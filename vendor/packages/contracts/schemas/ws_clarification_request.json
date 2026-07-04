@@ -1,0 +1,62 @@
+{
+  "$defs": {
+    "ClarificationOption": {
+      "additionalProperties": false,
+      "description": "One substantively-different path the agent could take. ``description``\nis required (A.4): it shows the user what each path produces.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "description"
+      ],
+      "title": "ClarificationOption",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``clarification-request`` (A.4): choose between different response paths.",
+  "properties": {
+    "default_timeout_seconds": {
+      "default": 60,
+      "title": "Default Timeout Seconds",
+      "type": "integer"
+    },
+    "options": {
+      "items": {
+        "$ref": "#/$defs/ClarificationOption"
+      },
+      "maxItems": 4,
+      "minItems": 2,
+      "title": "Options",
+      "type": "array"
+    },
+    "question": {
+      "title": "Question",
+      "type": "string"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "question",
+    "options"
+  ],
+  "title": "ClarificationRequestPayload",
+  "type": "object"
+}

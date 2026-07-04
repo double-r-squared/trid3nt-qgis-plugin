@@ -1,0 +1,20 @@
+{
+  "additionalProperties": false,
+  "description": "``confirm-response`` (A.3): user response to a confirmation-request.",
+  "properties": {
+    "approved": {
+      "title": "Approved",
+      "type": "boolean"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "approved"
+  ],
+  "title": "ConfirmResponsePayload",
+  "type": "object"
+}

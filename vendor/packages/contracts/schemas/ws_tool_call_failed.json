@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "description": "``tool-call-failed`` (A.4): a tool errored out.",
+  "properties": {
+    "call_id": {
+      "title": "Call Id",
+      "type": "string"
+    },
+    "error_code": {
+      "title": "Error Code",
+      "type": "string"
+    },
+    "message": {
+      "title": "Message",
+      "type": "string"
+    },
+    "retryable": {
+      "default": false,
+      "title": "Retryable",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "call_id",
+    "error_code",
+    "message"
+  ],
+  "title": "ToolCallFailedPayload",
+  "type": "object"
+}

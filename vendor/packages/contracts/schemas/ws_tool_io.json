@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "description": "``tool-io`` (A.4 extension): the RAW input args + function_response for one\ntool dispatch, keyed by the pipeline step it belongs to.\n\nThe ``pipeline-state`` ``PipelineStep`` carries only the humanized label +\nstate + timing \u2014 it deliberately does NOT carry the raw I/O. This envelope\nis the additive sidecar that lets the chat tool-card's expander reveal the\nEXACT args the agent sent and the EXACT ``function_response`` the agent read\nback (the dict ``summarize_tool_result`` produced). Surfacing it makes\nserver-side / upstream-API failures the narration hides directly visible\n(per ``feedback_tool_card_expand_output``).\n\n``step_id`` matches the ``PipelineStep.step_id`` of the dispatch's card so\nthe web merges this into the right card by id (the emitter mints the step\ninside ``emit_tool_call``; the server reads it back off\n``emitter.last_tool_step`` and stamps it here).\n\n``raw_args`` / ``function_response`` are pre-serialized JSON STRINGS (the\nserver json-dumps them so a non-JSON-serializable value degrades to a\nstring rather than breaking the envelope). Large payloads are TRUNCATED at\nthe server to ``MAX_FIELD_BYTES`` (large-payload norm \u2014 the chat must never\nship a multi-MB blob just for an expander); ``args_truncated`` /\n``response_truncated`` flag a truncation and the ``*_bytes`` fields carry the\nORIGINAL byte length so the UI can render an honest \"truncated, N bytes\"\nnote. ``is_error`` mirrors the honesty-floor signal (the function_response\ncarried ``status == \"error\"`` or the dispatch raised) so the expander styles\nthe response block red without re-parsing the JSON.",
+  "properties": {
+    "args_bytes": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Args Bytes",
+      "type": "integer"
+    },
+    "args_truncated": {
+      "default": false,
+      "title": "Args Truncated",
+      "type": "boolean"
+    },
+    "function_response": {
+      "default": "",
+      "title": "Function Response",
+      "type": "string"
+    },
+    "is_error": {
+      "default": false,
+      "title": "Is Error",
+      "type": "boolean"
+    },
+    "raw_args": {
+      "default": "",
+      "title": "Raw Args",
+      "type": "string"
+    },
+    "response_bytes": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Response Bytes",
+      "type": "integer"
+    },
+    "response_truncated": {
+      "default": false,
+      "title": "Response Truncated",
+      "type": "boolean"
+    },
+    "step_id": {
+      "title": "Step Id",
+      "type": "string"
+    },
+    "tool_name": {
+      "title": "Tool Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "step_id",
+    "tool_name"
+  ],
+  "title": "ToolIoPayload",
+  "type": "object"
+}

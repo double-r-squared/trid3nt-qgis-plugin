@@ -1,0 +1,75 @@
+{
+  "additionalProperties": false,
+  "description": "``catalog_audit_log`` (D.12): append-only audit trail for the catalog.\n\nEvery catalog mutation lands one document here. Mode 2 user-proposed entries\nproduce a ``user_proposed`` event at acceptance; curator-side approval /\nrejection produce a ``curator_approved`` / ``curator_rejected`` event\nagainst the same ``entry_id``. Decision M (claim provenance) requires this\ntrail to be inspectable: the catalog query path may surface user-proposed\nentries as provisional, and downstream run-document `CatalogReference`\nfields can be resolved back through this collection to recover the\nproposal + review context.\n\nFields:\n\n- ``id`` \u2014 ULID, the audit-event id (this is the document ``_id``).\n- ``entry_id`` \u2014 the ``CatalogEntry.id`` this event applies to. Indexed\n  for the ``(entry_id, timestamp DESC)`` query path.\n- ``session_id`` \u2014 optional ULID; populated when the event originated\n  inside an active session (Mode 2 user-proposed flow).\n- ``user_id`` \u2014 optional opaque user identifier; populated when user\n  identity is available (post-M6+ user accounts). v0.1 leaves this None\n  since identity machinery is not yet wired; the field is here so the\n  audit trail is forward-compatible.\n- ``event_type`` \u2014 ``CatalogAuditEventType`` literal.\n- ``event_payload`` \u2014 open dict (shape varies by ``event_type``); for\n  ``user_proposed`` it carries the conformity-probe findings + the\n  ``offer-catalog-addition`` request id; for ``curator_approved`` /\n  ``curator_rejected`` it carries the curator note; for ``update`` it\n  carries the diff.\n- ``timestamp`` \u2014 UTC datetime when the event was recorded.\n\nNo TTL \u2014 the audit trail is durable. No cost field anywhere (Invariant 9).",
+  "properties": {
+    "_id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "entry_id": {
+      "minLength": 1,
+      "title": "Entry Id",
+      "type": "string"
+    },
+    "event_payload": {
+      "additionalProperties": true,
+      "title": "Event Payload",
+      "type": "object"
+    },
+    "event_type": {
+      "enum": [
+        "add",
+        "update",
+        "deprecate",
+        "user_proposed",
+        "curator_approved",
+        "curator_rejected"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "user_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "User Id"
+    }
+  },
+  "required": [
+    "_id",
+    "entry_id",
+    "event_type",
+    "timestamp"
+  ],
+  "title": "CatalogAuditLogDocument",
+  "type": "object"
+}

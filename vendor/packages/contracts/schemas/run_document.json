@@ -1,0 +1,307 @@
+{
+  "$defs": {
+    "UserSpatialInput": {
+      "additionalProperties": false,
+      "description": "A user-provided spatial input recorded on a run (FR-AS-10).",
+      "properties": {
+        "coordinates": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Coordinates",
+          "type": "array"
+        },
+        "geometry_type": {
+          "enum": [
+            "point",
+            "bbox"
+          ],
+          "title": "Geometry Type",
+          "type": "string"
+        },
+        "prompt_title": {
+          "title": "Prompt Title",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "submitted_at": {
+          "format": "date-time",
+          "title": "Submitted At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "geometry_type",
+        "coordinates",
+        "prompt_title",
+        "submitted_at"
+      ],
+      "title": "UserSpatialInput",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``runs`` (D.3): every solver execution or discovery operation.\n\nEmbeds the full ``AssessmentEnvelope`` as ``assessment: dict`` (None until\ncomplete) \u2014 a dict, not a nested model, so envelope schema changes don't\nforce a collection migration (D.7). Validation happens at the API boundary\nin the agent before write. ``status`` carries ``cancelled`` as a distinct\nterminal state (invariant 8). No cost field (invariant 9 / D.7).",
+  "properties": {
+    "_id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "article_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Article Ids",
+      "type": "array"
+    },
+    "assessment": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Assessment"
+    },
+    "bbox": {
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Bbox",
+      "type": "array"
+    },
+    "cancellation_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cancellation Reason"
+    },
+    "cancelled_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cancelled At"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    },
+    "duration_seconds": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Seconds"
+    },
+    "embedding": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Embedding"
+    },
+    "embedding_model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Embedding Model"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "error_message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Message"
+    },
+    "event_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Event Id"
+    },
+    "event_time_end": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Event Time End"
+    },
+    "event_time_start": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Event Time Start"
+    },
+    "hazard_type": {
+      "title": "Hazard Type",
+      "type": "string"
+    },
+    "project_id": {
+      "title": "Project Id",
+      "type": "string"
+    },
+    "run_type": {
+      "enum": [
+        "modeled",
+        "discovered"
+      ],
+      "title": "Run Type",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "started_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Started At"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "running",
+        "complete",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "user_spatial_inputs": {
+      "items": {
+        "$ref": "#/$defs/UserSpatialInput"
+      },
+      "title": "User Spatial Inputs",
+      "type": "array"
+    },
+    "workflow_name": {
+      "title": "Workflow Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "_id",
+    "project_id",
+    "session_id",
+    "status",
+    "run_type",
+    "hazard_type",
+    "workflow_name",
+    "bbox"
+  ],
+  "title": "RunDocument",
+  "type": "object"
+}

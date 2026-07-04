@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "``map-command`` (A.4): one umbrella type with a ``command`` discriminator.\n\n``args`` is the command-specific args object (one of the ``*Args`` models\nabove). It is kept as a ``dict`` at the envelope level; the consumer\nvalidates it against the matching ``*Args`` model by ``command``. This is\nintentional: ten near-identical sibling top-level types would create churn\n(A.7 rationale).",
+  "properties": {
+    "args": {
+      "additionalProperties": true,
+      "title": "Args",
+      "type": "object"
+    },
+    "command": {
+      "enum": [
+        "load-layer",
+        "remove-layer",
+        "set-layer-visibility",
+        "set-layer-opacity",
+        "set-layer-order",
+        "zoom-to",
+        "set-temporal-config",
+        "start-animation",
+        "stop-animation",
+        "invalidate-tiles"
+      ],
+      "title": "Command",
+      "type": "string"
+    }
+  },
+  "required": [
+    "command"
+  ],
+  "title": "MapCommandPayload",
+  "type": "object"
+}

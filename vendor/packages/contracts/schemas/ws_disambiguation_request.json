@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "DisambiguationCandidate": {
+      "additionalProperties": false,
+      "description": "One enumerated candidate for an ambiguous entity.",
+      "properties": {
+        "bbox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bbox",
+          "type": "array"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "bbox"
+      ],
+      "title": "DisambiguationCandidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``disambiguation-request`` (A.4): pick one of several candidates.",
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/DisambiguationCandidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "default_timeout_seconds": {
+      "default": 120,
+      "title": "Default Timeout Seconds",
+      "type": "integer"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "title",
+    "description",
+    "candidates"
+  ],
+  "title": "DisambiguationRequestPayload",
+  "type": "object"
+}

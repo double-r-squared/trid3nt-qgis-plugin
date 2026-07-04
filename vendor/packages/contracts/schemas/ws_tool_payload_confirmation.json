@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "description": "``tool-payload-confirmation`` (Appendix A amendment, job-0127).\n\nClient returns this in response to a ``tool-payload-warning``. The\nagent matches ``warning_id`` against the paused dispatch coroutine and\neither proceeds with the original / revised args or surfaces a\ncancellation error to the chat.\n\nFields:\n\n- ``envelope_type`` \u2014 discriminator, literal ``\"tool-payload-confirmation\"``.\n- ``warning_id`` \u2014 matches the originating ``tool-payload-warning``.\n- ``decision`` \u2014 one of ``\"proceed\"`` / ``\"cancel\"`` / ``\"narrow_scope\"``.\n- ``revised_args`` \u2014 populated only when ``decision == \"narrow_scope\"``;\n  carries the args the agent should dispatch with. Permissive ``dict``\n  shape so the client can echo back the warning's\n  ``alternative_args`` OR a user-edited variant. The agent service\n  validates against the target tool signature before dispatch.\n\nCross-shape rule (``_validate_decision_consistency``):\n\n- ``decision == \"narrow_scope\"`` \u21d2 ``revised_args`` must be a non-None\n  dict (may be empty). Otherwise the agent has nothing to dispatch with.\n- ``decision != \"narrow_scope\"`` \u21d2 ``revised_args`` must be None. A\n  lingering revised_args on a proceed/cancel response is a client bug\n  we want to catch at the contract boundary, not at dispatch time.",
+  "properties": {
+    "decision": {
+      "enum": [
+        "proceed",
+        "cancel",
+        "narrow_scope"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "envelope_type": {
+      "const": "tool-payload-confirmation",
+      "default": "tool-payload-confirmation",
+      "title": "Envelope Type",
+      "type": "string"
+    },
+    "revised_args": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Revised Args"
+    },
+    "warning_id": {
+      "title": "Warning Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "warning_id",
+    "decision"
+  ],
+  "title": "PayloadConfirmationEnvelopePayload",
+  "type": "object"
+}

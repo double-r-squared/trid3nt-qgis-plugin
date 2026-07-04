@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "description": "``confirmation-request`` (A.4): agent needs user approval.\n\nNo cost field anywhere (invariant 9 / A.4): surfacing approximate cost is\nworse than none.",
+  "properties": {
+    "default_timeout_seconds": {
+      "default": 60,
+      "title": "Default Timeout Seconds",
+      "type": "integer"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "estimated_duration_seconds": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estimated Duration Seconds"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "title",
+    "description"
+  ],
+  "title": "ConfirmationRequestPayload",
+  "type": "object"
+}

@@ -1,0 +1,150 @@
+{
+  "additionalProperties": false,
+  "description": "``catalog_entries`` (D.11): one curated Mode 1 catalog entry.\n\nThe collection schema *is* the ``CatalogEntry`` schema (Appendix F /\nFR-PHC-2 + \u00a7F.1.2 Mode 1); no wrapper fields are added. The Mongo ``_id``\nis the entry ``id`` (a stable string identifier curated at entry-creation\ntime, e.g. ``\"usgs-3dep-dem-1m\"``, ``\"worldpop-1km-aggregated\"``); the\nwrite path sets ``_id = id`` at insert time.\n\nWe do NOT alias here \u2014 keeping ``CatalogEntry`` a single shape across wire,\nYAML, and Mongo is more useful than the ``_id`` alias would be, and the\n``id`` field is already a free-form stable string (not a ULID), so the\nMongo-side aliasing of the ULID-based ``DocModel`` doesn't apply.\n\nIndexes (declared in ``CATALOG_ENTRIES_INDEXES`` below): one on\n``source_class`` for ``catalog_search`` by domain, and a compound on\n``(status, source_class)`` for the common \"active-only by source\"\nquery path (``status: \"active\"`` filter + ``source_class`` selector).",
+  "properties": {
+    "access_tier": {
+      "enum": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "title": "Access Tier",
+      "type": "integer"
+    },
+    "api_key_secret_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Api Key Secret Ref"
+    },
+    "citation": {
+      "minLength": 1,
+      "title": "Citation",
+      "type": "string"
+    },
+    "credential_tier": {
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "Credential Tier",
+      "type": "integer"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "how_to_use": {
+      "minLength": 1,
+      "title": "How To Use",
+      "type": "string"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "last_verified": {
+      "format": "date-time",
+      "title": "Last Verified",
+      "type": "string"
+    },
+    "license": {
+      "minLength": 1,
+      "title": "License",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "native_resolution_m": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Native Resolution M"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_class": {
+      "minLength": 1,
+      "title": "Source Class",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "active",
+        "deprecated",
+        "user_proposed_pending_curator_review"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "ttl_class": {
+      "enum": [
+        "static-30d",
+        "semi-static-7d",
+        "dynamic-1h",
+        "live-no-cache"
+      ],
+      "title": "Ttl Class",
+      "type": "string"
+    },
+    "urls": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Urls",
+      "type": "array"
+    },
+    "vintage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Vintage"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "description",
+    "urls",
+    "access_tier",
+    "credential_tier",
+    "ttl_class",
+    "source_class",
+    "license",
+    "citation",
+    "last_verified",
+    "status",
+    "how_to_use"
+  ],
+  "title": "CatalogEntryDocument",
+  "type": "object"
+}

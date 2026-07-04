@@ -1,0 +1,2 @@
+[console_scripts]
+grace2-agent = grace2_agent.main:run

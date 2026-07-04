@@ -1,0 +1,212 @@
+{
+  "$defs": {
+    "ProjectLayerSummary": {
+      "additionalProperties": false,
+      "description": "Denormalized layer entry on a project (and on session map state).\n\nThe ``wms_url`` field carries the QGIS Server WMS endpoint the client uses\nfor MapLibre source registration; ``uri`` remains the underlying GCS file\npointer (gs://...). ``style_preset`` drives client-side legend matching.\n``opacity`` (0.0\u20131.0) and ``z_index`` enable layer-stack arbitration;\nclients fall back to ``1.0`` / a default order if both are absent.\n\nCloses OQ-62-LAYERURI-URI-FIELD, OQ-W-65-STYLE-PRESET, OQ-0068-ZIDX.",
+      "properties": {
+        "layer_id": {
+          "title": "Layer Id",
+          "type": "string"
+        },
+        "layer_type": {
+          "enum": [
+            "raster",
+            "vector"
+          ],
+          "title": "Layer Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "context",
+            "input"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "style_preset": {
+          "title": "Style Preset",
+          "type": "string"
+        },
+        "temporal": {
+          "title": "Temporal",
+          "type": "boolean"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        },
+        "visible": {
+          "title": "Visible",
+          "type": "boolean"
+        },
+        "wms_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wms Url"
+        },
+        "z_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Z Index"
+        }
+      },
+      "required": [
+        "layer_id",
+        "name",
+        "layer_type",
+        "uri",
+        "style_preset",
+        "visible",
+        "role",
+        "temporal"
+      ],
+      "title": "ProjectLayerSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``projects`` (D.2): metadata index over .qgs files in GCS.",
+  "properties": {
+    "_id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "bbox": {
+      "anyOf": [
+        {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bbox"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "deleted_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Deleted At"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "hazard_types": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Hazard Types",
+      "type": "array"
+    },
+    "layers": {
+      "items": {
+        "$ref": "#/$defs/ProjectLayerSummary"
+      },
+      "title": "Layers",
+      "type": "array"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "qgs_uri": {
+      "title": "Qgs Uri",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "_id",
+    "session_id",
+    "qgs_uri",
+    "name",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "ProjectDocument",
+  "type": "object"
+}

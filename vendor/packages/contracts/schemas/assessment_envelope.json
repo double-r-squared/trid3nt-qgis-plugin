@@ -1,0 +1,666 @@
+{
+  "$defs": {
+    "BaseMetrics": {
+      "additionalProperties": false,
+      "description": "Empty base; subtype payloads carry the real metric fields (Appendix B.3).\n\nThe envelope's top-level ``metrics`` field is ``BaseMetrics`` and stays\nempty by design \u2014 real numbers live in the hazard subtype payload\n(``flood.metrics`` etc.), enforcing invariant 3.",
+      "properties": {},
+      "title": "BaseMetrics",
+      "type": "object"
+    },
+    "CatalogReference": {
+      "additionalProperties": false,
+      "description": "Denormalized reference to a public_hazard_catalog entry (discovery only).",
+      "properties": {
+        "access_url": {
+          "title": "Access Url",
+          "type": "string"
+        },
+        "agency": {
+          "title": "Agency",
+          "type": "string"
+        },
+        "catalog_entry_id": {
+          "title": "Catalog Entry Id",
+          "type": "string"
+        },
+        "license": {
+          "title": "License",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "catalog_entry_id",
+        "title",
+        "agency",
+        "access_url",
+        "license"
+      ],
+      "title": "CatalogReference",
+      "type": "object"
+    },
+    "CriticalFacility": {
+      "additionalProperties": false,
+      "description": "A flooded critical facility (invariant 1: typed, narratable number).",
+      "properties": {
+        "category": {
+          "enum": [
+            "school",
+            "hospital",
+            "fire_station",
+            "police",
+            "other"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "coordinates": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "maximum": 180.0,
+              "minimum": -180.0,
+              "type": "number"
+            },
+            {
+              "maximum": 90.0,
+              "minimum": -90.0,
+              "type": "number"
+            }
+          ],
+          "title": "Coordinates",
+          "type": "array"
+        },
+        "max_depth_m": {
+          "title": "Max Depth M",
+          "type": "number"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "category",
+        "coordinates",
+        "max_depth_m"
+      ],
+      "title": "CriticalFacility",
+      "type": "object"
+    },
+    "DataSource": {
+      "additionalProperties": false,
+      "description": "A single upstream data source, as a typed (not prose) provenance record.",
+      "properties": {
+        "accessed_at": {
+          "format": "date-time",
+          "title": "Accessed At",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "uri",
+        "accessed_at"
+      ],
+      "title": "DataSource",
+      "type": "object"
+    },
+    "FloodMetrics": {
+      "additionalProperties": false,
+      "description": "Structured flood metrics. Every number the narrative cites lives here.",
+      "properties": {
+        "affected_buildings_by_depth": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Affected Buildings By Depth"
+        },
+        "affected_buildings_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Affected Buildings Count"
+        },
+        "affected_critical_facilities": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CriticalFacility"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Affected Critical Facilities"
+        },
+        "flooded_area_km2": {
+          "minimum": 0.0,
+          "title": "Flooded Area Km2",
+          "type": "number"
+        },
+        "grid_resolution_m": {
+          "exclusiveMinimum": 0.0,
+          "title": "Grid Resolution M",
+          "type": "number"
+        },
+        "max_depth_m": {
+          "title": "Max Depth M",
+          "type": "number"
+        },
+        "max_velocity_m_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Velocity M S"
+        },
+        "mean_depth_m": {
+          "title": "Mean Depth M",
+          "type": "number"
+        },
+        "p95_depth_m": {
+          "title": "P95 Depth M",
+          "type": "number"
+        },
+        "population_exposed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Population Exposed"
+        },
+        "simulation_duration_hours": {
+          "exclusiveMinimum": 0,
+          "title": "Simulation Duration Hours",
+          "type": "integer"
+        },
+        "solver_version": {
+          "title": "Solver Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "flooded_area_km2",
+        "max_depth_m",
+        "mean_depth_m",
+        "p95_depth_m",
+        "solver_version",
+        "grid_resolution_m",
+        "simulation_duration_hours"
+      ],
+      "title": "FloodMetrics",
+      "type": "object"
+    },
+    "FloodPayload": {
+      "additionalProperties": false,
+      "description": "Flood hazard subtype payload. Populated iff ``hazard_type == 'flood'``.",
+      "properties": {
+        "metrics": {
+          "$ref": "#/$defs/FloodMetrics"
+        }
+      },
+      "required": [
+        "metrics"
+      ],
+      "title": "FloodPayload",
+      "type": "object"
+    },
+    "ForcingSummary": {
+      "additionalProperties": false,
+      "description": "Boundary-condition summary for a modeled envelope (None for discovery).",
+      "properties": {
+        "forcing_type": {
+          "enum": [
+            "storm_surge",
+            "pluvial_synthetic",
+            "fluvial_synthetic",
+            "news_derived",
+            "user_supplied"
+          ],
+          "title": "Forcing Type",
+          "type": "string"
+        },
+        "inputs_uri": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Uri"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "forcing_type",
+        "source",
+        "parameters"
+      ],
+      "title": "ForcingSummary",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Structured provenance for a modeled or discovered envelope (invariant 7).",
+      "properties": {
+        "article_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Article Ids",
+          "type": "array"
+        },
+        "data_sources": {
+          "items": {
+            "$ref": "#/$defs/DataSource"
+          },
+          "title": "Data Sources",
+          "type": "array"
+        },
+        "event_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event Id"
+        }
+      },
+      "title": "Provenance",
+      "type": "object"
+    },
+    "ResultLayer": {
+      "additionalProperties": false,
+      "description": "A renderable result layer.\n\nField-for-field alignable with ``map-command load-layer`` args\n(``layer_id``, ``style_preset``, ``temporal``) so the UI renders without\ntranslation. Output formats are fixed by FR-CE-4/FR-QS-3: rasters COG,\nvectors FlatGeobuf/GeoParquet. ``LayerURI`` (execution.py) is the producer\nshape that maps onto this.",
+      "properties": {
+        "layer_id": {
+          "title": "Layer Id",
+          "type": "string"
+        },
+        "layer_type": {
+          "enum": [
+            "raster",
+            "vector"
+          ],
+          "title": "Layer Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "context",
+            "input"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "style_preset": {
+          "title": "Style Preset",
+          "type": "string"
+        },
+        "temporal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemporalConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Units"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layer_id",
+        "name",
+        "layer_type",
+        "uri",
+        "style_preset",
+        "role"
+      ],
+      "title": "ResultLayer",
+      "type": "object"
+    },
+    "TemporalConfig": {
+      "additionalProperties": false,
+      "description": "WMS-T temporal config for a time-varying layer.",
+      "properties": {
+        "end": {
+          "format": "date-time",
+          "title": "End",
+          "type": "string"
+        },
+        "start": {
+          "format": "date-time",
+          "title": "Start",
+          "type": "string"
+        },
+        "step_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Step Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "step_seconds"
+      ],
+      "title": "TemporalConfig",
+      "type": "object"
+    },
+    "TimeRange": {
+      "additionalProperties": false,
+      "description": "A UTC start/end interval. Shared by AssessmentEnvelope and EventMetadata.",
+      "properties": {
+        "end": {
+          "format": "date-time",
+          "title": "End",
+          "type": "string"
+        },
+        "start": {
+          "format": "date-time",
+          "title": "Start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "TimeRange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The central output structure (Appendix B.2).\n\nFor a given envelope, exactly one subtype field matching ``hazard_type`` is\npopulated; the rest are ``None``. ``envelope_type`` (modeled vs discovered)\nis independent of ``hazard_type``.\n\nv0.1 note: only the flood subtype is fully typed (``FloodPayload``). The\nv0.2+/v0.3+ subtypes (groundwater/wildfire/seismic/spill) are carried as\npermissive ``dict | None`` slots until their engines land \u2014 matching\nAppendix B.6b, which states discovery payloads are a permissive dict\nvalidated at the workflow layer in v0.1. See report Open Question OQ-S2.",
+  "properties": {
+    "bbox": {
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Bbox",
+      "type": "array"
+    },
+    "catalog_entries": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/CatalogReference"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Catalog Entries"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "crs": {
+      "default": "EPSG:4326",
+      "title": "Crs",
+      "type": "string"
+    },
+    "envelope_id": {
+      "title": "Envelope Id",
+      "type": "string"
+    },
+    "envelope_type": {
+      "enum": [
+        "modeled",
+        "discovered"
+      ],
+      "title": "Envelope Type",
+      "type": "string"
+    },
+    "flood": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FloodPayload"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "forcing": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ForcingSummary"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "groundwater": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Groundwater"
+    },
+    "hazard_type": {
+      "enum": [
+        "flood",
+        "groundwater",
+        "wildfire",
+        "seismic",
+        "spill"
+      ],
+      "title": "Hazard Type",
+      "type": "string"
+    },
+    "layers": {
+      "items": {
+        "$ref": "#/$defs/ResultLayer"
+      },
+      "title": "Layers",
+      "type": "array"
+    },
+    "metrics": {
+      "$ref": "#/$defs/BaseMetrics"
+    },
+    "project_id": {
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seismic": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Seismic"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "solver_run_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Solver Run Ids",
+      "type": "array"
+    },
+    "spill": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Spill"
+    },
+    "time_range": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TimeRange"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "wildfire": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wildfire"
+    },
+    "workflow_name": {
+      "title": "Workflow Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "envelope_id",
+    "project_id",
+    "session_id",
+    "envelope_type",
+    "hazard_type",
+    "workflow_name",
+    "bbox",
+    "provenance",
+    "created_at",
+    "completed_at"
+  ],
+  "title": "AssessmentEnvelope",
+  "type": "object"
+}

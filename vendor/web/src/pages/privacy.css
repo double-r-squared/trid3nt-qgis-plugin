@@ -1,0 +1,152 @@
+/* GRACE-2 web — privacy policy page styles (job-0285).
+ *
+ * Same dark map-toned palette as the landing page (.lp), all selectors
+ * prefixed `.pp` so nothing bleeds into the app. Optimized for reading:
+ * single measure-limited column, generous line height.
+ */
+
+.pp {
+  --pp-bg: #0b1018;
+  --pp-ink: #e8edf5;
+  --pp-ink-dim: #9aa7ba;
+  --pp-line: rgba(255, 255, 255, 0.08);
+  --pp-blue: #4285f4;
+  --pp-grad: linear-gradient(100deg, #4285f4 0%, #9b72cb 55%, #d96570 100%);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--pp-bg);
+  color: var(--pp-ink);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.65;
+}
+
+.pp a {
+  color: #8ab4f8;
+  text-decoration: none;
+}
+
+.pp a:hover {
+  text-decoration: underline;
+}
+
+.pp-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 820px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 22px 24px;
+  box-sizing: border-box;
+}
+
+.pp-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  color: var(--pp-ink) !important;
+}
+
+.pp-wordmark-glyph {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--pp-grad);
+}
+
+.pp-nav-launch {
+  padding: 7px 15px;
+  border: 1px solid var(--pp-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--pp-ink) !important;
+  font-size: 13.5px;
+}
+
+.pp-nav-launch:hover {
+  border-color: rgba(66, 133, 244, 0.6);
+  text-decoration: none;
+}
+
+.pp-main {
+  flex: 1;
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 24px 24px 64px;
+  box-sizing: border-box;
+}
+
+.pp-main h1 {
+  margin: 18px 0 6px;
+  font-size: clamp(30px, 4vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.pp-effective {
+  margin: 0 0 26px;
+  font-size: 14px;
+  color: var(--pp-ink-dim);
+}
+
+.pp-lede {
+  font-size: 16.5px;
+  color: var(--pp-ink-dim);
+  border-left: 3px solid;
+  border-image: var(--pp-grad) 1;
+  padding-left: 16px;
+  margin: 0 0 12px;
+}
+
+.pp-main section {
+  margin-top: 36px;
+}
+
+.pp-main h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--pp-line);
+}
+
+.pp-main p,
+.pp-main li {
+  font-size: 15px;
+  color: var(--pp-ink-dim);
+}
+
+.pp-main li strong,
+.pp-main p strong {
+  color: var(--pp-ink);
+}
+
+.pp-main ul {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pp-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 820px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 24px 32px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--pp-line);
+  font-size: 13px;
+  color: var(--pp-ink-dim);
+}

@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "RegionCandidate": {
+      "additionalProperties": false,
+      "description": "A single selectable sub-region of the snapped state.\n\nThe agent's region-set builder produces one of these per administrative\nfeature (default: per county) within the detected state: it fetches the\nTIGER boundaries for the state and emits, for each feature, a stable\n``region_id``, the human-readable ``name``, the ``bbox`` (the polygon's\n``total_bounds`` in EPSG:4326), and the ``admin_level`` the feature was\ndrawn at.\n\nFields:\n\n- ``region_id`` \u2014 stable identifier the client echoes verbatim in the\n  ``RegionChoiceProvidedEnvelopePayload`` when the user picks this region.\n  Drawn from the TIGER feature's GEOID (e.g. ``\"county-12071\"`` for Lee\n  County FL) so it is stable across requests for the same state. Free-form\n  non-empty string (\u2264120 chars); the schema does not constrain the format.\n- ``name`` \u2014 human label rendered on the in-chat card and the map\n  choropleth tooltip (e.g. ``\"Lee County\"``). \u2264200 chars.\n- ``bbox`` \u2014 EPSG:4326 ``[min_lon, min_lat, max_lon, max_lat]`` total bounds\n  of the region polygon. This is the bbox the agent continues the workflow\n  with when the user selects this region.\n- ``admin_level`` \u2014 the granularity this candidate was drawn at (closed\n  ``RegionAdminLevel`` Literal; ``\"county\"`` by default).",
+      "properties": {
+        "admin_level": {
+          "const": "county",
+          "default": "county",
+          "title": "Admin Level",
+          "type": "string"
+        },
+        "bbox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bbox",
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "region_id": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Region Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "region_id",
+        "name",
+        "bbox"
+      ],
+      "title": "RegionCandidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``region-choice-request`` (A.4): server -> client narrow-the-region prompt.\n\nEmitted when a ``geocode_location`` tool result comes back as a state-snap\n(``source == \"state-bbox-fallback\"``). The agent has ALREADY resolved the\nwhole-state bbox (the honest default the automated path uses); this request\nsurfaces, on top of that default, a user choice to NARROW to a sub-region\nof the state (default granularity: counties). The client renders the\ncandidates BOTH as an in-chat card list and as a tappable county\nchoropleth on the map (both synced to the same ``request_id``); either\naffordance answers via ``RegionChoiceProvidedEnvelopePayload``.\n\nThe agent PAUSES the turn awaiting the reply (mirroring the credential-\nrequest pause/resume), with a fail-open default: on timeout / no client the\nwhole-state bbox (already the geocode result) is used unchanged \u2014 the\nworkflow never blocks on the interactive pick.\n\nFields:\n\n- ``request_id`` \u2014 ULID correlating this request with the\n  ``RegionChoiceProvidedEnvelopePayload`` reply (and with the agent's\n  paused-turn record). The client MUST echo it verbatim.\n- ``state_name`` \u2014 the detected state's full name (e.g. ``\"Florida\"``).\n  Surfaced in the prompt + as the whole-state option's label. \u2264120 chars.\n- ``state_code`` \u2014 the 2-letter state code (e.g. ``\"FL\"``). Lets the client\n  label / disambiguate without a name -> code table. \u22642 chars.\n- ``state_bbox`` \u2014 the whole-state EPSG:4326 bbox the geocode snapped to;\n  the bbox used if the user chooses ``use_whole_state`` (the default\n  action). The client highlights this extent on the map.\n- ``candidates`` \u2014 the candidate sub-regions to choose from (default:\n  counties of the state). May be empty when the region-set build failed \u2014\n  the client then offers only the whole-state default (honest degrade).\n- ``default_action`` \u2014 the action taken if the user does not pick a region.\n  Always ``\"use_whole_state\"`` at v0.1 (the honest, already-resolved\n  default). A closed Literal so the contract is explicit about the\n  fail-open behaviour.\n- ``message`` \u2014 the agent's user-facing prompt: it MUST say the agent\n  snapped to the whole state and is offering a narrower pick (fallback\n  honesty floor). Plain prose; \u22641024 chars.\n\nInvariant 9 (no cost theater): no cost / quota field. Invariant 8\n(cancellation is first-class): no per-envelope timeout/cancel field \u2014 a\n\"use the whole state\" reply IS the decline path; a hard cancel rides the\nA.3 ``cancel`` message.",
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/RegionCandidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "default_action": {
+      "const": "use_whole_state",
+      "default": "use_whole_state",
+      "title": "Default Action",
+      "type": "string"
+    },
+    "envelope_type": {
+      "const": "region-choice-request",
+      "default": "region-choice-request",
+      "title": "Envelope Type",
+      "type": "string"
+    },
+    "message": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "title": "Message",
+      "type": "string"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "state_bbox": {
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "State Bbox",
+      "type": "array"
+    },
+    "state_code": {
+      "maxLength": 2,
+      "minLength": 1,
+      "title": "State Code",
+      "type": "string"
+    },
+    "state_name": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "State Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "state_name",
+    "state_code",
+    "state_bbox",
+    "message"
+  ],
+  "title": "RegionChoiceRequestEnvelopePayload",
+  "type": "object"
+}

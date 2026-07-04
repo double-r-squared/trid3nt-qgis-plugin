@@ -1,0 +1,202 @@
+{
+  "$defs": {
+    "SuggestedCatalogEntry": {
+      "additionalProperties": false,
+      "description": "Agent-drafted catalog entry surfaced inside an ``offer-catalog-addition``.\n\nPermissive shape: the agent supplies the fields it can infer from the\nconformity probe; the user may edit any of them in the review modal before\naccepting. The agent service round-trips an accepted draft through the\nfull ``CatalogEntry`` model (which enforces cross-field rules) before\nwriting to the ``catalog_entries`` collection.\n\nMirrors the SRS \u00a7F.1.2 Mode 2 envelope example fields:\n``id`` / ``name`` / ``description`` / ``urls`` / ``access_tier`` /\n``credential_tier`` / ``ttl_class`` / ``source_class`` / ``license_claim``\n/ ``how_to_use``. Probe-time drafts may omit ``description``, ``vintage``,\nor the conditional ``api_key_secret_ref``; the curator review fills any\ngaps before flipping ``status`` to ``\"active\"``.\n\nRenamed from the SRS sketch: ``license_claim`` here (the SRS prose uses\n``license`` inside the suggested-entry block but the outer ``CatalogEntry``\nalso uses ``license``; the ``_claim`` suffix marks that this is the probe's\n*observation*, not the curator-attested value). Surfaced in Open Questions.",
+      "properties": {
+        "access_tier": {
+          "anyOf": [
+            {
+              "enum": [
+                1,
+                2,
+                3,
+                4
+              ],
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Tier"
+        },
+        "credential_tier": {
+          "anyOf": [
+            {
+              "enum": [
+                1,
+                2,
+                3
+              ],
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credential Tier"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "how_to_use": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "How To Use"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "license_claim": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Claim"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "source_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Class"
+        },
+        "ttl_class": {
+          "anyOf": [
+            {
+              "enum": [
+                "static-30d",
+                "semi-static-7d",
+                "dynamic-1h",
+                "live-no-cache"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ttl Class"
+        },
+        "urls": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Urls",
+          "type": "array"
+        }
+      },
+      "title": "SuggestedCatalogEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``catalog-addition-response`` (A.4b \u2014 sprint-08 amendment, \u00a7F.1.2 Mode 2).\n\nUser has accepted / rejected the offered catalog addition.\n\nFields:\n\n- ``request_id`` \u2014 matches the originating ``offer-catalog-addition``.\n- ``decision`` \u2014 ``\"accept\"`` or ``\"reject\"`` (or None when ``cancelled``).\n- ``edited_catalog_entry`` \u2014 populated only when ``decision == \"accept\"``\n  AND the user edited any field in the modal. When None on accept, the\n  agent writes the original ``suggested_catalog_entry`` as-is (modulo\n  cross-field validation). Mirrors the same permissive shape as the\n  offer's ``suggested_catalog_entry`` so the round-trip is field-for-field.\n- ``reject_reason`` \u2014 free-text reason populated only when\n  ``decision == \"reject\"``. Capped at 512 chars. Optional \u2014 the user may\n  decline without explanation.\n- ``cancelled`` \u2014 set when the user dismissed the modal without deciding.\n\nDecision M (claim provenance): the response is logged to\n``catalog_audit_log`` (D.12) with ``event_type: \"user_proposed\"`` on\naccept; reject events are also audited (open dict carries the\n``reject_reason``).",
+  "properties": {
+    "cancelled": {
+      "default": false,
+      "title": "Cancelled",
+      "type": "boolean"
+    },
+    "decision": {
+      "anyOf": [
+        {
+          "enum": [
+            "accept",
+            "reject"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Decision"
+    },
+    "edited_catalog_entry": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SuggestedCatalogEntry"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "reject_reason": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reject Reason"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id"
+  ],
+  "title": "CatalogAdditionResponsePayload",
+  "type": "object"
+}

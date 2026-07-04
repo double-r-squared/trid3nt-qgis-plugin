@@ -1,0 +1,972 @@
+{
+  "$defs": {
+    "AdminUnit": {
+      "additionalProperties": false,
+      "description": "Parsed administrative context for an event location.",
+      "properties": {
+        "country": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Country"
+        },
+        "locality": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locality"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        }
+      },
+      "title": "AdminUnit",
+      "type": "object"
+    },
+    "AtmosphericRiverIntensity": {
+      "additionalProperties": false,
+      "properties": {
+        "ar_category": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ivt_kg_m_s": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "AtmosphericRiverIntensity",
+      "type": "object"
+    },
+    "ClaimSet": {
+      "additionalProperties": false,
+      "description": "A set of numerical claims for one quantity across sources, with consensus.\n\n``consensus_value`` is the narrated number (invariant 7). Contributing\n``claims`` stay drillable. Populated by ``aggregate_claims_across_sources``\n(engine-owned); ``schema`` owns this shape.",
+      "properties": {
+        "claims": {
+          "items": {
+            "$ref": "#/$defs/NumericClaim"
+          },
+          "title": "Claims",
+          "type": "array"
+        },
+        "consensus_confidence": {
+          "anyOf": [
+            {
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consensus Confidence"
+        },
+        "consensus_method": {
+          "anyOf": [
+            {
+              "enum": [
+                "single_source",
+                "median",
+                "authority_weighted",
+                "latest_authoritative",
+                "agent_synthesized"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consensus Method"
+        },
+        "consensus_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consensus Unit"
+        },
+        "consensus_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consensus Value"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "title": "ClaimSet",
+      "type": "object"
+    },
+    "DamFailureIntensity": {
+      "additionalProperties": false,
+      "properties": {
+        "breach_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "overtopping",
+                "piping",
+                "structural",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Breach Type"
+        },
+        "dam_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dam Name"
+        },
+        "reservoir_volume_acre_feet": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "DamFailureIntensity",
+      "type": "object"
+    },
+    "EventLocation": {
+      "additionalProperties": false,
+      "description": "Event location. At least one of ``bbox`` or ``place_name`` is required.",
+      "properties": {
+        "admin_unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdminUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "geocoded": {
+          "default": false,
+          "title": "Geocoded",
+          "type": "boolean"
+        },
+        "granularity": {
+          "anyOf": [
+            {
+              "enum": [
+                "country",
+                "region",
+                "state",
+                "city",
+                "facility",
+                "bbox"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Granularity"
+        },
+        "place_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Place Name"
+        },
+        "precision_class": {
+          "anyOf": [
+            {
+              "enum": [
+                "point_known",
+                "polygon_known",
+                "bbox_sufficient",
+                "imprecise",
+                "ambiguous"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Precision Class"
+        }
+      },
+      "title": "EventLocation",
+      "type": "object"
+    },
+    "EventProvenance": {
+      "additionalProperties": false,
+      "description": "Source attribution for an extracted event.",
+      "properties": {
+        "article_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Article Ids",
+          "type": "array"
+        },
+        "extraction_notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extraction Notes"
+        },
+        "primary_article_id": {
+          "title": "Primary Article Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "primary_article_id"
+      ],
+      "title": "EventProvenance",
+      "type": "object"
+    },
+    "FlashFloodIntensity": {
+      "additionalProperties": false,
+      "properties": {
+        "cause": {
+          "anyOf": [
+            {
+              "enum": [
+                "thunderstorm",
+                "training_storms",
+                "dam_break",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cause"
+        },
+        "duration_hours": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "FlashFloodIntensity",
+      "type": "object"
+    },
+    "GenericIntensity": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "enum": [
+                "minor",
+                "moderate",
+                "major",
+                "catastrophic"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "title": "GenericIntensity",
+      "type": "object"
+    },
+    "HurricaneIntensity": {
+      "additionalProperties": false,
+      "properties": {
+        "landfall_location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Landfall Location"
+        },
+        "max_winds_kt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "min_central_pressure_mb": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "saffir_simpson": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "HurricaneIntensity",
+      "type": "object"
+    },
+    "IntensityIndicators": {
+      "additionalProperties": false,
+      "description": "Discriminated union: exactly one field populated based on event_type.",
+      "properties": {
+        "atmospheric_river": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AtmosphericRiverIntensity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "dam_failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DamFailureIntensity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "flash_flood": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FlashFloodIntensity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "generic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GenericIntensity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "hurricane": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HurricaneIntensity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rainfall": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RainfallIntensity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "river_flood": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiverFloodIntensity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "storm_surge": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StormSurgeIntensity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tropical_storm": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TropicalStormIntensity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "IntensityIndicators",
+      "type": "object"
+    },
+    "NumericClaim": {
+      "additionalProperties": false,
+      "description": "A single numerical claim from a single source, with provenance.",
+      "properties": {
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "observation_time": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Time"
+        },
+        "outlier_flag": {
+          "default": false,
+          "title": "Outlier Flag",
+          "type": "boolean"
+        },
+        "reporting_time": {
+          "format": "date-time",
+          "title": "Reporting Time",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "agency",
+            "major_news",
+            "regional_news",
+            "aggregator",
+            "social",
+            "other"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "source_type",
+        "source_id",
+        "source_url",
+        "reporting_time"
+      ],
+      "title": "NumericClaim",
+      "type": "object"
+    },
+    "RainfallIntensity": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_hours": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "peak_hourly_inches": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "return_period_years": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "total_inches": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "RainfallIntensity",
+      "type": "object"
+    },
+    "RiverFloodIntensity": {
+      "additionalProperties": false,
+      "properties": {
+        "flood_stage_ft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gauge_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gauge Id"
+        },
+        "peak_stage_ft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "river_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "River Name"
+        }
+      },
+      "title": "RiverFloodIntensity",
+      "type": "object"
+    },
+    "StormSurgeIntensity": {
+      "additionalProperties": false,
+      "properties": {
+        "associated_storm": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Associated Storm"
+        },
+        "peak_surge_ft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "StormSurgeIntensity",
+      "type": "object"
+    },
+    "TimeRange": {
+      "additionalProperties": false,
+      "description": "A UTC start/end interval. Shared by AssessmentEnvelope and EventMetadata.",
+      "properties": {
+        "end": {
+          "format": "date-time",
+          "title": "End",
+          "type": "string"
+        },
+        "start": {
+          "format": "date-time",
+          "title": "Start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "TimeRange",
+      "type": "object"
+    },
+    "TropicalStormIntensity": {
+      "additionalProperties": false,
+      "properties": {
+        "landfall_location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Landfall Location"
+        },
+        "max_winds_kt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaimSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "TropicalStormIntensity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Structured representation of a real-world hazard event (Appendix C.2).",
+  "properties": {
+    "canonical_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Canonical Id"
+    },
+    "canonical_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Canonical Name"
+    },
+    "confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "embedding": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Embedding"
+    },
+    "embedding_model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Embedding Model"
+    },
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "enum": [
+        "hurricane",
+        "tropical_storm",
+        "atmospheric_river",
+        "intense_rainfall",
+        "dam_failure",
+        "levee_failure",
+        "storm_surge",
+        "river_flood",
+        "flash_flood",
+        "other"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "extracted_at": {
+      "format": "date-time",
+      "title": "Extracted At",
+      "type": "string"
+    },
+    "extractor_version": {
+      "title": "Extractor Version",
+      "type": "string"
+    },
+    "intensity": {
+      "$ref": "#/$defs/IntensityIndicators"
+    },
+    "location": {
+      "$ref": "#/$defs/EventLocation"
+    },
+    "provenance": {
+      "$ref": "#/$defs/EventProvenance"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "time_classification": {
+      "enum": [
+        "past",
+        "ongoing",
+        "forecast"
+      ],
+      "title": "Time Classification",
+      "type": "string"
+    },
+    "time_range": {
+      "$ref": "#/$defs/TimeRange"
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "confidence",
+    "location",
+    "time_range",
+    "time_classification",
+    "intensity",
+    "provenance",
+    "extracted_at",
+    "extractor_version"
+  ],
+  "title": "EventMetadata",
+  "type": "object"
+}

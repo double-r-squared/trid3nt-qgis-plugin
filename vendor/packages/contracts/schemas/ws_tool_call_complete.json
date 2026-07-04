@@ -1,0 +1,37 @@
+{
+  "additionalProperties": false,
+  "description": "``tool-call-complete`` (A.4): a tool finished successfully.\n\n``metrics`` is tool-specific structured data (invariant 1: the numbers the\nnarrative cites live here, never free text). For the flood depth tool this\ncarries ``FloodMetrics``-shaped fields; the full result body lives in GCS /\nMongoDB and is referenced by ``result_uri``.",
+  "properties": {
+    "call_id": {
+      "title": "Call Id",
+      "type": "string"
+    },
+    "metrics": {
+      "additionalProperties": true,
+      "title": "Metrics",
+      "type": "object"
+    },
+    "result_summary": {
+      "title": "Result Summary",
+      "type": "string"
+    },
+    "result_uri": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Result Uri"
+    }
+  },
+  "required": [
+    "call_id",
+    "result_summary"
+  ],
+  "title": "ToolCallCompletePayload",
+  "type": "object"
+}

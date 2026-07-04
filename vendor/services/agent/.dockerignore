@@ -1,0 +1,44 @@
+# .dockerignore for the GRACE-2 agent image (services/agent/Dockerfile).
+#
+# The build context is the repo ROOT (the CodeBuild buildspec sets it so the
+# COPY paths are repo-root-relative, matching the worker images). This file is
+# read when the build context root is services/agent/ -- it keeps the agent
+# subtree lean. The codebuild buildspec also tars only services/agent into the
+# context, so most of these are belt-and-suspenders.
+#
+# Container-hygiene norm (feedback_container_image_hygiene): minimize the context
+# so the daemon never ships the heavy local venv / tests / evidence into the
+# build, which both slows the upload and risks leaking the gitignored local .env.
+
+# The local editable venv -- NEVER ship it (the image builds a clean venv).
+.venv/
+**/.venv/
+
+# Local secrets -- the .env is gitignored AND must never enter an image layer.
+# The container gets config via the task definition env + the task IAM role.
+.env
+*.env
+.env.*
+
+# Python build/cache artifacts.
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+**/.pytest_cache/
+*.egg-info/
+**/*.egg-info/
+build/
+dist/
+
+# Tests + local verification scripts + captured evidence -- not needed at
+# runtime (the image runs the WS server, not the suite).
+tests/
+evidence/
+verify_*.py
+migrate_file_to_dynamo.py
+
+# Editor / OS noise.
+.DS_Store
+*.swp

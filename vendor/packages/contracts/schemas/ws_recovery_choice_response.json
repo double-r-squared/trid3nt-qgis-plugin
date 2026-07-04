@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "description": "``recovery-choice-response`` (A.4b \u2014 sprint-08 amendment, FR-FR-1).\n\nUser has picked one of the three actions OR cancelled the gate.\n\nFields:\n\n- ``request_id`` \u2014 matches the originating ``recovery-choice`` request.\n- ``choice`` \u2014 ``\"deny\"`` / ``\"retry\"`` / ``\"chat\"`` OR None when the user\n  cancelled. (Cancellation rare; modeled the same way as the existing\n  ``clarification-response`` / ``disambiguation-response`` shapes.)\n- ``chat_text`` \u2014 populated only when ``choice == \"chat\"``; carries the\n  focused single-line nudge the user typed. Capped at 4096 chars.\n- ``cancelled`` \u2014 set to True when the user explicitly dismissed the modal.\n\nCross-shape discipline (lightweight \u2014 full enforcement is the consumer's\nresponsibility, matching the existing A.4b response shapes): ``chat_text``\nSHOULD be populated when ``choice == \"chat\"`` and SHOULD be None\notherwise; the agent service validates at receipt time per FR-AS-11.",
+  "properties": {
+    "cancelled": {
+      "default": false,
+      "title": "Cancelled",
+      "type": "boolean"
+    },
+    "chat_text": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chat Text"
+    },
+    "choice": {
+      "anyOf": [
+        {
+          "enum": [
+            "deny",
+            "retry",
+            "chat"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Choice"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id"
+  ],
+  "title": "RecoveryChoiceResponsePayload",
+  "type": "object"
+}

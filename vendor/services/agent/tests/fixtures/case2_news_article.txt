@@ -1,0 +1,43 @@
+SYNTHETIC FIXTURE — NOT A REAL EVENT (job-0228, sprint-13 Stage 2).
+This article is a fabricated test fixture for the Case 2 groundwater-
+contamination composer. The event, quantities, and quotes below are invented
+for end-to-end testing and do not describe any real incident.
+
+Tanker Overturns Near Twin Falls, Spilling Industrial Solvent Toward Aquifer
+
+TWIN FALLS, IDAHO — A tractor-trailer hauling industrial solvent overturned on a
+rural highway just south of Twin Falls, Idaho on March 14, 2026, releasing an
+estimated 12,000 gallons of trichloroethylene (TCE) into roadside soil before
+emergency crews could contain the leak. State environmental officials said the
+solvent drained from a ruptured baffle over roughly six hours, soaking into
+ground that sits directly above the Eastern Snake River Plain aquifer — one of
+the most productive groundwater systems in the western United States.
+
+Trichloroethylene, a chlorinated degreasing solvent once common in
+metal-finishing shops, is denser than water and notoriously mobile in
+groundwater. Hydrogeologists with the Idaho Department of Water Resources warned
+that even a partial infiltration of the 12,000-gallon load could establish a
+long-lived contaminant plume migrating with the regional groundwater gradient.
+
+"TCE doesn't break down quickly, and it sinks," said a department spokesperson.
+"Once it reaches saturated sands and gravels, it can travel a long way from the
+release point. Our first job is to understand how far and how fast."
+
+The driver was treated for minor injuries and released. No residents were
+reported hurt, though officials advised three nearby households on private wells
+to switch to bottled water as a precaution while monitoring wells are installed.
+Crews worked through the night to excavate the most heavily saturated soil, but
+state officials cautioned that some fraction of the solvent had almost certainly
+reached the water table by the time containment berms were in place.
+
+The Eastern Snake River Plain aquifer supplies irrigation water to hundreds of
+farms across south-central Idaho and feeds the springs that discharge into the
+Snake River canyon near Twin Falls. A contaminant plume in this setting could
+take years to characterize and far longer to remediate.
+
+Federal and state agencies opened a joint investigation into the cause of the
+crash and the integrity of the tanker's containment system. A full delineation
+of the subsurface plume — its likely footprint and peak concentration — is
+expected to take weeks of monitoring-well sampling and groundwater-transport
+modeling. Officials said modeling the plume's probable extent is the immediate
+priority so that downgradient wells can be prioritized for sampling.

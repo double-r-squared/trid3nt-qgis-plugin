@@ -1,0 +1,79 @@
+{
+  "additionalProperties": false,
+  "description": "A single numerical claim from a single source, with provenance.",
+  "properties": {
+    "confidence": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confidence"
+    },
+    "observation_time": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Observation Time"
+    },
+    "outlier_flag": {
+      "default": false,
+      "title": "Outlier Flag",
+      "type": "boolean"
+    },
+    "reporting_time": {
+      "format": "date-time",
+      "title": "Reporting Time",
+      "type": "string"
+    },
+    "source_id": {
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_type": {
+      "enum": [
+        "agency",
+        "major_news",
+        "regional_news",
+        "aggregator",
+        "social",
+        "other"
+      ],
+      "title": "Source Type",
+      "type": "string"
+    },
+    "source_url": {
+      "title": "Source Url",
+      "type": "string"
+    },
+    "unit": {
+      "title": "Unit",
+      "type": "string"
+    },
+    "value": {
+      "title": "Value",
+      "type": "number"
+    }
+  },
+  "required": [
+    "value",
+    "unit",
+    "source_type",
+    "source_id",
+    "source_url",
+    "reporting_time"
+  ],
+  "title": "NumericClaim",
+  "type": "object"
+}

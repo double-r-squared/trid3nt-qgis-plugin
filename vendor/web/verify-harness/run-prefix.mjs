@@ -1,0 +1,15 @@
+import { chromium } from "playwright";
+const BASE = "http://127.0.0.1:5191";
+const browser = await chromium.launch();
+const page = await browser.newPage();
+const client = await page.context().newCDPSession(page);
+await client.send("Network.enable");
+const frames = [];
+client.on("Network.webSocketFrameSent", (p) => { try { frames.push(JSON.parse(p.response.payloadData).type); } catch { frames.push("<nj>"); } });
+client.on("Network.webSocketFrameReceived", (p) => { try { frames.push("RECV:" + JSON.parse(p.response.payloadData).type); } catch {} });
+await page.goto(`${BASE}/verify-harness/wireorder-prefix.html?mode=anon&url=${encodeURIComponent("ws://127.0.0.1:8905")}`, { waitUntil: "load" });
+await page.waitForTimeout(2500);
+const events = await page.evaluate(() => window.__events);
+await page.screenshot({ path: "/tmp/panel-0253b-out/wireorder-PREFIX-regression.png" });
+console.log(JSON.stringify({ frames, events }, null, 2));
+await browser.close();

@@ -1,0 +1,632 @@
+{
+  "$defs": {
+    "ChatMessage": {
+      "additionalProperties": false,
+      "description": "One chat turn. ``message_id`` matches the WS message id for agent msgs.",
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "user",
+            "agent"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "tool_calls": {
+          "items": {
+            "$ref": "#/$defs/ToolCallSummary"
+          },
+          "title": "Tool Calls",
+          "type": "array"
+        }
+      },
+      "required": [
+        "message_id",
+        "role",
+        "content",
+        "created_at"
+      ],
+      "title": "ChatMessage",
+      "type": "object"
+    },
+    "MapView": {
+      "additionalProperties": false,
+      "description": "Current client map view.",
+      "properties": {
+        "bbox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bbox",
+          "type": "array"
+        },
+        "center": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Center",
+          "type": "array"
+        },
+        "zoom": {
+          "title": "Zoom",
+          "type": "number"
+        }
+      },
+      "required": [
+        "center",
+        "zoom",
+        "bbox"
+      ],
+      "title": "MapView",
+      "type": "object"
+    },
+    "PipelineSnapshot": {
+      "additionalProperties": false,
+      "description": "A persisted pipeline run.",
+      "properties": {
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "final_state": {
+          "anyOf": [
+            {
+              "enum": [
+                "complete",
+                "failed",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Final State"
+        },
+        "pipeline_id": {
+          "title": "Pipeline Id",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/PipelineStepSummary"
+          },
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "pipeline_id",
+        "started_at"
+      ],
+      "title": "PipelineSnapshot",
+      "type": "object"
+    },
+    "PipelineStepSummary": {
+      "additionalProperties": false,
+      "description": "A step in a persisted pipeline snapshot. ``cancelled`` is distinct.\n\nOptional progress + error fields (job-0030, sprint-06 M4 pre-flight,\nresolving job-0026 OQ-W-26-PIPELINE-STEP-FIELDS):\n\n- ``progress_percent`` is an integer 0..100, populated by the workflow\n  when it can reasonably attribute progress (e.g. solver chunk N of M,\n  n-of-M rows processed). Optional everywhere \u2014 never an LLM estimate\n  (Invariant 1: determinism boundary).\n- ``error_code`` is a ``SCREAMING_SNAKE_CASE`` literal aligned with the\n  Appendix A.6 error-code convention; populated only when ``state ==\n  \"failed\"``. The set of valid codes is **open** per A.6 (every workflow\n  may register its own); validation is shape-only (regex).\n- ``error_message`` is a short human-readable accompanier, capped at\n  512 chars to discourage stack-trace leakage. Free text.\n- ``duration_ms`` (job-0264, ELEVATED tool-timer requirement) is the\n  authoritative wall-clock elapsed time, derived deterministically from\n  ``completed_at - started_at`` and stamped on the **terminal** transition\n  (complete / failed / cancelled) by the ``PipelineEmitter``. Never an LLM\n  estimate (Invariant 1). Optional / ``None`` for pending/running. ``ge=0``.\n\nTightening these to required on ``state == \"running\"`` / ``state ==\n\"failed\"`` is a deliberate follow-up \u2014 see report Open Questions.\nNo cost field anywhere (Invariant 9).",
+      "properties": {
+        "batch_job_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch Job Id"
+        },
+        "batch_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch Status"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "parent_step_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Step Id"
+        },
+        "progress_percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Progress Percent"
+        },
+        "role": {
+          "default": "tool",
+          "enum": [
+            "tool",
+            "compute"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "running",
+            "complete",
+            "failed",
+            "cancelled"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "step_id": {
+          "title": "Step Id",
+          "type": "string"
+        },
+        "substep_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substep Index"
+        },
+        "substep_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substep Label"
+        },
+        "substep_total": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substep Total"
+        },
+        "tool_name": {
+          "title": "Tool Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step_id",
+        "name",
+        "tool_name",
+        "state"
+      ],
+      "title": "PipelineStepSummary",
+      "type": "object"
+    },
+    "ProjectLayerSummary": {
+      "additionalProperties": false,
+      "description": "Denormalized layer entry on a project (and on session map state).\n\nThe ``wms_url`` field carries the QGIS Server WMS endpoint the client uses\nfor MapLibre source registration; ``uri`` remains the underlying GCS file\npointer (gs://...). ``style_preset`` drives client-side legend matching.\n``opacity`` (0.0\u20131.0) and ``z_index`` enable layer-stack arbitration;\nclients fall back to ``1.0`` / a default order if both are absent.\n\nCloses OQ-62-LAYERURI-URI-FIELD, OQ-W-65-STYLE-PRESET, OQ-0068-ZIDX.",
+      "properties": {
+        "layer_id": {
+          "title": "Layer Id",
+          "type": "string"
+        },
+        "layer_type": {
+          "enum": [
+            "raster",
+            "vector"
+          ],
+          "title": "Layer Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "context",
+            "input"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "style_preset": {
+          "title": "Style Preset",
+          "type": "string"
+        },
+        "temporal": {
+          "title": "Temporal",
+          "type": "boolean"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        },
+        "visible": {
+          "title": "Visible",
+          "type": "boolean"
+        },
+        "wms_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wms Url"
+        },
+        "z_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Z Index"
+        }
+      },
+      "required": [
+        "layer_id",
+        "name",
+        "layer_type",
+        "uri",
+        "style_preset",
+        "visible",
+        "role",
+        "temporal"
+      ],
+      "title": "ProjectLayerSummary",
+      "type": "object"
+    },
+    "ToolCallSummary": {
+      "additionalProperties": false,
+      "description": "A completed/failed/cancelled tool call recorded in chat history.",
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "result_summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Summary"
+        },
+        "result_uri": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Uri"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "complete",
+            "failed",
+            "cancelled"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "tool_name": {
+          "title": "Tool Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "tool_name",
+        "state",
+        "started_at"
+      ],
+      "title": "ToolCallSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``sessions`` (D.6): chat session state. TTL-cleaned via ``expires_at``.",
+  "properties": {
+    "_id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "chat_history": {
+      "items": {
+        "$ref": "#/$defs/ChatMessage"
+      },
+      "title": "Chat History",
+      "type": "array"
+    },
+    "client_fingerprint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Client Fingerprint"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "current_pipeline": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PipelineSnapshot"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "last_active_at": {
+      "format": "date-time",
+      "title": "Last Active At",
+      "type": "string"
+    },
+    "loaded_layers": {
+      "items": {
+        "$ref": "#/$defs/ProjectLayerSummary"
+      },
+      "title": "Loaded Layers",
+      "type": "array"
+    },
+    "map_view": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MapView"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "pipeline_history": {
+      "items": {
+        "$ref": "#/$defs/PipelineSnapshot"
+      },
+      "title": "Pipeline History",
+      "type": "array"
+    },
+    "project_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Project Ids",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "_id",
+    "created_at",
+    "last_active_at",
+    "expires_at"
+  ],
+  "title": "SessionDocument",
+  "type": "object"
+}

@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "description": "``tool-call-start`` (A.4): a tool invocation has begun.",
+  "properties": {
+    "call_id": {
+      "title": "Call Id",
+      "type": "string"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    },
+    "step_id": {
+      "title": "Step Id",
+      "type": "string"
+    },
+    "tool_category": {
+      "title": "Tool Category",
+      "type": "string"
+    },
+    "tool_name": {
+      "title": "Tool Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "call_id",
+    "step_id",
+    "tool_name",
+    "tool_category"
+  ],
+  "title": "ToolCallStartPayload",
+  "type": "object"
+}

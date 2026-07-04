@@ -1,0 +1,69 @@
+{
+  "additionalProperties": false,
+  "description": "Returned by ``build_sfincs_model`` (HydroMT). A staged, ready-to-run model.\n\nThe built model artifacts live in GCS; ``setup_uri`` points at them.\n``parameters`` is solver-specific staging metadata (grid, forcing, options)\nvalidated at the engine layer.",
+  "properties": {
+    "bbox": {
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Bbox",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "grid_resolution_m": {
+      "exclusiveMinimum": 0.0,
+      "title": "Grid Resolution M",
+      "type": "number"
+    },
+    "parameters": {
+      "additionalProperties": true,
+      "title": "Parameters",
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "setup_id": {
+      "title": "Setup Id",
+      "type": "string"
+    },
+    "setup_uri": {
+      "title": "Setup Uri",
+      "type": "string"
+    },
+    "solver": {
+      "title": "Solver",
+      "type": "string"
+    }
+  },
+  "required": [
+    "setup_id",
+    "solver",
+    "setup_uri",
+    "grid_resolution_m",
+    "bbox",
+    "created_at"
+  ],
+  "title": "ModelSetup",
+  "type": "object"
+}

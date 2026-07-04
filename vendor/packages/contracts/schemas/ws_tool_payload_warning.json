@@ -1,0 +1,190 @@
+{
+  "$defs": {
+    "GranularitySuggestion": {
+      "additionalProperties": false,
+      "description": "Pre-run mesh-granularity suggestion attached to a ``tool-payload-warning``\n(#154 granularity gate, sprint-16).\n\nThe granularity gate makes mesh resolution a USER lever rather than a\nsilent auto-coarsen (memory: ``feedback_user_controlled_granularity``).\nBefore a heavy solver run (SWMM / SFINCS), the autoscaler emits a\nSUGGESTED resolution alongside the active-cell count, the estimated\nsolve wall-clock, and the chosen compute class so the user can SEE the\ncost-of-resolution and override the rung before execution. The user's\noverride reuses the existing ``tool-payload-confirmation`` path\n(``decision=\"narrow_scope\"`` + ``revised_args`` carrying the chosen\n``resolution_param`` value) \u2014 no new confirmation envelope.\n\nThis model is an OPTIONAL enrichment on ``PayloadWarningEnvelopePayload``;\na payload-warning without a granularity suggestion is unchanged.\n\nFields:\n\n- ``engine`` \u2014 the solver this suggestion is for (``\"swmm\"`` / ``\"sfincs\"``).\n- ``resolution_param`` \u2014 the solver-args field the user overrides:\n  ``\"target_resolution_m\"`` (SWMM overland cell size) or\n  ``\"grid_resolution_m\"`` (SFINCS grid). The client writes the chosen\n  rung back into ``revised_args`` under this exact key.\n- ``suggested_resolution_m`` \u2014 the autoscaler's recommended cell size in\n  metres (> 0). The default-selected rung.\n- ``resolution_choices`` \u2014 the ascending ladder of selectable cell sizes\n  in metres (the rungs the user can pick from). Each rung > 0.\n- ``estimated_active_cells`` \u2014 projected active-cell count at the\n  suggested resolution (>= 0). Drives the \"~46k cells\" readout.\n- ``estimated_solve_seconds`` \u2014 projected solver wall-clock in seconds\n  at the suggested resolution (>= 0). An inference, surfaced as \"est ~70s\".\n- ``vcpus`` \u2014 vCPU count of the chosen compute class (> 0).\n- ``compute_class`` \u2014 human/infra label for the compute tier\n  (e.g. a Batch Spot instance type \"c7i.2xlarge\").\n- ``cell_cap`` \u2014 the element-cap the autoscaler honoured (> 0); the\n  ceiling above which the suggestion coarsens.\n- ``coarsened`` \u2014 True when the suggested resolution is COARSER than the\n  user's originally-requested resolution because the request would have\n  exceeded ``cell_cap``. Surfaces the \"we coarsened\" honesty signal.\n- ``reason`` \u2014 short human-readable rationale (e.g. \"Requested 10 m would\n  exceed the 2M-cell cap; suggesting 30 m\").\n- ``spot_label`` \u2014 optional Spot-pricing/instance label for the readout\n  (e.g. \"c7i.2xlarge Spot\"); None when not on a Spot tier.\n\nInvariant 1 (Determinism boundary): every number the chat narrates here is\na structured field, never inferred from prose.\nInvariant 9 (No cost theater): cells / seconds / vCPUs / instance label are\ncapacity + capability descriptors, NOT dollar figures. No dollar field.",
+      "properties": {
+        "cell_cap": {
+          "exclusiveMinimum": 0,
+          "title": "Cell Cap",
+          "type": "integer"
+        },
+        "coarsened": {
+          "title": "Coarsened",
+          "type": "boolean"
+        },
+        "compute_class": {
+          "minLength": 1,
+          "title": "Compute Class",
+          "type": "string"
+        },
+        "engine": {
+          "enum": [
+            "swmm",
+            "sfincs"
+          ],
+          "title": "Engine",
+          "type": "string"
+        },
+        "estimated_active_cells": {
+          "minimum": 0,
+          "title": "Estimated Active Cells",
+          "type": "integer"
+        },
+        "estimated_solve_seconds": {
+          "minimum": 0.0,
+          "title": "Estimated Solve Seconds",
+          "type": "number"
+        },
+        "reason": {
+          "maxLength": 512,
+          "title": "Reason",
+          "type": "string"
+        },
+        "resolution_choices": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Resolution Choices",
+          "type": "array"
+        },
+        "resolution_param": {
+          "enum": [
+            "target_resolution_m",
+            "grid_resolution_m"
+          ],
+          "title": "Resolution Param",
+          "type": "string"
+        },
+        "spot_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spot Label"
+        },
+        "suggested_resolution_m": {
+          "exclusiveMinimum": 0.0,
+          "title": "Suggested Resolution M",
+          "type": "number"
+        },
+        "vcpus": {
+          "exclusiveMinimum": 0,
+          "title": "Vcpus",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "engine",
+        "resolution_param",
+        "suggested_resolution_m",
+        "estimated_active_cells",
+        "estimated_solve_seconds",
+        "vcpus",
+        "compute_class",
+        "cell_cap",
+        "coarsened",
+        "reason"
+      ],
+      "title": "GranularitySuggestion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``tool-payload-warning`` (Appendix A amendment, job-0127).\n\nAgent emits this when a registered estimator's projected payload\nexceeds the warning threshold. The client renders an inline chat card\nshowing the tool name, the projected MB, the threshold, the agent's\nshort recommendation, and (optionally) the agent's suggested narrowing\nargs. The user picks one of the actions in ``options``.\n\nFields:\n\n- ``envelope_type`` \u2014 discriminator, literal ``\"tool-payload-warning\"``.\n- ``warning_id`` \u2014 ULID identifying the gate; the response carries it\n  back so the agent can match the confirmation to the right paused\n  coroutine.\n- ``tool_name`` \u2014 atomic-tool function name (Python identifier). The\n  client renders this to the user.\n- ``tool_args`` \u2014 the args the agent intended to dispatch (sanitized,\n  JSON-serializable). The client shows a summary so the user can\n  verify what's about to be fetched.\n- ``estimated_mb`` \u2014 the estimator's projected payload size in\n  megabytes. Float; the estimator may return a fractional value.\n- ``threshold_mb`` \u2014 the threshold the estimate exceeded. The client\n  surfaces both numbers (estimate + threshold) so the user understands\n  WHY the gate fired.\n- ``recommendation`` \u2014 short human-readable suggestion (e.g.\n  \"Consider narrowing bbox to a single county\" or \"Filter to fewer\n  bands\"). Capped at 512 chars.\n- ``alternative_args`` \u2014 optional agent-drafted narrowed args. When\n  present, the client can offer a one-click \"narrow scope\" using these\n  exact args (no second prompt needed). Permissive ``dict`` shape so\n  tool-specific narrowing strategies (smaller bbox / fewer time steps\n  / fewer features) all fit. The agent service round-trips this\n  through the target tool's signature before dispatch.\n- ``options`` \u2014 non-empty subset of {``\"proceed\"``, ``\"cancel\"``,\n  ``\"narrow_scope\"``}. When the estimate exceeds the hard cap, the\n  agent omits ``\"proceed\"`` here so the client cannot offer it.\n- ``ttl_seconds`` \u2014 gate validity (seconds since envelope ``ts``); on\n  expiry the gate becomes a typed failure (``CONFIRMATION_TIMEOUT``\n  from A.6). Default 300s \u2014 payload-warning gates are read-decisions,\n  so they get the same TTL as a confirmation-request.\n- ``granularity`` \u2014 OPTIONAL pre-run mesh-granularity suggestion\n  (#154 granularity gate). When present, the client renders the\n  resolution ladder + estimated cells / solve time / compute class and\n  lets the user override the rung before the heavy solver run. The\n  override rides back on the existing ``tool-payload-confirmation``\n  (``decision=\"narrow_scope\"`` + ``revised_args``). None on ordinary\n  payload-warnings \u2014 fully back-compatible.\n\nInvariant 1 (Determinism boundary): every number the chat narrates\nhere is a structured field, never inferred from prose.\nInvariant 9 (No cost theater): ``estimated_mb`` is a payload-size\nestimate, not a dollar / latency / quota figure. No cost field anywhere.",
+  "properties": {
+    "alternative_args": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Alternative Args"
+    },
+    "envelope_type": {
+      "const": "tool-payload-warning",
+      "default": "tool-payload-warning",
+      "title": "Envelope Type",
+      "type": "string"
+    },
+    "estimated_mb": {
+      "minimum": 0.0,
+      "title": "Estimated Mb",
+      "type": "number"
+    },
+    "granularity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GranularitySuggestion"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "options": {
+      "items": {
+        "enum": [
+          "proceed",
+          "cancel",
+          "narrow_scope"
+        ],
+        "type": "string"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Options",
+      "type": "array"
+    },
+    "recommendation": {
+      "maxLength": 512,
+      "title": "Recommendation",
+      "type": "string"
+    },
+    "threshold_mb": {
+      "minimum": 0.0,
+      "title": "Threshold Mb",
+      "type": "number"
+    },
+    "tool_args": {
+      "additionalProperties": true,
+      "title": "Tool Args",
+      "type": "object"
+    },
+    "tool_name": {
+      "minLength": 1,
+      "title": "Tool Name",
+      "type": "string"
+    },
+    "ttl_seconds": {
+      "default": 300,
+      "minimum": 1,
+      "title": "Ttl Seconds",
+      "type": "integer"
+    },
+    "warning_id": {
+      "title": "Warning Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "warning_id",
+    "tool_name",
+    "estimated_mb",
+    "threshold_mb",
+    "recommendation"
+  ],
+  "title": "PayloadWarningEnvelopePayload",
+  "type": "object"
+}

@@ -1,0 +1,198 @@
+{
+  "additionalProperties": false,
+  "description": "A step in a persisted pipeline snapshot. ``cancelled`` is distinct.\n\nOptional progress + error fields (job-0030, sprint-06 M4 pre-flight,\nresolving job-0026 OQ-W-26-PIPELINE-STEP-FIELDS):\n\n- ``progress_percent`` is an integer 0..100, populated by the workflow\n  when it can reasonably attribute progress (e.g. solver chunk N of M,\n  n-of-M rows processed). Optional everywhere \u2014 never an LLM estimate\n  (Invariant 1: determinism boundary).\n- ``error_code`` is a ``SCREAMING_SNAKE_CASE`` literal aligned with the\n  Appendix A.6 error-code convention; populated only when ``state ==\n  \"failed\"``. The set of valid codes is **open** per A.6 (every workflow\n  may register its own); validation is shape-only (regex).\n- ``error_message`` is a short human-readable accompanier, capped at\n  512 chars to discourage stack-trace leakage. Free text.\n- ``duration_ms`` (job-0264, ELEVATED tool-timer requirement) is the\n  authoritative wall-clock elapsed time, derived deterministically from\n  ``completed_at - started_at`` and stamped on the **terminal** transition\n  (complete / failed / cancelled) by the ``PipelineEmitter``. Never an LLM\n  estimate (Invariant 1). Optional / ``None`` for pending/running. ``ge=0``.\n\nTightening these to required on ``state == \"running\"`` / ``state ==\n\"failed\"`` is a deliberate follow-up \u2014 see report Open Questions.\nNo cost field anywhere (Invariant 9).",
+  "properties": {
+    "batch_job_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Batch Job Id"
+    },
+    "batch_status": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Batch Status"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    },
+    "duration_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Ms"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "error_message": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Message"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "parent_step_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Step Id"
+    },
+    "progress_percent": {
+      "anyOf": [
+        {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Progress Percent"
+    },
+    "role": {
+      "default": "tool",
+      "enum": [
+        "tool",
+        "compute"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "started_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Started At"
+    },
+    "state": {
+      "enum": [
+        "pending",
+        "running",
+        "complete",
+        "failed",
+        "cancelled"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "step_id": {
+      "title": "Step Id",
+      "type": "string"
+    },
+    "substep_index": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Substep Index"
+    },
+    "substep_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Substep Label"
+    },
+    "substep_total": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Substep Total"
+    },
+    "tool_name": {
+      "title": "Tool Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "step_id",
+    "name",
+    "tool_name",
+    "state"
+  ],
+  "title": "PipelineStepSummary",
+  "type": "object"
+}

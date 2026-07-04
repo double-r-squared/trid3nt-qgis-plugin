@@ -1,0 +1,63 @@
+{
+  "additionalProperties": false,
+  "description": "Returned by ``run_solver``. The cancellation contract (invariant 8).\n\n``workflows_execution_id`` is the Cloud Workflows execution identifier \u2014\nthe pinned cancellation seam. ``agent`` calls Workflows ``terminate`` with\nit on cancel; ``infra`` provisions the workflow definitions it names. All\nthree cite this same handle (orchestrator \"Solver cancellation chain\").",
+  "properties": {
+    "compute_class": {
+      "enum": [
+        "small",
+        "standard",
+        "large",
+        "gpu"
+      ],
+      "title": "Compute Class",
+      "type": "string"
+    },
+    "handle_id": {
+      "title": "Handle Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "solver": {
+      "title": "Solver",
+      "type": "string"
+    },
+    "submitted_at": {
+      "format": "date-time",
+      "title": "Submitted At",
+      "type": "string"
+    },
+    "workflow_location": {
+      "title": "Workflow Location",
+      "type": "string"
+    },
+    "workflow_name": {
+      "title": "Workflow Name",
+      "type": "string"
+    },
+    "workflows_execution_id": {
+      "title": "Workflows Execution Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "handle_id",
+    "run_id",
+    "solver",
+    "compute_class",
+    "workflows_execution_id",
+    "workflow_name",
+    "workflow_location",
+    "submitted_at"
+  ],
+  "title": "ExecutionHandle",
+  "type": "object"
+}

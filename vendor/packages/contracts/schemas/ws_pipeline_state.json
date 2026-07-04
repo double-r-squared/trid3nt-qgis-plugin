@@ -1,0 +1,197 @@
+{
+  "$defs": {
+    "PipelineStep": {
+      "additionalProperties": false,
+      "description": "One step in the pipeline snapshot.\n\n``duration_ms`` (job-0264, ELEVATED tool-timer requirement) is the\nauthoritative wall-clock elapsed time the workflow stamps on the\n**terminal** transition (complete / failed / cancelled). It is derived\ndeterministically from ``completed_at - started_at`` by the\n``PipelineEmitter`` \u2014 NOT an LLM estimate (Invariant 1). Optional and\n``None`` for pending/running steps: the client renders a cosmetic live\nticker until this lands, then locks the card to this number. Milliseconds\nso a sub-second tool reads honestly (0 displays as \"0:00\"). ``ge=0``.\n\nTwo-card sim observability (task-149): ``role`` discriminates the card\nKIND \u2014 the default ``\"tool\"`` is an on-box atomic-tool card (every existing\npayload), while ``\"compute\"`` is the off-box solver card that binds to an\nAWS Batch job. For a ``\"compute\"`` card, ``batch_job_id`` carries the Batch\n``jobId`` it tracks and ``batch_status`` the last ``DescribeJobs`` status\n(SUBMITTED / RUNNABLE / STARTING / RUNNING / SUCCEEDED / FAILED). All three\nare optional with defaults that keep every existing tool card byte-identical\non the wire (``role=\"tool\"``, both ids ``None``). Never an LLM estimate\n(Invariant 1): ``batch_status`` mirrors the Batch control-plane verbatim.\n\nNested sub-step timeline (task-168): a composer's INTERNAL atomic-tool calls\n(``fetch_*`` / deck build / ``run_solver`` / ``postprocess_*`` /\n``publish_layer`` / ``compute_*``) are surfaced as CHILD steps nested under\nthe parent workflow card instead of separate top-level interleaved cards.\nFour additive fields drive the \"live breadcrumb + expand\" UX:\n\n- ``parent_step_id`` -- set on a CHILD step; the ``step_id`` of the parent\n  workflow step this child belongs to. When set, the client NESTS this step\n  under the parent and does NOT render it as a top-level card. ``None`` (the\n  default) means a normal top-level step -- every existing payload.\n- ``substep_label`` -- set on the PARENT; the raw tool name of the\n  currently-running child (the web humanizes it into a breadcrumb label).\n  Cleared (``None``) when the parent reaches a terminal state.\n- ``substep_index`` -- set on the PARENT; the 1-based index of the\n  currently-running child (the breadcrumb \"k\" in \"fetching topobathy k/N\").\n  Cleared when the parent completes.\n- ``substep_total`` -- set on the PARENT; the planned child count (the\n  breadcrumb \"N\"). ``None`` when unknown -- the web then shows just the\n  humanized label + index with no \"/N\".\n\nAll four default ``None`` so every existing serialization stays\nbyte-compatible (a step with no children + no parent dumps identically to\nthe pre-task-168 wire shape). Deterministic / workflow-attributed, never an\nLLM estimate (Invariant 1).",
+      "properties": {
+        "batch_job_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch Job Id"
+        },
+        "batch_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Batch Status"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "parent_step_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Step Id"
+        },
+        "progress_percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Progress Percent"
+        },
+        "role": {
+          "default": "tool",
+          "enum": [
+            "tool",
+            "compute"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "running",
+            "complete",
+            "failed",
+            "cancelled"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "step_id": {
+          "title": "Step Id",
+          "type": "string"
+        },
+        "substep_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substep Index"
+        },
+        "substep_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substep Label"
+        },
+        "substep_total": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substep Total"
+        },
+        "tool_name": {
+          "title": "Tool Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step_id",
+        "name",
+        "tool_name",
+        "state"
+      ],
+      "title": "PipelineStep",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``pipeline-state`` (A.4): full snapshot of the current pipeline.\n\nThe full snapshot replaces the client's pipeline view on each message;\ndeltas are not used.",
+  "properties": {
+    "pipeline_id": {
+      "title": "Pipeline Id",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/PipelineStep"
+      },
+      "title": "Steps",
+      "type": "array"
+    }
+  },
+  "required": [
+    "pipeline_id"
+  ],
+  "title": "PipelineStatePayload",
+  "type": "object"
+}

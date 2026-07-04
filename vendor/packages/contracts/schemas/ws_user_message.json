@@ -1,0 +1,48 @@
+{
+  "additionalProperties": false,
+  "description": "``user-message`` (A.3): user-submitted text input.",
+  "properties": {
+    "case_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Case Id"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Id"
+    },
+    "research_mode": {
+      "default": "research",
+      "enum": [
+        "research",
+        "deep_research"
+      ],
+      "title": "Research Mode",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "title": "UserMessagePayload",
+  "type": "object"
+}

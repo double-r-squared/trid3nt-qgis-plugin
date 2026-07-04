@@ -1,0 +1,484 @@
+"""OpenAI-compatible LLM provider adapter (offline/local build -- GAP 1).
+
+``MODEL_PROVIDER=openai`` selects this path. It accepts the SAME inputs that
+``bedrock_adapter.stream_bedrock`` accepts -- a ``list[genai_types.Content]``
+history + a list of ``genai_types.FunctionDeclaration`` tool specs + a system
+prompt -- converts them to OpenAI chat-completions wire shapes at the boundary,
+and yields the SAME ``StreamEvent`` union (``TextDeltaEvent`` /
+``FunctionCallEvent`` / ``UsageMetadataEvent``) that the server.py dispatch
+loop consumes.
+
+This single provider covers any OpenAI-compatible endpoint:
+  - Local: Ollama (http://localhost:11434/v1), vLLM, llama.cpp server, LM Studio
+  - Cloud: OpenAI, Groq, DeepSeek, OpenRouter, Anthropic (messages-compat API)
+
+Config env vars (all read at call time so an ECS/systemd env injection works
+without re-import):
+
+  GRACE2_OPENAI_BASE_URL  (REQUIRED when MODEL_PROVIDER=openai; no default)
+  GRACE2_OPENAI_API_KEY   (default "not-needed" -- local endpoints ignore it)
+  GRACE2_OPENAI_MODEL     (required; sent verbatim on every chat.completions call)
+  MODEL_PROVIDER=openai   (selects this adapter from the dispatch seam)
+
+Design notes:
+
+  1. genai Content[] -> OpenAI messages[]
+     - ``user`` role -> ``"user"``; ``model`` role -> ``"assistant"``
+     - assistant function_call Part -> ``"assistant"`` message with ``tool_calls``
+       list; ``tool_call_id`` is minted deterministically (``"call_{counter}"``
+       per turn if the genai id is absent).
+     - function_response Part -> ``"tool"`` message with matching ``tool_call_id``
+       and JSON-serialised content; ids are resolved by pairing arrivals in order
+       (mirroring the bedrock_adapter queue strategy).
+     - Consecutive same-role messages are coalesced to satisfy the OpenAI API
+       requirement that roles alternate (or at minimum that tool-result sequences
+       form a legal run).
+
+  2. FunctionDeclaration[] -> OpenAI tools[]
+     - ``_genai_schema_to_json_schema`` converts genai uppercase enum types to
+       lowercase JSON Schema (mirrors bedrock_adapter._genai_schema_to_json_schema).
+     - The same sanitisation pass is applied: empty parameters -> object with
+       ``{}``, non-object top-level schema -> wrapped in object.
+
+  3. Streaming
+     - ``stream_options={"include_usage": True}`` is sent so the final chunk
+       carries usage metadata (usage is tolerated absent for providers that do
+       not support it).
+     - Tool-call argument deltas are accumulated per index (``delta.tool_calls``
+       index field) across chunks; on ``finish_reason=="tool_calls"`` the
+       accumulated JSON is parsed and ``FunctionCallEvent``s are emitted.
+     - Text deltas -> ``TextDeltaEvent`` as they arrive.
+     - Usage on the final chunk -> ``UsageMetadataEvent`` (best-effort).
+
+  4. Bedrock-style id compatibility
+     - When the session's selected model id looks like a Bedrock inference-profile
+       id (contains ``anthropic.`` / ``us.`` / ``:0``), GRACE2_OPENAI_MODEL
+       overrides it and a one-shot warning is logged.
+
+The ``openai`` package (``openai>=1.40``) is a hard dependency only when this
+adapter is active; the import lives inside the streaming function so the rest of
+the agent starts cleanly on environments where the package is not installed.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from collections import deque
+from collections.abc import AsyncIterator
+from typing import Any
+
+from google.genai import types as genai_types
+
+from .adapter import (
+    FunctionCallEvent,
+    StreamEvent,
+    TextDeltaEvent,
+    UsageMetadataEvent,
+)
+
+logger = logging.getLogger("grace2_agent.openai_adapter")
+
+# Logged once per process if the session model id looks like a Bedrock id.
+_BEDROCK_ID_WARN_DONE = False
+
+# ---------------------------------------------------------------------------
+# Config helpers
+# ---------------------------------------------------------------------------
+
+_BEDROCK_ID_PATTERNS = (
+    "anthropic.",
+    "us.anthropic",
+    "us.amazon",
+    "us.deepseek",
+    ":0",
+)
+
+
+def _looks_like_bedrock_id(model_id: str) -> bool:
+    return any(p in model_id for p in _BEDROCK_ID_PATTERNS)
+
+
+def openai_base_url() -> str:
+    """Return GRACE2_OPENAI_BASE_URL; raise clearly if unset."""
+    url = os.environ.get("GRACE2_OPENAI_BASE_URL", "").strip()
+    if not url:
+        raise RuntimeError(
+            "MODEL_PROVIDER=openai requires GRACE2_OPENAI_BASE_URL to be set "
+            "(e.g. http://localhost:11434/v1 for Ollama). "
+            "Set it in the environment and restart the agent."
+        )
+    return url
+
+
+def openai_api_key() -> str:
+    return os.environ.get("GRACE2_OPENAI_API_KEY", "not-needed")
+
+
+def openai_model(session_model: str | None = None) -> str:
+    """Resolve the OpenAI model name to send.
+
+    Precedence:
+      1. GRACE2_OPENAI_MODEL env var (always wins for the OpenAI path)
+      2. session_model if it does NOT look like a Bedrock inference-profile id
+      3. Raise if nothing is configured
+    """
+    global _BEDROCK_ID_WARN_DONE
+    configured = os.environ.get("GRACE2_OPENAI_MODEL", "").strip()
+    if configured:
+        return configured
+    if session_model:
+        if _looks_like_bedrock_id(session_model):
+            if not _BEDROCK_ID_WARN_DONE:
+                logger.warning(
+                    "openai_adapter: session model %r looks like a Bedrock id; "
+                    "ignoring it for the OpenAI path. Set GRACE2_OPENAI_MODEL "
+                    "to the local/OpenAI model name (e.g. llama3.2:3b).",
+                    session_model,
+                )
+                _BEDROCK_ID_WARN_DONE = True
+        else:
+            return session_model
+    raise RuntimeError(
+        "MODEL_PROVIDER=openai requires GRACE2_OPENAI_MODEL to be set "
+        "(e.g. 'llama3.2:3b' for Ollama or 'gpt-4o' for OpenAI). "
+        "Set it in the environment and restart the agent."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Schema conversion: genai FunctionDeclaration -> OpenAI tools[]
+# (mirrors bedrock_adapter._genai_schema_to_json_schema / tool_declarations_to_bedrock_tools)
+# ---------------------------------------------------------------------------
+
+_TYPE_MAP = {
+    "STRING": "string",
+    "NUMBER": "number",
+    "INTEGER": "integer",
+    "BOOLEAN": "boolean",
+    "ARRAY": "array",
+    "OBJECT": "object",
+    "TYPE_UNSPECIFIED": "string",
+}
+
+
+def _genai_schema_to_json_schema(node: Any) -> dict[str, Any]:
+    """Recursively convert a genai-dumped Schema dict to JSON Schema."""
+    if not isinstance(node, dict):
+        return {"type": "string"}
+    out: dict[str, Any] = {}
+    raw_type = node.get("type")
+    if raw_type is not None:
+        t = raw_type.value if hasattr(raw_type, "value") else str(raw_type)
+        out["type"] = _TYPE_MAP.get(t.upper(), t.lower())
+    if node.get("description"):
+        out["description"] = node["description"]
+    if node.get("enum"):
+        out["enum"] = list(node["enum"])
+    if node.get("format"):
+        out["format"] = node["format"]
+    props = node.get("properties")
+    if isinstance(props, dict):
+        out["properties"] = {
+            k: _genai_schema_to_json_schema(v) for k, v in props.items()
+        }
+    items = node.get("items")
+    if items is not None:
+        out["items"] = _genai_schema_to_json_schema(items)
+    if node.get("required"):
+        out["required"] = list(node["required"])
+    # Ensure object schemas declare type.
+    if out.get("type") == "object" and "properties" not in out:
+        out["properties"] = {}
+    return out
+
+
+def tool_declarations_to_openai_tools(
+    tool_declarations: list[genai_types.FunctionDeclaration] | None,
+) -> list[dict[str, Any]]:
+    """Convert genai FunctionDeclarations to OpenAI ``tools[]`` (function type)."""
+    tools: list[dict[str, Any]] = []
+    for decl in tool_declarations or []:
+        dumped = decl.model_dump(mode="json", exclude_none=True)
+        params = dumped.get("parameters")
+        if params:
+            schema = _genai_schema_to_json_schema(params)
+        else:
+            schema = {"type": "object", "properties": {}}
+        if schema.get("type") != "object":
+            schema = {"type": "object", "properties": {}}
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": dumped["name"],
+                    "description": (dumped.get("description") or dumped["name"])[:1000],
+                    "parameters": schema,
+                },
+            }
+        )
+    return tools
+
+
+# ---------------------------------------------------------------------------
+# History conversion: genai Content[] -> OpenAI messages[]
+# ---------------------------------------------------------------------------
+
+
+def _coalesce_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge consecutive messages of the same role (except tool messages).
+
+    OpenAI requires that consecutive same-role assistant messages be merged.
+    Tool (role=='tool') messages must NEVER be merged -- each carries its own
+    tool_call_id and must remain separate.
+    """
+    merged: list[dict[str, Any]] = []
+    for m in messages:
+        if m["role"] == "tool":
+            merged.append(m)
+            continue
+        if (
+            merged
+            and merged[-1]["role"] == m["role"]
+            and merged[-1]["role"] != "tool"
+        ):
+            # Merge: extend content list or concatenate text strings.
+            prev = merged[-1]
+            prev_content = prev.get("content")
+            cur_content = m.get("content")
+            if isinstance(prev_content, list) and isinstance(cur_content, list):
+                prev_content.extend(cur_content)
+            elif isinstance(prev_content, str) and isinstance(cur_content, str):
+                prev["content"] = prev_content + "\n" + cur_content
+            elif isinstance(prev_content, list) and isinstance(cur_content, str):
+                prev_content.append({"type": "text", "text": cur_content})
+            # Also merge tool_calls if both have them.
+            if m.get("tool_calls"):
+                if prev.get("tool_calls"):
+                    prev["tool_calls"].extend(m["tool_calls"])
+                else:
+                    prev["tool_calls"] = m["tool_calls"]
+        else:
+            merged.append(dict(m))
+    return merged
+
+
+def contents_to_openai_messages(
+    contents: list[genai_types.Content],
+    system_prompt: str | None = None,
+) -> list[dict[str, Any]]:
+    """Convert genai ``contents`` to OpenAI ``messages[]``.
+
+    genai roles:
+      ``user``  -> ``"user"``
+      ``model`` -> ``"assistant"``
+    function_call Part -> ``"assistant"`` message with ``tool_calls``
+    function_response Part -> ``"tool"`` message with tool_call_id
+
+    tool_call_id is harvested from fc.id; when absent (legacy Gemini history),
+    a stable deterministic id ``"call_{counter}"`` is minted. function_response
+    ids are resolved by pairing with the preceding function_call by arrival order
+    (same FIFO queue strategy as bedrock_adapter.contents_to_bedrock_messages).
+    """
+    messages: list[dict[str, Any]] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+
+    pending_ids: deque[str] = deque()
+    counter = 0
+
+    def _next_id() -> str:
+        nonlocal counter
+        counter += 1
+        return f"call_{counter}"
+
+    for content in contents:
+        role = getattr(content, "role", "user") or "user"
+        oai_role = "assistant" if role == "model" else "user"
+        parts = getattr(content, "parts", None) or []
+
+        # Collect tool calls and text for assistant turns.
+        tool_calls: list[dict[str, Any]] = []
+        text_parts: list[str] = []
+        tool_results: list[dict[str, Any]] = []
+
+        for part in parts:
+            fc = getattr(part, "function_call", None)
+            fr = getattr(part, "function_response", None)
+            text = getattr(part, "text", None)
+
+            if fc is not None and getattr(fc, "name", None):
+                tid = getattr(fc, "id", None) or _next_id()
+                pending_ids.append(tid)
+                args = dict(getattr(fc, "args", None) or {})
+                tool_calls.append(
+                    {
+                        "id": tid,
+                        "type": "function",
+                        "function": {
+                            "name": fc.name,
+                            "arguments": json.dumps(args),
+                        },
+                    }
+                )
+            elif fr is not None and getattr(fr, "name", None):
+                tid = getattr(fr, "id", None) or (
+                    pending_ids.popleft() if pending_ids else _next_id()
+                )
+                resp = getattr(fr, "response", None)
+                if not isinstance(resp, dict):
+                    resp = {"result": resp}
+                tool_results.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tid,
+                        "content": json.dumps(resp),
+                    }
+                )
+            elif text:
+                text_parts.append(text)
+
+        # Build the message(s) for this content.
+        if tool_results:
+            # Tool result messages go as individual "tool" role messages.
+            messages.extend(tool_results)
+        elif tool_calls:
+            # Assistant turn with tool calls (may also have text).
+            msg: dict[str, Any] = {"role": "assistant", "tool_calls": tool_calls}
+            if text_parts:
+                msg["content"] = "\n".join(text_parts)
+            else:
+                msg["content"] = None
+            messages.append(msg)
+        elif text_parts:
+            messages.append({"role": oai_role, "content": "\n".join(text_parts)})
+
+    return _coalesce_messages(messages)
+
+
+# ---------------------------------------------------------------------------
+# Streaming
+# ---------------------------------------------------------------------------
+
+
+async def stream_openai(
+    contents: list[genai_types.Content],
+    tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
+    system_prompt: str | None = None,
+    model: str | None = None,
+) -> AsyncIterator[StreamEvent]:
+    """Stream one OpenAI-compatible turn, yielding the GRACE ``StreamEvent`` union.
+
+    Mirrors ``bedrock_adapter.stream_bedrock``: one call == one model round.
+    The dispatch loop in ``server.py`` appends function_call + function_response
+    Contents and re-calls until no tool calls remain.
+
+    The ``openai`` package is imported inside this function so the rest of the
+    agent starts cleanly on environments where the package is not installed
+    (the dep is dormant unless MODEL_PROVIDER=openai is selected).
+    """
+    try:
+        from openai import AsyncOpenAI
+    except ImportError as exc:
+        raise RuntimeError(
+            "MODEL_PROVIDER=openai requires the 'openai' package. "
+            "Install it with: pip install 'openai>=1.40'"
+        ) from exc
+
+    resolved_model = openai_model(model)
+    base_url = openai_base_url()
+    api_key = openai_api_key()
+
+    client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+
+    messages = contents_to_openai_messages(contents, system_prompt=system_prompt)
+    tools = tool_declarations_to_openai_tools(tool_declarations)
+
+    kwargs: dict[str, Any] = {
+        "model": resolved_model,
+        "messages": messages,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+        "temperature": 0.7,
+    }
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
+
+    # Per-index accumulator for fragmented tool-call argument deltas.
+    # Structure: {index: {"id": str, "name": str, "args_buf": str}}
+    tool_call_accumulators: dict[int, dict[str, Any]] = {}
+
+    async with await client.chat.completions.create(**kwargs) as stream:  # type: ignore[attr-defined]
+        async for chunk in stream:
+            choices = getattr(chunk, "choices", None) or []
+            for choice in choices:
+                delta = getattr(choice, "delta", None)
+
+                if delta is None:
+                    continue
+
+                # Text delta.
+                text = getattr(delta, "content", None)
+                if text:
+                    yield TextDeltaEvent(delta=text)
+
+                # Tool-call deltas: accumulate by index.
+                tc_deltas = getattr(delta, "tool_calls", None) or []
+                for tc_delta in tc_deltas:
+                    idx = tc_delta.index
+                    if idx not in tool_call_accumulators:
+                        tool_call_accumulators[idx] = {
+                            "id": "",
+                            "name": "",
+                            "args_buf": "",
+                        }
+                    acc = tool_call_accumulators[idx]
+                    if tc_delta.id:
+                        acc["id"] += tc_delta.id
+                    fn = getattr(tc_delta, "function", None)
+                    if fn:
+                        if getattr(fn, "name", None):
+                            acc["name"] += fn.name
+                        if getattr(fn, "arguments", None):
+                            acc["args_buf"] += fn.arguments
+
+            # Usage on the last chunk (stream_options include_usage).
+            usage = getattr(chunk, "usage", None)
+            if usage is not None:
+                prompt_tokens = getattr(usage, "prompt_tokens", None)
+                completion_tokens = getattr(usage, "completion_tokens", None)
+                total_tokens = getattr(usage, "total_tokens", None)
+                if any(v is not None for v in (prompt_tokens, completion_tokens, total_tokens)):
+                    yield UsageMetadataEvent(
+                        prompt_token_count=prompt_tokens,
+                        candidates_token_count=completion_tokens,
+                        total_token_count=total_tokens,
+                        cached_content_token_count=None,
+                        cache_hit=False,
+                    )
+
+    # After the stream, emit any accumulated tool calls.
+    for _idx, acc in sorted(tool_call_accumulators.items()):
+        if not acc["name"]:
+            continue
+        try:
+            args = json.loads(acc["args_buf"]) if acc["args_buf"].strip() else {}
+        except json.JSONDecodeError:
+            args = {}
+        yield FunctionCallEvent(
+            name=acc["name"],
+            call_id=acc["id"] or None,
+            args=args if isinstance(args, dict) else {},
+        )
+
+
+__all__ = [
+    "stream_openai",
+    "tool_declarations_to_openai_tools",
+    "contents_to_openai_messages",
+    "openai_model",
+    "openai_base_url",
+    "openai_api_key",
+]

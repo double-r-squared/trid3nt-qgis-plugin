@@ -1,0 +1,67 @@
+{
+  "additionalProperties": false,
+  "description": "``session-state`` (A.4): lets the client reconstruct the session.\n\nThe nested shapes are the JSON serialization of the Appendix D.6 models\n(``ChatMessage``, ``ProjectLayerSummary``, ``PipelineSnapshot``,\n``MapView``). They are carried as plain ``dict``/``list`` here to avoid a\ncircular contract dependency between ws.py and collections.py; the agent\nserializes the real D.6 models into them. See report OQ-S4.\n\n``status`` is ``\"active\"`` in normal operation; ``\"max_turns_reached\"``\nwhen the FR-FR-3 cap fires (job-0048). Defaults to ``\"active\"`` so\nexisting consumers do not need to change.",
+  "properties": {
+    "chat_history": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Chat History",
+      "type": "array"
+    },
+    "current_pipeline": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Current Pipeline"
+    },
+    "loaded_layers": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Loaded Layers",
+      "type": "array"
+    },
+    "map_view": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Map View"
+    },
+    "pipeline_history": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Pipeline History",
+      "type": "array"
+    },
+    "status": {
+      "default": "active",
+      "enum": [
+        "active",
+        "max_turns_reached"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "title": "SessionStatePayload",
+  "type": "object"
+}

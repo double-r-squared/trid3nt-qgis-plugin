@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "``clarification-response`` (A.4b): user chose an option, or cancelled.",
+  "properties": {
+    "cancelled": {
+      "default": false,
+      "title": "Cancelled",
+      "type": "boolean"
+    },
+    "option_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Option Id"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id"
+  ],
+  "title": "ClarificationResponsePayload",
+  "type": "object"
+}

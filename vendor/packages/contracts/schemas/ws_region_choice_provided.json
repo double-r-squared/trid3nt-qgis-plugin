@@ -1,0 +1,71 @@
+{
+  "additionalProperties": false,
+  "description": "``region-choice-provided`` (A.3): client -> server the user's region pick.\n\nSent when the user answers a ``RegionChoiceRequestEnvelopePayload`` \u2014 either\nby tapping a candidate (in-chat card OR map choropleth, both synced) or by\nchoosing \"use the whole state\". It resumes the agent's paused turn,\ncorrelated by ``request_id``. Carries the picked region's identity so the\nagent continues the workflow with the right bbox.\n\nFields:\n\n- ``request_id`` \u2014 the ``request_id`` of the\n  ``RegionChoiceRequestEnvelopePayload`` this answers. The agent uses it to\n  resolve the exact paused turn to resume.\n- ``choice`` \u2014 ``\"region\"`` when the user narrowed to a sub-region;\n  ``\"whole_state\"`` when the user kept the whole-state default (the\n  honest already-resolved bbox). Closed Literal.\n- ``selected_region_id`` \u2014 the ``region_id`` of the chosen\n  ``RegionCandidate`` when ``choice == \"region\"``; ``None`` for\n  ``whole_state``. The agent re-resolves the candidate's bbox by this id\n  (authoritative over a client-sent bbox), falling back to\n  ``selected_bbox`` only if the id is unknown.\n- ``selected_bbox`` \u2014 the chosen region's EPSG:4326 bbox, echoed from the\n  candidate. Present when ``choice == \"region\"``; ``None`` for\n  ``whole_state``. A convenience / fallback when the agent cannot\n  re-resolve ``selected_region_id`` (e.g. the region set was rebuilt) \u2014\n  the agent prefers re-resolving by ``selected_region_id`` so a tampered\n  bbox cannot redirect the workflow.\n\nInvariant 9: no cost field. Invariant 8: cancellation is first-class \u2014 a\n``whole_state`` reply IS the decline path; a hard cancel rides A.3\n``cancel``.",
+  "properties": {
+    "choice": {
+      "enum": [
+        "region",
+        "whole_state"
+      ],
+      "title": "Choice",
+      "type": "string"
+    },
+    "envelope_type": {
+      "const": "region-choice-provided",
+      "default": "region-choice-provided",
+      "title": "Envelope Type",
+      "type": "string"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "selected_bbox": {
+      "anyOf": [
+        {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Bbox"
+    },
+    "selected_region_id": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Region Id"
+    }
+  },
+  "required": [
+    "request_id",
+    "choice"
+  ],
+  "title": "RegionChoiceProvidedEnvelopePayload",
+  "type": "object"
+}

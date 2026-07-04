@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "``agent-message-chunk`` (A.4): a streamed token group from the LLM.",
+  "properties": {
+    "delta": {
+      "title": "Delta",
+      "type": "string"
+    },
+    "done": {
+      "default": false,
+      "title": "Done",
+      "type": "boolean"
+    },
+    "message_id": {
+      "title": "Message Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "message_id",
+    "delta"
+  ],
+  "title": "AgentMessageChunkPayload",
+  "type": "object"
+}

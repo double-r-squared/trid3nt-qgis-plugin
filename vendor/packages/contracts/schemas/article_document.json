@@ -1,0 +1,160 @@
+{
+  "additionalProperties": false,
+  "description": "``articles`` (D.4): fetched news article corpus.",
+  "properties": {
+    "_id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "author": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Author"
+    },
+    "embedding": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Embedding"
+    },
+    "embedding_model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Embedding Model"
+    },
+    "extracted_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Extracted Event Ids",
+      "type": "array"
+    },
+    "extraction_status": {
+      "enum": [
+        "pending",
+        "extracted",
+        "failed",
+        "no_events"
+      ],
+      "title": "Extraction Status",
+      "type": "string"
+    },
+    "fetched_at": {
+      "format": "date-time",
+      "title": "Fetched At",
+      "type": "string"
+    },
+    "html_uri": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Html Uri"
+    },
+    "last_processed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Processed At"
+    },
+    "published_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Published At"
+    },
+    "publisher": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Publisher"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    },
+    "text_length": {
+      "minimum": 0,
+      "title": "Text Length",
+      "type": "integer"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "url": {
+      "title": "Url",
+      "type": "string"
+    },
+    "url_hash": {
+      "title": "Url Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "_id",
+    "url",
+    "url_hash",
+    "title",
+    "text",
+    "text_length",
+    "fetched_at",
+    "extraction_status"
+  ],
+  "title": "ArticleDocument",
+  "type": "object"
+}

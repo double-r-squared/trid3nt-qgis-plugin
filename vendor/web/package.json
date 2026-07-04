@@ -1,0 +1,49 @@
+{
+  "name": "grace2-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "GRACE-2 web client (React + MapLibre GL JS) — M1 stub: CONUS map + chat round-trip against the local Appendix-A WebSocket agent.",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@deck.gl/core": "^9.3.5",
+    "@deck.gl/layers": "^9.3.5",
+    "@deck.gl/mapbox": "^9.3.5",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^8.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@phosphor-icons/react": "^2.1.10",
+    "flatgeobuf": "^4.4.0",
+    "maplibre-gl": "4.7.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "terra-draw": "1.31.1",
+    "terra-draw-maplibre-gl-adapter": "1.3.0",
+    "vega": "^6.2.0",
+    "vega-embed": "^7.1.0",
+    "vega-lite": "^6.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "@vitest/ui": "^4.1.8",
+    "happy-dom": "^20.10.2",
+    "jsdom": "^29.1.1",
+    "playwright": "^1.61.0",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "vitest": "^4.1.8"
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "additionalProperties": false,
+  "description": "A single curated public data-source catalog entry (FR-PHC-2 + \u00a7F.1.2).\n\nFields (per \u00a7F.1.2 Mode 1):\n\n- ``id`` \u2014 stable identifier (e.g. ``\"usgs-3dep-dem-1m\"``,\n  ``\"worldpop-1km-aggregated\"``).\n- ``name`` \u2014 human-readable label.\n- ``description`` \u2014 brief description of what the layer / dataset\n  represents.\n- ``urls`` \u2014 endpoint URLs; the first is primary, subsequent entries are\n  alternative mirrors. ``min_length=1``.\n- ``access_tier`` \u2014 \u00a7F.1.1 access-pattern tier (1/2/3/4).\n- ``credential_tier`` \u2014 \u00a7F.1 credential tier (1/2/3).\n- ``ttl_class`` \u2014 FR-DC-2 cache class.\n- ``source_class`` \u2014 FR-DC-1 bucket-prefix identifier (``\"dem\"``,\n  ``\"landcover\"``, ``\"flood_zone\"``, \u2026). Free-form string per FR-DC-1.\n- ``license`` \u2014 license text or URL (e.g. ``\"Public Domain (US Federal)\"``,\n  ``\"CC-BY-4.0\"``). Required structured field per Invariant 7.\n- ``citation`` \u2014 formal citation string. Required.\n- ``vintage`` \u2014 data vintage descriptor (e.g. ``\"2020\"``, ``\"2024-Q3\"``,\n  ``\"R2020A\"``). Optional \u2014 some live-feed sources do not have a stable\n  vintage.\n- ``last_verified`` \u2014 UTC datetime when the entry was last confirmed\n  working by a curator (or by the Mode 2 conformity probe).\n- ``status`` \u2014 entry lifecycle per ``EntryStatus``.\n- ``how_to_use`` \u2014 multi-line invocation examples + parameter constraints +\n  known quirks. This is the actionable-catalog payload (\u00a7F.1.2 Mode 1).\n- ``api_key_secret_ref`` \u2014 Secret Manager resource path for the API key\n  when ``credential_tier >= 2``. Must be ``None`` when ``credential_tier == 1``.",
+  "properties": {
+    "access_tier": {
+      "enum": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "title": "Access Tier",
+      "type": "integer"
+    },
+    "api_key_secret_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Api Key Secret Ref"
+    },
+    "citation": {
+      "minLength": 1,
+      "title": "Citation",
+      "type": "string"
+    },
+    "credential_tier": {
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "Credential Tier",
+      "type": "integer"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "how_to_use": {
+      "minLength": 1,
+      "title": "How To Use",
+      "type": "string"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "last_verified": {
+      "format": "date-time",
+      "title": "Last Verified",
+      "type": "string"
+    },
+    "license": {
+      "minLength": 1,
+      "title": "License",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "native_resolution_m": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Native Resolution M"
+    },
+    "schema_version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_class": {
+      "minLength": 1,
+      "title": "Source Class",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "active",
+        "deprecated",
+        "user_proposed_pending_curator_review"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "ttl_class": {
+      "enum": [
+        "static-30d",
+        "semi-static-7d",
+        "dynamic-1h",
+        "live-no-cache"
+      ],
+      "title": "Ttl Class",
+      "type": "string"
+    },
+    "urls": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Urls",
+      "type": "array"
+    },
+    "vintage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Vintage"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "description",
+    "urls",
+    "access_tier",
+    "credential_tier",
+    "ttl_class",
+    "source_class",
+    "license",
+    "citation",
+    "last_verified",
+    "status",
+    "how_to_use"
+  ],
+  "title": "CatalogEntry",
+  "type": "object"
+}

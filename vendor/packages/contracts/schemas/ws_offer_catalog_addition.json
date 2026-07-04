@@ -1,0 +1,298 @@
+{
+  "$defs": {
+    "ProbeFindings": {
+      "additionalProperties": false,
+      "description": "Conformity-probe results captured by the agent during Mode 2 discovery.\n\nAll fields are optional because a given probe may not be able to determine\nevery axis (the OGC GetCapabilities check may fail while the STAC root\ncheck succeeds, etc.). The client renders findings as a structured table\nin the review modal so the user can sanity-check the agent's classification.",
+      "properties": {
+        "access_tier_inferred": {
+          "anyOf": [
+            {
+              "enum": [
+                1,
+                2,
+                3,
+                4
+              ],
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Tier Inferred"
+        },
+        "content_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Type"
+        },
+        "last_modified_header": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Modified Header"
+        },
+        "license_observed": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Observed"
+        },
+        "ogc_capabilities_found": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ogc Capabilities Found"
+        },
+        "stac_root_found": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stac Root Found"
+        },
+        "supports_range_requests": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supports Range Requests"
+        },
+        "tls_cert_org": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tls Cert Org"
+        }
+      },
+      "title": "ProbeFindings",
+      "type": "object"
+    },
+    "SuggestedCatalogEntry": {
+      "additionalProperties": false,
+      "description": "Agent-drafted catalog entry surfaced inside an ``offer-catalog-addition``.\n\nPermissive shape: the agent supplies the fields it can infer from the\nconformity probe; the user may edit any of them in the review modal before\naccepting. The agent service round-trips an accepted draft through the\nfull ``CatalogEntry`` model (which enforces cross-field rules) before\nwriting to the ``catalog_entries`` collection.\n\nMirrors the SRS \u00a7F.1.2 Mode 2 envelope example fields:\n``id`` / ``name`` / ``description`` / ``urls`` / ``access_tier`` /\n``credential_tier`` / ``ttl_class`` / ``source_class`` / ``license_claim``\n/ ``how_to_use``. Probe-time drafts may omit ``description``, ``vintage``,\nor the conditional ``api_key_secret_ref``; the curator review fills any\ngaps before flipping ``status`` to ``\"active\"``.\n\nRenamed from the SRS sketch: ``license_claim`` here (the SRS prose uses\n``license`` inside the suggested-entry block but the outer ``CatalogEntry``\nalso uses ``license``; the ``_claim`` suffix marks that this is the probe's\n*observation*, not the curator-attested value). Surfaced in Open Questions.",
+      "properties": {
+        "access_tier": {
+          "anyOf": [
+            {
+              "enum": [
+                1,
+                2,
+                3,
+                4
+              ],
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Access Tier"
+        },
+        "credential_tier": {
+          "anyOf": [
+            {
+              "enum": [
+                1,
+                2,
+                3
+              ],
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credential Tier"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "how_to_use": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "How To Use"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "license_claim": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Claim"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "source_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Class"
+        },
+        "ttl_class": {
+          "anyOf": [
+            {
+              "enum": [
+                "static-30d",
+                "semi-static-7d",
+                "dynamic-1h",
+                "live-no-cache"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ttl Class"
+        },
+        "urls": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Urls",
+          "type": "array"
+        }
+      },
+      "title": "SuggestedCatalogEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``offer-catalog-addition`` (A.4 \u2014 sprint-08 amendment, \u00a7F.1.2 Mode 2).\n\nAgent encountered a candidate `.gov` / `.edu` URL during research, ran a\nconformity probe, and is offering to add it to the catalog. The web client\nrenders a dedicated review modal (mirrors \u00a7F.3 secret-form pattern \u2014 popup,\nfocus-trapped, separate from chat envelope) showing the URL + probe\nfindings + the suggested catalog entry.\n\nFields:\n\n- ``request_id`` \u2014 ULID identifying the offer; the response carries it back.\n- ``url`` \u2014 the candidate URL (must be `.gov` or `.edu` per Mode 2 trust\n  model; the agent service enforces this before emission).\n- ``discovered_via`` \u2014 how the agent encountered the URL (``\"user-query\"``\n  / ``\"web-research\"`` / ``\"catalog-cross-reference\"`` / ``\"other\"``).\n  Open ``Literal`` so new discovery surfaces can be added without a\n  breaking schema change.\n- ``probe_findings`` \u2014 structured ``ProbeFindings`` block (all sub-fields\n  optional; rendered as a table in the modal).\n- ``suggested_catalog_entry`` \u2014 agent-drafted ``SuggestedCatalogEntry``;\n  the user may edit any field before accepting.\n- ``ttl_seconds`` \u2014 offer validity. Default 600s (10 minutes \u2014 review\n  modals get more time than retry gates because the user is reading +\n  sanity-checking provenance).",
+  "properties": {
+    "discovered_via": {
+      "enum": [
+        "user-query",
+        "web-research",
+        "catalog-cross-reference",
+        "other"
+      ],
+      "title": "Discovered Via",
+      "type": "string"
+    },
+    "probe_findings": {
+      "$ref": "#/$defs/ProbeFindings"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "suggested_catalog_entry": {
+      "$ref": "#/$defs/SuggestedCatalogEntry"
+    },
+    "ttl_seconds": {
+      "default": 600,
+      "minimum": 1,
+      "title": "Ttl Seconds",
+      "type": "integer"
+    },
+    "url": {
+      "minLength": 1,
+      "title": "Url",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "url",
+    "discovered_via",
+    "probe_findings",
+    "suggested_catalog_entry"
+  ],
+  "title": "OfferCatalogAdditionPayload",
+  "type": "object"
+}

@@ -1,0 +1,87 @@
+{
+  "additionalProperties": false,
+  "description": "``solve-progress`` (A.4 extension): LIVE big-sim telemetry tick.\n\nEmitted by the agent during a long solver run (SFINCS / MODFLOW) so the web\nclient renders grid resolution / active-cell count / vCPU / elapsed / ETA\ninline on the running tool/pipeline card \u2014 replacing a silent multi-minute\nspinner with honest live progress. The web track owns the card rendering;\nthis payload is the shared wire contract.\n\nInvariant 1 (Determinism boundary): every field is solver/perf-model\nsourced, never an LLM estimate \u2014 ``elapsed_seconds`` is wall-clock and\n``eta_seconds`` comes from the autoscale ``estimated_solve_seconds`` (the\nperf model) when available, else ``None`` (no fabricated ETA).",
+  "properties": {
+    "active_cell_count": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Cell Count"
+    },
+    "elapsed_seconds": {
+      "minimum": 0,
+      "title": "Elapsed Seconds",
+      "type": "number"
+    },
+    "eta_seconds": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Eta Seconds"
+    },
+    "grid_resolution_m": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Grid Resolution M"
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Phase"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "solver": {
+      "title": "Solver",
+      "type": "string"
+    },
+    "vcpus": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Vcpus"
+    }
+  },
+  "required": [
+    "run_id",
+    "solver",
+    "elapsed_seconds"
+  ],
+  "title": "SolveProgressPayload",
+  "type": "object"
+}

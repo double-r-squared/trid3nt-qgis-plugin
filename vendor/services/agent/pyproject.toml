@@ -1,0 +1,239 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grace2-agent"
+version = "0.1.0"
+description = "GRACE-2 agent service: AWS Bedrock Converse agent loop, Appendix-A WebSocket server, S3/DynamoDB persistence, AWS Batch solver dispatch."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "GRACE-2 agent specialist" }]
+
+# Pin upper bounds loosely; ADK + genai SDK evolve fast — verify with `pip show`.
+dependencies = [
+    # sprint-14-aws (job-0286): AWS Bedrock Converse provider for the agent
+    # loop (MODEL_PROVIDER=bedrock). google-genai stays until the GCP->AWS
+    # migration completes and the Vertex path is retired.
+    "boto3>=1.40,<2",
+    # sprint-14-aws (job-0296): Cognito ID-token (JWKS/RS256) verification in
+    # auth_handshake.cognito_verify. [crypto] pulls cryptography for RSAAlgorithm.
+    "PyJWT[crypto]>=2.8,<3",
+    # GCP decommission: google-adk DROPPED (zero live callers — register_with_adk
+    # was test-only and is now removed) and google-cloud-secret-manager DROPPED
+    # (the vault is AWS SSM via secrets_handler; the GCP Secret Manager
+    # default-client builder is gone). google-cloud-workflows / google-cloud-logging
+    # also DROPPED: the cloud sandbox readback (Cloud Logging) and the gcp-workflows
+    # solver branch were removed; object I/O is AWS S3 via boto3. (google-cloud-storage
+    # is KEPT — it is part of the QGIS publish carve-out, see google-cloud-run below.)
+    # google-genai is KEPT (carve-out): bedrock_adapter speaks the genai_types
+    # Content/FunctionDeclaration contract that it converts to the Bedrock
+    # Converse API — removing it breaks the live Bedrock path.
+    "google-genai>=2.8,<3",
+    # job-0033 M4 Stage C: data-fetch atomic tools.
+    # py3dep wraps the USGS 3DEP DEM service (CONUS DEM at 10/30m); pulls in
+    # rioxarray + rasterio for COG serialization. requests is the HTTP client
+    # for Nominatim / Census ACS / Planetary Computer STAC search.
+    "py3dep>=0.19,<0.20",
+    "rioxarray>=0.18,<1",
+    "requests>=2.32,<3",
+    # job-0037 sprint-07 Stage A: WorldPop default flip for fetch_population.
+    # pystac-client is the canonical STAC catalog reader used by future
+    # fetch_landcover (NLCD / WorldCover) too. WorldPop itself is served via
+    # a direct REST API (https://www.worldpop.org/rest/data/pop/...) rather
+    # than a STAC catalog (the kickoff-recommended PC ``worldpop-100m``
+    # collection does not exist on Planetary Computer at this writing — see
+    # OQ-37-WORLDPOP-STAC-ENDPOINT). We still pin pystac-client now so the
+    # dep set is stable for sprint-07's downstream fetcher jobs (job-0039).
+    "pystac-client>=0.8,<1",
+    # job-0042 M5 capstone + job-0049 install: HydroMT-SFINCS drives
+    # build_sfincs_model per the OQ-4 §4 decision (full HydroMT reliance).
+    # The < 2.0 cap on hydromt-sfincs holds until SfincsModel v2.0 RC exits
+    # release-candidate status — v2.0 breaks the component-based API.
+    # Honest correction (job-0049): hydromt-sfincs 1.1.2 does not exist on
+    # PyPI (line jumps 1.1.0 → 1.2.0), and the stable hydromt-sfincs v1.2.x
+    # line transitively constrains hydromt < 1 (it does NOT support
+    # hydromt >= 1.0 yet — that lands with hydromt-sfincs v2.0 RC). The
+    # OQ-4 §4 paper pin "hydromt-sfincs >= 1.1.2, < 2.0" + "hydromt >= 1.0"
+    # is internally contradictory in the upstream releases; the working
+    # combo is hydromt-sfincs >= 1.1.0, < 2.0 with hydromt resolved
+    # transitively (currently 0.10.1). Documented in
+    # infra/THIRD_PARTY_LICENSES.md OQ-49 note. fsspec[gcs] is the GCS
+    # bridging layer HydroMT uses to materialize the staged deck.
+    "hydromt-sfincs>=1.1.0,<2.0",
+    # job-0056 pandas pin — resolves two upstream hydromt-sfincs 1.2.2 pandas-3 incompats:
+    #   OQ-54 (sfincs.py:1858): pd.Index.is_integer() — removed in pandas 2.0, still
+    #         present (deprecated) in pandas 2.x. Repro: pd.RangeIndex(1,5).is_integer()
+    #         → AttributeError on pandas 3.x.
+    #   OQ-55 (sfincs.py:2456): pd.date_range(..., freq="10T") — "T" minute alias
+    #         deprecated in pandas 2.2, removed in pandas 3.0.
+    # pandas 2.2.x is the earliest series with pre-built wheels for Python 3.13
+    # (pandas 2.1.x and older have no cp313 wheel and fail to compile against the
+    # CPython 3.13 changed _PyLong_AsByteArray API). Both deprecated APIs remain
+    # functional under pandas 2.2.x with FutureWarnings — acceptable for v0.1 scope.
+    # Migration path: when hydromt-sfincs upstream lands a pandas-3 fix (likely
+    # v1.2.3 or v2.0 RC — upstream should replace is_integer() with
+    # pd.api.types.is_integer_dtype() and "10T" with "10min"), drop this pin and
+    # bump hydromt-sfincs to the fixed release.
+    "pandas>=2.2,<2.3",
+    # GCP decommission: the ``[gcs]`` extra (gcsfs) is DROPPED — the live
+    # object store is S3 (s3fs, below). fsspec core stays; the
+    # ``fsspec.filesystem("gcs")`` calls in the legacy gs:// staging branches
+    # are dead on the AWS default backend.
+    "fsspec>=2024.6",
+    # job-0241 (OQ-227-FLOPY-DEP): flopy is the MODFLOW 6 deck builder + UCN
+    # reader for the GWT groundwater-transport path (run_modflow /
+    # postprocess_modflow / gwt_adapter). 3.9 is the first series with the
+    # MF6-GWT API used here; <4 guards the next major. Previously present
+    # only transitively (3.10.0) — undeclared deps are how the fsspec stale-
+    # venv plume bug shipped (job-0235).
+    "flopy>=3.9,<4",
+    # GCP decommission: KEPT (publish-path carve-out, until job-0308). publish_layer
+    # still lazy-imports ``google.cloud.run_v2.JobsClient`` to dispatch the legacy
+    # PyQGIS worker as a Cloud Run Job for the QGIS-Server WMS render path, which
+    # stays live until the AWS QGIS WMS cutover (job-0308). Drop then.
+    "google-cloud-run>=0.10",
+    # GCP decommission: KEPT (publish-path carve-out, until job-0308). publish_layer
+    # lazy-imports ``from google.cloud import storage`` to upload the project .qgs /
+    # read the GCS-hosted render artifacts for the SAME legacy QGIS-Server WMS path
+    # (the gs:// STORAGE SEAM in every other tool was collapsed to S3/boto3; only
+    # this carve-out keeps google-cloud-storage). Drop together with google-cloud-run
+    # when the AWS QGIS WMS cutover (job-0308) lands.
+    "google-cloud-storage>=2.18,<4",
+    # Wave 4.10 job-A2: s3fs is the fsspec S3 backend for the NOAA Big Data
+    # Program anonymous S3 mirrors consumed by fetch_hrrr_forecast (HRRR-Zarr
+    # at s3://hrrrzarr/) and a planned fetch_hrrr_smoke. Wraps boto3 +
+    # aiobotocore for async-friendly access; we use it only in sync calls via
+    # fsspec.filesystem('s3', anon=True). MRMS already exists on the same
+    # bucket family but uses urllib.request via the public HTTPS endpoint, so
+    # s3fs was not required there.
+    "s3fs>=2024.6",
+    # Wave 4.10 job-A2: zarr is the chunked array backend for HRRR-Zarr
+    # (and pulled in transitively by xarray.open_zarr in other tools).
+    # Zarr v3 is fully back-compatible with v2 stores at read time, which
+    # is what hrrrzarr publishes.
+    "zarr>=2.18,<4",
+    # job-0092 web_fetch: BeautifulSoup4 + lxml drive the main_text/metadata
+    # extraction modes (boilerplate strip + Open Graph tag parse). lxml was
+    # already present transitively (rasterio chain); pin it explicitly here
+    # so a future dep churn doesn't silently drop the parser.
+    "beautifulsoup4>=4.12,<5",
+    "lxml>=5.0,<7",
+    "websockets>=13,<16",
+    # GCP decommission: pymongo DROPPED. The live persistence is the file /
+    # DynamoDB backend (dynamo_backend via boto3); MongoDB/Atlas access went
+    # through the deleted mongodb-mcp-server subprocess (mcp.py), never pymongo.
+    "pydantic>=2,<3",
+    "python-ulid>=2,<4",
+    # job-0122 Wave 2: Firebase Auth admin SDK for the WS connect handshake.
+    # The agent verifies the client's Firebase ID token via
+    # ``firebase_admin.auth.verify_id_token`` (Appendix H.5), resolves the
+    # Firebase ``uid`` to a ``UserDocument._id`` via Persistence (job-0115),
+    # and auto-provisions on first connect. Anonymous fallback when no token
+    # arrives within 5s (H.3). Per Decision E + H.1 v0.1 uses GCP Application
+    # Default Credentials — no separate service-account JSON.
+    # job-0120 Wave 2: Pelicun (NHERI SimCenter) is the fragility-curve runtime
+    # for ``run_pelicun_damage_assessment`` (post-M5 Decision N). v0.1 wires
+    # only the bundled HAZUS v6.1 flood loss-function library
+    # (resources/DamageAndLossModelLibrary/flood/...); the seismic library
+    # is bundled but its engine integration is sprint-13+ (OQ-8-RESOLVED-V0.1).
+    # Pulls in scikit-learn / scipy / pandas / colorama transitively; pandas
+    # is already pinned to 2.2.x by job-0056 (HydroMT-SFINCS compat) which is
+    # within pelicun's pandas>=2.2,<3 range.
+    "pelicun>=3.9,<4",
+    # job-0131 Wave 2: Copernicus CDS API client for fetch_era5_reanalysis.
+    # cdsapi wraps the queue/poll/stream lifecycle of CDS retrievals; we
+    # call ``Client.retrieve()`` from the engine atomic tool and convert
+    # the returned NetCDF into a CRS-tagged COG. Tier-2 Copernicus CDS
+    # secret resolution flows through the Wave 2 sibling job-0124
+    # ``Persistence.get_secret_value`` path.
+    "cdsapi>=0.7,<1",
+    # Wave 4.10 job-A11: USGS Landslide Hazards Program post-fire debris-flow
+    # library. We import it for its data-source wrappers (not the assessment
+    # engine) — fetch_statsgo_soils uses pfdf.data.usgs.statsgo to materialize
+    # STATSGO COGs from ScienceBase, and fetch_3dep_extra uses
+    # pfdf.data.usgs.tnm.dem for the non-default 3DEP resolutions
+    # (1 arc-sec / 1/9 arc-sec / 1 m / 2 arc-sec / 5 m). pfdf 3.x requires
+    # Python >= 3.11 (matches our floor). NOT on PyPI: distributed only via
+    # USGS GitLab (code.usgs.gov/ghsc/lhp/pfdf). Install via direct VCS URL
+    # in environments that need it — production Cloud Run container must
+    # bake the wheel from the GitLab clone during image build (mirrors how
+    # hydromt-sfincs is pulled).
+    "pfdf @ git+https://code.usgs.gov/ghsc/lhp/pfdf.git",
+    # Wave 4.10 job-B7: rank_bm25 backs the BM25 channel of discover_dataset's
+    # hybrid lexical+dense retrieval over the audited tool-docstring corpus +
+    # tool_query_corpus.yaml synthetic queries. Pure-Python (numpy dep only),
+    # ~9 KB wheel; the BM25Okapi class is the canonical implementation.
+    # Sentence-transformers / Vertex embeddings are imported opportunistically
+    # at runtime (no hard dep) so the agent service still starts when the
+    # dense backend is unavailable — see discover_dataset._select_dense_backend.
+    "rank_bm25>=0.2,<1",
+    # job-0224 sprint-13 Stage 1: analytical Q&A tools (summarize_layer_statistics,
+    # count_features_above_threshold, aggregate_property_within_zone) use geopandas
+    # for vector reading + spatial join. geopandas pulls in shapely + pyogrio (GDAL-backed
+    # vector I/O); pyogrio replaces fiona as the default driver in geopandas >= 1.0.
+    "geopandas>=1.0,<2",
+    # NATE 2026-06-17 (fetch_field_boundaries): GeoParquet 1.1 row-group bbox
+    # pushdown over HTTP range requests against the Fields of The World / fiboa
+    # GeoParquet on Source Cooperative. geopandas.read_parquet(bbox=...) needs
+    # the pyarrow backend to prune row groups via the covering bbox column — the
+    # country files are 4-5 GB, so pruning (not whole-file download) is the only
+    # viable path. pyproj (transitive via geopandas) reprojects the WGS84 query
+    # bbox into each file's native CRS (US-USDA is Albers/meters).
+    "pyarrow>=16",
+    # sprint-16 P2 (PySWMM quasi-2D urban-flood engine): pyswmm is the headless
+    # SWMM5 runner (Simulation/Nodes/Links iteration) and swmm-api is the .inp
+    # deck author (Storage/Conduit/Orifice has_flap_gate / Outfall / Timeseries /
+    # Raingage / XSection RECT_OPEN) — the exact pins proven by the P0 GO/NO-GO
+    # spike (services/workers/swmm/spike_quasi2d.py): pyswmm 2.1.0 + swmm-api
+    # 0.4.73. BOTH are lazy-imported inside swmm_mesh_builder.py (a top-level
+    # import would force every agent process to load SWMM5; the mesh build only
+    # happens inside the urban-flood worker path), so the agent service still
+    # starts when these are absent. The FLAP GATE = an Orifice(has_flap_gate=True)
+    # (a Conduit has NO flap kwarg in 0.4.73) and an OUTFALL takes exactly ONE
+    # inlet link — both P0 carry-forwards encoded in the builder.
+    "pyswmm>=2.1,<3",
+    "swmm-api>=0.4.73,<0.5",
+    # F94 vector-tiles path (job-0175 follow-up): pmtiles is the PMTiles v3
+    # archive writer/reader used by vector_tiles.build_pmtiles. The import
+    # surface it relies on (pmtiles.tile.zxy_to_tileid + Compression + TileType,
+    # pmtiles.writer.Writer, pmtiles.reader.Reader/MmapSource) is provided by the
+    # 3.x line (verified against 3.7.0). The build path is env-gated OFF by
+    # default (vector_tiles_enabled() requires GRACE2_VECTOR_TILES_BASE_URL), so
+    # the dep only matters once an HTTP tile-serving face exists. mapbox-vector-
+    # tile + mercantile are pulled transitively (shapely already present via
+    # geopandas). NOTE: the SSM file-swap deploy does NOT pip-install, so the
+    # deployed agent box venv must have pmtiles installed out-of-band.
+    "pmtiles>=3,<4",
+    # offline/local build (GAP 1 -- trid3nt-local offline-architecture.md):
+    # openai is the client for ANY OpenAI-compatible chat.completions endpoint
+    # (Ollama, vLLM, llama.cpp, LM Studio, OpenAI, Groq, DeepSeek, OpenRouter).
+    # Dormant unless MODEL_PROVIDER=openai is selected; zero impact on the live
+    # Bedrock path. AsyncOpenAI + streaming tool-call support requires >= 1.40.
+    "openai>=1.40",
+    # Consumed verbatim from packages/contracts/ (editable install via make run-agent).
+    "grace2-contracts>=0.1,<0.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+grace2-agent = "grace2_agent.main:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Ship runtime data files in the wheel. setuptools drops all non-.py files by
+# default, so a non-editable `pip install` (the Docker/agent image build) was
+# silently omitting these -- e.g. manning_mapping.csv, causing every SFINCS
+# flood to die with MANNING_MAPPING_LOAD_FAILED on the isolation image while the
+# box (editable/source install) worked. Keep this in sync with any new data file
+# loaded via Path(__file__).parent (2026-06-30).
+[tool.setuptools.package-data]
+grace2_agent = [
+    "workflows/manning_mapping.csv",
+    "data/tool_query_corpus.yaml",
+    "tools/README.md",
+]

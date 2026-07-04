@@ -1,0 +1,70 @@
+{
+  "additionalProperties": false,
+  "description": "``chart-emission`` (Appendix A.4 amendment, job-0223, sprint-13).\n\nThe agent emits this after a chart-generation tool computes chart data and\nbuilds a Vega-Lite v5 spec. The client renders the spec inline (stacked\npreview) and in a full-viewport gallery; the chart is also persisted to the\n``sessions`` collection (wrapped in :class:`SessionChartRecord`) so it\nreplays on Case rehydration.\n\nFields:\n\n- ``envelope_type`` \u2014 discriminator, literal ``\"chart-emission\"``.\n- ``chart_id`` \u2014 unique id for this chart (ULID). The client keys the chart\n  on it (de-dupe on replay, gallery navigation, save-as-PNG filename).\n- ``vega_lite_spec`` \u2014 the full Vega-Lite v5 JSON spec as an opaque dict.\n  Validated structurally (``$schema`` OR ``mark``+``encoding``), not against\n  the full grammar. Carries the chart's data + encodings; the client passes\n  it straight to ``vega-embed``.\n- ``title`` \u2014 chart title shown in the preview card + gallery (non-empty).\n- ``caption`` \u2014 optional one-line caption / interpretation under the chart.\n  Capped at 512 chars to keep it a caption, not a narrative.\n- ``source_layer_uri`` \u2014 optional ``gs://`` / layer URI the chart was\n  computed from (e.g. the damage layer behind a damage-distribution\n  histogram). Lets the client offer \"show the source layer\" and lets the\n  writer cross-reference the chart to a layer on replay. Optional because\n  some charts (a pure summary the agent assembled) have no single source\n  layer.\n- ``created_turn_id`` \u2014 the **UI stack-grouping key**. Charts emitted within\n  the same agent turn / tool-call sequence carry the same ``created_turn_id``\n  and the client renders them as one stack (top chart visible, the rest\n  offset behind with a ``+N`` badge). Optional: when None the client treats\n  the chart as its own singleton stack. This is the only grouping signal \u2014\n  the client does NOT infer stacks from timing.\n\nInvariant 1 (Determinism boundary): every number rendered is structured data\ninside ``vega_lite_spec`` computed by a deterministic tool, never narrated\nprose. Invariant 9: no cost field anywhere.",
+  "properties": {
+    "caption": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Caption"
+    },
+    "chart_id": {
+      "title": "Chart Id",
+      "type": "string"
+    },
+    "created_turn_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Created Turn Id"
+    },
+    "envelope_type": {
+      "const": "chart-emission",
+      "default": "chart-emission",
+      "title": "Envelope Type",
+      "type": "string"
+    },
+    "source_layer_uri": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Layer Uri"
+    },
+    "title": {
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "vega_lite_spec": {
+      "additionalProperties": true,
+      "title": "Vega Lite Spec",
+      "type": "object"
+    }
+  },
+  "required": [
+    "chart_id",
+    "vega_lite_spec",
+    "title"
+  ],
+  "title": "ChartEmissionPayload",
+  "type": "object"
+}

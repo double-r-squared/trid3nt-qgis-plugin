@@ -1,0 +1,71 @@
+{
+  "additionalProperties": false,
+  "description": "``location-resolved`` (A.4): a meaningful location was resolved.\n\nEmitted as a side effect of resolution-producing tools; the client\nauto-snaps the map to ``bbox``.",
+  "properties": {
+    "animate": {
+      "default": true,
+      "title": "Animate",
+      "type": "boolean"
+    },
+    "bbox": {
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Bbox",
+      "type": "array"
+    },
+    "granularity": {
+      "enum": [
+        "country",
+        "region",
+        "state",
+        "city",
+        "facility",
+        "bbox"
+      ],
+      "title": "Granularity",
+      "type": "string"
+    },
+    "label": {
+      "title": "Label",
+      "type": "string"
+    },
+    "resolved_id": {
+      "title": "Resolved Id",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "news_extraction",
+        "user_prompt",
+        "disambiguation",
+        "geocoding",
+        "tool_result"
+      ],
+      "title": "Source",
+      "type": "string"
+    }
+  },
+  "required": [
+    "resolved_id",
+    "label",
+    "bbox",
+    "granularity",
+    "source"
+  ],
+  "title": "LocationResolvedPayload",
+  "type": "object"
+}

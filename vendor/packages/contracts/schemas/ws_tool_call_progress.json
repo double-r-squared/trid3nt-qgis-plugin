@@ -1,0 +1,41 @@
+{
+  "additionalProperties": false,
+  "description": "``tool-call-progress`` (A.4): optional progress for an in-flight tool.",
+  "properties": {
+    "call_id": {
+      "title": "Call Id",
+      "type": "string"
+    },
+    "percent": {
+      "anyOf": [
+        {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Percent"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Status"
+    }
+  },
+  "required": [
+    "call_id"
+  ],
+  "title": "ToolCallProgressPayload",
+  "type": "object"
+}

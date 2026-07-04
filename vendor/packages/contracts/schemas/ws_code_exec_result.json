@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "description": "``code-exec-result`` (Appendix A.4 amendment, job-0233, sprint-13).\n\nAgent -> client, emitted AFTER the sandbox returns. The client renders the\nrun outcome inline in the chat (status pill + stdout/stderr tails + the\nresult descriptor \u2014 a scalar, a dataframe preview, a chart, or a too-large\nmarker).\n\nFields:\n\n- ``envelope_type`` \u2014 discriminator, literal ``\"code-exec-result\"``.\n- ``code_exec_id`` \u2014 matches the originating ``code-exec-request`` (the\n  client joins the result card to the request card on this key).\n- ``status`` \u2014 one of ``ok`` / ``error`` / ``timeout`` / ``blocked``\n  (:data:`CodeExecStatus`). The HONEST terminal outcome \u2014 a ``blocked`` /\n  ``timeout`` run is never dressed up as ``ok``.\n- ``stdout_tail`` \u2014 bounded tail of the run's stdout (the executor + host\n  runner already truncate; this field is the user-visible capture). Capped\n  at 16 KiB on the wire.\n- ``stderr_tail`` \u2014 bounded tail of stderr (carries the traceback on\n  ``error``, the ``SandboxNetworkBlocked`` message on ``blocked``). Capped at\n  16 KiB.\n- ``result`` \u2014 the sandbox's converted ``result`` descriptor (the\n  ``convert_result`` output: ``{\"kind\": ...}``), or None when the run\n  produced no ``result`` variable / errored before assigning one. Opaque\n  dict \u2014 the client branches on ``result[\"kind\"]``.\n- ``truncated`` \u2014 True when EITHER the result descriptor was size-bounded\n  (executor FINDING-1 cap) OR the stdout/stderr was truncated. The single\n  honest \"you are not seeing the whole thing\" signal for the card.\n- ``duration_s`` \u2014 wallclock seconds the run took (float). Not a cost \u2014 a\n  latency, surfaced so the user knows a 60s run hit the cap.\n\nInvariant 1 (Determinism boundary): the agent narrates numbers from\n``result``, fed back as the function_response; this envelope is the visual\ntwin of that structured payload. Invariant 9: ``duration_s`` is a latency,\nnot a dollar figure \u2014 no cost field anywhere.",
+  "properties": {
+    "code_exec_id": {
+      "title": "Code Exec Id",
+      "type": "string"
+    },
+    "duration_s": {
+      "default": 0.0,
+      "minimum": 0.0,
+      "title": "Duration S",
+      "type": "number"
+    },
+    "envelope_type": {
+      "const": "code-exec-result",
+      "default": "code-exec-result",
+      "title": "Envelope Type",
+      "type": "string"
+    },
+    "result": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Result"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "error",
+        "timeout",
+        "blocked"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "stderr_tail": {
+      "default": "",
+      "maxLength": 16384,
+      "title": "Stderr Tail",
+      "type": "string"
+    },
+    "stdout_tail": {
+      "default": "",
+      "maxLength": 16384,
+      "title": "Stdout Tail",
+      "type": "string"
+    },
+    "truncated": {
+      "default": false,
+      "title": "Truncated",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "code_exec_id",
+    "status"
+  ],
+  "title": "CodeExecResultPayload",
+  "type": "object"
+}

@@ -1,0 +1,87 @@
+{
+  "additionalProperties": false,
+  "description": "Cache-shim metadata for an atomic tool's registration (FR-CE-8, FR-DC-2).\n\nEvery atomic tool that may issue a network call to an external public data\nsource declares one of these at registration time. The agent service's\ntool-registry refuses to register a tool whose metadata is missing,\nincomplete, or fails the cross-field validator below.\n\nFields:\n\n- ``name`` \u2014 atomic-tool function name (Python identifier, e.g.\n  ``\"fetch_dem\"``). The agent registry uses this as the registry key.\n- ``ttl_class`` \u2014 one of the four FR-DC-2 classes. Required for every\n  external-API tool. ``\"live-no-cache\"`` is reserved for the FR-DC-6\n  uncacheable-by-construction enumeration (interactive solicitation\n  tools, envelope emitters, MongoDB writes, solver dispatchers).\n- ``source_class`` \u2014 the ``<source-class>`` prefix in the cache bucket\n  layout per FR-DC-1 (e.g. ``\"dem\"``, ``\"buildings\"``, ``\"geocode\"``).\n  Required when ``cacheable=True``; MAY be omitted when ``cacheable=False``\n  (no bucket prefix is needed if nothing is written).\n- ``cacheable`` \u2014 explicit boolean for FR-DC-6 enumeration; defaults to\n  ``True`` because the cacheable case is the common case. ``False`` for\n  interactive solicitation tools, envelope emitters, MongoDB writes,\n  and solver dispatchers per FR-DC-6.\n\nCross-field rule (``_validate_cacheable_consistency``):\n\n- ``cacheable=True`` \u21d2 ``ttl_class != \"live-no-cache\"`` AND\n  ``source_class`` is non-empty. A cacheable tool with a live-no-cache\n  class would never hit; a cacheable tool with no source_class can't\n  construct a cache key path.\n- ``cacheable=False`` \u21d2 ``ttl_class == \"live-no-cache\"``. The other\n  classes would suggest the cache is in play.\n\nThe validator runs at construction time, so a misconfigured registration\nraises ``ValidationError`` before the tool is reachable on the wire.",
+  "properties": {
+    "cacheable": {
+      "default": true,
+      "title": "Cacheable",
+      "type": "boolean"
+    },
+    "destructive_hint": {
+      "default": false,
+      "description": "MCP annotation: destructiveHint. True when the tool can overwrite or permanently alter existing state in a way that is difficult to reverse (e.g. mutating the canonical .qgs project via publish_layer). Defaults to False. Distinguished from read_only_hint=False: a tool may be non-readonly (it writes) without being destructive (the write is additive / ephemeral). publish_layer is the only current True case because it overwrites a layer entry in the shared .qgs project.",
+      "title": "Destructive Hint",
+      "type": "boolean"
+    },
+    "idempotent_hint": {
+      "default": true,
+      "description": "MCP annotation: idempotentHint. True when calling the tool multiple times with the same arguments produces the same result without additional side effects. Defaults to True \u2014 fetchers with the cache shim satisfy this property. Set to False for tools that emit pipeline state (wait_for_completion), dispatch Cloud Run jobs (run_solver, qgis_process), write GCS artifacts (run_pelicun_damage_assessment, publish_layer), or interact with stateful systems in non-idempotent ways.",
+      "title": "Idempotent Hint",
+      "type": "boolean"
+    },
+    "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "open_world_hint": {
+      "default": false,
+      "description": "MCP annotation: openWorldHint. True when the tool issues calls to external APIs or public data endpoints outside the GRACE-2 GCP project boundary. Defaults to False \u2014 compute, clip, and intra-GCP tools opt out. All fetch_* tools and web_fetch are True; catalog_search/catalog_fetch are True because they ultimately hit Tier-2/3 external endpoints.",
+      "title": "Open World Hint",
+      "type": "boolean"
+    },
+    "payload_mb_estimator_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional reference (Python identifier) to a callable in the tool module's ``__init__`` that estimates expected payload MB given the tool's args. The callable signature is ``estimate_payload_mb(**args) -> float``. The Wave 2 chat-warning system (``tool-payload-warning`` envelope) reads this metadata to decide when to gate a large fetch behind explicit user confirmation. See memory: feedback_large_payload_chat_warning.",
+      "title": "Payload Mb Estimator Name"
+    },
+    "read_only_hint": {
+      "default": true,
+      "description": "MCP annotation: readOnlyHint. True when the tool has no side effects and does not mutate any external state (GCS, QGIS project, MongoDB, Cloud Run). Defaults to True \u2014 the safe assumption for fetchers and compute tools. Set to False for publish_layer, run_solver, qgis_process, run_pelicun_damage_assessment, and any other tool that writes.",
+      "title": "Read Only Hint",
+      "type": "boolean"
+    },
+    "source_class": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Class"
+    },
+    "supports_global_query": {
+      "default": false,
+      "description": "True if this tool accepts ``bbox=None`` to mean global/CONUS-wide query. Default False (safer \u2014 tools opt in). When False, calling with ``bbox=None`` must raise ``ToolInputError(code='BBOX_REQUIRED', retryable=False)`` BEFORE issuing any network call. See memory: feedback_layer_global_bbox_policy.",
+      "title": "Supports Global Query",
+      "type": "boolean"
+    },
+    "ttl_class": {
+      "enum": [
+        "static-30d",
+        "semi-static-7d",
+        "dynamic-1h",
+        "live-no-cache"
+      ],
+      "title": "Ttl Class",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "ttl_class"
+  ],
+  "title": "AtomicToolMetadata",
+  "type": "object"
+}

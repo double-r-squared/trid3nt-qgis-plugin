@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "ReferenceLayer": {
+      "additionalProperties": false,
+      "description": "An optional helper layer shown only during a spatial-input request.",
+      "properties": {
+        "layer_id": {
+          "title": "Layer Id",
+          "type": "string"
+        },
+        "style_preset": {
+          "title": "Style Preset",
+          "type": "string"
+        },
+        "wms_url": {
+          "title": "Wms Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layer_id",
+        "wms_url",
+        "style_preset"
+      ],
+      "title": "ReferenceLayer",
+      "type": "object"
+    },
+    "SuggestedView": {
+      "additionalProperties": false,
+      "description": "Where the client zooms to make picking easier.",
+      "properties": {
+        "bbox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bbox",
+          "type": "array"
+        },
+        "zoom": {
+          "title": "Zoom",
+          "type": "number"
+        }
+      },
+      "required": [
+        "bbox",
+        "zoom"
+      ],
+      "title": "SuggestedView",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``spatial-input-request`` (A.4): agent needs the user to pick a geometry.\n\n``mode`` selects the client pick affordance:\n\n- ``\"point\"`` \u2014 single map click; the reply carries ``coordinates=[lon, lat]``.\n- ``\"bbox\"`` \u2014 a drag-rectangle; the reply carries\n  ``coordinates=[minLon, minLat, maxLon, maxLat]``.\n- ``\"vector_draw\"`` \u2014 FR-WC-16 urban vector-draw: the client opens a\n  terra-draw surface (rectangle / polygon / polyline + select-edit) and the\n  reply carries ``features`` (a GeoJSON ``FeatureCollection`` with\n  ``role``-tagged + per-segment ``barrier_type``/``flap_direction``\n  properties). Use this when the agent needs the user to draw AOIs and\n  tagged structural barriers (walls / flap gates) for the urban-flood\n  (SWMM) engine.",
+  "properties": {
+    "default_timeout_seconds": {
+      "default": 300,
+      "title": "Default Timeout Seconds",
+      "type": "integer"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "point",
+        "bbox",
+        "vector_draw"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "reference_layers": {
+      "items": {
+        "$ref": "#/$defs/ReferenceLayer"
+      },
+      "title": "Reference Layers",
+      "type": "array"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "suggested_view": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SuggestedView"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "mode",
+    "title",
+    "description"
+  ],
+  "title": "SpatialInputRequestPayload",
+  "type": "object"
+}

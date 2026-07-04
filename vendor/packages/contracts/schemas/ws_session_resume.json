@@ -1,0 +1,20 @@
+{
+  "additionalProperties": false,
+  "description": "``session-resume`` (A.3): resume an existing session (id in envelope).",
+  "properties": {
+    "case_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Case Id"
+    }
+  },
+  "title": "SessionResumePayload",
+  "type": "object"
+}

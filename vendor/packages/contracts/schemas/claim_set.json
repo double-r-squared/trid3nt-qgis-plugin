@@ -1,0 +1,168 @@
+{
+  "$defs": {
+    "NumericClaim": {
+      "additionalProperties": false,
+      "description": "A single numerical claim from a single source, with provenance.",
+      "properties": {
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "observation_time": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Time"
+        },
+        "outlier_flag": {
+          "default": false,
+          "title": "Outlier Flag",
+          "type": "boolean"
+        },
+        "reporting_time": {
+          "format": "date-time",
+          "title": "Reporting Time",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "agency",
+            "major_news",
+            "regional_news",
+            "aggregator",
+            "social",
+            "other"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "source_url": {
+          "title": "Source Url",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "source_type",
+        "source_id",
+        "source_url",
+        "reporting_time"
+      ],
+      "title": "NumericClaim",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A set of numerical claims for one quantity across sources, with consensus.\n\n``consensus_value`` is the narrated number (invariant 7). Contributing\n``claims`` stay drillable. Populated by ``aggregate_claims_across_sources``\n(engine-owned); ``schema`` owns this shape.",
+  "properties": {
+    "claims": {
+      "items": {
+        "$ref": "#/$defs/NumericClaim"
+      },
+      "title": "Claims",
+      "type": "array"
+    },
+    "consensus_confidence": {
+      "anyOf": [
+        {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Consensus Confidence"
+    },
+    "consensus_method": {
+      "anyOf": [
+        {
+          "enum": [
+            "single_source",
+            "median",
+            "authority_weighted",
+            "latest_authoritative",
+            "agent_synthesized"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Consensus Method"
+    },
+    "consensus_unit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Consensus Unit"
+    },
+    "consensus_value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Consensus Value"
+    },
+    "notes": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Notes"
+    }
+  },
+  "title": "ClaimSet",
+  "type": "object"
+}

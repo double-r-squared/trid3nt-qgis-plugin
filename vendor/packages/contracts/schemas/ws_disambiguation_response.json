@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "``disambiguation-response`` (A.4b): user chose a candidate, or cancelled.",
+  "properties": {
+    "cancelled": {
+      "default": false,
+      "title": "Cancelled",
+      "type": "boolean"
+    },
+    "candidate_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Candidate Id"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id"
+  ],
+  "title": "DisambiguationResponsePayload",
+  "type": "object"
+}

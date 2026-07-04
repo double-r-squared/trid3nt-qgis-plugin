@@ -1,0 +1,19 @@
+{
+  "turns": [
+    {
+      "text": "Running a standalone SWAN nearshore spectral wave simulation off Mexico Beach.",
+      "tool_call": {
+        "name": "run_swan_waves",
+        "args": {
+          "bbox": [-85.55, 29.85, -85.3, 30.05],
+          "boundary_hs_m": 8.0,
+          "boundary_tp_s": 12.0,
+          "boundary_side": "south"
+        }
+      }
+    },
+    {
+      "text": "Done -- the peak significant wave height is about 8 m offshore, shoaling toward the coast."
+    }
+  ]
+}

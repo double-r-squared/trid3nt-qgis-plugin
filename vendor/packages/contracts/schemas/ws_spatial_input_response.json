@@ -1,0 +1,65 @@
+{
+  "additionalProperties": false,
+  "description": "``spatial-input-response`` (A.4b): user picked a geometry, or cancelled.\n\nThree shapes ride this one payload, keyed by ``geometry_type``:\n\n- ``\"point\"`` / ``\"bbox\"`` \u2014 the original FR-WC-13 pick-mode reply:\n  ``coordinates`` is set (``[lon, lat]`` for point,\n  ``[minLon, minLat, maxLon, maxLat]`` for bbox); ``features`` stays None.\n- ``\"vector_draw\"`` \u2014 the FR-WC-16 urban vector-draw reply: ``features`` is\n  a GeoJSON ``FeatureCollection`` of the drawn geometry; ``coordinates``\n  stays None. Each ``Feature.properties`` carries a ``role`` \u2208\n  {``\"aoi\"``, ``\"barrier\"``, ``\"point\"``}. For a ``\"barrier\"`` LineString,\n  ``properties.barrier_type`` \u2208 {``\"wall\"``, ``\"flap_gate\"``} (mirrors\n  ``swmm_contracts.BarrierType``) and, for a ``\"flap_gate\"``, an OPTIONAL\n  ``properties.flap_direction`` \u2208 {``\"in\"``, ``\"out\"``} (or a numeric\n  bearing) recording the one-way orientation; an OPTIONAL\n  ``properties.protected_side`` \u2208 {``\"left\"``, ``\"right\"``} mirrors the\n  engine seam (``swmm_mesh_builder._resolve_protected``).\n- For a cancellation: ``cancelled=True`` and every geometry field stays\n  None.\n\nThe drawn ``features`` round-trips straight into the urban engine: the\n``\"barrier\"`` features are exactly the tagged-``LineString``\n``FeatureCollection`` that ``swmm_contracts.SWMMRunArgs.barriers`` accepts\n(filter to ``role == \"barrier\"`` and they validate field-for-field).\n\nLarge-payload note (Invariant + large-payload norm): a drawn\n``FeatureCollection`` is small by construction (a handful of short\n``LineString`` / ``Polygon`` rings \u2014 kilobytes, not the megabytes a raster\nfetch produces), so NO ``estimate_payload_mb`` / payload-warning gate\napplies to it. The 25 MB warn / 250 MB hard-block discipline\n(``payload_warning.py``) governs TOOL-OUTPUT payloads, not this small\nuser-drawn input; no cap is imposed here beyond the structural validator.",
+  "properties": {
+    "cancelled": {
+      "default": false,
+      "title": "Cancelled",
+      "type": "boolean"
+    },
+    "coordinates": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Coordinates"
+    },
+    "features": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Features"
+    },
+    "geometry_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "point",
+            "bbox",
+            "vector_draw"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Geometry Type"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id"
+  ],
+  "title": "SpatialInputResponsePayload",
+  "type": "object"
+}

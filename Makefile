@@ -4,7 +4,7 @@ SCRIPTS   := $(REPO_ROOT)/scripts
 RUN_DIR   := $(REPO_ROOT)/run
 LOG_DIR   := $(REPO_ROOT)/logs
 
-.PHONY: binaries minio titiler agent web status stop
+.PHONY: binaries minio titiler agent venv web status stop
 
 binaries:
 	@bash $(SCRIPTS)/fetch_binaries.sh
@@ -19,7 +19,14 @@ titiler:
 	@bash $(SCRIPTS)/start_titiler.sh
 
 agent:
-	@echo "agent venv not yet built"
+	@mkdir -p $(LOG_DIR) $(RUN_DIR)
+	@bash $(SCRIPTS)/start_agent.sh
+
+venv:
+	@~/.local/bin/uv venv --python 3.12 $(REPO_ROOT)/venvs/agent
+	@~/.local/bin/uv pip install --python $(REPO_ROOT)/venvs/agent/bin/python \
+	  -e $(REPO_ROOT)/vendor/packages/contracts \
+	  -e $(REPO_ROOT)/vendor/services/agent
 
 web:
 	@echo "web build not yet configured"
@@ -52,4 +59,11 @@ stop:
 	  else echo "titiler not running (stale pid $$PID)"; fi; \
 	  rm -f $(RUN_DIR)/titiler.pid; \
 	else echo "no titiler.pid found"; fi
+	@if [ -f $(RUN_DIR)/agent.pid ]; then \
+	  PID=$$(cat $(RUN_DIR)/agent.pid); \
+	  if kill -0 $$PID 2>/dev/null; then \
+	    echo "stopping agent (pid $$PID)"; kill $$PID; \
+	  else echo "agent not running (stale pid $$PID)"; fi; \
+	  rm -f $(RUN_DIR)/agent.pid; \
+	else echo "no agent.pid found"; fi
 	@echo "done"

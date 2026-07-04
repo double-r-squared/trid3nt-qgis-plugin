@@ -1,0 +1,264 @@
+/* GRACE-2 web — global font normalization (job-0166).
+ *
+ * Three browser-default surfaces render with a serif (Times-New-Roman-like)
+ * font when no font-family is declared on them or an ancestor:
+ *
+ *   - <body> when the host page has not set one
+ *   - <input> / <textarea> / <select> / <button>: these elements do NOT
+ *     inherit the body font in any browser; they explicitly fall back to
+ *     the platform UA stylesheet, which is serif on most platforms.
+ *
+ * Wave 4.6 left CasesPanel / CaseView / ConfirmationDialog / Chat / etc. each
+ * declaring their own fontFamily inline, but the (initially hidden) inputs and
+ * buttons inside them still rendered as Times because the inline rule only
+ * covered the wrapper, not the form controls.
+ *
+ * Rather than auditing every <input>/<button>/<textarea> in the tree, we set
+ * a single source of truth: the SAME system-ui sans-serif stack used by
+ * Chat.tsx / LayerPanel.tsx / LayerLegend.tsx (the existing convention).
+ *
+ * The stack here is the union of the conventions already in use across
+ * components — favors the platform-native sans-serif on macOS / Windows /
+ * Linux, with `system-ui` as the generic fallback.
+ */
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  color: #222;
+  background: #fff;
+}
+
+/* Form controls do NOT inherit font-family by default. Force them to. */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* job-0278 — mobile drawer touch targets (>=44px, Apple HIG minimum).
+ *
+ * `.grace2-mobile-touch` is applied ONLY by MobileDrawer.tsx, which mounts
+ * ONLY below the 768px breakpoint (useIsMobile guard in App.tsx) — desktop
+ * rendering is pixel-identical. min-width/min-height clamp the inline
+ * width/height the components declare (a min-* stylesheet rule always wins
+ * over an inline height, no !important needed).
+ *
+ * Deliberately scoped to the Case-row / breadcrumb / pill controls.
+ * LayerPanel's 16-22px drag-handle / eye / slider cluster is EXCLUDED:
+ * bumping those would break the 288px row layout (kickoff: "bump hit area
+ * on mobile only if trivial" — it is not trivial there).
+ */
+.grace2-mobile-touch [data-testid="grace2-case-row"] button,
+.grace2-mobile-touch [data-testid="grace2-cases-new"],
+.grace2-mobile-touch [data-testid="grace2-case-view-back"],
+.grace2-mobile-touch [data-testid="grace2-case-view-cases-link"],
+.grace2-mobile-touch [data-testid="grace2-bottom-row-settings"],
+.grace2-mobile-touch [data-testid="grace2-bottom-row-secrets"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* job-0280 — sleekness pass: strip the nested CasesPanel / CaseView chrome
+ * (own border + own background + fixed desktop width) inside the drawer so
+ * the content isn't a box-within-a-box. (job-0284 note: the drawer surface
+ * itself is now transparent — see the job-0284 block below for the
+ * per-component floating-card surfaces that replaced it.)
+ *
+ * Scope: `.grace2-mobile-touch` is applied ONLY by MobileDrawer.tsx, which
+ * mounts ONLY below the 768px breakpoint — desktop stays pixel-identical.
+ * `!important` is required here (unlike the min-* rules above) because these
+ * components declare background/border/width as INLINE styles, which always
+ * beat stylesheet rules otherwise. Visual only — zero behavior change.
+ */
+/* job-0337 — the Cases panel must be a FIXED width on mobile, == the
+ * LayerPanel mobile width (288px, LAYERS_WIDTH_DEFAULT_PX), NOT `width:auto`.
+ *
+ * `width:auto` (job-0280) let the panel size to its content inside the
+ * `min(320px,85vw)` drawer column, so a long Case title (whiteSpace:nowrap)
+ * widened the whole panel — it both varied with viewport AND clipped under the
+ * column's overflow:hidden ("dynamically sized + cuts off", the user report).
+ *
+ * Pin it to 288px (`box-sizing:border-box` keeps the 10px CasesPanel padding
+ * inside that 288, matching the LayerPanel column). `max-width:100%` is a guard
+ * for sub-376px viewports where the column collapses to 85vw < 288 — the panel
+ * can SHRINK to fit the column there (never clip) but can NEVER GROW past 288
+ * or size to content. The Case-row title's flex:1 + min-width:0 ellipsis then
+ * absorbs any overflow and the kebab (flex-shrink:0) stays visible. */
+.grace2-mobile-touch [data-testid="grace2-cases-panel"] {
+  width: 288px !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+.grace2-mobile-touch [data-testid="grace2-case-view"] {
+  width: auto !important;
+}
+
+/* job-0284 — mobile map-centric pass. The MobileDrawer panel surface is GONE
+ * (transparent container + invisible backdrop, see MobileDrawer.tsx): every
+ * component inside it now floats as its own translucent hairline card
+ * directly over the map, using the job-0283 design family (hairline
+ * rgba(255,255,255,0.06–0.14) borders, 12px panel / 8px row radii, the
+ * gradient surface — now at ~0.72–0.82 alpha so the map reads through).
+ *
+ * Scope: `.grace2-mobile-touch` is applied ONLY by MobileDrawer.tsx, which
+ * mounts ONLY below the 768px breakpoint — desktop stays pixel-identical.
+ * `!important` is required because these components declare their chrome as
+ * INLINE styles (same documented trade-off as the blocks above).
+ *
+ * NO backdrop-filter on ANY rule in this block that is an ancestor of a
+ * position:fixed element: CasesPanel hosts ConfirmationDialog (delete
+ * confirm, position:fixed → must center on the viewport). A non-none
+ * backdrop-filter would turn that ancestor into the containing block and
+ * trap the dialog inside the 320px drawer column (job-0283 hazard, learned
+ * the hard way). Translucency here is rgba/alpha ONLY.
+ */
+.grace2-mobile-touch [data-testid="grace2-cases-header"] {
+  background: linear-gradient(
+    180deg,
+    rgba(26, 27, 33, 0.82) 0%,
+    rgba(18, 19, 24, 0.82) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 8px 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+.grace2-mobile-touch [data-testid="grace2-cases-new"] {
+  border-radius: 8px !important;
+}
+.grace2-mobile-touch [data-testid="grace2-cases-empty"] {
+  background: rgba(18, 19, 24, 0.72) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.18) !important;
+  border-radius: 8px !important;
+}
+.grace2-mobile-touch [data-testid="grace2-case-row"] {
+  background: rgba(18, 19, 24, 0.82) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+.grace2-mobile-touch [data-testid="grace2-case-row"][data-active="true"] {
+  background: rgba(30, 45, 75, 0.86) !important;
+  border-color: rgba(59, 130, 246, 0.55) !important;
+}
+.grace2-mobile-touch [data-testid="grace2-case-view-breadcrumb"] {
+  background: linear-gradient(
+    180deg,
+    rgba(26, 27, 33, 0.82) 0%,
+    rgba(18, 19, 24, 0.82) 100%
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+/* LayerPanel floats as ONE translucent card hugging its content (it kept a
+ * panel surface deliberately: its row backgrounds are state-driven inline
+ * styles — drag/active tints — that a per-row !important override would
+ * clobber). position:static drops the inline absolute pin (left/top/
+ * bottom:16 stretched it full-height inside the drawer); max-height keeps
+ * the internal scroll working for long layer lists. Its pre-existing inline
+ * backdrop blur is fine: LayerPanel hosts no position:fixed descendants. */
+.grace2-mobile-touch [data-testid="grace2-layer-panel"] {
+  position: static !important;
+  width: auto !important;
+  max-height: 100%;
+  background: linear-gradient(
+    180deg,
+    rgba(26, 27, 33, 0.82) 0%,
+    rgba(18, 19, 24, 0.82) 100%
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* job-0283 — DESKTOP sleekness pass (the job-0280 mobile pass, extended to
+ * the desktop left rail). `.grace2-desktop-rail` is applied ONLY by the two
+ * desktop left-rail wrappers in App.tsx (cases-list mode + case-view mode),
+ * which mount ONLY when !isMobile — the mobile drawer renders pixel-identical
+ * to job-0280 (its CasesPanel/CaseView ride inside `.grace2-mobile-touch`,
+ * never inside this scope).
+ *
+ * Design language = the job-0264 LayerPanel polish, now applied to the rest
+ * of the rail so the two desktop panels read as ONE family: gradient
+ * surface, hairline rgba borders (no more solid #333 boxes-within-boxes),
+ * 12px panel radius / 8px row radius, soft shadow, backdrop blur.
+ *
+ * `!important` is required — these components declare their chrome as INLINE
+ * styles (which beat stylesheets otherwise); same documented trade-off as
+ * the `.grace2-mobile-touch` block above. Visual only — zero behavior
+ * change, no control moved or removed, all data-testids untouched.
+ */
+.grace2-desktop-rail [data-testid="grace2-cases-panel"] {
+  /* job-0343 (FIX 1): width parity with the Layers panel. The Layers panel's
+   * desktop default is LAYERS_WIDTH_DEFAULT_PX = 288px (LayerPanel.tsx); the
+   * Cases panel was pinned to 280px here, so the two rails read as slightly
+   * different widths and a long Case title clipped 8px sooner than the layer
+   * rows. Pin to the SAME 288px so the two panels are one rail family; the
+   * Case-row title's flex:1 + min-width:0 ellipsis (CasesPanel.tsx) then
+   * absorbs any overflow within that width. */
+  width: 288px !important; /* == LAYERS_WIDTH_DEFAULT_PX (LayerPanel.tsx) */
+  background: linear-gradient(
+    180deg,
+    rgba(26, 27, 33, 0.96) 0%,
+    rgba(18, 19, 24, 0.96) 100%
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 12px !important;
+  padding: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  /* NO backdrop-filter here: a non-none backdrop-filter makes this panel
+   * the containing block for position:fixed descendants, which would trap
+   * the delete ConfirmationDialog (a CasesPanel child) inside the 280px
+   * column instead of centering it on the viewport (caught in the job-0283
+   * after-screenshot pass). The 0.96-alpha gradient hides blur anyway. */
+}
+.grace2-desktop-rail [data-testid="grace2-cases-new"] {
+  border-radius: 8px !important;
+}
+.grace2-desktop-rail [data-testid="grace2-cases-empty"] {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.16) !important;
+  border-radius: 8px !important;
+}
+.grace2-desktop-rail [data-testid="grace2-case-row"] {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 8px !important;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.grace2-desktop-rail [data-testid="grace2-case-row"]:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+.grace2-desktop-rail [data-testid="grace2-case-row"][data-active="true"] {
+  background: rgba(59, 130, 246, 0.16) !important;
+  border-color: rgba(59, 130, 246, 0.55) !important;
+}
+.grace2-desktop-rail [data-testid="grace2-case-row-hazard"] {
+  border-color: rgba(59, 130, 246, 0.45) !important;
+}
+.grace2-desktop-rail [data-testid="grace2-case-view-breadcrumb"] {
+  background: linear-gradient(
+    180deg,
+    rgba(26, 27, 33, 0.96) 0%,
+    rgba(18, 19, 24, 0.96) 100%
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.grace2-desktop-rail [data-testid="grace2-case-view-empty-layers"] {
+  background: rgba(18, 19, 24, 0.92) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.16) !important;
+  border-radius: 10px !important;
+}

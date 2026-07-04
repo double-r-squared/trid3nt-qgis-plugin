@@ -1,0 +1,54 @@
+{
+  "additionalProperties": false,
+  "description": "``error`` (A.4): global error not tied to a specific tool call.",
+  "properties": {
+    "error_code": {
+      "enum": [
+        "AUTH_FAILED",
+        "RATE_LIMITED",
+        "INTERNAL_ERROR",
+        "LLM_UNAVAILABLE",
+        "TOOL_NOT_FOUND",
+        "TOOL_PARAMS_INVALID",
+        "TOOL_TIMEOUT",
+        "DEM_SOURCE_UNAVAILABLE",
+        "SOLVER_FAILED",
+        "CONFIRMATION_TIMEOUT",
+        "SPATIAL_INPUT_TIMEOUT",
+        "DISAMBIGUATION_TIMEOUT",
+        "CLARIFICATION_TIMEOUT",
+        "USER_INPUT_CANCELLED",
+        "CANCELLED"
+      ],
+      "title": "Error Code",
+      "type": "string"
+    },
+    "message": {
+      "title": "Message",
+      "type": "string"
+    },
+    "retry_after_seconds": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Retry After Seconds"
+    },
+    "retryable": {
+      "default": false,
+      "title": "Retryable",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "error_code",
+    "message"
+  ],
+  "title": "ErrorPayload",
+  "type": "object"
+}
