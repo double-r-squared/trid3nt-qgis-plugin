@@ -6,5 +6,10 @@ node_modules/
 dist/
 .env
 *.log
+bin/
+third_party/
+venvs/
 data/
+logs/
+run/
 runs/
