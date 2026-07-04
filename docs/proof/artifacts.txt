@@ -1,0 +1,40 @@
+=== TRID3NT Local MODFLOW Direct Invocation Proof ===
+Timestamp: 2026-07-04T04:54:47 UTC
+Script: scripts/run_modflow_direct.py
+
+run_id:         fresno-sy-zy33lti0
+archetype:      sustainable_yield
+location:       lat=36.7468, lon=-119.7726 (Fresno, CA)
+mf6_binary:     /home/nate/Documents/trid3nt-local/bin/mf6 (MODFLOW 6.5.0)
+workdir:        /tmp/modflow_fresno_zy33lti0
+converged:      true (exit=0)
+max_drawdown_m: 6.133708586054513
+model_crs:      EPSG:32611
+cog_s3_uri:     s3://trid3nt-runs/fresno-sy-zy33lti0/drawdown_4326.tif (10168 bytes)
+tile_preview:   http://127.0.0.1:8080/cog/preview.png?url=... (HTTP 200, 3290 bytes -> 04-modflow-tile.png)
+
+MinIO bucket listing (trid3nt-runs):
+  fresno-sy-zy33lti0/drawdown_4326.tif  10168 bytes
+  (+ 8 case-manifests, 8 case-views from prior agent sessions)
+
+--- MODFLOW listing tail (last 20 lines) ---
+
+ MEMORY MANAGER TOTAL STORAGE BY DATA TYPE, IN MEGABYTES
+ -------------------------------
+                    ALLOCATED   
+ DATA TYPE           MEMORY     
+ -------------------------------
+ Character        7.67200000E-03
+ Logical          4.40000000E-05
+ Integer          0.28760800    
+ Real             0.81858400    
+ -------------------------------
+ Total            1.1139080     
+ Virtual          0.0000000     
+ -------------------------------
+
+
+ 
+ Run end date and time (yyyy/mm/dd hh:mm:ss): 2026/07/04  4:54:47
+ Elapsed run time:  0.263 Seconds
+ Normal termination of simulation.

@@ -29,7 +29,16 @@ venv:
 	  -e $(REPO_ROOT)/vendor/services/agent
 
 web:
-	@echo "web build not yet configured"
+	@mkdir -p $(LOG_DIR) $(RUN_DIR)
+	@if [ -f $(RUN_DIR)/web.pid ] && kill -0 $$(cat $(RUN_DIR)/web.pid) 2>/dev/null; then \
+	  echo "web already running (pid $$(cat $(RUN_DIR)/web.pid))"; \
+	else \
+	  echo "starting vite dev server on :5173 ..."; \
+	  setsid nohup sh -c 'cd $(REPO_ROOT)/vendor/web && node_modules/.bin/vite --port 5173 --host 127.0.0.1' \
+	    > $(LOG_DIR)/web.log 2>&1 & \
+	  echo $$! > $(RUN_DIR)/web.pid; \
+	  echo "web pid $$!  -- logs at $(LOG_DIR)/web.log"; \
+	fi
 
 status:
 	@echo "=== TRID3NT Local service status ==="
