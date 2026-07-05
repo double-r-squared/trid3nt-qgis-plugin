@@ -160,11 +160,22 @@ def synthesize_demo_wave_boundary(
     min_lon, min_lat, max_lon, max_lat = bbox
     width = max_lon - min_lon
     height = max_lat - min_lat
-    side = "S" if width >= height else "E"
+    # For the US West Coast (lon < -100) the open Pacific is to the WEST.
+    # For Gulf/Atlantic coasts the ocean is typically to the SOUTH.
+    # Wide (E-W) AOIs default to S; tall (N-S) AOIs default to E.
+    # West-coast override: any AOI west of -100 deg uses the W boundary.
+    center_lon = (min_lon + max_lon) / 2.0
+    if center_lon < -100.0:
+        side = "W"
+    else:
+        side = "S" if width >= height else "E"
+    # Set dir_deg consistent with the chosen side (waves coming FROM that side).
+    side_inward_dir = {"N": 0.0, "E": 90.0, "S": 180.0, "W": 270.0}
+    dir_deg = side_inward_dir[side]
     return SwanWaveBoundary(
         hs_m=DEFAULT_BOUNDARY_HS_M,
         tp_s=DEFAULT_BOUNDARY_TP_S,
-        dir_deg=DEFAULT_BOUNDARY_DIR_DEG,
+        dir_deg=dir_deg,
         spread_deg=DEFAULT_BOUNDARY_SPREAD_DEG,
         side=side,  # type: ignore[arg-type]
     )
