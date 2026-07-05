@@ -282,6 +282,14 @@ def contents_to_openai_messages(
     (same FIFO queue strategy as bedrock_adapter.contents_to_bedrock_messages).
     """
     messages: list[dict[str, Any]] = []
+    # GRACE2_OPENAI_EXTRA_SYSTEM: optional text appended to the system prompt.
+    # Primary use: "/no_think" for Qwen3-family models served by Ollama, whose
+    # default thinking mode routes ALL tokens to the reasoning channel -- the
+    # OpenAI-compat content deltas arrive empty and the turn renders no text.
+    # Generic seam (any provider-specific system suffix), dormant unless set.
+    extra_system = os.environ.get("GRACE2_OPENAI_EXTRA_SYSTEM", "").strip()
+    if extra_system:
+        system_prompt = f"{system_prompt}\n{extra_system}" if system_prompt else extra_system
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
