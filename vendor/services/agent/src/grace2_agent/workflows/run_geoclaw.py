@@ -1192,6 +1192,14 @@ def geoclaw_local_spec() -> "Any":
 
     def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
         # args comes from manifest["geoclaw_args"] = ["--run-id", rid, "--manifest-uri", uri]
+        # Replace any staging --run-id with the launcher's run_id so container
+        # outputs land under the same S3 prefix that the supervisor polls.
+        fixed_args = list(args)
+        if "--run-id" in fixed_args:
+            idx = fixed_args.index("--run-id")
+            fixed_args[idx + 1] = run_id
+        else:
+            fixed_args = ["--run-id", run_id] + fixed_args
         cmd = [
             "docker", "run", "--rm",
             "--name", run_id,
@@ -1214,8 +1222,7 @@ def geoclaw_local_spec() -> "Any":
         for k, v in env_pairs:
             cmd += ["-e", f"{k}={v}"]
         cmd.append(image)
-        # args = ["--run-id", "<id>", "--manifest-uri", "s3://..."]
-        cmd.extend(args)
+        cmd.extend(fixed_args)
         return cmd
 
     return LocalSolverSpec(
