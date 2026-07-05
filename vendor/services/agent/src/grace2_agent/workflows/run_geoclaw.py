@@ -1085,17 +1085,18 @@ def stage_geoclaw_manifest(
         amr_levels_override=amr_levels_override,
     )
 
-    manifest_dict: dict[str, Any] = {
-        "inputs": inputs,
-        "build_spec": build_spec,
-        "outputs": list(GEOCLAW_OUTPUT_GLOBS),
-    }
-
     scheme = storage_scheme()  # "s3" on AWS (GCP decommissioned)
     cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache")
     prefix = f"cache/static-30d/geoclaw_setup/{rid}/"
     manifest_key = f"{prefix}manifest.json"
     manifest_uri = f"{scheme}://{cache_bucket}/{manifest_key}"
+
+    manifest_dict: dict[str, Any] = {
+        "inputs": inputs,
+        "build_spec": build_spec,
+        "outputs": list(GEOCLAW_OUTPUT_GLOBS),
+        "geoclaw_args": ["--run-id", rid, "--manifest-uri", manifest_uri],
+    }
 
     try:
         s3 = _get_s3_client()
@@ -1158,3 +1159,85 @@ def register_geoclaw_solver() -> None:
 # Register at import so ``run_solver(solver='geoclaw')`` is wired wherever this
 # module is imported (the composer + the tool wrapper both import it).
 register_geoclaw_solver()
+
+
+# --------------------------------------------------------------------------- #
+# GeoClaw LocalSolverSpec -- docker runner for the local-docker backend.
+#
+# exec_kind="docker": GeoClaw is a Fortran solver that compiles xgeoclaw at
+# run time; the trid3nt-local/geoclaw:latest image carries gfortran + the
+# full Clawpack 5.14 source tree. The entrypoint takes --run-id + --manifest-uri
+# (pointing to the MinIO/S3 staged manifest) and handles all S3 I/O internally.
+#
+# The MinIO endpoint is injected via -e flags in the docker run command so the
+# container's boto3 reaches the local MinIO at 127.0.0.1:9000.
+# --------------------------------------------------------------------------- #
+
+#: Default GeoClaw image under local-docker (env GRACE2_GEOCLAW_IMAGE).
+DEFAULT_GEOCLAW_IMAGE: str = "trid3nt-local/geoclaw:latest"
+
+
+def geoclaw_local_spec() -> "Any":
+    """Build the GeoClaw LocalSolverSpec for the local-docker backend."""
+    import os
+    from pathlib import Path
+    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+
+    image = os.environ.get("GRACE2_GEOCLAW_IMAGE") or DEFAULT_GEOCLAW_IMAGE
+    aws_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
+    aws_access_key = os.environ.get("AWS_ACCESS_KEY_ID", "")
+    aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+    aws_region = os.environ.get("AWS_REGION", "us-east-1")
+    runs_bucket = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+
+    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
+        # args comes from manifest["geoclaw_args"] = ["--run-id", rid, "--manifest-uri", uri]
+        cmd = [
+            "docker", "run", "--rm",
+            "--name", run_id,
+            "--network", "host",
+        ]
+        # Inject MinIO / S3 credentials so the container reaches the local MinIO
+        env_pairs = [
+            ("GRACE2_RUNS_BUCKET", runs_bucket),
+            ("GRACE2_OBJECT_STORE", "s3"),
+            ("GRACE2_GEOCLAW_SCRATCH", "/opt/grace2/work"),
+            ("AWS_REGION", aws_region),
+            ("PYTHONUNBUFFERED", "1"),
+        ]
+        if aws_endpoint:
+            env_pairs.append(("AWS_ENDPOINT_URL", aws_endpoint))
+        if aws_access_key:
+            env_pairs.append(("AWS_ACCESS_KEY_ID", aws_access_key))
+        if aws_secret_key:
+            env_pairs.append(("AWS_SECRET_ACCESS_KEY", aws_secret_key))
+        for k, v in env_pairs:
+            cmd += ["-e", f"{k}={v}"]
+        cmd.append(image)
+        # args = ["--run-id", "<id>", "--manifest-uri", "s3://..."]
+        cmd.extend(args)
+        return cmd
+
+    return LocalSolverSpec(
+        solver=GEOCLAW_SOLVER_NAME,
+        workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
+        args_key="geoclaw_args",
+        build_argv=build_argv,
+        stdout_name="geoclaw.stdout",
+        stderr_name="geoclaw.stderr",
+        stdout_uri_field="geoclaw_stdout_uri",
+        stderr_uri_field="geoclaw_stderr_uri",
+        exec_kind="docker",
+        classify_exit=None,
+    )
+
+
+def register_geoclaw_local_spec() -> None:
+    """Register the GeoClaw LocalSolverSpec factory for the local-docker backend."""
+    from ..tools.solver import register_local_solver_spec
+    register_local_solver_spec(GEOCLAW_SOLVER_NAME, geoclaw_local_spec)
+
+
+# Register at import so run_solver(solver='geoclaw') with
+# GRACE2_SOLVER_BACKEND=local-docker dispatches to the docker spec.
+register_geoclaw_local_spec()

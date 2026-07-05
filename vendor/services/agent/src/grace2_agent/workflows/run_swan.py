@@ -335,17 +335,18 @@ def stage_swan_manifest(
         mesh_cells=mesh_cells,
     )
 
-    manifest_dict: dict[str, Any] = {
-        "inputs": inputs,
-        "build_spec": build_spec,
-        "outputs": list(SWAN_OUTPUT_GLOBS),
-    }
-
     scheme = storage_scheme()  # "s3" on AWS (GCP decommissioned)
     cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache")
     prefix = f"cache/static-30d/swan_setup/{rid}/"
     manifest_key = f"{prefix}manifest.json"
     manifest_uri = f"{scheme}://{cache_bucket}/{manifest_key}"
+
+    manifest_dict: dict[str, Any] = {
+        "inputs": inputs,
+        "build_spec": build_spec,
+        "outputs": list(SWAN_OUTPUT_GLOBS),
+        "swan_args": ["--run-id", rid, "--manifest-uri", manifest_uri],
+    }
 
     try:
         s3 = _get_s3_client()
@@ -406,3 +407,77 @@ def register_swan_solver() -> None:
 # Register at import so ``run_solver(solver='swan')`` is wired wherever this
 # module is imported (the composer + the tool wrapper both import it).
 register_swan_solver()
+
+
+# --------------------------------------------------------------------------- #
+# SWAN LocalSolverSpec -- docker runner for the local-docker backend.
+# --------------------------------------------------------------------------- #
+
+#: Default SWAN image under local-docker (env GRACE2_SWAN_IMAGE).
+DEFAULT_SWAN_IMAGE: str = "trid3nt-local/swan:latest"
+
+
+def swan_local_spec() -> "Any":
+    """Build the SWAN LocalSolverSpec for the local-docker backend."""
+    import os
+    from pathlib import Path
+    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+
+    image = os.environ.get("GRACE2_SWAN_IMAGE") or DEFAULT_SWAN_IMAGE
+    aws_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
+    aws_access_key = os.environ.get("AWS_ACCESS_KEY_ID", "")
+    aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+    aws_region = os.environ.get("AWS_REGION", "us-east-1")
+    runs_bucket = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+
+    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
+        # args comes from manifest["swan_args"] = ["--run-id", rid, "--manifest-uri", uri]
+        cmd = [
+            "docker", "run", "--rm",
+            "--name", run_id,
+            "--network", "host",
+        ]
+        env_pairs = [
+            ("GRACE2_RUNS_BUCKET", runs_bucket),
+            ("GRACE2_OBJECT_STORE", "s3"),
+            ("GRACE2_SWAN_SCRATCH", "/opt/grace2/work"),
+            ("AWS_REGION", aws_region),
+            ("OMP_NUM_THREADS", "4"),
+            ("PYTHONUNBUFFERED", "1"),
+        ]
+        if aws_endpoint:
+            env_pairs.append(("AWS_ENDPOINT_URL", aws_endpoint))
+        if aws_access_key:
+            env_pairs.append(("AWS_ACCESS_KEY_ID", aws_access_key))
+        if aws_secret_key:
+            env_pairs.append(("AWS_SECRET_ACCESS_KEY", aws_secret_key))
+        for k, v in env_pairs:
+            cmd += ["-e", f"{k}={v}"]
+        cmd.append(image)
+        # args = ["--run-id", "<id>", "--manifest-uri", "s3://..."]
+        cmd.extend(args)
+        return cmd
+
+    return LocalSolverSpec(
+        solver=SWAN_SOLVER_NAME,
+        workflow_name=LOCAL_DOCKER_WORKFLOW_NAME,
+        args_key="swan_args",
+        build_argv=build_argv,
+        stdout_name="swan.stdout",
+        stderr_name="swan.stderr",
+        stdout_uri_field="swan_stdout_uri",
+        stderr_uri_field="swan_stderr_uri",
+        exec_kind="docker",
+        classify_exit=None,
+    )
+
+
+def register_swan_local_spec() -> None:
+    """Register the SWAN LocalSolverSpec factory for the local-docker backend."""
+    from ..tools.solver import register_local_solver_spec
+    register_local_solver_spec(SWAN_SOLVER_NAME, swan_local_spec)
+
+
+# Register at import so run_solver(solver='swan') with
+# GRACE2_SOLVER_BACKEND=local-docker dispatches to the docker spec.
+register_swan_local_spec()
