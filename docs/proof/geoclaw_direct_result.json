@@ -1,0 +1,78 @@
+{
+  "engine": "geoclaw",
+  "backend": "local-docker",
+  "image": "trid3nt-local/geoclaw:latest",
+  "bbox": [
+    -124.24,
+    41.73,
+    -124.16,
+    41.78
+  ],
+  "scenario": "tsunami",
+  "sim_duration_s": 1800,
+  "amr_levels": 2,
+  "output_frames": 6,
+  "result_type": "GeoClawDepthLayerURI",
+  "result": {
+    "layer_id": "geoclaw-depth-peak-01KWT8S1FCPMK5JEEWTE96986X",
+    "name": "Peak flood depth",
+    "layer_type": "raster",
+    "uri": "http://127.0.0.1:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2Ftrid3nt-runs%2F01KWT8S1FCPMK5JEEWTE96986X%2Fgeoclaw_depth_peak.tif&rescale=0,3&colormap_name=ylgnbu",
+    "style_preset": "continuous_flood_depth",
+    "temporal": null,
+    "role": "primary",
+    "units": "meters",
+    "bbox": [
+      -124.24,
+      41.73,
+      -124.16,
+      41.78
+    ],
+    "legend": null,
+    "max_depth_m": 0.0,
+    "flooded_area_km2": 0.0,
+    "max_inundation_m": 0.0,
+    "arrival_time_s": null,
+    "scenario": "tsunami"
+  },
+  "new_run_prefixes": [
+    "01KWT8S1FCPMK5JEEWTE96986X",
+    "01KWT8S1G64K3Y8E6BD53GMXVR"
+  ],
+  "run_listings": {
+    "01KWT8S1FCPMK5JEEWTE96986X": [
+      "01KWT8S1FCPMK5JEEWTE96986X/geoclaw_depth_frame_01.tif (4830 bytes)",
+      "01KWT8S1FCPMK5JEEWTE96986X/geoclaw_depth_frame_02.tif (4830 bytes)",
+      "01KWT8S1FCPMK5JEEWTE96986X/geoclaw_depth_frame_03.tif (4830 bytes)",
+      "01KWT8S1FCPMK5JEEWTE96986X/geoclaw_depth_frame_04.tif (4830 bytes)",
+      "01KWT8S1FCPMK5JEEWTE96986X/geoclaw_depth_frame_05.tif (4830 bytes)",
+      "01KWT8S1FCPMK5JEEWTE96986X/geoclaw_depth_frame_06.tif (4830 bytes)",
+      "01KWT8S1FCPMK5JEEWTE96986X/geoclaw_depth_frame_07.tif (4830 bytes)",
+      "01KWT8S1FCPMK5JEEWTE96986X/geoclaw_depth_peak.tif (4830 bytes)"
+    ],
+    "01KWT8S1G64K3Y8E6BD53GMXVR": [
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fgmax0001.txt (12348 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fgmax_grids.data (862 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.q0000 (145990 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.q0001 (145990 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.q0002 (145990 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.q0003 (145990 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.q0004 (145990 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.q0005 (145990 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.q0006 (145990 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.t0000 (203 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.t0001 (203 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.t0002 (203 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.t0003 (203 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.t0004 (203 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.t0005 (203 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/fort.t0006 (203 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/_output/gauge00001.txt (10717 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/completion.json (1745 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/deck_manifest.json (430 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/geoclaw.stderr (5570 bytes)",
+      "01KWT8S1G64K3Y8E6BD53GMXVR/geoclaw.stdout (0 bytes)"
+    ]
+  },
+  "tile_server_base": "http://127.0.0.1:8080"
+}

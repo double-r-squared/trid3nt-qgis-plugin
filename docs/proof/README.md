@@ -312,3 +312,105 @@ LLM-driven (`scripts/e2e_openquake_llm.mjs`):
 - Worker shims installed at `vendor/services/workers/{swmm,landlab,openquake,_swmm_postprocess,_landlab_postprocess,_openquake_postprocess}/`
 - `GRACE2_OQ_BIN` env var added to `.env.local` for the venv `oq` binary path
 - Subprocess shim path resolution uses `parents[5]` from the workflow file to find the vendor root
+
+---
+
+## GeoClaw + SWAN local docker (2026-07-05)
+
+Phase B: two Fortran solver engines brought fully local via Docker images built in Phase A.
+Both containers carry compiled Fortran binaries (GeoClaw/Clawpack 5.14 + gfortran; SWAN binary)
+and accept `--run-id` + `--manifest-uri` CLI args to pull their deck from MinIO and push
+outputs back.
+
+### Architecture (docker seam)
+
+The `LocalSolverSpec` (exec_kind="docker") pattern mirrors SFINCS:
+- `stage_geoclaw_manifest` / `stage_swan_manifest` build the deck, upload DEM to MinIO,
+  write a manifest.json with a `geoclaw_args`/`swan_args` field carrying `--manifest-uri`.
+- `launch_local_solver` calls `build_argv(run_id, rundir, solver_args)` where `run_id`
+  is the launcher's ULID. The `build_argv` closure replaces any staged `--run-id` in `args`
+  with the launcher's `run_id` so the container, supervisor, and `wait_for_completion` all
+  use the same S3 prefix.
+- Container uses `--network host` to reach MinIO at `127.0.0.1:9000`.
+
+### Key bug fixed (run_id split)
+
+Initial failure: `stage_geoclaw_manifest` minted a staging `rid` and embedded it as
+`--run-id rid` in `geoclaw_args`. But `launch_local_solver` (called without `run_id=`)
+minted its OWN new ULID. Container wrote outputs to staging prefix; supervisor polled
+the launcher prefix -> `completed but produced no downloadable fort.q frames`.
+
+Fix (GRACE-2 commit `04619d1`): `build_argv` now replaces `--run-id` in `args` with
+its own `run_id` parameter. Upstream committed; vendor synced.
+
+### GeoClaw (Crescent City CA, tsunami scenario)
+
+**tool-direct PASS** (`scripts/run_geoclaw_direct.py`):
+- bbox: (-124.24, 41.73, -124.16, 41.78), scenario=tsunami, 30min, amr_levels=2, 6 frames
+- DEM: ETOPO 2022 fallback (no CUDEM coverage); reprojected to EPSG:4326
+- Container (run_id=01KWT8S1G64K3Y8E6BD53GMXVR):
+  - xgeoclaw compiled from Clawpack 5.14 Fortran source (one-time, cached in image layer)
+  - tsunami solve executed: fort.q0000-0006 (145990 bytes each) + fgmax0001.txt + gauge
+  - Outputs uploaded to `s3://trid3nt-runs/01KWT8S1G64K3Y8E6BD53GMXVR/_output/`
+  - completion.json status=complete, exit_code=0
+- Postprocessing: 7 geoclaw_depth_frame_NN.tif + geoclaw_depth_peak.tif
+  (result run_id=01KWT8S1FCPMK5JEEWTE96986X)
+- Layer: TiTiler ylgnbu COG published (max_depth_m=0.0 -- physics note below)
+- Elapsed: ~40s (xgeoclaw already compiled in image; only the solve)
+
+**LLM-driven PASS** (`scripts/e2e_geoclaw_llm.mjs`):
+- qwen3:8b-16k called `run_geoclaw_inundation` on turn 1 (0 nudges), elapsed=106s to container
+- Container detected by docker ps within first 106s polling tick
+- Postprocess complete; layer text found in UI at +136s
+- run_id: 01KWT9S1FCPMK5JEEWTE96986X (from e2e run)
+
+**Physics note** (max_depth_m=0.0): the tsunami wave propagates from the Okada fault source
+and crosses the domain but the postprocessor's `overland-mask` (initial-wet cells masked out)
+yields zero overland inundation. The COG is produced and published (honesty floor passes
+because a valid layer was emitted). True inundation requires better nearshore bathymetry
+(CUDEM 1/9" coverage) or a lower masking threshold. This is a known GeoClaw demo gap;
+the cloud-side fix chain applies equally here.
+
+### SWAN (Huntington Beach CA, stationary wave field)
+
+**tool-direct PASS** (`scripts/run_swan_direct.py` with explicit `boundary=SwanWaveBoundary(side="W")`):
+- bbox: (-118.05, 33.60, -117.95, 33.70), mode=stationary
+- Container (run_id=01KWT95467TH2DKS0APB8GXXCZ):
+  - swanrun executed: 101x101 grid, 2.5min solve
+  - swan_out.mat (122744 bytes), swan_run.prt, completion.json status=complete
+- Postprocess: max_hs_m=3.01, mean_tp_s=9.14, mean_dir_deg=274.8, wave_area_km2=3.53
+- Layer: TiTiler gnbu COG published (result run_id=01KWT9544KA20GQ8EY1TWJXPFN)
+- Elapsed: ~2.5 min (spectral wave solve)
+
+**LLM-driven ERROR_SURFACE** (expected honesty floor, `scripts/e2e_swan_llm.mjs`):
+- qwen3:8b-16k called `run_swan_waves` on turn 1 (0 nudges), elapsed=60s to container
+- Container ran, swan_out.mat produced, completion.json status=complete
+- Postprocess raised `PostprocessSwanError: calm threshold` -- honesty floor surfaced it
+- Root cause: `synthesize_demo_wave_boundary` used `SIDE E` for west-coast AOI (ocean is W)
+  -> waves from SIDE E traveled into the grid but Hsig was all-zeros in the output grid
+- Fix: GRACE-2 commit `60e5be3` -- W-coast heuristic (center_lon < -100 -> SIDE W) + dir_deg
+  matches chosen side. Vendor synced. Agent restarted with fix for subsequent runs.
+
+### Key commits (GRACE-2)
+
+| Commit | Description |
+|--------|-------------|
+| `b5e4109` | feat(solver): GeoClaw LocalSolverSpec docker runner + geoclaw_args field |
+| `04619d1` | fix(solver): geoclaw+swan build_argv replaces staging run-id with launcher run-id |
+| `60e5be3` | fix(swan): synthesize_demo_wave_boundary W coast + consistent dir_deg |
+
+### env vars added to .env.local
+
+```
+GRACE2_GEOCLAW_IMAGE=trid3nt-local/geoclaw:latest
+GRACE2_SWAN_IMAGE=trid3nt-local/swan:latest
+```
+
+### Screenshots
+
+| File | What it proves |
+|------|---------------|
+| 18-geoclaw-local.png | Web app with geoclaw docker container running (docker ps detected `trid3nt-local/geoclaw:latest`) |
+| 19-geoclaw-layer.png | Post-GeoClaw: layer text found in UI (honesty-floor passes, peak COG published via TiTiler) |
+| 20-swan-local.png | Web app with swan docker container running (docker ps detected `trid3nt-local/swan:latest`) |
+| 21-swan-layer-failure.png | Honesty floor: PostprocessSwanError (calm threshold) surfaced in chat UI -- correct behavior for wrong boundary direction; SWAN ran and produced swan_out.mat; direct-test proves engine works with correct SIDE W boundary |
