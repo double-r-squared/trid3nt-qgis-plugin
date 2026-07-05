@@ -24,7 +24,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from grace2_contracts.landlab_contracts import LandlabRunArgs
@@ -37,6 +39,8 @@ __all__ = [
     "stage_landlab_manifest",
     "build_landlab_build_spec",
     "LANDLAB_SOLVER_NAME",
+    "landlab_local_spec",
+    "register_landlab_solver",
 ]
 
 #: The registry key + handle ``solver`` tag for the Landlab surface-process
@@ -238,3 +242,106 @@ def stage_landlab_manifest(
         run_args=run_args,
         build_spec=build_spec,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Landlab LocalSolverSpec -- subprocess runner for the local-docker backend.
+#
+# exec_kind="exec": there is no public Landlab container image. The worker
+# entrypoint (services/workers/landlab/entrypoint.py) runs as a subprocess
+# in the current venv's Python via ``sys.executable -m
+# services.workers.landlab.entrypoint``, with the GRACE-2 repo root on
+# PYTHONPATH so the worker's ``from services.workers.*`` imports resolve.
+#
+# The worker reads a file:// manifest URI (GRACE2_OBJECT_STORE=file) from the
+# local runs dir; no S3 / MinIO required for the offline build.
+# --------------------------------------------------------------------------- #
+
+#: Path to the Landlab subprocess CLI shim (mirrors run_inp.py for SWMM).
+_LANDLAB_RUN_CHAIN = (
+    Path(__file__).resolve().parents[5]
+    / "services"
+    / "workers"
+    / "landlab"
+    / "run_chain.py"
+)
+
+#: Repo root so the subprocess can resolve ``services.workers.*`` imports.
+_GRACE2_REPO_ROOT = str(Path(__file__).resolve().parents[5])
+
+
+def landlab_local_spec() -> Any:
+    """Build the Landlab ``LocalSolverSpec`` for the local-docker backend.
+
+    Mirrors ``run_swmm.swmm_local_spec``: ``exec_kind="exec"`` (no public
+    Landlab container image -- the worker is a pip-dep entrypoint), the
+    manifest carries ``build_spec`` + a staged DEM path, and the spec runs
+    the entrypoint as ``sys.executable -m services.workers.landlab.entrypoint
+    --run-id <id> --manifest-uri <uri>`` in a subprocess.
+
+    The GRACE-2 repo root is prepended to PYTHONPATH so the worker's
+    ``from services.workers.*`` imports resolve in the current venv (no
+    editable install of the worker package is required).
+
+    This spec is the SUBPROCESS RUNNER for the offline / local build. The
+    cloud Batch path (``run_solver(solver='landlab', model_setup_uri=s3://...)``)
+    is unchanged.
+    """
+    from ..tools.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
+
+    repo_root = _GRACE2_REPO_ROOT
+    # Prepend the repo root to PYTHONPATH so the worker can import
+    # ``services.workers.landlab.component_chain`` etc. directly.
+    existing_pypath = os.environ.get("PYTHONPATH", "")
+    new_pypath = f"{repo_root}:{existing_pypath}" if existing_pypath else repo_root
+
+    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
+        # Run the thin CLI shim (mirrors SWMM's run_inp.py pattern). The shim
+        # reads manifest.json from rundir (written by launch_local_solver before
+        # launching) and the DEM staged there; exits 0 on success.
+        del args, run_id  # shim reads everything from manifest.json in CWD
+        return [
+            sys.executable,
+            str(_LANDLAB_RUN_CHAIN),
+            "--manifest",
+            "manifest.json",
+        ]
+
+    def classify_exit(
+        rundir: Path, exit_code: int
+    ) -> "tuple[str, int, str | None, dict]":
+        if exit_code != 0:
+            return "error", exit_code, f"landlab worker exited with code {exit_code}", {}
+        return "ok", 0, None, {}
+
+    return LocalSolverSpec(
+        solver=LANDLAB_SOLVER_NAME,
+        workflow_name=LOCAL_EXEC_WORKFLOW_NAME,
+        args_key="build_spec",
+        build_argv=build_argv,
+        stdout_name="landlab.stdout",
+        stderr_name="landlab.stderr",
+        stdout_uri_field="landlab_stdout_uri",
+        stderr_uri_field="landlab_stderr_uri",
+        exec_kind="exec",
+        classify_exit=classify_exit,
+        env_overrides={"PYTHONPATH": new_pypath},
+    )
+
+
+def register_landlab_solver() -> None:
+    """Register ``'landlab'`` local spec in ``tools.solver.LOCAL_SOLVER_SPEC_REGISTRY``.
+
+    Mirrors ``run_swmm.register_swmm_solver``. Idempotent -- safe to call at
+    module import. The factory is a zero-arg lambda wrapping ``landlab_local_spec``
+    (deferred construction avoids any circular-import hazard at import time).
+    """
+    from ..tools.solver import LOCAL_SOLVER_SPEC_REGISTRY, register_local_solver_spec
+
+    _ = LOCAL_SOLVER_SPEC_REGISTRY  # ensure the registry is initialised
+    register_local_solver_spec(LANDLAB_SOLVER_NAME, landlab_local_spec)
+
+
+# Register at import so ``run_solver(solver='landlab')`` with
+# GRACE2_SOLVER_BACKEND=local-docker dispatches to the subprocess spec.
+register_landlab_solver()

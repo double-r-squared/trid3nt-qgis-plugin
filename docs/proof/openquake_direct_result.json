@@ -1,0 +1,57 @@
+{
+  "engine": "openquake",
+  "backend": "local-exec-subprocess",
+  "bbox": [
+    -122.3,
+    37.7,
+    -122.1,
+    37.9
+  ],
+  "imt": "PGA",
+  "poe": 0.1,
+  "investigation_time_years": 50.0,
+  "site_grid_spacing_km": 20.0,
+  "result_type": "SeismicHazardLayerURI",
+  "result": {
+    "layer_id": "seismic-hazard-01KWT715QDJFV0JBGBNRQ1C4ZC",
+    "name": "Seismic hazard (PGA, 475-yr return period)",
+    "layer_type": "raster",
+    "uri": "http://127.0.0.1:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2Ftrid3nt-runs%2F01KWT715QDJFV0JBGBNRQ1C4ZC%2Fseismic_hazard_4326.tif&rescale=0,1&colormap_name=magma",
+    "style_preset": "continuous_seismic_pga",
+    "temporal": null,
+    "role": "primary",
+    "units": "g",
+    "bbox": [
+      -122.39021249999999,
+      37.450334999999995,
+      -121.98323166666667,
+      38.169805
+    ],
+    "legend": null,
+    "imt": "PGA",
+    "poe": 0.1,
+    "investigation_time_years": 50.0,
+    "return_period_years": 474.56107905149526,
+    "max_hazard_value": 0.8968691229820251,
+    "hazard_area_km2": 2217.2516474884196,
+    "n_sites": 7,
+    "source_model_kind": "real-fault",
+    "source_model_note": "Hazard built from 2 real GEM active-fault sources (Hayward (So) 2011 CFM, Hayward (No) 2011 CFM); the hazard peaks on the actual fault traces."
+  },
+  "new_run_prefixes": [
+    "01KWT715QDJFV0JBGBNRQ1C4ZC"
+  ],
+  "run_listings": {
+    "01KWT715QDJFV0JBGBNRQ1C4ZC": [
+      "01KWT715QDJFV0JBGBNRQ1C4ZC/completion.json (687 bytes)",
+      "01KWT715QDJFV0JBGBNRQ1C4ZC/oq.stderr (7220 bytes)",
+      "01KWT715QDJFV0JBGBNRQ1C4ZC/oq.stdout (0 bytes)",
+      "01KWT715QDJFV0JBGBNRQ1C4ZC/output/hazard_curve-mean-PGA_9.csv (2380 bytes)",
+      "01KWT715QDJFV0JBGBNRQ1C4ZC/output/hazard_map-mean-475y_9.csv (350 bytes)",
+      "01KWT715QDJFV0JBGBNRQ1C4ZC/output/hazard_map-mean_9.csv (392 bytes)",
+      "01KWT715QDJFV0JBGBNRQ1C4ZC/output/realizations_9.csv (147 bytes)",
+      "01KWT715QDJFV0JBGBNRQ1C4ZC/seismic_hazard_4326.tif (2506 bytes)"
+    ]
+  },
+  "tile_server_base": "http://127.0.0.1:8080"
+}

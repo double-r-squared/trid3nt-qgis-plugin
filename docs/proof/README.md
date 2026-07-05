@@ -232,3 +232,83 @@ the richer in-app map render (stronger proof), which is what is committed.
 MinIO `Content-Length: 0` HEAD-style response for `sfincs_map.nc`. It is non-fatal (the
 poll loop continues and the run completes status=ok); it is a known MinIO/urllib3 header
 quirk, not a solve failure.
+
+---
+
+## Pip-only engines local (2026-07-05)
+
+Three new pip-only subprocess engines verified end-to-end via both tool-direct invocation
+and LLM-driven Playwright on qwen3:8b-16k. No Docker required for any of these engines.
+
+Stack state:
+- Agent: qwen3:8b-16k (MODEL_PROVIDER=openai -> Ollama :11434), GRACE2_SOLVER_BACKEND=local-docker
+- GRACE2_OQ_BIN=/home/nate/Documents/trid3nt-local/venvs/agent/bin/oq (added to .env.local)
+- Worker shims copied from GRACE-2 into vendor/services/workers/{swmm,landlab,openquake,_*_postprocess}/
+- OpenQuake DB upgrade applied (`oq engine --upgrade-db`) on first run (versions 0008-0010)
+
+### Per-engine results
+
+| Engine | Mechanism | tool-direct run_id | LLM-driven run_id | Outcome |
+|--------|-----------|-------------------|-------------------|---------|
+| SWMM | pyswmm IN-PROCESS (no subprocess) | 01KWT6SGJ69PB4E73BHEA53YJB | 01KWT7BTW00N4EKHM6MB0HH5C8 | PASS |
+| Landlab | subprocess run_chain.py (exec_kind=exec) | 01KWT6WB2ZJA804E856YYDXX82 (postprocess) / 01KWT6X3CHPDRJ863963ADVP2V (subprocess) | 01KWT7F4SV0BA3KDF528NMRRJX | PASS |
+| OpenQuake | subprocess run_oq.py -> oq engine (exec_kind=exec) | 01KWT715QDJFV0JBGBNRQ1C4ZC | 01KWT7ES2KPET48B9FK7MZEK6P | PASS |
+
+### SWMM (PySWMM urban stormwater)
+
+Tool-direct (`scripts/run_swmm_direct.py`):
+- Scenario: Alexandria, VA -- downtown 3-block box, 10-yr design storm, 1hr
+- run_id: `01KWT6SGJ69PB4E73BHEA53YJB`
+- max_depth_m=0.821, flooded_area_km2=0.0376
+- 24 frame COGs + swmm_depth_peak.tif + mesh.geojson uploaded to MinIO
+- TiTiler depth layer published
+
+LLM-driven (`scripts/e2e_swmm_llm.mjs`):
+- qwen3:8b-16k called `run_swmm_urban_flood` on turn 1 (0 nudges), elapsed=108s
+- run_id: `01KWT7BTW00N4EKHM6MB0HH5C8`
+- 6 depth-frame COGs + swmm_depth_peak.tif in MinIO, 1 layer in LayerPanel
+
+### Landlab (landslide susceptibility)
+
+Tool-direct (`scripts/run_landlab_direct.py`):
+- Scenario: Boulder, CO -- 4km box, coarsest resolution (30m), n_monte_carlo=25
+- Subprocess run_id: `01KWT6X3CHPDRJ863963ADVP2V` (run_chain.py, completion.json status=ok)
+- Postprocess run_id: `01KWT6WB2ZJA804E856YYDXX82` (landlab_susceptibility.tif 923KiB)
+- unstable_area_fraction=1.0, mean_pof=1.0
+- Secondary COGs: drainage_area, factor_of_safety, relative_wetness, slope
+- TiTiler susceptibility layer published
+
+LLM-driven (`scripts/e2e_landlab_llm.mjs`):
+- qwen3:8b-16k called `run_landlab_susceptibility` on turn 1 (0 nudges), elapsed=91s
+- run_id: `01KWT7F4SV0BA3KDF528NMRRJX`
+
+### OpenQuake (PSHA seismic hazard)
+
+Tool-direct (`scripts/run_openquake_direct.py`):
+- Scenario: San Francisco Bay Area, PGA, 10% PoE in 50yr (475-yr return period), 20km grid
+- run_id: `01KWT715QDJFV0JBGBNRQ1C4ZC`
+- max_hazard=0.897g, n_sites=7, source_model_kind=real-fault (Hayward So + No 2011 CFM)
+- Outputs: hazard_curve-mean-PGA CSV, hazard_map-mean-475y CSV, seismic_hazard_4326.tif
+- TiTiler seismic hazard layer published
+- One-time: `oq engine --upgrade-db` applied (DB versions 0008-0010)
+
+LLM-driven (`scripts/e2e_openquake_llm.mjs`):
+- qwen3:8b-16k called `run_seismic_hazard_psha` on turn 1 (0 nudges), elapsed=30s
+- run_id: `01KWT7ES2KPET48B9FK7MZEK6P`
+
+### Screenshots
+
+| File | What it proves |
+|------|---------------|
+| 12-swmm-local.png | Web app mid-SWMM-run: resolution-picker-card visible after tool routing, LLM confirmed coarsest resolution |
+| 13-swmm-layer.png | Post-SWMM: 1 depth layer in LayerPanel (SWMM run complete, MinIO prefix 01KWT7BTW00N4EKHM6MB0HH5C8) |
+| 14-landlab-local.png | Web app Landlab run in flight: chat UI shows Landlab prompt sent |
+| 15-landlab-layer.png | Post-Landlab: MinIO prefix 01KWT7F4SV0BA3KDF528NMRRJX confirmed (Landlab susceptibility layer produced) |
+| 16-openquake-local.png | Web app OpenQuake PSHA run in flight: chat UI shows SF PSHA prompt |
+| 17-openquake-layer.png | Post-OpenQuake: MinIO prefix 01KWT7ES2KPET48B9FK7MZEK6P confirmed (seismic hazard layer produced) |
+
+### Vendor patches
+
+- Worker shims installed at `vendor/services/workers/{swmm,landlab,openquake,_swmm_postprocess,_landlab_postprocess,_openquake_postprocess}/`
+- `GRACE2_OQ_BIN` env var added to `.env.local` for the venv `oq` binary path
+- Subprocess shim path resolution uses `parents[5]` from the workflow file to find the vendor root

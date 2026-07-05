@@ -487,6 +487,9 @@ _SWMM_WORKER_RUN_INP = (
     / "run_inp.py"
 )
 
+#: Repo root for PYTHONPATH injection (subprocess must resolve services.workers.*).
+_SWMM_GRACE2_REPO_ROOT = str(Path(__file__).resolve().parents[5])
+
 
 def swmm_local_spec() -> Any:
     """Build the SWMM ``LocalSolverSpec`` for the shared local backend.
@@ -549,6 +552,15 @@ def swmm_local_spec() -> Any:
             )
         return "ok", 0, None, extra
 
+    # Prepend the repo root to PYTHONPATH so the shim can import
+    # ``services.workers.swmm.*`` when the agent is installed in an isolated venv.
+    existing_pypath = os.environ.get("PYTHONPATH", "")
+    new_pypath = (
+        f"{_SWMM_GRACE2_REPO_ROOT}:{existing_pypath}"
+        if existing_pypath
+        else _SWMM_GRACE2_REPO_ROOT
+    )
+
     return LocalSolverSpec(
         solver=SWMM_SOLVER_NAME,
         workflow_name=LOCAL_EXEC_WORKFLOW_NAME,
@@ -560,21 +572,29 @@ def swmm_local_spec() -> Any:
         stderr_uri_field="swmm_stderr_uri",
         exec_kind="exec",
         classify_exit=classify_exit,
+        env_overrides={"PYTHONPATH": new_pypath},
     )
 
 
 def register_swmm_solver() -> None:
-    """Register ``'swmm'`` in ``tools.solver.SOLVER_WORKFLOW_REGISTRY``.
+    """Register ``'swmm'`` in SOLVER_WORKFLOW_REGISTRY and LOCAL_SOLVER_SPEC_REGISTRY.
 
-    Mirrors the SFINCS registration. The registry maps the solver name to its
-    workflow/dispatch name; for the local-exec lane that name is the
+    Mirrors the SFINCS registration. The workflow registry maps the solver name
+    to its workflow/dispatch name; for the local-exec lane that name is the
     ``LOCAL_EXEC_WORKFLOW_NAME`` sentinel (``run_solver`` only requires the key
-    to be PRESENT to dispatch — the backend seam routes to the local launcher,
-    which uses ``swmm_local_spec``). Idempotent — safe to call at import.
+    to be PRESENT to dispatch). The spec registry maps the solver name to its
+    ``LocalSolverSpec`` factory so ``_run_solver_local_docker`` dispatches to the
+    correct shim instead of the default SFINCS spec. Idempotent -- safe to call
+    at import.
     """
-    from ..tools.solver import LOCAL_EXEC_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from ..tools.solver import (
+        LOCAL_EXEC_WORKFLOW_NAME,
+        SOLVER_WORKFLOW_REGISTRY,
+        register_local_solver_spec,
+    )
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(SWMM_SOLVER_NAME, LOCAL_EXEC_WORKFLOW_NAME)
+    register_local_solver_spec(SWMM_SOLVER_NAME, swmm_local_spec)
 
 
 # Register at import so ``run_solver(solver='swmm')`` is wired wherever this

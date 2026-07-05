@@ -37,6 +37,8 @@ import json
 import logging
 import math
 import os
+import sys
+from pathlib import Path
 from typing import Any
 
 from grace2_contracts import new_ulid
@@ -74,6 +76,8 @@ __all__ = [
     "make_fault_sources_layer_uri",
     "FAULT_LINE_STYLE_PRESET",
     "REAL_FAULT_SITE_GRID_SPACING_KM",
+    "openquake_local_spec",
+    "register_openquake_solver",
 ]
 
 #: The registry key + handle ``solver`` tag for the seismic-hazard engine.
@@ -924,3 +928,104 @@ async def model_seismic_hazard_scenario(
         layer.uri,
     )
     return layer
+
+
+# --------------------------------------------------------------------------- #
+# OpenQuake LocalSolverSpec -- subprocess runner for the local-docker backend.
+#
+# exec_kind="exec": OpenQuake ships as a containerized CLI; there is no PyPI
+# package that exposes a stable in-process API. For the offline / local build we
+# run the worker entrypoint as a subprocess: ``sys.executable -m
+# services.workers.openquake.entrypoint --run-id <id> --manifest-uri <uri>``
+# with the GRACE-2 repo root on PYTHONPATH. The worker renders the deck via
+# ``job_ini.render_openquake_deck``, runs ``oq engine --run job.ini``, and writes
+# completion.json + uploads output CSVs.
+#
+# IMPORTANT: the ``oq`` CLI binary must be on PATH in the subprocess environment
+# (installed via the ``local-engines`` extra: ``pip install openquake.engine``).
+# The spec is INERT unless GRACE2_SOLVER_BACKEND=local-docker; the cloud Batch
+# path (run_solver with aws-batch backend) is unchanged.
+# --------------------------------------------------------------------------- #
+
+#: Path to the thin OpenQuake subprocess shim (mirrors run_inp.py for SWMM).
+_OQ_RUN_OQ = (
+    Path(__file__).resolve().parents[5]
+    / "services" / "workers" / "openquake" / "run_oq.py"
+)
+
+#: Repo root so the subprocess can resolve ``services.workers.*`` imports.
+_GRACE2_REPO_ROOT_OQ = str(Path(__file__).resolve().parents[5])
+
+
+def openquake_local_spec() -> Any:
+    """Build the OpenQuake ``LocalSolverSpec`` for the local-docker backend.
+
+    Runs the thin CLI shim ``services/workers/openquake/run_oq.py`` as a
+    subprocess in the current venv. The shim reads manifest.json from the
+    rundir, renders the OpenQuake deck, and drives ``oq engine --run job.ini``.
+    The SUPERVISOR (not the shim) writes completion.json and uploads output.
+
+    The GRACE-2 repo root is prepended to PYTHONPATH so the shim's
+    ``from services.workers.*`` imports resolve.
+
+    The ``oq`` CLI binary must be on PATH (installed via ``openquake.engine``
+    in the local-engines optional extra). If absent, the shim exits 127 and
+    the completion records status="error".
+
+    This spec is the SUBPROCESS RUNNER for the offline / local build. The
+    cloud Batch path is unchanged.
+    """
+    from ..tools.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
+
+    repo_root = _GRACE2_REPO_ROOT_OQ
+    # Prepend the repo root to PYTHONPATH so the shim can import
+    # ``services.workers.openquake.*`` and ``services.workers._raster_postprocess``.
+    existing_pypath = os.environ.get("PYTHONPATH", "")
+    new_pypath = f"{repo_root}:{existing_pypath}" if existing_pypath else repo_root
+
+    def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
+        del args, run_id  # manifest.json is written to rundir by the supervisor
+        return [
+            sys.executable,
+            str(_OQ_RUN_OQ),
+            "--manifest",
+            "manifest.json",
+        ]
+
+    def classify_exit(
+        rundir: Path, exit_code: int
+    ) -> "tuple[str, int, str | None, dict]":
+        if exit_code != 0:
+            return "error", exit_code, f"openquake worker exited with code {exit_code}", {}
+        return "ok", 0, None, {}
+
+    return LocalSolverSpec(
+        solver=OPENQUAKE_SOLVER_NAME,
+        workflow_name=LOCAL_EXEC_WORKFLOW_NAME,
+        args_key="oq_args",
+        build_argv=build_argv,
+        stdout_name="oq.stdout",
+        stderr_name="oq.stderr",
+        stdout_uri_field="oq_stdout_uri",
+        stderr_uri_field="oq_stderr_uri",
+        exec_kind="exec",
+        classify_exit=classify_exit,
+        env_overrides={"PYTHONPATH": new_pypath},
+    )
+
+
+def register_openquake_solver() -> None:
+    """Register ``'openquake'`` local spec in ``tools.solver.LOCAL_SOLVER_SPEC_REGISTRY``.
+
+    Mirrors ``run_swmm.register_swmm_solver``. Idempotent -- safe to call at
+    import. The factory (``openquake_local_spec``) is only called at dispatch
+    time to avoid any circular-import hazard.
+    """
+    from ..tools.solver import register_local_solver_spec
+
+    register_local_solver_spec(OPENQUAKE_SOLVER_NAME, openquake_local_spec)
+
+
+# Register at import so ``run_solver(solver='openquake')`` with
+# GRACE2_SOLVER_BACKEND=local-docker dispatches to the subprocess spec.
+register_openquake_solver()

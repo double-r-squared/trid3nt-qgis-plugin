@@ -225,6 +225,8 @@ __all__ = [
     "LocalSolverSpec",
     "launch_local_solver",
     "SOLVER_WORKFLOW_REGISTRY",
+    "LOCAL_SOLVER_SPEC_REGISTRY",
+    "register_local_solver_spec",
     "EmitterBinding",
     "NFR_P_4_TARGET_SECONDS",
     "DEFAULT_POLL_INTERVAL_S",
@@ -1123,6 +1125,17 @@ class LocalSolverSpec:
     classify_exit: (
         Callable[[Path, int], tuple[str, int, str | None, dict[str, Any]]] | None
     ) = None
+    env_overrides: dict[str, str] | None = None
+    """Optional environment variable overrides merged into the subprocess env.
+
+    Used by pip-only engine specs (landlab, openquake) to prepend the GRACE-2
+    repo root to PYTHONPATH so ``services.workers.*`` imports resolve in the
+    subprocess. ``None`` (the default) means the subprocess inherits the parent
+    env unchanged (SFINCS docker + MODFLOW mf6 binary paths both work without
+    any env surgery). Keys/values are plain strings; values replace (not append)
+    the matching env key. Prepend patterns (e.g. PYTHONPATH) must be assembled
+    by the spec factory using the current env value.
+    """
 
 
 def _sfincs_local_spec() -> LocalSolverSpec:
@@ -1537,6 +1550,24 @@ def launch_local_solver(
     solver_args = [str(a) for a in (manifest.get(spec.args_key, []) or [])]
     output_patterns = [str(p) for p in (manifest.get("outputs", []) or [])]
 
+    # Write the manifest to rundir/manifest.json so subprocess-runner specs
+    # (landlab, openquake) can pass a file:// URI to their worker entrypoints
+    # without requiring a separate S3 read from the subprocess. This is a
+    # no-op for docker/exec specs that do not use the manifest URI at runtime
+    # (SFINCS passes sfincs_args; MODFLOW passes mf6_args; SWMM passes inp path).
+    manifest_rundir_path = rundir / "manifest.json"
+    try:
+        manifest_rundir_path.write_text(
+            json.dumps(manifest, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:  # noqa: BLE001 - non-fatal; subprocess specs re-read from original URI on failure
+        logger.warning(
+            "local-docker could not write manifest.json to rundir %s: %s "
+            "(subprocess specs that rely on file:// will fail)",
+            rundir,
+            exc,
+        )
+
     rundir_resolved = rundir.resolve()
     for item in inputs:
         try:
@@ -1569,6 +1600,15 @@ def launch_local_solver(
     stderr_path = rundir / spec.stderr_name
     cmd = spec.build_argv(run_id, rundir, solver_args)
     logger.info("local-%s exec: %s", spec.exec_kind, " ".join(cmd))
+    # Build the subprocess environment: start from the current process env and
+    # merge any spec-level overrides (e.g. PYTHONPATH for pip-only workers that
+    # use ``services.workers.*`` imports from the GRACE-2 repo root).
+    proc_env: dict[str, str] | None = None
+    if spec.env_overrides:
+        import copy as _copy
+        proc_env = _copy.copy(os.environ.copy())
+        proc_env.update(spec.env_overrides)
+
     try:
         with stdout_path.open("wb") as out, stderr_path.open("wb") as err:
             proc = subprocess.Popen(  # noqa: S603 — argv list, no shell
@@ -1577,6 +1617,7 @@ def launch_local_solver(
                 stderr=err,
                 cwd=str(rundir),
                 start_new_session=True,  # detach from the agent's signal group
+                env=proc_env,  # None = inherit parent env (default / SFINCS / MODFLOW)
             )
     except Exception as exc:  # noqa: BLE001 — docker/solver binary missing, etc.
         raise SolverDispatchError(
@@ -1628,8 +1669,29 @@ def launch_local_solver(
 def _run_solver_local_docker(
     solver: str, model_setup_uri: str, compute_class: str
 ) -> ExecutionHandle:
-    """``run_solver`` body under ``GRACE2_SOLVER_BACKEND=local-docker`` — the
-    job-0291 SFINCS docker path, now a thin spec over the shared launcher."""
+    """``run_solver`` body under ``GRACE2_SOLVER_BACKEND=local-docker``.
+
+    Dispatches to the per-solver ``LocalSolverSpec`` via
+    ``LOCAL_SOLVER_SPEC_REGISTRY``. SFINCS uses the original docker path; pip-
+    only engines (swmm/landlab/openquake) use ``exec_kind="exec"`` subprocess
+    specs registered at import time (deferred via callables to avoid circular
+    imports -- each workflow module self-registers when it is first imported).
+
+    An unregistered solver falls back to the SFINCS spec so that the original
+    local-docker path stays byte-identical for callers that only set
+    ``GRACE2_SOLVER_BACKEND=local-docker`` for SFINCS.
+    """
+    factory = LOCAL_SOLVER_SPEC_REGISTRY.get(solver)
+    if factory is not None:
+        try:
+            spec = factory()
+        except Exception as exc:  # noqa: BLE001
+            raise SolverDispatchError(
+                f"local-docker spec factory for solver {solver!r} raised "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        return launch_local_solver(spec, model_setup_uri, compute_class=compute_class)
+    # Default: SFINCS docker path (byte-identical to job-0291).
     return launch_local_solver(
         _sfincs_local_spec(),
         model_setup_uri,
@@ -1638,7 +1700,44 @@ def _run_solver_local_docker(
 
 
 # --------------------------------------------------------------------------- #
-# aws-batch backend (sprint-16, SFINCS per-job autoscale) — staged, INERT
+# Per-solver local-spec registry (subprocess runner for pip-only engines)
+#
+# Maps solver name -> callable returning a LocalSolverSpec. The callable form
+# (factory, not a pre-built spec) avoids circular imports: each workflow module
+# (run_swmm, run_landlab, model_seismic_hazard_scenario) registers itself at
+# import time via register_local_solver_spec(); the factory is only CALLED
+# inside _run_solver_local_docker, by which time the module is fully loaded.
+#
+# SFINCS is NOT in this registry -- it keeps the original _sfincs_local_spec()
+# path (docker exec_kind, not subprocess). All pip-only engines that have no
+# public container image use exec_kind="exec" and register here.
+# --------------------------------------------------------------------------- #
+
+#: solver name -> zero-arg callable returning a LocalSolverSpec.
+LOCAL_SOLVER_SPEC_REGISTRY: dict[str, Any] = {}
+
+
+def register_local_solver_spec(solver: str, factory: Any) -> None:
+    """Register a per-solver LocalSolverSpec factory for the local-docker backend.
+
+    Call at module import time from each workflow module that owns a pip-only
+    engine (e.g. ``run_swmm``, ``run_landlab``, ``model_seismic_hazard_scenario``).
+    The factory is a zero-arg callable returning a fresh ``LocalSolverSpec``
+    instance (deferred construction avoids circular imports -- the solver module
+    is partially loaded when it first registers). Idempotent: a second call with
+    the same key overwrites silently (the last writer wins, which is harmless
+    since all callers build the same spec).
+
+    Args:
+        solver: lowercase solver identifier (must match ``SOLVER_WORKFLOW_REGISTRY``).
+        factory: ``() -> LocalSolverSpec`` -- called inside
+            ``_run_solver_local_docker`` at dispatch time.
+    """
+    LOCAL_SOLVER_SPEC_REGISTRY[solver] = factory
+
+
+# --------------------------------------------------------------------------- #
+# aws-batch backend (sprint-16, SFINCS per-job autoscale) -- staged, INERT
 # until NATE provisions the Batch compute env / queue / job-def + flips the env.
 # --------------------------------------------------------------------------- #
 
