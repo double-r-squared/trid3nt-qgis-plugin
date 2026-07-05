@@ -15,7 +15,11 @@ Status: pre-alpha scaffold. Design doc lands in `docs/design/`.
 
 Prerequisites: Linux x86_64, Python 3.12, Node 20+, [uv](https://astral.sh/uv),
 [ollama](https://ollama.com) running locally (for local LLM; any OpenAI-compatible
-endpoint also works).
+endpoint also works), and **Docker** (required for the SFINCS engine -- the
+`deltares/sfincs-cpu` container runs the solve). Your user must be in the `docker`
+group; if you were just added, either log out/in or wrap docker-touching commands
+(including the agent start) in `sg docker -c '...'` so the running shell picks up the
+group. Pull the SFINCS image once: `sg docker -c 'docker pull deltares/sfincs-cpu:sfincs-v2.3.3'`.
 
 ### 1. Download binaries (mf6, minio, mc)
 
@@ -44,6 +48,16 @@ cp .env.local .env.local.mine   # optional personal override
 ```
 
 The defaults point at Ollama on localhost, MinIO on :9000, TiTiler on :8080.
+
+Engine backend selection (in `.env.local`):
+- `GRACE2_MODFLOW_LOCAL=1` -- run MODFLOW against the local `mf6` binary (`GRACE2_MF6_BIN`).
+- `GRACE2_SOLVER_BACKEND=local-docker` -- run SFINCS via the local `deltares/sfincs-cpu`
+  docker container. Also set `GRACE2_SFINCS_IMAGE=deltares/sfincs-cpu:sfincs-v2.3.3` and
+  `GRACE2_RUNS_DIR=<repo>/data/runs` (the host rundir mounted into the container at `/data`).
+  These two backends are independent: MODFLOW checks `GRACE2_MODFLOW_LOCAL` first, so switching
+  `GRACE2_SOLVER_BACKEND` to `local-docker` does not affect MODFLOW. Start (or restart) the
+  agent inside the docker group so it can reach the docker socket:
+  `sg docker -c 'bash scripts/start_agent.sh'`.
 
 ### 4. Start services
 

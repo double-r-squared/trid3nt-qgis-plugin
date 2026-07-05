@@ -148,3 +148,87 @@ During harness development, multiple failure modes were uncovered and recorded:
    valid MODFLOW tool call), qwen3:8b-16k called `run_model_sustainable_yield_scenario`
    directly on turn 1 in every run once the prompt provided the required mandatory args.
    This confirms qwen3:8b-16k is suitable for single-tool-call MODFLOW composition.
+
+---
+
+## SFINCS local (docker) 2026-07-05
+
+The FINAL v1 engine milestone: a small-AOI SFINCS pluvial (rain-on-grid) flood
+running LOCALLY via docker, end-to-end. This is genuine execution -- a
+`deltares/sfincs-cpu` container runs the SFINCS binary against a hydromt-built
+deck; outputs (`sfincs_map.nc`, depth COGs) land in MinIO; the depth layer is
+published via TiTiler.
+
+### Env changes made
+
+`.env.local` (see repo README quickstart):
+- `GRACE2_SOLVER_BACKEND=local-docker` (was `local-exec`) -- routes `run_solver('sfincs')`
+  to the docker path. Independent of MODFLOW: MODFLOW's local mf6 path is gated on the
+  separate `GRACE2_MODFLOW_LOCAL=1` (checked first, unaffected by this change).
+- `GRACE2_SFINCS_IMAGE=deltares/sfincs-cpu:sfincs-v2.3.3` (the pulled image; the code
+  default is `:latest`, which is not pulled locally).
+- `GRACE2_RUNS_DIR=/home/nate/Documents/trid3nt-local/data/runs` (host rundir mounted
+  into the container at `/data`; the code default `/opt/grace2/runs` does not exist here).
+
+The agent was restarted inside the docker group (`sg docker -c 'bash scripts/start_agent.sh'`)
+so the agent process can reach the docker socket.
+
+### The pipeline (deterministic, in `run_model_flood_scenario`)
+
+`fetch_dem` (USGS 3DEP) + `fetch_landcover` (NLCD) -> `lookup_precip_return_period`
+(NOAA Atlas 14 100yr/1hr) -> `build_sfincs_model` (hydromt-sfincs 1.2.2, in-agent,
+`GRACE2_SFINCS_BUILD_OFFLOAD` unset) -> deck staged to `s3://trid3nt-cache/...` (MinIO) ->
+`run_solver('sfincs')` (local-docker: stages 11 deck inputs into the rundir, launches
+`docker run --rm --name <run_id> -v <rundir>:/data -w /data deltares/sfincs-cpu:sfincs-v2.3.3`) ->
+supervisor uploads outputs + writes `completion.json` to `s3://trid3nt-runs/<run_id>/` ->
+`wait_for_completion` (polls the completion.json) -> `postprocess_flood` (peak-depth COG) ->
+`publish_layer` (TiTiler tile URL).
+
+### Attempt 1 - LLM-driven (PRIMARY proof): PASS
+
+Playwright harness `scripts/e2e_sfincs_llm.mjs` drove the qwen3:8b-16k model through the
+web app at :5173 with the pluvial Chattanooga prompt (bbox `[-85.32, 35.03, -85.28, 35.07]`,
+100yr/1hr design storm, coarsest resolution).
+
+- **OUTCOME: PASS** -- LLM called `run_model_flood_scenario` on turn 1, 0 nudges
+- run_id: `01KWRSKE771W6XVDJRSQDXZYSY`
+- SFINCS container ran; `completion.json` status=ok, exit_code=0
+- Outputs: `s3://trid3nt-runs/01KWRSKE771W6XVDJRSQDXZYSY/sfincs_map.nc` (1.7 MiB) + stdout/stderr
+- 3 layers rendered in the LayerPanel (DEM, NLCD, depth) over Chattanooga
+- Note: `docker ps -a` sampling (15s cadence) missed the short-lived `--rm` container;
+  the new MinIO run prefix + completion.json are the authoritative genuine-execution proof.
+
+### Attempt 2 - tool-direct (corroborating smoke run): PASS
+
+`scripts/run_sfincs_direct.py` calls the same `run_model_flood_scenario` workflow directly
+(no LLM), used first to de-risk the docker path before spending the 30-min LLM window.
+
+- **OUTCOME: PASS**
+- run_id: `01KWRSECZGJEYBD44X6T0GRTT9`
+- docker exec captured verbatim in `logs/sfincs_direct.log`:
+  `docker run --rm --name 01KWRSECZGJEYBD44X6T0GRTT9 -v .../data/runs/01KWRSECZGJEYBD44X6T0GRTT9:/data -w /data deltares/sfincs-cpu:sfincs-v2.3.3`
+- `completion.json` status=ok, exit_code=0
+- Outputs in `s3://trid3nt-runs/01KWRSECZGJEYBD44X6T0GRTT9/`: `sfincs_map.nc` (1.79 MiB),
+  7 `flood_depth_frame_NN.tif` frames, `flood_depth_peak.tif`, stdout/stderr, completion.json
+- Published depth layer:
+  `http://127.0.0.1:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3://trid3nt-runs/01KWRSECZGJEYBD44X6T0GRTT9/flood_depth_peak.tif&rescale=0,3&colormap_name=ylgnbu`
+- estimated_active_cells=22890 -> compute_class=small
+- Full result: `sfincs_direct_result.json`
+
+### Screenshots
+
+| File | What it proves |
+|------|---------------|
+| 08-sfincs-local-running.png | Web app (:5173) mid-run: LayerPanel building NLCD/DEM/Rivers layers over Chattanooga, chat showing the pluvial SFINCS prompt + "resolution confirmed", legend visible -- LLM-driven pipeline in flight |
+| 09-sfincs-depth-layer.png | The SFINCS result layer rendered on the MapLibre map over downtown Chattanooga (river channel + land cover), from the local-docker solve output |
+
+Note (honesty): the direct run also rendered a clean depth-only TiTiler `/cog/preview` PNG of
+`flood_depth_peak.tif`; the LLM harness subsequently overwrote `09-sfincs-depth-layer.png` with
+the richer in-app map render (stronger proof), which is what is committed.
+
+### Known cosmetic noise
+
+`logs/sfincs_direct.log` contains a urllib3 `HeaderParsingError` WARNING/traceback on a
+MinIO `Content-Length: 0` HEAD-style response for `sfincs_map.nc`. It is non-fatal (the
+poll loop continues and the run completes status=ok); it is a known MinIO/urllib3 header
+quirk, not a solve failure.

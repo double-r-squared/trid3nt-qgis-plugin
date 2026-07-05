@@ -86,3 +86,140 @@ Post-run MinIO listing (trid3nt-runs):
 [2026-07-04 22:23:16 PDT]  24KiB STANDARD case-views/01KWRBG0X4BTZ1J2RMYWDGQR5Y.json
 [2026-07-04 22:33:27 PDT]  11KiB STANDARD case-views/01KWRC6CC1TFB48Y7VQ95XPKCN.json
 [2026-07-04 04:54:48 PDT] 9.9KiB STANDARD fresno-sy-zy33lti0/drawdown_4326.tif
+
+=== LLM-driven SFINCS pluvial (local-docker) on qwen3:8b-16k (2026-07-05T09:26:39.419Z) ===
+outcome:        PASS
+run_id:         01KWRSKE771W6XVDJRSQDXZYSY
+nudges_used:    0
+tool_sequence:  run_model_flood_scenario
+layer_count:    3
+docker_seen:    false
+
+docker ps -a (sfincs container evidence):
+open-webui	Exited (137) 2 weeks ago	ghcr.io/open-webui/open-webui:ollama
+
+Post-run MinIO listing (trid3nt-runs):
+[2026-07-04 22:20:42 PDT] 9.9KiB STANDARD 01KWRBHFK96K97E73K5TG4HQ8M/drawdown_4326.tif
+[2026-07-04 22:22:35 PDT] 9.9KiB STANDARD 01KWRBMYBQGPGKE9Q2EJS8EJP2/drawdown_4326.tif
+[2026-07-04 22:33:26 PDT] 9.9KiB STANDARD 01KWRC8TCVX0AF9TFHFP2PZVM1/drawdown_4326.tif
+[2026-07-05 02:24:13 PDT]   437B STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/completion.json
+[2026-07-05 02:24:21 PDT] 3.7KiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/flood_depth_frame_01.tif
+[2026-07-05 02:24:21 PDT] 4.0KiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/flood_depth_frame_02.tif
+[2026-07-05 02:24:21 PDT]  12KiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/flood_depth_frame_03.tif
+[2026-07-05 02:24:21 PDT]  21KiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/flood_depth_frame_04.tif
+[2026-07-05 02:24:21 PDT]  24KiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/flood_depth_frame_05.tif
+[2026-07-05 02:24:21 PDT]  26KiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/flood_depth_frame_06.tif
+[2026-07-05 02:24:21 PDT]  28KiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/flood_depth_frame_07.tif
+[2026-07-05 02:24:21 PDT]  28KiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/flood_depth_peak.tif
+[2026-07-05 02:23:42 PDT]     0B STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/sfincs.stderr
+[2026-07-05 02:23:42 PDT] 3.1KiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/sfincs.stdout
+[2026-07-05 02:23:43 PDT] 1.7MiB STANDARD 01KWRSECZGJEYBD44X6T0GRTT9/sfincs_map.nc
+[2026-07-05 02:26:28 PDT]     0B STANDARD 01KWRSKE771W6XVDJRSQDXZYSY/sfincs.stderr
+[2026-07-05 02:26:28 PDT] 3.1KiB STANDARD 01KWRSKE771W6XVDJRSQDXZYSY/sfincs.stdout
+[2026-07-05 02:26:28 PDT] 1.7MiB STANDARD 01KWRSKE771W6XVDJRSQDXZYSY/sfincs_map.nc
+[2026-07-05 02:19:44 PDT]   172B STANDARD case-manifests/01KWPE5HTHTA2NPWW8W5J941H1.json
+[2026-07-05 02:19:44 PDT]   172B STANDARD case-manifests/01KWPE87XCDKKZ0BE79XP2S2V3.json
+[2026-07-05 02:19:44 PDT]   172B STANDARD case-manifests/01KWPETN9KF1466AQ7DJ2MKPHZ.json
+[2026-07-05 02:19:44 PDT]   172B STANDARD case-manifests/01KWPEVHE5P9PZ1ZM6ZCA45GHJ.json
+[2026-07-05 02:19:44 PDT]   172B STANDARD case-manifests/01KWPEXP4G0HF2HY3G67TGJD2T.json
+[2026-07-05 02:19:44 PDT]   172B STANDARD case-manifests/01KWPF21H15K2JW1K6B2KQV55B.json
+[2026-07-05 02:19:44 PDT]   172B STANDARD case-manifests/01KWPF577QMB4KRHMA4FNDTNMQ.json
+[2026-07-05 02:19:44 PDT]   172B STANDARD case-manifests/01KWPFBHAFBYCHJ1EY9HD8KK78.json
+[2026-07-05 02:19:45 PDT]   190B STANDARD case-manifests/01KWPFZQWXKB8Z228FA1PSQ7EP.json
+[2026-07-05 02:19:45 PDT]   190B STANDARD case-manifests/01KWPG8CNPK8C0FJ8Z9B69ZKTQ.json
+[2026-07-05 02:19:45 PDT]   172B STANDARD case-manifests/01KWR8W4CEMX8H0ST00Z67E2KC.json
+[2026-07-05 02:19:45 PDT]   172B STANDARD case-manifests/01KWR93DS2EPXQKD0QBK164TMJ.json
+[2026-07-05 02:19:45 PDT]   210B STANDARD case-manifests/01KWR9J2SD41PJRR68CT689SJ9.json
+[2026-07-05 02:19:45 PDT]   210B STANDARD case-manifests/01KWRAC97KKEXEW8RJF8B692JT.json
+[2026-07-05 02:19:45 PDT]   210B STANDARD case-manifests/01KWRAJDXB2P3VY5H5TSXBB5GF.json
+[2026-07-05 02:19:45 PDT]   210B STANDARD case-manifests/01KWRB8BZXQM7R133BPX6BPMCZ.json
+[2026-07-05 02:19:45 PDT]   210B STANDARD case-manifests/01KWRBG0X4BTZ1J2RMYWDGQR5Y.json
+[2026-07-05 02:19:45 PDT]   210B STANDARD case-manifests/01KWRC6CC1TFB48Y7VQ95XPKCN.json
+[2026-07-05 02:19:44 PDT]   463B STANDARD case-views/01KWPE5HTHTA2NPWW8W5J941H1.json
+[2026-07-05 02:19:44 PDT] 1.1KiB STANDARD case-views/01KWPE87XCDKKZ0BE79XP2S2V3.json
+[2026-07-05 02:19:44 PDT] 1.3KiB STANDARD case-views/01KWPETN9KF1466AQ7DJ2MKPHZ.json
+[2026-07-05 02:19:44 PDT] 1.3KiB STANDARD case-views/01KWPEVHE5P9PZ1ZM6ZCA45GHJ.json
+[2026-07-05 02:19:44 PDT] 1.3KiB STANDARD case-views/01KWPEXP4G0HF2HY3G67TGJD2T.json
+[2026-07-05 02:19:44 PDT] 1.3KiB STANDARD case-views/01KWPF21H15K2JW1K6B2KQV55B.json
+[2026-07-05 02:19:44 PDT] 2.7KiB STANDARD case-views/01KWPF577QMB4KRHMA4FNDTNMQ.json
+[2026-07-05 02:19:44 PDT] 3.1KiB STANDARD case-views/01KWPFBHAFBYCHJ1EY9HD8KK78.json
+[2026-07-05 02:19:44 PDT] 2.4KiB STANDARD case-views/01KWPFZQWXKB8Z228FA1PSQ7EP.json
+[2026-07-05 02:19:44 PDT] 1.2KiB STANDARD case-views/01KWPG8CNPK8C0FJ8Z9B69ZKTQ.json
+[2026-07-05 02:19:45 PDT] 3.1KiB STANDARD case-views/01KWR8W4CEMX8H0ST00Z67E2KC.json
+[2026-07-05 02:19:45 PDT] 3.1KiB STANDARD case-views/01KWR93DS2EPXQKD0QBK164TMJ.json
+[2026-07-05 02:19:45 PDT] 4.3KiB STANDARD case-views/01KWR9J2SD41PJRR68CT689SJ9.json
+[2026-07-05 02:19:45 PDT]  26KiB STANDARD case-views/01KWRAC97KKEXEW8RJF8B692JT.json
+[2026-07-05 02:19:45 PDT] 3.2KiB STANDARD case-views/01KWRAJDXB2P3VY5H5TSXBB5GF.json
+[2026-07-05 02:19:45 PDT] 6.9KiB STANDARD case-views/01KWRB8BZXQM7R133BPX6BPMCZ.json
+[2026-07-05 02:19:45 PDT]  24KiB STANDARD case-views/01KWRBG0X4BTZ1J2RMYWDGQR5Y.json
+[2026-07-05 02:19:45 PDT]  11KiB STANDARD case-views/01KWRC6CC1TFB48Y7VQ95XPKCN.json
+[2026-07-04 04:54:48 PDT] 9.9KiB STANDARD fresno-sy-zy33lti0/drawdown_4326.tif
+
+================================================================
+=== SFINCS local (docker) end-to-end -- v1 engine milestone (2026-07-05) ===
+================================================================
+
+backend:        GRACE2_SOLVER_BACKEND=local-docker
+image:          deltares/sfincs-cpu:sfincs-v2.3.3
+aoi:            downtown Chattanooga, TN  bbox=[-85.32, 35.03, -85.28, 35.07] (~4km)
+scenario:       pluvial rain-on-grid, 100yr / 1hr Atlas 14 design storm, compute_class=small
+
+--- Attempt 1: LLM-driven (qwen3:8b-16k, scripts/e2e_sfincs_llm.mjs) : PASS ---
+run_id:         01KWRSKE771W6XVDJRSQDXZYSY
+outputs:
+[2026-07-05 02:26:59 PDT]   437B STANDARD completion.json
+[2026-07-05 02:27:06 PDT] 3.7KiB STANDARD flood_depth_frame_01.tif
+[2026-07-05 02:27:06 PDT] 4.0KiB STANDARD flood_depth_frame_02.tif
+[2026-07-05 02:27:06 PDT]  12KiB STANDARD flood_depth_frame_03.tif
+[2026-07-05 02:27:06 PDT]  21KiB STANDARD flood_depth_frame_04.tif
+[2026-07-05 02:27:06 PDT]  24KiB STANDARD flood_depth_frame_05.tif
+[2026-07-05 02:27:06 PDT]  26KiB STANDARD flood_depth_frame_06.tif
+[2026-07-05 02:27:06 PDT]  28KiB STANDARD flood_depth_frame_07.tif
+[2026-07-05 02:27:06 PDT]  28KiB STANDARD flood_depth_peak.tif
+[2026-07-05 02:26:28 PDT]     0B STANDARD sfincs.stderr
+[2026-07-05 02:26:28 PDT] 3.1KiB STANDARD sfincs.stdout
+[2026-07-05 02:26:28 PDT] 1.7MiB STANDARD sfincs_map.nc
+completion.json:
+{
+  "run_id": "01KWRSKE771W6XVDJRSQDXZYSY",
+  "status": "ok",
+  "exit_code": 0,
+  "sfincs_stdout_uri": "s3://trid3nt-runs/01KWRSKE771W6XVDJRSQDXZYSY/sfincs.stdout",
+  "sfincs_stderr_uri": "s3://trid3nt-runs/01KWRSKE771W6XVDJRSQDXZYSY/sfincs.stderr",
+  "output_uris": [
+    "s3://trid3nt-runs/01KWRSKE771W6XVDJRSQDXZYSY/sfincs_map.nc"
+  ],
+  "started_at": "2026-07-05T09:26:25Z",
+  "finished_at": "2026-07-05T09:26:59Z",
+  "error": null
+}
+--- Attempt 2: tool-direct (scripts/run_sfincs_direct.py) : PASS ---
+run_id:         01KWRSECZGJEYBD44X6T0GRTT9
+docker exec:    docker run --rm --name 01KWRSECZGJEYBD44X6T0GRTT9 -v .../data/runs/01KWRSECZGJEYBD44X6T0GRTT9:/data -w /data deltares/sfincs-cpu:sfincs-v2.3.3
+outputs:
+[2026-07-05 02:24:13 PDT]   437B STANDARD completion.json
+[2026-07-05 02:24:21 PDT] 3.7KiB STANDARD flood_depth_frame_01.tif
+[2026-07-05 02:24:21 PDT] 4.0KiB STANDARD flood_depth_frame_02.tif
+[2026-07-05 02:24:21 PDT]  12KiB STANDARD flood_depth_frame_03.tif
+[2026-07-05 02:24:21 PDT]  21KiB STANDARD flood_depth_frame_04.tif
+[2026-07-05 02:24:21 PDT]  24KiB STANDARD flood_depth_frame_05.tif
+[2026-07-05 02:24:21 PDT]  26KiB STANDARD flood_depth_frame_06.tif
+[2026-07-05 02:24:21 PDT]  28KiB STANDARD flood_depth_frame_07.tif
+[2026-07-05 02:24:21 PDT]  28KiB STANDARD flood_depth_peak.tif
+[2026-07-05 02:23:42 PDT]     0B STANDARD sfincs.stderr
+[2026-07-05 02:23:42 PDT] 3.1KiB STANDARD sfincs.stdout
+[2026-07-05 02:23:43 PDT] 1.7MiB STANDARD sfincs_map.nc
+completion.json:
+{
+  "run_id": "01KWRSECZGJEYBD44X6T0GRTT9",
+  "status": "ok",
+  "exit_code": 0,
+  "sfincs_stdout_uri": "s3://trid3nt-runs/01KWRSECZGJEYBD44X6T0GRTT9/sfincs.stdout",
+  "sfincs_stderr_uri": "s3://trid3nt-runs/01KWRSECZGJEYBD44X6T0GRTT9/sfincs.stderr",
+  "output_uris": [
+    "s3://trid3nt-runs/01KWRSECZGJEYBD44X6T0GRTT9/sfincs_map.nc"
+  ],
+  "started_at": "2026-07-05T09:23:41Z",
+  "finished_at": "2026-07-05T09:24:13Z",
+  "error": null
+}
