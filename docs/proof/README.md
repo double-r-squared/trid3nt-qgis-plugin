@@ -414,3 +414,67 @@ GRACE2_SWAN_IMAGE=trid3nt-local/swan:latest
 | 19-geoclaw-layer.png | Post-GeoClaw: layer text found in UI (honesty-floor passes, peak COG published via TiTiler) |
 | 20-swan-local.png | Web app with swan docker container running (docker ps detected `trid3nt-local/swan:latest`) |
 | 21-swan-layer-failure.png | Honesty floor: PostprocessSwanError (calm threshold) surfaced in chat UI -- correct behavior for wrong boundary direction; SWAN ran and produced swan_out.mat; direct-test proves engine works with correct SIDE W boundary |
+
+---
+
+## Flood inundation view + animation (2026-07-05)
+
+### Diagnosis: root cause category (a) - layers present, correct ordering, map zoom governs visibility
+
+The persisted case (01KWT89VDTEW2J5FHAT5JYQJKE, run_id 01KWT8BWTMTSB7H4NPMD4QWQET) had all
+depth layers present and correctly ordered in `loaded_layer_summaries`:
+
+- z=10: Peak flood depth (id=01KWT8DG9EA98GBX1581KE19SQ, name="Peak flood depth", role=primary)
+- z=3-9: Flood depth frame_01 through frame_07 (animation group, 7 frames)
+- z=2: NLCD Land Cover (layered below depth)
+- z=1: USGS 3DEP DEM (below landcover)
+- z=0: Rivers & Streams (vector, bottommost)
+
+All 8 depth layers (peak + 7 frames) were successfully published to TiTiler at
+`http://127.0.0.1:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png` with `ylgnbu` colormap.
+Verified: `curl /cog/info` returns valid bounds and statistics (min=0.05m, max=2.70m, valid_pixels=6563).
+
+Layer TiTiler tiles return 404 for coordinates OUTSIDE the raster extent -- this is normal TiTiler
+behavior for empty tiles (not a bug). Tiles at the correct Chattanooga coordinates (z=13-17,
+center approx 2154/3243 at z=13) all return HTTP 200 with rendered flood depth.
+
+The peak layer's `layer_id` in persistence is the envelope_id (01KWT8DG9EA98GBX1581KE19SQ)
+rather than the canonical `flood-depth-peak-{run_id}` format -- the log confirms
+`scenario_reuse` records it by envelope id. The client reads the name ("Peak flood depth")
+and `isPeakLayer()` correctly excludes it from the animation group, keeping it as an independent
+top-of-stack row with its own visibility toggle. No bug was found -- this is working as designed.
+
+The `LayerPanel` correctly groups frames 01-07 into a single animation row ("Flood Depth 1/7")
+with frame selectors and a play button. The peak depth appears as a separate layer above the
+animation group.
+
+### UI actions taken (Playwright)
+
+1. Loaded app at :5173, set localStorage `grace2.anonymous_user_id=01KWT89MZNKYHEMQAP5CNEY89A`
+   (matching the case owner) and `sessionStorage grace2-save-gate-accepted=1` (bypass save-gate).
+2. Selected the Chattanooga case row ("Small Pluvial Rain-on-grid SFINCS Flood Simulati...")
+3. Waited for 5 layers to appear in LayerPanel.
+4. Toggled NLCD Land Cover visibility off so the flood depth layer renders without occlusion.
+5. Screenshotted peak depth view (22-flood-peak-inundation.png).
+6. Selected animation frames 1, 4 (mid), 7 (late) via `[data-testid="layer-group-frame-select"]`.
+7. Screenshotted each frame (23, 24, 25).
+8. Clicked "+new case" (save-gate pre-accepted), sent fresh Chattanooga flood prompt.
+9. Screenshotted pipeline cards visible during run (26-flood-run-progress.png).
+   New run_id: 01KWTD9VHQAY7T1V893SG82C9E.
+
+### Screenshots
+
+| File | What it proves |
+|------|---------------|
+| 22-flood-peak-inundation.png | LayerPanel showing "Peak flood depth" as top-of-stack row + "Flood Depth 1/7" animation group below it, landcover toggled off; flood ylgnbu colorbar visible in legend |
+| 23-flood-anim-early.png | Animation frame 1/7 selected (earliest time step) -- thin river-channel inundation over Chattanooga basemap |
+| 24-flood-anim-mid.png | Animation frame 4/7 selected (mid-run) -- wider inundation pattern visible as flood spreads |
+| 25-flood-anim-late.png | Animation frame 7/7 selected (final time step) -- maximum lateral spread of flood depth |
+| 26-flood-run-progress.png | Fresh flood run in progress: resolution-picker-card visible in chat, pipeline cards active while solver runs |
+
+### Run IDs
+
+| Purpose | run_id |
+|---------|--------|
+| Original case used for screenshots 22-25 | 01KWT8BWTMTSB7H4NPMD4QWQET |
+| Fresh run captured in screenshot 26 | 01KWTD9VHQAY7T1V893SG82C9E |
