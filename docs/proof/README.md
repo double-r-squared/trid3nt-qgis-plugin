@@ -536,3 +536,65 @@ There were two bugs in the S3 write path (`_write_overview_cog`):
 - `vendor/services/agent/src/grace2_agent/tools/publish_layer.py` (3 functions)
 - `vendor/web/src/Map.tsx` (raster addSource)
 - `docs/proof/README.md` (this entry)
+
+---
+
+## Flood animation playback (2026-06-28)
+
+### What was tested
+
+All 7 flood depth animation frames captured via Playwright (`scripts/capture_anim_frames.mjs`)
+using frame-select dot clicks in the LayerPanel animation group row.
+Case: `01KWT89VDTEW2J5FHAT5JYQJKE` (Chattanooga SFINCS pluvial), run `01KWTDDCE46FSAAAK1KHJFR2GV`.
+
+### Per-frame status
+
+| Frame | Scrubber label | Map pixels changed vs previous | Hash |
+|-------|---------------|-------------------------------|------|
+| 1/7 | 1/7 | (first frame, baseline) | 838a85a37c00 |
+| 2/7 | 2/7 | YES | 6f7c4a26da17 |
+| 3/7 | 3/7 | YES | b24350d70e61 |
+| 4/7 | 4/7 | YES | be2964d21342 |
+| 5/7 | 5/7 | YES | 271197463793 |
+| 6/7 | 6/7 | YES | 68167f51093c |
+| 7/7 | 7/7 | YES | cc25f986ecbb |
+
+All 7 frames produced distinct pixel hashes -- the map tiles changed on every frame select.
+The previously-reported stall at frame 4 did NOT recur; frame-dot clicks are deterministic.
+
+### Play button behavior
+
+- PLAY button visible and enabled (not disabled)
+- Clicking play: aria-label transitions "Play sequence" -> "Pause sequence" (controller armed)
+- Auto-advance observed: advanced through 7 unique labels (1/7 -> 2/7 -> ... -> 7/7 -> 1/7 -> ...)
+  over the 12s observation window; confirmed loop-back to 1/7 after hitting 7/7
+- Clicking stop: aria-label returns to "Play sequence"
+- Conclusion: play loops all 7 frames continuously with correct wrap-around
+
+### GIF
+
+- Path: `docs/proof/29-flood-animation.gif`
+- Size: 2114 KB (2.1 MB)
+- Frames: 7, each 960x617 px (downscaled from 1400x900 for GIF efficiency)
+- Frame duration: 700 ms/frame, loop=0 (infinite)
+- All 7 frames show visibly expanding flood depth over downtown Chattanooga (ylgnbu colormap)
+
+### Script
+
+`scripts/capture_anim_frames.mjs` -- selects case by title fragment, expands animation group,
+clicks `[data-testid="layer-group-frame-select"]` dots, polls for tile settle (~1.5s networkidle
++ 0.8s paint buffer), reads `[data-testid="scrubber-frame-label"]` to assert n/7, screenshots
+each frame, then tests the play button over 12s.
+
+### Screenshots (individual frames)
+
+| File | What it proves |
+|------|---------------|
+| docs/proof/anim/frame-01.png | Frame 1/7: thin channel inundation (early, minimal depth) |
+| docs/proof/anim/frame-02.png | Frame 2/7: inundation spreading from channel |
+| docs/proof/anim/frame-03.png | Frame 3/7: continued lateral spread |
+| docs/proof/anim/frame-04.png | Frame 4/7: mid-run inundation extent |
+| docs/proof/anim/frame-05.png | Frame 5/7: broad flood pattern developing |
+| docs/proof/anim/frame-06.png | Frame 6/7: near-peak lateral extent |
+| docs/proof/anim/frame-07.png | Frame 7/7: final time step, maximum spread |
+| docs/proof/29-flood-animation.gif | Assembled 7-frame GIF (700ms/frame, loops) |
