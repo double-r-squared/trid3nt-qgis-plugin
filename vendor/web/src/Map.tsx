@@ -3619,10 +3619,18 @@ export function MapView({ subscribeSessionState, subscribeMapCommand, theme = "l
             if (!addedSourceIds.current.has(layer.layer_id)) return;
             try {
               if (m.getSource(layer.layer_id)) return; // already added (idle race)
+              // minzoom: 0 - TiTiler computes minzoom == maxzoom for small
+              // COGs that have no overviews (e.g. a 125x150 SFINCS output
+              // where max_dim // 2 < 256 so no overview factors are generated).
+              // Without this override MapLibre silently renders nothing at the
+              // default CONUS zoom (z=4). Setting minzoom=0 tells MapLibre to
+              // overzoom the nearest available tile level at any zoom - the
+              // correct behavior for hazard-depth overlays.
               m.addSource(layer.layer_id, {
                 type: "raster",
                 tiles: [tileUrl],
                 tileSize: 256,
+                minzoom: 0,
               });
               m.addLayer({
                 id: layer.layer_id,

@@ -1665,7 +1665,17 @@ def _build_cog_with_overviews_rasterio(raster_bytes: bytes) -> bytes | None:
 
 
 def _overview_factors(width: int, height: int) -> list[int]:
-    """Power-of-two decimation factors down to a ~256px overview (F33)."""
+    """Power-of-two decimation factors down to a ~256px overview (F33).
+
+    For small rasters (max dimension < 512px) the 256px floor produces an empty
+    list, so _build_cog_with_overviews_rasterio skips overview generation and the
+    COG stays overview-free. TiTiler then computes minzoom == maxzoom for tiny
+    COGs, and MapLibre silently renders nothing at the default CONUS zoom.
+
+    Fix: always include at least factor=2, even if the 256px floor is never met.
+    A single factor-2 overview (64-75px) is sufficient for TiTiler to lower its
+    minzoom and for MapLibre to overzoom the tiles at any zoom level.
+    """
     factors: list[int] = []
     factor = 2
     while max(width, height) // factor >= 256:
@@ -1673,6 +1683,10 @@ def _overview_factors(width: int, height: int) -> list[int]:
         factor *= 2
         if len(factors) >= 8:  # safety cap
             break
+    # Always add factor=2 even when the image is already smaller than 512px so
+    # TiTiler gets at least one overview level for tiny rasters.
+    if not factors:
+        factors = [2]
     return factors
 
 
@@ -1708,6 +1722,17 @@ def _read_raster_bytes(layer_uri: str) -> bytes | None:
         return None
 
 
+def _split_s3_uri(uri: str) -> tuple[str, str] | None:
+    """Split an ``s3://`` URI into ``(bucket, key)``, or ``None`` if not parseable."""
+    if not uri.startswith("s3://"):
+        return None
+    rest = uri[len("s3://"):]
+    slash = rest.find("/")
+    if slash <= 0 or slash == len(rest) - 1:
+        return None
+    return rest[:slash], rest[slash + 1:]
+
+
 def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
     """Write the auto-translated COG alongside the source; return its URI (None on fail).
 
@@ -1715,12 +1740,15 @@ def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
     never mutated in place and warm negative-caches don't poison the new path.
     Fail-open: returns ``None`` on any write error (caller publishes original).
     """
-    parsed = _split_object_uri(layer_uri) if layer_uri.startswith(("gs://", "s3://")) else None
+    # NOTE: _split_object_uri only handles gs:// and /vsigs/, NOT s3://.
+    # Use _split_s3_uri for the s3 branch and _split_object_uri for gs only.
+    parsed_gs = _split_object_uri(layer_uri) if layer_uri.startswith("gs://") else None
+    parsed_s3 = _split_s3_uri(layer_uri)
     try:
-        if layer_uri.startswith("s3://") and parsed is not None:
+        if layer_uri.startswith("s3://") and parsed_s3 is not None:
             import boto3
 
-            bucket, key = parsed
+            bucket, key = parsed_s3
             dir_prefix = key.rsplit("/", 1)[0] + "/" if "/" in key else ""
             new_key = f"{dir_prefix}overviews/{new_ulid()}.tif"
             s3 = boto3.client(
@@ -1730,11 +1758,11 @@ def _write_overview_cog(layer_uri: str, cog_bytes: bytes) -> str | None:
                 Bucket=bucket, Key=new_key, Body=cog_bytes, ContentType="image/tiff"
             )
             return f"s3://{bucket}/{new_key}"
-        if layer_uri.startswith("gs://") and parsed is not None:
+        if layer_uri.startswith("gs://") and parsed_gs is not None:
             client = _get_storage_client()
             if client is None:
                 return None
-            bucket, key = parsed
+            bucket, key = parsed_gs
             dir_prefix = key.rsplit("/", 1)[0] + "/" if "/" in key else ""
             new_key = f"{dir_prefix}overviews/{new_ulid()}.tif"
             client.bucket(bucket).blob(new_key).upload_from_string(

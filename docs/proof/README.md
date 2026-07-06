@@ -478,3 +478,61 @@ animation group.
 |---------|--------|
 | Original case used for screenshots 22-25 | 01KWT8BWTMTSB7H4NPMD4QWQET |
 | Fresh run captured in screenshot 26 | 01KWTD9VHQAY7T1V893SG82C9E |
+
+---
+
+## Flood renders at all zooms (2026-07-06)
+
+### Root cause
+
+The SFINCS postprocess writes a 125x150 px COG (small AOI, coarse grid).
+`_overview_factors(125, 150)` returned `[]` because `max(125, 150) // 2 = 75 < 256`
+(the 256px floor was never met). `_build_cog_with_overviews_rasterio` received an
+empty factor list, built no overviews, and the raster stayed overview-free.
+
+TiTiler then computed `minzoom=12, maxzoom=12` for the overview-free 125x150 COG.
+MapLibre's `addSource` had no `minzoom` override, so it respected TiTiler's
+`minzoom=12` from the tilejson and silently rendered NOTHING at the default CONUS
+zoom (z=4) or any zoom below 12. Because the map snaps to z=12 on case-select the
+layer was VISIBLE only immediately after zoom-to, then disappeared when the user
+panned or zoomed out.
+
+There were two bugs in the S3 write path (`_write_overview_cog`):
+- `_split_object_uri` only handled `gs://` and `/vsigs/`, NOT `s3://`
+- So `parsed` was always `None` for s3:// URIs, and the S3 branch was never taken
+- The function fell through to the local-path branch and tried `open("s3://...", "wb")`
+  which raised `FileNotFoundError`, causing fail-open back to the original no-overview COG
+
+### Fixes applied
+
+1. `publish_layer.py` - `_overview_factors`: always return at least `[2]` so small rasters
+   get at least one overview level, allowing TiTiler to serve downsampled tiles efficiently.
+
+2. `publish_layer.py` - `_split_s3_uri` (new helper): parse `s3://bucket/key` independently
+   of `_split_object_uri` (which is gs-only). `_write_overview_cog` now uses `parsed_s3`
+   for the S3 branch and `parsed_gs` for the gs branch.
+
+3. `web/src/Map.tsx` - `addSource` for raster layers: add `minzoom: 0` so MapLibre
+   overzooms from the nearest available tile at ANY zoom level. Without this the client
+   respected TiTiler's tilejson `minzoom=12` and showed nothing at z<12.
+
+### Verification
+
+- `_ensure_raster_has_overviews` now auto-translates the no-overview COG and writes a
+  sibling overview COG to `s3://trid3nt-runs/.../overviews/<ulid>.tif`
+- TiTiler serves 200 at z=8, z=10, z=12, z=14 for the flood depth COG
+- Screenshots 27/28 show the flood layer painted on the map at BOTH wide zoom (z=8)
+  and close zoom (z=14)
+
+### Screenshots
+
+| File | What it proves |
+|------|---------------|
+| 27-flood-widezoom.png | Peak flood depth layer visible at z=8 (wide CONUS zoom) as a small colored blob over Chattanooga; ylgnbu legend visible; NLCD/DEM toggled off for clarity |
+| 28-flood-closezoom.png | Peak flood depth layer visible at z=14 (close zoom) over downtown Chattanooga; flood cells cover river channel and low-lying areas with ylgnbu color gradient |
+
+### Files changed
+
+- `vendor/services/agent/src/grace2_agent/tools/publish_layer.py` (3 functions)
+- `vendor/web/src/Map.tsx` (raster addSource)
+- `docs/proof/README.md` (this entry)
