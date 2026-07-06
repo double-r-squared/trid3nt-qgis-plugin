@@ -978,18 +978,32 @@ class Persistence:
             uri = layer.get("uri")
             if not isinstance(uri, str) or not uri:
                 continue
-            try:
-                geojson_obj = await _read_vector_uri_as_geojson(uri)
-            except Exception:  # noqa: BLE001 - per-layer best-effort
+            # Scale-to-zero P3 (blueprint 2.5.7): a layer that misses this inline
+            # is written to the snapshot with its bare object-store uri, which the
+            # cold box-off viewer cannot fetch -- the layer is INVISIBLE until the
+            # next snapshot rebuild. One transient S3 hiccup must not cause that,
+            # so retry the read once before giving up on the layer.
+            geojson_obj = None
+            for attempt in (1, 2):
+                try:
+                    geojson_obj = await _read_vector_uri_as_geojson(uri)
+                except Exception:  # noqa: BLE001 - per-layer best-effort
+                    geojson_obj = None
+                if geojson_obj is not None:
+                    break
+                if attempt == 1:
+                    import asyncio as _aio  # local: matches this method's lazy-import style
+
+                    await _aio.sleep(0.5)
+            if geojson_obj is None:
                 logger.warning(
-                    "case-view-snapshot cross-case inline read failed case=%s "
-                    "layer_id=%s uri=%s",
+                    "case-view-snapshot cross-case inline read failed after retry "
+                    "case=%s layer_id=%s uri=%s -- layer will be invisible in the "
+                    "cold box-off view until the next snapshot rebuild",
                     case_id,
                     layer.get("layer_id"),
                     uri,
                 )
-                continue
-            if geojson_obj is None:
                 continue
             # Guard absurdly large GeoJSON against the payload norm: skip + flag
             # so the cold snapshot never balloons past the hard-block ceiling.

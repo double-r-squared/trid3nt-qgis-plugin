@@ -39,6 +39,11 @@ Requires-Dist: openai>=1.40
 Requires-Dist: grace2-contracts<0.2,>=0.1
 Provides-Extra: dev
 Requires-Dist: pytest>=7; extra == "dev"
+Provides-Extra: local-engines
+Requires-Dist: pyswmm<3,>=2.1; extra == "local-engines"
+Requires-Dist: swmm-api<1,>=0.4; extra == "local-engines"
+Requires-Dist: landlab<3,>=2.6; extra == "local-engines"
+Requires-Dist: openquake.engine>=3.19; extra == "local-engines"
 
 # services/agent/ — Agent service (Bedrock + WebSocket)
 

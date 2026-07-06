@@ -1792,6 +1792,103 @@ _IDLE_EXIT_SECONDS_DEFAULT = 0
 #: How often the idle-exit monitor samples liveness (seconds).
 _IDLE_EXIT_CHECK_INTERVAL_S = 30.0
 
+# --------------------------------------------------------------------------- #
+# ROUTE-ROW HEARTBEAT WRITER (Phase-1 scale-to-zero, design 2.3)
+#
+# Every GRACE2_ROUTE_HEARTBEAT_SECONDS the agent writes its own liveness state
+# into its DynamoDB route row (UpdateItem).  The reaper can then read these
+# fields instead of HTTP-probing :8766, eliminating the need for the reaper to
+# run inside the VPC (and thus killing the ~$29/mo ECS+Batch interface
+# endpoints).
+#
+# Fields written to grace2_session_routes(user_ulid, session_id):
+#   hb_last_seen      (N) epoch seconds of the last successful write
+#   hb_busy           (BOOL) is_busy() at that instant
+#   hb_active_connections (N) active_connection_count() at that instant
+#   hb_inflight_batch (N) solve_in_flight_count() -- gives a PER-SESSION Batch
+#                     guard so an unrelated user's solve no longer pins every
+#                     idle task (fixes the G3 global-pin defect).
+#
+# DISABLED BY DEFAULT: the feature is dormant unless GRACE2_ROUTE_HEARTBEAT_SECONDS
+# is set to a positive integer in the task definition's environment.  The
+# agent also needs GRACE2_ROUTE_USER_ULID + GRACE2_ROUTE_SESSION_ID (injected
+# by the broker's RunTask overrides) to know which DynamoDB row to update.
+# Without those env vars the writer silently no-ops (zero cloud impact on the
+# box or on any task definition that has not been updated).
+# --------------------------------------------------------------------------- #
+
+#: Cached DynamoDB client for the heartbeat writer.  Created lazily on the
+#: first enabled tick; None when the writer is disabled.
+_HB_DDB_CLIENT: "object | None" = None
+
+
+def _hb_interval_seconds() -> int:
+    """Resolve GRACE2_ROUTE_HEARTBEAT_SECONDS (default 0 = disabled)."""
+    raw = os.environ.get("GRACE2_ROUTE_HEARTBEAT_SECONDS")
+    if raw is None:
+        return 0
+    try:
+        return max(0, int(str(raw).strip()))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _hb_route_key() -> "tuple[str, str] | None":
+    """Return (user_ulid, session_id) from env, or None if either is missing."""
+    u = os.environ.get("GRACE2_ROUTE_USER_ULID", "").strip()
+    s = os.environ.get("GRACE2_ROUTE_SESSION_ID", "").strip()
+    if u and s:
+        return u, s
+    return None
+
+
+def _hb_write_once(
+    user_ulid: str,
+    session_id: str,
+    *,
+    busy: bool,
+    active_connections: int,
+    inflight_batch: int,
+    table: str,
+    region: str,
+) -> None:
+    """Synchronous DynamoDB UpdateItem for the heartbeat fields.
+
+    Called via asyncio.to_thread so it NEVER blocks the asyncio loop.
+    Best-effort: any exception is swallowed (heartbeat loss is not fatal --
+    the reaper's fail-safe direction is to keep the task up on stale data).
+    """
+    import time as _time
+
+    global _HB_DDB_CLIENT
+    try:
+        if _HB_DDB_CLIENT is None:
+            import boto3 as _boto3
+
+            _HB_DDB_CLIENT = _boto3.client(
+                "dynamodb",
+                region_name=region,
+            )
+        _HB_DDB_CLIENT.update_item(  # type: ignore[union-attr]
+            TableName=table,
+            Key={
+                "user_ulid": {"S": user_ulid},
+                "session_id": {"S": session_id},
+            },
+            UpdateExpression=(
+                "SET hb_last_seen = :ls, hb_busy = :b, "
+                "hb_active_connections = :ac, hb_inflight_batch = :ib"
+            ),
+            ExpressionAttributeValues={
+                ":ls": {"N": str(int(_time.time()))},
+                ":b": {"BOOL": busy},
+                ":ac": {"N": str(max(0, active_connections))},
+                ":ib": {"N": str(max(0, inflight_batch))},
+            },
+        )
+    except Exception:  # noqa: BLE001 -- heartbeat is best-effort
+        logger.debug("route-row heartbeat write failed (non-fatal)", exc_info=True)
+
 #: Hold a strong ref to the monitor task so it is not GC'd (create_task keeps only
 #: a weak reference).
 _IDLE_EXIT_TASK: "asyncio.Task | None" = None
@@ -1839,30 +1936,117 @@ def _idle_exit_decision(
 async def _run_idle_exit_monitor(
     *, check_interval_s: float = _IDLE_EXIT_CHECK_INTERVAL_S
 ) -> None:
-    """Background loop that self-stops a genuinely-idle session task.
+    """Background loop that self-stops a genuinely-idle session task AND writes
+    the route-row heartbeat (Phase-1 scale-to-zero, design 2.3).
 
-    No-op when GRACE2_AGENT_IDLE_EXIT_SECONDS is unset / <=0 (the box). On the
-    Fargate session task it flushes any pending coldview snapshot writes and then
-    ``os._exit(0)`` so the container exits cleanly and the Fargate task STOPS,
-    releasing its vCPU. The gate (``_idle_exit_decision``) guarantees this only
-    fires with zero connections and zero in-flight work."""
+    No-op for the idle-exit gate when GRACE2_AGENT_IDLE_EXIT_SECONDS is unset /
+    <=0 (the box). On the Fargate session task it flushes any pending coldview
+    snapshot writes and then ``os._exit(0)`` so the container exits cleanly and
+    the Fargate task STOPS, releasing its vCPU. The gate
+    (``_idle_exit_decision``) guarantees this only fires with zero connections
+    and zero in-flight work.
+
+    HEARTBEAT: every ``hb_interval`` seconds (GRACE2_ROUTE_HEARTBEAT_SECONDS,
+    default disabled) writes liveness fields (hb_last_seen, hb_busy,
+    hb_active_connections, hb_inflight_batch) to the agent's own route row.
+    The write is off-loop (asyncio.to_thread) and best-effort (never raises).
+    The idle-exit gate is INDEPENDENT: either, both, or neither can be enabled.
+    """
     secs = _idle_exit_seconds()
     if secs <= 0:
         logger.info("agent self-idle-exit disabled (GRACE2_AGENT_IDLE_EXIT_SECONDS unset/<=0)")
+    else:
+        logger.info(
+            "agent self-idle-exit armed: stop after %ds idle (no client, no in-flight work)",
+            secs,
+        )
+
+    # Heartbeat config -- resolved once at startup.
+    hb_interval = _hb_interval_seconds()
+    hb_key = _hb_route_key()
+    hb_table = os.environ.get("GRACE2_ROUTES_TABLE", "grace2_session_routes")
+    hb_region = os.environ.get("AWS_REGION", "us-west-2")
+    if hb_interval > 0 and hb_key:
+        logger.info(
+            "route-row heartbeat armed: user_ulid=%s session_id=%s table=%s interval=%ds",
+            hb_key[0],
+            hb_key[1],
+            hb_table,
+            hb_interval,
+        )
+    elif hb_interval > 0:
+        logger.warning(
+            "GRACE2_ROUTE_HEARTBEAT_SECONDS=%d but GRACE2_ROUTE_USER_ULID/SESSION_ID "
+            "are not set -- heartbeat disabled (no route key)",
+            hb_interval,
+        )
+        hb_interval = 0  # disable: can't write without a key
+
+    if secs <= 0 and hb_interval <= 0:
+        # Nothing to do -- return immediately so no asyncio.sleep runs.
         return
-    logger.info(
-        "agent self-idle-exit armed: stop after %ds idle (no client, no in-flight work)",
-        secs,
-    )
+
     idle_since: float | None = None
+    _hb_ticks_since_write: int = 0
+    # How many check_interval_s ticks make up one heartbeat interval.
+    _hb_ticks_per_write: int = max(1, round(hb_interval / check_interval_s)) if hb_interval > 0 else 0
+
     while True:
         await asyncio.sleep(check_interval_s)
         try:
             busy = is_busy()
             conns = active_connection_count()
+            inflight = solve_in_flight_count()
         except Exception:  # noqa: BLE001 -- the monitor must never crash the loop
             logger.exception("idle-exit monitor sample failed; skipping this tick")
             continue
+
+        # --- ROUTE-ROW HEARTBEAT ---
+        if hb_interval > 0 and hb_key is not None:
+            _hb_ticks_since_write += 1
+            if _hb_ticks_since_write >= _hb_ticks_per_write:
+                _hb_ticks_since_write = 0
+                # Phase-4 sizing evidence (blueprint 2.4): log peak/current RSS
+                # each heartbeat so CloudWatch Logs carries the live memory
+                # profile that gates the 8GB->4GB task-def shrink. ru_maxrss is
+                # KB on Linux; VmRSS is the instantaneous figure.
+                try:
+                    import resource as _resource
+
+                    _peak_mb = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss // 1024
+                    _cur_mb = 0
+                    with open("/proc/self/status", encoding="ascii") as _f:
+                        for _line in _f:
+                            if _line.startswith("VmRSS:"):
+                                _cur_mb = int(_line.split()[1]) // 1024
+                                break
+                    logger.info(
+                        "hb-rss peak_mb=%d cur_mb=%d busy=%s conns=%d",
+                        _peak_mb,
+                        _cur_mb,
+                        busy,
+                        conns,
+                    )
+                except Exception:  # noqa: BLE001 -- telemetry only
+                    pass
+                # Off-loop: boto3 is synchronous; never block the asyncio loop.
+                asyncio.ensure_future(
+                    asyncio.to_thread(
+                        _hb_write_once,
+                        hb_key[0],
+                        hb_key[1],
+                        busy=busy,
+                        active_connections=conns,
+                        inflight_batch=inflight,
+                        table=hb_table,
+                        region=hb_region,
+                    )
+                )
+
+        # --- IDLE-EXIT GATE ---
+        if secs <= 0:
+            continue  # heartbeat-only mode; skip the exit logic
+
         should_exit, idle_since = _idle_exit_decision(
             idle_exit_seconds=secs,
             busy=busy,
@@ -12129,6 +12313,31 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # strong ref so the task is not GC'd.
     global _IDLE_EXIT_TASK
     _IDLE_EXIT_TASK = asyncio.create_task(_run_idle_exit_monitor())
+
+    # TOOL-RETRIEVAL INDEX WARM-AT-STARTUP: when retrieval is enabled
+    # (shadow/enforce), build the discover index off-loop NOW instead of
+    # lazily on the first discover_dataset tool call. Without this every
+    # turn's _discover_topk sees a COLD index and FAIL-OPENS to the full
+    # ~176-tool registry -- harmless for 200k-context cloud models, but a
+    # SMALL-CONTEXT local model (offline build, e.g. 16k Ollama) gets its
+    # request silently truncated, so it cannot see tool schemas and guesses
+    # argument names. Fire-and-forget: a failed warm just leaves the
+    # documented fail-open behavior in place; never delays serving.
+    if _tool_retrieval_mode() != "off":
+        async def _warm_discover_index() -> None:
+            try:
+                from .tools import discover_dataset as _dd_warm
+                await asyncio.to_thread(_dd_warm._get_index)
+                logger.info("tool_retrieval: discover index warmed at startup")
+            except Exception:  # noqa: BLE001 -- warm is best-effort
+                logger.warning(
+                    "tool_retrieval: startup index warm failed; fail-open stays",
+                    exc_info=True,
+                )
+        _warm_task = asyncio.create_task(_warm_discover_index())
+        _BG_SNAPSHOT_TASKS.add(_warm_task)
+        _warm_task.add_done_callback(_BG_SNAPSHOT_TASKS.discard)
+
     handler = _make_handler(settings)
 
     # Wave 4.10 C1: best-effort mount of the catalog HTTP listener.

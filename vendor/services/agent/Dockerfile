@@ -96,7 +96,8 @@ RUN uv pip install --no-cache /build/packages/contracts
 COPY services/agent/pyproject.toml /build/services/agent/pyproject.toml
 COPY services/agent/README.md /build/services/agent/README.md
 COPY services/agent/src /build/services/agent/src
-RUN uv pip install --no-cache /build/services/agent
+COPY services/agent/vendor /build/services/agent/vendor
+RUN uv pip install --no-cache --find-links /build/services/agent/vendor /build/services/agent
 
 # Prune byte-compiled caches only (NOT package tests/ -- numpy/scipy import some
 # at runtime; same rationale as the sfincs worker). Hygiene saving on the heavy

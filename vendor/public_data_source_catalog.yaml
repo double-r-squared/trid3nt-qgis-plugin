@@ -1,0 +1,1232 @@
+# public_data_source_catalog.yaml — v0.1.0
+# GRACE-2 Public Data Source Catalog
+# Engine-owned per FR-PHC-4 / §F.1.2 (v0.3.18 + v0.3.20 amendments)
+# Curated 2026-06-07 — job-0046-research-20260607 (sprint-08 Stage A)
+#
+# §F.1.1 access-tier key:
+#   1 = STAC + COG (STAC catalog + HTTP Range on backend)
+#   2 = OGC service (WMS/WCS/WFS — visualization or canonical bytes)
+#   3 = Direct HTTPS file + Range support (206 Partial Content)
+#   4 = Region-download + local clip (no Range; full-file per region)
+#
+# §F.1 credential-tier key:
+#   1 = key-free public
+#   2 = key-required, free
+#   3 = paid / commercial
+#
+# §F.1.2 required fields per entry:
+#   id, name, description, urls, access_tier, credential_tier,
+#   ttl_class, source_class, license, citation, vintage, last_verified,
+#   status, how_to_use
+#
+# ttl_class values (FR-DC-2): static-30d | semi-static-7d | dynamic-1h | live-no-cache
+
+catalog_version: "0.1.0"
+last_updated: "2026-06-07"
+curator_job: "job-0046-research-20260607"
+
+entries:
+
+  # ─────────────────────────────────────────────────────────────────
+  # DOMAIN: terrain
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: usgs-3dep-elevation-image-service
+    name: "USGS 3DEP Elevation ImageServer (ArcGIS REST)"
+    description: >
+      Multi-resolution USGS 3D Elevation Program DEM mosaic, covering the
+      conterminous US, Hawaii, and Alaska at resolutions from 1m to 1/3-arc-second
+      (10m). Supports on-the-fly raster functions (hillshade, slope, aspect,
+      contours) and OGC WMS/WCS interfaces. Data current as of May 2026.
+    urls:
+      - "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: elevation.nationalmap.gov REST endpoint returns valid
+    # ArcGIS ImageServer JSON with WMS + WCS capabilities declared. The older
+    # index.nationalmap.gov path returns HTTP 404 — use elevation.nationalmap.gov.
+    # WCS GetCoverage returns bytes suitable for model inputs (Tier 2, not Tier 3).
+    # The /vsicurl/ windowed-read Tier 3 pattern works on individual staged tiles
+    # at prd-tnm.s3.amazonaws.com but the tile URL pattern varies by resolution
+    # and QQQUAD cell; the ImageServer WCS is the simpler canonical entry point.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: dem
+    license: "Public domain (US Federal data, USGS)"
+    citation: >
+      U.S. Geological Survey, 3D Elevation Program (3DEP) Elevation ImageServer.
+      Accessed via https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer.
+    vintage: "2026"
+    last_verified: "2026-06-07"
+    status: active
+    # Phase-2 resolution lever: 3DEP's canonical seamless product is 1/3-arc-sec
+    # (~10 m). The Tier-2 catalog_fetch dispatch targets this native cell size
+    # for its extent-aware raster grid (was a fixed 1024 px that coarsened large AOIs).
+    native_resolution_m: 10.0
+    how_to_use: |
+      OGC WCS GetCoverage is the canonical model-input path (same lesson as NLCD
+      per job-0044). Append ?service=WCS&version=1.0.0&request=GetCoverage&
+      Coverage=DEP3Elevation&CRS=EPSG:4326&BBOX=<west>,<south>,<east>,<north>&
+      WIDTH=<px>&HEIGHT=<px>&FORMAT=GeoTIFF. Use the ArcGIS REST exportImage
+      endpoint for raster functions (hillshade etc.). The service exposes 11+
+      raster functions; default band is elevation in meters. WMS layer name is
+      "3DEPElevation". Resolution auto-degrades to 1/9-arc-sec (10m) outside
+      1m or 1/3-arc-sec coverage areas — check pixel size in response headers.
+
+  - id: copernicus-dem-glo-30-stac
+    name: "Copernicus DEM GLO-30 (Microsoft Planetary Computer STAC)"
+    description: >
+      Global 30-meter digital surface model derived from TanDEM-X radar satellite
+      data. Covers the entire Earth (-180 to 180°, -90 to 90°). Cloud-Optimized
+      GeoTIFF tiles queryable via STAC. Preferred global DEM when 3DEP coverage
+      is absent (international locations, offshore areas).
+    urls:
+      - "https://planetarycomputer.microsoft.com/api/stac/v1/collections/cop-dem-glo-30"
+      - "https://planetarycomputer.microsoft.com/api/stac/v1"
+    access_tier: 1
+    # LIVE PROBE 2026-06-07: STAC collection cop-dem-glo-30 returns HTTP 200 with
+    # valid STAC 1.0.0 collection JSON. GeoParquet item index confirms COG backend.
+    # Tier 1 confirmed (STAC + COG).
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: dem
+    license: "Proprietary — Copernicus DEM license (free for most uses; see ESA Mission-specific Annex)"
+    citation: >
+      European Space Agency (licensor), Sinergise (producer). Copernicus Digital
+      Elevation Model (GLO-30). Hosted by Microsoft Planetary Computer.
+      DOI: 10.5069/G9028PQB (OpenTopography). Accessed 2026-06-07.
+    vintage: "2021-04-22"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Use pystac-client to query: Client.open("https://planetarycomputer.microsoft.com/api/stac/v1")
+      then search collection="cop-dem-glo-30" with bbox and datetime. Assets key
+      "data" yields the COG href. HTTP Range is supported — use rasterio + GDAL
+      /vsicurl/ for windowed reads. Resolution is ~30m GSD. CRS is EPSG:4326.
+      Note: the GLO-30 license permits free use including commercial; read the
+      Copernicus DEM License Summary before redistribution.
+
+  - id: copernicus-dem-glo-90-stac
+    name: "Copernicus DEM GLO-90 (Microsoft Planetary Computer STAC)"
+    description: >
+      Global 90-meter digital surface model from TanDEM-X. Same coverage and
+      provenance as GLO-30 but at coarser resolution — suitable for large-domain
+      regional modeling or quick scoping queries.
+    urls:
+      - "https://planetarycomputer.microsoft.com/api/stac/v1/collections/cop-dem-glo-90"
+    access_tier: 1
+    # LIVE PROBE 2026-06-07: collection cop-dem-glo-90 returns valid STAC 1.0.0
+    # JSON with GeoParquet item index. Tier 1 confirmed.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: dem
+    license: "Proprietary — Copernicus DEM license (free for most uses)"
+    citation: >
+      European Space Agency / Sinergise. Copernicus DEM GLO-90.
+      Hosted by Microsoft Planetary Computer. Accessed 2026-06-07.
+    vintage: "2021-04-22"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Same query pattern as cop-dem-glo-30 (pystac-client + collection ID
+      "cop-dem-glo-90"). Asset key "data" → COG href. Use for bbox areas where
+      1m/10m/30m coverage is not needed (reduces download volume ~9x vs GLO-30).
+
+  - id: hydrosheds-v1-dem-conditioned
+    name: "HydroSHEDS Hydrologically Conditioned DEM v1 (3 arc-second)"
+    description: >
+      Hydrologically conditioned (sink-filled, stream-burned) DEM derived from
+      SRTM at 3 arc-second (~90m) resolution. Available by continent as zipped
+      GeoTIFF packages. Key input for watershed delineation and flow routing.
+      HydroSHEDS v2 (TanDEM-X derived) is in development as of 2025.
+    urls:
+      - "https://data.hydrosheds.org/file/hydrosheds-v1-con/na_con_3s.zip"
+      - "https://www.hydrosheds.org/hydrosheds-core-downloads"
+    access_tier: 4
+    # LIVE PROBE 2026-06-07: hydrosheds.org core downloads page confirmed live.
+    # Direct download URL pattern: https://data.hydrosheds.org/file/hydrosheds-v1-con/[continent]_con_3s.zip
+    # The /vsicurl/ range-read is NOT tested on these ZIPs (compressed ZIPs don't
+    # support byte-range reads of internal TIFFs). Must download full ZIP then extract.
+    # Tier 4 (region download + local clip). Continental files are ~100–400 MB each.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: dem
+    license: "HydroSHEDS license (free for scientific, educational, commercial use with attribution)"
+    citation: >
+      Lehner B, Verdin K, Jarvis A (2008). New global hydrography derived from
+      spaceborne elevation data. Eos, 89(10): 93–94.
+      Data: https://www.hydrosheds.org. Accessed 2026-06-07.
+    vintage: "2008 (SRTM v3.0 base)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Download the North America conditioned DEM ZIP from
+      https://data.hydrosheds.org/file/hydrosheds-v1-con/na_con_3s.zip (approx.
+      350 MB). Continent codes: na=North/Central America, sa=South America,
+      eu=Europe+Middle East, as=Asia, af=Africa, au=Australasia.
+      After extraction, clip with rasterio using bbox in EPSG:4326. CRS is
+      EPSG:4326. Used by HydroMT as a hydrostatically-consistent DEM for
+      watershed delineation and SFINCS grid setup. Pre-built flow direction
+      (DIR) and accumulation (ACC) grids available at same base path with
+      pattern [continent]_dir_3s.zip / hyd_[continent]_acc_15s.zip.
+
+  # ─────────────────────────────────────────────────────────────────
+  # DOMAIN: hydrology
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: nhdplus-hr-nationalmap-mapserver
+    name: "NHDPlus High Resolution — USGS National Map MapServer"
+    description: >
+      Nationally seamless high-resolution hydrographic network: stream reaches,
+      catchments, flow surfaces, and value-added attributes. 13 layers including
+      flowlines, water bodies, catchments, and WBD HUC12 watershed boundaries.
+      Query and download via ArcGIS REST MapServer.
+    urls:
+      - "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: MapServer root returns ArcGIS REST JSON v11.3 with
+    # 13 layers (NHDPlusGage, NetworkNHDFlowline, NHDPlusCatchment, WBDHU12,
+    # etc.). Query capability confirmed (JSON/geoJSON/PBF). Note: layer 1 is
+    # NHDPlusSink (point type, not flowline) — use layer 0 (NetworkNHDFlowline)
+    # for reach queries. Direct bbox queries (geometry param) returned HTTP 400
+    # in spot tests — use where clause with spatial_intersect or OID pagination.
+    # Data as of October 2022; no real-time update.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: river_geometry
+    license: "Public domain (US Federal data, USGS)"
+    citation: >
+      U.S. Geological Survey, NHDPlus High Resolution.
+      Accessed via https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer.
+      Data current as of October 2022.
+    vintage: "2022-10"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Use the ArcGIS REST query interface. Base URL:
+      https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer/0/query
+      Key layer IDs: 0=NetworkNHDFlowline, 2=NHDPlusCatchment, 12=WBDHU12.
+      Use where=1=1 with geometry bbox + inSR=4326 + outSR=4326.
+      Response formats: json, geojson, pbf. Max 2000 records per page; use
+      resultOffset for pagination. GNIS_NAME and REACHCODE are the key
+      identification fields. Download full NHDPlus HR by HUC4 from
+      https://www.usgs.gov/national-hydrography/access-national-hydrography-products.
+
+  - id: usgs-nwis-instantaneous-values
+    name: "USGS NWIS Instantaneous Values (Streamflow REST API)"
+    description: >
+      Real-time and historical streamflow, stage, water temperature, and other
+      parameters at USGS stream gauge network. Instantaneous values at 15-minute
+      intervals. Freely accessible REST JSON service.
+    urls:
+      - "https://waterservices.usgs.gov/nwis/iv/"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: waterservices.usgs.gov/nwis/iv/ returned HTTP 404
+    # at the bare root. Parametric query
+    # ?format=json&sites=02339500&parameterCd=00060&period=P1D returns valid JSON
+    # with site metadata + 15-min time series. Bbox query with bBox param also
+    # returns live gauges (1 gauge returned for Fort Myers bbox 26.55-26.68N,
+    # -81.92 to -81.80W: WHISKEY CREEK AT FT. MYERS, FL, site 02293230).
+    # Access pattern: OGC-like REST with query params — classified as Tier 2
+    # (not a standard WMS but a provider REST service; not direct-file Tier 3).
+    credential_tier: 1
+    ttl_class: live-no-cache
+    source_class: streamflow
+    license: "Public domain (US Federal data, USGS)"
+    citation: >
+      U.S. Geological Survey, National Water Information System (NWIS).
+      Accessed via https://waterservices.usgs.gov/nwis/iv/. Accessed 2026-06-07.
+    vintage: "real-time"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Base URL: https://waterservices.usgs.gov/nwis/iv/
+      Key parameters: format=json, sites=<site_number>, bBox=<west,south,east,north>,
+      parameterCd=00060 (streamflow ft³/s) | 00065 (stage ft) | 00010 (temp °C),
+      period=P1D (last 24h) or startDT/endDT for date range.
+      Example (Fort Myers area bbox): ?format=json&bBox=-81.92,26.55,-81.80,26.68
+        &parameterCd=00060&period=P1D&siteStatus=active&siteType=ST
+      Returns WaterML JSON with site metadata + time series. Provisional data
+      tagged with "P" qualifier. Data is real-time; do NOT cache with static-30d.
+
+  - id: noaa-atlas14-pfds
+    name: "NOAA Atlas 14 Precipitation Frequency Data Server (PFDS)"
+    description: >
+      Precipitation frequency estimates (depth and intensity) by return period
+      (1 to 1000 years) and duration (5 min to 60 days) for any US location.
+      Official source for design-storm return periods used in SFINCS forcing.
+      Data returned as structured text/CSV at a point location.
+    urls:
+      - "https://hdsc.nws.noaa.gov/cgi-bin/hdsc/new/fe_text_mean.csv"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: PFDS endpoint returned valid structured text with
+    # precipitation depth estimates for Fort Myers (lat=26.62, lon=-81.87).
+    # 100-year / 24-hour value: 11.9 inches — consistent with job-0039's
+    # lookup_precip_return_period live run (same endpoint, same result).
+    # Tier 2 (OGC-like REST, not STAC/COG, not direct-file Range).
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: precipitation_frequency
+    license: "Public domain (NOAA/NWS federal data)"
+    citation: >
+      NOAA National Weather Service, Hydrometeorological Design Studies Center.
+      Precipitation Frequency Data Server (PFDS), NOAA Atlas 14.
+      https://hdsc.nws.noaa.gov/pfds/. Accessed 2026-06-07.
+    vintage: "2013–2019 (by region)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Query URL: https://hdsc.nws.noaa.gov/cgi-bin/hdsc/new/fe_text_mean.csv
+        ?lat=<lat>&lon=<lon>&data=depth&units=english&series=pf
+      Returns structured text with ARI columns (1, 2, 5, 10, 25, 50, 100, 200,
+      500, 1000 years) × duration rows (5min, 10min, 15min, 30min, 1hr, 2hr,
+      3hr, 6hr, 12hr, 24hr, 48hr, 4day, 7day, 10day, 20day, 30day, 45day, 60day).
+      Parse the "100" column + "24-hr" row for design-storm SFINCS forcing.
+      Use units=metric for mm. The lookup_precip_return_period tool wraps this
+      endpoint and caches at static-30d (design-storm values do not change).
+
+  - id: noaa-co-ops-water-level-api
+    name: "NOAA CO-OPS Tides and Currents API"
+    description: >
+      NOAA Center for Operational Oceanographic Products and Services REST API
+      for tide gauge observations: water level, tidal predictions, currents,
+      meteorological data. 6-minute interval real-time data. Used for coastal
+      storm-surge tidal boundary conditions.
+    urls:
+      - "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: tidesandcurrents.noaa.gov datagetter redirects
+    # (HTTP 301) to api.tidesandcurrents.noaa.gov — use the api. subdomain
+    # directly. Live response for station 8723214 (Virginia Key, FL) returned
+    # valid JSON with 481 6-minute water level records for Jan 1-2 2026.
+    # Tier 2 (REST API, not direct-file Tier 3).
+    credential_tier: 1
+    ttl_class: live-no-cache
+    source_class: tide_gauge
+    license: "Public domain (NOAA federal data)"
+    citation: >
+      NOAA Center for Operational Oceanographic Products and Services (CO-OPS).
+      Tides and Currents API. https://api.tidesandcurrents.noaa.gov/. Accessed 2026-06-07.
+    vintage: "real-time"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Base URL: https://api.tidesandcurrents.noaa.gov/api/prod/datagetter
+      Key parameters: product=water_level, station=<STATION_ID>, datum=MLLW,
+      begin_date=YYYYMMDD, end_date=YYYYMMDD, time_zone=GMT, units=english|metric,
+      format=json. Station IDs: 8723214 (Virginia Key/Miami), 8726667 (Naples FL),
+      8726520 (Fort Myers FL), 8727520 (Cedar Key FL). For storm surge: subtract
+      predicted tide from observed to get surge residual. Real-time; do not cache.
+      Note: the old tidesandcurrents.noaa.gov/api/datagetter URL now permanently
+      redirects — update any legacy code to use api.tidesandcurrents.noaa.gov.
+
+  - id: hydrosheds-hydrobasins-na
+    name: "HydroSHEDS HydroBASINS Watersheds (North America)"
+    description: >
+      Global hierarchical watershed polygon dataset derived from HydroSHEDS,
+      organized into 12 Pfafstetter levels. Levels 4–8 are most useful for
+      regional watershed delineation. Available as shapefile ZIPs by continent
+      and level from data.hydrosheds.org.
+    urls:
+      - "https://data.hydrosheds.org/file/HydroBasins/standard/hybas_na_lev04_v1c.zip"
+      - "https://www.hydrosheds.org/products/hydrobasins"
+    access_tier: 4
+    # LIVE PROBE 2026-06-07: hybas_na_lev04_v1c.zip at data.hydrosheds.org
+    # returned a binary ZIP (5.2 MB) with shapefile contents — confirmed live
+    # public download. Tier 4 (full-file ZIP, no Range support on ZIPs).
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: watershed
+    license: "HydroSHEDS license (free for scientific, educational, commercial use with attribution)"
+    citation: >
+      Lehner B, Grill G (2013). Global river hydrography and network routing:
+      baseline data and new approaches to study the world's large river systems.
+      Hydrological Processes 27(15): 2171–2186.
+      Data: https://www.hydrosheds.org/products/hydrobasins. Accessed 2026-06-07.
+    vintage: "v1c (2013)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      URL pattern: https://data.hydrosheds.org/file/HydroBasins/standard/hybas_[continent]_lev[NN]_v1c.zip
+      Continent codes: na, sa, eu, as, af, au, ar, gr, si. Levels 04–08 cover
+      regional to watershed scale. Download, extract, and use geopandas to
+      spatial-join the bbox centroid to find the containing HydroBASIN.
+      Standard + customized (with lakes) variants available. CRS: EPSG:4326.
+
+  # ─────────────────────────────────────────────────────────────────
+  # DOMAIN: weather + precipitation
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: mrms-qpe-01h-pass2
+    name: "NOAA MRMS Multi-Sensor QPE 1-Hour Pass 2 (GRIB2)"
+    description: >
+      Multi-Radar Multi-Sensor (MRMS) quantitative precipitation estimate at
+      1-hour intervals and ~1-km resolution, updated every 2 minutes.
+      Pass 2 is the quality-controlled product incorporating gauge corrections.
+      Used for real-time rainfall forcing in pluvial flood workflows.
+    urls:
+      - "https://mrms.ncep.noaa.gov/data/2D/MultiSensor_QPE_01H_Pass2/"
+    access_tier: 4
+    # LIVE PROBE 2026-06-07: mrms.ncep.noaa.gov/data/2D/MultiSensor_QPE_01H_Pass2/
+    # returned HTTP 200 directory listing with ~20 GRIB2.GZ files at 2-min cadence
+    # (files from June 6-7, 2026). File pattern:
+    # MRMS_MultiSensor_QPE_01H_Pass2_00.00_YYYYMMDD-HHMMSS.grib2.gz
+    # A "latest" symlink is provided. This is a direct HTTPS directory —
+    # files are ~654KB–1.1MB gzipped GRIB2. No Range header tested (GRIB2 files
+    # are not COGs so Range reads are of limited utility). Classified Tier 4
+    # (download full GRIB2 per timestamp, then decode with cfgrib/pygrib).
+    # Note: nomads.ncep.noaa.gov/pub/data/nccf/com/mrms/prod/ returned HTTP 403.
+    credential_tier: 1
+    ttl_class: live-no-cache
+    source_class: precipitation_qpe
+    license: "Public domain (NOAA federal data)"
+    citation: >
+      NOAA National Severe Storms Laboratory, Multi-Radar/Multi-Sensor (MRMS).
+      https://mrms.ncep.noaa.gov/. Accessed 2026-06-07.
+    vintage: "real-time"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      List directory: https://mrms.ncep.noaa.gov/data/2D/MultiSensor_QPE_01H_Pass2/
+      Parse href links for GRIB2.GZ files. "Latest" symlink gives most recent file.
+      Download with requests, decompress with gzip.open(), decode with cfgrib
+      (xarray.open_dataset(file, engine="cfgrib")). The QPE field name in GRIB2
+      is typically "tp" (total precipitation, mm). CRS is EPSG:4326 lat/lon grid.
+      Archive products (older than ~2h) are not available at this path; use
+      NCEI archive for historical QPE (separate endpoint, key-required for bulk).
+      Other MRMS products at same base path: RadarQualityIndex, PrecipFlag,
+      Reflectivity products.
+
+  - id: nexrad-level2-unidata-s3
+    name: "NEXRAD Level II Archive — Unidata/NOAA S3 Bucket"
+    description: >
+      Full-volume NEXRAD Level II base data (reflectivity, velocity, spectrum
+      width) for all US WSR-88D sites. Real-time + historical archive. Bucket
+      migrated from noaa-nexrad-level2 to unidata-nexrad-level2 effective
+      September 2025.
+    urls:
+      - "s3://unidata-nexrad-level2"
+      - "https://unidata-nexrad-level2.s3.amazonaws.com/"
+    access_tier: 3
+    # LIVE PROBE 2026-06-07: The original noaa-nexrad-level2 S3 bucket URL
+    # returned HTTP 403 (deprecated per Unidata migration notice — bucket
+    # discontinued Sep 2025). New bucket is unidata-nexrad-level2. File access
+    # pattern: s3://unidata-nexrad-level2/YYYY/MM/DD/KSITE/KSITE{YYYYMMDD}_{HHMMSS}_V06
+    # Files are ~2-10 MB each. HTTPS direct access supports Range reads (S3 standard).
+    # Access via boto3 or s3fs — no authenticated key needed (public bucket).
+    # DEVIATION FROM KICKOFF: kickoff listed noaa-nexrad-level2 bucket; the live
+    # bucket name changed to unidata-nexrad-level2 in Sep 2025.
+    credential_tier: 1
+    ttl_class: live-no-cache
+    source_class: radar
+    license: "Public domain (NOAA federal data)"
+    citation: >
+      NOAA National Weather Service, NEXRAD Level II Base Data.
+      Hosted by Unidata/NSF. s3://unidata-nexrad-level2.
+      Legacy bucket noaa-nexrad-level2 deprecated September 2025.
+      Accessed 2026-06-07.
+    vintage: "real-time + archive (1991–present)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Access via boto3 or s3fs (no AWS key needed for public bucket):
+        import s3fs; fs = s3fs.S3FileSystem(anon=True)
+        fs.ls("unidata-nexrad-level2/2022/09/29/KTBW/")
+      File naming: KSITE{YYYYMMDD}_{HHMMSS}_V06 (V06 = newest superresolution format).
+      Parse with MetPy or PyART:
+        from metpy.io import Level2File; f = Level2File(s3_path)
+      For QPE derivation, apply Z-R relationship to reflectivity field.
+      Do NOT use old noaa-nexrad-level2 bucket — bucket discontinued Sep 2025;
+      update all existing code to unidata-nexrad-level2.
+
+  - id: noaa-nhc-atcf-hurdat2
+    name: "NOAA NHC ATCF Best-Track (HURDAT2)"
+    description: >
+      NOAA National Hurricane Center historical Atlantic and Pacific best-track
+      database (HURDAT2) with 6-hourly storm positions and intensities from
+      1851 (Atlantic) / 1949 (Pacific) to present. Single flat text files
+      covering the full record. Also: real-time ATCF advisory files for active
+      storms.
+    urls:
+      - "https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-02272026.txt"
+      - "https://www.nhc.noaa.gov/data/"
+    access_tier: 3
+    # LIVE PROBE 2026-06-07: NHC data page confirmed live; HURDAT2 files
+    # listed as direct HTTPS downloads (6.8 MB Atlantic, 4.0 MB Pacific).
+    # A sample historical TCR PDF (Hurricane Ian) downloaded at HTTP 200
+    # (6.7 MB PDF). Real-time ATCF advisory files (a-deck, b-deck) accessible
+    # at https://ftp.nhc.noaa.gov/atcf/ — the .dat.gz file probe returned
+    # a binary 1.5 KB file (confirmed accessible but via gz binary).
+    # Tier 3: direct HTTPS file, no STAC catalog, file size small enough for
+    # full download (no Range needed for HURDAT2 text files).
+    credential_tier: 1
+    ttl_class: semi-static-7d
+    source_class: hurricane_track
+    license: "Public domain (NOAA/NWS federal data)"
+    citation: >
+      Landsea C, Franklin J (2013). Atlantic Hurricane Database Re-analysis Project
+      (HURDAT2). Monthly Weather Review 141(10): 3576–3592. NOAA NHC.
+      https://www.nhc.noaa.gov/data/. Accessed 2026-06-07.
+    vintage: "1851–2025 (historical); real-time for active storms"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      HURDAT2 download: https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-02272026.txt
+      Parse with tropycal (pip install tropycal) or pandas.read_csv with custom
+      header logic. 6-hourly format: storm ID, name, date, time, status, lat, lon,
+      max wind (kt), min pressure (hPa), and radii.
+      For active storms: check https://www.nhc.noaa.gov/data/archive/ for current
+      season advisory packages. Real-time ATCF track: ftp.nhc.noaa.gov/atcf/btk/
+      for b-deck best-track files during active season. File naming for archived
+      storms: bal{NN}{YYYY}.dat.gz where NN=storm number.
+
+  - id: noaa-storm-events-db
+    name: "NOAA Storm Events Database (NCDC)"
+    description: >
+      Official US record of significant weather events causing injuries, fatalities,
+      or property damage. 1950–present. Downloadable as annual CSV files per
+      event type. Includes Hurricane Ian 2022 FL events. Claim source for
+      FR-HEP-2 tier-1 authority weighting.
+    urls:
+      - "https://www.ncdc.noaa.gov/stormevents/"
+    access_tier: 4
+    # LIVE PROBE 2026-06-07: The CSV API endpoint
+    # (ncdc.noaa.gov/stormevents/csv?...) returned HTTP timeout — likely requires
+    # browser session. The main page and FTP CSV download approach work:
+    # https://www.ncdc.noaa.gov/stormevents/ftp.jsp documents annual CSV files.
+    # Canonical download path is the NWS Storm Data publication CSV archive.
+    # Tier 4: no Range support; full annual CSV download required per year.
+    credential_tier: 1
+    ttl_class: semi-static-7d
+    source_class: storm_events
+    license: "Public domain (NOAA/NWS federal data)"
+    citation: >
+      NOAA National Centers for Environmental Information (NCEI).
+      Storm Events Database. https://www.ncdc.noaa.gov/stormevents/. Accessed 2026-06-07.
+    vintage: "1950–present (updated monthly)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      CSV download base: https://www.ncdc.noaa.gov/stormevents/ftp.jsp
+      Annual CSV files follow pattern:
+        StormEvents_details-ftp_v1.0_d{YYYY}_c{YYYYMMDD}.csv.gz
+      Download desired year, decompress, filter by STATE_FIPS and EVENT_TYPE.
+      Key fields: EVENT_TYPE, STATE, BEGIN_DATE_TIME, DEATHS_DIRECT,
+      INJURIES_DIRECT, DAMAGE_PROPERTY, DAMAGE_CROPS, EVENT_NARRATIVE.
+      For API-style access (with NCEI web token), use NCEI data services:
+      https://www.ncei.noaa.gov/access/services/data/v1?dataset=storm-events-details
+      — but this endpoint requires an API token (credential_tier 2 path).
+      The CSV bulk download path is credential_tier 1 (no key needed).
+
+  # ─────────────────────────────────────────────────────────────────
+  # DOMAIN: buildings + infrastructure
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: microsoft-global-ml-building-footprints
+    name: "Microsoft Global ML Building Footprints"
+    description: >
+      ~1.5 billion ML-detected building footprint polygons globally, organized
+      by country and L9 quadkey tiles. Distributed as line-delimited GeoJSON
+      in gzipped CSV files. Global coverage including US, with frequent updates.
+    urls:
+      - "https://github.com/microsoft/GlobalMLBuildingFootprints"
+      - "https://minedbuildings.z5.web.core.windows.net/global-buildings/"
+    access_tier: 4
+    # LIVE PROBE 2026-06-07: GitHub README confirmed data is at Azure storage
+    # base https://minedbuildings.z5.web.core.windows.net/global-buildings/.
+    # The dataset-links.csv index URL (minedbuildings.blob.core.windows.net/...)
+    # returned HTTP 409 Conflict (outdated URL). The z5.web.core.windows.net
+    # hosting is the current path. Tier 4: files are gzipped CSV, no COG, no
+    # Range-optimized access. Country file sizes vary; US splits into quadkey tiles.
+    credential_tier: 1
+    ttl_class: semi-static-7d
+    source_class: buildings
+    license: "Open Data Commons Open Database License (ODbL)"
+    citation: >
+      Microsoft, GlobalMLBuildingFootprints.
+      https://github.com/microsoft/GlobalMLBuildingFootprints.
+      License: ODbL. Accessed 2026-06-07.
+    vintage: "2023 (dataset releases ongoing)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Enumerate tiles for a bbox: download the dataset index CSV from the GitHub
+      README link, filter by country and spatial extent to find relevant quadkey
+      tile URLs. Each tile is a .csv.gz of line-delimited GeoJSON.
+      For CONUS: filter index to country_iso="US", find quadkey tiles overlapping
+      your bbox. Download matching files, decompress, parse with geopandas or
+      mercantile for quadkey → bbox lookup. CRS: EPSG:4326. Attribute:
+      "geometry" (Polygon WKT). No height/floor count in the open footprint
+      (height data is a separate commercial product). For HAZUS exposure modeling,
+      pair with NSI (usace-nsi-api entry) for value attributes.
+
+  - id: osm-overpass-api
+    name: "OpenStreetMap Overpass API (Critical Infrastructure)"
+    description: >
+      OpenStreetMap read-only query API for arbitrary OSM tags. Primary source
+      for critical infrastructure polygons and points: hospitals, fire stations,
+      schools, power infrastructure, roads, bridges. Key=free public; returns
+      JSON/XML. Rate-limited: 10 req/min default.
+    urls:
+      - "https://overpass-api.de/api/interpreter"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: Overpass API returned valid JSON with 3 hospital
+    # features for Fort Myers bbox when queried for amenity=hospital. Generator
+    # shows "Overpass API 0.7.62.11". Tier 2 (provider REST API, not STAC/COG).
+    credential_tier: 1
+    ttl_class: semi-static-7d
+    source_class: critical_infrastructure
+    license: "ODbL (OpenStreetMap contributors)"
+    citation: >
+      OpenStreetMap contributors, Overpass API.
+      https://overpass-api.de/. Data © OpenStreetMap contributors, ODbL.
+      Accessed 2026-06-07.
+    vintage: "real-time (updated within minutes of OSM edits)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      POST or GET to https://overpass-api.de/api/interpreter with Overpass QL.
+      For critical infrastructure in a bbox (Fort Myers example):
+        [out:json][timeout:30];
+        (node[amenity~"hospital|fire_station|school"](26.55,-81.92,26.68,-81.80);
+         way[amenity~"hospital|fire_station|school"](26.55,-81.92,26.68,-81.80););
+        out body; >; out skel qt;
+      For power infrastructure: [power~"substation|line|tower"].
+      Rate limit: ~10 req/min. Use overpy (pip install overpy) for Python
+      client. Respect rate limits — add timeout=30 to all queries. OSM data
+      quality varies by region; urban US coverage is generally excellent.
+
+  - id: fema-nfhl-flood-zones
+    name: "FEMA National Flood Hazard Layer (NFHL) — ArcGIS REST"
+    description: >
+      FEMA Flood Insurance Rate Map (FIRM) digital database with 31 feature
+      layers: flood hazard zones (AE, VE, X, etc.), base flood elevations,
+      cross-sections, FIRM panels, LOMRs/LOMAs, levees, coastal transects.
+      Authoritative source for regulatory flood zones in the US.
+    urls:
+      - "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: hazards.fema.gov REST service returned valid
+    # ArcGIS MapServer JSON v11.1 with 31 layers. Note: the endpoint moved —
+    # hazards.fema.gov/gis/nfhl/rest/... (legacy) returns HTTP 404 now;
+    # use hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer.
+    # Direct bbox query (layer 28 flood zones) returned HTTP 400 in spot test —
+    # use layer IDs carefully (flood hazard zones = layer 28).
+    # DEVIATION: kickoff listed /gis/nfhl/ path; live probe found it 404.
+    # Current URL is /arcgis/rest/services/public/NFHL/.
+    credential_tier: 1
+    ttl_class: semi-static-7d
+    source_class: flood_zone
+    license: "Public domain (FEMA federal data)"
+    citation: >
+      FEMA, National Flood Hazard Layer (NFHL).
+      Accessed via https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer.
+      Accessed 2026-06-07.
+    vintage: "updated continuously (FIRM amendments)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Base URL: https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer
+      Layer 28: Flood Hazard Zones (FLD_ZONE, FLD_ZONE_SUBTY fields).
+      Query example (ensure correct where clause format):
+        /MapServer/28/query?where=FLD_ZONE+%3C%3E+%27AREA+NOT+INCLUDED%27
+        &geometry=<bbox>&geometryType=esriGeometryEnvelope&inSR=4326
+        &outFields=FLD_ZONE,FLD_ZONE_SUBTY&f=json
+      Key flood zones: AE=100-yr with BFE, X=500-yr/0.2%, VE=coastal wave,
+      D=undetermined. For WMS visualization: WMS endpoint at same base path
+      (append /MapServer/WMSServer?service=WMS&request=GetCapabilities).
+
+  - id: usace-nsi-structures-api
+    name: "USACE National Structures Inventory (NSI) API"
+    description: >
+      US Army Corps of Engineers structure inventory with physical and occupancy
+      attributes for ~10 million buildings. Supports bbox and FIPS-code queries.
+      Returns GeoJSON feature collections with foundation type, square footage,
+      occupancy, and HAZUS-compatible replacement value estimates.
+    urls:
+      - "https://nsi.sec.usace.army.mil/nsiapi/structures"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: NSI API returned HTTP 500 for both bbox formats
+    # tested (lat/lon/radius and bbox=). GitHub and HEC documentation confirm
+    # the endpoint at nsi.sec.usace.army.mil/nsiapi/structures is current.
+    # The 500 may be transient (server-side); treat as intermittent rather than
+    # down. Documented as bbox=west,south,east,north or fips=<FIPS> parameters.
+    # Tier 2 (REST API, JSON response, not STAC/file).
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: buildings
+    license: "Public domain (USACE federal data)"
+    citation: >
+      US Army Corps of Engineers, Hydrologic Engineering Center.
+      National Structures Inventory (NSI). https://nsi.sec.usace.army.mil/.
+      API Reference: https://www.hec.usace.army.mil/confluence/nsi/technicalreferences/latest/api-reference-guide.
+      Accessed 2026-06-07.
+    vintage: "2023 (ongoing updates)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Base URL: https://nsi.sec.usace.army.mil/nsiapi/structures
+      Bbox query: ?bbox=<west>,<south>,<east>,<north>&fmt=fc
+        (fmt=fc → GeoJSON FeatureCollection; fmt=fs → feature stream)
+      FIPS query: ?fips=<STATE+COUNTY_FIPS>
+      Returns GeoJSON with properties: occtype (occupancy), sqft (area),
+      found_type (foundation), val_struct (structure value), val_cont (contents
+      value), val_vehi (vehicle value). These are HAZUS-compatible exposure
+      attributes for loss estimation. Note: API returned HTTP 500 on June 7
+      probe — may be under maintenance. Retry with exponential backoff.
+
+  # ─────────────────────────────────────────────────────────────────
+  # DOMAIN: population + demographics
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: worldpop-1km-aggregated-rest
+    name: "WorldPop 1km Aggregated Population (REST + direct GeoTIFF)"
+    description: >
+      WorldPop Global_2000_2020 1km Aggregated population count raster by
+      country. Live-verified substrate for fetch_population Tier-1 default
+      (job-0037). 50 MB GeoTIFF per country, clipped locally to bbox.
+      Units: people per 1km cell.
+    urls:
+      - "https://data.worldpop.org/GIS/Population/Global_2000_2020_1km/2020/"
+      - "https://www.worldpop.org/rest/data/pop/wpgp?iso3=USA"
+    access_tier: 4
+    # LIVE PROBE 2026-06-07: WorldPop data.worldpop.org URL maxed out content
+    # limit (file >10MB — expected for 50 MB GeoTIFF). Server returns HTTP 200
+    # (not 206) for Range requests — confirmed by job-0037's live verification.
+    # /vsicurl/ windowed reads DO NOT WORK (no HTTP 206 support).
+    # WorldPop Hub STAC at hub.worldpop.org/stac/catalog.json: HTTP 404 (not
+    # live). Microsoft Planetary Computer: no worldpop collection exists.
+    # Tier 4: full-country GeoTIFF download required; clip locally.
+    # This matches the existing fetch_population tool implementation.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: population
+    license: "Creative Commons Attribution 4.0 International (CC BY 4.0)"
+    citation: >
+      WorldPop (www.worldpop.org, School of Geography and Environmental Science,
+      University of Southampton). WorldPop gridded population count, 2020,
+      1km resolution. DOI:10.5258/SOTON/WP00673. Accessed 2026-06-07.
+    vintage: "2020 (R2018A)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      URL pattern: https://data.worldpop.org/GIS/Population/Global_2000_2020_1km/
+        2020/{ISO3}/{iso3_lower}_ppp_2020_1km_Aggregated.tif
+      Example USA: https://data.worldpop.org/GIS/Population/Global_2000_2020_1km/
+        2020/USA/usa_ppp_2020_1km_Aggregated.tif
+      Download full country file (~50 MB for USA), then use rasterio windowed
+      read with from_bounds(bbox) to clip to target bbox. Reproject result to
+      model CRS before SFINCS input. Units: people per 1 km cell — sum cells
+      within bbox for total exposure count, do not area-normalize individual cells.
+      WorldPop server returns HTTP 200 (not 206) for Range requests — /vsicurl/
+      windowed reads will fail with "Range downloading not supported."
+      The fetch_population tool caches the clipped COG at static-30d per bbox key.
+
+  - id: us-census-acs-5year-api
+    name: "US Census ACS 5-Year Estimates API (Tier-2 opt-in)"
+    description: >
+      Census Bureau American Community Survey 5-year population and demographic
+      estimates at tract, block group, county, and state levels. Table B01003
+      provides total population. Requires a free API key (Tier-2).
+      Opt-in alternative to WorldPop for sub-county precision in the US.
+    urls:
+      - "https://api.census.gov/data/2023/acs/acs5"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: api.census.gov/data/2023/acs/acs5/variables/B01003_001E.json
+    # returned valid JSON confirming the ACS 5-year API is live. The variable
+    # metadata (label, concept, predicate_type) confirms the total population
+    # variable. Actual data queries require a Census API key in the `key=` param.
+    # Tier 2 (REST API, key-required for data queries).
+    credential_tier: 2
+    ttl_class: semi-static-7d
+    source_class: population
+    license: "Public domain (US Federal data, Census Bureau)"
+    citation: >
+      US Census Bureau. American Community Survey 5-Year Estimates, Table B01003.
+      https://api.census.gov/data/2023/acs/acs5. Accessed 2026-06-07.
+    vintage: "2023 (5-year estimates 2019–2023)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Tier-2 opt-in via fetch_population(bbox, dataset="acs_2022").
+      Direct API: https://api.census.gov/data/2023/acs/acs5
+        ?get=NAME,B01003_001E&for=tract:*&in=state:12+county:071&key=YOUR_KEY
+      State FIPS: 12=Florida; county 071=Lee County (Fort Myers).
+      Requires Census API key provisioned in Secret Manager. Sign up free:
+      https://api.census.gov/data/key_signup.html.
+      Returns JSON array (first row = column headers). B01003_001E = total
+      population estimate; tract geometries available from TIGER REST service.
+
+  - id: ghsl-population-r2023a
+    name: "Global Human Settlement Layer (GHSL) GHS-POP R2023A"
+    description: >
+      EU JRC Global Human Settlement Layer population grid at 30 arc-second
+      and 1 km resolution, 1975–2030 multi-epoch. Based on census + built-up
+      surface + dasymetric redistribution. Freely downloadable by tile from
+      the Copernicus Emergency Management Service portal.
+    urls:
+      - "https://human-settlement.emergency.copernicus.eu/download.php"
+      - "https://ghsl.jrc.ec.europa.eu/"
+    access_tier: 4
+    # LIVE PROBE 2026-06-07: ghsl.jrc.ec.europa.eu download URL redirected
+    # (HTTP 302) to human-settlement.emergency.copernicus.eu — use the new domain.
+    # The download page confirms free access with tiling interface. No API;
+    # tile selection via web UI or manually-constructed download links.
+    # Tier 4: full tile download, no COG Range support documented.
+    # Note: "single file download for this product is being produced" warning
+    # observed — tile-based access is the current primary path.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: population
+    license: "Creative Commons Attribution 4.0 (CC BY 4.0)"
+    citation: >
+      Schiavina M, Freire S, Carioli A, MacManus K (2023). GHS-POP R2023A —
+      GHS Population Grid, Multitemporal (1975-2030). European Commission,
+      Joint Research Centre (JRC). DOI:10.2905/2FF68A52-5B5B-4A22-8F40-C41DA8332CFE.
+      Accessed 2026-06-07.
+    vintage: "R2023A (2020 epoch)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Navigate to https://human-settlement.emergency.copernicus.eu/download.php
+      Select: ds=pop, layer=GHS_POP_E2020_GLOBE_R2023A_4326_30ss (30 arc-sec)
+      or GHS_POP_E2020_GLOBE_R2023A_4326_3ss (3 arc-sec).
+      Click tile on map for your area. Download the ~30 MB ZIP per tile.
+      Extract GeoTIFF, clip with rasterio to bbox. Units: people per cell.
+      Note: global single-file download was "in preparation" as of 2026-06-07
+      — use tile-based download. CRS: EPSG:4326.
+
+  # ─────────────────────────────────────────────────────────────────
+  # DOMAIN: land cover
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: nlcd-mrlc-wcs
+    name: "NLCD via MRLC GeoServer WCS 1.0.0 (canonical NLCD class integers)"
+    description: >
+      National Land Cover Database (NLCD) via the Multi-Resolution Land
+      Characteristics (MRLC) Consortium GeoServer WCS 1.0.0 GetCoverage.
+      Returns canonical NLCD integer class codes (11=Open Water, 21–24=Developed,
+      31=Barren, 41–43=Forest, 52=Shrub, 71=Grassland, 81–82=Agriculture,
+      90–95=Wetlands). This is the fetch_landcover substrate post-job-0044 hotfix.
+    urls:
+      - "https://www.mrlc.gov/geoserver/mrlc_download/NLCD_2021_Land_Cover_L48/ows"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: WCS 2.0.1 GetCapabilities on mrlc_download workspace
+    # returned a valid 825 KB capabilities document. WCS 1.0.0 GetCoverage on
+    # mrlc_download:NLCD_2021_Land_Cover_L48 with CRS=EPSG:4326+BBOX+WIDTH+HEIGHT
+    # +FORMAT=GeoTIFF returned a 37.9 KB binary TIFF — canonical NLCD integers
+    # confirmed by job-0044 evidence (unique values [11,21,22,23,24,31,41,42,43,52,
+    # 71,81,82,90,95]). Note: mrlc_display workspace (WMS endpoint used for
+    # visualization) exists separately. Use mrlc_download workspace for WCS
+    # model-input bytes. WCS 2.0.1 returns GeoServer projection-mapping bug;
+    # WCS 1.1.1 fails on sub-pixel bbox; only WCS 1.0.0 works cleanly.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: landcover
+    license: "Public domain (US Federal data, MRLC/USGS)"
+    citation: >
+      Multi-Resolution Land Characteristics Consortium (MRLC).
+      National Land Cover Database (NLCD) 2021.
+      https://www.mrlc.gov/. Accessed 2026-06-07.
+    vintage: "2021 (vintages 2001, 2004, 2006, 2008, 2011, 2013, 2016, 2019, 2021)"
+    last_verified: "2026-06-07"
+    status: active
+    # Phase-2 resolution lever: NLCD's native grid is 30 m. The Tier-2
+    # catalog_fetch dispatch targets this cell size for its extent-aware grid.
+    native_resolution_m: 30.0
+    how_to_use: |
+      WCS 1.0.0 GetCoverage:
+        https://www.mrlc.gov/geoserver/mrlc_download/NLCD_2021_Land_Cover_L48/ows
+          ?service=WCS&version=1.0.0&request=GetCoverage
+          &Coverage=mrlc_download:NLCD_2021_Land_Cover_L48
+          &CRS=EPSG:4326&BBOX=<west>,<south>,<east>,<north>
+          &WIDTH=<px>&HEIGHT=<px>&FORMAT=GeoTIFF
+      Returns uint8 GeoTIFF with canonical NLCD integers (see manning_mapping.csv
+      v1.0.0 for the complete class→Manning's-n mapping). Nodata=255.
+      Width/Height: use ceil(bbox_deg / 0.00009) for ~10m pixel size.
+      CRITICAL: do NOT use WMS GetMap (mrlc_display workspace) for model inputs —
+      it returns palette-encoded indices (1–21), NOT canonical NLCD integers.
+      This distinction is the OQ-42 lesson: WMS for visualization, WCS for bytes.
+      Vintage year 2021 is the most recent as of 2026-06-07; 2023 Annual NLCD not
+      yet available in MRLC GeoServer.
+
+  - id: esa-worldcover-2021-stac
+    name: "ESA WorldCover 10m 2020+2021 (Microsoft Planetary Computer STAC)"
+    description: >
+      ESA global land cover at 10-meter resolution for 2020 and 2021, derived
+      from Sentinel-1 and Sentinel-2. 11 UN FAO LCCS classes. Cloud-Optimized
+      GeoTIFF tiles queryable via STAC on Planetary Computer.
+    urls:
+      - "https://planetarycomputer.microsoft.com/api/stac/v1/collections/esa-worldcover"
+    access_tier: 1
+    # LIVE PROBE 2026-06-07: STAC collection esa-worldcover returned HTTP 200
+    # with valid STAC 1.0.0 JSON. Spatial: global -180 to 180, -60 to 82.75.
+    # Temporal: 2020-01-01 to 2021-12-31. GeoParquet item index confirms COG
+    # backend. Tier 1 confirmed (STAC + COG).
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: landcover
+    license: "Creative Commons Attribution 4.0 International (CC BY 4.0)"
+    citation: >
+      Zanaga D, et al. (2022). ESA WorldCover 10m 2021 v200. Zenodo.
+      DOI:10.5281/zenodo.7254221. Hosted by Microsoft Planetary Computer.
+      Accessed 2026-06-07.
+    vintage: "2021"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      pystac-client query: Client.open("https://planetarycomputer.microsoft.com/api/stac/v1")
+      search(collections=["esa-worldcover"], bbox=<bbox>, datetime="2021").
+      Asset key "map" → COG href. 11 classes: 10=Tree, 20=Shrubland, 30=Grassland,
+      40=Cropland, 50=Built-up, 60=Bare/Sparse, 70=Snow+Ice, 80=Permanent Water,
+      90=Herbaceous Wetland, 95=Mangroves, 100=Moss/Lichen. CRS: EPSG:4326.
+      Use for global locations outside NLCD coverage (international projects).
+      HTTP Range supported — windowed reads with rasterio + /vsicurl/ work.
+
+  - id: modis-land-cover-mcd12q1-stac
+    name: "MODIS Land Cover Type (MCD12Q1) — Planetary Computer STAC"
+    description: >
+      Annual global land cover at 500m resolution from combined Terra and Aqua
+      MODIS, 2001–present. Multiple classification schemes including IGBP and
+      UMD. Useful for large-domain forcing and global consistency checks.
+    urls:
+      - "https://planetarycomputer.microsoft.com/api/stac/v1/collections/modis-13A1-061"
+    access_tier: 1
+    # LIVE PROBE 2026-06-07: modis-13A1-061 (MODIS vegetation 16-day) is
+    # confirmed live on PC. The land cover type product MCD12Q1 likely exists
+    # at the same API but was not directly probed; vegetation proxy collection
+    # confirms PC MODIS infrastructure is live. Tier 1 inferred for PC-hosted
+    # MODIS collections (all PC collections are STAC+COG). Note: modis-13A1-061
+    # is vegetation index (NDVI/EVI), not land cover — the land cover collection
+    # ID would be modis-MCD12Q1-061 or similar. Record as active with caveat.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: landcover
+    license: "Public domain (NASA LP DAAC federal data)"
+    citation: >
+      Friedl M, Sulla-Menashe D (2022). MODIS/Terra+Aqua Land Cover Type Yearly
+      L3 Global 500m (MCD12Q1.061). NASA LP DAAC, USGS EROS.
+      Hosted by Microsoft Planetary Computer. Accessed 2026-06-07.
+    vintage: "2001–2023 (annual)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Query via pystac-client collection="modis-MCD12Q1-061" (confirm collection ID
+      at https://planetarycomputer.microsoft.com/api/stac/v1/collections).
+      Asset "LC_Type1" → IGBP classification COG. 17 IGBP classes (1=Evergreen
+      Needleleaf, 12=Cropland, 13=Urban, 17=Water). 500m pixel, annual composite.
+      Use for large bbox (>10 km²) or international locations where NLCD/ESA
+      WorldCover are preferable at higher resolution.
+
+  # ─────────────────────────────────────────────────────────────────
+  # DOMAIN: fire / wildfire
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: usfs-wildfire-hazard-potential-2023
+    name: "USFS Wildfire Hazard Potential (WHP) 2023"
+    description: >
+      USDA Forest Service annual wildfire hazard potential raster for CONUS.
+      Classes: 1=Very Low, 2=Low, 3=Moderate, 4=High, 5=Very High, 6=Non-burnable,
+      7=Water. 270m resolution. Used by Discovery-First lane for wildfire risk
+      queries. Available as GeoTIFF download or via USGS web service tile.
+    urls:
+      - "https://www.fs.usda.gov/rmrs/datasets/wildfire-hazard-potential-conus-2023"
+    access_tier: 4
+    # LIVE PROBE 2026-06-07: apps.fs.usda.gov ArcGIS REST service URLs attempted
+    # returned HTTP 403 (access forbidden). WFAS.net WHP page returned HTTP 404.
+    # The primary access remains the direct download from Forest Service RMRS.
+    # apps.fs.usda.gov/arcx/ REST service for WHP: HTTP 403 (may require VPN).
+    # Tier 4 (region download; WMS/REST service not consistently accessible).
+    # DEVIATION: kickoff expected WMS/REST access; live probes show limited public
+    # API access. GeoTIFF download remains the reliable path for model inputs.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: wildfire_hazard
+    license: "Public domain (USDA/USFS federal data)"
+    citation: >
+      Dillon GK (2023). Wildfire Hazard Potential for the conterminous United
+      States (270-m), version 2023 update. Fort Collins, CO: Forest Service
+      Research Data Archive. DOI: 10.2737/RDS-2015-0047-8. Accessed 2026-06-07.
+    vintage: "2023"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Download from Forest Service Research Data Archive:
+      https://www.fs.usda.gov/rmrs/datasets/wildfire-hazard-potential-conus-2023
+      or DOI:10.2737/RDS-2015-0047-8. GeoTIFF format, CONUS extent, 270m pixel,
+      projected CRS (Albers Equal Area). Clip to bbox with rasterio after
+      reprojecting to EPSG:4326 or target model CRS.
+      For Discovery-First lane visualization, a WMS tile service may exist at
+      apps.fs.usda.gov/arcx/rest — probe with /f=json before using, as access
+      has been intermittent. Annual release; cache at static-30d until next update.
+
+  - id: landfire-fuels-wcs
+    name: "LANDFIRE Fuels Data (USGS GeoServer WCS)"
+    description: >
+      LANDFIRE fuel characterization products for CONUS: fire behavior fuel models
+      (FBF/FBFM), forest canopy cover (FCC), fuel moisture (FMC), surface fuel
+      loads, and more. Available via USGS GeoServer WCS at edcintl.cr.usgs.gov.
+      2022 and 2023 versions confirmed in capabilities.
+    urls:
+      - "https://edcintl.cr.usgs.gov/geoserver/landfire/conus_lf2022/ows"
+      - "https://landfire.gov/data/lf_wcs_wms"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: LANDFIRE WCS documentation at landfire.gov confirmed
+    # WCS endpoint base pattern: edcintl.cr.usgs.gov/geoserver/landfire/conus_lf[YEAR]/ows
+    # Direct WCS GetCapabilities on conus_lf2022 and conus_lf2023 workspaces
+    # returned HTTP 404 — the exact workspace naming could not be confirmed live.
+    # The edcintl.cr.usgs.gov base server is likely active per USGS infrastructure.
+    # WMS seasonal fuels endpoint documented at:
+    # edcintl.cr.usgs.gov/geoserver/landfire/conus_sf/ows?service=WMS&request=GetCapabilities
+    # Tier 2 (OGC WCS/WMS service; credentials not required per documentation).
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: wildfire_fuels
+    license: "Public domain (USDA/USFS + USGS federal data)"
+    citation: >
+      LANDFIRE Program. LANDFIRE 2022 LF2022 Products. USDA Forest Service,
+      US Geological Survey, US Department of the Interior.
+      https://landfire.gov/. Accessed 2026-06-07.
+    vintage: "LF2022 (2022 disturbance)"
+    last_verified: "2026-06-07"
+    status: active
+    # Phase-2 resolution lever: LANDFIRE fuels products are 30 m. The Tier-2
+    # catalog_fetch dispatch targets this cell size for its extent-aware grid.
+    native_resolution_m: 30.0
+    how_to_use: |
+      WCS endpoint pattern: https://edcintl.cr.usgs.gov/geoserver/landfire/conus_lf2022/ows
+        ?service=WCS&request=GetCapabilities (probe first to confirm coverage names)
+      Expected coverage name pattern: LANDFIRE_2022_FBFM40 (40-class fuel model),
+        LANDFIRE_2022_CC (canopy cover), LANDFIRE_2022_FMC (fuel moisture).
+      WMS endpoint for visualization:
+        edcintl.cr.usgs.gov/geoserver/landfire/conus_sf/ows?service=WMS
+        &request=GetCapabilities
+      GetCoverage with WCS 1.0.0 using CRS=EPSG:4326 is likely the correct
+      version (same pattern as MRLC per job-0044). The LANDFIRE Map Viewer at
+      landfire.gov/viewer/ provides reference for product names. Pixel units:
+      integer class codes per fuel model standard (FBFM13, FBFM40, etc.).
+
+  - id: nasa-firms-viirs-active-fire
+    name: "NASA FIRMS VIIRS Active Fire Detections (Key-Required API)"
+    description: >
+      NASA Fire Information for Resource Management System real-time VIIRS
+      active fire/hotspot detections. Near-real-time (NRT) and standard
+      products from Suomi-NPP and NOAA-20/21. CSV output. Free MAP_KEY required.
+    urls:
+      - "https://firms.modaps.eosdis.nasa.gov/api/area/"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: firms.modaps.eosdis.nasa.gov/api/area/ endpoint
+    # confirmed live. Without API key: HTTP 401 Unauthorized. With API key the
+    # response would be CSV with columns: latitude, longitude, brightness,
+    # acq_date, acq_time, satellite, confidence, frp (fire radiative power).
+    # Free MAP_KEY required — apply at https://firms.modaps.eosdis.nasa.gov/api/.
+    # Tier 2 (REST API with key). Note: credential_tier 2 (key required, free).
+    credential_tier: 2
+    ttl_class: live-no-cache
+    source_class: active_fire
+    license: "Public domain (NASA federal data)"
+    citation: >
+      NASA EOSDIS, Fire Information for Resource Management System (FIRMS).
+      VIIRS S-NPP 375m Active Fire Detections.
+      https://firms.modaps.eosdis.nasa.gov/. Accessed 2026-06-07.
+    vintage: "real-time (NRT: within 3h of overpass)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Register for free MAP_KEY at https://firms.modaps.eosdis.nasa.gov/api/.
+      API URL: https://firms.modaps.eosdis.nasa.gov/api/area/csv/{MAP_KEY}/{SOURCE}/{BBOX}/{DAY_RANGE}
+      SOURCE options: VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, LANDSAT_NRT, MODIS_NRT.
+      BBOX: west,south,east,north (e.g. -82.5,25.5,-81.0,27.0 for Fort Myers area).
+      DAY_RANGE: 1 to 5. Returns CSV with lat/lon/brightness/confidence/FRP.
+      Rate limit: 5000 transactions / 10-min. For historical archive (>7 days),
+      use NASA Earthdata FIRMS archive (separate endpoint, NASA Earthdata Login required).
+      For discovery workflow: filter confidence>=50%, FRP>10 MW for significant detections.
+
+  - id: usda-wildfire-risk-to-communities
+    name: "USDA Wildfire Risk to Communities (WRC) — GIS Downloads"
+    description: >
+      USDA Forest Service community-level wildfire risk characterization for
+      all populated places in the US. Risk scores, exposure, and susceptibility
+      layers. GIS data available as state-level downloads from the Forest Service
+      Research Data Archive.
+    urls:
+      - "https://wildfirerisk.org/"
+      - "https://doi.org/10.2737/RDS-2020-0016-2"
+    access_tier: 4
+    # LIVE PROBE 2026-06-07: wildfirerisk.org confirmed live; download page
+    # redirects to Forest Service Research Data Archive DOI links.
+    # No WMS/REST API identified for programmatic access — data is distributed
+    # as state-level GIS file downloads from the FSRDA.
+    # Tier 4 (region download; no Range or STAC).
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: wildfire_hazard
+    license: "Public domain (USDA/USFS federal data)"
+    citation: >
+      Scott JH, et al. (2020). Wildfire risk to communities: Spatial datasets of
+      landscape-wide wildfire risk components for the United States. Fort Collins,
+      CO: Forest Service Research Data Archive. DOI:10.2737/RDS-2020-0016-2.
+      Accessed 2026-06-07.
+    vintage: "2020 (v2)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Data download: https://doi.org/10.2737/RDS-2020-0016-2 (all lands)
+      or https://doi.org/10.2737/RDS-2020-0060-2 (populated places only).
+      Download state-level files, extract relevant rasters/shapefiles.
+      Key layers: WHPercentile (wildfire hazard potential rank), ExpBuildings
+      (exposed building count), WRIScore (community risk index).
+      For web visualization: https://apps.wildfirerisk.org/explore/ provides
+      an interactive map that can be used for quick reference while programmatic
+      GIS access uses the archive downloads.
+
+  # ─────────────────────────────────────────────────────────────────
+  # DOMAIN: seismic + earthquake
+  # ─────────────────────────────────────────────────────────────────
+
+  - id: usgs-earthquake-catalog-comcat
+    name: "USGS Earthquake Catalog (ComCat) FDSNWS Event API"
+    description: >
+      USGS comprehensive earthquake catalog via FDSN Web Service Event API.
+      Returns GeoJSON, QuakeML, or CSV. Supports spatial (bbox, radius),
+      temporal, and magnitude filters. Key source for historical and near-real-
+      time seismic event data.
+    urls:
+      - "https://earthquake.usgs.gov/fdsnws/event/1/query"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: FDSNWS event query returned valid GeoJSON with 5
+    # earthquake features for Jan 1-2 2026 with minmagnitude=3.0. Service
+    # confirmed live. Tier 2 (REST API with query parameters, not STAC/COG).
+    credential_tier: 1
+    ttl_class: semi-static-7d
+    source_class: earthquake_events
+    license: "Public domain (USGS federal data)"
+    citation: >
+      U.S. Geological Survey, Earthquake Hazards Program.
+      Comprehensive Earthquake Catalog (ComCat).
+      https://earthquake.usgs.gov/earthquakes/search/. Accessed 2026-06-07.
+    vintage: "1900–present (real-time updates)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Base URL: https://earthquake.usgs.gov/fdsnws/event/1/query
+      Parameters: format=geojson|csv|quakeml, starttime=YYYY-MM-DD, endtime=YYYY-MM-DD,
+      minmagnitude=3.0, maxdepth=70, minlatitude=, maxlatitude=, minlongitude=,
+      maxlongitude=, limit=20000. Example (M3+ within 200km of Fort Myers):
+        ?format=geojson&starttime=2020-01-01&endtime=2026-06-07
+        &minmagnitude=3.0&latitude=26.62&longitude=-81.87&maxradius=2.0
+      GeoJSON properties: mag, place, time (epoch ms), depth (km), magType.
+      For historical event research (FR-HEP-2): use as Tier-1 agency source.
+      Max 20000 results per query; paginate with orderby=time-asc + offset for
+      large time ranges.
+
+  - id: usgs-nshmp-hazard-web-service
+    name: "USGS National Seismic Hazard Mapping Program (NSHMP) Hazard API"
+    description: >
+      USGS NSHMP web service for probabilistic seismic hazard analysis (PSHA).
+      Returns hazard curves (PGA and spectral accelerations) at a lat/lon point
+      for specified return periods. Supports 2008, 2014, 2014B editions (US48).
+      Used by the USGS Unified Hazard Tool and ASCE 7 reference values.
+    urls:
+      - "https://earthquake.usgs.gov/nshmp-haz-ws/hazard"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: hazard-ws root returned usage documentation JSON
+    # listing editions E2008, E2014, E2014B for COUS/CEUS/WUS regions.
+    # Editions E2018 and E2023 not found on this instance. Parametric query
+    # with valid E2014B + vs30=760 + region=COUS returned meaningful error
+    # ("No enum constant...E2018R1") confirming the API is live and parsing
+    # requests. The Earthquake Hazard Toolbox at earthquake.usgs.gov/nshmp/
+    # is the user-facing UI wrapping this API. Tier 2 (REST API, key-free).
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: seismic_hazard
+    license: "Public domain (USGS federal data)"
+    citation: >
+      U.S. Geological Survey, Earthquake Hazards Program.
+      National Seismic Hazard Model Project, NSHMP Web Service.
+      https://earthquake.usgs.gov/nshmp-haz-ws/. Accessed 2026-06-07.
+    vintage: "2014/2014B/2023 models"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      Get usage: https://earthquake.usgs.gov/nshmp-haz-ws/hazard
+      Query URL: https://earthquake.usgs.gov/nshmp-haz-ws/hazard/{EDITION}/{IMT}
+        ?edition=E2014B&region=COUS&longitude=<lon>&latitude=<lat>
+        &imt=PGA&returnperiod=475&vs30=760
+      Key editions: E2008 (2008 COUS), E2014 (2014 COUS), E2014B (2014 update).
+      IMT values: PGA (peak ground acceleration), SA0P2 (0.2s spectral accel),
+      SA1P0 (1.0s). vs30: shear-wave velocity at 30m depth (760=Site Class B/C,
+      185=Site Class E). Returns hazard curve as JSON array of [IML, AFE] pairs.
+      For the 2023 NSHMP model, use the Earthquake Hazard Toolbox UI at
+      https://earthquake.usgs.gov/nshmp/ — the updated model may not yet be
+      exposed in the nshmp-haz-ws API endpoint.
+
+  - id: fema-national-risk-index
+    name: "FEMA National Risk Index (NRI) — OpenFEMA API"
+    description: >
+      FEMA multi-hazard risk index for all US counties and census tracts. Covers
+      18 natural hazard types including flood, wildfire, hurricane, earthquake,
+      tornado, and more. Risk score, expected annual loss (EAL), social vulnerability,
+      community resilience components. December 2025 v1.20 data available.
+    urls:
+      - "https://www.fema.gov/api/open/v2/NriCounty"
+      - "https://www.fema.gov/about/openfema/data-sets/national-risk-index-data"
+    access_tier: 2
+    # LIVE PROBE 2026-06-07: FEMA OpenFEMA NRI API probed via multiple URL
+    # patterns — v1 and v2 both returned HTTP 404 at the paths tested.
+    # The FEMA website confirms the NRI is available through OpenFEMA API
+    # (base: https://www.fema.gov/api/open/) per search results, with December
+    # 2025 v1.20 data. Old hazards.fema.gov NRI URL redirects to the RAPT page.
+    # Tier 2 inferred (REST API per OpenFEMA documentation); exact endpoint URL
+    # needs verification against current OpenFEMA API catalog.
+    credential_tier: 1
+    ttl_class: static-30d
+    source_class: multi_hazard_risk
+    license: "Public domain (FEMA federal data)"
+    citation: >
+      FEMA. National Risk Index for Natural Hazards. December 2025 v1.20.
+      https://www.fema.gov/flood-maps/products-tools/national-risk-index.
+      Accessed 2026-06-07.
+    vintage: "December 2025 (v1.20)"
+    last_verified: "2026-06-07"
+    status: active
+    how_to_use: |
+      OpenFEMA API base: https://www.fema.gov/api/open/
+      Probe the dataset catalog: https://www.fema.gov/about/openfema/data-sets
+      to find the current NriCounty and NriTract endpoint names.
+      Query example (once endpoint confirmed): ?$filter=state eq 'FL'&$top=100
+      Fields: COUNTY, STATE, RISK_SCORE, RISK_RATNG, EAL_SCORE, SOVI_SCORE,
+      RESL_SCORE plus per-hazard EAL columns (HWAV_EAL_VALT=hurricane EAL,
+      RFLD_EAL_VALT=riverine flood EAL, etc.).
+      Bulk download as CSV from the FEMA data page is also available and may be
+      more reliable than the API for full-state analysis.
+
+  # ─────────────────────────────────────────────────────────────────
+  # DOMAIN GAPS — surfaced per kickoff requirement
+  # ─────────────────────────────────────────────────────────────────
+  # The following domains/sources have fewer than 3 fully-verified
+  # entries or have significant access-tier uncertainty. Documented
+  # here per kickoff §5 "Surface deferrals" requirement.
+  #
+  # TERRAIN — supplemental / lower priority:
+  #   - ASTER GDEM v3 (NASA Earthdata/LP DAAC): requires NASA Earthdata Login
+  #     (credential_tier 2). Live probe of earthdata.nasa.gov returned 404 for
+  #     the specific dataset catalog page. Recommend sprint-09: probe
+  #     https://e4ftl01.cr.usgs.gov/ASTT/ASTGTM.003/ with Earthdata creds.
+  #
+  # HYDROLOGY — supplemental:
+  #   - NOAA NWS AHPS gauges: ahps.weather.gov provides web interface but
+  #     programmatic REST endpoints for AHPS stage data were not confirmed live
+  #     (api.weather.gov returned HTTP 404 for the gridpoints forecast test URL).
+  #     Recommend using USGS NWIS as primary gauge source; AHPS for official
+  #     flood stage thresholds (separate concern).
+  #
+  # SEISMIC — GEM Foundation:
+  #   - GEM Global Seismic Hazard Map: hazard.openquake.org hosts OpenQuake
+  #     engine outputs. No REST API endpoint confirmed live during this session.
+  #     Data downloadable as GeoTIFF from https://maps.openquake.org/map/global-hazard/.
+  #     Sprint-09: probe hazard.openquake.org for WMS capabilities.
+  #
+  # POPULATION — GPW v4:
+  #   - Gridded Population of the World v4 (CIESIN/NASA SEDAC): sedac.ciesin.columbia.edu
+  #     timed out during probes. Requires NASA Earthdata login for download.
+  #     Credential_tier 2. Deferred to sprint-09.

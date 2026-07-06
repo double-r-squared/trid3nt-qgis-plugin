@@ -1147,7 +1147,7 @@ export class GraceWs {
       this.sessionId,
       payload,
     );
-    this.sendEnvelope(env);
+    this.sendOrQueue(env); // scale-to-zero P3: user answers must survive a mid-wake socket
   }
 
   /**
@@ -1167,7 +1167,7 @@ export class GraceWs {
       this.sessionId,
       payload,
     );
-    this.sendEnvelope(env);
+    this.sendOrQueue(env); // scale-to-zero P3: user answers must survive a mid-wake socket
   }
 
   /**
@@ -1198,7 +1198,7 @@ export class GraceWs {
       this.sessionId,
       payload,
     );
-    this.sendEnvelope(env);
+    this.sendOrQueue(env); // scale-to-zero P3: user answers must survive a mid-wake socket
   }
 
   /**
@@ -1238,7 +1238,7 @@ export class GraceWs {
       this.sessionId,
       payload,
     );
-    this.sendEnvelope(env);
+    this.sendOrQueue(env); // scale-to-zero P3: user answers must survive a mid-wake socket
   }
 
   /**
@@ -1282,7 +1282,7 @@ export class GraceWs {
       this.sessionId,
       payload,
     );
-    this.sendEnvelope(env);
+    this.sendOrQueue(env); // scale-to-zero P3: user answers must survive a mid-wake socket
   }
 
   /**
@@ -1310,7 +1310,7 @@ export class GraceWs {
       this.sessionId,
       payload,
     );
-    this.sendEnvelope(env);
+    this.sendOrQueue(env); // scale-to-zero P3: user answers must survive a mid-wake socket
   }
 
   /**
@@ -1422,7 +1422,7 @@ export class GraceWs {
       this.sessionId,
       payload,
     );
-    this.sendEnvelope(env);
+    this.sendOrQueue(env); // scale-to-zero P3: user answers must survive a mid-wake socket
   }
 
   /**

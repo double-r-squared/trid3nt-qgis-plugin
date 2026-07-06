@@ -432,6 +432,7 @@ tests/test_layer_delete_and_reuse_job0325.py
 tests/test_layer_persist_survives_cancel.py
 tests/test_layer_uri_emit.py
 tests/test_list_run_frames.py
+tests/test_local_subprocess_runner.py
 tests/test_loop_exhausted_envelope.py
 tests/test_main_startup.py
 tests/test_max_turns_cap.py

@@ -213,13 +213,9 @@ def _validate_glm_bbox(
 # ---------------------------------------------------------------------------
 def _glm_s3_client() -> Any:
     """Anonymous (UNSIGNED) boto3 S3 client for the public ``noaa-goesNN`` buckets."""
-    import boto3
-    from botocore import UNSIGNED
-    from botocore.config import Config
+    from ._public_s3 import public_s3_client
 
-    return boto3.client(
-        "s3", region_name="us-east-1", config=Config(signature_version=UNSIGNED)
-    )
+    return public_s3_client("us-east-1")
 
 
 def _glm_key_start_datetime(key: str) -> datetime | None:

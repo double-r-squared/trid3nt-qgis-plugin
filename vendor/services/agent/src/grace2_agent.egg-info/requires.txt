@@ -32,3 +32,9 @@ grace2-contracts<0.2,>=0.1
 
 [dev]
 pytest>=7
+
+[local-engines]
+pyswmm<3,>=2.1
+swmm-api<1,>=0.4
+landlab<3,>=2.6
+openquake.engine>=3.19
