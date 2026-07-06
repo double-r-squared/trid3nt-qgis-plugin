@@ -1,7 +1,7 @@
 # TRID3NT Local tool sweep -- direct-execution checklist
 
-Updated: 2026-07-06T16:52:02  
-Total 176 | PASS 134 | KEY 5 | FAIL 22 | TIMEOUT 3 | SKIP-ARGS 12
+Updated: 2026-07-06T16:54:01  
+Total 176 | PASS 137 | KEY 5 | FAIL 19 | TIMEOUT 3 | SKIP-ARGS 12
 
 AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 
@@ -11,7 +11,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | aggregate_property_within_zone | SKIP-ARGS | 0s | required params not fabricatable: ['value_layer_uri'] |
 | analyze_affected_fields | SKIP-ARGS | 0s | required params not fabricatable: ['plume_layer_uri'] |
 | catalog_fetch | FAIL | 8s | OGCAdapterError: OGC ARCGIS_REST GET failed for url=https://hazards.fema.gov/arcgis/rest/s |
-| catalog_search | FAIL | 0s | ValueError: too many values to unpack (expected 4) |
+| catalog_search | PASS | 0s |  |
 | clip_raster_to_bbox | PASS | 1s |  |
 | clip_raster_to_polygon | PASS | 0s |  |
 | clip_vector_to_polygon | PASS | 0s |  |
@@ -35,7 +35,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | compute_terrain_profile | PASS | 0s |  |
 | compute_wave_nomograph | PASS | 0s |  |
 | compute_zonal_statistics | PASS | 0s |  |
-| count_features_above_threshold | FAIL | 0s | AnalyticalQAError: Could not open vector layer '/tmp/tmpmayj9og_/layer_acd107c0664b0b5ce83 |
+| count_features_above_threshold | PASS | 0s |  |
 | cut_features_with_polygon | FAIL | 0s | CutFeaturesError: the cutter polygon fully consumed every target feature and delete_emptie |
 | describe_qgis_algorithm | FAIL | 0s | RuntimeError: QGIS discovery tool invoked but worker submitter is not bound; agent service |
 | digitize_water_body | PASS | 13s |  |
@@ -133,7 +133,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | fetch_viirs_day_fire | PASS | 114s |  |
 | fetch_wdpa_protected_areas | PASS | 1s |  |
 | fetch_wfigs_incident | PASS | 1s |  |
-| fill_gaps | FAIL | 0s | FillGapsError: could not read vector source '/tmp/grace2_fillgap_ystfifu7.fgb': '/tmp/grac |
+| fill_gaps | FAIL | 0s | FillGapsError: no enclosed gaps (interior rings) were found in the union of the supplied p |
 | generate_choropleth_legend | PASS | 0s |  |
 | generate_damage_distribution | SKIP-ARGS | 0s | required params not fabricatable: ['damage_layer_uri'] |
 | generate_histogram | PASS | 0s |  |
@@ -144,7 +144,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | list_run_frames | PASS | 0s |  |
 | list_tools_in_category | PASS | 0s |  |
 | lookup_precip_return_period | PASS | 0s |  |
-| merge_features | FAIL | 0s | MergeFeaturesError: could not read vector source '/tmp/grace2_merge_omnxu2hr.fgb': '/tmp/g |
+| merge_features | PASS | 0s |  |
 | postprocess_pelicun | SKIP-ARGS | 0s | required params not fabricatable: ['damage_layer_uri'] |
 | publish_layer | PASS | 1s |  |
 | qgis_process | PASS | 0s |  |

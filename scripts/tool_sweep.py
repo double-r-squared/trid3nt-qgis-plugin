@@ -92,7 +92,7 @@ OVERRIDES: dict[str, dict] = {
     "fetch_storm_events_db": {"year": 2024, "state": "FL"},
     "fetch_nws_event": {"area": "FL"},
     "fetch_nws_alerts_conus": {"area": "FL"},
-    "catalog_search": {"topic": "flood"},
+    "catalog_search": {"topic": "flood", "location": BBOX},
     "list_tools_in_category": {"category_id": "data_fetch"},
     "lookup_precip_return_period": {"return_period_years": 100, "duration_hours": 24},
     "compute_overtopping": {"hs_m": 2.0, "tp_s": 8.0, "crest_freeboard_m": 1.0, "slope": 0.25},
@@ -117,6 +117,12 @@ OVERRIDES: dict[str, dict] = {
 }
 
 OVERRIDES.update({
+    # vector-oriented tools whose generic param is the ambiguous layer_uri --
+    # the chain map's default (DEM raster) is wrong for these
+    "merge_features": {"layer_uri": "__CHAIN_COUNTIES__"},
+    "fill_gaps": {"layer_uri": "__CHAIN_COUNTIES__"},
+    "count_features_above_threshold": {"layer_uri": "__CHAIN_COUNTIES__", "property": "ALAND", "threshold": 1.0},
+    "generate_choropleth_legend": {"layer_uri": "__CHAIN_COUNTIES__"},
     "lookup_precip_return_period": {"return_period_years": 100, "duration_hours": 24, "location": (LAT, LON)},
     "list_tools_in_category": {"category_id": "hazard_modeling"},
     "fetch_overpass_pois": {"tag": "amenity=hospital", "bbox": (-82.55, 27.90, -82.40, 28.00)},
@@ -252,7 +258,10 @@ def build_args(fn) -> tuple[dict, list[str]]:
         if param.kind in (param.VAR_KEYWORD, param.VAR_POSITIONAL):
             continue
         if pname in overrides:
-            kwargs[pname] = overrides[pname]
+            v = overrides[pname]
+            if v == "__CHAIN_COUNTIES__":
+                v = CHAINED.get("zone_layer_uri", v)
+            kwargs[pname] = v
             continue
         ok, val = _guess_arg(pname, str(param.annotation))
         if ok:
