@@ -57,6 +57,23 @@ HAND_PROMPTS = {
 
 TAMPA = "for the downtown Tampa, Florida area"
 
+# Tools that transform an EXISTING case layer: prompting them against an empty
+# case makes the agent (correctly) decline. Seed a DEM per case + phrase the
+# prompt against it.
+_LAYER_PREFIXES = ("compute_", "clip_", "cut_", "merge_", "fill_", "enhance_",
+                   "extract_", "generate_", "summarize_", "aggregate_")
+LAYER_SUFFIX = "using the elevation layer already in this case"
+SEED_SPEC = {
+    "id": 0, "short": "__seed__",
+    "prompt": "Fetch a digital elevation model for downtown Tampa, Florida.",
+    "expected": "fetch_copernicus_dem",
+    "expected_set": {"fetch_copernicus_dem", "fetch_topobathy", "fetch_elevation"},
+    "is_solver": False,
+}
+
+def _needs_layer(name: str) -> bool:
+    return name.startswith(_LAYER_PREFIXES) or name in ("publish_layer",)
+
 
 def _gen_prompt(name: str, desc: str) -> str:
     if name in HAND_PROMPTS:
@@ -69,6 +86,8 @@ def _gen_prompt(name: str, desc: str) -> str:
     if not first:
         first = name.replace("_", " ")
     # imperative-ize: many descriptions already start with a verb
+    if _needs_layer(name):
+        return f"{first}, {LAYER_SUFFIX}."
     return f"{first} {TAMPA}."
 
 
@@ -153,6 +172,10 @@ async def main() -> None:
             ws = await websockets.connect(bench.WS_URL, max_size=None)
             await bench.do_handshake(ws, session_id)
             case_id = await bench.create_case(ws, session_id, f"routing-sweep-{session_id[:6]}")
+            try:
+                await bench.run_one_prompt(ws, session_id, case_id, SEED_SPEC)  # unscored: put a DEM in the case
+            except Exception:
+                pass
             ran_on_conn = 0
         t0 = dt.datetime.now()
         try:

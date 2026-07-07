@@ -1,7 +1,7 @@
 # TRID3NT Local tool sweep -- direct-execution checklist
 
-Updated: 2026-07-06T17:08:31  
-Total 176 | PASS 138 | KEY 5 | FAIL 18 | TIMEOUT 3 | SKIP-ARGS 12
+Updated: 2026-07-06T17:34:38  
+Total 176 | PASS 138 | KEY 6 | FAIL 17 | TIMEOUT 3 | SKIP-ARGS 12
 
 AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 
@@ -47,7 +47,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | fetch_airnow_air_quality | KEY | 0s | AirNowMissingKeyError: no AirNow API key available: pass api_key=..., secret_ref=..., or s |
 | fetch_asos_metar | PASS | 2s |  |
 | fetch_buildings | PASS | 7s |  |
-| fetch_cama_flood_discharge | FAIL | 3s | CaMaFloodUnreachableError: CaMa-Flood data source migrated: the kickoff-named U.Tokyo Hydr |
+| fetch_cama_flood_discharge | KEY | 0s | upstream became REGISTRATION-GATED (U-Tokyo Google Form -> issued password); set GRACE2_CA |
 | fetch_cdc_svi | PASS | 1s |  |
 | fetch_census_acs | PASS | 3s |  |
 | fetch_chirps_precipitation | PASS | 5s |  |
@@ -179,7 +179,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | run_seismic_hazard_psha | PASS | 41s |  |
 | run_solver | SKIP-ARGS | 0s | required params not fabricatable: ['solver', 'model_setup_uri'] |
 | run_swan_waves | PASS | 41s |  |
-| run_swmm_urban_flood | TIMEOUT | 900s | exceeded 900s (thread abandoned) |
+| run_swmm_urban_flood | TIMEOUT | 1500s | exceeded 1500s (thread abandoned) |
 | summarize_layer_statistics | PASS | 1s |  |
 | wait_for_completion | SKIP-ARGS | 0s | required params not fabricatable: ['handle'] |
 | web_fetch | SKIP-ARGS | 0s | required params not fabricatable: ['url'] |
