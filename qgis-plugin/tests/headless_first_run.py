@@ -83,6 +83,31 @@ class FakeIface:
 
 iface = FakeIface()
 
+# Give the canvas a real CRS + a downtown-Tampa extent (EPSG:3857) so the
+# dock's canvas-AOI path resolves and the agent receives a genuine bbox --
+# without this the AOI line reads "CRS not resolved -- sent without AOI" and
+# the model geocodes a ~10 m degenerate bbox.
+from qgis.core import QgsCoordinateReferenceSystem, QgsRectangle  # noqa: E402
+
+iface.mapCanvas().setDestinationCrs(QgsCoordinateReferenceSystem("EPSG:3857"))
+iface.mapCanvas().setExtent(
+    QgsRectangle(-9184000, 3235000, -9178000, 3241000)  # ~6 km downtown Tampa
+)
+
+# OSM basemap so the proof screenshot shows a real map under the agent layer
+# (loads straight from tile.openstreetmap.org -- no agent involvement).
+from qgis.core import QgsProject as _QgsProject, QgsRasterLayer  # noqa: E402
+
+_osm = QgsRasterLayer(
+    "type=xyz&url=https://tile.openstreetmap.org/%7Bz%7D/%7Bx%7D/%7By%7D.png"
+    "&zmax=19&zmin=0",
+    "OpenStreetMap",
+    "wms",
+)
+if _osm.isValid():
+    _QgsProject.instance().addMapLayer(_osm)
+    print("[first-run] OSM basemap added", flush=True)
+
 from qgis.PyQt.QtCore import QSettings  # noqa: E402
 
 from trid3nt.plugin import Trid3ntPlugin  # noqa: E402
@@ -156,17 +181,31 @@ if dock._case_id is None:
     qgs.exitQgis()
     sys.exit(2)
 
-# send the prompt through the dock's input
+# send the prompt through the dock's input. fetch_dem opts OUT of the
+# server's deterministic auto-publish (raw input rasters are not
+# auto-rendered), so ask for the render explicitly; if the small model
+# still stops after the fetch, nudge once with a follow-up -- the same
+# two-step a real user types.
 dock.input_edit.setText(
-    "Fetch a digital elevation model for downtown Tampa, Florida."
+    "Fetch a digital elevation model for downtown Tampa, Florida, "
+    "and render it on the map."
 )
 dock._send()
 print("[first-run] prompt sent via input_edit + _send()", flush=True)
 
-# wait up to 6 min for a layer to land, pumping events (confirm gates too)
+# wait up to 9 min for a layer to land, pumping events (confirm gates too)
 t0 = time.time()
 clicked_gates: set = set()
-while time.time() - t0 < 360:
+nudged = False
+while time.time() - t0 < 540:
+    if not nudged and time.time() - t0 > 240:
+        nudged = True
+        dock.input_edit.setText(
+            "Call the publish_layer tool now, passing the layer handle "
+            "that fetch_dem returned, to render the elevation layer."
+        )
+        dock._send()
+        print("[first-run] no layer yet -- publish nudge sent", flush=True)
     pump(5)
     # auto-proceed any (enabled, unanswered) gate card
     for btn in iface.mainWindow().findChildren(QPushButton):
@@ -178,28 +217,45 @@ while time.time() - t0 < 360:
             clicked_gates.add(id(btn))
             btn.click()
             print("[first-run] clicked gate: Proceed", flush=True)
-    layer_count = len(QgsProject.instance().mapLayers())
-    if layer_count > 0:
+    # agent-delivered layers only -- the driver-added basemap doesn't count
+    agent_layers = [
+        lyr
+        for lyr in QgsProject.instance().mapLayers().values()
+        if lyr.name() != "OpenStreetMap"
+    ]
+    if agent_layers:
         print(
-            f"[first-run] {layer_count} layer(s) in project "
+            f"[first-run] {len(agent_layers)} agent layer(s) in project "
             f"after {time.time() - t0:.0f}s",
             flush=True,
         )
         break
 
-# zoom canvas to the first layer + render
-layers = list(QgsProject.instance().mapLayers().values())
+# zoom canvas to the agent layer over the basemap + render
+layers = [
+    lyr
+    for lyr in QgsProject.instance().mapLayers().values()
+    if lyr.name() != "OpenStreetMap"
+]
 if layers:
-    iface.mapCanvas().setLayers(layers)
+    all_layers = layers + [
+        lyr
+        for lyr in QgsProject.instance().mapLayers().values()
+        if lyr.name() == "OpenStreetMap"
+    ]
+    iface.mapCanvas().setLayers(all_layers)
     iface.mapCanvas().setExtent(layers[0].extent())
     iface.mapCanvas().refresh()
-    pump(8)
+    pump(12)
 
 os.makedirs(PROOF, exist_ok=True)
+# A failed run must never clobber a prior successful proof -- failure shots
+# go to the *-failed names for diagnosis.
+_suffix = "" if layers else "-failed"
 iface.mainWindow().grab().save(
-    os.path.join(PROOF, "40-qgis-plugin-firstrun.png")
+    os.path.join(PROOF, f"40-qgis-plugin-firstrun{_suffix}.png")
 )
-dock.grab().save(os.path.join(PROOF, "41-qgis-plugin-dock.png"))
+dock.grab().save(os.path.join(PROOF, f"41-qgis-plugin-dock{_suffix}.png"))
 print(
     "[first-run] screenshots saved; layers:",
     [layer.name() for layer in layers],
