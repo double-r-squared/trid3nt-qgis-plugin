@@ -169,8 +169,18 @@ async def main() -> None:
             if ws is not None:
                 await ws.close()
             session_id = bench.new_id()
-            ws = await websockets.connect(bench.WS_URL, max_size=None)
-            await bench.do_handshake(ws, session_id)
+            # the agent can be mid-chain from an abandoned prompt (heavy sync
+            # fetchers run on the loop locally) -- retry the handshake instead
+            # of dying, waiting for the turn to drain
+            for attempt in range(6):
+                try:
+                    ws = await websockets.connect(bench.WS_URL, max_size=None, open_timeout=30)
+                    await bench.do_handshake(ws, session_id)
+                    break
+                except Exception:
+                    if attempt == 5:
+                        raise
+                    await asyncio.sleep(60)
             case_id = await bench.create_case(ws, session_id, f"routing-sweep-{session_id[:6]}")
             try:
                 await bench.run_one_prompt(ws, session_id, case_id, SEED_SPEC)  # unscored: put a DEM in the case
