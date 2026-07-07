@@ -4,11 +4,12 @@ The TRID3NT agent, docked inside QGIS: ask for data or a hazard simulation in
 plain language, and the answer arrives as styled layers on the canvas you are
 already working in.
 
-This is **milestone 2 of v1** (per
+This is **milestone 3 of v1** (per
 `docs/design/qgis-plugin-product-analysis-2026-07.md`): on top of milestone
-1's skeleton + connection layer + chat dock + layer materialization, this
-adds the simulation gate card, canvas-extent AOI, capped-jitter reconnect
-with queued sends, and Open-case-in-QGIS.
+2's gate card + canvas AOI + reconnect + local Open-case-in-QGIS, this adds
+remote-mode case export (artifact download), case switching from the Cases
+dialog, a debounced case-list refresh, selected-polygon AOI, and honest
+token-expiry handling.
 
 ## Layout
 
@@ -81,8 +82,12 @@ Speaks the agent's envelope protocol (see `vendor/web/src/ws.ts` and
   - **remote**: `wss://` URL + pasted bearer token; the token rides as the
     `?st=` query carrier (what the cloud broker authenticates before the
     upgrade) plus the in-band `auth-token` envelope. Token *acquisition*
-    (Cognito sign-in) is out of scope in milestone 1 -- paste one into
-    Settings.
+    (Cognito sign-in) stays out of scope -- Settings explains where to copy
+    one from (the web app session's `/ws?st=` request) and the dock detects
+    expiry honestly: a failure that classifies as auth (the broker's
+    pre-upgrade 401/403, or an in-band `AUTH_REQUIRED` error) STOPS the
+    reconnect ladder and paints "token expired -- paste a fresh one in
+    Settings" instead of silently retrying a dead token forever.
 
 ## Layer materialization
 
@@ -118,10 +123,17 @@ minutes-per-frame + window with a live frame-count readout. Buttons:
 Sims never start without a click here (user-controlled granularity is a
 standing product rule). The card locks after one answer.
 
-## Canvas-extent AOI (milestone 2)
+## Canvas-extent + selected-polygon AOI (milestones 2-3)
 
 The "Use map canvas as area of interest" toggle (default ON) makes "here"
-mean the map you are looking at:
+mean the map you are looking at. The "Use selected polygon as AOI" toggle
+(default OFF, milestone 3) overrides it: when the active layer has selected
+features, the **bbox of the selection** (v1: the bounding box, not the exact
+ring -- the agent's structured AOI carriers are 4-number boxes) is sent
+instead, honestly labelled as a selection AOI in both the status line
+(`AOI: selection 0.05 x 0.05 deg`) and the in-text context line. With no
+selection resolved it falls back to the canvas extent; a too-large selection
+is refused with an honest note, never silently swapped for the canvas.
 
 - On connect, the session case is created with the canvas extent as
   `case-command create` `args.bbox = [lon_min, lat_min, lon_max, lat_max]`
@@ -140,22 +152,45 @@ mean the map you are looking at:
 - EPSG:4326 / EPSG:3857 canvases transform with pure math; any other project
   CRS falls back to `QgsCoordinateTransform`.
 
-## Open case in QGIS (milestone 2)
+## Cases dialog: switch, refresh, open (milestones 2-3)
 
 The **Cases** header button lists your cases (from the agent's `case-list`
-envelope, received on connect). "Open in QGIS" (local mode) POSTs
-`{"case_id": ...}` to the local agent's `/api/export-qgis` (HTTP listener,
-default `http://127.0.0.1:8766`, configurable in Settings) and then ADDS the
-exported layers to your current project: every feature table from
-`export.gpkg` plus every GeoTIFF in the export folder, grouped under
-"TRID3NT export <case>".
+envelope, received on connect). Three actions:
+
+- **Open chat** (milestone 3): sends `case-command select`; the server
+  replies with a full `case-open` rehydration and the dock REBINDS -- the
+  header shows the case title, the layer group switches to
+  "TRID3NT \<title\>" (dedup reset), and the case's persisted layers replay
+  into it. The web-mirror rule applies: the local case stamp updates at send
+  time so the next `session-resume` re-asserts the selected case even across
+  a reconnect race.
+- **Refresh** (milestone 3): the protocol has NO list-cases request verb --
+  `case-list` only arrives as a server emission. Refresh is therefore one
+  `session-resume` round trip (the exact frame the web client already sends
+  as its ~25s keepalive; the server answers with `session-state` +
+  `case-list`), debounced to one per 2 s. Documented tradeoff: a redundant
+  session-state frame rides along; layer dedup by `layer_id` makes it a
+  no-op.
+- **Open in QGIS**: POSTs `{"case_id": ...}` to `/api/export-qgis` and ADDS
+  the exported layers to your current project: every feature table from
+  `export.gpkg` plus the GeoTIFFs, grouped under "TRID3NT export <case>".
+  - **local mode**: the local agent's HTTP listener (default
+    `http://127.0.0.1:8766`, configurable in Settings); artifact paths are
+    read directly off disk.
+  - **remote mode** (milestone 3): the same POST on the HTTP base derived
+    from the remote WS URL (`wss://host/ws` -> `https://host`), then the
+    `.gpkg`/`.qgz` artifacts download through
+    `GET /api/export-qgis/file?path=<abs>` into a local temp dir. That route
+    serves ONLY .qgz/.gpkg under the agent's export root (403 otherwise,
+    404 when missing) -- so remote GeoTIFF rasters become an honest skipped
+    note (view them via their published tile layers), and a 403/404 on one
+    artifact surfaces verbatim without losing the rest.
 
 Documented decision: we deliberately do NOT open the returned `project.qgz`
 via `QgsProject.read()` -- that replaces your whole open project (unsaved
 work, your layer tree, and the live chat-session group would be lost).
 Adding layers is non-destructive; the `.qgz` path is still shown in a note
-if you want the fully styled project. Remote mode gets an honest
-"local-mode only for now" note (presigned export lands later).
+if you want the fully styled project.
 
 ## Install (by zip)
 
@@ -207,7 +242,7 @@ make test
 ../venvs/agent/bin/python -m unittest discover -s tests -v
 ```
 
-Covers (37 tests): envelope/ULID shape, anonymous + token handshakes
+Covers (58 tests): envelope/ULID shape, anonymous + token handshakes
 (`?st=` carrier verified on the upgrade path), case create (with and without
 the AOI-first `args.bbox`), a full chat round trip (streamed chunks, pipeline
 steps, layer-event parse incl. a >64 KiB inline-GeoJSON frame exercising the
@@ -217,14 +252,45 @@ gated stub turn, the hard-cap path, the mirrored cells/ETA/frames estimate
 math, canvas-AOI CRS math + the 2-deg guard + status/attach formatting,
 the capped-jitter backoff ladder, a reconnect that re-binds the case and
 flushes the bounded outbound queue, sticky-anonymous replay, case-list
-parsing, and the export-API client + exported-layer planning. GUI code is
-intentionally untested here (no QGIS in the test env).
+parsing, and the export-API client + exported-layer planning.
 
-## Milestone 3 (next)
+Milestone 3 adds: the WS->HTTP base derivation, the remote artifact download
+(200 attachment / 403 outside-root / 403 wrong-type / 404 missing, against a
+stub that mirrors the agent's real route guards), the full remote
+POST->download->plan round trip incl. per-file failure survival, case select
+(wire shape + case-open rebind + resume re-assertion), null-rehydration and
+defensive case-open parsing, the resume-refresh round trip + the pure
+debouncer, selection-AOI precedence/status/context-line math, token-expiry
+classification (pure + a stub round trip where a dead token gets
+AUTH_REQUIRED + a 1008 close), and -- in a subprocess with the system
+interpreter's PyQt5 -- the REAL `AgentBridge.start` Qt wiring (see below).
 
-- Remote-mode presigned vector fetch + remote Open-in-QGIS (download the
-  export artifacts through `/api/export-qgis/file`).
-- Selected-polygon AOI (lasso) as an alternative to the canvas extent.
-- Token acquisition (Cognito sign-in) instead of paste-only.
-- Case switching from the Cases dialog (select an existing case for the chat
-  session, not just export it).
+### The Qt-wiring regression test (why it exists)
+
+Milestones 1-2 shipped a crash the stdlib tests could not see: the bridge's
+`event = pyqtSignal(...)` SHADOWED the C++ virtual `QObject.event()`, so the
+first QEvent Qt delivered (the ChildAdded from `QThread(self)` inside
+`AgentBridge.start`) called the signal as an event handler -->
+"TypeError: native Qt signal is not callable" --> qFatal, aborting all of
+QGIS on the first Connect click. Fixed by renaming to `agent_event`;
+`tests/test_milestone3.TestQtBridgeStart` now drives the real start wiring
+under a `QCoreApplication` (subprocess; skips honestly when no PyQt5
+interpreter exists). Rule: never name a pyqtSignal after a QObject virtual
+(`event`, `eventFilter`, `timerEvent`, `childEvent`, ...).
+
+`tests/headless_first_run.py` is the manual live-proof driver on top: it
+loads the plugin inside a real offscreen `QgsApplication` with a fake iface,
+connects, sends a prompt, waits for layers, and saves screenshots to
+`docs/proof/`. Point it at the stub with
+`TRID3NT_AGENT_URL=ws://127.0.0.1:<port>/ws` or at the live local stack
+(default `ws://127.0.0.1:8765/ws`).
+
+## Milestone 4 (next / toward installable beta)
+
+- Live-QGIS pass over the new surfaces (case switch + remote export against
+  the real cloud stack; the M3 proof ran against the stub).
+- Remote-mode s3 vector layers in session-state (presigned fetch -- the
+  export path now works remotely, the live layer path still skips).
+- Token acquisition (Cognito sign-in) instead of paste-plus-help-text.
+- Exact-ring selection AOI (v1 sends the bbox of the selection).
+- Windows/macOS smoke pass (all testing so far is Linux).

@@ -1,5 +1,25 @@
 """TRID3NT chat dock -- message list, input, status dot, settings.
 
+Milestone 3 additions on top of milestone 2:
+
+  * REMOTE Open-in-QGIS: mode=remote POSTs /api/export-qgis on the HTTP base
+    derived from the remote WS URL, downloads the .gpkg/.qgz artifacts through
+    GET /api/export-qgis/file into a local temp dir, then adds layers exactly
+    like local mode (rasters become an honest skipped note -- the file route
+    serves only .qgz/.gpkg).
+  * CASE SWITCHING: the Cases dialog gains "Open chat" -> case-command select;
+    the server's case-open rehydration rebinds the dock (header case title,
+    fresh layer group, replayed layers).
+  * CASE-LIST REFRESH: no list-cases verb exists; refresh = one debounced
+    session-resume round trip (the web's own keepalive -- documented tradeoff
+    in trid3nt_client.request_case_list_refresh).
+  * SELECTED-POLYGON AOI: opt-in toggle; the active layer's selection bbox
+    (v1: bbox, not the exact ring) overrides the canvas extent on case-create
+    and the per-message context line.
+  * TOKEN UX: Settings explains where a token comes from (?st= carrier); an
+    auth-classified failure STOPS the reconnect ladder and paints an honest
+    "token expired -- paste a fresh one" status instead of silently looping.
+
 Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
 
   * GATE CARD: ``tool-payload-warning`` envelopes render as an inline Qt card
@@ -32,6 +52,7 @@ cross-thread signals (auto-queued by Qt).
 from __future__ import annotations
 
 import datetime
+import tempfile
 import threading
 from typing import List, Optional, Tuple
 
@@ -60,7 +81,7 @@ from qgis.PyQt.QtWidgets import (
 from . import aoi, case_export, gate
 from .layers import LayerMaterializer
 from .plugin_settings import MODE_LOCAL, MODE_REMOTE, PluginSettings
-from .trid3nt_client import CaseInfo, PipelineStep
+from .trid3nt_client import CaseInfo, Debouncer, PipelineStep, parse_case_open
 from .ws_bridge import AgentBridge
 
 # LLM bookkeeping step names the web also hides from the tool timeline.
@@ -119,6 +140,22 @@ class SettingsDialog(QDialog):
         self.token_edit.setEchoMode(QLineEdit.Password)
         self.token_edit.setPlaceholderText("paste bearer token (remote mode)")
         form.addRow("Remote token", self.token_edit)
+
+        # Milestone 3 item 5: token HELP, not a Cognito flow. Honest about
+        # where a token comes from today and what expiry looks like.
+        token_help = QLabel(
+            "Get a token: sign in to the TRID3NT web app, open the browser "
+            "dev tools (F12) > Network > WS, and copy the value of the "
+            "st= query parameter on the /ws WebSocket request. That is the "
+            "carrier the cloud broker authenticates BEFORE the upgrade; the "
+            "plugin sends it the same way (plus the in-band auth-token "
+            "envelope). Tokens EXPIRE: when the dock status says the token "
+            "expired, paste a fresh one here and press Connect -- the plugin "
+            "will not silently retry a dead token."
+        )
+        token_help.setWordWrap(True)
+        token_help.setStyleSheet(_STATUS_LINE_STYLE)
+        form.addRow("Get token help", token_help)
 
         self.minio_edit = QLineEdit(settings.minio_endpoint)
         form.addRow("Local MinIO endpoint", self.minio_edit)
@@ -391,15 +428,28 @@ class GateCard(QFrame):
 
 
 class _ExportTask(QObject):
-    """POST /api/export-qgis off the UI thread (cross-thread signal emit)."""
+    """POST /api/export-qgis off the UI thread (cross-thread signal emit).
 
-    finished = pyqtSignal(str, dict)  # case_id, result
+    ``remote=True`` (milestone 3 item 1) additionally downloads the produced
+    .gpkg/.qgz through GET /api/export-qgis/file into a fresh local temp dir
+    and rewrites the result's paths to the local copies, so the finished
+    slot can plan layers exactly like local mode.
+    """
+
+    finished = pyqtSignal(str, dict)  # case_id, result (localized if remote)
     errored = pyqtSignal(str, str)    # case_id, message
 
-    def __init__(self, base_url: str, case_id: str, parent: Optional[QObject] = None):
+    def __init__(
+        self,
+        base_url: str,
+        case_id: str,
+        parent: Optional[QObject] = None,
+        remote: bool = False,
+    ):
         super().__init__(parent)
         self._base_url = base_url
         self._case_id = case_id
+        self._remote = remote
 
     def start(self) -> None:
         threading.Thread(target=self._run, daemon=True).start()
@@ -407,6 +457,11 @@ class _ExportTask(QObject):
     def _run(self) -> None:
         try:
             result = case_export.post_export_case(self._base_url, self._case_id)
+            if self._remote:
+                dest_dir = tempfile.mkdtemp(prefix="trid3nt_remote_export_")
+                result = case_export.localize_remote_export(
+                    self._base_url, result, dest_dir
+                )
         except case_export.ExportRequestError as exc:
             self.errored.emit(self._case_id, str(exc))
             return
@@ -417,16 +472,51 @@ class _ExportTask(QObject):
 
 
 class CasesDialog(QDialog):
-    """The user's cases (latest ``case-list`` envelope) + Open in QGIS."""
+    """The user's cases (latest ``case-list`` envelope): Refresh (debounced
+    resume round trip), Open chat (case-command select -> dock rebind), and
+    Open in QGIS (export API, local or remote)."""
 
     def __init__(self, dock: "Trid3ntDock", cases: List[CaseInfo]):
         super().__init__(dock)
         self._dock = dock
         self.setWindowTitle("TRID3NT cases")
-        self.resize(420, 320)
+        self.resize(460, 340)
         lay = QVBoxLayout(self)
 
         self.listw = QListWidget()
+        lay.addWidget(self.listw, 1)
+
+        self.info_lbl = QLabel("")
+        self.info_lbl.setWordWrap(True)
+        self.info_lbl.setStyleSheet(_STATUS_LINE_STYLE)
+        lay.addWidget(self.info_lbl)
+
+        row = QHBoxLayout()
+        self.refresh_btn = QPushButton("Refresh")
+        self.refresh_btn.clicked.connect(self._refresh)
+        row.addWidget(self.refresh_btn)
+        row.addStretch(1)
+        self.chat_btn = QPushButton("Open chat")
+        self.chat_btn.clicked.connect(self._open_chat_selected)
+        row.addWidget(self.chat_btn)
+        self.open_btn = QPushButton("Open in QGIS")
+        self.open_btn.clicked.connect(self._open_selected)
+        row.addWidget(self.open_btn)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.reject)
+        row.addWidget(close_btn)
+        lay.addLayout(row)
+
+        self.set_cases(cases)
+
+    def set_cases(self, cases: List[CaseInfo]) -> None:
+        """(Re)populate the list -- called live when a fresh ``case-list``
+        lands while the dialog is open (the Refresh round trip)."""
+        selected = None
+        current = self.listw.currentItem()
+        if current is not None:
+            selected = current.data(Qt.UserRole)
+        self.listw.clear()
         for case in cases:
             label = case.title
             if case.status and case.status != "active":
@@ -435,36 +525,43 @@ class CasesDialog(QDialog):
                 label += f"  ({case.updated_at[:10]})"
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, case.case_id)
+            item.setData(Qt.UserRole + 1, case.title)
             self.listw.addItem(item)
-        lay.addWidget(self.listw, 1)
-
-        if not cases:
-            empty = QLabel(
-                "No cases received yet -- the list arrives from the agent on "
-                "connect (case-list envelope)."
-            )
-            empty.setWordWrap(True)
-            empty.setStyleSheet(_STATUS_LINE_STYLE)
-            lay.addWidget(empty)
-
-        row = QHBoxLayout()
-        row.addStretch(1)
-        self.open_btn = QPushButton("Open in QGIS")
-        self.open_btn.clicked.connect(self._open_selected)
+            if case.case_id == selected:
+                self.listw.setCurrentItem(item)
         self.open_btn.setEnabled(bool(cases))
-        row.addWidget(self.open_btn)
-        close_btn = QPushButton("Close")
-        close_btn.clicked.connect(self.reject)
-        row.addWidget(close_btn)
-        lay.addLayout(row)
+        self.chat_btn.setEnabled(bool(cases))
+        if not cases:
+            self.info_lbl.setText(
+                "No cases received yet -- the list arrives from the agent on "
+                "connect (case-list envelope). Try Refresh once connected."
+            )
+        elif self.info_lbl.text().startswith(("No cases", "Refreshing")):
+            self.info_lbl.setText("")
 
-    def _open_selected(self) -> None:
+    def _refresh(self) -> None:
+        self.info_lbl.setText(self._dock.refresh_cases())
+
+    def _selected(self) -> Tuple[Optional[str], str]:
         item = self.listw.currentItem()
         if item is None:
-            return
+            return None, ""
         case_id = item.data(Qt.UserRole)
+        title = item.data(Qt.UserRole + 1) or item.text()
         if isinstance(case_id, str) and case_id:
-            self._dock.open_case_in_qgis(case_id, item.text())
+            return case_id, str(title)
+        return None, ""
+
+    def _open_chat_selected(self) -> None:
+        case_id, title = self._selected()
+        if case_id:
+            self._dock.select_case(case_id, title)
+            self.accept()
+
+    def _open_selected(self) -> None:
+        case_id, title = self._selected()
+        if case_id:
+            self._dock.open_case_in_qgis(case_id, title)
             self.accept()
 
 
@@ -481,8 +578,12 @@ class Trid3ntDock(QDockWidget):
         self._pending: Optional[_AssistantEntry] = None
         self._connected = False
         self._case_id: Optional[str] = None
+        self._case_title: str = ""
+        self._session_case_title: str = ""
         self._cases: List[CaseInfo] = []
+        self._cases_dialog: Optional[CasesDialog] = None
         self._export_tasks: List[_ExportTask] = []  # keep-alive refs
+        self._refresh_debounce = Debouncer()
 
         self._build_ui()
         self._wire_bridge()
@@ -520,6 +621,14 @@ class Trid3ntDock(QDockWidget):
         header.addWidget(self.connect_btn)
         outer.addLayout(header)
 
+        # Active-case title (milestone 3 case switching): which case the
+        # chat and the layer group are bound to right now.
+        self.case_label = QLabel("")
+        self.case_label.setStyleSheet("font-size: 9pt; font-weight: bold;")
+        self.case_label.setWordWrap(True)
+        self.case_label.setVisible(False)
+        outer.addWidget(self.case_label)
+
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
         line.setFrameShadow(QFrame.Sunken)
@@ -537,13 +646,21 @@ class Trid3ntDock(QDockWidget):
         self.scroll.setWidget(self.messages_host)
         outer.addWidget(self.scroll, 1)
 
-        # AOI row: toggle + status line
+        # AOI rows: canvas toggle + selection override + status line
         aoi_row = QHBoxLayout()
         self.aoi_checkbox = QCheckBox("Use map canvas as area of interest")
         self.aoi_checkbox.setChecked(self.settings.canvas_aoi)
         self.aoi_checkbox.toggled.connect(self._on_aoi_toggled)
         aoi_row.addWidget(self.aoi_checkbox)
         outer.addLayout(aoi_row)
+        sel_row = QHBoxLayout()
+        self.selection_checkbox = QCheckBox(
+            "Use selected polygon as AOI (overrides canvas)"
+        )
+        self.selection_checkbox.setChecked(self.settings.selection_aoi)
+        self.selection_checkbox.toggled.connect(self._on_selection_aoi_toggled)
+        sel_row.addWidget(self.selection_checkbox)
+        outer.addLayout(sel_row)
         self.aoi_status = QLabel(aoi.aoi_status_text(None, False))
         self.aoi_status.setStyleSheet(_STATUS_LINE_STYLE)
         outer.addWidget(self.aoi_status)
@@ -591,26 +708,22 @@ class Trid3ntDock(QDockWidget):
 
     # -- AOI ------------------------------------------------------------------ #
 
-    def _canvas_bbox4326(self) -> Optional[Tuple[float, float, float, float]]:
-        """Current canvas extent as an EPSG:4326 bbox tuple, or None.
+    def _rect_to_bbox4326(
+        self, extent, authid: str
+    ) -> Optional[Tuple[float, float, float, float]]:
+        """A QgsRectangle in ``authid`` -> EPSG:4326 bbox tuple, or None.
 
         Pure math (``aoi.extent_to_bbox4326``) covers EPSG:4326/3857; any
-        other project CRS falls back to QGIS's own transform. Never raises --
-        an unresolvable CRS yields None (the status line says so honestly).
+        other CRS falls back to QGIS's own transform. Never raises -- an
+        unresolvable CRS yields None (the status line says so honestly).
         """
-        try:
-            canvas = self.iface.mapCanvas()
-            extent = canvas.extent()
-            authid = canvas.mapSettings().destinationCrs().authid()
-        except Exception:  # noqa: BLE001 -- no canvas (headless), no AOI
-            return None
         bbox = aoi.extent_to_bbox4326(
             extent.xMinimum(), extent.yMinimum(),
             extent.xMaximum(), extent.yMaximum(), authid,
         )
         if bbox is not None:
             return bbox
-        # Arbitrary project CRS: use QGIS's transform machinery.
+        # Arbitrary CRS: use QGIS's transform machinery.
         try:
             from qgis.core import (
                 QgsCoordinateReferenceSystem,
@@ -631,23 +744,68 @@ class Trid3ntDock(QDockWidget):
         except Exception:  # noqa: BLE001 -- honest None, noted in status
             return None
 
-    def _aoi_for_send(self) -> Optional[Tuple[float, float, float, float]]:
-        """The bbox to attach right now, or None (off / unresolved / too big).
-        Also refreshes the status line so the user sees WHY."""
-        enabled = self.aoi_checkbox.isChecked()
-        bbox = self._canvas_bbox4326() if enabled else None
-        self.aoi_status.setText(aoi.aoi_status_text(bbox, enabled))
+    def _canvas_bbox4326(self) -> Optional[Tuple[float, float, float, float]]:
+        """Current canvas extent as an EPSG:4326 bbox tuple, or None."""
+        try:
+            canvas = self.iface.mapCanvas()
+            extent = canvas.extent()
+            authid = canvas.mapSettings().destinationCrs().authid()
+        except Exception:  # noqa: BLE001 -- no canvas (headless), no AOI
+            return None
+        return self._rect_to_bbox4326(extent, authid)
+
+    def _selection_bbox4326(self) -> Optional[Tuple[float, float, float, float]]:
+        """The active layer's SELECTION bbox as EPSG:4326, or None.
+
+        Milestone 3 item 4 (v1): the bbox OF the selection, not the exact
+        ring -- the agent's structured AOI carriers (``args.bbox`` on
+        case-create + the in-text line) are 4-number boxes. None when there
+        is no active vector layer, no selected features, or a degenerate
+        rect (a single point selection has no area -- honest None).
+        """
+        try:
+            layer = self.iface.activeLayer()
+            if layer is None or not hasattr(layer, "selectedFeatureCount"):
+                return None
+            if layer.selectedFeatureCount() == 0:
+                return None
+            rect = layer.boundingBoxOfSelected()
+            if rect is None or rect.isEmpty():
+                return None
+            authid = layer.crs().authid()
+        except Exception:  # noqa: BLE001 -- no selection resolvable, no AOI
+            return None
+        return self._rect_to_bbox4326(rect, authid)
+
+    def _aoi_for_send(
+        self,
+    ) -> Tuple[Optional[Tuple[float, float, float, float]], Optional[str]]:
+        """The ``(bbox, source)`` to attach right now, or ``(None, None)``
+        (off / unresolved / too big). Also refreshes the status line so the
+        user sees WHY. Selection (when its toggle is on and features are
+        selected) overrides the canvas extent -- see ``aoi.choose_aoi``."""
+        canvas_enabled = self.aoi_checkbox.isChecked()
+        selection_enabled = self.selection_checkbox.isChecked()
+        selection_bbox = self._selection_bbox4326() if selection_enabled else None
+        canvas_bbox = self._canvas_bbox4326() if canvas_enabled else None
+        bbox, source = aoi.choose_aoi(selection_bbox, canvas_bbox, selection_enabled)
+        enabled = canvas_enabled or selection_enabled
+        self.aoi_status.setText(
+            aoi.aoi_status_text(bbox, enabled, source=source or "canvas")
+        )
         if bbox is not None and aoi.bbox_within_guard(bbox):
-            return bbox
-        return None
+            return bbox, source
+        return None, None
 
     def _refresh_aoi_status(self) -> None:
-        enabled = self.aoi_checkbox.isChecked()
-        bbox = self._canvas_bbox4326() if enabled else None
-        self.aoi_status.setText(aoi.aoi_status_text(bbox, enabled))
+        self._aoi_for_send()
 
     def _on_aoi_toggled(self, checked: bool) -> None:
         self.settings.canvas_aoi = checked
+        self._refresh_aoi_status()
+
+    def _on_selection_aoi_toggled(self, checked: bool) -> None:
+        self.settings.selection_aoi = checked
         self._refresh_aoi_status()
 
     # -- connection ----------------------------------------------------------- #
@@ -655,11 +813,14 @@ class Trid3ntDock(QDockWidget):
     def _wire_bridge(self) -> None:
         self.bridge.connected.connect(self._on_connected)
         self.bridge.case_ready.connect(self._on_case_ready)
-        self.bridge.event.connect(self._on_event)
+        # ``agent_event`` (never ``event`` -- that name shadows the C++
+        # virtual QObject.event() and qFatals QGIS; see ws_bridge).
+        self.bridge.agent_event.connect(self._on_event)
         self.bridge.failed.connect(self._on_failed)
         self.bridge.closed.connect(self._on_closed)
         self.bridge.reconnecting.connect(self._on_reconnecting)
         self.bridge.resumed.connect(self._on_resumed)
+        self.bridge.auth_expired.connect(self._on_auth_expired)
 
     def connect_agent(self) -> None:
         if self.bridge.running:
@@ -673,10 +834,11 @@ class Trid3ntDock(QDockWidget):
         self.status_label.setText(f"Connecting to {url} ...")
         self.connect_btn.setText("Disconnect")
         title = "QGIS session " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        self._session_case_title = title
         anon = self.settings.anonymous_user_id or None
-        # #170 AOI-first: create the case WITH the canvas extent so the very
-        # first turn's _turn_case_bbox anchors on it (guard applies).
-        case_bbox = self._aoi_for_send()
+        # #170 AOI-first: create the case WITH the canvas/selection extent so
+        # the very first turn's _turn_case_bbox anchors on it (guard applies).
+        case_bbox, _source = self._aoi_for_send()
         self.bridge.start(
             url,
             token=self.settings.effective_token(),
@@ -689,9 +851,15 @@ class Trid3ntDock(QDockWidget):
         self.bridge.stop()
         self._connected = False
         self._case_id = None
+        self._set_case_label("")
         self._set_dot("disconnected")
         self.status_label.setText("Not connected")
         self.connect_btn.setText("Connect")
+
+    def _set_case_label(self, title: str) -> None:
+        self._case_title = title
+        self.case_label.setText(f"Case: {title}" if title else "")
+        self.case_label.setVisible(bool(title))
 
     def _toggle_connection(self) -> None:
         if self.bridge.running:
@@ -705,22 +873,62 @@ class Trid3ntDock(QDockWidget):
 
     def _open_cases(self) -> None:
         dlg = CasesDialog(self, self._cases)
-        dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
+        self._cases_dialog = dlg
+        try:
+            dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
+        finally:
+            self._cases_dialog = None
+
+    # -- case switching (milestone 3) ------------------------------------------ #
+
+    def select_case(self, case_id: str, title: str) -> None:
+        """Switch the chat session to an existing case (case-command select).
+
+        The server replies with a full ``case-open`` rehydration; the dock
+        rebinds on that event (authoritative title + replayed layers), so
+        this only stamps optimistically and sends.
+        """
+        if not self.bridge.running:
+            self.status_label.setText("Not connected -- press Connect first")
+            return
+        self._case_id = case_id
+        self._note(f"Switching to case '{title}' ...")
+        self.bridge.select_case(case_id)
+
+    def refresh_cases(self) -> str:
+        """Debounced case-list refresh (one session-resume round trip -- see
+        ``trid3nt_client.request_case_list_refresh`` for the tradeoff).
+        Returns a status line for the Cases dialog."""
+        if not self._refresh_debounce.allow():
+            return "Refresh debounced -- try again in a moment"
+        if self.bridge.refresh_case_list():
+            return "Refreshing case list ..."
+        return "Not connected -- the list refreshes on the next connect"
 
     # -- open case in QGIS ------------------------------------------------------ #
 
     def open_case_in_qgis(self, case_id: str, label: str) -> None:
-        """Export ``case_id`` via the local agent's /api/export-qgis and add
-        the produced layers to the CURRENT project (see ``case_export`` for
-        why we add layers instead of opening the .qgz)."""
-        if self.settings.mode != MODE_LOCAL:
+        """Export ``case_id`` via /api/export-qgis and add the produced layers
+        to the CURRENT project (see ``case_export`` for why we add layers
+        instead of opening the .qgz).
+
+        Local mode talks to the local agent's HTTP listener and reads the
+        artifact paths directly. Remote mode (milestone 3) POSTs the same
+        route on the HTTP base derived from the remote WS URL, then downloads
+        the .gpkg/.qgz through GET /api/export-qgis/file into a temp dir.
+        """
+        if self.settings.mode == MODE_LOCAL:
+            base_url = self.settings.export_api
+            remote = False
+            self._note(f"Exporting case '{label}' via the local agent ...")
+        else:
+            base_url = case_export.ws_url_to_http_base(self.settings.remote_url)
+            remote = True
             self._note(
-                "Open in QGIS is local-mode only for now -- the remote "
-                "presigned export path lands in a later milestone.",
+                f"Exporting case '{label}' on the remote agent "
+                f"({base_url}) -- artifacts download to a local temp dir ..."
             )
-            return
-        self._note(f"Exporting case '{label}' via the local agent ...")
-        task = _ExportTask(self.settings.export_api, case_id, self)
+        task = _ExportTask(base_url, case_id, self, remote=remote)
         task.finished.connect(self._on_export_finished)
         task.errored.connect(self._on_export_errored)
         self._export_tasks.append(task)
@@ -752,7 +960,8 @@ class Trid3ntDock(QDockWidget):
 
     def _on_case_ready(self, case_id: str) -> None:
         self._case_id = case_id
-        self.materializer.set_case(case_id)
+        self.materializer.set_case(case_id, self._session_case_title or None)
+        self._set_case_label(self._session_case_title or case_id[:8])
         self._set_dot("connected")
         self.status_label.setText(f"Connected -- case {case_id[:8]}")
 
@@ -762,10 +971,24 @@ class Trid3ntDock(QDockWidget):
         self.status_label.setText(f"Connection failed: {message}")
         self.connect_btn.setText("Connect")
 
+    def _on_auth_expired(self, message: str) -> None:
+        """The token was rejected (broker 401/403 or in-band AUTH_REQUIRED):
+        the worker has STOPPED -- no silent reconnect loop. Say exactly what
+        to do next."""
+        self._connected = False
+        self._set_dot("error")
+        self.status_label.setText(
+            "Token expired or rejected -- paste a fresh one in Settings"
+        )
+        self.connect_btn.setText("Connect")
+        self._note(f"Authentication failed: {message}", error=True)
+
     def _on_closed(self, reason: str) -> None:
         self._connected = False
         self._case_id = None
-        if reason != "stopped":
+        if reason == "auth-expired":
+            pass  # _on_auth_expired already painted the honest status
+        elif reason != "stopped":
             self._set_dot("error")
             self.status_label.setText(f"Disconnected: {reason}")
         self.connect_btn.setText("Connect")
@@ -823,13 +1046,46 @@ class Trid3ntDock(QDockWidget):
             self._scroll_to_bottom()
         elif kind == "payload-warning":
             self._show_gate_card(data)
+        elif kind == "case-open":
+            self._on_case_open_event(data)
         elif kind == "case-list":
             cases = data.get("cases")
             if isinstance(cases, list):
                 self._cases = [c for c in cases if isinstance(c, CaseInfo)]
+                if self._cases_dialog is not None:
+                    self._cases_dialog.set_cases(self._cases)
         elif kind == "turn-complete":
             if self._pending is not None:
                 self._pending = None
+
+    def _on_case_open_event(self, payload: dict) -> None:
+        """A ``case-open`` rehydration arrived (the select response --
+        create's case-open is consumed inside the worker handshake).
+
+        Rebinds the dock: authoritative title in the header, a FRESH layer
+        group named for the case (dedup reset), and the persisted
+        loaded_layers replayed into it.
+        """
+        info = parse_case_open(payload)
+        if info is None:
+            self._note(
+                "Case switch failed: the server could not rehydrate the case "
+                "(archived/deleted between list and select?)",
+                error=True,
+            )
+            return
+        self._case_id = info.case_id
+        self._pending = None
+        self.materializer.set_case(info.case_id, info.title)
+        self._set_case_label(info.title)
+        self._set_dot("connected")
+        self.status_label.setText(f"Connected -- case {info.case_id[:8]}")
+        self._note(f"Case '{info.title}' active")
+        if info.layers:
+            notes = self.materializer.materialize(info.layers)
+            for note in notes:
+                self._note(note)
+        self._scroll_to_bottom()
 
     # -- gate card -------------------------------------------------------------- #
 
@@ -867,8 +1123,12 @@ class Trid3ntDock(QDockWidget):
         self._add_user_bubble(text)
         self._pending = _AssistantEntry(self.messages_layout)
         self._scroll_to_bottom()
-        bbox = self._aoi_for_send()
-        wire_text = aoi.attach_aoi_to_text(text, bbox) if bbox else text
+        bbox, source = self._aoi_for_send()
+        wire_text = (
+            aoi.attach_aoi_to_text(text, bbox, source=source or "canvas")
+            if bbox
+            else text
+        )
         try:
             self.bridge.send_chat(wire_text)
         except Exception as exc:  # noqa: BLE001

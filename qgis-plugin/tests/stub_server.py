@@ -20,6 +20,16 @@ Milestone 2 additions:
   server-side WITHOUT a turn-complete (reconnect tests); the server keeps
   accepting new connections.
 
+Milestone 3 additions:
+
+* ``case-command select`` answers with the server's full ``case-open``
+  rehydration (CaseSummary + loaded_layers) for a known ``CASE_LIST_ROWS``
+  id, or ``session_state: None`` for an unknown id (the real server's
+  could-not-rehydrate shape). Selected ids are recorded on ``selects``.
+* an ``auth-token`` whose token is ``EXPIRED_TOKEN`` is REJECTED the way the
+  live agent rejects a dead token: an ``error`` envelope with
+  ``error_code=AUTH_REQUIRED`` then a 1008 (policy violation) close.
+
 Requires the ``websockets`` package (present in the trid3nt-local agent venv).
 The plugin itself never imports this -- test-only.
 """
@@ -35,6 +45,9 @@ import websockets
 
 STUB_USER_ID = "01STUBUSERAAAAAAAAAAAAAAAA"
 STUB_CASE_ID = "01STUBCASEAAAAAAAAAAAAAAAA"
+
+#: An auth-token carrying this value is rejected AUTH_REQUIRED + close 1008.
+EXPIRED_TOKEN = "stub-expired-token"
 
 # A raster row exactly as the local agent publishes it: the display ``uri`` is
 # a ready TiTiler XYZ template (contains {z}/{x}/{y}) with style params.
@@ -181,6 +194,7 @@ class StubAgentServer:
         self.connection_count = 0
         self.resume_case_ids: list[Optional[str]] = []  # session-resume payloads
         self.confirmations: list[dict] = []  # tool-payload-confirmation payloads
+        self.selects: list[Optional[str]] = []  # case-command select case_ids
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._ready = threading.Event()
@@ -250,6 +264,19 @@ class StubAgentServer:
 
             if etype == "auth-token":
                 token = (env.get("payload") or {}).get("token") or ""
+                if token == EXPIRED_TOKEN:
+                    # The live agent's dead-token path: an in-band error
+                    # envelope, then a policy-violation close (1008). No
+                    # auth-ack ever arrives.
+                    await send(
+                        "error",
+                        {
+                            "error_code": "AUTH_REQUIRED",
+                            "message": "token expired or invalid",
+                        },
+                    )
+                    await ws.close(code=1008, reason="auth required")
+                    return
                 await send(
                     "auth-ack",
                     {"user_id": STUB_USER_ID, "is_anonymous": token == ""},
@@ -280,6 +307,31 @@ class StubAgentServer:
                             }
                         },
                     )
+                elif payload.get("command") == "select":
+                    # The real server's _emit_case_open: full rehydration
+                    # (CaseSummary + persisted loaded_layers) for a known
+                    # Case; session_state=None when it cannot rehydrate.
+                    sel_id = payload.get("case_id")
+                    self.selects.append(sel_id)
+                    row = next(
+                        (r for r in CASE_LIST_ROWS if r["case_id"] == sel_id),
+                        None,
+                    )
+                    if row is None:
+                        await send("case-open", {"session_state": None})
+                    else:
+                        await send(
+                            "case-open",
+                            {
+                                "session_state": {
+                                    "case": dict(row),
+                                    "loaded_layers": [RASTER_LAYER_ROW],
+                                    "chat_history": [],
+                                    "pipeline_history": [],
+                                }
+                            },
+                            case_id=sel_id,
+                        )
             elif etype == "user-message":
                 case_id = env.get("case_id")
                 text = str((env.get("payload") or {}).get("text") or "")

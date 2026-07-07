@@ -56,20 +56,25 @@ __all__ = [
     "AgentClient",
     "AgentEvent",
     "CaseInfo",
+    "CaseOpenInfo",
     "ConnectionClosed",
+    "Debouncer",
     "HandshakeFailed",
     "LayerEvent",
     "OUTBOUND_QUEUE_MAX",
     "PipelineStep",
     "RECONNECT_FLOOR_MS",
     "RECONNECT_MAX_MS",
+    "REFRESH_DEBOUNCE_S",
     "WebSocketConnection",
     "WebSocketError",
     "build_ws_url",
+    "is_auth_failure",
     "make_envelope",
     "new_ulid",
     "next_backoff",
     "parse_case_list",
+    "parse_case_open",
     "parse_layer_events",
     "parse_pipeline_steps",
     "qgis_xyz_uri",
@@ -302,6 +307,118 @@ def parse_case_list(payload: dict) -> list[CaseInfo]:
 
 
 # --------------------------------------------------------------------------- #
+# Case-open parsing (pure) -- the select/rebind rehydration
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class CaseOpenInfo:
+    """The rehydration a ``case-open`` envelope carries (select response).
+
+    ``session_state.case`` is the CaseSummary; ``loaded_layers`` rides in the
+    same session_state so the client can repaint the reopened Case's layers.
+    """
+
+    case_id: str
+    title: str
+    layers: list = field(default_factory=list)  # list[LayerEvent]
+    raw: dict = field(default_factory=dict)
+
+
+def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
+    """Parse a ``case-open`` payload into a ``CaseOpenInfo``.
+
+    Returns None when the server could not rehydrate -- per
+    ``CaseOpenEnvelopePayload`` semantics ``session_state`` is None (or the
+    ``case`` row is missing) and the client falls back to the empty state.
+    Defensive: never raises on a malformed payload.
+    """
+    if not isinstance(payload, dict):
+        return None
+    session_state = payload.get("session_state")
+    if not isinstance(session_state, dict):
+        return None
+    case = session_state.get("case")
+    if not isinstance(case, dict):
+        return None
+    case_id = case.get("case_id")
+    if not isinstance(case_id, str) or not case_id:
+        return None
+    return CaseOpenInfo(
+        case_id=case_id,
+        title=str(case.get("title") or case_id),
+        layers=parse_layer_events(session_state),
+        raw=payload,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Auth-failure classification (pure) -- milestone 3 token-expiry UX
+# --------------------------------------------------------------------------- #
+
+
+def is_auth_failure(text: str) -> bool:
+    """Classify a connection failure as an AUTH failure (dead/expired token)
+    vs a transport failure.
+
+    The remote broker validates the ``?st=`` token BEFORE the WebSocket
+    upgrade, so a dead token surfaces as ``HandshakeFailed("upgrade rejected:
+    HTTP/1.1 401/403 ...")``. An in-band rejection surfaces as an ``error``
+    envelope with ``error_code=AUTH_REQUIRED`` followed by a policy-violation
+    close (1008). Transport failures (connection refused, read timeout, a
+    mid-stream drop) must NOT classify as auth -- those drive the reconnect
+    ladder; an auth failure must STOP the ladder instead (retrying a dead
+    token is a silent reconnect loop, the exact UX this exists to kill).
+    """
+    low = (text or "").lower()
+    if not low:
+        return False
+    if "upgrade rejected" in low and (" 401" in low or " 403" in low):
+        return True
+    markers = (
+        "auth_required",
+        "auth-ack without user_id",
+        "unauthorized",
+        "token expired",
+        "invalid token",
+        "code=1008",
+    )
+    return any(marker in low for marker in markers)
+
+
+# --------------------------------------------------------------------------- #
+# Refresh debounce (pure) -- milestone 3 case-list refresh
+# --------------------------------------------------------------------------- #
+
+#: Minimum seconds between case-list refresh round trips (session-resume is
+#: cheap -- the web uses it as a ~25s keepalive -- but a click-happy user
+#: should not be able to queue a resume storm).
+REFRESH_DEBOUNCE_S = 2.0
+
+
+class Debouncer:
+    """Min-interval debounce: ``allow()`` returns True (and stamps the clock)
+    when the action may fire now, False while inside the suppress window.
+    Clock injectable for tests."""
+
+    def __init__(
+        self,
+        interval_s: float = REFRESH_DEBOUNCE_S,
+        clock: Callable[[], float] = time.monotonic,
+    ):
+        self.interval_s = interval_s
+        self._clock = clock
+        self._last: Optional[float] = None
+
+    def allow(self) -> bool:
+        now = self._clock()
+        if self._last is not None and (now - self._last) < self.interval_s:
+            return False
+        self._last = now
+        return True
+
+
+# --------------------------------------------------------------------------- #
 # Reconnect backoff (pure) -- mirrors the web client (ws.ts)
 # --------------------------------------------------------------------------- #
 
@@ -445,7 +562,7 @@ class WebSocketConnection:
             "Connection: Upgrade\r\n"
             f"Sec-WebSocket-Key: {key}\r\n"
             "Sec-WebSocket-Version: 13\r\n"
-            "User-Agent: trid3nt-qgis-plugin/0.1\r\n"
+            "User-Agent: trid3nt-qgis-plugin/0.3\r\n"
             "\r\n"
         )
         raw.sendall(request.encode("ascii"))
@@ -688,6 +805,10 @@ class AgentClient:
         self.is_anonymous: Optional[bool] = None
         self.case_id: Optional[str] = None
         self.last_session_state: Optional[dict] = None
+        #: The last ``error`` envelope payload seen while draining a handshake
+        #: wait (e.g. AUTH_REQUIRED before a 1008 close) -- the bridge folds it
+        #: into the failure text so token expiry is classifiable.
+        self.last_handshake_error: Optional[dict] = None
         #: True between a completed handshake and the next transport loss.
         self.connected = False
         self._ws: Optional[WebSocketConnection] = None
@@ -717,6 +838,7 @@ class AgentClient:
         Queued outbound frames are flushed FIFO once the handshake completes.
         """
         self.connected = False
+        self.last_handshake_error = None
         if self._ws is not None:
             self._ws.close()
         self._ws = WebSocketConnection(self.ws_url, connect_timeout=self.connect_timeout)
@@ -782,6 +904,43 @@ class AgentClient:
                 return case_id
             # A case-open without a case_id (e.g. a null rehydration) --
             # keep draining until the deadline.
+
+    def select_case(self, case_id: str) -> None:
+        """Switch the active case (``case-command select``).
+
+        Exact web mirror (ws.ts ``sendCaseCommand``): the local ``case_id``
+        stamp updates AT SEND TIME so the very next ``session-resume`` /
+        ``user-message`` re-asserts the same case even if a queued select and
+        the resume race; the frame itself sendOrQueues (a select tapped
+        mid-reconnect must not be silently dropped -- LANE CASE-WEB). The
+        server replies with a full ``case-open`` rehydration (CaseSummary +
+        loaded_layers + chat history) which arrives through ``next_event``.
+        """
+        self.case_id = case_id
+        self._send(
+            "case-command",
+            {"command": "select", "case_id": case_id, "args": {}},
+            case_id=case_id,
+            queue_if_closed=True,
+        )
+
+    def request_case_list_refresh(self) -> bool:
+        """Refresh the case list via one ``session-resume`` round trip.
+
+        DOCUMENTED TRADEOFF (milestone 3 item 3): the protocol has NO
+        dedicated list-cases request verb -- ``case-list`` only ever arrives
+        as a server emission. The server's session-resume handler replies
+        with ``session-state`` + ``case-list`` and is ALREADY the web
+        client's ~25s keepalive (the server logs it at DEBUG), so a resume
+        round trip IS the cheap refresh. Cost: a redundant ``session-state``
+        frame rides along -- harmless, layer materialization dedups by
+        layer_id. Returns False when disconnected (nothing to ask; the
+        reconnect resume will refresh anyway). The caller debounces.
+        """
+        if not self.connected:
+            return False
+        self._send("session-resume", {"case_id": self.case_id})
+        return True
 
     def send_chat(self, text: str) -> None:
         self._send(
@@ -967,7 +1126,10 @@ class AgentClient:
         """Drain frames until one of ``etype`` arrives (handshake helper).
 
         Non-matching frames are dropped, mirroring the reference driver
-        (tool_routing_bench.do_handshake / create_case).
+        (tool_routing_bench.do_handshake / create_case) -- EXCEPT ``error``
+        envelopes, whose payload is stashed on ``last_handshake_error`` so a
+        rejection that closes the socket (AUTH_REQUIRED then 1008) stays
+        classifiable after the ``ConnectionClosed`` surfaces.
         """
         if deadline is None:
             deadline = time.monotonic() + self.handshake_timeout
@@ -982,5 +1144,9 @@ class AgentClient:
                 env = json.loads(raw)
             except (json.JSONDecodeError, ValueError):
                 continue
-            if isinstance(env, dict) and env.get("type") == etype:
+            if not isinstance(env, dict):
+                continue
+            if env.get("type") == "error" and isinstance(env.get("payload"), dict):
+                self.last_handshake_error = env["payload"]
+            if env.get("type") == etype:
                 return env

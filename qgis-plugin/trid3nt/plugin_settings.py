@@ -100,6 +100,16 @@ class PluginSettings:
         self._set("canvas_aoi", "true" if value else "false")
 
     @property
+    def selection_aoi(self) -> bool:
+        """Milestone 3: "Use selected polygon as AOI" toggle (default OFF --
+        an explicit override of the canvas extent, opt-in per session)."""
+        return self._get("selection_aoi", "false").lower() == "true"
+
+    @selection_aoi.setter
+    def selection_aoi(self, value: bool) -> None:
+        self._set("selection_aoi", "true" if value else "false")
+
+    @property
     def anonymous_user_id(self) -> str:
         """Server-assigned anonymous user id, replayed on reconnect so the
         same local User record re-binds (mirrors the web client)."""

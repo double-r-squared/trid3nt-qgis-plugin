@@ -26,6 +26,13 @@ Milestone 2 reconnect policy (mirrors the web client, ws.ts):
   outbound intent flushes FIFO. ``resumed`` fires when the wire is back.
 * ``stop()`` exits the ladder immediately (the backoff sleep polls the stop
   flag).
+
+Milestone 3 token-expiry policy: a failure that classifies as AUTH
+(``trid3nt_client.is_auth_failure`` -- the broker's pre-upgrade 401/403 on a
+dead ``?st=`` token, or an in-band AUTH_REQUIRED error) emits
+``auth_expired`` and STOPS -- first connect and reconnect ladder alike.
+Retrying a dead token forever is exactly the silent-reconnect-loop UX this
+kills; the dock tells the user to paste a fresh token instead.
 """
 
 from __future__ import annotations
@@ -41,6 +48,7 @@ from .trid3nt_client import (
     AgentClient,
     ConnectionClosed,
     WebSocketError,
+    is_auth_failure,
     next_backoff,
 )
 
@@ -48,13 +56,21 @@ from .trid3nt_client import (
 class AgentWorker(QObject):
     """Runs connect + handshake + case create + the receive/reconnect loop."""
 
+    # CRASH FIX (found live in QGIS 3.40.6): this signal was named ``event``,
+    # which SHADOWS the C++ virtual ``QObject.event()``. The first QEvent Qt
+    # delivered to the object (the ChildAdded from ``QThread(self)`` in
+    # AgentBridge.start) made PyQt call the attribute as the reimplemented
+    # event handler -> "TypeError: native Qt signal is not callable" -> qFatal
+    # abort of the whole QGIS process. NEVER name a pyqtSignal after a
+    # QObject virtual (event / eventFilter / timerEvent / childEvent / ...).
     connected = pyqtSignal(str, bool)  # user_id, is_anonymous
     case_ready = pyqtSignal(str)       # case_id
-    event = pyqtSignal(str, object)    # AgentEvent.kind, AgentEvent.data
+    agent_event = pyqtSignal(str, object)  # AgentEvent.kind, AgentEvent.data
     failed = pyqtSignal(str)           # terminal setup failure (human-readable)
     closed = pyqtSignal(str)           # loop ended for good (reason)
     reconnecting = pyqtSignal(str)     # transport lost; entering backoff (reason)
     resumed = pyqtSignal()             # reconnect handshake done, queue flushed
+    auth_expired = pyqtSignal(str)     # token rejected -- paste a fresh one
 
     def __init__(
         self,
@@ -87,7 +103,11 @@ class AgentWorker(QObject):
             case_id = self.client.create_case(self._case_title, bbox=self._case_bbox)
             self.case_ready.emit(case_id)
         except Exception as exc:  # noqa: BLE001 -- surfaced verbatim, never silent
-            self.failed.emit(f"{type(exc).__name__}: {exc}")
+            text = self._failure_text(exc)
+            if is_auth_failure(text):
+                self.auth_expired.emit(text)
+            else:
+                self.failed.emit(text)
             self._close_client()
             return
 
@@ -100,7 +120,7 @@ class AgentWorker(QObject):
                     while not self._stop:
                         ev = self.client.next_event(timeout=1.0)
                         if ev is not None:
-                            self.event.emit(ev.kind, ev.data)
+                            self.agent_event.emit(ev.kind, ev.data)
                     break  # stop requested
                 except ConnectionClosed as exc:
                     if self._stop:
@@ -115,7 +135,15 @@ class AgentWorker(QObject):
                     try:
                         self.client.reconnect()
                     except (WebSocketError, OSError) as exc:
-                        self.reconnecting.emit(f"{type(exc).__name__}: {exc}")
+                        text = self._failure_text(exc)
+                        if is_auth_failure(text):
+                            # A dead token cannot be fixed by retrying --
+                            # exit the ladder honestly instead of looping.
+                            self.auth_expired.emit(text)
+                            reason = "auth-expired"
+                            self._stop = True
+                            break
+                        self.reconnecting.emit(text)
                         continue
                     backoff_ms = RECONNECT_FLOOR_MS  # reset on successful open
                     self.resumed.emit()
@@ -140,6 +168,19 @@ class AgentWorker(QObject):
         """Thread-safe: just flips the poll flag the run loop checks."""
         self._stop = True
 
+    def _failure_text(self, exc: Exception) -> str:
+        """The exception, plus any error envelope the handshake drained
+        (e.g. AUTH_REQUIRED before a 1008 close) -- one classifiable line."""
+        text = f"{type(exc).__name__}: {exc}"
+        err = getattr(self.client, "last_handshake_error", None)
+        if isinstance(err, dict):
+            code = str(err.get("error_code") or "").strip()
+            message = str(err.get("message") or "").strip()
+            detail = " ".join(part for part in (code, message) if part)
+            if detail:
+                text += f" [{detail}]"
+        return text
+
     def _close_client(self) -> None:
         if self.client is not None:
             try:
@@ -158,6 +199,15 @@ class AgentWorker(QObject):
         if self.client is not None:
             self.client.cancel()
 
+    def select_case(self, case_id: str) -> None:
+        if self.client is not None:
+            self.client.select_case(case_id)
+
+    def refresh_case_list(self) -> bool:
+        if self.client is not None:
+            return self.client.request_case_list_refresh()
+        return False
+
     def confirm_payload(
         self,
         warning_id: str,
@@ -171,13 +221,16 @@ class AgentWorker(QObject):
 class AgentBridge(QObject):
     """Owns the QThread + worker pair; the dock talks only to this."""
 
+    # ``agent_event``, NOT ``event`` -- see the AgentWorker signal block for
+    # the QObject.event() shadowing crash this name avoids.
     connected = pyqtSignal(str, bool)
     case_ready = pyqtSignal(str)
-    event = pyqtSignal(str, object)
+    agent_event = pyqtSignal(str, object)
     failed = pyqtSignal(str)
     closed = pyqtSignal(str)
     reconnecting = pyqtSignal(str)
     resumed = pyqtSignal()
+    auth_expired = pyqtSignal(str)
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -209,14 +262,18 @@ class AgentBridge(QObject):
         self._thread.started.connect(self._worker.run)
         self._worker.connected.connect(self.connected)
         self._worker.case_ready.connect(self.case_ready)
-        self._worker.event.connect(self.event)
+        self._worker.agent_event.connect(self.agent_event)
         self._worker.failed.connect(self.failed)
         self._worker.closed.connect(self.closed)
         self._worker.reconnecting.connect(self.reconnecting)
         self._worker.resumed.connect(self.resumed)
-        # Whichever way the run loop exits, wind the thread down.
+        self._worker.auth_expired.connect(self.auth_expired)
+        # Whichever way the run loop exits, wind the thread down. (The
+        # first-connect auth path emits auth_expired and returns without a
+        # closed emission, so it must quit the thread too.)
         self._worker.failed.connect(self._thread.quit)
         self._worker.closed.connect(self._thread.quit)
+        self._worker.auth_expired.connect(self._thread.quit)
         self._thread.start()
 
     def stop(self) -> None:
@@ -237,6 +294,15 @@ class AgentBridge(QObject):
     def cancel(self) -> None:
         if self._worker is not None:
             self._worker.cancel()
+
+    def select_case(self, case_id: str) -> None:
+        if self._worker is not None:
+            self._worker.select_case(case_id)
+
+    def refresh_case_list(self) -> bool:
+        if self._worker is not None:
+            return self._worker.refresh_case_list()
+        return False
 
     def confirm_payload(
         self,

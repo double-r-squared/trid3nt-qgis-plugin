@@ -20,14 +20,26 @@ own group intact, and QGIS users already know how to save/inspect them. The
 .qgz path is still surfaced in the note so a user who WANTS the styled
 project can open it manually.
 
-The local agent runs on this same machine, so the returned paths are directly
-readable; no file download round-trip is needed (the /api/export-qgis/file
-route exists for remote clients and stays unused here).
+LOCAL mode: the agent runs on this same machine, so the returned paths are
+directly readable; no download round-trip is needed.
 
-Pure-testable pieces: the HTTP call (stdlib urllib against any host) and the
-result -> layer plan (GeoPackage table listing via stdlib sqlite3
-``gpkg_contents`` -- no OGR needed just to enumerate names; the raster scan is
-a plain ``*.tif``/``*.tiff`` directory walk of ``output_dir``).
+REMOTE mode (milestone 3 item 1): the returned paths live on the REMOTE box,
+so the artifacts are downloaded through ``GET /api/export-qgis/file?path=<abs>``
+into a local temp dir first (``localize_remote_export``). That route serves
+ONLY ``.qgz``/``.gpkg`` under the agent's export root (Content-Disposition
+attachment; 400 missing param / 403 wrong type or outside root / 404 missing
+-- see services/agent ``tool_catalog_http.py`` + its route tests). GeoTIFF
+rasters are therefore NOT downloadable remotely: they become an honest
+skipped note, never a silent gap (the raster is still viewable through its
+published tile layer). The HTTP API base is derived from the WS URL
+(``wss://host/ws`` -> ``https://host`` -- CloudFront routes ``/api/*`` to the
+agent's HTTP listener at the origin root).
+
+Pure-testable pieces: the HTTP calls (stdlib urllib against any host), the
+WS->HTTP base derivation, the remote-result localization, and the result ->
+layer plan (GeoPackage table listing via stdlib sqlite3 ``gpkg_contents`` --
+no OGR needed just to enumerate names; the raster scan is a plain
+``*.tif``/``*.tiff`` directory walk of ``output_dir``).
 """
 
 from __future__ import annotations
@@ -36,6 +48,7 @@ import json
 import os
 import sqlite3
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -44,8 +57,11 @@ __all__ = [
     "DEFAULT_EXPORT_API",
     "ExportPlan",
     "ExportRequestError",
+    "download_export_file",
+    "localize_remote_export",
     "plan_export_layers",
     "post_export_case",
+    "ws_url_to_http_base",
 ]
 
 DEFAULT_EXPORT_API = "http://127.0.0.1:8766"
@@ -53,6 +69,109 @@ DEFAULT_EXPORT_API = "http://127.0.0.1:8766"
 
 class ExportRequestError(Exception):
     """The export API call failed -- carries the server's honest message."""
+
+
+def ws_url_to_http_base(ws_url: str) -> str:
+    """Derive the HTTP(S) API base from an agent WebSocket URL.
+
+    ``wss://host/ws`` -> ``https://host``; ``ws://127.0.0.1:8765/ws`` ->
+    ``http://127.0.0.1:8765``. The ``/api/*`` routes live at the origin root
+    (CloudFront routes ``/api/*`` to the agent's HTTP listener), so the WS
+    path and any query string are dropped; the port is preserved.
+    """
+    parts = urllib.parse.urlsplit((ws_url or "").strip())
+    scheme = {"wss": "https", "ws": "http"}.get(parts.scheme, parts.scheme or "http")
+    netloc = parts.netloc or parts.path.split("/", 1)[0]
+    return f"{scheme}://{netloc}"
+
+
+def _http_error_detail(exc: urllib.error.HTTPError) -> str:
+    """The server's own ``{"error": ...}`` message, prefixed with the HTTP
+    status so a 403 vs 404 is distinguishable at a glance."""
+    detail = ""
+    try:
+        payload = json.loads(exc.read().decode("utf-8", "replace"))
+        if isinstance(payload, dict):
+            detail = str(payload.get("error") or "")
+    except Exception:  # noqa: BLE001 -- body may be anything
+        pass
+    return f"HTTP {exc.code}" + (f": {detail}" if detail else "")
+
+
+def download_export_file(
+    base_url: str, remote_path: str, dest_dir: str, timeout: float = 300.0
+) -> str:
+    """``GET {base_url}/api/export-qgis/file?path=<remote_path>`` -> local path.
+
+    Downloads one export artifact into ``dest_dir`` (named by the remote
+    basename) and returns the local path. The route serves ONLY ``.qgz`` /
+    ``.gpkg`` under the agent's export root; a 403 (wrong type / outside
+    root) or 404 (missing) surfaces as an ``ExportRequestError`` carrying the
+    status code + the server's honest message. Blocking -- the caller runs it
+    OFF the UI thread.
+    """
+    url = (
+        f"{base_url.rstrip('/')}/api/export-qgis/file"
+        f"?path={urllib.parse.quote(remote_path, safe='')}"
+    )
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            data = resp.read()
+    except urllib.error.HTTPError as exc:
+        raise ExportRequestError(
+            f"download of {os.path.basename(remote_path)!r} failed "
+            f"({_http_error_detail(exc)})"
+        ) from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise ExportRequestError(
+            f"export file download unreachable at {url} ({exc})"
+        ) from exc
+    name = os.path.basename(remote_path.rstrip("/")) or "export.bin"
+    local_path = os.path.join(dest_dir, name)
+    with open(local_path, "wb") as f:
+        f.write(data)
+    return local_path
+
+
+def localize_remote_export(base_url: str, result: dict, dest_dir: str) -> dict:
+    """Rewrite a remote ``/api/export-qgis`` result into a locally-planable one.
+
+    Downloads the ``.gpkg`` (vector tables) and ``.qgz`` (styled project)
+    through the file route into ``dest_dir`` and points the result's paths at
+    the local copies (``output_dir`` = ``dest_dir``). Rasters are NOT
+    downloadable (the route serves only .qgz/.gpkg), so a nonzero
+    ``exported_raster_count`` becomes an honest ``skipped`` row and the count
+    is zeroed. Per-file failures (403/404) also become skipped rows -- this
+    never raises, so one bad artifact cannot lose the rest.
+    """
+    localized = dict(result)
+    skipped = [row for row in (result.get("skipped") or []) if isinstance(row, dict)]
+    for key in ("gpkg_path", "qgz_path"):
+        remote = result.get(key)
+        localized[key] = None
+        if isinstance(remote, str) and remote:
+            try:
+                localized[key] = download_export_file(base_url, remote, dest_dir)
+            except ExportRequestError as exc:
+                skipped.append(
+                    {"name": os.path.basename(remote), "reason": str(exc)}
+                )
+    raster_count = result.get("exported_raster_count")
+    if isinstance(raster_count, int) and raster_count > 0:
+        skipped.append(
+            {
+                "name": f"{raster_count} raster(s)",
+                "reason": (
+                    "remote export serves only .qgz/.gpkg -- GeoTIFFs stay on "
+                    "the remote box (view them via the published tile layers)"
+                ),
+            }
+        )
+    localized["exported_raster_count"] = 0
+    localized["skipped"] = skipped
+    localized["output_dir"] = dest_dir
+    return localized
 
 
 def post_export_case(
