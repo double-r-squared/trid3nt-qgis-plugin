@@ -369,3 +369,18 @@ existing AI-plugin crowd, (b) built almost entirely on shipped, tested seams
 honest product for the three personas: the data scavenger hunt collapses to a
 sentence, and for the first time in the QGIS ecosystem, the model runs WHERE
 THE MAP IS.
+
+---
+
+## DECISIONS (NATE, 2026-07-07)
+
+1. **Windows strategy**: Linux-local + remote-agent mode for everyone else.
+2. **Cloud mode**: YES, in v1 -- the plugin speaks to either the local stack or
+   the cloud API from day one.
+3. **Distribution**: no publishing yet -- write the code first; repository
+   question revisited when v1 works.
+
+v1 scope locked per the recommendation: chat dock (WS protocol, layers land as
+native QGIS layers), canvas-extent simulations with the granularity gate as a
+Qt card, conversational fetchers, one-click case-open. Deferred: fetcher
+dialog, Processing provider, QGIS-to-case import.
