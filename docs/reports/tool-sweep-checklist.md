@@ -1,7 +1,7 @@
 # TRID3NT Local tool sweep -- direct-execution checklist
 
-Updated: 2026-07-06T16:54:01  
-Total 176 | PASS 137 | KEY 5 | FAIL 19 | TIMEOUT 3 | SKIP-ARGS 12
+Updated: 2026-07-06T17:08:31  
+Total 176 | PASS 138 | KEY 5 | FAIL 18 | TIMEOUT 3 | SKIP-ARGS 12
 
 AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 
@@ -103,7 +103,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | fetch_noaa_slr_scenarios | PASS | 23s |  |
 | fetch_noaa_sst | PASS | 92s |  |
 | fetch_nws_alerts_conus | PASS | 1s |  |
-| fetch_nws_event | FAIL | 1s | NWSUpstreamError: FlatGeobuf write failed for 3 features: Could not add feature to layer a |
+| fetch_nws_event | PASS | 1s |  |
 | fetch_nws_river_forecast | PASS | 1s |  |
 | fetch_openaq_measurements | KEY | 0s | OpenAQMissingKeyError: no OpenAQ API key available: pass api_key=..., secret_ref=..., or s |
 | fetch_openfema_disasters | PASS | 74s |  |
@@ -159,7 +159,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | run_model_flood_scenario | PASS | 42s |  |
 | run_model_glm_lightning_animation | PASS | 702s |  |
 | run_model_goes_fire_animation | FAIL | 191s | GOESFireAnimEmptyError: GOES SLIDER frames were available for goes-18/conus over 2026-07-0 |
-| run_model_groundwater_contamination_scenario | FAIL | 0s | ParameterExtractionError: could not extract a release duration (hours / days) from the art |
+| run_model_groundwater_contamination_scenario | FAIL | 1s | ConfirmationDeniedError: MODFLOW run not started: the parameter-confirmation gate was not  |
 | run_model_mar_scenario | PASS | 0s |  |
 | run_model_mine_dewatering_scenario | PASS | 0s |  |
 | run_model_multi_species_scenario | PASS | 0s |  |

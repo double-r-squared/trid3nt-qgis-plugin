@@ -117,6 +117,7 @@ OVERRIDES: dict[str, dict] = {
 }
 
 OVERRIDES.update({
+    "run_swmm_urban_flood": {"bbox": (-82.460, 27.945, -82.450, 27.955)},
     # vector-oriented tools whose generic param is the ambiguous layer_uri --
     # the chain map's default (DEM raster) is wrong for these
     "merge_features": {"layer_uri": "__CHAIN_COUNTIES__"},
@@ -130,9 +131,9 @@ OVERRIDES.update({
     "fetch_climate_normals": {"bbox": (-82.9, 27.6, -82.1, 28.3)},
     "digitize_water_body": {"bbox": (-82.78, 28.07, -82.71, 28.16), "start_date": (END - dt.timedelta(days=90)).isoformat()},
     "run_model_groundwater_contamination_scenario": {
-        "article_text": "A tanker spill released approximately 5,000 gallons of benzene near Tampa, "
-                        "Florida on 2026-06-01, contaminating shallow groundwater around 27.955N 82.455W "
-                        "per county officials."
+        "article_text": "A tanker spill released approximately 5,000 gallons of benzene over a period "
+                        "of two days near Tampa, Florida starting 2026-06-01, contaminating shallow "
+                        "groundwater around 27.955N 82.455W per county officials."
     },
 })
 
@@ -201,6 +202,7 @@ def prefetch_chain(tools) -> None:
 
 
 TIMEOUT_OVERRIDES = {
+    "run_swmm_urban_flood": 1500,
     "fetch_storm_events_db": 420,
     "fetch_climate_normals": 420,
     "fetch_population": 420,
