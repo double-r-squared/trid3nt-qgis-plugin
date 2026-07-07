@@ -88,12 +88,18 @@ from qgis.PyQt.QtCore import QSettings  # noqa: E402
 from trid3nt.plugin import Trid3ntPlugin  # noqa: E402
 
 # Optional agent-URL override (stub-server runs) -- stamped for THIS run,
-# restored on exit so the user's real profile setting survives.
+# restored on exit so the user's real profile setting survives. The sticky
+# anonymous_user_id is saved/restored too: a stub run stores the STUB's fake
+# user id, and replaying that against the real agent poisons every later
+# handshake (this exact leak shipped once -- the settings-side ULID guard is
+# the backstop, this is the hygiene fix at the source).
 _URL_OVERRIDE = os.environ.get("TRID3NT_AGENT_URL")
 _PRIOR_URL = None
+_PRIOR_ANON = None
 if _URL_OVERRIDE:
     _qs = QSettings()
     _PRIOR_URL = _qs.value("trid3nt/local_url", None)
+    _PRIOR_ANON = _qs.value("trid3nt/anonymous_user_id", None)
     _qs.setValue("trid3nt/local_url", _URL_OVERRIDE)
     print(f"[first-run] agent url override: {_URL_OVERRIDE}", flush=True)
 
@@ -102,10 +108,14 @@ def _restore_url() -> None:
     if not _URL_OVERRIDE:
         return
     _qs = QSettings()
-    if _PRIOR_URL is None:
-        _qs.remove("trid3nt/local_url")
-    else:
-        _qs.setValue("trid3nt/local_url", _PRIOR_URL)
+    for key, prior in (
+        ("trid3nt/local_url", _PRIOR_URL),
+        ("trid3nt/anonymous_user_id", _PRIOR_ANON),
+    ):
+        if prior is None:
+            _qs.remove(key)
+        else:
+            _qs.setValue(key, prior)
     _qs.sync()
 
 

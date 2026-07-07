@@ -545,3 +545,60 @@ class TestQtBridgeStart(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestAnonymousIdGuard(unittest.TestCase):
+    """The sticky anonymous_user_id read guard (plugin_settings).
+
+    plugin_settings imports qgis.PyQt, so this test stubs QtCore.QSettings
+    with an in-memory dict -- the guard logic itself is pure. Regression for
+    the stub-server user id ("01STUBUSERAAAAAAAAAAAAAAAA", not Crockford --
+    contains U) leaking into the real profile and poisoning every live
+    handshake with an opaque auth-ack timeout.
+    """
+
+    def _settings_with(self, stored: str):
+        import types
+        import importlib
+
+        class FakeQSettings:
+            store = {}
+
+            def value(self, key, default=None):
+                return self.store.get(key, default)
+
+            def setValue(self, key, value):
+                self.store[key] = value
+
+        qtcore = types.ModuleType("qgis.PyQt.QtCore")
+        qtcore.QSettings = FakeQSettings
+        pyqt = types.ModuleType("qgis.PyQt")
+        pyqt.QtCore = qtcore
+        qgis = types.ModuleType("qgis")
+        qgis.PyQt = pyqt
+        saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
+        sys.modules.update({"qgis": qgis, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
+        try:
+            sys.modules.pop("plugin_settings", None)
+            ps = importlib.import_module("plugin_settings")
+            FakeQSettings.store = {"trid3nt/anonymous_user_id": stored}
+            return ps.PluginSettings()
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    sys.modules.pop(k, None)
+                else:
+                    sys.modules[k] = v
+
+    def test_stub_id_filtered(self):
+        s = self._settings_with("01STUBUSERAAAAAAAAAAAAAAAA")
+        self.assertEqual(s.anonymous_user_id, "")
+
+    def test_garbage_filtered(self):
+        for bad in ("", "not-a-ulid", "01KWYB", "01kwyb5ad95pzrgmf9qahm5bv1"):
+            s = self._settings_with(bad)
+            self.assertEqual(s.anonymous_user_id, "", bad)
+
+    def test_real_ulid_passes(self):
+        s = self._settings_with("01KWYB5AD95PZRGMF9QAHM5BV1")
+        self.assertEqual(s.anonymous_user_id, "01KWYB5AD95PZRGMF9QAHM5BV1")
