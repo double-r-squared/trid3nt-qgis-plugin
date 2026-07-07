@@ -2,8 +2,8 @@
 name=TRID3NT
 qgisMinimumVersion=3.28
 description=TRID3NT agent chat dock -- ask for geospatial data or a hazard simulation in plain language and the answer arrives as styled layers on the canvas.
-about=Dockable chat panel that drives a TRID3NT agent (local stack on ws://127.0.0.1:8765 or a remote endpoint). Every layer the agent publishes is materialized as a native QGIS layer: rasters as XYZ tile layers (TiTiler templates), vectors from inline GeoJSON or the local MinIO object store. Milestone 1 of v1: skeleton + connection layer + chat dock. The local TRID3NT stack (agent, MinIO, TiTiler, Ollama) must be installed and running separately -- the plugin never starts or stops it.
-version=0.1.0
+about=Dockable chat panel that drives a TRID3NT agent (local stack on ws://127.0.0.1:8765 or a remote endpoint). Every layer the agent publishes is materialized as a native QGIS layer: rasters as XYZ tile layers (TiTiler templates), vectors from inline GeoJSON or the local MinIO object store. Milestone 2 of v1: simulation gate card (confirm resolution/cadence before a solve starts), canvas-extent AOI on every message, capped-jitter auto-reconnect with queued sends, and Open-case-in-QGIS via the local agent's export API. The local TRID3NT stack (agent, MinIO, TiTiler, Ollama) must be installed and running separately -- the plugin never starts or stops it.
+version=0.2.0
 author=Nate Almanza
 email=natealmanza3@gmail.com
 experimental=True

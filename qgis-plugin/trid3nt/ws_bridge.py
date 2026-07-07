@@ -2,32 +2,59 @@
 
 The WebSocket lives on a QThread-hosted worker; the dock only ever touches Qt
 signals (queued across threads, so slots run on the UI thread). Outbound sends
-(``send_chat`` / ``cancel``) are safe to call from the UI thread directly:
-``WebSocketConnection.send_text`` is mutex-guarded and a chat-sized
-``sendall`` does not block meaningfully.
+(``send_chat`` / ``cancel`` / ``confirm_payload``) are safe to call from the
+UI thread directly: ``WebSocketConnection.send_text`` is mutex-guarded and a
+chat-sized ``sendall`` does not block meaningfully; while disconnected they
+buffer in the client's bounded outbound queue and flush on resume.
 
 QGIS freeze rule (product analysis section 7): the socket NEVER blocks the UI
-thread -- connect, handshake, and the receive loop all run on the worker.
+thread -- connect, handshake, the receive loop, AND the reconnect backoff all
+run on the worker.
+
+Milestone 2 reconnect policy (mirrors the web client, ws.ts):
+
+* The FIRST connect is fail-fast: a dead port / bad URL / rejected upgrade at
+  the moment the user presses Connect surfaces immediately as ``failed``
+  (milestone 1 behaviour preserved -- no silent retry against a stack that
+  was never up).
+* AFTER a successful first connect, any transport loss enters the
+  capped-jitter reconnect ladder (floor 1.5 s doubling to 5 s, jitter in
+  [0.5, 1.0) x base -- ``trid3nt_client.next_backoff``), emitting
+  ``reconnecting`` per attempt. Each re-dial reuses the SAME session_id +
+  sticky anonymous_user_id and sends ``session-resume`` with the current
+  case_id so the server re-binds the Case and replays its layers; queued
+  outbound intent flushes FIFO. ``resumed`` fires when the wire is back.
+* ``stop()`` exits the ladder immediately (the backoff sleep polls the stop
+  flag).
 """
 
 from __future__ import annotations
 
+import time
 import traceback
 from typing import Optional
 
 from qgis.PyQt.QtCore import QObject, QThread, pyqtSignal
 
-from .trid3nt_client import AgentClient, ConnectionClosed
+from .trid3nt_client import (
+    RECONNECT_FLOOR_MS,
+    AgentClient,
+    ConnectionClosed,
+    WebSocketError,
+    next_backoff,
+)
 
 
 class AgentWorker(QObject):
-    """Runs connect + handshake + case create + the receive loop."""
+    """Runs connect + handshake + case create + the receive/reconnect loop."""
 
     connected = pyqtSignal(str, bool)  # user_id, is_anonymous
     case_ready = pyqtSignal(str)       # case_id
     event = pyqtSignal(str, object)    # AgentEvent.kind, AgentEvent.data
     failed = pyqtSignal(str)           # terminal setup failure (human-readable)
-    closed = pyqtSignal(str)           # socket ended (reason)
+    closed = pyqtSignal(str)           # loop ended for good (reason)
+    reconnecting = pyqtSignal(str)     # transport lost; entering backoff (reason)
+    resumed = pyqtSignal()             # reconnect handshake done, queue flushed
 
     def __init__(
         self,
@@ -35,46 +62,79 @@ class AgentWorker(QObject):
         token: str = "",
         anonymous_user_id: Optional[str] = None,
         case_title: str = "QGIS session",
+        case_bbox: Optional[list] = None,
     ):
         super().__init__()
         self._url = url
         self._token = token
         self._anonymous_user_id = anonymous_user_id or None
         self._case_title = case_title
+        self._case_bbox = case_bbox
         self._stop = False
         self.client: Optional[AgentClient] = None
 
     # Runs on the worker thread (wired to QThread.started).
     def run(self) -> None:
+        self.client = AgentClient(
+            self._url,
+            token=self._token,
+            anonymous_user_id=self._anonymous_user_id,
+        )
+        # First connect: fail-fast (see module docstring).
         try:
-            self.client = AgentClient(
-                self._url,
-                token=self._token,
-                anonymous_user_id=self._anonymous_user_id,
-            )
             user_id = self.client.connect()
             self.connected.emit(user_id, bool(self.client.is_anonymous))
-            case_id = self.client.create_case(self._case_title)
+            case_id = self.client.create_case(self._case_title, bbox=self._case_bbox)
             self.case_ready.emit(case_id)
         except Exception as exc:  # noqa: BLE001 -- surfaced verbatim, never silent
             self.failed.emit(f"{type(exc).__name__}: {exc}")
             self._close_client()
             return
 
+        backoff_ms = RECONNECT_FLOOR_MS
         reason = "stopped"
         try:
             while not self._stop:
-                ev = self.client.next_event(timeout=1.0)
-                if ev is not None:
-                    self.event.emit(ev.kind, ev.data)
-        except ConnectionClosed as exc:
-            reason = str(exc)
-        except Exception as exc:  # noqa: BLE001
+                # -- receive until stop or transport loss -------------------- #
+                try:
+                    while not self._stop:
+                        ev = self.client.next_event(timeout=1.0)
+                        if ev is not None:
+                            self.event.emit(ev.kind, ev.data)
+                    break  # stop requested
+                except ConnectionClosed as exc:
+                    if self._stop:
+                        break
+                    self.reconnecting.emit(str(exc))
+
+                # -- capped-jitter reconnect ladder --------------------------- #
+                while not self._stop:
+                    delay_ms, backoff_ms = next_backoff(backoff_ms)
+                    if not self._sleep_interruptible(delay_ms / 1000.0):
+                        break  # stop requested mid-backoff
+                    try:
+                        self.client.reconnect()
+                    except (WebSocketError, OSError) as exc:
+                        self.reconnecting.emit(f"{type(exc).__name__}: {exc}")
+                        continue
+                    backoff_ms = RECONNECT_FLOOR_MS  # reset on successful open
+                    self.resumed.emit()
+                    break
+        except Exception as exc:  # noqa: BLE001 -- anything else is terminal
             reason = f"{type(exc).__name__}: {exc}"
             traceback.print_exc()
         finally:
             self._close_client()
             self.closed.emit(reason)
+
+    def _sleep_interruptible(self, seconds: float) -> bool:
+        """Sleep in small slices, polling the stop flag. False = stopped."""
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if self._stop:
+                return False
+            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+        return not self._stop
 
     def stop(self) -> None:
         """Thread-safe: just flips the poll flag the run loop checks."""
@@ -87,7 +147,8 @@ class AgentWorker(QObject):
             except Exception:  # noqa: BLE001
                 pass
 
-    # -- UI-thread-safe outbound verbs (socket writes are mutex-guarded) ---- #
+    # -- UI-thread-safe outbound verbs (socket writes are mutex-guarded; ---- #
+    # -- while disconnected they buffer in the client's bounded queue) ------ #
 
     def send_chat(self, text: str) -> None:
         if self.client is not None:
@@ -97,9 +158,14 @@ class AgentWorker(QObject):
         if self.client is not None:
             self.client.cancel()
 
-    def confirm_payload(self, warning_id: str, decision: str = "proceed") -> None:
+    def confirm_payload(
+        self,
+        warning_id: str,
+        decision: str = "proceed",
+        revised_args: Optional[dict] = None,
+    ) -> None:
         if self.client is not None:
-            self.client.confirm_payload(warning_id, decision)
+            self.client.confirm_payload(warning_id, decision, revised_args)
 
 
 class AgentBridge(QObject):
@@ -110,6 +176,8 @@ class AgentBridge(QObject):
     event = pyqtSignal(str, object)
     failed = pyqtSignal(str)
     closed = pyqtSignal(str)
+    reconnecting = pyqtSignal(str)
+    resumed = pyqtSignal()
 
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
@@ -126,6 +194,7 @@ class AgentBridge(QObject):
         token: str = "",
         anonymous_user_id: Optional[str] = None,
         case_title: str = "QGIS session",
+        case_bbox: Optional[list] = None,
     ) -> None:
         self.stop()
         self._worker = AgentWorker(
@@ -133,6 +202,7 @@ class AgentBridge(QObject):
             token=token,
             anonymous_user_id=anonymous_user_id,
             case_title=case_title,
+            case_bbox=case_bbox,
         )
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)
@@ -142,6 +212,8 @@ class AgentBridge(QObject):
         self._worker.event.connect(self.event)
         self._worker.failed.connect(self.failed)
         self._worker.closed.connect(self.closed)
+        self._worker.reconnecting.connect(self.reconnecting)
+        self._worker.resumed.connect(self.resumed)
         # Whichever way the run loop exits, wind the thread down.
         self._worker.failed.connect(self._thread.quit)
         self._worker.closed.connect(self._thread.quit)
@@ -166,6 +238,11 @@ class AgentBridge(QObject):
         if self._worker is not None:
             self._worker.cancel()
 
-    def confirm_payload(self, warning_id: str, decision: str = "proceed") -> None:
+    def confirm_payload(
+        self,
+        warning_id: str,
+        decision: str = "proceed",
+        revised_args: Optional[dict] = None,
+    ) -> None:
         if self._worker is not None:
-            self._worker.confirm_payload(warning_id, decision)
+            self._worker.confirm_payload(warning_id, decision, revised_args)

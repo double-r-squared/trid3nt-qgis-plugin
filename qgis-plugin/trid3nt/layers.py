@@ -139,6 +139,49 @@ class LayerMaterializer:
 
         return f"vector '{event.name}': no inline GeoJSON and non-s3 uri -- skipped"
 
+    # -- exported-case materialization (milestone 2, Open case in QGIS) -------- #
+
+    def materialize_export(self, plan, group_label: str) -> List[str]:
+        """Add an exported case's layers (``case_export.ExportPlan``) to the
+        CURRENT project under their own group.
+
+        Documented decision (see ``case_export``): layers are ADDED, the
+        returned ``project.qgz`` is never opened via ``QgsProject.read()`` --
+        that would REPLACE the user's open project (unsaved work + the live
+        chat-session group would be lost). Never raises; every skip/failure
+        is an honest note.
+        """
+        notes: List[str] = []
+        root = QgsProject.instance().layerTreeRoot()
+        group_name = f"TRID3NT export {group_label}"
+        group = root.findGroup(group_name)
+        if group is None:
+            group = root.insertGroup(0, group_name)
+
+        def _add(layer, label: str) -> None:
+            if not layer.isValid():
+                notes.append(f"export layer '{label}': QGIS rejected it -- skipped")
+                return
+            QgsProject.instance().addMapLayer(layer, False)
+            group.insertLayer(0, layer)
+            notes.append(f"export layer '{label}' added")
+
+        for name in plan.vector_layers:
+            _add(
+                QgsVectorLayer(f"{plan.gpkg_path}|layername={name}", name, "ogr"),
+                name,
+            )
+        for path in plan.raster_paths:
+            stem = os.path.splitext(os.path.basename(path))[0]
+            _add(QgsRasterLayer(path, stem, "gdal"), stem)
+        notes.extend(plan.notes)
+        if not plan.vector_layers and not plan.raster_paths:
+            notes.append(
+                "export produced no loadable layers -- nothing added "
+                f"(status={plan.status or 'unknown'})"
+            )
+        return notes
+
     def _add_to_group(self, layer, event: LayerEvent, note: str) -> str:
         if event.opacity is not None:
             try:

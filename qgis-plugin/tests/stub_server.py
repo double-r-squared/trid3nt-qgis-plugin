@@ -6,6 +6,20 @@ its own event loop, speaking just enough of the envelope protocol
 user-message -> chunk + pipeline-state + session-state-with-layers +
 turn-complete) to exercise ``trid3nt_client.AgentClient`` end to end.
 
+Milestone 2 additions:
+
+* a user-message whose text contains ``"simulate"`` pauses behind a
+  ``tool-payload-warning`` (granularity + time_scale enrichments, job-0127 /
+  #154 shapes) and only proceeds when the matching
+  ``tool-payload-confirmation`` arrives (decision recorded; cancel ->
+  cancelled turn-complete). ``"simulate-hardcap"`` emits the hard-cap variant
+  (no "proceed" in options).
+* ``session-resume`` now answers with a populated ``case-list`` (CaseSummary
+  rows) and echoes the resumed ``case_id`` back on the session-state.
+* a user-message whose text contains ``"drop-connection"`` closes the socket
+  server-side WITHOUT a turn-complete (reconnect tests); the server keeps
+  accepting new connections.
+
 Requires the ``websockets`` package (present in the trid3nt-local agent venv).
 The plugin itself never imports this -- test-only.
 """
@@ -80,6 +94,81 @@ S3_VECTOR_LAYER_ROW: dict[str, Any] = {
     "temporal": False,
 }
 
+STUB_WARNING_ID = "01STUBWARNINGAAAAAAAAAAAAA"
+
+# A tool-payload-warning payload with the #154 granularity + time_scale
+# enrichments -- field-for-field the PayloadWarningEnvelopePayload contract
+# (packages/contracts .../payload_warning.py).
+PAYLOAD_WARNING_ROW: dict[str, Any] = {
+    "envelope_type": "tool-payload-warning",
+    "warning_id": STUB_WARNING_ID,
+    "tool_name": "run_sfincs_simulation",
+    "tool_args": {"bbox": [-82.6, 35.55, -82.5, 35.65], "grid_resolution_m": 30.0},
+    "estimated_mb": 48.0,
+    "threshold_mb": 25.0,
+    "recommendation": "Consider a coarser grid for this AOI.",
+    "alternative_args": {"grid_resolution_m": 60.0},
+    "options": ["proceed", "cancel", "narrow_scope"],
+    "ttl_seconds": 300,
+    "granularity": {
+        "engine": "sfincs",
+        "resolution_param": "grid_resolution_m",
+        "suggested_resolution_m": 30.0,
+        "resolution_choices": [10.0, 30.0, 60.0, 120.0],
+        "estimated_active_cells": 46000,
+        "estimated_solve_seconds": 70.0,
+        "vcpus": 8,
+        "compute_class": "local",
+        "cell_cap": 2000000,
+        "coarsened": False,
+        "reason": "30 m keeps the AOI under the cell cap.",
+        "spot_label": None,
+    },
+    "time_scale": {
+        "cadence_param": "output_interval_min",
+        "suggested_interval_min": 5.0,
+        "interval_choices": [5.0, 10.0, 15.0],
+        "duration_param": "duration_hr",
+        "suggested_duration_hr": 6.0,
+        "estimated_frame_count": 72,
+        "max_frames": 144,
+        "min_interval_min": 1.0,
+        "is_coastal": True,
+        "reason": "Coastal surge: 5-min frames animate the wave roll-in.",
+    },
+}
+
+# The hard-cap variant: "proceed" is OMITTED from options (contract: the agent
+# removes it above HARD_CAP_MB_DEFAULT).
+PAYLOAD_WARNING_HARDCAP_ROW: dict[str, Any] = dict(
+    PAYLOAD_WARNING_ROW,
+    warning_id="01STUBWARNINGHARDCAPAAAAAA",
+    estimated_mb=400.0,
+    options=["cancel", "narrow_scope"],
+)
+
+# case-list rows (CaseSummary subset the plugin's case picker consumes).
+CASE_LIST_ROWS: list[dict[str, Any]] = [
+    {
+        "schema_version": "v1",
+        "case_id": "01STUBCASELISTAAAAAAAAAAAA",
+        "title": "Asheville flood",
+        "created_at": "2026-07-01T00:00:00Z",
+        "updated_at": "2026-07-06T12:00:00Z",
+        "status": "active",
+        "bbox": [-82.6, 35.55, -82.5, 35.65],
+    },
+    {
+        "schema_version": "v1",
+        "case_id": "01STUBCASELISTBBBBBBBBBBBB",
+        "title": "Tampa surge",
+        "created_at": "2026-06-20T00:00:00Z",
+        "updated_at": "2026-06-21T09:30:00Z",
+        "status": "archived",
+        "bbox": None,
+    },
+]
+
 
 class StubAgentServer:
     """Threaded stub agent. ``start()`` binds an ephemeral port; ``stop()``
@@ -89,6 +178,9 @@ class StubAgentServer:
         self.port: Optional[int] = None
         self.received: list[dict] = []
         self.paths: list[str] = []
+        self.connection_count = 0
+        self.resume_case_ids: list[Optional[str]] = []  # session-resume payloads
+        self.confirmations: list[dict] = []  # tool-payload-confirmation payloads
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._ready = threading.Event()
@@ -126,6 +218,7 @@ class StubAgentServer:
     # -- protocol ------------------------------------------------------------ #
 
     async def _handler(self, ws) -> None:
+        self.connection_count += 1
         try:
             self.paths.append(ws.request.path)
         except AttributeError:  # older websockets API fallback
@@ -164,10 +257,13 @@ class StubAgentServer:
             elif etype == "session-resume":
                 # Real server interleaves housekeeping before session-state;
                 # emit a case-list first so the client's drain is exercised.
-                await send("case-list", {"cases": []})
+                resume_case_id = (env.get("payload") or {}).get("case_id")
+                self.resume_case_ids.append(resume_case_id)
+                await send("case-list", {"cases": CASE_LIST_ROWS})
                 await send(
                     "session-state",
                     {"chat_history": [], "loaded_layers": [], "pipeline_history": []},
+                    case_id=resume_case_id,
                 )
             elif etype == "case-command":
                 payload = env.get("payload") or {}
@@ -186,6 +282,25 @@ class StubAgentServer:
                     )
             elif etype == "user-message":
                 case_id = env.get("case_id")
+                text = str((env.get("payload") or {}).get("text") or "")
+                if "drop-connection" in text:
+                    # Simulate a transport loss mid-turn: close server-side,
+                    # NO turn-complete. The serve loop keeps accepting.
+                    # (1006 is reserved/unsendable; 1011 = server error.)
+                    await ws.close(code=1011, reason="stub drop")
+                    return
+                if "simulate" in text:
+                    # Gate the "solve" behind a payload warning; the turn
+                    # continues only on the matching confirmation (handled in
+                    # the tool-payload-confirmation branch below).
+                    row = (
+                        PAYLOAD_WARNING_HARDCAP_ROW
+                        if "hardcap" in text
+                        else PAYLOAD_WARNING_ROW
+                    )
+                    self._pending_gate_case = case_id
+                    await send("tool-payload-warning", row, case_id=case_id)
+                    continue
                 await send(
                     "pipeline-state",
                     {
@@ -242,5 +357,28 @@ class StubAgentServer:
                     case_id=case_id,
                 )
                 await send("turn-complete", {}, case_id=case_id)
+            elif etype == "tool-payload-confirmation":
+                payload = env.get("payload") or {}
+                self.confirmations.append(payload)
+                gate_case = getattr(self, "_pending_gate_case", None)
+                decision = payload.get("decision")
+                if decision == "cancel":
+                    await send(
+                        "turn-complete", {"cancelled": True}, case_id=gate_case
+                    )
+                else:
+                    revised = payload.get("revised_args") or {}
+                    resolution = revised.get("grid_resolution_m", 30.0)
+                    await send(
+                        "agent-message-chunk",
+                        {
+                            "message_id": "m-gate",
+                            "delta": f"Starting the run at {resolution:g} m.",
+                            "done": True,
+                        },
+                        case_id=gate_case,
+                    )
+                    await send("turn-complete", {}, case_id=gate_case)
+
             elif etype == "cancel":
                 await send("turn-complete", {"cancelled": True}, case_id=env.get("case_id"))

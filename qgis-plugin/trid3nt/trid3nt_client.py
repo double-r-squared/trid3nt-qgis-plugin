@@ -41,6 +41,7 @@ import base64
 import hashlib
 import json
 import os
+import random
 import socket
 import ssl as ssl_module
 import struct
@@ -54,15 +55,21 @@ from typing import Any, Callable, Optional
 __all__ = [
     "AgentClient",
     "AgentEvent",
+    "CaseInfo",
     "ConnectionClosed",
     "HandshakeFailed",
     "LayerEvent",
+    "OUTBOUND_QUEUE_MAX",
     "PipelineStep",
+    "RECONNECT_FLOOR_MS",
+    "RECONNECT_MAX_MS",
     "WebSocketConnection",
     "WebSocketError",
     "build_ws_url",
     "make_envelope",
     "new_ulid",
+    "next_backoff",
+    "parse_case_list",
     "parse_layer_events",
     "parse_pipeline_steps",
     "qgis_xyz_uri",
@@ -241,6 +248,89 @@ def parse_pipeline_steps(pipeline_state_payload: dict) -> list[PipelineStep]:
             )
         )
     return steps
+
+
+# --------------------------------------------------------------------------- #
+# Case-list parsing (pure)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class CaseInfo:
+    """One row of the ``case-list`` envelope (subset of ``CaseSummary`` the
+    dock's case picker renders)."""
+
+    case_id: str
+    title: str
+    status: str = "active"
+    updated_at: str = ""
+    bbox: Optional[list] = None  # [lon_min, lat_min, lon_max, lat_max]
+    raw: dict = field(default_factory=dict)
+
+
+def parse_case_list(payload: dict) -> list[CaseInfo]:
+    """Parse ``case-list.cases`` rows into ``CaseInfo``s (defensive: bad rows
+    are skipped, never raised on)."""
+    cases: list[CaseInfo] = []
+    rows = payload.get("cases") or []
+    if not isinstance(rows, list):
+        return cases
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        case_id = row.get("case_id")
+        if not isinstance(case_id, str) or not case_id:
+            continue
+        bbox = row.get("bbox")
+        if not (
+            isinstance(bbox, list)
+            and len(bbox) == 4
+            and all(isinstance(v, (int, float)) for v in bbox)
+        ):
+            bbox = None
+        cases.append(
+            CaseInfo(
+                case_id=case_id,
+                title=str(row.get("title") or case_id),
+                status=str(row.get("status") or "active"),
+                updated_at=str(row.get("updated_at") or ""),
+                bbox=bbox,
+                raw=row,
+            )
+        )
+    return cases
+
+
+# --------------------------------------------------------------------------- #
+# Reconnect backoff (pure) -- mirrors the web client (ws.ts)
+# --------------------------------------------------------------------------- #
+
+#: Backoff FLOOR (ms): the first reconnect after a drop waits at least this
+#: long (web BUG 1b raised it from 500 to 1500 to stop reconnect storms).
+RECONNECT_FLOOR_MS = 1500
+#: Backoff CEILING (ms): the doubling ladder caps here.
+RECONNECT_MAX_MS = 5000
+
+#: Outbound-queue bound (web ws.ts sendOrQueue MAX_QUEUE): beyond this the
+#: OLDEST frames are dropped first (keep the most recent intent).
+OUTBOUND_QUEUE_MAX = 50
+
+
+def next_backoff(
+    base_ms: int,
+    rng: Callable[[], float] = random.random,
+) -> tuple[int, int]:
+    """One rung of the web client's capped-jitter reconnect ladder.
+
+    Returns ``(delay_ms, next_base_ms)``: the actual wait is jittered within
+    ``[0.5, 1.0) * base`` (up to 50 percent earlier, never later) and the base
+    DOUBLES toward ``RECONNECT_MAX_MS``. Reset the base to
+    ``RECONNECT_FLOOR_MS`` after a successful open (as the web does).
+    """
+    base = max(int(base_ms), 1)
+    jitter_factor = 0.5 + 0.5 * rng()
+    delay = int(round(base * jitter_factor))
+    return delay, min(base * 2, RECONNECT_MAX_MS)
 
 
 # --------------------------------------------------------------------------- #
@@ -562,7 +652,8 @@ class AgentEvent:
       error           raw error payload (error_code, message, ...)
       turn-complete   raw payload
       case-open       raw payload
-      payload-warning raw payload (milestone 2 renders the gate card)
+      payload-warning raw payload (the dock renders the gate card; see gate.py)
+      case-list       {"cases": [CaseInfo, ...], "payload": <raw>}
       raw             {"type": <envelope type>, "payload": <raw>}
     """
 
@@ -597,7 +688,14 @@ class AgentClient:
         self.is_anonymous: Optional[bool] = None
         self.case_id: Optional[str] = None
         self.last_session_state: Optional[dict] = None
+        #: True between a completed handshake and the next transport loss.
+        self.connected = False
         self._ws: Optional[WebSocketConnection] = None
+        # Outbound intent queue (web sendOrQueue): pre-serialized frames
+        # buffered while disconnected, flushed FIFO after the resume
+        # handshake. Bounded; OLDEST dropped first.
+        self._outbound_queue: list[str] = []
+        self._queue_lock = threading.Lock()
 
     # -- lifecycle ---------------------------------------------------------- #
 
@@ -610,7 +708,17 @@ class AgentClient:
 
         Returns the resolved ``user_id``. Raises ``HandshakeFailed`` /
         ``ConnectionClosed`` on any failure.
+
+        RECONNECT semantics (milestone 2): the SAME ``session_id`` is reused,
+        the sticky ``anonymous_user_id`` re-binds the same local User record,
+        and ``session-resume`` carries the current ``case_id`` so the server
+        RE-BINDS its active-Case pointer and replays that Case's layers
+        (contract ``SessionResumePayload.case_id``, job-CASE-AUTHORITY).
+        Queued outbound frames are flushed FIFO once the handshake completes.
         """
+        self.connected = False
+        if self._ws is not None:
+            self._ws.close()
         self._ws = WebSocketConnection(self.ws_url, connect_timeout=self.connect_timeout)
         self._ws.connect()
         self._send(
@@ -624,22 +732,44 @@ class AgentClient:
             raise HandshakeFailed(f"auth-ack without user_id: {payload!r}")
         self.user_id = user_id
         self.is_anonymous = bool(payload.get("is_anonymous", not self.token))
+        if self.is_anonymous:
+            # Sticky-anonymous: replay the server-assigned id on the next
+            # connect so the SAME local User record re-binds (web mirror).
+            self.anonymous_user_id = user_id
 
-        self._send("session-resume", {"case_id": None})
+        self._send("session-resume", {"case_id": self.case_id})
         state = self._wait_for("session-state")
         self.last_session_state = state.get("payload") or {}
+        self.connected = True
+        self._flush_outbound_queue()
         return user_id
 
+    def reconnect(self) -> str:
+        """Re-dial after a transport loss (same session + case; see
+        ``connect``). The caller owns the backoff cadence."""
+        return self.connect()
+
     def close(self) -> None:
+        self.connected = False
         if self._ws is not None:
             self._ws.close()
             self._ws = None
 
     # -- protocol verbs ------------------------------------------------------ #
 
-    def create_case(self, title: str) -> str:
-        """Create a fresh case; returns its case_id."""
-        self._send("case-command", {"command": "create", "args": {"title": title}})
+    def create_case(self, title: str, bbox: Optional[list] = None) -> str:
+        """Create a fresh case; returns its case_id.
+
+        ``bbox`` (optional) is the #170 AOI-first extent
+        ``[lon_min, lat_min, lon_max, lat_max]`` (EPSG:4326): the agent seeds
+        ``CaseSummary.bbox`` + ``state.case_bbox`` from ``args.bbox`` so the
+        FIRST turn's ``_turn_case_bbox`` returns the user's extent (exact web
+        mirror: useCases.ts createCase includes ``bbox`` only when supplied).
+        """
+        args: dict = {"title": title}
+        if bbox is not None:
+            args["bbox"] = list(bbox)
+        self._send("case-command", {"command": "create", "args": args})
         deadline = time.monotonic() + self.handshake_timeout
         while True:
             env = self._wait_for("case-open", deadline=deadline)
@@ -658,16 +788,35 @@ class AgentClient:
             "user-message",
             {"text": text, "case_id": self.case_id},
             case_id=self.case_id,
+            queue_if_closed=True,
         )
 
     def cancel(self, reason: str = "user-cancel") -> None:
-        self._send("cancel", {"reason": reason}, case_id=self.case_id)
+        self._send(
+            "cancel", {"reason": reason}, case_id=self.case_id, queue_if_closed=True
+        )
 
-    def confirm_payload(self, warning_id: str, decision: str = "proceed") -> None:
-        """Answer a ``tool-payload-warning`` gate (milestone 2 UI)."""
+    def confirm_payload(
+        self,
+        warning_id: str,
+        decision: str = "proceed",
+        revised_args: Optional[dict] = None,
+    ) -> None:
+        """Answer a ``tool-payload-warning`` gate (milestone 2 gate card).
+
+        Contract cross-rule (``PayloadConfirmationEnvelopePayload``):
+        ``narrow_scope`` REQUIRES a ``revised_args`` dict (may be empty);
+        ``proceed`` / ``cancel`` MUST send ``revised_args = None``. Enforced
+        here so a UI slip can never emit an envelope the agent rejects.
+        """
+        if decision == "narrow_scope":
+            revised: Optional[dict] = revised_args if isinstance(revised_args, dict) else {}
+        else:
+            revised = None
         self._send(
             "tool-payload-confirmation",
-            {"warning_id": warning_id, "decision": decision, "revised_args": None},
+            {"warning_id": warning_id, "decision": decision, "revised_args": revised},
+            queue_if_closed=True,
         )
 
     # -- event pump ---------------------------------------------------------- #
@@ -723,6 +872,10 @@ class AgentClient:
             return AgentEvent("case-open", payload)
         if etype == "tool-payload-warning":
             return AgentEvent("payload-warning", payload)
+        if etype == "case-list":
+            return AgentEvent(
+                "case-list", {"cases": parse_case_list(payload), "payload": payload}
+            )
         return AgentEvent("raw", {"type": etype, "payload": payload})
 
     def run_forever(
@@ -740,16 +893,75 @@ class AgentClient:
 
     # -- internals ------------------------------------------------------------ #
 
-    def _send(self, type_: str, payload: dict, case_id: Optional[str] = None) -> None:
+    def _send(
+        self,
+        type_: str,
+        payload: dict,
+        case_id: Optional[str] = None,
+        queue_if_closed: bool = False,
+    ) -> None:
+        """Send an envelope, or buffer it when disconnected.
+
+        ``queue_if_closed`` mirrors the web's ``sendOrQueue``: user-intent
+        verbs (chat / cancel / gate confirmations) issued while the socket is
+        down are pre-serialized and buffered (bounded ``OUTBOUND_QUEUE_MAX``,
+        OLDEST dropped first) instead of raising, then flushed FIFO after the
+        next resume handshake. Handshake verbs keep the raise-on-closed
+        behaviour -- queueing an auth-token would be nonsense.
+        """
+        env = make_envelope(type_, self.session_id, payload, case_id=case_id)
+        raw = json.dumps(env)
+        if queue_if_closed and (not self.connected or self._ws is None):
+            self._enqueue(raw)
+            return
         if self._ws is None:
             raise ConnectionClosed(reason="not connected")
-        env = make_envelope(type_, self.session_id, payload, case_id=case_id)
-        self._ws.send_text(json.dumps(env))
+        try:
+            self._ws.send_text(raw)
+        except ConnectionClosed:
+            self.connected = False
+            if queue_if_closed:
+                # The transport died under the send: keep the user's intent.
+                self._enqueue(raw)
+                return
+            raise
+
+    def _enqueue(self, raw: str) -> None:
+        with self._queue_lock:
+            self._outbound_queue.append(raw)
+            if len(self._outbound_queue) > OUTBOUND_QUEUE_MAX:
+                del self._outbound_queue[: len(self._outbound_queue) - OUTBOUND_QUEUE_MAX]
+
+    def _flush_outbound_queue(self) -> None:
+        """FIFO-flush buffered intent frames after a resume handshake. If the
+        socket dies mid-flush the unsent remainder is re-buffered (frame
+        included) and the failure propagates to the reconnect loop."""
+        with self._queue_lock:
+            pending, self._outbound_queue = self._outbound_queue, []
+        for i, raw in enumerate(pending):
+            try:
+                if self._ws is None:
+                    raise ConnectionClosed(reason="not connected")
+                self._ws.send_text(raw)
+            except ConnectionClosed:
+                self.connected = False
+                with self._queue_lock:
+                    self._outbound_queue = pending[i:] + self._outbound_queue
+                raise
+
+    @property
+    def queued_outbound(self) -> int:
+        with self._queue_lock:
+            return len(self._outbound_queue)
 
     def _recv(self, timeout: float) -> Optional[str]:
         if self._ws is None:
             raise ConnectionClosed(reason="not connected")
-        return self._ws.recv(timeout=timeout)
+        try:
+            return self._ws.recv(timeout=timeout)
+        except ConnectionClosed:
+            self.connected = False
+            raise
 
     def _wait_for(self, etype: str, deadline: Optional[float] = None) -> dict:
         """Drain frames until one of ``etype`` arrives (handshake helper).

@@ -1,0 +1,537 @@
+"""Milestone 2 tests -- gate card logic, canvas AOI, reconnect, case list,
+case export. No QGIS required (Qt widgets excluded, as in milestone 1).
+
+Run via ``make test`` from qgis-plugin/ (the stub server needs ``websockets``;
+everything under test is pure stdlib).
+"""
+
+from __future__ import annotations
+
+import http.server
+import json
+import os
+import sqlite3
+import sys
+import tempfile
+import threading
+import time
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "trid3nt"))
+sys.path.insert(0, os.path.dirname(__file__))
+
+import aoi  # noqa: E402
+import case_export  # noqa: E402
+import gate  # noqa: E402
+import trid3nt_client as tc  # noqa: E402
+from stub_server import (  # noqa: E402
+    CASE_LIST_ROWS,
+    PAYLOAD_WARNING_HARDCAP_ROW,
+    PAYLOAD_WARNING_ROW,
+    STUB_WARNING_ID,
+    StubAgentServer,
+)
+
+
+# --------------------------------------------------------------------------- #
+# Gate logic (pure)
+# --------------------------------------------------------------------------- #
+
+
+class TestGateParsing(unittest.TestCase):
+    def test_parse_payload_warning_fields(self):
+        w = gate.parse_payload_warning(PAYLOAD_WARNING_ROW)
+        self.assertEqual(w.warning_id, STUB_WARNING_ID)
+        self.assertEqual(w.tool_name, "run_sfincs_simulation")
+        self.assertEqual(w.estimated_mb, 48.0)
+        self.assertEqual(w.threshold_mb, 25.0)
+        self.assertTrue(w.can_proceed)
+        self.assertTrue(w.can_narrow)
+        self.assertEqual(w.resolution_choices, [10.0, 30.0, 60.0, 120.0])
+        self.assertEqual(w.suggested_resolution_m, 30.0)
+        self.assertEqual(w.alternative_args, {"grid_resolution_m": 60.0})
+        self.assertIsNotNone(w.time_scale)
+        # Malformed: no warning_id -> unusable
+        self.assertIsNone(gate.parse_payload_warning({"tool_name": "x"}))
+        self.assertIsNone(gate.parse_payload_warning("not-a-dict"))
+
+    def test_hardcap_removes_proceed(self):
+        w = gate.parse_payload_warning(PAYLOAD_WARNING_HARDCAP_ROW)
+        self.assertFalse(w.can_proceed)
+        self.assertTrue(w.can_narrow)
+        # summary carries the honest hard-cap line
+        self.assertTrue(any("Hard cap" in line for line in gate.summary_lines(w)))
+
+    def test_resolve_gate_decision_rules(self):
+        w = gate.parse_payload_warning(PAYLOAD_WARNING_ROW)
+        # unchanged rung -> proceed, revised None (web ResolutionPickerCard rule)
+        d = gate.resolve_gate_decision(w, chosen_resolution_m=30.0)
+        self.assertEqual((d.decision, d.revised_args), ("proceed", None))
+        # changed rung -> narrow_scope with the EXACT resolution_param key
+        d = gate.resolve_gate_decision(w, chosen_resolution_m=60.0)
+        self.assertEqual(d.decision, "narrow_scope")
+        self.assertEqual(d.revised_args, {"grid_resolution_m": 60.0})
+        # changed cadence + duration merge into the SAME revised dict
+        d = gate.resolve_gate_decision(
+            w, chosen_resolution_m=60.0, interval_min=10.0, duration_hr=12.0
+        )
+        self.assertEqual(
+            d.revised_args,
+            {"grid_resolution_m": 60.0, "output_interval_min": 10.0, "duration_hr": 12.0},
+        )
+        # cancel wins
+        d = gate.resolve_gate_decision(w, cancel=True, chosen_resolution_m=60.0)
+        self.assertEqual((d.decision, d.revised_args), ("cancel", None))
+        # interval below the deck floor is re-floored (min_interval_min=1.0)
+        d = gate.resolve_gate_decision(w, interval_min=0.5)
+        self.assertEqual(d.revised_args, {"output_interval_min": 1.0})
+
+    def test_resolve_gate_decision_hardcap(self):
+        w = gate.parse_payload_warning(PAYLOAD_WARNING_HARDCAP_ROW)
+        # unchanged -> REFUSED (proceed not offered), honest note
+        d = gate.resolve_gate_decision(w, chosen_resolution_m=30.0)
+        self.assertIsNone(d.decision)
+        self.assertIn("hard cap", d.note)
+        # coarser rung -> narrow_scope allowed
+        d = gate.resolve_gate_decision(w, chosen_resolution_m=120.0)
+        self.assertEqual(d.decision, "narrow_scope")
+        self.assertEqual(d.revised_args, {"grid_resolution_m": 120.0})
+
+    def test_estimates_mirror_web_math(self):
+        g = PAYLOAD_WARNING_ROW["granularity"]
+        # same rung -> authoritative numbers unchanged
+        self.assertEqual(gate.estimate_cells(g, 30.0), 46000)
+        self.assertAlmostEqual(gate.estimate_eta_seconds(g, 30.0), 70.0)
+        # coarser (60 m): cells scale by (30/60)^2 = 1/4
+        self.assertEqual(gate.estimate_cells(g, 60.0), 11500)
+        self.assertAlmostEqual(gate.estimate_eta_seconds(g, 60.0), 17.5)
+        # frames: duration_hr*60/interval clamped to [1, max_frames]
+        ts = PAYLOAD_WARNING_ROW["time_scale"]
+        self.assertEqual(gate.estimate_frames(ts, 5.0, 6.0), 72)
+        self.assertEqual(gate.estimate_frames(ts, 1.0, 24.0), 144)  # capped
+        self.assertEqual(gate.estimate_frames(ts, 0.25, 6.0), 144)  # floored at 1 min
+
+
+class TestGateRoundTrip(unittest.TestCase):
+    """confirm_payload round trips against the stub's gated 'simulate' turn."""
+
+    def setUp(self):
+        self.server = StubAgentServer()
+        self.server.start()
+        self.addCleanup(self.server.stop)
+        self.client = tc.AgentClient(self.server.url)
+        self.addCleanup(self.client.close)
+        self.client.connect()
+        self.client.create_case("gate test")
+
+    def _await_kind(self, kind, deadline_s=10.0):
+        deadline = time.monotonic() + deadline_s
+        while time.monotonic() < deadline:
+            ev = self.client.next_event(timeout=1.0)
+            if ev is not None and ev.kind == kind:
+                return ev
+        self.fail(f"no {kind!r} event within {deadline_s}s")
+
+    def test_proceed_round_trip(self):
+        self.client.send_chat("simulate a flood here")
+        warning = self._await_kind("payload-warning")
+        parsed = gate.parse_payload_warning(warning.data)
+        self.assertEqual(parsed.warning_id, STUB_WARNING_ID)
+        # sim must NOT have started: no chunk before the confirmation
+        self.client.confirm_payload(parsed.warning_id, "proceed")
+        chunk = self._await_kind("chunk")
+        self.assertEqual(chunk.data["delta"], "Starting the run at 30 m.")
+        self._await_kind("turn-complete")
+        conf = self.server.confirmations[-1]
+        self.assertEqual(conf["warning_id"], STUB_WARNING_ID)
+        self.assertEqual(conf["decision"], "proceed")
+        self.assertIsNone(conf["revised_args"])  # contract cross-rule
+
+    def test_cancel_round_trip(self):
+        self.client.send_chat("simulate a flood here")
+        warning = self._await_kind("payload-warning")
+        self.client.confirm_payload(warning.data["warning_id"], "cancel")
+        done = self._await_kind("turn-complete")
+        self.assertTrue(done.data.get("cancelled"))
+        conf = self.server.confirmations[-1]
+        self.assertEqual(conf["decision"], "cancel")
+        self.assertIsNone(conf["revised_args"])
+
+    def test_narrow_scope_round_trip_carries_revised_args(self):
+        self.client.send_chat("simulate a flood here")
+        warning = self._await_kind("payload-warning")
+        parsed = gate.parse_payload_warning(warning.data)
+        decision = gate.resolve_gate_decision(parsed, chosen_resolution_m=60.0)
+        self.client.confirm_payload(
+            parsed.warning_id, decision.decision, decision.revised_args
+        )
+        chunk = self._await_kind("chunk")
+        self.assertEqual(chunk.data["delta"], "Starting the run at 60 m.")
+        conf = self.server.confirmations[-1]
+        self.assertEqual(conf["decision"], "narrow_scope")
+        self.assertEqual(conf["revised_args"], {"grid_resolution_m": 60.0})
+
+
+# --------------------------------------------------------------------------- #
+# Canvas AOI (pure)
+# --------------------------------------------------------------------------- #
+
+
+class TestAoi(unittest.TestCase):
+    def test_merc_to_lonlat(self):
+        lon, lat = aoi.merc_to_lonlat(0.0, 0.0)
+        self.assertAlmostEqual(lon, 0.0)
+        self.assertAlmostEqual(lat, 0.0)
+        lon, lat = aoi.merc_to_lonlat(20037508.342789244, 0.0)
+        self.assertAlmostEqual(lon, 180.0, places=6)
+        # Asheville-ish sanity point
+        lon, lat = aoi.merc_to_lonlat(-9190000.0, 4241000.0)
+        self.assertAlmostEqual(lon, -82.556, places=2)
+        self.assertAlmostEqual(lat, 35.566, places=2)
+
+    def test_extent_to_bbox4326(self):
+        # 4326 passthrough
+        self.assertEqual(
+            aoi.extent_to_bbox4326(-82.6, 35.5, -82.5, 35.6, "EPSG:4326"),
+            (-82.6, 35.5, -82.5, 35.6),
+        )
+        # 3857 conversion (web-mercator canvas, the QGIS default with OSM tiles)
+        bbox = aoi.extent_to_bbox4326(
+            -9196000.0, 4238000.0, -9185000.0, 4249000.0, "EPSG:3857"
+        )
+        self.assertIsNotNone(bbox)
+        self.assertAlmostEqual(bbox[0], -82.610, places=2)
+        self.assertAlmostEqual(bbox[2], -82.512, places=2)
+        self.assertTrue(35.4 < bbox[1] < bbox[3] < 35.8)
+        # unknown CRS -> None (caller falls back to QgsCoordinateTransform)
+        self.assertIsNone(aoi.extent_to_bbox4326(0, 0, 1000, 1000, "EPSG:26917"))
+        # degenerate / non-finite -> None, never a fabricated bbox
+        self.assertIsNone(aoi.extent_to_bbox4326(1, 1, 1, 1, "EPSG:4326"))
+        self.assertIsNone(
+            aoi.extent_to_bbox4326(float("nan"), 0, 1, 1, "EPSG:4326")
+        )
+
+    def test_two_deg_guard(self):
+        small = (-82.6, 35.5, -82.5, 35.6)
+        self.assertTrue(aoi.bbox_within_guard(small))
+        # exactly 2.0 deg is still allowed ("exceeds" the guard means >)
+        edge = (-83.0, 35.0, -81.0, 37.0)
+        self.assertTrue(aoi.bbox_within_guard(edge))
+        wide = (-85.0, 35.0, -80.0, 36.0)  # 5 deg lon
+        self.assertFalse(aoi.bbox_within_guard(wide))
+        tall = (-82.0, 30.0, -81.0, 36.0)  # 6 deg lat
+        self.assertFalse(aoi.bbox_within_guard(tall))
+
+    def test_attach_and_status_text(self):
+        bbox = (-82.62, 35.55, -82.50, 35.64)
+        attached = aoi.attach_aoi_to_text("Fetch a DEM here", bbox)
+        self.assertTrue(attached.startswith("Fetch a DEM here\n\n["))
+        # the exact structured shape survives verbatim in the context line
+        self.assertIn(
+            "bbox = [-82.620000, 35.550000, -82.500000, 35.640000]", attached
+        )
+        self.assertIn("EPSG:4326", attached)
+        # status line formats
+        self.assertEqual(
+            aoi.aoi_status_text(bbox, True), "AOI: canvas 0.12 x 0.09 deg"
+        )
+        self.assertEqual(aoi.aoi_status_text(bbox, False), "AOI: off")
+        self.assertIn("unavailable", aoi.aoi_status_text(None, True))
+        wide = (-85.0, 35.0, -80.0, 36.0)
+        status = aoi.aoi_status_text(wide, True)
+        self.assertIn("too large", status)
+        self.assertIn("sent without AOI", status)
+
+    def test_create_case_sends_aoi_first_bbox(self):
+        """The #170 AOI-first mirror: args.bbox on case-command create."""
+        server = StubAgentServer()
+        server.start()
+        self.addCleanup(server.stop)
+        client = tc.AgentClient(server.url)
+        self.addCleanup(client.close)
+        client.connect()
+        client.create_case("aoi case", bbox=[-82.6, 35.5, -82.5, 35.6])
+        create = [e for e in server.received if e["type"] == "case-command"][0]
+        self.assertEqual(create["payload"]["command"], "create")
+        self.assertEqual(
+            create["payload"]["args"]["bbox"], [-82.6, 35.5, -82.5, 35.6]
+        )
+        # no bbox -> args carries no bbox key (byte-identical legacy path)
+        client2 = tc.AgentClient(server.url)
+        self.addCleanup(client2.close)
+        client2.connect()
+        client2.create_case("no aoi case")
+        create2 = [e for e in server.received if e["type"] == "case-command"][-1]
+        self.assertNotIn("bbox", create2["payload"]["args"])
+
+
+# --------------------------------------------------------------------------- #
+# Reconnect + outbound queue
+# --------------------------------------------------------------------------- #
+
+
+class TestBackoff(unittest.TestCase):
+    def test_next_backoff_ladder(self):
+        # deterministic rng: factor = 0.5 + 0.5*rng()
+        delay, nxt = tc.next_backoff(1500, rng=lambda: 0.0)
+        self.assertEqual(delay, 750)  # 0.5 x base (max jitter, earliest retry)
+        self.assertEqual(nxt, 3000)  # doubles
+        delay, nxt = tc.next_backoff(3000, rng=lambda: 0.999999)
+        self.assertLessEqual(delay, 3000)  # never later than base
+        self.assertGreater(delay, 2990)
+        self.assertEqual(nxt, 5000)  # capped at RECONNECT_MAX_MS
+        _, nxt = tc.next_backoff(5000, rng=lambda: 0.5)
+        self.assertEqual(nxt, 5000)  # stays at the ceiling
+        self.assertEqual(tc.RECONNECT_FLOOR_MS, 1500)
+        self.assertEqual(tc.RECONNECT_MAX_MS, 5000)
+
+
+class TestReconnect(unittest.TestCase):
+    def setUp(self):
+        self.server = StubAgentServer()
+        self.server.start()
+        self.addCleanup(self.server.stop)
+        self.client = tc.AgentClient(self.server.url)
+        self.addCleanup(self.client.close)
+        self.client.connect()
+        self.client.create_case("reconnect test")
+
+    def _drain_until_closed(self, deadline_s=10.0):
+        deadline = time.monotonic() + deadline_s
+        while time.monotonic() < deadline:
+            try:
+                self.client.next_event(timeout=1.0)
+            except tc.ConnectionClosed:
+                return
+        self.fail("socket never closed")
+
+    def test_resume_rebinds_case_and_flushes_queue(self):
+        session_id = self.client.session_id
+        # Server drops the connection mid-turn.
+        self.client.send_chat("please drop-connection now")
+        self._drain_until_closed()
+        self.assertFalse(self.client.connected)
+
+        # Intent issued while down QUEUES instead of raising (sendOrQueue).
+        self.client.send_chat("queued while offline")
+        self.client.cancel(reason="queued-cancel")
+        self.assertEqual(self.client.queued_outbound, 2)
+
+        self.client.reconnect()
+        self.assertTrue(self.client.connected)
+        self.assertEqual(self.client.queued_outbound, 0)
+        # Same session resumed; session-resume carried the ACTIVE case_id
+        # (SessionResumePayload.case_id, job-CASE-AUTHORITY).
+        self.assertEqual(self.client.session_id, session_id)
+        self.assertEqual(self.server.connection_count, 2)
+        self.assertEqual(self.server.resume_case_ids[0], None)
+        self.assertEqual(self.server.resume_case_ids[1], self.client.case_id)
+        # Queued frames flushed FIFO after the handshake. The flush is sent
+        # before reconnect() returns but the stub INGESTS asynchronously --
+        # wait for both frames to land.
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            if sum(1 for e in self.server.received if e["type"] == "cancel"):
+                break
+            time.sleep(0.05)
+        types = [e["type"] for e in self.server.received]
+        resume2 = [i for i, t in enumerate(types) if t == "session-resume"][1]
+        flushed = types[resume2 + 1: resume2 + 3]
+        self.assertEqual(flushed, ["user-message", "cancel"])
+        flushed_msg = [
+            e for e in self.server.received if e["type"] == "user-message"
+        ][-1]
+        self.assertEqual(flushed_msg["payload"]["text"], "queued while offline")
+
+    def test_sticky_anonymous_user_replayed_on_reconnect(self):
+        self.client.send_chat("drop-connection")
+        self._drain_until_closed()
+        self.client.reconnect()
+        auth_frames = [e for e in self.server.received if e["type"] == "auth-token"]
+        self.assertEqual(len(auth_frames), 2)
+        self.assertIsNone(auth_frames[0]["payload"]["anonymous_user_id"])
+        self.assertEqual(
+            auth_frames[1]["payload"]["anonymous_user_id"], self.client.user_id
+        )
+
+    def test_queue_bounded_50_drops_oldest(self):
+        self.client.send_chat("drop-connection")
+        self._drain_until_closed()
+        for i in range(55):
+            self.client.send_chat(f"msg-{i}")
+        self.assertEqual(self.client.queued_outbound, tc.OUTBOUND_QUEUE_MAX)
+        with self.client._queue_lock:
+            queued = [json.loads(raw) for raw in self.client._outbound_queue]
+        # OLDEST dropped first: msg-0..msg-4 gone, msg-5 is now the head.
+        self.assertEqual(queued[0]["payload"]["text"], "msg-5")
+        self.assertEqual(queued[-1]["payload"]["text"], "msg-54")
+
+
+# --------------------------------------------------------------------------- #
+# Case list
+# --------------------------------------------------------------------------- #
+
+
+class TestCaseList(unittest.TestCase):
+    def test_parse_case_list(self):
+        cases = tc.parse_case_list({"cases": CASE_LIST_ROWS})
+        self.assertEqual(len(cases), 2)
+        self.assertEqual(cases[0].case_id, "01STUBCASELISTAAAAAAAAAAAA")
+        self.assertEqual(cases[0].title, "Asheville flood")
+        self.assertEqual(cases[0].status, "active")
+        self.assertEqual(cases[0].bbox, [-82.6, 35.55, -82.5, 35.65])
+        self.assertEqual(cases[1].status, "archived")
+        self.assertIsNone(cases[1].bbox)
+        # defensive: malformed rows skipped, never raised on
+        cases = tc.parse_case_list(
+            {"cases": [None, {"title": "no id"}, {"case_id": ""}, 42,
+                       {"case_id": "OK1", "bbox": [1, 2, 3]}]}
+        )
+        self.assertEqual(len(cases), 1)
+        self.assertEqual(cases[0].case_id, "OK1")
+        self.assertIsNone(cases[0].bbox)  # wrong-length bbox dropped
+        self.assertEqual(tc.parse_case_list({"cases": "nope"}), [])
+
+    def test_case_list_event_surfaces_on_connect(self):
+        server = StubAgentServer()
+        server.start()
+        self.addCleanup(server.stop)
+        client = tc.AgentClient(server.url)
+        self.addCleanup(client.close)
+        client.connect()
+        client.create_case("case-list test")
+        # Trigger a fresh emission cycle: the stub replies to session-resume
+        # with case-list first; ask for one more resume round.
+        client._send("session-resume", {"case_id": client.case_id})
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            ev = client.next_event(timeout=1.0)
+            if ev is not None and ev.kind == "case-list":
+                cases = ev.data["cases"]
+                self.assertEqual(len(cases), 2)
+                self.assertIsInstance(cases[0], tc.CaseInfo)
+                self.assertEqual(cases[1].title, "Tampa surge")
+                return
+        self.fail("no case-list event surfaced")
+
+
+# --------------------------------------------------------------------------- #
+# Case export (open case in QGIS)
+# --------------------------------------------------------------------------- #
+
+
+def _make_gpkg(path: str, tables: list) -> None:
+    """Minimal gpkg_contents so the pure sqlite3 listing works."""
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE gpkg_contents (table_name TEXT, data_type TEXT)"
+    )
+    for name, data_type in tables:
+        conn.execute(
+            "INSERT INTO gpkg_contents VALUES (?, ?)", (name, data_type)
+        )
+    conn.commit()
+    conn.close()
+
+
+class TestExportPlan(unittest.TestCase):
+    def test_plan_export_layers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            gpkg = os.path.join(tmp, "export.gpkg")
+            _make_gpkg(
+                gpkg,
+                [("buildings", "features"), ("rivers", "features"),
+                 ("style_notes", "attributes")],  # non-feature table excluded
+            )
+            for name in ("depth.tif", "dem.TIFF", "readme.txt"):
+                with open(os.path.join(tmp, name), "w") as f:
+                    f.write("x")
+            result = {
+                "status": "partial",
+                "qgz_path": os.path.join(tmp, "project.qgz"),
+                "gpkg_path": gpkg,
+                "exported_vector_count": 2,
+                "exported_raster_count": 2,
+                "skipped": [{"name": "Basemap", "reason": "tile template only"}],
+                "output_dir": tmp,
+            }
+            plan = case_export.plan_export_layers(result)
+            self.assertEqual(plan.gpkg_path, gpkg)
+            self.assertEqual(plan.vector_layers, ["buildings", "rivers"])
+            self.assertEqual(
+                [os.path.basename(p) for p in plan.raster_paths],
+                ["dem.TIFF", "depth.tif"],
+            )
+            self.assertEqual(
+                plan.notes, ["skipped 'Basemap': tile template only"]
+            )
+
+    def test_plan_export_layers_honest_on_missing_artifacts(self):
+        plan = case_export.plan_export_layers(
+            {
+                "status": "ok",
+                "gpkg_path": "/nonexistent/export.gpkg",
+                "exported_raster_count": 1,
+                "output_dir": "/nonexistent",
+                "skipped": [],
+            }
+        )
+        self.assertIsNone(plan.gpkg_path)
+        self.assertEqual(plan.raster_paths, [])
+        self.assertTrue(any("missing on disk" in n for n in plan.notes))
+        self.assertTrue(any("1 raster(s)" in n for n in plan.notes))
+
+
+class _ExportApiStub(http.server.BaseHTTPRequestHandler):
+    responses: dict = {}
+
+    def do_POST(self):  # noqa: N802
+        length = int(self.headers.get("Content-Length") or 0)
+        body = json.loads(self.rfile.read(length))
+        case_id = body.get("case_id")
+        status, payload = self.responses.get(
+            case_id, (404, {"error": f"no such case: {case_id}"})
+        )
+        raw = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def log_message(self, *args):  # silence
+        pass
+
+
+class TestExportApi(unittest.TestCase):
+    def setUp(self):
+        _ExportApiStub.responses = {
+            "01GOODCASE": (200, {"status": "ok", "qgz_path": "/x/project.qgz",
+                                 "gpkg_path": None, "exported_vector_count": 0,
+                                 "exported_raster_count": 1, "skipped": [],
+                                 "output_dir": "/x"}),
+            "01BADCASE": (404, {"error": "CASE_NOT_FOUND: no such case"}),
+        }
+        self.httpd = http.server.HTTPServer(("127.0.0.1", 0), _ExportApiStub)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.httpd.shutdown)
+        self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+
+    def test_post_export_case_ok(self):
+        result = case_export.post_export_case(self.base, "01GOODCASE", timeout=10)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["qgz_path"], "/x/project.qgz")
+
+    def test_post_export_case_typed_error_surfaces_verbatim(self):
+        with self.assertRaises(case_export.ExportRequestError) as ctx:
+            case_export.post_export_case(self.base, "01BADCASE", timeout=10)
+        self.assertIn("CASE_NOT_FOUND", str(ctx.exception))
+
+    def test_post_export_case_unreachable_is_honest(self):
+        with self.assertRaises(case_export.ExportRequestError) as ctx:
+            case_export.post_export_case("http://127.0.0.1:1", "X", timeout=2)
+        self.assertIn("unreachable", str(ctx.exception))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

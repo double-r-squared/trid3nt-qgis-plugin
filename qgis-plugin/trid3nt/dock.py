@@ -1,24 +1,43 @@
 """TRID3NT chat dock -- message list, input, status dot, settings.
 
-Milestone 1 chat surface (plain text bubbles):
+Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
 
-  * user + assistant bubbles (assistant streams in via agent-message-chunk)
-  * narration/pipeline-state frames render as small status lines under the
-    pending assistant bubble (replace-not-reconcile, like the web)
-  * layer materialization notes append as persistent status lines
-  * connection status dot + settings dialog (mode local/remote, URLs, token)
+  * GATE CARD: ``tool-payload-warning`` envelopes render as an inline Qt card
+    (title, the agent's honest numbers/recommendation, the #154 resolution
+    ladder when the envelope carries one, editable cadence/window when a
+    time_scale rides along) with Proceed / Cancel wired to
+    ``tool-payload-confirmation``. Sims never start without a click here
+    (user-controlled granularity, standing directive). Decision rules live in
+    the pure ``gate`` module (tested without Qt).
+  * CANVAS AOI: "Use map canvas as area of interest" toggle (default ON) --
+    the case is created with the canvas extent as ``args.bbox`` (#170
+    AOI-first) and every outgoing message carries the CURRENT extent as an
+    in-text context line (see ``aoi`` module docstring for why the wire
+    contract forbids a per-message field). >2 deg/side extents are honestly
+    dropped with a status note.
+  * RECONNECT: the bridge's capped-jitter ladder drives the status dot
+    (connecting amber / connected green / lost red); queued sends flush on
+    resume.
+  * OPEN CASE IN QGIS: a Cases dialog listing the ``case-list`` envelope,
+    with per-case "Open in QGIS" -> POST /api/export-qgis on the local agent,
+    then the exported GeoPackage tables + GeoTIFFs are ADDED to the current
+    project (never ``QgsProject.read()`` -- that would replace the user's
+    open project; rationale in ``case_export``).
 
 All socket work lives on the AgentBridge worker thread; this widget only
-handles Qt signals.
+handles Qt signals. The export POST runs on a plain worker thread emitting
+cross-thread signals (auto-queued by Qt).
 """
 
 from __future__ import annotations
 
 import datetime
-from typing import List, Optional
+import threading
+from typing import List, Optional, Tuple
 
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QObject, Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -28,6 +47,8 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -36,9 +57,10 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from . import aoi, case_export, gate
 from .layers import LayerMaterializer
 from .plugin_settings import MODE_LOCAL, MODE_REMOTE, PluginSettings
-from .trid3nt_client import PipelineStep
+from .trid3nt_client import CaseInfo, PipelineStep
 from .ws_bridge import AgentBridge
 
 # LLM bookkeeping step names the web also hides from the tool timeline.
@@ -63,10 +85,17 @@ _ASSISTANT_BUBBLE_STYLE = (
 )
 _STATUS_LINE_STYLE = "color: palette(mid); font-size: 8pt; padding-left: 4px;"
 _ERROR_LINE_STYLE = "color: #f85149; font-size: 8pt; padding-left: 4px;"
+# Amber caution frame for the gate card (mirrors the web's warning palette).
+_GATE_CARD_STYLE = (
+    "QFrame { border: 1px solid #d29922; border-radius: 8px; }"
+)
+_GATE_TITLE_STYLE = "color: #d29922; font-weight: bold; border: none;"
+_GATE_BODY_STYLE = "border: none; font-size: 9pt;"
+_GATE_NOTE_STYLE = "border: none; color: palette(mid); font-size: 8pt;"
 
 
 class SettingsDialog(QDialog):
-    """Mode local/remote, URLs, pasted token, MinIO endpoint."""
+    """Mode local/remote, URLs, pasted token, MinIO + export API endpoints."""
 
     def __init__(self, settings: PluginSettings, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -94,9 +123,14 @@ class SettingsDialog(QDialog):
         self.minio_edit = QLineEdit(settings.minio_endpoint)
         form.addRow("Local MinIO endpoint", self.minio_edit)
 
+        self.export_api_edit = QLineEdit(settings.export_api)
+        form.addRow("Local export API", self.export_api_edit)
+
         note = QLabel(
             "Local mode connects anonymously. Remote mode sends the pasted "
-            "token (?st= carrier + auth-token envelope). Reconnect to apply."
+            "token (?st= carrier + auth-token envelope). The export API is "
+            "the local agent's HTTP listener (Open case in QGIS). "
+            "Reconnect to apply."
         )
         note.setWordWrap(True)
         note.setStyleSheet(_STATUS_LINE_STYLE)
@@ -113,6 +147,7 @@ class SettingsDialog(QDialog):
         self._settings.remote_url = self.remote_url_edit.text()
         self._settings.token = self.token_edit.text()
         self._settings.minio_endpoint = self.minio_edit.text()
+        self._settings.export_api = self.export_api_edit.text()
         super().accept()
 
 
@@ -173,6 +208,266 @@ class _AssistantEntry:
         self.notes_area.addWidget(lbl)
 
 
+class GateCard(QFrame):
+    """Inline confirmation card for one ``tool-payload-warning``.
+
+    Renders the honest envelope numbers (tool, estimated vs threshold MB,
+    recommendation), the #154 granularity ladder when present (rung combo +
+    live cells/ETA recompute via the mirrored web math), editable cadence /
+    window when a ``time_scale`` rides along, and Proceed / Cancel. Decision
+    mapping (proceed / narrow_scope+revised_args / cancel) is delegated to
+    ``gate.resolve_gate_decision`` -- the exact web ResolutionPickerCard
+    rules. Once answered the card locks (no re-answer) and folds to a
+    one-line summary.
+    """
+
+    def __init__(self, warning: gate.PayloadWarning, on_decide, parent=None):
+        super().__init__(parent)
+        self._warning = warning
+        self._on_decide = on_decide
+        self._decided: Optional[str] = None
+        self.setStyleSheet(_GATE_CARD_STYLE)
+        self.setFrameShape(QFrame.StyledPanel)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setSpacing(3)
+
+        title = "Confirm run settings" if warning.granularity else "Large response expected"
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet(_GATE_TITLE_STYLE)
+        lay.addWidget(title_lbl)
+
+        for line in gate.summary_lines(warning):
+            lbl = QLabel(line)
+            lbl.setWordWrap(True)
+            lbl.setTextFormat(Qt.PlainText)
+            lbl.setStyleSheet(_GATE_BODY_STYLE)
+            lay.addWidget(lbl)
+
+        # -- resolution ladder ------------------------------------------------ #
+        self.res_combo: Optional[QComboBox] = None
+        self.res_estimate_lbl: Optional[QLabel] = None
+        rungs = warning.resolution_choices
+        suggested = warning.suggested_resolution_m
+        if warning.granularity and suggested is not None:
+            if suggested not in rungs:
+                rungs = sorted(set(rungs) | {suggested})
+            row = QHBoxLayout()
+            row.addWidget(self._plain_label("Resolution:"))
+            self.res_combo = QComboBox()
+            for rung in rungs:
+                label = f"{rung:g} m" + (" (suggested)" if rung == suggested else "")
+                self.res_combo.addItem(label, rung)
+            self.res_combo.setCurrentIndex(rungs.index(suggested))
+            self.res_combo.currentIndexChanged.connect(self._refresh_estimates)
+            row.addWidget(self.res_combo)
+            self.res_estimate_lbl = QLabel("")
+            self.res_estimate_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            row.addWidget(self.res_estimate_lbl, 1)
+            lay.addLayout(row)
+
+        # -- time scale (cadence + window) ------------------------------------ #
+        self.interval_edit: Optional[QLineEdit] = None
+        self.duration_edit: Optional[QLineEdit] = None
+        self.frames_lbl: Optional[QLabel] = None
+        ts = warning.time_scale
+        if ts:
+            row = QHBoxLayout()
+            row.addWidget(self._plain_label("Frame every"))
+            self.interval_edit = QLineEdit(f"{ts.get('suggested_interval_min') or 0:g}")
+            self.interval_edit.setMaximumWidth(56)
+            self.interval_edit.textChanged.connect(self._refresh_estimates)
+            row.addWidget(self.interval_edit)
+            row.addWidget(self._plain_label("min over"))
+            self.duration_edit = QLineEdit(f"{ts.get('suggested_duration_hr') or 0:g}")
+            self.duration_edit.setMaximumWidth(56)
+            self.duration_edit.textChanged.connect(self._refresh_estimates)
+            row.addWidget(self.duration_edit)
+            row.addWidget(self._plain_label("h"))
+            self.frames_lbl = QLabel("")
+            self.frames_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            row.addWidget(self.frames_lbl, 1)
+            lay.addLayout(row)
+
+        # -- buttons ----------------------------------------------------------- #
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        self.proceed_btn = QPushButton("Proceed")
+        self.proceed_btn.clicked.connect(self._proceed)
+        btn_row.addWidget(self.proceed_btn)
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self._cancel)
+        btn_row.addWidget(self.cancel_btn)
+        lay.addLayout(btn_row)
+
+        self.result_lbl = QLabel("")
+        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl.setVisible(False)
+        lay.addWidget(self.result_lbl)
+
+        self._refresh_estimates()
+
+    @staticmethod
+    def _plain_label(text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setStyleSheet(_GATE_BODY_STYLE)
+        return lbl
+
+    # -- UI state ------------------------------------------------------------- #
+
+    def _chosen_resolution(self) -> Optional[float]:
+        if self.res_combo is None:
+            return None
+        value = self.res_combo.currentData()
+        return float(value) if isinstance(value, (int, float)) else None
+
+    def _edited_float(self, edit: Optional[QLineEdit]) -> Optional[float]:
+        if edit is None:
+            return None
+        try:
+            value = float(edit.text())
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
+    def _refresh_estimates(self, *_args) -> None:
+        w = self._warning
+        chosen = self._chosen_resolution()
+        if w.granularity and chosen and self.res_estimate_lbl is not None:
+            cells = gate.estimate_cells(w.granularity, chosen)
+            eta = gate.estimate_eta_seconds(w.granularity, chosen)
+            self.res_estimate_lbl.setText(f"~{cells:,} cells, est ~{eta:.0f}s")
+        if w.time_scale and self.frames_lbl is not None:
+            interval = self._edited_float(self.interval_edit) or 0.0
+            duration = self._edited_float(self.duration_edit) or 0.0
+            frames = gate.estimate_frames(w.time_scale, interval, duration)
+            self.frames_lbl.setText(f"~{frames} frames")
+        # Hard cap: Proceed stays enabled only when the current choice maps
+        # to a decision the envelope's options actually allow.
+        if self._decided is None:
+            decision = self._current_decision()
+            self.proceed_btn.setEnabled(decision.decision is not None)
+            self.proceed_btn.setToolTip(decision.note or "")
+
+    def _current_decision(self) -> gate.GateDecision:
+        return gate.resolve_gate_decision(
+            self._warning,
+            cancel=False,
+            chosen_resolution_m=self._chosen_resolution(),
+            interval_min=self._edited_float(self.interval_edit),
+            duration_hr=self._edited_float(self.duration_edit),
+        )
+
+    # -- actions --------------------------------------------------------------- #
+
+    def _proceed(self) -> None:
+        decision = self._current_decision()
+        if decision.decision is None:
+            self.result_lbl.setText(decision.note)
+            self.result_lbl.setVisible(True)
+            return
+        self._commit(decision)
+
+    def _cancel(self) -> None:
+        self._commit(gate.resolve_gate_decision(self._warning, cancel=True))
+
+    def _commit(self, decision: gate.GateDecision) -> None:
+        if self._decided is not None:
+            return  # locked -- a gate is answered exactly once
+        self._decided = decision.decision
+        self._on_decide(self._warning.warning_id, decision.decision, decision.revised_args)
+        for widget in (self.proceed_btn, self.cancel_btn, self.res_combo,
+                       self.interval_edit, self.duration_edit):
+            if widget is not None:
+                widget.setEnabled(False)
+        summary = {
+            "proceed": "Confirmed -- proceeding.",
+            "cancel": "Cancelled.",
+            "narrow_scope": f"Confirmed with overrides: {decision.revised_args}",
+        }.get(decision.decision or "", "")
+        self.result_lbl.setText(summary)
+        self.result_lbl.setVisible(True)
+
+
+class _ExportTask(QObject):
+    """POST /api/export-qgis off the UI thread (cross-thread signal emit)."""
+
+    finished = pyqtSignal(str, dict)  # case_id, result
+    errored = pyqtSignal(str, str)    # case_id, message
+
+    def __init__(self, base_url: str, case_id: str, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self._base_url = base_url
+        self._case_id = case_id
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            result = case_export.post_export_case(self._base_url, self._case_id)
+        except case_export.ExportRequestError as exc:
+            self.errored.emit(self._case_id, str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
+            self.errored.emit(self._case_id, f"{type(exc).__name__}: {exc}")
+            return
+        self.finished.emit(self._case_id, result)
+
+
+class CasesDialog(QDialog):
+    """The user's cases (latest ``case-list`` envelope) + Open in QGIS."""
+
+    def __init__(self, dock: "Trid3ntDock", cases: List[CaseInfo]):
+        super().__init__(dock)
+        self._dock = dock
+        self.setWindowTitle("TRID3NT cases")
+        self.resize(420, 320)
+        lay = QVBoxLayout(self)
+
+        self.listw = QListWidget()
+        for case in cases:
+            label = case.title
+            if case.status and case.status != "active":
+                label += f"  [{case.status}]"
+            if case.updated_at:
+                label += f"  ({case.updated_at[:10]})"
+            item = QListWidgetItem(label)
+            item.setData(Qt.UserRole, case.case_id)
+            self.listw.addItem(item)
+        lay.addWidget(self.listw, 1)
+
+        if not cases:
+            empty = QLabel(
+                "No cases received yet -- the list arrives from the agent on "
+                "connect (case-list envelope)."
+            )
+            empty.setWordWrap(True)
+            empty.setStyleSheet(_STATUS_LINE_STYLE)
+            lay.addWidget(empty)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        self.open_btn = QPushButton("Open in QGIS")
+        self.open_btn.clicked.connect(self._open_selected)
+        self.open_btn.setEnabled(bool(cases))
+        row.addWidget(self.open_btn)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.reject)
+        row.addWidget(close_btn)
+        lay.addLayout(row)
+
+    def _open_selected(self) -> None:
+        item = self.listw.currentItem()
+        if item is None:
+            return
+        case_id = item.data(Qt.UserRole)
+        if isinstance(case_id, str) and case_id:
+            self._dock.open_case_in_qgis(case_id, item.text())
+            self.accept()
+
+
 class Trid3ntDock(QDockWidget):
     """The chat dock widget."""
 
@@ -186,6 +481,8 @@ class Trid3ntDock(QDockWidget):
         self._pending: Optional[_AssistantEntry] = None
         self._connected = False
         self._case_id: Optional[str] = None
+        self._cases: List[CaseInfo] = []
+        self._export_tasks: List[_ExportTask] = []  # keep-alive refs
 
         self._build_ui()
         self._wire_bridge()
@@ -198,7 +495,7 @@ class Trid3ntDock(QDockWidget):
         outer.setContentsMargins(6, 6, 6, 6)
         outer.setSpacing(4)
 
-        # Header: status dot | status text | settings | connect
+        # Header: status dot | status text | cases | settings | connect
         header = QHBoxLayout()
         self.dot = QLabel()
         self._set_dot("disconnected")
@@ -206,6 +503,11 @@ class Trid3ntDock(QDockWidget):
         self.status_label = QLabel("Not connected")
         self.status_label.setStyleSheet("font-size: 9pt;")
         header.addWidget(self.status_label, 1)
+
+        self.cases_btn = QToolButton()
+        self.cases_btn.setText("Cases")
+        self.cases_btn.clicked.connect(self._open_cases)
+        header.addWidget(self.cases_btn)
 
         self.settings_btn = QToolButton()
         self.settings_btn.setText("Settings")
@@ -234,6 +536,18 @@ class Trid3ntDock(QDockWidget):
         self.messages_layout.addStretch(1)
         self.scroll.setWidget(self.messages_host)
         outer.addWidget(self.scroll, 1)
+
+        # AOI row: toggle + status line
+        aoi_row = QHBoxLayout()
+        self.aoi_checkbox = QCheckBox("Use map canvas as area of interest")
+        self.aoi_checkbox.setChecked(self.settings.canvas_aoi)
+        self.aoi_checkbox.toggled.connect(self._on_aoi_toggled)
+        aoi_row.addWidget(self.aoi_checkbox)
+        outer.addLayout(aoi_row)
+        self.aoi_status = QLabel(aoi.aoi_status_text(None, False))
+        self.aoi_status.setStyleSheet(_STATUS_LINE_STYLE)
+        outer.addWidget(self.aoi_status)
+        self._refresh_aoi_status()
 
         # Input row
         input_row = QHBoxLayout()
@@ -275,6 +589,67 @@ class Trid3ntDock(QDockWidget):
             self._pending = _AssistantEntry(self.messages_layout)
         return self._pending
 
+    # -- AOI ------------------------------------------------------------------ #
+
+    def _canvas_bbox4326(self) -> Optional[Tuple[float, float, float, float]]:
+        """Current canvas extent as an EPSG:4326 bbox tuple, or None.
+
+        Pure math (``aoi.extent_to_bbox4326``) covers EPSG:4326/3857; any
+        other project CRS falls back to QGIS's own transform. Never raises --
+        an unresolvable CRS yields None (the status line says so honestly).
+        """
+        try:
+            canvas = self.iface.mapCanvas()
+            extent = canvas.extent()
+            authid = canvas.mapSettings().destinationCrs().authid()
+        except Exception:  # noqa: BLE001 -- no canvas (headless), no AOI
+            return None
+        bbox = aoi.extent_to_bbox4326(
+            extent.xMinimum(), extent.yMinimum(),
+            extent.xMaximum(), extent.yMaximum(), authid,
+        )
+        if bbox is not None:
+            return bbox
+        # Arbitrary project CRS: use QGIS's transform machinery.
+        try:
+            from qgis.core import (
+                QgsCoordinateReferenceSystem,
+                QgsCoordinateTransform,
+                QgsProject,
+            )
+
+            transform = QgsCoordinateTransform(
+                QgsCoordinateReferenceSystem(authid),
+                QgsCoordinateReferenceSystem("EPSG:4326"),
+                QgsProject.instance(),
+            )
+            rect = transform.transformBoundingBox(extent)
+            return aoi.extent_to_bbox4326(
+                rect.xMinimum(), rect.yMinimum(),
+                rect.xMaximum(), rect.yMaximum(), "EPSG:4326",
+            )
+        except Exception:  # noqa: BLE001 -- honest None, noted in status
+            return None
+
+    def _aoi_for_send(self) -> Optional[Tuple[float, float, float, float]]:
+        """The bbox to attach right now, or None (off / unresolved / too big).
+        Also refreshes the status line so the user sees WHY."""
+        enabled = self.aoi_checkbox.isChecked()
+        bbox = self._canvas_bbox4326() if enabled else None
+        self.aoi_status.setText(aoi.aoi_status_text(bbox, enabled))
+        if bbox is not None and aoi.bbox_within_guard(bbox):
+            return bbox
+        return None
+
+    def _refresh_aoi_status(self) -> None:
+        enabled = self.aoi_checkbox.isChecked()
+        bbox = self._canvas_bbox4326() if enabled else None
+        self.aoi_status.setText(aoi.aoi_status_text(bbox, enabled))
+
+    def _on_aoi_toggled(self, checked: bool) -> None:
+        self.settings.canvas_aoi = checked
+        self._refresh_aoi_status()
+
     # -- connection ----------------------------------------------------------- #
 
     def _wire_bridge(self) -> None:
@@ -283,6 +658,8 @@ class Trid3ntDock(QDockWidget):
         self.bridge.event.connect(self._on_event)
         self.bridge.failed.connect(self._on_failed)
         self.bridge.closed.connect(self._on_closed)
+        self.bridge.reconnecting.connect(self._on_reconnecting)
+        self.bridge.resumed.connect(self._on_resumed)
 
     def connect_agent(self) -> None:
         if self.bridge.running:
@@ -297,11 +674,15 @@ class Trid3ntDock(QDockWidget):
         self.connect_btn.setText("Disconnect")
         title = "QGIS session " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         anon = self.settings.anonymous_user_id or None
+        # #170 AOI-first: create the case WITH the canvas extent so the very
+        # first turn's _turn_case_bbox anchors on it (guard applies).
+        case_bbox = self._aoi_for_send()
         self.bridge.start(
             url,
             token=self.settings.effective_token(),
             anonymous_user_id=anon if self.settings.mode == MODE_LOCAL else None,
             case_title=title,
+            case_bbox=list(case_bbox) if case_bbox else None,
         )
 
     def disconnect_agent(self) -> None:
@@ -321,6 +702,45 @@ class Trid3ntDock(QDockWidget):
     def _open_settings(self) -> None:
         dlg = SettingsDialog(self.settings, self)
         dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
+
+    def _open_cases(self) -> None:
+        dlg = CasesDialog(self, self._cases)
+        dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
+
+    # -- open case in QGIS ------------------------------------------------------ #
+
+    def open_case_in_qgis(self, case_id: str, label: str) -> None:
+        """Export ``case_id`` via the local agent's /api/export-qgis and add
+        the produced layers to the CURRENT project (see ``case_export`` for
+        why we add layers instead of opening the .qgz)."""
+        if self.settings.mode != MODE_LOCAL:
+            self._note(
+                "Open in QGIS is local-mode only for now -- the remote "
+                "presigned export path lands in a later milestone.",
+            )
+            return
+        self._note(f"Exporting case '{label}' via the local agent ...")
+        task = _ExportTask(self.settings.export_api, case_id, self)
+        task.finished.connect(self._on_export_finished)
+        task.errored.connect(self._on_export_errored)
+        self._export_tasks.append(task)
+        task.start()
+
+    def _on_export_finished(self, case_id: str, result: dict) -> None:
+        plan = case_export.plan_export_layers(result)
+        notes = self.materializer.materialize_export(plan, group_label=case_id[:8])
+        for note in notes:
+            self._note(note)
+        if plan.qgz_path:
+            self._note(f"Styled QGIS project also written: {plan.qgz_path}")
+        self._scroll_to_bottom()
+
+    def _on_export_errored(self, case_id: str, message: str) -> None:
+        self._note(f"Case export failed: {message}", error=True)
+
+    def _note(self, text: str, error: bool = False) -> None:
+        self._ensure_pending().add_note(text, error=error)
+        self._scroll_to_bottom()
 
     # -- bridge slots (UI thread) ---------------------------------------------- #
 
@@ -349,6 +769,18 @@ class Trid3ntDock(QDockWidget):
             self._set_dot("error")
             self.status_label.setText(f"Disconnected: {reason}")
         self.connect_btn.setText("Connect")
+
+    def _on_reconnecting(self, reason: str) -> None:
+        # Transport lost; the worker's capped-jitter ladder is running.
+        self._connected = False
+        self._set_dot("connecting")
+        self.status_label.setText("Connection lost -- reconnecting ...")
+
+    def _on_resumed(self) -> None:
+        self._connected = True
+        self._set_dot("connected")
+        suffix = f" -- case {self._case_id[:8]}" if self._case_id else ""
+        self.status_label.setText(f"Reconnected{suffix}")
 
     def _on_event(self, kind: str, data: object) -> None:
         if not isinstance(data, dict):
@@ -390,15 +822,37 @@ class Trid3ntDock(QDockWidget):
             self._ensure_pending().add_note(f"{code}: {message}", error=True)
             self._scroll_to_bottom()
         elif kind == "payload-warning":
-            # Milestone 2 renders the real gate card; surface honestly for now.
-            self._ensure_pending().add_note(
-                "Tool payload warning received -- the sim gate card lands in "
-                "milestone 2; use the web app to confirm this run.",
-            )
-            self._scroll_to_bottom()
+            self._show_gate_card(data)
+        elif kind == "case-list":
+            cases = data.get("cases")
+            if isinstance(cases, list):
+                self._cases = [c for c in cases if isinstance(c, CaseInfo)]
         elif kind == "turn-complete":
             if self._pending is not None:
                 self._pending = None
+
+    # -- gate card -------------------------------------------------------------- #
+
+    def _show_gate_card(self, payload: dict) -> None:
+        warning = gate.parse_payload_warning(payload)
+        if warning is None:
+            self._note(
+                "Received a malformed tool-payload-warning (no warning_id) -- "
+                "cannot confirm it; the run will time out server-side.",
+                error=True,
+            )
+            return
+        card = GateCard(warning, self._on_gate_decision)
+        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        self._scroll_to_bottom()
+
+    def _on_gate_decision(
+        self, warning_id: str, decision: str, revised_args: Optional[dict]
+    ) -> None:
+        try:
+            self.bridge.confirm_payload(warning_id, decision, revised_args)
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"confirmation send failed: {exc}", error=True)
 
     # -- sending ------------------------------------------------------------- #
 
@@ -406,15 +860,17 @@ class Trid3ntDock(QDockWidget):
         text = self.input_edit.text().strip()
         if not text:
             return
-        if not (self._connected and self._case_id and self.bridge.running):
+        if not (self._case_id and self.bridge.running):
             self.status_label.setText("Not connected -- press Connect first")
             return
         self.input_edit.clear()
         self._add_user_bubble(text)
         self._pending = _AssistantEntry(self.messages_layout)
         self._scroll_to_bottom()
+        bbox = self._aoi_for_send()
+        wire_text = aoi.attach_aoi_to_text(text, bbox) if bbox else text
         try:
-            self.bridge.send_chat(text)
+            self.bridge.send_chat(wire_text)
         except Exception as exc:  # noqa: BLE001
             self._pending.add_note(f"send failed: {exc}", error=True)
 

@@ -14,6 +14,7 @@ GROUP = "trid3nt"
 DEFAULT_LOCAL_URL = "ws://127.0.0.1:8765/ws"
 DEFAULT_REMOTE_URL = "wss://"
 DEFAULT_MINIO_ENDPOINT = "http://127.0.0.1:9000"
+DEFAULT_EXPORT_API = "http://127.0.0.1:8766"
 
 MODE_LOCAL = "local"
 MODE_REMOTE = "remote"
@@ -77,6 +78,26 @@ class PluginSettings:
     @minio_endpoint.setter
     def minio_endpoint(self, value: str) -> None:
         self._set("minio_endpoint", value.strip() or DEFAULT_MINIO_ENDPOINT)
+
+    @property
+    def export_api(self) -> str:
+        """The local agent's HTTP listener base URL (tool catalog + the
+        /api/export-qgis routes) -- Open-case-in-QGIS uses this."""
+        return self._get("export_api", DEFAULT_EXPORT_API) or DEFAULT_EXPORT_API
+
+    @export_api.setter
+    def export_api(self, value: str) -> None:
+        self._set("export_api", value.strip() or DEFAULT_EXPORT_API)
+
+    @property
+    def canvas_aoi(self) -> bool:
+        """Milestone 2: "Use map canvas as area of interest" toggle (default
+        ON). Stored as "true"/"false" strings (QSettings bool portability)."""
+        return self._get("canvas_aoi", "true").lower() != "false"
+
+    @canvas_aoi.setter
+    def canvas_aoi(self, value: bool) -> None:
+        self._set("canvas_aoi", "true" if value else "false")
 
     @property
     def anonymous_user_id(self) -> str:
