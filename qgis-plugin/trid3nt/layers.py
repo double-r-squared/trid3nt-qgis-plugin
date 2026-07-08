@@ -15,6 +15,13 @@ tree, grouped under "TRID3NT <case>".
 
 Dedup: by ``layer_id`` -- session-state is replayed on every emit (A.7
 replace-not-reconcile), so the same rows arrive many times per turn.
+
+Temporal animation: after layers land (both the live-stream and the
+exported-case paths), frame-sequence rasters (``Flood_depth_step_1..N``,
+``F+03h`` stacks, ISO valid-time frames -- the same series the web scrubber
+groups) are stamped with per-layer fixed temporal ranges so the built-in
+QGIS Temporal Controller plays them natively. Pure grouping/range math lives
+in ``temporal`` (tested without QGIS); ``stamp_temporal`` here applies it.
 """
 
 from __future__ import annotations
@@ -25,8 +32,10 @@ import re
 import tempfile
 from typing import List, Optional
 
-from qgis.core import QgsProject, QgsRasterLayer, QgsVectorLayer
+from qgis.core import QgsDateTimeRange, QgsProject, QgsRasterLayer, QgsVectorLayer
+from qgis.PyQt.QtCore import QDateTime, Qt
 
+from . import temporal
 from .plugin_settings import MODE_LOCAL, PluginSettings
 from .trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
 
@@ -37,6 +46,101 @@ def _safe_filename(name: str) -> str:
     return _SAFE_NAME.sub("_", name).strip("_") or "layer"
 
 
+# -- Temporal Controller stamping (frame-sequence animation) ----------------- #
+
+
+def _temporal_qdt(dt) -> QDateTime:
+    """An aware-UTC ``datetime`` -> ``QDateTime`` (ISO round trip -- the
+    trailing Z parses as UTC on both Qt5 and Qt6)."""
+    return QDateTime.fromString(dt.strftime("%Y-%m-%dT%H:%M:%SZ"), Qt.ISODate)
+
+
+def _fixed_temporal_mode(props):
+    """The FixedTemporalRange mode enum, across QGIS API generations."""
+    try:
+        from qgis.core import Qgis
+
+        return Qgis.RasterTemporalMode.FixedTemporalRange
+    except (ImportError, AttributeError):
+        return props.ModeFixedTemporalRange
+
+
+def _apply_fixed_range(layer, begin, end) -> None:
+    """Stamp one raster layer: FixedTemporalRange [begin, end), active."""
+    props = layer.temporalProperties()
+    props.setMode(_fixed_temporal_mode(props))
+    props.setFixedTemporalRange(
+        QgsDateTimeRange(_temporal_qdt(begin), _temporal_qdt(end))
+    )
+    props.setIsActive(True)
+
+
+def _widen_project_temporal_range(begin, end) -> None:
+    """Grow the project temporal range to cover [begin, end) so the Temporal
+    Controller picks the sequence up immediately (existing coverage is kept)."""
+    begin_qdt, end_qdt = _temporal_qdt(begin), _temporal_qdt(end)
+    settings = QgsProject.instance().timeSettings()
+    try:
+        current = settings.temporalRange()
+        if (
+            current is not None
+            and not current.isInfinite()
+            and current.begin().isValid()
+            and current.end().isValid()
+        ):
+            if current.begin() < begin_qdt:
+                begin_qdt = current.begin()
+            if current.end() > end_qdt:
+                end_qdt = current.end()
+    except (AttributeError, TypeError):
+        pass  # unreadable current range -- just set the group's span
+    settings.setTemporalRange(QgsDateTimeRange(begin_qdt, end_qdt))
+
+
+def stamp_temporal(raster_layers, stamped_counts: Optional[dict] = None) -> List[str]:
+    """Stamp frame-sequence rasters for the native Temporal Controller.
+
+    Detects frame groups among ``raster_layers`` (``temporal.group_frame_layers``
+    -- the web scrubber's grouping), stamps each member with a per-frame
+    FixedTemporalRange (ISO valid-times when the labels carry them, else a
+    synthetic today-00:00-UTC + 1 h/step clock), activates the properties,
+    and widens the project temporal range to span the group.
+
+    ``stamped_counts`` (stem -> member count, per-case state) makes replays
+    idempotent: a group is (re)stamped only when it gains members. Never
+    raises -- failures become honest notes.
+    """
+    notes: List[str] = []
+    by_name: dict = {}
+    for layer in raster_layers:
+        try:
+            by_name.setdefault(layer.name(), layer)
+        except (AttributeError, RuntimeError):  # deleted/half-built layer
+            continue
+    for group in temporal.group_frame_layers(list(by_name)):
+        count = len(group.members)
+        if stamped_counts is not None and stamped_counts.get(group.stem) == count:
+            continue
+        try:
+            ranges = temporal.assign_frame_ranges(group)
+            for name, begin, end in ranges:
+                _apply_fixed_range(by_name[name], begin, end)
+            _widen_project_temporal_range(ranges[0][1], ranges[-1][2])
+        except Exception as exc:  # noqa: BLE001 -- honest note, never a crash
+            notes.append(
+                f"temporal stamp for sequence '{group.stem}' failed "
+                f"({type(exc).__name__}: {exc})"
+            )
+            continue
+        if stamped_counts is not None:
+            stamped_counts[group.stem] = count
+        notes.append(
+            f"{count}-frame sequence '{group.stem}' stamped for the Temporal "
+            "Controller (View > Panels > Temporal Controller, press play)"
+        )
+    return notes
+
+
 class LayerMaterializer:
     """Per-connection materializer: one group, one added-id set, one temp dir."""
 
@@ -45,6 +149,8 @@ class LayerMaterializer:
         self._added_ids: set[str] = set()
         self._group_name: Optional[str] = None
         self._temp_dir: Optional[str] = None
+        self._case_rasters: List = []  # QgsRasterLayer refs, this case
+        self._stamped_counts: dict = {}  # frame-group stem -> stamped size
 
     # -- lifecycle ------------------------------------------------------------- #
 
@@ -53,6 +159,8 @@ class LayerMaterializer:
         label = title or case_id[:8]
         self._group_name = f"TRID3NT {label}"
         self._added_ids.clear()
+        self._case_rasters = []
+        self._stamped_counts = {}
 
     def _ensure_temp_dir(self) -> str:
         if self._temp_dir is None or not os.path.isdir(self._temp_dir):
@@ -77,6 +185,7 @@ class LayerMaterializer:
         crash (honesty floor: failures are visible, not silent).
         """
         notes: List[str] = []
+        rasters_before = len(self._case_rasters)
         for event in events:
             if event.layer_id in self._added_ids:
                 continue
@@ -89,6 +198,11 @@ class LayerMaterializer:
                 # re-note on every session-state replay of the snapshot.
                 self._added_ids.add(event.layer_id)
                 notes.append(note)
+        # Frame-sequence rasters -> native Temporal Controller animation.
+        # Only when this snapshot added a raster; the per-case stamped-counts
+        # dict keeps session-state replays idempotent.
+        if len(self._case_rasters) != rasters_before:
+            notes.extend(stamp_temporal(self._case_rasters, self._stamped_counts))
         return notes
 
     def _materialize_one(self, event: LayerEvent) -> Optional[str]:
@@ -108,6 +222,7 @@ class LayerMaterializer:
         layer = QgsRasterLayer(qgis_xyz_uri(template), event.name, "wms")
         if not layer.isValid():
             return f"raster '{event.name}': QGIS rejected the XYZ uri -- skipped"
+        self._case_rasters.append(layer)
         return self._add_to_group(layer, event, f"raster '{event.name}' added (XYZ tiles)")
 
     def _add_vector(self, event: LayerEvent) -> str:
@@ -171,9 +286,16 @@ class LayerMaterializer:
                 QgsVectorLayer(f"{plan.gpkg_path}|layername={name}", name, "ogr"),
                 name,
             )
+        export_rasters: List = []
         for path in plan.raster_paths:
             stem = os.path.splitext(os.path.basename(path))[0]
-            _add(QgsRasterLayer(path, stem, "gdal"), stem)
+            layer = QgsRasterLayer(path, stem, "gdal")
+            if layer.isValid():
+                export_rasters.append(layer)
+            _add(layer, stem)
+        # Frame-sequence rasters (Flood_depth_step_1..N GeoTIFFs) -> native
+        # Temporal Controller animation, same as the live-stream path.
+        notes.extend(stamp_temporal(export_rasters))
         notes.extend(plan.notes)
         if not plan.vector_layers and not plan.raster_paths:
             notes.append(
