@@ -29,6 +29,7 @@ SUBTREES=(
   services/workers/_sfincs_build
   services/workers/_modflow_build
   services/workers/_modflow_postprocess
+  services/workers/elmfire
   packages/contracts
   web
 )
