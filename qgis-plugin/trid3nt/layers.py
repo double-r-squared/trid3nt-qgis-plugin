@@ -287,12 +287,20 @@ class LayerMaterializer:
                 name,
             )
         export_rasters: List = []
+        raster_styles = getattr(plan, "raster_styles", None) or {}
         for path in plan.raster_paths:
             stem = os.path.splitext(os.path.basename(path))[0]
             layer = QgsRasterLayer(path, stem, "gdal")
             if layer.isValid():
                 export_rasters.append(layer)
             _add(layer, stem)
+            # Sidecar .qml (the export tool's TiTiler-derived pseudocolor
+            # ramp): without it a GeoTIFF renders default grayscale --
+            # near-black flood frames. loadNamedStyle is Qt5/Qt6-neutral;
+            # a style failure is an honest note, never a lost layer.
+            qml = raster_styles.get(path)
+            if qml and layer.isValid():
+                notes.append(self._apply_named_style(layer, stem, qml))
         # Frame-sequence rasters (Flood_depth_step_1..N GeoTIFFs) -> native
         # Temporal Controller animation, same as the live-stream path.
         notes.extend(stamp_temporal(export_rasters))
@@ -303,6 +311,37 @@ class LayerMaterializer:
                 f"(status={plan.status or 'unknown'})"
             )
         return notes
+
+    @staticmethod
+    def _apply_named_style(layer, label: str, qml_path: str) -> str:
+        """Apply a sidecar .qml to an added layer; returns an honest note.
+
+        ``QgsMapLayer.loadNamedStyle`` returns ``(message, ok)`` on both the
+        Qt5 and Qt6 PyQGIS bindings; handled defensively in case a binding
+        flattens it. Never raises -- a bad style must not lose the layer.
+        """
+        try:
+            result = layer.loadNamedStyle(qml_path)
+            if isinstance(result, (tuple, list)) and len(result) >= 2:
+                message, ok = str(result[0]), bool(result[1])
+            else:
+                message, ok = "", bool(result)
+            if not ok:
+                return (
+                    f"style for '{label}' did not apply"
+                    + (f" ({message})" if message else "")
+                    + " -- layer kept with default rendering"
+                )
+            try:
+                layer.triggerRepaint()
+            except (AttributeError, RuntimeError):
+                pass
+            return f"style applied to '{label}' (web colormap)"
+        except Exception as exc:  # noqa: BLE001 -- honest note, never a crash
+            return (
+                f"style for '{label}' failed ({type(exc).__name__}: {exc}) "
+                "-- layer kept with default rendering"
+            )
 
     def _add_to_group(self, layer, event: LayerEvent, note: str) -> str:
         if event.opacity is not None:

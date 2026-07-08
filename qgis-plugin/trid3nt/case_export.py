@@ -40,6 +40,15 @@ WS->HTTP base derivation, the remote-result localization, and the result ->
 layer plan (GeoPackage table listing via stdlib sqlite3 ``gpkg_contents`` --
 no OGR needed just to enumerate names; the raster scan is a plain
 ``*.tif``/``*.tiff`` directory walk of ``output_dir``).
+
+Raster styling (the black-flood-raster fix): the export tool writes a sidecar
+``<stem>.qml`` next to every GeoTIFF (the same TiTiler-derived pseudocolor
+ramp its ``project.qgz`` embeds inline) and lists them as ``qml_paths`` in the
+result JSON. ``plan_export_layers`` joins qml to raster by filename stem
+(result list first, same-stem disk sidecar as fallback) into
+``ExportPlan.raster_styles`` so the materializer can ``loadNamedStyle`` each
+raster after adding it -- without this the plugin-added GeoTIFFs rendered
+default grayscale (near-black flood frames).
 """
 
 from __future__ import annotations
@@ -51,7 +60,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 __all__ = [
     "DEFAULT_EXPORT_API",
@@ -169,6 +178,9 @@ def localize_remote_export(base_url: str, result: dict, dest_dir: str) -> dict:
             }
         )
     localized["exported_raster_count"] = 0
+    # Raster style sidecars live next to the rasters on the remote box; with
+    # no rasters localized there is nothing to style locally.
+    localized["qml_paths"] = []
     localized["skipped"] = skipped
     localized["output_dir"] = dest_dir
     return localized
@@ -229,6 +241,7 @@ class ExportPlan:
     gpkg_path: Optional[str] = None
     vector_layers: List[str] = field(default_factory=list)  # gpkg table names
     raster_paths: List[str] = field(default_factory=list)  # local .tif files
+    raster_styles: Dict[str, str] = field(default_factory=dict)  # tif -> .qml
     notes: List[str] = field(default_factory=list)  # honest skips/problems
 
 
@@ -273,11 +286,28 @@ def plan_export_layers(result: dict) -> ExportPlan:
         else:
             plan.notes.append(f"GeoPackage missing on disk: {gpkg}")
 
+    # Sidecar .qml styles declared by the export result, keyed by stem.
+    qml_by_stem = {}
+    for qml in result.get("qml_paths") or []:
+        if isinstance(qml, str) and qml.lower().endswith(".qml") and os.path.isfile(qml):
+            qml_by_stem[os.path.splitext(os.path.basename(qml))[0]] = qml
+
     output_dir = result.get("output_dir")
     if isinstance(output_dir, str) and os.path.isdir(output_dir):
         for name in sorted(os.listdir(output_dir)):
             if name.lower().endswith((".tif", ".tiff")):
-                plan.raster_paths.append(os.path.join(output_dir, name))
+                path = os.path.join(output_dir, name)
+                plan.raster_paths.append(path)
+                # Style join: result-declared qml first, same-stem disk
+                # sidecar as fallback (covers pre-qml_paths result shapes).
+                stem = os.path.splitext(name)[0]
+                qml = qml_by_stem.get(stem)
+                if qml is None:
+                    candidate = os.path.join(output_dir, stem + ".qml")
+                    if os.path.isfile(candidate):
+                        qml = candidate
+                if qml is not None:
+                    plan.raster_styles[path] = qml
     expected_rasters = result.get("exported_raster_count")
     if (
         isinstance(expected_rasters, int)

@@ -481,6 +481,255 @@ class TestExportPlan(unittest.TestCase):
         self.assertTrue(any("missing on disk" in n for n in plan.notes))
         self.assertTrue(any("1 raster(s)" in n for n in plan.notes))
 
+    def test_plan_joins_qml_styles_to_rasters(self):
+        """Sidecar .qml join: result-declared qml_paths first, same-stem disk
+        sidecar as fallback, unstyled rasters simply get no entry."""
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in (
+                "depth.tif", "depth.qml",   # declared in qml_paths
+                "dem.tif", "dem.qml",       # NOT declared -> disk fallback
+                "plain.tif",                # no style at all
+            ):
+                with open(os.path.join(tmp, name), "w") as f:
+                    f.write("x")
+            result = {
+                "status": "ok",
+                "exported_raster_count": 3,
+                "qml_paths": [
+                    os.path.join(tmp, "depth.qml"),
+                    os.path.join(tmp, "ghost.qml"),  # missing file: ignored
+                ],
+                "skipped": [],
+                "output_dir": tmp,
+            }
+            plan = case_export.plan_export_layers(result)
+            depth = os.path.join(tmp, "depth.tif")
+            dem = os.path.join(tmp, "dem.tif")
+            plain = os.path.join(tmp, "plain.tif")
+            self.assertEqual(
+                plan.raster_paths, sorted([dem, depth, plain])
+            )
+            self.assertEqual(
+                plan.raster_styles,
+                {
+                    depth: os.path.join(tmp, "depth.qml"),
+                    dem: os.path.join(tmp, "dem.qml"),
+                },
+            )
+
+    def test_localize_remote_export_drops_qml_paths(self):
+        """Remote mode: rasters stay on the remote box, so remote qml paths
+        must not leak into the localized result."""
+        localized = case_export.localize_remote_export(
+            "http://127.0.0.1:1",
+            {
+                "status": "ok",
+                "qgz_path": None,
+                "gpkg_path": None,
+                "exported_raster_count": 2,
+                "qml_paths": ["/remote/depth.qml", "/remote/dem.qml"],
+                "skipped": [],
+                "output_dir": "/remote",
+            },
+            tempfile.gettempdir(),
+        )
+        self.assertEqual(localized["qml_paths"], [])
+        self.assertEqual(localized["exported_raster_count"], 0)
+
+
+# --------------------------------------------------------------------------- #
+# materialize_export applies sidecar styles (stubbed qgis -- pure python)
+# --------------------------------------------------------------------------- #
+
+
+class TestMaterializeExportStyles(unittest.TestCase):
+    """``LayerMaterializer.materialize_export`` must ``loadNamedStyle`` every
+    raster that has a plan-joined .qml (the black-flood-raster fix) and stay
+    honest (note, never crash) when a style does not apply.
+
+    ``layers.py`` imports ``qgis.core`` / ``qgis.PyQt`` at module top, so this
+    installs in-memory stub modules (the milestone-3 ``plugin_settings``
+    pattern) and imports ``trid3nt.layers`` as a package module.
+    """
+
+    def _import_layers(self):
+        import importlib
+        import types
+
+        class _FakeQSettings:
+            def value(self, key, default=None):
+                return default
+
+            def setValue(self, key, value):
+                pass
+
+        class _FakeQDateTime:
+            @staticmethod
+            def fromString(text, fmt=None):
+                return text
+
+        class _FakeQt:
+            ISODate = 1
+
+        class _FakeNode:
+            def setItemVisibilityChecked(self, checked):
+                pass
+
+        class _FakeGroup:
+            def insertLayer(self, idx, layer):
+                return _FakeNode()
+
+        class _FakeRoot:
+            def __init__(self):
+                self._groups = {}
+
+            def findGroup(self, name):
+                return self._groups.get(name)
+
+            def insertGroup(self, idx, name):
+                group = _FakeGroup()
+                self._groups[name] = group
+                return group
+
+        class _FakeProject:
+            _instance = None
+
+            @classmethod
+            def instance(cls):
+                if cls._instance is None:
+                    cls._instance = cls()
+                return cls._instance
+
+            def __init__(self):
+                self._root = _FakeRoot()
+                self.added = []
+
+            def layerTreeRoot(self):
+                return self._root
+
+            def addMapLayer(self, layer, add_to_legend=True):
+                self.added.append(layer)
+
+        class _FakeRasterLayer:
+            instances = []
+            style_result = ("", True)  # (message, ok) -- PyQGIS tuple shape
+
+            def __init__(self, path, name, provider=""):
+                self._path, self._name = path, name
+                self.style_loads = []
+                self.repainted = False
+                _FakeRasterLayer.instances.append(self)
+
+            def isValid(self):
+                return True
+
+            def name(self):
+                return self._name
+
+            def loadNamedStyle(self, qml_path):
+                self.style_loads.append(qml_path)
+                return self.style_result
+
+            def triggerRepaint(self):
+                self.repainted = True
+
+        class _FakeVectorLayer(_FakeRasterLayer):
+            pass
+
+        qtcore = types.ModuleType("qgis.PyQt.QtCore")
+        qtcore.QSettings = _FakeQSettings
+        qtcore.QDateTime = _FakeQDateTime
+        qtcore.Qt = _FakeQt
+        pyqt = types.ModuleType("qgis.PyQt")
+        pyqt.QtCore = qtcore
+        core = types.ModuleType("qgis.core")
+        core.QgsDateTimeRange = type("QgsDateTimeRange", (), {})
+        core.QgsProject = _FakeProject
+        core.QgsRasterLayer = _FakeRasterLayer
+        core.QgsVectorLayer = _FakeVectorLayer
+        qgis_mod = types.ModuleType("qgis")
+        qgis_mod.PyQt = pyqt
+        qgis_mod.core = core
+
+        stub_keys = ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore", "qgis.core")
+        saved = {k: sys.modules.get(k) for k in stub_keys}
+        sys.modules.update(
+            {
+                "qgis": qgis_mod,
+                "qgis.PyQt": pyqt,
+                "qgis.PyQt.QtCore": qtcore,
+                "qgis.core": core,
+            }
+        )
+        plugin_root = os.path.join(os.path.dirname(__file__), "..")
+        sys.path.insert(0, plugin_root)
+        pkg_keys = [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]
+        saved_pkg = {k: sys.modules.pop(k) for k in pkg_keys}
+        try:
+            layers = importlib.import_module("trid3nt.layers")
+        finally:
+            sys.path.remove(plugin_root)
+            for k in [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]:
+                sys.modules.pop(k, None)
+            sys.modules.update(saved_pkg)
+            for k, v in saved.items():
+                if v is None:
+                    sys.modules.pop(k, None)
+                else:
+                    sys.modules[k] = v
+        return layers, _FakeRasterLayer
+
+    def _plan(self, raster_paths, raster_styles):
+        return case_export.ExportPlan(
+            status="ok",
+            raster_paths=list(raster_paths),
+            raster_styles=dict(raster_styles),
+        )
+
+    def test_styles_applied_via_load_named_style(self):
+        layers, fake_raster = self._import_layers()
+        m = layers.LayerMaterializer(settings=None)
+        plan = self._plan(
+            ["/exp/depth.tif", "/exp/plain.tif"],
+            {"/exp/depth.tif": "/exp/depth.qml"},
+        )
+        notes = m.materialize_export(plan, "styled case")
+        by_name = {l.name(): l for l in fake_raster.instances}
+        self.assertEqual(by_name["depth"].style_loads, ["/exp/depth.qml"])
+        self.assertTrue(by_name["depth"].repainted)
+        self.assertEqual(by_name["plain"].style_loads, [])  # no qml, no call
+        self.assertTrue(any("style applied to 'depth'" in n for n in notes))
+        self.assertFalse(any("plain" in n and "style" in n for n in notes))
+
+    def test_failed_style_is_note_not_crash(self):
+        layers, fake_raster = self._import_layers()
+        fake_raster.style_result = ("bad xml", False)
+        m = layers.LayerMaterializer(settings=None)
+        plan = self._plan(["/exp/depth.tif"], {"/exp/depth.tif": "/exp/depth.qml"})
+        notes = m.materialize_export(plan, "styled case")
+        # Layer still added; failure is an honest note.
+        self.assertTrue(any("export layer 'depth' added" in n for n in notes))
+        self.assertTrue(
+            any("style for 'depth' did not apply" in n and "bad xml" in n for n in notes)
+        )
+
+    def test_plan_without_styles_attr_is_tolerated(self):
+        """An old-shape plan object (no raster_styles) must not break the
+        materializer (getattr guard)."""
+        layers, fake_raster = self._import_layers()
+        m = layers.LayerMaterializer(settings=None)
+
+        class OldPlan:
+            status = "ok"
+            qgz_path = None
+            gpkg_path = None
+            vector_layers = []
+            raster_paths = ["/exp/depth.tif"]
+            notes = []
+
+        notes = m.materialize_export(OldPlan(), "old plan")
+        self.assertTrue(any("export layer 'depth' added" in n for n in notes))
+
 
 class _ExportApiStub(http.server.BaseHTTPRequestHandler):
     responses: dict = {}
