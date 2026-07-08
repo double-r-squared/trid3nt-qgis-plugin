@@ -145,6 +145,12 @@ def _restore_url() -> None:
 
 
 print(f"[first-run] plugin path: {PLUGIN_PATH}", flush=True)
+# Canvas-AOI OFF for this proof: with an AOI in play the local 8B reliably
+# falls into the placeholder/parallel-publish pathology; the no-AOI flow is
+# the proven-good path (2026-07-07 08:05 success).
+_qs0 = QSettings()
+_qs0.setValue("trid3nt/canvas_aoi", "false")
+_qs0.sync()
 plugin = Trid3ntPlugin(iface)
 plugin.initGui()
 plugin.toggle_dock(True)
@@ -187,8 +193,8 @@ if dock._case_id is None:
 # still stops after the fetch, nudge once with a follow-up -- the same
 # two-step a real user types.
 dock.input_edit.setText(
-    "Fetch a digital elevation model for downtown Tampa, Florida, "
-    "and render it on the map."
+    "Fetch a digital elevation model for the Tampa, Florida area with "
+    "bbox [-82.52, 27.88, -82.42, 27.96] and render it on the map."
 )
 dock._send()
 print("[first-run] prompt sent via input_edit + _send()", flush=True)
@@ -244,9 +250,21 @@ if layers:
         if lyr.name() == "OpenStreetMap"
     ]
     iface.mapCanvas().setLayers(all_layers)
-    iface.mapCanvas().setExtent(layers[0].extent())
+    # XYZ tile layers report a GLOBAL extent, so zoom to the known prompt
+    # bbox (EPSG:4326 -> canvas CRS) instead of layer.extent().
+    from qgis.core import QgsCoordinateTransform, QgsPointXY
+    _src = QgsCoordinateReferenceSystem("EPSG:4326")
+    _xf = QgsCoordinateTransform(
+        _src, iface.mapCanvas().mapSettings().destinationCrs(),
+        QgsProject.instance(),
+    )
+    _bl = _xf.transform(QgsPointXY(-82.52, 27.88))
+    _tr = _xf.transform(QgsPointXY(-82.42, 27.96))
+    iface.mapCanvas().setExtent(
+        QgsRectangle(_bl.x(), _bl.y(), _tr.x(), _tr.y())
+    )
     iface.mapCanvas().refresh()
-    pump(12)
+    pump(25)
 
 os.makedirs(PROOF, exist_ok=True)
 # A failed run must never clobber a prior successful proof -- failure shots
