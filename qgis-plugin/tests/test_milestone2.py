@@ -62,6 +62,30 @@ class TestGateParsing(unittest.TestCase):
         # summary carries the honest hard-cap line
         self.assertTrue(any("Hard cap" in line for line in gate.summary_lines(w)))
 
+    def test_summary_lines_compute_wording(self):
+        # Local-cloud fingerprint fix (2026-07-08): the "local" compute lane
+        # renders plain CPU wording ("local run (8 CPU)"), never the cloud
+        # "vCPU" label; any other compute label (a remote/cloud agent) keeps
+        # the prior wording unchanged.
+        import copy
+
+        row = copy.deepcopy(PAYLOAD_WARNING_ROW)
+        row["granularity"]["compute_class"] = "local"
+        row["granularity"]["vcpus"] = 8
+        joined = "\n".join(gate.summary_lines(gate.parse_payload_warning(row)))
+        self.assertIn("local run (8 CPU)", joined)
+        self.assertNotIn("vCPU", joined)
+        # vcpus <= 1 (the fetch-resolution gate) -> bare "local run".
+        row["granularity"]["vcpus"] = 1
+        joined = "\n".join(gate.summary_lines(gate.parse_payload_warning(row)))
+        self.assertIn("local run", joined)
+        self.assertNotIn("local run (", joined)
+        # A cloud/remote compute label keeps the prior cloud wording.
+        row["granularity"]["compute_class"] = "standard"
+        row["granularity"]["vcpus"] = 8
+        joined = "\n".join(gate.summary_lines(gate.parse_payload_warning(row)))
+        self.assertIn("standard (8 vCPU)", joined)
+
     def test_resolve_gate_decision_rules(self):
         w = gate.parse_payload_warning(PAYLOAD_WARNING_ROW)
         # unchanged rung -> proceed, revised None (web ResolutionPickerCard rule)

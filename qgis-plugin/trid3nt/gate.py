@@ -296,7 +296,18 @@ def summary_lines(warning: PayloadWarning) -> list:
             if isinstance(eta, (int, float)):
                 bits.append(f"est ~{eta:g}s")
             if compute:
-                label = compute if not vcpus else f"{compute} ({vcpus} vCPU)"
+                # Local-cloud fingerprint fix (NATE 2026-07-08): this plugin
+                # is the LOCAL product -- the "local" compute lane renders
+                # plain CPU wording ("local run"), never the cloud "vCPU"
+                # label. Any other compute label (e.g. a remote-mode cloud
+                # agent's "standard") keeps the prior wording unchanged.
+                if compute == "local":
+                    if isinstance(vcpus, (int, float)) and vcpus > 1:
+                        label = f"local run ({int(vcpus)} CPU)"
+                    else:
+                        label = "local run"
+                else:
+                    label = compute if not vcpus else f"{compute} ({vcpus} vCPU)"
                 bits.append(label)
             lines.append(", ".join(bits))
         reason = g.get("reason")

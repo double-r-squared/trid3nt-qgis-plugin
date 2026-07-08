@@ -41,6 +41,12 @@ RSYNC_EXCLUDES=(
   --exclude='__pycache__'
   --exclude='*.egg-info'
   --exclude='.venv'
+  # Never vendor machine-local env files: GRACE-2's web/.env.production.local
+  # carries the CLOUD endpoints (CloudFront/Cognito/wake) and must not ride
+  # into the local product (cloud-fingerprint fix, 2026-07-08). .env.example
+  # is kept (documentation).
+  --exclude='.env.local'
+  --exclude='.env.*.local'
 )
 
 for subtree in "${SUBTREES[@]}"; do
