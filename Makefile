@@ -34,7 +34,7 @@ web:
 	  echo "web already running (pid $$(cat $(RUN_DIR)/web.pid))"; \
 	else \
 	  echo "starting vite dev server on :5173 ..."; \
-	  setsid nohup sh -c 'cd $(REPO_ROOT)/vendor/web && VITE_DEPLOYMENT=local node_modules/.bin/vite --port 5173 --host 127.0.0.1' \
+	  setsid nohup sh -c 'cd $(REPO_ROOT)/vendor/web && VITE_DEPLOYMENT=local node_modules/.bin/vite --port 5173 --host 0.0.0.0' \
 	    > $(LOG_DIR)/web.log 2>&1 & \
 	  echo $$! > $(RUN_DIR)/web.pid; \
 	  echo "web pid $$!  -- logs at $(LOG_DIR)/web.log"; \
