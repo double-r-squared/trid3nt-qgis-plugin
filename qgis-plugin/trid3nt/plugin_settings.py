@@ -118,6 +118,18 @@ class PluginSettings:
         self._set("selection_aoi", "true" if value else "false")
 
     @property
+    def show_thinking(self) -> bool:
+        """F9 (live-feedback 2026-07-09): 'Show model thinking' toggle (default
+        ON). When ON, send ``show_thinking=True`` in the user-message payload
+        so the server forwards the model's reasoning channel; the dock renders
+        collapsible grey thinking blocks. Stored as "true"/"false" strings."""
+        return self._get("show_thinking", "true").lower() != "false"
+
+    @show_thinking.setter
+    def show_thinking(self, value: bool) -> None:
+        self._set("show_thinking", "true" if value else "false")
+
+    @property
     def anonymous_user_id(self) -> str:
         """Server-assigned anonymous user id, replayed on reconnect so the
         same local User record re-binds (mirrors the web client).

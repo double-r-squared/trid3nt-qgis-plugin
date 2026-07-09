@@ -262,6 +262,57 @@ class TestCaseAndChat(StubServerTestCase):
         sent = [e for e in self.server.received if e["type"] == "cancel"][0]
         self.assertEqual(sent["payload"]["reason"], "test-cancel")
 
+    # F9 (live-feedback 2026-07-09): thinking-chunk round trip. ---------------
+
+    def test_thinking_chunk_via_show_thinking_flag(self):
+        """send_chat(show_thinking=True) -> stub emits agent-thinking-chunk
+        events -> next_event yields thinking-chunk kind before chunk kind."""
+        client = self._connect()
+        client.connect()
+        client.create_case("thinking test")
+        # send_chat with show_thinking=True
+        client.send_chat("Fetch a DEM for Asheville", show_thinking=True)
+        # Verify the outbound payload carries show_thinking=True
+        sent = [e for e in self.server.received if e["type"] == "user-message"]
+        # Wait for the round trip
+        events = self._collect_until_turn_complete(client)
+        # Refresh received list post round-trip
+        sent = [e for e in self.server.received if e["type"] == "user-message"]
+        self.assertEqual(len(sent), 1)
+        self.assertTrue(sent[0]["payload"].get("show_thinking"), "show_thinking must be True on wire")
+        # Check thinking-chunk events arrived before the answer chunk
+        kinds = [e.kind for e in events]
+        first_thinking = kinds.index("thinking-chunk") if "thinking-chunk" in kinds else -1
+        first_chunk = kinds.index("chunk") if "chunk" in kinds else -1
+        self.assertIn("thinking-chunk", kinds, "thinking-chunk events expected when show_thinking=True")
+        self.assertGreater(first_chunk, first_thinking, "thinking-chunk must arrive before answer chunk")
+
+    def test_thinking_chunk_accumulated_text(self):
+        """Two agent-thinking-chunk deltas concatenate into a single full text."""
+        client = self._connect()
+        client.connect()
+        client.create_case("thinking acc test")
+        client.send_chat("think about this", show_thinking=False)
+        # "think" keyword triggers thinking in the stub
+        events = self._collect_until_turn_complete(client)
+        thinking_events = [e for e in events if e.kind == "thinking-chunk"]
+        self.assertGreater(len(thinking_events), 0, "at least one thinking-chunk expected")
+        accumulated = "".join(e.data["delta"] for e in thinking_events)
+        self.assertIn("Considering", accumulated)
+        self.assertIn("Fetching", accumulated)
+
+    def test_send_chat_without_show_thinking_omits_key(self):
+        """Default send_chat (show_thinking=False) must NOT include show_thinking on wire."""
+        client = self._connect()
+        client.connect()
+        client.create_case("no thinking test")
+        client.send_chat("plain message")
+        events = self._collect_until_turn_complete(client)
+        sent = [e for e in self.server.received if e["type"] == "user-message"]
+        self.assertEqual(len(sent), 1)
+        self.assertFalse(sent[0]["payload"].get("show_thinking", False),
+                         "show_thinking must be absent or False when not requested")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

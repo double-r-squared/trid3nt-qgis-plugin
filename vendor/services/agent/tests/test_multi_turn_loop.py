@@ -830,3 +830,202 @@ async def test_stream_multiple_calls_one_round_single_finalize():
     assert all(
         seg0_done < pos <= seg1_text for pos in dispatch_at_wire_len
     ), "tool dispatches not interleaved between the two bubbles"
+
+
+# ---------------------------------------------------------------------------
+# F2 (live-feedback 2026-07-09): a turn SURVIVES the client WebSocket dropping.
+#
+# Log 2026-07-09 01:23 (trid3nt-local): the phone's WS died mid-turn; raw
+# ``websocket.send`` calls raised ConnectionClosedError INSIDE tool dispatch
+# and the raise reached the "model stream failed" handler, which misreported
+# a client transport drop as LLM_UNAVAILABLE ("Model generation failed: no
+# close frame received or sent") and persisted a terminal-failure card. Fixes
+# pinned here: (a) per-turn sends route through ``_session_safe_send`` (never
+# raise; the turn runs to completion and its rows persist for the case-open
+# replay), (b) the stream-failure handler separates ConnectionClosed (client
+# transport, log-only) from genuine model errors (still LLM_UNAVAILABLE).
+# ---------------------------------------------------------------------------
+
+from websockets.exceptions import ConnectionClosedError
+
+
+@dataclass
+class _DroppableSocket:
+    """Socket shim that starts live, then raises ConnectionClosedError on
+    every ``send`` once ``dead`` is flipped (the phone walking away)."""
+
+    sent: list[str] = field(default_factory=list)
+    dead: bool = False
+
+    async def send(self, msg: str) -> None:
+        if self.dead:
+            raise ConnectionClosedError(None, None)
+        self.sent.append(msg)
+
+
+def _turn_recorders(agent_server):
+    """Recorder fakes for the three failure-surfacing seams."""
+    persisted: list[dict] = []
+    failure_cards: list[dict] = []
+    error_codes: list[str] = []
+
+    async def _fake_persist_chat_turn(state, **kwargs):
+        persisted.append(kwargs)
+
+    async def _fake_failure_card(state, **kwargs):
+        failure_cards.append(kwargs)
+
+    async def _fake_send_error(_ws, _session_id, code, message, **kwargs):
+        error_codes.append(code)
+
+    return (
+        persisted,
+        failure_cards,
+        error_codes,
+        patch.object(agent_server, "_persist_chat_turn", _fake_persist_chat_turn),
+        patch.object(
+            agent_server, "_persist_terminal_failure_card", _fake_failure_card
+        ),
+        patch.object(agent_server, "_send_error", _fake_send_error),
+    )
+
+
+@pytest.mark.asyncio
+async def test_turn_survives_client_ws_close_mid_dispatch():
+    """The client socket dies WHILE a tool runs: the tool result still feeds
+    back to the model, the closing narration still persists, and neither an
+    LLM_UNAVAILABLE error nor a terminal-failure card is produced."""
+    from grace2_agent import server as agent_server
+    from grace2_agent.server import SessionState
+
+    turn1 = _make_fake_chunk_with_function_call(
+        "fetch_esri_landcover_10m", {"year": "2023"}, "call-lc"
+    )
+    turn2 = _make_fake_chunk_with_text("Landcover fetched and published.")
+    turn_responses = iter([iter([turn1]), iter([turn2])])
+    model_calls: list[int] = []
+
+    fake_client = MagicMock()
+
+    def _next_stream(**_):
+        model_calls.append(1)
+        return next(turn_responses)
+
+    fake_client.models.generate_content_stream.side_effect = _next_stream
+
+    sock = _DroppableSocket()
+    dispatch_log: list[tuple[str, dict]] = []
+
+    async def _fake_invoke(_ws, _state, name, args):
+        # The phone drops MID-DISPATCH: every send from here on raises.
+        sock.dead = True
+        dispatch_log.append((name, args))
+        return {"status": "ok", "layer_id": "landcover-2023"}
+
+    state = SessionState(session_id=new_ulid())
+    settings = GeminiSettings(
+        model="gemini-2.5-pro",
+        project="test",
+        location="us-central1",
+        use_vertex=True,
+    )
+    persisted, failure_cards, error_codes, p1, p2, p3 = _turn_recorders(
+        agent_server
+    )
+
+    with patch.object(agent_server, "build_client", return_value=fake_client), \
+         patch.object(
+             agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke
+         ), \
+         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+         p1, p2, p3:
+        # Must NOT raise despite every post-dispatch send hitting a dead socket.
+        await agent_server._stream_gemini_reply(
+            sock, state, settings, "show me landcover", "research"
+        )
+
+    # The tool completed and its result fed the SECOND model round.
+    assert dispatch_log == [("fetch_esri_landcover_10m", {"year": "2023"})]
+    assert len(model_calls) == 2, "turn did not run to completion"
+
+    # The closing narration persisted (case-open replay backstop).
+    agent_rows = [k for k in persisted if k.get("role") == "agent"]
+    assert any(
+        "Landcover fetched" in (k.get("content") or "") for k in agent_rows
+    ), f"closing narration not persisted: {persisted}"
+
+    # A client transport drop is NOT a model failure.
+    assert "LLM_UNAVAILABLE" not in error_codes, error_codes
+    assert failure_cards == [], failure_cards
+
+
+@pytest.mark.asyncio
+async def test_client_close_is_not_reported_as_llm_unavailable():
+    """Backstop branch: a ConnectionClosed that still escapes into the
+    stream-failure handler logs only -- no error envelope, no failure card."""
+    from grace2_agent import server as agent_server
+    from grace2_agent.server import SessionState
+
+    fake_client = MagicMock()
+
+    def _raise_closed(**_):
+        raise ConnectionClosedError(None, None)
+
+    fake_client.models.generate_content_stream.side_effect = _raise_closed
+
+    state = SessionState(session_id=new_ulid())
+    settings = GeminiSettings(
+        model="gemini-2.5-pro",
+        project="test",
+        location="us-central1",
+        use_vertex=True,
+    )
+    persisted, failure_cards, error_codes, p1, p2, p3 = _turn_recorders(
+        agent_server
+    )
+
+    with patch.object(agent_server, "build_client", return_value=fake_client), \
+         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+         p1, p2, p3:
+        await agent_server._stream_gemini_reply(
+            _FakeSocket(), state, settings, "hi", "research"
+        )
+
+    assert error_codes == [], error_codes
+    assert failure_cards == [], failure_cards
+
+
+@pytest.mark.asyncio
+async def test_genuine_model_failure_still_reports_llm_unavailable():
+    """Contrast guard: a REAL model error still surfaces LLM_UNAVAILABLE +
+    the persisted terminal-failure card (the separation is not overbroad)."""
+    from grace2_agent import server as agent_server
+    from grace2_agent.server import SessionState
+
+    fake_client = MagicMock()
+
+    def _raise_model(**_):
+        raise RuntimeError("bedrock 500")
+
+    fake_client.models.generate_content_stream.side_effect = _raise_model
+
+    state = SessionState(session_id=new_ulid())
+    settings = GeminiSettings(
+        model="gemini-2.5-pro",
+        project="test",
+        location="us-central1",
+        use_vertex=True,
+    )
+    persisted, failure_cards, error_codes, p1, p2, p3 = _turn_recorders(
+        agent_server
+    )
+
+    with patch.object(agent_server, "build_client", return_value=fake_client), \
+         patch.object(agent_server, "build_tool_declarations", return_value=[]), \
+         p1, p2, p3:
+        await agent_server._stream_gemini_reply(
+            _FakeSocket(), state, settings, "hi", "research"
+        )
+
+    assert "LLM_UNAVAILABLE" in error_codes, error_codes
+    assert len(failure_cards) == 1, failure_cards

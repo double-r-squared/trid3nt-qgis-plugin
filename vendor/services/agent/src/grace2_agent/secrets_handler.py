@@ -80,9 +80,11 @@ SRS references:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Final
 
 from grace2_contracts.common import new_ulid
@@ -159,6 +161,19 @@ DEFAULT_GCP_PROJECT: Final[str] = (
 #: Vault-ref scheme prefix for AWS SSM Parameter Store SecureStrings.
 AWS_SSM_VAULT_SCHEME: Final[str] = "aws-ssm://"
 
+#: Vault-ref scheme prefix for the LOCAL file vault (fingerprint audit L8,
+#: NATE 2026-07-08). The TRID3NT local build (``GRACE2_SOLVER_BACKEND=
+#: local-docker``, file persistence, no GCP ADC / AWS SSM) used to fall
+#: through to the GCP Secret Manager write path -- a dead cloud branch that
+#: failed with a GCP ADC error the first time a user submitted a
+#: credential-request card locally. Local writes now land in a mode-0600 JSON
+#: file next to the file-persistence store; reads route on this scheme.
+LOCAL_FILE_VAULT_SCHEME: Final[str] = "local-file://"
+
+#: Filename of the local secrets vault, created under the file-persistence
+#: dir (``GRACE2_DEV_PERSISTENCE_DIR``, default ``~/.grace2/dev_persistence``).
+LOCAL_VAULT_FILENAME: Final[str] = "secrets_vault.json"
+
 #: Vault-ref scheme prefix for the (default) GCP Secret Manager path. Legacy
 #: records may carry a bare resource name (no scheme); both are tolerated.
 GCP_SM_VAULT_SCHEME: Final[str] = "gcp-sm://"
@@ -180,6 +195,22 @@ def _aws_secret_backend_selected() -> bool:
     """
     backend = (os.environ.get("GRACE2_STORAGE_BACKEND") or "").strip().lower()
     return backend in ("s3", "aws")
+
+
+def _local_file_vault_selected() -> bool:
+    """True when secret values must route to the LOCAL file vault (L8).
+
+    The canonical is-local seam (same one ``server._local_compute_lane`` and
+    the gate-card wording fixes use): the solver dispatch backend --
+    ``GRACE2_SOLVER_BACKEND=local-docker`` -> ``tools.solver.solver_backend()``
+    returns ``local-docker``. The TRID3NT local build pins it; the cloud stack
+    never sets it, so the cloud SSM/GCP write paths stay byte-identical.
+    Checked FIRST so a local box never writes a credential to a cloud vault.
+    Read at call time so a test env injection takes effect without re-import.
+    """
+    from .tools.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
+
+    return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 
 
 def _aws_region() -> str:
@@ -417,6 +448,152 @@ def _aws_delete_secret(vault_ref: str, *, ssm_client=None) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Vault write/read/delete — LOCAL file vault (fingerprint audit L8)
+# --------------------------------------------------------------------------- #
+
+
+def _local_vault_path(vault_dir: "Path | None" = None) -> Path:
+    """Resolve the local vault file path (persistence-dir / secrets_vault.json).
+
+    Mirrors the file-persistence selection: the vault sits next to the
+    ``FileMCPClient`` collections under ``GRACE2_DEV_PERSISTENCE_DIR``
+    (default ``~/.grace2/dev_persistence``), resolved at call time via the
+    same helper the persistence layer uses. ``vault_dir`` is a test seam.
+    """
+    if vault_dir is not None:
+        return Path(vault_dir) / LOCAL_VAULT_FILENAME
+    from .persistence import _default_dev_persistence_dir
+
+    return Path(_default_dev_persistence_dir()) / LOCAL_VAULT_FILENAME
+
+
+def _read_vault_store(path: Path) -> dict[str, str]:
+    """Load the vault dict (``key-name -> raw value``); missing file -> {}."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+    store = json.loads(raw)
+    return store if isinstance(store, dict) else {}
+
+
+def _write_vault_store(path: Path, store: dict[str, str]) -> None:
+    """Atomically write the vault dict with mode 0600 (owner read/write only).
+
+    tmp-file + ``os.replace`` (POSIX-atomic on the same filesystem, the same
+    discipline as ``FileMCPClient``); the tmp file is CREATED 0600 via
+    ``os.open`` so the raw values are never world-readable, even transiently,
+    and the final path is re-chmodded 0600 in case a pre-existing file had
+    looser bits.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(store, fh, indent=0, sort_keys=True)
+    os.replace(tmp, path)
+    os.chmod(path, 0o600)
+
+
+def _build_file_vault_key(
+    provider: ProviderID, user_id: str, case_id: str | None
+) -> str:
+    """Vault-dict key: ``<user_id>/<provider>/[case-<short>-]<short_ulid>``.
+
+    Same shape as the SSM parameter name minus the IAM-scoped
+    ``/grace2/secrets`` prefix (no IAM locally). The short ULID keeps re-adds
+    after a revoke collision-free, mirroring both cloud builders.
+    """
+    short = new_ulid()[-12:].lower()
+    if case_id:
+        case_short = case_id[-8:].lower()
+        return f"{user_id}/{provider}/case-{case_short}-{short}"
+    return f"{user_id}/{provider}/{short}"
+
+
+def _file_write_secret(
+    envelope: SecretAddEnvelopePayload,
+    *,
+    user_id: str,
+    vault_dir: "Path | None" = None,
+) -> str:
+    """Write the raw key to the LOCAL file vault; return the ``vault_ref``.
+
+    Local-build branch of the vault fork (``local-file://<key-name>``). The
+    raw key value goes ONLY into the 0600 vault file -- it is never logged and
+    never interpolated into an error message. ``vault_dir`` is a test seam
+    (tests point it at a tmpdir; production resolves the persistence dir).
+    """
+    key_name = _build_file_vault_key(envelope.provider, user_id, envelope.case_id)
+    path = _local_vault_path(vault_dir)
+
+    logger.info(
+        "secret-add[local-file]: storing key=%s provider=%s case=%s user=%s "
+        "vault=%s",
+        key_name,
+        envelope.provider,
+        envelope.case_id,
+        user_id,
+        path,
+    )
+    try:
+        store = _read_vault_store(path)
+        store[key_name] = envelope.key_value
+        _write_vault_store(path, store)
+    except Exception as exc:  # noqa: BLE001
+        # Typed error WITHOUT the key value (same discipline as the SSM branch).
+        raise SecretError(
+            f"local file-vault write failed for provider={envelope.provider}: "
+            f"{type(exc).__name__}"
+        ) from exc
+
+    return f"{LOCAL_FILE_VAULT_SCHEME}{key_name}"
+
+
+def _file_read_secret(vault_ref: str, *, vault_dir: "Path | None" = None) -> str:
+    """Read a raw key value back from the LOCAL file vault by ``vault_ref``.
+
+    Called by ``Persistence.get_secret_value`` when the stored ref carries the
+    ``local-file://`` scheme (reads route on the ref scheme, exactly like the
+    SSM/GCP branches). **Caller MUST NOT log the returned value.**
+    """
+    key_name = vault_ref[len(LOCAL_FILE_VAULT_SCHEME) :]
+    path = _local_vault_path(vault_dir)
+    store = _read_vault_store(path)
+    value = store.get(key_name)
+    if value is None:
+        raise SecretNotFoundError(
+            f"local file-vault has no entry for key {key_name!r} "
+            f"(vault file: {path})"
+        )
+    return str(value)
+
+
+def _file_delete_secret(vault_ref: str, *, vault_dir: "Path | None" = None) -> None:
+    """Hard-delete a local vault entry (parity with ``_aws_delete_secret``).
+
+    ``handle_secret_revoke`` stays a SOFT revoke (Mongo/file record flag);
+    this purge helper exists for an explicit hard-delete caller. Best-effort:
+    a missing entry / missing vault file is not an error.
+    """
+    if not vault_ref.startswith(LOCAL_FILE_VAULT_SCHEME):
+        return
+    key_name = vault_ref[len(LOCAL_FILE_VAULT_SCHEME) :]
+    path = _local_vault_path(vault_dir)
+    try:
+        store = _read_vault_store(path)
+        if key_name in store:
+            del store[key_name]
+            _write_vault_store(path, store)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "secret-revoke[local-file]: best-effort delete failed for key=%s "
+            "(continuing)",
+            key_name,
+        )
+
+
+# --------------------------------------------------------------------------- #
 # Handlers
 # --------------------------------------------------------------------------- #
 
@@ -436,6 +613,9 @@ async def handle_secret_add(
 
     1. Write the raw ``key_value`` to the selected vault backend and capture
        the ``vault_ref``:
+         - **LOCAL** (``GRACE2_SOLVER_BACKEND=local-docker`` -- the TRID3NT
+           local build): mode-0600 ``secrets_vault.json`` under the
+           file-persistence dir; ``vault_ref="local-file://<key-name>"``.
          - **AWS** (``GRACE2_STORAGE_BACKEND`` ∈ {s3, aws}): ``put_parameter``
            a ``SecureString`` under ``/grace2/secrets/<user>/<provider>/<ulid>``
            (KMS-encrypted at rest); ``vault_ref="aws-ssm://<name>"``.
@@ -488,10 +668,15 @@ async def handle_secret_add(
         # write a zero-byte secret version to the vault.
         raise SecretError("handle_secret_add: key_value is empty")
 
-    # Backend fork: AWS SSM Parameter Store (SecureString) on the AWS stack,
-    # GCP Secret Manager everywhere else. We never surface key_value into a
-    # log line on either branch.
-    if _aws_secret_backend_selected():
+    # Backend fork: LOCAL file vault when solves run on this machine
+    # (``GRACE2_SOLVER_BACKEND=local-docker`` -- checked first so a local box
+    # never writes a credential to a cloud vault; fingerprint audit L8), AWS
+    # SSM Parameter Store (SecureString) on the AWS stack, GCP Secret Manager
+    # everywhere else. We never surface key_value into a log line on any
+    # branch.
+    if _local_file_vault_selected():
+        vault_ref = _file_write_secret(envelope, user_id=user_id)
+    elif _aws_secret_backend_selected():
         vault_ref = _aws_write_secret(
             envelope, user_id=user_id, ssm_client=ssm_client
         )

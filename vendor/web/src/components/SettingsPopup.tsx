@@ -25,6 +25,11 @@ import type { ProviderID, SecretRecord } from "../contracts";
 // `wakeConfigured()` still gates the section so dev/LAN (no wake endpoint, box
 // never auto-stops -> no asleep/wake affordance) hides it, exactly as before.
 import { wakeConfigured } from "../lib/wake";
+// TRID3NT LOCAL (F5, live-feedback 2026-07-08): the local build is a
+// single-user product with NO auth -- the whole Account section (sign-in CTA,
+// sign-out, "Anonymous mode" identity copy) gates OFF on the deployment seam.
+// Cloud rendering is byte-identical when the flag is unset.
+import { isLocalDeployment } from "../lib/deployment";
 // job-0322 F56 — chat-opacity control. The SHARED localStorage key + the tier
 // type + the read/write helpers are OWNED by Chat.tsx (Group B), which also
 // applies the resulting alpha to both the desktop chat container and the
@@ -53,6 +58,15 @@ import {
   writeTerrain3dEnabled,
   readContoursEnabled,
 } from "../lib/terrain_3d";
+// TRID3NT LOCAL (live-feedback 2026-07-08) - "Show model thinking" toggle.
+// LOCAL-ONLY (gated on isLocalDeployment below): streams the local model's
+// reasoning-channel tokens into the chat as a greyed thinking block. Settings
+// owns the persistence write (mirroring the bbox / terrain pattern); Chat.tsx
+// reads the effective pref per turn via showThinkingPref(). DEFAULT ON.
+import {
+  readShowThinking,
+  writeShowThinking,
+} from "../lib/thinking_pref";
 
 export interface SettingsPopupProps {
   /** Email of the signed-in user, or null if anonymous. */
@@ -350,6 +364,19 @@ export function SettingsPopup({
     onTerrain3dChange?.({ terrain3d: next, contours: contoursEnabled });
   }
 
+  // TRID3NT LOCAL - "Show model thinking" flag (DEFAULT ON). Persisted here;
+  // Chat.tsx reads the effective pref per turn via showThinkingPref(), so no
+  // App callback is needed. The toggle renders only on the LOCAL build.
+  const [showThinking, setShowThinking] = useState<boolean>(() =>
+    readShowThinking(),
+  );
+
+  function onToggleShowThinking(): void {
+    const next = !showThinking;
+    setShowThinking(next);
+    writeShowThinking(next);
+  }
+
   // SHARED-BOX SLEEP (NATE 2026-06-29). Two-step: first click ARMS a confirm,
   // the second performs a PER-SESSION pause. This is a PURE client action now -
   // no network, no token, no box stop: App closes THIS session's WS, clears the
@@ -411,49 +438,73 @@ export function SettingsPopup({
         </button>
         <h2 style={headerStyle}>Settings</h2>
 
-        {/* Account section */}
-        <div style={sectionStyle}>
-          <div style={sectionTitleStyle}>Account</div>
-          <div style={valueStyle}>
-            <span data-testid="grace2-settings-account-label">
-              {isSignedIn && userEmail
-                ? userEmail
-                : "Anonymous mode"}
-            </span>
-            {isSignedIn ? (
-              <button
-                data-testid="grace2-settings-signout"
-                onClick={onSignOut}
-                style={buttonStyle}
-                aria-label="Sign out"
+        {/* Show model thinking (LOCAL only, F8): stream the local model's
+            reasoning tokens as a grey foldable block. Default ON. */}
+        {isLocalDeployment() && (
+          <div style={sectionStyle}>
+            <div style={sectionTitleStyle}>Model thinking</div>
+            <label
+              style={{ ...valueStyle, cursor: "pointer" }}
+              data-testid="grace2-settings-show-thinking"
+            >
+              <span>Show model thinking</span>
+              <input
+                type="checkbox"
+                checked={showThinking}
+                onChange={onToggleShowThinking}
+                aria-label="Show model thinking tokens"
+              />
+            </label>
+          </div>
+        )}
+
+        {/* Account section. Hidden entirely in the LOCAL build (F5): single
+            user, no login -- an account/sign-in surface would be a cloud
+            fingerprint and a lie. */}
+        {!isLocalDeployment() && (
+          <div style={sectionStyle}>
+            <div style={sectionTitleStyle}>Account</div>
+            <div style={valueStyle}>
+              <span data-testid="grace2-settings-account-label">
+                {isSignedIn && userEmail
+                  ? userEmail
+                  : "Anonymous mode"}
+              </span>
+              {isSignedIn ? (
+                <button
+                  data-testid="grace2-settings-signout"
+                  onClick={onSignOut}
+                  style={buttonStyle}
+                  aria-label="Sign out"
+                >
+                  Sign out
+                </button>
+              ) : (
+                <button
+                  data-testid="grace2-settings-signin"
+                  onClick={onSignInRequest}
+                  style={primaryButtonStyle}
+                  aria-label="Sign in to save your work"
+                >
+                  Sign in
+                </button>
+              )}
+            </div>
+            {!isSignedIn && (
+              <div
+                data-testid="grace2-settings-account-cta"
+                style={{
+                  fontSize: 11,
+                  color: "#9aa0ad",
+                  marginTop: 4,
+                  lineHeight: 1.5,
+                }}
               >
-                Sign out
-              </button>
-            ) : (
-              <button
-                data-testid="grace2-settings-signin"
-                onClick={onSignInRequest}
-                style={primaryButtonStyle}
-                aria-label="Sign in to save your work"
-              >
-                Sign in
-              </button>
+                Sign in to save your work and sync Cases across devices.
+              </div>
             )}
           </div>
-          {!isSignedIn && (
-            <div
-              data-testid="grace2-settings-account-cta"
-              style={{
-                fontSize: 11,
-                color: "#9aa0ad",
-                marginTop: 4,
-                lineHeight: 1.5,
-              }}
-            >
-              Sign in to save your work and sync Cases across devices.
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Appearance section */}
         <div style={sectionStyle}>

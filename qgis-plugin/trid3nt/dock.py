@@ -188,6 +188,14 @@ class SettingsDialog(QDialog):
         super().accept()
 
 
+# Style constants for the thinking block (F9, live-feedback 2026-07-09).
+_THINKING_TOGGLE_STYLE = "color: palette(mid); font-size: 8pt; border: none; text-align: left;"
+_THINKING_BLOCK_STYLE = (
+    "background-color: palette(window); border-left: 2px solid palette(mid); "
+    "border-radius: 2px; padding: 4px 6px; font-size: 8pt; color: palette(mid);"
+)
+
+
 class _AssistantEntry:
     """One pending/complete assistant bubble + its status-line area."""
 
@@ -196,6 +204,32 @@ class _AssistantEntry:
         lay = QVBoxLayout(self.container)
         lay.setContentsMargins(0, 2, 40, 2)
         lay.setSpacing(2)
+
+        # F9 thinking block: toggle button + collapsible text label.
+        # Hidden until the first thinking-chunk arrives.
+        self._thinking_container = QWidget()
+        thinking_lay = QVBoxLayout(self._thinking_container)
+        thinking_lay.setContentsMargins(0, 0, 0, 0)
+        thinking_lay.setSpacing(0)
+
+        self._thinking_toggle = QPushButton("Thinking...")
+        self._thinking_toggle.setFlat(True)
+        self._thinking_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self._thinking_toggle.setCheckable(True)
+        self._thinking_toggle.setChecked(True)  # expanded while streaming
+        self._thinking_toggle.clicked.connect(self._toggle_thinking)
+        thinking_lay.addWidget(self._thinking_toggle)
+
+        self._thinking_label = QLabel("")
+        self._thinking_label.setWordWrap(True)
+        self._thinking_label.setTextFormat(Qt.PlainText)
+        self._thinking_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._thinking_label.setStyleSheet(_THINKING_BLOCK_STYLE)
+        thinking_lay.addWidget(self._thinking_label)
+
+        self._thinking_container.setVisible(False)
+        lay.addWidget(self._thinking_container)
+        self._thinking_text = ""
 
         self.label = QLabel("")
         self.label.setWordWrap(True)
@@ -219,7 +253,29 @@ class _AssistantEntry:
         parent_layout.insertWidget(parent_layout.count() - 1, self.container)
         self.text = ""
 
+    # -- thinking block ---------------------------------------------------- #
+
+    def _toggle_thinking(self) -> None:
+        self._thinking_label.setVisible(self._thinking_toggle.isChecked())
+
+    def append_thinking_delta(self, delta: str) -> None:
+        """Accumulate a reasoning-channel token delta; show the thinking block."""
+        self._thinking_text += delta
+        self._thinking_label.setText(self._thinking_text)
+        self._thinking_container.setVisible(True)
+
+    def collapse_thinking(self) -> None:
+        """Collapse the thinking block once the answer starts streaming."""
+        self._thinking_toggle.setChecked(False)
+        self._thinking_toggle.setText("Thought process")
+        self._thinking_label.setVisible(False)
+
+    # -- answer text ------------------------------------------------------- #
+
     def append_delta(self, delta: str) -> None:
+        if not self.text and self._thinking_text:
+            # First answer token: collapse the thinking block.
+            self.collapse_thinking()
         self.text += delta
         self.label.setText(self.text)
         self.label.setVisible(True)
@@ -661,6 +717,16 @@ class Trid3ntDock(QDockWidget):
         self.selection_checkbox.toggled.connect(self._on_selection_aoi_toggled)
         sel_row.addWidget(self.selection_checkbox)
         outer.addLayout(sel_row)
+        # F9 (live-feedback 2026-07-09): "Show model thinking" toggle.
+        # When checked, the next user-message carries show_thinking=True and the
+        # dock renders the model's reasoning-channel tokens as a collapsible grey
+        # block above each answer. Default ON.
+        thinking_row = QHBoxLayout()
+        self.thinking_checkbox = QCheckBox("Show model thinking")
+        self.thinking_checkbox.setChecked(self.settings.show_thinking)
+        self.thinking_checkbox.toggled.connect(self._on_thinking_toggled)
+        thinking_row.addWidget(self.thinking_checkbox)
+        outer.addLayout(thinking_row)
         self.aoi_status = QLabel(aoi.aoi_status_text(None, False))
         self.aoi_status.setStyleSheet(_STATUS_LINE_STYLE)
         outer.addWidget(self.aoi_status)
@@ -807,6 +873,10 @@ class Trid3ntDock(QDockWidget):
     def _on_selection_aoi_toggled(self, checked: bool) -> None:
         self.settings.selection_aoi = checked
         self._refresh_aoi_status()
+
+    def _on_thinking_toggled(self, checked: bool) -> None:
+        """F9 (live-feedback 2026-07-09): persist the show_thinking preference."""
+        self.settings.show_thinking = checked
 
     # -- connection ----------------------------------------------------------- #
 
@@ -1008,7 +1078,14 @@ class Trid3ntDock(QDockWidget):
     def _on_event(self, kind: str, data: object) -> None:
         if not isinstance(data, dict):
             return
-        if kind == "chunk":
+        if kind == "thinking-chunk":
+            # F9 (live-feedback 2026-07-09): local model reasoning-channel token.
+            # Accumulate into the pending entry's thinking block; the block
+            # collapses automatically when the first answer delta arrives.
+            entry = self._ensure_pending()
+            entry.append_thinking_delta(str(data.get("delta") or ""))
+            self._scroll_to_bottom()
+        elif kind == "chunk":
             entry = self._ensure_pending()
             entry.append_delta(str(data.get("delta") or ""))
             self._scroll_to_bottom()
@@ -1130,7 +1207,9 @@ class Trid3ntDock(QDockWidget):
             else text
         )
         try:
-            self.bridge.send_chat(wire_text)
+            # F9: pass show_thinking so the server enables reasoning-channel
+            # forwarding for this turn (local mode only; remote ignores the field).
+            self.bridge.send_chat(wire_text, show_thinking=self.settings.show_thinking)
         except Exception as exc:  # noqa: BLE001
             self._pending.add_note(f"send failed: {exc}", error=True)
 

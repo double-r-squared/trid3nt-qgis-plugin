@@ -151,9 +151,24 @@ def resolve_selected_model(requested: str | None) -> tuple[str | None, str | Non
 
     ``requested is None`` is the normal "no explicit choice" case and returns
     ``(None, None)`` — silent default, no notice.
+
+    MODEL_PROVIDER=openai (the TRID3NT local build -- F2, live-feedback
+    2026-07-08): the selectable set is whatever the local runtime serves (the
+    web lists it live via the agent's ``/api/local-models`` endpoint), NOT the
+    Bedrock allowlist, so the id passes through verbatim. Safety still holds:
+    ``openai_adapter.openai_model`` ignores a Bedrock-shaped id (falls back to
+    ``GRACE2_OPENAI_MODEL``), and a model the runtime does not have raises the
+    runtime's own honest error rather than a fabricated success. The legacy
+    ``"local-default"`` placeholder id (the pre-F2 web registry entry, possibly
+    persisted in localStorage) maps to ``None`` — "use the server default".
+    The cloud (bedrock) validation path below is byte-identical.
     """
     if requested is None:
         return None, None
+    if model_provider() == "openai":
+        if requested == "local-default":
+            return None, None
+        return requested, None
     if requested in SELECTABLE_MODEL_IDS:
         return requested, None
     return (

@@ -326,3 +326,45 @@ def test_clamp_fetch_resolution_helper() -> None:
     assert server._clamp_fetch_resolution(30.0, 5.0) == 30.0
     # Equal -> the bound.
     assert server._clamp_fetch_resolution(5.0, 5.0) == 5.0
+
+
+# --------------------------------------------------------------------------- #
+# 10) Local-cloud fingerprint seam (NATE 2026-07-08): the LOCAL build
+#     (GRACE2_SOLVER_BACKEND=local-docker) must not surface the cloud
+#     "fetch (1 vCPU)" compute label on the confirm card -- it renders the
+#     "local" compute lane instead. The cloud lane (aws-batch / unset) keeps
+#     the exact prior values byte-for-byte.
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "backend,expected_compute_class",
+    [
+        ("local-docker", "local"),
+        ("aws-batch", "fetch"),
+        ("", "fetch"),  # unset/empty -> the cloud default, unchanged
+    ],
+)
+async def test_fetch_gate_compute_label_deployment_aware(
+    monkeypatch, backend: str, expected_compute_class: str
+) -> None:
+    from grace2_agent import server
+
+    if backend:
+        monkeypatch.setenv("GRACE2_SOLVER_BACKEND", backend)
+    else:
+        monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+
+    ws, state = _FakeWS(), _FakeState()
+    approver = asyncio.create_task(_drive_decision(server, "proceed"))
+    should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+        ws, state, "fetch_dem", _fetch_params()
+    )
+    await approver
+
+    assert should_run is True
+    card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
+    g = card["payload"]["granularity"]
+    assert g["compute_class"] == expected_compute_class
+    # Both lanes: vcpus stays 1 (contract requires > 0) and no Spot label.
+    assert g["vcpus"] == 1
+    assert g["spot_label"] is None

@@ -123,6 +123,7 @@ import {
 import { IconChevronRight, IconSandbox } from "./components/icons";
 import { WakeOverlay, WakePhase } from "./components/WakeOverlay";
 import { wakeConfigured } from "./lib/wake";
+import { showThinkingPref } from "./lib/thinking_pref";
 import { AgentMessage } from "./components/AgentMessage";
 import { UserBubble } from "./components/UserBubble";
 import { ScrollToBottom } from "./components/ScrollToBottom";
@@ -610,6 +611,13 @@ export interface ChatMessage {
   role: "user" | "agent";
   text: string;
   done: boolean;
+  /**
+   * LOCAL build only (live-feedback F8/F10 2026-07-09): accumulated reasoning
+   * tokens from agent-thinking-chunk deltas. Only populated on the local build
+   * when show_thinking is enabled; absent on cloud (cloud never emits
+   * agent-thinking-chunk).
+   */
+  thinkingText?: string;
 }
 
 // --- Pipeline inline state ----------------------------------------------- //
@@ -1363,6 +1371,50 @@ export function routeAgentChunk(
   const s = getStream(cs, owningKey(cs, caseId));
   recordMessageSeqIn(s, p.message_id);
   s.messages = appendDelta(s.messages, p);
+}
+
+/**
+ * LOCAL build only (live-feedback F8/F10 2026-07-09) — route an
+ * `agent-thinking-chunk` envelope into the OWNING stream's ChatMessage
+ * thinking block. The thinking block is keyed by message_id (same as the
+ * subsequent agent-message-chunk answer). Append-only: each delta accumulates
+ * so the ThinkingBlock can render the full reasoning text.
+ */
+export function routeThinkingChunk(
+  cs: ChatStreams,
+  p: AgentMessageChunkPayload,
+  caseId?: string | null,
+): void {
+  adoptRootInto(cs, caseId);
+  const s = getStream(cs, owningKey(cs, caseId));
+  // Ensure a message slot exists for this thinking block keyed by message_id.
+  // We don't call recordMessageSeqIn here -- the answer chunk that follows will
+  // claim the seq slot and position the bubble; thinking is pre-answer and
+  // should appear ABOVE that answer, not as a separate interleaved row.
+  const idx = s.messages.findIndex((m) => m.id === p.message_id);
+  if (idx === -1) {
+    // No answer bubble yet -- create a placeholder that carries only the
+    // thinking text. It will be updated in-place by the subsequent answer chunks.
+    recordMessageSeqIn(s, p.message_id);
+    s.messages = [
+      ...s.messages,
+      {
+        id: p.message_id,
+        role: "agent",
+        text: "",
+        done: false,
+        thinkingText: p.delta,
+      },
+    ];
+  } else {
+    const existing = s.messages[idx]!;
+    const next = s.messages.slice();
+    next[idx] = {
+      ...existing,
+      thinkingText: (existing.thinkingText ?? "") + p.delta,
+    };
+    s.messages = next;
+  }
 }
 
 export function routePipelineState(
@@ -3570,6 +3622,13 @@ export function Chat({
         routeAgentChunk(streamsRef.current, p, caseId);
         bumpInbound();
       },
+      // LOCAL build only (live-feedback F8/F10 2026-07-09): route
+      // agent-thinking-chunk deltas into the matching message's thinkingText
+      // field. Cloud servers never emit this envelope, so cloud is unaffected.
+      onAgentThinkingChunk: (p: AgentMessageChunkPayload, caseId?: string | null) => {
+        routeThinkingChunk(streamsRef.current, p, caseId);
+        bumpInbound();
+      },
       onPipelineState: (p: PipelineStatePayload, caseId?: string | null) => {
         routePipelineState(streamsRef.current, p, caseId);
         bumpInbound();
@@ -3675,6 +3734,18 @@ export function Chat({
       onPayloadWarning: (p: PayloadWarningEnvelopePayload) => {
         routePayloadWarning(streamsRef.current, p);
         bumpInbound();
+        // Gate UX (live-feedback 2026-07-09): a payload gate card arriving
+        // while the user is scrolled up (reading the geocoded area card or
+        // prior narration) would be invisible. Force-scroll to the bottom
+        // unconditionally so the gate card is always seen, regardless of
+        // whether atBottomRef is true. Use requestAnimationFrame so React has
+        // flushed the new payloadWarnings entry before we measure scrollHeight.
+        requestAnimationFrame(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            atBottomRef.current = true;
+          }
+        });
       },
       // Region-disambiguation request (state-bbox-fallback narrowing): a
       // geocode snapped to a whole-state bbox and the agent is offering a
@@ -4254,7 +4325,10 @@ export function Chat({
     bump();
     // NATE 2026-06-17 — include the selected Bedrock model id on every turn
     // so the agent can hot-swap between turns without a reconnect.
-    wsRef.current.sendUserMessage(text, researchMode, modelId ?? null);
+    // LOCAL build: pass show_thinking so the server enables reasoning-channel
+    // forwarding for this turn (F8/F10 live-feedback 2026-07-09). Cloud builds
+    // get undefined (omitted from the wire payload by sendUserMessage).
+    wsRef.current.sendUserMessage(text, researchMode, modelId ?? null, showThinkingPref());
   }
 
   function cancel(): void {
@@ -5151,6 +5225,8 @@ export type InterleavedEntry =
       id: string;
       text: string;
       done: boolean;
+      /** LOCAL build only: accumulated thinking tokens (may be undefined). */
+      thinkingText?: string;
     }
   | {
       kind: "tool";
@@ -5302,6 +5378,8 @@ export function buildInterleavedStream(
         id: m.id,
         text: m.text,
         done: m.done,
+        // LOCAL only: carry thinking tokens to the renderer; undefined on cloud.
+        ...(m.thinkingText !== undefined ? { thinkingText: m.thinkingText } : {}),
       });
     }
   }
@@ -5588,6 +5666,7 @@ function InterleavedChatStream({
               key={entry.id}
               text={entry.text}
               done={entry.done}
+              thinkingText={entry.thinkingText}
             />
           );
         }

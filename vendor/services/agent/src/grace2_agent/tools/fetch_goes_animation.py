@@ -177,6 +177,15 @@ _BLEND_FIRE_PRODUCT = "fire_temperature"
 #: LayerURI name label for a blended frame.
 _BLEND_PRODUCT_LABEL = "Fire (GeoColor + Fire Temperature)"
 
+#: ``band`` tokens that route ``fetch_goes_animation`` to the BLENDED composite
+#: path (GeoColor base + Fire Temperature glow in ONE scrubber group). Folding
+#: the former ``fetch_goes_blend_animation`` in as a band keyword collapses two
+#: near-identical sibling tools into one surface (small-model routing).
+_BLEND_BAND_TOKENS = frozenset(
+    {"blend", "blended", "combined", "geocolor_fire", "geocolor_fire_temperature",
+     "geocolor+fire", "geocolor_and_fire_temperature"}
+)
+
 #: Shared style preset for blended frames (3-band RGB COG -> multiband passthrough).
 _GOES_BLEND_STYLE_PRESET = "goes_rgb_animation"
 
@@ -425,7 +434,12 @@ def fetch_goes_animation(
     # job-0164: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> list[LayerURI]:
-    """Build a GOES GeoColor / Fire Temperature animation (ordered per-frame RGB COGs) over a time window.
+    """Build a GOES GeoColor / Fire Temperature / BLENDED satellite animation (ordered per-frame RGB COGs) over a time window.
+
+    Use this (not ``fetch_goes_satellite``, which is a single still frame) for a
+    time-stepped GOES loop. Pass ``band="blend"`` for the CIRA combined GeoColor +
+    Fire Temperature composite (this ABSORBS the former ``fetch_goes_blend_animation``
+    -- one scrubber group with the active-fire glow on the true-color base).
 
     **What it does:** Pulls the ready-made CIRA/RAMMB SLIDER GeoColor or Fire
     Temperature RGB imagery for a GOES geostationary satellite (default GOES-18 /
@@ -453,7 +467,9 @@ def fetch_goes_animation(
     - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
       Required.
     - ``band`` (str, default ``"geocolor"``): ``"geocolor"`` or
-      ``"fire_temperature"`` (the two CIRA fire-animation products).
+      ``"fire_temperature"`` (the two CIRA fire-animation products), or
+      ``"blend"`` for the combined GeoColor + Fire Temperature composite (ONE
+      scrubber group; the former ``fetch_goes_blend_animation``).
     - ``satellite`` (str, default ``"goes-18"``): ``"goes-18"`` (West) or
       ``"goes-19"`` (East).
     - ``sector`` (str, default ``"conus"``): SLIDER sector slug (``"conus"`` /
@@ -486,6 +502,17 @@ def fetch_goes_animation(
       + ``fetch_nifc_fire_perimeters`` (perimeter overlay).
     - Driven by: ``run_model_satellite_fire_animation``.
     """
+    # BLEND consolidation: a blend band token routes to the combined GeoColor +
+    # Fire Temperature composite path (the folded-in fetch_goes_blend_animation).
+    if isinstance(band, str) and band.strip().lower() in _BLEND_BAND_TOKENS:
+        return _blend_animation_impl(
+            bbox,
+            satellite=satellite,
+            sector=sector,
+            start_utc=start_utc,
+            end_utc=end_utc,
+            step_minutes=step_minutes,
+        )
     q_bbox = _round_bbox(_validate_bbox(bbox))
     product = _band_to_slider_product(band)
     # Normalize-then-validate: accept GOES-18 / goes18 / G18 / "GOES West" / 18
@@ -629,13 +656,7 @@ def _build_blend_metadata() -> AtomicToolMetadata:
 _BLEND_METADATA = _build_blend_metadata()
 
 
-@register_tool(
-    _BLEND_METADATA,
-    # readOnlyHint=True, openWorldHint=True (external SLIDER tiles),
-    # destructiveHint=False, idempotentHint=True (per-frame cache dedupes).
-    open_world_hint=True,
-)
-def fetch_goes_blend_animation(
+def _blend_animation_impl(
     bbox: tuple[float, float, float, float],
     satellite: str = "goes-18",
     sector: str = "conus",
@@ -646,6 +667,10 @@ def fetch_goes_blend_animation(
     **_extra_ignored: Any,
 ) -> list[LayerURI]:
     """Build a BLENDED GeoColor + Fire Temperature animation (ONE composite scrubber group).
+
+    Shared implementation for the blended composite path. Reached via
+    ``fetch_goes_animation(band="blend")`` (canonical surface) and via the
+    DEPRECATED ``fetch_goes_blend_animation`` delegate (backward compat).
 
     **What it does:** For each SLIDER scan time in the window, pulls BOTH the
     GeoColor (true-color base, shows smoke) and the Fire Temperature (SWIR active-
@@ -812,6 +837,45 @@ def fetch_goes_blend_animation(
         zoom,
     )
     return layers
+
+
+@register_tool(
+    _BLEND_METADATA,
+    # readOnlyHint=True, openWorldHint=True (external SLIDER tiles),
+    # destructiveHint=False, idempotentHint=True (per-frame cache dedupes).
+    open_world_hint=True,
+)
+def fetch_goes_blend_animation(
+    bbox: tuple[float, float, float, float],
+    satellite: str = "goes-18",
+    sector: str = "conus",
+    start_utc: str | None = None,
+    end_utc: str | None = None,
+    step_minutes: int = 5,
+    # job-0164: absorb LLM-invented kwargs.
+    **_extra_ignored: Any,
+) -> list[LayerURI]:
+    """DEPRECATED alias of ``fetch_goes_animation`` with ``band="blend"``.
+
+    Retained as a thin registered delegate for backward compatibility (existing
+    cases + the routing bench). New callers should use ``fetch_goes_animation``
+    with ``band="blend"`` -- the blended GeoColor + Fire Temperature composite is
+    now a band mode of the one GOES-animation tool, not a separate sibling.
+
+    Builds the BLENDED GeoColor + Fire Temperature animation (ONE composite
+    scrubber group): for each SLIDER scan time it pulls BOTH products at the same
+    valid-time and composites them (GeoColor base + active-fire glow), returning
+    an ORDERED ``list[LayerURI]`` -- one blended frame per scan time.
+    """
+    return _blend_animation_impl(
+        bbox,
+        satellite=satellite,
+        sector=sector,
+        start_utc=start_utc,
+        end_utc=end_utc,
+        step_minutes=step_minutes,
+        **_extra_ignored,
+    )
 
 
 # ---------------------------------------------------------------------------

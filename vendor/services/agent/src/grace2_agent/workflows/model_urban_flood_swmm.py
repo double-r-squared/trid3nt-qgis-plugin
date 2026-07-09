@@ -643,11 +643,12 @@ async def model_urban_flood_swmm(
         # identical to the proven SFINCS pattern in model_flood_scenario.
         # Best-effort: emitter None -> no-op; cancelled + awaited in a finally
         # regardless of outcome. The heartbeat wraps BOTH lanes.
-        from ..tools.solver import AWS_BATCH_COMPUTE_CLASS_SIZING
+        # Deployment-aware CPU count (fingerprint audit A6): local-docker
+        # reports the HOST cpu count (the web renders it with "CPU" wording);
+        # aws-batch keeps the tier lookup byte-identical.
+        from ..tools.solver import solve_progress_vcpus
 
-        _swmm_vcpus = AWS_BATCH_COMPUTE_CLASS_SIZING.get(
-            effective_compute_class, {}
-        ).get("vcpus")
+        _swmm_vcpus = solve_progress_vcpus(effective_compute_class)
         if not is_local_mode():
             # --- Out-of-process lane (GRACE2_SWMM_LOCAL=0): GENERIC Batch seam.
             # Stage the built deck + a worker-contract manifest to S3, then

@@ -36,6 +36,9 @@
 
 import { useState } from "react";
 import { ProviderID, SecretRecord, SecretsListPayload } from "../contracts";
+// TRID3NT LOCAL (F5): no accounts locally, so the signed-in-account tooltip on
+// the user-wide scope is cloud copy; local wording drops the account mention.
+import { isLocalDeployment } from "../lib/deployment";
 
 // --- Display vocabulary -------------------------------------------------- //
 
@@ -363,7 +366,11 @@ export function SecretsPanel({
           </label>
           <label
             style={{ fontSize: 11, color: "#aaa" }}
-            title="User-wide secrets require a signed-in account."
+            title={
+              isLocalDeployment()
+                ? "User-wide secrets apply to every Case on this machine."
+                : "User-wide secrets require a signed-in account."
+            }
           >
             <input
               type="radio"

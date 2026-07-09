@@ -406,6 +406,20 @@ def _geojson_to_fgb(geojson: dict[str, Any]) -> bytes:
             crs="EPSG:4326",
         )
 
+    # NWS zone-based alerts (e.g. statewide watches) carry NULL geometry;
+    # pyogrio's FlatGeobuf writer rejects them while building the spatial
+    # index ("ICreateFeature: NULL geometry not supported"). Drop them --
+    # they have no map footprint to draw anyway (2026-07-06 local sweep).
+    n_null = int(gdf.geometry.isna().sum()) if len(gdf) else 0
+    if n_null:
+        gdf = gdf[gdf.geometry.notna()]
+        logger.info(
+            "fetch_nws_event: dropped %d geometry-less zone alert(s) before "
+            "FlatGeobuf write (%d drawable remain)",
+            n_null,
+            len(gdf),
+        )
+
     tmp_fgb: str | None = None
     try:
         with tempfile.NamedTemporaryFile(

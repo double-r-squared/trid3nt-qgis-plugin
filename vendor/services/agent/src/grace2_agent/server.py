@@ -42,7 +42,11 @@ from typing import Any
 
 from pydantic import ValidationError
 from websockets.asyncio.server import ServerConnection, serve
-from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
+from websockets.exceptions import (
+    ConnectionClosed,
+    ConnectionClosedError,
+    ConnectionClosedOK,
+)
 
 from grace2_contracts import new_ulid, now_utc
 from grace2_contracts.execution import LayerURI
@@ -143,6 +147,12 @@ from .credential_registry import (
     provider_for_tool,
 )
 from .layer_uri_emit import emit_layer_uri
+from .lessons import (
+    lessons_appendix,
+    lessons_enabled,
+    observe_turn as observe_lessons_turn,
+    register_lesson,
+)
 from .mode2_classifier import (
     Mode2CandidateEnvelope,
     classify_for_mode2,
@@ -415,6 +425,15 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # whole AOI, so no rupture/incident-area user input is needed for classical
     # PSHA (that is scenario mode, which is not built).
     "run_seismic_hazard_psha",
+    # FIRE-3: the ELMFIRE wildfire-spread composer joins the confirm set
+    # (Invariant 9 — a consequential solver run: LANDFIRE fetches + a
+    # containerized level-set solve). The card is built by
+    # _build_fire_confirm_envelope from the call args: approximate grid cell
+    # count + a FIRE-1-calibrated runtime estimate + the scenario weather, so
+    # the user confirms the actual run about to dispatch. Simple
+    # proceed/cancel (no granularity picker at v1 — cellsize_m is an explicit
+    # tool arg the LLM can restate).
+    "model_fire_spread",
 }
 
 
@@ -2315,7 +2334,14 @@ async def _send_error(
     retryable: bool = False,
 ) -> None:
     payload = ErrorPayload(error_code=code, message=message, retryable=retryable)
-    await websocket.send(_new_envelope("error", session_id, payload))
+    # F1 (2026-07-08): route through the session-aware safe send. An error
+    # reply aimed at a just-dropped socket must reach the session's surviving
+    # sibling socket when one exists, and must NEVER raise into the caller --
+    # pre-fix, the turn-failure path's _send_error re-raised ConnectionClosed
+    # and skipped the terminal-failure-card persist entirely.
+    await _session_safe_send(
+        websocket, session_id, _new_envelope("error", session_id, payload)
+    )
 
 
 # WS-30s STORM FIX (server data heartbeat): the browser ``WebSocket`` API
@@ -2398,6 +2424,62 @@ async def _heartbeat_loop(
             )
 
 
+# ---------------------------------------------------------------------------
+# F1 (live-feedback 2026-07-08 local): mid-turn emission resilience.
+#
+# ROOT CAUSE of "nothing streams during the turn / it all appears at the end":
+# every raw ``await websocket.send(...)`` inside the turn task uses the socket
+# CAPTURED at dispatch time. A browser reload / transport drop mid-turn kills
+# that socket; the turn is detached and kept running (job-SOLVE-SURVIVE), and
+# ``_rebind_live_turns`` re-points the PipelineEmitter sink to the new socket,
+# but the direct sends (agent-message-chunk text deltas, cache-status,
+# loop_exhausted, segment terminators, turn-complete) still target the DEAD
+# socket. Worse, the first such raise inside the stream loop propagated to the
+# ``model stream failed`` handler and ABORTED the whole turn (observed live:
+# the landcover turn died at iter=3 with ConnectionClosedOK 1001, so the
+# fetched landcover was never published).
+#
+# Fix: ``_session_safe_send`` -- try the captured socket, then fall back to
+# any OTHER live socket registered for the session (``_SESSION_WS_CONNECTIONS``
+# is maintained by the resume handshake for exactly this kind of lookup), and
+# NEVER raise. The web side fans message-scoped envelope types across its
+# sibling GraceWs instances (ws.ts SESSION_SCOPED_TYPES), so delivering to
+# either of the session's sockets reaches the right UI handler. When every
+# socket is dead the frame is dropped (logged debug) -- the persisted chat/tool
+# rows remain the durable replay backstop, and the turn KEEPS RUNNING.
+# ---------------------------------------------------------------------------
+
+
+async def _session_safe_send(
+    websocket: "ServerConnection | None",
+    session_id: str,
+    message: str,
+) -> bool:
+    """Send ``message`` on the captured socket, falling back to any live
+    socket of ``session_id``. Never raises; returns True when a send landed.
+    """
+    if websocket is not None:
+        try:
+            await websocket.send(message)
+            return True
+        except Exception:  # noqa: BLE001 -- captured socket may be dead
+            pass
+    for conn in list(_SESSION_WS_CONNECTIONS.get(session_id, ())):
+        if conn is websocket:
+            continue
+        try:
+            await conn.send(message)
+            return True
+        except Exception:  # noqa: BLE001 -- sibling may be mid-close too
+            continue
+    logger.debug(
+        "session-safe-send: no live socket for session=%s (frame dropped; "
+        "persisted rows remain the replay backstop)",
+        session_id,
+    )
+    return False
+
+
 async def _send_loop_exhausted(
     websocket: ServerConnection,
     session_id: str,
@@ -2445,14 +2527,16 @@ async def _send_loop_exhausted(
             ),
             "retryable": False,
         }
-        await websocket.send(
+        await _session_safe_send(
+            websocket,
+            session_id,
             _json.dumps(
                 {
                     "type": "loop_exhausted",
                     "session_id": session_id,
                     "payload": payload,
                 }
-            )
+            ),
         )
         logger.info(
             "loop_exhausted envelope sent session=%s max_iter=%d",
@@ -2484,7 +2568,9 @@ async def _send_agent_abort(
     import json as _json
 
     try:
-        await websocket.send(
+        await _session_safe_send(
+            websocket,
+            session_id,
             _json.dumps(
                 {
                     "type": "loop_exhausted",
@@ -2496,7 +2582,7 @@ async def _send_agent_abort(
                         "retryable": False,
                     },
                 }
-            )
+            ),
         )
         logger.warning(
             "agent-abort session=%s reason=%s", session_id, reason_code
@@ -2668,7 +2754,7 @@ async def _emit_cache_status(
             "candidates_tokens": usage.candidates_token_count,
             "cache_name": state.gemini_cache_name,
         }
-        await websocket.send(
+        await _session_safe_send(websocket, state.session_id,
             _json.dumps(
                 {
                     "type": "cache-status",
@@ -2777,7 +2863,7 @@ async def _stream_gemini_reply(
         state="running",
     )
     state.current_pipeline_steps = [thinking_step]
-    await websocket.send(
+    await _session_safe_send(websocket, state.session_id,
         _new_envelope(
             "pipeline-state",
             state.session_id,
@@ -2889,6 +2975,24 @@ async def _stream_gemini_reply(
             _retrieval_registry = TOOL_REGISTRY
     tool_decls = build_tool_declarations(_retrieval_registry)
 
+    # LESSONS LOOP v1 READ SEAM (track 4, GRACE2_LESSONS gate -- dark by
+    # default). Same layer the retrieval-visible-tools selection runs at: once
+    # per turn, score the stored failed-then-corrected lessons against
+    # ``user_text`` (BM25, ~200-token budget, top 2) and append the advisory
+    # "Past corrections" appendix to the system prompt for THIS turn only.
+    # Advisory text only; any fault falls back to the plain SYSTEM_PROMPT.
+    # NOTE: a non-empty appendix varies the system prompt across turns, which
+    # can reduce Bedrock cachePoint prefix hits -- acceptable while the gate
+    # is dark/off by default; benchmark before arming (A/B via the sweep).
+    _turn_system_prompt = SYSTEM_PROMPT
+    if lessons_enabled():
+        try:
+            _lessons_text = await asyncio.to_thread(lessons_appendix, user_text)
+            if _lessons_text:
+                _turn_system_prompt = SYSTEM_PROMPT + "\n\n" + _lessons_text
+        except Exception:  # noqa: BLE001 -- advisory, never blocks the turn
+            logger.warning("lessons: read-side appendix failed", exc_info=True)
+
     # GCP decommissioned: the agent runs on Bedrock, whose prompt caching is
     # its own ``cachePoint`` mechanism (bedrock_adapter). The Vertex-only
     # ``CachedContent`` fast-path (``gemini_cache.py``) is REMOVED, so this is
@@ -2975,6 +3079,12 @@ async def _stream_gemini_reply(
     _post_deliverable_idle = 0
     _crisp_concluded = False
 
+    # LESSONS LOOP v1 WRITE SEAM (part 1/3): per-turn dispatch record. Every
+    # tool call this turn appends {tool, args, success, error_code} (stamped at
+    # the telemetry chokepoint below); the end-of-turn observe distills any
+    # failed-then-corrected pair into the lessons store (GRACE2_LESSONS gate).
+    _lessons_turn_calls: list[dict] = []
+
     iterations = 0
     try:
         while iterations < _step_cap:
@@ -2996,7 +3106,10 @@ async def _stream_gemini_reply(
                 settings.model,
                 contents,
                 tool_declarations=tool_decls,
-                system_prompt=SYSTEM_PROMPT,
+                # LESSONS LOOP v1: SYSTEM_PROMPT plus the per-turn advisory
+                # lessons appendix (identical to SYSTEM_PROMPT when the
+                # GRACE2_LESSONS gate is off -- the default).
+                system_prompt=_turn_system_prompt,
                 cached_content_name=state.gemini_cache_name,
                 bedrock_model=bedrock_model,
             ):
@@ -3017,7 +3130,7 @@ async def _stream_gemini_reply(
                     chunk = AgentMessageChunkPayload(
                         message_id=current_message_id, delta=event.delta, done=False
                     )
-                    await websocket.send(
+                    await _session_safe_send(websocket, state.session_id,
                         _new_envelope("agent-message-chunk", state.session_id, chunk)
                     )
                     turn_text_parts.append(event.delta)
@@ -3511,6 +3624,18 @@ async def _stream_gemini_reply(
                     # recall@k join key against this turn's shadow-selection row.
                     turn_id=pipeline_id,
                 )
+                # LESSONS LOOP v1 WRITE SEAM (part 2/3): record this dispatch
+                # for the end-of-turn distillation, reusing the telemetry
+                # success/error_code verdict computed just above (so a
+                # returned-failure envelope counts as a typed failure too).
+                _lessons_turn_calls.append(
+                    {
+                        "tool": call.name,
+                        "args": call.args or {},
+                        "success": _tel_success,
+                        "error_code": _tel_error_code,
+                    }
+                )
                 # job-B10: pass the thought_signature harvested off the
                 # function_call Part through to the replayed model turn.
                 # Gemini 3 requires the same opaque byte-blob on the replayed
@@ -3632,7 +3757,7 @@ async def _stream_gemini_reply(
                 # final-segment finalize below no-ops -- emit a standalone
                 # terminator here with a fresh id (mirrors the abort path).
                 if current_message_id is None:
-                    await websocket.send(
+                    await _session_safe_send(websocket, state.session_id,
                         _new_envelope(
                             "agent-message-chunk",
                             state.session_id,
@@ -3660,7 +3785,7 @@ async def _stream_gemini_reply(
             # no-ops. The client still waits for a stream-closing done=True to
             # stop spinning, so emit a standalone terminator with a fresh id.
             if current_message_id is None:
-                await websocket.send(
+                await _session_safe_send(websocket, state.session_id,
                     _new_envelope(
                         "agent-message-chunk",
                         state.session_id,
@@ -3727,7 +3852,7 @@ async def _stream_gemini_reply(
                 # closing bubble (one message_id == one bubble). Each chunk
                 # carries done=False; the terminal done=True comes from
                 # ``_finalize_segment`` below.
-                await websocket.send(
+                await _session_safe_send(websocket, state.session_id,
                     _new_envelope(
                         "agent-message-chunk",
                         state.session_id,
@@ -3757,7 +3882,7 @@ async def _stream_gemini_reply(
                 # terminator with a fresh id (mirrors the loop_exhausted / abort
                 # paths). Honesty floor: no synthesized summary, just the
                 # close-frame.
-                await websocket.send(
+                await _session_safe_send(websocket, state.session_id,
                     _new_envelope(
                         "agent-message-chunk",
                         state.session_id,
@@ -3775,13 +3900,26 @@ async def _stream_gemini_reply(
             state="complete",
         )
         state.current_pipeline_steps = [thinking_step]
-        await websocket.send(
+        await _session_safe_send(websocket, state.session_id,
             _new_envelope(
                 "pipeline-state",
                 state.session_id,
                 PipelineStatePayload(pipeline_id=pipeline_id, steps=[thinking_step]),
             )
         )
+        # LESSONS LOOP v1 WRITE SEAM (part 3/3): end-of-turn distillation. If a
+        # typed tool failure was later corrected in THIS turn (same tool with
+        # changed args, or an intent-matched tool swap), observe_turn distills
+        # it into the lessons store. Never-raise + off-loop (asyncio.to_thread
+        # for the file write); a no-op when GRACE2_LESSONS is off (default).
+        if lessons_enabled() and _lessons_turn_calls:
+            try:
+                await asyncio.to_thread(
+                    observe_lessons_turn, user_text, _lessons_turn_calls
+                )
+            except Exception:  # noqa: BLE001 -- advisory, never breaks the turn
+                logger.warning("lessons: end-of-turn observe failed", exc_info=True)
+
         # job-0269: append to the entry-captured list — after a mid-stream
         # case switch this turn's text must not leak into the NEW Case's
         # LLM context (the carryover class, 74fc0d6).
@@ -3816,6 +3954,25 @@ async def _stream_gemini_reply(
         except Exception:  # noqa: BLE001 — socket may be down on cancel
             pass
         raise
+    except ConnectionClosed as exc:
+        # F2 (live-feedback 2026-07-09 local): the CLIENT transport died
+        # mid-turn. This is NOT a model failure -- the LLM stream rides httpx,
+        # never websockets, so a ConnectionClosed reaching this scope can only
+        # be a residual raw send to the dead client socket. Every known
+        # per-turn send now routes through ``_session_safe_send`` (never
+        # raises; sibling-socket fallback), so this branch is a backstop: log
+        # once and end the turn quietly. NO ``LLM_UNAVAILABLE`` error envelope
+        # and NO terminal-failure card -- reporting a client transport drop as
+        # a model failure was the 01:23 misreport ("Model generation failed:
+        # no close frame received or sent"). The persisted chat/tool rows plus
+        # the session-resume replay carry the turn's results to the client
+        # when it reconnects.
+        logger.warning(
+            "client websocket closed mid-turn (transport drop, not a model "
+            "failure) session=%s: %s",
+            state.session_id,
+            exc,
+        )
     except Exception as exc:  # noqa: BLE001 — surface as A.6 LLM_UNAVAILABLE
         logger.exception("model stream failed: %s", exc)
         await _send_error(
@@ -5720,7 +5877,7 @@ async def _finalize_segment(
     """
     text = "".join(segment_parts).strip()
     # (1) wire terminal for this bubble — always fires (id has text).
-    await websocket.send(
+    await _session_safe_send(websocket, state.session_id,
         _new_envelope(
             "agent-message-chunk",
             state.session_id,
@@ -6255,7 +6412,7 @@ async def _maybe_gate_on_payload_warning(
     fut: asyncio.Future = loop.create_future()
     _register_pending_confirmation(state.session_id, warning_id, fut)
 
-    await websocket.send(
+    await _session_safe_send(websocket, state.session_id,
         _new_envelope("tool-payload-warning", state.session_id, warning_payload)
     )
     logger.info(
@@ -6271,7 +6428,7 @@ async def _maybe_gate_on_payload_warning(
     # with an asyncio timeout so the dispatch coroutine doesn't hang forever).
     try:
         decision_payload: PayloadConfirmationEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=warning_payload.ttl_seconds
+            fut, timeout=_gate_wait_timeout(warning_payload.ttl_seconds)
         )
     except asyncio.TimeoutError:
         audit_entry["decision"] = "timeout"
@@ -6374,7 +6531,7 @@ async def _gate_on_code_exec(
     fut: asyncio.Future = loop.create_future()
     _register_pending_confirmation(state.session_id, code_exec_id, fut)
 
-    await websocket.send(
+    await _session_safe_send(websocket, state.session_id,
         _new_envelope("code-exec-request", state.session_id, request_payload)
     )
     logger.info(
@@ -6387,7 +6544,7 @@ async def _gate_on_code_exec(
 
     try:
         decision_payload: PayloadConfirmationEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=CODE_EXEC_CONFIRM_TIMEOUT_SECONDS
+            fut, timeout=_gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
         )
     except asyncio.TimeoutError:
         logger.warning(
@@ -6563,6 +6720,48 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
     return envelope, auto, dem_path
 
 
+def _local_compute_lane() -> bool:
+    """True when solves run on the LOCAL machine (the TRID3NT local build).
+
+    Local-cloud fingerprint seam (NATE 2026-07-08): the canonical deployment
+    signal is the solver dispatch backend -- ``GRACE2_SOLVER_BACKEND=
+    local-docker`` (``tools.solver.solver_backend()``), which the local build
+    pins and the cloud stack never sets. Used ONLY to localize user-visible
+    confirm-card wording (compute labels / "cloud solve" prose); it never
+    changes dispatch. Cloud wording stays byte-identical when this is False.
+    """
+    from .tools.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
+
+    return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
+
+
+# F6 (live-feedback 2026-07-08): user-decision gates must NOT expire in the
+# TRID3NT local build. The cloud read-decision TTLs (300s payload-warning /
+# code-exec / solver-confirm / credential / region-choice, 60-300s spatial
+# input) exist because a hung turn holds Bedrock-connection economics on the
+# always-on box; locally the user OWNS the machine and the LLM, so a gate card
+# should wait for them indefinitely. "Effectively unbounded" = 24h -- long
+# enough that no human session ever hits it, finite so an abandoned process
+# still unwinds its futures.
+_LOCAL_GATE_TIMEOUT_SECONDS: int = 24 * 3600
+
+
+def _gate_wait_timeout(default_seconds: float) -> float:
+    """Effective ``asyncio.wait_for`` timeout for a user-decision gate future.
+
+    Local build (``_local_compute_lane()`` -- the established
+    ``solver_backend() == "local-docker"`` seam): 24h, so confirmation /
+    resolution / credential / region-choice / spatial-input gates never time
+    out on a user who stepped away. Cloud: ``default_seconds`` unchanged
+    (byte-identical behavior when the backend is aws-batch/unset). The wire
+    envelope (``ttl_seconds`` etc.) is NOT rewritten -- only the server-side
+    wait changes, so the client contract is untouched.
+    """
+    if _local_compute_lane():
+        return float(_LOCAL_GATE_TIMEOUT_SECONDS)
+    return float(default_seconds)
+
+
 # NATE 2026-06-26: per-fetcher resolution ladders for the fetch-resolution gate.
 # Finer = smaller metres. fetch_dem can go to 1 m (3DEP); fetch_topobathy floors
 # at 3 m (CUDEM tiles). Both default to 10 m (the tools' resolution_m default).
@@ -6684,6 +6883,12 @@ async def _build_fetch_resolution_envelope(
     )[:512]
 
     engine = "dem" if tool_name == "fetch_dem" else "topobathy"
+    # Local-cloud fingerprint fix (NATE 2026-07-08): the local build must not
+    # surface the cloud "fetch (1 vCPU)" compute label on the confirm card --
+    # the fetch runs in-process on the local machine, so the compute label is
+    # "local" (the QGIS-plugin/web cards render local wording off it). The
+    # cloud lane keeps the exact prior values byte-for-byte.
+    fetch_compute_class = "local" if _local_compute_lane() else "fetch"
     granularity = GranularitySuggestion(
         engine=engine,
         resolution_param="resolution_m",
@@ -6692,7 +6897,7 @@ async def _build_fetch_resolution_envelope(
         estimated_active_cells=int(px_estimate),
         estimated_solve_seconds=0.0,
         vcpus=1,
-        compute_class="fetch",
+        compute_class=fetch_compute_class,
         cell_cap=int(MAX_FETCH_PX) ** 2,
         coarsened=False,
         reason=reason,
@@ -6832,6 +7037,14 @@ async def _build_flood_run_settings_envelope(
             tuple(coerced),  # type: ignore[arg-type]
         )
         compute_class = params.get("compute_class", "standard") or "standard"
+        card_vcpus = int(auto.vcpus)
+        if _local_compute_lane():
+            # Local-cloud fingerprint fix (NATE 2026-07-08): the local build
+            # solves on the local machine, so the card's compute descriptors
+            # are the local lane's ("local" + host CPU count -- mirrors the
+            # SWMM builder's local lane). Cloud keeps the exact prior values.
+            compute_class = "local"
+            card_vcpus = os.cpu_count() or 1
         rungs = sorted(
             {r for r in SFINCS_RES_LADDER if r > 0}
             | {float(auto.grid_resolution_m)}
@@ -6843,7 +7056,7 @@ async def _build_flood_run_settings_envelope(
             resolution_choices=[float(r) for r in rungs if r > 0],
             estimated_active_cells=int(auto.estimated_active_cells),
             estimated_solve_seconds=float(auto.estimated_solve_seconds),
-            vcpus=int(auto.vcpus),
+            vcpus=card_vcpus,
             compute_class=str(compute_class),
             cell_cap=int(auto.cell_cap),
             coarsened=bool(auto.coarsened),
@@ -6886,7 +7099,14 @@ async def _build_flood_run_settings_envelope(
         threshold_mb=0.0,
         recommendation=(
             f"Run a SFINCS flood simulation for {where} "
-            "(cloud solve, typically 5-20 minutes)."
+            # Local-cloud fingerprint fix (NATE 2026-07-08): local builds run
+            # the solve on this machine -- never say "cloud solve" there. The
+            # cloud phrase is byte-identical to the prior wording.
+            + (
+                "(local solve)."
+                if _local_compute_lane()
+                else "(cloud solve, typically 5-20 minutes)."
+            )
             + res_phrase
             + cadence_phrase
             + " Review the run settings, then confirm to start."
@@ -6989,12 +7209,22 @@ def _build_psha_confirm_envelope(params: dict) -> Any:
         if return_period_years is not None
         else ""
     )
+    # Local-cloud fingerprint fix (NATE 2026-07-08): the local build runs the
+    # OpenQuake engine on this machine -- never say "AWS Batch"/"cloud solve"
+    # there. The cloud phrase is byte-identical to the prior wording.
+    dispatch_phrase = (
+        "This runs the OpenQuake engine locally (typically several minutes)."
+        if _local_compute_lane()
+        else (
+            "This dispatches the OpenQuake engine to AWS Batch (a cloud "
+            "solve, typically several minutes)."
+        )
+    )
     recommendation = (
         f"Run a classical probabilistic seismic-hazard (PSHA) calculation over "
         f"{area_phrase}: intensity measure {imt} at a {poe:g} probability of "
-        f"exceedance in {inv_time:g} years{rp_phrase}. This dispatches the "
-        f"OpenQuake engine to AWS Batch (a cloud solve, typically several "
-        f"minutes). Confirm to start."
+        f"exceedance in {inv_time:g} years{rp_phrase}. {dispatch_phrase} "
+        f"Confirm to start."
     )[:512]
 
     return PayloadWarningEnvelopePayload(
@@ -7013,6 +7243,106 @@ def _build_psha_confirm_envelope(params: dict) -> Any:
                 round(bbox_area_km2) if bbox_area_km2 is not None else None
             ),
             "gmpe": params.get("gmpe", "BooreAtkinson2008"),
+        },
+        estimated_mb=0.0,
+        threshold_mb=0.0,
+        recommendation=recommendation,
+        options=["proceed", "cancel"],
+    )
+
+
+def _build_fire_confirm_envelope(params: dict) -> Any:
+    """FIRE-3: build the ELMFIRE fire-spread solver-confirm card.
+
+    A simple proceed/cancel confirmation (mirrors ``run_seismic_hazard_psha``):
+    PURE arithmetic from the call args — the approximate computational grid
+    (``estimate_elmfire_grid``, cosine-latitude cell count) + the
+    FIRE-1-calibrated runtime heuristic (``estimate_elmfire_runtime_s``) + the
+    scenario weather (wind, fuel-moisture preset expanded to its m1/m10/m100
+    percentages, duration). No fetch, no rasterio — safe to build inline. The
+    ignition-required rule is NOT enforced here: a missing ignition falls
+    through to the tool's own typed ``FIRE_IGNITION_REQUIRED`` error (the gate
+    must never mask parameter problems, matching the extraction-failure
+    fall-through below).
+    """
+    from grace2_contracts.elmfire_contracts import FUEL_MOISTURE_PRESETS
+    from grace2_contracts.payload_warning import PayloadWarningEnvelopePayload
+    from .tool_arg_normalizer import coerce_bbox_value
+    from .workflows.run_elmfire import (
+        estimate_elmfire_grid,
+        estimate_elmfire_runtime_s,
+    )
+
+    coerced = coerce_bbox_value(params.get("bbox"))
+    try:
+        cellsize_m = float(params.get("cellsize_m", 30.0))
+    except (TypeError, ValueError):
+        cellsize_m = 30.0
+    try:
+        duration_hours = float(params.get("duration_hours", 6.0))
+    except (TypeError, ValueError):
+        duration_hours = 6.0
+    try:
+        wind_speed_mph = float(params.get("wind_speed_mph", 15.0))
+    except (TypeError, ValueError):
+        wind_speed_mph = 15.0
+    try:
+        wind_dir_deg = float(params.get("wind_dir_deg", 0.0))
+    except (TypeError, ValueError):
+        wind_dir_deg = 0.0
+    preset = str(params.get("fuel_moisture", "dry")).strip().lower()
+    moisture = FUEL_MOISTURE_PRESETS.get(preset)
+
+    n_cells: int | None = None
+    est_runtime_s: float | None = None
+    if coerced is not None and len(coerced) == 4:
+        _nx, _ny, n_cells = estimate_elmfire_grid(coerced, cellsize_m)
+        est_runtime_s = estimate_elmfire_runtime_s(
+            n_cells, duration_hours * 3600.0
+        )
+
+    cells_phrase = (
+        f"~{n_cells:,} cells at {cellsize_m:g} m" if n_cells is not None
+        else "the requested AOI"
+    )
+    runtime_phrase = (
+        f"; estimated solver time ~{est_runtime_s:,.0f} s"
+        if est_runtime_s is not None
+        else ""
+    )
+    moisture_phrase = (
+        f"{preset} fuels"
+        + (
+            f" (1h/10h/100h = {moisture['m1_pct']:g}/{moisture['m10_pct']:g}/"
+            f"{moisture['m100_pct']:g}%)"
+            if moisture
+            else ""
+        )
+    )
+    recommendation = (
+        f"Run an ELMFIRE wildfire-spread simulation over {cells_phrase}: "
+        f"{duration_hours:g} h burn, wind {wind_speed_mph:g} mph from "
+        f"{wind_dir_deg:g} deg, {moisture_phrase}{runtime_phrase}. This "
+        f"fetches LANDFIRE fuels + terrain and dispatches the ELMFIRE solver. "
+        f"Confirm to start."
+    )[:512]
+
+    return PayloadWarningEnvelopePayload(
+        warning_id=new_ulid(),
+        tool_name="model_fire_spread",
+        tool_args={
+            "bbox": list(coerced) if coerced is not None else params.get("bbox"),
+            "ignition_lonlat": params.get("ignition_lonlat"),
+            "wind_speed_mph": wind_speed_mph,
+            "wind_dir_deg": wind_dir_deg,
+            "fuel_moisture": preset,
+            "fuel_moisture_pct": moisture,
+            "duration_hours": duration_hours,
+            "cellsize_m": cellsize_m,
+            "estimated_cells": n_cells,
+            "estimated_runtime_s": (
+                round(est_runtime_s) if est_runtime_s is not None else None
+            ),
         },
         estimated_mb=0.0,
         threshold_mb=0.0,
@@ -7231,6 +7561,14 @@ async def _gate_on_solver_confirm(
             # composer extraction is needed (the run args are the tool args), so
             # this is built inline rather than via a workflow helper.
             envelope = _build_psha_confirm_envelope(params)
+        elif tool_name == "model_fire_spread":
+            # FIRE-3: ELMFIRE fire-spread solver-confirm card. Simple
+            # proceed/cancel with the approximate cell count + the
+            # FIRE-1-calibrated runtime estimate + the scenario weather —
+            # PURE arithmetic built inline (no fetch/rasterio), so nothing is
+            # offloaded. A missing ignition point deliberately falls through
+            # to the tool's typed FIRE_IGNITION_REQUIRED error after approval.
+            envelope = _build_fire_confirm_envelope(params)
         else:  # unknown gated tool: fail open to the tool's own validation
             return True, params
     except Exception:  # noqa: BLE001 — never mask param errors with a gate
@@ -7247,7 +7585,7 @@ async def _gate_on_solver_confirm(
     fut: asyncio.Future = loop.create_future()
     _register_pending_confirmation(state.session_id, warning_id, fut)
 
-    await websocket.send(
+    await _session_safe_send(websocket, state.session_id,
         _new_envelope("tool-payload-warning", state.session_id, envelope)
     )
     logger.info(
@@ -7262,7 +7600,7 @@ async def _gate_on_solver_confirm(
 
     try:
         decision_payload: PayloadConfirmationEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=CODE_EXEC_CONFIRM_TIMEOUT_SECONDS
+            fut, timeout=_gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
         )
     except asyncio.TimeoutError:
         logger.warning(
@@ -7829,7 +8167,7 @@ async def _emit_credential_request_and_wait(
     fut: asyncio.Future = loop.create_future()
     _register_pending_credential(state.session_id, request_id, fut)
 
-    await websocket.send(
+    await _session_safe_send(websocket, state.session_id,
         _new_envelope("credential-request", state.session_id, payload)
     )
     logger.info(
@@ -7842,7 +8180,7 @@ async def _emit_credential_request_and_wait(
 
     try:
         provided: CredentialProvidedEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=CODE_EXEC_CONFIRM_TIMEOUT_SECONDS
+            fut, timeout=_gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
         )
     except asyncio.TimeoutError:
         logger.warning(
@@ -8149,7 +8487,7 @@ async def _emit_region_choice_and_wait(
     fut: asyncio.Future = loop.create_future()
     _register_pending_region_choice(state.session_id, payload.request_id, fut)
 
-    await websocket.send(
+    await _session_safe_send(websocket, state.session_id,
         _new_envelope("region-choice-request", state.session_id, payload)
     )
     logger.info(
@@ -8162,7 +8500,7 @@ async def _emit_region_choice_and_wait(
 
     try:
         provided: RegionChoiceProvidedEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=CODE_EXEC_CONFIRM_TIMEOUT_SECONDS
+            fut, timeout=_gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
         )
     except asyncio.TimeoutError:
         logger.info(
@@ -8379,7 +8717,7 @@ async def _emit_spatial_input_and_wait(
     fut: asyncio.Future = loop.create_future()
     _register_pending_spatial_input(state.session_id, payload.request_id, fut)
 
-    await websocket.send(
+    await _session_safe_send(websocket, state.session_id,
         _new_envelope("spatial-input-request", state.session_id, payload)
     )
     logger.info(
@@ -8391,7 +8729,7 @@ async def _emit_spatial_input_and_wait(
 
     try:
         response: SpatialInputResponsePayload = await asyncio.wait_for(
-            fut, timeout=payload.default_timeout_seconds
+            fut, timeout=_gate_wait_timeout(payload.default_timeout_seconds)
         )
     except asyncio.TimeoutError:
         logger.info(
@@ -8845,6 +9183,21 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         "fetch_soilgrids",
         "fetch_esri_landcover_10m",
         "fetch_noaa_sst",
+        # quick-win batch (2026-07-07): compute_change_detection reads TWO
+        # Sentinel-2 scenes (SAS sign + windowed /vsicurl warp-read per band)
+        # + vectorizes + writes an FGB in ONE sync call -- the same shape as
+        # compute_ndvi/digitize_water_body above. Emit-free body (the
+        # emit_tool_call wrapper does the emit), so off-load so it never
+        # stalls the WS heartbeat (feedback_no_sync_blocking_on_asyncio_loop).
+        "compute_change_detection",
+        # compute_flood_depth_damage stages an s3 depth COG + fetches the NSI
+        # inventory + samples + writes an FGB in one sync call -- same off-load
+        # rationale; emit-free body.
+        "compute_flood_depth_damage",
+        # compute_urban_heat_island fetches MODIS LST + the 10 m land-cover COG
+        # + resamples onto the class grid + writes a COG in one sync call --
+        # same off-load rationale; emit-free body.
+        "compute_urban_heat_island",
     }
 )
 #: Loop-bound emitter API names. A sync tool whose CODE (comments + string /
@@ -9309,6 +9662,26 @@ async def _invoke_tool_via_emitter(
     # without inventing. See uri_registry.py.
     uri_registry = get_uri_registry(state.session_id)
     params = uri_registry.resolve_params(tool_name, params)
+
+    # 2026-07-08 small-model resilience: local 8B models omit publish_layer's
+    # layer_id entirely (live TypeError). The tool itself now derives one, but
+    # the wrap-site emission below keys off params["layer_id"], so inject the
+    # SAME derived id here (post-URI-resolution, so a handle-resolved
+    # layer_uri maps back to the producing tool's layer_id) - otherwise the
+    # layer would publish without ever being announced to the map.
+    if tool_name == "publish_layer" and not params.get("layer_id"):
+        _pl_uri = params.get("layer_uri")
+        if isinstance(_pl_uri, str) and _pl_uri:
+            from .tools.publish_layer import derive_layer_id as _derive_layer_id
+
+            params = dict(params)
+            params["layer_id"] = _derive_layer_id(_pl_uri, uri_registry)
+            logger.info(
+                "publish_layer: layer_id omitted by the model - derived %r "
+                "from layer_uri=%r",
+                params["layer_id"],
+                _pl_uri,
+            )
 
     # job VAULT-READ: thread the user's per-Case ``secret_ref`` into a keyed
     # tool so its ``_resolve_*_key`` reads the VAULT key first (then env). This
@@ -11079,6 +11452,65 @@ async def _emit_secrets_list(
     )
 
 
+async def _handle_lesson_add(
+    websocket: ServerConnection,
+    state: SessionState,
+    payload_dict: Any,
+) -> None:
+    """LESSONS LOOP v1 (track 4): the thumbs-down stub's server half.
+
+    Consumes a loosely-shaped ``lesson-add`` payload -- ``{text, trigger_text?}``
+    (kept untyped like ``layer-delete`` for forward-compat; the web thumbs-down
+    UI is out of scope here) -- and writes a user-authored lesson row via
+    ``lessons.register_lesson``. Replies with a ``lesson-added`` ack carrying
+    the stored row's id + normalized text; malformed payloads surface a typed
+    ``TOOL_PARAMS_INVALID``. The write runs off-loop (asyncio.to_thread). The
+    ack is a raw-JSON envelope (the ``turn-complete`` / ``_send_loop_exhausted``
+    pattern) because the typed ``Envelope.payload`` forbids extra keys and the
+    lesson-added payload has no ``grace2_contracts`` model yet.
+    """
+    text = payload_dict.get("text") if isinstance(payload_dict, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        await _send_error(
+            websocket,
+            state.session_id,
+            "TOOL_PARAMS_INVALID",
+            "lesson-add requires a non-empty 'text' field.",
+        )
+        return
+    trigger = payload_dict.get("trigger_text")
+    trigger = trigger if isinstance(trigger, str) else ""
+    try:
+        row = await asyncio.to_thread(register_lesson, text, trigger)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("lesson-add failed session=%s", state.session_id)
+        await _send_error(
+            websocket,
+            state.session_id,
+            "INTERNAL_ERROR",
+            f"lesson-add failed: {exc}",
+        )
+        return
+    import json as _json  # matches the raw-JSON envelope pattern above
+
+    await websocket.send(
+        _json.dumps(
+            {
+                "type": "lesson-added",
+                "id": new_ulid(),
+                "ts": now_utc().isoformat().replace("+00:00", "Z"),
+                "session_id": state.session_id,
+                "case_id": current_turn_case(),
+                "payload": {
+                    "envelope_type": "lesson-added",
+                    "lesson_id": row.get("id"),
+                    "lesson": row.get("lesson"),
+                },
+            }
+        )
+    )
+
+
 async def _handle_secret_add(
     websocket: ServerConnection,
     state: SessionState,
@@ -11857,6 +12289,13 @@ def _make_handler(settings: GeminiSettings):
                         )
                         await _handle_secret_add(websocket, state, sa)
 
+                    elif msg_type == "lesson-add":
+                        # LESSONS LOOP v1 (track 4): thumbs-down stub. The
+                        # payload is loosely-shaped ({text, trigger_text?});
+                        # the handler validates inline and writes via
+                        # lessons.register_lesson. UI lands separately.
+                        await _handle_lesson_add(websocket, state, payload_dict)
+
                     elif msg_type == "secret-revoke":
                         # job-0124: soft-revoke a per-Case secret.
                         secret_revoke = SecretRevokeEnvelopePayload.model_validate(
@@ -12438,6 +12877,8 @@ __all__ = [
     "_emit_secrets_list",
     "_handle_secret_add",
     "_handle_secret_revoke",
+    # LESSONS LOOP v1 (track 4): thumbs-down stub envelope handler.
+    "_handle_lesson_add",
     # job VAULT-READ: credential pipeline (secret_ref injection + JIT prompt).
     "_inject_secret_ref",
     "_resolve_active_secret_ref",

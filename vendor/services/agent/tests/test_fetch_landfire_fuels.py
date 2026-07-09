@@ -209,9 +209,9 @@ def test_tool_is_registered_in_registry() -> None:
     assert entry.metadata.cacheable is True
 
 
-def test_four_layers_are_defined() -> None:
-    """All four required layer codes are present."""
-    assert _VALID_LAYERS == {"fbfm40", "fbfm13", "cbh", "cbd"}
+def test_six_layers_are_defined() -> None:
+    """All six required layer codes are present (cc/ch added by FIRE-2)."""
+    assert _VALID_LAYERS == {"fbfm40", "fbfm13", "cbh", "cbd", "cc", "ch"}
 
 
 def test_each_layer_has_a_service_name() -> None:
@@ -236,6 +236,8 @@ def test_units_set_for_continuous_layers_and_none_for_categorical() -> None:
     assert _LAYER_UNITS["fbfm13"] is None
     assert _LAYER_UNITS["cbh"] is not None
     assert _LAYER_UNITS["cbd"] is not None
+    assert _LAYER_UNITS["cc"] == "percent"
+    assert _LAYER_UNITS["ch"] == "m * 10"
 
 
 def test_build_metadata_defends_against_schema_extension() -> None:
@@ -559,6 +561,68 @@ def test_url_encodes_requested_bbox() -> None:
     assert "bboxSR=4326" in url
     assert "imageSR=4326" in url
     assert "format=tiff" in url
+
+
+# ---------------------------------------------------------------------------
+# FIRE-2: cc / ch canopy layers (ELMFIRE deck inputs) — mocked, no network.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("layer", "service", "label"),
+    [
+        ("cc", "LF2022_CC_CONUS", "Canopy Cover"),
+        ("ch", "LF2022_CH_CONUS", "Canopy Height"),
+    ],
+)
+def test_mocked_cc_ch_fetch_targets_correct_service(
+    layer: str, service: str, label: str
+) -> None:
+    """cc/ch fetches hit their own ImageServer and return a well-formed LayerURI."""
+    fake_gcs = FakeStorageClient()
+    patched_rt = _make_read_through_injector(fake_gcs)
+    captured = {}
+
+    def capture_get(url: str, **_kw: Any) -> Any:
+        captured["url"] = url
+        return _make_response(_fake_tiff_bytes())
+
+    with patch(
+        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        side_effect=patched_rt,
+    ), patch(
+        "grace2_agent.tools.fetch_landfire_fuels.requests.get",
+        side_effect=capture_get,
+    ), patch(
+        "grace2_agent.tools.fetch_landfire_fuels._is_all_nodata",
+        return_value=False,
+    ):
+        layer_uri = fetch_landfire_fuels(bbox=_CA_SIERRA_BBOX, layer=layer)  # type: ignore[arg-type]
+
+    assert f"{service}/ImageServer/exportImage" in captured["url"]
+    assert "bbox=" in captured["url"]
+    assert layer_uri.uri is not None
+    assert layer_uri.uri.startswith("s3://")
+    assert f"landfire-{layer}-" in layer_uri.layer_id
+    assert label in layer_uri.name
+    assert layer_uri.layer_type == "raster"
+    assert layer_uri.units is not None  # continuous canopy layer
+    assert layer_uri.style_preset == _LAYER_STYLE_PRESET[layer]
+
+
+def test_cc_ch_cache_keys_distinct_from_each_other_and_cbh() -> None:
+    """cc / ch / cbh over the same bbox produce three distinct cache keys."""
+    bbox = _round_bbox_to_6dp(_CA_SIERRA_BBOX)
+    keys = {
+        layer: compute_cache_key(
+            "landfire_fuels",
+            {"layer": layer, "bbox": list(bbox), "year": _LANDFIRE_YEAR},
+            "static-30d",
+            now=_PINNED_NOW,
+        )
+        for layer in ("cc", "ch", "cbh")
+    }
+    assert len(set(keys.values())) == 3
 
 
 # ---------------------------------------------------------------------------

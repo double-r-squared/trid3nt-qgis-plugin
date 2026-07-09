@@ -85,6 +85,20 @@ class TextDeltaEvent:
 
 
 @dataclass(frozen=True)
+class ThinkingDeltaEvent:
+    """A streamed reasoning-channel fragment (local OpenAI-compatible path).
+
+    NATE live-feedback 2026-07-08 (local build): Ollama's OpenAI-compat stream
+    surfaces qwen3-family thinking as ``delta.reasoning`` chunks. The
+    openai_adapter yields these as ``ThinkingDeltaEvent`` so the server can
+    forward them live to the web as ``agent-thinking-chunk`` envelopes (greyed
+    foldable block). Never emitted by the Bedrock / Vertex / scripted paths;
+    the server loop must tolerate + may drop them (user toggle off).
+    """
+    delta: str
+
+
+@dataclass(frozen=True)
 class FunctionCallEvent:
     """Gemini decided to call a tool.
 
@@ -139,7 +153,9 @@ class UsageMetadataEvent:
     cache_hit: bool = False
 
 
-StreamEvent = TextDeltaEvent | FunctionCallEvent | UsageMetadataEvent
+StreamEvent = (
+    TextDeltaEvent | ThinkingDeltaEvent | FunctionCallEvent | UsageMetadataEvent
+)
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +187,12 @@ Key behaviors:
 - When a tool result contains a flood depth layer, describe the results from
   the returned metrics — do not invent values.
 - Keep responses concise and focused on the hazard modeling context.
+- Key-gated tools (e.g. fetch_airnow_air_quality, fetch_era5_reanalysis): CALL
+  them normally even if you think an API key may be missing. If a credential is
+  needed the system automatically shows the user a credential-request card and
+  retries the call once the key is entered -- a missing key is NOT a failure and
+  is NOT a reason to route to a different tool. Never substitute a sibling tool
+  just to avoid a possible key prompt.
 
 Data-analysis follow-ups via code_exec_request (CRITICAL data-access rule):
 When the user asks a quantitative follow-up or a CUSTOM FIGURE about a layer
@@ -2365,8 +2387,15 @@ async def stream_events_with_contents(
     system_prompt: str | None = None,
     cached_content_name: str | None = None,
     bedrock_model: str | None = None,
+    show_thinking: bool = False,
 ) -> AsyncIterator[StreamEvent]:
     """Stream one Gemini turn from a fully-built ``contents`` list (job-0169).
+
+    ``show_thinking`` (local build, NATE 2026-07-08): forwarded to the OpenAI
+    adapter only. When True the adapter omits the ``/no_think`` system suffix
+    (GRACE2_OPENAI_EXTRA_SYSTEM) for this round so the model's reasoning
+    channel is generated and surfaced as ``ThinkingDeltaEvent``s. Ignored by
+    the Bedrock / Vertex / scripted paths.
 
     This is the primitive the multi-turn loop driver in ``server.py`` uses.
     Each call corresponds to exactly one ``generate_content_stream`` round —
@@ -2442,6 +2471,7 @@ async def stream_events_with_contents(
             tool_declarations=tool_declarations,
             system_prompt=system_prompt,
             model=bedrock_model,
+            show_thinking=show_thinking,
         ):
             yield _ev
         return
@@ -2615,6 +2645,7 @@ __all__ = [
     "GeminiSettings",
     "StreamEvent",
     "TextDeltaEvent",
+    "ThinkingDeltaEvent",
     "FunctionCallEvent",
     "UsageMetadataEvent",
     "SYSTEM_PROMPT",

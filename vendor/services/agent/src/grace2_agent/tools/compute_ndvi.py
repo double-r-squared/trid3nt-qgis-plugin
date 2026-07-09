@@ -429,6 +429,8 @@ def compute_ndvi(
 ) -> LayerURI:
     """Compute Sentinel-2 NDVI (vegetation vigor) for a bbox + time window.
 
+    Use this (not fetch_sentinel2_truecolor) when you want the NDVI vegetation-index values, not the raw true-color picture.
+
     **What it does:** Searches the Microsoft Planetary Computer for the
     least-cloudy Sentinel-2 L2A scene intersecting ``bbox`` inside the time
     window, reads the Red (B04) and NIR (B08) 10 m bands clipped to the bbox,

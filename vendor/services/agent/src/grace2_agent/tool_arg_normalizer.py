@@ -223,12 +223,22 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "dataset": "layer",
     },
     "fetch_usace_dams": {
-        # bbox is the only param; cover its common aliases
+        # bbox aliases
         "bounding_box": "bbox",
         "extent": "bbox",
         "bounds": "bbox",
         "region": "bbox",
         "area": "bbox",
+        # hazard_potential aliases
+        "hazard": "hazard_potential",
+        "hazard_class": "hazard_potential",
+        "hazard_classification": "hazard_potential",
+        # min_height_ft aliases - LLMs invent min_height / height variants
+        "min_height": "min_height_ft",
+        "minimum_height": "min_height_ft",
+        "min_dam_height": "min_height_ft",
+        "min_height_feet": "min_height_ft",
+        "height_min": "min_height_ft",
     },
     "fetch_usace_nsi": {
         # bbox is the only param

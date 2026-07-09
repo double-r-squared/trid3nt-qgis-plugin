@@ -363,3 +363,122 @@ def test_psha_solver_in_confirm_set() -> None:
     from grace2_agent import server
 
     assert "run_seismic_hazard_psha" in server.SOLVER_CONFIRM_TOOLS
+
+
+# --------------------------------------------------------------------------- #
+# Local-cloud fingerprint seam (NATE 2026-07-08): confirm-card prose is
+# deployment-aware. The LOCAL build (GRACE2_SOLVER_BACKEND=local-docker)
+# never says "cloud solve" / "AWS Batch"; the cloud lane (aws-batch / unset)
+# keeps the exact prior wording byte-for-byte.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "backend,expected,forbidden",
+    [
+        ("local-docker", "(local solve).", "cloud solve"),
+        ("aws-batch", "(cloud solve, typically 5-20 minutes).", "local solve"),
+    ],
+)
+async def test_flood_gate_recommendation_deployment_aware(
+    monkeypatch, backend: str, expected: str, forbidden: str
+) -> None:
+    from grace2_agent import server
+
+    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", backend)
+    ws = _FakeWS()
+    state = _FakeState()
+    # bbox included so the card also carries a granularity block.
+    params = {
+        "location_query": "Fort Myers, Florida",
+        "bbox": [-81.98, 26.55, -81.90, 26.63],
+        "return_period_yr": 100,
+    }
+
+    async def _approve_soon() -> None:
+        for _ in range(200):
+            if server._PENDING_CONFIRMATIONS:
+                break
+            await asyncio.sleep(0.005)
+        wid = next(iter(server._PENDING_CONFIRMATIONS))
+        server._PENDING_CONFIRMATIONS[wid][1].set_result(
+            PayloadConfirmationEnvelopePayload(warning_id=wid, decision="proceed")
+        )
+
+    approver = asyncio.create_task(_approve_soon())
+    should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+        ws, state, "run_model_flood_scenario", params
+    )
+    await approver
+    assert should_run is True
+    card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
+    rec = card["payload"]["recommendation"]
+    assert expected in rec
+    assert forbidden not in rec
+    g = card["payload"]["granularity"]
+    assert g is not None
+    if backend == "local-docker":
+        # The local lane renders the local compute descriptors...
+        assert g["compute_class"] == "local"
+        assert g["spot_label"] is None
+    else:
+        # ...and the cloud lane keeps the prior default label unchanged.
+        assert g["compute_class"] == "standard"
+    # The dispatch args are NEVER localized -- only the card wording is.
+    assert card["payload"]["tool_args"]["compute_class"] == "standard"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "backend,expected,forbidden",
+    [
+        (
+            "local-docker",
+            "This runs the OpenQuake engine locally (typically several "
+            "minutes).",
+            "AWS Batch",
+        ),
+        (
+            "aws-batch",
+            "This dispatches the OpenQuake engine to AWS Batch (a cloud "
+            "solve, typically several minutes).",
+            "locally",
+        ),
+    ],
+)
+async def test_psha_gate_recommendation_deployment_aware(
+    monkeypatch, backend: str, expected: str, forbidden: str
+) -> None:
+    from grace2_agent import server
+
+    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", backend)
+    ws = _FakeWS()
+    state = _FakeState()
+    params = {
+        "bbox": [-122.6, 37.5, -122.2, 37.9],
+        "imt": "PGA",
+        "poe": 0.10,
+        "investigation_time_years": 50.0,
+    }
+
+    async def _approve_soon() -> None:
+        for _ in range(200):
+            if server._PENDING_CONFIRMATIONS:
+                break
+            await asyncio.sleep(0.005)
+        wid = next(iter(server._PENDING_CONFIRMATIONS))
+        server._PENDING_CONFIRMATIONS[wid][1].set_result(
+            PayloadConfirmationEnvelopePayload(warning_id=wid, decision="proceed")
+        )
+
+    approver = asyncio.create_task(_approve_soon())
+    should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+        ws, state, "run_seismic_hazard_psha", params
+    )
+    await approver
+    assert should_run is True
+    card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
+    rec = card["payload"]["recommendation"]
+    assert expected in rec
+    assert forbidden not in rec

@@ -819,18 +819,24 @@ def fetch_airnow_air_quality(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """EPA AirNow current-hour air-quality monitor observations as points.
+    """EPA AirNow current-hour air-quality / AQI / PM2.5 monitor observations as points.
+
+    Use this (not fetch_openaq_measurements) when the user names EPA AirNow or
+    wants US/Canada/Mexico current-hour AQI. Call it even if no key is set: the
+    key is auto-requested via a credential card if missing (see below), so a
+    possible key prompt is NOT a reason to route elsewhere.
 
     What it does:
         Fetches the U.S. EPA AirNow current-hour air-quality observations for
         every reporting monitor within ``bbox`` as point features. Each point
         carries the reporting parameter (PM2.5 / Ozone / PM10 / NO2 / SO2 /
         CO), the AQI value + AQI category band, the raw concentration + unit,
-        and the monitor / reporting-agency identity. SECRET-GATED: AirNow
-        requires an API key (resolved kwarg -> per-Case ``secret_ref`` ->
-        ``GRACE2_AIRNOW_API_KEY`` env). With NO key it raises a credential-
-        shaped ``AirNowMissingKeyError`` so the agent surfaces a credential
-        card -- it NEVER fabricates a layer (AirNow has no public mirror).
+        and the monitor / reporting-agency identity. Key auto-requested if
+        missing: AirNow uses an API key (resolved kwarg -> per-Case
+        ``secret_ref`` -> ``GRACE2_AIRNOW_API_KEY`` env). With NO key it raises a
+        credential-shaped ``AirNowMissingKeyError`` so the agent surfaces a
+        credential card and retries -- it NEVER fabricates a layer (AirNow has
+        no public mirror).
 
     When to use:
         - User asks about current air quality / AQI / smoke exposure in a

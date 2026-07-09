@@ -582,6 +582,8 @@ def fetch_cdc_svi(
 ) -> LayerURI:
     """CDC/ATSDR Social Vulnerability Index (SVI 2022) census-tract choropleth.
 
+    Use this (not fetch_census_acs or fetch_epa_ejscreen) when you specifically want the CDC/ATSDR Social Vulnerability Index (SVI).
+
     Fetches U.S. census-tract polygons intersecting a bbox from CDC/ATSDR's
     public ArcGIS REST FeatureServer and returns a FlatGeobuf choropleth with
     the overall SVI percentile ranking (``rpl_themes``) plus the four theme

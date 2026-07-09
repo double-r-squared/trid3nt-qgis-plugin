@@ -637,6 +637,8 @@ def compute_home_range_kde(
 ) -> LayerURI:
     """Compute a kernel-density home range (utilization-distribution isopleths).
 
+    Use this (not compute_movement_trajectory) when you want the kernel-density utilization-distribution HOME-RANGE isopleths.
+
     Takes the POINT FlatGeobuf that ``fetch_movebank_tracks(geometry_type=
     "point")`` emits (one feature per telemetry fix) and fits a 2-D Gaussian
     kernel density over the fix locations to produce the **utilization

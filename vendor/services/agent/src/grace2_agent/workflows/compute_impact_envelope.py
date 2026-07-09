@@ -227,6 +227,8 @@ async def compute_impact_envelope(
 ) -> dict[str, Any]:
     """Compose flood-layer → structure inventory → Pelicun → ImpactEnvelope.
 
+    Use this (not run_model_flood_scenario, which SIMULATES the flood) when a flood layer already exists and you want the composed damage impact envelope.
+
     Four-step deterministic chain (no LLM in the loop):
 
     1. ``geocode_location(location_query)`` (only when ``bbox`` not given).

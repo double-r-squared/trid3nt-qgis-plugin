@@ -36,6 +36,7 @@ import {
   ToolIoPayload,
 } from "../contracts";
 import { IconChevronRight } from "./icons";
+import { isLocalDeployment } from "../lib/deployment";
 
 // --- Duration formatting + live ticker (job-0264) ------------------------ //
 //
@@ -128,7 +129,10 @@ export function formatSolveReadout(solve: SolveProgressPayload): string {
     parts.push(`~${formatCellCount(solve.active_cell_count)} cells`);
   }
   if (solve.vcpus !== null && solve.vcpus !== undefined) {
-    parts.push(`${solve.vcpus} vCPU`);
+    // LOCAL build (fingerprint audit A8): "vCPU" is AWS Batch tier vocabulary;
+    // the local product reads "CPU". Cloud segment byte-identical when
+    // VITE_DEPLOYMENT is unset/cloud.
+    parts.push(`${solve.vcpus} ${isLocalDeployment() ? "CPU" : "vCPU"}`);
   }
   parts.push(formatDuration(solve.elapsed_seconds * 1000));
   if (solve.eta_seconds !== null && solve.eta_seconds !== undefined) {

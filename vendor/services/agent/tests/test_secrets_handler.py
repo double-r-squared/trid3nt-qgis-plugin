@@ -621,6 +621,199 @@ def test_read_routes_by_vault_ref_scheme_not_env(monkeypatch) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# LOCAL file vault (fingerprint audit L8, NATE 2026-07-08)
+# --------------------------------------------------------------------------- #
+#
+# The TRID3NT local build (GRACE2_SOLVER_BACKEND=local-docker, file
+# persistence, no GCP ADC / AWS IAM) used to fall through to the GCP Secret
+# Manager write path. Secret writes now land in a mode-0600
+# ``secrets_vault.json`` under the persistence dir; reads route on the
+# ``local-file://`` ref scheme. Cloud lanes stay byte-identical (the AWS/GCP
+# tests above run with GRACE2_SOLVER_BACKEND unset).
+
+
+@pytest.fixture
+def _local_vault(monkeypatch, tmp_path):
+    """Select the LOCAL file-vault backend against a tmp persistence dir."""
+    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("GRACE2_DEV_PERSISTENCE_DIR", str(tmp_path))
+    monkeypatch.delenv("GRACE2_STORAGE_BACKEND", raising=False)
+    yield tmp_path
+
+
+def test_local_secret_add_writes_file_vault_mode_0600(_local_vault) -> None:
+    """Local add lands in secrets_vault.json (0600), never a cloud client."""
+    import json as _json
+    import stat as _stat
+
+    p, mcp, sm = _make_persistence_and_secret_mgr()
+    ssm = MockSSMClient()
+    user_id = new_ulid()
+    envelope = _env_add(provider="ebird", key="local-vault-key-abc")
+
+    record = _run(
+        handle_secret_add(
+            envelope, user_id=user_id, persistence=p,
+            secret_manager_client=sm, ssm_client=ssm,
+        )
+    )
+
+    # vault_ref carries the local scheme + the user/provider key shape.
+    assert record.vault_ref.startswith("local-file://")
+    assert user_id in record.vault_ref
+    assert "ebird" in record.vault_ref
+
+    # Neither cloud client was touched (mocks were available and ignored).
+    assert not sm.calls
+    assert not ssm.calls
+
+    # The vault file exists under the tmp persistence dir, is owner-only
+    # (0600), and holds the raw value keyed by the ref's key-name.
+    vault = _local_vault / "secrets_vault.json"
+    assert vault.exists()
+    mode = _stat.S_IMODE(vault.stat().st_mode)
+    assert mode == 0o600, f"vault mode is {oct(mode)}, expected 0o600"
+    store = _json.loads(vault.read_text(encoding="utf-8"))
+    key_name = record.vault_ref[len("local-file://"):]
+    assert store[key_name] == "local-vault-key-abc"
+
+    # MongoDB SecretRecord persisted (vault-ref only -- Decision F backstop).
+    secrets_calls = [
+        a for n, a in mcp.calls
+        if a.get("collection") == SECRETS_COLLECTION
+        and n == "update-one" and a.get("upsert") is True
+    ]
+    assert secrets_calls
+
+
+def test_local_get_secret_value_round_trips_via_file(_local_vault) -> None:
+    """Round-trip: add locally, read back with NO cloud client available."""
+    p, _, _ = _make_persistence_and_secret_mgr()
+    user_id = new_ulid()
+    record = _run(
+        handle_secret_add(
+            _env_add(key="local-round-trip-value"), user_id=user_id,
+            persistence=p,
+        )
+    )
+    # No secret_manager_client / ssm_client passed: the local-file:// branch
+    # must resolve before either cloud lazy-constructor is reached.
+    fetched = _run(p.get_secret_value(record))
+    assert fetched == "local-round-trip-value"
+
+
+def test_local_get_secret_value_raises_on_revoked(_local_vault) -> None:
+    p, _, _ = _make_persistence_and_secret_mgr()
+    record = _run(
+        handle_secret_add(
+            _env_add(key="local-will-revoke"), user_id=new_ulid(),
+            persistence=p,
+        )
+    )
+    revoked = record.model_copy(update={"is_active": False})
+    with pytest.raises(SecretRevokedError):
+        _run(p.get_secret_value(revoked))
+
+
+def test_local_missing_vault_entry_raises_typed_error(_local_vault) -> None:
+    from grace2_agent.secrets_handler import SecretNotFoundError
+
+    p, _, _ = _make_persistence_and_secret_mgr()
+    ghost = SecretRecord(
+        secret_id=new_ulid(),
+        provider="ebird",
+        case_id=new_ulid(),
+        vault_ref="local-file://nobody/ebird/deadbeefdead",
+        label="ghost",
+        added_at=datetime.now(timezone.utc),
+        last_used_at=None,
+        is_active=True,
+    )
+    with pytest.raises(SecretNotFoundError):
+        _run(p.get_secret_value(ghost))
+
+
+def test_local_vault_never_logs_key(_local_vault, caplog) -> None:
+    """Decision F leak check on the local path: raw key never in the logs."""
+    p, _, _ = _make_persistence_and_secret_mgr()
+    sentinel = "LOCAL-LEAK-SENTINEL-KEY-77821"
+    with caplog.at_level("DEBUG"):
+        record = _run(
+            handle_secret_add(
+                _env_add(key=sentinel), user_id=new_ulid(), persistence=p,
+            )
+        )
+        _run(p.get_secret_value(record))
+    full_log = "\n".join(r.getMessage() for r in caplog.records)
+    assert sentinel not in full_log
+
+
+def test_local_vault_wins_over_storage_backend(monkeypatch, tmp_path) -> None:
+    """local-docker beats GRACE2_STORAGE_BACKEND=s3: a local box never writes
+    a credential to AWS SSM. (Cloud is unaffected -- it never runs
+    local-docker.)"""
+    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("GRACE2_DEV_PERSISTENCE_DIR", str(tmp_path))
+    p, _, _ = _make_persistence_and_secret_mgr()
+    ssm = MockSSMClient()
+    record = _run(
+        handle_secret_add(
+            _env_add(key="precedence-key"), user_id=new_ulid(),
+            persistence=p, ssm_client=ssm,
+        )
+    )
+    assert record.vault_ref.startswith("local-file://")
+    assert not ssm.calls
+
+
+def test_cloud_lane_byte_identical_when_backend_aws_batch(monkeypatch) -> None:
+    """GRACE2_SOLVER_BACKEND=aws-batch (the cloud stack) + storage=aws still
+    routes to SSM exactly as before the file-vault fork."""
+    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "aws-batch")
+    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "aws")
+    p, _, _ = _make_persistence_and_secret_mgr()
+    ssm = MockSSMClient()
+    record = _run(
+        handle_secret_add(
+            _env_add(key="cloud-unchanged-key"), user_id=new_ulid(),
+            persistence=p, ssm_client=ssm,
+        )
+    )
+    assert record.vault_ref.startswith("aws-ssm:///grace2/secrets/")
+    puts = [a for n, a in ssm.calls if n == "put_parameter"]
+    assert len(puts) == 1 and puts[0]["Type"] == "SecureString"
+
+
+def test_local_file_delete_secret_purges_entry(_local_vault) -> None:
+    """Hard-purge parity helper removes the entry; other entries survive."""
+    import json as _json
+
+    from grace2_agent.secrets_handler import _file_delete_secret
+
+    p, _, _ = _make_persistence_and_secret_mgr()
+    rec_a = _run(
+        handle_secret_add(
+            _env_add(provider="ebird", key="keep-me"), user_id=new_ulid(),
+            persistence=p,
+        )
+    )
+    rec_b = _run(
+        handle_secret_add(
+            _env_add(provider="openweathermap", key="purge-me"),
+            user_id=new_ulid(), persistence=p,
+        )
+    )
+    _file_delete_secret(rec_b.vault_ref)
+    vault = _local_vault / "secrets_vault.json"
+    store = _json.loads(vault.read_text(encoding="utf-8"))
+    assert rec_a.vault_ref[len("local-file://"):] in store
+    assert rec_b.vault_ref[len("local-file://"):] not in store
+    # Non-local refs are ignored (best-effort no-op).
+    _file_delete_secret("aws-ssm:///grace2/secrets/u/p/x")
+
+
+# --------------------------------------------------------------------------- #
 # Integration: full lifecycle
 # --------------------------------------------------------------------------- #
 

@@ -191,9 +191,9 @@ class AgentWorker(QObject):
     # -- UI-thread-safe outbound verbs (socket writes are mutex-guarded; ---- #
     # -- while disconnected they buffer in the client's bounded queue) ------ #
 
-    def send_chat(self, text: str) -> None:
+    def send_chat(self, text: str, show_thinking: bool = False) -> None:
         if self.client is not None:
-            self.client.send_chat(text)
+            self.client.send_chat(text, show_thinking=show_thinking)
 
     def cancel(self) -> None:
         if self.client is not None:
@@ -287,9 +287,9 @@ class AgentBridge(QObject):
 
     # -- outbound ------------------------------------------------------------ #
 
-    def send_chat(self, text: str) -> None:
+    def send_chat(self, text: str, show_thinking: bool = False) -> None:
         if self._worker is not None:
-            self._worker.send_chat(text)
+            self._worker.send_chat(text, show_thinking=show_thinking)
 
     def cancel(self) -> None:
         if self._worker is not None:

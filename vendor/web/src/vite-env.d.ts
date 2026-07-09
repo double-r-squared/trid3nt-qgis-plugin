@@ -1,6 +1,13 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  // Deployment-mode seam (local-cloud fingerprint fixes 2026-07-08): "local"
+  // selects the TRID3NT LOCAL build wording/behavior (CPUs not vCPUs, no
+  // sleep/wake copy, local privacy copy, generic local model selector, local
+  // tool-catalog source). Unset / any other value = CLOUD (the Vercel build
+  // sets nothing and renders byte-identical). See lib/deployment.ts - the
+  // ONLY module that may read this.
+  readonly VITE_DEPLOYMENT?: string;
   readonly VITE_GRACE2_WS_URL?: string;
   readonly VITE_GRACE2_HTTP_URL?: string;
   // sprint-14-aws CloudFront/HTTPS: a single public origin (e.g.

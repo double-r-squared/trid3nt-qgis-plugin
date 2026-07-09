@@ -125,3 +125,43 @@ describe("precedence — explicit per-surface overrides win over public base", (
     expect(httpBase()).toBe("https://d123.cloudfront.net");
   });
 });
+
+describe("coldCatalogUrl — deployment-mode gating (fingerprint audit L1)", () => {
+  const CLOUD_S3_DEFAULT =
+    "https://grace2-hazard-web-226996537797.s3.us-west-2.amazonaws.com/catalog/tool-catalog.json";
+
+  it("CLOUD default (no env): the public S3 snapshot (byte-identical)", async () => {
+    const { coldCatalogUrl } = await import("./public_base");
+    expect(coldCatalogUrl()).toBe(CLOUD_S3_DEFAULT);
+  });
+
+  it("VITE_DEPLOYMENT=cloud is exactly the unset default", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_DEPLOYMENT", "cloud");
+    const { coldCatalogUrl } = await import("./public_base");
+    expect(coldCatalogUrl()).toBe(CLOUD_S3_DEFAULT);
+  });
+
+  it("LOCAL: collapses onto the live agent catalog endpoint, never S3", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_DEPLOYMENT", "local");
+    const { coldCatalogUrl, catalogUrl } = await import("./public_base");
+    // happy-dom serves from http://localhost -> <proto>//<host>:8766 base.
+    expect(coldCatalogUrl()).toBe("http://localhost:8766/api/tool-catalog");
+    expect(coldCatalogUrl()).toBe(catalogUrl());
+    expect(coldCatalogUrl()).not.toContain("amazonaws.com");
+  });
+
+  it("explicit VITE_GRACE2_COLD_CATALOG_URL wins in BOTH modes", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_GRACE2_COLD_CATALOG_URL", "http://127.0.0.1:9000/catalog.json");
+    let mod = await import("./public_base");
+    expect(mod.coldCatalogUrl()).toBe("http://127.0.0.1:9000/catalog.json");
+
+    vi.resetModules();
+    vi.stubEnv("VITE_DEPLOYMENT", "local");
+    vi.stubEnv("VITE_GRACE2_COLD_CATALOG_URL", "http://127.0.0.1:9000/catalog.json");
+    mod = await import("./public_base");
+    expect(mod.coldCatalogUrl()).toBe("http://127.0.0.1:9000/catalog.json");
+  });
+});

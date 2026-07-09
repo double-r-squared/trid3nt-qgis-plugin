@@ -31,6 +31,7 @@ from grace2_agent.tools import TOOL_REGISTRY
 from grace2_agent.tools.publish_layer import (
     PublishLayerError,
     _build_wms_url,
+    derive_layer_id,
     _gs_to_vsigs,
     _parse_qgs_key,
     _validate_and_correct_layer_uri,
@@ -688,3 +689,91 @@ def test_publish_layer_end_to_end_with_hallucinated_uri_corrects_and_dispatches(
         f"worker must receive the CORRECTED raster URI, not the hallucinated one; "
         f"got {env['RASTER_URI']}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# 2026-07-08 - layer_id is OPTIONAL (small-model resilience)
+#
+# Live evidence: local 8B models call publish_layer without layer_id at all
+# (TypeError: publish_layer() missing 1 required positional argument:
+# 'layer_id'). The arg now defaults to None and is DERIVED - registered
+# handle for the resolved layer_uri, else the URI basename stem, else a
+# fresh layer-<ulid>.
+# --------------------------------------------------------------------------- #
+
+
+def test_derive_layer_id_prefers_registered_handle() -> None:
+    """A layer_uri the registry knows derives the producing tool's layer_id."""
+    from grace2_agent.uri_registry import (
+        get_uri_registry,
+        reset_uri_registries_for_tests,
+    )
+
+    reset_uri_registries_for_tests()
+    try:
+        reg = get_uri_registry("sess-derive-layer-id")
+        reg.record(
+            "dem-3dep-10m",
+            uri="s3://grace2-hazard-cache/cache/static-30d/fetch_dem/abc.tif",
+            tool_name="fetch_dem",
+        )
+        derived = derive_layer_id(
+            "s3://grace2-hazard-cache/cache/static-30d/fetch_dem/abc.tif", reg
+        )
+        assert derived == "dem-3dep-10m"
+    finally:
+        reset_uri_registries_for_tests()
+
+
+def test_derive_layer_id_falls_back_to_basename_stem() -> None:
+    assert (
+        derive_layer_id("s3://bucket/runs/01X/flood_depth_peak.tif")
+        == "flood_depth_peak"
+    )
+    assert derive_layer_id("gs://bucket/dir/continuous-dem-10m.tif") == (
+        "continuous-dem-10m"
+    )
+
+
+def test_derive_layer_id_sanitizes_and_never_returns_empty() -> None:
+    assert derive_layer_id("s3://bucket/dir/my layer (v2).tif") == "my-layer-v2"
+    # No basename at all -> a fresh ULID-suffixed id, never an empty string.
+    derived = derive_layer_id("s3://bucket/dir/")
+    assert derived.startswith("layer-") and len(derived) > len("layer-")
+
+
+def test_publish_layer_derives_layer_id_when_omitted() -> None:
+    """Omitting layer_id publishes under the basename-stem-derived id."""
+    execution = _make_succeeded_execution()
+    mock_client = _make_jobs_client(execution)
+
+    set_jobs_client(mock_client)
+    set_qgis_server_url("https://qgis.test.example.com/ogc/wms")
+    set_default_qgs_uri("gs://test-qgs-bucket/grace2-sample.qgs")
+    set_gcp_project("test-project")
+    set_gcp_location("us-central1")
+    set_pyqgis_worker_job_name("grace-2-pyqgis-worker")
+    set_storage_client(_default_fake_storage(qgs_layers=("flood_depth_peak",)))
+
+    try:
+        result = publish_layer(
+            layer_uri="gs://grace-2-hazard-prod-runs/run-abc/flood_depth_peak.tif",
+        )
+    finally:
+        set_jobs_client(None)
+        set_qgis_server_url(None)
+        set_default_qgs_uri(None)
+        set_gcp_project(None)
+        set_gcp_location(None)
+        set_pyqgis_worker_job_name(None)
+        set_storage_client(None)
+
+    assert result == (
+        "https://qgis.test.example.com/ogc/wms"
+        "?MAP=/mnt/qgs/grace2-sample.qgs"
+        "&LAYERS=flood_depth_peak"
+    ), f"unexpected WMS URL: {result}"
+
+    req = mock_client.run_job.call_args.kwargs["request"]
+    env = {e.name: e.value for e in req.overrides.container_overrides[0].env}
+    assert env["RASTER_LAYER_ID"] == "flood_depth_peak"

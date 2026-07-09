@@ -606,3 +606,71 @@ def test_blend_fetcher_unknown_satellite_raises():
     # typed error (GOESInputError) fires before the tool's own allow-list.
     with pytest.raises(GOESInputError):
         fetch_goes_blend_animation(bbox=_UT_BBOX, satellite="himawari-9")
+
+
+# ---------------------------------------------------------------------------
+# Consolidation: fetch_goes_animation(band="blend") folds in the blend tool.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("token", ["blend", "blended", "combined", "GeoColor_Fire"])
+def test_band_blend_delegates_to_blend_impl(monkeypatch, token):
+    """A blend band token routes fetch_goes_animation to the blended impl."""
+    from grace2_agent.tools import fetch_goes_animation as mod
+
+    sentinel = ["BLENDED"]
+    seen = {}
+
+    def _fake_impl(bbox, **kwargs):
+        seen["bbox"] = bbox
+        seen["kwargs"] = kwargs
+        return sentinel
+
+    monkeypatch.setattr(mod, "_blend_animation_impl", _fake_impl)
+    got = fetch_goes_animation(
+        bbox=_UT_BBOX,
+        band=token,
+        satellite="goes-18",
+        sector="conus",
+        start_utc="2026-06-22T17:30:00Z",
+        end_utc="2026-06-22T18:30:00Z",
+    )
+    assert got is sentinel
+    assert seen["bbox"] == _UT_BBOX
+    assert seen["kwargs"]["satellite"] == "goes-18"
+    assert seen["kwargs"]["sector"] == "conus"
+
+
+def test_deprecated_blend_alias_routes_through_impl(monkeypatch):
+    """The deprecated fetch_goes_blend_animation still routes through the impl."""
+    from grace2_agent.tools import fetch_goes_animation as mod
+
+    sentinel = ["BLENDED"]
+    monkeypatch.setattr(mod, "_blend_animation_impl", lambda bbox, **k: sentinel)
+    got = fetch_goes_blend_animation(
+        bbox=_UT_BBOX,
+        satellite="goes-18",
+        start_utc="2026-06-22T17:30:00Z",
+        end_utc="2026-06-22T18:30:00Z",
+    )
+    assert got is sentinel
+
+
+def test_non_blend_band_does_not_delegate(monkeypatch):
+    """geocolor / fire_temperature never hit the blend impl."""
+    from grace2_agent.tools import fetch_goes_animation as mod
+
+    seen = _patch_slider_for_three_frames(monkeypatch, [])
+
+    def _boom(*a, **k):  # pragma: no cover - must not be called
+        raise AssertionError("blend impl should not run for band=geocolor")
+
+    monkeypatch.setattr(mod, "_blend_animation_impl", _boom)
+    layers = fetch_goes_animation(
+        bbox=_UT_BBOX,
+        band="geocolor",
+        satellite="goes-18",
+        start_utc="2026-06-22T17:30:00Z",
+        end_utc="2026-06-22T18:30:00Z",
+    )
+    assert len(layers) == 3

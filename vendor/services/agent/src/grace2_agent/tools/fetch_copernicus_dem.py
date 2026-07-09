@@ -445,18 +445,13 @@ def _fetch_copernicus_dem_bytes(
 # ---------------------------------------------------------------------------
 
 
-@register_tool(
-    _METADATA,
-    # Annotations: readOnlyHint=True, openWorldHint=True (PC STAC public API),
-    # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
-    open_world_hint=True,
-)
-def fetch_copernicus_dem(
+def _copernicus_dem_impl(
     bbox: tuple[float, float, float, float],
-    # job-0164: absorb LLM-invented kwargs.
-    **_extra_ignored: Any,
 ) -> LayerURI:
-    """Fetch a GLOBAL 30 m elevation model (Copernicus GLO-30) for a bbox.
+    """Shared Copernicus GLO-30 implementation.
+
+    Reached via ``fetch_dem(bbox, source="copernicus")`` (canonical surface) and
+    via the DEPRECATED ``fetch_copernicus_dem`` delegate (backward compat).
 
     **What it does:** STAC-searches the Microsoft Planetary Computer for the
     Copernicus DEM GLO-30 (Copernicus_DSM, 30 m global) tiles covering ``bbox``,
@@ -536,3 +531,30 @@ def fetch_copernicus_dem(
         units="meters",
         bbox=q_bbox,
     )
+
+
+@register_tool(
+    _METADATA,
+    # Annotations: readOnlyHint=True, openWorldHint=True (PC STAC public API),
+    # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
+    open_world_hint=True,
+)
+def fetch_copernicus_dem(
+    bbox: tuple[float, float, float, float],
+    # job-0164: absorb LLM-invented kwargs.
+    **_extra_ignored: Any,
+) -> LayerURI:
+    """DEPRECATED alias of ``fetch_dem`` with ``source="copernicus"``.
+
+    Retained as a thin registered delegate for backward compatibility (existing
+    cases + the routing bench). New callers should use ``fetch_dem`` with
+    ``source="copernicus"`` -- the GLOBAL Copernicus GLO-30 30 m elevation model
+    is now a source mode of the one DEM tool, not a separate sibling.
+
+    Fetches a GLOBAL 30 m elevation model (Copernicus GLO-30) for ``bbox`` via the
+    Microsoft Planetary Computer STAC and returns a single-band float32 (meters)
+    Cloud-Optimized GeoTIFF (``style_preset="continuous_dem"``). Use it (or
+    ``fetch_dem(source="copernicus")``) for terrain OUTSIDE the US, where the
+    default 3DEP source has no coverage.
+    """
+    return _copernicus_dem_impl(bbox)

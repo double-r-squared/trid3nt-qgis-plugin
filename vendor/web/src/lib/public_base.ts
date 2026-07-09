@@ -28,6 +28,8 @@
 // This module performs NO network I/O and reads no globals beyond
 // `import.meta.env` and `window.location`; it is pure + unit-testable.
 
+import { isLocalDeployment } from "./deployment";
+
 /** Normalise a public-base value into an origin string with NO trailing slash.
  *  Accepts bare domains ("d.cloudfront.net") and full origins
  *  ("https://d.cloudfront.net/"). A bare domain is assumed https (the seam's
@@ -124,12 +126,23 @@ export function catalogUrl(): string {
  * policy) and CORS-enabled for the Vercel origins, so the browser GETs it
  * directly from the S3 REST endpoint cross-origin. Override at build time with
  * VITE_GRACE2_COLD_CATALOG_URL; default is the live us-west-2 web bucket key.
+ *
+ * LOCAL build (VITE_DEPLOYMENT=local; fingerprint audit L1): the local agent is
+ * always-on (no sleep/wake), so there is no "cold" source distinct from the
+ * live one - and the cloud S3 default would silently GET a live AWS object
+ * from the local product. In local mode the cold URL therefore collapses onto
+ * the live agent catalog endpoint (catalogUrl()). An explicit
+ * VITE_GRACE2_COLD_CATALOG_URL still wins in BOTH modes (e.g. a
+ * MinIO-published snapshot).
  */
 export function coldCatalogUrl(): string {
   const explicit =
     (import.meta.env.VITE_GRACE2_COLD_CATALOG_URL as string | undefined) ?? null;
   if (explicit != null && explicit.trim() !== "") {
     return explicit.trim();
+  }
+  if (isLocalDeployment()) {
+    return catalogUrl();
   }
   return "https://grace2-hazard-web-226996537797.s3.us-west-2.amazonaws.com/catalog/tool-catalog.json";
 }

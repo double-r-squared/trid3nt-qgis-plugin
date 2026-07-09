@@ -398,6 +398,7 @@ export function PayloadWarningInline({
       testId="payload-warning-inline"
       ariaLabel="Large payload warning"
       extraAttrs={{ "data-warning-id": warning.warning_id }}
+      highlight={sent === null}
       footer={
         sent !== null ? (
           <span data-testid="payload-warning-sent">

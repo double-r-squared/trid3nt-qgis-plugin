@@ -94,6 +94,22 @@ DEFAULT_AUTH_TOKEN_TIMEOUT_S: float = float(
 )
 
 # --------------------------------------------------------------------------- #
+# TRID3NT local build: ONE fixed local user (F1, live-feedback 2026-07-09)
+# --------------------------------------------------------------------------- #
+
+#: The single fixed user every connection resolves to in local mode
+#: (``GRACE2_SOLVER_BACKEND=local-docker`` / FilePersistence). A constant,
+#: ULID-shaped id ("L0CA1 VSER" in Crockford base32 -- L/O/U are not in the
+#: alphabet, hence 1/0/V) so the desktop browser, phone, QGIS plugin, and
+#: Playwright all land on the SAME case list regardless of the per-client
+#: ``anonymous_user_id`` hint. Never used on the cloud path.
+LOCAL_SINGLE_USER_ID = "0110CA1VSERAAAAAAAAAAAAAAA"
+
+#: Once-per-process guard for the stray-case adoption sweep (cheap update-many
+#: on the file substrate, but no reason to re-run it on every reconnect).
+_local_case_adoption_done = False
+
+# --------------------------------------------------------------------------- #
 # Cognito configuration — read at call time so the orchestrator can inject the
 # env via the EC2 deploy without re-import, and so dev (no env) stays anonymous.
 # --------------------------------------------------------------------------- #
@@ -426,6 +442,15 @@ async def authenticate_token(
 
     gate_on = auth_required()
 
+    # F1 (2026-07-09): TRID3NT local build -- ONE fixed local user. Every
+    # connection (any anonymous_user_id hint, any token) resolves to the same
+    # ``LOCAL_SINGLE_USER_ID`` so all clients share one case list. Guarded on
+    # the local-docker seam AND on the gate being OFF (if someone ever arms
+    # AUTH_REQUIRED on a local box, the sign-in gate wins). Cloud path:
+    # ``solver_backend()`` returns ``aws-batch``, branch never taken.
+    if not gate_on and _is_local_single_user_mode():
+        return await _resolve_local_single_user(persistence)
+
     # 1. Anonymous fallback: no envelope, empty token, or no Cognito pool.
     token_str = (token_envelope.token if token_envelope else "").strip()
     if not token_str:
@@ -518,6 +543,78 @@ async def authenticate_token(
         is_anonymous=False,
         tier=tier_claim,
     )
+
+
+def _is_local_single_user_mode() -> bool:
+    """True when auth must collapse to the ONE fixed local user (F1).
+
+    The canonical is-local seam (same one ``secrets_handler`` and
+    ``server._local_compute_lane`` use): ``GRACE2_SOLVER_BACKEND=local-docker``
+    -> ``tools.solver.solver_backend()`` returns ``local-docker``. The TRID3NT
+    local build pins it; the cloud stack never sets it, so the multi-user
+    cloud path stays byte-identical. Read at call time so a test env
+    injection takes effect without re-import.
+    """
+    from .tools.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
+
+    return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
+
+
+async def _resolve_local_single_user(
+    persistence: Persistence | None,
+) -> AuthResult:
+    """Resolve EVERY local-mode connection to ``LOCAL_SINGLE_USER_ID`` (F1).
+
+    NATE 2026-07-09: "persistent cases ... I want to accumulate test cases".
+    Pre-fix, each client (desktop browser, phone, QGIS plugin, Playwright)
+    presented its own sticky ``anonymous_user_id``, so every device forked its
+    own owner-scoped case list (log 01:23:14: "hint ... not found; minting
+    fresh" -> case-list count=0 on a box full of cases). In local mode there
+    is exactly one human, so all connections collapse onto one fixed user:
+
+    - reuse the persisted local-user record when it exists (stable
+      ``created_at`` / prefs -- no re-upsert churn per reconnect);
+    - else provision it verbatim via the sticky-anonymous path;
+    - ``is_anonymous`` stays True so the auth-ack keeps clients' sticky
+      logic working unchanged;
+    - one adoption sweep per process re-owns every stray case (minted by the
+      old per-client anonymous users) to the local user, so the accumulated
+      test cases all show up everywhere.
+    """
+    global _local_case_adoption_done
+    result: AuthResult | None = None
+    if persistence is not None:
+        existing = await _try_reuse_anonymous_user(
+            persistence, LOCAL_SINGLE_USER_ID
+        )
+        if existing is not None:
+            result = AuthResult(
+                user=existing,
+                firebase_uid=None,
+                is_anonymous=True,
+                tier="free",
+            )
+    if result is None:
+        result = await _provision_anonymous_user(
+            persistence, requested_user_id=LOCAL_SINGLE_USER_ID
+        )
+    if persistence is not None and not _local_case_adoption_done:
+        _local_case_adoption_done = True
+        try:
+            adopted = await persistence.adopt_cases_to_user(
+                LOCAL_SINGLE_USER_ID
+            )
+            if adopted:
+                logger.info(
+                    "local single-user: adopted %d stray case(s) onto %s",
+                    adopted,
+                    LOCAL_SINGLE_USER_ID,
+                )
+        except Exception as exc:  # noqa: BLE001 -- adoption is best-effort
+            logger.warning(
+                "local single-user case adoption failed (non-fatal): %s", exc
+            )
+    return result
 
 
 async def _provision_anonymous_user(

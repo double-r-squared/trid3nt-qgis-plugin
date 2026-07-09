@@ -614,6 +614,8 @@ def enhance_satellite_image(
 ) -> LayerURI:
     """OPTIONAL polish/enhance pass for a true-color satellite RGB image.
 
+    Use this (not publish_layer) when you want an OPTIONAL cosmetic enhancement pass on an RGB satellite COG before publishing.
+
     Reads an RGB image COG and returns a NEW, polished RGB COG that reads closer
     to NOAA/CIRA's de-hazed "GeoColor" look: de-hazed (atmospheric haze removed),
     white-balanced, lightly sharpened, and optionally upscaled. This is a

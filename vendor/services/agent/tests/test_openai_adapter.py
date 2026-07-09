@@ -435,3 +435,53 @@ class TestStreamOpenai:
                 pass
 
         assert "tools" not in captured_kwargs
+
+
+# ---------------------------------------------------------------------------
+# 4. openai_model precedence (F2, live-feedback 2026-07-08: local hot-swap)
+# ---------------------------------------------------------------------------
+
+
+class TestOpenaiModelPrecedence:
+    """Per-turn session model overrides the GRACE2_OPENAI_MODEL default;
+    Bedrock-shaped session ids are ignored (fall back to the env default)."""
+
+    def test_session_model_overrides_env_default(self, monkeypatch):
+        from grace2_agent.openai_adapter import openai_model
+
+        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "qwen3:8b-16k")
+        assert openai_model("llama3.2:3b") == "llama3.2:3b"
+
+    def test_env_default_used_when_no_session_model(self, monkeypatch):
+        from grace2_agent.openai_adapter import openai_model
+
+        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "qwen3:8b-16k")
+        assert openai_model(None) == "qwen3:8b-16k"
+
+    def test_bedrock_shaped_session_id_falls_back_to_env(self, monkeypatch):
+        from grace2_agent.openai_adapter import openai_model
+
+        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "qwen3:8b-16k")
+        assert (
+            openai_model("us.anthropic.claude-sonnet-4-6") == "qwen3:8b-16k"
+        )
+
+    def test_session_model_works_with_no_env_default(self, monkeypatch):
+        from grace2_agent.openai_adapter import openai_model
+
+        monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
+        assert openai_model("llama3.2:3b") == "llama3.2:3b"
+
+    def test_nothing_configured_raises(self, monkeypatch):
+        from grace2_agent.openai_adapter import openai_model
+
+        monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
+        with pytest.raises(RuntimeError):
+            openai_model(None)
+
+    def test_bedrock_shaped_session_id_with_no_env_raises(self, monkeypatch):
+        from grace2_agent.openai_adapter import openai_model
+
+        monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
+        with pytest.raises(RuntimeError):
+            openai_model("us.amazon.nova-pro-v1:0")

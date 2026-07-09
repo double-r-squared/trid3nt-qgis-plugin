@@ -106,6 +106,7 @@ import {
 } from "./components/MobileDrawer";
 import { IconMenu, IconSettings } from "./components/icons";
 import { AgentWaker, wakeConfigured, WakeState } from "./lib/wake";
+import { isLocalDeployment } from "./lib/deployment";
 import { fetchCaseView, caseViewConfigured } from "./lib/case_view";
 import { fetchCaseList, caseListConfigured } from "./lib/case_list";
 import {
@@ -301,7 +302,7 @@ function layerListsEqual(
   return true;
 }
 
-export function App(): JSX.Element {
+export function App(): JSX.Element | null {
   const bus = useMemo(() => createLayerPanelBus(), []);
 
   // job-0179 (per-Case client cache + view-state durability  -  "the seatbelt").
@@ -570,9 +571,13 @@ export function App(): JSX.Element {
     return unsub;
   }, []);
 
-  // job-0138: anonymous-accepted flag.
-  const [anonymousAccepted, setAnonymousAccepted] = useState<boolean>(() =>
-    readAnonymousAccepted(),
+  // job-0138: anonymous-accepted flag. TRID3NT LOCAL (F5, live-feedback
+  // 2026-07-08): the local build is single-user with NO auth surfaces, so the
+  // anonymous-accept gate is pre-satisfied -- the app opens straight into the
+  // anonymous single-user session (the local agent already accepts anonymous).
+  // Cloud (flag unset) reads localStorage exactly as before.
+  const [anonymousAccepted, setAnonymousAccepted] = useState<boolean>(
+    () => isLocalDeployment() || readAnonymousAccepted(),
   );
   const [upgradeToast, setUpgradeToast] = useState<string | null>(null);
   const prevSignedInRef = useRef<boolean>(false);
@@ -2073,6 +2078,13 @@ export function App(): JSX.Element {
   // AuthGuard renders its own Google-only sign-in surface and the anonymous
   // gate below is never reached (Decision 6  -  no anonymous in prod).
   if (!appShouldRender) {
+    // TRID3NT LOCAL (F5): never mount a sign-in surface. The only way to be
+    // here locally is the (near-instant) initAuth() anonymous resolve window
+    // (anonymousAccepted is seeded true above), so render nothing rather than
+    // flashing the gate. Cloud renders the exact prior gate stack.
+    if (isLocalDeployment()) {
+      return null;
+    }
     return (
       <AuthGuard authExpired={authExpired}>
         <AuthGate onAnonymousAccept={handleAnonymousAccept} />

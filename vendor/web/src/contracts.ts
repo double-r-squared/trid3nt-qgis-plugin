@@ -54,6 +54,13 @@ export interface UserMessagePayload {
   /** In-chat model selector — Bedrock model id (NATE 2026-06-17). Null → server keeps its current selection. */
   model_id?: string | null;
   /**
+   * LOCAL build only (live-feedback 2026-07-08): when true the server enables
+   * + forwards the local model's reasoning-channel ("thinking") tokens for
+   * this turn as `agent-thinking-chunk` envelopes. Omitted entirely on cloud
+   * (older/cloud server builds never see the key).
+   */
+  show_thinking?: boolean;
+  /**
    * Client's CURRENT active Case (useCases.activeCaseId), stamped on every
    * outbound user-message so the SERVER binds the turn to the case the client
    * is actually looking at — closing the two-sources-of-truth gap where the
@@ -93,6 +100,17 @@ export interface AgentMessageChunkPayload {
   delta: string;
   done?: boolean; // terminal frame is `done: true`
 }
+
+/**
+ * `agent-thinking-chunk` (LOCAL build, live-feedback 2026-07-08) — the local
+ * model's reasoning-channel tokens, streamed live BEFORE the same bubble's
+ * answer text. Wire shape is IDENTICAL to `agent-message-chunk`: the server
+ * mints ONE message_id per narration segment and uses the SAME message_id for
+ * that segment's thinking chunks and its later `agent-message-chunk` text; a
+ * final chunk with `delta:"" done:true` closes the thinking stream for that
+ * bubble (sent when the answer text starts or the segment ends).
+ */
+export type AgentThinkingChunkPayload = AgentMessageChunkPayload;
 
 export type PipelineStepState =
   | "pending"

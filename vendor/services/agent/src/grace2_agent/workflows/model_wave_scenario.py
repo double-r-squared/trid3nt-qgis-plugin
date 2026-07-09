@@ -270,8 +270,8 @@ async def model_wave_scenario(
 
     # --- Auto vertical scaling from the mesh cell count ---------------------
     from ..tools.solver import (
-        AWS_BATCH_COMPUTE_CLASS_SIZING,
         select_compute_class,
+        solve_progress_vcpus,
     )
 
     n_active = int(getattr(staging, "n_active_cells", 0) or 0)
@@ -279,9 +279,9 @@ async def model_wave_scenario(
         effective_compute_class = select_compute_class(n_active)
     else:
         effective_compute_class = compute_class
-    _vcpus = AWS_BATCH_COMPUTE_CLASS_SIZING.get(effective_compute_class, {}).get(
-        "vcpus"
-    )
+    # Deployment-aware CPU count (fingerprint audit A6): local-docker reports
+    # the HOST cpu count; aws-batch keeps the tier lookup byte-identical.
+    _vcpus = solve_progress_vcpus(effective_compute_class)
 
     # --- Step 3: dispatch to AWS Batch (the generic run_solver seam) --------
     from ..tools.solver import (

@@ -134,6 +134,21 @@ RUN apt-get update \
 # The whole app + its deps live in the venv; copy it verbatim from the builder.
 COPY --from=builder /opt/venv /opt/venv
 
+# services/workers PYTHON SOURCES (FIRE-4, 2026-07-08). Several workflows
+# resolve worker-side deck authors BY REPO-ROOT PATH at runtime --
+# ``Path(__file__).resolve().parents[5]`` from the installed package, which in
+# this image is ``/opt/venv`` -- e.g. run_elmfire.load_deck_builder
+# (services/workers/elmfire/deck_builder.py, the FIRE-2 deck builder the cloud
+# ELMFIRE lane builds decks with) and run_modflow._import_gwt_adapter
+# (services/workers/modflow/gwt_adapter.py, the MODFLOW archetypes). The EC2
+# box shipped these via the deploy bundle; the container must carry them too or
+# those tools fail typed (ELMFIRE_DECK_BUILDER_UNAVAILABLE / "unknown MODFLOW
+# archetype") on every Fargate session. The build-context tarball includes ONLY
+# the .py files (see buildspec.agent.yml TRIGGER: tar the find-*.py subset --
+# services/workers also holds multi-GB spike/evidence dirs that must never
+# enter the context).
+COPY services/workers /opt/venv/services/workers
+
 # Run as a non-root user (the EC2 systemd unit runs as root for the editable
 # /opt/grace2 mount; the container needs no host mount so it drops privileges).
 RUN useradd --create-home --uid 10001 grace2

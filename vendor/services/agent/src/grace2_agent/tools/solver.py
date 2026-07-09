@@ -193,6 +193,7 @@ __all__ = [
     "set_runs_bucket",
     "set_s3_client",
     "solver_backend",
+    "solve_progress_vcpus",
     "SOLVER_BACKEND_LOCAL_DOCKER",
     "SOLVER_BACKEND_AWS_BATCH",
     "AWS_BATCH_WORKFLOW_NAME",
@@ -579,6 +580,43 @@ def solver_backend() -> str:
     if b == SOLVER_BACKEND_LOCAL_DOCKER:
         return SOLVER_BACKEND_LOCAL_DOCKER
     return SOLVER_BACKEND_AWS_BATCH
+
+
+def solve_progress_vcpus(
+    compute_class: str | None = None,
+    *,
+    cloud_vcpus: int | None = None,
+) -> int | None:
+    """Deployment-aware CPU count for the LIVE solve-progress readout (A6).
+
+    Local-cloud fingerprint seam (NATE 2026-07-08): the live solve-progress
+    envelope used to carry the AWS Batch tier's vCPU count even when the solve
+    ran on the local machine (``GRACE2_SOLVER_BACKEND=local-docker``), so the
+    local build's card read "... 8 vCPU ..." mid-solve. This helper is the
+    single seam the workflow call sites use instead of reading
+    ``AWS_BATCH_COMPUTE_CLASS_SIZING`` directly:
+
+    - **local-docker** -> ``os.cpu_count()`` (the host CPUs actually doing the
+      solve; the web/plugin render the local deployment's count with "CPU"
+      wording, never "vCPU"). ``None`` if the host count is indeterminate --
+      the card then omits the segment entirely (no fabrication).
+    - **aws-batch** (unset/default) -> byte-identical to the callers' prior
+      tier logic: ``cloud_vcpus`` when the caller already resolved a count
+      (e.g. the SFINCS autoscale provenance), else the
+      ``AWS_BATCH_COMPUTE_CLASS_SIZING[compute_class]["vcpus"]`` lookup
+      (``None`` for an unknown class -- same as the old ``.get(...).get(...)``).
+
+    Wording/telemetry only -- NEVER consulted for dispatch sizing (the Batch
+    ``resourceRequirements`` path reads the sizing table directly).
+    """
+    if solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER:
+        return os.cpu_count()
+    if cloud_vcpus is not None:
+        return int(cloud_vcpus)
+    if compute_class is None:
+        return None
+    tier_vcpus = AWS_BATCH_COMPUTE_CLASS_SIZING.get(compute_class, {}).get("vcpus")
+    return int(tier_vcpus) if tier_vcpus is not None else None
 
 
 #: Map the kickoff-named compute classes (small/medium/large) onto the

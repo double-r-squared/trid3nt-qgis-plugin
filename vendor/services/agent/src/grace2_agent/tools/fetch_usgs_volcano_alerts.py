@@ -683,6 +683,8 @@ def fetch_usgs_volcano_alerts(
 ) -> LayerURI:
     """Fetch the CURRENT USGS volcano alert levels as a point FlatGeobuf.
 
+    Use this (not fetch_usgs_earthquakes, and go past geocode_location) when you want CURRENT USGS VOLCANO alert levels.
+
     Retrieves the current volcanic-alert status of every monitored US volcano
     from the USGS Volcano Hazards Program HANS public API and returns one Point
     feature per volcano at its summit, carrying the four-stage Volcano Alert

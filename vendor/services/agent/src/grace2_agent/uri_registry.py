@@ -89,6 +89,7 @@ __all__ = [
     "activate_registry",
     "deactivate_registry",
     "get_uri_registry",
+    "lookup_handle_for_uri",
     "observe_published_layer",
     "reset_uri_registries_for_tests",
 ]
@@ -210,6 +211,20 @@ def _normalize_gs(value: str) -> str:
 
 def _is_gs(value: str) -> bool:
     return value.startswith("gs://")
+
+
+#: Any RFC-3986-ish scheme prefix (s3://, gs://, http://, https://, file://, ...).
+_URI_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+
+
+def _is_uri_shaped(value: str) -> bool:
+    """True when ``value`` carries a URI scheme or a GDAL /vsi prefix.
+
+    uri-shaped values are NEVER placeholder-resolved (a hallucinated but
+    well-formed gs:///s3:// path could be a real cross-case reference; the
+    existing branch-3/branch-4 machinery owns those).
+    """
+    return bool(_URI_SCHEME_RE.match(value)) or value.startswith("/vsi")
 
 
 def _looks_like_wms(value: str) -> bool:
@@ -563,6 +578,30 @@ class SessionUriRegistry:
                     return rec.uri
             raise UriResolutionError(param_name, value, self._inventory_text())
 
+        # Small-model PLACEHOLDER resolution (2026-07-08): local 8B models emit
+        # the producer (fetch_dem) and the consumer (publish_layer) in the SAME
+        # iteration, passing stand-ins like 'LayerURI_from_fetch_dem' /
+        # '<layer_uri_from_fetch_dem>' / 'fetch_dem_output' as the URI param.
+        # Tool calls dispatch SEQUENTIALLY, so by the time the consumer
+        # resolves, the producer's real URI is already registered. Conservative
+        # by construction: only NON-uri-shaped, non-path strings that name
+        # exactly ONE producing tool with exactly ONE distinct registered URI
+        # resolve; everything else falls through to the existing honest paths.
+        placeholder_hit = self._resolve_placeholder(v)
+        if placeholder_hit is not None:
+            resolved_uri, producer = placeholder_hit
+            logger.info(
+                "uri_registry[%s]: placeholder resolved tool=%s param=%s "
+                "placeholder=%r -> %r (producer=%s)",
+                self.session_id,
+                tool_name,
+                param_name,
+                value,
+                resolved_uri,
+                producer,
+            )
+            return resolved_uri
+
         # Non-gs, non-wms strings (plain https COG, local path, opaque token):
         # fail-open. The mangle classes are all gs:// or WMS shaped.
         if not _is_gs(v):
@@ -585,6 +624,49 @@ class SessionUriRegistry:
             value,
         )
         return value
+
+    def _resolve_placeholder(self, value: str) -> tuple[str, str] | None:
+        """Resolve a small-model placeholder string to a producer's layer URI.
+
+        Returns ``(uri, producer_tool_name)`` when ALL of these hold, else
+        ``None`` (caller falls through to the existing branches):
+
+        - ``value`` is NOT uri-shaped (no ``<scheme>://`` prefix, no ``/vsi``)
+          and NOT a filesystem-path shape (leading ``/`` or ``\\``) - a
+          well-formed but unknown URI must keep the existing branch-3/branch-4
+          treatment, never a silent substitution;
+        - ``value`` textually contains (case-insensitive) the name of exactly
+          ONE tool that registered a URI this session ('LayerURI_from_fetch_dem',
+          '<layer_uri_from_fetch_dem>', 'fetch_dem_output', 'the layer from
+          fetch_dem' all contain 'fetch_dem'); when two matched names nest
+          (e.g. 'fetch_dem' inside 'fetch_dem_hires') the longest match wins;
+        - that tool registered exactly ONE distinct URI in this session -
+          multiple candidates are ambiguous, so we refuse to guess and the
+          existing honest error fires downstream.
+        """
+        if _is_uri_shaped(value) or value.startswith(("/", "\\")):
+            return None
+        lowered = value.lower()
+        by_producer: dict[str, list[UriRecord]] = {}
+        for rec in self._records.values():
+            if rec.uri and rec.tool_name and rec.tool_name != "case-rehydration":
+                by_producer.setdefault(rec.tool_name, []).append(rec)
+        matched = [name for name in by_producer if name.lower() in lowered]
+        if len(matched) > 1:
+            # Nested tool names: drop any match that is a substring of a
+            # longer matched name ('fetch_dem' loses to 'fetch_dem_hires').
+            matched = [
+                n
+                for n in matched
+                if not any(m != n and n.lower() in m.lower() for m in matched)
+            ]
+        if len(matched) != 1:
+            return None
+        producer = matched[0]
+        uris = {rec.uri for rec in by_producer[producer] if rec.uri}
+        if len(uris) != 1:
+            return None  # ambiguous - never guess between two layers
+        return next(iter(uris)), producer
 
     def _fuzzy_match(self, v: str) -> str | None:
         """Match an unknown gs:// URI against the registered inventory.
@@ -717,6 +799,27 @@ def activate_registry(reg: SessionUriRegistry) -> Token:
 
 def deactivate_registry(token: Token) -> None:
     _ACTIVE_REGISTRY.reset(token)
+
+
+def lookup_handle_for_uri(
+    uri: str, registry: SessionUriRegistry | None = None
+) -> str | None:
+    """Return the registered LAYER handle whose data/display URI is ``uri``.
+
+    Used by ``publish_layer`` to derive a ``layer_id`` when the model omitted
+    it: the (already server-resolved) ``layer_uri`` usually maps back to the
+    producing tool's ``layer_id``. Minted ``uri:<basename>`` handles are NOT
+    returned (they are fuzzy-match plumbing, not real layer ids). Falls back
+    to the ambient ContextVar registry when ``registry`` is not passed; returns
+    ``None`` outside an active dispatch (tests / direct programmatic calls).
+    """
+    reg = registry if registry is not None else _ACTIVE_REGISTRY.get()
+    if reg is None or not uri:
+        return None
+    handle = reg._uri_to_handle.get(_normalize_gs(uri.strip()))
+    if handle and not handle.startswith("uri:"):
+        return handle
+    return None
 
 
 def observe_published_layer(

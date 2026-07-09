@@ -4672,6 +4672,12 @@ async def model_flood_scenario(
         _live_active_cells = _autoscale.get("estimated_active_cells")
         _live_vcpus = _autoscale.get("vcpus")
         _live_eta = _autoscale.get("estimated_solve_seconds")
+        # Deployment-aware CPU count (fingerprint audit A6): local-docker
+        # reports the HOST cpu count (never the perf model's cloud vCPU
+        # anchor); aws-batch keeps the autoscale-provenance value
+        # byte-identical.
+        from ..tools.solver import solve_progress_vcpus
+
         _progress_task = asyncio.ensure_future(
             _drive_live_solve_progress(
                 emitter=emitter,
@@ -4683,7 +4689,11 @@ async def model_flood_scenario(
                     if _live_active_cells is not None
                     else None
                 ),
-                vcpus=int(_live_vcpus) if _live_vcpus is not None else None,
+                vcpus=solve_progress_vcpus(
+                    cloud_vcpus=(
+                        int(_live_vcpus) if _live_vcpus is not None else None
+                    )
+                ),
                 eta_seconds=float(_live_eta) if _live_eta is not None else None,
             )
         )

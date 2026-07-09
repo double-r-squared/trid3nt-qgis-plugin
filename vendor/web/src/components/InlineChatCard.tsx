@@ -24,7 +24,7 @@
 // click. A11y roles default to `role="status"` (info/success/warning) or
 // `role="alert"` (danger); consumers may override via the `role` prop.
 
-import { CSSProperties, ReactNode } from "react";
+import { CSSProperties, ReactNode, useEffect, useRef, useState } from "react";
 import { IconWarning, IconInfo, IconCheck } from "./icons";
 import type { IconProps } from "./icons";
 import type { FC } from "react";
@@ -115,6 +115,15 @@ export interface InlineChatCardProps {
    * don't belong in the shared card API.
    */
   extraAttrs?: Record<string, string>;
+  /**
+   * Gate UX (live-feedback 2026-07-09): when true, animate a brief amber
+   * attention-pulse on mount so the card is visually distinct while the user
+   * has not yet answered it. Pass true for unresolved gate cards (payload /
+   * resolution / solver-confirm), false or undefined for resolved or non-gate
+   * cards. Respects prefers-reduced-motion (pulses once on mount only; static
+   * on reduced-motion).
+   */
+  highlight?: boolean;
 }
 
 // --- Style helpers ------------------------------------------------------- //
@@ -169,6 +178,25 @@ function btnStyle(
   };
 }
 
+// --- Attention-pulse CSS (gate UX, live-feedback 2026-07-09) ------------ //
+//
+// A two-phase amber glow that fires once on mount when `highlight` is true.
+// Phase 1 (0-0.6s): ramp the outline alpha up to 0.7 (attention peak).
+// Phase 2 (0.6-1.2s): fade back out to 0 (settles invisible).
+// The animation is fill-mode=forwards so it stays gone after completion.
+// prefers-reduced-motion: the card mounts without any pulse.
+
+const GATE_PULSE_CSS = `
+@keyframes grace2-gate-pulse {
+  0%   { box-shadow: 0 4px 14px rgba(0,0,0,0.35), 0 0 0 0 rgba(234,179,8,0); }
+  40%  { box-shadow: 0 4px 14px rgba(0,0,0,0.35), 0 0 0 4px rgba(234,179,8,0.55); }
+  100% { box-shadow: 0 4px 14px rgba(0,0,0,0.35), 0 0 0 8px rgba(234,179,8,0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grace2-gate-pulse { animation: none !important; }
+}
+`;
+
 // --- Component ----------------------------------------------------------- //
 
 /**
@@ -186,9 +214,25 @@ export function InlineChatCard({
   role,
   ariaLabel,
   extraAttrs,
+  highlight,
 }: InlineChatCardProps): JSX.Element {
   const accent = VARIANT_ACCENT[variant];
   const ariaRole = role ?? VARIANT_ROLE[variant];
+
+  // Gate pulse: active for 1.2s on mount, then cleared so the card settles.
+  const [pulseActive, setPulseActive] = useState(highlight === true);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!highlight) return;
+    setPulseActive(true);
+    timerRef.current = setTimeout(() => setPulseActive(false), 1200);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+    // highlight changes when the card transitions from unresolved -> resolved;
+    // we intentionally do NOT re-trigger on subsequent renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Icon resolution:
   //   - icon === ""        → suppress the icon entirely
@@ -200,11 +244,14 @@ export function InlineChatCard({
     icon !== undefined ? icon : <VariantIcon size={14} color={accent} />;
 
   return (
+    <>
+      {pulseActive && <style>{GATE_PULSE_CSS}</style>}
     <div
       data-testid={testId ?? "inline-chat-card"}
       data-variant={variant}
       role={ariaRole}
       aria-label={ariaLabel}
+      className={pulseActive ? "grace2-gate-pulse" : undefined}
       {...extraAttrs}
       style={{
         // Semi-transparent surface over the chat background; subtle border
@@ -214,6 +261,7 @@ export function InlineChatCard({
         borderLeft: `3px solid ${accent}`,
         borderRadius: 8,
         boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+        animation: pulseActive ? "grace2-gate-pulse 1.2s ease-out forwards" : undefined,
         color: "#e5e7eb",
         padding: "10px 12px",
         display: "flex",
@@ -320,5 +368,6 @@ export function InlineChatCard({
         </div>
       )}
     </div>
+    </>
   );
 }

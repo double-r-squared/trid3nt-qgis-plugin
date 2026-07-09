@@ -877,6 +877,8 @@ async def run_model_nws_flood_event_scenario(
 ) -> dict[str, Any]:
     """Model the flood from a live NWS flood warning (Case 3: NWS → MRMS → SFINCS).
 
+    Use this (not run_model_flood_scenario) when the flood is driven by a LIVE NWS flood warning/alert (NWS -> MRMS -> SFINCS).
+
     Five-step deterministic composition (zero LLM calls inside):
     1. ``fetch_nws_alerts_conus(event_types=["Flood Warning", "Flash Flood
        Warning"])`` — active NWS flood-warning polygons, published as a map layer.

@@ -570,8 +570,8 @@ async def model_dambreak_geoclaw_scenario(
 
     # --- Auto vertical scaling from the base grid cell count ----------------
     from ..tools.solver import (
-        AWS_BATCH_COMPUTE_CLASS_SIZING,
         select_compute_class,
+        solve_progress_vcpus,
     )
 
     n_active = int(getattr(staging, "n_active_cells", 0) or 0)
@@ -584,9 +584,9 @@ async def model_dambreak_geoclaw_scenario(
     effective_compute_class = max(
         auto_class, compute_class, key=lambda c: _CLASS_RANK.get(c, 1)
     )
-    _vcpus = AWS_BATCH_COMPUTE_CLASS_SIZING.get(effective_compute_class, {}).get(
-        "vcpus"
-    )
+    # Deployment-aware CPU count (fingerprint audit A6): local-docker reports
+    # the HOST cpu count; aws-batch keeps the tier lookup byte-identical.
+    _vcpus = solve_progress_vcpus(effective_compute_class)
 
     # --- Step 3: dispatch to AWS Batch (the generic run_solver seam) --------
     from ..tools.solver import (

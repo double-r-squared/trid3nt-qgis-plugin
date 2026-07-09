@@ -17,7 +17,8 @@ without re-import):
 
   GRACE2_OPENAI_BASE_URL  (REQUIRED when MODEL_PROVIDER=openai; no default)
   GRACE2_OPENAI_API_KEY   (default "not-needed" -- local endpoints ignore it)
-  GRACE2_OPENAI_MODEL     (required; sent verbatim on every chat.completions call)
+  GRACE2_OPENAI_MODEL     (the default model; a per-turn selection from the
+                           web model selector overrides it -- see openai_model)
   MODEL_PROVIDER=openai   (selects this adapter from the dispatch seam)
 
 Design notes:
@@ -75,6 +76,7 @@ from .adapter import (
     FunctionCallEvent,
     StreamEvent,
     TextDeltaEvent,
+    ThinkingDeltaEvent,
     UsageMetadataEvent,
 )
 
@@ -119,15 +121,23 @@ def openai_api_key() -> str:
 def openai_model(session_model: str | None = None) -> str:
     """Resolve the OpenAI model name to send.
 
-    Precedence:
-      1. GRACE2_OPENAI_MODEL env var (always wins for the OpenAI path)
-      2. session_model if it does NOT look like a Bedrock inference-profile id
+    Precedence (F2, live-feedback 2026-07-08: local hot-swap):
+      1. session_model if it does NOT look like a Bedrock inference-profile id
+         -- the per-turn selection from the web model selector (which, in the
+         local build, lists the REAL installed Ollama models via the agent's
+         /api/local-models endpoint). This must OVERRIDE the env default so
+         picking a model in the UI actually changes the serving model.
+      2. GRACE2_OPENAI_MODEL env var (the configured default)
       3. Raise if nothing is configured
+
+    A Bedrock-shaped session id (stale localStorage from a cloud session) is
+    ignored with a one-shot warning and falls through to the env default --
+    same guard as before, just no longer masked by the env-always-wins rule.
+    This function is only reached when MODEL_PROVIDER=openai, so the cloud
+    (Bedrock) path is untouched by the precedence flip.
     """
     global _BEDROCK_ID_WARN_DONE
     configured = os.environ.get("GRACE2_OPENAI_MODEL", "").strip()
-    if configured:
-        return configured
     if session_model:
         if _looks_like_bedrock_id(session_model):
             if not _BEDROCK_ID_WARN_DONE:
@@ -140,6 +150,8 @@ def openai_model(session_model: str | None = None) -> str:
                 _BEDROCK_ID_WARN_DONE = True
         else:
             return session_model
+    if configured:
+        return configured
     raise RuntimeError(
         "MODEL_PROVIDER=openai requires GRACE2_OPENAI_MODEL to be set "
         "(e.g. 'llama3.2:3b' for Ollama or 'gpt-4o' for OpenAI). "
@@ -267,6 +279,7 @@ def _coalesce_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def contents_to_openai_messages(
     contents: list[genai_types.Content],
     system_prompt: str | None = None,
+    show_thinking: bool = False,
 ) -> list[dict[str, Any]]:
     """Convert genai ``contents`` to OpenAI ``messages[]``.
 
@@ -280,6 +293,12 @@ def contents_to_openai_messages(
     a stable deterministic id ``"call_{counter}"`` is minted. function_response
     ids are resolved by pairing with the preceding function_call by arrival order
     (same FIFO queue strategy as bedrock_adapter.contents_to_bedrock_messages).
+
+    ``show_thinking`` (NATE live-feedback 2026-07-08, local build): when True
+    any ``/no_think`` directive inside GRACE2_OPENAI_EXTRA_SYSTEM is dropped
+    for THIS round so the qwen3-family reasoning channel is generated (and
+    streamed back as ``ThinkingDeltaEvent``s by ``stream_openai``). Other
+    extra-system text is preserved.
     """
     messages: list[dict[str, Any]] = []
     # GRACE2_OPENAI_EXTRA_SYSTEM: optional text appended to the system prompt.
@@ -288,6 +307,10 @@ def contents_to_openai_messages(
     # OpenAI-compat content deltas arrive empty and the turn renders no text.
     # Generic seam (any provider-specific system suffix), dormant unless set.
     extra_system = os.environ.get("GRACE2_OPENAI_EXTRA_SYSTEM", "").strip()
+    if extra_system and show_thinking:
+        # Thinking display ON for this turn: omit the /no_think suppressor
+        # (keep any unrelated extra-system text verbatim).
+        extra_system = extra_system.replace("/no_think", "").strip()
     if extra_system:
         system_prompt = f"{system_prompt}\n{extra_system}" if system_prompt else extra_system
     if system_prompt:
@@ -375,6 +398,7 @@ async def stream_openai(
     tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
     system_prompt: str | None = None,
     model: str | None = None,
+    show_thinking: bool = False,
 ) -> AsyncIterator[StreamEvent]:
     """Stream one OpenAI-compatible turn, yielding the GRACE ``StreamEvent`` union.
 
@@ -400,7 +424,9 @@ async def stream_openai(
 
     client = AsyncOpenAI(base_url=base_url, api_key=api_key)
 
-    messages = contents_to_openai_messages(contents, system_prompt=system_prompt)
+    messages = contents_to_openai_messages(
+        contents, system_prompt=system_prompt, show_thinking=show_thinking
+    )
     tools = tool_declarations_to_openai_tools(tool_declarations)
 
     kwargs: dict[str, Any] = {
@@ -431,6 +457,28 @@ async def stream_openai(
                 text = getattr(delta, "content", None)
                 if text:
                     yield TextDeltaEvent(delta=text)
+
+                # Reasoning delta (NATE live-feedback 2026-07-08): Ollama's
+                # OpenAI-compat stream carries qwen3-family thinking as
+                # ``delta.reasoning`` (verified live); DeepSeek-style servers
+                # use ``delta.reasoning_content``. The openai SDK's ChoiceDelta
+                # tolerates extra fields, but read defensively via getattr +
+                # the pydantic ``model_extra`` bag so an SDK that drops unknown
+                # attrs still surfaces the channel. Always yielded when
+                # present -- the server gates FORWARDING on the per-turn user
+                # toggle, and with /no_think armed the channel is simply not
+                # generated.
+                reasoning = getattr(delta, "reasoning", None) or getattr(
+                    delta, "reasoning_content", None
+                )
+                if not reasoning:
+                    extra = getattr(delta, "model_extra", None)
+                    if isinstance(extra, dict):
+                        reasoning = extra.get("reasoning") or extra.get(
+                            "reasoning_content"
+                        )
+                if reasoning and isinstance(reasoning, str):
+                    yield ThinkingDeltaEvent(delta=reasoning)
 
                 # Tool-call deltas: accumulate by index.
                 tc_deltas = getattr(delta, "tool_calls", None) or []

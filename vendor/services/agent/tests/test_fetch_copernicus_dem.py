@@ -350,3 +350,43 @@ def test_distinct_bbox_distinct_cache_key() -> None:
     )
     # Two distinct bboxes -> two distinct cached objects.
     assert len(fake.store) == 2
+
+
+# ---------------------------------------------------------------------------
+# Consolidation: fetch_dem(source="copernicus") folds in this GLO-30 tool.
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_dem_source_copernicus_delegates_to_impl() -> None:
+    """``fetch_dem(source="copernicus")`` routes to the shared GLO-30 impl."""
+    from grace2_agent.tools.data_fetch import fetch_dem
+
+    sentinel = object()
+    with patch.object(cop_mod, "_copernicus_dem_impl", return_value=sentinel) as spy:
+        got = fetch_dem(_ALPS_BBOX, source="copernicus")
+    assert got is sentinel
+    spy.assert_called_once_with(_ALPS_BBOX)
+
+
+def test_fetch_dem_default_source_does_not_touch_copernicus() -> None:
+    """The default 3DEP path never delegates to the Copernicus impl."""
+    from grace2_agent.tools.data_fetch import fetch_dem
+
+    with patch.object(cop_mod, "_copernicus_dem_impl") as spy:
+        with patch("grace2_agent.tools.data_fetch._fetch_3dep_dem_bytes",
+                   return_value=b"dem"), \
+             patch("grace2_agent.tools.data_fetch.read_through") as rt:
+            from types import SimpleNamespace
+            rt.return_value = SimpleNamespace(uri="s3://c/dem.tif", data=b"dem", hit=False)
+            fetch_dem((-82.0, 26.0, -81.9, 26.1), resolution_m=10)
+    spy.assert_not_called()
+
+
+def test_deprecated_fetch_copernicus_dem_routes_through_impl() -> None:
+    """The deprecated alias still registers and routes through the shared impl."""
+    assert "fetch_copernicus_dem" in TOOL_REGISTRY
+    sentinel = object()
+    with patch.object(cop_mod, "_copernicus_dem_impl", return_value=sentinel) as spy:
+        got = fetch_copernicus_dem(bbox=_ALPS_BBOX)
+    assert got is sentinel
+    spy.assert_called_once_with(_ALPS_BBOX)

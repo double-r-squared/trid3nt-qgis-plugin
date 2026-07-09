@@ -1022,7 +1022,12 @@ def fetch_era5_reanalysis(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Copernicus ERA5 global reanalysis Tier-2 fetcher (single-level hourly).
+    """Copernicus ERA5 global reanalysis fetcher: historical hourly wind / precip / temperature / wave height.
+
+    Use this (do not stop at geocode_location) when the user names ERA5 or wants
+    historical/global atmospheric reanalysis. Call it even if no key is set: the
+    Copernicus CDS key is auto-requested via a credential card if missing, so a
+    possible key prompt is NOT a reason to route elsewhere.
 
     **What it does:** Retrieves an ERA5 hourly reanalysis variable for a bbox
     and date range via the Copernicus Climate Data Store (CDS) ``cdsapi``
@@ -1056,9 +1061,11 @@ def fetch_era5_reanalysis(
     - DO NOT use for CONUS precipitation when MRMS is available — MRMS QPE is
       1 km gauge-corrected vs ERA5's 27 km; use ``fetch_mrms_qpe`` instead.
     - DO NOT use for sub-hourly timesteps; ERA5 is hourly minimum.
-    - Requires a Copernicus CDS API key (free registration at
-      https://cds.climate.copernicus.eu/user/register); raises
-      ``ERA5MissingKeyError`` without one.
+    - Key auto-requested if missing: ERA5 uses a free Copernicus CDS API key
+      (register at https://cds.climate.copernicus.eu/user/register). If none is
+      configured the tool raises ``ERA5MissingKeyError``, which surfaces a
+      credential card and retries -- so a missing key is NOT a reason to avoid
+      this tool; call it normally.
 
     **Parameters:**
     - ``bbox`` (tuple[float, float, float, float]): ``(west, south, east,

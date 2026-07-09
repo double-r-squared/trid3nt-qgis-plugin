@@ -308,6 +308,8 @@ async def compute_canopy_height(
 ) -> LayerURI | dict[str, Any]:
     """Estimate tree-canopy HEIGHT (metres) over an AOI from RGB imagery.
 
+    Use this (not fetch_usfs_canopy_fuels, which is fuel data) when you want ML-inferred tree-canopy HEIGHT in metres from RGB imagery.
+
     Runs Meta's pretrained HighResCanopyHeight deep-learning model (a DINOv2 ViT
     backbone + DPT decoder, Apache-2.0) on sub-metre RGB aerial imagery and
     produces an ESTIMATED per-pixel canopy-top-height raster (metres), painted on

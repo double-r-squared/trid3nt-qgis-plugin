@@ -1441,6 +1441,201 @@ async def _handle_building_detail(query_string: str) -> bytes:
 
 
 # ---------------------------------------------------------------------------
+# /api/export-qgis -- user-driven QGIS case export (NATE 2026-07-06)
+# ---------------------------------------------------------------------------
+#
+# Two routes back the web's per-case "Export to QGIS" kebab item:
+#   POST /api/export-qgis {"case_id": "..."}  -> run the export_case_to_qgis
+#     tool in-process; 200 with its result dict, typed tool errors -> 4xx
+#     with {"error": <honest message>} (never a traceback).
+#   GET  /api/export-qgis/file?path=<abs>     -> serve the produced .qgz/.gpkg
+#     bytes, ONLY when the resolved real path lives inside the export root
+#     (GRACE2_EXPORT_DIR, default ~/trid3nt-exports) -- anything else is a
+#     403 (path-traversal guard).
+
+
+class _ExportQgisBadRequest(Exception):
+    """Malformed /api/export-qgis request (bad JSON / missing case_id / path)."""
+
+
+class _ExportQgisForbidden(Exception):
+    """File request outside the export root or a non-exported file type."""
+
+
+class _ExportQgisNotFound(Exception):
+    """The requested export file does not exist under the export root."""
+
+
+def _export_qgis_fn():
+    """Lazy-import seam for the export tool (heavy geo deps load on first
+    call, not at listener start; monkeypatchable in tests)."""
+    from .tools.export_case_to_qgis import export_case_to_qgis
+
+    return export_case_to_qgis
+
+
+async def _handle_export_qgis_post(raw_body: bytes) -> bytes:
+    """Resolve the JSON body for ``POST /api/export-qgis``.
+
+    Validates ``{"case_id": "..."}``, awaits the ``export_case_to_qgis`` tool,
+    and returns its encoded result dict. Raises ``_ExportQgisBadRequest``
+    (-> 400) on malformed input; the tool's own typed ``ExportCaseError``
+    subclasses propagate for the dispatcher to map to honest 4xx bodies.
+    """
+    try:
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise _ExportQgisBadRequest(f"body must be JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise _ExportQgisBadRequest(
+            'body must be a JSON object like {"case_id": "..."}'
+        )
+    case_id = payload.get("case_id")
+    if not isinstance(case_id, str) or not case_id.strip():
+        raise _ExportQgisBadRequest("missing or empty `case_id`")
+
+    result = await _export_qgis_fn()(case_id=case_id.strip())
+    return json.dumps(result, separators=(",", ":")).encode("utf-8")
+
+
+def _export_qgis_root() -> Path:
+    """The only directory the file route may serve from: the export tool's
+    output root (same default as ``export_case_to_qgis``)."""
+    raw = os.environ.get("GRACE2_EXPORT_DIR") or str(Path.home() / "trid3nt-exports")
+    return Path(raw).expanduser().resolve()
+
+
+def _resolve_export_qgis_file(query_string: str) -> tuple[Path, str]:
+    """Validate ``GET /api/export-qgis/file?path=...`` -> ``(path, content_type)``.
+
+    SYNC (filesystem resolution); the caller wraps it in ``asyncio.to_thread``.
+    Guards, in order: a ``path`` param must be present (400); only the two
+    artifact types the export tool produces are served, ``.qgz`` (zip) and
+    ``.gpkg`` (403 otherwise); the REAL resolved path (symlinks + ``..``
+    collapsed) must live inside the export root (403 -- traversal guard); and
+    the file must exist (404).
+    """
+    from urllib.parse import parse_qs
+
+    params = parse_qs(query_string, keep_blank_values=False)
+    raw = (params.get("path") or [""])[0].strip()
+    if not raw:
+        raise _ExportQgisBadRequest("missing `path` query param")
+
+    content_type = {
+        ".qgz": "application/zip",
+        ".gpkg": "application/geopackage+sqlite3",
+    }.get(Path(raw).suffix.lower())
+    if content_type is None:
+        raise _ExportQgisForbidden(
+            "only .qgz and .gpkg export artifacts are served"
+        )
+
+    root = _export_qgis_root()
+    real = Path(raw).expanduser().resolve()
+    if real != root and root not in real.parents:
+        raise _ExportQgisForbidden(
+            f"path is outside the export root {root}"
+        )
+    if not real.is_file():
+        raise _ExportQgisNotFound(f"no such export file: {real}")
+    return real, content_type
+
+
+# ---------------------------------------------------------------------------
+# /api/local-models -- installed local (Ollama) models (F2, live-feedback
+# 2026-07-08).
+# ---------------------------------------------------------------------------
+#
+# The TRID3NT LOCAL build serves its LLM through an OpenAI-compatible endpoint
+# (MODEL_PROVIDER=openai, typically Ollama). The web model selector needs the
+# REAL installed model list to offer cloud-style hot-swap, but the browser
+# generally cannot reach the Ollama server (:11434) directly. This endpoint
+# proxies Ollama's ``GET /api/tags`` from the agent process (which CAN reach
+# it -- it is the same host the chat completions go to) and returns:
+#
+#     {"models": [{"id": "qwen3:8b-16k", "label": "qwen3:8b-16k"}, ...],
+#      "default": "qwen3:8b-16k" | null}
+#
+# ``default`` is the agent's configured GRACE2_OPENAI_MODEL (null when unset).
+# CLOUD posture: when MODEL_PROVIDER != "openai" the route is treated as
+# ABSENT (404, exactly what an unknown path returns today), so the cloud
+# surface is behavior-identical. Ollama unreachable -> honest 502.
+
+
+def _local_models_route_enabled() -> bool:
+    """The route exists only for the OpenAI-compatible (local) provider."""
+    try:
+        from .bedrock_adapter import model_provider
+
+        return model_provider() == "openai"
+    except Exception:  # noqa: BLE001 -- import fault -> route absent
+        return False
+
+
+def _ollama_tags_url() -> str:
+    """Derive the Ollama ``/api/tags`` URL from the agent's own LLM endpoint.
+
+    ``GRACE2_OPENAI_BASE_URL`` is the OpenAI-compatible base the adapter dials
+    (e.g. ``http://127.0.0.1:11434/v1``); the native Ollama API lives one level
+    up. Strips a trailing ``/v1`` and appends ``/api/tags``. Falls back to the
+    Ollama default host when the env is unset (dev convenience).
+    """
+    base = os.environ.get("GRACE2_OPENAI_BASE_URL", "").strip().rstrip("/")
+    if base.endswith("/v1"):
+        base = base[: -len("/v1")]
+    if not base:
+        base = "http://127.0.0.1:11434"
+    return f"{base}/api/tags"
+
+
+class _LocalModelsUpstreamError(Exception):
+    """Ollama /api/tags unreachable or returned an unusable payload."""
+
+
+def _fetch_local_models() -> bytes:
+    """SYNC (httpx; caller wraps in ``asyncio.to_thread``): build the JSON body.
+
+    Raises ``_LocalModelsUpstreamError`` on any upstream fault so the handler
+    emits an honest 502 -- never a fabricated empty success.
+    """
+    import httpx
+
+    url = _ollama_tags_url()
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            payload = resp.json()
+    except Exception as exc:  # noqa: BLE001 -- unreachable / non-JSON / 5xx
+        raise _LocalModelsUpstreamError(
+            f"local model runtime unreachable at {url}: {exc}"
+        ) from exc
+
+    raw_models = payload.get("models") if isinstance(payload, dict) else None
+    models: list[dict[str, str]] = []
+    if isinstance(raw_models, list):
+        for m in raw_models:
+            if not isinstance(m, dict):
+                continue
+            name = m.get("name") or m.get("model")
+            if isinstance(name, str) and name.strip():
+                name = name.strip()
+                models.append({"id": name, "label": name})
+    default = os.environ.get("GRACE2_OPENAI_MODEL", "").strip() or None
+    # Configured default first, so a client that picks entry 0 gets the model
+    # the agent would serve anyway.
+    if default is not None:
+        for i, m in enumerate(models):
+            if m["id"] == default:
+                models.insert(0, models.pop(i))
+                break
+    return json.dumps(
+        {"models": models, "default": default}, separators=(",", ":")
+    ).encode("utf-8")
+
+
+# ---------------------------------------------------------------------------
 # HTTP server (asyncio, stdlib only)
 # ---------------------------------------------------------------------------
 
@@ -1461,6 +1656,7 @@ def _format_response(
         200: "OK",
         204: "No Content",
         400: "Bad Request",
+        403: "Forbidden",
         404: "Not Found",
         405: "Method Not Allowed",
         500: "Internal Server Error",
@@ -1469,9 +1665,9 @@ def _format_response(
     headers = {
         "Content-Type": content_type,
         "Content-Length": str(len(body)),
-        # CORS — see module docstring.
+        # CORS — see module docstring. POST is scoped to /api/export-qgis.
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
         "Cache-Control": "no-cache",
         "Connection": "close",
@@ -1519,8 +1715,10 @@ async def _handle_http(
         writer.close()
         return
 
-    # Drain headers; we don't need them, but the socket must be advanced past
+    # Drain headers; the only one we consume is Content-Length (so the
+    # export-qgis POST body can be read), but the socket must be advanced past
     # them before we close so the client sees our response cleanly.
+    content_length = 0
     while True:
         try:
             line = await asyncio.wait_for(reader.readline(), timeout=5.0)
@@ -1528,10 +1726,72 @@ async def _handle_http(
             break
         if not line or line == b"\r\n" or line == b"\n":
             break
+        name, _, value = line.decode("latin-1", "replace").partition(":")
+        if name.strip().lower() == "content-length":
+            try:
+                content_length = int(value.strip())
+            except ValueError:
+                content_length = 0
 
     if method == "OPTIONS":
         # CORS preflight.
         writer.write(_format_response(204, b""))
+        await writer.drain()
+        writer.close()
+        return
+
+    proxy_path, _, proxy_qs = path.partition("?")
+
+    if method == "POST" and proxy_path == "/api/export-qgis":
+        # User-driven QGIS export (NATE 2026-07-06): run the
+        # export_case_to_qgis tool for a case_id. Typed tool errors map to
+        # honest 4xx {"error": message} bodies -- never a traceback.
+        raw_body = b""
+        if content_length > 0:
+            try:
+                raw_body = await asyncio.wait_for(
+                    reader.readexactly(content_length), timeout=30.0
+                )
+            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                raw_body = b""
+        from .tools.export_case_to_qgis import CaseNotFoundError, ExportCaseError
+
+        try:
+            body = await _handle_export_qgis_post(raw_body)
+            writer.write(_format_response(200, body))
+        except _ExportQgisBadRequest as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except CaseNotFoundError as exc:
+            writer.write(
+                _format_response(
+                    404,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except ExportCaseError as exc:
+            # INVALID_INPUT / NO_EXPORTABLE_LAYERS / EXPORT_FAILED -- the
+            # tool's honest message, as a client error (the request was
+            # well-formed HTTP but the export cannot succeed).
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("export-qgis run failed")
+            writer.write(_format_response(500, b'{"error":"qgis export failed"}'))
         await writer.drain()
         writer.close()
         return
@@ -1550,7 +1810,6 @@ async def _handle_http(
     # contract lens). Env-gated: when ``QGIS_PROXY_ENABLED`` is off (default),
     # the route is treated as absent and falls through to the 404 below, so
     # TODAY'S behavior is unchanged until job-0257 flips the flag in prod.
-    proxy_path, _, proxy_qs = path.partition("?")
     if proxy_path == "/qgis-proxy":
         from .qgis_proxy import qgis_proxy_enabled
 
@@ -1584,6 +1843,32 @@ async def _handle_http(
             writer.write(
                 _format_response(500, b'{"error":"telemetry summary failed"}')
             )
+    elif proxy_path == "/api/local-models":
+        # F2 (live-feedback 2026-07-08): installed local (Ollama) models for
+        # the web model selector's local hot-swap. Route ABSENT (404 -- same
+        # as any unknown path) unless MODEL_PROVIDER=openai, so the cloud
+        # agent's HTTP surface is behavior-identical. The upstream fetch runs
+        # off the event loop.
+        if not _local_models_route_enabled():
+            writer.write(_format_response(404, b'{"error":"not found"}'))
+        else:
+            try:
+                body = await asyncio.to_thread(_fetch_local_models)
+                writer.write(_format_response(200, body))
+            except _LocalModelsUpstreamError as exc:
+                writer.write(
+                    _format_response(
+                        502,
+                        json.dumps(
+                            {"error": str(exc)}, separators=(",", ":")
+                        ).encode("utf-8"),
+                    )
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("local-models listing failed")
+                writer.write(
+                    _format_response(500, b'{"error":"local models failed"}')
+                )
     elif proxy_path == "/api/building-detail":
         # Click-to-enrich (NATE 2026-06-27): the building footprint inline
         # GeoJSON is now SLIM (id-only props). The popup fetches the full tag
@@ -1616,6 +1901,60 @@ async def _handle_http(
             logger.exception("building-detail lookup failed")
             writer.write(
                 _format_response(500, b'{"error":"building detail failed"}')
+            )
+    elif proxy_path == "/api/export-qgis/file":
+        # Serve a produced export artifact (.qgz / .gpkg) so the browser can
+        # download it. Path-traversal guarded: the resolved REAL path must
+        # live inside the export root or the request is a 403. Filesystem
+        # work runs off the event loop.
+        try:
+            file_path, file_ctype = await asyncio.to_thread(
+                _resolve_export_qgis_file, proxy_qs
+            )
+            data = await asyncio.to_thread(file_path.read_bytes)
+            writer.write(
+                _format_response(
+                    200,
+                    data,
+                    content_type=file_ctype,
+                    extra_headers={
+                        "Content-Disposition": (
+                            f'attachment; filename="{file_path.name}"'
+                        )
+                    },
+                )
+            )
+        except _ExportQgisBadRequest as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except _ExportQgisForbidden as exc:
+            writer.write(
+                _format_response(
+                    403,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except _ExportQgisNotFound as exc:
+            writer.write(
+                _format_response(
+                    404,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("export-qgis file serve failed")
+            writer.write(
+                _format_response(500, b'{"error":"export file serve failed"}')
             )
     elif path == "/api/health":
         # Autostop liveness probe (agent-box auto-stop/wake infra). The idle

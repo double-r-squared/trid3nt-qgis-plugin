@@ -43,7 +43,9 @@ Server-side ``where``-clause filters (job-A5 upgrade): the previously inert
 ``hazard_potential`` and ``state`` params are now live -- they compose into
 an ArcGIS ``where`` clause applied to BOTH the authoritative endpoint and
 the mirror (so "show every high-hazard dam in Nevada" filters server-side
-instead of pulling the whole inventory).
+instead of pulling the whole inventory). 2026-07-07: ``min_height_ft``
+joins them (``DAM_HEIGHT >= {value}``, feet; numeric comparison verified
+live against the mirror).
 
 Query parameters used:
     where=1=1
@@ -104,6 +106,7 @@ __all__ = [
     "_build_where_clause",
     "_validate_hazard_potential",
     "_validate_state",
+    "_validate_min_height",
     "_resolve_nid_token",
     "set_persistence_for_secrets",
     "_validate_bbox",
@@ -524,20 +527,67 @@ def _validate_state(
     return out
 
 
+def _validate_min_height(
+    min_height_ft: float | int | None,
+) -> float | None:
+    """Normalize the ``min_height_ft`` filter to a finite non-negative float.
+
+    Accepts an int/float (or a numeric string, since LLM callers sometimes
+    stringify numbers). Returns None when the filter is unset. Raises
+    ``USACEDAMSInputError`` on a non-numeric, negative, NaN, or infinite
+    value. Units are FEET - the NID ``DAM_HEIGHT`` column is reported in
+    feet.
+    """
+    if min_height_ft is None:
+        return None
+    if isinstance(min_height_ft, bool):
+        raise USACEDAMSInputError(
+            f"min_height_ft must be a number (feet); got {min_height_ft!r}"
+        )
+    if isinstance(min_height_ft, str):
+        try:
+            min_height_ft = float(min_height_ft.strip())
+        except ValueError:
+            raise USACEDAMSInputError(
+                f"min_height_ft must be a number (feet); got {min_height_ft!r}"
+            ) from None
+    if not isinstance(min_height_ft, (int, float)):
+        raise USACEDAMSInputError(
+            f"min_height_ft must be a number (feet); got "
+            f"{type(min_height_ft).__name__}"
+        )
+    value = float(min_height_ft)
+    if math.isnan(value) or math.isinf(value):
+        raise USACEDAMSInputError(
+            f"min_height_ft must be finite; got {min_height_ft!r}"
+        )
+    if value < 0:
+        raise USACEDAMSInputError(
+            f"min_height_ft must be >= 0; got {min_height_ft!r}"
+        )
+    return value
+
+
 def _build_where_clause(
     hazard_potentials: list[str],
     states: list[str],
+    min_height_ft: float | None = None,
 ) -> str:
     """Compose an ArcGIS ``where`` clause from the normalized filters.
 
-    Both filters are applied with ``IN (...)`` lists ANDed together. When no
-    filter is set, returns the ``1=1`` tautology (the original behaviour). All
-    interpolated values are pre-validated + SQL-escaped.
+    String filters are applied with ``IN (...)`` lists; the numeric
+    ``min_height_ft`` filter as ``DAM_HEIGHT >= {value}`` (NID reports
+    ``DAM_HEIGHT`` in feet; verified live 2026-07-07 that the mirror
+    evaluates the numeric comparison server-side). All clauses are ANDed
+    together. When no filter is set, returns the ``1=1`` tautology (the
+    original behaviour). All interpolated string values are pre-validated +
+    SQL-escaped; the numeric value is pre-validated to a finite float.
 
     Example::
 
-        _build_where_clause(["High", "Significant"], ["Nevada"])
-        -> "HAZARD_POTENTIAL IN ('High','Significant') AND STATE IN ('Nevada')"
+        _build_where_clause(["High", "Significant"], ["Nevada"], 50.0)
+        -> "HAZARD_POTENTIAL IN ('High','Significant') AND STATE IN ('Nevada')
+            AND DAM_HEIGHT >= 50"
     """
     clauses: list[str] = []
     if hazard_potentials:
@@ -546,6 +596,10 @@ def _build_where_clause(
     if states:
         ins = ",".join(f"'{_sql_escape(s)}'" for s in states)
         clauses.append(f"STATE IN ({ins})")
+    if min_height_ft is not None:
+        # %g drops a trailing ".0" so cache keys / URLs stay stable for the
+        # common integer case (50.0 -> "50").
+        clauses.append(f"DAM_HEIGHT >= {min_height_ft:g}")
     if not clauses:
         return "1=1"
     return " AND ".join(clauses)
@@ -1065,6 +1119,7 @@ def fetch_usace_dams(
     bbox: tuple[float, float, float, float] | None = None,
     hazard_potential: str | list[str] | None = None,
     state: str | list[str] | None = None,
+    min_height_ft: float | int | None = None,
     token: str | None = None,
     secret_ref: Any | None = None,
     # job-0164: absorb LLM-invented kwargs (centralized at server.py via
@@ -1130,6 +1185,12 @@ def fetch_usace_dams(
             abbreviations (``"NV"``) are both accepted and normalized to the
             NID ``STATE`` column form. Applied server-side as
             ``STATE IN (...)``.
+        min_height_ft: Optional minimum dam height in FEET (the NID
+            ``DAM_HEIGHT`` unit). A single non-negative number; applied
+            server-side as ``DAM_HEIGHT >= {value}`` so "show dams taller
+            than 100 ft" pulls only matching dams. Example:
+            ``min_height_ft=100``. Composable with ``hazard_potential`` /
+            ``state`` (clauses are ANDed).
         token: Optional explicit USACE NID authoritative-endpoint token
             (highest-priority resolution path). When set, the authoritative
             ``geospatial.sec.usace.army.mil`` endpoint is queried first.
@@ -1185,7 +1246,8 @@ def fetch_usace_dams(
     # Filter validation + WHERE-clause construction (job-A5 upgrade).
     hazard_norm = _validate_hazard_potential(hazard_potential)
     state_norm = _validate_state(state)
-    where = _build_where_clause(hazard_norm, state_norm)
+    min_height_norm = _validate_min_height(min_height_ft)
+    where = _build_where_clause(hazard_norm, state_norm, min_height_norm)
 
     # Authoritative-endpoint token resolution (None => mirror-only path).
     resolved_token = _resolve_nid_token(token=token, secret_ref=secret_ref)
@@ -1200,6 +1262,10 @@ def fetch_usace_dams(
         "hazard_potential": hazard_norm or None,
         "state": state_norm or None,
     }
+    # Only key on min_height_ft when SET, so pre-existing cache entries for
+    # unfiltered calls keep their original keys (no mass invalidation).
+    if min_height_norm is not None:
+        params["min_height_ft"] = min_height_norm
 
     result = read_through(
         metadata=_METADATA,
@@ -1219,11 +1285,18 @@ def fetch_usace_dams(
         filt_bits.append("-".join(h.lower() for h in hazard_norm))
     if state_norm:
         filt_bits.append("-".join(s.lower().replace(" ", "") for s in state_norm))
+    if min_height_norm is not None:
+        filt_bits.append(f"ge{min_height_norm:g}ft")
     filt_id = ("-" + "-".join(filt_bits)) if filt_bits else ""
     filt_name = (
         " [" + "; ".join(
             ([", ".join(hazard_norm) + " hazard"] if hazard_norm else [])
             + ([", ".join(state_norm)] if state_norm else [])
+            + (
+                [f">= {min_height_norm:g} ft"]
+                if min_height_norm is not None
+                else []
+            )
         ) + "]"
     ) if filt_bits else ""
 

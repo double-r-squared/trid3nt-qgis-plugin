@@ -353,6 +353,21 @@ class StubAgentServer:
                     self._pending_gate_case = case_id
                     await send("tool-payload-warning", row, case_id=case_id)
                     continue
+                # F9 (live-feedback 2026-07-09): when the user-message carries
+                # show_thinking=True or the text contains "think", emit two
+                # agent-thinking-chunk deltas before the answer.
+                show_thinking = bool((env.get("payload") or {}).get("show_thinking"))
+                if show_thinking or "think" in text:
+                    await send(
+                        "agent-thinking-chunk",
+                        {"message_id": "m1", "delta": "Considering the request... ", "done": False},
+                        case_id=case_id,
+                    )
+                    await send(
+                        "agent-thinking-chunk",
+                        {"message_id": "m1", "delta": "Fetching DEM.", "done": True},
+                        case_id=case_id,
+                    )
                 await send(
                     "pipeline-state",
                     {

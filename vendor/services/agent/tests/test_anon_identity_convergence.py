@@ -357,3 +357,115 @@ async def test_authed_path_ignores_anon_registry_and_hint() -> None:
         assert stored[0]["firebase_uid"] == "cognito-sub-001"
     finally:
         set_verify_hook(None)
+
+
+# --------------------------------------------------------------------------- #
+# F1 (live-feedback 2026-07-09): TRID3NT local build -- ONE fixed local user.
+#
+# Local mode (GRACE2_SOLVER_BACKEND=local-docker, the FilePersistence build)
+# has exactly one human, but each client (desktop browser, phone, QGIS plugin,
+# Playwright) presented its own sticky anonymous_user_id -- so every device
+# forked its own owner-scoped case list (log 2026-07-09 01:23:14 "hint ...
+# not found; minting fresh" -> count=0 on a box full of cases). The fix
+# collapses EVERY local-mode connection onto auth_handshake.LOCAL_SINGLE_USER_ID
+# and adopts stray cases (minted by the old per-client anon users) onto it.
+# These tests run on the REAL local substrate (FileMCPClient) for fidelity.
+# --------------------------------------------------------------------------- #
+
+from grace2_agent import auth_handshake
+from grace2_agent.persistence import FileMCPClient
+
+
+def _local_persistence(monkeypatch, tmp_path) -> Persistence:
+    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    # Re-arm the once-per-process adoption sweep for test isolation.
+    monkeypatch.setattr(auth_handshake, "_local_case_adoption_done", False)
+    return Persistence(FileMCPClient(tmp_path))
+
+
+def _case(title: str) -> CaseSummary:
+    return CaseSummary(
+        case_id=new_ulid(),
+        title=title,
+        created_at=now_utc(),
+        updated_at=now_utc(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_local_mode_two_anon_ids_resolve_to_same_user(
+    monkeypatch, tmp_path
+) -> None:
+    """Two DIFFERENT client anon hints both resolve to the fixed local user,
+    the ack stays anonymous (clients keep their sticky logic), and a case
+    created via one device is listed for the other."""
+    p = _local_persistence(monkeypatch, tmp_path)
+
+    desktop = await authenticate_token(
+        AuthTokenEnvelope(token="", anonymous_user_id=new_ulid()), p
+    )
+    phone = await authenticate_token(
+        AuthTokenEnvelope(token="", anonymous_user_id=new_ulid()), p
+    )
+
+    assert desktop.user.user_id == auth_handshake.LOCAL_SINGLE_USER_ID
+    assert phone.user.user_id == auth_handshake.LOCAL_SINGLE_USER_ID
+    # is_anonymous survives so the auth-ack keeps client sticky logic intact.
+    assert desktop.is_anonymous is True
+    assert phone.is_anonymous is True
+
+    case = _case("Desktop Case")
+    await p.upsert_case(case, owner_user_id=desktop.user.user_id)
+    listed = await p.list_cases_for_user(phone.user.user_id)
+    assert [c.case_id for c in listed] == [case.case_id]
+
+
+@pytest.mark.asyncio
+async def test_local_mode_adopts_stray_per_anon_user_cases(
+    monkeypatch, tmp_path
+) -> None:
+    """Pre-fix cases owned by per-client anonymous users (and legacy
+    owner-less cases) are adopted by the single local user on first auth."""
+    p = _local_persistence(monkeypatch, tmp_path)
+
+    stray_a = _case("Phone Case")
+    stray_b = _case("Playwright Case")
+    orphan = _case("Pre-auth Case")
+    await p.upsert_case(stray_a, owner_user_id=new_ulid())
+    await p.upsert_case(stray_b, owner_user_id=new_ulid())
+    await p.upsert_case(orphan)  # no owner stamped at all
+
+    result = await authenticate_token(AuthTokenEnvelope(token=""), p)
+    assert result.user.user_id == auth_handshake.LOCAL_SINGLE_USER_ID
+
+    listed = await p.list_cases_for_user(auth_handshake.LOCAL_SINGLE_USER_ID)
+    assert {c.case_id for c in listed} == {
+        stray_a.case_id,
+        stray_b.case_id,
+        orphan.case_id,
+    }
+
+
+@pytest.mark.asyncio
+async def test_local_mode_user_record_stable_across_reconnects(
+    monkeypatch, tmp_path
+) -> None:
+    """The second connect REUSES the persisted local-user record (no
+    re-provision churn) and no hint at all still lands on the local user."""
+    p = _local_persistence(monkeypatch, tmp_path)
+
+    first = await authenticate_token(
+        AuthTokenEnvelope(token="", anonymous_user_id=new_ulid()), p
+    )
+    second = await authenticate_token(AuthTokenEnvelope(token=""), p)
+    third = await authenticate_token(None, p)
+
+    assert (
+        first.user.user_id
+        == second.user.user_id
+        == third.user.user_id
+        == auth_handshake.LOCAL_SINGLE_USER_ID
+    )
+    # Stable record: created_at survives the reconnects (reuse, not re-upsert).
+    assert second.user.created_at == first.user.created_at
+    assert third.user.created_at == first.user.created_at

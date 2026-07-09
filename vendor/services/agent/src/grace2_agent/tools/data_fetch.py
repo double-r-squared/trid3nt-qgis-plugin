@@ -459,17 +459,26 @@ def _fetch_3dep_dem_bytes(
 def fetch_dem(
     bbox: tuple[float, float, float, float],
     resolution_m: int = 10,
+    source: str = "3dep",
     # job-0164: absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Fetch a digital elevation model (DEM) for a bounding box from USGS 3DEP.
+    """Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP by default; GLOBAL Copernicus GLO-30 via source="copernicus").
+
+    Use this (not ``fetch_topobathy``, which is coastal land+seafloor) for a plain
+    ground-elevation DEM. Pass ``source="copernicus"`` for terrain OUTSIDE the US
+    (the Alps, Andes, Himalaya, Africa, ...) -- that ABSORBS the former
+    ``fetch_copernicus_dem`` (keyless global GLO-30 30 m). The default
+    ``source="3dep"`` keeps the current US 10 m behavior byte-for-byte.
 
     **What it does:** Downloads a Cloud-Optimized GeoTIFF of ground elevation
     from the USGS 3D Elevation Program (3DEP) via the ``py3dep`` library and
     writes it to the 30-day cache. Returns a ``LayerURI`` pointing at the
     cached COG so downstream SFINCS/HydroMT setup and terrain analysis tools
-    can consume it without re-fetching.
+    can consume it without re-fetching. With ``source="copernicus"`` it instead
+    mosaics the global Copernicus GLO-30 30 m DEM (same ``continuous_dem`` ramp,
+    same ``LayerURI`` raster contract).
 
     **When to use:**
     - Any flood workflow step that needs terrain elevation: SFINCS model
@@ -482,10 +491,10 @@ def fetch_dem(
       ``compute_aspect``, or ``compute_zonal_statistics``.
 
     **When NOT to use:**
-    - Coverage outside the continental US — 3DEP is CONUS-only; a future
-      ``fetch_dem(source="copernicus")`` will handle global queries.
-    - Bathymetry (below-water elevation) — 3DEP is land-only; use a future
-      ``fetch_bathymetry`` routed to NOAA NCEI.
+    - Coverage outside the continental US with the DEFAULT source — 3DEP is
+      CONUS-only; pass ``source="copernicus"`` for a global GLO-30 30 m DEM.
+    - Bathymetry (below-water elevation) — 3DEP/GLO-30 are land/surface models;
+      use ``fetch_topobathy`` for coastal seafloor depth.
     - Single-point elevation lookups — the tool fetches a raster window;
       for a point query use a future ``point_elevation`` tool.
     - Bboxes larger than 10,000 km² — the tool raises ``BboxInvalidError``
@@ -494,8 +503,11 @@ def fetch_dem(
     **Parameters:**
     - ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,
       max_lat)`` in EPSG:4326. Max area 10,000 km².
-    - ``resolution_m`` (int, default 10): DEM grid spacing in meters.
+    - ``resolution_m`` (int, default 10): DEM grid spacing in meters (3DEP only).
       10 m or 30 m are fastest on 3DEP's tile tree; other values interpolate.
+    - ``source`` (str, default ``"3dep"``): ``"3dep"`` (USGS 3DEP, US-only,
+      honors ``resolution_m``) or ``"copernicus"`` (Copernicus GLO-30, global
+      30 m, keyless -- delegates to the folded-in ``fetch_copernicus_dem``).
 
     **Returns:**
     A ``LayerURI`` pointing at a Cloud-Optimized GeoTIFF in the cache bucket
@@ -509,7 +521,21 @@ def fetch_dem(
       ``compute_hillshade``, ``compute_aspect``, ``compute_colored_relief``,
       ``compute_zonal_statistics``.
     - Typically called after: ``geocode_location`` supplies the bbox.
+    - Sibling source: ``source="copernicus"`` for non-US / global terrain.
     """
+    # SOURCE consolidation: the global Copernicus GLO-30 path is folded in as a
+    # source mode (the former fetch_copernicus_dem). Same LayerURI raster
+    # contract + continuous_dem ramp; the impl lives in the copernicus module.
+    if isinstance(source, str) and source.strip().lower() in {
+        "copernicus",
+        "cop-dem-glo-30",
+        "glo-30",
+        "glo30",
+        "copernicus_glo30",
+    }:
+        from .fetch_copernicus_dem import _copernicus_dem_impl
+
+        return _copernicus_dem_impl(bbox)
     quantized = round_bbox_to_resolution(bbox, resolution_m)
     if _bbox_area_km2(quantized) > 10_000.0:
         raise BboxInvalidError(

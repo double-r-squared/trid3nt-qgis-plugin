@@ -380,10 +380,14 @@ export function ToolsCatalogPopup({
     if (initialCatalog) return;
     let cancelled = false;
     let activeController: AbortController | null = null;
+    // Dedupe: in the LOCAL build (VITE_DEPLOYMENT=local) the cold URL
+    // collapses onto the live agent endpoint (public_base.coldCatalogUrl), so
+    // both entries are the same URL - fetch it once, not twice. No-op on
+    // cloud (the two URLs differ).
     const sources =
       catalogUrl != null && catalogUrl !== ""
         ? [catalogUrl]
-        : [coldCatalogUrl(), defaultCatalogUrl()];
+        : [...new Set([coldCatalogUrl(), defaultCatalogUrl()])];
     const TIMEOUT_MS = 10_000;
 
     (async () => {

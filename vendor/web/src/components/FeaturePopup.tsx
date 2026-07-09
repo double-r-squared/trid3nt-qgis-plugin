@@ -22,10 +22,21 @@
 
 import { useEffect } from "react";
 import { IconClose, IconDownload } from "./icons";
+import { isLocalDeployment } from "../lib/deployment";
 // csvFromFeatures is a PURE helper (no React / no map dependency) exported by
 // Map.tsx. The import edge is call-time only (used inside the click handler
 // below), so the Map<->FeaturePopup module cycle never bites at load time.
 import { csvFromFeatures } from "../Map";
+
+/** Enrich-failure copy (fingerprint audit A11): "awake" is cloud sleep/wake
+ *  vocabulary - the LOCAL agent is always-on, so the local build blames a
+ *  plain load failure instead. Cloud copy byte-identical when VITE_DEPLOYMENT
+ *  is unset/cloud. Read at call time so vitest can stub the env. */
+function enrichFailedCopy(): string {
+  return isLocalDeployment()
+    ? "Details unavailable -- the agent could not load building details."
+    : "Details unavailable -- the agent must be awake to load building details.";
+}
 
 /** One attribute row in the popup. `label` is the human-facing key. */
 export interface FeatureAttribute {
@@ -498,7 +509,7 @@ export function FeaturePopup({
                 fontStyle: "italic",
               }}
             >
-              Details unavailable -- the agent must be awake to load building details.
+              {enrichFailedCopy()}
             </div>
           ) : null}
         </div>
@@ -529,7 +540,7 @@ export function FeaturePopup({
             fontStyle: "italic",
           }}
         >
-          Details unavailable -- the agent must be awake to load building details.
+          {enrichFailedCopy()}
         </div>
       ) : (
         <div

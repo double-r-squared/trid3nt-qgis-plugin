@@ -278,6 +278,29 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # run_seismic_hazard_psha (there is no dedicated geophysics data category).
     "fetch_fault_sources": "hazard_modeling",
     "run_landlab_susceptibility": "hazard_modeling",
+    # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1
+    # likelihood + Gartner 2014 emergency volume + Cannon 2010 combined class
+    # over a delineated stream-segment network). Filed as a hazard engine;
+    # cross-listed to fire below (reached from the wildfire lane next to
+    # MTBS / NIFC / FIRMS).
+    "model_debris_flow": "hazard_modeling",
+    # FIRE-3: the ELMFIRE wildfire-spread composer (LANDFIRE fuels + terrain ->
+    # deck -> run_solver('elmfire') -> time-of-arrival + burned-extent
+    # animation). Filed as a hazard engine; cross-listed to fire below (reached
+    # from the wildfire lane next to LANDFIRE / NIFC / FIRMS).
+    "model_fire_spread": "hazard_modeling",
+    # The QGIS bridge exporter: a case-product utility, not a modeling engine.
+    # geographic_primitives is the general-purpose/utility lane; reached from
+    # "take this into QGIS / export my project".
+    "export_case_to_qgis": "geographic_primitives",
+    # case-analysis batch: point/series sampling + the case situation report are
+    # general-purpose case utilities (the conversational-analysis surface);
+    # exposure-in-footprint is an impact/exposure product, so it files under
+    # damage_assessment alongside compute_impact_envelope.
+    "compute_exposure_summary": "damage_assessment",
+    "query_point_hazard": "geographic_primitives",
+    "extract_timeseries_at_point": "geographic_primitives",
+    "compose_case_report": "geographic_primitives",
     # sprint-18 MODFLOW GWF-only archetype composers (Wave-1 + Wave-2): each is a
     # run_model_* groundwater-flow composer that dispatches the shared MODFLOW
     # solver via run_modflow_archetype_job. Filed alongside the other MODFLOW
@@ -349,6 +372,17 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "lookup_precip_return_period": "hydrology",
     "fetch_gcn250_curve_numbers": "hydrology",
     "fetch_statsgo_soils": "hydrology",
+    # RUSLE hillslope water-erosion composer (A = R*K*LS*C*P): PRIMARY
+    # hydrology (rainfall-driven soil loss; sits beside its STATSGO / curve-
+    # number inputs), cross-listed to land_cover_development (C-factor is
+    # land-cover-driven) + terrain_elevation (LS from the DEM) below.
+    "compute_sediment_yield": "hydrology",
+    # Watershed primitives (pysheds D8 over a DEM): the drainage-basin polygon
+    # and the DEM-derived channel network are core hydrology surfaces (they sit
+    # beside the NHDPlus/NLDI navigation + river-geometry fetchers); cross-
+    # listed to terrain_elevation below (pure DEM derivatives).
+    "delineate_watershed": "hydrology",
+    "extract_stream_network": "hydrology",
     # ---- 4. terrain_elevation ---------------------------------------------
     "fetch_dem": "terrain_elevation",
     "fetch_3dep_extra": "terrain_elevation",
@@ -536,6 +570,23 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_noaa_coops_currents": "coastal",
     "fetch_airnow_air_quality": "weather_atmosphere",
     "fetch_openaq_measurements": "weather_atmosphere",
+    # quick-win batch (2026-07-07)
+    # compute_change_detection differences a CONTINUOUS index (NDVI/NDWI) to
+    # map land-surface change footprints -- it sits in the land-cover/
+    # development-change lane beside digitize_water_body / compute_ndvi.
+    "compute_change_detection": "land_cover_development",
+    # compute_idf_curve is design-storm rainfall frequency -- the chart form of
+    # lookup_precip_return_period, so it files beside it in hydrology (more
+    # accurate than the generic chart tools' geographic_primitives).
+    "compute_idf_curve": "hydrology",
+    # compute_flood_depth_damage IS damage assessment (the screening cousin of
+    # the Pelicun chain, which is cross-listed here).
+    "compute_flood_depth_damage": "damage_assessment",
+    # compute_urban_heat_island: land_cover_development over weather_atmosphere
+    # -- the analysis QUANTIFIES a land-cover/development effect (built-up vs
+    # vegetated thermal delta, LST stratified BY class); the LST input is the
+    # weather-side ingredient, so weather_atmosphere is the cross-list.
+    "compute_urban_heat_island": "land_cover_development",
 }
 
 
@@ -607,6 +658,14 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # weather_atmosphere lane too -- it is the cosmetic finishing pass a user
     # most often reaches for on a GOES/satellite true-color frame.
     "enhance_satellite_image": ("weather_atmosphere",),
+    # The post-fire debris-flow composer is PRIMARY hazard_modeling (a modeling
+    # engine) and materially belongs to fire (post-wildfire hazard, reached from
+    # the MTBS / NIFC / FIRMS lane).
+    "model_debris_flow": ("fire",),
+    # FIRE-3: the ELMFIRE wildfire-spread composer is PRIMARY hazard_modeling
+    # (a modeling engine) and materially belongs to fire (fire-behavior
+    # modeling, reached from the LANDFIRE / NIFC / FIRMS wildfire lane).
+    "model_fire_spread": ("fire",),
     # The satellite fire-animation composer spans hazard_modeling (it composes a
     # multi-tool imagery pipeline) AND fire (it is the fire-branch demo) AND
     # news_events (it ingests the fire news / incident lookup up front).
@@ -660,6 +719,29 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "fetch_noaa_coops_currents": ('hydrology', 'geographic_primitives',),
     "fetch_airnow_air_quality": ('news_events', 'damage_assessment', 'fire',),
     "fetch_openaq_measurements": ('conservation_ecology', 'news_events',),
+    # RUSLE soil-loss composer: PRIMARY hydrology; the C-factor comes from land
+    # cover and the LS-factor from the DEM, so it is materially reachable from
+    # both those lanes too.
+    "compute_sediment_yield": ("land_cover_development", "terrain_elevation"),
+    # Watershed primitives: PRIMARY hydrology; both are pure DEM derivatives,
+    # so they materially belong to the terrain lane too.
+    "delineate_watershed": ("terrain_elevation",),
+    "extract_stream_network": ("terrain_elevation",),
+    # quick-win batch (2026-07-07)
+    # Two-date NDVI/NDWI change: PRIMARY land-cover/development; vegetation
+    # gain/loss mapping is materially a conservation surface too.
+    "compute_change_detection": ("conservation_ecology",),
+    # IDF curve: PRIMARY hydrology (design-storm rainfall); materially a
+    # weather/precipitation surface too.
+    "compute_idf_curve": ("weather_atmosphere",),
+    # Depth-damage screening: PRIMARY damage_assessment; a user reaches it
+    # straight from a flood-model run, so it materially belongs to the
+    # hazard-modeling lane too.
+    "compute_flood_depth_damage": ("hazard_modeling",),
+    # UHI: PRIMARY land_cover_development (quantifies the built-vs-vegetated
+    # development effect); the LST side makes it materially a
+    # weather/extreme-heat surface too.
+    "compute_urban_heat_island": ("weather_atmosphere",),
 }
 
 # ---------------------------------------------------------------------------

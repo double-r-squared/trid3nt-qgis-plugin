@@ -616,6 +616,8 @@ def compute_hillshade(
 ) -> LayerURI:
     """Compute a hillshade raster from a DEM. Wraps ``gdaldem hillshade``.
 
+    Use this (not compute_slope or compute_colored_relief) when you want the shaded-relief HILLSHADE render of terrain specifically.
+
     Applies GDAL's hillshade algorithm to a single-band elevation GeoTIFF and
     returns a single-band uint8 intensity raster (0–255) in the same CRS and
     grid. Five style presets control illumination direction, blending, and

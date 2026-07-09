@@ -30,6 +30,7 @@ import { createPortal } from "react-dom";
 import { CaseSummary } from "../contracts";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { ExportButton } from "./ExportButton";
+import { QgisExportButton } from "./QgisExportButton";
 import {
   IconKebab,
   IconRename,
@@ -431,6 +432,14 @@ function CaseRow({
                   {/* Export (NATE 2026-06-19) - in-menu item; self-gates on
                       signed-in + endpoint configured, runs in place. */}
                   <ExportButton
+                    caseId={c.case_id}
+                    asMenuItem
+                    itemStyle={menuItemStyle()}
+                  />
+                  {/* Export to QGIS (NATE 2026-07-06) - local-first agent
+                      endpoint; renders unconditionally (a failed POST shows
+                      an inline honest error - no config probe, no gate). */}
+                  <QgisExportButton
                     caseId={c.case_id}
                     asMenuItem
                     itemStyle={menuItemStyle()}

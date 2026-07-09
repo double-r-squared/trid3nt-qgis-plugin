@@ -110,10 +110,37 @@ def test_write_tools_are_not_read_only():
     )
 
 
+#: compute_*-named tools that legitimately ARE open-world: composers that
+#: FETCH their own inputs (external APIs) rather than transforming a handed-in
+#: raster. compute_sediment_yield (RUSLE) fetches Copernicus DEM + STATSGO
+#: KFFACT + Esri/IO land cover when no override URIs are passed, so its
+#: open_world_hint=True is HONEST -- flipping it to False to satisfy the
+#: naming lint would misannotate a real external-API caller.
+#: Quick-win batch (2026-07-07): compute_change_detection fetches its own
+#: two-date Sentinel-2 inputs (PC STAC) unless both imagery_*_uri overrides
+#: are passed -- the same input-fetching-composer shape as
+#: compute_sediment_yield, so its open_world_hint=True is honest too.
+#: compute_idf_curve hits the external NOAA PFDS API (the same endpoint as
+#: lookup_precip_return_period), so its open_world_hint=True is honest.
+#: compute_flood_depth_damage fetches the USACE NSI structure inventory
+#: (external API) unless assets_uri is passed, so it is honest too.
+#: compute_urban_heat_island fetches MODIS LST + Esri/IO land cover (external
+#: PC STAC) unless both override URIs are passed, so it is honest too.
+_OPEN_WORLD_COMPUTE_EXCEPTIONS = {
+    "compute_sediment_yield",
+    "compute_change_detection",
+    "compute_idf_curve",
+    "compute_flood_depth_damage",
+    "compute_urban_heat_island",
+}
+
+
 def test_open_world_tools_are_fetchers_or_external():
     """open_world_hint=True tools must not include compute_* or clip_* tools.
 
-    compute_* and clip_* are local GDAL transforms with no external API calls.
+    compute_* and clip_* are local GDAL transforms with no external API calls
+    (documented exceptions: input-fetching composers in
+    ``_OPEN_WORLD_COMPUTE_EXCEPTIONS``).
     """
     snapshot = _registry_snapshot()
     open_world_names = {n for n, m in snapshot.items() if m.open_world_hint}
@@ -121,7 +148,12 @@ def test_open_world_tools_are_fetchers_or_external():
         "No tools have open_world_hint=True — check that fetch_* tools were annotated."
     )
     # Compute and clip tools must NOT be open-world.
-    local_compute = {n for n in open_world_names if n.startswith(("compute_", "clip_"))}
+    local_compute = {
+        n
+        for n in open_world_names
+        if n.startswith(("compute_", "clip_"))
+        and n not in _OPEN_WORLD_COMPUTE_EXCEPTIONS
+    }
     assert not local_compute, (
         f"compute_* / clip_* tools incorrectly flagged open_world_hint=True: "
         f"{local_compute}"

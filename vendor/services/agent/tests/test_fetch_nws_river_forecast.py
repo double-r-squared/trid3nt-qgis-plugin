@@ -462,3 +462,225 @@ def test_live_nwps_cedar_rapids() -> None:
     )
     assert len(recs) >= 1
     assert any(r.get("flood_category") for r in recs)
+
+
+# ---------------------------------------------------------------------------
+# Stageflow series + forecast crest + gauge_id mode (2026-07-07 extension).
+# ---------------------------------------------------------------------------
+
+_STAGEFLOW_BODY_CIDI4 = json.dumps(
+    {
+        "observed": {
+            "primaryName": "Stage",
+            "primaryUnits": "ft",
+            "secondaryName": "Flow",
+            "secondaryUnits": "kcfs",
+            "data": [
+                {"validTime": "2026-06-27T20:00:00Z", "primary": 4.5, "secondary": 4.1},
+                {"validTime": "2026-06-27T21:00:00Z", "primary": 4.6, "secondary": 4.3},
+                {"validTime": "2026-06-27T22:00:00Z", "primary": 4.73, "secondary": 4.56},
+            ],
+        },
+        "forecast": {
+            "primaryName": "Stage",
+            "primaryUnits": "ft",
+            "data": [
+                {"validTime": "2026-06-28T00:00:00Z", "primary": 9.5, "secondary": 8.0},
+                {"validTime": "2026-06-28T06:00:00Z", "primary": 12.4, "secondary": 9.9},
+                {"validTime": "2026-06-28T12:00:00Z", "primary": 11.0, "secondary": 9.1},
+            ],
+        },
+    }
+).encode("utf-8")
+
+# Full-shape detail body (identity + status like one gauges-list entry, plus
+# flood.categories) - the gauge_id mode parses this directly.
+_DETAIL_FULL_BODY_CIDI4 = json.dumps(
+    {
+        "lid": "CIDI4",
+        "usgsId": "05464500",
+        "name": "Cedar River at Cedar Rapids",
+        "latitude": 41.9719,
+        "longitude": -91.6669,
+        "rfc": {"abbreviation": "NCRFC"},
+        "wfo": {"abbreviation": "DVN"},
+        "state": {"abbreviation": "IA"},
+        "status": {
+            "observed": {
+                "primary": 9.34,
+                "secondary": 20.0,
+                "floodCategory": "no_flooding",
+                "validTime": "2026-07-08T00:00:00Z",
+            },
+            "forecast": {
+                "primary": 9.6,
+                "secondary": 20.9,
+                "floodCategory": "no_flooding",
+                "validTime": "2026-07-08T06:00:00Z",
+            },
+        },
+        "flood": {
+            "categories": {
+                "action": {"stage": 10, "flow": -9999},
+                "minor": {"stage": 12, "flow": -9999},
+                "moderate": {"stage": 14, "flow": -9999},
+                "major": {"stage": 16, "flow": -9999},
+            }
+        },
+    }
+).encode("utf-8")
+
+
+def test_build_gauge_stageflow_url() -> None:
+    from grace2_agent.tools.fetch_nws_river_forecast import (
+        _build_gauge_stageflow_url,
+    )
+
+    assert (
+        _build_gauge_stageflow_url("CIDI4")
+        == GAUGE_DETAIL_URL + "CIDI4/stageflow"
+    )
+
+
+def test_parse_stageflow_crest_and_series() -> None:
+    from grace2_agent.tools.fetch_nws_river_forecast import _parse_stageflow
+
+    out = _parse_stageflow(_STAGEFLOW_BODY_CIDI4)
+    assert len(out["observed"]) == 3
+    assert len(out["forecast"]) == 3
+    # crest = the MAX forecast stage, not the first or last point
+    assert out["fcst_crest_stage_ft"] == pytest.approx(12.4)
+    assert out["fcst_crest_time"] == "2026-06-28T06:00:00Z"
+    assert out["observed"][-1] == ("2026-06-27T22:00:00Z", 4.73, 4.56)
+
+
+def test_parse_stageflow_empty_and_malformed() -> None:
+    from grace2_agent.tools.fetch_nws_river_forecast import _parse_stageflow
+
+    for raw in (b"", b"not json", b"[1,2,3]"):
+        out = _parse_stageflow(raw)
+        assert out["observed"] == []
+        assert out["forecast"] == []
+        assert out["fcst_crest_stage_ft"] is None
+        assert out["fcst_crest_time"] is None
+
+
+def test_fetch_include_series_enriches_crest_and_json() -> None:
+    pytest.importorskip("geopandas")
+    import grace2_agent.tools.fetch_nws_river_forecast as mod
+
+    def _http_router(url: str, timeout: float = 60.0) -> bytes:
+        if url.endswith("/stageflow"):
+            return _STAGEFLOW_BODY_CIDI4 if "CIDI4" in url else b""
+        return _GAUGES_BODY
+
+    captured: dict[str, Any] = {}
+    orig_build = mod._build_flatgeobuf
+
+    def _spy_build(records: Any) -> bytes:
+        captured["recs"] = records
+        return orig_build(records)
+
+    with patch.object(mod, "_http_get", side_effect=_http_router), patch.object(
+        mod, "read_through", _stub_read_through
+    ), patch.object(mod, "_build_flatgeobuf", _spy_build):
+        mod.fetch_nws_river_forecast(
+            bbox=(-92.0, 41.7, -91.4, 42.1), include_series=True
+        )
+
+    recs = {r["lid"]: r for r in captured["recs"]}
+    cidi4 = recs["CIDI4"]
+    assert cidi4["fcst_crest_stage_ft"] == pytest.approx(12.4)
+    assert cidi4["fcst_crest_time"] == "2026-06-28T06:00:00Z"
+    obs = json.loads(cidi4["obs_series_json"])
+    assert obs["t"][-1] == "2026-06-27T22:00:00Z"
+    assert obs["stage_ft"][-1] == pytest.approx(4.73)
+    fcst = json.loads(cidi4["fcst_series_json"])
+    assert fcst["stage_ft"] == [9.5, 12.4, 11.0]
+    # OXFI4 stageflow 404s (empty body) -> honest empty series, None crest.
+    oxfi4 = recs["OXFI4"]
+    assert oxfi4["fcst_crest_stage_ft"] is None
+    assert json.loads(oxfi4["obs_series_json"]) == {
+        "t": [], "stage_ft": [], "flow_kcfs": [],
+    }
+
+
+def test_fetch_gauge_id_single_gauge_mode() -> None:
+    pytest.importorskip("geopandas")
+    import grace2_agent.tools.fetch_nws_river_forecast as mod
+
+    urls: list[str] = []
+
+    def _http_router(url: str, timeout: float = 60.0) -> bytes:
+        urls.append(url)
+        if url.endswith("/stageflow"):
+            return _STAGEFLOW_BODY_CIDI4
+        return _DETAIL_FULL_BODY_CIDI4
+
+    captured: dict[str, Any] = {}
+    orig_build = mod._build_flatgeobuf
+
+    def _spy_build(records: Any) -> bytes:
+        captured["recs"] = records
+        return orig_build(records)
+
+    with patch.object(mod, "_http_get", side_effect=_http_router), patch.object(
+        mod, "read_through", _stub_read_through
+    ), patch.object(mod, "_build_flatgeobuf", _spy_build):
+        # lowercase lid is canonicalized; bbox not required in gauge_id mode.
+        uri = mod.fetch_nws_river_forecast(gauge_id="cidi4", include_series=True)
+
+    assert urls[0] == GAUGE_DETAIL_URL + "CIDI4"
+    assert uri.layer_type == "vector"
+    assert "CIDI4" in uri.name
+    recs = captured["recs"]
+    assert len(recs) == 1
+    rec = recs[0]
+    assert rec["lid"] == "CIDI4"
+    assert rec["obs_stage_ft"] == pytest.approx(9.34)
+    # thresholds ride along free with the detail body
+    assert rec["action_stage_ft"] == pytest.approx(10.0)
+    assert rec["major_stage_ft"] == pytest.approx(16.0)
+    # series enrichment applies in gauge_id mode too
+    assert rec["fcst_crest_stage_ft"] == pytest.approx(12.4)
+
+
+def test_fetch_gauge_id_unknown_raises_no_gauges() -> None:
+    import grace2_agent.tools.fetch_nws_river_forecast as mod
+
+    with patch.object(
+        mod, "_http_get", return_value=b""  # the 404 path returns empty body
+    ), patch.object(mod, "read_through", _stub_read_through):
+        with pytest.raises(NwsRiverForecastNoGaugesError, match="ZZZZ9"):
+            mod.fetch_nws_river_forecast(gauge_id="ZZZZ9")
+
+
+def test_fetch_gauge_id_invalid_lid_rejected() -> None:
+    import grace2_agent.tools.fetch_nws_river_forecast as mod
+
+    with pytest.raises(NwsRiverForecastInputError, match="gauge_id"):
+        mod.fetch_nws_river_forecast(gauge_id="  ")
+    with pytest.raises(NwsRiverForecastInputError, match="gauge_id"):
+        mod.fetch_nws_river_forecast(gauge_id="../etc")
+
+
+def test_default_call_cache_params_unchanged() -> None:
+    """The pre-extension cache key must stay byte-identical for default calls."""
+    import grace2_agent.tools.fetch_nws_river_forecast as mod
+
+    seen: dict[str, Any] = {}
+
+    def _capture_rt(*, metadata: Any, params: Any, ext: str, fetch_fn: Any) -> Any:
+        seen["params"] = params
+        fetch_fn()
+        return _FakeResult(f"s3://test-bucket/cache/{ext}/stub.fgb")
+
+    with patch.object(
+        mod, "_http_get", return_value=_GAUGES_BODY
+    ), patch.object(mod, "read_through", _capture_rt):
+        mod.fetch_nws_river_forecast(bbox=(-92.0, 41.7, -91.4, 42.1))
+
+    assert seen["params"] == {
+        "bbox": [-92.0, 41.7, -91.4, 42.1],
+        "include_thresholds": False,
+    }

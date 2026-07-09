@@ -1258,3 +1258,90 @@ def test_live_state_and_hazard_filter_applies():
         props = f.get("properties", {})
         assert props.get("HAZARD_POTENTIAL") == "High"
         assert props.get("STATE") == "Nevada"
+
+
+# ===========================================================================
+# 2026-07-07 UPGRADE tests - min_height_ft server-side filter
+# (DAM_HEIGHT >= {value}, feet). Appended; do not interleave.
+# ===========================================================================
+
+from grace2_agent.tools.fetch_usace_dams import (  # noqa: E402
+    _validate_min_height,
+)
+
+
+def test_validate_min_height_accepts_numbers_and_numeric_strings():
+    assert _validate_min_height(None) is None
+    assert _validate_min_height(0) == 0.0
+    assert _validate_min_height(100) == 100.0
+    assert _validate_min_height(50.5) == 50.5
+    assert _validate_min_height("100") == 100.0
+    assert _validate_min_height(" 25.5 ") == 25.5
+
+
+def test_validate_min_height_rejects_garbage():
+    with pytest.raises(USACEDAMSInputError):
+        _validate_min_height("tall")
+    with pytest.raises(USACEDAMSInputError):
+        _validate_min_height(-1)
+    with pytest.raises(USACEDAMSInputError):
+        _validate_min_height(float("nan"))
+    with pytest.raises(USACEDAMSInputError):
+        _validate_min_height(float("inf"))
+    with pytest.raises(USACEDAMSInputError):
+        _validate_min_height(True)  # bool is not a height
+    with pytest.raises(USACEDAMSInputError):
+        _validate_min_height([100])  # type: ignore[arg-type]
+
+
+def test_build_where_clause_includes_min_height():
+    assert _build_where_clause([], [], 100.0) == "DAM_HEIGHT >= 100"
+    assert _build_where_clause([], [], 50.5) == "DAM_HEIGHT >= 50.5"
+    # Composes (ANDed) with the string filters.
+    assert _build_where_clause(["High"], ["Nevada"], 100.0) == (
+        "HAZARD_POTENTIAL IN ('High') AND STATE IN ('Nevada') "
+        "AND DAM_HEIGHT >= 100"
+    )
+    # Unset -> unchanged legacy behaviour.
+    assert _build_where_clause([], [], None) == "1=1"
+
+
+def test_min_height_threads_into_where_and_distinguishes_cache_key():
+    """min_height_ft reaches the fetch where-clause AND fragments the cache."""
+    fake_gcs = FakeStorageClient()
+    captured_wheres: list[str] = []
+
+    def _capture_fetch(q_bbox, where="1=1", token=None, **_k):
+        captured_wheres.append(where)
+        return _geojson_to_fgb(_sample_nid_geojson(2))
+
+    with patch(
+        "grace2_agent.tools.fetch_usace_dams._fetch_nid_bytes",
+        side_effect=_capture_fetch,
+    ), patch(
+        "grace2_agent.tools.fetch_usace_dams.read_through",
+        side_effect=_make_read_through_injector(fake_gcs),
+    ):
+        l_all = fetch_usace_dams(bbox=(-115.4, 35.8, -114.3, 36.5))
+        l_tall = fetch_usace_dams(
+            bbox=(-115.4, 35.8, -114.3, 36.5), min_height_ft=100
+        )
+
+    assert "DAM_HEIGHT >= 100" in captured_wheres[-1]
+    assert l_all.layer_id != l_tall.layer_id
+    assert "ge100ft" in l_tall.layer_id
+    assert l_all.uri != l_tall.uri, (
+        "min_height_ft must produce a distinct cache key"
+    )
+    assert ">= 100 ft" in l_tall.name
+
+
+def test_min_height_invalid_raises_before_any_fetch():
+    with patch(
+        "grace2_agent.tools.fetch_usace_dams.read_through"
+    ) as mock_rt:
+        with pytest.raises(USACEDAMSInputError):
+            fetch_usace_dams(
+                bbox=(-115.4, 35.8, -114.3, 36.5), min_height_ft="very tall"
+            )
+    mock_rt.assert_not_called()

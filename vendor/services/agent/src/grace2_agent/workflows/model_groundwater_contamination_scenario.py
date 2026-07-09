@@ -279,6 +279,7 @@ _SOLVENT_KEYWORDS: tuple[tuple[str, str], ...] = (
 #: number + the unit so the composer converts to days.
 _DURATION_RE = re.compile(
     r"(?:over|within|across|during|for|in|about|roughly|approximately|some)?\s*"
+    r"(?:a\s+(?:period|span|stretch)\s+of\s+)?"  # "over a period of 2 days"
     r"(?:about|roughly|approximately|some|nearly|almost)?\s*"
     r"(\d+(?:\.\d+)?)\s*"
     r"(hours?|hrs?|h|days?|d)\b",
@@ -305,6 +306,7 @@ _NUMBER_WORDS: dict[str, float] = {
 }
 _DURATION_WORD_RE = re.compile(
     r"(?:over|within|across|during|for|in|about|roughly|approximately|some)\s+"
+    r"(?:a\s+(?:period|span|stretch)\s+of\s+)?"  # "over a period of two days"
     r"(?:about|roughly|approximately|some|nearly|almost)?\s*"
     r"(" + "|".join(re.escape(w) for w in _NUMBER_WORDS) + r")\s+"
     r"(hours?|hrs?|days?)\b",

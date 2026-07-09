@@ -72,6 +72,7 @@ import {
   formatEta,
 } from "./PipelineCard";
 import { IconGrid, IconCheck, IconChevronDown, IconChevronRight } from "./icons";
+import { isLocalDeployment } from "../lib/deployment";
 
 const ACCENT = "#eab308"; // amber - same family as the payload-warning card
 
@@ -439,15 +440,24 @@ export function ResolutionPickerCard({
             {formatEta(g.estimated_solve_seconds)}
           </strong>
         </span>
+        {/* LOCAL build (fingerprint audit A7): "vCPUs" is AWS Batch tier
+            vocabulary - the local product says "CPUs" and renders the agent's
+            "local" compute class as "local run". The Spot row (Spot is a
+            cloud-capacity concept) never renders locally. Cloud output is
+            byte-identical when VITE_DEPLOYMENT is unset/cloud. */}
         <span data-testid="resolution-picker-vcpus">
-          vCPUs:{" "}
+          {isLocalDeployment() ? "CPUs:" : "vCPUs:"}{" "}
           <strong style={{ color: "#e5e7eb" }}>{g.vcpus}</strong>
         </span>
         <span data-testid="resolution-picker-compute-class">
           Compute:{" "}
-          <strong style={{ color: "#e5e7eb" }}>{g.compute_class}</strong>
+          <strong style={{ color: "#e5e7eb" }}>
+            {isLocalDeployment() && g.compute_class === "local"
+              ? "local run"
+              : g.compute_class}
+          </strong>
         </span>
-        {g.spot_label && (
+        {!isLocalDeployment() && g.spot_label && (
           <span data-testid="resolution-picker-spot-label">
             Spot:{" "}
             <strong style={{ color: "#e5e7eb" }}>{g.spot_label}</strong>
@@ -741,6 +751,7 @@ export function ResolutionPickerCard({
       icon={<IconGrid size={14} color={ACCENT} />}
       testId="resolution-picker-card"
       ariaLabel={cardTitle}
+      highlight={decided === null}
       extraAttrs={{
         "data-warning-id": warning.warning_id,
         "data-engine": g.engine,

@@ -557,6 +557,43 @@ class Persistence:
         )
         return modified
 
+    async def adopt_cases_to_user(self, user_id: str) -> int:
+        """Re-own EVERY case not already owned by ``user_id`` (local mode, F1).
+
+        TRID3NT local-build single-user seam (live-feedback 2026-07-09): the
+        old per-client anonymous users each minted their own cases, so the
+        case list forked per device. When local mode collapses auth onto the
+        one fixed local user (``auth_handshake.LOCAL_SINGLE_USER_ID``), this
+        sweep adopts the strays -- one ``update-many`` setting ``user_id`` on
+        every case doc whose owner differs (``$nin`` also matches a MISSING
+        ``user_id``, Mongo-faithful, so pre-auth orphans are adopted too).
+
+        Idempotent: after one run every case is owned by ``user_id`` and the
+        filter matches nothing. ONLY called from the local-mode auth path --
+        never wired on the cloud stack, where blanket adoption would be a
+        cross-tenant ownership transfer.
+
+        Returns the modified count when the backend reports one, else ``0``.
+        """
+        raw = await self._mcp.call_tool(
+            "update-many",
+            {
+                "database": self._db,
+                "collection": CASES_COLLECTION,
+                "filter": {"user_id": {"$nin": [user_id]}},
+                "update": {"$set": {"user_id": user_id}},
+            },
+        )
+        modified = 0
+        payload = _unwrap_mcp_result(raw) if isinstance(raw, dict) else raw
+        if isinstance(payload, dict):
+            for k in ("modifiedCount", "modified_count", "nModified"):
+                v = payload.get(k)
+                if isinstance(v, int):
+                    modified = v
+                    break
+        return modified
+
     async def list_cases_for_user(self, user_id: str) -> list[CaseSummary]:
         """List the user's LIVE Cases (``status="active"`` only).
 
@@ -1868,8 +1905,10 @@ class Persistence:
         from .secrets_handler import (
             AWS_SSM_VAULT_SCHEME,
             GCP_SM_VAULT_SCHEME,
+            LOCAL_FILE_VAULT_SCHEME,
             SecretRevokedError,
             _default_ssm_client,
+            _file_read_secret,
         )
 
         if not secret_ref.is_active:
@@ -1879,6 +1918,14 @@ class Persistence:
             )
 
         ref = secret_ref.vault_ref
+
+        # LOCAL file-vault path (fingerprint audit L8): checked FIRST so a
+        # local-build ref never touches a cloud client. Refs written by the
+        # local build carry the ``local-file://`` scheme; the value lives in
+        # the mode-0600 ``secrets_vault.json`` next to the file-persistence
+        # store.
+        if ref.startswith(LOCAL_FILE_VAULT_SCHEME):
+            return _file_read_secret(ref)
 
         # AWS SSM Parameter Store SecureString path (AWS prod stack).
         if ref.startswith(AWS_SSM_VAULT_SCHEME):

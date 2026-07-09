@@ -130,6 +130,19 @@ export type ConnectionStatus =
 export interface WsHandlers {
   onStatus: (s: ConnectionStatus) => void;
   onAgentChunk: (p: AgentMessageChunkPayload, caseId?: string | null) => void;
+  /**
+   * `agent-thinking-chunk` (LOCAL build, live-feedback 2026-07-08) — the local
+   * model's reasoning-channel tokens for a narration bubble, streamed BEFORE
+   * that bubble's answer text and keyed by the SAME message_id (payload shape
+   * is identical to agent-message-chunk; see AgentThinkingChunkPayload).
+   * Optional so App.tsx (which never renders chat) needs no change — Chat.tsx
+   * subscribes and appends the deltas onto the matching message's thinking
+   * block. Cloud servers never emit the envelope, so cloud is unaffected.
+   */
+  onAgentThinkingChunk?: (
+    p: AgentMessageChunkPayload,
+    caseId?: string | null,
+  ) => void;
   onPipelineState: (p: PipelineStatePayload, caseId?: string | null) => void;
   /**
    * Session-state frame. `fannedOut` is TRUE when this frame did NOT arrive on
@@ -646,9 +659,14 @@ export interface AuthAckPayload {
 // Fix: keep one socket each, but fan out the SESSION-SCOPED envelope types
 // in-process across all `GraceWs` instances that share the same
 // `session_id`. Message-level envelopes (`agent-message-chunk`,
-// `pipeline-state`, `error`) are NOT fanned out — those follow the
-// user-message that originated them and routing them across instances
-// would duplicate chat messages and pipeline cards.
+// `pipeline-state`, `error`) originally were NOT fanned out — they follow
+// the user-message that originated them. That changed with the F1
+// mid-turn-reconnect fix (live-feedback 2026-07-08 local): the server now
+// retargets a turn's emissions to ANY live socket of the session after a
+// drop, which may be the App.tsx socket, so those types now fan out too
+// (see the SESSION_SCOPED_TYPES entries below for the no-duplication
+// argument: one socket per envelope server-side, siblings-only delivery
+// client-side, and App's handlers for them are no-ops).
 //
 // The hub is a passive event bus; subscribers are existing `GraceWs`
 // instances. Registration is automatic in the constructor; unregistration
@@ -704,6 +722,22 @@ const SESSION_SCOPED_TYPES = new Set<string>([
   // App.tsx's connection — Chat owns the tool cards that must be force-
   // completed when the turn ends. Mirrors solve-progress's rationale exactly.
   "turn-complete",
+  // F1 fix (live-feedback 2026-07-08 local): after a mid-turn socket drop the
+  // SERVER now retargets turn emissions to whichever live socket of the
+  // session it can find — narration/cards were previously lost to a dead
+  // captured socket and only appeared at turn end. The retarget may land on
+  // the App.tsx socket, so these message-scoped types must fan out to the
+  // sibling Chat instance (which owns their rendering; App.tsx's onAgentChunk /
+  // onPipelineState / onError handlers are no-ops). No duplication: the server
+  // sends each envelope to exactly ONE socket, and hubBroadcast delivers only
+  // to SIBLING instances (local dispatch is separate).
+  "agent-message-chunk",
+  "pipeline-state",
+  "error",
+  // agent-thinking-chunk (LOCAL build): the model's reasoning-channel tokens
+  // for a narration bubble — same shape + same retarget hazard as
+  // agent-message-chunk, so it fans out for the same reason.
+  "agent-thinking-chunk",
 ]);
 
 const SESSION_HUB: Map<string, Set<GraceWs>> = new Map();
@@ -1075,6 +1109,12 @@ export class GraceWs {
     text: string,
     researchMode: ResearchMode = "research",
     modelId: string | null = null,
+    // LOCAL build (live-feedback 2026-07-08): when a boolean, ride
+    // show_thinking on the payload so the server enables + forwards the
+    // model's reasoning channel for this turn. Callers on cloud leave it
+    // undefined and the key is omitted entirely (older server builds that
+    // don't know the field still parse cleanly).
+    showThinking?: boolean,
   ): void {
     const payload: UserMessagePayload = {
       text,
@@ -1083,6 +1123,10 @@ export class GraceWs {
       // means "use server's current selection" (omit the field entirely so
       // older server builds that don't know the field still parse cleanly).
       ...(modelId != null ? { model_id: modelId } : {}),
+      // Only include show_thinking when it is a boolean (LOCAL build only).
+      ...(typeof showThinking === "boolean"
+        ? { show_thinking: showThinking }
+        : {}),
       // LANE CASE-WEB — STAMP the client's CURRENT active Case so the server
       // binds the turn to the case the client is actually looking at (the
       // authority), not a possibly-stale in-memory active case. `null` = root.
@@ -1678,6 +1722,16 @@ export class GraceWs {
     switch (envType) {
       case "agent-message-chunk":
         this.handlers.onAgentChunk(payload as unknown as AgentMessageChunkPayload, caseId);
+        break;
+      case "agent-thinking-chunk":
+        // LOCAL build (live-feedback 2026-07-08): reasoning-channel tokens for
+        // the SAME message_id as the bubble's later agent-message-chunk text.
+        // Optional handler (guarded) so App.tsx needs no change; cloud servers
+        // never emit this envelope.
+        this.handlers.onAgentThinkingChunk?.(
+          payload as unknown as AgentMessageChunkPayload,
+          caseId,
+        );
         break;
       case "pipeline-state":
         this.handlers.onPipelineState(

@@ -1,181 +1,190 @@
 # TRID3NT Local tool-routing sweep (pass 3) -- qwen3:8b-16k
 
-Updated: 2026-07-06T22:26:23  
-Scored 174/174 | ERROR 1 | HIT 45 | MISS 73 | NO_CALL 55
+Updated: 2026-07-07T18:09:39  
+Scored 183/183 | ERROR 1 | HIT 44 | MISS 91 | NO_CALL 47
 
 | tool | outcome | first_call | seconds |
 |---|---|---|---|
-| aggregate_claims_across_sources | MISS | geocode_location | 100 |
-| aggregate_property_within_zone | NO_CALL |  | 30 |
-| analyze_affected_fields | MISS | aggregate_claims_across_sources | 66 |
-| catalog_fetch | MISS | fetch_fema_nfhl_zones | 16 |
-| catalog_search | NO_CALL |  | 26 |
-| clip_raster_to_bbox | NO_CALL |  | 33 |
-| clip_raster_to_polygon | MISS | clip_raster_to_bbox | 68 |
-| clip_vector_to_polygon | MISS | geocode_location | 122 |
-| code_exec_request | NO_CALL |  | 21 |
-| compute_aspect | NO_CALL |  | 40 |
-| compute_blended_composite | MISS | geocode_location | 110 |
-| compute_building_density | NO_CALL |  | 15 |
-| compute_canopy_height | MISS | geocode_location | 216 |
-| compute_colored_relief | HIT | compute_colored_relief | 64 |
-| compute_contours | HIT | compute_contours | 83 |
-| compute_cross_section | MISS | compute_terrain_profile | 75 |
-| compute_hillshade | HIT | compute_hillshade | 85 |
-| compute_home_range_kde | MISS | compute_hillshade | 89 |
-| compute_impact_envelope | MISS | compute_colored_relief | 240 |
+| aggregate_claims_across_sources | MISS | fetch_dem | 57 |
+| aggregate_property_within_zone | MISS | geocode_location | 105 |
+| analyze_affected_fields | MISS | run_model_groundwater_contamination_scenario | 58 |
+| catalog_fetch | MISS | fetch_dem | 49 |
+| catalog_search | MISS | compute_layer_bounds | 54 |
+| clip_raster_to_bbox | HIT | aggregate_property_within_zone | 73 |
+| clip_raster_to_polygon | MISS | fetch_dem | 77 |
+| clip_vector_to_polygon | HIT | fetch_dem | 136 |
+| code_exec_request | MISS | geocode_location | 240 |
+| compute_aspect | NO_CALL |  | 1 |
+| compute_blended_composite | NO_CALL |  | 1 |
+| compute_building_density | NO_CALL |  | 0 |
+| compute_canopy_height | NO_CALL |  | 0 |
+| compute_change_detection | NO_CALL |  | 0 |
+| compute_colored_relief | NO_CALL |  | 0 |
+| compute_contours | NO_CALL |  | 1 |
+| compute_cross_section | MISS | geocode_location | 171 |
+| compute_flood_depth_damage | MISS | request_spatial_input | 240 |
+| compute_hillshade | NO_CALL |  | 1 |
+| compute_home_range_kde | NO_CALL |  | 2 |
+| compute_idf_curve | NO_CALL |  | 0 |
+| compute_impact_envelope | NO_CALL |  | 0 |
 | compute_impervious_surface | NO_CALL |  | 0 |
-| compute_layer_bounds | NO_CALL |  | 1 |
-| compute_movement_trajectory | MISS | fetch_dem | 74 |
-| compute_ndvi | MISS | compute_movement_trajectory | 70 |
-| compute_overtopping | MISS | compute_movement_trajectory | 240 |
-| compute_slope | NO_CALL |  | 0 |
-| compute_terrain_profile | NO_CALL |  | 0 |
-| compute_wave_nomograph | NO_CALL |  | 0 |
-| compute_zonal_statistics | NO_CALL |  | 0 |
-| count_features_above_threshold | NO_CALL |  | 0 |
-| cut_features_with_polygon | HIT | geocode_location | 79 |
-| describe_qgis_algorithm | HIT | geocode_location | 69 |
-| digitize_water_body | MISS | geocode_location | 145 |
-| discover_dataset | HIT | fetch_dem | 213 |
-| enhance_satellite_image | MISS | qgis_process | 74 |
-| extract_landcover_class | MISS | cut_features_with_polygon | 98 |
-| fetch_3dep_extra | NO_CALL |  | 42 |
-| fetch_administrative_boundaries | MISS | fetch_wdpa_protected_areas | 87 |
-| fetch_airnow_air_quality | MISS | geocode_location | 124 |
-| fetch_asos_metar | NO_CALL |  | 91 |
-| fetch_buildings | MISS | fetch_asos_metar | 75 |
-| fetch_cama_flood_discharge | MISS | fetch_dem | 127 |
-| fetch_cdc_svi | MISS | geocode_location | 240 |
-| fetch_census_acs | NO_CALL |  | 0 |
-| fetch_chirps_precipitation | NO_CALL |  | 1 |
+| compute_layer_bounds | NO_CALL |  | 0 |
+| compute_movement_trajectory | MISS | publish_layer | 60 |
+| compute_ndvi | MISS | compute_movement_trajectory | 93 |
+| compute_overtopping | MISS | compute_movement_trajectory | 112 |
+| compute_sediment_yield | MISS | run_model_flood_scenario | 77 |
+| compute_slope | NO_CALL |  | 15 |
+| compute_terrain_profile | ERROR | ConnectionClosedError: sent 1011 (internal error) keepalive ping timeout; no clo | 2 |
+| compute_urban_heat_island | MISS | geocode_location | 152 |
+| compute_wave_nomograph | MISS | compute_urban_heat_island | 109 |
+| compute_zonal_statistics | HIT | fetch_modis_lst | 95 |
+| count_features_above_threshold | HIT | fetch_modis_lst | 156 |
+| cut_features_with_polygon | MISS | compute_zonal_statistics | 91 |
+| delineate_watershed | HIT | compute_zonal_statistics | 116 |
+| describe_qgis_algorithm | MISS | fetch_dem | 104 |
+| digitize_water_body | MISS | compute_zonal_statistics | 240 |
+| discover_dataset | MISS | compute_layer_bounds | 84 |
+| enhance_satellite_image | MISS | fetch_dem | 156 |
+| export_case_to_qgis | MISS | fetch_dem | 59 |
+| extract_landcover_class | NO_CALL |  | 56 |
+| extract_stream_network | HIT | extract_stream_network | 77 |
+| fetch_3dep_extra | MISS | fetch_dem | 138 |
+| fetch_administrative_boundaries | MISS | fetch_dem | 191 |
+| fetch_airnow_air_quality | MISS | export_case_to_qgis | 75 |
+| fetch_asos_metar | HIT | geocode_location | 103 |
+| fetch_buildings | MISS | geocode_location | 97 |
+| fetch_cama_flood_discharge | MISS | geocode_location | 240 |
+| fetch_cdc_svi | NO_CALL |  | 1 |
+| fetch_census_acs | NO_CALL |  | 2 |
+| fetch_chirps_precipitation | NO_CALL |  | 0 |
 | fetch_climate_normals | NO_CALL |  | 0 |
-| fetch_copernicus_dem | MISS | geocode_location | 100 |
-| fetch_dem | NO_CALL |  | 30 |
-| fetch_ebird_observations | NO_CALL |  | 34 |
-| fetch_epa_ejscreen | MISS | fetch_sentinel2_truecolor | 135 |
-| fetch_epa_frs_facilities | NO_CALL |  | 34 |
-| fetch_era5_reanalysis | MISS | fetch_dem | 87 |
-| fetch_esri_landcover_10m | MISS | compute_layer_bounds | 168 |
-| fetch_fault_sources | MISS | run_seismic_hazard_psha | 56 |
-| fetch_fema_nfhl_zones | NO_CALL |  | 30 |
-| fetch_field_boundaries | MISS | fetch_fema_nfhl_zones | 126 |
-| fetch_firms_active_fire | MISS | fetch_nifc_fire_perimeters | 102 |
-| fetch_gbif_occurrences | HIT | fetch_gbif_occurrences | 66 |
-| fetch_gcn250_curve_numbers | MISS | fetch_dem | 108 |
-| fetch_ghsl_population | MISS | fetch_population | 229 |
-| fetch_glm_lightning | NO_CALL |  | 40 |
-| fetch_goes_active_fire | NO_CALL |  | 31 |
-| fetch_goes_animation | MISS | geocode_location | 127 |
-| fetch_goes_archive_animation | HIT | fetch_goes_archive_animation | 67 |
-| fetch_goes_blend_animation | HIT | fetch_goes_animation | 240 |
-| fetch_goes_satellite | NO_CALL |  | 0 |
-| fetch_gridmet | NO_CALL |  | 1 |
-| fetch_gtsm_tide_surge | NO_CALL |  | 1 |
-| fetch_hifld_critical_infrastructure | NO_CALL |  | 0 |
-| fetch_hifld_transmission_lines | NO_CALL |  | 0 |
-| fetch_hrrr_forecast | MISS | geocode_location | 72 |
-| fetch_hrrr_smoke | MISS | geocode_location | 119 |
-| fetch_hrsl_population | HIT | fetch_hrsl_population | 57 |
-| fetch_inaturalist_observations | MISS | geocode_location | 235 |
-| fetch_iucn_red_list_range | NO_CALL |  | 33 |
-| fetch_jrc_global_surface_water | NO_CALL |  | 24 |
-| fetch_landcover | MISS | fetch_dem | 91 |
-| fetch_landfire_fuels | NO_CALL |  | 27 |
-| fetch_landsat_imagery | MISS | geocode_location | 240 |
-| fetch_lehd_jobs | MISS | run_model_flood_scenario | 2 |
-| fetch_mobi | NO_CALL |  | 1 |
-| fetch_modis_lst | NO_CALL |  | 0 |
-| fetch_movebank_tracks | NO_CALL |  | 0 |
-| fetch_mrms_qpe | NO_CALL |  | 0 |
-| fetch_mtbs_burn_severity | NO_CALL |  | 0 |
-| fetch_naip | NO_CALL |  | 0 |
-| fetch_nexrad_reflectivity | HIT | fetch_nexrad_reflectivity | 73 |
-| fetch_nhdplus_nldi_navigate | HIT | publish_layer | 90 |
-| fetch_nifc_fire_perimeters | HIT | fetch_nifc_fire_perimeters | 110 |
-| fetch_noaa_coops_currents | MISS | fetch_noaa_coops_tides | 69 |
-| fetch_noaa_coops_tides | HIT | fetch_river_geometry | 90 |
-| fetch_noaa_nwm_streamflow | MISS | fetch_usgs_nwis_gauges | 66 |
-| fetch_noaa_slr_confidence | MISS | fetch_us_drought_monitor | 103 |
-| fetch_noaa_slr_marsh | MISS | fetch_openaq_measurements | 240 |
-| fetch_noaa_slr_scenarios | NO_CALL |  | 27 |
-| fetch_noaa_sst | MISS | fetch_noaa_slr_scenarios | 73 |
-| fetch_nws_alerts_conus | NO_CALL |  | 15 |
-| fetch_nws_event | HIT | fetch_dem | 190 |
-| fetch_nws_river_forecast | MISS | geocode_location | 104 |
+| fetch_copernicus_dem | NO_CALL |  | 0 |
+| fetch_dem | NO_CALL |  | 1 |
+| fetch_ebird_observations | NO_CALL |  | 2 |
+| fetch_epa_ejscreen | NO_CALL |  | 0 |
+| fetch_epa_frs_facilities | NO_CALL |  | 0 |
+| fetch_era5_reanalysis | NO_CALL |  | 0 |
+| fetch_esri_landcover_10m | NO_CALL |  | 0 |
+| fetch_fault_sources | NO_CALL |  | 0 |
+| fetch_fema_nfhl_zones | NO_CALL |  | 0 |
+| fetch_field_boundaries | MISS | geocode_location | 93 |
+| fetch_firms_active_fire | HIT | geocode_location | 240 |
+| fetch_gbif_occurrences | NO_CALL |  | 1 |
+| fetch_gcn250_curve_numbers | NO_CALL |  | 1 |
+| fetch_ghsl_population | NO_CALL |  | 0 |
+| fetch_glm_lightning | NO_CALL |  | 0 |
+| fetch_goes_active_fire | NO_CALL |  | 0 |
+| fetch_goes_animation | NO_CALL |  | 0 |
+| fetch_goes_archive_animation | HIT | geocode_location | 115 |
+| fetch_goes_blend_animation | MISS | geocode_location | 165 |
+| fetch_goes_satellite | HIT | fetch_goes_archive_animation | 132 |
+| fetch_gridmet | HIT | fetch_viirs_day_fire | 111 |
+| fetch_gtsm_tide_surge | MISS | fetch_goes_animation | 138 |
+| fetch_hifld_critical_infrastructure | MISS | fetch_dem | 103 |
+| fetch_hifld_transmission_lines | MISS | fetch_sentinel2_truecolor | 114 |
+| fetch_hrrr_forecast | MISS | fetch_dem | 120 |
+| fetch_hrrr_smoke | MISS | geocode_location | 63 |
+| fetch_hrsl_population | MISS | geocode_location | 109 |
+| fetch_inaturalist_observations | MISS | compute_layer_bounds | 57 |
+| fetch_iucn_red_list_range | MISS | fetch_population | 74 |
+| fetch_jrc_global_surface_water | HIT | compute_layer_bounds | 85 |
+| fetch_landcover | NO_CALL |  | 30 |
+| fetch_landfire_fuels | HIT | fetch_hrrr_smoke | 142 |
+| fetch_landsat_imagery | MISS | fetch_dem | 73 |
+| fetch_lehd_jobs | MISS | geocode_location | 121 |
+| fetch_mobi | HIT | fetch_lehd_jobs | 68 |
+| fetch_modis_lst | HIT | fetch_modis_lst | 71 |
+| fetch_movebank_tracks | NO_CALL |  | 42 |
+| fetch_mrms_qpe | HIT | fetch_population | 201 |
+| fetch_mtbs_burn_severity | HIT | fetch_population | 141 |
+| fetch_naip | HIT | fetch_population | 101 |
+| fetch_nexrad_reflectivity | MISS | fetch_dem | 95 |
+| fetch_nhdplus_nldi_navigate | MISS | geocode_location | 178 |
+| fetch_nifc_fire_perimeters | HIT | fetch_nhdplus_nldi_navigate | 100 |
+| fetch_noaa_coops_currents | HIT | fetch_noaa_coops_currents | 62 |
+| fetch_noaa_coops_tides | HIT | fetch_river_geometry | 104 |
+| fetch_noaa_nwm_streamflow | MISS | fetch_river_geometry | 92 |
+| fetch_noaa_slr_confidence | MISS | fetch_usgs_nwis_gauges | 240 |
+| fetch_noaa_slr_marsh | NO_CALL |  | 2 |
+| fetch_noaa_slr_scenarios | NO_CALL |  | 1 |
+| fetch_noaa_sst | MISS | publish_layer | 50 |
+| fetch_nws_alerts_conus | MISS | fetch_noaa_sst | 148 |
+| fetch_nws_event | MISS | fetch_noaa_sst | 199 |
+| fetch_nws_river_forecast | HIT | geocode_location | 156 |
 | fetch_openaq_measurements | HIT | fetch_openaq_measurements | 240 |
-| fetch_openfema_disasters | NO_CALL |  | 1 |
-| fetch_overpass_pois | NO_CALL |  | 0 |
-| fetch_population | NO_CALL |  | 0 |
-| fetch_raws_weather | NO_CALL |  | 0 |
-| fetch_river_geometry | NO_CALL |  | 0 |
-| fetch_roads_osm | NO_CALL |  | 0 |
-| fetch_sentinel1_sar | MISS | geocode_location | 153 |
-| fetch_sentinel2_truecolor | HIT | fetch_sentinel1_sar | 95 |
-| fetch_snotel_snow | HIT | fetch_sentinel1_sar | 76 |
-| fetch_soilgrids | ERROR | ConnectionClosedError: no close frame received or sent | 83 |
-| fetch_statsgo_soils | MISS | geocode_location | 113 |
-| fetch_storm_events_db | HIT | fetch_statsgo_soils | 66 |
-| fetch_topobathy | HIT | fetch_topobathy | 66 |
-| fetch_tsunami_events | MISS | fetch_statsgo_soils | 240 |
-| fetch_us_drought_monitor | MISS | fetch_storm_events_db | 1 |
-| fetch_usace_dams | NO_CALL |  | 1 |
+| fetch_openfema_disasters | NO_CALL |  | 2 |
+| fetch_overpass_pois | NO_CALL |  | 1 |
+| fetch_population | NO_CALL |  | 1 |
+| fetch_raws_weather | MISS | geocode_location | 81 |
+| fetch_river_geometry | HIT | geocode_location | 92 |
+| fetch_roads_osm | HIT | fetch_dem | 103 |
+| fetch_sentinel1_sar | HIT | fetch_dem | 86 |
+| fetch_sentinel2_truecolor | MISS | geocode_location | 132 |
+| fetch_snotel_snow | HIT | fetch_raws_weather | 127 |
+| fetch_soilgrids | HIT | fetch_soilgrids | 96 |
+| fetch_statsgo_soils | HIT | fetch_dem | 131 |
+| fetch_storm_events_db | HIT | geocode_location | 240 |
+| fetch_topobathy | MISS | fetch_storm_events_db | 2 |
+| fetch_tsunami_events | NO_CALL |  | 1 |
+| fetch_us_drought_monitor | NO_CALL |  | 0 |
+| fetch_usace_dams | NO_CALL |  | 0 |
 | fetch_usace_levees | NO_CALL |  | 0 |
 | fetch_usace_nsi | NO_CALL |  | 0 |
-| fetch_usfs_canopy_fuels | HIT | fetch_usfs_canopy_fuels | 153 |
-| fetch_usgs_earthquakes | HIT | fetch_usgs_earthquakes | 84 |
-| fetch_usgs_groundwater_levels | MISS | geocode_location | 76 |
-| fetch_usgs_nwis_gauges | HIT | fetch_usgs_earthquakes | 72 |
-| fetch_usgs_volcano_alerts | HIT | fetch_usgs_earthquakes | 189 |
-| fetch_usgs_water_quality | HIT | fetch_usgs_volcano_alerts | 129 |
-| fetch_viirs_day_fire | HIT | fetch_viirs_day_fire | 64 |
-| fetch_wdpa_protected_areas | HIT | fetch_viirs_day_fire | 129 |
-| fetch_wfigs_incident | MISS | geocode_location | 190 |
-| fill_gaps | HIT | fill_gaps | 80 |
-| generate_choropleth_legend | HIT | fetch_wfigs_incident | 86 |
-| generate_damage_distribution | MISS | fill_gaps | 73 |
-| generate_histogram | HIT | fetch_wfigs_incident | 72 |
-| generate_time_series | HIT | generate_histogram | 78 |
-| geocode_location | HIT | fetch_wfigs_incident | 159 |
-| list_categories | HIT | list_categories | 64 |
-| list_qgis_algorithms | MISS | geocode_location | 120 |
-| list_run_frames | MISS | list_qgis_algorithms | 92 |
-| list_tools_in_category | HIT | list_tools_in_category | 65 |
-| lookup_precip_return_period | HIT | list_qgis_algorithms | 78 |
-| merge_features | HIT | fetch_dem | 73 |
-| postprocess_pelicun | HIT | fetch_dem | 151 |
-| publish_layer | HIT | publish_layer | 85 |
-| qgis_process | HIT | fetch_dem | 90 |
-| request_spatial_input | MISS | publish_layer | 57 |
-| run_geoclaw_inundation | MISS | request_spatial_input | 240 |
-| run_landlab_susceptibility | NO_CALL |  | 0 |
-| run_model_asr_scenario | NO_CALL |  | 1 |
-| run_model_capture_zone_scenario | NO_CALL |  | 0 |
-| run_model_conservation_priority | NO_CALL |  | 0 |
-| run_model_contamination_affected_fields | NO_CALL |  | 0 |
-| run_model_flood_habitat_scenario | NO_CALL |  | 0 |
-| run_model_flood_scenario | MISS | geocode_location | 78 |
-| run_model_glm_lightning_animation | MISS | geocode_location | 78 |
-| run_model_goes_fire_animation | MISS | geocode_location | 57 |
-| run_model_groundwater_contamination_scenario | MISS | geocode_location | 46 |
-| run_model_mar_scenario | MISS | geocode_location | 67 |
-| run_model_mine_dewatering_scenario | MISS | geocode_location | 49 |
-| run_model_multi_species_scenario | MISS | geocode_location | 42 |
-| run_model_news_event_ingest | MISS | geocode_location | 46 |
-| run_model_nws_flood_event_scenario | MISS | geocode_location | 94 |
-| run_model_regional_water_budget_scenario | MISS | geocode_location | 68 |
-| run_model_river_seepage_scenario | MISS | geocode_location | 93 |
-| run_model_saltwater_intrusion_scenario | MISS | fetch_dem | 35 |
-| run_model_satellite_fire_animation | MISS | run_model_flood_scenario | 77 |
-| run_model_sustainable_yield_scenario | HIT | run_model_sustainable_yield_scenario | 42 |
-| run_model_wellhead_protection_scenario | MISS | geocode_location | 74 |
-| run_model_wetland_hydroperiod_scenario | MISS | geocode_location | 75 |
-| run_modflow_job | MISS | geocode_location | 101 |
-| run_pelicun_damage_assessment | MISS | geocode_location | 146 |
-| run_pelicun_with_buildings | HIT | run_pelicun_with_buildings | 112 |
-| run_river_seepage_job | HIT | run_river_seepage_job | 72 |
-| run_seismic_hazard_psha | HIT | run_pelicun_with_buildings | 89 |
-| run_swan_waves | MISS | geocode_location | 171 |
-| run_swmm_urban_flood | HIT | run_swan_waves | 40 |
-| summarize_layer_statistics | HIT | summarize_layer_statistics | 91 |
-| web_fetch | MISS | fetch_dem | 240 |
+| fetch_usfs_canopy_fuels | NO_CALL |  | 0 |
+| fetch_usgs_earthquakes | MISS | geocode_location | 171 |
+| fetch_usgs_groundwater_levels | MISS | fetch_usgs_earthquakes | 79 |
+| fetch_usgs_nwis_gauges | MISS | geocode_location | 82 |
+| fetch_usgs_volcano_alerts | MISS | geocode_location | 75 |
+| fetch_usgs_water_quality | MISS | geocode_location | 140 |
+| fetch_viirs_day_fire | HIT | fetch_dem | 179 |
+| fetch_wdpa_protected_areas | HIT | fetch_viirs_day_fire | 105 |
+| fetch_wfigs_incident | HIT | fetch_usgs_earthquakes | 188 |
+| fill_gaps | MISS | geocode_location | 66 |
+| generate_choropleth_legend | MISS | geocode_location | 74 |
+| generate_damage_distribution | MISS | geocode_location | 88 |
+| generate_histogram | MISS | fetch_dem | 100 |
+| generate_time_series | MISS | fetch_dem | 90 |
+| geocode_location | MISS | fetch_dem | 72 |
+| list_categories | HIT | geocode_location | 109 |
+| list_qgis_algorithms | HIT | fetch_dem | 65 |
+| list_run_frames | MISS | geocode_location | 66 |
+| list_tools_in_category | MISS | geocode_location | 92 |
+| lookup_precip_return_period | HIT | fetch_dem | 136 |
+| merge_features | HIT | geocode_location | 101 |
+| model_debris_flow | HIT | geocode_location | 104 |
+| postprocess_pelicun | HIT | geocode_location | 96 |
+| publish_layer | HIT | geocode_location | 90 |
+| qgis_process | HIT | fetch_dem | 96 |
+| request_spatial_input | HIT | request_spatial_input | 45 |
+| run_geoclaw_inundation | MISS | request_spatial_input | 85 |
+| run_landlab_susceptibility | MISS | geocode_location | 123 |
+| run_model_asr_scenario | MISS | request_spatial_input | 77 |
+| run_model_capture_zone_scenario | MISS | request_spatial_input | 53 |
+| run_model_conservation_priority | MISS | request_spatial_input | 166 |
+| run_model_contamination_affected_fields | MISS | request_spatial_input | 73 |
+| run_model_flood_habitat_scenario | MISS | run_geoclaw_inundation | 61 |
+| run_model_flood_scenario | MISS | geocode_location | 91 |
+| run_model_glm_lightning_animation | MISS | geocode_location | 63 |
+| run_model_goes_fire_animation | MISS | geocode_location | 51 |
+| run_model_groundwater_contamination_scenario | MISS | geocode_location | 59 |
+| run_model_mar_scenario | MISS | geocode_location | 70 |
+| run_model_mine_dewatering_scenario | MISS | geocode_location | 55 |
+| run_model_multi_species_scenario | MISS | geocode_location | 80 |
+| run_model_news_event_ingest | MISS | geocode_location | 65 |
+| run_model_nws_flood_event_scenario | MISS | geocode_location | 61 |
+| run_model_regional_water_budget_scenario | MISS | geocode_location | 62 |
+| run_model_river_seepage_scenario | MISS | geocode_location | 79 |
+| run_model_saltwater_intrusion_scenario | MISS | geocode_location | 63 |
+| run_model_satellite_fire_animation | MISS | geocode_location | 36 |
+| run_model_sustainable_yield_scenario | MISS | geocode_location | 66 |
+| run_model_wellhead_protection_scenario | MISS | geocode_location | 41 |
+| run_model_wetland_hydroperiod_scenario | MISS | geocode_location | 53 |
+| run_modflow_job | MISS | geocode_location | 138 |
+| run_pelicun_damage_assessment | MISS | run_modflow_job | 93 |
+| run_pelicun_with_buildings | MISS | compute_building_density | 154 |
+| run_river_seepage_job | MISS | run_modflow_job | 125 |
+| run_seismic_hazard_psha | HIT | run_modflow_job | 78 |
+| run_swan_waves | MISS | run_modflow_job | 96 |
+| run_swmm_urban_flood | MISS | run_modflow_job | 77 |
+| summarize_layer_statistics | HIT | summarize_layer_statistics | 54 |
+| web_fetch | MISS | geocode_location | 93 |

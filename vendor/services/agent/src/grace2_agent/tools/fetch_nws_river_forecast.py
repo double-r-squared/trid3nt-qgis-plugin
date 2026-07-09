@@ -38,6 +38,17 @@ non-flood states pass through verbatim (``not_defined``, ``obs_not_current``,
 ``out_of_service``) so the caller can see why a gauge has no category rather than
 silently dropping it.
 
+    SERIES + CREST (optional, ``include_series=True``) - per-gauge stageflow:
+        https://api.water.noaa.gov/nwps/v1/gauges/<lid>/stageflow
+        Carries the OBSERVED (~30 days hourly) and FORECAST (~28 6-hourly
+        points) stage/flow series. We derive the forecast CREST (max forecast
+        stage + its valid time) and embed the series inline as compact JSON
+        attributes for charting, bounded to ``_MAX_SERIES_GAUGES`` gauges.
+
+    SINGLE GAUGE (optional, ``gauge_id=<lid>``) - the detail endpoint above is
+    used directly (the detail body carries the same identity + status shape as
+    one gauges-list entry, plus the thresholds for free).
+
 Output schema:
     Driver: FlatGeobuf, EPSG:4326, Point geometry (one feature per gauge).
     Props: lid, usgs_id, name, flood_category, fcst_flood_category,
@@ -45,7 +56,10 @@ Output schema:
            fcst_stage_ft, fcst_flow_kcfs, fcst_valid_time,
            rfc, wfo, state,
            action_stage_ft, minor_stage_ft, moderate_stage_ft, major_stage_ft
-           (the *_stage_ft thresholds are populated only with include_thresholds).
+           (the *_stage_ft thresholds are populated only with include_thresholds
+           or gauge_id mode),
+           fcst_crest_stage_ft, fcst_crest_time, obs_series_json,
+           fcst_series_json (populated only with include_series).
 
 Tier-1, no auth, ``supports_global_query=False`` (US + territories only - NWS
 river forecasts cover the US gauge network).
@@ -84,8 +98,10 @@ __all__ = [
     "_build_gauge_detail_url",
     "_parse_gauges_json",
     "_parse_gauge_thresholds",
+    "_parse_stageflow",
     "_normalize_flood_category",
     "_build_flatgeobuf",
+    "_build_gauge_stageflow_url",
     "_fetch_nws_river_forecast_bytes",
     "GAUGES_URL",
     "GAUGE_DETAIL_URL",
@@ -181,6 +197,15 @@ _MAX_BBOX_SQ_DEG = 2000.0
 #: HTTP round-trip; we bound it so include_thresholds on a dense bbox cannot
 #: fan out to hundreds of requests.
 _MAX_THRESHOLD_GAUGES = 60
+
+#: Cap on per-gauge stageflow-series enrichment calls (include_series). The
+#: observed series alone is ~2800 hourly points per gauge, so the fan-out is
+#: bounded much tighter than the threshold enrichment.
+_MAX_SERIES_GAUGES = 12
+
+#: Most-recent observed points kept when embedding the series inline (the
+#: NWPS observed window is ~30 days hourly; ~4 days is what a chart needs).
+_MAX_OBS_SERIES_POINTS = 96
 
 #: NWPS no-data / missing sentinel for stage & flow scalars.
 _NWPS_MISSING = -999.0
@@ -356,6 +381,11 @@ def _build_gauge_detail_url(lid: str) -> str:
     return GAUGE_DETAIL_URL + urllib.parse.quote(str(lid).strip(), safe="")
 
 
+def _build_gauge_stageflow_url(lid: str) -> str:
+    """Build the NWPS per-gauge stageflow URL (observed + forecast series)."""
+    return _build_gauge_detail_url(lid) + "/stageflow"
+
+
 # ---------------------------------------------------------------------------
 # Parsers.
 # ---------------------------------------------------------------------------
@@ -432,6 +462,12 @@ def _parse_gauges_json(raw: bytes) -> list[dict[str, Any]]:
             "minor_stage_ft": None,
             "moderate_stage_ft": None,
             "major_stage_ft": None,
+            # Forecast crest + inline series - populated only by the
+            # include_series stageflow enrichment.
+            "fcst_crest_stage_ft": None,
+            "fcst_crest_time": None,
+            "obs_series_json": None,
+            "fcst_series_json": None,
         }
         if not rec["lid"]:
             continue
@@ -466,6 +502,81 @@ def _parse_gauge_thresholds(raw: bytes) -> dict[str, float | None]:
     return out
 
 
+def _parse_stageflow(raw: bytes) -> dict[str, Any]:
+    """Parse a per-gauge ``/stageflow`` body -> observed + forecast series.
+
+    The NWPS stageflow body is ``{"observed": {"data": [{"validTime",
+    "primary", "secondary"}, ...], "primaryUnits": "ft", ...}, "forecast":
+    {...}}`` (live-verified 2026-07-07; observed is ~30 days hourly, forecast
+    ~28 6-hourly points). Returns::
+
+        {"observed": [(iso_time, stage_ft, flow_kcfs), ...],   # full
+         "forecast": [(iso_time, stage_ft, flow_kcfs), ...],   # full
+         "fcst_crest_stage_ft": float | None,   # max forecast stage
+         "fcst_crest_time": str | None}         # its validTime
+
+    Empty body (404) or a malformed body -> empty series + None crest; the
+    per-gauge enrichment is best-effort by design.
+    """
+    empty: dict[str, Any] = {
+        "observed": [],
+        "forecast": [],
+        "fcst_crest_stage_ft": None,
+        "fcst_crest_time": None,
+    }
+    if not raw:
+        return empty
+    try:
+        obj = json.loads(raw.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return empty
+    if not isinstance(obj, dict):
+        return empty
+
+    def _series(key: str) -> list[tuple[str, float | None, float | None]]:
+        block = obj.get(key) or {}
+        pts: list[tuple[str, float | None, float | None]] = []
+        for p in block.get("data") or []:
+            if not isinstance(p, dict):
+                continue
+            t = str(p.get("validTime") or "").strip()
+            if not t:
+                continue
+            pts.append(
+                (t, _coerce_float(p.get("primary")), _coerce_float(p.get("secondary")))
+            )
+        return pts
+
+    observed = _series("observed")
+    forecast = _series("forecast")
+    crest_stage: float | None = None
+    crest_time: str | None = None
+    for t, stage, _flow in forecast:
+        if stage is not None and (crest_stage is None or stage > crest_stage):
+            crest_stage = stage
+            crest_time = t
+    return {
+        "observed": observed,
+        "forecast": forecast,
+        "fcst_crest_stage_ft": crest_stage,
+        "fcst_crest_time": crest_time,
+    }
+
+
+def _series_to_json(
+    points: list[tuple[str, float | None, float | None]],
+) -> str:
+    """Compact column-oriented JSON for inline embedding in an FGB attribute."""
+    return json.dumps(
+        {
+            "t": [p[0] for p in points],
+            "stage_ft": [p[1] for p in points],
+            "flow_kcfs": [p[2] for p in points],
+        },
+        separators=(",", ":"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # FlatGeobuf builder.
 # ---------------------------------------------------------------------------
@@ -481,6 +592,7 @@ _FGB_FLOAT_COLS = [
     "minor_stage_ft",
     "moderate_stage_ft",
     "major_stage_ft",
+    "fcst_crest_stage_ft",
 ]
 _FGB_STR_COLS = [
     "lid",
@@ -493,6 +605,9 @@ _FGB_STR_COLS = [
     "fcst_flood_category",
     "obs_valid_time",
     "fcst_valid_time",
+    "fcst_crest_time",
+    "obs_series_json",
+    "fcst_series_json",
 ]
 
 
@@ -598,36 +713,128 @@ def _enrich_thresholds(records: list[dict[str, Any]]) -> None:
         rec.update(thresholds)
 
 
+def _enrich_series(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """In-place join of the stageflow series + forecast crest onto records.
+
+    Fetches ``/gauges/<lid>/stageflow`` for up to ``_MAX_SERIES_GAUGES`` gauges
+    and writes onto each record:
+
+      - ``fcst_crest_stage_ft`` / ``fcst_crest_time`` - the maximum forecast
+        stage and its valid time (the forecast CREST),
+      - ``obs_series_json`` - the most-recent ``_MAX_OBS_SERIES_POINTS``
+        observed points as compact column JSON ``{"t": [...],
+        "stage_ft": [...], "flow_kcfs": [...]}``,
+      - ``fcst_series_json`` - the full forecast series, same shape.
+
+    A per-gauge failure is non-fatal (that gauge keeps None). Returns the
+    per-lid raw series dict ``{lid: {"observed": [...], "forecast": [...],
+    "fcst_crest_stage_ft": ..., "fcst_crest_time": ...}}`` for callers that
+    want the untrimmed series (charting).
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for rec in records[:_MAX_SERIES_GAUGES]:
+        lid = rec.get("lid")
+        if not lid:
+            continue
+        try:
+            raw = _http_get(_build_gauge_stageflow_url(lid))
+        except NwsRiverForecastUpstreamError as exc:
+            logger.info(
+                "fetch_nws_river_forecast: series enrich skipped for %s: %s",
+                lid,
+                exc,
+            )
+            continue
+        series = _parse_stageflow(raw)
+        out[str(lid)] = series
+        rec["fcst_crest_stage_ft"] = series["fcst_crest_stage_ft"]
+        rec["fcst_crest_time"] = series["fcst_crest_time"]
+        rec["obs_series_json"] = _series_to_json(
+            series["observed"][-_MAX_OBS_SERIES_POINTS:]
+        )
+        rec["fcst_series_json"] = _series_to_json(series["forecast"])
+    return out
+
+
+def _fetch_single_gauge_records(gauge_id: str) -> list[dict[str, Any]]:
+    """Fetch one gauge by NWS lid via the detail endpoint -> gauge records.
+
+    The detail body carries the same identity + ``status`` shape as one entry
+    of the gauges list (live-verified 2026-07-07), so it is parsed by wrapping
+    it as a single-element gauges list. The flood-category thresholds ride
+    along for free (the detail body already carries ``flood.categories``).
+    Returns ``[]`` for a 404 / unknown lid.
+    """
+    raw = _http_get(_build_gauge_detail_url(gauge_id))
+    if not raw:
+        return []
+    try:
+        detail = json.loads(raw.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise NwsRiverForecastUpstreamError(
+            f"NWPS gauge detail for {gauge_id!r} is not valid JSON: {exc}"
+        ) from exc
+    if not isinstance(detail, dict):
+        return []
+    records = _parse_gauges_json(
+        json.dumps({"gauges": [detail]}).encode("utf-8")
+    )
+    # Thresholds come free with the detail body.
+    for rec in records:
+        rec.update(_parse_gauge_thresholds(raw))
+    return records
+
+
 def _fetch_nws_river_forecast_bytes(
     *,
-    bbox: tuple[float, float, float, float],
+    bbox: tuple[float, float, float, float] | None,
     include_thresholds: bool,
+    gauge_id: str | None = None,
+    include_series: bool = False,
 ) -> tuple[bytes, tuple[float, float, float, float]]:
-    """End-to-end fetch: gauges-by-bbox -> (optional) thresholds -> FGB bytes.
+    """End-to-end fetch: gauges (bbox list OR single lid) -> enrich -> FGB bytes.
 
     Returns ``(fgb_bytes, extent_bbox)``. Raises ``NwsRiverForecastNoGaugesError``
-    when the NWPS bbox list returns zero gauges.
+    when the scope resolves to zero gauges.
     """
-    url = _build_gauges_url(bbox)
-    logger.info("fetch_nws_river_forecast: GAUGES GET %s", url)
-    raw = _http_get(url)
-    records = _parse_gauges_json(raw)
-
-    if not records:
-        raise NwsRiverForecastNoGaugesError(
-            f"No NWS river/forecast gauges (AHPS/NWPS) found inside bbox={bbox!r}. "
-            f"The NWPS gauges-by-bbox service returned zero forecast points. "
-            f"Either the area has no forecast river reach or the bbox misses the "
-            f"river; try a larger bbox or an area on a known forecast river."
+    if gauge_id is not None:
+        logger.info(
+            "fetch_nws_river_forecast: DETAIL GET %s",
+            _build_gauge_detail_url(gauge_id),
         )
+        records = _fetch_single_gauge_records(gauge_id)
+        if not records:
+            raise NwsRiverForecastNoGaugesError(
+                f"NWPS has no river-forecast gauge with lid={gauge_id!r}. "
+                f"Gauge ids are NWS location ids (e.g. 'CIDI4'), not USGS site "
+                f"numbers; find one via a bbox query first."
+            )
+    else:
+        assert bbox is not None  # the tool body enforces bbox-or-gauge_id
+        url = _build_gauges_url(bbox)
+        logger.info("fetch_nws_river_forecast: GAUGES GET %s", url)
+        raw = _http_get(url)
+        records = _parse_gauges_json(raw)
+
+        if not records:
+            raise NwsRiverForecastNoGaugesError(
+                f"No NWS river/forecast gauges (AHPS/NWPS) found inside bbox={bbox!r}. "
+                f"The NWPS gauges-by-bbox service returned zero forecast points. "
+                f"Either the area has no forecast river reach or the bbox misses the "
+                f"river; try a larger bbox or an area on a known forecast river."
+            )
+
+        if include_thresholds:
+            _enrich_thresholds(records)
 
     logger.info(
-        "fetch_nws_river_forecast: NWPS returned %d river gauge(s) in bbox",
+        "fetch_nws_river_forecast: NWPS returned %d river gauge(s) for %s",
         len(records),
+        f"lid={gauge_id}" if gauge_id is not None else "bbox",
     )
 
-    if include_thresholds:
-        _enrich_thresholds(records)
+    if include_series:
+        _enrich_series(records)
 
     extent = _records_bbox(records)
     assert extent is not None  # records is non-empty here
@@ -651,6 +858,8 @@ def _fetch_nws_river_forecast_bytes(
 def fetch_nws_river_forecast(
     bbox: tuple[float, float, float, float] | None = None,
     include_thresholds: bool = False,
+    gauge_id: str | None = None,
+    include_series: bool = False,
     # Absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
@@ -675,59 +884,91 @@ def fetch_nws_river_forecast(
     reach flow; this tool is the NWS forecast + flood-category source.
 
     Args:
-        bbox: ``(west, south, east, north)`` in EPSG:4326. REQUIRED.
+        bbox: ``(west, south, east, north)`` in EPSG:4326. REQUIRED unless
+            ``gauge_id`` is given.
         include_thresholds: when True, fetch each gauge's flood-category
             threshold stages (``action_stage_ft`` / ``minor_stage_ft`` /
             ``moderate_stage_ft`` / ``major_stage_ft``, ft) via a per-gauge
             detail call (bounded to the first ~60 gauges). OFF by default to
-            keep the tool a single HTTP request.
+            keep the tool a single HTTP request. Always ON in ``gauge_id``
+            mode (the detail body carries the thresholds for free).
+        gauge_id: Optional NWS location id (lid, e.g. ``"CIDI4"`` - NOT a
+            USGS site number) selecting a SINGLE gauge via the NWPS detail
+            endpoint; ``bbox`` is then optional/ignored. Use a bbox query
+            first to discover lids.
+        include_series: when True, fetch each gauge's ``/stageflow`` observed
+            + forecast time series (bounded to the first ~12 gauges) and add:
+            ``fcst_crest_stage_ft`` / ``fcst_crest_time`` (the forecast CREST
+            - the max forecast stage and when it occurs) plus
+            ``obs_series_json`` (most-recent ~96 observed points) and
+            ``fcst_series_json`` (full forecast series) as compact
+            column-oriented JSON strings ``{"t": [...], "stage_ft": [...],
+            "flow_kcfs": [...]}`` for charting. OFF by default.
 
     Returns:
         A vector ``LayerURI`` (FlatGeobuf, Point, EPSG:4326).
 
     Raises:
-        NwsRiverForecastInputError: bbox missing / malformed.
+        NwsRiverForecastInputError: bbox and gauge_id both missing / malformed.
         NwsRiverForecastBboxTooLargeError: bbox implausibly large.
-        NwsRiverForecastNoGaugesError: zero forecast gauges in the bbox.
+        NwsRiverForecastNoGaugesError: zero forecast gauges in the bbox, or
+            an unknown gauge_id.
         NwsRiverForecastUpstreamError: NWPS API / network failure.
 
     Tier-1 free. No API key. ``supports_global_query=False`` (US + territories).
     """
-    # 1. Resolve + validate the bbox.
-    if bbox is None:
-        raise NwsRiverForecastInputError(
-            "fetch_nws_river_forecast requires bbox=(west, south, east, north) "
-            "in EPSG:4326."
-        )
-    if not isinstance(bbox, (tuple, list)):
-        raise NwsRiverForecastInputError(
-            f"bbox must be a 4-tuple/list; got {type(bbox).__name__}"
-        )
-    try:
-        bbox_t: tuple[float, float, float, float] = tuple(
-            float(v) for v in bbox
-        )  # type: ignore[assignment]
-    except (TypeError, ValueError) as exc:
-        raise NwsRiverForecastInputError(
-            f"bbox values must be numeric; got {bbox!r}: {exc}"
-        ) from exc
-    _validate_bbox(bbox_t)
-    area = _bbox_area_sq_deg(bbox_t)
-    if area > _MAX_BBOX_SQ_DEG:
-        raise NwsRiverForecastBboxTooLargeError(
-            f"bbox area {area:.0f} deg^2 exceeds the {_MAX_BBOX_SQ_DEG:.0f} deg^2 "
-            f"limit; the NWS river-gauge set spans the US, so an unbounded bbox "
-            f"would pull thousands of points. Re-issue with a basin / metro / "
-            f"state-sized bbox."
-        )
-    resolved_bbox = _round_bbox_to_6dp(bbox_t)
+    # 1. Resolve + validate the spatial selector (bbox OR gauge_id).
+    gauge_lid: str | None = None
+    if gauge_id is not None:
+        gauge_lid = str(gauge_id).strip().upper()
+        if not gauge_lid or not gauge_lid.isalnum():
+            raise NwsRiverForecastInputError(
+                f"gauge_id must be an alphanumeric NWS lid (e.g. 'CIDI4'); "
+                f"got {gauge_id!r}"
+            )
+    resolved_bbox: tuple[float, float, float, float] | None = None
+    if gauge_lid is None:
+        if bbox is None:
+            raise NwsRiverForecastInputError(
+                "fetch_nws_river_forecast requires bbox=(west, south, east, "
+                "north) in EPSG:4326 (or a gauge_id lid for a single gauge)."
+            )
+        if not isinstance(bbox, (tuple, list)):
+            raise NwsRiverForecastInputError(
+                f"bbox must be a 4-tuple/list; got {type(bbox).__name__}"
+            )
+        try:
+            bbox_t: tuple[float, float, float, float] = tuple(
+                float(v) for v in bbox
+            )  # type: ignore[assignment]
+        except (TypeError, ValueError) as exc:
+            raise NwsRiverForecastInputError(
+                f"bbox values must be numeric; got {bbox!r}: {exc}"
+            ) from exc
+        _validate_bbox(bbox_t)
+        area = _bbox_area_sq_deg(bbox_t)
+        if area > _MAX_BBOX_SQ_DEG:
+            raise NwsRiverForecastBboxTooLargeError(
+                f"bbox area {area:.0f} deg^2 exceeds the {_MAX_BBOX_SQ_DEG:.0f} deg^2 "
+                f"limit; the NWS river-gauge set spans the US, so an unbounded bbox "
+                f"would pull thousands of points. Re-issue with a basin / metro / "
+                f"state-sized bbox."
+            )
+        resolved_bbox = _round_bbox_to_6dp(bbox_t)
     inc_thresh = bool(include_thresholds)
+    inc_series = bool(include_series)
 
     # 2. Cache-key params.
     params: dict[str, Any] = {
-        "bbox": list(resolved_bbox),
+        "bbox": list(resolved_bbox) if resolved_bbox is not None else None,
         "include_thresholds": inc_thresh,
     }
+    # Keep pre-extension cache keys byte-identical for the default call shape:
+    # the new params join the key only when they deviate from the default.
+    if gauge_lid is not None:
+        params["gauge_id"] = gauge_lid
+    if inc_series:
+        params["include_series"] = True
 
     # The fetch_fn returns (bytes, extent); read_through caches the bytes. We
     # need the extent for LayerURI.bbox, so capture it via a closure side-channel.
@@ -735,7 +976,10 @@ def fetch_nws_river_forecast(
 
     def _fetch_bytes() -> bytes:
         fgb, extent = _fetch_nws_river_forecast_bytes(
-            bbox=resolved_bbox, include_thresholds=inc_thresh
+            bbox=resolved_bbox,
+            include_thresholds=inc_thresh,
+            gauge_id=gauge_lid,
+            include_series=inc_series,
         )
         captured["extent"] = extent
         return fgb
@@ -758,10 +1002,14 @@ def fetch_nws_river_forecast(
         extent_bbox = resolved_bbox
 
     # 5. Build a descriptive layer name + stable id.
-    scope_tag = (
-        f"{resolved_bbox[0]:.2f},{resolved_bbox[1]:.2f}->"
-        f"{resolved_bbox[2]:.2f},{resolved_bbox[3]:.2f}"
-    )
+    if gauge_lid is not None:
+        scope_tag = f"lid {gauge_lid}"
+    else:
+        assert resolved_bbox is not None
+        scope_tag = (
+            f"{resolved_bbox[0]:.2f},{resolved_bbox[1]:.2f}->"
+            f"{resolved_bbox[2]:.2f},{resolved_bbox[3]:.2f}"
+        )
     seed = hashlib.sha256(
         json.dumps(params, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()[:8]

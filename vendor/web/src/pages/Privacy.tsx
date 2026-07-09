@@ -7,15 +7,24 @@
 // Amazon S3; prompts processed by AWS Bedrock (Anthropic Claude); no sale of
 // personal data. (The product moved off Google Gemini / GCP to AWS Bedrock —
 // keep this page accurate to where data actually flows.)
+//
+// LOCAL build (VITE_DEPLOYMENT=local; fingerprint audit A9): the cloud-stack
+// paragraphs (AWS Bedrock / DynamoDB / S3 / EC2 / Batch) are factually WRONG
+// for TRID3NT Local (a locally hosted model + local object storage + local
+// docker solvers), so the AWS-specific copy gates on the deployment seam and
+// the local build shows a local-storage-appropriate version. Cloud rendering
+// is byte-identical when the flag is unset/cloud.
 
 import { useEffect } from "react";
 import { IconArrowLeft } from "../components/icons";
+import { isLocalDeployment } from "../lib/deployment";
 import "./privacy.css";
 
 const EFFECTIVE_DATE = "June 11, 2026";
 const CONTACT_EMAIL = "natealmanza3@gmail.com";
 
 export function Privacy(): JSX.Element {
+  const local = isLocalDeployment();
   useEffect(() => {
     document.title = "Privacy Policy - TRID3NT";
   }, []);
@@ -38,26 +47,48 @@ export function Privacy(): JSX.Element {
           Effective date: <strong>{EFFECTIVE_DATE}</strong>
         </p>
 
-        <p className="pp-lede">
-          TRID3NT is an AI workbench for multi-hazard modeling: you chat with
-          an agent powered by Anthropic&rsquo;s Claude (via AWS Bedrock) that
-          runs geospatial models and renders the results on a map. This policy
-          explains, in plain language, what data the service handles when you
-          use it and where that data lives.
-        </p>
+        {local ? (
+          <p className="pp-lede">
+            TRID3NT is an AI workbench for multi-hazard modeling: you chat
+            with an agent powered by a locally hosted language model that runs
+            geospatial models and renders the results on a map. This policy
+            explains, in plain language, what data the application handles
+            when you use it and where that data lives.
+          </p>
+        ) : (
+          <p className="pp-lede">
+            TRID3NT is an AI workbench for multi-hazard modeling: you chat with
+            an agent powered by Anthropic&rsquo;s Claude (via AWS Bedrock) that
+            runs geospatial models and renders the results on a map. This policy
+            explains, in plain language, what data the service handles when you
+            use it and where that data lives.
+          </p>
+        )}
 
         <section>
           <h2>Data we collect</h2>
           <ul>
-            <li>
-              <strong>Session identifiers.</strong> Today TRID3NT uses
-              anonymous sessions: a randomly generated session ID and
-              anonymous user ID stored in your browser&rsquo;s localStorage.
-              They contain no personal information. When Google sign-in
-              launches, signing in will additionally associate your Google
-              account&rsquo;s basic profile (name, email address) with your
-              workspace.
-            </li>
+            {local ? (
+              /* F5 (live-feedback 2026-07-08): the local build is single-user
+                 with no sign-in of any kind -- the Google-sign-in sentence is
+                 cloud copy and must not render here. */
+              <li>
+                <strong>Session identifiers.</strong> TRID3NT uses anonymous
+                sessions: a randomly generated session ID and anonymous user
+                ID stored in your browser&rsquo;s localStorage. They contain
+                no personal information, and there is no account or sign-in.
+              </li>
+            ) : (
+              <li>
+                <strong>Session identifiers.</strong> Today TRID3NT uses
+                anonymous sessions: a randomly generated session ID and
+                anonymous user ID stored in your browser&rsquo;s localStorage.
+                They contain no personal information. When Google sign-in
+                launches, signing in will additionally associate your Google
+                account&rsquo;s basic profile (name, email address) with your
+                workspace.
+              </li>
+            )}
             <li>
               <strong>Chat and Case content.</strong> The messages you send,
               the agent&rsquo;s responses, the tools it ran, and the Cases
@@ -94,46 +125,71 @@ export function Privacy(): JSX.Element {
           </ul>
         </section>
 
-        <section>
-          <h2>Storage &amp; third parties</h2>
-          <p>
-            TRID3NT runs on Amazon Web Services (AWS). Your data is processed
-            and stored by the following services, each under its own terms:
-          </p>
-          <ul>
-            <li>
-              <strong>Amazon DynamoDB</strong> — stores chat history, Cases,
-              session records, and audit logs.
-            </li>
-            <li>
-              <strong>Amazon S3</strong> — stores generated geospatial
-              artifacts (rasters, vectors, model outputs).
-            </li>
-            <li>
-              <strong>AWS Bedrock (Anthropic Claude)</strong> — your prompts
-              and the agent&rsquo;s working context are sent to Anthropic&rsquo;s
-              Claude models, hosted in AWS Bedrock, to produce responses and
-              decide which tools to run.
-            </li>
-            <li>
-              <strong>Amazon EC2 / AWS Batch</strong> — host the application
-              and execute the modeling engines.
-            </li>
-          </ul>
-          <p>
-            Public data sources the agent queries on your behalf (for
-            example NOAA, USGS, FEMA, USACE, GBIF) receive only the query
-            parameters needed to fulfil your request (such as a bounding box
-            or place name), never your identity.
-          </p>
-        </section>
+        {local ? (
+          <section>
+            <h2>Storage &amp; third parties</h2>
+            <p>
+              This build of TRID3NT runs on your own machine. Your chats,
+              Cases, and generated geospatial artifacts are stored locally
+              (local files and a local object store) and are not uploaded to
+              a cloud service by TRID3NT. Prompts are processed by the
+              locally hosted language model configured for the agent; they
+              are not sent to a hosted AI provider.
+            </p>
+            <p>
+              Public data sources the agent queries on your behalf (for
+              example NOAA, USGS, FEMA, USACE, GBIF) receive only the query
+              parameters needed to fulfil your request (such as a bounding box
+              or place name), never your identity.
+            </p>
+          </section>
+        ) : (
+          <section>
+            <h2>Storage &amp; third parties</h2>
+            <p>
+              TRID3NT runs on Amazon Web Services (AWS). Your data is processed
+              and stored by the following services, each under its own terms:
+            </p>
+            <ul>
+              <li>
+                <strong>Amazon DynamoDB</strong> — stores chat history, Cases,
+                session records, and audit logs.
+              </li>
+              <li>
+                <strong>Amazon S3</strong> — stores generated geospatial
+                artifacts (rasters, vectors, model outputs).
+              </li>
+              <li>
+                <strong>AWS Bedrock (Anthropic Claude)</strong> — your prompts
+                and the agent&rsquo;s working context are sent to Anthropic&rsquo;s
+                Claude models, hosted in AWS Bedrock, to produce responses and
+                decide which tools to run.
+              </li>
+              <li>
+                <strong>Amazon EC2 / AWS Batch</strong> — host the application
+                and execute the modeling engines.
+              </li>
+            </ul>
+            <p>
+              Public data sources the agent queries on your behalf (for
+              example NOAA, USGS, FEMA, USACE, GBIF) receive only the query
+              parameters needed to fulfil your request (such as a bounding box
+              or place name), never your identity.
+            </p>
+          </section>
+        )}
 
         <section>
           <h2>Your choices</h2>
           <ul>
-            <li>
-              You can use TRID3NT anonymously today; no account is required.
-            </li>
+            {local ? (
+              <li>TRID3NT runs without an account; there is nothing to sign
+              in to.</li>
+            ) : (
+              <li>
+                You can use TRID3NT anonymously today; no account is required.
+              </li>
+            )}
             <li>
               Clearing your browser&rsquo;s localStorage for this site
               discards your anonymous session identifiers; a fresh session is
@@ -157,11 +213,18 @@ export function Privacy(): JSX.Element {
 
         <section>
           <h2>Changes to this policy</h2>
-          <p>
-            If this policy changes materially (for example when Google
-            sign-in launches), we will update this page and its effective
-            date.
-          </p>
+          {local ? (
+            <p>
+              If this policy changes materially, we will update this page and
+              its effective date.
+            </p>
+          ) : (
+            <p>
+              If this policy changes materially (for example when Google
+              sign-in launches), we will update this page and its effective
+              date.
+            </p>
+          )}
         </section>
       </main>
 
@@ -170,7 +233,11 @@ export function Privacy(): JSX.Element {
           <IconArrowLeft size={14} />
           Back to TRID3NT
         </a>
-        <span>© 2026 TRID3NT · Built on AWS Bedrock · Amazon EC2 · QGIS</span>
+        {local ? (
+          <span>© 2026 TRID3NT · Runs locally · QGIS</span>
+        ) : (
+          <span>© 2026 TRID3NT · Built on AWS Bedrock · Amazon EC2 · QGIS</span>
+        )}
       </footer>
     </div>
   );

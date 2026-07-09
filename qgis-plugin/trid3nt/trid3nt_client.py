@@ -942,10 +942,21 @@ class AgentClient:
         self._send("session-resume", {"case_id": self.case_id})
         return True
 
-    def send_chat(self, text: str) -> None:
+    def send_chat(self, text: str, show_thinking: bool = False) -> None:
+        """Send a user chat message.
+
+        :param text: The message text.
+        :param show_thinking: F9 (live-feedback 2026-07-09) - when True, ride
+            ``show_thinking=True`` on the payload so the local model's reasoning
+            channel is forwarded as ``agent-thinking-chunk`` envelopes. Only
+            meaningful locally; cloud agents ignore the field.
+        """
+        payload: dict = {"text": text, "case_id": self.case_id}
+        if show_thinking:
+            payload["show_thinking"] = True
         self._send(
             "user-message",
-            {"text": text, "case_id": self.case_id},
+            payload,
             case_id=self.case_id,
             queue_if_closed=True,
         )
@@ -1003,6 +1014,19 @@ class AgentClient:
         if etype == "agent-message-chunk":
             return AgentEvent(
                 "chunk",
+                {
+                    "message_id": payload.get("message_id"),
+                    "delta": payload.get("delta") or payload.get("text") or "",
+                    "done": bool(payload.get("done")),
+                },
+            )
+        if etype == "agent-thinking-chunk":
+            # F9 (live-feedback 2026-07-09): local model reasoning-channel
+            # tokens. Same payload shape as agent-message-chunk. Keyed by the
+            # same message_id as the subsequent answer chunk so the dock can
+            # attach the thinking block to the right assistant entry.
+            return AgentEvent(
+                "thinking-chunk",
                 {
                     "message_id": payload.get("message_id"),
                     "delta": payload.get("delta") or payload.get("text") or "",

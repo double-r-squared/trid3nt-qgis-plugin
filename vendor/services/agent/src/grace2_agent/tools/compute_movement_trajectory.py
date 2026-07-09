@@ -650,6 +650,8 @@ def compute_movement_trajectory(
 ) -> LayerURI:
     """Compute movement-trajectory metrics from a layer of timestamped track POINTS.
 
+    Use this (not fetch_dem) when you already have timestamped GPS/track POINTS and want movement metrics (speed, step length, turning angle).
+
     Takes a point vector (one feature per telemetry fix, carrying a timestamp)
     and returns an annotated **trajectory** vector: one LineString SEGMENT per
     adjacent pair of fixes, each labelled with movement metrics, plus a

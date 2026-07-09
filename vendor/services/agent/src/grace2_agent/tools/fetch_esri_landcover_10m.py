@@ -535,7 +535,11 @@ def fetch_esri_landcover_10m(
     # job-0164: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Fetch the Esri / Impact Observatory 10 m global land-cover for a bbox.
+    """Global 10 m land cover (Esri / Impact Observatory land-use land-cover) for a bbox -- trees, crops, built area, water, worldwide.
+
+    Use this (not ``fetch_landcover``, which serves US-only NLCD as a dict) when
+    the AOI is OUTSIDE CONUS or you want a consistent 10 m land-cover schema
+    across borders. Returns a bare ``LayerURI`` (NOT the ``fetch_landcover`` dict).
 
     **What it does:** Searches the Microsoft Planetary Computer for the Impact
     Observatory ``io-lulc-annual-v02`` 10 m annual Land-Use Land-Cover items

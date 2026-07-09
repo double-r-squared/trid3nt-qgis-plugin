@@ -19,6 +19,11 @@
 //   - 9 (no cost theater): copy refers to persistence only, never cost.
 
 import { useCallback, useState } from "react";
+// TRID3NT LOCAL (F5, live-feedback 2026-07-08): the local build is single-user
+// with no sign-in, and everything persists locally -- the "Sign in to save"
+// gate is meaningless there, so gated actions always run immediately. Cloud
+// behavior is byte-identical when the flag is unset.
+import { isLocalDeployment } from "../lib/deployment";
 
 export interface UseSaveGateOptions {
   /** Whether the active user can persist work (Firebase non-anonymous). */
@@ -84,7 +89,7 @@ export function useSaveGate(opts: UseSaveGateOptions): UseSaveGateReturn {
   const gateAction = useCallback(
     (action: () => void, kind: string = "Save your work") =>
       () => {
-        if (isSignedIn || gateAccepted()) {
+        if (isSignedIn || isLocalDeployment() || gateAccepted()) {
           action();
           return;
         }

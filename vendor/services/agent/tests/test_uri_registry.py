@@ -677,3 +677,149 @@ def test_resolvable_param_allowlist_excludes_server_owned_params() -> None:
     # The headline consumers from the 5 incidents ARE covered.
     for name in ("hazard_raster_uri", "assets_uri", "layer_uri"):
         assert name in RESOLVABLE_URI_PARAMS
+
+
+# --------------------------------------------------------------------------- #
+# 6. Small-model PLACEHOLDER resolution (2026-07-08)
+#
+# Local 8B models emit fetch_dem + publish_layer in the SAME iteration, passing
+# stand-in strings as the consumer's layer_uri. Dispatch is sequential, so the
+# producer's real URI is already registered when the consumer resolves.
+# Observed live placeholder values are replayed verbatim below.
+# --------------------------------------------------------------------------- #
+
+DEM_LAYER_ID = "dem-3dep-10m--122.51-47.49--122.30-47.62"
+DEM_COG = (
+    "s3://grace2-hazard-cache/cache/static-30d/fetch_dem/"
+    "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d.tif"
+)
+DEM_COG_2 = (
+    "s3://grace2-hazard-cache/cache/static-30d/fetch_dem/"
+    "ffeeddccbbaa99887766554433221100.tif"
+)
+
+
+class TestPlaceholderResolution:
+    def _registry_with_dem(self) -> SessionUriRegistry:
+        reg = make_registry()
+        reg.register_tool_result(
+            "fetch_dem",
+            LayerURI(
+                layer_id=DEM_LAYER_ID,
+                name="3DEP DEM 10m",
+                layer_type="raster",
+                uri=DEM_COG,
+                style_preset="continuous_dem",
+            ),
+        )
+        return reg
+
+    @pytest.mark.parametrize(
+        "placeholder",
+        [
+            "LayerURI_from_fetch_dem",  # observed live (local 8B)
+            "<layer_uri_from_fetch_dem>",  # observed live (local 8B)
+            "fetch_dem_output",
+            "the layer from fetch_dem",
+        ],
+    )
+    def test_observed_placeholder_shapes_resolve(self, placeholder: str) -> None:
+        reg = self._registry_with_dem()
+        out = reg.resolve_params("publish_layer", {"layer_uri": placeholder})
+        assert out["layer_uri"] == DEM_COG
+
+    def test_placeholder_resolution_logs_info_telemetry(self, caplog) -> None:
+        reg = self._registry_with_dem()
+        with caplog.at_level("INFO", logger="grace2_agent.uri_registry"):
+            reg.resolve_params(
+                "publish_layer", {"layer_uri": "LayerURI_from_fetch_dem"}
+            )
+        hits = [r for r in caplog.records if "placeholder resolved" in r.getMessage()]
+        assert hits, "expected the INFO placeholder-resolution telemetry line"
+        msg = hits[0].getMessage()
+        assert "tool=publish_layer" in msg
+        assert "param=layer_uri" in msg
+        assert "'LayerURI_from_fetch_dem'" in msg
+        assert DEM_COG in msg
+        assert "producer=fetch_dem" in msg
+
+    def test_ambiguous_multi_candidate_does_not_resolve(self) -> None:
+        reg = self._registry_with_dem()
+        reg.register_tool_result(
+            "fetch_dem",
+            LayerURI(
+                layer_id="dem-3dep-10m--second-aoi",
+                name="3DEP DEM 10m (second AOI)",
+                layer_type="raster",
+                uri=DEM_COG_2,
+                style_preset="continuous_dem",
+            ),
+        )
+        placeholder = "LayerURI_from_fetch_dem"
+        out = reg.resolve_params("publish_layer", {"layer_uri": placeholder})
+        assert out["layer_uri"] == placeholder  # refuse to guess between two DEMs
+
+    def test_uri_shaped_values_are_never_placeholder_resolved(self) -> None:
+        reg = self._registry_with_dem()
+        # Observed live: a hallucinated FOREIGN gs:// path. It is uri-shaped,
+        # so the placeholder path must not touch it - the existing foreign-
+        # bucket fail-open passes it through unchanged.
+        hallucinated = "gs://3dep-cache/continuous-dem-10m.tif"
+        out = reg.resolve_params("publish_layer", {"layer_uri": hallucinated})
+        assert out["layer_uri"] == hallucinated
+        # Even an s3:// path that NAMES the producing tool stays untouched
+        # (auto-substituting uri-shaped values could mask real cross-case refs).
+        s3_foreign = "s3://some-users-bucket/fetch_dem/dem.tif"
+        out = reg.resolve_params("publish_layer", {"layer_uri": s3_foreign})
+        assert out["layer_uri"] == s3_foreign
+
+    def test_unknown_tool_name_does_not_resolve(self) -> None:
+        reg = self._registry_with_dem()
+        placeholder = "LayerURI_from_fetch_landcover"  # never produced anything
+        out = reg.resolve_params("publish_layer", {"layer_uri": placeholder})
+        assert out["layer_uri"] == placeholder
+
+    def test_local_path_containing_tool_name_untouched(self) -> None:
+        reg = self._registry_with_dem()
+        path = "/tmp/fetch_dem/out.tif"
+        out = reg.resolve_params("publish_layer", {"layer_uri": path})
+        assert out["layer_uri"] == path
+
+    def test_two_distinct_matched_tools_do_not_resolve(self) -> None:
+        reg = self._registry_with_dem()
+        reg.register_tool_result(
+            "fetch_landcover",
+            LayerURI(
+                layer_id="nlcd-2021",
+                name="NLCD 2021",
+                layer_type="raster",
+                uri="s3://grace2-hazard-cache/cache/static-30d/fetch_landcover/aa.tif",
+                style_preset="",
+            ),
+        )
+        placeholder = "output of fetch_dem and fetch_landcover"
+        out = reg.resolve_params("publish_layer", {"layer_uri": placeholder})
+        assert out["layer_uri"] == placeholder
+
+    def test_nested_tool_name_prefers_longest_match(self) -> None:
+        reg = self._registry_with_dem()
+        hires = "s3://grace2-hazard-cache/cache/static-30d/fetch_dem_hires/bb.tif"
+        reg.register_tool_result(
+            "fetch_dem_hires",
+            LayerURI(
+                layer_id="dem-hires-1m",
+                name="Hi-res DEM",
+                layer_type="raster",
+                uri=hires,
+                style_preset="continuous_dem",
+            ),
+        )
+        out = reg.resolve_params(
+            "publish_layer", {"layer_uri": "LayerURI_from_fetch_dem_hires"}
+        )
+        assert out["layer_uri"] == hires
+        # The shorter name still resolves to ITS own unique layer.
+        out = reg.resolve_params(
+            "publish_layer", {"layer_uri": "LayerURI_from_fetch_dem"}
+        )
+        assert out["layer_uri"] == DEM_COG

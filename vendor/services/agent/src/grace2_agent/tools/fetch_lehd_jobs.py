@@ -714,6 +714,8 @@ def fetch_lehd_jobs(
 ) -> LayerURI:
     """Census LEHD LODES workplace employment as a tract choropleth FlatGeobuf.
 
+    Use this (not fetch_census_acs, and go past geocode_location) when you want LEHD LODES workplace JOBS/employment counts.
+
     Aggregates the Census Bureau's LODES Workplace Area Characteristics (WAC)
     block-level job counts up to census tract and joins them to authoritative
     tract geometry (TIGERweb, keyless), returning a job-density choropleth

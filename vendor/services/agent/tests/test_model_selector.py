@@ -326,3 +326,59 @@ def test_aggregate_by_model_latency_fields_present():
 def test_aggregate_empty_records_by_model_is_empty_list():
     summary = _aggregate_records([])
     assert summary["by_model"] == []
+
+
+# ---------------------------------------------------------------------------
+# 5. resolve_selected_model - provider-aware validation (F2, live-feedback
+#    2026-07-08: local hot-swap). Cloud (bedrock/default) keeps the Bedrock
+#    allowlist byte-identical; MODEL_PROVIDER=openai passes local ids verbatim.
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_none_is_silent_default(monkeypatch):
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    assert ba.resolve_selected_model(None) == (None, None)
+
+
+def test_resolve_bedrock_known_id_passes(monkeypatch):
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    got, notice = ba.resolve_selected_model("us.anthropic.claude-sonnet-4-6")
+    assert got == "us.anthropic.claude-sonnet-4-6"
+    assert notice is None
+
+
+def test_resolve_bedrock_unknown_id_falls_back_with_notice(monkeypatch):
+    monkeypatch.delenv("MODEL_PROVIDER", raising=False)
+    got, notice = ba.resolve_selected_model("qwen3:8b-16k")
+    assert got is None
+    assert notice is not None and "qwen3:8b-16k" in notice
+
+
+def test_resolve_openai_provider_passes_local_id_verbatim(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    assert ba.resolve_selected_model("qwen3:8b-16k") == ("qwen3:8b-16k", None)
+
+
+def test_resolve_openai_provider_local_default_placeholder_maps_to_default(
+    monkeypatch,
+):
+    """The legacy 'local-default' web placeholder = 'use the server default'."""
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    assert ba.resolve_selected_model("local-default") == (None, None)
+
+
+def test_resolve_openai_provider_none_still_silent(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    assert ba.resolve_selected_model(None) == (None, None)
+
+
+def test_resolve_openai_provider_bedrock_id_passes_through_to_adapter_guard(
+    monkeypatch,
+):
+    """A stale Bedrock id is passed through here; openai_adapter.openai_model
+    ignores Bedrock-shaped ids (falls back to GRACE2_OPENAI_MODEL), so the
+    guard lives at the adapter boundary, not in resolve."""
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    got, notice = ba.resolve_selected_model("us.anthropic.claude-sonnet-4-6")
+    assert got == "us.anthropic.claude-sonnet-4-6"
+    assert notice is None

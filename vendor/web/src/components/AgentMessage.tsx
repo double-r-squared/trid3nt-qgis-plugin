@@ -26,7 +26,7 @@
 // renders came from the agent. Tool-call / numerical content is just text;
 // we add no fallback values, defaults, or client-computed glyphs.
 
-import { CSSProperties } from "react";
+import { CSSProperties, useState } from "react";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -35,6 +35,15 @@ export interface AgentMessageProps {
   text: string;
   /** Whether the stream has finalized (agent-message-chunk.done). */
   done: boolean;
+  /**
+   * LOCAL build only (live-feedback F8/F10 2026-07-08): accumulated reasoning
+   * tokens emitted via agent-thinking-chunk BEFORE the answer. Undefined on the
+   * cloud build (the server never emits those envelopes). When present, a
+   * collapsible grey thinking block renders ABOVE the answer text; it is
+   * expanded while streaming and auto-collapses once the answer starts (done
+   * reflects the answer stream, not the thinking stream).
+   */
+  thinkingText?: string;
 }
 
 const WRAPPER_STYLE: CSSProperties = {
@@ -194,7 +203,7 @@ const COMPONENTS: Components = {
   ),
 };
 
-export function AgentMessage({ text, done }: AgentMessageProps): JSX.Element {
+export function AgentMessage({ text, done, thinkingText }: AgentMessageProps): JSX.Element {
   return (
     <div
       data-testid="agent-message"
@@ -202,10 +211,112 @@ export function AgentMessage({ text, done }: AgentMessageProps): JSX.Element {
       data-done={done ? "true" : "false"}
       style={WRAPPER_STYLE}
     >
+      {thinkingText !== undefined && thinkingText.length > 0 && (
+        <ThinkingBlock thinkingText={thinkingText} answerStarted={text.length > 0} />
+      )}
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
         {text}
       </ReactMarkdown>
       {!done && <TypingCaret />}
+    </div>
+  );
+}
+
+// --- Collapsible thinking block (LOCAL build, live-feedback F8/F10) -------- //
+//
+// Grey collapsible block that renders the model's reasoning-channel tokens
+// (agent-thinking-chunk deltas) ABOVE the answer text. Expanded while
+// reasoning is streaming (answerStarted=false), auto-collapses once the answer
+// arrives (answerStarted=true). The user can manually toggle it back open. No
+// card chrome - just a lightweight grey inset block.
+
+const THINKING_CSS = `
+@keyframes grace2-thinking-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+.grace2-thinking-streaming {
+  animation: grace2-thinking-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .grace2-thinking-streaming { animation: none; }
+}
+`;
+
+interface ThinkingBlockProps {
+  thinkingText: string;
+  answerStarted: boolean;
+}
+
+function ThinkingBlock({ thinkingText, answerStarted }: ThinkingBlockProps): JSX.Element {
+  // Auto-collapse when the answer begins; the user can re-open manually.
+  const [open, setOpen] = useState(!answerStarted);
+  // Once the answer has started and we have collapsed, keep it collapsed on
+  // subsequent re-renders even if answerStarted flickers.
+  // (controlled by user toggle after that point)
+
+  const isStreaming = !answerStarted;
+
+  return (
+    <div
+      data-testid="agent-thinking-block"
+      style={{ marginBottom: 8 }}
+    >
+      <style>{THINKING_CSS}</style>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          background: "transparent",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          color: "#6b7280",
+          fontSize: 11,
+          fontFamily: "inherit",
+          marginBottom: open ? 4 : 0,
+        }}
+      >
+        <span
+          style={{
+            display: "inline-block",
+            transform: open ? "rotate(90deg)" : "none",
+            transition: "transform 0.15s ease",
+            fontSize: 10,
+          }}
+        >
+          {"▶"}
+        </span>
+        <span className={isStreaming ? "grace2-thinking-streaming" : ""}>
+          {isStreaming ? "Thinking..." : "Thought process"}
+        </span>
+      </button>
+      {open && (
+        <div
+          data-testid="agent-thinking-content"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            borderLeft: "2px solid #374151",
+            borderRadius: "0 4px 4px 0",
+            padding: "6px 10px",
+            color: "#6b7280",
+            fontSize: 11,
+            lineHeight: 1.5,
+            fontFamily:
+              'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            maxHeight: 240,
+            overflowY: "auto",
+          }}
+        >
+          {thinkingText}
+        </div>
+      )}
     </div>
   );
 }

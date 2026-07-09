@@ -50,6 +50,7 @@ __all__ = [
     "ClarificationResponsePayload",
     # agent -> client (A.4)
     "AgentMessageChunkPayload",
+    "AgentThinkingChunkPayload",
     "ToolCallStartPayload",
     "ToolCallProgressPayload",
     "ToolCallCompletePayload",
@@ -189,6 +190,14 @@ class UserMessagePayload(GraceModel):
     # shape as ``SessionResumePayload.case_id`` and the web ``contracts.ts``
     # mirror so the client<->server contract is identical across both messages.
     case_id: str | None = None
+    # Local-build thinking visibility (NATE live-feedback 2026-07-08): when
+    # True the OpenAI-compatible local adapter enables the model's reasoning
+    # channel for this turn (omits the /no_think system suffix) and the server
+    # forwards reasoning deltas as ``agent-thinking-chunk`` envelopes. ``None``
+    # (older client / cloud client that does not stamp) preserves the prior
+    # behavior: thinking suppressed per GRACE2_OPENAI_EXTRA_SYSTEM. Ignored by
+    # the Bedrock path.
+    show_thinking: bool | None = None
 
 
 class CancelPayload(GraceModel):
@@ -419,6 +428,25 @@ class AgentMessageChunkPayload(GraceModel):
 
     message_id: ULIDStr
     delta: str  # new content since the last chunk (not accumulated)
+    done: bool = False
+
+
+class AgentThinkingChunkPayload(GraceModel):
+    """``agent-thinking-chunk``: a streamed reasoning-channel token group.
+
+    Local-build feature (NATE live-feedback 2026-07-08): the OpenAI-compatible
+    adapter surfaces the model's reasoning deltas (e.g. Ollama qwen3
+    ``delta.reasoning``) and the server forwards them live so the web can
+    render a greyed, collapsible "thinking" block inside the SAME bubble as
+    the eventual answer. ``message_id`` is shared with the segment's
+    ``agent-message-chunk`` frames; a ``delta="" done=True`` frame closes the
+    thinking stream for that bubble. Shape mirrors AgentMessageChunkPayload.
+    """
+
+    MESSAGE_TYPE: ClassVar[str] = "agent-thinking-chunk"
+
+    message_id: ULIDStr
+    delta: str  # new reasoning content since the last chunk (not accumulated)
     done: bool = False
 
 
@@ -1225,6 +1253,7 @@ CLIENT_TO_AGENT_PAYLOADS[
 
 AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     AgentMessageChunkPayload.MESSAGE_TYPE: AgentMessageChunkPayload,
+    AgentThinkingChunkPayload.MESSAGE_TYPE: AgentThinkingChunkPayload,
     ToolCallStartPayload.MESSAGE_TYPE: ToolCallStartPayload,
     ToolCallProgressPayload.MESSAGE_TYPE: ToolCallProgressPayload,
     ToolCallCompletePayload.MESSAGE_TYPE: ToolCallCompletePayload,

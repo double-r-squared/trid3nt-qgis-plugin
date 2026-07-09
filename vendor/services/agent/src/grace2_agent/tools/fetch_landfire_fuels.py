@@ -60,6 +60,8 @@ Layer codes::
     fbfm13 -> Anderson 13 fire-behavior fuel models
     cbh    -> canopy base height (m × 10)
     cbd    -> canopy bulk density (kg/m³ × 100)
+    cc     -> canopy cover (percent)          [FIRE-2, ELMFIRE cc.tif]
+    ch     -> canopy height (m × 10)          [FIRE-2, ELMFIRE ch.tif]
 
 FR-TA-2 atomic tool, FR-CE-8 / FR-DC-3/4 routed through ``read_through``
 so identical ``(bbox, layer)`` calls reuse the cached GeoTIFF in the
@@ -162,6 +164,11 @@ _LAYER_SERVICE: dict[str, str] = {
     "fbfm13": "LF2022_FBFM13_CONUS",
     "cbh": "LF2022_CBH_CONUS",
     "cbd": "LF2022_CBD_CONUS",
+    # FIRE-2 (ELMFIRE engine design 2026-07-07): canopy cover + canopy height —
+    # the two remaining rasters of the ELMFIRE fuels stack (cc.tif / ch.tif).
+    # Same LF2022 CONUS ImageServer family as the four layers above.
+    "cc": "LF2022_CC_CONUS",
+    "ch": "LF2022_CH_CONUS",
 }
 
 _VALID_LAYERS = frozenset(_LAYER_SERVICE.keys())
@@ -172,6 +179,8 @@ _LAYER_DESCRIPTION: dict[str, str] = {
     "fbfm13": "Anderson 13 fire-behavior fuel models",
     "cbh": "canopy base height (m x 10, scaled int)",
     "cbd": "canopy bulk density (kg/m^3 x 100, scaled int)",
+    "cc": "canopy cover (percent, int)",
+    "ch": "canopy height (m x 10, scaled int)",
 }
 
 #: Per-layer units string for LayerURI.units. None for fuel-model categories
@@ -181,6 +190,8 @@ _LAYER_UNITS: dict[str, str | None] = {
     "fbfm13": None,
     "cbh": "m * 10",
     "cbd": "kg/m^3 * 100",
+    "cc": "percent",
+    "ch": "m * 10",
 }
 
 #: Per-layer QML style preset. Until the engine adds dedicated LANDFIRE
@@ -193,6 +204,8 @@ _LAYER_STYLE_PRESET: dict[str, str] = {
     "fbfm13": "categorical_landcover",
     "cbh": "continuous_dem",
     "cbd": "continuous_dem",
+    "cc": "continuous_dem",
+    "ch": "continuous_dem",
 }
 
 #: User-Agent per USGS / ESRI ImageServer guidelines.
@@ -483,7 +496,7 @@ def _is_all_nodata(tiff_bytes: bytes) -> bool:
 )
 def fetch_landfire_fuels(
     bbox: tuple[float, float, float, float],
-    layer: Literal["fbfm40", "fbfm13", "cbh", "cbd"] = "fbfm40",
+    layer: Literal["fbfm40", "fbfm13", "cbh", "cbd", "cc", "ch"] = "fbfm40",
     # job-0164: absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
@@ -493,9 +506,10 @@ def fetch_landfire_fuels(
     **What it does:** Downloads a 30 m raster from the LANDFIRE LF2022 CONUS
     ImageServer (USDA Forest Service + USGS), clips it server-side to the
     requested bbox, and returns a CRS-tagged GeoTIFF via the 30-day cache.
-    Four layers are available: Scott and Burgan 40 surface fuel models
+    Six layers are available: Scott and Burgan 40 surface fuel models
     (``fbfm40``), Anderson 13 fuel models (``fbfm13``), canopy base height
-    (``cbh``), and canopy bulk density (``cbd``).
+    (``cbh``), canopy bulk density (``cbd``), canopy cover (``cc``), and
+    canopy height (``ch``) — together the full ELMFIRE canopy-fuels stack.
 
     **When to use:**
     - User asks for wildfire fuel conditions, fuel maps, or fire-behavior
@@ -528,7 +542,8 @@ def fetch_landfire_fuels(
       Burgan 40; integer codes 101-204 + 91/92/93/98/99 special classes),
       ``"fbfm13"`` (Anderson 13; codes 1-13 + specials), ``"cbh"`` (canopy
       base height, m x 10 scaled int), ``"cbd"`` (canopy bulk density,
-      kg/m^3 x 100 scaled int).
+      kg/m^3 x 100 scaled int), ``"cc"`` (canopy cover, percent int),
+      ``"ch"`` (canopy height, m x 10 scaled int).
 
     **Returns:** A ``LayerURI`` pointing at a GeoTIFF in the cache bucket
     (``gs://grace-2-hazard-prod-cache/cache/static-30d/landfire_fuels/<key>.tif``).
@@ -583,6 +598,8 @@ def fetch_landfire_fuels(
         "fbfm13": "FBFM13",
         "cbh": "Canopy Base Height",
         "cbd": "Canopy Bulk Density",
+        "cc": "Canopy Cover",
+        "ch": "Canopy Height",
     }.get(layer, layer.upper())
 
     return LayerURI(

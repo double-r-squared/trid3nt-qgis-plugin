@@ -686,6 +686,8 @@ def _tier4_region_fetch(
 def catalog_fetch(entry_id: str, params: dict[str, Any] | None = None, **_extra_ignored: Any) -> dict[str, Any]:
     """Fetch bytes for a vetted catalog entry by its stable id (§F.1.2 Mode 1).
 
+    Use this (not catalog_search, which only LISTS candidates) when you already have a stable catalog entry id and want its actual layer BYTES.
+
     Use this when: the LLM has chosen a `CatalogEntry` from `catalog_search`
     and needs the actual layer bytes — generic dispatcher routes by the
     entry's ``access_tier``: Tier 1 (STAC+COG), Tier 2 (OGC service), Tier 3
