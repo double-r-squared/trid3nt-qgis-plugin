@@ -2931,7 +2931,7 @@ def _has_overviews(tif_bytes: bytes) -> bool:
 
 
 def _fetch_nlcd_landcover_bytes(
-    bbox: tuple[float, float, float, float], vintage_year: int
+    bbox: tuple[float, float, float, float], vintage_year: int, resolution_m: int = 30
 ) -> bytes:
     """Fetch NLCD landcover for ``bbox`` at the given vintage year via MRLC WCS 1.0.0.
 
@@ -2944,12 +2944,18 @@ def _fetch_nlcd_landcover_bytes(
     ``setup_manning_roughness`` consumes the bytes directly without a
     client-side palette decode.
 
+    ``resolution_m`` controls the WCS pixel grid: at 30 m (native) each pixel is
+    one NLCD cell; at coarser values (e.g. 300 m for a state-scale bbox) the grid
+    shrinks to stay under the MRLC WCS server's ~4000 px-per-axis limit. Because
+    NLCD is a categorical raster, nearest-neighbor resampling is implicit in the
+    WCS server's pixel-addressed GetCoverage (no bilinear corruption of class codes).
+
     Path-comparison summary (live-verified 2026-06-07):
     - WMS GetMap: returned palette indices [1, 3, 4, 5, 6, 7, 9, 10, 11, 13,
-      14, 18, 19, 20, 21] for Fort Myers — BROKEN (Manning's mapping keyed by
+      14, 18, 19, 20, 21] for Fort Myers -- BROKEN (Manning's mapping keyed by
       canonical integers).
     - WCS 1.0.0 GetCoverage: returned canonical integers [11, 21, 22, 23, 24,
-      31, 41, 42, 43, 52, 71, 81, 82, 90, 95, 255-nodata] — CORRECT.
+      31, 41, 42, 43, 52, 71, 81, 82, 90, 95, 255-nodata] -- CORRECT.
     """
     _validate_bbox(bbox)
     coverage = _NLCD_WCS_COVERAGE_BY_YEAR.get(vintage_year)
@@ -2961,17 +2967,24 @@ def _fetch_nlcd_landcover_bytes(
             f"``mrlc_display:NLCD_2023_Land_Cover_L48`` (see OQ-39-NLCD-VINTAGE-DEFAULT)."
         )
 
-    # Pixel grid: 30 m native, sized to the bbox in EPSG:4326. WCS 1.0.0
-    # requires explicit WIDTH/HEIGHT (no resolution shorthand at this version).
+    # Pixel grid: sized to the bbox at the requested resolution in EPSG:4326.
+    # WCS 1.0.0 requires explicit WIDTH/HEIGHT (no resolution shorthand at this
+    # version). At the native 30 m, clamp to 4000 px per axis (MRLC server
+    # limit; beyond that the server times out or returns an exception). For
+    # coarsened fetches (state-scale AOI at 300+ m) the pixel count is low and
+    # the clamp is never hit.
+    _res = max(1, int(resolution_m))
     min_lon, min_lat, max_lon, max_lat = bbox
     mid_lat = 0.5 * (min_lat + max_lat)
     m_per_deg_lon = 111_320.0 * math.cos(math.radians(mid_lat))
     width_m = (max_lon - min_lon) * m_per_deg_lon
     height_m = (max_lat - min_lat) * 111_320.0
-    # 30 m native; clamp 16 px..4096 px per axis (the server rejects very
-    # large GetCoverage requests; 4096 covers ~122 km wide bbox at 30 m).
-    width_px = max(16, min(4096, int(round(width_m / 30.0))))
-    height_px = max(16, min(4096, int(round(height_m / 30.0))))
+    # MRLC pixel cap: 4000 px per axis keeps the GetCoverage inside the server's
+    # stated limit. At native 30 m this caps at ~122 km/axis; at 300 m it covers
+    # ~1200 km/axis, enough for any CONUS state.
+    _MRLC_MAX_PX = 4000
+    width_px = max(16, min(_MRLC_MAX_PX, int(round(width_m / _res))))
+    height_px = max(16, min(_MRLC_MAX_PX, int(round(height_m / _res))))
 
     # WCS 1.0.0 GetCoverage via the shared generic OGC adapter (job-0047
     # refactor — single source of truth for §F.1.1 Tier 2 retrieval). The
@@ -3059,6 +3072,7 @@ def _round_bbox_to_30m_nlcd(
 def fetch_landcover(
     bbox: tuple[float, float, float, float],
     dataset: str = "nlcd_2021",
+    resolution_m: int = 30,
     # job-0164: absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
@@ -3084,24 +3098,33 @@ def fetch_landcover(
     - Visualization using the ``categorical_landcover`` QML style preset.
 
     **When NOT to use:**
-    - Coverage outside CONUS L48 — NLCD covers only the 48 contiguous US
+    - Coverage outside CONUS L48 -- NLCD covers only the 48 contiguous US
       states; Alaska, Hawaii, and Puerto Rico have separate MRLC layers not
       in the v0.1 substrate.
-    - Global landcover — pass ``dataset="esa_worldcover_2021"`` to opt into
+    - Global landcover -- pass ``dataset="esa_worldcover_2021"`` to opt into
       the ESA WorldCover branch, but that branch currently raises
       ``UpstreamAPIError`` (forward-looking, OQ-39-ESA-WORLDCOVER-SUBSTRATE).
-    - Single-point landcover classification — this tool returns a raster;
+    - Single-point landcover classification -- this tool returns a raster;
       use ``extract_landcover_class`` for point lookups once it lands.
-    - Bboxes larger than 10,000 km² — the MRLC WCS server rejects oversized
-      requests; the tool raises ``BboxInvalidError`` at that threshold.
+    - Continent-scale bboxes (> 5,000,000 km^2) -- the tool raises
+      ``BboxInvalidError`` at that hard ceiling. State-scale and
+      multi-state-scale bboxes are served by auto-coarsening the resolution
+      (the fetch-resolution gate asks the user to confirm the coarsened rung
+      before the MRLC WCS GetCoverage is issued).
 
     **Parameters:**
     - ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,
-      max_lat)`` in EPSG:4326. Max area 10,000 km².
+      max_lat)`` in EPSG:4326. Continent-scale bboxes (> 5e6 km^2) are
+      rejected; all other sizes are served at auto-coarsened resolution.
     - ``dataset`` (str, default ``"nlcd_2021"``): NLCD vintage string
       (``"nlcd_2021"``, ``"nlcd_2019"``, ``"nlcd_2016"``, etc.) or
       ``"esa_worldcover_2021"`` (forward-looking). Valid NLCD years:
       2001, 2004, 2006, 2008, 2011, 2013, 2016, 2019, 2021.
+    - ``resolution_m`` (int, default 30): pixel grid spacing in meters.
+      The fetch-resolution gate auto-coarsens this for large bboxes and
+      asks the user to confirm before downloading. The native NLCD grid
+      is 30 m; coarser values (60, 120, 300, 600 m) are used for
+      state-scale or multi-state-scale AOIs.
 
     **Returns:**
     A dict with keys:
@@ -3112,6 +3135,10 @@ def fetch_landcover(
       ``build_sfincs_model`` to validate the Manning's mapping CSV.
     - ``dataset`` (str): echo of the input dataset string for provenance.
     - ``source`` (str): ``"mrlc-wcs"`` for NLCD.
+    - ``effective_resolution_m`` (int): actual pixel spacing used (equals
+      ``resolution_m`` when at native 30 m; coarser when the bbox was large).
+    - ``native_resolution_m`` (int): NLCD native resolution (30 m).
+    - ``downsampled`` (bool): True when ``effective_resolution_m > native_resolution_m``.
 
     **Cross-tool dependencies:**
     - Upstream: ``geocode_location`` for bbox derivation.
@@ -3123,6 +3150,12 @@ def fetch_landcover(
             f"fetch_landcover requires a non-empty dataset string; got {dataset!r}"
         )
 
+    # Pixel-budget constants for MRLC WCS auto-coarsening.
+    # PIXEL_BUDGET: max pixels per side we request from the MRLC WCS server
+    # (4000 keeps a margin under the ~4096 cap the server enforces).
+    _PIXEL_BUDGET = 4000
+    _NATIVE_RES_M = 30
+
     if dataset.startswith("nlcd_"):
         try:
             vintage_year = int(dataset.split("_", 1)[1])
@@ -3132,51 +3165,92 @@ def fetch_landcover(
                 "expected 'nlcd_YYYY' (e.g. 'nlcd_2021')."
             ) from exc
 
-        quantized = _round_bbox_to_30m_nlcd(bbox)
-        # Guardrail: MRLC WMS rejects very large requests; cap bbox area to
-        # 10,000 km^2 same as fetch_dem, so a single GetMap call is tractable.
-        if _bbox_area_km2(quantized) > 10_000.0:
+        # Hard ceiling: continent-scale bboxes (> 5e6 km^2) are refused.
+        # Everything below that is served at auto-coarsened resolution.
+        rough_area = _bbox_area_km2(bbox)
+        if rough_area > 5_000_000.0:
             raise BboxInvalidError(
-                f"bbox area {_bbox_area_km2(quantized):.1f} km^2 exceeds 10000 km^2 "
-                "guardrail for fetch_landcover (MRLC WMS will reject; use a tiled "
-                "workflow for larger domains)."
+                f"bbox area {rough_area:.1f} km^2 exceeds the 5,000,000 km^2 hard "
+                "ceiling for fetch_landcover (continent-scale; split into sub-regions)."
             )
+
+        # Compute the effective resolution from the gate-supplied resolution_m.
+        # The gate (server.py FETCH_CONFIRM_TOOLS) auto-coarsens for large bboxes
+        # and injects a confirmed resolution_m; we honour it here. If the gate
+        # was bypassed (e.g. a small bbox or a direct call), use the supplied
+        # resolution_m as-is, but floor it at 30 m (never finer than native).
+        effective_res = max(_NATIVE_RES_M, int(resolution_m))
+
+        # Enforce the MRLC pixel budget on the RESOLUTION (not just the px
+        # clamp inside _fetch_nlcd_landcover_bytes): if the bbox at
+        # effective_res would exceed _PIXEL_BUDGET px on the long axis, coarsen
+        # to fit. This keeps effective_resolution_m HONEST -- it always
+        # describes the grid actually delivered, even when the gate was
+        # bypassed (direct call, tests, small-model shortcut) with a rung too
+        # fine for the AOI. Nearest-neighbor semantics hold: the WCS pixel-
+        # addressed GetCoverage samples class codes, never interpolates.
+        min_lon, min_lat, max_lon, max_lat = bbox
+        mid_lat = 0.5 * (min_lat + max_lat)
+        m_per_deg_lon = 111_320.0 * max(0.05, math.cos(math.radians(mid_lat)))
+        long_axis_m = max(
+            (max_lon - min_lon) * m_per_deg_lon,
+            (max_lat - min_lat) * 111_320.0,
+        )
+        budget_res = int(math.ceil(long_axis_m / _PIXEL_BUDGET))
+        effective_res = max(effective_res, budget_res)
+        downsampled = effective_res > _NATIVE_RES_M
+
+        # Quantize to the effective resolution grid for cache-key stability.
+        quantized = round_bbox_to_resolution(bbox, effective_res)
+
         # Cache-key source tag is ``mrlc-wcs`` after job-0044's hotfix; the
         # palette-encoded ``mrlc-wms`` entries from job-0039 land under a
-        # different key and naturally evict on the 30-day TTL — no explicit
+        # different key and naturally evict on the 30-day TTL -- no explicit
         # invalidation needed (cached COG migration is a no-op).
         # STALE-CACHE fix (job-0324 follow-up): the ``cache_version`` salt makes
         # the post-fix key differ from the pre-fix (palette-less) entry, so this
         # fetch MISSES the stale COG and regenerates a colored, palette-
-        # preserving one. Landcover-only — see _LANDCOVER_CACHE_VERSION.
+        # preserving one. Landcover-only -- see _LANDCOVER_CACHE_VERSION.
         params = {
             "bbox": list(quantized),
             "dataset": dataset,
             "source": "mrlc-wcs",
+            "resolution_m": effective_res,
             "cache_version": _LANDCOVER_CACHE_VERSION,
         }
         result = read_through(
             metadata=_FETCH_LANDCOVER_METADATA,
             params=params,
             ext="tif",
-            fetch_fn=lambda: _fetch_nlcd_landcover_bytes(quantized, vintage_year),
+            fetch_fn=lambda: _fetch_nlcd_landcover_bytes(quantized, vintage_year, effective_res),
         )
         assert result.uri is not None
+        res_suffix = f"-{effective_res}m" if downsampled else ""
         layer = LayerURI(
-            layer_id=f"landcover-{quantized[0]:.4f}-{quantized[1]:.4f}-{dataset}",
-            name=f"NLCD Land Cover ({vintage_year})",
+            layer_id=f"landcover-{quantized[0]:.4f}-{quantized[1]:.4f}-{dataset}{res_suffix}",
+            name=f"NLCD Land Cover ({vintage_year})" + (f" at {effective_res} m" if downsampled else ""),
             layer_type="raster",
             uri=result.uri,
             style_preset="categorical_landcover",
             role="input",
             units="nlcd_class_code",
         )
-        return {
+        out: dict[str, Any] = {
             "layer": layer,
             "nlcd_vintage_year": vintage_year,
             "dataset": dataset,
             "source": "mrlc-wcs",
+            "effective_resolution_m": effective_res,
+            "native_resolution_m": _NATIVE_RES_M,
+            "downsampled": downsampled,
         }
+        if downsampled:
+            out["downsampling_note"] = (
+                f"Landcover fetched at {effective_res} m (coarsened from {_NATIVE_RES_M} m native). "
+                "NLCD class codes are preserved (nearest-neighbor resampling via WCS pixel grid). "
+                "Category boundaries are approximate at this scale."
+            )
+        return out
 
     if dataset.startswith("esa_worldcover_"):
         try:

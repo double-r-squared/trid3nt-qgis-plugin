@@ -108,8 +108,9 @@ class GranularitySuggestion(GraceModel):
 
     - ``engine`` — the run this suggestion is for. Solvers ``"swmm"`` /
       ``"sfincs"`` OR a FETCHER resolution choice ``"dem"`` / ``"topobathy"``
-      (#154 gate widened, NATE 2026-06-26) — the same ladder UI describes a
-      DEM/topobathy fetch resolution, not only a solver mesh.
+      / ``"landcover"`` (#154 gate widened, NATE 2026-06-26; landcover added
+      to support state-scale NLCD auto-coarsening) -- the same ladder UI
+      describes a fetch resolution, not only a solver mesh.
     - ``resolution_param`` — the args field the user overrides:
       ``"target_resolution_m"`` (SWMM overland cell size),
       ``"grid_resolution_m"`` (SFINCS grid), or ``"resolution_m"`` (a
@@ -148,10 +149,11 @@ class GranularitySuggestion(GraceModel):
     """
 
     # NATE 2026-06-26: widened engine + resolution_param so the #154 gate can
-    # also describe a FETCHER resolution choice (dem / topobathy fetch), not
-    # just the SWMM/SFINCS solver mesh. compute_class stays a free str, so a
-    # fetch gate sets compute_class="fetch" with no Literal change.
-    engine: Literal["swmm", "sfincs", "dem", "topobathy"]
+    # also describe a FETCHER resolution choice (dem / topobathy / landcover
+    # fetch), not just the SWMM/SFINCS solver mesh. compute_class stays a free
+    # str, so a fetch gate sets compute_class="fetch" with no Literal change.
+    # "landcover" added to support state-scale NLCD auto-coarsening.
+    engine: Literal["swmm", "sfincs", "dem", "topobathy", "landcover"]
     resolution_param: Literal[
         "target_resolution_m", "grid_resolution_m", "resolution_m"
     ]

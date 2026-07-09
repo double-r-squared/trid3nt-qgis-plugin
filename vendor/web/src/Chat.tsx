@@ -3856,6 +3856,23 @@ export function Chat({
     };
   }, [bump]);
 
+  // Dev-only seam: inject a spatial-input-request so Playwright can drive the
+  // SpatialDrawSurface UI (banner + toolbar + actions) without a live agent
+  // turn. Calls spatialInputBus.setRequest directly -- the same path the real
+  // WS handler uses at Chat line 3773. Only valid for UI-layout / overlap
+  // verification; NOT a substitute for live E2E with a real agent turn.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (window as unknown as Record<string, unknown>).__grace2InjectSpatialInput =
+      (p: SpatialInputRequestPayload) => {
+        spatialInputBus.setRequest(p);
+      };
+    return () => {
+      delete (window as unknown as Record<string, unknown>)
+        .__grace2InjectSpatialInput;
+    };
+  }, []);
+
   // job-0266 dev-only seam: drive Chat's per-Case stream map with a
   // case-open without a live agent. The App-level __grace2InjectCaseOpen
   // seam reaches only useCases (App's GraceWs handler); Chat's stream map

@@ -183,8 +183,9 @@ def test_out_of_range_bbox_raises() -> None:
 
 
 def test_too_large_bbox_raises() -> None:
-    with pytest.raises(EsriLandcoverBboxError, match="guardrail"):
-        fetch_esri_landcover_10m(bbox=(36.0, -2.0, 38.0, 0.0))  # 4 deg^2 >> 0.5
+    # 27 deg^2 >> 8 deg^2 ceiling; error must mention fetch_landcover.
+    with pytest.raises(EsriLandcoverBboxError, match="ceiling"):
+        fetch_esri_landcover_10m(bbox=(36.0, -6.0, 42.0, -1.5))  # 6 * 4.5 = 27 deg^2
 
 
 def test_malformed_bbox_length_raises() -> None:
@@ -371,3 +372,137 @@ def test_distinct_year_distinct_cache_key() -> None:
     k1 = compute_cache_key("esri_landcover_10m", p1, "static-30d", now=_PINNED_NOW)
     k2 = compute_cache_key("esri_landcover_10m", p2, "static-30d", now=_PINNED_NOW)
     assert k1 != k2
+
+
+# ---------------------------------------------------------------------------
+# Tile-grid planning.
+# ---------------------------------------------------------------------------
+
+
+def test_tile_grid_small_bbox_single_tile() -> None:
+    """A bbox within the tile cap produces exactly one tile equal to the input."""
+    from grace2_agent.tools.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
+
+    # _BBOX is 0.2 * 0.2 = 0.04 deg^2, well under 0.5 cap.
+    tiles = _plan_tile_grid(_BBOX, tile_deg2=_TILE_DEG2)
+    assert len(tiles) == 1
+    assert tiles[0] == _BBOX
+
+
+def test_tile_grid_klickitat_county_no_raise() -> None:
+    """Klickitat County WA (~0.767 deg^2) must plan a grid without raising.
+
+    This was the live-failure bbox that originally hit the 0.5 deg^2 guard.
+    """
+    # Approximate Klickitat County WA bbox (0.767 deg^2).
+    bbox = (-121.2, 45.6, -120.3, 46.45)
+    area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+    assert area > 0.5, "test setup: bbox must exceed the old 0.5 cap"
+    assert area < 8.0, "test setup: bbox must be within new 8.0 ceiling"
+
+    from grace2_agent.tools.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
+
+    tiles = _plan_tile_grid(bbox, tile_deg2=_TILE_DEG2)
+    assert len(tiles) > 1, "bbox above tile cap must produce multiple sub-tiles"
+    # No tile should exceed the cap.
+    for t in tiles:
+        t_area = (t[2] - t[0]) * (t[3] - t[1])
+        assert t_area <= _TILE_DEG2 + 1e-9, (
+            f"sub-tile {t} area {t_area:.4f} exceeds tile cap {_TILE_DEG2}"
+        )
+
+
+def test_tile_grid_coverage_and_no_gaps() -> None:
+    """The union area of all sub-tiles equals the total bbox area (no gaps)."""
+    from grace2_agent.tools.fetch_esri_landcover_10m import _plan_tile_grid
+
+    # A ~3 deg^2 bbox (6 tiles expected at 0.5 cap).
+    bbox = (-121.5, 45.0, -119.5, 46.5)
+    total_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+    tiles = _plan_tile_grid(bbox, tile_deg2=0.5)
+
+    # Sum of tile areas must equal total area (within float precision).
+    tile_area_sum = sum((t[2] - t[0]) * (t[3] - t[1]) for t in tiles)
+    assert abs(tile_area_sum - total_area) < 1e-9, (
+        f"Tile area sum {tile_area_sum:.6f} != total area {total_area:.6f}"
+    )
+
+    # Tiles must cover the full bbox extents (min/max across all tiles).
+    assert min(t[0] for t in tiles) == pytest.approx(bbox[0])
+    assert min(t[1] for t in tiles) == pytest.approx(bbox[1])
+    assert max(t[2] for t in tiles) == pytest.approx(bbox[2])
+    assert max(t[3] for t in tiles) == pytest.approx(bbox[3])
+
+
+def test_above_8_deg2_raises_with_nlcd_recommendation() -> None:
+    """Bboxes above 8 deg^2 must raise EsriLandcoverBboxError mentioning fetch_landcover."""
+    # 27 deg^2 bbox.
+    with pytest.raises(EsriLandcoverBboxError, match="fetch_landcover"):
+        fetch_esri_landcover_10m(bbox=(36.0, -6.0, 42.0, -1.5))
+
+
+# ---------------------------------------------------------------------------
+# Tiled mosaic: dtype and colormap preservation.
+# ---------------------------------------------------------------------------
+
+
+def test_tiled_mosaic_preserves_dtype_and_colormap() -> None:
+    """A multi-sub-tile fetch must produce uint8 output with an embedded colormap.
+
+    We mock _plan_tile_grid to return two sub-bboxes covering the same _BBOX
+    (halved along longitude), patch _select_items + sas_sign_href so each sub-tile
+    gets a synthetic local source COG with a palette, then verify the merged output
+    is uint8 and carries the colormap (not grey).
+    """
+    import rasterio
+    from rasterio.io import MemoryFile
+    from unittest.mock import patch
+
+    # Two half-bboxes that together equal _BBOX.
+    mid_lon = (_BBOX[0] + _BBOX[2]) / 2.0
+    half_a = (_BBOX[0], _BBOX[1], mid_lon, _BBOX[3])
+    half_b = (mid_lon, _BBOX[1], _BBOX[2], _BBOX[3])
+
+    sh, sw = 20, 10
+    # Half A: Trees.
+    arr_a = np.full((sh, sw), 2, dtype="uint8")
+    # Half B: Crops.
+    arr_b = np.full((sh, sw), 5, dtype="uint8")
+    src_a = _write_class_cog(half_a, arr_a)
+    src_b = _write_class_cog(half_b, arr_b)
+
+    try:
+        fake = _FakeStore()
+        rt = _make_read_through_injector(fake)
+        item_a = _fake_item(src_a, half_a, 2022)
+        item_b = _fake_item(src_b, half_b, 2022)
+        real_open = rasterio.open
+
+        def fake_select_items(bbox, year):
+            if abs(bbox[0] - half_a[0]) < 1e-6:
+                return [item_a]
+            return [item_b]
+
+        with patch.object(lc_mod, "_plan_tile_grid", return_value=[half_a, half_b]), \
+             patch.object(lc_mod, "_select_items", side_effect=fake_select_items), \
+             patch.object(lc_mod._pc_stac, "sas_sign_href", side_effect=lambda href, c: href), \
+             patch.object(lc_mod, "read_through", rt), \
+             patch("rasterio.open", side_effect=_open_local_vsicurl(real_open)):
+            layer = fetch_esri_landcover_10m(bbox=_BBOX, year=2022)
+
+        assert layer.style_preset == "categorical_landcover"
+
+        cog = next(iter(fake.store.values()))
+        with MemoryFile(cog) as mem, mem.open() as out:
+            # dtype must be uint8 (categorical codes never interpolated).
+            assert str(out.dtypes[0]) == "uint8"
+            # Colormap must be embedded (not grey output).
+            cmap = out.colormap(1)
+            assert cmap[2][:3] == (57, 125, 73)   # Trees green
+            assert cmap[5][:3] == (228, 150, 53)  # Crops orange
+    finally:
+        for p in (src_a, src_b):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass

@@ -43,7 +43,7 @@ __all__ = ["request_spatial_input", "SPATIAL_INPUT_SENTINEL_KEY"]
 SPATIAL_INPUT_SENTINEL_KEY = "_request_spatial_input"
 
 _VALID_MODES = ("point", "bbox", "vector_draw")
-_VALID_PURPOSES = ("barrier", "line")
+_VALID_PURPOSES = ("barrier", "line", "aoi")
 
 
 _REQUEST_SPATIAL_INPUT_METADATA = AtomicToolMetadata(
@@ -104,11 +104,18 @@ async def request_spatial_input(
             (drag-rectangle).
         title: short prompt heading shown over the draw surface.
         description: one-line instruction telling the user what to draw.
-        purpose: ``vector_draw`` only. ``"barrier"`` (DEFAULT -- drawn lines are
-            structural SWMM walls / flap gates that the user MUST tag) or
-            ``"line"`` (drawn line is a NEUTRAL elevation/section line for
-            ``compute_terrain_profile`` -- submitted plain, no tagging). Use
-            ``"line"`` when you need an elevation-profile / cross-section line.
+        purpose: ``vector_draw`` only. ``"aoi"`` (SELECT AN AREA -- the user
+            draws a rectangle or polygon to define an area of interest; no
+            barrier tagging; use this when you need the user to outline a
+            region, watershed, or study area for ANY tool that takes an AOI or
+            bbox). ``"barrier"`` (DEFAULT -- drawn lines are structural SWMM
+            walls / flap gates that the user MUST tag; only for the urban-flood
+            SWMM engine). ``"line"`` (drawn line is a NEUTRAL elevation/section
+            line for ``compute_terrain_profile`` -- submitted plain, no tagging).
+            ROUTING: choose ``"aoi"`` for "show me X over Y", "landcover over
+            Washington", "flood risk in this area", or any area-selection
+            prompt. Use ``"barrier"`` only for flood walls / flap gates. Use
+            ``"line"`` only for elevation profiles / cross-sections.
         suggested_view: OPTIONAL ``{"bbox": [minLon, minLat, maxLon, maxLat],
             "zoom": <float>}`` camera hint so the map jumps to the right place
             before drawing.

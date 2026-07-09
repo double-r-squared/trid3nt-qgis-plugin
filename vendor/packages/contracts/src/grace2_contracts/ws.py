@@ -900,7 +900,7 @@ class SpatialInputRequestPayload(GraceModel):
     mode: Literal["point", "bbox", "vector_draw"]
     title: str
     description: str
-    # ``purpose`` (vector_draw only) selects what a drawn LineString MEANS:
+    # ``purpose`` (vector_draw only) selects the draw affordance + semantics:
     #
     # - ``"barrier"`` (DEFAULT -- the original SWMM urban-flood flow): a drawn
     #   LineString is a structural barrier that MUST be tagged wall / flap_gate
@@ -911,7 +911,13 @@ class SpatialInputRequestPayload(GraceModel):
     #   barrier tagging required. The reply's first line geometry is surfaced as
     #   the ``line`` / ``linestring`` fields. ADDITIVE -- the default keeps the
     #   barrier flow byte-for-byte unchanged.
-    purpose: Literal["barrier", "line"] = "barrier"
+    # - ``"aoi"`` -- area-of-interest selection: only the rect/polygon draw
+    #   tools are shown (no line/barrier tool), no tagging is required, and
+    #   submit gates on having drawn at least one polygon. Drawn polygons carry
+    #   ``role=="aoi"`` exactly as in the barrier flow (neutral, no barrier
+    #   semantics). Use when the model needs the user to outline a region /
+    #   study area for any tool that accepts an AOI or bbox.
+    purpose: Literal["barrier", "line", "aoi"] = "barrier"
     suggested_view: SuggestedView | None = None
     reference_layers: list[ReferenceLayer] = Field(default_factory=list)
     default_timeout_seconds: int = 300

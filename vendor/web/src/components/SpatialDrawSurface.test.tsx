@@ -19,7 +19,7 @@
 // (the same FakeTerraDraw shape draw_controller.test.ts uses) plus a minimal
 // MapLibre map stub covering only the methods the surface touches.
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { SpatialDrawSurface } from "./SpatialDrawSurface";
 import type { DrawControllerDeps, DrawFeatureId } from "../lib/draw_controller";
@@ -415,5 +415,193 @@ describe("SpatialDrawSurface -- neutral-line flow (purpose='line')", () => {
     });
     // The wall/flap-gate tagging popover must never appear in neutral-line mode.
     expect(screen.queryByTestId("spatial-draw-tag-popover")).toBeNull();
+  });
+});
+
+// =========================================================================== //
+// FIX 3: AOI flow (purpose="aoi") -- the user draws a rectangle/polygon to
+// outline an area of interest. No line/barrier tool, no tagging required.
+// This fixes the live bug where request_spatial_input(purpose='aoi') returned
+// SPATIAL_INPUT_PARAMS_INVALID because "aoi" was not in _VALID_PURPOSES.
+// =========================================================================== //
+
+function aoiRequest(): SpatialInputRequestPayload {
+  return {
+    envelope_type: "spatial-input-request",
+    request_id: "01HJSPATIAL00000000000003",
+    mode: "vector_draw",
+    purpose: "aoi",
+    title: "Select the study area",
+    description: "Draw a rectangle or polygon over the Washington state region to analyse.",
+    suggested_view: { bbox: [-124.8, 45.5, -116.9, 49.0], zoom: 7 },
+  };
+}
+
+function renderAoiSurface() {
+  const fake = new FakeTerraDraw();
+  const drawDeps: DrawControllerDeps = {
+    makeDraw: () => fake as unknown as TerraDraw,
+  };
+  const onSubmit = vi.fn<(r: SpatialInputResult) => void>();
+  const onCancel = vi.fn<(id: string) => void>();
+  render(
+    <SpatialDrawSurface
+      map={makeFakeMap()}
+      request={aoiRequest()}
+      onSubmit={onSubmit}
+      onCancel={onCancel}
+      drawDeps={drawDeps}
+    />,
+  );
+  return { fake, onSubmit, onCancel };
+}
+
+describe("SpatialDrawSurface -- AOI flow (purpose='aoi')", () => {
+  it("blocks submit until an area is drawn, then submits WITHOUT tagging", () => {
+    const { fake, onSubmit } = renderAoiSurface();
+
+    // Nothing drawn -> blocked with the aoi-specific reason.
+    expect(submitBtn().disabled).toBe(true);
+    expect(
+      screen.getByTestId("spatial-draw-submit-reason").textContent,
+    ).toContain("Draw an area on the map to submit");
+
+    // Draw a polygon and DO NOT tag it. In the barrier flow this would need a
+    // barrier tag; in aoi mode polygons are plain aoi features with no tag needed.
+    act(() => {
+      fake._add(AOI_SQUARE, { mode: "polygon" });
+    });
+    expect(submitBtn().disabled).toBe(false);
+    // No "untagged barrier" reason.
+    expect(screen.queryByTestId("spatial-draw-submit-reason")).toBeNull();
+
+    fireEvent.click(submitBtn());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const result = onSubmit.mock.calls[0]![0];
+    expect(result.geometryType).toBe("vector_draw");
+    const fc = result.features!;
+    expect(fc.features).toHaveLength(1);
+    // The drawn polygon round-trips as role="aoi" -- NOT a barrier.
+    expect(fc.features[0]!.properties.role).toBe("aoi");
+    expect(fc.features[0]!.properties.barrier_type).toBeUndefined();
+    // No barrier features at all.
+    expect(fc.features.some((f) => f.properties.role === "barrier")).toBe(false);
+  });
+
+  it("does NOT open the barrier tag popover in aoi mode", () => {
+    // The barrier tag popover must never appear for an aoi purpose request.
+    const { fake } = renderAoiSurface();
+    let id: DrawFeatureId = -1;
+    act(() => {
+      // Draw a linestring (even if drawn accidentally the tag popover must not open).
+      id = fake._add(lineGeom([[-124.5, 47.5], [-120.0, 47.5]]), {
+        mode: "linestring",
+      });
+    });
+    act(() => {
+      fake._select(id);
+    });
+    expect(screen.queryByTestId("spatial-draw-tag-popover")).toBeNull();
+  });
+
+  it("the discard-small control is NOT shown in aoi mode (no polygons to discard)", () => {
+    renderAoiSurface();
+    // The discard-area slider is a barrier-flow affordance; aoi mode has no
+    // barrier semantics so it must not appear.
+    expect(screen.queryByTestId("spatial-draw-discard-control")).toBeNull();
+  });
+});
+
+// =========================================================================== //
+// MOBILE LAYOUT: stacked flex-column (isMobile === true) -- MOBILE-SCOPED.
+// Desktop (isMobile === false) is the existing absolute layout tested above.
+//
+// The fix: on mobile the banner, toolbar, and discard control are stacked
+// vertically in a flex-column container (data-testid="spatial-draw-top-stack")
+// so they can never overlap. We test the structural presence, not pixel rects
+// (happy-dom has no layout engine), but confirm: the top-stack container exists
+// on mobile and is absent on desktop, the banner and toolbar are its children,
+// and the actions remain absolute (bottom-pinned, outside the stack).
+// =========================================================================== //
+
+// Helper: stub window.matchMedia so useIsMobile() returns `mobile`.
+function stubMatchMedia(mobile: boolean): void {
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes("max-width") ? mobile : false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })) as unknown as typeof window.matchMedia;
+}
+
+describe("SpatialDrawSurface -- mobile layout (MOBILE-SCOPED)", () => {
+  let _originalMatchMedia: typeof window.matchMedia;
+
+  beforeEach(() => {
+    _originalMatchMedia = window.matchMedia;
+  });
+  afterEach(() => {
+    window.matchMedia = _originalMatchMedia;
+  });
+
+  it("mobile viewport: banner and toolbar are inside the top-stack flex container (not colliding absolutes)", () => {
+    // MOBILE-SCOPED: isMobile = true -> the flex-column top-stack must be present.
+    stubMatchMedia(true);
+    const fake = new FakeTerraDraw();
+    const drawDeps: DrawControllerDeps = {
+      makeDraw: () => fake as unknown as TerraDraw,
+    };
+    render(
+      <SpatialDrawSurface
+        map={makeFakeMap()}
+        request={aoiRequest()}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+        drawDeps={drawDeps}
+      />,
+    );
+
+    // The top-stack container must exist on mobile.
+    const topStack = screen.getByTestId("spatial-draw-top-stack");
+    expect(topStack).toBeTruthy();
+
+    // Banner is inside the top-stack.
+    const banner = screen.getByTestId("spatial-draw-banner");
+    expect(topStack.contains(banner)).toBe(true);
+
+    // Toolbar is inside the top-stack.
+    const toolbar = screen.getByTestId("spatial-draw-toolbar");
+    expect(topStack.contains(toolbar)).toBe(true);
+
+    // Actions (bottom-pinned) are NOT inside the top-stack.
+    const actions = screen.getByTestId("spatial-draw-actions");
+    expect(topStack.contains(actions)).toBe(false);
+  });
+
+  it("desktop viewport: top-stack container is absent (absolute layout unchanged)", () => {
+    // Desktop: isMobile = false -> the top-stack must NOT be present.
+    stubMatchMedia(false);
+    const fake = new FakeTerraDraw();
+    const drawDeps: DrawControllerDeps = {
+      makeDraw: () => fake as unknown as TerraDraw,
+    };
+    render(
+      <SpatialDrawSurface
+        map={makeFakeMap()}
+        request={aoiRequest()}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+        drawDeps={drawDeps}
+      />,
+    );
+    // The mobile top-stack container must be absent on desktop.
+    expect(screen.queryByTestId("spatial-draw-top-stack")).toBeNull();
+    // But the banner and toolbar still render (via the desktop absolute path).
+    expect(screen.getByTestId("spatial-draw-banner")).toBeTruthy();
+    expect(screen.getByTestId("spatial-draw-toolbar")).toBeTruthy();
   });
 });

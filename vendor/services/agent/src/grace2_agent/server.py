@@ -450,6 +450,7 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
 FETCH_CONFIRM_TOOLS: set[str] = {
     "fetch_dem",
     "fetch_topobathy",
+    "fetch_landcover",
 }
 
 #: NATE 2026-06-26: hard px-grid ceiling for the fetch-resolution gate. A fine
@@ -6796,11 +6797,25 @@ def _gate_wait_timeout(default_seconds: float) -> float:
 # NATE 2026-06-26: per-fetcher resolution ladders for the fetch-resolution gate.
 # Finer = smaller metres. fetch_dem can go to 1 m (3DEP); fetch_topobathy floors
 # at 3 m (CUDEM tiles). Both default to 10 m (the tools' resolution_m default).
+# fetch_landcover: NLCD native is 30 m; for large bboxes the gate coarsens to
+# 60/120/300/600 m so the MRLC WCS GetCoverage stays under 4000 px per axis.
 _FETCH_RES_LADDERS: dict[str, list[float]] = {
     "fetch_dem": [1.0, 3.0, 10.0, 30.0],
     "fetch_topobathy": [3.0, 10.0, 30.0],
+    "fetch_landcover": [30.0, 60.0, 120.0, 300.0, 600.0],
 }
 _FETCH_DEFAULT_RES_M: float = 10.0
+# fetch_landcover: native NLCD resolution doubles as the tool's resolution_m
+# default (there is no finer rung, so the coarse default IS the native grid).
+_LANDCOVER_DEFAULT_RES_M: float = 30.0
+# Per-tool px-grid ceiling override for the fetch-resolution gate. The MRLC WCS
+# server rejects/times-out GetCoverage beyond ~4096 px per axis, so the
+# fetch_landcover card must bound its finest selectable rung to 4000 px (margin)
+# rather than the generic MAX_FETCH_PX -- otherwise the card would offer a rung
+# the tool cannot deliver (it clamps to 4000 px and would silently coarsen).
+_FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
+    "fetch_landcover": 4000,
+}
 
 
 def _clamp_fetch_resolution(chosen_m: float, finest_allowed_m: float) -> float:
@@ -6851,7 +6866,13 @@ async def _build_fetch_resolution_envelope(
 
     ladder = _FETCH_RES_LADDERS.get(tool_name, [3.0, 10.0, 30.0])
     ladder_floor = min(ladder)
-    coarse_default = _FETCH_DEFAULT_RES_M
+    coarse_default = (
+        _LANDCOVER_DEFAULT_RES_M
+        if tool_name == "fetch_landcover"
+        else _FETCH_DEFAULT_RES_M
+    )
+    # Per-tool px ceiling (MRLC WCS caps ~4096/axis for fetch_landcover).
+    max_fetch_px = _FETCH_MAX_PX_BY_TOOL.get(tool_name, MAX_FETCH_PX)
 
     # The user's requested rung (the base the readout describes). Defaults to the
     # fetcher's resolution_m default so an absent value matches the fetch.
@@ -6870,7 +6891,7 @@ async def _build_fetch_resolution_envelope(
     width_m = max(0.0, max_lon - min_lon) * m_per_deg_lon
     height_m = max(0.0, max_lat - min_lat) * 111_320.0
     long_axis_m = max(width_m, height_m)
-    finest_allowed_m = max(ladder_floor, long_axis_m / float(MAX_FETCH_PX))
+    finest_allowed_m = max(ladder_floor, long_axis_m / float(max_fetch_px))
 
     # The default-selected rung: the coarse default when it clears the bound,
     # else the finest allowed (so the card never pre-selects an unselectable rung
@@ -6893,10 +6914,10 @@ async def _build_fetch_resolution_envelope(
     resolution_choices = [float(r) for r in candidate if r > 0]
 
     # px-grid estimate at the SUGGESTED rung (pure arithmetic, no read). px_max
-    # raised to MAX_FETCH_PX so a large-AOI estimate is not clamped at the default
-    # 4096; estimated_active_cells = width_px * height_px.
+    # raised to the tool's px ceiling so a large-AOI estimate is not clamped at
+    # the default 4096; estimated_active_cells = width_px * height_px.
     width_px, height_px = bbox_pixel_dims(
-        bbox, suggested, px_min=1, px_max=MAX_FETCH_PX
+        bbox, suggested, px_min=1, px_max=max_fetch_px
     )
     px_estimate = int(width_px) * int(height_px)
 
@@ -6906,14 +6927,19 @@ async def _build_fetch_resolution_envelope(
         f"{long_axis_m / 1000.0:.1f} km AOI (~{px_estimate} px grid). "
         + (
             f"A finer rung is bounded to {finest_allowed_m:.0f} m to keep the "
-            f"grid under {MAX_FETCH_PX} px. "
+            f"grid under {max_fetch_px} px. "
             if finest_bounded
             else ""
         )
         + "Pick a finer or coarser resolution, or confirm."
     )[:512]
 
-    engine = "dem" if tool_name == "fetch_dem" else "topobathy"
+    _ENGINE_BY_TOOL = {
+        "fetch_dem": "dem",
+        "fetch_topobathy": "topobathy",
+        "fetch_landcover": "landcover",
+    }
+    engine = _ENGINE_BY_TOOL.get(tool_name, "topobathy")
     # Local-cloud fingerprint fix (NATE 2026-07-08): the local build must not
     # surface the cloud "fetch (1 vCPU)" compute label on the confirm card --
     # the fetch runs in-process on the local machine, so the compute label is
@@ -6929,7 +6955,7 @@ async def _build_fetch_resolution_envelope(
         estimated_solve_seconds=0.0,
         vcpus=1,
         compute_class=fetch_compute_class,
-        cell_cap=int(MAX_FETCH_PX) ** 2,
+        cell_cap=int(max_fetch_px) ** 2,
         coarsened=False,
         reason=reason,
         spot_label=None,
@@ -6951,7 +6977,7 @@ async def _build_fetch_resolution_envelope(
     fetch_suggestion = SimpleNamespace(
         coarse_default_m=float(suggested),
         finest_allowed_m=float(finest_allowed_m),
-        cap=int(MAX_FETCH_PX) ** 2,
+        cap=int(max_fetch_px) ** 2,
     )
     return envelope, fetch_suggestion
 
@@ -7582,6 +7608,20 @@ async def _gate_on_solver_confirm(
                 envelope,
                 fetch_suggestion,
             ) = await _build_fetch_resolution_envelope(tool_name, params)
+            # fetch_landcover-only: skip the card when NO coarsening is needed
+            # (small AOI: the suggested rung IS the native 30 m grid and the
+            # caller did not request finer). NLCD has no finer-than-native knob,
+            # so a confirm on a small bbox would be pure friction; the gate
+            # exists to surface AUTO-COARSENING (state-scale AOIs) for user
+            # override. fetch_dem/fetch_topobathy keep gating every call
+            # (they have real finer/coarser rungs at any AOI size).
+            if (
+                tool_name == "fetch_landcover"
+                and envelope.granularity is not None
+                and envelope.granularity.suggested_resolution_m
+                <= _LANDCOVER_DEFAULT_RES_M + 1e-9
+            ):
+                return True, params
         elif tool_name == "run_seismic_hazard_psha":
             # NATE 2026-06-26: OpenQuake classical-PSHA solver-confirm card. A
             # SIMPLE proceed/cancel confirm (no granularity/resolution picker):
@@ -8693,12 +8733,14 @@ def _build_spatial_input_request_payload(
         "title": title[:200],
         "description": description[:1024],
     }
-    # purpose (vector_draw only): "barrier" (default, SWMM walls/flap-gates) or
-    # "line" (a NEUTRAL elevation/section line for compute_terrain_profile). Only
-    # forwarded when explicitly "line" so the wire default stays "barrier" and the
-    # existing SWMM draw flow is byte-for-byte unchanged.
-    if call_args.get("purpose") == "line":
-        payload_kwargs["purpose"] = "line"
+    # purpose (vector_draw only): "barrier" (default, SWMM walls/flap-gates),
+    # "line" (a NEUTRAL elevation/section line for compute_terrain_profile), or
+    # "aoi" (area-of-interest selection -- only rect/polygon tools, no line/tag).
+    # Only forwarded when explicitly non-default so the wire default stays
+    # "barrier" and the existing SWMM draw flow is byte-for-byte unchanged.
+    raw_purpose = call_args.get("purpose")
+    if raw_purpose in ("line", "aoi"):
+        payload_kwargs["purpose"] = raw_purpose
     # suggested_view: {bbox: [..4..], zoom: float} — optional camera hint.
     sv = call_args.get("suggested_view")
     if isinstance(sv, dict) and isinstance(sv.get("bbox"), (list, tuple)):

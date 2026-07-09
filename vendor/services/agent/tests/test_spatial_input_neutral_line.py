@@ -257,3 +257,60 @@ def test_tool_rejects_bad_purpose():
     assert out["status"] == "error"
     assert out["error_code"] == "SPATIAL_INPUT_PARAMS_INVALID"
     assert SPATIAL_INPUT_SENTINEL_KEY not in out
+
+
+def test_tool_rides_purpose_aoi_in_sentinel():
+    """purpose='aoi' is accepted and the emitted sentinel carries purpose='aoi'.
+
+    This is the fix for the live bug (session 01KX41AFRWWCGTKBYPVYYWHT70) where
+    the model correctly called request_spatial_input(purpose='aoi') to ask the
+    user to draw an area of interest but got SPATIAL_INPUT_PARAMS_INVALID
+    (aoi was not in _VALID_PURPOSES).  The model then retried with purpose='barrier'
+    which is semantically wrong for an AOI selection request.
+    """
+    from grace2_agent.tools.spatial_input_tool import (
+        SPATIAL_INPUT_SENTINEL_KEY,
+        request_spatial_input,
+    )
+
+    out = asyncio.run(
+        request_spatial_input(
+            mode="vector_draw",
+            purpose="aoi",
+            title="Draw the study area",
+            description="Draw a rectangle or polygon over the region to analyse.",
+        )
+    )
+    # Must succeed (sentinel, not an error dict).
+    assert out.get(SPATIAL_INPUT_SENTINEL_KEY) is True, (
+        f"expected sentinel, got: {out}"
+    )
+    assert out["mode"] == "vector_draw"
+    assert out["purpose"] == "aoi"
+    # Must NOT return an error.
+    assert "status" not in out or out.get("status") != "error"
+
+
+def test_tool_aoi_purpose_does_not_emit_barrier_sentinel():
+    """purpose='aoi' sentinel must differ from purpose='barrier'.
+
+    Regression guard: a model using purpose='aoi' must not accidentally produce
+    the same wire payload as the SWMM barrier flow.
+    """
+    from grace2_agent.tools.spatial_input_tool import (
+        SPATIAL_INPUT_SENTINEL_KEY,
+        request_spatial_input,
+    )
+
+    aoi_out = asyncio.run(
+        request_spatial_input(mode="vector_draw", purpose="aoi", title="t", description="d")
+    )
+    barrier_out = asyncio.run(
+        request_spatial_input(mode="vector_draw", purpose="barrier", title="t", description="d")
+    )
+    # Both produce a valid sentinel.
+    assert aoi_out.get(SPATIAL_INPUT_SENTINEL_KEY) is True
+    assert barrier_out.get(SPATIAL_INPUT_SENTINEL_KEY) is True
+    # But the purpose field differs so the server routes them to different UI paths.
+    assert aoi_out["purpose"] == "aoi"
+    assert barrier_out["purpose"] == "barrier"

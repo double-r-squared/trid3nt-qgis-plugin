@@ -17,6 +17,7 @@
 // (or a cancel) through the spatial-input bus to Chat.tsx, the reply owner.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useIsMobile } from "../hooks/useIsMobile";
 import type { Map as MapLibreMap, MapMouseEvent, GeoJSONSource } from "maplibre-gl";
 import type {
   BarrierType,
@@ -91,12 +92,21 @@ export function SpatialDrawSurface({
   onCancel,
   drawDeps,
 }: SpatialDrawSurfaceProps): JSX.Element {
+  // Mobile-scoped layout gate (MOBILE ONLY -- desktop layout is byte-for-byte
+  // unchanged). Matches the project-wide mobile breakpoint (<768px).
+  const isMobile = useIsMobile();
+
   const isVectorDraw = request.mode === "vector_draw";
   // NEUTRAL-LINE request (purpose="line"): the user draws ONE plain elevation /
   // section LineString (for compute_terrain_profile) with NO wall/flap_gate
   // tagging. ADDITIVE + gated on the request -- the default (barrier) SWMM flow
   // is byte-for-byte unchanged.
   const isNeutralLine = isVectorDraw && request.purpose === "line";
+  // AOI request (purpose="aoi"): the user draws a rectangle or polygon to
+  // outline an area of interest. Only rect/polygon tools shown; no line/barrier
+  // tool, no tagging required. Submit gates on >= 1 polygon drawn. Drawn
+  // polygons carry role="aoi" (same as the barrier flow -- no barrier semantics).
+  const isNeutralAoi = isVectorDraw && request.purpose === "aoi";
 
   // --- vector_draw: DrawController lifecycle ----------------------------- //
   const controllerRef = useRef<DrawController | null>(null);
@@ -144,7 +154,9 @@ export function SpatialDrawSurface({
     if (!isVectorDraw) return;
     // NEUTRAL-LINE mode (purpose="line"): the controller reads back untagged
     // LineStrings as role="line" (not barrier), and the surface starts in the
-    // line tool. Default (barrier) behavior is unchanged.
+    // line tool. AOI mode (purpose="aoi"): starts in rectangle mode, no
+    // neutralLine flag needed (polygons always get role="aoi"). Default
+    // (barrier) behavior is unchanged.
     const controller = new DrawController(map, {
       ...drawDeps,
       neutralLine: isNeutralLine || drawDeps?.neutralLine,
@@ -157,10 +169,9 @@ export function SpatialDrawSurface({
     const refresh = (): void => setCounts(controller.counts());
     const unsubChange = controller.onChanged(refresh);
     const unsubSelect = controller.onSelected((id) => {
-      // NEUTRAL-LINE mode never opens the barrier tag popover (a neutral line is
-      // submitted plain -- no wall/flap_gate tagging). In the default barrier
-      // flow, only barrier LineStrings get the tag popover.
-      if (isNeutralLine) {
+      // NEUTRAL-LINE and AOI modes never open the barrier tag popover. In the
+      // default barrier flow, only barrier LineStrings get the tag popover.
+      if (isNeutralLine || isNeutralAoi) {
         setTagTarget(null);
         return;
       }
@@ -180,7 +191,7 @@ export function SpatialDrawSurface({
       setTagTarget(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVectorDraw, request.request_id]);
+  }, [isVectorDraw, isNeutralAoi, request.request_id]);
 
   // --- point / bbox pick-mode handlers ----------------------------------- //
   useEffect(() => {
@@ -315,6 +326,11 @@ export function SpatialDrawSurface({
       if (isNeutralLine) {
         return counts.line > 0 ? null : "Draw a line on the map to submit";
       }
+      // AOI mode: submit gates on having drawn at least one polygon. No barrier
+      // tagging involved; the line/barrier tool is not shown.
+      if (isNeutralAoi) {
+        return counts.aoi > 0 ? null : "Draw an area on the map to submit";
+      }
       if (counts.untaggedBarrier > 0) {
         return "Tag every barrier as wall or flap-gate to submit";
       }
@@ -324,11 +340,296 @@ export function SpatialDrawSurface({
       return null;
     }
     return pickCoords !== null ? null : "Pick a location on the map to submit";
-  }, [isVectorDraw, isNeutralLine, counts, pickCoords]);
+  }, [isVectorDraw, isNeutralLine, isNeutralAoi, counts, pickCoords]);
 
   const canSubmit = submitBlockReason === null;
 
   // --- Render ------------------------------------------------------------ //
+
+  // Shared toolbar content for the three draw modes. Extracted so it renders
+  // identically whether we're in the mobile (flex-column) or desktop (absolute)
+  // layout path.
+  const toolbarContent = isVectorDraw && isNeutralLine ? (
+    // NEUTRAL-LINE toolbar (purpose="line"): plain elevation/section line only.
+    // ADDITIVE -- the default barrier toolbar below is unchanged.
+    <div data-testid="spatial-draw-toolbar" style={isMobile ? toolbarStyleMobile : toolbarStyle}>
+      <ToolbarBtn
+        label="Line"
+        active={activeMode === "linestring"}
+        onClick={() => handleSetMode("linestring")}
+        icon={<IconLine size={16} />}
+        testid="draw-mode-linestring"
+      />
+      <ToolbarBtn
+        label="Select / edit"
+        active={activeMode === "select"}
+        onClick={() => handleSetMode("select")}
+        icon={<IconMapPin size={16} />}
+        testid="draw-mode-select"
+      />
+      <ToolbarBtn
+        label="Clear all"
+        onClick={handleClear}
+        icon={<IconClose size={16} />}
+        testid="draw-clear"
+      />
+      <span data-testid="draw-counts" style={countsStyle}>
+        {counts.line} line{counts.line === 1 ? "" : "s"}
+      </span>
+    </div>
+  ) : isVectorDraw && isNeutralAoi ? (
+    // AOI toolbar (purpose="aoi"): rect + polygon only; no line/barrier tool,
+    // no tagging required. MOBILE-SCOPED changes affect layout only -- the
+    // toolbar buttons are the same on desktop and mobile.
+    <div data-testid="spatial-draw-toolbar" style={isMobile ? toolbarStyleMobile : toolbarStyle}>
+      <ToolbarBtn
+        label="Rectangle (AOI)"
+        active={activeMode === "rectangle"}
+        onClick={() => handleSetMode("rectangle")}
+        icon={<IconBbox size={16} />}
+        testid="draw-mode-rectangle"
+      />
+      <ToolbarBtn
+        label="Polygon (AOI)"
+        active={activeMode === "polygon"}
+        onClick={() => handleSetMode("polygon")}
+        icon={<IconPolygon size={16} />}
+        testid="draw-mode-polygon"
+      />
+      <ToolbarBtn
+        label="Select / edit"
+        active={activeMode === "select"}
+        onClick={() => handleSetMode("select")}
+        icon={<IconMapPin size={16} />}
+        testid="draw-mode-select"
+      />
+      <ToolbarBtn
+        label="Clear all"
+        onClick={handleClear}
+        icon={<IconClose size={16} />}
+        testid="draw-clear"
+      />
+      <span data-testid="draw-counts" style={countsStyle}>
+        {counts.aoi} AOI
+      </span>
+    </div>
+  ) : isVectorDraw ? (
+    // Default barrier toolbar (purpose="barrier" or absent -- the SWMM flow).
+    // Desktop layout is byte-for-byte unchanged.
+    <div data-testid="spatial-draw-toolbar" style={isMobile ? toolbarStyleMobile : toolbarStyle}>
+      <ToolbarBtn
+        label="Rectangle (AOI)"
+        active={activeMode === "rectangle"}
+        onClick={() => handleSetMode("rectangle")}
+        icon={<IconBbox size={16} />}
+        testid="draw-mode-rectangle"
+      />
+      <ToolbarBtn
+        label="Polygon (AOI)"
+        active={activeMode === "polygon"}
+        onClick={() => handleSetMode("polygon")}
+        icon={<IconPolygon size={16} />}
+        testid="draw-mode-polygon"
+      />
+      <ToolbarBtn
+        label="Line (barrier)"
+        active={activeMode === "linestring"}
+        onClick={() => handleSetMode("linestring")}
+        icon={<IconLine size={16} />}
+        testid="draw-mode-linestring"
+      />
+      <ToolbarBtn
+        label="Select / edit"
+        active={activeMode === "select"}
+        onClick={() => handleSetMode("select")}
+        icon={<IconMapPin size={16} />}
+        testid="draw-mode-select"
+      />
+      <div style={{ width: 1, background: "rgba(255,255,255,0.12)", margin: "2px 4px" }} />
+      <ToolbarBtn
+        label="Discard tiny polygons"
+        onClick={handleDiscardSmall}
+        icon={<IconWarning size={16} />}
+        testid="draw-discard-small"
+      />
+      <ToolbarBtn
+        label="Clear all"
+        onClick={handleClear}
+        icon={<IconClose size={16} />}
+        testid="draw-clear"
+      />
+      <span data-testid="draw-counts" style={countsStyle}>
+        {counts.aoi} AOI · {counts.barrier} barrier
+        {counts.untaggedBarrier > 0 ? ` (${counts.untaggedBarrier} untagged)` : ""}
+      </span>
+    </div>
+  ) : null;
+
+  // discard control (barrier flow only, not shown for neutral-line or aoi).
+  const discardControl = isVectorDraw && !isNeutralLine && !isNeutralAoi ? (
+    <div data-testid="spatial-draw-discard-control" style={isMobile ? discardControlStyleMobile : discardControlStyle}>
+      <label style={{ fontSize: 11, color: "#cbd5e1" }}>
+        Min polygon area: {discardArea} m{"²"}
+        <input
+          type="range"
+          data-testid="draw-discard-slider"
+          min={0}
+          max={5000}
+          step={50}
+          value={discardArea}
+          onChange={(e) => setDiscardArea(Number(e.target.value))}
+          style={{ display: "block", width: 160 }}
+        />
+      </label>
+      {discardNotice && (
+        <span data-testid="draw-discard-notice" style={{ fontSize: 11, color: "#fbbf24" }}>
+          {discardNotice}
+        </span>
+      )}
+    </div>
+  ) : null;
+
+  // Submit + Cancel buttons (identical in both layouts).
+  const actionButtons = (
+    <div data-testid="spatial-draw-actions" style={isMobile ? actionsStyleMobile : actionsStyle}>
+      {submitBlockReason && (
+        <span
+          data-testid="spatial-draw-submit-reason"
+          role="status"
+          style={submitReasonStyle}
+        >
+          <IconWarning size={13} color="#fbbf24" />
+          {submitBlockReason}
+        </span>
+      )}
+      <div style={{ display: "flex", gap: 10 }}>
+        <button
+          type="button"
+          data-testid="spatial-draw-cancel"
+          onClick={handleCancel}
+          style={cancelBtnStyle}
+        >
+          <IconClose size={14} /> Cancel
+        </button>
+        <button
+          type="button"
+          data-testid="spatial-draw-submit"
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          title={submitBlockReason ?? undefined}
+          style={submitBtnStyle(canSubmit)}
+        >
+          <IconCheck size={14} /> Submit
+        </button>
+      </div>
+    </div>
+  );
+
+  if (isMobile) {
+    // MOBILE-SCOPED layout (isMobile === true). Stacks vertically with real flow
+    // (flex column) instead of colliding absolutes. Banner pinned at top;
+    // toolbar below banner; discard slider below toolbar (barrier flow only).
+    // Bottom-center actions remain absolute (always outside the top flex stack).
+    // Desktop (isMobile === false) is the existing absolute layout, byte-for-byte.
+    return (
+      <div data-testid="spatial-draw-surface" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {/* Top stack: banner -> toolbar -> (optional) discard control */}
+        <div
+          data-testid="spatial-draw-top-stack"
+          style={{
+            position: "absolute",
+            top: 8,
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 6,
+            maxWidth: "calc(100vw - 16px)",
+            pointerEvents: "none",
+            zIndex: 5,
+          }}
+        >
+          {/* Banner: title + description, capped so it can't push the toolbar off */}
+          <div data-testid="spatial-draw-banner" style={bannerStyleMobile}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <IconBbox size={15} color={PICK_COLOR} />
+              <span style={{ fontWeight: 600 }}>{request.title}</span>
+            </span>
+            <span style={{ color: "#cbd5e1", fontSize: 12, overflowY: "auto", maxHeight: 60 }}>
+              {request.description}
+            </span>
+          </div>
+
+          {/* Toolbar immediately below the banner (no hardcoded top offset) */}
+          {toolbarContent}
+
+          {/* Discard control (barrier flow only) below toolbar on mobile */}
+          {discardControl}
+        </div>
+
+        {/* Tagging popover: absolute but pushed below top-stack via marginTop;
+            on mobile we anchor it to center with a fixed top offset below the
+            typical stack height. */}
+        {isVectorDraw && tagTarget && (
+          <div data-testid="spatial-draw-tag-popover" style={tagPopoverStyleMobile}>
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Tag barrier segment</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                data-testid="tag-wall"
+                onClick={() => handleTag("wall")}
+                style={tagBtnStyle("#e53935")}
+              >
+                Wall (red)
+              </button>
+              <button
+                type="button"
+                data-testid="tag-flap-gate"
+                onClick={() => handleTag("flap_gate")}
+                style={tagBtnStyle("#43a047")}
+              >
+                Flap gate (green)
+              </button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+              <IconFlowArrow size={14} color="#cbd5e1" />
+              <span style={{ fontSize: 11, color: "#cbd5e1" }}>Flap direction:</span>
+              <button
+                type="button"
+                data-testid="flap-dir-out"
+                onClick={() => setFlapDirection("out")}
+                style={dirBtnStyle(flapDirection === "out")}
+              >
+                out
+              </button>
+              <button
+                type="button"
+                data-testid="flap-dir-in"
+                onClick={() => setFlapDirection("in")}
+                style={dirBtnStyle(flapDirection === "in")}
+              >
+                in
+              </button>
+            </div>
+            <button
+              type="button"
+              data-testid="tag-snip"
+              onClick={handleSnip}
+              style={{ ...dirBtnStyle(false), marginTop: 8, display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              <IconSnip size={13} /> Snip this segment
+            </button>
+          </div>
+        )}
+
+        {/* Submit + Cancel pinned bottom-center */}
+        {actionButtons}
+      </div>
+    );
+  }
+
+  // --- DESKTOP layout (isMobile === false) -- byte-for-byte unchanged ------- //
   return (
     <div data-testid="spatial-draw-surface" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
       {/* Banner (reused FR-WC-13 pick-mode banner pattern). */}
@@ -340,87 +641,8 @@ export function SpatialDrawSurface({
         <span style={{ color: "#cbd5e1", fontSize: 12 }}>{request.description}</span>
       </div>
 
-      {/* vector_draw NEUTRAL-LINE toolbar (purpose="line"): just draw a plain
-          elevation/section line -- no AOI/barrier/tag affordances. ADDITIVE; the
-          default barrier toolbar below is unchanged. */}
-      {isVectorDraw && isNeutralLine && (
-        <div data-testid="spatial-draw-toolbar" style={toolbarStyle}>
-          <ToolbarBtn
-            label="Line"
-            active={activeMode === "linestring"}
-            onClick={() => handleSetMode("linestring")}
-            icon={<IconLine size={16} />}
-            testid="draw-mode-linestring"
-          />
-          <ToolbarBtn
-            label="Select / edit"
-            active={activeMode === "select"}
-            onClick={() => handleSetMode("select")}
-            icon={<IconMapPin size={16} />}
-            testid="draw-mode-select"
-          />
-          <ToolbarBtn
-            label="Clear all"
-            onClick={handleClear}
-            icon={<IconClose size={16} />}
-            testid="draw-clear"
-          />
-          <span data-testid="draw-counts" style={countsStyle}>
-            {counts.line} line{counts.line === 1 ? "" : "s"}
-          </span>
-        </div>
-      )}
-
-      {/* vector_draw toolbar (default barrier flow). */}
-      {isVectorDraw && !isNeutralLine && (
-        <div data-testid="spatial-draw-toolbar" style={toolbarStyle}>
-          <ToolbarBtn
-            label="Rectangle (AOI)"
-            active={activeMode === "rectangle"}
-            onClick={() => handleSetMode("rectangle")}
-            icon={<IconBbox size={16} />}
-            testid="draw-mode-rectangle"
-          />
-          <ToolbarBtn
-            label="Polygon (AOI)"
-            active={activeMode === "polygon"}
-            onClick={() => handleSetMode("polygon")}
-            icon={<IconPolygon size={16} />}
-            testid="draw-mode-polygon"
-          />
-          <ToolbarBtn
-            label="Line (barrier)"
-            active={activeMode === "linestring"}
-            onClick={() => handleSetMode("linestring")}
-            icon={<IconLine size={16} />}
-            testid="draw-mode-linestring"
-          />
-          <ToolbarBtn
-            label="Select / edit"
-            active={activeMode === "select"}
-            onClick={() => handleSetMode("select")}
-            icon={<IconMapPin size={16} />}
-            testid="draw-mode-select"
-          />
-          <div style={{ width: 1, background: "rgba(255,255,255,0.12)", margin: "2px 4px" }} />
-          <ToolbarBtn
-            label="Discard tiny polygons"
-            onClick={handleDiscardSmall}
-            icon={<IconWarning size={16} />}
-            testid="draw-discard-small"
-          />
-          <ToolbarBtn
-            label="Clear all"
-            onClick={handleClear}
-            icon={<IconClose size={16} />}
-            testid="draw-clear"
-          />
-          <span data-testid="draw-counts" style={countsStyle}>
-            {counts.aoi} AOI · {counts.barrier} barrier
-            {counts.untaggedBarrier > 0 ? ` (${counts.untaggedBarrier} untagged)` : ""}
-          </span>
-        </div>
-      )}
+      {/* Toolbar (all three modes use the toolbarContent shared node above). */}
+      {toolbarContent}
 
       {/* Tagging popover (vector_draw select a barrier segment). */}
       {isVectorDraw && tagTarget && (
@@ -475,64 +697,11 @@ export function SpatialDrawSurface({
         </div>
       )}
 
-      {/* discard-area control + notice. (Not shown for a neutral-line draw --
-          there are no polygons to discard.) */}
-      {isVectorDraw && !isNeutralLine && (
-        <div data-testid="spatial-draw-discard-control" style={discardControlStyle}>
-          <label style={{ fontSize: 11, color: "#cbd5e1" }}>
-            Min polygon area: {discardArea} m²
-            <input
-              type="range"
-              data-testid="draw-discard-slider"
-              min={0}
-              max={5000}
-              step={50}
-              value={discardArea}
-              onChange={(e) => setDiscardArea(Number(e.target.value))}
-              style={{ display: "block", width: 160 }}
-            />
-          </label>
-          {discardNotice && (
-            <span data-testid="draw-discard-notice" style={{ fontSize: 11, color: "#fbbf24" }}>
-              {discardNotice}
-            </span>
-          )}
-        </div>
-      )}
+      {/* discard-area control + notice. */}
+      {discardControl}
 
       {/* Submit + Cancel (pinned bottom-center). */}
-      <div data-testid="spatial-draw-actions" style={actionsStyle}>
-        {submitBlockReason && (
-          <span
-            data-testid="spatial-draw-submit-reason"
-            role="status"
-            style={submitReasonStyle}
-          >
-            <IconWarning size={13} color="#fbbf24" />
-            {submitBlockReason}
-          </span>
-        )}
-        <div style={{ display: "flex", gap: 10 }}>
-          <button
-            type="button"
-            data-testid="spatial-draw-cancel"
-            onClick={handleCancel}
-            style={cancelBtnStyle}
-          >
-            <IconClose size={14} /> Cancel
-          </button>
-          <button
-            type="button"
-            data-testid="spatial-draw-submit"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            title={submitBlockReason ?? undefined}
-            style={submitBtnStyle(canSubmit)}
-          >
-            <IconCheck size={14} /> Submit
-          </button>
-        </div>
-      </div>
+      {actionButtons}
     </div>
   );
 }
@@ -685,6 +854,8 @@ function clearPickLayers(map: MapLibreMap): void {
 
 // --- Styles --------------------------------------------------------------- //
 
+// Desktop layout styles (byte-for-byte unchanged from before the mobile fix).
+
 const bannerStyle: React.CSSProperties = {
   position: "absolute",
   top: 12,
@@ -772,6 +943,93 @@ const actionsStyle: React.CSSProperties = {
   gap: 8,
   pointerEvents: "auto",
   zIndex: 6,
+};
+
+// MOBILE-SCOPED layout styles (used only when isMobile === true).
+// The flex-column top-stack in the mobile render path owns the actual
+// positioning; these child styles drop the absolute/top/left overrides and
+// use natural flow width so the stacking container controls placement.
+
+const bannerStyleMobile: React.CSSProperties = {
+  // No position/top/left -- the parent flex column positions this.
+  background: "rgba(20,20,26,0.92)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 8,
+  boxShadow: "0 4px 14px rgba(0,0,0,0.4)",
+  color: "#e5e7eb",
+  padding: "8px 14px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 3,
+  fontSize: 13,
+  fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+  // Cap width so banner never bleeds off screen on narrow phones.
+  maxWidth: "calc(100vw - 16px)",
+  width: "100%",
+  boxSizing: "border-box",
+  pointerEvents: "auto",
+};
+
+const toolbarStyleMobile: React.CSSProperties = {
+  // No position/top/left -- flows below banner in the flex column container.
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 4,
+  background: "rgba(20,20,26,0.85)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 8,
+  padding: 5,
+  maxWidth: "calc(100vw - 16px)",
+  pointerEvents: "auto",
+};
+
+const discardControlStyleMobile: React.CSSProperties = {
+  // No position/top/right -- flows below toolbar in the flex column.
+  background: "rgba(20,20,26,0.85)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 8,
+  padding: 8,
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  maxWidth: "calc(100vw - 16px)",
+  pointerEvents: "auto",
+  fontFamily: "system-ui, sans-serif",
+};
+
+// Tag popover on mobile: anchored near top with enough offset to clear the
+// typical banner+toolbar stack. The stack can be up to ~180px tall; we use
+// 196px so even a wrapped toolbar clears.
+const tagPopoverStyleMobile: React.CSSProperties = {
+  position: "absolute",
+  top: 196,
+  left: "50%",
+  transform: "translateX(-50%)",
+  background: "rgba(20,20,26,0.95)",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 8,
+  boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
+  color: "#e5e7eb",
+  padding: 12,
+  maxWidth: "calc(100vw - 16px)",
+  pointerEvents: "auto",
+  zIndex: 6,
+  fontFamily: "system-ui, sans-serif",
+};
+
+const actionsStyleMobile: React.CSSProperties = {
+  position: "absolute",
+  bottom: 18,
+  left: "50%",
+  transform: "translateX(-50%)",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  pointerEvents: "auto",
+  zIndex: 6,
+  maxWidth: "calc(100vw - 16px)",
 };
 
 // Honest "why is Submit disabled" note pinned above the action buttons —

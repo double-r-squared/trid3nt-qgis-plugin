@@ -810,10 +810,12 @@ export interface SpatialInputRequestPayload {
   title: string;
   description: string;
   // vector_draw only. "barrier" (default, SWMM walls/flap-gates -- drawn lines
-  // MUST be tagged) or "line" (a NEUTRAL elevation/section line for
-  // compute_terrain_profile -- drawn line submitted plain, no tagging required).
+  // MUST be tagged), "line" (a NEUTRAL elevation/section line for
+  // compute_terrain_profile -- drawn line submitted plain, no tagging required),
+  // or "aoi" (area-of-interest selection -- only rect/polygon tools shown, no
+  // line/tagging, submit gates on >= 1 polygon drawn).
   // Optional/absent => "barrier" (the existing flow is byte-for-byte unchanged).
-  purpose?: "barrier" | "line";
+  purpose?: "barrier" | "line" | "aoi";
   suggested_view?: SuggestedView | null;       // camera hint for the pick
   reference_layers?: ReferenceLayer[];          // optional helper layers
   default_timeout_seconds?: number;             // fail-open timeout (default 300)

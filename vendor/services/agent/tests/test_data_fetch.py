@@ -1791,7 +1791,7 @@ def test_fetch_landcover_returns_nlcd_vintage_year_sidecar(monkeypatch):
     monkeypatch.setattr(
         data_fetch,
         "_fetch_nlcd_landcover_bytes",
-        lambda bbox, year: b"FAKE_NLCD_GEOTIFF_BYTES",
+        lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
     )
     monkeypatch.setattr(
         data_fetch,
@@ -1829,7 +1829,7 @@ def test_fetch_landcover_routes_through_read_through_writes_cache(monkeypatch):
     monkeypatch.setattr(
         data_fetch,
         "_fetch_nlcd_landcover_bytes",
-        lambda bbox, year: b"FAKE_NLCD_GEOTIFF_BYTES",
+        lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
     )
     monkeypatch.setattr(
         data_fetch,
@@ -1863,7 +1863,7 @@ def test_fetch_landcover_quantizes_bbox_to_30m_nlcd_grid(monkeypatch):
     monkeypatch.setattr(
         data_fetch,
         "_fetch_nlcd_landcover_bytes",
-        lambda bbox, year: b"FAKE_NLCD_GEOTIFF_BYTES",
+        lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
     )
     monkeypatch.setattr(
         data_fetch,
@@ -1904,10 +1904,15 @@ def test_fetch_landcover_esa_worldcover_not_implemented(monkeypatch):
 
 
 def test_fetch_landcover_rejects_oversized_bbox():
-    """The 10000 km^2 guardrail rejects unrealistic single-call bboxes."""
-    huge = (-100.0, 25.0, -80.0, 45.0)  # ~2.2M km^2
+    """The 5,000,000 km^2 hard ceiling rejects continent-scale bboxes.
+
+    State/multi-state bboxes (the old 10,000 km^2 hard-fail zone) are now
+    served via auto-coarsened resolution through the fetch-resolution gate;
+    only continent-scale requests still hard-fail.
+    """
+    continent = (-125.0, 24.0, -66.0, 50.0)  # whole CONUS, ~ 16M km^2
     with pytest.raises(BboxInvalidError):
-        fetch_landcover(huge, dataset="nlcd_2021")
+        fetch_landcover(continent, dataset="nlcd_2021")
 
 
 # ---------------------------------------------------------------------------
@@ -1955,7 +1960,7 @@ def test_fetch_landcover_cache_key_source_is_mrlc_wcs(monkeypatch):
     monkeypatch.setattr(
         data_fetch,
         "_fetch_nlcd_landcover_bytes",
-        lambda bbox, year: b"FAKE_NLCD_GEOTIFF_BYTES_WCS",
+        lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES_WCS",
     )
     monkeypatch.setattr(
         data_fetch,
@@ -2056,7 +2061,7 @@ def test_fetch_landcover_writes_cache_at_new_salted_key(monkeypatch):
     monkeypatch.setattr(
         data_fetch,
         "_fetch_nlcd_landcover_bytes",
-        lambda bbox, year: b"FAKE_NLCD_GEOTIFF_BYTES_PALETTE_PRESERVED",
+        lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES_PALETTE_PRESERVED",
     )
     monkeypatch.setattr(
         data_fetch,
@@ -2073,6 +2078,9 @@ def test_fetch_landcover_writes_cache_at_new_salted_key(monkeypatch):
         "bbox": list(quantized),
         "dataset": "nlcd_2021",
         "source": "mrlc-wcs",
+        # Auto-coarsen feature: params now carry the effective resolution
+        # (30 m native for a small bbox like Fort Myers).
+        "resolution_m": 30,
         "cache_version": data_fetch._LANDCOVER_CACHE_VERSION,
     }
     expected_key = compute_cache_key(
