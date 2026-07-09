@@ -203,6 +203,10 @@ class AgentWorker(QObject):
         if self.client is not None:
             self.client.select_case(case_id)
 
+    def case_command(self, command: str, case_id: Optional[str] = None) -> None:
+        if self.client is not None:
+            self.client.case_command(command, case_id=case_id)
+
     def refresh_case_list(self) -> bool:
         if self.client is not None:
             return self.client.request_case_list_refresh()
@@ -298,6 +302,10 @@ class AgentBridge(QObject):
     def select_case(self, case_id: str) -> None:
         if self._worker is not None:
             self._worker.select_case(case_id)
+
+    def case_command(self, command: str, case_id: Optional[str] = None) -> None:
+        if self._worker is not None:
+            self._worker.case_command(command, case_id=case_id)
 
     def refresh_case_list(self) -> bool:
         if self._worker is not None:

@@ -315,6 +315,143 @@ class TestCaseSelect(unittest.TestCase):
         self.assertEqual(info.case_id, "01OK")
         self.assertEqual(info.title, "01OK")  # falls back to the id
         self.assertEqual(info.layers, [])
+        self.assertIsNone(info.bbox)  # no bbox on the row -> honest None
+
+    # -- item 1 (live-feedback 2026-07-09): case-open bbox extraction ---------- #
+
+    def test_parse_case_open_bbox_present(self):
+        info = tc.parse_case_open(
+            {
+                "session_state": {
+                    "case": {
+                        "case_id": "01OK",
+                        "title": "Asheville flood",
+                        "bbox": [-82.6, 35.55, -82.5, 35.65],
+                    },
+                    "loaded_layers": [],
+                }
+            }
+        )
+        self.assertIsNotNone(info)
+        self.assertEqual(info.bbox, (-82.6, 35.55, -82.5, 35.65))
+        # every element is a float regardless of int/float mix on the wire
+        self.assertTrue(all(isinstance(v, float) for v in info.bbox))
+
+    def test_parse_case_open_bbox_absent(self):
+        info = tc.parse_case_open(
+            {"session_state": {"case": {"case_id": "01OK"}, "loaded_layers": []}}
+        )
+        self.assertIsNotNone(info)
+        self.assertIsNone(info.bbox)
+
+    def test_parse_case_open_bbox_malformed(self):
+        # Wrong length, non-numeric elements, and a non-list value all yield
+        # an honest None on the field -- never a raise, never a fabricated
+        # bbox.
+        for bad_bbox in (
+            [-82.6, 35.55, -82.5],  # only 3 elements
+            [-82.6, 35.55, -82.5, "not-a-number"],
+            "not-a-list",
+            42,
+            None,
+        ):
+            info = tc.parse_case_open(
+                {
+                    "session_state": {
+                        "case": {"case_id": "01OK", "bbox": bad_bbox},
+                        "loaded_layers": [],
+                    }
+                }
+            )
+            self.assertIsNotNone(info)
+            self.assertIsNone(info.bbox, f"bbox={bad_bbox!r} should parse to None")
+
+    def test_parse_case_open_bbox_int_elements_coerced_to_float(self):
+        info = tc.parse_case_open(
+            {
+                "session_state": {
+                    "case": {"case_id": "01OK", "bbox": [-83, 35, -82, 36]},
+                    "loaded_layers": [],
+                }
+            }
+        )
+        self.assertEqual(info.bbox, (-83.0, 35.0, -82.0, 36.0))
+
+
+# --------------------------------------------------------------------------- #
+# Generic case-command (create/delete) -- item 2/3 (live-feedback 2026-07-09)
+# --------------------------------------------------------------------------- #
+
+
+class TestCaseCommandCreateDelete(unittest.TestCase):
+    """``AgentClient.case_command`` -- the New/Delete case plumbing.
+
+    Unlike ``create_case`` (blocking, used only during the initial connect
+    handshake), ``case_command`` sends without waiting: the reply flows
+    through the normal ``next_event`` pump like ``select_case``'s does.
+    """
+
+    def setUp(self):
+        self.server = StubAgentServer()
+        self.server.start()
+        self.addCleanup(self.server.stop)
+        self.client = tc.AgentClient(self.server.url)
+        self.addCleanup(self.client.close)
+        self.client.connect()
+        self.client.create_case("case-command test")
+
+    def _await_kind(self, kind, deadline_s=10.0):
+        deadline = time.monotonic() + deadline_s
+        while time.monotonic() < deadline:
+            ev = self.client.next_event(timeout=1.0)
+            if ev is not None and ev.kind == kind:
+                return ev
+        self.fail(f"no {kind!r} event within {deadline_s}s")
+
+    def test_create_sends_no_case_id_and_yields_case_open(self):
+        self.client.case_command("create")
+        ev = self._await_kind("case-open")
+        info = tc.parse_case_open(ev.data)
+        self.assertIsNotNone(info)  # the stub's create branch always rehydrates
+        create_frames = [
+            e
+            for e in self.server.received
+            if e["type"] == "case-command" and e["payload"].get("command") == "create"
+        ]
+        # one from setUp's create_case, one from this test's case_command
+        self.assertEqual(len(create_frames), 2)
+        sent = create_frames[-1]
+        self.assertNotIn("case_id", sent["payload"])
+        self.assertEqual(sent["payload"]["args"], {})
+        self.assertIsNone(sent["case_id"])  # envelope-level case_id too
+
+    def test_delete_sends_case_id(self):
+        target = CASE_LIST_ROWS[0]["case_id"]
+        self.client.case_command("delete", target)
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            frames = [
+                e
+                for e in self.server.received
+                if e["type"] == "case-command"
+                and e["payload"].get("command") == "delete"
+            ]
+            if frames:
+                break
+            time.sleep(0.05)
+        else:
+            self.fail("no delete case-command observed by the stub server")
+        sent = frames[-1]
+        self.assertEqual(sent["payload"]["case_id"], target)
+        self.assertEqual(sent["payload"]["args"], {})
+        self.assertEqual(sent["case_id"], target)  # envelope-level case_id set
+
+    def test_case_command_queues_when_disconnected(self):
+        """Mirrors select_case's queue-if-closed: a command tapped mid-
+        reconnect must not be silently dropped."""
+        client = tc.AgentClient("ws://127.0.0.1:1/ws")  # never connected
+        client.case_command("create")
+        self.assertEqual(client.queued_outbound, 1)
 
 
 # --------------------------------------------------------------------------- #
@@ -681,6 +818,92 @@ class TestShowThinkingSettings(unittest.TestCase):
             self.assertEqual(FakeQSettings.store.get("trid3nt/show_thinking"), "false")
             s.show_thinking = True
             self.assertEqual(FakeQSettings.store.get("trid3nt/show_thinking"), "true")
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    sys.modules.pop(k, None)
+                else:
+                    sys.modules[k] = v
+
+
+class TestAutoBasemapSettings(unittest.TestCase):
+    """Item 4 (live-feedback 2026-07-09): auto_basemap preference in
+    plugin_settings -- same shape as TestShowThinkingSettings above."""
+
+    def _make_settings(self, stored: dict = None):
+        import types
+        import importlib
+
+        class FakeQSettings:
+            store: dict = {}
+
+            def value(self, key, default=None):
+                return self.store.get(key, default)
+
+            def setValue(self, key, value):
+                self.store[key] = value
+
+        FakeQSettings.store = stored or {}
+        qtcore = types.ModuleType("qgis.PyQt.QtCore")
+        qtcore.QSettings = FakeQSettings
+        pyqt = types.ModuleType("qgis.PyQt")
+        pyqt.QtCore = qtcore
+        qgis_mod = types.ModuleType("qgis")
+        qgis_mod.PyQt = pyqt
+        saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
+        sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
+        try:
+            sys.modules.pop("plugin_settings", None)
+            return importlib.import_module("plugin_settings").PluginSettings()
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    sys.modules.pop(k, None)
+                else:
+                    sys.modules[k] = v
+
+    def test_default_is_true(self):
+        s = self._make_settings()
+        self.assertTrue(s.auto_basemap, "auto_basemap must default to True")
+
+    def test_explicit_false_stored(self):
+        s = self._make_settings({"trid3nt/auto_basemap": "false"})
+        self.assertFalse(s.auto_basemap)
+
+    def test_explicit_true_stored(self):
+        s = self._make_settings({"trid3nt/auto_basemap": "true"})
+        self.assertTrue(s.auto_basemap)
+
+    def test_setter_persists(self):
+        import types
+        import importlib
+
+        class FakeQSettings:
+            store: dict = {}
+
+            def value(self, key, default=None):
+                return self.store.get(key, default)
+
+            def setValue(self, key, value):
+                self.store[key] = value
+
+        FakeQSettings.store = {}
+        qtcore = types.ModuleType("qgis.PyQt.QtCore")
+        qtcore.QSettings = FakeQSettings
+        pyqt = types.ModuleType("qgis.PyQt")
+        pyqt.QtCore = qtcore
+        qgis_mod = types.ModuleType("qgis")
+        qgis_mod.PyQt = pyqt
+        saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
+        sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
+        try:
+            sys.modules.pop("plugin_settings", None)
+            ps = importlib.import_module("plugin_settings")
+            s = ps.PluginSettings()
+            s.auto_basemap = False
+            self.assertEqual(FakeQSettings.store.get("trid3nt/auto_basemap"), "false")
+            s.auto_basemap = True
+            self.assertEqual(FakeQSettings.store.get("trid3nt/auto_basemap"), "true")
         finally:
             for k, v in saved.items():
                 if v is None:

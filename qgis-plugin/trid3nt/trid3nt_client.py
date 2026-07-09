@@ -50,7 +50,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Tuple
 
 __all__ = [
     "AgentClient",
@@ -317,11 +317,16 @@ class CaseOpenInfo:
 
     ``session_state.case`` is the CaseSummary; ``loaded_layers`` rides in the
     same session_state so the client can repaint the reopened Case's layers.
+    ``bbox`` (EPSG:4326 ``[lon_min, lat_min, lon_max, lat_max]``) lets the
+    dock zoom the canvas to the case instead of leaving it wherever it was
+    (the "canvas is just white" fix) -- may be absent/None on cases that
+    predate the #170 AOI-first bbox seeding.
     """
 
     case_id: str
     title: str
     layers: list = field(default_factory=list)  # list[LayerEvent]
+    bbox: Optional[Tuple[float, float, float, float]] = None
     raw: dict = field(default_factory=dict)
 
 
@@ -331,7 +336,8 @@ def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
     Returns None when the server could not rehydrate -- per
     ``CaseOpenEnvelopePayload`` semantics ``session_state`` is None (or the
     ``case`` row is missing) and the client falls back to the empty state.
-    Defensive: never raises on a malformed payload.
+    Defensive: never raises on a malformed payload -- a missing/malformed
+    ``bbox`` yields ``None`` on the field, never a crash.
     """
     if not isinstance(payload, dict):
         return None
@@ -344,10 +350,19 @@ def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
     case_id = case.get("case_id")
     if not isinstance(case_id, str) or not case_id:
         return None
+    bbox_raw = case.get("bbox")
+    bbox: Optional[Tuple[float, float, float, float]] = None
+    if (
+        isinstance(bbox_raw, (list, tuple))
+        and len(bbox_raw) == 4
+        and all(isinstance(v, (int, float)) for v in bbox_raw)
+    ):
+        bbox = (float(bbox_raw[0]), float(bbox_raw[1]), float(bbox_raw[2]), float(bbox_raw[3]))
     return CaseOpenInfo(
         case_id=case_id,
         title=str(case.get("title") or case_id),
         layers=parse_layer_events(session_state),
+        bbox=bbox,
         raw=payload,
     )
 
@@ -922,6 +937,25 @@ class AgentClient:
             {"command": "select", "case_id": case_id, "args": {}},
             case_id=case_id,
             queue_if_closed=True,
+        )
+
+    def case_command(self, command: str, case_id: Optional[str] = None) -> None:
+        """Send a generic ``case-command`` (``create`` / ``delete`` / ...)
+        WITHOUT blocking on the reply -- unlike ``create_case`` (used only
+        during the initial connect handshake), the reply here flows through
+        the normal ``next_event`` pump like ``select_case``'s does (a
+        ``create`` reply arrives as a ``case-open`` the dock rebinds on; a
+        ``delete`` reply arrives as a fresh ``case-list``).
+
+        Mirrors ``select_case``'s envelope shape and queue-if-closed
+        behaviour: a New/Delete tapped mid-reconnect must not be silently
+        dropped.
+        """
+        payload: dict = {"command": command, "args": {}}
+        if case_id is not None:
+            payload["case_id"] = case_id
+        self._send(
+            "case-command", payload, case_id=case_id, queue_if_closed=True
         )
 
     def request_case_list_refresh(self) -> bool:

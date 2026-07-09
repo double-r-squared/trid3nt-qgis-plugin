@@ -671,6 +671,11 @@ class TestMaterializeExportStyles(unittest.TestCase):
         core.QgsProject = _FakeProject
         core.QgsRasterLayer = _FakeRasterLayer
         core.QgsVectorLayer = _FakeVectorLayer
+        # Not exercised by these tests (no basemap/zoom calls here) -- just
+        # need to exist so ``layers.py``'s module-level import succeeds.
+        core.QgsCoordinateReferenceSystem = type("QgsCoordinateReferenceSystem", (), {})
+        core.QgsCoordinateTransform = type("QgsCoordinateTransform", (), {})
+        core.QgsRectangle = type("QgsRectangle", (), {})
         qgis_mod = types.ModuleType("qgis")
         qgis_mod.PyQt = pyqt
         qgis_mod.core = core

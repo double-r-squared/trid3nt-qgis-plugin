@@ -118,6 +118,18 @@ class PluginSettings:
         self._set("selection_aoi", "true" if value else "false")
 
     @property
+    def auto_basemap(self) -> bool:
+        """Item 4 (live-feedback 2026-07-09): "Add OpenStreetMap basemap
+        automatically" toggle (default ON). When ON, ``layers.ensure_basemap``
+        runs after a case opens or a case export lands so the canvas is never
+        left white behind the case's own layers."""
+        return self._get("auto_basemap", "true").lower() != "false"
+
+    @auto_basemap.setter
+    def auto_basemap(self, value: bool) -> None:
+        self._set("auto_basemap", "true" if value else "false")
+
+    @property
     def show_thinking(self) -> bool:
         """F9 (live-feedback 2026-07-09): 'Show model thinking' toggle (default
         ON). When ON, send ``show_thinking=True`` in the user-message payload

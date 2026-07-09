@@ -70,6 +70,7 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -79,7 +80,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from . import aoi, case_export, gate
-from .layers import LayerMaterializer
+from .layers import LayerMaterializer, ensure_basemap, zoom_to_bbox4326, zoom_to_extent
 from .plugin_settings import MODE_LOCAL, MODE_REMOTE, PluginSettings
 from .trid3nt_client import CaseInfo, Debouncer, PipelineStep, parse_case_open
 from .ws_bridge import AgentBridge
@@ -116,7 +117,14 @@ _GATE_NOTE_STYLE = "border: none; color: palette(mid); font-size: 8pt;"
 
 
 class SettingsDialog(QDialog):
-    """Mode local/remote, URLs, pasted token, MinIO + export API endpoints."""
+    """Mode local/remote, URLs, pasted token, MinIO + export API endpoints,
+    AOI toggles, and the auto-basemap toggle.
+
+    Item 4 (live-feedback 2026-07-09): the AOI checkboxes (canvas / selected
+    polygon) used to live-apply straight from the dock; they now live here
+    ONLY, and nothing applies until Save -- every field, line edits and
+    checkboxes alike, copies into ``settings`` in the ``accept()`` branch.
+    """
 
     def __init__(self, settings: PluginSettings, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -173,7 +181,26 @@ class SettingsDialog(QDialog):
         note.setStyleSheet(_STATUS_LINE_STYLE)
         form.addRow(note)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        # Item 4: AOI toggles + auto-basemap moved here from the dock (they
+        # used to live-apply; now they apply only on Save, like every other
+        # field in this dialog).
+        self.canvas_aoi_checkbox = QCheckBox("Use map canvas as area of interest")
+        self.canvas_aoi_checkbox.setChecked(settings.canvas_aoi)
+        form.addRow("AOI", self.canvas_aoi_checkbox)
+
+        self.selection_aoi_checkbox = QCheckBox(
+            "Use selected polygon as AOI (overrides canvas)"
+        )
+        self.selection_aoi_checkbox.setChecked(settings.selection_aoi)
+        form.addRow("", self.selection_aoi_checkbox)
+
+        self.auto_basemap_checkbox = QCheckBox(
+            "Add OpenStreetMap basemap automatically"
+        )
+        self.auto_basemap_checkbox.setChecked(settings.auto_basemap)
+        form.addRow("Basemap", self.auto_basemap_checkbox)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)
@@ -185,6 +212,9 @@ class SettingsDialog(QDialog):
         self._settings.token = self.token_edit.text()
         self._settings.minio_endpoint = self.minio_edit.text()
         self._settings.export_api = self.export_api_edit.text()
+        self._settings.canvas_aoi = self.canvas_aoi_checkbox.isChecked()
+        self._settings.selection_aoi = self.selection_aoi_checkbox.isChecked()
+        self._settings.auto_basemap = self.auto_basemap_checkbox.isChecked()
         super().accept()
 
 
@@ -322,9 +352,38 @@ class GateCard(QFrame):
         self.setStyleSheet(_GATE_CARD_STYLE)
         self.setFrameShape(QFrame.StyledPanel)
 
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(3)
+
+        # Item 5 (live-feedback 2026-07-09): the collapsed one-line summary,
+        # shown only once the card is answered (``_collapse``). "show
+        # details" re-expands ``self._body`` read-only (its buttons stay
+        # disabled -- see ``_commit``).
+        summary_row = QHBoxLayout()
+        self.summary_lbl = QLabel("")
+        self.summary_lbl.setWordWrap(True)
+        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setStyleSheet(_GATE_TITLE_STYLE)
+        summary_row.addWidget(self.summary_lbl, 1)
+        self.details_toggle = QPushButton("show details")
+        self.details_toggle.setFlat(True)
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.details_toggle.clicked.connect(self._toggle_details)
+        summary_row.addWidget(self.details_toggle)
+        self._summary_container = QWidget()
+        self._summary_container.setLayout(summary_row)
+        self._summary_container.setVisible(False)
+        outer.addWidget(self._summary_container)
+
+        # The full card content -- visible until answered, then hidden
+        # behind the summary line (re-expandable via "show details").
+        self._body = QWidget()
+        lay = QVBoxLayout(self._body)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(3)
+        outer.addWidget(self._body)
 
         title = "Confirm run settings" if warning.granularity else "Large response expected"
         title_lbl = QLabel(title)
@@ -481,6 +540,34 @@ class GateCard(QFrame):
         }.get(decision.decision or "", "")
         self.result_lbl.setText(summary)
         self.result_lbl.setVisible(True)
+        self._collapse()
+
+    # -- collapse (item 5, live-feedback 2026-07-09) ---------------------------- #
+
+    def _collapse(self) -> None:
+        """Fold to a single amber summary line once answered. The body stays
+        intact underneath (its buttons already disabled by ``_commit``) so
+        "show details" can re-expand a read-only view."""
+        chosen = self._chosen_resolution()
+        if self._decided == "proceed" and chosen is not None:
+            line = f"Resolution gate: proceeded at {chosen:g} m"
+        elif self._decided == "proceed":
+            line = "Resolution gate: proceeded"
+        elif self._decided == "cancel":
+            line = "Resolution gate: cancelled"
+        elif self._decided == "narrow_scope":
+            line = "Resolution gate: proceeded with overrides"
+        else:
+            line = f"Resolution gate: {self._decided or 'answered'}"
+        self.summary_lbl.setText(line)
+        self._summary_container.setVisible(True)
+        self._body.setVisible(False)
+        self.details_toggle.setChecked(False)
+        self.details_toggle.setText("show details")
+
+    def _toggle_details(self, checked: bool) -> None:
+        self._body.setVisible(checked)
+        self.details_toggle.setText("hide details" if checked else "show details")
 
 
 class _ExportTask(QObject):
@@ -528,9 +615,17 @@ class _ExportTask(QObject):
 
 
 class CasesDialog(QDialog):
-    """The user's cases (latest ``case-list`` envelope): Refresh (debounced
-    resume round trip), Open chat (case-command select -> dock rebind), and
-    Open in QGIS (export API, local or remote)."""
+    """The user's cases (latest ``case-list`` envelope):
+
+      Refresh   debounced session-resume round trip.
+      New case  case-command create -> dock rebind (fresh case-open).
+      Open      case-command select -> dock rebind. PRIMARY action (default
+                button + double-click on the list mirror it).
+      Export GeoTIFFs  POSTs /api/export-qgis (local or remote) and adds the
+                artifacts to the current project.
+      Delete    case-command delete, confirmed. The server re-emits
+                case-list, which refreshes this dialog via ``set_cases``.
+    """
 
     def __init__(self, dock: "Trid3ntDock", cases: List[CaseInfo]):
         super().__init__(dock)
@@ -540,6 +635,7 @@ class CasesDialog(QDialog):
         lay = QVBoxLayout(self)
 
         self.listw = QListWidget()
+        self.listw.itemDoubleClicked.connect(self._open_selected)
         lay.addWidget(self.listw, 1)
 
         self.info_lbl = QLabel("")
@@ -551,13 +647,20 @@ class CasesDialog(QDialog):
         self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.clicked.connect(self._refresh)
         row.addWidget(self.refresh_btn)
+        self.new_btn = QPushButton("New case")
+        self.new_btn.clicked.connect(self._new_case)
+        row.addWidget(self.new_btn)
         row.addStretch(1)
-        self.chat_btn = QPushButton("Open chat")
-        self.chat_btn.clicked.connect(self._open_chat_selected)
-        row.addWidget(self.chat_btn)
-        self.open_btn = QPushButton("Open in QGIS")
+        self.open_btn = QPushButton("Open")
+        self.open_btn.setDefault(True)  # primary action
         self.open_btn.clicked.connect(self._open_selected)
         row.addWidget(self.open_btn)
+        self.export_btn = QPushButton("Export GeoTIFFs")
+        self.export_btn.clicked.connect(self._export_selected)
+        row.addWidget(self.export_btn)
+        self.delete_btn = QPushButton("Delete")
+        self.delete_btn.clicked.connect(self._delete_selected)
+        row.addWidget(self.delete_btn)
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.reject)
         row.addWidget(close_btn)
@@ -567,7 +670,8 @@ class CasesDialog(QDialog):
 
     def set_cases(self, cases: List[CaseInfo]) -> None:
         """(Re)populate the list -- called live when a fresh ``case-list``
-        lands while the dialog is open (the Refresh round trip)."""
+        lands while the dialog is open (the Refresh round trip, or a New/
+        Delete case-command reply)."""
         selected = None
         current = self.listw.currentItem()
         if current is not None:
@@ -586,11 +690,13 @@ class CasesDialog(QDialog):
             if case.case_id == selected:
                 self.listw.setCurrentItem(item)
         self.open_btn.setEnabled(bool(cases))
-        self.chat_btn.setEnabled(bool(cases))
+        self.export_btn.setEnabled(bool(cases))
+        self.delete_btn.setEnabled(bool(cases))
         if not cases:
             self.info_lbl.setText(
                 "No cases received yet -- the list arrives from the agent on "
-                "connect (case-list envelope). Try Refresh once connected."
+                "connect (case-list envelope). Try Refresh once connected, "
+                "or start a New case."
             )
         elif self.info_lbl.text().startswith(("No cases", "Refreshing")):
             self.info_lbl.setText("")
@@ -608,17 +714,35 @@ class CasesDialog(QDialog):
             return case_id, str(title)
         return None, ""
 
-    def _open_chat_selected(self) -> None:
+    def _new_case(self) -> None:
+        self._dock.new_case()
+        self.accept()
+
+    def _open_selected(self) -> None:
         case_id, title = self._selected()
         if case_id:
             self._dock.select_case(case_id, title)
             self.accept()
 
-    def _open_selected(self) -> None:
+    def _export_selected(self) -> None:
         case_id, title = self._selected()
         if case_id:
             self._dock.open_case_in_qgis(case_id, title)
             self.accept()
+
+    def _delete_selected(self) -> None:
+        case_id, title = self._selected()
+        if not case_id:
+            return
+        reply = QMessageBox.question(
+            self,
+            "Delete case",
+            f"Delete case '{title}'? This cannot be undone from the plugin.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self._dock.delete_case(case_id, title)
 
 
 class Trid3ntDock(QDockWidget):
@@ -666,6 +790,15 @@ class Trid3ntDock(QDockWidget):
         self.cases_btn.clicked.connect(self._open_cases)
         header.addWidget(self.cases_btn)
 
+        # Item 3 (live-feedback 2026-07-09): header shortcut for a fresh
+        # case, next to Cases -- the case-open reply rebinds the dock
+        # (fresh layer group, header title) via the existing handler.
+        self.new_case_btn = QToolButton()
+        self.new_case_btn.setText("New")
+        self.new_case_btn.setToolTip("Start a fresh case")
+        self.new_case_btn.clicked.connect(self.new_case)
+        header.addWidget(self.new_case_btn)
+
         self.settings_btn = QToolButton()
         self.settings_btn.setText("Settings")
         self.settings_btn.clicked.connect(self._open_settings)
@@ -702,21 +835,11 @@ class Trid3ntDock(QDockWidget):
         self.scroll.setWidget(self.messages_host)
         outer.addWidget(self.scroll, 1)
 
-        # AOI rows: canvas toggle + selection override + status line
-        aoi_row = QHBoxLayout()
-        self.aoi_checkbox = QCheckBox("Use map canvas as area of interest")
-        self.aoi_checkbox.setChecked(self.settings.canvas_aoi)
-        self.aoi_checkbox.toggled.connect(self._on_aoi_toggled)
-        aoi_row.addWidget(self.aoi_checkbox)
-        outer.addLayout(aoi_row)
-        sel_row = QHBoxLayout()
-        self.selection_checkbox = QCheckBox(
-            "Use selected polygon as AOI (overrides canvas)"
-        )
-        self.selection_checkbox.setChecked(self.settings.selection_aoi)
-        self.selection_checkbox.toggled.connect(self._on_selection_aoi_toggled)
-        sel_row.addWidget(self.selection_checkbox)
-        outer.addLayout(sel_row)
+        # Item 4 (live-feedback 2026-07-09): the AOI toggles (canvas /
+        # selected polygon) moved into Settings -- apply-on-Save there now,
+        # instead of live-applying from checkboxes here. ``self.aoi_status``
+        # below stays as the compact read-only status line, refreshed from
+        # settings at build time, on every send, and after Settings closes.
         # F9 (live-feedback 2026-07-09): "Show model thinking" toggle.
         # When checked, the next user-message carries show_thinking=True and the
         # dock renders the model's reasoning-channel tokens as a collapsible grey
@@ -849,9 +972,14 @@ class Trid3ntDock(QDockWidget):
         """The ``(bbox, source)`` to attach right now, or ``(None, None)``
         (off / unresolved / too big). Also refreshes the status line so the
         user sees WHY. Selection (when its toggle is on and features are
-        selected) overrides the canvas extent -- see ``aoi.choose_aoi``."""
-        canvas_enabled = self.aoi_checkbox.isChecked()
-        selection_enabled = self.selection_checkbox.isChecked()
+        selected) overrides the canvas extent -- see ``aoi.choose_aoi``.
+
+        Item 4 (live-feedback 2026-07-09): the two toggles now live ONLY in
+        Settings (apply-on-Save), so this reads them straight off
+        ``self.settings`` instead of dock checkboxes.
+        """
+        canvas_enabled = self.settings.canvas_aoi
+        selection_enabled = self.settings.selection_aoi
         selection_bbox = self._selection_bbox4326() if selection_enabled else None
         canvas_bbox = self._canvas_bbox4326() if canvas_enabled else None
         bbox, source = aoi.choose_aoi(selection_bbox, canvas_bbox, selection_enabled)
@@ -865,14 +993,6 @@ class Trid3ntDock(QDockWidget):
 
     def _refresh_aoi_status(self) -> None:
         self._aoi_for_send()
-
-    def _on_aoi_toggled(self, checked: bool) -> None:
-        self.settings.canvas_aoi = checked
-        self._refresh_aoi_status()
-
-    def _on_selection_aoi_toggled(self, checked: bool) -> None:
-        self.settings.selection_aoi = checked
-        self._refresh_aoi_status()
 
     def _on_thinking_toggled(self, checked: bool) -> None:
         """F9 (live-feedback 2026-07-09): persist the show_thinking preference."""
@@ -940,6 +1060,10 @@ class Trid3ntDock(QDockWidget):
     def _open_settings(self) -> None:
         dlg = SettingsDialog(self.settings, self)
         dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
+        # Item 4: the AOI toggles now live only in Settings -- refresh the
+        # dock's read-only status line from whatever landed (Save or
+        # Cancel; re-reading unchanged settings on Cancel is harmless).
+        self._refresh_aoi_status()
 
     def _open_cases(self) -> None:
         dlg = CasesDialog(self, self._cases)
@@ -949,7 +1073,7 @@ class Trid3ntDock(QDockWidget):
         finally:
             self._cases_dialog = None
 
-    # -- case switching (milestone 3) ------------------------------------------ #
+    # -- case switching / new / delete (milestone 3 + item 2/3) ---------------- #
 
     def select_case(self, case_id: str, title: str) -> None:
         """Switch the chat session to an existing case (case-command select).
@@ -964,6 +1088,35 @@ class Trid3ntDock(QDockWidget):
         self._case_id = case_id
         self._note(f"Switching to case '{title}' ...")
         self.bridge.select_case(case_id)
+
+    def new_case(self) -> None:
+        """Start a fresh case (case-command create) -- header "New" button
+        and the Cases dialog's "New case" button both call this. The
+        server's case-open reply rebinds the dock (fresh layer group,
+        header title, basemap + zoom) through ``_on_case_open_event``, the
+        same path a case SELECT rebinds through.
+        """
+        if not self.bridge.running:
+            self.status_label.setText("Not connected -- press Connect first")
+            return
+        self._note("Starting a new case ...")
+        self.bridge.case_command("create")
+
+    def delete_case(self, case_id: str, title: str) -> None:
+        """Delete a case (case-command delete). The server re-emits
+        case-list, which refreshes the open Cases dialog via ``set_cases``.
+        If the deleted case was the dock's active one, clear the case label
+        gracefully -- the connection itself stays up."""
+        if not self.bridge.running:
+            self.status_label.setText("Not connected -- press Connect first")
+            return
+        self._note(f"Deleting case '{title}' ...")
+        self.bridge.case_command("delete", case_id)
+        if case_id == self._case_id:
+            self._case_id = None
+            self._case_title = ""
+            self.case_label.setText("No case")
+            self.case_label.setVisible(True)
 
     def refresh_cases(self) -> str:
         """Debounced case-list refresh (one session-resume round trip -- see
@@ -1011,9 +1164,31 @@ class Trid3ntDock(QDockWidget):
             self._note(note)
         if plan.qgz_path:
             self._note(f"Styled QGIS project also written: {plan.qgz_path}")
+        if self.settings.auto_basemap:
+            note = ensure_basemap()
+            if note:
+                self._note(note)
+        # Item 1: zoom to the union of the just-exported layers' REAL extents
+        # (GeoTIFF/gpkg layers carry true GDAL/OGR extents, unlike the live
+        # XYZ tile layers) so the canvas is never left white/stale.
+        try:
+            canvas = self.iface.mapCanvas()
+            dest_crs = canvas.mapSettings().destinationCrs()
+            extent = self.materializer.last_added_export_extent(dest_crs)
+            zoom_to_extent(canvas, extent)
+        except Exception:  # noqa: BLE001 -- headless/no canvas, skip the zoom
+            pass
         self._scroll_to_bottom()
 
     def _on_export_errored(self, case_id: str, message: str) -> None:
+        if "has no layers to export" in message:
+            # Friendly, not an error: an empty case is expected, not broken.
+            self._note(
+                "This case has no layers yet -- open it and run a prompt to "
+                "generate data.",
+                error=False,
+            )
+            return
         self._note(f"Case export failed: {message}", error=True)
 
     def _note(self, text: str, error: bool = False) -> None:
@@ -1136,12 +1311,18 @@ class Trid3ntDock(QDockWidget):
                 self._pending = None
 
     def _on_case_open_event(self, payload: dict) -> None:
-        """A ``case-open`` rehydration arrived (the select response --
-        create's case-open is consumed inside the worker handshake).
+        """A ``case-open`` rehydration arrived -- the select response, AND
+        (as of item 2/3) a mid-session ``case_command("create")`` reply too,
+        since that now sends without blocking on the reply (only the
+        INITIAL connect's create_case still consumes its case-open inside
+        the worker handshake, via ``_on_case_ready``).
 
         Rebinds the dock: authoritative title in the header, a FRESH layer
-        group named for the case (dedup reset), and the persisted
-        loaded_layers replayed into it.
+        group named for the case (dedup reset), the persisted loaded_layers
+        replayed into it, an OpenStreetMap basemap (settings-gated, item 4),
+        and a canvas zoom to the case bbox -- or, absent one, the union of
+        the vector layers just materialized -- so the canvas is never left
+        white (item 1, live-feedback 2026-07-09).
         """
         info = parse_case_open(payload)
         if info is None:
@@ -1162,7 +1343,33 @@ class Trid3ntDock(QDockWidget):
             notes = self.materializer.materialize(info.layers)
             for note in notes:
                 self._note(note)
+        if self.settings.auto_basemap:
+            note = ensure_basemap()
+            if note:
+                self._note(note)
+        self._zoom_after_case_open(info.bbox)
         self._scroll_to_bottom()
+
+    def _zoom_after_case_open(
+        self, bbox: Optional[Tuple[float, float, float, float]]
+    ) -> None:
+        """Zoom the canvas to ``bbox`` (EPSG:4326), or -- when it is absent
+        or the transform fails -- to the union of the vector layers this
+        case-open just materialized. XYZ raster layers report a whole-world
+        extent, so they never drive the fallback. Headless-safe: no canvas
+        (no ``iface``) is a silent no-op, never a crash."""
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- no canvas (headless), nothing to zoom
+            return
+        if bbox is not None and zoom_to_bbox4326(canvas, bbox):
+            return
+        try:
+            dest_crs = canvas.mapSettings().destinationCrs()
+        except Exception:  # noqa: BLE001
+            return
+        extent = self.materializer.last_added_vector_extent(dest_crs)
+        zoom_to_extent(canvas, extent)
 
     # -- gate card -------------------------------------------------------------- #
 

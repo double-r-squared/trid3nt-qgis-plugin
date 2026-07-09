@@ -30,9 +30,17 @@ import json
 import os
 import re
 import tempfile
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-from qgis.core import QgsDateTimeRange, QgsProject, QgsRasterLayer, QgsVectorLayer
+from qgis.core import (
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsDateTimeRange,
+    QgsProject,
+    QgsRasterLayer,
+    QgsRectangle,
+    QgsVectorLayer,
+)
 from qgis.PyQt.QtCore import QDateTime, Qt
 
 from . import temporal
@@ -41,9 +49,77 @@ from .trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
 
+#: The OSM raster tile TEMPLATE ensure_basemap() adds (contains {z}/{x}/{y}).
+_OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+_OSM_LAYER_NAME = "OpenStreetMap"
+
 
 def _safe_filename(name: str) -> str:
     return _SAFE_NAME.sub("_", name).strip("_") or "layer"
+
+
+# -- basemap + canvas zoom (the "canvas is just white" fix) ------------------ #
+
+
+def ensure_basemap() -> Optional[str]:
+    """Add an OpenStreetMap XYZ basemap layer if the project doesn't already
+    have one, inserted LAST in the layer tree root (bottom of the stack, so
+    it renders under every case group). Returns a status note, or None when
+    a basemap already exists. Never raises -- a rejected uri is an honest
+    note, not a crash.
+    """
+    project = QgsProject.instance()
+    if project.mapLayersByName(_OSM_LAYER_NAME):
+        return None
+    uri = qgis_xyz_uri(_OSM_TEMPLATE, zmin=0, zmax=19)
+    layer = QgsRasterLayer(uri, _OSM_LAYER_NAME, "wms")
+    if not layer.isValid():
+        return "OpenStreetMap basemap: QGIS rejected the XYZ uri -- skipped"
+    project.addMapLayer(layer, False)
+    project.layerTreeRoot().addLayer(layer)  # appends LAST -- bottom of stack
+    return "OpenStreetMap basemap added"
+
+
+def zoom_to_extent(canvas, rect: Optional["QgsRectangle"], margin: float = 0.1) -> bool:
+    """Zoom ``canvas`` to ``rect`` (already in the canvas' own CRS), scaled
+    out by ``margin`` (10% default) so features are not flush against the
+    view edge. Returns False (no-op) on an empty/None rect or any failure --
+    never raises.
+    """
+    try:
+        if rect is None or rect.isEmpty():
+            return False
+        scaled = QgsRectangle(rect)
+        scaled.scale(1.0 + margin)
+        canvas.setExtent(scaled)
+        canvas.refresh()
+        return True
+    except Exception:  # noqa: BLE001 -- honest no-op, never a crash
+        return False
+
+
+def zoom_to_bbox4326(
+    canvas, bbox: Tuple[float, float, float, float], margin: float = 0.1
+) -> bool:
+    """Zoom ``canvas`` to an EPSG:4326 ``(lon_min, lat_min, lon_max, lat_max)``
+    bbox, transformed to the canvas' destination CRS via
+    ``QgsCoordinateTransform`` (the project's transform context), scaled out
+    by ``margin``. Returns False (no-op) on any transform failure -- never
+    raises.
+    """
+    try:
+        lon_min, lat_min, lon_max, lat_max = bbox
+        rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
+        dst_crs = canvas.mapSettings().destinationCrs()
+        src_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+        if src_crs != dst_crs:
+            transform = QgsCoordinateTransform(
+                src_crs, dst_crs, QgsProject.instance().transformContext()
+            )
+            rect = transform.transformBoundingBox(rect)
+    except Exception:  # noqa: BLE001 -- honest no-op, never a crash
+        return False
+    return zoom_to_extent(canvas, rect, margin=margin)
 
 
 # -- Temporal Controller stamping (frame-sequence animation) ----------------- #
@@ -151,6 +227,10 @@ class LayerMaterializer:
         self._temp_dir: Optional[str] = None
         self._case_rasters: List = []  # QgsRasterLayer refs, this case
         self._stamped_counts: dict = {}  # frame-group stem -> stamped size
+        #: Layers added by the MOST RECENT ``materialize``/``materialize_export``
+        #: call (reset at the top of each) -- lets the dock zoom to "what just
+        #: landed" without re-deriving it from notes strings.
+        self.last_added_layers: List = []
 
     # -- lifecycle ------------------------------------------------------------- #
 
@@ -161,6 +241,7 @@ class LayerMaterializer:
         self._added_ids.clear()
         self._case_rasters = []
         self._stamped_counts = {}
+        self.last_added_layers = []
 
     def _ensure_temp_dir(self) -> str:
         if self._temp_dir is None or not os.path.isdir(self._temp_dir):
@@ -186,6 +267,7 @@ class LayerMaterializer:
         """
         notes: List[str] = []
         rasters_before = len(self._case_rasters)
+        self.last_added_layers = []
         for event in events:
             if event.layer_id in self._added_ids:
                 continue
@@ -267,6 +349,7 @@ class LayerMaterializer:
         is an honest note.
         """
         notes: List[str] = []
+        self.last_added_layers = []
         root = QgsProject.instance().layerTreeRoot()
         group_name = f"TRID3NT export {group_label}"
         group = root.findGroup(group_name)
@@ -279,6 +362,7 @@ class LayerMaterializer:
                 return
             QgsProject.instance().addMapLayer(layer, False)
             group.insertLayer(0, layer)
+            self.last_added_layers.append(layer)
             notes.append(f"export layer '{label}' added")
 
         for name in plan.vector_layers:
@@ -354,4 +438,48 @@ class LayerMaterializer:
         node = group.insertLayer(0, layer)
         if node is not None and not event.visible:
             node.setItemVisibilityChecked(False)
+        self.last_added_layers.append(layer)
         return note
+
+    # -- extent union (canvas-zoom fallback, item 1) ---------------------------- #
+
+    def combined_extent(self, dest_crs, layers: Optional[List] = None) -> Optional["QgsRectangle"]:
+        """Combined extent of ``layers`` (default: ``self.last_added_layers``),
+        each transformed into ``dest_crs``. Layers with an empty extent or an
+        unresolvable CRS transform are skipped, never raised on. Returns None
+        when nothing usable was found.
+        """
+        combined: Optional[QgsRectangle] = None
+        for layer in (self.last_added_layers if layers is None else layers):
+            try:
+                extent = layer.extent()
+                if extent is None or extent.isEmpty():
+                    continue
+                crs = layer.crs()
+                if crs != dest_crs:
+                    transform = QgsCoordinateTransform(
+                        crs, dest_crs, QgsProject.instance().transformContext()
+                    )
+                    extent = transform.transformBoundingBox(extent)
+            except Exception:  # noqa: BLE001 -- skip this layer, never raise
+                continue
+            if combined is None:
+                combined = QgsRectangle(extent)
+            else:
+                combined.combineExtentWith(extent)
+        return combined
+
+    def last_added_vector_extent(self, dest_crs) -> Optional["QgsRectangle"]:
+        """Combined extent of the VECTOR layers added by the most recent
+        live ``materialize()`` call. XYZ raster layers (the live tile
+        publishes) report a whole-world extent, so only vectors count here --
+        the canvas-zoom fallback when a case-open carries no bbox."""
+        vectors = [l for l in self.last_added_layers if isinstance(l, QgsVectorLayer)]
+        return self.combined_extent(dest_crs, vectors)
+
+    def last_added_export_extent(self, dest_crs) -> Optional["QgsRectangle"]:
+        """Combined extent of ALL layers added by the most recent
+        ``materialize_export()`` call -- exported GeoTIFFs carry real GDAL
+        extents (unlike the live XYZ tile layers), so rasters count here
+        too."""
+        return self.combined_extent(dest_crs, self.last_added_layers)
