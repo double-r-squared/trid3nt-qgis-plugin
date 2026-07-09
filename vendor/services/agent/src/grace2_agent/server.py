@@ -82,6 +82,7 @@ from grace2_contracts.ws import (
     AgentMessageChunkPayload,
     CancelPayload,
     Envelope,
+    AgentThinkingChunkPayload,
     ErrorPayload,
     PipelineStatePayload,
     PipelineStep,
@@ -110,6 +111,7 @@ from .adapter import (
     MAX_TURN_ITERATIONS,
     SYSTEM_PROMPT,
     TextDeltaEvent,
+    ThinkingDeltaEvent,
     UsageMetadataEvent,
     build_client,
     build_contents_from_history,
@@ -2776,6 +2778,7 @@ async def _stream_gemini_reply(
     user_text: str,
     research_mode: str,
     bedrock_model: str | None = None,
+    show_thinking: bool = False,
 ) -> None:
     """Stream one user-message reply with multi-turn tool dispatch (job-0169).
 
@@ -3112,6 +3115,7 @@ async def _stream_gemini_reply(
                 system_prompt=_turn_system_prompt,
                 cached_content_name=state.gemini_cache_name,
                 bedrock_model=bedrock_model,
+                show_thinking=show_thinking,
             ):
                 if not first_token_logged:
                     first_token_logged = True
@@ -3143,6 +3147,33 @@ async def _stream_gemini_reply(
                     # text, and a crash leaves the un-finalized tail for the
                     # wrapper. Same registered list object — never rebound.
                     _segment_buf.append(event.delta)
+
+                elif isinstance(event, ThinkingDeltaEvent):
+                    # F8 (NATE live-feedback 2026-07-08, local build): forward
+                    # the model's reasoning-channel deltas so the web/QGIS
+                    # clients render the greyed foldable thinking block.
+                    # Gated on the per-turn user toggle — with it off the
+                    # /no_think suppressor is armed and the channel is not
+                    # generated, but a model that leaks reasoning anyway must
+                    # not reach a client that asked for it to stay hidden.
+                    # Shares the segment's message_id (contract: the thinking
+                    # block and its answer live in the SAME bubble); a
+                    # thinking-only segment persists nothing (_finalize_segment
+                    # skips empty text).
+                    if show_thinking:
+                        if current_message_id is None:
+                            current_message_id = new_ulid()
+                        await _session_safe_send(websocket, state.session_id,
+                            _new_envelope(
+                                "agent-thinking-chunk",
+                                state.session_id,
+                                AgentThinkingChunkPayload(
+                                    message_id=current_message_id,
+                                    delta=event.delta,
+                                    done=False,
+                                ),
+                            )
+                        )
 
                 elif isinstance(event, FunctionCallEvent):
                     logger.info(
@@ -11100,6 +11131,7 @@ async def _dispatch_gemini_and_persist(
     user_text: str,
     research_mode: str,
     bedrock_model: str | None = None,
+    show_thinking: bool = False,
 ) -> None:
     """Stream Gemini reply, then persist the agent's reply to the active Case.
 
@@ -11144,6 +11176,7 @@ async def _dispatch_gemini_and_persist(
         await _stream_gemini_reply(
             websocket, state, settings, user_text, research_mode,
             bedrock_model=bedrock_model,
+            show_thinking=show_thinking,
         )
     finally:
         # Turn-cancel Batch kill path: terminate any Batch job this turn
@@ -12236,6 +12269,7 @@ def _make_handler(settings: GeminiSettings):
                                     um.text,
                                     um.research_mode,
                                     bedrock_model=_turn_bedrock_model,
+                                    show_thinking=bool(um.show_thinking),
                                 )
                             )
                         state.inflight_tasks[turn_key] = task
