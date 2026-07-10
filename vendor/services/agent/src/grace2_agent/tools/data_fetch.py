@@ -3050,6 +3050,13 @@ def _fetch_esa_worldcover_bytes(
     )
 
 
+# Default NLCD vintage used both as the ``fetch_landcover`` ``dataset``
+# parameter default and as the resolved value for the bare 'nlcd' / 'nlcd_'
+# aliases (job-fix: model kept retrying 'nlcd' -> 'nlcd_' before landing on
+# a valid 'nlcd_YYYY', re-triggering the resolution-confirm gate each time).
+_DEFAULT_NLCD_DATASET = "nlcd_2021"
+
+
 def _round_bbox_to_30m_nlcd(
     bbox: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
@@ -3071,7 +3078,7 @@ def _round_bbox_to_30m_nlcd(
 )
 def fetch_landcover(
     bbox: tuple[float, float, float, float],
-    dataset: str = "nlcd_2021",
+    dataset: str = _DEFAULT_NLCD_DATASET,
     resolution_m: int = 30,
     # job-0164: absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
@@ -3116,10 +3123,12 @@ def fetch_landcover(
     - ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,
       max_lat)`` in EPSG:4326. Continent-scale bboxes (> 5e6 km^2) are
       rejected; all other sizes are served at auto-coarsened resolution.
-    - ``dataset`` (str, default ``"nlcd_2021"``): NLCD vintage string
-      (``"nlcd_2021"``, ``"nlcd_2019"``, ``"nlcd_2016"``, etc.) or
-      ``"esa_worldcover_2021"`` (forward-looking). Valid NLCD years:
-      2001, 2004, 2006, 2008, 2011, 2013, 2016, 2019, 2021.
+    - ``dataset`` (str, default ``"nlcd_2021"``): ``"nlcd"`` (default vintage)
+      or ``"nlcd_YYYY"`` (e.g. ``"nlcd_2021"``, ``"nlcd_2019"``,
+      ``"nlcd_2016"``) or ``"esa_worldcover_2021"`` (forward-looking). Bare
+      ``"nlcd"`` and ``"nlcd_"`` are accepted as aliases for the default
+      vintage. Valid NLCD years: 2001, 2004, 2006, 2008, 2011, 2013, 2016,
+      2019, 2021.
     - ``resolution_m`` (int, default 30): pixel grid spacing in meters.
       The fetch-resolution gate auto-coarsens this for large bboxes and
       asks the user to confirm before downloading. The native NLCD grid
@@ -3149,6 +3158,16 @@ def fetch_landcover(
         raise BboxInvalidError(
             f"fetch_landcover requires a non-empty dataset string; got {dataset!r}"
         )
+
+    # Alias resolution: models frequently call this with bare 'nlcd' (no
+    # vintage) or a stray trailing-underscore 'nlcd_' before landing on a
+    # valid 'nlcd_YYYY' -- each of those was a typed error that forced a
+    # retry, and every retry re-triggered the resolution-confirm gate on
+    # the same bbox (see turn-memory fix in server.py). Treat both as
+    # aliases for the default vintage; an explicit 'nlcd_YYYY' still wins.
+    normalized_dataset = dataset.strip().lower()
+    if normalized_dataset in ("nlcd", "nlcd_"):
+        dataset = _DEFAULT_NLCD_DATASET
 
     # Pixel-budget constants for MRLC WCS auto-coarsening.
     # PIXEL_BUDGET: max pixels per side we request from the MRLC WCS server
@@ -3287,8 +3306,9 @@ def fetch_landcover(
         }
 
     raise BboxInvalidError(
-        f"unsupported dataset={dataset!r}; allowed prefixes: 'nlcd_' (default, "
-        "Tier-1 CONUS), 'esa_worldcover_' (opt-in, forward-looking — not implemented)."
+        f"unsupported dataset={dataset!r}; allowed: 'nlcd' (default vintage, "
+        f"currently {_DEFAULT_NLCD_DATASET!r}) or 'nlcd_YYYY' (Tier-1 CONUS), "
+        "'esa_worldcover_' (opt-in, forward-looking - not implemented)."
     )
 
 

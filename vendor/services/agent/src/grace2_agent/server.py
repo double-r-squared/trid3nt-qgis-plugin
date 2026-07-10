@@ -2281,6 +2281,28 @@ class SessionState:
     # would re-trip the auth error and re-prompt forever. Reset at the start of
     # every ``_stream_gemini_reply`` turn (the prompt is a per-request decision).
     credential_prompted_tools: set[str] = field(default_factory=set)
+    # fix (bbox-gate-retry-loop, 2026-07-09): per-TURN memory of solver-confirm
+    # / fetch-resolution gate ("tool-payload-warning") decisions, keyed by
+    # ``_gate_memory_key(tool_name, params)`` (tool name + bbox rounded to
+    # ~6 decimals, or the full normalized args when there is no bbox). A
+    # model that retries a gated tool with corrected NON-bbox args (e.g.
+    # ``fetch_landcover(dataset='nlcd')`` -> typed error -> retried with
+    # ``dataset='nlcd_'`` -> typed error -> retried with ``dataset=
+    # 'nlcd_2021')``) re-emitted an IDENTICAL confirm gate on the SAME bbox
+    # every retry; the user only answered the FIRST one, and local gates
+    # have no timeout by design, so the second gate hung the turn forever.
+    # Only "proceed" / "narrow_scope" decisions are recorded here (a
+    # "cancel" raises before reaching the write site, so a corrected retry
+    # still re-gates - the user might reconsider). Reset at the start of
+    # every new user-message dispatch (same site as
+    # ``credential_prompted_tools`` above), so it never leaks across turns;
+    # it lives on the per-session ``SessionState`` so it never leaks across
+    # sessions or Cases either. Values are the DELTA the gate applied to the
+    # params (e.g. ``{"resolution_m": 300}``), not the whole approved dict,
+    # so a later retry keeps its own corrected non-bbox args.
+    gate_decisions_this_turn: dict[tuple[str, str], dict[str, Any]] = field(
+        default_factory=dict
+    )
     # In-chat model selector (NATE 2026-06-17): the Bedrock model id chosen by
     # the user for the CURRENT turn.  Updated on every ``user-message`` that
     # carries a non-None ``model_id``; persists across turns so consecutive
@@ -2839,6 +2861,11 @@ async def _stream_gemini_reply(
     # turn is a fresh request — a tool that prompted for a key last turn may
     # legitimately prompt again this turn (the key may still be missing).
     state.credential_prompted_tools = set()
+    # fix (bbox-gate-retry-loop, 2026-07-09): reset the per-turn
+    # solver-confirm/fetch-resolution gate-decision memory. A new user turn
+    # is a fresh request - a tool+bbox pair confirmed last turn must gate
+    # again this turn (see ``gate_decisions_this_turn`` docstring above).
+    state.gate_decisions_this_turn = {}
     turn_narration = state.current_turn_narration
     turn_history = state.chat_history
     # job-0315: per-segment buffer for the CURRENTLY OPEN bubble only (reset by
@@ -7408,11 +7435,42 @@ def _build_fire_confirm_envelope(params: dict) -> Any:
     )
 
 
+def _gate_memory_key(tool_name: str, params: dict[str, Any]) -> tuple[str, str]:
+    """Turn-memory key for the solver-confirm / fetch-resolution gate.
+
+    Fix (bbox-gate-retry-loop, 2026-07-09): keys on ``(tool_name, bbox)`` -
+    a bbox rounded to ~6 decimal degrees (~0.1 m; matches the quantization
+    granularity the fetch tools already use for cache-key stability) - so a
+    retry of the SAME tool over the SAME AOI with a corrected non-bbox arg
+    (e.g. a typed-error retry that fixes ``dataset``) reuses the earlier
+    proceed/narrow_scope decision instead of re-gating. When the call
+    carries no ``bbox`` arg, falls back to keying on the FULL normalized
+    args dict (order-independent JSON), so any arg change still gates
+    fresh - this is the conservative default for gated tools without a
+    bbox-shaped AOI (e.g. the groundwater-contamination composers).
+    """
+    bbox = params.get("bbox")
+    if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+        try:
+            bbox_key = tuple(round(float(v), 6) for v in bbox)
+            return (tool_name, repr(bbox_key))
+        except (TypeError, ValueError):
+            pass
+    import json as _json
+
+    try:
+        normalized = _json.dumps(params, sort_keys=True, default=str)
+    except TypeError:
+        normalized = repr(sorted(params.items(), key=lambda kv: kv[0]))
+    return (tool_name, normalized)
+
+
 async def _gate_on_solver_confirm(
     websocket: ServerConnection,
     state: SessionState,
     tool_name: str,
     params: dict,
+    _warning_id_out: dict[str, str] | None = None,
 ) -> tuple[bool, dict]:
     """Parameter-confirmation gate for solver composers (job-0241) — fail-closed.
 
@@ -7431,6 +7489,14 @@ async def _gate_on_solver_confirm(
     An extraction failure here falls through to dispatch (``True``) so the
     composer raises its own typed extraction error — the gate must not mask
     parameter problems behind a confusing confirm card.
+
+    ``_warning_id_out``: optional out-param (fix, 2026-07-09 bbox-gate-retry-
+    loop) - when given, this function stashes the emitted ``warning_id``
+    under key ``"warning_id"`` the moment a REAL gate is sent to the client.
+    It stays unset on every fail-open early return (unknown tool, extraction
+    failure, the landcover no-coarsening skip) since no gate was emitted
+    there. The caller uses this to know whether a proceed/narrow_scope
+    decision is worth memoizing into ``state.gate_decisions_this_turn``.
     """
     # #154: the SWMM autoscale result + the localized DEM path are captured here
     # so the decision tail can CAP-CLAMP a user-chosen finer resolution on a
@@ -7652,6 +7718,11 @@ async def _gate_on_solver_confirm(
         return True, params
 
     warning_id = envelope.warning_id
+    if _warning_id_out is not None:
+        # A real gate is about to be sent - the caller may memoize whatever
+        # decision comes back (proceed/narrow_scope only; a cancel raises
+        # before the caller's write site is reached).
+        _warning_id_out["warning_id"] = warning_id
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
     _register_pending_confirmation(state.session_id, warning_id, fut)
@@ -7938,6 +8009,75 @@ async def _gate_on_solver_confirm(
     # hourly default untouched -> unchanged pluvial behavior).
     if flood_cadence_gated and flood_output_interval_min is not None:
         approved["output_interval_min"] = float(flood_output_interval_min)
+    return True, approved
+
+
+async def _gate_with_turn_memory(
+    websocket: ServerConnection,
+    state: SessionState,
+    tool_name: str,
+    params: dict,
+) -> tuple[bool, dict]:
+    """``_gate_on_solver_confirm`` wrapped with per-turn decision memory.
+
+    Fix (bbox-gate-retry-loop, 2026-07-09): a live drive found a model
+    retrying a gated fetch tool with corrected NON-bbox args after typed
+    errors (``fetch_landcover(dataset='nlcd')`` -> typed error ->
+    ``dataset='nlcd_'`` -> typed error -> ``dataset='nlcd_2021'``). EACH
+    valid-bbox retry re-emitted a NEW ``tool-payload-warning`` confirm gate
+    for the SAME tool + SAME bbox; the user answered only the first one, and
+    local gates have no timeout by design, so the second (unanswered) gate
+    hung the turn forever.
+
+    This wrapper checks ``state.gate_decisions_this_turn`` (keyed by
+    :func:`_gate_memory_key`) BEFORE calling the real gate. A remembered
+    "proceed" / "narrow_scope" decision from earlier in the SAME turn is
+    auto-applied (its recorded param DELTA is merged onto the current call's
+    params) and no new gate is emitted. A "cancel" is never recorded (the
+    real gate raises via ``should_run=False`` before this wrapper's write
+    site), so a corrected retry after a cancel still gates fresh. A
+    DIFFERENT tool or a DIFFERENT bbox in the same turn always gates
+    normally (different key -> memory miss).
+    """
+    gate_key = _gate_memory_key(tool_name, params)
+    remembered = state.gate_decisions_this_turn.get(gate_key)
+    if remembered is not None:
+        merged = {**params, **remembered["overrides"]}
+        logger.info(
+            "solver-confirm gate auto-applied from turn memory "
+            "session=%s tool=%s warning_id_prior=%s",
+            state.session_id,
+            tool_name,
+            remembered["warning_id"],
+        )
+        return True, merged
+
+    pre_gate_params = dict(params)
+    warning_id_box: dict[str, str] = {}
+    should_run, approved = await _gate_on_solver_confirm(
+        websocket, state, tool_name, params, _warning_id_out=warning_id_box
+    )
+    if not should_run:
+        return False, approved
+
+    prior_warning_id = warning_id_box.get("warning_id")
+    if prior_warning_id is not None:
+        # A real gate was sent and answered proceed/narrow_scope (a cancel
+        # returns should_run=False above and is never memoized, so a
+        # corrected retry after a cancel still gates fresh). Remember only
+        # the DELTA the gate applied to params - not the whole approved
+        # dict - so a later retry keeps ITS OWN corrected non-bbox args
+        # (e.g. a fixed `dataset`) and only inherits what the gate itself
+        # decided (e.g. `resolution_m`).
+        overrides = {
+            k: v
+            for k, v in approved.items()
+            if k not in pre_gate_params or pre_gate_params[k] != v
+        }
+        state.gate_decisions_this_turn[gate_key] = {
+            "overrides": overrides,
+            "warning_id": prior_warning_id,
+        }
     return True, approved
 
 
@@ -9713,13 +9853,18 @@ async def _invoke_tool_via_emitter(
     # confirmed is stripped only for the solver branch (fetchers do not read it);
     # _gate_on_solver_confirm guards the confirmed/enable_autoscale injection to
     # SOLVER_CONFIRM_TOOLS, so a fetch's approved params carry resolution_m only.
+    # fix (bbox-gate-retry-loop, 2026-07-09): routed through
+    # ``_gate_with_turn_memory`` so a same-tool/same-bbox retry later in this
+    # SAME turn (e.g. a typed-error retry that only fixed a non-bbox arg)
+    # replays the earlier proceed/narrow_scope decision instead of hanging
+    # on an unanswered second gate.
     if (
         tool_name in (SOLVER_CONFIRM_TOOLS | FETCH_CONFIRM_TOOLS)
         and not isinstance(entry, _ReuseEntry)
     ):
         if tool_name in SOLVER_CONFIRM_TOOLS:
             params.pop("confirmed", None)
-        should_run, params = await _gate_on_solver_confirm(
+        should_run, params = await _gate_with_turn_memory(
             websocket, state, tool_name, params
         )
         if not should_run:

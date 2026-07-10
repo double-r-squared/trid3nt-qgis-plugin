@@ -1887,6 +1887,89 @@ def test_fetch_landcover_rejects_unknown_dataset():
         fetch_landcover(FORT_MYERS_BBOX, dataset="usgs_nlcd_2023_v3")
 
 
+# ---------------------------------------------------------------------------
+# dataset alias fix - bare 'nlcd' / 'nlcd_' resolve to the default vintage.
+#
+# Live drive found the model calling dataset='nlcd', hitting the typed
+# error, retrying with dataset='nlcd_' (also a typed error), then finally
+# landing on 'nlcd_2021'. Each retry re-triggered the resolution-confirm
+# gate on the same bbox and the second gate hung forever (see server.py
+# turn-memory fix). This section proves the aliases resolve without a
+# retry loop, while an explicit bad vintage still errors.
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_landcover_bare_nlcd_alias_resolves_to_default_vintage(monkeypatch):
+    """``dataset='nlcd'`` (no vintage) is accepted as an alias for the default."""
+    fake_storage = FakeStorageClient()
+    from grace2_agent.tools import cache as cache_mod
+
+    monkeypatch.setattr(
+        data_fetch,
+        "_fetch_nlcd_landcover_bytes",
+        lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
+    )
+    monkeypatch.setattr(
+        data_fetch,
+        "read_through",
+        lambda *a, **kw: cache_mod.read_through(
+            *a, storage_client=fake_storage, now=PINNED_NOW, **kw
+        ),
+    )
+
+    result = fetch_landcover(FORT_MYERS_BBOX, dataset="nlcd")
+    assert result["nlcd_vintage_year"] == 2021
+    assert result["dataset"] == data_fetch._DEFAULT_NLCD_DATASET
+
+
+def test_fetch_landcover_trailing_underscore_nlcd_alias_resolves_to_default_vintage(
+    monkeypatch,
+):
+    """``dataset='nlcd_'`` (trailing underscore, no year) is accepted the same way."""
+    fake_storage = FakeStorageClient()
+    from grace2_agent.tools import cache as cache_mod
+
+    monkeypatch.setattr(
+        data_fetch,
+        "_fetch_nlcd_landcover_bytes",
+        lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
+    )
+    monkeypatch.setattr(
+        data_fetch,
+        "read_through",
+        lambda *a, **kw: cache_mod.read_through(
+            *a, storage_client=fake_storage, now=PINNED_NOW, **kw
+        ),
+    )
+
+    result = fetch_landcover(FORT_MYERS_BBOX, dataset="nlcd_")
+    assert result["nlcd_vintage_year"] == 2021
+    assert result["dataset"] == data_fetch._DEFAULT_NLCD_DATASET
+
+
+def test_fetch_landcover_unknown_vintage_year_still_errors(monkeypatch):
+    """An explicit but out-of-catalog vintage (e.g. 'nlcd_1875') still errors.
+
+    The alias fix must NOT loosen validation of explicit 'nlcd_YYYY' values --
+    only bare 'nlcd' / 'nlcd_' get the default-vintage fallback. 1875 parses
+    as a valid int but is not in the MRLC WCS catalog, so this exercises the
+    real (unmocked) ``_fetch_nlcd_landcover_bytes`` year check, which raises
+    before any network call is made.
+    """
+    fake_storage = FakeStorageClient()
+    from grace2_agent.tools import cache as cache_mod
+
+    monkeypatch.setattr(
+        data_fetch,
+        "read_through",
+        lambda *a, **kw: cache_mod.read_through(
+            *a, storage_client=fake_storage, now=PINNED_NOW, **kw
+        ),
+    )
+    with pytest.raises(UpstreamAPIError):
+        fetch_landcover(FORT_MYERS_BBOX, dataset="nlcd_1875")
+
+
 def test_fetch_landcover_esa_worldcover_not_implemented(monkeypatch):
     """ESA WorldCover opt-in is reserved; v0.1 substrate raises UpstreamAPIError."""
     fake_storage = FakeStorageClient()
