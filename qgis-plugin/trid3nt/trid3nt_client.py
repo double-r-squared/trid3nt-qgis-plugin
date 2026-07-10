@@ -69,17 +69,20 @@ __all__ = [
     "RECONNECT_FLOOR_MS",
     "RECONNECT_MAX_MS",
     "REFRESH_DEBOUNCE_S",
+    "CHAT_HISTORY_REPLAY_MAX",
     "WebSocketConnection",
     "WebSocketError",
     "build_ws_url",
     "choose_startup_case",
     "fetch_case_list",
+    "find_fallback_bbox",
     "is_auth_failure",
     "make_envelope",
     "new_ulid",
     "next_backoff",
     "parse_case_list",
     "parse_case_open",
+    "parse_chat_history",
     "parse_layer_events",
     "parse_pipeline_steps",
     "qgis_xyz_uri",
@@ -409,6 +412,42 @@ def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
 # --------------------------------------------------------------------------- #
 
 
+#: Cap on chat-history replay rows (ITEM B dock snappiness -- a Case that has
+#: chatted for hours must not stall the dock repainting hundreds of bubbles).
+CHAT_HISTORY_REPLAY_MAX = 50
+
+
+def parse_chat_history(session_state_payload: dict) -> list:
+    """Parse ``session_state.chat_history`` rows (``CaseChatMessage`` --
+    contracts ``case.py``) into plain ``{"role", "content"}`` dicts for the
+    dock's case-open chat replay.
+
+    Only ``user``/``agent`` rows are surfaced -- the replay is the plain
+    CONVERSATION (user bubbles + assistant bubbles, no thinking blocks), not
+    the full tool-card/system stream ``role`` also carries. Defensive: a
+    missing/non-list ``chat_history``, a non-dict row, or a row with a
+    missing/non-string ``role``/``content`` is skipped, never raised on -- a
+    bad persisted row must not break a case switch. Capped to the most
+    recent ``CHAT_HISTORY_REPLAY_MAX`` rows (persisted order is oldest-first,
+    so the cap keeps the TAIL -- the most recent conversation).
+    """
+    rows = session_state_payload.get("chat_history") or []
+    if not isinstance(rows, list):
+        return []
+    out: list = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        role = row.get("role")
+        content = row.get("content")
+        if role not in ("user", "agent"):
+            continue
+        if not isinstance(content, str) or not content:
+            continue
+        out.append({"role": role, "content": content})
+    return out[-CHAT_HISTORY_REPLAY_MAX:]
+
+
 @dataclass
 class CaseOpenInfo:
     """The rehydration a ``case-open`` envelope carries (select response).
@@ -418,14 +457,65 @@ class CaseOpenInfo:
     ``bbox`` (EPSG:4326 ``[lon_min, lat_min, lon_max, lat_max]``) lets the
     dock zoom the canvas to the case instead of leaving it wherever it was
     (the "canvas is just white" fix) -- may be absent/None on cases that
-    predate the #170 AOI-first bbox seeding.
+    predate the #170 AOI-first bbox seeding. ``chat_messages`` (ITEM B) is
+    the same session_state's persisted ``chat_history``, defensively parsed
+    via ``parse_chat_history``, so the dock can replay the opened Case's
+    conversation instead of leaving the previous Case's bubbles on screen.
     """
 
     case_id: str
     title: str
     layers: list = field(default_factory=list)  # list[LayerEvent]
     bbox: Optional[Tuple[float, float, float, float]] = None
+    chat_messages: list = field(default_factory=list)  # list[{"role","content"}]
     raw: dict = field(default_factory=dict)
+
+
+def _coerce_bbox(raw) -> Optional[Tuple[float, float, float, float]]:
+    """A candidate ``[lon_min, lat_min, lon_max, lat_max]`` value -> a clean
+    float 4-tuple, or None when it is not a well-formed EPSG:4326 bbox.
+    Never raises."""
+    if (
+        isinstance(raw, (list, tuple))
+        and len(raw) == 4
+        and all(isinstance(v, (int, float)) for v in raw)
+    ):
+        return (float(raw[0]), float(raw[1]), float(raw[2]), float(raw[3]))
+    return None
+
+
+def find_fallback_bbox(payload: dict) -> Optional[Tuple[float, float, float, float]]:
+    """ITEM D (live-feedback 2026-07-10): scan a ``case-open`` payload for a
+    bbox OUTSIDE the primary ``session_state.case.bbox`` carrier ``parse_
+    case_open`` already extracts.
+
+    Today's wire contract (``CaseOpenEnvelopePayload`` / ``CaseSessionState``
+    / ``CaseSummary``) has exactly ONE bbox field, so in practice this only
+    re-finds what ``parse_case_open`` already found -- it exists so a
+    raster-only OLD case (no vector layers to fall back to, per the "canvas
+    is just white" fix's other rung) still gets a shot at SOME bbox before
+    the dock gives up and says so honestly, and so a future server-side
+    bbox carrier (e.g. per-layer or top-level) is picked up without another
+    client change. Checked in order: ``payload.bbox``, ``payload.
+    session_state.bbox``, ``payload.session_state.case.bbox``. Defensive:
+    never raises, returns None when nothing usable is found.
+    """
+    if not isinstance(payload, dict):
+        return None
+    direct = _coerce_bbox(payload.get("bbox"))
+    if direct is not None:
+        return direct
+    session_state = payload.get("session_state")
+    if isinstance(session_state, dict):
+        direct = _coerce_bbox(session_state.get("bbox"))
+        if direct is not None:
+            return direct
+        case = session_state.get("case")
+        if isinstance(case, dict):
+            direct = _coerce_bbox(case.get("bbox"))
+            if direct is not None:
+                return direct
+    return None
 
 
 def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
@@ -448,19 +538,13 @@ def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
     case_id = case.get("case_id")
     if not isinstance(case_id, str) or not case_id:
         return None
-    bbox_raw = case.get("bbox")
-    bbox: Optional[Tuple[float, float, float, float]] = None
-    if (
-        isinstance(bbox_raw, (list, tuple))
-        and len(bbox_raw) == 4
-        and all(isinstance(v, (int, float)) for v in bbox_raw)
-    ):
-        bbox = (float(bbox_raw[0]), float(bbox_raw[1]), float(bbox_raw[2]), float(bbox_raw[3]))
+    bbox = _coerce_bbox(case.get("bbox"))
     return CaseOpenInfo(
         case_id=case_id,
         title=str(case.get("title") or case_id),
         layers=parse_layer_events(session_state),
         bbox=bbox,
+        chat_messages=parse_chat_history(session_state),
         raw=payload,
     )
 

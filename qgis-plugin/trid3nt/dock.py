@@ -89,6 +89,7 @@ from .trid3nt_client import (
     Debouncer,
     PipelineStep,
     fetch_case_list,
+    find_fallback_bbox,
     parse_case_open,
 )
 from .ws_bridge import AgentBridge
@@ -964,6 +965,39 @@ class Trid3ntDock(QDockWidget):
             self._pending = _AssistantEntry(self.messages_layout)
         return self._pending
 
+    def _clear_messages(self) -> None:
+        """ITEM B (case switch must clear chat): remove every message-list
+        child widget (user bubbles, assistant entries, gate cards, notes)
+        while keeping the terminal stretch item ``_build_ui`` adds last --
+        every insertion elsewhere in the dock inserts BEFORE it, so it must
+        stay. Also drops any pending streaming assistant entry; a stale
+        target from the previous case must never receive the new case's
+        deltas."""
+        self._pending = None
+        while self.messages_layout.count() > 1:
+            item = self.messages_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _replay_chat_history(self, messages: List[dict]) -> None:
+        """ITEM B: repaint a just-opened case's persisted conversation
+        (plain user/assistant bubbles, no thinking/pipeline chrome -- this
+        is a read-only replay, not a live stream) before the "Case '<title>'
+        active" note. ``messages`` is already role/content-filtered and
+        capped by ``trid3nt_client.parse_chat_history``; an empty list (a
+        brand-new case) is a no-op -- clean slate, just the active note."""
+        for row in messages:
+            role = row.get("role")
+            content = row.get("content")
+            if not isinstance(content, str) or not content:
+                continue
+            if role == "user":
+                self._add_user_bubble(content)
+            elif role == "agent":
+                entry = _AssistantEntry(self.messages_layout)
+                entry.append_delta(content)
+
     # -- AOI ------------------------------------------------------------------ #
 
     def _rect_to_bbox4326(
@@ -1464,8 +1498,15 @@ class Trid3ntDock(QDockWidget):
         group named for the case (dedup reset), the persisted loaded_layers
         replayed into it, an OpenStreetMap basemap (settings-gated, item 4),
         and a canvas zoom to the case bbox -- or, absent one, the union of
-        the vector layers just materialized -- so the canvas is never left
-        white (item 1, live-feedback 2026-07-09).
+        the vector layers just materialized, or a further fallback bbox --
+        so the canvas is never silently left wherever it was (item 1,
+        live-feedback 2026-07-09; the fallback ladder + honest note for a
+        genuinely bbox-less raster-only case is item D, live-feedback
+        2026-07-10). Runs LAST, unconditionally, on every case-open path
+        that reaches this handler (select, New case, and the startup-reuse
+        select alike -- ``_bind_startup_case`` also resolves through a
+        ``case-command select`` whose reply lands here) -- nothing above
+        this call may skip or short-circuit past it.
         """
         info = parse_case_open(payload)
         if info is None:
@@ -1476,11 +1517,15 @@ class Trid3ntDock(QDockWidget):
             )
             return
         self._case_id = info.case_id
-        self._pending = None
+        # ITEM B: the previous case's bubbles/notes/gate cards must not
+        # survive a switch -- clear the message list before repainting
+        # anything for the newly-opened case.
+        self._clear_messages()
         self.materializer.set_case(info.case_id, info.title)
         self._set_case_label(info.title)
         self._set_dot("connected")
         self.status_label.setText(f"Connected -- case {info.case_id[:8]}")
+        self._replay_chat_history(info.chat_messages)
         self._note(f"Case '{info.title}' active")
         if info.layers:
             notes = self.materializer.materialize(info.layers)
@@ -1490,29 +1535,77 @@ class Trid3ntDock(QDockWidget):
             note = ensure_basemap()
             if note:
                 self._note(note)
-        self._zoom_after_case_open(info.bbox)
+        self._zoom_after_case_open(info)
         self._scroll_to_bottom()
 
-    def _zoom_after_case_open(
-        self, bbox: Optional[Tuple[float, float, float, float]]
-    ) -> None:
-        """Zoom the canvas to ``bbox`` (EPSG:4326), or -- when it is absent
-        or the transform fails -- to the union of the vector layers this
-        case-open just materialized. XYZ raster layers report a whole-world
-        extent, so they never drive the fallback. Headless-safe: no canvas
-        (no ``iface``) is a silent no-op, never a crash."""
+    def _zoom_after_case_open(self, info) -> None:
+        """ITEM D (live-feedback 2026-07-10, auto-focus on every case
+        switch): zoom the canvas to the just-opened case's area, and say
+        so. Fallback ladder, each rung tried only when the previous one is
+        absent or its transform fails:
+
+          1. ``info.bbox`` -- the case-open's own ``session_state.case.bbox``
+             (EPSG:4326).
+          2. the union of the vector layers THIS case-open just
+             materialized (XYZ raster layers report a whole-world extent,
+             so they never drive this fallback).
+          3. any bbox found elsewhere in the case-open's raw payload
+             (``find_fallback_bbox`` -- defensive/future-proof; today's
+             wire contract carries no OTHER bbox field).
+          4. the dock's own CACHED ``case-list`` row for this case_id
+             (``CaseInfo.bbox``, populated independently of the case-open
+             rehydration) -- can carry a bbox even when (1)-(3) come up
+             empty.
+
+        A successful zoom appends "Zoomed to case area" so the behavior is
+        visible. A genuinely bbox-less, vector-less case (an OLD raster-only
+        case predating bbox seeding) says so honestly instead of silently
+        leaving the view wherever it was. Headless-safe: no canvas (no
+        ``iface``) is a silent no-op, never a crash (there would be no one
+        to show the note to in that environment either).
+        """
         try:
             canvas = self.iface.mapCanvas()
         except Exception:  # noqa: BLE001 -- no canvas (headless), nothing to zoom
             return
-        if bbox is not None and zoom_to_bbox4326(canvas, bbox):
+        if info.bbox is not None and zoom_to_bbox4326(canvas, info.bbox):
+            self._note("Zoomed to case area")
             return
         try:
             dest_crs = canvas.mapSettings().destinationCrs()
         except Exception:  # noqa: BLE001
             return
         extent = self.materializer.last_added_vector_extent(dest_crs)
-        zoom_to_extent(canvas, extent)
+        if zoom_to_extent(canvas, extent):
+            self._note("Zoomed to case area")
+            return
+        fallback = self._fallback_case_bbox(info)
+        if fallback is not None and zoom_to_bbox4326(canvas, fallback):
+            self._note("Zoomed to case area")
+            return
+        self._note("Case has no stored map area - keeping current view")
+
+    def _fallback_case_bbox(
+        self, info
+    ) -> Optional[Tuple[float, float, float, float]]:
+        """ITEM D rungs 3-4: a bbox from OUTSIDE ``info.bbox`` -- the
+        case-open's own raw payload, then the dock's cached ``case-list``
+        row for this case_id. Returns the first usable EPSG:4326 bbox, or
+        None. Never raises -- a malformed cached row is skipped, not fatal.
+        """
+        raw_bbox = find_fallback_bbox(info.raw)
+        if raw_bbox is not None:
+            return raw_bbox
+        for case in self._cases:
+            try:
+                if case.case_id != info.case_id or not case.bbox:
+                    continue
+                bbox = case.bbox
+                if len(bbox) == 4 and all(isinstance(v, (int, float)) for v in bbox):
+                    return (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
+            except (AttributeError, TypeError, ValueError):
+                continue
+        return None
 
     # -- gate card -------------------------------------------------------------- #
 

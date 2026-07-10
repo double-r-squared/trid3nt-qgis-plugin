@@ -53,6 +53,15 @@ _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
 _OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 _OSM_LAYER_NAME = "OpenStreetMap"
 
+#: Prefix shared by every TRID3NT-owned layer-tree group: the live per-case
+#: group ("TRID3NT <case>", ``LayerMaterializer.set_case``) AND the "Open
+#: case in QGIS" export group ("TRID3NT export <case>",
+#: ``materialize_export``). ITEM A (case-switch clear) matches on this
+#: prefix so BOTH kinds are swept on a case-open rebind. The OpenStreetMap
+#: basemap is added directly at layerTreeRoot (never inside a group -- see
+#: ``ensure_basemap``) so it never matches this prefix and is never touched.
+_GROUP_PREFIX = "TRID3NT "
+
 
 def _safe_filename(name: str) -> str:
     return _SAFE_NAME.sub("_", name).strip("_") or "layer"
@@ -217,6 +226,90 @@ def stamp_temporal(raster_layers, stamped_counts: Optional[dict] = None) -> List
     return notes
 
 
+# -- animation grouping (ITEM C: nested subgroup, not flat siblings) -------- #
+#
+# DESIGN NOTE (proven live 2026-07-10): a frame-sequence raster is placed
+# into its animation subgroup AT INSERTION TIME (``_ensure_animation_subgroup``
+# below, consulted by ``LayerMaterializer._add_raster`` BEFORE the layer's
+# tree node is ever created) -- never moved there after the fact.
+#
+# An earlier version built every raster flat first, then RELOCATED the
+# frame-sequence members into a subgroup afterward (via
+# ``removeChildNode``+``insertLayer``, then ``takeChild``+``insertChildNode``
+# when the first approach looked suspect). BOTH relocation strategies proved
+# unsafe against a REAL Qt event loop: reproduced with a minimal script
+# (construct group -> relocate members -> call ``QCoreApplication.
+# processEvents()`` a few times) -- the relocated nodes' underlying C++
+# objects got silently destroyed once the loop next drained, even though
+# ``findLayerIds()`` read back correctly immediately after the move. A
+# synchronous single-shot script never pumps the Qt loop, so it never
+# caught this; the live dock does (every ``pump``/timer tick), which is
+# exactly where it surfaced -- an animation subgroup that read "N frames
+# grouped" then silently emptied moments later. Root cause is very likely a
+# SIP ownership-transfer gap between the group's C++-side child list and
+# the Python-side node wrapper for a RELOCATED node (a freshly-``insertLayer``
+# -created node, which is never relocated, does not exhibit it -- verified
+# by direct construction-into-a-nested-subgroup surviving the same
+# processEvents() churn cleanly). Placing at creation time sidesteps the
+# whole relocation code path.
+
+
+def _ensure_animation_subgroup(parent_group, stem: str, count: int):
+    """Find-or-create the animation subgroup for a frame-sequence ``stem``
+    with ``count`` members, RENAMING an existing prefix-matched subgroup in
+    place when the count grew (a plain property rename -- no node move, no
+    reconstruction, safe). Never places a member itself; callers insert
+    directly into the returned group at construction time."""
+    prefix = f"{stem} (animation, "
+    subgroup_name = f"{prefix}{count} frames)"
+    for existing in parent_group.findGroups():
+        if existing.name().startswith(prefix):
+            if existing.name() != subgroup_name:
+                existing.setName(subgroup_name)
+            return existing
+    subgroup = parent_group.insertGroup(0, subgroup_name)
+    subgroup.setExpanded(False)
+    return subgroup
+
+
+def _frame_membership(names) -> dict:
+    """``{layer_name: (stem, member_count)}`` for every name that is part of
+    a detected frame-sequence group (``temporal.group_frame_layers`` -- the
+    SAME grouping ``stamp_temporal`` stamps). Names not part of any
+    (>= 2-member) sequence are simply absent -- callers treat that as "stays
+    flat"."""
+    membership: dict = {}
+    for group in temporal.group_frame_layers(list(names)):
+        count = len(group.members)
+        for member in group.members:
+            membership[member.name] = (group.stem, count)
+    return membership
+
+
+def _animation_group_notes(raster_layers, grouped_counts: dict) -> List[str]:
+    """Dock notes for frame-sequence groups that changed size THIS call.
+    Pure bookkeeping -- placement already happened at insertion time (see
+    the module docstring above); this only decides what to SAY, using the
+    same idempotent stem->count dedup pattern as ``stamp_temporal``."""
+    notes: List[str] = []
+    names = []
+    for layer in raster_layers:
+        try:
+            names.append(layer.name())
+        except (AttributeError, RuntimeError):  # deleted/half-built layer
+            continue
+    for group in temporal.group_frame_layers(names):
+        count = len(group.members)
+        if grouped_counts.get(group.stem) == count:
+            continue
+        grouped_counts[group.stem] = count
+        notes.append(
+            f"{group.stem}: {count} frames grouped - open View > Panels > "
+            "Temporal Controller and press play to animate."
+        )
+    return notes
+
+
 class LayerMaterializer:
     """Per-connection materializer: one group, one added-id set, one temp dir."""
 
@@ -227,6 +320,7 @@ class LayerMaterializer:
         self._temp_dir: Optional[str] = None
         self._case_rasters: List = []  # QgsRasterLayer refs, this case
         self._stamped_counts: dict = {}  # frame-group stem -> stamped size
+        self._grouped_counts: dict = {}  # frame-group stem -> animated size (ITEM C)
         #: Layers added by the MOST RECENT ``materialize``/``materialize_export``
         #: call (reset at the top of each) -- lets the dock zoom to "what just
         #: landed" without re-deriving it from notes strings.
@@ -235,13 +329,49 @@ class LayerMaterializer:
     # -- lifecycle ------------------------------------------------------------- #
 
     def set_case(self, case_id: str, title: Optional[str] = None) -> None:
-        """Bind to a case: names the layer-tree group + resets dedup."""
+        """Bind to a case: clears every stale TRID3NT layer-tree group (ITEM
+        A -- this materializer's own previous-case group AND any "Open case
+        in QGIS" export groups, which otherwise accumulate across switches),
+        names the fresh layer-tree group, and resets dedup/animation state
+        so the case-open replay always repaints from a clean slate."""
         label = title or case_id[:8]
         self._group_name = f"TRID3NT {label}"
+        self._clear_stale_groups()
         self._added_ids.clear()
         self._case_rasters = []
         self._stamped_counts = {}
+        self._grouped_counts = {}
         self.last_added_layers = []
+
+    def _clear_stale_groups(self) -> None:
+        """Remove every layer-tree group whose name starts with the TRID3NT
+        group PREFIX (the live per-case group AND any "Open case in QGIS"
+        export groups -- both share the prefix), along with the layers each
+        one owns. Always clears ALL of them, including one that happens to
+        share the incoming case's own group name -- a case-open always
+        repaints its layers fresh (dedup state is reset right after), so
+        keeping a same-named group around would only risk stacking
+        duplicate layers into it.
+
+        NEVER touches the OpenStreetMap basemap (added directly at
+        layerTreeRoot, never inside a group -- see ``ensure_basemap``) or
+        any non-TRID3NT group/layer the user added themselves. Never raises
+        -- a half-torn-down project tree must not crash a case switch.
+        """
+        try:
+            project = QgsProject.instance()
+            root = project.layerTreeRoot()
+            stale = [g for g in root.findGroups() if g.name().startswith(_GROUP_PREFIX)]
+            for group in stale:
+                try:
+                    layer_ids = group.findLayerIds()
+                    if layer_ids:
+                        project.removeMapLayers(layer_ids)
+                    root.removeChildNode(group)
+                except Exception:  # noqa: BLE001 -- best-effort per-group cleanup
+                    continue
+        except Exception:  # noqa: BLE001 -- honest no-op, never a crash
+            pass
 
     def _ensure_temp_dir(self) -> str:
         if self._temp_dir is None or not os.path.isdir(self._temp_dir):
@@ -268,11 +398,24 @@ class LayerMaterializer:
         notes: List[str] = []
         rasters_before = len(self._case_rasters)
         self.last_added_layers = []
+        # ITEM C: decide frame-sequence membership UP FRONT (existing case
+        # rasters + this batch's about-to-land raster events), so a brand
+        # new frame member is placed straight into its animation subgroup
+        # at construction time -- see the module docstring above the
+        # animation-grouping helpers for why members are never relocated
+        # after the fact.
+        candidate_names = [self._safe_layer_name(l) for l in self._case_rasters]
+        candidate_names.extend(
+            event.name
+            for event in events
+            if event.layer_type == "raster" and event.layer_id not in self._added_ids
+        )
+        frame_membership = _frame_membership([n for n in candidate_names if n])
         for event in events:
             if event.layer_id in self._added_ids:
                 continue
             try:
-                note = self._materialize_one(event)
+                note = self._materialize_one(event, frame_membership)
             except Exception as exc:  # noqa: BLE001
                 note = f"layer '{event.name}': failed ({type(exc).__name__}: {exc})"
             if note is not None:
@@ -280,21 +423,34 @@ class LayerMaterializer:
                 # re-note on every session-state replay of the snapshot.
                 self._added_ids.add(event.layer_id)
                 notes.append(note)
-        # Frame-sequence rasters -> native Temporal Controller animation.
-        # Only when this snapshot added a raster; the per-case stamped-counts
-        # dict keeps session-state replays idempotent.
+        # Frame-sequence rasters landed in their animation subgroups above
+        # (placement is per-layer, at insertion time); this only stamps the
+        # native Temporal Controller ranges and announces newly-(re)grouped
+        # sequences. Only when this snapshot added a raster; the per-case
+        # stamped/grouped counts dicts keep session-state replays (and the
+        # case-open replay, which flows through this same method) idempotent.
         if len(self._case_rasters) != rasters_before:
             notes.extend(stamp_temporal(self._case_rasters, self._stamped_counts))
+            notes.extend(_animation_group_notes(self._case_rasters, self._grouped_counts))
         return notes
 
-    def _materialize_one(self, event: LayerEvent) -> Optional[str]:
+    @staticmethod
+    def _safe_layer_name(layer) -> str:
+        try:
+            return layer.name()
+        except (AttributeError, RuntimeError):  # deleted/half-built layer
+            return ""
+
+    def _materialize_one(
+        self, event: LayerEvent, frame_membership: Optional[dict] = None
+    ) -> Optional[str]:
         if event.layer_type == "raster":
-            return self._add_raster(event)
+            return self._add_raster(event, frame_membership or {})
         if event.layer_type in ("vector", "geojson"):
             return self._add_vector(event)
         return f"layer '{event.name}': type '{event.layer_type}' not supported yet -- skipped"
 
-    def _add_raster(self, event: LayerEvent) -> str:
+    def _add_raster(self, event: LayerEvent, frame_membership: dict) -> str:
         template = event.tile_template
         if not template:
             return (
@@ -305,7 +461,17 @@ class LayerMaterializer:
         if not layer.isValid():
             return f"raster '{event.name}': QGIS rejected the XYZ uri -- skipped"
         self._case_rasters.append(layer)
-        return self._add_to_group(layer, event, f"raster '{event.name}' added (XYZ tiles)")
+        # ITEM C: a recognized frame-sequence member goes straight into its
+        # (found-or-created-or-renamed) animation subgroup; everything else
+        # stays flat under the case group.
+        destination = None
+        membership = frame_membership.get(event.name)
+        if membership is not None:
+            stem, count = membership
+            destination = _ensure_animation_subgroup(self._ensure_group(), stem, count)
+        return self._add_to_group(
+            layer, event, f"raster '{event.name}' added (XYZ tiles)", group=destination
+        )
 
     def _add_vector(self, event: LayerEvent) -> str:
         if event.inline_geojson is not None:
@@ -356,12 +522,12 @@ class LayerMaterializer:
         if group is None:
             group = root.insertGroup(0, group_name)
 
-        def _add(layer, label: str) -> None:
+        def _add(layer, label: str, destination=None) -> None:
             if not layer.isValid():
                 notes.append(f"export layer '{label}': QGIS rejected it -- skipped")
                 return
             QgsProject.instance().addMapLayer(layer, False)
-            group.insertLayer(0, layer)
+            (destination or group).insertLayer(0, layer)
             self.last_added_layers.append(layer)
             notes.append(f"export layer '{label}' added")
 
@@ -372,12 +538,24 @@ class LayerMaterializer:
             )
         export_rasters: List = []
         raster_styles = getattr(plan, "raster_styles", None) or {}
+        # ITEM C: decide frame-sequence membership UP FRONT from every raster
+        # stem in this export (the whole batch lands in one call, so unlike
+        # the live-stream path there is no "existing + new" split -- see the
+        # animation-grouping module docstring for why placement happens at
+        # construction time rather than a post-hoc relocation).
+        stems = [os.path.splitext(os.path.basename(p))[0] for p in plan.raster_paths]
+        frame_membership = _frame_membership(stems)
         for path in plan.raster_paths:
             stem = os.path.splitext(os.path.basename(path))[0]
             layer = QgsRasterLayer(path, stem, "gdal")
             if layer.isValid():
                 export_rasters.append(layer)
-            _add(layer, stem)
+            destination = None
+            membership = frame_membership.get(stem)
+            if membership is not None:
+                anim_stem, count = membership
+                destination = _ensure_animation_subgroup(group, anim_stem, count)
+            _add(layer, stem, destination=destination)
             # Sidecar .qml (the export tool's TiTiler-derived pseudocolor
             # ramp): without it a GeoTIFF renders default grayscale --
             # near-black flood frames. loadNamedStyle is Qt5/Qt6-neutral;
@@ -385,9 +563,13 @@ class LayerMaterializer:
             qml = raster_styles.get(path)
             if qml and layer.isValid():
                 notes.append(self._apply_named_style(layer, stem, qml))
-        # Frame-sequence rasters (Flood_depth_step_1..N GeoTIFFs) -> native
-        # Temporal Controller animation, same as the live-stream path.
+        # Frame-sequence rasters (Flood_depth_step_1..N GeoTIFFs) landed in
+        # their animation subgroups above; stamp the native Temporal
+        # Controller ranges and announce the grouping (fresh throwaway dedup
+        # dict -- the whole export lands in one call, unlike the incremental
+        # live stream, so every recognized sequence is "new" every time).
         notes.extend(stamp_temporal(export_rasters))
+        notes.extend(_animation_group_notes(export_rasters, {}))
         notes.extend(plan.notes)
         if not plan.vector_layers and not plan.raster_paths:
             notes.append(
@@ -427,15 +609,21 @@ class LayerMaterializer:
                 "-- layer kept with default rendering"
             )
 
-    def _add_to_group(self, layer, event: LayerEvent, note: str) -> str:
+    def _add_to_group(self, layer, event: LayerEvent, note: str, group=None) -> str:
+        """Add ``layer`` to the project + insert its tree node into
+        ``group`` (default: this materializer's flat case group). ``group``
+        lets ITEM C place a frame-sequence member straight into its
+        animation subgroup at construction time -- see the module docstring
+        above the animation-grouping helpers for why members are never
+        relocated into a subgroup after the fact."""
         if event.opacity is not None:
             try:
                 layer.setOpacity(max(0.0, min(1.0, float(event.opacity))))
             except (AttributeError, TypeError, ValueError):
                 pass
         QgsProject.instance().addMapLayer(layer, False)
-        group = self._ensure_group()
-        node = group.insertLayer(0, layer)
+        target = group if group is not None else self._ensure_group()
+        node = target.insertLayer(0, layer)
         if node is not None and not event.visible:
             node.setItemVisibilityChecked(False)
         self.last_added_layers.append(layer)

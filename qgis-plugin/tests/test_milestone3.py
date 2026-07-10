@@ -512,6 +512,149 @@ class TestCaseSelect(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------- #
+# ITEM B (live-feedback 2026-07-10): chat-history replay extraction --
+# ``session_state.chat_history`` (contracts ``case.py`` CaseChatMessage) ->
+# plain role/content rows for the dock's case-open chat replay.
+# --------------------------------------------------------------------------- #
+
+
+class TestParseChatHistory(unittest.TestCase):
+    def test_present_user_and_agent_rows_survive(self):
+        rows = tc.parse_chat_history(
+            {
+                "chat_history": [
+                    {"role": "user", "content": "how deep does it flood?"},
+                    {"role": "agent", "content": "up to 1.2 m near the river"},
+                ]
+            }
+        )
+        self.assertEqual(
+            rows,
+            [
+                {"role": "user", "content": "how deep does it flood?"},
+                {"role": "agent", "content": "up to 1.2 m near the river"},
+            ],
+        )
+
+    def test_absent_chat_history_yields_empty_list(self):
+        self.assertEqual(tc.parse_chat_history({}), [])
+        self.assertEqual(tc.parse_chat_history({"chat_history": None}), [])
+        self.assertEqual(tc.parse_chat_history({"chat_history": "not-a-list"}), [])
+
+    def test_malformed_rows_are_skipped_not_raised(self):
+        rows = tc.parse_chat_history(
+            {
+                "chat_history": [
+                    "not-a-dict",
+                    {"role": "user"},  # no content
+                    {"content": "no role"},
+                    {"role": "user", "content": 42},  # non-string content
+                    {"role": "user", "content": ""},  # empty content
+                    {"role": "system", "content": "tool bookkeeping"},
+                    {"role": "tool", "content": "{...}"},
+                    {"role": "bogus", "content": "hi"},
+                    {"role": "user", "content": "the one good row"},
+                ]
+            }
+        )
+        self.assertEqual(rows, [{"role": "user", "content": "the one good row"}])
+
+    def test_capped_at_replay_max_keeping_the_tail(self):
+        many = [
+            {"role": "user" if i % 2 == 0 else "agent", "content": f"msg {i}"}
+            for i in range(tc.CHAT_HISTORY_REPLAY_MAX + 10)
+        ]
+        rows = tc.parse_chat_history({"chat_history": many})
+        self.assertEqual(len(rows), tc.CHAT_HISTORY_REPLAY_MAX)
+        # the TAIL survives (most recent conversation), not the head
+        self.assertEqual(rows[0]["content"], "msg 10")
+        self.assertEqual(rows[-1]["content"], f"msg {tc.CHAT_HISTORY_REPLAY_MAX + 9}")
+
+    def test_parse_case_open_surfaces_chat_messages(self):
+        info = tc.parse_case_open(
+            {
+                "session_state": {
+                    "case": {"case_id": "01OK", "title": "Asheville flood"},
+                    "loaded_layers": [],
+                    "chat_history": [
+                        {"role": "user", "content": "start a flood sim"},
+                        {"role": "tool", "content": "{tool_card}"},
+                        {"role": "agent", "content": "here is the result"},
+                    ],
+                }
+            }
+        )
+        self.assertIsNotNone(info)
+        self.assertEqual(
+            info.chat_messages,
+            [
+                {"role": "user", "content": "start a flood sim"},
+                {"role": "agent", "content": "here is the result"},
+            ],
+        )
+
+    def test_parse_case_open_without_chat_history_is_empty(self):
+        info = tc.parse_case_open(
+            {"session_state": {"case": {"case_id": "01OK"}, "loaded_layers": []}}
+        )
+        self.assertIsNotNone(info)
+        self.assertEqual(info.chat_messages, [])
+
+
+# --------------------------------------------------------------------------- #
+# ITEM D (live-feedback 2026-07-10): auto-focus fallback bbox scan --
+# ``find_fallback_bbox`` covers a case-open payload OUTSIDE the primary
+# session_state.case.bbox carrier ``parse_case_open`` already extracts.
+# --------------------------------------------------------------------------- #
+
+
+class TestFindFallbackBbox(unittest.TestCase):
+    def test_top_level_payload_bbox(self):
+        bbox = tc.find_fallback_bbox({"bbox": [-83, 35, -82, 36]})
+        self.assertEqual(bbox, (-83.0, 35.0, -82.0, 36.0))
+
+    def test_session_state_level_bbox(self):
+        bbox = tc.find_fallback_bbox(
+            {"session_state": {"bbox": [-83, 35, -82, 36]}}
+        )
+        self.assertEqual(bbox, (-83.0, 35.0, -82.0, 36.0))
+
+    def test_session_state_case_level_bbox(self):
+        bbox = tc.find_fallback_bbox(
+            {"session_state": {"case": {"bbox": [-83, 35, -82, 36]}}}
+        )
+        self.assertEqual(bbox, (-83.0, 35.0, -82.0, 36.0))
+
+    def test_precedence_top_level_wins(self):
+        # top-level payload.bbox is checked first, even when a DIFFERENT
+        # bbox also sits deeper in the payload.
+        bbox = tc.find_fallback_bbox(
+            {
+                "bbox": [-83, 35, -82, 36],
+                "session_state": {"case": {"bbox": [-70, 40, -69, 41]}},
+            }
+        )
+        self.assertEqual(bbox, (-83.0, 35.0, -82.0, 36.0))
+
+    def test_absent_or_malformed_yields_none(self):
+        for payload in (
+            {},
+            {"bbox": None},
+            {"bbox": [-83, 35, -82]},  # only 3 elements
+            {"bbox": "not-a-list"},
+            {"session_state": None},
+            {"session_state": {"case": "not-a-dict"}},
+            "not-a-dict",
+            None,
+        ):
+            self.assertIsNone(tc.find_fallback_bbox(payload), f"payload={payload!r}")
+
+    def test_int_elements_coerced_to_float(self):
+        bbox = tc.find_fallback_bbox({"bbox": [-83, 35, -82, 36]})
+        self.assertTrue(all(isinstance(v, float) for v in bbox))
+
+
+# --------------------------------------------------------------------------- #
 # Generic case-command (create/delete) -- item 2/3 (live-feedback 2026-07-09)
 # --------------------------------------------------------------------------- #
 
