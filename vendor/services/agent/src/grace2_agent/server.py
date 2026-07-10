@@ -4302,7 +4302,10 @@ async def _replay_active_case_layers(state: SessionState) -> None:
             )
         # Seed the URI registry so handle-indirection resolves for layers
         # produced in a PRIOR session of this Case (mirrors _sync_case_context).
-        get_uri_registry(state.session_id).seed_from_layers(
+        # F32: REPLACE (not additive-seed) — same rationale as the case-switch
+        # call sites, kept consistent here so a bare reconnect never leaves
+        # stale/evicted records lingering across repeated resumes.
+        get_uri_registry(state.session_id).replace_from_layers(
             session_state.loaded_layers
         )
         logger.info(
@@ -4764,6 +4767,10 @@ async def _sync_case_context(
         # JOB 2: no active Case -> no AOI anchor.
         state.case_bbox = None
         state.emitter.reset_loaded_layers([])
+        # F32: no active Case -> no resolvable handles either (clears any
+        # leftover registrations from whatever Case this connection last
+        # drove).
+        get_uri_registry(state.session_id).clear()
         return
     p = get_persistence()
     if p is None:
@@ -4787,7 +4794,12 @@ async def _sync_case_context(
         # handle-indirection works for layers produced in PRIOR sessions of
         # this Case (the LLM history was just cleared; the registry is the
         # only place the layer_id → uri association survives).
-        get_uri_registry(state.session_id).seed_from_layers(
+        # F32: REPLACE, not additive-seed — this IS a case-switch point (this
+        # connection's context was synced to a DIFFERENT Case, or none). An
+        # additive seed would leak the previous Case's handles/URIs into this
+        # Case's resolution (a stale Case-A layer_id could satisfy a Case-B
+        # tool call, or out-rank the correct Case-B URI in a fuzzy match).
+        get_uri_registry(state.session_id).replace_from_layers(
             session_state.loaded_layers
         )
         # F17 (ux-batch-1 J8): rehydrate this connection's LLM context from the
@@ -4905,6 +4917,25 @@ async def _emit_case_open(
         )
     if state.emitter is not None:
         state.emitter.reset_loaded_layers(session_state.loaded_layers)
+        # F32 (live-reported): seed the URI registry from the SAME persisted
+        # layers the emitter/build_layers_present_note advertise. This was
+        # the missing half of the explicit case-open path — a fresh
+        # connection (e.g. a QGIS dock reconnect) that opens an EXISTING Case
+        # via case-command(select) reaches THIS function directly, never
+        # _sync_case_context / _replay_active_case_layers (which already
+        # seeded the registry for their own paths). The registry is
+        # session-scoped in-memory state, so on a genuinely fresh connection
+        # it starts empty regardless of how many layers the Case has
+        # persisted. Without this seed, the per-turn [Case state] note (built
+        # from these SAME loaded_layers) advertised handles the registry
+        # could not resolve — a tool call using an advertised handle got the
+        # branch-4 "does not match any layer this session produced" error,
+        # which is FALSE (the Case has the layer; only this connection's
+        # registry didn't). REPLACE (not additive) so a Case switch on this
+        # connection never leaks a prior Case's handles (F32 part 2).
+        get_uri_registry(state.session_id).replace_from_layers(
+            session_state.loaded_layers
+        )
         # sprint-14-aws (job-0290d): persisted VECTOR layers carry no inline
         # GeoJSON (the side-table is in-memory only), so the case-open payload
         # above rehydrated entries the browser cannot render (it never fetches
@@ -5087,6 +5118,10 @@ async def _handle_case_command(
         _ensure_emitter(websocket, state)
         if state.emitter is not None:
             state.emitter.reset_loaded_layers([])
+        # F32: a fresh Case starts with no resolvable handles either — clear
+        # any leftover registrations from whatever Case this connection last
+        # drove (mirrors the emitter flush immediately above).
+        get_uri_registry(state.session_id).clear()
         # Lane A1: materialize the (empty) view snapshot for the fresh Case so a
         # view-without-agent link resolves immediately after create — before any
         # turn lands. Emitter was just flushed, so no inline vectors to merge.
@@ -5137,6 +5172,9 @@ async def _handle_case_command(
         state.turn_count = 0
         if state.emitter is not None:
             state.emitter.reset_loaded_layers([])
+        # F32: no active Case -> no resolvable handles from the just-exited
+        # Case either (mirrors _sync_case_context's current-is-None branch).
+        get_uri_registry(state.session_id).clear()
         # job-CASE-AUTHORITY: clear the persisted pointer too, so a reconnect
         # after restart does NOT re-seed the just-exited Case.
         await _persist_session_active_case(state, None)
@@ -5697,6 +5735,113 @@ async def _pin_case_aoi_from_solve(
         )
     except Exception:  # noqa: BLE001 — best-effort, never break the turn
         logger.exception("aoi-pin: upsert failed case=%s", case_id)
+
+
+def _bbox_round6(bbox: Any) -> tuple[float, float, float, float] | None:
+    """Round a coerced 4-tuple bbox to 6 decimal places (~0.11 m at the
+    equator) for a TIGHT change-detection comparison.
+
+    Used only by ``_pin_case_aoi_from_tool_bbox``'s durable-write debounce —
+    deliberately much tighter than the coarse ~2 km ``_BBOX_QUANT_DEG``
+    scenario-reuse quant (``bbox_equivalent``'s default): that quant is
+    "close enough to be the same run", whereas here we only want to skip a
+    literally-repeated bbox, not silently drop a real (if small) AOI move.
+    Returns ``None`` for a missing / malformed bbox.
+    """
+    coerced = _coerce_bbox4(bbox)
+    if coerced is None:
+        return None
+    return (
+        round(coerced[0], 6),
+        round(coerced[1], 6),
+        round(coerced[2], 6),
+        round(coerced[3], 6),
+    )
+
+
+async def _pin_case_aoi_from_tool_bbox(
+    state: SessionState,
+    *,
+    case_id: str | None,
+    tool_name: str,
+    params: dict,
+) -> None:
+    """Durably anchor the Case AOI from an ordinary bbox-taking FETCH call.
+
+    ROOT CAUSE (live-reported): ``_pin_case_aoi_from_solve`` (above) only
+    fires for a domain-producing SOLVER (SWMM / SFINCS / MODFLOW). A Case
+    whose activity so far is plain fetches (``fetch_dem``, ``fetch_landcover``,
+    ...) never triggers it, so ``CaseSummary.bbox`` never gets written at all
+    — every such Case row sits at ``bbox: None`` forever. With no anchor,
+    ``build_layers_present_note`` carries no AOI line, and a follow-up like
+    "show me the hillshade in the bounding box" makes the model reverse-
+    engineer the extent from layer-id strings instead of reading it (the
+    live-reported symptom: a small local model burned its whole thinking
+    budget trying to recover a bbox from a TiTiler URI).
+
+    Fires ONLY for recognized bbox-taking fetchers (``fetched_kind_for_tool``);
+    domain-producing solvers are explicitly excluded — they keep their own
+    post-RESULT pin from the FLOORED solve-domain bbox (``_pin_case_aoi_from_
+    solve``), which must win over a pre-solve REQUEST bbox. Called AFTER both
+    AOI reuse guards have already read ``_turn_case_bbox`` for THIS dispatch
+    (so it never perturbs this call's own reuse comparison) and AFTER
+    ``_maybe_default_fetch_bbox_to_pinned_aoi`` has already snapped a
+    same-area drifted/narrower box onto any existing pin — so this call can
+    only WIDEN (an explicit enclose), MOVE (a disjoint bbox = a genuinely
+    different place — latest-wins, matching the solve-pin's unconditional
+    overwrite semantics), or — the common fix case — SEED (no pin yet) the
+    anchor. It can never silently shrink an already-established AOI.
+
+    Latest-wins in-session: ``state.case_bbox`` is set unconditionally (once a
+    valid bbox is present) so the persisted Case row and the in-session cache
+    stay in lockstep (the invariant: ``_turn_case_bbox`` at turn end ==
+    ``CaseSummary.bbox``). The durable Persistence write is debounced on a
+    tight 6-decimal-place comparison (``_bbox_round6``, NOT the coarse
+    scenario-reuse quant) so a repeated identical bbox never round-trips
+    Persistence twice. Best-effort and silent: never raises, never blocks the
+    turn — a missing active Case, an unbound Persistence, or a Persistence
+    hiccup just skips the write (existing bbox-less Cases self-heal on their
+    NEXT turn with any bbox-carrying fetch).
+    """
+    if fetched_kind_for_tool(tool_name) is None:
+        return
+    if _scenario_produces_domain(tool_name):
+        return  # solves are pinned post-result from the floored domain bbox
+    if not case_id:
+        return
+    coerced = _coerce_bbox4(params.get("bbox"))
+    if coerced is None:
+        return
+    # Latest-wins: always refresh the in-session anchor first, mirroring
+    # _pin_case_aoi_from_solve — the durable write below is best-effort and
+    # may legitimately no-op (debounce) or fail without undoing this.
+    state.case_bbox = list(coerced)
+    p = get_persistence()
+    if p is None:
+        return
+    try:
+        case = await p.get_case(case_id)
+    except Exception:  # noqa: BLE001 — best-effort, never break the turn
+        logger.exception("aoi-pin[fetch]: get_case failed case=%s", case_id)
+        return
+    if case is None:
+        logger.debug("aoi-pin[fetch]: case=%s missing; skipping pin", case_id)
+        return
+    if _bbox_round6(case.bbox) == _bbox_round6(coerced):
+        return  # debounce: the persisted AOI already matches this exact bbox
+    updated = case.model_copy(
+        update={"bbox": list(coerced), "updated_at": now_utc()}
+    )
+    try:
+        await p.upsert_case(updated)
+        logger.info(
+            "aoi-pin[fetch]: pinned Case AOI case=%s bbox=%s (tool=%s)",
+            case_id,
+            list(coerced),
+            tool_name,
+        )
+    except Exception:  # noqa: BLE001 — best-effort, never break the turn
+        logger.exception("aoi-pin[fetch]: upsert failed case=%s", case_id)
 
 
 def _bbox_overlaps(a: Any, b: Any) -> bool:
@@ -9842,6 +9987,15 @@ async def _invoke_tool_via_emitter(
                     bbox=fmatch.bbox,
                 )
                 entry = _ReuseEntry(entry.metadata, _reused_fetch_layer)
+
+    # job bbox-durability (live-reported, 2026-07): anchor the Case AOI from
+    # THIS bbox-carrying fetch's final (already reuse-guard-consulted /
+    # AOI-defaulted) params. Runs AFTER both reuse guards above so it never
+    # perturbs their read of the PRIOR pin; see _pin_case_aoi_from_tool_bbox
+    # for the full root-cause + latest-wins-but-never-shrinks contract.
+    await _pin_case_aoi_from_tool_bbox(
+        state, case_id=turn_case_id, tool_name=tool_name, params=params
+    )
 
     # Confirmation-before-consequence for solver composers (job-0241,
     # Invariant 9 / FR-AS-8). The LLM-supplied ``confirmed`` is STRIPPED first

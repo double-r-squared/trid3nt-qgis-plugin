@@ -823,3 +823,240 @@ class TestPlaceholderResolution:
             "publish_layer", {"layer_uri": "LayerURI_from_fetch_dem"}
         )
         assert out["layer_uri"] == DEM_COG
+
+
+# --------------------------------------------------------------------------- #
+# 7. F32 (live-reported): reconnect-empty registry + honest error text
+#
+# The layer-handle registry is session-scoped in-memory state (module-level
+# ``_SESSION_URI_REGISTRIES``, keyed by ``session_id``). A fresh connection
+# (e.g. a QGIS dock reconnect) that opens an EXISTING Case gets a NEW
+# ``session_id`` and therefore a brand-new, empty registry — even though the
+# Case's persisted ``loaded_layers`` (the SAME data the per-turn [Case state]
+# note advertises as reusable handles) are unchanged. A tool call using one of
+# those advertised handles then failed with "does not match any layer this
+# session produced" — factually wrong (the Case HAS the layer; only this
+# connection's registry didn't know about it yet).
+# --------------------------------------------------------------------------- #
+
+
+class TestReplaceFromLayers:
+    """``clear`` / ``replace_from_layers`` — the case-switch reseed contract."""
+
+    def test_clear_drops_everything(self) -> None:
+        reg = make_registry("sess-clear")
+        reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
+        assert reg.known_handles() == [NSI_LAYER_ID]
+        assert reg.resolve_params("t", {"assets_uri": NSI_LAYER_ID})["assets_uri"] == (
+            REAL_NSI_FGB
+        )
+        reg.clear()
+        assert reg.known_handles() == []
+        # A handle that resolved before clearing no longer maps to the URI —
+        # a bare (non-gs://) handle string that resolves to nothing fails OPEN
+        # (passed through unresolved, per the existing fail-open convention
+        # for non-URI-shaped values — see test_bare_handle_in_other_session_
+        # unresolved above), so the proof is "no longer substituted", not "now
+        # raises".
+        out = reg.resolve_params("t", {"assets_uri": NSI_LAYER_ID})
+        assert out["assets_uri"] == NSI_LAYER_ID
+
+    def test_replace_from_layers_seeds_case_open_style_payload(self) -> None:
+        reg = make_registry("sess-replace")
+        layers = [
+            {
+                "layer_id": NSI_LAYER_ID,
+                "name": "USACE NSI Structures",
+                "layer_type": "vector",
+                "uri": REAL_NSI_FGB,
+            }
+        ]
+        reg.replace_from_layers(layers)
+        assert reg.known_handles() == [NSI_LAYER_ID]
+        out = reg.resolve_params("t", {"assets_uri": NSI_LAYER_ID})
+        assert out["assets_uri"] == REAL_NSI_FGB
+
+    def test_replace_from_layers_drops_a_prior_cases_handles(self) -> None:
+        """F32 part 2: a Case switch must not leak the PREVIOUS Case's handles."""
+        reg = make_registry("sess-switch")
+        # Case A's persisted layer.
+        reg.replace_from_layers(
+            [{"layer_id": "case-a-dem", "name": "DEM", "layer_type": "raster",
+              "uri": DEM_COG}]
+        )
+        assert reg.known_handles() == ["case-a-dem"]
+        # Switch to Case B — a DIFFERENT layer set entirely.
+        reg.replace_from_layers(
+            [{"layer_id": NSI_LAYER_ID, "name": "NSI", "layer_type": "vector",
+              "uri": REAL_NSI_FGB}]
+        )
+        assert reg.known_handles() == [NSI_LAYER_ID]
+        # Case A's handle is GONE — a stale reference to it is no longer
+        # substituted with Case A's URI (fails open, unresolved — see
+        # test_clear_drops_everything).
+        out = reg.resolve_params("t", {"dem_uri": "case-a-dem"})
+        assert out["dem_uri"] == "case-a-dem"
+        assert out["dem_uri"] != DEM_COG
+
+    def test_seed_from_layers_is_additive_not_a_replace(self) -> None:
+        """Contrasts with replace_from_layers — documents WHY case-switch call
+        sites must use replace, not the plain additive seed."""
+        reg = make_registry("sess-additive")
+        reg.record("case-a-dem", uri=DEM_COG, tool_name="fetch_dem")
+        reg.seed_from_layers(
+            [{"layer_id": NSI_LAYER_ID, "name": "NSI", "layer_type": "vector",
+              "uri": REAL_NSI_FGB}]
+        )
+        # Additive: BOTH handles resolve (the leak replace_from_layers exists
+        # to prevent).
+        assert set(reg.known_handles()) == {"case-a-dem", NSI_LAYER_ID}
+
+
+class TestDemHintInventoryText:
+    """``_inventory_text`` (F32): tool-aware empty-registry suggestion + a
+    wider (10, was 5) handle-listing cap."""
+
+    def test_dem_consuming_tool_gets_fetch_dem_hint(self) -> None:
+        reg = make_registry("sess-dem-hint")
+        for tool in (
+            "compute_hillshade",
+            "compute_slope",
+            "compute_aspect",
+            "compute_contours",
+            "compute_terrain_profile",
+        ):
+            with pytest.raises(UriResolutionError) as exc_info:
+                reg.resolve_params(tool, {"dem_uri": "gs://grace2-hazard-cache/x.tif"})
+            msg = str(exc_info.value)
+            assert "fetch_dem" in msg
+            assert "run_model_flood_scenario" not in msg
+
+    def test_non_dem_tool_keeps_generic_hint(self) -> None:
+        reg = make_registry("sess-generic-hint")
+        with pytest.raises(UriResolutionError) as exc_info:
+            reg.resolve_params(
+                "run_pelicun_damage_assessment",
+                {"hazard_raster_uri": "gs://grace2-hazard-cache/x.tif"},
+            )
+        msg = str(exc_info.value)
+        assert "run_model_flood_scenario" in msg
+
+    def test_non_empty_registry_lists_up_to_ten_handles(self) -> None:
+        reg = make_registry("sess-ten-handles")
+        for i in range(12):
+            reg.record(
+                f"layer-{i:02d}",
+                uri=f"gs://grace2-hazard-cache/layer-{i:02d}.tif",
+                tool_name="t",
+            )
+        with pytest.raises(UriResolutionError) as exc_info:
+            reg.resolve_params(
+                "t", {"assets_uri": "gs://grace2-hazard-cache/does-not-exist.tif"}
+            )
+        msg = str(exc_info.value)
+        listed = sum(1 for i in range(12) if f"layer-{i:02d}" in msg)
+        assert listed == 10
+
+
+class TestReconnectSeedsRegistryFromCase:
+    """Server-integration: the actual case-open path (``case-command(select)``
+    -> ``_emit_case_open``) seeds the registry so a fresh connection resolves
+    the SAME handles the [Case state] note just advertised."""
+
+    def test_case_open_on_fresh_session_resolves_persisted_handle(self) -> None:
+        import asyncio
+
+        from grace2_agent.persistence import Persistence
+        from grace2_agent.server import SessionState, _emit_case_open, get_persistence, set_persistence
+        from grace2_contracts.common import new_ulid
+
+        from .test_persistence import MockMCPClient, _fresh_case_summary
+
+        saved = get_persistence()
+        set_persistence(Persistence(MockMCPClient()))
+        reset_uri_registries_for_tests()
+        try:
+            p = get_persistence()
+            # ``get_session_state`` hydrates loaded_layers straight from
+            # ``CaseSummary.loaded_layer_summaries`` — stamp it there so a
+            # case-open sees a Case with a real persisted layer.
+            case = _fresh_case_summary().model_copy(
+                update={
+                    "loaded_layer_summaries": [
+                        {
+                            "layer_id": NSI_LAYER_ID,
+                            "name": "USACE NSI Structures",
+                            "layer_type": "vector",
+                            "uri": REAL_NSI_FGB,
+                        }
+                    ]
+                }
+            )
+            asyncio.run(p.upsert_case(case))
+
+            # A FRESH connection (new session_id — this IS the reconnect: the
+            # registry store has no entry for this session_id yet).
+            ws = MockWebSocket()
+            state = SessionState(session_id=new_ulid())
+            assert get_uri_registry(state.session_id).known_handles() == []
+            asyncio.run(_emit_case_open(ws, state, case.case_id))
+
+            # The registry is seeded — the handle the note just advertised
+            # resolves, matching the note's own loaded_layers.
+            reg = get_uri_registry(state.session_id)
+            assert NSI_LAYER_ID in reg.known_handles()
+            out = reg.resolve_params("run_pelicun_damage_assessment",
+                                      {"assets_uri": NSI_LAYER_ID})
+            assert out["assets_uri"] == REAL_NSI_FGB
+        finally:
+            set_persistence(saved)
+            reset_uri_registries_for_tests()
+
+    def test_case_switch_on_same_session_replaces_not_leaks(self) -> None:
+        import asyncio
+
+        from grace2_agent.persistence import Persistence
+        from grace2_agent.server import SessionState, _emit_case_open, get_persistence, set_persistence
+        from grace2_contracts.common import new_ulid
+
+        from .test_persistence import MockMCPClient, _fresh_case_summary
+
+        saved = get_persistence()
+        set_persistence(Persistence(MockMCPClient()))
+        reset_uri_registries_for_tests()
+        try:
+            p = get_persistence()
+            case_a = _fresh_case_summary().model_copy(
+                update={
+                    "loaded_layer_summaries": [
+                        {
+                            "layer_id": "case-a-dem",
+                            "name": "DEM",
+                            "layer_type": "raster",
+                            "uri": DEM_COG,
+                        }
+                    ]
+                }
+            )
+            case_b = _fresh_case_summary()  # distinct case_id, no layers
+            asyncio.run(p.upsert_case(case_a))
+            asyncio.run(p.upsert_case(case_b))
+
+            ws = MockWebSocket()
+            state = SessionState(session_id=new_ulid())
+            asyncio.run(_emit_case_open(ws, state, case_a.case_id))
+            assert "case-a-dem" in get_uri_registry(state.session_id).known_handles()
+
+            # Same connection/session switches to Case B (empty layers).
+            asyncio.run(_emit_case_open(ws, state, case_b.case_id))
+            reg = get_uri_registry(state.session_id)
+            assert reg.known_handles() == []
+            # Case A's handle no longer maps to Case A's URI (fails open,
+            # unresolved — bare non-gs:// handle strings never raise; see
+            # TestReplaceFromLayers.test_clear_drops_everything).
+            out = reg.resolve_params("t", {"dem_uri": "case-a-dem"})
+            assert out["dem_uri"] == "case-a-dem"
+            assert out["dem_uri"] != DEM_COG
+        finally:
+            set_persistence(saved)
+            reset_uri_registries_for_tests()

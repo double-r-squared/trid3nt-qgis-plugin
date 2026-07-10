@@ -150,7 +150,23 @@ _RECORDS_PER_SESSION_CAP = 1024
 _WALK_MAX_DEPTH = 8
 _WALK_MAX_ITEMS = 64
 _ANNOUNCE_CAP = 8
-_ERROR_HANDLES_CAP = 5
+_ERROR_HANDLES_CAP = 10
+
+#: F32: tools that consume a DEM as their primary input. When the branch-4
+#: "no layers yet" fallback fires for one of these, suggest ``fetch_dem`` —
+#: the generic ``run_model_flood_scenario`` example was actively misleading
+#: for a terrain-derivative ask (live incident: a reconnect-empty registry +
+#: the generic suggestion steered the model away from the actually-needed
+#: ``fetch_dem`` call).
+_DEM_CONSUMING_TOOLS: frozenset[str] = frozenset(
+    {
+        "compute_hillshade",
+        "compute_slope",
+        "compute_aspect",
+        "compute_contours",
+        "compute_terrain_profile",
+    }
+)
 
 
 def _managed_bucket_prefixes() -> tuple[str, ...]:
@@ -478,11 +494,40 @@ class SessionUriRegistry:
                 self.record(layer_id, wms_url=norm, tool_name=tool_name)
 
     def seed_from_layers(self, layers: Any) -> None:
-        """Seed from persisted Case ``loaded_layers`` (rehydration path)."""
+        """Seed from persisted Case ``loaded_layers`` (rehydration path).
+
+        ADDITIVE — merges into whatever this registry already holds. Callers
+        switching the active Case on a connection (case-open / case-switch)
+        must use :meth:`replace_from_layers` instead so a prior Case's
+        handles don't leak into the new Case's inventory/resolution.
+        """
         try:
             self._walk(layers, "case-rehydration", depth=0, seen=set())
         except Exception:  # noqa: BLE001 — best-effort seam
             logger.exception("uri_registry[%s]: seed failed", self.session_id)
+
+    def clear(self) -> None:
+        """Drop every registered handle/URI/pending-announcement (F32)."""
+        self._records.clear()
+        self._uri_to_handle.clear()
+        self._pending_announcements.clear()
+
+    def replace_from_layers(self, layers: Any) -> None:
+        """Reset this registry to EXACTLY ``layers`` (F32 case-switch seed).
+
+        The registry is keyed by ``session_id``, not by Case — a session that
+        switches Cases (or a fresh connection that opens an existing Case)
+        reuses the SAME ``SessionUriRegistry``. ``seed_from_layers`` alone is
+        additive, so a prior Case's handles/URIs would keep resolving after
+        the switch (a cross-case leak: a handle from Case A could satisfy a
+        Case B tool call, or a stale Case A URI could win a fuzzy match over
+        the correct Case B one). Case-open / case-switch call sites clear
+        first so the registry reflects ONLY the now-active Case's persisted
+        layers, mirroring the emitter's ``reset_loaded_layers`` (replace, not
+        reconcile — job-0245's rule applied here too).
+        """
+        self.clear()
+        self.seed_from_layers(layers)
 
     # ------------------------------------------------------------------ #
     # Announcements (function_response surfacing)
@@ -534,7 +579,7 @@ class SessionUriRegistry:
                 return rec.uri
             if rec.wms_url:
                 # Only the display face is known — no data URI to hand over.
-                raise UriResolutionError(param_name, value, self._inventory_text())
+                raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
         # Branch 1 — exact URI known: pass (data URI) or map back (display URL).
         handle = self._uri_to_handle.get(v)
@@ -545,7 +590,7 @@ class SessionUriRegistry:
             if v == rec.wms_url:
                 if rec.uri:
                     return rec.uri  # display URL where a data URI belongs
-                raise UriResolutionError(param_name, value, self._inventory_text())
+                raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
             return v
 
         # Branch 3-titiler — a TiTiler tile-template DISPLAY URL: the underlying
@@ -567,7 +612,7 @@ class SessionUriRegistry:
                     return self._records[handle].uri
                 if _is_gs(cog_norm) or cog.startswith("s3://"):
                     return cog
-            raise UriResolutionError(param_name, value, self._inventory_text())
+            raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
         # Branch 3-wms — unknown WMS-style URL: recover the layer_id handle.
         if _looks_like_wms(v):
@@ -576,7 +621,7 @@ class SessionUriRegistry:
                 rec = self._records.get(layer_id)
                 if rec is not None and rec.uri:
                     return rec.uri
-            raise UriResolutionError(param_name, value, self._inventory_text())
+            raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
         # Small-model PLACEHOLDER resolution (2026-07-08): local 8B models emit
         # the producer (fetch_dem) and the consumer (publish_layer) in the SAME
@@ -615,7 +660,7 @@ class SessionUriRegistry:
         # Branch 4 — unknown + no match. Reject inside managed buckets;
         # fail-open for foreign buckets (user-supplied data we never saw).
         if _in_managed_bucket(v):
-            raise UriResolutionError(param_name, value, self._inventory_text())
+            raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
         logger.info(
             "uri_registry[%s]: passing through unknown foreign-bucket uri %s.%s=%r",
             self.session_id,
@@ -735,8 +780,19 @@ class SessionUriRegistry:
     # Introspection
     # ------------------------------------------------------------------ #
 
-    def _inventory_text(self) -> str:
-        """Compact handle inventory for the branch-4 error message."""
+    def _inventory_text(self, tool_name: str | None = None) -> str:
+        """Compact handle inventory for the branch-4 error message.
+
+        F32: when the registry genuinely has no layers, the "run the
+        producing tool first" example is tool-aware — a DEM-consuming tool
+        (``_DEM_CONSUMING_TOOLS``) is told to ``fetch_dem`` for this AOI
+        instead of the generic ``run_model_flood_scenario`` example, which
+        was actively misleading (and factually irrelevant) for a terrain
+        derivative ask. When the registry DOES have layers (the common F32
+        reconnect-repair case — the registry was simply unseeded, not
+        genuinely empty) this branch never fires; the handle listing below
+        does, now capped at ``_ERROR_HANDLES_CAP`` (10, was 5).
+        """
         layer_recs = [
             r
             for r in self._records.values()
@@ -744,6 +800,12 @@ class SessionUriRegistry:
         ]
         layer_recs.sort(key=lambda r: r.seq, reverse=True)
         if not layer_recs:
+            if tool_name in _DEM_CONSUMING_TOOLS:
+                return (
+                    "No layers have been produced this session yet — run "
+                    "fetch_dem for this AOI first to get a dem_uri handle, "
+                    f"then retry {tool_name}."
+                )
             return (
                 "No layers have been produced this session yet — run the "
                 "producing tool first (e.g. run_model_flood_scenario for a "
