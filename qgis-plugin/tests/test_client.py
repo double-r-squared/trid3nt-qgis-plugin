@@ -85,13 +85,22 @@ class TestPureHelpers(unittest.TestCase):
         self.assertTrue(uri.startswith("type=xyz&url="))
         self.assertTrue(uri.endswith("&zmin=0&zmax=24"))
         encoded = uri[len("type=xyz&url="):-len("&zmin=0&zmax=24")]
-        # No raw & or = may survive inside the encoded template (they would
-        # split the QGIS provider uri), and decoding must round-trip.
+        # MINIMAL encoding contract (2026-07-10): the installed QGIS build
+        # does not percent-decode the url component, so everything must stay
+        # literal EXCEPT the template's own query ampersands (%26), which
+        # would otherwise split the provider-uri parameter list.
         self.assertNotIn("&", encoded)
-        self.assertNotIn("=", encoded)
-        import urllib.parse
+        self.assertEqual(encoded.replace("%26", "&"), template)
+        # Placeholders, scheme and ? stay literal so QGIS can substitute
+        # tiles and the tile server sees its query verbatim.
+        self.assertIn("{z}", encoded)
+        self.assertIn("http://", encoded)
+        self.assertIn("?url=s3%3A%2F%2Fb%2Fk.tif", encoded)
 
-        self.assertEqual(urllib.parse.unquote(encoded), template)
+    def test_qgis_xyz_uri_no_query(self):
+        template = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        uri = tc.qgis_xyz_uri(template, zmin=0, zmax=19)
+        self.assertEqual(uri, f"type=xyz&url={template}&zmin=0&zmax=19")
 
     def test_parse_layer_events(self):
         payload = {

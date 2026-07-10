@@ -586,14 +586,19 @@ def s3_to_http(uri: str, endpoint: str) -> Optional[str]:
 def qgis_xyz_uri(template: str, zmin: int = 0, zmax: int = 24) -> str:
     """Build the QGIS ``wms`` provider uri for an XYZ tile TEMPLATE.
 
-    The template's own query string (TiTiler ``url=``/``rescale=``/
-    ``colormap=`` params) contains ``&`` and ``=`` characters that would
-    confuse the QGIS uri parser, so the whole template is percent-encoded
-    (QGIS decodes the ``url`` component). ``{z}/{x}/{y}`` placeholders are
-    encoded too -- QGIS accepts them either way.
+    Encode as LITTLE as possible: the installed QGIS build does NOT
+    percent-decode the ``url`` component, so a fully-quoted template
+    produces a layer that reports valid yet never issues a single tile
+    request (proven 2026-07-10 with a request-logging stub server; the
+    prior full-quote version painted nothing). Only the template's own
+    query-string ampersands are escaped (``%26``) so the provider's
+    ``&``-splitting of uri parameters cannot eat them; scheme, slashes,
+    ``?``, ``=`` and the ``{z}/{x}/{y}`` placeholders stay literal, and
+    already-encoded query values (TiTiler ``url=s3%3A%2F%2F...``) pass
+    through verbatim exactly as the tile server expects.
     """
     return (
-        f"type=xyz&url={urllib.parse.quote(template, safe='')}"
+        f"type=xyz&url={template.replace('&', '%26')}"
         f"&zmin={zmin}&zmax={zmax}"
     )
 
