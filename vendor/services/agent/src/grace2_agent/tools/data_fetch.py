@@ -2629,7 +2629,7 @@ _FETCH_LANDCOVER_METADATA = AtomicToolMetadata(
 # into the shared ``compute_cache_key`` salt, so no other tool's cache key
 # changes (a recursive cache wipe was deliberately avoided). Bump the integer
 # whenever a landcover-COG-generation fix must force a clean regenerate.
-_LANDCOVER_CACHE_VERSION = 2  # v2 = post-job-0324 palette-preserving COGs
+_LANDCOVER_CACHE_VERSION = 3  # v3 = F26 background(0)->nodata transparency; v2 = post-job-0324 palette-preserving COGs
 
 
 # MRLC WCS 1.0.0 GeoServer endpoint (Tier 2 OGC service, live-verified
@@ -2930,6 +2930,95 @@ def _has_overviews(tif_bytes: bytes) -> bool:
                 pass
 
 
+# NLCD "Background" class code -- MRLC's official legend reserves index 0 for
+# pixels outside the classified CONUS extent (open ocean, international
+# waters, etc). It is NEVER a legitimate NLCD land-cover class (real classes
+# are 11-95); the MRLC WCS 1.0.0 GetCoverage's embedded color table maps it
+# to OPAQUE BLACK ((0, 0, 0, 255)) rather than transparent -- confirmed via a
+# live probe of the real endpoint (bbox off the Washington coast, 2026-07-09).
+# The raster's DECLARED ``nodata`` tag is 255 (a separate sentinel that DOES
+# render transparent), so 0 slips through as an undeclared second nodata
+# value. City/county-scale fetches (always fully on land) never hit index 0
+# and never surfaced this; the state-scale auto-coarsen resolution-gate path
+# (commit 21cd123) is what first requested a bbox large enough to include
+# real open ocean, live-exposing an opaque black rectangle over the nodata
+# region. See _fix_nlcd_background_transparency.
+_NLCD_BACKGROUND_CLASS = 0
+
+
+def _fix_nlcd_background_transparency(tif_bytes: bytes) -> bytes:
+    """Fold NLCD's ``0`` (Background/no-coverage) pixels into the declared nodata.
+
+    Root cause (live-verified against the real MRLC WCS endpoint 2026-07-09,
+    and against GDAL's actual GTiff behavior -- NOT just the embedded table):
+    GDAL's GTiff driver forces alpha=0 ONLY for the color-table entry whose
+    index equals the band's DECLARED ``nodata`` value; every other entry's
+    alpha is silently forced back to 255 (opaque) when the color table is
+    flushed to disk, regardless of what alpha ``write_colormap`` was given.
+    (Confirmed empirically: writing ``cmap[0] = (0, 0, 0, 0)`` while
+    ``nodata`` stays 255 round-trips back as ``(0, 0, 0, 255)`` -- opaque --
+    every time; rewriting the colormap alone can never fix this.) So the only
+    reliable fix is at the PIXEL level: remap every ``0``-valued pixel to the
+    raster's existing declared ``nodata`` (255 for MRLC WCS NLCD), which
+    already renders transparent correctly. Class 0 is never a legitimate NLCD
+    code (real codes are 11-95), so this remap can never destroy real data.
+    If the raster has no declared nodata at all, ``0`` is promoted to be the
+    declared nodata directly (no remap needed; GDAL's forcing behavior then
+    makes index 0 transparent on its own).
+
+    Best-effort: returns ``tif_bytes`` unchanged (never raises) if the raster
+    has no embedded colormap, has no ``0``-valued pixels, or the rewrite
+    fails for any reason -- this is strictly a visualization fix, not a
+    correctness gate, and must never corrupt or block a real fetch.
+    """
+    try:
+        import numpy as np  # type: ignore[import-not-found]
+        import rasterio  # type: ignore[import-not-found]
+        from rasterio.io import MemoryFile  # type: ignore[import-not-found]
+
+        with MemoryFile(tif_bytes) as mem, mem.open() as src:
+            cmap = _read_band1_colormap(src)
+            if cmap is None:
+                return tif_bytes  # not a paletted raster -- nothing to fix
+
+            data = src.read()
+            band1 = data[0]
+            if not bool(np.any(band1 == _NLCD_BACKGROUND_CLASS)):
+                return tif_bytes  # no background pixels present -- no-op
+
+            nodata = src.nodata
+            target_nodata = (
+                float(_NLCD_BACKGROUND_CLASS) if nodata is None else float(nodata)
+            )
+
+            if int(target_nodata) == _NLCD_BACKGROUND_CLASS:
+                # No declared nodata (or it's already 0) -- promote 0 itself
+                # to the declared nodata; GDAL forces its alpha transparent.
+                out_data = data
+            else:
+                # Fold background (0) into the existing nodata sentinel so
+                # there is a single, already-transparent, sentinel value.
+                out_data = data.copy()
+                out_data[0][band1 == _NLCD_BACKGROUND_CLASS] = target_nodata
+
+            profile = src.profile.copy()
+            profile["nodata"] = target_nodata
+            colorinterp = src.colorinterp
+            with MemoryFile() as out_mem:
+                with out_mem.open(**profile) as dst:
+                    dst.write(out_data)
+                    _apply_band1_colormap(dst, cmap, colorinterp)
+                return out_mem.read()
+    except Exception as exc:  # noqa: BLE001 -- transparency fix is best-effort
+        logger.warning(
+            "fetch_landcover: NLCD background-transparency fix failed (%s: %s); "
+            "value-0 (ocean/no-coverage) pixels may render opaque black",
+            type(exc).__name__,
+            exc,
+        )
+        return tif_bytes
+
+
 def _fetch_nlcd_landcover_bytes(
     bbox: tuple[float, float, float, float], vintage_year: int, resolution_m: int = 30
 ) -> bytes:
@@ -3025,11 +3114,17 @@ def _fetch_nlcd_landcover_bytes(
             f"bbox={bbox}; body preview: {ogc_resp.content[:300]!r}"
         )
 
+    # NLCD Background-class transparency fix (2026-07-09): the WCS embedded
+    # color table maps class 0 to opaque black instead of transparent -- see
+    # _fix_nlcd_background_transparency. Applied BEFORE the COG re-write
+    # pipeline so the fixed table is what gets clipped/tiled/cached.
+    fixed = _fix_nlcd_background_transparency(ogc_resp.content)
+
     # job-0271-class fix (F33/F39): the MRLC WCS GetCoverage GeoTIFF is a flat
     # strip-organized raster with NO overviews, so TiTiler 404s the zoomed-out
     # tiles and NLCD renders spotty / vanishes when panned out. Clip to the
     # exact bbox and re-emit a tiled COG WITH overviews before caching.
-    return _landcover_bytes_to_cog(ogc_resp.content, bbox)
+    return _landcover_bytes_to_cog(fixed, bbox)
 
 
 def _fetch_esa_worldcover_bytes(

@@ -2400,6 +2400,199 @@ _NLCD_COLORMAP = {
 }
 
 
+# job-2026-07-09 -- NLCD state-scale opaque-black-ocean fix.
+#
+# The real MRLC WCS 1.0.0 GetCoverage embeds class 0 ("Background", used for
+# pixels outside the classified CONUS extent -- ocean, international waters)
+# as OPAQUE BLACK -- live-verified against the real endpoint 2026-07-09 (a
+# bbox off the Washington coast). ``_NLCD_COLORMAP`` above hand-assumed 0 was
+# already transparent, which is why the earlier colormap-preservation tests
+# never caught this: they preserve whatever table they are handed, and the
+# fixture handed them was already "clean". This second colormap matches the
+# REAL observed encoding so the background-transparency fix has something
+# real to fix.
+_NLCD_COLORMAP_REAL_MRLC = {
+    0: (0, 0, 0, 255),  # Background -- REAL MRLC WCS encoding: OPAQUE (the bug)
+    11: (70, 107, 159, 255),  # open water
+    21: (222, 197, 197, 255),  # developed, open space
+    41: (104, 171, 95, 255),  # deciduous forest
+    81: (220, 217, 57, 255),  # pasture/hay
+    90: (184, 217, 235, 255),  # woody wetlands
+    255: (255, 255, 255, 0),  # declared nodata -- correctly transparent
+}
+
+
+def _make_paletted_nlcd_geotiff_bytes_with_background(
+    bbox, width=200, height=200, background_frac=0.3, nodata=255
+):
+    """Build a paletted NLCD-style GeoTIFF carrying REAL class-0 background pixels.
+
+    Mirrors ``_make_paletted_nlcd_geotiff_bytes`` but (a) uses the REAL
+    observed MRLC colormap (``_NLCD_COLORMAP_REAL_MRLC``, class 0 = opaque
+    black) and (b) actually plants some class-0 "Background" pixels in the
+    data (a state-scale AOI reaching into open ocean) -- the scenario the
+    existing fixtures never exercised. ``nodata=None`` builds a raster with
+    NO declared nodata tag, for the promote-0-to-nodata branch.
+    """
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_bounds
+
+    classes = np.array([11, 21, 41, 81, 90], dtype="uint8")
+    data = classes[np.random.randint(0, len(classes), size=(height, width))]
+    n_bg = int(height * width * background_frac)
+    flat = data.reshape(-1)
+    bg_idx = np.random.choice(flat.size, size=n_bg, replace=False)
+    flat[bg_idx] = 0
+    data = flat.reshape(height, width)
+    transform = from_bounds(*bbox, width, height)
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+        path = f.name
+    kwargs = dict(
+        driver="GTiff",
+        width=width,
+        height=height,
+        count=1,
+        dtype="uint8",
+        crs="EPSG:4326",
+        transform=transform,
+    )
+    if nodata is not None:
+        kwargs["nodata"] = nodata
+    with rasterio.open(path, "w", **kwargs) as dst:
+        dst.write(data, 1)
+        dst.write_colormap(1, _NLCD_COLORMAP_REAL_MRLC)
+    with open(path, "rb") as f:
+        out = f.read()
+    os.unlink(path)
+    return out
+
+
+def test_fix_nlcd_background_transparency_folds_zero_into_declared_nodata():
+    """The live bug fix: class-0 background pixels must render transparent.
+
+    Root cause: GDAL forces alpha=0 ONLY for the color-table entry matching
+    the DECLARED ``nodata`` value; every other entry (including class 0,
+    which MRLC's real WCS response leaves opaque black) is forced back to
+    alpha=255 on write regardless of what we ask ``write_colormap`` for.
+    So the fix must remap 0-valued pixels into the existing (already
+    transparent) nodata sentinel -- verified here end to end.
+    """
+    import rasterio
+    import tempfile
+
+    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    raw = _make_paletted_nlcd_geotiff_bytes_with_background(quantized, nodata=255)
+    assert _colormap_of_bytes(raw)[0] == (0, 0, 0, 255)  # sanity: bug present
+
+    fixed = data_fetch._fix_nlcd_background_transparency(raw)
+
+    with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+        f.write(fixed)
+        path = f.name
+    try:
+        with rasterio.open(path) as src:
+            band1 = src.read(1)
+            assert not (band1 == 0).any(), "background pixels must be remapped away"
+            assert src.nodata == 255
+            cmap = src.colormap(1)
+            # The value now covering every former-background pixel (255)
+            # renders transparent -- the actual fix outcome.
+            assert cmap[255][3] == 0
+            # Real classes must be byte-for-byte untouched.
+            for idx in (11, 21, 41, 81, 90):
+                assert cmap[idx] == _NLCD_COLORMAP_REAL_MRLC[idx]
+    finally:
+        os.unlink(path)
+
+
+def test_fix_nlcd_background_transparency_promotes_zero_when_no_nodata_declared():
+    """No declared ``nodata`` at all: 0 is promoted to be the declared nodata."""
+    import rasterio
+    import tempfile
+
+    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    raw = _make_paletted_nlcd_geotiff_bytes_with_background(quantized, nodata=None)
+
+    fixed = data_fetch._fix_nlcd_background_transparency(raw)
+
+    with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+        f.write(fixed)
+        path = f.name
+    try:
+        with rasterio.open(path) as src:
+            assert src.nodata == 0
+            cmap = src.colormap(1)
+            # GDAL now forces index 0 (the declared nodata) transparent.
+            assert cmap[0][3] == 0
+    finally:
+        os.unlink(path)
+
+
+def test_fix_nlcd_background_transparency_noop_when_no_background_pixels():
+    """No class-0 pixels present -- nothing to fix, bytes pass through unchanged."""
+    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    raw = _make_paletted_nlcd_geotiff_bytes(quantized)  # no 0-valued pixels
+
+    fixed = data_fetch._fix_nlcd_background_transparency(raw)
+    assert fixed == raw
+
+
+def test_fix_nlcd_background_transparency_noop_without_colormap():
+    """A continuous (non-paletted) raster is NEVER given a fabricated colormap."""
+    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    flat = _make_flat_nlcd_geotiff_bytes(quantized)
+    assert _colormap_of_bytes(flat) is None  # sanity: no table to begin with
+
+    fixed = data_fetch._fix_nlcd_background_transparency(flat)
+    assert fixed == flat
+    assert _colormap_of_bytes(fixed) is None, "must NOT fabricate a colormap"
+
+
+def test_fetch_nlcd_landcover_bytes_fixes_background_transparency_end_to_end(
+    monkeypatch,
+):
+    """Wiring check: ``_fetch_nlcd_landcover_bytes`` applies the fix BEFORE the
+    COG re-write pipeline, so the cached/published COG never carries the bug.
+    """
+    import rasterio
+    import tempfile
+
+    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    raw = _make_paletted_nlcd_geotiff_bytes_with_background(
+        quantized, width=64, height=64, nodata=255
+    )
+
+    class _FakeResp:
+        status_code = 200
+        headers = {"content-type": "image/tiff"}
+        content = raw
+        text = ""
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(
+        data_fetch.requests, "get", lambda *a, **kw: _FakeResp()
+    )
+    out = data_fetch._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
+
+    with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
+        f.write(out)
+        path = f.name
+    try:
+        with rasterio.open(path) as src:
+            band1 = src.read(1)
+            assert not (band1 == 0).any(), (
+                "published COG must not carry background(0)-valued pixels; "
+                "the opaque-black-ocean bug would still be live"
+            )
+    finally:
+        os.unlink(path)
+
+
 def _make_paletted_nlcd_geotiff_bytes(bbox, width=900, height=900, pad=False):
     """Build a flat single-band uint8 GeoTIFF WITH an embedded color table.
 
