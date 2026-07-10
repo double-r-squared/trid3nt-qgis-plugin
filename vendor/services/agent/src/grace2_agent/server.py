@@ -6971,8 +6971,16 @@ def _gate_wait_timeout(default_seconds: float) -> float:
 # at 3 m (CUDEM tiles). Both default to 10 m (the tools' resolution_m default).
 # fetch_landcover: NLCD native is 30 m; for large bboxes the gate coarsens to
 # 60/120/300/600 m so the MRLC WCS GetCoverage stays under 4000 px per axis.
+# fetch_dem (2026-07-10, F16-for-DEM extension): the ladder used to top out at
+# 30 m, which is far too fine to ever appear as a selectable rung for a
+# state-scale AOI (a WA-state bbox needs ~150 m to stay under the tool's own
+# 4000 px/axis budget -- see data_fetch.py's _DEM_PIXEL_BUDGET_PX) -- so the
+# card's ladder-filtered choices would silently collapse to just the computed
+# finest_allowed_m with no coarser alternative to pick. 90/300/900 m rungs
+# give the user real choices at state / multi-state scale, same as
+# fetch_landcover's coarse rungs do for NLCD.
 _FETCH_RES_LADDERS: dict[str, list[float]] = {
-    "fetch_dem": [1.0, 3.0, 10.0, 30.0],
+    "fetch_dem": [1.0, 3.0, 10.0, 30.0, 90.0, 300.0, 900.0],
     "fetch_topobathy": [3.0, 10.0, 30.0],
     "fetch_landcover": [30.0, 60.0, 120.0, 300.0, 600.0],
 }
@@ -6985,8 +6993,14 @@ _LANDCOVER_DEFAULT_RES_M: float = 30.0
 # fetch_landcover card must bound its finest selectable rung to 4000 px (margin)
 # rather than the generic MAX_FETCH_PX -- otherwise the card would offer a rung
 # the tool cannot deliver (it clamps to 4000 px and would silently coarsen).
+# fetch_dem (2026-07-10): the tool itself now auto-coarsens against a 4000
+# px/axis budget (data_fetch.py's _DEM_PIXEL_BUDGET_PX) -- kept identical here
+# so the card's suggested rung matches what fetch_dem will actually deliver
+# (an honest suggestion instead of a stale 30 m that the tool would silently
+# coarsen past).
 _FETCH_MAX_PX_BY_TOOL: dict[str, int] = {
     "fetch_landcover": 4000,
+    "fetch_dem": 4000,
 }
 
 

@@ -359,6 +359,55 @@ _FETCH_DEM_METADATA = AtomicToolMetadata(
 )
 
 
+# ---------------------------------------------------------------------------
+# F16 pattern extended to fetch_dem (2026-07-10): state-scale auto-coarsen.
+# ---------------------------------------------------------------------------
+# Live failure this fixes: "show me the hillshade in the bounding box" over
+# Washington state -> fetch_dem(bbox=<WA state, ~230,638 km^2>, source="3dep",
+# resolution_m=30) -> hard "bbox area ... exceeds 10000 km^2 guardrail" dead
+# end. A state-scale DEM at a coarsened resolution is a perfectly reasonable
+# request (fine for a hillshade/overview render); commit 21cd123 already gave
+# fetch_landcover this exact treatment (hard cap raised to a continent
+# ceiling + pixel-budget auto-coarsen instead of a flat area cutoff). This
+# block mirrors that pattern for fetch_dem's default source="3dep" path.
+#
+# Acquisition-path note (why the coarsen is just "pass a bigger resolution_m"
+# here, unlike fetch_landcover's WCS WIDTH/HEIGHT dance): fetch_dem's 3DEP
+# path calls ``py3dep.get_dem(bbox, resolution=resolution_m)`` directly --
+# py3dep's own ``resolution`` argument already controls the delivered grid
+# spacing (it picks the fast ``static_3dep_dem`` tile-tree path at 10/30/60 m
+# and falls back to a WMS ``get_map`` mosaic + reproject/resample at any other
+# value). Coarsening is therefore just requesting a bigger ``resolution_m``;
+# py3dep/GDAL's own reprojection resampling applies (area-weighted / bilinear
+# for a continuous field), which is CORRECT for elevation -- UNLIKE NLCD land
+# cover, which must use nearest-neighbor to keep discrete class codes intact.
+# We never touch pixel values ourselves; we only choose what resolution to
+# request.
+#
+# Continent ceiling mirrors fetch_landcover's 5,000,000 km^2 hard cap exactly
+# (still hard-fails: no auto-coarsen rescues a whole-continent request).
+_DEM_CONTINENT_CEILING_KM2 = 5_000_000.0
+
+# Pixel-budget constant for the auto-coarsen (same long-axis/4000px budget
+# fetch_landcover uses against the MRLC WCS 4096 px/axis server cap). py3dep
+# has no equivalent hard server-side px cap, but an unbounded grid at fine
+# resolution over a huge AOI is still an enormous mosaic/COG to materialize
+# and hold in memory -- 4000 px/axis keeps it tractable. Kept in step with
+# server.py's ``_FETCH_MAX_PX_BY_TOOL["fetch_dem"]`` so the resolution-gate's
+# suggested rung matches what this tool will actually deliver (server.py
+# point 5 of the F16-for-DEM extension).
+_DEM_PIXEL_BUDGET_PX = 4000
+
+# Absolute floor on the coarsen math: 3DEP's finest tiles (lidar-derived) run
+# down to ~1 m. UNLIKE fetch_landcover's fixed 30 m NLCD native grid, 3DEP has
+# no single "native" resolution -- coverage varies by tile (1-3 m lidar
+# patches in many areas, a 10 m national baseline, 30 m fallback elsewhere)
+# -- so this is a sanity floor guarding a degenerate resolution_m < 1 request,
+# NOT a native-resolution constant to clamp UP to (that would break the
+# tool's existing fine 1 m / 3 m site-scale requests on small AOIs).
+_DEM_FINEST_RES_FLOOR_M = 1
+
+
 def _fetch_3dep_dem_bytes(
     bbox: tuple[float, float, float, float], resolution_m: int
 ) -> bytes:
@@ -497,14 +546,17 @@ def fetch_dem(
       use ``fetch_topobathy`` for coastal seafloor depth.
     - Single-point elevation lookups — the tool fetches a raster window;
       for a point query use a future ``point_elevation`` tool.
-    - Bboxes larger than 10,000 km² — the tool raises ``BboxInvalidError``
-      at that threshold; use a tiled workflow for very large domains.
+    - Continent-scale bboxes (> 5,000,000 km²) — rejected with
+      ``BboxInvalidError``. State/multi-state bboxes auto-coarsen instead of
+      failing (not a dead end).
 
     **Parameters:**
     - ``bbox`` (tuple[float,float,float,float]): ``(min_lon, min_lat, max_lon,
-      max_lat)`` in EPSG:4326. Max area 10,000 km².
+      max_lat)`` in EPSG:4326. Max area 5,000,000 km²; large bboxes auto-coarsen.
     - ``resolution_m`` (int, default 10): DEM grid spacing in meters (3DEP only).
-      10 m or 30 m are fastest on 3DEP's tile tree; other values interpolate.
+      10 m or 30 m are fastest on 3DEP's tile tree. A large bbox may deliver a
+      coarser grid than requested (a pixel-budget auto-coarsen); the delivered
+      spacing is stamped into the result.
     - ``source`` (str, default ``"3dep"``): ``"3dep"`` (USGS 3DEP, US-only,
       honors ``resolution_m``) or ``"copernicus"`` (Copernicus GLO-30, global
       30 m, keyless -- delegates to the folded-in ``fetch_copernicus_dem``).
@@ -514,7 +566,10 @@ def fetch_dem(
     (``gs://grace-2-hazard-prod-cache/cache/static-30d/dem/<key>.tif``).
     CRS: EPSG:5070 (py3dep default); units: meters above NAVD88.
     Fields consumed downstream: ``uri`` → by ``build_sfincs_model`` and QGIS
-    Server WMS; ``style_preset="continuous_dem"`` → map rendering.
+    Server WMS; ``style_preset="continuous_dem"`` → map rendering. When the
+    bbox forced a coarser grid than requested, ``name`` carries an honest
+    coarsening note (approximate terrain -- fine for a hillshade/overview,
+    not site-scale analysis).
 
     **Cross-tool dependencies:**
     - Downstream: ``build_sfincs_model``, ``compute_slope``,
@@ -536,24 +591,72 @@ def fetch_dem(
         from .fetch_copernicus_dem import _copernicus_dem_impl
 
         return _copernicus_dem_impl(bbox)
-    quantized = round_bbox_to_resolution(bbox, resolution_m)
-    if _bbox_area_km2(quantized) > 10_000.0:
+
+    # Continent ceiling (F16-for-DEM, 2026-07-10): mirrors fetch_landcover's
+    # 5,000,000 km^2 hard cap. Below this, auto-coarsen instead of hard-fail
+    # -- see the module-level comment above _DEM_CONTINENT_CEILING_KM2.
+    requested_res = int(resolution_m)
+    rough_area = _bbox_area_km2(bbox)
+    if rough_area > _DEM_CONTINENT_CEILING_KM2:
         raise BboxInvalidError(
-            f"bbox area {_bbox_area_km2(quantized):.1f} km^2 exceeds 10000 km^2 "
-            "guardrail for fetch_dem (use a smaller bbox or a future workflow "
-            "that tiles the request)."
+            f"bbox area {rough_area:.1f} km^2 exceeds the "
+            f"{_DEM_CONTINENT_CEILING_KM2:,.0f} km^2 hard ceiling for fetch_dem "
+            "(continent-scale; split into sub-regions)."
         )
-    params = {"bbox": list(quantized), "resolution_m": resolution_m}
+
+    # Pixel-budget auto-coarsen: if the requested resolution would put more
+    # than _DEM_PIXEL_BUDGET_PX pixels on the bbox's long axis, coarsen to
+    # fit. effective_res is the coarser of (a) what the caller/gate asked
+    # for and (b) what the pixel budget allows -- it is NEVER finer than
+    # requested_res, so a small-bbox site-scale request (e.g. 1 m) is
+    # honored exactly as before (byte-identical for the common case).
+    min_lon, min_lat, max_lon, max_lat = bbox
+    mid_lat = 0.5 * (min_lat + max_lat)
+    m_per_deg_lon = 111_320.0 * max(0.05, math.cos(math.radians(mid_lat)))
+    long_axis_m = max(
+        (max_lon - min_lon) * m_per_deg_lon,
+        (max_lat - min_lat) * 111_320.0,
+    )
+    budget_res = int(math.ceil(long_axis_m / _DEM_PIXEL_BUDGET_PX))
+    effective_res = max(_DEM_FINEST_RES_FLOOR_M, requested_res, budget_res)
+    downsampled = effective_res > requested_res
+
+    # Quantize to the EFFECTIVE resolution grid -- a coarsened fetch snaps to
+    # a coarser grid than a native-resolution fetch of the same bbox would,
+    # so the two never collide on the same cache key (matches fetch_landcover).
+    quantized = round_bbox_to_resolution(bbox, effective_res)
+    params = {"bbox": list(quantized), "resolution_m": effective_res}
     result = read_through(
         metadata=_FETCH_DEM_METADATA,
         params=params,
         ext="tif",
-        fetch_fn=lambda: _fetch_3dep_dem_bytes(quantized, resolution_m),
+        fetch_fn=lambda: _fetch_3dep_dem_bytes(quantized, effective_res),
     )
     assert result.uri is not None, "fetch_dem is cacheable; uri must be set"
+    name = f"USGS 3DEP DEM ({effective_res}m)"
+    if downsampled:
+        # Honest coarsening note (Invariant 7 -- no silent wrong answers).
+        # LayerURI is a FROZEN contract (extra="forbid", see fetch_landcover's
+        # "Sidecar shape" comment above) with ~7 internal Python call sites
+        # (fetch_topobathy, compute_contours, model_flood_scenario,
+        # run_elmfire, model_landslide_scenario, model_dambreak_geoclaw_
+        # scenario, model_urban_flood_swmm) plus 50+ tests depending on
+        # fetch_dem returning a bare LayerURI -- unlike fetch_landcover (few
+        # callers, already dict-shaped pre-F16), converting fetch_dem to a
+        # dict-sidecar return here would be a wide, high-risk blast radius for
+        # no functional gain: LayerURI IS fully JSON-serialized back to the
+        # LLM (see server.py result handling), so folding the effective /
+        # native resolution + the honesty note into ``name`` (and the
+        # resolution into ``layer_id`` below) reaches the LLM/user exactly the
+        # same as a separate dict field would.
+        name += (
+            f", coarsened from {requested_res}m -- large-AOI pixel budget. "
+            "Terrain detail is approximate at this scale: fine for a "
+            "hillshade/overview render, not for site-scale analysis."
+        )
     return LayerURI(
-        layer_id=f"dem-{quantized[0]:.4f}-{quantized[1]:.4f}-{resolution_m}m",
-        name=f"USGS 3DEP DEM ({resolution_m}m)",
+        layer_id=f"dem-{quantized[0]:.4f}-{quantized[1]:.4f}-{effective_res}m",
+        name=name,
         layer_type="raster",
         uri=result.uri,
         style_preset="continuous_dem",

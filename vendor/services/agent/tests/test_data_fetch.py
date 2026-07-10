@@ -275,11 +275,110 @@ def test_fetch_dem_happy_path_writes_through_cache(monkeypatch):
     assert fake_storage.last_put["Key"] == paths_written[0]
 
 
-def test_fetch_dem_rejects_oversized_bbox():
-    """The 10000 km^2 guardrail rejects unrealistic single-call bboxes."""
-    huge = (-100.0, 25.0, -80.0, 45.0)  # ~2.2M km^2
-    with pytest.raises(BboxInvalidError):
-        fetch_dem(huge, resolution_m=10)
+def test_fetch_dem_rejects_continent_scale_bbox():
+    """The 5,000,000 km^2 hard ceiling rejects continent-scale bboxes.
+
+    F16-for-DEM (2026-07-10): the old flat 10,000 km^2 hard-fail is replaced
+    by a pixel-budget auto-coarsen (see the tests below) -- only
+    continent-scale bboxes still hard-fail, mirroring fetch_landcover's
+    5,000,000 km^2 ceiling (commit 21cd123).
+    """
+    whole_conus = (-125.0, 24.0, -66.0, 50.0)  # ~8,000,000 km^2
+    with pytest.raises(BboxInvalidError, match="5,000,000"):
+        fetch_dem(whole_conus, resolution_m=30)
+
+
+# ---------------------------------------------------------------------------
+# F16-for-DEM (2026-07-10): state-scale auto-coarsen, mirroring the
+# fetch_landcover treatment (commit 21cd123). Live failure this fixes:
+# "show me the hillshade in the bounding box" over Washington state ->
+# fetch_dem(bbox=<WA state>, source='3dep', resolution_m=30) hard-failed
+# "bbox area 230638.1 km^2 exceeds 10000 km^2 guardrail". The hard-fail zone
+# is now served via a 4000 px/axis pixel-budget auto-coarsen.
+# ---------------------------------------------------------------------------
+
+# The exact bbox from the live failure report.
+_WA_STATE_BBOX = (-124.837922, 45.543029, -116.914037, 49.003324)
+
+
+def _effective_res_from_layer(layer) -> int:
+    """Parse the effective resolution stamped into ``layer_id``'s ``<N>m`` suffix."""
+    return int(layer.layer_id.rsplit("-", 1)[-1].rstrip("m"))
+
+
+def _install_fake_dem_fetch(monkeypatch, fake_storage) -> None:
+    from grace2_agent.tools import cache as cache_mod
+
+    monkeypatch.setattr(
+        data_fetch, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
+    )
+    monkeypatch.setattr(
+        data_fetch,
+        "read_through",
+        lambda *a, **kw: cache_mod.read_through(
+            *a, storage_client=fake_storage, now=PINNED_NOW, **kw
+        ),
+    )
+
+
+def test_fetch_dem_state_scale_no_hard_fail(monkeypatch):
+    """The WA-state bbox (~230,638 km^2) must not raise BboxInvalidError.
+
+    The hard-fail that was at > 10,000 km^2 is replaced by auto-coarsening;
+    only continent-scale bboxes (> 5,000,000 km^2) still hard-fail.
+    """
+    fake_storage = FakeStorageClient()
+    _install_fake_dem_fetch(monkeypatch, fake_storage)
+
+    layer = fetch_dem(_WA_STATE_BBOX, resolution_m=30)
+    effective = _effective_res_from_layer(layer)
+    # WA long axis ~599 km / 4000 px -> ~150 m; must exceed the 30 m request
+    # and stay well inside the extended ladder's coarsest rung (900 m).
+    assert 30 < effective <= 900
+    assert "coarsened from 30m" in layer.name
+    assert "hillshade/overview" in layer.name
+
+
+def test_fetch_dem_bypass_enforces_pixel_budget(monkeypatch):
+    """A direct state-scale call at the tool's 10 m default (gate bypassed)
+    must still be coarsened by the TOOL against the pixel budget -- the
+    delivered grid, not the request, is what ``layer_id``/``name`` describe."""
+    fake_storage = FakeStorageClient()
+    _install_fake_dem_fetch(monkeypatch, fake_storage)
+
+    layer = fetch_dem(_WA_STATE_BBOX, resolution_m=10)
+    effective = _effective_res_from_layer(layer)
+    assert 10 < effective <= 900
+    assert "coarsened from 10m" in layer.name
+
+
+def test_fetch_dem_explicit_coarse_resolution_honored(monkeypatch):
+    """An explicit coarse resolution_m on a SMALL bbox is delivered exactly --
+    the tool never further coarsens below what was explicitly requested, and
+    an honored (not budget-forced) coarse request carries no coarsening note."""
+    fake_storage = FakeStorageClient()
+    _install_fake_dem_fetch(monkeypatch, fake_storage)
+
+    layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=300)
+    effective = _effective_res_from_layer(layer)
+    assert effective == 300
+    assert "coarsened" not in layer.name
+
+
+def test_fetch_dem_tiny_bbox_native_resolution_untouched(monkeypatch):
+    """A tiny (~100 m) bbox at a fine (site-scale) resolution is delivered
+    untouched -- the pixel-budget floor never coarsens a small-AOI fine
+    request. (Fort Myers -- ~13 km across -- is itself too large for a 1 m
+    request to stay under the 4000 px budget, so this uses a building-scale
+    bbox instead.)"""
+    fake_storage = FakeStorageClient()
+    _install_fake_dem_fetch(monkeypatch, fake_storage)
+
+    tiny_bbox = (-81.9010, 26.5500, -81.9000, 26.5510)  # ~100 m x 110 m
+    layer = fetch_dem(tiny_bbox, resolution_m=1)
+    effective = _effective_res_from_layer(layer)
+    assert effective == 1
+    assert "coarsened" not in layer.name
 
 
 def test_fetch_dem_upstream_failure_reraises(monkeypatch):

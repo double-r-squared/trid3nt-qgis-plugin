@@ -132,7 +132,10 @@ async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -
     assert g["vcpus"] == 1
     assert g["coarsened"] is False
     assert g["spot_label"] is None
-    assert g["cell_cap"] == server.MAX_FETCH_PX ** 2
+    # fetch_dem carries its own 4000 px/axis budget (2026-07-10, matching the
+    # tool's own auto-coarsen); other fetchers fall back to the generic bound.
+    expected_max_px = server._FETCH_MAX_PX_BY_TOOL.get(tool_name, server.MAX_FETCH_PX)
+    assert g["cell_cap"] == expected_max_px ** 2
     # narrow_scope must be offered so the user can override the rung.
     assert "narrow_scope" in card["payload"]["options"]
 
@@ -368,6 +371,42 @@ async def test_fetch_gate_compute_label_deployment_aware(
     # Both lanes: vcpus stays 1 (contract requires > 0) and no Spot label.
     assert g["vcpus"] == 1
     assert g["spot_label"] is None
+
+
+# --------------------------------------------------------------------------- #
+# 11) fetch_dem F16-for-DEM extension (2026-07-10): a state-scale bbox (the
+#     WA-state live failure this fixes) gets an HONEST coarsened suggestion --
+#     bounded by fetch_dem's own 4000 px/axis budget (matching
+#     data_fetch.py's _DEM_PIXEL_BUDGET_PX), not the generic 8192 px
+#     MAX_FETCH_PX and not a stale 30 m default.
+# --------------------------------------------------------------------------- #
+# The exact bbox from the live failure report.
+_WA_STATE_BBOX_DEM = [-124.837922, 45.543029, -116.914037, 49.003324]
+
+
+@pytest.mark.asyncio
+async def test_dem_state_scale_gate_suggests_honest_coarsened_rung() -> None:
+    from grace2_agent import server
+
+    _env, sugg = await server._build_fetch_resolution_envelope(  # type: ignore[attr-defined]
+        "fetch_dem", _fetch_params(bbox=_WA_STATE_BBOX_DEM)
+    )
+    # ~150 m for this AOI at the tool's 4000 px/axis budget -- if the gate
+    # were still using the generic 8192 px bound this would be ~73 m instead
+    # (the live-bug symptom: the gate offering a rung the tool cannot honor
+    # without further silently coarsening).
+    assert 100.0 < sugg.finest_allowed_m < 250.0
+
+    ws, state = _FakeWS(), _FakeState()
+    approver = asyncio.create_task(_drive_decision(server, "proceed"))
+    should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
+        ws, state, "fetch_dem", _fetch_params(bbox=_WA_STATE_BBOX_DEM)
+    )
+    await approver
+
+    assert should_run is True
+    # Coarsened well past the old ladder's 30 m ceiling.
+    assert effective["resolution_m"] > 30
 
 
 
