@@ -90,6 +90,7 @@ __all__ = [
     "publish_layer",
     "PublishLayerError",
     "derive_layer_id",
+    "derive_readable_layer_name",
     "style_params_from_band_stats",
     "legend_for_published_layer",
     "pop_legend_for_uri",
@@ -2232,6 +2233,143 @@ def derive_layer_id(layer_uri: str, registry: Any | None = None) -> str:
     return f"layer-{new_ulid()}"
 
 
+#: Known ``style_preset`` -> human label. Extend as new presets land; presets
+#: not listed here fall through to the token-cleanup path in
+#: ``_label_from_style_preset`` (strip a family prefix, title-case the rest).
+_STYLE_PRESET_LABELS: dict[str, str] = {
+    "standard_hillshade": "Hillshade",
+    "continuous_flood_depth": "Flood Depth",
+    "continuous_slope_pct": "Slope",
+    "categorical_aspect": "Aspect",
+    "standard_colored_relief": "Colored Relief",
+    "continuous_dem": "Elevation",
+    "categorical_landcover": "Land Cover",
+    "continuous_impervious_surface": "Impervious Surface",
+}
+
+
+def _looks_like_ulid(value: str) -> bool:
+    """True for a 26-char Crockford-base32 ULID shape (case-insensitive).
+
+    Matches ``new_ulid()``'s output shape without importing the ``ulid``
+    package here — a cheap regex is enough to recognize "this is not a
+    human name, it's an identifier" for the OPEN-9 name-derivation guard.
+    """
+    import re as _re
+
+    return bool(_re.match(r"^[0-9A-HJKMNP-TV-Z]{26}$", value, _re.IGNORECASE))
+
+
+def _looks_like_hash_or_id(value: str) -> bool:
+    """True for a bare ULID, or a long hex/opaque cache-key-shaped token.
+
+    Used to skip non-human URI path segments (e.g. a cache-key filename
+    stem like ``a1b2c3d4e5f6...tif``) when deriving a name from the URI.
+    """
+    import re as _re
+
+    if _looks_like_ulid(value):
+        return True
+    return bool(_re.match(r"^[0-9a-f]{12,64}$", value, _re.IGNORECASE))
+
+
+def _label_from_style_preset(style_preset: str | None) -> str | None:
+    """Human label for a ``style_preset``, or ``None`` if uninformative."""
+    if not style_preset:
+        return None
+    label = _STYLE_PRESET_LABELS.get(style_preset)
+    if label:
+        return label
+    if style_preset in ("auto", ""):
+        return None
+    import re as _re
+
+    # Strip a family prefix (e.g. "continuous_"/"standard_"/"categorical_")
+    # and title-case what remains, so an unlisted-but-descriptive preset
+    # (e.g. "continuous_ndvi") still yields a readable label ("Ndvi").
+    cleaned = _re.sub(r"^(standard_|continuous_|categorical_)", "", style_preset)
+    cleaned = cleaned.replace("_", " ").replace("-", " ").strip()
+    return cleaned.title() if cleaned else None
+
+
+def _label_from_uri(layer_uri: str) -> str | None:
+    """Human label from a source ``layer_uri`` path segment, or ``None``.
+
+    Prefers the PARENT directory segment (e.g. ``.../hillshade/<hash>.tif``
+    -> ``"hillshade"``) since the file stem is typically a cache hash or a
+    bare ULID and not human-meaningful; falls back to the file stem itself
+    when it IS human-shaped (no parent segment, or the parent is also
+    opaque).
+    """
+    from urllib.parse import urlparse as _urlparse
+
+    path = _urlparse(layer_uri).path if "://" in layer_uri else layer_uri
+    segments = [s for s in path.split("/") if s]
+    if not segments:
+        return None
+    stem = segments[-1].rsplit(".", 1)[0] if "." in segments[-1] else segments[-1]
+    candidates = ([segments[-2]] if len(segments) >= 2 else []) + [stem]
+    for cand in candidates:
+        if not cand or _looks_like_hash_or_id(cand):
+            continue
+        cleaned = cand.replace("_", " ").replace("-", " ").strip()
+        if cleaned:
+            return cleaned.title()
+    return None
+
+
+def _short_disambiguator(layer_id: str) -> str:
+    """Short suffix (last 4 alnum chars of ``layer_id``, else today's MMDD)
+    so two derived names for the same family/preset don't collide in the
+    UI's layer list."""
+    import re as _re
+
+    tail = _re.sub(r"[^A-Za-z0-9]", "", layer_id or "")[-4:]
+    if tail:
+        return tail.upper()
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%m%d")
+
+
+def derive_readable_layer_name(
+    name: str | None,
+    layer_id: str,
+    style_preset: str | None,
+    layer_uri: str,
+) -> str:
+    """Derive a human-readable layer name for the UI's layer list (OPEN-9).
+
+    Local 8B models routinely omit ``publish_layer``'s ``name``, and when
+    ``layer_id`` ALSO degrades to a bare ULID (``derive_layer_id``'s last
+    resort), the published layer showed up in the UI as e.g.
+    ``'01KX5TEZ20BK86EE6DG8PSVFJK'`` — meaningless to the user. Precedence:
+
+    1. an explicit, non-empty ``name`` that is not ITSELF a bare-ULID shape
+       — returned VERBATIM, no disambiguator appended (the caller already
+       chose it deliberately; second-guessing it would be surprising).
+    2. ``style_preset`` mapped to a human label (e.g. ``"standard_hillshade"``
+       -> ``"Hillshade"``).
+    3. a human segment of the source ``layer_uri`` path (the parent
+       directory / product-family segment — the file stem is typically a
+       cache hash or a ULID).
+    4. a generic ``"Layer"`` fallback.
+
+    Cases 2-4 append a short disambiguator (``_short_disambiguator``) so two
+    derived names for the same family don't collide in the UI list.
+    INVARIANT: a bare-ULID name must never reach the layer summary when any
+    better signal (an explicit name, a style_preset, or a URI segment) is
+    available.
+    """
+    if name and name.strip() and not _looks_like_ulid(name.strip()):
+        return name.strip()
+
+    label = _label_from_style_preset(style_preset) or _label_from_uri(layer_uri)
+    if not label:
+        label = "Layer"
+    return f"{label} {_short_disambiguator(layer_id)}"
+
+
 # --------------------------------------------------------------------------- #
 # Tool registration
 # --------------------------------------------------------------------------- #
@@ -2263,6 +2401,7 @@ def publish_layer(
     style_preset: str | None = None,
     project_qgs_uri: str | None = None,
     case_id: str | None = None,
+    name: str | None = None,
     # job-0164: absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
@@ -2323,6 +2462,17 @@ def publish_layer(
             wrapper does the lazy-init and substitutes the resolved URI
             into ``project_qgs_uri``. Defaults to ``None`` (single-tenant
             demo path; OQ-62-QGS-MUTATION-CONFLICT preserved verbatim).
+        name: OPTIONAL human-readable display name for the UI's layer list
+            (OPEN-9, 2026-07-10). When given, used verbatim. When omitted
+            (or the model passes it as an unadorned copy of ``layer_id``),
+            a readable name is DERIVED server-side (``style_preset`` ->
+            label, else a ``layer_uri`` path segment, else a generic
+            fallback) so a bare ULID never reaches the layer summary. This
+            parameter is a transport-only carrier - the atomic tool body
+            does not consume it (it returns a bare URL string, not a
+            LayerURI); the server-side wrap-site
+            (``derive_readable_layer_name``) applies the same precedence
+            when it constructs the ``LayerURI`` the client renders.
 
     Returns:
         WMS URL string:
@@ -2376,6 +2526,14 @@ def publish_layer(
             layer_id,
             layer_uri,
         )
+
+    # OPEN-9: ``name`` is a transport-only carrier (see docstring) - the
+    # actual LayerURI.name the client renders is computed by the server-side
+    # wrap-site's ``derive_readable_layer_name`` call (it has the resolved
+    # published URI + style_preset this function's caller does not see yet).
+    # Logged here purely for observability of what the model actually sent.
+    if name:
+        logger.info("publish_layer: name=%r layer_id=%r", name, layer_id)
 
     # sprint-14-aws (job-0290): on the AWS deployment rasters publish through
     # TiTiler (a COG XYZ tile server reading s3:// directly) instead of the

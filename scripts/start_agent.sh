@@ -66,4 +66,22 @@ if ! kill -0 "$AGENT_PID" 2>/dev/null; then
   exit 1
 fi
 
+# OPEN-5: best-effort Ollama keep-alive pin. qwen3:8b-16k unloads after
+# Ollama's default 5m idle window, so the FIRST prompt after any idle gap
+# pays a ~60-75s cold-load. A manual keep_alive=24h pin works but does not
+# survive an Ollama restart, so re-arm it here on every agent (re)start
+# instead. Backgrounded (a cold model load can itself take the full 60-75s)
+# and fully non-fatal -- Ollama may be down, or the box may be pointed at a
+# non-Ollama provider (remote/Bedrock), and neither should fail agent
+# startup. Derives the model from the same env the agent itself just
+# loaded ($ENV_FILE, sourced above); falls back to qwen3:8b-16k if unset.
+WARM_MODEL="${GRACE2_OPENAI_MODEL:-qwen3:8b-16k}"
+(
+  curl -s -m 90 http://127.0.0.1:11434/api/generate \
+    -d '{"model":"'"$WARM_MODEL"'","keep_alive":"24h"}' \
+    >/dev/null 2>&1 || true
+) &
+disown
+echo "[start_agent] Ollama keep-alive warmup fired in background (model=$WARM_MODEL keep_alive=24h)"
+
 echo "[start_agent] agent is running -- tail $LOG_FILE to follow startup"

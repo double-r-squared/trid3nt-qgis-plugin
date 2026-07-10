@@ -491,7 +491,15 @@ async def test_emitted_case_list_envelope_excludes_tombstones(
     await file_persistence.delete_case(ghost.case_id)
 
     ws.sent.clear()
-    await server._emit_case_list(ws, state)
+    # OPEN-8 change-guard: force=True — this assertion is about tombstone
+    # FILTERING (the ghost Case must never appear), not about the guard's
+    # skip-when-unchanged behavior. The ghost create+delete round-trip here
+    # goes through Persistence directly (bypassing the server's
+    # case-command handler), so the visible-case content coincidentally
+    # matches what the earlier create step already cached; without
+    # force=True this direct re-invocation would be a legitimate guard skip
+    # rather than the tombstone-filtering check this test wants.
+    await server._emit_case_list(ws, state, force=True)
     envelopes = [json.loads(t) for t in ws.sent]
     case_lists = [e for e in envelopes if e["type"] == "case-list"]
     assert len(case_lists) == 1

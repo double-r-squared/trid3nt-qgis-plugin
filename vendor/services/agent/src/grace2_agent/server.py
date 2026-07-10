@@ -31,6 +31,7 @@ OQ-1 (Cloud Run WS vs Agent Engine) — see report's Open Questions section.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import math
 import weakref
 import logging
@@ -3986,7 +3987,7 @@ async def _stream_gemini_reply(
         # job-0260: name an Untitled Case from its first prompt + refresh
         # the left rail so accumulated demo Cases are distinguishable.
         if await _maybe_autoname_case(state, user_text):
-            await _emit_case_list(websocket, state)
+            await _emit_case_list(websocket, state, force=True)
 
     except asyncio.CancelledError:
         # Invariant 8 — distinct cancelled step state, not failed. job-0315: a
@@ -4225,7 +4226,13 @@ async def _handle_session_resume(
         state.did_fresh_resume = True
         did_replay_now = True
     await state.emitter.emit_session_state()
-    await _emit_case_list(websocket, state)
+    # OPEN-8: force an unconditional emit only on a genuine first (non-
+    # keepalive) resume of THIS connection — the moment a client actually
+    # needs the list (fresh connect / real reconnect). A later keepalive
+    # ping on the same warm socket (or a sibling socket of the same
+    # session independently resuming) goes through the change-guard so an
+    # unchanged ~190-case list is not re-serialized + re-sent every cycle.
+    await _emit_case_list(websocket, state, force=not is_keepalive)
     # C2 (re-emit on resume): ONLY on the genuine fresh-socket resume (the
     # first bare resume that just seeded + replayed this connection's layers),
     # never on a keepalive ping and never on a rebound (a rebound live turn is
@@ -4637,8 +4644,49 @@ async def _ensure_auth_handshake(
 # Case lifecycle handlers (job-0121, FR-MP-6)
 # --------------------------------------------------------------------------- #
 
+#: OPEN-8 (case-list emission storm): the last-emitted case-list content
+#: digest PER SESSION (not per connection — ``SessionState`` is a fresh
+#: per-connection object, and a session can legitimately carry more than one
+#: live socket, e.g. the web client's dual-GraceWs tab or a QGIS dock
+#: reconnect racing its own stale socket's teardown). A ``session-resume``
+#: keepalive ping — the client's ~25s proof-of-life, or one of several
+#: concurrent sockets independently resuming — was re-serializing +
+#: re-sending the FULL case list (~190 cases live) even when nothing had
+#: changed since the last emit, observed live as multi-per-minute chatter on
+#: long-lived sessions. Cleared when the session's last live connection
+#: disconnects (mirrors ``_SESSION_WS_CONNECTIONS`` bookkeeping) so a later
+#: reconnect always gets a fresh unconditional emit.
+_SESSION_CASE_LIST_HASH: "dict[str, str]" = {}
 
-async def _emit_case_list(websocket: ServerConnection, state: SessionState) -> None:
+
+def _case_list_digest(cases: "list[CaseSummary]") -> str:
+    """Stable content digest of a case list, order-independent.
+
+    Built from the fields a client actually renders/reacts to (id, title,
+    status, timestamps) rather than a raw model dump, so field additions
+    that don't change client-visible state don't force spurious re-emits.
+    Sorted by ``case_id`` so the digest is independent of listing order.
+    """
+    parts = sorted(
+        f"{c.case_id}|{c.title}|{c.status}|{c.created_at}|{c.updated_at}"
+        for c in cases
+    )
+    return hashlib.sha1("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+def _clear_case_list_hash(session_id: str) -> None:
+    """Drop the cached case-list digest for ``session_id`` (best-effort).
+
+    Called once the session's last live connection disconnects so a fresh
+    reconnect later always gets an unconditional first emit rather than
+    inheriting a stale digest from a prior connection's cache.
+    """
+    _SESSION_CASE_LIST_HASH.pop(session_id, None)
+
+
+async def _emit_case_list(
+    websocket: ServerConnection, state: SessionState, *, force: bool = False
+) -> None:
     """Emit the ``case-list`` envelope for the client's left rail.
 
     Best-effort: if Persistence is unbound (M1 in-memory path) we silently
@@ -4653,6 +4701,14 @@ async def _emit_case_list(websocket: ServerConnection, state: SessionState) -> N
     to ``session_id`` only when the handshake hasn't bound a user yet — the
     same ``authenticated_user_id or session_id`` posture as the secrets /
     chat-persist paths.
+
+    OPEN-8 change-guard: ``force=False`` (the default) skips the actual send
+    when the list is byte-for-byte the same (by content digest, see
+    ``_case_list_digest``) as the last emit for this SESSION — collapsing
+    repeat keepalive/duplicate-socket resumes into a no-op. Callers that
+    just performed (or may have performed) a mutation — create / rename /
+    archive / delete / a genuine first (non-keepalive) resume — pass
+    ``force=True`` so the client is never left with a stale list.
     """
     p = get_persistence()
     if p is None:
@@ -4664,6 +4720,16 @@ async def _emit_case_list(websocket: ServerConnection, state: SessionState) -> N
     except Exception:  # noqa: BLE001 — best-effort
         logger.exception("case-list: list_cases_for_user failed")
         return
+    digest = _case_list_digest(cases)
+    if not force and _SESSION_CASE_LIST_HASH.get(state.session_id) == digest:
+        logger.debug(
+            "case-list unchanged session=%s user=%s count=%d — skipping emit",
+            state.session_id,
+            user_id,
+            len(cases),
+        )
+        return
+    _SESSION_CASE_LIST_HASH[state.session_id] = digest
     payload = CaseListEnvelopePayload(cases=cases)
     await websocket.send(_new_envelope("case-list", state.session_id, payload))
     logger.info(
@@ -5130,7 +5196,7 @@ async def _handle_case_command(
         # data-island cold path lists the fresh Case immediately. Best-effort —
         # a manifest failure never breaks the snapshot path (own try/except).
         await _persist_case_manifest(state, case_id=new_case_id)
-        await _emit_case_list(websocket, state)
+        await _emit_case_list(websocket, state, force=True)
         logger.info(
             "case-command create session=%s case=%s title=%r",
             state.session_id,
@@ -5234,7 +5300,7 @@ async def _handle_case_command(
         # #165 dual-write: refresh the thin manifest too (``title`` is a manifest
         # field). Best-effort; never breaks the snapshot path.
         await _persist_case_manifest(state, case_id=cmd.case_id)
-        await _emit_case_list(websocket, state)
+        await _emit_case_list(websocket, state, force=True)
         logger.info(
             "case-command rename session=%s case=%s title=%r",
             state.session_id,
@@ -5263,7 +5329,7 @@ async def _handle_case_command(
                 f"case archive failed: {exc}",
             )
             return
-        await _emit_case_list(websocket, state)
+        await _emit_case_list(websocket, state, force=True)
         logger.info(
             "case-command archive session=%s case=%s",
             state.session_id,
@@ -5299,7 +5365,7 @@ async def _handle_case_command(
             # job-0259: preserve pre-existing behavior on THIS connection (no
             # chat clear on delete); siblings re-sync on their next dispatch.
             state.case_context_synced_to = None
-        await _emit_case_list(websocket, state)
+        await _emit_case_list(websocket, state, force=True)
         logger.info(
             "case-command delete session=%s case=%s",
             state.session_id,
@@ -5527,7 +5593,7 @@ async def _emit_auto_case_open(
                     state.session_id,
                     case_id,
                 )
-    await _emit_case_list(websocket, state)
+    await _emit_case_list(websocket, state, force=True)
 
 
 async def _prepare_user_turn(
@@ -10558,10 +10624,30 @@ async def _invoke_tool_via_emitter(
                     # URL here is always http(s) (guarded above), so the seam
                     # passes it through; the seam exists so this site can never
                     # regress into emitting a renderable raw gs:// raster.
+                    _resolved_style_preset = _resolve_publish_wrap_style_preset(
+                        style_preset=params.get("style_preset"),
+                        layer_uri=result,
+                        layer_id=lid,
+                    )
+                    # OPEN-9: a bare-ULID layer_id (derive_layer_id's last
+                    # resort) rendered directly as the UI name is meaningless
+                    # ("01KX5TEZ20BK86EE6DG8PSVFJK"). Derive a readable name
+                    # from whatever IS known — an explicit model-supplied
+                    # name (params carries it even though publish_layer's own
+                    # signature only uses it for logging), else the resolved
+                    # style_preset, else the published URI's path segment.
+                    from .tools.publish_layer import derive_readable_layer_name
+
+                    _layer_name = derive_readable_layer_name(
+                        params.get("name"),
+                        lid,
+                        _resolved_style_preset,
+                        result,
+                    )
                     _emit_layer = emit_layer_uri(
                         LayerURI(
                             layer_id=lid,
-                            name=lid,
+                            name=_layer_name,
                             layer_type="raster",
                             uri=result,
                             # job duplicate-flood-layer SAFETY NET: when a
@@ -10569,11 +10655,7 @@ async def _invoke_tool_via_emitter(
                             # style_preset, default it to continuous_flood_depth
                             # so the layer is never styleless (= viridis). Non-
                             # flood rasters keep "" (QGIS/TiTiler default).
-                            style_preset=_resolve_publish_wrap_style_preset(
-                                style_preset=params.get("style_preset"),
-                                layer_uri=result,
-                                layer_id=lid,
-                            ),
+                            style_preset=_resolved_style_preset,
                         )
                     )
                     if _emit_layer is not None:
@@ -13007,6 +13089,14 @@ def _make_handler(settings: GeminiSettings):
             # already reaped by a sibling's resume is a harmless discard.
             if state is not None:
                 _deregister_session_connection(state.session_id, websocket)
+                # OPEN-8: once the session's LAST live socket is gone, drop the
+                # cached case-list digest too — otherwise a later reconnect
+                # (fresh SessionState, unaware of the stale digest) could
+                # inherit an emit-skip decision from a connection that no
+                # longer exists. ``session_connection_count`` is 0 only when
+                # every sibling socket of this session has also deregistered.
+                if session_connection_count(state.session_id) == 0:
+                    _clear_case_list_hash(state.session_id)
             # WS-30s STORM FIX: stop the per-connection data heartbeat on EVERY
             # exit path (normal close, crash, cancellation, loop exhaustion) so
             # the background task never outlives its socket. Cancel + await so the

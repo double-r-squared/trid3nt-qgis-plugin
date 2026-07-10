@@ -112,3 +112,60 @@ async def test_turn_layer_accumulator_still_tracks_layer_id() -> None:
         {"layer_uri": "gs://bucket/cache/x.tif", "layer_id": "relief-2"},
     )
     assert "relief-2" in state.current_turn_layer_ids
+
+
+# --------------------------------------------------------------------------- #
+# OPEN-9 (2026-07-10): the LayerURI.name the wrap-site constructs must be a
+# READABLE name, not the bare layer_id, when the model omits a usable one —
+# live bug: a bare-ULID layer_id (derive_layer_id's last resort) surfaced
+# directly in the UI's layer list as e.g. "01KX5TEZ20BK86EE6DG8PSVFJK".
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_bare_ulid_layer_id_gets_a_readable_name_from_style_preset() -> None:
+    """A local model that omits ``name`` AND lands on a bare-ULID layer_id
+    (via ``derive_layer_id``'s last resort) still gets a HUMAN name in the
+    layer summary, derived from ``style_preset``."""
+    ws = FakeWS()
+    state = server.SessionState(session_id=new_ulid())
+    bare_ulid = new_ulid()
+
+    await server._invoke_tool_via_emitter(
+        ws,
+        state,
+        "publish_layer",
+        {
+            "layer_uri": "gs://bucket/cache/hillshade/x.tif",
+            "layer_id": bare_ulid,
+            "style_preset": "standard_hillshade",
+        },
+    )
+
+    matching = next(l for l in state.emitter.loaded_layers if l.layer_id == bare_ulid)
+    assert matching.name != bare_ulid, "the bare ULID must never surface as the name"
+    assert matching.name.startswith("Hillshade")
+
+
+@pytest.mark.asyncio
+async def test_explicit_name_param_passes_through_untouched() -> None:
+    """A model (or composer) that DOES supply an explicit ``name`` keeps it
+    verbatim — the derivation only kicks in when nothing usable was given."""
+    ws = FakeWS()
+    state = server.SessionState(session_id=new_ulid())
+
+    await server._invoke_tool_via_emitter(
+        ws,
+        state,
+        "publish_layer",
+        {
+            "layer_uri": "gs://bucket/cache/x.tif",
+            "layer_id": "colored-relief-boulder",
+            "name": "Boulder Colored Relief (2026 flyover)",
+        },
+    )
+
+    matching = next(
+        l for l in state.emitter.loaded_layers if l.layer_id == "colored-relief-boulder"
+    )
+    assert matching.name == "Boulder Colored Relief (2026 flyover)"

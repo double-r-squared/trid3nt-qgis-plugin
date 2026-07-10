@@ -120,6 +120,18 @@ def _make_emitter(ws: FakeWS, session_id: str) -> PipelineEmitter:
     return PipelineEmitter(session_id=session_id, sink=_sink)
 
 
+def _case_list_envelopes(ws: FakeWS) -> list[dict]:
+    out: list[dict] = []
+    for raw in ws.sent:
+        try:
+            env = json.loads(raw)
+        except Exception:  # noqa: BLE001
+            continue
+        if env.get("type") == "case-list":
+            out.append(env)
+    return out
+
+
 def _session_states(ws: FakeWS) -> list[dict]:
     out: list[dict] = []
     for raw in ws.sent:
@@ -141,10 +153,12 @@ CASE_B = "0" + "B" * 25
 def _clean_registries():
     saved_active = dict(server._SESSION_ACTIVE_CASE)
     saved_conns = {k: set(v) for k, v in server._SESSION_WS_CONNECTIONS.items()}
+    saved_case_list_hash = dict(server._SESSION_CASE_LIST_HASH)
     saved_p = server.get_persistence()
     server._SESSION_ACTIVE_CASE.clear()
     server._SESSION_WS_CONNECTIONS.clear()
     server._SESSION_LIVE_TURNS.clear()
+    server._SESSION_CASE_LIST_HASH.clear()
     server.set_persistence(None)
     try:
         yield
@@ -155,6 +169,8 @@ def _clean_registries():
         server._SESSION_WS_CONNECTIONS.clear()
         server._SESSION_WS_CONNECTIONS.update(saved_conns)
         server._SESSION_LIVE_TURNS.clear()
+        server._SESSION_CASE_LIST_HASH.clear()
+        server._SESSION_CASE_LIST_HASH.update(saved_case_list_hash)
 
 
 # =========================================================================== #
@@ -456,3 +472,59 @@ async def test_first_resume_replays_layers_through_real_emitter() -> None:
     assert server.get_persistence().get_session_state_calls == first_calls, (
         "a keepalive resume must NOT re-hit the replay seam (no re-paint blink)"
     )
+
+
+# =========================================================================== #
+# OPEN-8: case-list emission storm - server-side change-guard
+# =========================================================================== #
+#
+# Root cause (live evidence, trid3nt-local/logs/agent.log): ``_emit_case_list``
+# had NO change-detection - every ``session-resume`` (the client's ~25s
+# keepalive ping, OR any one of several sockets sharing a session_id
+# independently resuming) re-serialized + re-sent the full case list
+# (~190 cases live) even when nothing had changed, observed as multi-per-
+# minute chatter on long-lived sessions. Fix: a per-session content-digest
+# guard (``_SESSION_CASE_LIST_HASH`` / ``_case_list_digest``) skips the send
+# when unchanged; ``force=True`` (a genuine first resume, or any explicit
+# case mutation) always emits.
+
+
+@pytest.mark.asyncio
+async def test_first_resume_forces_case_list_keepalive_skips_unchanged() -> None:
+    """The genuine FIRST resume of a connection always emits ``case-list``
+    (force=True); a later keepalive resume with an UNCHANGED list is a
+    no-op — no repeat serialize/send of the same content."""
+    session_id = new_ulid()
+    case_id = new_ulid()
+    server.set_persistence(_FakePersistence(case_id, []))
+
+    ws = FakeWS()
+    state = server.SessionState(session_id=session_id)
+    state.emitter = _make_emitter(ws, session_id)
+
+    await server._handle_session_resume(ws, state)
+    assert len(_case_list_envelopes(ws)) == 1, "first resume forces an emit"
+
+    # KEEPALIVE x3: the list is unchanged, so no further case-list emits.
+    await server._handle_session_resume(ws, state)
+    await server._handle_session_resume(ws, state)
+    await server._handle_session_resume(ws, state)
+    assert len(_case_list_envelopes(ws)) == 1, (
+        "repeat keepalive resumes with an unchanged list must not re-emit"
+    )
+
+
+@pytest.mark.asyncio
+async def test_case_list_change_guard_cleared_on_disconnect(monkeypatch) -> None:
+    """Once a session's last live connection deregisters, its cached
+    case-list digest is dropped — a later reconnect (fresh SessionState)
+    gets an honest first-resume emit rather than inheriting a stale guard
+    from the closed connection."""
+    session_id = new_ulid()
+    case_id = new_ulid()
+    server.set_persistence(_FakePersistence(case_id, []))
+    server._SESSION_CASE_LIST_HASH[session_id] = "stale-digest-from-a-dead-connection"
+
+    assert server.session_connection_count(session_id) == 0
+    server._clear_case_list_hash(session_id)
+    assert session_id not in server._SESSION_CASE_LIST_HASH

@@ -372,6 +372,97 @@ def test_emit_case_list_skips_when_persistence_unbound() -> None:
         set_persistence(saved)
 
 
+def test_emit_case_list_skips_repeat_when_unchanged(
+    _persistence_bound: Persistence,
+) -> None:
+    """OPEN-8 change-guard: calling ``_emit_case_list`` twice with an
+    UNCHANGED case list (default ``force=False``) sends the envelope only
+    once - the second call is a no-op (no re-serialize, no re-send)."""
+    case = _fresh_case_summary()
+    ws = MockWebSocket()
+    state = _fresh_state()
+    state.authenticated_user_id = new_ulid()
+    asyncio.run(_persistence_bound.upsert_case(case, owner_user_id=state.authenticated_user_id))
+
+    asyncio.run(_emit_case_list(ws, state))
+    asyncio.run(_emit_case_list(ws, state))
+
+    case_list_envelopes = [env for env in ws.sent if env["type"] == "case-list"]
+    assert len(case_list_envelopes) == 1
+
+
+def test_emit_case_list_force_always_emits(
+    _persistence_bound: Persistence,
+) -> None:
+    """``force=True`` bypasses the change-guard - every call sends, even when
+    the underlying case list is byte-for-byte identical (the genuine-first-
+    resume / explicit-mutation posture)."""
+    case = _fresh_case_summary()
+    ws = MockWebSocket()
+    state = _fresh_state()
+    state.authenticated_user_id = new_ulid()
+    asyncio.run(_persistence_bound.upsert_case(case, owner_user_id=state.authenticated_user_id))
+
+    asyncio.run(_emit_case_list(ws, state, force=True))
+    asyncio.run(_emit_case_list(ws, state, force=True))
+
+    case_list_envelopes = [env for env in ws.sent if env["type"] == "case-list"]
+    assert len(case_list_envelopes) == 2
+
+
+def test_emit_case_list_reemits_after_mutation(
+    _persistence_bound: Persistence,
+) -> None:
+    """A real mutation (a second Case created for the same owner) changes the
+    content digest, so the NEXT default (``force=False``) call emits again -
+    the guard tracks content, not merely call count."""
+    case = _fresh_case_summary()
+    ws = MockWebSocket()
+    state = _fresh_state()
+    state.authenticated_user_id = new_ulid()
+    asyncio.run(_persistence_bound.upsert_case(case, owner_user_id=state.authenticated_user_id))
+
+    asyncio.run(_emit_case_list(ws, state))
+    # Unchanged -> skipped.
+    asyncio.run(_emit_case_list(ws, state))
+    case_list_envelopes = [env for env in ws.sent if env["type"] == "case-list"]
+    assert len(case_list_envelopes) == 1
+
+    # A second Case lands for the same owner -> the list content changed.
+    other = _fresh_case_summary()
+    asyncio.run(_persistence_bound.upsert_case(other, owner_user_id=state.authenticated_user_id))
+    asyncio.run(_emit_case_list(ws, state))
+
+    case_list_envelopes = [env for env in ws.sent if env["type"] == "case-list"]
+    assert len(case_list_envelopes) == 2
+    case_ids = {c["case_id"] for c in case_list_envelopes[-1]["payload"]["cases"]}
+    assert {case.case_id, other.case_id} <= case_ids
+
+
+def test_emit_case_list_change_guard_is_per_session(
+    _persistence_bound: Persistence,
+) -> None:
+    """Two distinct sessions each get their OWN change-guard slot - the guard
+    is keyed by ``session_id``, so session A's cached digest never suppresses
+    session B's first emit."""
+    case = _fresh_case_summary()
+    owner = new_ulid()
+    asyncio.run(_persistence_bound.upsert_case(case, owner_user_id=owner))
+
+    ws_a = MockWebSocket()
+    state_a = _fresh_state()
+    state_a.authenticated_user_id = owner
+    asyncio.run(_emit_case_list(ws_a, state_a))
+
+    ws_b = MockWebSocket()
+    state_b = _fresh_state()
+    state_b.authenticated_user_id = owner
+    asyncio.run(_emit_case_list(ws_b, state_b))
+
+    assert len([env for env in ws_a.sent if env["type"] == "case-list"]) == 1
+    assert len([env for env in ws_b.sent if env["type"] == "case-list"]) == 1
+
+
 def test_active_case_id_set_after_create_and_select(
     _persistence_bound: Persistence,
 ) -> None:

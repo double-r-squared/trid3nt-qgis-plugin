@@ -70,7 +70,7 @@ sg docker -c 'docker pull deltares/sfincs-cpu:sfincs-v2.3.3'
 Fortran solvers into the image; the build is one-time and cached):
 
 ```sh
-sg docker -c 'docker build -t trid3nt-local/geoclaw:latest vendor/services/workers/geoclaw/'
+sg docker -c 'docker build -t trid3nt-local/geoclaw:latest -f vendor/services/workers/geoclaw/Dockerfile vendor/'
 sg docker -c 'docker build -t trid3nt-local/swan:latest vendor/services/workers/swan/'
 ```
 

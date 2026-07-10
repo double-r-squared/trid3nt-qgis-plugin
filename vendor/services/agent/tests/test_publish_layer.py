@@ -32,6 +32,7 @@ from grace2_agent.tools.publish_layer import (
     PublishLayerError,
     _build_wms_url,
     derive_layer_id,
+    derive_readable_layer_name,
     _gs_to_vsigs,
     _parse_qgs_key,
     _validate_and_correct_layer_uri,
@@ -740,6 +741,95 @@ def test_derive_layer_id_sanitizes_and_never_returns_empty() -> None:
     # No basename at all -> a fresh ULID-suffixed id, never an empty string.
     derived = derive_layer_id("s3://bucket/dir/")
     assert derived.startswith("layer-") and len(derived) > len("layer-")
+
+
+# --------------------------------------------------------------------------- #
+# derive_readable_layer_name (OPEN-9, 2026-07-10): a bare-ULID layer_id must
+# never reach the UI's layer summary as the display name when a better
+# signal (explicit name, style_preset, or a URI path segment) is available.
+# --------------------------------------------------------------------------- #
+
+_BARE_ULID = "01KX5TEZ20BK86EE6DG8PSVFJK"
+
+
+def test_derive_readable_layer_name_from_hillshade_style_preset() -> None:
+    """Omitted name + a known style_preset -> a readable name, not the bare
+    ULID layer_id (the live bug this fixes)."""
+    name = derive_readable_layer_name(
+        None,
+        _BARE_ULID,
+        "standard_hillshade",
+        "https://tiles.example.com/cog/tiles/{z}/{x}/{y}?url=s3://bucket/hillshade/abc123.tif",
+    )
+    assert name.startswith("Hillshade")
+    assert name != _BARE_ULID
+    assert _BARE_ULID not in name
+
+
+def test_derive_readable_layer_name_explicit_name_untouched() -> None:
+    """An explicit, non-ULID-shaped name is returned VERBATIM -- no
+    disambiguator appended, no override by style_preset/URI."""
+    name = derive_readable_layer_name(
+        "Fort Myers Flood Depth",
+        _BARE_ULID,
+        "continuous_flood_depth",
+        "https://tiles.example.com/cog/tiles/{z}/{x}/{y}?url=s3://bucket/flood/abc123.tif",
+    )
+    assert name == "Fort Myers Flood Depth"
+
+
+def test_derive_readable_layer_name_explicit_name_that_is_itself_a_ulid_is_ignored() -> None:
+    """A 'name' that is itself just the bare ULID (a model echoing layer_id
+    into both fields) is treated as NO usable name -- falls through to the
+    style_preset/URI derivation instead of surfacing the ULID."""
+    name = derive_readable_layer_name(
+        _BARE_ULID,
+        _BARE_ULID,
+        "standard_hillshade",
+        "https://tiles.example.com/cog/tiles/{z}/{x}/{y}?url=s3://bucket/hillshade/abc123.tif",
+    )
+    assert name.startswith("Hillshade")
+    assert name != _BARE_ULID
+
+
+def test_derive_readable_layer_name_uri_segment_fallback() -> None:
+    """No name, no informative style_preset -> derive from the source URI's
+    path segment (e.g. '.../hillshade/<hash>.tif' -> 'Hillshade')."""
+    name = derive_readable_layer_name(
+        None,
+        _BARE_ULID,
+        None,
+        "s3://grace2-hazard-cache/cache/hillshade/9f8e7d6c5b4a3210.tif",
+    )
+    assert name.startswith("Hillshade")
+    assert _BARE_ULID not in name
+
+
+def test_derive_readable_layer_name_generic_fallback_never_bare_ulid() -> None:
+    """No name, no style_preset, no human URI segment (flat path, hash-shaped
+    stem, no parent directory to fall back to) -> a generic 'Layer' label
+    with a disambiguator -- STILL never the bare ULID."""
+    name = derive_readable_layer_name(
+        None,
+        _BARE_ULID,
+        None,
+        "s3://grace2-hazard-cache/9f8e7d6c5b4a3210fedcba9876543210.tif",
+    )
+    assert name.startswith("Layer")
+    assert name != _BARE_ULID
+    assert _BARE_ULID not in name
+
+
+def test_derive_readable_layer_name_disambiguator_varies_by_layer_id() -> None:
+    """Two layers in the same family get DISTINCT derived names (the
+    disambiguator suffix), so they don't collide in the UI's layer list."""
+    name_a = derive_readable_layer_name(
+        None, "01AAAAAAAAAAAAAAAAAAAAAAAA", "standard_hillshade", "s3://b/x.tif"
+    )
+    name_b = derive_readable_layer_name(
+        None, "01BBBBBBBBBBBBBBBBBBBBBBBB", "standard_hillshade", "s3://b/x.tif"
+    )
+    assert name_a != name_b
 
 
 def test_publish_layer_derives_layer_id_when_omitted() -> None:
