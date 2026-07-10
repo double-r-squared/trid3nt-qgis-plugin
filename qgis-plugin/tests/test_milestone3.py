@@ -701,6 +701,36 @@ class TestCaseCommandCreateDelete(unittest.TestCase):
         self.assertEqual(sent["payload"]["args"], {})
         self.assertIsNone(sent["case_id"])  # envelope-level case_id too
 
+    def test_create_reply_updates_wire_stamp(self):
+        """F34: the pump must ADOPT the case-open rebind into client.case_id.
+
+        Pre-fix, case_command("create") never updated the stamp, so the next
+        user-message carried the PREVIOUS case_id and the turn ran/persisted
+        into the wrong case (live-proven 2026-07-10: a fresh flood case ended
+        up empty while its layers landed in the startup case).
+        """
+        before = self.client.case_id
+        self.client.case_command("create")
+        ev = self._await_kind("case-open")
+        info = tc.parse_case_open(ev.data)
+        self.assertIsNotNone(info)
+        self.assertEqual(self.client.case_id, info.case_id)
+        if info.case_id != before:
+            self.assertNotEqual(self.client.case_id, before)
+        # and the very next chat frame is stamped with the OPENED case
+        self.client.send_chat("hello after new case")
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            chats = [
+                e for e in self.server.received if e["type"] == "user-message"
+            ]
+            if chats:
+                break
+            time.sleep(0.05)
+        else:
+            self.fail("no user-message observed by the stub server")
+        self.assertEqual(chats[-1]["case_id"], info.case_id)
+
     def test_delete_sends_case_id(self):
         target = CASE_LIST_ROWS[0]["case_id"]
         self.client.case_command("delete", target)

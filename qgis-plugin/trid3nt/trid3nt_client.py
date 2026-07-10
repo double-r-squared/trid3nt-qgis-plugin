@@ -1289,6 +1289,19 @@ class AgentClient:
         if etype == "turn-complete":
             return AgentEvent("turn-complete", payload)
         if etype == "case-open":
+            # F34 (live-proven 2026-07-10): adopt the server's authoritative
+            # rebind into the wire stamp. select_case stamps at send time,
+            # but the generic case_command("create") path did NOT - so every
+            # envelope after a New-case rebind (including user-message) kept
+            # carrying the PREVIOUS case_id and the turn ran/persisted into
+            # the wrong case. The case-open reply is the one signal every
+            # rebind path shares (create, select, startup reuse), so the
+            # stamp follows it unconditionally.
+            opened = ((payload.get("session_state") or {}).get("case") or {}).get(
+                "case_id"
+            )
+            if isinstance(opened, str) and opened:
+                self.case_id = opened
             return AgentEvent("case-open", payload)
         if etype == "tool-payload-warning":
             return AgentEvent("payload-warning", payload)
