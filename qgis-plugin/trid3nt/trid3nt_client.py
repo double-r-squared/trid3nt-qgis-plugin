@@ -47,7 +47,9 @@ import ssl as ssl_module
 import struct
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional, Tuple
@@ -56,6 +58,7 @@ __all__ = [
     "AgentClient",
     "AgentEvent",
     "CaseInfo",
+    "CaseListRequestError",
     "CaseOpenInfo",
     "ConnectionClosed",
     "Debouncer",
@@ -69,6 +72,8 @@ __all__ = [
     "WebSocketConnection",
     "WebSocketError",
     "build_ws_url",
+    "choose_startup_case",
+    "fetch_case_list",
     "is_auth_failure",
     "make_envelope",
     "new_ulid",
@@ -304,6 +309,99 @@ def parse_case_list(payload: dict) -> list[CaseInfo]:
             )
         )
     return cases
+
+
+def choose_startup_case(
+    resumed_case_id: Optional[str],
+    cases: list,
+) -> Tuple[str, Optional[str]]:
+    """Decide which case a fresh LOCAL connect should bind (PURE -- no
+    sockets, no Qt, so the startup decision is unit-testable).
+
+    Live-feedback 2026-07-09: ``connect_agent`` used to CREATE a fresh
+    "QGIS session ..." case on every dock-show, regrowing exactly the case
+    clutter the user just purged (157 junk cases). The decision ladder:
+
+      ("resume", id)   the session-resume handshake already rebound a
+                       persisted active case -- keep it.
+      ("select", id)   no resumed case, but the user HAS cases -- reuse the
+                       NEWEST live one (``updated_at`` desc; ISO-8601 Z
+                       strings sort lexicographically). Tombstoned
+                       (deleted/archived) and malformed rows are skipped.
+      ("create", None) zero usable cases -- only then is a fresh case
+                       created (or explicitly via the New case button).
+    """
+    if isinstance(resumed_case_id, str) and resumed_case_id:
+        return ("resume", resumed_case_id)
+    candidates = []
+    for case in cases or []:
+        case_id = getattr(case, "case_id", None)
+        if not isinstance(case_id, str) or not case_id:
+            continue
+        status = getattr(case, "status", "") or ""
+        if status in ("deleted", "archived"):
+            continue
+        candidates.append(case)
+    if candidates:
+        newest = max(
+            candidates, key=lambda c: str(getattr(c, "updated_at", "") or "")
+        )
+        return ("select", newest.case_id)
+    return ("create", None)
+
+
+class CaseListRequestError(Exception):
+    """``fetch_case_list`` failed -- transport, HTTP status, or a non-JSON
+    body. Carries an honest, user-facing message."""
+
+
+def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
+    """``GET {base_url}/api/case-list`` -- the COLD case list, no WS session.
+
+    Live-feedback 2026-07-09: the QGIS dock previously could not show ANY
+    cases until the user pressed Connect, because ``case-list`` only ever
+    arrived as a WS envelope. The local agent's HTTP listener
+    (``tool_catalog_http.py``) mirrors that same envelope's data over plain
+    HTTP for the local single-user seam, so the dock's Cases dialog can
+    populate BEFORE a connection exists. Plain ``urllib`` (stdlib only, same
+    posture as ``case_export.py``'s HTTP calls) -- no WebSocket involved.
+
+    Returns ``[]`` (never raises) is NOT the contract here: a genuine failure
+    (agent HTTP listener down, route absent, bad body) raises
+    ``CaseListRequestError`` with an honest message so the caller can show
+    it -- never a silently-empty dialog that looks like "no cases exist".
+    Row-level parsing stays defensive (``parse_case_list`` skips malformed
+    rows; a partially-bad payload still yields the good rows).
+    """
+    url = f"{base_url.rstrip('/')}/api/case-list"
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            body = json.loads(exc.read().decode("utf-8", "replace"))
+            if isinstance(body, dict):
+                detail = str(body.get("error") or "")
+        except Exception:  # noqa: BLE001 -- body may be anything
+            pass
+        raise CaseListRequestError(
+            detail or f"case list request failed (HTTP {exc.code})"
+        ) from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise CaseListRequestError(
+            f"agent HTTP API unreachable at {url} ({exc})"
+        ) from exc
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CaseListRequestError(
+            f"case list API returned non-JSON: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise CaseListRequestError("case list API returned a non-object body")
+    return parse_case_list(payload)
 
 
 # --------------------------------------------------------------------------- #
@@ -820,6 +918,12 @@ class AgentClient:
         self.is_anonymous: Optional[bool] = None
         self.case_id: Optional[str] = None
         self.last_session_state: Optional[dict] = None
+        #: The most recent ``case-list`` observed -- stashed by BOTH the
+        #: handshake drain (``_wait_for``; the stub server emits it before
+        #: session-state) and the event pump (``next_event``; the live
+        #: server emits it after). None until one arrives. The startup
+        #: case-reuse decision (``choose_startup_case``) reads this.
+        self.last_case_list: Optional[list] = None
         #: The last ``error`` envelope payload seen while draining a handshake
         #: wait (e.g. AUTH_REQUIRED before a 1008 close) -- the bridge folds it
         #: into the failure text so token expiry is classifiable.
@@ -877,6 +981,16 @@ class AgentClient:
         self._send("session-resume", {"case_id": self.case_id})
         state = self._wait_for("session-state")
         self.last_session_state = state.get("payload") or {}
+        # Startup case reuse (live-feedback 2026-07-09): the server stamps
+        # the session-state reply's envelope ``case_id`` with the active
+        # case the resume rebound (its persisted ``last_active_case_id``).
+        # Adopt it when this client has no case yet, so the connect flow can
+        # KEEP the persisted case instead of minting a new one. A client
+        # that already carries a case (reconnect) keeps its own stamp -- the
+        # client is the authority there (job-CASE-AUTHORITY).
+        resumed = state.get("case_id")
+        if self.case_id is None and isinstance(resumed, str) and resumed:
+            self.case_id = resumed
         self.connected = True
         self._flush_outbound_queue()
         return user_id
@@ -1090,9 +1204,11 @@ class AgentClient:
         if etype == "tool-payload-warning":
             return AgentEvent("payload-warning", payload)
         if etype == "case-list":
-            return AgentEvent(
-                "case-list", {"cases": parse_case_list(payload), "payload": payload}
-            )
+            cases = parse_case_list(payload)
+            # Mirror of the last_session_state stash above: the startup
+            # case-reuse decision reads the freshest list either way.
+            self.last_case_list = cases
+            return AgentEvent("case-list", {"cases": cases, "payload": payload})
         return AgentEvent("raw", {"type": etype, "payload": payload})
 
     def run_forever(
@@ -1206,5 +1322,10 @@ class AgentClient:
                 continue
             if env.get("type") == "error" and isinstance(env.get("payload"), dict):
                 self.last_handshake_error = env["payload"]
+            # A ``case-list`` drained during the handshake wait (the stub
+            # server interleaves it BEFORE session-state) would otherwise be
+            # dropped -- stash it for the startup case-reuse decision.
+            if env.get("type") == "case-list" and isinstance(env.get("payload"), dict):
+                self.last_case_list = parse_case_list(env["payload"])
             if env.get("type") == etype:
                 return env

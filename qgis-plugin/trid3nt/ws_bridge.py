@@ -48,6 +48,7 @@ from .trid3nt_client import (
     AgentClient,
     ConnectionClosed,
     WebSocketError,
+    choose_startup_case,
     is_auth_failure,
     next_backoff,
 )
@@ -79,6 +80,7 @@ class AgentWorker(QObject):
         anonymous_user_id: Optional[str] = None,
         case_title: str = "QGIS session",
         case_bbox: Optional[list] = None,
+        reuse_case: bool = False,
     ):
         super().__init__()
         self._url = url
@@ -86,6 +88,7 @@ class AgentWorker(QObject):
         self._anonymous_user_id = anonymous_user_id or None
         self._case_title = case_title
         self._case_bbox = case_bbox
+        self._reuse_case = reuse_case
         self._stop = False
         self.client: Optional[AgentClient] = None
 
@@ -100,7 +103,7 @@ class AgentWorker(QObject):
         try:
             user_id = self.client.connect()
             self.connected.emit(user_id, bool(self.client.is_anonymous))
-            case_id = self.client.create_case(self._case_title, bbox=self._case_bbox)
+            case_id = self._bind_startup_case()
             self.case_ready.emit(case_id)
         except Exception as exc:  # noqa: BLE001 -- surfaced verbatim, never silent
             text = self._failure_text(exc)
@@ -154,6 +157,54 @@ class AgentWorker(QObject):
         finally:
             self._close_client()
             self.closed.emit(reason)
+
+    def _bind_startup_case(self) -> str:
+        """Bind the fresh connection to a case; returns its case_id.
+
+        ``reuse_case=False`` (remote mode): milestone 1 behavior, unchanged
+        -- create a fresh case.
+
+        ``reuse_case=True`` (local mode, live-feedback 2026-07-09): never
+        mint a fresh case while the user already has one -- the old always-
+        create regrew case clutter on every dock-show. Decision ladder
+        (``choose_startup_case``, pure + unit-tested):
+
+          1. the resume handshake rebound a persisted active case -> keep it;
+          2. else the user HAS cases -> select the NEWEST live one;
+          3. else (zero cases) -> create, the only remaining path.
+
+        Both reuse rungs send a ``case-command select`` (even for the
+        resumed case): the server's full ``case-open`` rehydration then
+        flows through the normal event pump and rebinds the dock with the
+        authoritative title + persisted layers + bbox zoom -- the dock is
+        never left caseless (``case_ready`` fires with the target id either
+        way; the case-open refines it moments later).
+
+        The live server emits the ``case-list`` envelope right AFTER the
+        session-state the connect handshake consumed (the stub emits it
+        before, which the handshake drain stashes), so when neither a
+        resumed case nor a stashed list exists yet we pump events briefly
+        -- forwarding them to the dock as usual -- until the list lands.
+        A no-show inside the window falls through to an honest create.
+        """
+        if self._reuse_case:
+            if self.client.case_id is None and self.client.last_case_list is None:
+                deadline = time.monotonic() + 5.0
+                while (
+                    not self._stop
+                    and self.client.last_case_list is None
+                    and time.monotonic() < deadline
+                ):
+                    ev = self.client.next_event(timeout=0.5)
+                    if ev is not None:
+                        self.agent_event.emit(ev.kind, ev.data)
+            action, target = choose_startup_case(
+                self.client.case_id, self.client.last_case_list or []
+            )
+            if action in ("resume", "select") and target:
+                self.client.select_case(target)
+                return target
+        return self.client.create_case(self._case_title, bbox=self._case_bbox)
 
     def _sleep_interruptible(self, seconds: float) -> bool:
         """Sleep in small slices, polling the stop flag. False = stopped."""
@@ -252,6 +303,7 @@ class AgentBridge(QObject):
         anonymous_user_id: Optional[str] = None,
         case_title: str = "QGIS session",
         case_bbox: Optional[list] = None,
+        reuse_case: bool = False,
     ) -> None:
         self.stop()
         self._worker = AgentWorker(
@@ -260,6 +312,7 @@ class AgentBridge(QObject):
             anonymous_user_id=anonymous_user_id,
             case_title=case_title,
             case_bbox=case_bbox,
+            reuse_case=reuse_case,
         )
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)

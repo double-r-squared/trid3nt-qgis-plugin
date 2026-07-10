@@ -170,6 +170,139 @@ class TestWsUrlToHttpBase(unittest.TestCase):
         self.assertEqual(f("host.example/ws"), "http://host.example")
 
 
+# --------------------------------------------------------------------------- #
+# Cold case list -- GET /api/case-list (items b/c, live-feedback 2026-07-09)
+# --------------------------------------------------------------------------- #
+
+
+class _CaseListStub(http.server.BaseHTTPRequestHandler):
+    """Mirrors the agent's real ``GET /api/case-list`` route in miniature
+    (services/agent ``tool_catalog_http.py``): 200 ``{"cases": [...]}`` on
+    success, or a configurable status + ``{"error": ...}`` body."""
+
+    status: int = 200
+    body: dict = {"cases": []}
+
+    def _json(self, status: int, payload: dict) -> None:
+        raw = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_GET(self):  # noqa: N802
+        if self.path != "/api/case-list":
+            self._json(404, {"error": "not found"})
+            return
+        self._json(self.status, self.body)
+
+    def log_message(self, *args):  # silence
+        pass
+
+
+class _CaseListStubBase(unittest.TestCase):
+    def _start(self, status: int, body: dict) -> str:
+        _CaseListStub.status = status
+        _CaseListStub.body = body
+        httpd = http.server.HTTPServer(("127.0.0.1", 0), _CaseListStub)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(httpd.shutdown)
+        return f"http://127.0.0.1:{httpd.server_address[1]}"
+
+
+class TestFetchCaseList(_CaseListStubBase):
+    def test_happy_path_two_cases(self):
+        base = self._start(
+            200,
+            {
+                "cases": [
+                    {
+                        "case_id": "01STUBCASELISTAAAAAAAAAAAA",
+                        "title": "Asheville flood",
+                        "updated_at": "2026-07-06T12:00:00Z",
+                        "bbox": [-82.6, 35.55, -82.5, 35.65],
+                    },
+                    {
+                        "case_id": "01STUBCASELISTBBBBBBBBBBBB",
+                        "title": "Tampa surge",
+                        "updated_at": "2026-06-21T09:30:00Z",
+                        "bbox": None,
+                    },
+                ]
+            },
+        )
+        cases = tc.fetch_case_list(base, timeout=10)
+        self.assertEqual(len(cases), 2)
+        self.assertTrue(all(isinstance(c, tc.CaseInfo) for c in cases))
+        self.assertEqual(
+            [c.case_id for c in cases],
+            ["01STUBCASELISTAAAAAAAAAAAA", "01STUBCASELISTBBBBBBBBBBBB"],
+        )
+        self.assertEqual(cases[0].title, "Asheville flood")
+        self.assertEqual(cases[0].bbox, [-82.6, 35.55, -82.5, 35.65])
+        self.assertIsNone(cases[1].bbox)
+
+    def test_malformed_rows_are_skipped(self):
+        base = self._start(
+            200,
+            {
+                "cases": [
+                    {"case_id": "01GOOD0000000000000000000", "title": "Good"},
+                    {"title": "No case_id -- dropped"},
+                    "not-a-dict",
+                    {"case_id": "01GOOD2000000000000000000", "title": "Also good"},
+                ]
+            },
+        )
+        cases = tc.fetch_case_list(base, timeout=10)
+        self.assertEqual(
+            [c.case_id for c in cases],
+            ["01GOOD0000000000000000000", "01GOOD2000000000000000000"],
+        )
+
+    def test_empty_list_is_ok(self):
+        base = self._start(200, {"cases": []})
+        self.assertEqual(tc.fetch_case_list(base, timeout=10), [])
+
+    def test_persistence_unavailable_503_raises_honest_error(self):
+        base = self._start(503, {"error": "persistence unavailable"})
+        with self.assertRaises(tc.CaseListRequestError) as ctx:
+            tc.fetch_case_list(base, timeout=10)
+        self.assertIn("persistence unavailable", str(ctx.exception))
+
+    def test_route_absent_404_raises(self):
+        base = self._start(404, {"error": "not found"})
+        with self.assertRaises(tc.CaseListRequestError):
+            tc.fetch_case_list(base, timeout=10)
+
+    def test_unreachable_agent_raises_honest_error(self):
+        with self.assertRaises(tc.CaseListRequestError) as ctx:
+            tc.fetch_case_list("http://127.0.0.1:1", timeout=2)
+        self.assertIn("unreachable", str(ctx.exception))
+
+    def test_non_json_body_raises(self):
+        class _BadJsonStub(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                raw = b"not json"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+            def log_message(self, *args):
+                pass
+
+        httpd = http.server.HTTPServer(("127.0.0.1", 0), _BadJsonStub)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(httpd.shutdown)
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        with self.assertRaises(tc.CaseListRequestError) as ctx:
+            tc.fetch_case_list(base, timeout=10)
+        self.assertIn("non-JSON", str(ctx.exception))
+
+
 class TestRemoteDownload(_RemoteExportBase):
     def test_download_ok_lands_bytes_locally(self):
         local = case_export.download_export_file(
@@ -452,6 +585,190 @@ class TestCaseCommandCreateDelete(unittest.TestCase):
         client = tc.AgentClient("ws://127.0.0.1:1/ws")  # never connected
         client.case_command("create")
         self.assertEqual(client.queued_outbound, 1)
+
+
+# --------------------------------------------------------------------------- #
+# Startup case reuse (live-feedback 2026-07-09): never mint a fresh
+# "QGIS session ..." case while the user already has one
+# --------------------------------------------------------------------------- #
+
+
+class TestChooseStartupCase(unittest.TestCase):
+    """The pure connect-flow decision ladder (``choose_startup_case``):
+    resume > select-newest > create."""
+
+    @staticmethod
+    def _case(case_id, updated_at="", status="active"):
+        return tc.CaseInfo(
+            case_id=case_id, title=case_id, status=status, updated_at=updated_at
+        )
+
+    def test_resumed_case_wins_over_list(self):
+        cases = [self._case("01NEWEST", "2026-07-08T00:00:00Z")]
+        self.assertEqual(
+            tc.choose_startup_case("01RESUMED", cases), ("resume", "01RESUMED")
+        )
+
+    def test_newest_live_case_selected(self):
+        cases = [
+            self._case("01OLD", "2026-06-01T00:00:00Z"),
+            self._case("01NEW", "2026-07-08T00:00:00Z"),
+            self._case("01MID", "2026-07-01T00:00:00Z"),
+        ]
+        self.assertEqual(tc.choose_startup_case(None, cases), ("select", "01NEW"))
+
+    def test_tombstones_and_malformed_rows_skipped(self):
+        cases = [
+            self._case("01ARCHIVED", "2026-07-09T00:00:00Z", status="archived"),
+            self._case("01DELETED", "2026-07-09T00:00:00Z", status="deleted"),
+            self._case("", "2026-07-09T00:00:00Z"),  # no case_id -- dropped
+            self._case("01LIVE", "2026-06-15T00:00:00Z"),
+        ]
+        self.assertEqual(tc.choose_startup_case(None, cases), ("select", "01LIVE"))
+
+    def test_missing_updated_at_sorts_oldest(self):
+        cases = [
+            self._case("01NODATE", ""),
+            self._case("01DATED", "2026-07-01T00:00:00Z"),
+        ]
+        self.assertEqual(tc.choose_startup_case(None, cases), ("select", "01DATED"))
+
+    def test_zero_cases_creates(self):
+        self.assertEqual(tc.choose_startup_case(None, []), ("create", None))
+        self.assertEqual(tc.choose_startup_case("", None), ("create", None))
+
+    def test_all_tombstoned_creates(self):
+        cases = [self._case("01GONE", "2026-07-01T00:00:00Z", status="archived")]
+        self.assertEqual(tc.choose_startup_case(None, cases), ("create", None))
+
+    def test_stub_rows_pick_the_active_newest(self):
+        # The stub's canonical rows: Asheville (active) + Tampa (archived).
+        cases = tc.parse_case_list({"cases": CASE_LIST_ROWS})
+        self.assertEqual(
+            tc.choose_startup_case(None, cases),
+            ("select", "01STUBCASELISTAAAAAAAAAAAA"),
+        )
+
+
+class TestStartupCaseReuse(unittest.TestCase):
+    """The client half of the connect-flow reuse: the handshake stashes the
+    case-list + adopts a server-rebound case, and the reuse ladder ends in a
+    full case-open rehydration (the worker's ``_bind_startup_case`` path,
+    minus Qt)."""
+
+    def _client(self, server, **kwargs):
+        client = tc.AgentClient(server.url, **kwargs)
+        self.addCleanup(client.close)
+        return client
+
+    def _await_kind(self, client, kind, deadline_s=10.0):
+        deadline = time.monotonic() + deadline_s
+        while time.monotonic() < deadline:
+            ev = client.next_event(timeout=1.0)
+            if ev is not None and ev.kind == kind:
+                return ev
+        self.fail(f"no {kind!r} event within {deadline_s}s")
+
+    def test_handshake_stashes_case_list(self):
+        server = StubAgentServer()
+        server.start()
+        self.addCleanup(server.stop)
+        client = self._client(server)
+        client.connect()
+        # The stub interleaves case-list BEFORE session-state -- the
+        # handshake drain must stash it, not drop it.
+        self.assertIsNotNone(client.last_case_list)
+        self.assertEqual(
+            [c.case_id for c in client.last_case_list],
+            [r["case_id"] for r in CASE_LIST_ROWS],
+        )
+
+    def test_bare_resume_adopts_server_rebound_case(self):
+        server = StubAgentServer()
+        server.resume_rebind_case_id = CASE_LIST_ROWS[0]["case_id"]
+        server.start()
+        self.addCleanup(server.stop)
+        client = self._client(server)
+        client.connect()
+        # Rule 1: the persisted active case the resume rebound is adopted.
+        self.assertEqual(client.case_id, CASE_LIST_ROWS[0]["case_id"])
+
+    def test_client_stamp_beats_server_rebind(self):
+        server = StubAgentServer()
+        server.resume_rebind_case_id = CASE_LIST_ROWS[0]["case_id"]
+        server.start()
+        self.addCleanup(server.stop)
+        client = self._client(server)
+        client.case_id = "01CLIENTSTAMPAAAAAAAAAAAAA"  # reconnect posture
+        client.connect()
+        # job-CASE-AUTHORITY: the client's own stamp is never overwritten.
+        self.assertEqual(client.case_id, "01CLIENTSTAMPAAAAAAAAAAAAA")
+
+    def test_no_rebind_no_adoption(self):
+        server = StubAgentServer()
+        server.start()
+        self.addCleanup(server.stop)
+        client = self._client(server)
+        client.connect()
+        self.assertIsNone(client.case_id)
+
+    def test_reuse_ladder_selects_newest_and_rehydrates(self):
+        """The worker's local-mode connect flow, minus Qt: connect ->
+        choose_startup_case -> select -> the case-open rehydration carries
+        the authoritative title + layers (the dock's rebind input)."""
+        server = StubAgentServer()
+        server.start()
+        self.addCleanup(server.stop)
+        client = self._client(server)
+        client.connect()
+        action, target = tc.choose_startup_case(
+            client.case_id, client.last_case_list or []
+        )
+        self.assertEqual((action, target), ("select", CASE_LIST_ROWS[0]["case_id"]))
+        client.select_case(target)
+        self.assertEqual(client.case_id, target)  # bound -- never caseless
+        ev = self._await_kind(client, "case-open")
+        info = tc.parse_case_open(ev.data)
+        self.assertIsNotNone(info)
+        self.assertEqual(info.case_id, target)
+        self.assertEqual(info.title, "Asheville flood")
+        self.assertEqual(len(info.layers), 1)  # persisted layers replayed
+        # No create ever hit the wire -- the whole point of the reuse ladder.
+        creates = [
+            e
+            for e in server.received
+            if e["type"] == "case-command"
+            and (e["payload"] or {}).get("command") == "create"
+        ]
+        self.assertEqual(creates, [])
+
+    def test_reuse_ladder_resume_wins(self):
+        server = StubAgentServer()
+        server.resume_rebind_case_id = CASE_LIST_ROWS[0]["case_id"]
+        server.start()
+        self.addCleanup(server.stop)
+        client = self._client(server)
+        client.connect()
+        action, target = tc.choose_startup_case(
+            client.case_id, client.last_case_list or []
+        )
+        self.assertEqual(
+            (action, target), ("resume", CASE_LIST_ROWS[0]["case_id"])
+        )
+
+    def test_event_pump_stashes_case_list_too(self):
+        """The live server emits case-list AFTER session-state -- the event
+        pump path must stash it just like the handshake drain does."""
+        server = StubAgentServer()
+        server.start()
+        self.addCleanup(server.stop)
+        client = self._client(server)
+        client.connect()
+        client.last_case_list = None  # wipe the drain stash
+        self.assertTrue(client.request_case_list_refresh())
+        self._await_kind(client, "case-list")
+        self.assertIsNotNone(client.last_case_list)
+        self.assertEqual(len(client.last_case_list), 2)
 
 
 # --------------------------------------------------------------------------- #

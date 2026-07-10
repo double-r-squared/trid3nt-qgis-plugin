@@ -70,6 +70,7 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -82,7 +83,14 @@ from qgis.PyQt.QtWidgets import (
 from . import aoi, case_export, gate
 from .layers import LayerMaterializer, ensure_basemap, zoom_to_bbox4326, zoom_to_extent
 from .plugin_settings import MODE_LOCAL, MODE_REMOTE, PluginSettings
-from .trid3nt_client import CaseInfo, Debouncer, PipelineStep, parse_case_open
+from .trid3nt_client import (
+    CaseInfo,
+    CaseListRequestError,
+    Debouncer,
+    PipelineStep,
+    fetch_case_list,
+    parse_case_open,
+)
 from .ws_bridge import AgentBridge
 
 # LLM bookkeeping step names the web also hides from the tool timeline.
@@ -614,17 +622,49 @@ class _ExportTask(QObject):
         self.finished.emit(self._case_id, result)
 
 
+class _CaseListTask(QObject):
+    """GET /api/case-list off the UI thread (items b/c, live-feedback
+    2026-07-09) -- follows the ``_ExportTask`` pattern (cross-thread signal
+    emit) so a slow/dead agent HTTP listener never freezes the Cases dialog.
+    """
+
+    finished = pyqtSignal(list)  # list[CaseInfo]
+    errored = pyqtSignal(str)    # honest message
+
+    def __init__(self, base_url: str, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self._base_url = base_url
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            cases = fetch_case_list(self._base_url)
+        except CaseListRequestError as exc:
+            self.errored.emit(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
+            self.errored.emit(f"{type(exc).__name__}: {exc}")
+            return
+        self.finished.emit(cases)
+
+
 class CasesDialog(QDialog):
-    """The user's cases (latest ``case-list`` envelope):
+    """The user's cases (latest ``case-list`` envelope, or -- before a WS
+    connection exists -- the cold ``GET /api/case-list`` route; item b/c,
+    live-feedback 2026-07-09):
 
       Refresh   debounced session-resume round trip.
       New case  case-command create -> dock rebind (fresh case-open).
-      Open      case-command select -> dock rebind. PRIMARY action (default
-                button + double-click on the list mirror it).
-      Export GeoTIFFs  POSTs /api/export-qgis (local or remote) and adds the
-                artifacts to the current project.
-      Delete    case-command delete, confirmed. The server re-emits
-                case-list, which refreshes this dialog via ``set_cases``.
+      Click a case row (single click, or double-click) opens it and closes
+                the dialog: ``Trid3ntDock.open_case`` -- case-command select
+                -> dock rebind when already connected, or (item d) connects
+                first and queues the select for the instant the handshake
+                completes when the row came from the cold list.
+      Right-click a case row -> context menu: Export GeoTIFFs / Delete
+                (moved off the button row -- a left click now opens, so
+                these secondary actions need a gesture that does not).
     """
 
     def __init__(self, dock: "Trid3ntDock", cases: List[CaseInfo]):
@@ -635,7 +675,10 @@ class CasesDialog(QDialog):
         lay = QVBoxLayout(self)
 
         self.listw = QListWidget()
-        self.listw.itemDoubleClicked.connect(self._open_selected)
+        self.listw.itemClicked.connect(self._open_item)
+        self.listw.itemDoubleClicked.connect(self._open_item)
+        self.listw.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.listw.customContextMenuRequested.connect(self._show_context_menu)
         lay.addWidget(self.listw, 1)
 
         self.info_lbl = QLabel("")
@@ -651,27 +694,14 @@ class CasesDialog(QDialog):
         self.new_btn.clicked.connect(self._new_case)
         row.addWidget(self.new_btn)
         row.addStretch(1)
-        self.open_btn = QPushButton("Open")
-        self.open_btn.setDefault(True)  # primary action
-        self.open_btn.clicked.connect(self._open_selected)
-        row.addWidget(self.open_btn)
-        self.export_btn = QPushButton("Export GeoTIFFs")
-        self.export_btn.clicked.connect(self._export_selected)
-        row.addWidget(self.export_btn)
-        self.delete_btn = QPushButton("Delete")
-        self.delete_btn.clicked.connect(self._delete_selected)
-        row.addWidget(self.delete_btn)
-        close_btn = QPushButton("Close")
-        close_btn.clicked.connect(self.reject)
-        row.addWidget(close_btn)
         lay.addLayout(row)
 
         self.set_cases(cases)
 
     def set_cases(self, cases: List[CaseInfo]) -> None:
         """(Re)populate the list -- called live when a fresh ``case-list``
-        lands while the dialog is open (the Refresh round trip, or a New/
-        Delete case-command reply)."""
+        lands while the dialog is open (the Refresh round trip, a New/
+        Delete case-command reply, or the cold HTTP fetch landing)."""
         selected = None
         current = self.listw.currentItem()
         if current is not None:
@@ -689,51 +719,53 @@ class CasesDialog(QDialog):
             self.listw.addItem(item)
             if case.case_id == selected:
                 self.listw.setCurrentItem(item)
-        self.open_btn.setEnabled(bool(cases))
-        self.export_btn.setEnabled(bool(cases))
-        self.delete_btn.setEnabled(bool(cases))
         if not cases:
             self.info_lbl.setText(
                 "No cases received yet -- the list arrives from the agent on "
                 "connect (case-list envelope). Try Refresh once connected, "
                 "or start a New case."
             )
-        elif self.info_lbl.text().startswith(("No cases", "Refreshing")):
+        elif self.info_lbl.text().startswith(("No cases", "Refreshing", "Loading")):
             self.info_lbl.setText("")
 
     def _refresh(self) -> None:
         self.info_lbl.setText(self._dock.refresh_cases())
 
-    def _selected(self) -> Tuple[Optional[str], str]:
-        item = self.listw.currentItem()
-        if item is None:
-            return None, ""
-        case_id = item.data(Qt.UserRole)
-        title = item.data(Qt.UserRole + 1) or item.text()
-        if isinstance(case_id, str) and case_id:
-            return case_id, str(title)
-        return None, ""
-
     def _new_case(self) -> None:
         self._dock.new_case()
         self.accept()
 
-    def _open_selected(self) -> None:
-        case_id, title = self._selected()
-        if case_id:
-            self._dock.select_case(case_id, title)
+    def _open_item(self, item: QListWidgetItem) -> None:
+        case_id = item.data(Qt.UserRole)
+        title = item.data(Qt.UserRole + 1) or item.text()
+        if isinstance(case_id, str) and case_id:
+            # Item d (live-feedback 2026-07-09): the cold-list open path
+            # rides the SAME single-click action -- ``open_case`` itself
+            # decides whether a direct select suffices or a connect-then-
+            # queue is needed.
+            self._dock.open_case(case_id, str(title))
             self.accept()
 
-    def _export_selected(self) -> None:
-        case_id, title = self._selected()
-        if case_id:
-            self._dock.open_case_in_qgis(case_id, title)
-            self.accept()
-
-    def _delete_selected(self) -> None:
-        case_id, title = self._selected()
-        if not case_id:
+    def _show_context_menu(self, pos) -> None:
+        item = self.listw.itemAt(pos)
+        if item is None:
             return
+        case_id = item.data(Qt.UserRole)
+        title = item.data(Qt.UserRole + 1) or item.text()
+        if not isinstance(case_id, str) or not case_id:
+            return
+        menu = QMenu(self)
+        export_action = menu.addAction("Export GeoTIFFs")
+        delete_action = menu.addAction("Delete")
+        global_pos = self.listw.viewport().mapToGlobal(pos)
+        chosen = menu.exec_(global_pos) if hasattr(menu, "exec_") else menu.exec(global_pos)
+        if chosen is export_action:
+            self._dock.open_case_in_qgis(case_id, str(title))
+            self.accept()
+        elif chosen is delete_action:
+            self._delete_case(case_id, str(title))
+
+    def _delete_case(self, case_id: str, title: str) -> None:
         reply = QMessageBox.question(
             self,
             "Delete case",
@@ -763,10 +795,47 @@ class Trid3ntDock(QDockWidget):
         self._cases: List[CaseInfo] = []
         self._cases_dialog: Optional[CasesDialog] = None
         self._export_tasks: List[_ExportTask] = []  # keep-alive refs
+        self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._refresh_debounce = Debouncer()
+        # Item d (live-feedback 2026-07-09): a case picked from the Cases
+        # dialog before/while connecting -- opened via ``_on_case_ready``
+        # once the (auto-)connect actually completes, so a cold-list click
+        # is never silently dropped.
+        self._pending_open_case: Optional[Tuple[str, str]] = None
+        # AUTO-CONNECT (live-feedback 2026-07-09): fires once per dock SHOW,
+        # reset on hide -- see ``showEvent``/``hideEvent``/``_auto_connect_local_once``.
+        self._auto_connect_done_this_show = False
 
         self._build_ui()
         self._wire_bridge()
+
+    # -- Qt lifecycle -------------------------------------------------------- #
+
+    def showEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
+        super().showEvent(event)
+        self._auto_connect_local_once()
+
+    def hideEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
+        super().hideEvent(event)
+        self._auto_connect_done_this_show = False
+
+    def _auto_connect_local_once(self) -> None:
+        """AUTO-CONNECT (live-feedback 2026-07-09): cases must be visible
+        WITHOUT the user pressing Connect, and the dock should not require a
+        manual connect at all in local mode. Fires once per dock show (reset
+        on hide, so re-opening the dock tries again); never retries on
+        failure within one show -- a failed attempt just paints the existing
+        honest status line via ``connect_agent``'s own failure path, exactly
+        like a manual click would. Remote mode is unaffected (manual connect
+        only, a pasted token is required)."""
+        if self._auto_connect_done_this_show:
+            return
+        self._auto_connect_done_this_show = True
+        if self.settings.mode != MODE_LOCAL:
+            return
+        if self.bridge.running:
+            return
+        self.connect_agent()
 
     # -- UI ---------------------------------------------------------------- #
 
@@ -1035,6 +1104,12 @@ class Trid3ntDock(QDockWidget):
             anonymous_user_id=anon if self.settings.mode == MODE_LOCAL else None,
             case_title=title,
             case_bbox=list(case_bbox) if case_bbox else None,
+            # Live-feedback 2026-07-09: in local mode REUSE the resumed /
+            # newest existing case instead of minting a fresh "QGIS session
+            # ..." case on every connect (with auto-connect that regrew case
+            # clutter per dock-show); create only when zero cases exist.
+            # Remote keeps the milestone 1 always-create behavior.
+            reuse_case=self.settings.mode == MODE_LOCAL,
         )
 
     def disconnect_agent(self) -> None:
@@ -1068,12 +1143,69 @@ class Trid3ntDock(QDockWidget):
     def _open_cases(self) -> None:
         dlg = CasesDialog(self, self._cases)
         self._cases_dialog = dlg
+        # Item b/c (live-feedback 2026-07-09): populate from the cold HTTP
+        # route when there is nothing to show yet, or the live WS case-list
+        # never arrived (not connected) -- so the dialog is never an honest-
+        # looking-but-wrong empty state while the agent box actually has
+        # cases sitting in Persistence.
+        if not self._cases or not self._connected:
+            self._load_cold_case_list(dlg)
         try:
             dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
         finally:
             self._cases_dialog = None
 
+    def _load_cold_case_list(self, dlg: "CasesDialog") -> None:
+        """Fetch ``GET /api/case-list`` off the UI thread and feed the
+        result into ``dlg`` (item b/c). Local-mode only in practice (the
+        route is 404 outside the local single-user seam -- see
+        ``services/agent`` ``tool_catalog_http.py``); remote mode simply
+        gets an honest failure note, which is fine since remote already has
+        its own Connect-first flow."""
+        dlg.info_lbl.setText("Loading cases ...")
+        base_url = self.settings.export_api
+        task = _CaseListTask(base_url, self)
+        task.finished.connect(self._on_cold_case_list_finished)
+        task.errored.connect(self._on_cold_case_list_errored)
+        self._case_list_tasks.append(task)
+        task.start()
+
+    def _on_cold_case_list_finished(self, cases: List[CaseInfo]) -> None:
+        # A live WS case-list may have landed while the cold fetch was in
+        # flight -- that is authoritative, never clobber it.
+        if not self._cases:
+            self._cases = cases
+        if self._cases_dialog is not None:
+            self._cases_dialog.set_cases(self._cases)
+
+    def _on_cold_case_list_errored(self, message: str) -> None:
+        if self._cases_dialog is not None and not self._cases:
+            self._cases_dialog.info_lbl.setText(
+                "Agent HTTP API unreachable - is the local stack running?"
+            )
+
     # -- case switching / new / delete (milestone 3 + item 2/3) ---------------- #
+
+    def open_case(self, case_id: str, title: str) -> None:
+        """Open ``case_id`` from the Cases dialog (single click / double
+        click on a row, cold-listed or not; item d, live-feedback
+        2026-07-09).
+
+        Already connected -> a direct ``select_case`` (works even with no
+        active case bound, e.g. right after deleting one). Otherwise (cold
+        list, or a connect is still mid-handshake) -> queue the open and
+        (auto-)connect; ``_on_case_ready`` performs the deferred select once
+        the handshake actually completes, so the click is never silently
+        dropped."""
+        if self.bridge.running and self._connected:
+            self.select_case(case_id, title)
+            return
+        self._pending_open_case = (case_id, title)
+        if not self.bridge.running:
+            self._note(f"Connecting to open case '{title}' ...")
+            self.connect_agent()
+        else:
+            self._note(f"Waiting for connection to open case '{title}' ...")
 
     def select_case(self, case_id: str, title: str) -> None:
         """Switch the chat session to an existing case (case-command select).
@@ -1209,9 +1341,19 @@ class Trid3ntDock(QDockWidget):
         self._set_case_label(self._session_case_title or case_id[:8])
         self._set_dot("connected")
         self.status_label.setText(f"Connected -- case {case_id[:8]}")
+        # Item d (live-feedback 2026-07-09): a case picked from the Cases
+        # dialog while disconnected/mid-handshake -- the connection just
+        # created its own fresh "QGIS session ..." case; now switch to the
+        # one the user actually asked for.
+        if self._pending_open_case is not None:
+            pending_id, pending_title = self._pending_open_case
+            self._pending_open_case = None
+            if pending_id != case_id:
+                self.select_case(pending_id, pending_title)
 
     def _on_failed(self, message: str) -> None:
         self._connected = False
+        self._pending_open_case = None  # the connect this was riding died
         self._set_dot("error")
         self.status_label.setText(f"Connection failed: {message}")
         self.connect_btn.setText("Connect")
@@ -1221,6 +1363,7 @@ class Trid3ntDock(QDockWidget):
         the worker has STOPPED -- no silent reconnect loop. Say exactly what
         to do next."""
         self._connected = False
+        self._pending_open_case = None  # the connect this was riding died
         self._set_dot("error")
         self.status_label.setText(
             "Token expired or rejected -- paste a fresh one in Settings"

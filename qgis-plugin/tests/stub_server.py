@@ -195,6 +195,12 @@ class StubAgentServer:
         self.resume_case_ids: list[Optional[str]] = []  # session-resume payloads
         self.confirmations: list[dict] = []  # tool-payload-confirmation payloads
         self.selects: list[Optional[str]] = []  # case-command select case_ids
+        #: When set, a BARE session-resume (payload case_id None) answers with
+        #: THIS case_id stamped on the session-state envelope -- the real
+        #: server's persisted ``last_active_case_id`` rebind (startup case
+        #: reuse, live-feedback 2026-07-09). A client-stamped resume still
+        #: echoes the client's id (job-CASE-AUTHORITY).
+        self.resume_rebind_case_id: Optional[str] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._ready = threading.Event()
@@ -286,6 +292,10 @@ class StubAgentServer:
                 # emit a case-list first so the client's drain is exercised.
                 resume_case_id = (env.get("payload") or {}).get("case_id")
                 self.resume_case_ids.append(resume_case_id)
+                # Persisted last_active_case_id rebind on a BARE resume
+                # (startup case reuse) -- the client's own stamp wins.
+                if resume_case_id is None and self.resume_rebind_case_id:
+                    resume_case_id = self.resume_rebind_case_id
                 await send("case-list", {"cases": CASE_LIST_ROWS})
                 await send(
                     "session-state",

@@ -57,6 +57,7 @@ __all__ = [
     "load_query_corpus",
     "serve_catalog_http",
     "build_telemetry_summary",
+    "build_case_list_payload",
     "DEFAULT_HTTP_PORT",
 ]
 
@@ -1543,6 +1544,85 @@ def _resolve_export_qgis_file(query_string: str) -> tuple[Path, str]:
 
 
 # ---------------------------------------------------------------------------
+# /api/case-list -- cold (no WS session) case list for the QGIS local dock
+# (live-feedback 2026-07-09).
+#
+# The QGIS plugin's Cases dialog previously could not show ANY cases until
+# the user pressed Connect, because the case-list envelope only ever arrives
+# over the WS session (``_emit_case_list`` in ``server.py``, sent on connect
+# + after every case mutation). This route mirrors that envelope's data +
+# user-scoping over plain HTTP so the dock can populate the dialog BEFORE a
+# WS connection exists.
+#
+# User scoping mirrors ``_emit_case_list``: the WS path resolves
+# ``state.authenticated_user_id or state.session_id`` from the live
+# handshake. A cold HTTP caller has neither. The TRID3NT LOCAL build
+# collapses every connection onto ONE fixed user id
+# (``auth_handshake.LOCAL_SINGLE_USER_ID``, see
+# ``auth_handshake._resolve_local_single_user``), so a cold caller under that
+# same seam can resolve the identical id without a handshake. CLOUD posture:
+# when the agent is not running the local single-user seam
+# (``auth_handshake._is_local_single_user_mode()`` is False), the route is
+# treated as ABSENT (404) -- there is no honest per-user identity to resolve
+# without a session, matching the ``/api/local-models`` precedent below.
+# ---------------------------------------------------------------------------
+
+
+class _CaseListPersistenceUnavailable(Exception):
+    """Persistence is unbound; the case list cannot be sourced (-> 503)."""
+
+
+def _case_list_route_enabled() -> bool:
+    """The route exists only under the local single-user seam (see above)."""
+    try:
+        from .auth_handshake import _is_local_single_user_mode
+
+        return _is_local_single_user_mode()
+    except Exception:  # noqa: BLE001 -- import fault -> route absent
+        return False
+
+
+def _case_summary_to_wire(case: Any) -> dict[str, Any]:
+    """One ``CaseSummary`` -> the ``/api/case-list`` row shape.
+
+    ``model_dump(mode="json")`` runs the model's own ``UTCDatetime`` /
+    ``BBox`` serializers (ISO-8601 ``Z`` strings, plain float tuples) --
+    narrowed here to the four fields the dock needs, with an honest ``None``
+    bbox when the case has none.
+    """
+    dumped = case.model_dump(mode="json")
+    return {
+        "case_id": dumped.get("case_id"),
+        "title": dumped.get("title"),
+        "updated_at": dumped.get("updated_at"),
+        "bbox": dumped.get("bbox"),
+    }
+
+
+async def build_case_list_payload() -> dict[str, Any]:
+    """Assemble the ``/api/case-list`` JSON payload, newest-first.
+
+    Sources rows via the SAME ``Persistence.list_cases_for_user`` call
+    ``_emit_case_list`` makes over the WS session, scoped to the local
+    build's one fixed user id (``auth_handshake.LOCAL_SINGLE_USER_ID``).
+    Raises ``_CaseListPersistenceUnavailable`` when Persistence is unbound
+    (the dispatcher maps that to an honest 503) -- never a fabricated empty
+    list.
+    """
+    from .auth_handshake import LOCAL_SINGLE_USER_ID
+    from .server import get_persistence
+
+    persistence = get_persistence()
+    if persistence is None:
+        raise _CaseListPersistenceUnavailable("persistence unavailable")
+
+    cases = await persistence.list_cases_for_user(LOCAL_SINGLE_USER_ID)
+    rows = [_case_summary_to_wire(c) for c in cases]
+    rows.sort(key=lambda r: r.get("updated_at") or "", reverse=True)
+    return {"cases": rows}
+
+
+# ---------------------------------------------------------------------------
 # /api/local-models -- installed local (Ollama) models (F2, live-feedback
 # 2026-07-08).
 # ---------------------------------------------------------------------------
@@ -1661,6 +1741,7 @@ def _format_response(
         405: "Method Not Allowed",
         500: "Internal Server Error",
         502: "Bad Gateway",
+        503: "Service Unavailable",
     }.get(status, "OK")
     headers = {
         "Content-Type": content_type,
@@ -1843,6 +1924,31 @@ async def _handle_http(
             writer.write(
                 _format_response(500, b'{"error":"telemetry summary failed"}')
             )
+    elif proxy_path == "/api/case-list":
+        # Cold case list for the QGIS local dock (live-feedback 2026-07-09) --
+        # see the module section above _case_list_route_enabled for the full
+        # rationale. Route ABSENT (404) outside the local single-user seam.
+        if not _case_list_route_enabled():
+            writer.write(_format_response(404, b'{"error":"not found"}'))
+        else:
+            try:
+                payload = await build_case_list_payload()
+                body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+                writer.write(_format_response(200, body))
+            except _CaseListPersistenceUnavailable as exc:
+                writer.write(
+                    _format_response(
+                        503,
+                        json.dumps(
+                            {"error": str(exc)}, separators=(",", ":")
+                        ).encode("utf-8"),
+                    )
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("case-list build failed")
+                writer.write(
+                    _format_response(500, b'{"error":"case list failed"}')
+                )
     elif proxy_path == "/api/local-models":
         # F2 (live-feedback 2026-07-08): installed local (Ollama) models for
         # the web model selector's local hot-swap. Route ABSENT (404 -- same
