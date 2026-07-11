@@ -712,6 +712,35 @@ async function main() {
     console.log("[flood-proof] screenshot: 26-flood-run-progress.png (timeout fallback)");
   }
 
+  // ============================================================
+  // OPEN-12 fix: the Step-2 hasDepthLayers/groupCount scan ran BEFORE the
+  // fresh run, so it only ever measured pre-existing case layers. Re-scan
+  // the panel AFTER the run, waiting up to 150s for the fresh depth rows
+  // (publishes land a few seconds after the solve completes).
+  // ============================================================
+  let hasDepthLayersFinal = hasDepthLayers;
+  let groupCountFinal = groupCount;
+  {
+    const deadline = Date.now() + 150000;
+    while (Date.now() < deadline) {
+      const rows = page.locator('[data-testid="layer-row"], [data-testid="layer-group-row"]');
+      const n = await rows.count().catch(() => 0);
+      const names = [];
+      for (let i = 0; i < n; i++) {
+        names.push((await rows.nth(i).innerText().catch(() => "")).toLowerCase());
+      }
+      hasDepthLayersFinal = names.some(
+        (t) => t.includes("flood depth") || t.includes("depth step") || t.includes("peak flood")
+      );
+      groupCountFinal = await page.locator('[data-testid="layer-group-row"]').count().catch(() => 0);
+      if (hasDepthLayersFinal && groupCountFinal > 0) break;
+      await sleep(3000);
+    }
+    console.log(
+      "[flood-proof] post-run panel scan: depth=" + hasDepthLayersFinal + " groups=" + groupCountFinal
+    );
+  }
+
   await browser.close();
 
   // ============================================================
@@ -726,8 +755,8 @@ async function main() {
   ];
   console.log("\n=== e2e_flood_proof.mjs SUMMARY ===");
   console.log("case_picked:", casePicked);
-  console.log("has_depth_layers:", hasDepthLayers);
-  console.log("animation_groups:", groupCount);
+  console.log("has_depth_layers:", hasDepthLayersFinal);
+  console.log("animation_groups:", groupCountFinal);
   console.log("fresh_run_id:", resultRunId || "(none)");
   for (const f of screenshots) {
     const fp = path.join(PROOF_DIR, f);
