@@ -48,6 +48,14 @@ copy-pasting file paths.
   layer with one click ("Push layer" in the header). An optional "Set as
   case AOI" checkbox pins the case's bounding box to the pushed layer's
   extent. The layer reappears on the map on the case's next reopen.
+- **Probe** -- click "Probe" in the header, then click anywhere on the
+  canvas: the dock shows the value of every raster layer loaded on the
+  current case at that point (a plain "name: value" line), with detected
+  animation-frame sequences (e.g. flood depth over time) collapsed into one
+  compact chain, e.g. `Flood depth: 0.02 -> 0.15 -> 0.31 -> 0.28 m (4 steps,
+  peak 0.31)`. Deterministic -- no model call, no chat turn -- so it stays
+  fast even mid-conversation. Click "Probe" again to release the tool back
+  to whatever was active before.
 
 ![Flood simulation results in QGIS](docs/img/flood-map.png)
 

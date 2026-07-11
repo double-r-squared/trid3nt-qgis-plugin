@@ -80,7 +80,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from . import aoi, case_export, gate, push_layer
+from . import aoi, case_export, gate, probe, push_layer
 from .layers import LayerMaterializer, ensure_basemap, zoom_to_bbox4326, zoom_to_extent
 from .plugin_settings import MODE_LOCAL, MODE_REMOTE, PluginSettings
 from .trid3nt_client import (
@@ -712,6 +712,48 @@ class _PushLayerTask(QObject):
         self.finished.emit(self._layer_name, result)
 
 
+class _ProbePointTask(QObject):
+    """POST /api/probe-point off the UI thread, for one map click -- follows
+    the ``_ExportTask`` / ``_PushLayerTask`` pattern (cross-thread signal
+    emit). One task = one round trip (``probe.post_probe_point``); the
+    result formatting (``probe.format_probe_result``) runs back on the UI
+    thread in the ``finished`` slot, matching every other worker task here.
+    """
+
+    finished = pyqtSignal(float, float, dict)  # lon, lat, result
+    errored = pyqtSignal(float, float, str)    # lon, lat, message
+
+    def __init__(
+        self,
+        base_url: str,
+        case_id: str,
+        lon: float,
+        lat: float,
+        parent: Optional[QObject] = None,
+    ):
+        super().__init__(parent)
+        self._base_url = base_url
+        self._case_id = case_id
+        self._lon = lon
+        self._lat = lat
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            result = probe.post_probe_point(
+                self._base_url, self._case_id, self._lon, self._lat
+            )
+        except probe.ProbePointRequestError as exc:
+            self.errored.emit(self._lon, self._lat, str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
+            self.errored.emit(self._lon, self._lat, f"{type(exc).__name__}: {exc}")
+            return
+        self.finished.emit(self._lon, self._lat, result)
+
+
 class CasesDialog(QDialog):
     """The user's cases (latest ``case-list`` envelope, or -- before a WS
     connection exists -- the cold ``GET /api/case-list`` route; item b/c,
@@ -859,6 +901,13 @@ class Trid3ntDock(QDockWidget):
         self._export_tasks: List[_ExportTask] = []  # keep-alive refs
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
+        self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
+        # The Probe map tool (design point 2): built lazily on first toggle-on
+        # (QgsMapToolEmitPoint needs a live canvas). ``_prev_map_tool`` is the
+        # canvas' tool saved right before the Probe tool is installed, so
+        # toggling off restores it (never steals the tool permanently).
+        self._probe_map_tool = None
+        self._prev_map_tool = None
         self._refresh_debounce = Debouncer()
         # Item d (live-feedback 2026-07-09): a case picked from the Cases
         # dialog before/while connecting -- opened via ``_on_case_ready``
@@ -941,6 +990,20 @@ class Trid3ntDock(QDockWidget):
         )
         self.push_layer_btn.clicked.connect(self._push_active_layer)
         header.addWidget(self.push_layer_btn)
+
+        # Map-click point probe: click the canvas to sample every raster
+        # layer (and detected animation-frame sequence) on the current case
+        # at that point. Checkable -- ON installs a QgsMapToolEmitPoint on
+        # the canvas (saving whatever tool was active so toggling off
+        # restores it); OFF restores the saved tool.
+        self.probe_btn = QToolButton()
+        self.probe_btn.setText("Probe")
+        self.probe_btn.setCheckable(True)
+        self.probe_btn.setToolTip(
+            "Click the map to sample the case's layers at a point"
+        )
+        self.probe_btn.toggled.connect(self._toggle_probe_tool)
+        header.addWidget(self.probe_btn)
 
         self.settings_btn = QToolButton()
         self.settings_btn.setText("Settings")
@@ -1173,6 +1236,118 @@ class Trid3ntDock(QDockWidget):
     def _on_thinking_toggled(self, checked: bool) -> None:
         """F9 (live-feedback 2026-07-09): persist the show_thinking preference."""
         self.settings.show_thinking = checked
+
+    # -- probe (map-click point sample) --------------------------------------- #
+
+    def _point_to_lonlat4326(
+        self, point, authid: str
+    ) -> Optional[Tuple[float, float]]:
+        """A clicked ``QgsPointXY`` in ``authid`` -> EPSG:4326 ``(lon, lat)``,
+        or None.
+
+        Pure math (``aoi.merc_to_lonlat``) covers EPSG:4326 passthrough +
+        EPSG:3857; any other CRS falls back to QGIS's own transform --
+        mirrors ``_rect_to_bbox4326``. Never raises -- an unresolvable CRS
+        or an out-of-range result yields None (the click note says so
+        honestly)."""
+        import math
+
+        authid_norm = (authid or "").strip().upper()
+        x, y = point.x(), point.y()
+        if authid_norm in ("EPSG:4326", "OGC:CRS84"):
+            lon, lat = x, y
+        elif authid_norm == "EPSG:3857":
+            lon, lat = aoi.merc_to_lonlat(x, y)
+        else:
+            try:
+                from qgis.core import (
+                    QgsCoordinateReferenceSystem,
+                    QgsCoordinateTransform,
+                    QgsProject,
+                )
+
+                transform = QgsCoordinateTransform(
+                    QgsCoordinateReferenceSystem(authid),
+                    QgsCoordinateReferenceSystem("EPSG:4326"),
+                    QgsProject.instance(),
+                )
+                transformed = transform.transform(point)
+                lon, lat = transformed.x(), transformed.y()
+            except Exception:  # noqa: BLE001 -- honest None, noted on click
+                return None
+        if not (math.isfinite(lon) and math.isfinite(lat)):
+            return None
+        if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
+            return None
+        return lon, lat
+
+    def _toggle_probe_tool(self, checked: bool) -> None:
+        """Install/restore the canvas map tool for the Probe button.
+
+        ON: saves the canvas' CURRENT tool (whatever it was -- pan, another
+        plugin's tool, ...) then installs a ``QgsMapToolEmitPoint``, built
+        once and reused. OFF: restores the saved tool -- the canvas is never
+        left on a tool the user did not ask for."""
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- no canvas (headless) -- no-op
+            return
+        if checked:
+            if self._probe_map_tool is None:
+                from qgis.gui import QgsMapToolEmitPoint
+
+                self._probe_map_tool = QgsMapToolEmitPoint(canvas)
+                self._probe_map_tool.canvasClicked.connect(
+                    self._on_probe_canvas_clicked
+                )
+            self._prev_map_tool = canvas.mapTool()
+            canvas.setMapTool(self._probe_map_tool)
+        else:
+            if canvas.mapTool() is self._probe_map_tool:
+                canvas.setMapTool(self._prev_map_tool)
+            self._prev_map_tool = None
+
+    def _on_probe_canvas_clicked(self, point, _button) -> None:
+        if not self._case_id:
+            self._note(
+                "No active case -- open or start a case first.", error=True
+            )
+            return
+        try:
+            canvas = self.iface.mapCanvas()
+            authid = canvas.mapSettings().destinationCrs().authid()
+        except Exception:  # noqa: BLE001 -- no canvas (headless)
+            self._note("Probe failed: no map canvas available.", error=True)
+            return
+        lonlat = self._point_to_lonlat4326(point, authid)
+        if lonlat is None:
+            self._note(
+                "Probe failed: could not transform the clicked point to "
+                "EPSG:4326.",
+                error=True,
+            )
+            return
+        lon, lat = lonlat
+        base_url = (
+            self.settings.export_api
+            if self.settings.mode == MODE_LOCAL
+            else case_export.ws_url_to_http_base(self.settings.remote_url)
+        )
+        self._note(f"Probing {probe.probe_location_label(lon, lat)} ...")
+        task = _ProbePointTask(base_url, self._case_id, lon, lat, parent=self)
+        task.finished.connect(self._on_probe_finished)
+        task.errored.connect(self._on_probe_errored)
+        self._probe_tasks.append(task)
+        task.start()
+
+    def _on_probe_finished(self, lon: float, lat: float, result: dict) -> None:
+        lines = probe.format_probe_result(result)
+        header = f"Probe {probe.probe_location_label(lon, lat)}:"
+        self._note("\n".join([header] + [f"  {ln}" for ln in lines]))
+
+    def _on_probe_errored(self, lon: float, lat: float, message: str) -> None:
+        label = probe.probe_location_label(lon, lat)
+        self._note(f"Probe {label} failed: {message}", error=True)
 
     # -- connection ----------------------------------------------------------- #
 
