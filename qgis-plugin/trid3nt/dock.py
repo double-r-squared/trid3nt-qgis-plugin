@@ -80,7 +80,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from . import aoi, case_export, gate
+from . import aoi, case_export, gate, push_layer
 from .layers import LayerMaterializer, ensure_basemap, zoom_to_bbox4326, zoom_to_extent
 from .plugin_settings import MODE_LOCAL, MODE_REMOTE, PluginSettings
 from .trid3nt_client import (
@@ -666,6 +666,52 @@ class _CaseListTask(QObject):
         self.finished.emit(cases)
 
 
+class _PushLayerTask(QObject):
+    """Push the active QGIS layer into a case via ``push_layer.py``, off the
+    UI thread (cross-thread signal emit) -- follows the ``_ExportTask``
+    pattern. One task = one export-to-tempfile + upload + register round
+    trip (``push_layer.push_active_layer``); the temp file is deleted by
+    ``push_exported_file`` whether the ingest POST succeeds or fails.
+    """
+
+    finished = pyqtSignal(str, dict)  # layer_name, result
+    errored = pyqtSignal(str, str)    # layer_name, message
+
+    def __init__(
+        self,
+        base_url: str,
+        case_id: str,
+        layer,
+        make_aoi: bool = False,
+        parent: Optional[QObject] = None,
+    ):
+        super().__init__(parent)
+        self._base_url = base_url
+        self._case_id = case_id
+        self._layer = layer
+        self._make_aoi = make_aoi
+        try:
+            self._layer_name = layer.name() or ""
+        except Exception:  # noqa: BLE001 -- best-effort label only
+            self._layer_name = ""
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            result = push_layer.push_active_layer(
+                self._base_url, self._case_id, self._layer, make_aoi=self._make_aoi
+            )
+        except push_layer.PushLayerRequestError as exc:
+            self.errored.emit(self._layer_name, str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
+            self.errored.emit(self._layer_name, f"{type(exc).__name__}: {exc}")
+            return
+        self.finished.emit(self._layer_name, result)
+
+
 class CasesDialog(QDialog):
     """The user's cases (latest ``case-list`` envelope, or -- before a WS
     connection exists -- the cold ``GET /api/case-list`` route; item b/c,
@@ -812,6 +858,7 @@ class Trid3ntDock(QDockWidget):
         self._cases_dialog: Optional[CasesDialog] = None
         self._export_tasks: List[_ExportTask] = []  # keep-alive refs
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
+        self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._refresh_debounce = Debouncer()
         # Item d (live-feedback 2026-07-09): a case picked from the Cases
         # dialog before/while connecting -- opened via ``_on_case_ready``
@@ -883,6 +930,17 @@ class Trid3ntDock(QDockWidget):
         self.new_case_btn.setToolTip("Start a fresh case")
         self.new_case_btn.clicked.connect(self.new_case)
         header.addWidget(self.new_case_btn)
+
+        # Bidirectional layer push: send iface.activeLayer() into the
+        # current case as a first-class input layer (the reverse seam of
+        # "Open in QGIS").
+        self.push_layer_btn = QToolButton()
+        self.push_layer_btn.setText("Push layer")
+        self.push_layer_btn.setToolTip(
+            "Send the active QGIS layer to the current case"
+        )
+        self.push_layer_btn.clicked.connect(self._push_active_layer)
+        header.addWidget(self.push_layer_btn)
 
         self.settings_btn = QToolButton()
         self.settings_btn.setText("Settings")
@@ -1373,6 +1431,71 @@ class Trid3ntDock(QDockWidget):
             )
             return
         self._note(f"Case export failed: {message}", error=True)
+
+    # -- push active layer into the case -------------------------------------- #
+
+    def _push_active_layer(self) -> None:
+        """Header "Push layer" button: send ``iface.activeLayer()`` into the
+        current case as a first-class input layer.
+
+        Ask-free UX: a single click, ONE tiny confirm popover (the "Set as
+        case AOI" checkbox -- default off -- since that mutates the case
+        extent and deserves a beat of confirmation; everything else proceeds
+        without further prompting), then one worker-thread round trip
+        (export to a temp file, upload, register).
+        """
+        if not self._case_id:
+            self._note(
+                "No active case -- open or start a case first.", error=True
+            )
+            return
+        layer = self.iface.activeLayer()
+        if layer is None:
+            self._note(
+                "No active layer -- select a layer in the Layers panel first.",
+                error=True,
+            )
+            return
+
+        box = QMessageBox(self)
+        box.setWindowTitle("Push layer")
+        box.setText(f"Send '{layer.name()}' to the current case?")
+        box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        box.setDefaultButton(QMessageBox.Ok)
+        aoi_checkbox = QCheckBox("Set as case AOI")
+        aoi_checkbox.setChecked(False)
+        box.setCheckBox(aoi_checkbox)
+        if box.exec_() != QMessageBox.Ok:
+            return
+        make_aoi = aoi_checkbox.isChecked()
+
+        base_url = (
+            self.settings.export_api
+            if self.settings.mode == MODE_LOCAL
+            else case_export.ws_url_to_http_base(self.settings.remote_url)
+        )
+        self._note(f"Pushing '{layer.name()}' to the case ...")
+        task = _PushLayerTask(
+            base_url, self._case_id, layer, make_aoi=make_aoi, parent=self
+        )
+        task.finished.connect(self._on_push_layer_finished)
+        task.errored.connect(self._on_push_layer_errored)
+        self._push_tasks.append(task)
+        task.start()
+
+    def _on_push_layer_finished(self, layer_name: str, result: dict) -> None:
+        display_name = layer_name or result.get("name") or "Layer"
+        self._note(push_layer.format_push_note(display_name, result))
+        # Repaint: re-select the current case so the server replays the
+        # fresh layer list (design: "the layer appears via the normal
+        # replay/session-state path, or trigger a case re-open to repaint").
+        if self.bridge.running and self._case_id:
+            self.select_case(self._case_id, self._case_title or self._case_id[:8])
+        self._scroll_to_bottom()
+
+    def _on_push_layer_errored(self, layer_name: str, message: str) -> None:
+        label = f"'{layer_name}'" if layer_name else "Push layer"
+        self._note(f"{label} failed: {message}", error=True)
 
     def _note(self, text: str, error: bool = False) -> None:
         self._ensure_pending().add_note(text, error=error)

@@ -559,6 +559,26 @@ async def _merge_layer_into_case(
     return True
 
 
+async def _require_case_exists(case_id: str) -> None:
+    """Fail fast with ``CaseNotFoundError`` before doing any ingest work
+    (S3 reads, geopandas/rasterio conversion, ``publish_layer``) for a case
+    that does not exist. ``_merge_layer_into_case`` re-reads the case right
+    before its write regardless (freshness -- mirrors the
+    ``_pin_case_aoi_from_*`` re-read-before-write convention in server.py),
+    so this is a cheap early exit, not the only guard.
+    """
+    from ..server import get_persistence
+
+    p = get_persistence()
+    if p is None:
+        raise CaseNotFoundError(
+            "persistence unavailable -- cannot register the layer on a case"
+        )
+    case = await p.get_case(case_id)
+    if case is None:
+        raise CaseNotFoundError(f"case {case_id!r} not found")
+
+
 async def _notify_live_sessions(case_id: str) -> None:
     """Best-effort: nudge any LIVE session with ``case_id`` open.
 
@@ -634,6 +654,10 @@ async def ingest_user_layer(
     if not s3_uri or not s3_uri.startswith("s3://"):
         raise ImportLayerInputError(f"`s3_uri` must be an s3:// object, got {s3_uri!r}")
     clean_name = (name or "").strip() or "Pushed layer"
+
+    # Fail fast on a doomed case BEFORE any S3 read / geopandas / rasterio /
+    # publish_layer work -- see _require_case_exists's docstring.
+    await _require_case_exists(case_id.strip())
 
     size = await asyncio.to_thread(_head_object_size, s3_uri)
     if size > MAX_INGEST_BYTES:

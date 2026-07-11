@@ -43,6 +43,11 @@ copy-pasting file paths.
   the peak flood-depth dataset group pre-selected; every dataset group SFINCS
   wrote (bed level, Manning roughness, per-timestep max depth/level) stays
   selectable from Layer Properties.
+- **Push layer** -- the reverse of "Open in QGIS": send your ACTIVE QGIS
+  layer (vector or raster) into the current case as a first-class input
+  layer with one click ("Push layer" in the header). An optional "Set as
+  case AOI" checkbox pins the case's bounding box to the pushed layer's
+  extent. The layer reappears on the map on the case's next reopen.
 
 ![Flood simulation results in QGIS](docs/img/flood-map.png)
 
@@ -106,7 +111,7 @@ testable with plain CPython.
 make test
 ```
 
-runs the full pure-Python test suite (145 tests) -- no QGIS installation is
+runs the full pure-Python test suite (176 tests) -- no QGIS installation is
 required for most of it. A small subset that exercises real Qt signal wiring
 runs in a subprocess against the system PyQt5 interpreter and skips honestly
 when one isn't available. See `trid3nt/trid3nt_client.py`'s module docstring

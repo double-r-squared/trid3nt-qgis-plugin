@@ -79,6 +79,30 @@ def _tiny_geotiff_bytes() -> bytes:
         return mem.read()
 
 
+def _tiny_geotiff_bytes_3857() -> bytes:
+    """A tiny raster in EPSG:3857 (Web Mercator) -- proves the
+    ``rasterio.warp.transform_bounds`` reprojection branch."""
+    import numpy as np
+    from rasterio.io import MemoryFile
+    from rasterio.transform import from_origin
+
+    data = np.ones((4, 4), dtype="uint8")
+    # ~ -13,000,000 / 5,700,000 m in Web Mercator is roughly -116.8, 45.6 deg.
+    transform = from_origin(-13_000_000, 5_700_000, 2500, 2500)
+    with MemoryFile() as mem:
+        with mem.open(
+            driver="GTiff",
+            height=4,
+            width=4,
+            count=1,
+            dtype="uint8",
+            crs="EPSG:3857",
+            transform=transform,
+        ) as ds:
+            ds.write(data, 1)
+        return mem.read()
+
+
 class _FakePersistence:
     def __init__(self, cases: dict[str, CaseSummary]):
         self._cases = cases
@@ -213,6 +237,34 @@ async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
     assert summary["role"] == "input"
     assert summary["uri"].startswith("https://tiles.example/")
     assert list(updated.bbox) == pytest.approx([-122.5, 45.5, -122.4, 45.6])
+
+
+@pytest.mark.asyncio
+async def test_ingest_raster_reprojects_non_4326_crs(monkeypatch, fake_persistence):
+    """A raster in EPSG:3857 is reprojected to a EPSG:4326 bbox (proves the
+    rasterio.warp.transform_bounds branch, not just the already-4326 path)."""
+    from grace2_agent.tools import publish_layer as publish_layer_mod
+
+    case_id = new_ulid()
+    fake_persistence._cases[case_id] = _case(case_id)
+    data = _tiny_geotiff_bytes_3857()
+    _mock_s3_object(monkeypatch, data)
+    monkeypatch.setattr(
+        publish_layer_mod,
+        "publish_layer",
+        lambda *, layer_uri, layer_id, name=None, **_kw: "https://tiles.example/x",
+    )
+
+    result = await iul.ingest_user_layer(
+        case_id=case_id, name="Web Mercator raster", kind="raster", s3_uri="s3://b/k.tif"
+    )
+    assert result["status"] == "ok"
+    minx, miny, maxx, maxy = result["bbox"]
+    # ~(-116.8, 45.6) to (-116.7, 45.7) once reprojected out of Web Mercator.
+    assert -120 < minx < -110
+    assert 40 < miny < 50
+    assert minx < maxx
+    assert miny < maxy
 
 
 # ---------------------------------------------------------------------------
