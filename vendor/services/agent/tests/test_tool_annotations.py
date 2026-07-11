@@ -126,12 +126,17 @@ def test_write_tools_are_not_read_only():
 #: (external API) unless assets_uri is passed, so it is honest too.
 #: compute_urban_heat_island fetches MODIS LST + Esri/IO land cover (external
 #: PC STAC) unless both override URIs are passed, so it is honest too.
+#: compute_model_residuals fetches its own USGS groundwater observations
+#: (external OGC API) when observations_layer_uri is not passed -- the same
+#: input-fetching-composer shape as compute_flood_depth_damage, so it is
+#: honest too.
 _OPEN_WORLD_COMPUTE_EXCEPTIONS = {
     "compute_sediment_yield",
     "compute_change_detection",
     "compute_idf_curve",
     "compute_flood_depth_damage",
     "compute_urban_heat_island",
+    "compute_model_residuals",
 }
 
 

@@ -9636,6 +9636,10 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
         # + resamples onto the class grid + writes a COG in one sync call --
         # same off-load rationale; emit-free body.
         "compute_urban_heat_island",
+        # compute_model_residuals stages an s3 model COG + (optionally) fetches
+        # USGS groundwater observations over HTTP + bilinear-samples + writes
+        # an FGB in one sync call -- same off-load rationale; emit-free body.
+        "compute_model_residuals",
     }
 )
 #: Loop-bound emitter API names. A sync tool whose CODE (comments + string /

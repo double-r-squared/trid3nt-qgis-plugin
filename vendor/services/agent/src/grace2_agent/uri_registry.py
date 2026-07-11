@@ -126,6 +126,11 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
         "landcover_uri",
         "hazard_uri",
         "model_setup_uri",
+        # compute_model_residuals: the MODEL raster + the OPTIONAL existing
+        # observations vector layer -- both are handle/URI-resolved like the
+        # other *_uri params above.
+        "model_layer_uri",
+        "observations_layer_uri",
     }
 )
 

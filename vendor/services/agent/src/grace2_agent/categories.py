@@ -485,6 +485,12 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fill_gaps": "geographic_primitives",
     "compute_terrain_profile": "geographic_primitives",
     "compute_zonal_statistics": "geographic_primitives",
+    # compute_model_residuals: an analysis primitive over an existing raster +
+    # an existing/fetched vector layer -- same lane as compute_zonal_statistics
+    # (its closest sibling: raster-plus-vector -> aggregate result). Cross-
+    # listed to hazard_modeling below (its primary use is MODFLOW head
+    # calibration against observed wells).
+    "compute_model_residuals": "geographic_primitives",
     # NATE 2026-06-17: fast layer-extent + fit-the-map tool. Replaces the
     # sandbox bbox-math anti-pattern and drives the zoom-to map-command.
     "compute_layer_bounds": "geographic_primitives",
@@ -747,6 +753,11 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # development effect); the LST side makes it materially a
     # weather/extreme-heat surface too.
     "compute_urban_heat_island": ("weather_atmosphere",),
+    # Model residuals: PRIMARY geographic_primitives (analysis primitive next
+    # to compute_zonal_statistics); its headline use is MODFLOW simulated-head
+    # calibration against observed wells, so it materially belongs to the
+    # hazard-modeling lane too.
+    "compute_model_residuals": ("hazard_modeling",),
 }
 
 # ---------------------------------------------------------------------------

@@ -1738,6 +1738,68 @@ def _parse_ingest_layer_filename(query_string: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/probe-point {"case_id", "lon", "lat"} -- deterministic map-click
+# point probe (QGIS plugin dock "Probe" tool). Samples every raster layer (+
+# detected frame sequence) on the case at one point; see
+# ``tools/probe_point.py`` for the full contract/rationale. Local-mode gated
+# exactly like /api/ingest-layer -- ABSENT (404) outside the local
+# single-user seam.
+
+
+class _ProbePointBadRequest(Exception):
+    """Malformed /api/probe-point request."""
+
+
+def _probe_point_route_enabled() -> bool:
+    """The route exists only under the local single-user seam (mirrors
+    ``_ingest_layer_route_enabled`` / ``_case_list_route_enabled``)."""
+    try:
+        from .auth_handshake import _is_local_single_user_mode
+
+        return _is_local_single_user_mode()
+    except Exception:  # noqa: BLE001 -- import fault -> route absent
+        return False
+
+
+def _probe_point_fn():
+    """Lazy-import seam for the probe core (heavy geo deps load on first
+    call, not at listener start; monkeypatchable in tests)."""
+    from .tools.probe_point import probe_point_at
+
+    return probe_point_at
+
+
+async def _handle_probe_point_post(raw_body: bytes) -> bytes:
+    """Resolve the JSON body for ``POST /api/probe-point``.
+
+    Validates ``{"case_id", "lon", "lat"}`` are present with the right basic
+    shape, awaits ``probe_point_at``, and returns its encoded result dict.
+    Raises ``_ProbePointBadRequest`` (-> 400) on malformed input; the core's
+    own typed ``ProbePointError`` subclasses (deeper lon/lat range checks,
+    case lookup) propagate for the dispatcher to map to honest 4xx bodies.
+    """
+    try:
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise _ProbePointBadRequest(f"body must be JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise _ProbePointBadRequest(
+            'body must be a JSON object like {"case_id": "...", "lon": -85.4, '
+            '"lat": 30.1}'
+        )
+    case_id = payload.get("case_id")
+    lon = payload.get("lon")
+    lat = payload.get("lat")
+    if not isinstance(case_id, str) or not case_id.strip():
+        raise _ProbePointBadRequest("missing or empty `case_id`")
+    if lon is None or lat is None:
+        raise _ProbePointBadRequest("`lon` and `lat` are both required")
+
+    result = await _probe_point_fn()(case_id=case_id.strip(), lon=lon, lat=lat)
+    return json.dumps(result, separators=(",", ":")).encode("utf-8")
+
+
+# ---------------------------------------------------------------------------
 # /api/local-models -- installed local (Ollama) models (F2, live-feedback
 # 2026-07-08).
 # ---------------------------------------------------------------------------
@@ -2139,6 +2201,62 @@ async def _handle_http(
         except Exception:  # noqa: BLE001
             logger.exception("ingest-layer run failed")
             writer.write(_format_response(500, b'{"error":"layer ingest failed"}'))
+        await writer.drain()
+        writer.close()
+        return
+
+    if method == "POST" and proxy_path == "/api/probe-point":
+        # Deterministic map-click point probe (QGIS plugin Probe tool) -- see
+        # the module section above for the full contract. Local-mode gated
+        # exactly like /api/ingest-layer.
+        if not _probe_point_route_enabled():
+            writer.write(_format_response(404, b'{"error":"not found"}'))
+            await writer.drain()
+            writer.close()
+            return
+        raw_body = b""
+        if content_length > 0:
+            try:
+                raw_body = await asyncio.wait_for(
+                    reader.readexactly(content_length), timeout=30.0
+                )
+            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                raw_body = b""
+        from .tools.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
+
+        try:
+            body = await _handle_probe_point_post(raw_body)
+            writer.write(_format_response(200, body))
+        except _ProbePointBadRequest as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except ProbePointCaseNotFoundError as exc:
+            writer.write(
+                _format_response(
+                    404,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except ProbePointInputError as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("probe-point run failed")
+            writer.write(_format_response(500, b'{"error":"probe point failed"}'))
         await writer.drain()
         writer.close()
         return
