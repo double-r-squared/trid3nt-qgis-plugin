@@ -22,6 +22,26 @@ exported-case paths), frame-sequence rasters (``Flood_depth_step_1..N``,
 groups) are stamped with per-layer fixed temporal ranges so the built-in
 QGIS Temporal Controller plays them natively. Pure grouping/range math lives
 in ``temporal`` (tested without QGIS); ``stamp_temporal`` here applies it.
+
+Mesh outputs (MDAL phase 1): ``materialize_export`` also loads each of the
+export plan's ``mesh_entries`` (``case_export.plan_export_layers`` -- a
+locally-downloaded SFINCS ``sfincs_map.nc``) as a native
+``QgsMeshLayer(local_path, name, "mdal")``, a SIBLING of the export's
+vector/raster layers (never nested into an animation subgroup -- a mesh
+carries its OWN internal dataset-group time series, it is not a member of
+the flood-depth-COG frame sequence). QGIS's MDAL provider reports an EMPTY
+crs() for a SFINCS quadtree NetCDF (proven live 2026-07-10), so
+``setCrs(QgsCoordinateReferenceSystem(crs_authid))`` is applied explicitly
+from the export entry's ``crs_authid``; when that is unresolved the layer is
+still added with an honest dock note instead of a silent wrong-CRS render.
+The active scalar dataset group is set to the ``maximum_water_depth_timemax``
+group with the LARGEST time suffix (the final cumulative peak-depth field --
+MDAL's own group ORDER is alphabetical, not chronological, so picking "the
+last group" by index would often land on an EARLY, near-zero timestep
+instead) so the mesh renders something meaningful the instant it lands. The
+libhdf5 "File Type" attribute warnings QGIS's MDAL/netCDF backend prints on
+open are benign (proven live) and are not treated as failure -- only
+``layer.isValid()`` gates success.
 """
 
 from __future__ import annotations
@@ -36,6 +56,8 @@ from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsDateTimeRange,
+    QgsMeshDatasetIndex,
+    QgsMeshLayer,
     QgsProject,
     QgsRasterLayer,
     QgsRectangle,
@@ -48,6 +70,10 @@ from .plugin_settings import MODE_LOCAL, PluginSettings
 from .trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
+
+#: SFINCS quadtree dataset group name for a cumulative max-depth field ending
+#: at time offset N (seconds) -- see ``_select_peak_depth_dataset_group``.
+_PEAK_DEPTH_GROUP_RE = re.compile(r"^maximum_water_depth_timemax:(\d+)$")
 
 #: The OSM raster tile TEMPLATE ensure_basemap() adds (contains {z}/{x}/{y}).
 _OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -310,6 +336,42 @@ def _animation_group_notes(raster_layers, grouped_counts: dict) -> List[str]:
     return notes
 
 
+# -- mesh outputs (MDAL phase 1) --------------------------------------------- #
+
+
+def _select_peak_depth_dataset_group(layer) -> bool:
+    """Set ``layer``'s active scalar dataset group to the
+    ``maximum_water_depth_timemax:<seconds>`` group with the LARGEST time
+    suffix -- the cumulative max-depth field at the end of the run, i.e. the
+    real "peak flood depth" (MDAL enumerates dataset groups in the file's own
+    variable order, which is ALPHABETICAL for these names, not chronological
+    -- naively picking "the last matching group encountered" can land on an
+    EARLY timestep instead of the true peak). Returns True when a group was
+    selected; False (a no-op) when the mesh carries no such group -- QGIS's
+    own default selection stands, never a crash.
+    """
+    best_index = None
+    best_time = -1
+    for i in range(layer.datasetGroupCount()):
+        try:
+            name = layer.datasetGroupMetadata(QgsMeshDatasetIndex(i, 0)).name()
+        except Exception:  # noqa: BLE001 -- a bad group index is skipped, not fatal
+            continue
+        match = _PEAK_DEPTH_GROUP_RE.match(name or "")
+        if not match:
+            continue
+        t = int(match.group(1))
+        if t > best_time:
+            best_time = t
+            best_index = i
+    if best_index is None:
+        return False
+    settings = layer.rendererSettings()
+    settings.setActiveScalarDatasetGroup(best_index)
+    layer.setRendererSettings(settings)
+    return True
+
+
 class LayerMaterializer:
     """Per-connection materializer: one group, one added-id set, one temp dir."""
 
@@ -570,8 +632,43 @@ class LayerMaterializer:
         # live stream, so every recognized sequence is "new" every time).
         notes.extend(stamp_temporal(export_rasters))
         notes.extend(_animation_group_notes(export_rasters, {}))
+
+        # Mesh outputs (MDAL phase 1): SIBLINGS of the export's vector/raster
+        # layers, never nested into an animation subgroup -- a mesh carries
+        # its OWN internal dataset-group time series, it is not a member of
+        # the flood-depth-COG frame sequence. Entries with no local_path
+        # (remote mode, or a failed download) are skipped here WITHOUT a
+        # duplicate note -- case_export.plan_export_layers already recorded
+        # the honest reason in plan.notes (extended below).
+        loaded_mesh_count = 0
+        for entry in getattr(plan, "mesh_entries", None) or []:
+            local_path = entry.get("local_path")
+            name = entry.get("name") or "SFINCS mesh"
+            if not local_path:
+                continue
+            layer = QgsMeshLayer(local_path, name, "mdal")
+            if not layer.isValid():
+                notes.append(f"mesh '{name}': QGIS/MDAL rejected the file -- skipped")
+                continue
+            crs_authid = entry.get("crs_authid")
+            crs = QgsCoordinateReferenceSystem(crs_authid) if crs_authid else None
+            if crs is not None and crs.isValid():
+                layer.setCrs(crs)
+            else:
+                notes.append(f"{name}: mesh CRS unknown - set manually via layer properties")
+            _select_peak_depth_dataset_group(layer)
+            QgsProject.instance().addMapLayer(layer, False)
+            group.insertLayer(0, layer)
+            self.last_added_layers.append(layer)
+            loaded_mesh_count += 1
+            notes.append(
+                f"{name}: native mesh loaded - dataset groups selectable in "
+                "Layer Properties; install the Crayfish plugin for "
+                "time-series plots and mesh export."
+            )
+
         notes.extend(plan.notes)
-        if not plan.vector_layers and not plan.raster_paths:
+        if not plan.vector_layers and not plan.raster_paths and loaded_mesh_count == 0:
             notes.append(
                 "export produced no loadable layers -- nothing added "
                 f"(status={plan.status or 'unknown'})"

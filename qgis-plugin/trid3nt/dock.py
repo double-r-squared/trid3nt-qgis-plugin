@@ -586,6 +586,14 @@ class _ExportTask(QObject):
     .gpkg/.qgz through GET /api/export-qgis/file into a fresh local temp dir
     and rewrites the result's paths to the local copies, so the finished
     slot can plan layers exactly like local mode.
+
+    Mesh artifacts (MDAL phase 1) never travel through the ``output_dir``
+    copy the .gpkg/.tif entries get -- the result's ``mesh`` list only
+    carries an ``s3_uri`` (see ``case_export`` module docstring), so BOTH
+    modes need their own fetch. Local mode reads MinIO directly
+    (``minio_endpoint``, network-reachable); remote mode has no
+    presigned-fetch path yet, so its mesh entries are left un-downloaded and
+    ``plan_export_layers`` turns that into an honest skip note.
     """
 
     finished = pyqtSignal(str, dict)  # case_id, result (localized if remote)
@@ -597,11 +605,13 @@ class _ExportTask(QObject):
         case_id: str,
         parent: Optional[QObject] = None,
         remote: bool = False,
+        minio_endpoint: str = "",
     ):
         super().__init__(parent)
         self._base_url = base_url
         self._case_id = case_id
         self._remote = remote
+        self._minio_endpoint = minio_endpoint
 
     def start(self) -> None:
         threading.Thread(target=self._run, daemon=True).start()
@@ -613,6 +623,11 @@ class _ExportTask(QObject):
                 dest_dir = tempfile.mkdtemp(prefix="trid3nt_remote_export_")
                 result = case_export.localize_remote_export(
                     self._base_url, result, dest_dir
+                )
+            elif result.get("mesh"):
+                mesh_dir = tempfile.mkdtemp(prefix="trid3nt_mesh_export_")
+                result = case_export.localize_mesh_entries(
+                    result, self._minio_endpoint, mesh_dir
                 )
         except case_export.ExportRequestError as exc:
             self.errored.emit(self._case_id, str(exc))
@@ -1317,7 +1332,9 @@ class Trid3ntDock(QDockWidget):
                 f"Exporting case '{label}' on the remote agent "
                 f"({base_url}) -- artifacts download to a local temp dir ..."
             )
-        task = _ExportTask(base_url, case_id, self, remote=remote)
+        task = _ExportTask(
+            base_url, case_id, self, remote=remote, minio_endpoint=self.settings.minio_endpoint
+        )
         task.finished.connect(self._on_export_finished)
         task.errored.connect(self._on_export_errored)
         self._export_tasks.append(task)

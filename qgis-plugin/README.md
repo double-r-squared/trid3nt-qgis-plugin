@@ -37,6 +37,12 @@ copy-pasting file paths.
   time slider.
 - **GeoTIFF / case export** -- pull a case's exported layers (GeoTIFFs,
   vector tables) directly into your current QGIS project via "Open in QGIS".
+- **Mesh outputs (MDAL)** -- a SFINCS flood run's native mesh
+  (`sfincs_map.nc`) loads as a first-class `QgsMeshLayer` alongside the
+  exported GeoTIFFs/vectors (local mode), with its CRS set automatically and
+  the peak flood-depth dataset group pre-selected; every dataset group SFINCS
+  wrote (bed level, Manning roughness, per-timestep max depth/level) stays
+  selectable from Layer Properties.
 
 ![Flood simulation results in QGIS](docs/img/flood-map.png)
 

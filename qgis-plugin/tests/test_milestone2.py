@@ -676,6 +676,10 @@ class TestMaterializeExportStyles(unittest.TestCase):
         core.QgsCoordinateReferenceSystem = type("QgsCoordinateReferenceSystem", (), {})
         core.QgsCoordinateTransform = type("QgsCoordinateTransform", (), {})
         core.QgsRectangle = type("QgsRectangle", (), {})
+        # Not exercised by these tests (no mesh events here) -- just need to
+        # exist so ``layers.py``'s module-level import succeeds (MDAL phase 1).
+        core.QgsMeshDatasetIndex = type("QgsMeshDatasetIndex", (), {})
+        core.QgsMeshLayer = type("QgsMeshLayer", (), {})
         qgis_mod = types.ModuleType("qgis")
         qgis_mod.PyQt = pyqt
         qgis_mod.core = core
@@ -758,6 +762,350 @@ class TestMaterializeExportStyles(unittest.TestCase):
 
         notes = m.materialize_export(OldPlan(), "old plan")
         self.assertTrue(any("export layer 'depth' added" in n for n in notes))
+
+
+# --------------------------------------------------------------------------- #
+# materialize_export loads mesh entries as native QgsMeshLayer (MDAL phase 1)
+# --------------------------------------------------------------------------- #
+
+
+class TestMaterializeExportMesh(unittest.TestCase):
+    """``LayerMaterializer.materialize_export`` mesh handling: CRS set from
+    the export entry's ``crs_authid`` (MDAL never reports one itself -- proven
+    live 2026-07-10), the peak-depth dataset group auto-selected, an invalid
+    mesh skipped (never a crash), and a missing ``crs_authid`` becoming an
+    honest note rather than a silent unset CRS.
+
+    Reuses the ``TestMaterializeExportStyles`` stub-module pattern, plus fake
+    ``QgsMeshLayer``/``QgsMeshDatasetIndex``/``QgsCoordinateReferenceSystem``
+    rich enough to model dataset-group enumeration and the active-scalar
+    renderer setting.
+    """
+
+    def _import_layers(self):
+        import importlib
+        import types
+
+        class _FakeQSettings:
+            def value(self, key, default=None):
+                return default
+
+            def setValue(self, key, value):
+                pass
+
+        class _FakeQDateTime:
+            @staticmethod
+            def fromString(text, fmt=None):
+                return text
+
+        class _FakeQt:
+            ISODate = 1
+
+        class _FakeLayerNode:
+            def __init__(self, layer):
+                self._layer = layer
+
+            def layer(self):
+                return self._layer
+
+            def setItemVisibilityChecked(self, checked):
+                pass
+
+        class _FakeGroup:
+            def __init__(self, name=""):
+                self._name = name
+                self.children_ = []
+
+            def name(self):
+                return self._name
+
+            def children(self):
+                return list(self.children_)
+
+            def findGroups(self):
+                return [c for c in self.children_ if isinstance(c, _FakeGroup)]
+
+            def insertGroup(self, idx, name):
+                group = _FakeGroup(name)
+                self.children_.insert(0, group)
+                return group
+
+            def insertLayer(self, idx, layer):
+                node = _FakeLayerNode(layer)
+                self.children_.insert(0, node)
+                return node
+
+        class _FakeRoot(_FakeGroup):
+            def findGroup(self, name):
+                for child in self.children_:
+                    if isinstance(child, _FakeGroup) and child.name() == name:
+                        return child
+                return None
+
+        class _FakeProject:
+            _instance = None
+
+            @classmethod
+            def instance(cls):
+                if cls._instance is None:
+                    cls._instance = cls()
+                return cls._instance
+
+            def __init__(self):
+                self._root = _FakeRoot()
+                self.added = []
+
+            def layerTreeRoot(self):
+                return self._root
+
+            def addMapLayer(self, layer, add_to_legend=True):
+                self.added.append(layer)
+
+        class _FakeRasterLayer:
+            instances = []
+            style_result = ("", True)
+
+            def __init__(self, path, name, provider=""):
+                self._path, self._name = path, name
+                self.style_loads = []
+                self.repainted = False
+                _FakeRasterLayer.instances.append(self)
+
+            def isValid(self):
+                return True
+
+            def name(self):
+                return self._name
+
+            def loadNamedStyle(self, qml_path):
+                self.style_loads.append(qml_path)
+                return self.style_result
+
+            def triggerRepaint(self):
+                self.repainted = True
+
+        class _FakeVectorLayer(_FakeRasterLayer):
+            pass
+
+        class _FakeCrs:
+            def __init__(self, authid=None):
+                self._authid = authid
+
+            def isValid(self):
+                return bool(self._authid)
+
+            def authid(self):
+                return self._authid or ""
+
+        class _FakeMeshDatasetIndex:
+            def __init__(self, group, dataset=0):
+                self.group = group
+
+        class _FakeMeshGroupMeta:
+            def __init__(self, name):
+                self._name = name
+
+            def name(self):
+                return self._name
+
+        class _FakeMeshRendererSettings:
+            def __init__(self):
+                self.active_scalar_group = -1
+
+            def setActiveScalarDatasetGroup(self, idx):
+                self.active_scalar_group = idx
+
+            def activeScalarDatasetGroup(self):
+                return self.active_scalar_group
+
+        class _FakeMeshLayer:
+            instances = []
+            #: test-configured PER-CONSTRUCTION knobs (module reset() clears
+            #: them between tests via setUp).
+            next_group_names = []
+            next_valid = True
+            _counter = 0
+
+            def __init__(self, path, name, provider=""):
+                self._path, self._name = path, name
+                _FakeMeshLayer._counter += 1
+                self._id = f"{name}_{_FakeMeshLayer._counter}"
+                self._crs = None
+                self._valid = _FakeMeshLayer.next_valid
+                self._group_names = list(_FakeMeshLayer.next_group_names)
+                self._renderer_settings = _FakeMeshRendererSettings()
+                _FakeMeshLayer.instances.append(self)
+
+            def isValid(self):
+                return self._valid
+
+            def id(self):
+                return self._id
+
+            def name(self):
+                return self._name
+
+            def datasetGroupCount(self):
+                return len(self._group_names)
+
+            def datasetGroupMetadata(self, index):
+                return _FakeMeshGroupMeta(self._group_names[index.group])
+
+            def rendererSettings(self):
+                return self._renderer_settings
+
+            def setRendererSettings(self, settings):
+                self._renderer_settings = settings
+
+            def setCrs(self, crs):
+                self._crs = crs
+
+            def crs(self):
+                return self._crs
+
+        qtcore = types.ModuleType("qgis.PyQt.QtCore")
+        qtcore.QSettings = _FakeQSettings
+        qtcore.QDateTime = _FakeQDateTime
+        qtcore.Qt = _FakeQt
+        pyqt = types.ModuleType("qgis.PyQt")
+        pyqt.QtCore = qtcore
+        core = types.ModuleType("qgis.core")
+        core.QgsDateTimeRange = type("QgsDateTimeRange", (), {})
+        core.QgsProject = _FakeProject
+        core.QgsRasterLayer = _FakeRasterLayer
+        core.QgsVectorLayer = _FakeVectorLayer
+        core.QgsCoordinateReferenceSystem = _FakeCrs
+        core.QgsCoordinateTransform = type("QgsCoordinateTransform", (), {})
+        core.QgsRectangle = type("QgsRectangle", (), {})
+        core.QgsMeshDatasetIndex = _FakeMeshDatasetIndex
+        core.QgsMeshLayer = _FakeMeshLayer
+        qgis_mod = types.ModuleType("qgis")
+        qgis_mod.PyQt = pyqt
+        qgis_mod.core = core
+
+        stub_keys = ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore", "qgis.core")
+        saved = {k: sys.modules.get(k) for k in stub_keys}
+        sys.modules.update(
+            {
+                "qgis": qgis_mod,
+                "qgis.PyQt": pyqt,
+                "qgis.PyQt.QtCore": qtcore,
+                "qgis.core": core,
+            }
+        )
+        plugin_root = os.path.join(os.path.dirname(__file__), "..")
+        sys.path.insert(0, plugin_root)
+        pkg_keys = [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]
+        saved_pkg = {k: sys.modules.pop(k) for k in pkg_keys}
+        try:
+            layers = importlib.import_module("trid3nt.layers")
+        finally:
+            sys.path.remove(plugin_root)
+            for k in [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]:
+                sys.modules.pop(k, None)
+            sys.modules.update(saved_pkg)
+            for k, v in saved.items():
+                if v is None:
+                    sys.modules.pop(k, None)
+                else:
+                    sys.modules[k] = v
+        _FakeMeshLayer.instances = []
+        _FakeMeshLayer.next_group_names = []
+        _FakeMeshLayer.next_valid = True
+        return layers, _FakeMeshLayer, _FakeProject
+
+    def _plan(self, mesh_entries):
+        return case_export.ExportPlan(status="ok", mesh_entries=list(mesh_entries))
+
+    def test_peak_depth_group_selected_by_largest_time_not_last_index(self):
+        """Mirrors the REAL SFINCS probe order (2026-07-10): group index 8 is
+        timemax:3600 (numerically largest -> the true peak); group index 9 is
+        timemax:600 (comes AFTER it in raw enumeration order). Picking "the
+        last matching group encountered" would wrongly land on index 9."""
+        layers, fake_mesh, FakeProject = self._import_layers()
+        fake_mesh.next_group_names = [
+            "bed_level_above_reference_level",
+            "face_x",
+            "face_y",
+            "manning_roughness",
+            "maximum_water_depth_timemax:1200",
+            "maximum_water_depth_timemax:1800",
+            "maximum_water_depth_timemax:2400",
+            "maximum_water_depth_timemax:3000",
+            "maximum_water_depth_timemax:3600",  # index 8 -- the true peak
+            "maximum_water_depth_timemax:600",   # index 9 -- comes AFTER it
+            "water_depth",
+        ]
+        m = layers.LayerMaterializer(settings=None)
+        plan = self._plan(
+            [{"name": "SFINCS mesh (01RUN)", "local_path": "/tmp/sfincs_map.nc", "crs_authid": "EPSG:32616"}]
+        )
+        notes = m.materialize_export(plan, "mesh case")
+
+        mesh = fake_mesh.instances[0]
+        self.assertEqual(mesh.rendererSettings().active_scalar_group, 8)
+        self.assertEqual(mesh.crs().authid(), "EPSG:32616")
+        self.assertTrue(any("native mesh loaded" in n for n in notes))
+        self.assertFalse(any("CRS unknown" in n for n in notes))
+        self.assertIn(mesh, m.last_added_layers)
+
+    def test_unresolved_crs_is_an_honest_note_not_a_crash(self):
+        layers, fake_mesh, FakeProject = self._import_layers()
+        fake_mesh.next_group_names = []
+        m = layers.LayerMaterializer(settings=None)
+        plan = self._plan(
+            [{"name": "SFINCS mesh (01RUN)", "local_path": "/tmp/sfincs_map.nc", "crs_authid": None}]
+        )
+        notes = m.materialize_export(plan, "mesh case")
+
+        mesh = fake_mesh.instances[0]
+        self.assertIsNone(mesh.crs())
+        self.assertTrue(
+            any("mesh CRS unknown - set manually via layer properties" in n for n in notes)
+        )
+        # Still added -- an unknown CRS is a degrade, never a lost layer.
+        self.assertIn(mesh, m.last_added_layers)
+
+    def test_invalid_mesh_is_skipped_not_crashed(self):
+        layers, fake_mesh, FakeProject = self._import_layers()
+        fake_mesh.next_valid = False
+        m = layers.LayerMaterializer(settings=None)
+        plan = self._plan(
+            [{"name": "corrupt mesh", "local_path": "/tmp/bad.nc", "crs_authid": "EPSG:32616"}]
+        )
+        notes = m.materialize_export(plan, "mesh case")
+
+        self.assertTrue(any("QGIS/MDAL rejected the file" in n for n in notes))
+        self.assertEqual(m.last_added_layers, [])
+
+    def test_entry_without_local_path_is_not_materialized(self):
+        """A mesh with no local_path (remote mode / failed download) is never
+        handed to QgsMeshLayer -- case_export already recorded the honest
+        reason in plan.notes."""
+        layers, fake_mesh, FakeProject = self._import_layers()
+        m = layers.LayerMaterializer(settings=None)
+        plan = self._plan([{"name": "unavailable", "local_path": None, "crs_authid": None}])
+        plan.notes.append("mesh 'unavailable': not downloaded (remote mode)")
+        notes = m.materialize_export(plan, "mesh case")
+
+        self.assertEqual(fake_mesh.instances, [])
+        self.assertTrue(any("not downloaded (remote mode)" in n for n in notes))
+
+    def test_mesh_lands_as_sibling_not_nested_in_a_subgroup(self):
+        layers, fake_mesh, FakeProject = self._import_layers()
+        fake_mesh.next_group_names = ["water_depth"]
+        m = layers.LayerMaterializer(settings=None)
+        plan = self._plan(
+            [{"name": "SFINCS mesh (01RUN)", "local_path": "/tmp/sfincs_map.nc", "crs_authid": "EPSG:32616"}]
+        )
+        m.materialize_export(plan, "mesh case")
+
+        export_group = FakeProject.instance().layerTreeRoot().findGroup("TRID3NT export mesh case")
+        self.assertIsNotNone(export_group)
+        direct_layers = [c.layer() for c in export_group.children() if hasattr(c, "layer")]
+        self.assertIn(fake_mesh.instances[0], direct_layers)
+        # No nested animation subgroup was created for the mesh.
+        self.assertEqual(export_group.findGroups(), [])
 
 
 class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
@@ -958,6 +1306,10 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
         core.QgsCoordinateReferenceSystem = type("QgsCoordinateReferenceSystem", (), {})
         core.QgsCoordinateTransform = type("QgsCoordinateTransform", (), {})
         core.QgsRectangle = type("QgsRectangle", (), {})
+        # Not exercised by these tests (no mesh events here) -- just need to
+        # exist so ``layers.py``'s module-level import succeeds (MDAL phase 1).
+        core.QgsMeshDatasetIndex = type("QgsMeshDatasetIndex", (), {})
+        core.QgsMeshLayer = type("QgsMeshLayer", (), {})
         qgis_mod = types.ModuleType("qgis")
         qgis_mod.PyQt = pyqt
         qgis_mod.core = core

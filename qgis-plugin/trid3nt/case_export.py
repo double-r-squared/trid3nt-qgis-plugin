@@ -49,6 +49,21 @@ result JSON. ``plan_export_layers`` joins qml to raster by filename stem
 ``ExportPlan.raster_styles`` so the materializer can ``loadNamedStyle`` each
 raster after adding it -- without this the plugin-added GeoTIFFs rendered
 default grayscale (near-black flood frames).
+
+Mesh outputs (MDAL phase 1): the export result additionally carries a
+``mesh`` list (``export_case_to_qgis`` on the agent side) -- ONE entry per
+SFINCS run whose ``sfincs_map.nc`` sits alongside a flood-depth layer in the
+runs bucket, each ``{"kind": "mesh", "format": "sfincs_map_netcdf",
+"s3_uri": str, "crs_authid": str|None, "name": str}``. Unlike GeoTIFFs/the
+GeoPackage, the agent never copies the mesh into the export's ``output_dir``
+-- it is only referenced by ``s3_uri``, so EVERY mode needs its own download
+step: ``localize_mesh_entries`` fetches it via the local MinIO http form
+(``s3_to_http`` from ``trid3nt_client`` -- the SAME translation
+``layers.py``'s live vector materialization uses for ``s3://`` uris). This
+only works when MinIO is directly network-reachable (local mode); remote
+mode has no presigned-fetch path yet (same gap as the live vector/raster
+carve-outs above), so a mesh entry there is left without a ``local_path`` and
+``plan_export_layers`` turns that into an honest skip note -- never a crash.
 """
 
 from __future__ import annotations
@@ -62,11 +77,18 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+try:  # package context (real plugin runtime: dock.py does `from . import case_export`)
+    from .trid3nt_client import s3_to_http
+except ImportError:  # flat/test context (tests sys.path.insert the trid3nt/ dir directly)
+    from trid3nt_client import s3_to_http  # type: ignore[no-redef]
+
 __all__ = [
     "DEFAULT_EXPORT_API",
     "ExportPlan",
     "ExportRequestError",
     "download_export_file",
+    "download_mesh_file",
+    "localize_mesh_entries",
     "localize_remote_export",
     "plan_export_layers",
     "post_export_case",
@@ -141,6 +163,74 @@ def download_export_file(
     with open(local_path, "wb") as f:
         f.write(data)
     return local_path
+
+
+def download_mesh_file(
+    minio_endpoint: str, s3_uri: str, dest_dir: str, timeout: float = 300.0
+) -> str:
+    """Fetch one mesh artifact's ``s3://`` object directly off the local
+    MinIO http form (``s3_to_http``) into ``dest_dir`` -- returns the local
+    path. Unlike ``download_export_file`` this does NOT go through the
+    agent's ``/api/export-qgis/file`` route: the export tool never copies
+    ``sfincs_map.nc`` into its ``output_dir`` (see the module docstring), so
+    there is no in-export-root file for that route to serve; MinIO is read
+    straight over HTTP instead. Raises ``ExportRequestError`` (a bad
+    ``s3_uri``, or MinIO unreachable/404) -- callers convert per-entry
+    failures into honest notes, never a hard stop. Blocking -- run OFF the
+    UI thread.
+    """
+    http_url = s3_to_http(s3_uri, minio_endpoint)
+    if not http_url:
+        raise ExportRequestError(f"mesh uri {s3_uri!r} is not a valid s3:// uri")
+    request = urllib.request.Request(http_url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            data = resp.read()
+    except urllib.error.HTTPError as exc:
+        raise ExportRequestError(
+            f"mesh download of {os.path.basename(s3_uri)!r} failed (HTTP {exc.code})"
+        ) from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise ExportRequestError(
+            f"mesh download unreachable at {http_url} ({exc})"
+        ) from exc
+    name = os.path.basename(s3_uri.rstrip("/")) or "mesh.nc"
+    local_path = os.path.join(dest_dir, name)
+    with open(local_path, "wb") as f:
+        f.write(data)
+    return local_path
+
+
+def localize_mesh_entries(result: dict, minio_endpoint: str, dest_dir: str) -> dict:
+    """Download every ``result["mesh"]`` entry's ``sfincs_map.nc`` via the
+    local MinIO http form, attaching ``local_path`` to each entry.
+
+    Only meaningful when MinIO is directly network-reachable (local mode --
+    see ``download_mesh_file``); callers should skip invoking this in remote
+    mode, where entries simply keep no ``local_path`` and
+    ``plan_export_layers`` honestly notes them as unavailable. A per-entry
+    download failure is recorded as an ``error`` string on that entry, never
+    raised -- one bad mesh must not lose the rest of the export.
+    """
+    localized = dict(result)
+    entries = []
+    for entry in result.get("mesh") or []:
+        if not isinstance(entry, dict):
+            continue
+        entry = dict(entry)
+        s3_uri = entry.get("s3_uri")
+        if isinstance(s3_uri, str) and s3_uri:
+            try:
+                entry["local_path"] = download_mesh_file(minio_endpoint, s3_uri, dest_dir)
+            except ExportRequestError as exc:
+                entry["local_path"] = None
+                entry["error"] = str(exc)
+        else:
+            entry["local_path"] = None
+            entry["error"] = "mesh entry has no s3_uri"
+        entries.append(entry)
+    localized["mesh"] = entries
+    return localized
 
 
 def localize_remote_export(base_url: str, result: dict, dest_dir: str) -> dict:
@@ -242,6 +332,10 @@ class ExportPlan:
     vector_layers: List[str] = field(default_factory=list)  # gpkg table names
     raster_paths: List[str] = field(default_factory=list)  # local .tif files
     raster_styles: Dict[str, str] = field(default_factory=dict)  # tif -> .qml
+    # {"name": str, "local_path": str|None, "crs_authid": str|None} per mesh
+    # (MDAL phase 1); local_path is None when the download did not happen
+    # (remote mode) or failed -- the materializer skips those with a note.
+    mesh_entries: List[dict] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)  # honest skips/problems
 
 
@@ -318,6 +412,33 @@ def plan_export_layers(result: dict) -> ExportPlan:
             f"export reported {expected_rasters} raster(s) but only "
             f"{len(plan.raster_paths)} .tif found in {output_dir!r}"
         )
+
+    # Mesh entries (MDAL phase 1) -- defensive: a malformed/absent "mesh" key
+    # is simply an empty list, never an error (older agent builds predate it).
+    for entry in result.get("mesh") or []:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        local_path = entry.get("local_path")
+        if isinstance(local_path, str) and local_path and os.path.isfile(local_path):
+            plan.mesh_entries.append(
+                {
+                    "name": name,
+                    "local_path": local_path,
+                    "crs_authid": entry.get("crs_authid")
+                    if isinstance(entry.get("crs_authid"), str)
+                    else None,
+                }
+            )
+        else:
+            reason = entry.get("error") or (
+                "not downloaded (remote export does not yet fetch MDAL "
+                "netCDF meshes -- local mode only for now)"
+            )
+            plan.mesh_entries.append({"name": name, "local_path": None, "crs_authid": None})
+            plan.notes.append(f"mesh '{name}': {reason}")
 
     for row in result.get("skipped") or []:
         if isinstance(row, dict):

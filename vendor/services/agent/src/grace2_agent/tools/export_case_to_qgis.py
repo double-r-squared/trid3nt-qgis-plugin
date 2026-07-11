@@ -53,6 +53,23 @@ not claim success).
   writes files to the local export dir (a side effect), so caching is wrong.
 - **FR-AS-11 (typed errors):** every failure raises an ``ExportCaseError``
   subclass with a SCREAMING_SNAKE_CASE ``error_code``.
+
+**Mesh artifacts (MDAL phase 1, additive):** every SFINCS flood-depth layer
+(``style_preset == "continuous_flood_depth"``) whose ``uri`` lives under a
+runs-bucket ``s3://<bucket>/<run_id>/...`` prefix is checked for a sibling
+``<run_id>/sfincs_map.nc`` (the native SFINCS quadtree/regular mesh NetCDF --
+QGIS's MDAL provider opens it directly, no conversion). When found, one entry
+per DISTINCT ``run_id`` (a case's peak + per-frame flood layers all share the
+same run) is appended to the result's ``mesh`` list -- NEVER a locally-copied
+file (unlike the GeoTIFF/GeoPackage entries): ``s3_uri`` points straight at
+the runs-bucket object; the caller (the QGIS plugin) downloads it itself. CRS
+resolution reuses ``postprocess_flood._read_crs_from_dataset`` -- the SAME
+reader that CRS-tags the flood-depth COG -- read off the mesh file's own
+``crs`` data variable; there is no separate per-run manifest carrying a
+resolved UTM EPSG for SFINCS (unlike MODFLOW's ``model_crs`` handoff). A
+CRS-read failure still lists the mesh with ``crs_authid=None`` (honest
+degrade -- the plugin falls back to "set CRS manually"); a missing
+``sfincs_map.nc`` sibling (HeadObject miss) yields no entry at all.
 """
 
 from __future__ import annotations
@@ -229,6 +246,131 @@ def _read_uri_bytes(uri: str) -> bytes:
         f"layer uri {uri!r} is not an s3:// / http(s):// uri or a readable "
         f"local file"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Mesh sibling discovery (MDAL phase 1) -- SFINCS sfincs_map.nc, additive
+# --------------------------------------------------------------------------- #
+
+
+def _s3_client() -> Any:
+    """A boto3 S3 client honoring ``AWS_ENDPOINT_URL_S3`` / ``AWS_ENDPOINT_URL``
+    (MinIO local-dev) -- same endpoint resolution as ``_read_uri_bytes``, kept
+    as its own client here so a HeadObject probe or a mesh download never
+    needs to round-trip a full raster/vector read first."""
+    import boto3
+
+    endpoint = os.environ.get("AWS_ENDPOINT_URL_S3") or os.environ.get("AWS_ENDPOINT_URL")
+    return boto3.client(
+        "s3",
+        region_name=os.environ.get("AWS_REGION", "us-west-2"),
+        endpoint_url=endpoint or None,
+    )
+
+
+def _parse_s3_uri(uri: str) -> tuple[str, str] | None:
+    """``s3://bucket/key`` -> ``(bucket, key)``, or ``None`` for anything else
+    (non-s3 uri, or a bucket/key that fails to parse)."""
+    if not uri.startswith("s3://"):
+        return None
+    rest = uri[len("s3://"):]
+    bucket, _, key = rest.partition("/")
+    if not bucket or not key:
+        return None
+    return bucket, key
+
+
+def _resolve_mesh_crs(bucket: str, mesh_key: str) -> str | None:
+    """Best-effort CRS for a runs-bucket ``sfincs_map.nc``: download it and
+    read its ``crs`` data variable via ``postprocess_flood``'s SAME parser --
+    the reader that CRS-tags the peak flood-depth COG, so the mesh and the
+    raster can never disagree. Returns ``None`` on ANY failure (unreachable
+    bucket, unreadable NetCDF, no recognizable crs encoding) -- the mesh
+    entry is still listed by the caller (honest degrade, never a hard fail)."""
+    try:
+        import xarray as xr  # type: ignore[import-not-found]
+
+        from ..workflows.postprocess_flood import _read_crs_from_dataset
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".nc", delete=False, prefix="grace2_meshcrs_")
+        tmp.close()
+        try:
+            _s3_client().download_file(bucket, mesh_key, tmp.name)
+            ds = xr.open_dataset(tmp.name)
+            try:
+                crs = _read_crs_from_dataset(ds)
+            finally:
+                ds.close()
+            return str(crs) if crs else None
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+    except Exception as exc:  # noqa: BLE001 -- CRS is a nicety, never a gate
+        logger.warning(
+            "export_case_to_qgis: could not resolve mesh CRS for s3://%s/%s (%s)",
+            bucket,
+            mesh_key,
+            exc,
+        )
+        return None
+
+
+def _mesh_entry_for_layer(layer: dict[str, Any]) -> dict[str, Any] | None:
+    """For a flood-depth layer whose ``uri`` is (or wraps, as a TiTiler
+    display TEMPLATE) an ``s3://<bucket>/<run_id>/..`` object, probe the SAME
+    bucket for a sibling ``<run_id>/sfincs_map.nc`` and build the additive
+    mesh export entry (``None`` when the layer is not a flood-depth raster,
+    its uri does not resolve to s3://, or no mesh sibling exists).
+
+    A PERSISTED flood-depth layer's ``uri`` is normally the TiTiler
+    ``/cog/tiles/...?url=<percent-encoded s3://...>`` display template, not a
+    raw ``s3://`` uri (confirmed against real dev-persistence case data) --
+    ``_unwrap_tile_template`` (the SAME helper the raster export path uses)
+    resolves the underlying COG uri first."""
+    if str(layer.get("style_preset") or "") != "continuous_flood_depth":
+        return None
+    resolved_uri = _unwrap_tile_template(str(layer.get("uri") or ""))
+    parsed = _parse_s3_uri(resolved_uri)
+    if parsed is None:
+        return None
+    bucket, key = parsed
+    run_id = key.split("/", 1)[0]
+    if not run_id:
+        return None
+    mesh_key = f"{run_id}/sfincs_map.nc"
+    try:
+        _s3_client().head_object(Bucket=bucket, Key=mesh_key)
+    except Exception:  # noqa: BLE001 -- no mesh sibling (or bucket unreachable) -- no entry
+        return None
+    return {
+        "kind": "mesh",
+        "format": "sfincs_map_netcdf",
+        "s3_uri": f"s3://{bucket}/{mesh_key}",
+        "crs_authid": _resolve_mesh_crs(bucket, mesh_key),
+        "name": f"SFINCS mesh ({run_id[:8]})",
+    }
+
+
+def _collect_mesh_entries(raw_layers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One mesh entry per DISTINCT ``run_id`` found across ``raw_layers`` (a
+    case's peak + per-frame flood-depth layers all share the same run, so a
+    naive per-layer scan would duplicate the same mesh many times)."""
+    entries: list[dict[str, Any]] = []
+    seen_run_ids: set[str] = set()
+    for layer in raw_layers:
+        resolved_uri = _unwrap_tile_template(str(layer.get("uri") or ""))
+        parsed = _parse_s3_uri(resolved_uri)
+        run_id = parsed[1].split("/", 1)[0] if parsed else None
+        if run_id and run_id in seen_run_ids:
+            continue
+        entry = _mesh_entry_for_layer(layer)
+        if entry is not None:
+            if run_id:
+                seen_run_ids.add(run_id)
+            entries.append(entry)
+    return entries
 
 
 # --------------------------------------------------------------------------- #
@@ -683,6 +825,18 @@ async def export_case_to_qgis(
           "qml_paths": [str, ...],      # sidecar .qml style per raster
           "skipped": [{"name": str, "reason": str}, ...],
           "output_dir": str,
+          "mesh": [                     # additive (MDAL phase 1); [] if none
+            {
+              "kind": "mesh",
+              "format": "sfincs_map_netcdf",
+              "s3_uri": str,            # runs-bucket sfincs_map.nc -- NOT
+                                         # copied into output_dir; the caller
+                                         # downloads it itself
+              "crs_authid": str | None, # e.g. "EPSG:32616"; None if unresolved
+              "name": str,              # e.g. "SFINCS mesh (a1b2c3d4)"
+            },
+            ...
+          ],
         }
 
     Raises:
@@ -839,6 +993,15 @@ async def export_case_to_qgis(
     with zipfile.ZipFile(qgz_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("project.qgs", qgs_bytes)
 
+    # --- Mesh siblings (MDAL phase 1, additive) -----------------------------
+    # Best-effort: an unreachable runs bucket must never turn a good
+    # GeoTIFF/GeoPackage export into a failure -- the mesh list is just empty.
+    try:
+        mesh_entries = _collect_mesh_entries(raw_layers)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("export_case_to_qgis: mesh discovery failed (%s)", exc)
+        mesh_entries = []
+
     result = {
         "status": "ok" if not skipped else "partial",
         "qgz_path": str(qgz_path),
@@ -848,14 +1011,16 @@ async def export_case_to_qgis(
         "qml_paths": qml_paths,
         "skipped": skipped,
         "output_dir": str(out),
+        "mesh": mesh_entries,
         "exported_at": datetime.now(timezone.utc).isoformat(),
     }
     logger.info(
         "export_case_to_qgis: exported %d vector + %d raster layer(s) to %s "
-        "(%d skipped)",
+        "(%d skipped, %d mesh)",
         n_vec,
         n_ras,
         out,
         len(skipped),
+        len(mesh_entries),
     )
     return result

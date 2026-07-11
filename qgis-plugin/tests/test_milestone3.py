@@ -377,6 +377,196 @@ class TestRemoteDownload(_RemoteExportBase):
 
 
 # --------------------------------------------------------------------------- #
+# Mesh outputs (MDAL phase 1) -- pure parsing + MinIO-http download
+# --------------------------------------------------------------------------- #
+
+
+class _MinioStub(http.server.BaseHTTPRequestHandler):
+    """Path-style ``GET /<bucket>/<key>`` -- mirrors the MinIO http form
+    ``s3_to_http`` builds (``<endpoint>/<bucket>/<key>``): 200 + bytes for a
+    known object, 404 otherwise."""
+
+    objects: dict = {}  # "bucket/key" -> bytes
+
+    def do_GET(self):  # noqa: N802
+        key = self.path.lstrip("/")
+        data = self.objects.get(key)
+        if data is None:
+            raw = json.dumps({"error": "no such key"}).encode("utf-8")
+            self.send_response(404)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def log_message(self, *args):  # silence
+        pass
+
+
+class _MinioStubBase(unittest.TestCase):
+    def setUp(self):
+        _MinioStub.objects = {}
+        self.httpd = http.server.HTTPServer(("127.0.0.1", 0), _MinioStub)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.httpd.shutdown)
+        self.minio_endpoint = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+        self.dest = tempfile.mkdtemp(prefix="trid3nt_mesh_dl_")
+        self.addCleanup(shutil.rmtree, self.dest, True)
+
+
+class TestDownloadMeshFile(_MinioStubBase):
+    def test_download_ok_lands_bytes_locally(self):
+        _MinioStub.objects["trid3nt-runs/01RUN/sfincs_map.nc"] = b"fake-netcdf-bytes"
+        local = case_export.download_mesh_file(
+            self.minio_endpoint, "s3://trid3nt-runs/01RUN/sfincs_map.nc", self.dest, timeout=10
+        )
+        self.assertEqual(os.path.basename(local), "sfincs_map.nc")
+        self.assertTrue(local.startswith(self.dest))
+        with open(local, "rb") as f:
+            self.assertEqual(f.read(), b"fake-netcdf-bytes")
+
+    def test_download_404_is_honest(self):
+        with self.assertRaises(case_export.ExportRequestError) as ctx:
+            case_export.download_mesh_file(
+                self.minio_endpoint,
+                "s3://trid3nt-runs/01GONE/sfincs_map.nc",
+                self.dest,
+                timeout=10,
+            )
+        self.assertIn("HTTP 404", str(ctx.exception))
+
+    def test_non_s3_uri_is_honest(self):
+        with self.assertRaises(case_export.ExportRequestError) as ctx:
+            case_export.download_mesh_file(
+                self.minio_endpoint, "https://example.test/x.nc", self.dest, timeout=10
+            )
+        self.assertIn("not a valid s3://", str(ctx.exception))
+
+    def test_unreachable_endpoint_is_honest(self):
+        with self.assertRaises(case_export.ExportRequestError) as ctx:
+            case_export.download_mesh_file(
+                "http://127.0.0.1:1",
+                "s3://trid3nt-runs/01RUN/sfincs_map.nc",
+                self.dest,
+                timeout=2,
+            )
+        self.assertIn("unreachable", str(ctx.exception))
+
+
+class TestLocalizeMeshEntries(_MinioStubBase):
+    def test_two_entries_one_download_one_missing(self):
+        _MinioStub.objects["trid3nt-runs/01RUN/sfincs_map.nc"] = b"ok-bytes"
+        result = {
+            "mesh": [
+                {
+                    "kind": "mesh",
+                    "format": "sfincs_map_netcdf",
+                    "s3_uri": "s3://trid3nt-runs/01RUN/sfincs_map.nc",
+                    "crs_authid": "EPSG:32616",
+                    "name": "SFINCS mesh (01RUN)",
+                },
+                {
+                    "kind": "mesh",
+                    "format": "sfincs_map_netcdf",
+                    "s3_uri": "s3://trid3nt-runs/01GONE/sfincs_map.nc",
+                    "crs_authid": None,
+                    "name": "SFINCS mesh (01GONE)",
+                },
+            ]
+        }
+        localized = case_export.localize_mesh_entries(result, self.minio_endpoint, self.dest)
+        entries = localized["mesh"]
+        self.assertEqual(len(entries), 2)
+        self.assertTrue(entries[0]["local_path"].startswith(self.dest))
+        self.assertNotIn("error", entries[0])
+        self.assertIsNone(entries[1]["local_path"])
+        self.assertIn("HTTP 404", entries[1]["error"])
+        # Original result is not mutated in place.
+        self.assertNotIn("local_path", result["mesh"][0])
+
+    def test_missing_s3_uri_is_an_honest_error(self):
+        result = {"mesh": [{"name": "broken", "s3_uri": None}]}
+        localized = case_export.localize_mesh_entries(result, self.minio_endpoint, self.dest)
+        self.assertIsNone(localized["mesh"][0]["local_path"])
+        self.assertIn("no s3_uri", localized["mesh"][0]["error"])
+
+    def test_no_mesh_key_is_a_no_op(self):
+        localized = case_export.localize_mesh_entries({"status": "ok"}, self.minio_endpoint, self.dest)
+        self.assertEqual(localized["mesh"], [])
+
+    def test_malformed_entries_are_skipped(self):
+        result = {"mesh": ["not-a-dict", 42, None]}
+        localized = case_export.localize_mesh_entries(result, self.minio_endpoint, self.dest)
+        self.assertEqual(localized["mesh"], [])
+
+
+class TestPlanExportLayersMesh(unittest.TestCase):
+    """Pure parsing: ``plan_export_layers`` mesh-entry handling (no network)."""
+
+    def test_downloaded_mesh_lands_in_plan(self):
+        tmp_dir = tempfile.mkdtemp(prefix="trid3nt_mesh_plan_")
+        self.addCleanup(shutil.rmtree, tmp_dir, True)
+        nc_path = os.path.join(tmp_dir, "sfincs_map.nc")
+        with open(nc_path, "wb") as f:
+            f.write(b"fake-netcdf")
+        result = {
+            "status": "ok",
+            "mesh": [
+                {
+                    "name": "SFINCS mesh (01RUN)",
+                    "local_path": nc_path,
+                    "crs_authid": "EPSG:32616",
+                }
+            ],
+        }
+        plan = case_export.plan_export_layers(result)
+        self.assertEqual(
+            plan.mesh_entries,
+            [{"name": "SFINCS mesh (01RUN)", "local_path": nc_path, "crs_authid": "EPSG:32616"}],
+        )
+        self.assertEqual(plan.notes, [])
+
+    def test_undownloaded_mesh_becomes_honest_note(self):
+        result = {
+            "status": "ok",
+            "mesh": [{"name": "SFINCS mesh (01RUN)", "local_path": None, "error": "mesh download unreachable"}],
+        }
+        plan = case_export.plan_export_layers(result)
+        self.assertEqual(
+            plan.mesh_entries,
+            [{"name": "SFINCS mesh (01RUN)", "local_path": None, "crs_authid": None}],
+        )
+        self.assertTrue(any("mesh 'SFINCS mesh (01RUN)'" in n and "unreachable" in n for n in plan.notes))
+
+    def test_missing_local_path_on_disk_is_also_a_note(self):
+        """A local_path that does not actually exist on disk (stale/moved) is
+        treated the same as "not downloaded" -- never handed to QGIS."""
+        result = {
+            "status": "ok",
+            "mesh": [{"name": "gone", "local_path": "/no/such/file.nc", "crs_authid": "EPSG:32616"}],
+        }
+        plan = case_export.plan_export_layers(result)
+        self.assertEqual(plan.mesh_entries, [{"name": "gone", "local_path": None, "crs_authid": None}])
+        self.assertTrue(any("mesh 'gone'" in n for n in plan.notes))
+
+    def test_no_mesh_key_yields_empty_list(self):
+        plan = case_export.plan_export_layers({"status": "ok"})
+        self.assertEqual(plan.mesh_entries, [])
+        self.assertEqual(plan.notes, [])
+
+    def test_malformed_mesh_entries_are_defensively_skipped(self):
+        result = {"status": "ok", "mesh": ["oops", {"no_name": True}, {"name": ""}]}
+        plan = case_export.plan_export_layers(result)
+        self.assertEqual(plan.mesh_entries, [])
+
+
+# --------------------------------------------------------------------------- #
 # Case switching (case-command select -> case-open rebind)
 # --------------------------------------------------------------------------- #
 
