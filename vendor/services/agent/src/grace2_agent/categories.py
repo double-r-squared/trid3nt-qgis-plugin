@@ -293,6 +293,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # geographic_primitives is the general-purpose/utility lane; reached from
     # "take this into QGIS / export my project".
     "export_case_to_qgis": "geographic_primitives",
+    # The reverse seam: register an already-uploaded QGIS layer (vector or
+    # raster) onto a case as a first-class input layer. Filed alongside
+    # export_case_to_qgis -- same general-purpose/utility lane, same
+    # "bridge between the case and the user's desktop QGIS project" family.
+    "import_user_layer": "geographic_primitives",
     # case-analysis batch: point/series sampling + the case situation report are
     # general-purpose case utilities (the conversational-analysis surface);
     # exposure-in-footprint is an impact/exposure product, so it files under

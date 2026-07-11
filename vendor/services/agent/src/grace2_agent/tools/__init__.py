@@ -424,3 +424,10 @@ from ..workflows import model_glm_lightning_animation as _model_glm_lightning_an
 # allowed-set tracker, and post-hoc validator are exposed through
 # ``grace2_agent.categories`` for the server.py dispatch loop.
 from .. import categories as _categories  # noqa: E402,F401
+
+# bidirectional layer push: the reverse seam of export_case_to_qgis. Registers
+# import_user_layer (LLM-facing wrapper over ingest_user_layer, the shared
+# core the /api/ingest-layer HTTP route also drives) so an already-uploaded
+# QGIS layer can be registered onto a case conversationally, not just via the
+# plugin's "Push layer" button.
+from . import import_user_layer  # noqa: E402,F401 - registers import_user_layer (vector/raster upload -> case input layer; s3 object existence+size-cap validation, FlatGeobuf/COG registration reusing publish_layer + the #165 durable-vector-geojson writer, F32-style AOI pin)

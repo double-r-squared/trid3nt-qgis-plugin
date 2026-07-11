@@ -70,6 +70,18 @@ resolved UTM EPSG for SFINCS (unlike MODFLOW's ``model_crs`` handoff). A
 CRS-read failure still lists the mesh with ``crs_authid=None`` (honest
 degrade -- the plugin falls back to "set CRS manually"); a missing
 ``sfincs_map.nc`` sibling (HeadObject miss) yields no entry at all.
+
+**MDAL phase 2 (MODFLOW, additive).** The groundwater engine's plume layer
+(``style_preset == "continuous_plume_concentration"``, ``run_modflow_job`` /
+``postprocess_modflow``) gets the SAME treatment against a sibling
+``<run_id>/modflow_mesh.nc`` -- but unlike SFINCS's native quadtree output,
+this file does not come from the solver; ``workflows/modflow_mesh.py`` BUILDS
+it (a CF-1.8/UGRID-1.0 2D mesh over the DIS grid, carrying time-varying head +
+concentration datasets) and uploads it as a run-level sibling of the plume
+COG. ``_MESH_SIBLING_BY_STYLE_PRESET`` maps a raster layer's ``style_preset``
+to its engine's mesh filename/format/display-name-prefix; discovery,
+dedup-by-run_id, and CRS resolution are format-agnostic and shared verbatim
+between engines -- adding a THIRD engine's mesh only needs a new map entry.
 """
 
 from __future__ import annotations
@@ -317,20 +329,45 @@ def _resolve_mesh_crs(bucket: str, mesh_key: str) -> str | None:
         return None
 
 
-def _mesh_entry_for_layer(layer: dict[str, Any]) -> dict[str, Any] | None:
-    """For a flood-depth layer whose ``uri`` is (or wraps, as a TiTiler
-    display TEMPLATE) an ``s3://<bucket>/<run_id>/..`` object, probe the SAME
-    bucket for a sibling ``<run_id>/sfincs_map.nc`` and build the additive
-    mesh export entry (``None`` when the layer is not a flood-depth raster,
-    its uri does not resolve to s3://, or no mesh sibling exists).
+#: raster ``style_preset`` -> ``(mesh sibling filename, format id, display
+#: name prefix)``. One entry per hazard-model engine that publishes a run-
+#: level mesh sibling; SFINCS's is the engine's own native quadtree solve
+#: output, MODFLOW's is BUILT by ``workflows/modflow_mesh.py`` (see the module
+#: docstring's "MDAL phase 2" section). Only style_presets an engine's
+#: postprocess ACTUALLY wires a mesh emitter for belong here -- an unwired
+#: preset must stay absent (a HeadObject miss reads identically to "no mesh
+#: support" either way, but an absent map entry is honest about scope: today
+#: only the MODFLOW spill/plume path, run_modflow_job, emits a mesh; the
+#: GWF-only archetype postprocess functions -- drawdown/dewatering/mounding/
+#: ASR/hydroperiod/river-seepage -- do not call the emitter yet).
+_MESH_SIBLING_BY_STYLE_PRESET: dict[str, tuple[str, str, str]] = {
+    "continuous_flood_depth": ("sfincs_map.nc", "sfincs_map_netcdf", "SFINCS mesh"),
+    "continuous_plume_concentration": (
+        "modflow_mesh.nc",
+        "modflow_ugrid_netcdf",
+        "MODFLOW mesh",
+    ),
+}
 
-    A PERSISTED flood-depth layer's ``uri`` is normally the TiTiler
+
+def _mesh_entry_for_layer(layer: dict[str, Any]) -> dict[str, Any] | None:
+    """For a raster layer whose ``style_preset`` names an engine with a mesh
+    sibling (``_MESH_SIBLING_BY_STYLE_PRESET``) and whose ``uri`` is (or
+    wraps, as a TiTiler display TEMPLATE) an ``s3://<bucket>/<run_id>/..``
+    object, probe the SAME bucket for that engine's mesh sibling and build the
+    additive mesh export entry (``None`` when the style_preset has no mapped
+    mesh sibling, its uri does not resolve to s3://, or no mesh sibling
+    exists).
+
+    A PERSISTED layer's ``uri`` is normally the TiTiler
     ``/cog/tiles/...?url=<percent-encoded s3://...>`` display template, not a
     raw ``s3://`` uri (confirmed against real dev-persistence case data) --
     ``_unwrap_tile_template`` (the SAME helper the raster export path uses)
     resolves the underlying COG uri first."""
-    if str(layer.get("style_preset") or "") != "continuous_flood_depth":
+    sibling = _MESH_SIBLING_BY_STYLE_PRESET.get(str(layer.get("style_preset") or ""))
+    if sibling is None:
         return None
+    mesh_filename, mesh_format, name_prefix = sibling
     resolved_uri = _unwrap_tile_template(str(layer.get("uri") or ""))
     parsed = _parse_s3_uri(resolved_uri)
     if parsed is None:
@@ -339,17 +376,17 @@ def _mesh_entry_for_layer(layer: dict[str, Any]) -> dict[str, Any] | None:
     run_id = key.split("/", 1)[0]
     if not run_id:
         return None
-    mesh_key = f"{run_id}/sfincs_map.nc"
+    mesh_key = f"{run_id}/{mesh_filename}"
     try:
         _s3_client().head_object(Bucket=bucket, Key=mesh_key)
     except Exception:  # noqa: BLE001 -- no mesh sibling (or bucket unreachable) -- no entry
         return None
     return {
         "kind": "mesh",
-        "format": "sfincs_map_netcdf",
+        "format": mesh_format,
         "s3_uri": f"s3://{bucket}/{mesh_key}",
         "crs_authid": _resolve_mesh_crs(bucket, mesh_key),
-        "name": f"SFINCS mesh ({run_id[:8]})",
+        "name": f"{name_prefix} ({run_id[:8]})",
     }
 
 

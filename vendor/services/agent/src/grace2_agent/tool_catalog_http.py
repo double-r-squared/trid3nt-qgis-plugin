@@ -1623,6 +1623,121 @@ async def build_case_list_payload() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# /api/ingest-layer(-file) -- bidirectional layer push (QGIS plugin -> case).
+#
+# The reverse seam of /api/export-qgis: the plugin's "Push layer" button
+# sends the user's ACTIVE QGIS layer (vector or raster) into the current
+# case as a first-class input layer. Two routes, ONE upload flow:
+#
+#   POST /api/ingest-layer-file?filename=<name>  -- raw request-body upload.
+#     The QGIS Python runtime has no boto3 (stdlib-only), so the plugin
+#     cannot PUT to MinIO directly; it streams the exported file's bytes
+#     here (Content-Type: application/octet-stream, NOT multipart/form-data
+#     -- this codebase has no multipart parser anywhere and a raw-body PUT is
+#     the simplest correct shape for a single-file upload) and the agent does
+#     the actual object-store write. Returns {"s3_uri": "s3://..."}.
+#
+#   POST /api/ingest-layer {"case_id", "name", "kind", "s3_uri",
+#     "crs_authid"?, "make_aoi"?}  -- registers an ALREADY-uploaded object
+#     (normally the s3_uri from the call above) onto the case. Runs the
+#     ingest_user_layer core (import_user_layer.py): validates the object
+#     exists + is within the size cap, converts/validates the artifact,
+#     merges it into the case's durable loaded_layer_summaries, and
+#     best-effort-pins the AOI when make_aoi is true.
+#
+# Local-mode gated exactly like /api/case-list (see that section's docstring
+# for the full cloud-vs-local rationale): ABSENT (404) unless the agent is
+# running the TRID3NT local single-user seam.
+
+
+class _IngestLayerBadRequest(Exception):
+    """Malformed /api/ingest-layer(-file) request."""
+
+
+def _ingest_layer_route_enabled() -> bool:
+    """The routes exist only under the local single-user seam (mirrors
+    ``_case_list_route_enabled``)."""
+    try:
+        from .auth_handshake import _is_local_single_user_mode
+
+        return _is_local_single_user_mode()
+    except Exception:  # noqa: BLE001 -- import fault -> route absent
+        return False
+
+
+def _ingest_layer_fn():
+    """Lazy-import seam for the ingest core (heavy geo deps load on first
+    call, not at listener start; monkeypatchable in tests)."""
+    from .tools.import_user_layer import ingest_user_layer
+
+    return ingest_user_layer
+
+
+def _upload_layer_file_fn():
+    """Lazy-import seam for the staging-upload helper (monkeypatchable)."""
+    from .tools.import_user_layer import upload_layer_file
+
+    return upload_layer_file
+
+
+async def _handle_ingest_layer_post(raw_body: bytes) -> bytes:
+    """Resolve the JSON body for ``POST /api/ingest-layer``.
+
+    Validates ``{"case_id", "name", "kind", "s3_uri"}`` (``crs_authid`` /
+    ``make_aoi`` optional), awaits ``ingest_user_layer``, and returns its
+    encoded result dict. Raises ``_IngestLayerBadRequest`` (-> 400) on
+    malformed input; the core's own typed ``ImportLayerError`` subclasses
+    propagate for the dispatcher to map to honest 4xx/404 bodies.
+    """
+    try:
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise _IngestLayerBadRequest(f"body must be JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise _IngestLayerBadRequest(
+            'body must be a JSON object like {"case_id": "...", "name": "...", '
+            '"kind": "vector"|"raster", "s3_uri": "s3://..."}'
+        )
+    case_id = payload.get("case_id")
+    name = payload.get("name")
+    kind = payload.get("kind")
+    s3_uri = payload.get("s3_uri")
+    if not isinstance(case_id, str) or not case_id.strip():
+        raise _IngestLayerBadRequest("missing or empty `case_id`")
+    if not isinstance(kind, str) or kind not in ("vector", "raster"):
+        raise _IngestLayerBadRequest(
+            f'`kind` must be "vector" or "raster", got {kind!r}'
+        )
+    if not isinstance(s3_uri, str) or not s3_uri.strip():
+        raise _IngestLayerBadRequest("missing or empty `s3_uri`")
+    crs_authid = payload.get("crs_authid")
+    if crs_authid is not None and not isinstance(crs_authid, str):
+        raise _IngestLayerBadRequest("`crs_authid` must be a string when given")
+    make_aoi = bool(payload.get("make_aoi", False))
+
+    result = await _ingest_layer_fn()(
+        case_id=case_id.strip(),
+        name=name.strip() if isinstance(name, str) else "",
+        kind=kind,
+        s3_uri=s3_uri.strip(),
+        crs_authid=crs_authid,
+        make_aoi=make_aoi,
+    )
+    return json.dumps(result, separators=(",", ":")).encode("utf-8")
+
+
+def _parse_ingest_layer_filename(query_string: str) -> str:
+    """Extract + validate the ``filename`` query param for the upload route."""
+    from urllib.parse import parse_qs
+
+    params = parse_qs(query_string, keep_blank_values=False)
+    filename = (params.get("filename") or [""])[0].strip()
+    if not filename:
+        raise _IngestLayerBadRequest("missing `filename` query param")
+    return filename
+
+
+# ---------------------------------------------------------------------------
 # /api/local-models -- installed local (Ollama) models (F2, live-feedback
 # 2026-07-08).
 # ---------------------------------------------------------------------------
@@ -1739,6 +1854,7 @@ def _format_response(
         403: "Forbidden",
         404: "Not Found",
         405: "Method Not Allowed",
+        413: "Payload Too Large",
         500: "Internal Server Error",
         502: "Bad Gateway",
         503: "Service Unavailable",
@@ -1873,6 +1989,156 @@ async def _handle_http(
         except Exception:  # noqa: BLE001
             logger.exception("export-qgis run failed")
             writer.write(_format_response(500, b'{"error":"qgis export failed"}'))
+        await writer.drain()
+        writer.close()
+        return
+
+    if method == "POST" and proxy_path == "/api/ingest-layer-file":
+        # Bidirectional layer push, half 1: stage the plugin's raw upload
+        # bytes to object storage. Local-mode gated -- see the module section
+        # above this route for the rationale.
+        if not _ingest_layer_route_enabled():
+            writer.write(_format_response(404, b'{"error":"not found"}'))
+            await writer.drain()
+            writer.close()
+            return
+        from .tools.import_user_layer import MAX_INGEST_BYTES
+
+        if content_length <= 0:
+            writer.write(
+                _format_response(400, b'{"error":"missing or empty request body"}')
+            )
+            await writer.drain()
+            writer.close()
+            return
+        if content_length > MAX_INGEST_BYTES:
+            # Reject BEFORE reading the oversized body into memory.
+            writer.write(
+                _format_response(
+                    413,
+                    json.dumps(
+                        {
+                            "error": f"upload is {content_length} bytes, exceeds "
+                            f"the {MAX_INGEST_BYTES}-byte cap"
+                        },
+                        separators=(",", ":"),
+                    ).encode("utf-8"),
+                )
+            )
+            await writer.drain()
+            writer.close()
+            return
+        from .tools.import_user_layer import ImportLayerError, ObjectTooLargeError
+
+        try:
+            filename = _parse_ingest_layer_filename(proxy_qs)
+            raw_body = await asyncio.wait_for(
+                reader.readexactly(content_length), timeout=120.0
+            )
+            s3_uri = await asyncio.to_thread(
+                _upload_layer_file_fn(), filename, raw_body
+            )
+            writer.write(
+                _format_response(
+                    200,
+                    json.dumps({"s3_uri": s3_uri}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except _IngestLayerBadRequest as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+            writer.write(
+                _format_response(400, b'{"error":"upload body read failed"}')
+            )
+        except ObjectTooLargeError as exc:
+            writer.write(
+                _format_response(
+                    413,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except ImportLayerError as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("ingest-layer-file upload failed")
+            writer.write(_format_response(500, b'{"error":"layer upload failed"}'))
+        await writer.drain()
+        writer.close()
+        return
+
+    if method == "POST" and proxy_path == "/api/ingest-layer":
+        # Bidirectional layer push, half 2: register an already-uploaded
+        # object onto the case (see the module section above for the
+        # request/response contract).
+        if not _ingest_layer_route_enabled():
+            writer.write(_format_response(404, b'{"error":"not found"}'))
+            await writer.drain()
+            writer.close()
+            return
+        raw_body = b""
+        if content_length > 0:
+            try:
+                raw_body = await asyncio.wait_for(
+                    reader.readexactly(content_length), timeout=30.0
+                )
+            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                raw_body = b""
+        from .tools.import_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
+
+        try:
+            body = await _handle_ingest_layer_post(raw_body)
+            writer.write(_format_response(200, body))
+        except _IngestLayerBadRequest as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except (CaseNotFoundError, ObjectNotFoundError) as exc:
+            writer.write(
+                _format_response(
+                    404,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except ImportLayerError as exc:
+            # INVALID_INPUT / OBJECT_TOO_LARGE / UNREADABLE_LAYER / other typed
+            # core errors -- the request was well-formed HTTP but ingestion
+            # cannot succeed.
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("ingest-layer run failed")
+            writer.write(_format_response(500, b'{"error":"layer ingest failed"}'))
         await writer.drain()
         writer.close()
         return

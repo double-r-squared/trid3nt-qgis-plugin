@@ -111,6 +111,18 @@ def _flood_layer(name: str, run_id: str, filename: str = "flood_depth_peak.tif")
     }
 
 
+def _plume_layer(name: str, run_id: str, filename: str = "plume_concentration_4326.tif") -> dict[str, Any]:
+    """A MODFLOW plume layer (MDAL phase 2) -- same shape as ``_flood_layer``
+    but the ``style_preset`` that maps to ``modflow_mesh.nc`` in
+    ``_MESH_SIBLING_BY_STYLE_PRESET``."""
+    return {
+        "name": name,
+        "layer_type": "raster",
+        "uri": f"s3://trid3nt-runs/{run_id}/{filename}",
+        "style_preset": "continuous_plume_concentration",
+    }
+
+
 def _titiler_flood_layer(name: str, run_id: str, filename: str = "flood_depth_peak.tif") -> dict[str, Any]:
     """A flood-depth layer shaped EXACTLY like a real persisted case layer
     (data/persistence/grace2_dev/projects.json): ``uri`` is the TiTiler
@@ -353,3 +365,52 @@ async def test_unreadable_mesh_netcdf_lists_entry_with_null_crs(tmp_path: Path, 
     assert len(result["mesh"]) == 1
     assert result["mesh"][0]["crs_authid"] is None
     assert result["mesh"][0]["s3_uri"] == f"s3://trid3nt-runs/{run_id}/sfincs_map.nc"
+
+
+# --------------------------------------------------------------------------- #
+# MDAL phase 2 (MODFLOW): style_preset="continuous_plume_concentration" ->
+# a sibling modflow_mesh.nc, discovered through the SAME _mesh_entry_for_layer
+# seam (generalized to _MESH_SIBLING_BY_STYLE_PRESET) -- not a parallel code
+# path, so this is a thin slice proving the map dispatch + format id, not a
+# re-test of dedup/CRS/TiTiler-unwrap (already covered generically above).
+# --------------------------------------------------------------------------- #
+
+
+async def test_modflow_mesh_entry_added_with_resolved_crs(tmp_path: Path, monkeypatch) -> None:
+    run_id = "01RUNMODFLOW0001"
+    nc_path = _make_mesh_nc(tmp_path, epsg="EPSG:32617")
+    _patch_raster_read(monkeypatch, tmp_path)
+    _install_fake_s3(
+        monkeypatch,
+        existing={("trid3nt-runs", f"{run_id}/modflow_mesh.nc")},
+        nc_source=nc_path,
+    )
+
+    result = await export_case_to_qgis(
+        layers=[_plume_layer("Contaminant Plume (peak concentration)", run_id)],
+        output_dir=str(tmp_path / "export"),
+    )
+
+    assert len(result["mesh"]) == 1
+    mesh = result["mesh"][0]
+    assert mesh["format"] == "modflow_ugrid_netcdf"
+    assert mesh["s3_uri"] == f"s3://trid3nt-runs/{run_id}/modflow_mesh.nc"
+    assert mesh["crs_authid"] == "EPSG:32617"
+    assert mesh["name"] == f"MODFLOW mesh ({run_id[:8]})"
+
+
+async def test_modflow_and_flood_style_presets_probe_distinct_filenames(tmp_path: Path, monkeypatch) -> None:
+    """A style_preset with NO map entry (e.g. a plain elevation raster) never
+    probes S3 at all; a MODFLOW plume layer probes ONLY modflow_mesh.nc, never
+    sfincs_map.nc -- the two engines' sibling filenames must not cross-match."""
+    run_id = "01RUNNOCROSS0001"
+    fake = _install_fake_s3(monkeypatch, existing=set())  # every HeadObject misses
+    _patch_raster_read(monkeypatch, tmp_path)
+
+    result = await export_case_to_qgis(
+        layers=[_plume_layer("Contaminant Plume (peak concentration)", run_id)],
+        output_dir=str(tmp_path / "export"),
+    )
+
+    assert result["mesh"] == []
+    assert fake.head_calls == [("trid3nt-runs", f"{run_id}/modflow_mesh.nc")]

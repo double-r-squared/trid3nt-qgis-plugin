@@ -1226,6 +1226,24 @@ def postprocess_modflow(
         if wms_url:
             final_uri = wms_url
 
+    # --- UGRID mesh sibling (MDAL phase 2, additive) ------------------------
+    # Best-effort: a mesh-build/upload failure never sinks the plume COG this
+    # function already produced. Lazy import -- modflow_mesh imports this
+    # module's private helpers, so a module-level import here would be
+    # circular; see workflows/modflow_mesh.py's "Wiring" docstring section.
+    try:
+        from .modflow_mesh import emit_modflow_mesh_artifact
+
+        emit_modflow_mesh_artifact(
+            run_outputs_uri,
+            run_id=run_id,
+            model_crs=model_crs,
+            deck_dir=deck_dir,
+            runs_bucket=runs_bucket,
+        )
+    except Exception as exc:  # noqa: BLE001 -- see emit_modflow_mesh_artifact docstring
+        logger.warning("modflow mesh dispatch failed (non-fatal) run_id=%s: %s", run_id, exc)
+
     return PlumeLayerURI(
         layer_id=layer_id,
         name="Contaminant Plume (peak concentration)",
