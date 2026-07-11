@@ -2305,16 +2305,161 @@ _GEOCODE_LOCATION_METADATA = AtomicToolMetadata(
 )
 
 
+# ---------------------------------------------------------------------------
+# OPEN-10 (NATE-reported): "downtown Tampa" and similar sub-locality phrasings
+# resolved to a SINGLE BUILDING/POI footprint (bbox tens of meters across), so
+# every layer fetched against the case AOI came back empty -- all of NATE's
+# old Tampa cases were invisible for this reason. Live-confirmed root cause
+# (2026-07-11): Nominatim's ONLY match for "downtown Tampa" is a
+# ``category=railway, type=tram_stop`` node literally named "Downtown Tampa"
+# (a streetcar stop), bbox ~11m x 11m -- there is no competing neighbourhood
+# entity in OSM's Tampa data (compare "downtown Miami" / "midtown Atlanta",
+# which resolve cleanly to ``category=place, type=neighbourhood`` with a
+# proper ~2 km bbox). Two-part fix below:
+#
+#   (a) RESULT-CLASS PREFERENCE: with ``limit=1`` the old code could not even
+#       SEE an alternate candidate. Widen the query and, when the top hit is
+#       NOT itself a place/administrative-boundary result, scan the remaining
+#       candidates for the first one that is (city/town/village/hamlet/
+#       suburb/neighbourhood/quarter, or an admin boundary) and promote it.
+#       This is deliberately broad -- rather than an allowlist of "POI
+#       classes" (building/amenity/shop/office, ...), it demotes ANYTHING
+#       that isn't place-class, because the live Tampa failure is a railway
+#       node, not a building. Skipped entirely for queries that clearly name
+#       a POI (street address, named landmark) so a genuine point lookup is
+#       never redirected to the surrounding place.
+#   (b) MINIMUM AOI FLOOR: whichever candidate wins, a bbox smaller than
+#       ~1 km on its long axis is still unusable as a case AOI (this is what
+#       actually fixes "downtown Tampa" itself -- Nominatim has no better
+#       candidate to promote to). Expand it to a 2 km square centered on the
+#       point and attach an honest ``expansion_note`` so the model narrates
+#       the widening instead of silently handing back an invisible-layers AOI.
+# ---------------------------------------------------------------------------
+
+#: Nominatim ``category`` values that represent an area/place (as opposed to
+#: a point-scale POI). Matches the taxonomy observed live in jsonv2 responses
+#: (``category`` is the jsonv2 field name -- there is no ``class`` key).
+_PLACE_CATEGORIES: frozenset[str] = frozenset({"place"})
+
+#: Nominatim ``type`` values under ``category="place"`` (or the closest OSM
+#: place-node types) that make a usable area AOI. Excludes point-scale place
+#: types such as ``"isolated_dwelling"``.
+_PLACE_TYPES: frozenset[str] = frozenset({
+    "city", "town", "village", "hamlet", "suburb", "neighbourhood",
+    "quarter", "borough", "municipality", "county", "state", "region",
+    "district", "city_block", "island",
+})
+
+
+def _is_place_class(candidate: dict[str, Any]) -> bool:
+    """True if ``candidate`` (a raw Nominatim jsonv2 result) is an area/place.
+
+    A place-class result is ``category="place"`` with an area-scale ``type``
+    (city/town/suburb/neighbourhood/...), OR ``category="boundary"`` with
+    ``type="administrative"`` (counties, states, admin areas at any level).
+    """
+    category = candidate.get("category")
+    if category in _PLACE_CATEGORIES:
+        return candidate.get("type") in _PLACE_TYPES
+    if category == "boundary" and candidate.get("type") == "administrative":
+        return True
+    return False
+
+
+#: Query substrings that clearly name a point-of-interest rather than an
+#: area -- the class-preference reorder in ``_fetch_nominatim_geocode_bytes``
+#: MUST NOT touch these queries, or e.g. "Tampa International Airport" would
+#: get redirected to the surrounding city boundary instead of the airport.
+_POI_INTENT_KEYWORDS: tuple[str, ...] = (
+    "airport", "station", "stadium", "arena", "hospital", "university",
+    "college", "courthouse", "terminal", "port authority", "mall",
+    "museum", "library", "cemetery", "monument", "memorial",
+)
+
+#: A leading house number ("123 Main St, Tampa, FL") is a street address --
+#: always a precise point lookup, never an area-intent query.
+_STREET_ADDRESS_RE = re.compile(r"^\s*\d+[\d-]*\s+\S")
+
+
+def _looks_like_poi_query(query: str) -> bool:
+    """True if ``query`` clearly names a point-of-interest, not an area.
+
+    Governs the OPEN-10 class-preference reorder: point-intent queries
+    (street addresses, named landmarks like an airport or a stadium) pass
+    through with Nominatim's own top-ranked result, unchanged.
+    """
+    if _STREET_ADDRESS_RE.match(query):
+        return True
+    lowered = query.lower()
+    return any(keyword in lowered for keyword in _POI_INTENT_KEYWORDS)
+
+
+#: Kilometers per degree of latitude (also used as the per-degree-of-longitude
+#: figure at the equator; longitude shrinks by cos(latitude) elsewhere). An
+#: equirectangular approximation is intentional here -- OPEN-10 only needs to
+#: tell "building footprint" from "usable AOI" apart, not survey-grade
+#: distance.
+_KM_PER_DEGREE = 111.32
+
+#: Below this long-axis size (km) a bbox reads as a point-scale footprint
+#: (building, POI node, tram stop, ...) rather than a usable case AOI.
+_MIN_AOI_AXIS_KM = 1.0
+
+#: Side length (km) of the square AOI a point-scale geocode result is
+#: expanded to.
+_EXPANDED_AOI_SIDE_KM = 2.0
+
+
+def _bbox_long_axis_km(
+    west: float, south: float, east: float, north: float, lat: float
+) -> float:
+    """Approximate the longer side of a WGS84 bbox in kilometers."""
+    height_km = abs(north - south) * _KM_PER_DEGREE
+    width_km = abs(east - west) * _KM_PER_DEGREE * math.cos(math.radians(lat))
+    return max(height_km, width_km)
+
+
+def _square_km_bbox(
+    lat: float, lon: float, side_km: float
+) -> tuple[float, float, float, float]:
+    """Return ``(west, south, east, north)`` for a ``side_km`` square centered
+    on ``(lat, lon)`` (same equirectangular approximation as
+    ``_bbox_long_axis_km``).
+    """
+    half_deg_lat = (side_km / 2.0) / _KM_PER_DEGREE
+    # Guard near the poles so this never divides by ~0; irrelevant in
+    # practice (case AOIs are not polar), but keeps the helper total.
+    cos_lat = max(abs(math.cos(math.radians(lat))), 0.01)
+    half_deg_lon = (side_km / 2.0) / (_KM_PER_DEGREE * cos_lat)
+    return (
+        lon - half_deg_lon,
+        lat - half_deg_lat,
+        lon + half_deg_lon,
+        lat + half_deg_lat,
+    )
+
+
 def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
     """Forward-geocode ``query`` via OpenStreetMap Nominatim and return JSON bytes.
 
     Honors Nominatim usage policy:
     - descriptive User-Agent identifying the app + contact;
     - ``format=jsonv2`` for stable JSON shape;
-    - ``limit=1`` so we get the top-ranked match;
+    - ``limit=5`` so a same-locality place-class alternate is visible to the
+      OPEN-10 class-preference reorder below (was ``limit=1``, which could
+      not see past a single point-scale top hit -- see the module comment
+      above this function);
     - ``polygon_geojson=0`` (we just want bbox + lat/lon);
     - one request per cache-bucket window (the ``dynamic-1h`` class naturally
       throttles repeat queries — see ``read_through``).
+
+    Area-intent semantics (OPEN-10): when the top-ranked hit is a point-scale
+    POI (not itself a place/administrative-boundary result) and the query
+    does not clearly name a POI, the first place-class candidate among the
+    remaining results is promoted instead. Whichever candidate wins, if its
+    bbox is still smaller than ~1 km on its long axis, it is expanded to a
+    2 km square centered on the point and the returned dict carries an
+    additive ``expansion_note`` key the agent narrates truthfully.
 
     Returns the JSON-encoded structured result the tool body further
     massages into a ``GeocodedLocation``-shaped dict.
@@ -2327,7 +2472,7 @@ def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
     params = {
         "q": query.strip(),
         "format": "jsonv2",
-        "limit": 1,
+        "limit": 5,
         "addressdetails": 0,
         "polygon_geojson": 0,
     }
@@ -2356,6 +2501,25 @@ def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
         )
 
     top = body[0]
+
+    # OPEN-10 part (a): promote a place-class candidate over a point-scale
+    # top hit, unless the query clearly names a POI (street address, named
+    # landmark) -- see the module comment above this function for the live
+    # "downtown Tampa" vs. "downtown Miami" evidence behind this heuristic.
+    if not _is_place_class(top) and not _looks_like_poi_query(query):
+        for candidate in body[1:]:
+            if _is_place_class(candidate):
+                logger.info(
+                    "geocode_location query=%r top hit category=%r/type=%r "
+                    "(point-scale); promoting place-class candidate %r",
+                    query,
+                    top.get("category"),
+                    top.get("type"),
+                    candidate.get("display_name"),
+                )
+                top = candidate
+                break
+
     # Nominatim returns boundingbox as [south, north, west, east] strings.
     bb = top.get("boundingbox", [])
     if len(bb) != 4:
@@ -2371,10 +2535,29 @@ def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
             f"Nominatim boundingbox non-numeric: {bb!r}"
         ) from exc
 
+    lat = float(top.get("lat", (south + north) / 2.0))
+    lon = float(top.get("lon", (west + east) / 2.0))
+
+    # OPEN-10 part (b): MINIMUM AOI FLOOR. Whatever candidate won above, a
+    # bbox smaller than ~1 km on its long axis is not a usable case AOI --
+    # expand it to a 2 km square and carry an honest note so the model
+    # narrates the widening instead of silently returning an
+    # invisible-everything AOI.
+    expansion_note: str | None = None
+    long_axis_km = _bbox_long_axis_km(west, south, east, north, lat)
+    if long_axis_km < _MIN_AOI_AXIS_KM:
+        west, south, east, north = _square_km_bbox(lat, lon, _EXPANDED_AOI_SIDE_KM)
+        expansion_note = (
+            f"Geocoder returned a building-scale footprint "
+            f"(~{long_axis_km * 1000.0:.0f} m across) for {query.strip()!r}; "
+            f"expanded to a {_EXPANDED_AOI_SIDE_KM:.0f} km area of interest. "
+            f"Draw an AOI for precise control."
+        )
+
     structured = {
         "name": top.get("display_name", query),
-        "latitude": float(top.get("lat", 0.0)),
-        "longitude": float(top.get("lon", 0.0)),
+        "latitude": lat,
+        "longitude": lon,
         # Normalize to (min_lon, min_lat, max_lon, max_lat) — the project
         # canonical bbox shape (matches LayerURI / Census / py3dep).
         "bbox": [west, south, east, north],
@@ -2384,6 +2567,8 @@ def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
         "osm_id": top.get("osm_id"),
         "place_id": top.get("place_id"),
     }
+    if expansion_note is not None:
+        structured["expansion_note"] = expansion_note
     return json.dumps(structured).encode("utf-8")
 
 
@@ -2434,7 +2619,9 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
     - ``name`` (str): canonical OSM display name.
     - ``bbox`` (list[float]): ``[min_lon, min_lat, max_lon, max_lat]`` in
       EPSG:4326 — feeds directly into ``fetch_dem``, ``fetch_buildings``,
-      ``fetch_population``, ``fetch_landcover``, etc.
+      ``fetch_population``, ``fetch_landcover``, etc. Always at least ~2 km
+      on its long axis (see the AOI floor below) — this bbox is always a
+      usable case AOI, never a bare point/building footprint.
     - ``latitude`` / ``longitude`` (float): centroid of the matched feature.
     - ``source`` (str): ``"nominatim"`` on a precise match, or
       ``"state-bbox-fallback"`` when the state-snap fired (see below).
@@ -2444,6 +2631,11 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
       honest human-readable explanation the agent narrates truthfully, e.g.
       *"No precise match for 'south Florida'; snapped to the full state of
       Florida. Refine the prompt for a smaller area."*
+    - ``expansion_note`` (str, ADDITIVE — present ONLY when the AOI floor
+      fired, see below): an honest note the agent narrates truthfully, e.g.
+      *"Geocoder returned a building-scale footprint (~11 m across) for
+      'downtown Tampa'; expanded to a 2 km area of interest. Draw an AOI for
+      precise control."*
 
     **State-snap fallback (NATE directive):** vague/regional queries
     ("south Florida", "protected areas in south Florida") used to geocode to an
@@ -2457,6 +2649,28 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
     sanity-check and is returned UNCHANGED — it is never widened. When NO state
     is detected and the primary geocode fails, the typed error still raises
     (genuine failures are never swallowed).
+
+    **Area-intent semantics + AOI floor (OPEN-10, NATE-reported):**
+    sub-locality phrasings like "downtown Tampa" used to resolve to a SINGLE
+    BUILDING/POI footprint — e.g. the live top (and only) Nominatim match for
+    "downtown Tampa" is a railway tram-stop node named "Downtown Tampa", bbox
+    ~11 m across — so every layer fetched against the resulting AOI came back
+    empty. Two fixes now run inside the fetch:
+    (a) *result-class preference* — when the top-ranked hit is a point-scale
+    POI (not itself a place or administrative-boundary result) and the query
+    does not clearly name a POI (no street-address house number, no landmark
+    keyword like "airport" or "stadium"), the first place-class candidate
+    among the next few results (city/town/village/suburb/neighbourhood/
+    quarter/admin boundary) is promoted instead — e.g. "downtown Miami" and
+    "midtown Atlanta" already resolve straight to a neighbourhood polygon and
+    are untouched by this rule;
+    (b) *minimum AOI floor* — whichever candidate wins, if its bbox is still
+    smaller than ~1 km on its long axis (the Tampa case: there is no
+    neighbourhood entity to promote to), it is expanded to a 2 km square
+    centered on the point and the ``expansion_note`` key is set. Bboxes for
+    genuine POI queries and ordinary city/county/state matches are returned
+    exactly as Nominatim reports them — this only ever widens a
+    building-scale result, never a real area.
 
     **Cross-tool dependencies:**
     - Upstream of: ``fetch_dem``, ``fetch_buildings``, ``fetch_population``,

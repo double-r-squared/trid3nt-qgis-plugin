@@ -24,6 +24,7 @@ Coverage:
 
 from __future__ import annotations
 
+import math
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -1836,6 +1837,309 @@ def test_resolve_state_bbox_falls_back_to_table(monkeypatch):
     # Centroid inside the bbox.
     assert bbox[0] <= lon <= bbox[2]
     assert bbox[1] <= lat <= bbox[3]
+
+
+# ---------------------------------------------------------------------------
+# OPEN-10 — "downtown Tampa" (and similar sub-locality phrasings) resolving
+# to a single building/POI footprint instead of a usable case AOI.
+#
+# Live-confirmed root cause (2026-07-11): Nominatim's ONLY match for
+# "downtown Tampa" is a category=railway/type=tram_stop node literally named
+# "Downtown Tampa" (a streetcar stop), bbox ~11 m across. Two fixes in
+# ``_fetch_nominatim_geocode_bytes``: (a) prefer a place-class candidate over
+# a point-scale top hit for area-intent queries, (b) floor any surviving
+# sub-1km bbox to a 2 km square with an honest ``expansion_note``.
+# ---------------------------------------------------------------------------
+
+
+def test_geocode_open10_downtown_tampa_live_captured_regression(monkeypatch):
+    """Golden regression: the EXACT live Nominatim payload for 'downtown Tampa'
+    (captured 2026-07-11) must floor-expand rather than return an 11 m bbox.
+    """
+    tampa_tram_stop = [
+        {
+            "place_id": 305080868,
+            "osm_type": "node",
+            "osm_id": 5949810209,
+            "lat": "27.9452787",
+            "lon": "-82.4567888",
+            "category": "railway",
+            "type": "tram_stop",
+            "display_name": (
+                "Downtown Tampa, South Franklin Street, Riverside, Harbour "
+                "Island, Tampa, Hillsborough County, Florida, 33601, "
+                "United States"
+            ),
+            "boundingbox": [
+                "27.9452287", "27.9453287", "-82.4568388", "-82.4567388",
+            ],
+        }
+    ]
+    monkeypatch.setattr(
+        data_fetch.requests,
+        "get",
+        lambda *a, **kw: _FakeGeocodeResp(tampa_tram_stop),
+    )
+    _bind_geocode_cache(monkeypatch)
+
+    assert data_fetch._extract_us_state("downtown Tampa") is None
+
+    result = geocode_location("downtown Tampa")
+
+    west, south, east, north = result["bbox"]
+    # The raw tram-stop bbox is ~11 m across -- old behavior. The floored
+    # bbox must be a real, visible AOI: at least ~1 km on both axes.
+    height_km = abs(north - south) * 111.32
+    width_km = (
+        abs(east - west) * 111.32 * math.cos(math.radians(result["latitude"]))
+    )
+    assert height_km >= 1.0, height_km
+    assert width_km >= 1.0, width_km
+    assert "expansion_note" in result
+    assert "downtown Tampa" in result["expansion_note"]
+    assert "Downtown Tampa" in result["name"]
+
+
+def test_geocode_open10_building_first_place_class_wins(monkeypatch):
+    """Building-class top hit + a place-class candidate for the same locality
+    -> the place-class candidate is promoted, unchanged bbox, no floor note.
+    """
+    candidates = [
+        {
+            "osm_type": "way",
+            "osm_id": 1,
+            "lat": "27.95",
+            "lon": "-82.46",
+            "category": "building",
+            "type": "yes",
+            "display_name": "123 Some Building, Tampa, Florida, United States",
+            "boundingbox": ["27.9495", "27.9505", "-82.4605", "-82.4595"],
+        },
+        {
+            "osm_type": "node",
+            "osm_id": 2,
+            "lat": "27.95",
+            "lon": "-82.46",
+            "category": "place",
+            "type": "neighbourhood",
+            "display_name": "Downtown, Tampa, Florida, United States",
+            "boundingbox": ["27.94", "27.96", "-82.47", "-82.45"],
+        },
+    ]
+    monkeypatch.setattr(
+        data_fetch.requests,
+        "get",
+        lambda *a, **kw: _FakeGeocodeResp(candidates),
+    )
+    _bind_geocode_cache(monkeypatch)
+
+    result = geocode_location("downtown Tampa")
+
+    assert "Downtown, Tampa" in result["name"]
+    assert result["bbox"] == [-82.47, 27.94, -82.45, 27.96]
+    assert "expansion_note" not in result
+
+
+def test_geocode_open10_building_only_floor_expansion(monkeypatch):
+    """No place-class alternate exists -> the point-scale building hit is
+    floor-expanded to a 2 km square with an honest ``expansion_note``.
+    """
+    candidates = [
+        {
+            "osm_type": "way",
+            "osm_id": 1,
+            "lat": "27.95",
+            "lon": "-82.46",
+            "category": "building",
+            "type": "yes",
+            "display_name": "123 Some Building, Tampa, Florida, United States",
+            "boundingbox": ["27.9495", "27.9505", "-82.4605", "-82.4595"],
+        },
+    ]
+    monkeypatch.setattr(
+        data_fetch.requests,
+        "get",
+        lambda *a, **kw: _FakeGeocodeResp(candidates),
+    )
+    _bind_geocode_cache(monkeypatch)
+
+    result = geocode_location("downtown Tampa")
+
+    assert "123 Some Building" in result["name"]
+    assert "expansion_note" in result
+    assert "expanded to a 2 km area" in result["expansion_note"]
+    west, south, east, north = result["bbox"]
+    height_km = abs(north - south) * 111.32
+    width_km = (
+        abs(east - west) * 111.32 * math.cos(math.radians(result["latitude"]))
+    )
+    assert 1.9 <= height_km <= 2.1, height_km
+    assert 1.9 <= width_km <= 2.1, width_km
+
+
+def test_geocode_open10_genuine_poi_query_unchanged(monkeypatch):
+    """A query that clearly names a POI (contains 'airport') is NOT redirected
+    to a place-class candidate, even when the top hit is building-class and a
+    place-class alternate exists for the same locality.
+    """
+    candidates = [
+        {
+            "osm_type": "way",
+            "osm_id": 3,
+            "lat": "27.9772",
+            "lon": "-82.5311",
+            "category": "aeroway",
+            "type": "aerodrome",
+            "display_name": (
+                "Tampa International Airport, Tampa, Florida, United States"
+            ),
+            "boundingbox": ["27.955", "28.000", "-82.555", "-82.505"],
+        },
+        {
+            "osm_type": "relation",
+            "osm_id": 4,
+            "lat": "27.95",
+            "lon": "-82.46",
+            "category": "boundary",
+            "type": "administrative",
+            "display_name": "Tampa, Hillsborough County, Florida, United States",
+            "boundingbox": ["27.87", "28.06", "-82.58", "-82.35"],
+        },
+    ]
+    monkeypatch.setattr(
+        data_fetch.requests,
+        "get",
+        lambda *a, **kw: _FakeGeocodeResp(candidates),
+    )
+    _bind_geocode_cache(monkeypatch)
+
+    result = geocode_location("Tampa International Airport")
+
+    assert "Airport" in result["name"]
+    assert result["bbox"] == [-82.555, 27.955, -82.505, 28.0]
+    assert "expansion_note" not in result
+
+
+def test_geocode_open10_street_address_query_unchanged(monkeypatch):
+    """A street address (leading house number) is a point lookup, not an
+    area-intent query -- the class-preference reorder must not fire even
+    though the top hit is building-class and a place candidate exists.
+    """
+    candidates = [
+        {
+            "osm_type": "way",
+            "osm_id": 5,
+            "lat": "27.9",
+            "lon": "-82.46",
+            "category": "building",
+            "type": "yes",
+            "display_name": "123 Main St, Tampa, Florida, United States",
+            "boundingbox": ["27.8995", "27.9005", "-82.4605", "-82.4595"],
+        },
+        {
+            "osm_type": "relation",
+            "osm_id": 6,
+            "lat": "27.95",
+            "lon": "-82.46",
+            "category": "boundary",
+            "type": "administrative",
+            "display_name": "Tampa, Hillsborough County, Florida, United States",
+            "boundingbox": ["27.87", "28.06", "-82.58", "-82.35"],
+        },
+    ]
+    monkeypatch.setattr(
+        data_fetch.requests,
+        "get",
+        lambda *a, **kw: _FakeGeocodeResp(candidates),
+    )
+    _bind_geocode_cache(monkeypatch)
+
+    result = geocode_location("123 Main St, Tampa, FL")
+
+    assert "123 Main St" in result["name"]
+    # Still building-scale -- the AOI floor (part b) still applies even
+    # though the class-preference reorder (part a) correctly stayed off.
+    assert "expansion_note" in result
+
+
+def test_geocode_open10_big_city_bbox_untouched(monkeypatch):
+    """An ordinary city-scale query is returned exactly as Nominatim reports
+    it -- no reorder (already place-class) and no floor (bbox well over 1 km).
+    """
+    candidates = [
+        {
+            "osm_type": "relation",
+            "osm_id": 7,
+            "lat": "27.9506",
+            "lon": "-82.4572",
+            "category": "boundary",
+            "type": "administrative",
+            "display_name": "Tampa, Hillsborough County, Florida, United States",
+            "boundingbox": ["27.87", "28.06", "-82.58", "-82.35"],
+        }
+    ]
+    monkeypatch.setattr(
+        data_fetch.requests,
+        "get",
+        lambda *a, **kw: _FakeGeocodeResp(candidates),
+    )
+    _bind_geocode_cache(monkeypatch)
+
+    result = geocode_location("Tampa, FL")
+
+    assert result["bbox"] == [-82.58, 27.87, -82.35, 28.06]
+    assert "expansion_note" not in result
+
+
+@pytest.mark.parametrize(
+    "candidate,expected",
+    [
+        ({"category": "place", "type": "neighbourhood"}, True),
+        ({"category": "place", "type": "city"}, True),
+        ({"category": "place", "type": "isolated_dwelling"}, False),
+        ({"category": "boundary", "type": "administrative"}, True),
+        ({"category": "boundary", "type": "postal_code"}, False),
+        ({"category": "building", "type": "yes"}, False),
+        ({"category": "railway", "type": "tram_stop"}, False),
+        ({"category": "amenity", "type": "restaurant"}, False),
+        ({}, False),
+    ],
+)
+def test_is_place_class(candidate, expected):
+    assert data_fetch._is_place_class(candidate) is expected
+
+
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ("Tampa International Airport", True),
+        ("downtown Tampa", False),
+        ("123 Main St, Tampa, FL", True),
+        ("Fort Myers, FL", False),
+        ("Yankee Stadium", True),
+    ],
+)
+def test_looks_like_poi_query(query, expected):
+    assert data_fetch._looks_like_poi_query(query) is expected
+
+
+def test_bbox_long_axis_km_and_square_km_bbox_roundtrip():
+    # A ~0.0001 deg bbox (like the live Tampa tram-stop) is well under 1 km.
+    long_axis = data_fetch._bbox_long_axis_km(
+        -82.4568388, 27.9452287, -82.4567388, 27.9453287, 27.9452787
+    )
+    assert long_axis < 0.02  # ~11 m, in km
+
+    west, south, east, north = data_fetch._square_km_bbox(
+        27.9452787, -82.4567888, 2.0
+    )
+    height_km = abs(north - south) * 111.32
+    width_km = abs(east - west) * 111.32 * math.cos(math.radians(27.9452787))
+    assert 1.9 <= height_km <= 2.1
+    assert 1.9 <= width_km <= 2.1
+    # Centered on the input point.
+    assert south < 27.9452787 < north
+    assert west < -82.4567888 < east
 
 
 # ---------------------------------------------------------------------------
