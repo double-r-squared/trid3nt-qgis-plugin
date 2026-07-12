@@ -107,6 +107,8 @@ from .runaway_guard import (
 )
 
 from .adapter import (
+    CompactionCompleteEvent,
+    CompactionStartEvent,
     FunctionCallEvent,
     GeminiSettings,
     MAX_TURN_ITERATIONS,
@@ -145,6 +147,7 @@ from .case_lifecycle import CaseLifecycleError, ensure_case_qgs
 from .context_budget import (
     FABRICATION_CAVEAT,
     ContextWindowExceededError,
+    build_context_window_abort_note,
     looks_like_fabricated_action_claim,
 )
 from .credential_registry import (
@@ -171,7 +174,9 @@ from .pipeline_emitter import (
     PipelineEmitter,
     _json_for_tool_io,
     bind_turn_case,
+    complete_compaction_card,
     current_turn_case,
+    mint_compaction_card,
 )
 from .secrets_handler import (
     SecretError,
@@ -2182,6 +2187,14 @@ class SessionState:
     # evidence showed only user turns survived because this text was never
     # accumulated (the old code persisted ``content=""`` markers).
     current_turn_narration: list[str] = field(default_factory=list)
+    # BUG 1 (post-OPEN-14 acceptance rerun): set by the ``except
+    # ContextWindowExceededError`` handler in ``_stream_gemini_reply`` when a
+    # turn aborts on a clipped prompt. ``_dispatch_gemini_and_persist``'s
+    # finally reads + clears it and appends the text to whichever partial-
+    # narration row it is about to persist, so the reader sees the abort
+    # verdict in the SAME chat row as the (unverified) streamed text, not
+    # only in a transient error envelope a dead/detached socket may drop.
+    current_turn_context_abort_note: str | None = None
     # job-0268: the Case this TURN is bound to. Pinned by ``_prepare_user_turn``
     # at dispatch time (after the auto-create-from-root hand-off, before the
     # first write). Every turn-scoped persistence write — chat rows, tool
@@ -2863,6 +2876,9 @@ async def _stream_gemini_reply(
     # dispatch wrapper's finally joins THIS turn's list (never the live
     # field) — even on crash/cancel, since registration precedes any await.
     state.current_turn_narration = []
+    # BUG 1: reset the per-turn context-window-abort note. A new turn is a
+    # fresh request -- any prior turn's abort note must never leak forward.
+    state.current_turn_context_abort_note = None
     # job VAULT-READ: reset the per-turn credential-prompt guard. A new user
     # turn is a fresh request — a tool that prompted for a key last turn may
     # legitimately prompt again this turn (the key may still be missing).
@@ -3149,6 +3165,14 @@ async def _stream_gemini_reply(
             turn_text_parts: list[str] = []
             turn_function_calls: list[FunctionCallEvent] = []
             last_usage = None
+            # Compaction UX (Part A): the step_id of the currently-open
+            # compaction card, if any -- set on CompactionStartEvent, read +
+            # cleared on the matching CompactionCompleteEvent. Local to this
+            # round: the adapter always pairs the two 1:1 within one
+            # ``stream_events_with_contents`` call (see openai_adapter.
+            # stream_openai), and a round can legitimately mint+complete more
+            # than one (proactive, then a later reactive retry).
+            _compaction_step_id: str | None = None
 
             async for event in stream_events_with_contents(
                 client,
@@ -3251,6 +3275,33 @@ async def _stream_gemini_reply(
                         event.candidates_token_count,
                         event.cache_hit,
                     )
+
+                elif isinstance(event, CompactionStartEvent):
+                    # Compaction UX (Part A): mint the durable running
+                    # "Compacting conversation..." card the instant the
+                    # adapter announces compaction is about to run (proactive
+                    # or the reactive clip-guard retry -- see
+                    # openai_adapter.stream_openai). Mirrors the two-card SIM
+                    # observability's running-card mint (see
+                    # pipeline_emitter.mint_dispatch_and_sim_cards); best-
+                    # effort so a mint failure can never block the turn.
+                    _compaction_step_id = await mint_compaction_card(
+                        emitter=state.emitter
+                    )
+
+                elif isinstance(event, CompactionCompleteEvent):
+                    # Compaction UX (Part A): flip the card minted above to
+                    # its terminal "Conversation compacted (Nk -> Mk tokens)"
+                    # state. No-op (best-effort) if the mint above failed or
+                    # never fired (emitter unbound) -- see
+                    # complete_compaction_card's own None-guard.
+                    await complete_compaction_card(
+                        emitter=state.emitter,
+                        step_id=_compaction_step_id,
+                        before_tokens=event.before_tokens,
+                        after_tokens=event.after_tokens,
+                    )
+                    _compaction_step_id = None
 
             # Emit a cache-status envelope so the UI can render the cache
             # hit-rate live. Best-effort — a serialization failure logs but
@@ -4103,19 +4154,90 @@ async def _stream_gemini_reply(
             state.session_id,
             exc.num_ctx,
         )
-        await _send_error(
-            websocket,
-            state.session_id,
-            "CONTEXT_WINDOW_EXCEEDED",
-            str(exc),
-            retryable=False,
+        # BUG 1 (post-OPEN-14 acceptance rerun, 2x reproduced sessions
+        # 01KXAGEJAAPWDH0YSEGYQK5QVG / 01KXAJ1WKWDC0XS7VW4RY6CVF6): the OLD
+        # order sent the error envelope FIRST and persisted the failure card
+        # SECOND. ROOT CAUSE (confirmed by driving this path against the real
+        # ``grace2_contracts.ws.ErrorPayload`` model, not a mock): the
+        # contracts package's ``ErrorCode`` Literal never included
+        # "CONTEXT_WINDOW_EXCEEDED" -- so ``_send_error``'s
+        # ``ErrorPayload(error_code="CONTEXT_WINDOW_EXCEEDED", ...)``
+        # construction raised a pydantic ``ValidationError`` on EVERY call,
+        # unconditionally, before ``_session_safe_send``/``websocket.send``
+        # was ever reached (dead socket or not -- the 2 reproductions' dead
+        # sockets were incidental, not the cause). That raise was uncaught by
+        # the old except-block, so it propagated straight past the
+        # ``_persist_terminal_failure_card`` call below and out of this
+        # except-block entirely -- explaining exactly why NEITHER the
+        # persist's success INFO nor its own internal exception log ever
+        # fired: the persist call was never reached. Fixed in two parts:
+        # (a) ``grace2_contracts.ws.ErrorCode`` now includes
+        # "CONTEXT_WINDOW_EXCEEDED" so the envelope actually constructs and
+        # reaches the client; (b) belt-and-suspenders reorder -- persist
+        # FIRST (it never touches the socket or this payload, so it can no
+        # longer be starved by ANY failure in the send path, known or
+        # future), attempt the send SECOND. Both individually try/excepted
+        # with explicit logging so a future change to either helper's
+        # internals can never silently re-open this gap.
+        #
+        # BUG 2: the fabrication backstop (item 4, context_budget) is wired
+        # into the normal zero-tool-call terminal branch above but is skipped
+        # entirely on THIS (exception) path, so an abort mid-fabrication
+        # persisted an unqualified false claim ("The hillshade has been
+        # generated and added to the map"). Same structural gate here: zero
+        # tool calls dispatched this whole turn, AND the accumulated
+        # narration matches the claim regex.
+        _aborted_narration = "".join(turn_narration)
+        _fabricated_claim = not _turn_ever_called_tool and looks_like_fabricated_action_claim(
+            _aborted_narration
         )
-        await _persist_terminal_failure_card(
-            state,
-            error_code="CONTEXT_WINDOW_EXCEEDED",
-            message=str(exc),
-            case_id=_turn_case_id(state),
+        if _fabricated_claim:
+            logger.warning(
+                "context-budget: fabrication backstop fired on abort path "
+                "session=%s (zero tool calls this turn)",
+                state.session_id,
+            )
+        state.current_turn_context_abort_note = build_context_window_abort_note(
+            fabricated_claim=_fabricated_claim
         )
+        try:
+            await _persist_terminal_failure_card(
+                state,
+                error_code="CONTEXT_WINDOW_EXCEEDED",
+                message=str(exc),
+                case_id=_turn_case_id(state),
+            )
+        except Exception:  # noqa: BLE001 -- persist is best-effort but must
+            # never be allowed to skip the (equally best-effort) error send
+            # below; _persist_terminal_failure_card already swallows +
+            # `logger.exception`s internally, this is defense-in-depth only.
+            logger.exception(
+                "context-budget: terminal-failure card persist raised "
+                "session=%s",
+                state.session_id,
+            )
+        try:
+            await _send_error(
+                websocket,
+                state.session_id,
+                "CONTEXT_WINDOW_EXCEEDED",
+                str(exc),
+                retryable=False,
+            )
+        except Exception:  # noqa: BLE001 -- _send_error/_session_safe_send
+            # already never raise on an ordinary send failure (they catch
+            # Exception internally); this is defense-in-depth logging only.
+            # NOTE: a genuine ``asyncio.CancelledError`` here is NOT caught
+            # (it is a BaseException, not an Exception) and is intentionally
+            # left to propagate -- cancellation must never be swallowed. The
+            # whole point of the reorder above is that it no longer matters:
+            # the terminal-failure persist has ALREADY completed by the time
+            # we reach this send, so a cancelled/dead-socket send can no
+            # longer suppress it.
+            logger.exception(
+                "context-budget: error-envelope send raised session=%s",
+                state.session_id,
+            )
     except Exception as exc:  # noqa: BLE001 — surface as A.6 LLM_UNAVAILABLE
         logger.exception("model stream failed: %s", exc)
         await _send_error(
@@ -11750,6 +11872,14 @@ async def _dispatch_gemini_and_persist(
         narration = "".join(turn_narration).strip()
         open_tail = "".join(open_segment or []).strip()
         stream_completed = len(turn_history) > pre_chat_len
+        # BUG 1 (post-OPEN-14 acceptance rerun): when the turn aborted on
+        # ``ContextWindowExceededError``, ``_stream_gemini_reply``'s except
+        # handler stashed the honest abort verdict here (already carrying the
+        # BUG 2 fabrication-caveat lead-in when applicable). Read + clear it
+        # once so it lands on exactly the row that carries the (unverified)
+        # streamed text below, and never leaks into a later turn.
+        _abort_note = state.current_turn_context_abort_note
+        state.current_turn_context_abort_note = None
         if turn_case_id:
             if open_tail:
                 # Crash/cancel left an un-finalized open segment carrying text
@@ -11761,20 +11891,22 @@ async def _dispatch_gemini_and_persist(
                 await _persist_chat_turn(
                     state,
                     role="agent",
-                    content=open_tail,
+                    content=(open_tail + _abort_note) if _abort_note else open_tail,
                     pipeline_id=state.current_turn_pipeline_id,
                     case_id=turn_case_id,
                 )
-            elif segments_done == 0 and (narration or stream_completed):
+            elif segments_done == 0 and (narration or stream_completed or _abort_note):
                 # No segment was finalized AND no open tail: either a clean
                 # narration-LESS completed turn (content="" marker — replay row
-                # count unchanged from pre-fix), or a mocked-stream test that
+                # count unchanged from pre-fix), a mocked-stream test that
                 # populated only ``current_turn_narration`` (legacy one-row
-                # contract). Mirror the pre-job-0315 single-row write exactly.
+                # contract), or an abort with NO streamed text at all (still
+                # write the row so the abort note itself is not lost). Mirror
+                # the pre-job-0315 single-row write exactly, plus the note.
                 await _persist_chat_turn(
                     state,
                     role="agent",
-                    content=narration,
+                    content=(narration + _abort_note) if _abort_note else narration,
                     pipeline_id=state.current_turn_pipeline_id,
                     case_id=turn_case_id,
                 )

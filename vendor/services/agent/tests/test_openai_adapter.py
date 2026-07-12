@@ -10,6 +10,12 @@ Tests cover:
      path (num_ctx discovery is monkeypatched throughout, no live Ollama
      required; see tests/test_context_budget.py for the discovery/ladder/
      regex unit tests in isolation)
+  5. Part A (compaction UX): every compaction pass yields a
+     CompactionStartEvent/CompactionCompleteEvent pair -- NOT the pre-Part-A
+     TextDeltaEvent note glued onto the model's reply -- so server.py's
+     dispatch loop can mint/complete a durable pipeline card instead (see
+     tests/test_pipeline_emitter.py TestCompactionCard for the card-minting
+     seam these events drive).
 """
 from __future__ import annotations
 
@@ -26,14 +32,16 @@ from grace2_agent.openai_adapter import (
     tool_declarations_to_openai_tools,
 )
 from grace2_agent.adapter import (
+    CompactionCompleteEvent,
+    CompactionStartEvent,
     FunctionCallEvent,
     TextDeltaEvent,
     UsageMetadataEvent,
 )
 from grace2_agent.context_budget import (
-    CLIP_RETRY_NOTE,
     ContextWindowExceededError,
-    PROACTIVE_COMPACTION_NOTE,
+    openai_max_output_tokens,
+    reserve_output_tokens,
 )
 
 
@@ -568,8 +576,9 @@ class TestContextBudgetWiring:
     @pytest.mark.asyncio
     async def test_proactive_compaction_shrinks_the_sent_prompt(self, monkeypatch):
         """A huge history over a SMALL discovered num_ctx triggers proactive
-        compaction: a note is emitted first, and the request actually SENT is
-        smaller than the raw uncompacted history."""
+        compaction: a CompactionStartEvent/CompactionCompleteEvent pair is
+        emitted first (Part A -- NOT a TextDeltaEvent note), and the request
+        actually SENT is smaller than the raw uncompacted history."""
         self._env(monkeypatch)
         captured: dict[str, Any] = {}
 
@@ -590,8 +599,12 @@ class TestContextBudgetWiring:
             async for ev in stream_openai(contents=self._long_history()):
                 events.append(ev)
 
-        text_events = [e for e in events if isinstance(e, TextDeltaEvent)]
-        assert text_events[0].delta == PROACTIVE_COMPACTION_NOTE
+        # Part A: the FIRST two events are the compaction pair -- start then
+        # complete, in that order -- and no TextDeltaEvent note precedes them.
+        assert isinstance(events[0], CompactionStartEvent)
+        assert isinstance(events[1], CompactionCompleteEvent)
+        assert events[1].before_tokens > events[1].after_tokens > 0
+        assert not any(isinstance(e, TextDeltaEvent) for e in events[:2])
         # The actually-sent messages are far smaller than the raw 60-row
         # history would have been (proves compaction ran BEFORE the call).
         sent_chars = sum(len(m.get("content") or "") for m in captured["messages"])
@@ -599,7 +612,8 @@ class TestContextBudgetWiring:
 
     @pytest.mark.asyncio
     async def test_no_compaction_when_under_budget(self, monkeypatch):
-        """A small turn under a normal num_ctx is never touched."""
+        """A small turn under a normal num_ctx is never touched -- no
+        compaction events at all."""
         self._env(monkeypatch)
 
         async def _fake_discover(base_url, model_name):
@@ -619,14 +633,17 @@ class TestContextBudgetWiring:
             async for ev in stream_openai(contents=[user_content("hello")]):
                 events.append(ev)
 
-        text_events = [e for e in events if isinstance(e, TextDeltaEvent)]
-        assert all(e.delta != PROACTIVE_COMPACTION_NOTE for e in text_events)
+        assert not any(
+            isinstance(e, (CompactionStartEvent, CompactionCompleteEvent))
+            for e in events
+        )
 
     @pytest.mark.asyncio
     async def test_clip_guard_retries_once_then_succeeds(self, monkeypatch):
         """Round 1 reports usage.prompt_tokens >= num_ctx (clipped) -- the
-        adapter recompacts, emits the retry note, and retries ONCE. Round 2
-        is clean -- the turn completes normally, no exception."""
+        adapter recompacts, emits a CompactionStartEvent/CompactionCompleteEvent
+        pair (Part A -- NOT a text note), and retries ONCE. Round 2 is clean
+        -- the turn completes normally, no exception."""
         self._env(monkeypatch)
 
         async def _fake_discover(base_url, model_name):
@@ -661,8 +678,17 @@ class TestContextBudgetWiring:
         assert create_calls == 2
         text = "".join(e.delta for e in events if isinstance(e, TextDeltaEvent))
         assert "fabricated success" in text  # round 1's text still streamed live
-        assert CLIP_RETRY_NOTE in text  # honest caveat in between
         assert "the real answer" in text  # round 2's real text follows
+        # Part A: the reactive recompaction fires the SAME typed event pair
+        # as the proactive path, between the two rounds' text -- never a
+        # TextDeltaEvent note glued into the narration.
+        start_idx = next(i for i, e in enumerate(events) if isinstance(e, CompactionStartEvent))
+        complete_idx = next(
+            i for i, e in enumerate(events) if isinstance(e, CompactionCompleteEvent)
+        )
+        assert start_idx < complete_idx
+        first_text_idx = next(i for i, e in enumerate(events) if isinstance(e, TextDeltaEvent))
+        assert first_text_idx < start_idx  # round 1's text streamed BEFORE the retry compacts
         usage_events = [e for e in events if isinstance(e, UsageMetadataEvent)]
         assert usage_events[-1].prompt_token_count == 400
 
@@ -702,3 +728,75 @@ class TestContextBudgetWiring:
         assert excinfo.value.num_ctx == 1000
         assert "16k" not in str(excinfo.value)  # honest -- reflects THIS model's window
         assert "1k" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# BUG 3 (post-OPEN-14 acceptance rerun): a clipped/looping local generation
+# ran for ~22 minutes streaming 16k-26k tokens of looped narration before the
+# reactive clip guard (above) could react at stream end -- it only inspects
+# usage AFTER a round finishes. ``max_tokens`` bounds every request; the
+# proactive budget's reserve is COUPLED to the same cap (single source of
+# truth -- see test_context_budget.py::TestBudget).
+# ---------------------------------------------------------------------------
+
+
+class TestMaxTokensCap:
+    def _env(self, monkeypatch):
+        monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "http://localhost:11434/v1")
+        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "test-model")
+        monkeypatch.setenv("GRACE2_OPENAI_API_KEY", "not-needed")
+
+    @pytest.mark.asyncio
+    async def test_max_tokens_sent_on_every_request_default(self, monkeypatch):
+        self._env(monkeypatch)
+        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
+
+        async def _fake_discover(base_url, model_name):
+            return 16384
+
+        captured: dict[str, Any] = {}
+
+        async def _capture_create(**kwargs):
+            captured.update(kwargs)
+            return _make_stream([_text_chunk("hi"), _usage_chunk(50), _final_empty_chunk()])
+
+        with patch("openai.AsyncOpenAI") as mock_cls, \
+             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = _capture_create
+            mock_cls.return_value = mock_client
+
+            async for _ in stream_openai(contents=[user_content("hello")]):
+                pass
+
+        assert captured["max_tokens"] == 4096 == openai_max_output_tokens()
+
+    @pytest.mark.asyncio
+    async def test_max_tokens_honors_env_override_and_stays_coupled_to_reserve(
+        self, monkeypatch
+    ):
+        self._env(monkeypatch)
+        monkeypatch.setenv("GRACE2_OPENAI_MAX_TOKENS", "512")
+
+        async def _fake_discover(base_url, model_name):
+            return 16384
+
+        captured: dict[str, Any] = {}
+
+        async def _capture_create(**kwargs):
+            captured.update(kwargs)
+            return _make_stream([_text_chunk("hi"), _usage_chunk(50), _final_empty_chunk()])
+
+        with patch("openai.AsyncOpenAI") as mock_cls, \
+             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = _capture_create
+            mock_cls.return_value = mock_client
+
+            async for _ in stream_openai(contents=[user_content("hello")]):
+                pass
+
+        # The request cap AND the proactive budget's output reserve must move
+        # together -- a single env knob, never two that can drift apart.
+        assert captured["max_tokens"] == 512
+        assert reserve_output_tokens() == 512

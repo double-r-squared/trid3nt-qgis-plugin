@@ -154,6 +154,22 @@ ErrorCode = Literal[
     "CLARIFICATION_TIMEOUT",
     "USER_INPUT_CANCELLED",
     "CANCELLED",
+    # OPEN-14 (context-budget, LOCAL/OpenAI model path only): a turn's prompt
+    # was clipped by the model's num_ctx even after one recompaction + retry
+    # (context_budget.ContextWindowExceededError). Distinct from
+    # LLM_UNAVAILABLE -- a genuinely oversized Case, not a transient model
+    # outage -- so the client can render the honest "start a new case or
+    # switch models" guidance instead of an offer to retry.
+    #
+    # BUG 1 (post-OPEN-14 acceptance rerun, 2026-07-12): this value was
+    # missing here while server.py's abort handler already sent it as the
+    # literal ``error_code`` on every ``ErrorPayload`` -- so every single
+    # CONTEXT_WINDOW_EXCEEDED abort raised a pydantic ValidationError inside
+    # ``_send_error`` (constructing the payload), unconditionally, dead
+    # socket or not. That raise, uncaught by the pre-fix except-block, is why
+    # the terminal-failure-card persist call right after it was never
+    # reached.
+    "CONTEXT_WINDOW_EXCEEDED",
 ]
 
 

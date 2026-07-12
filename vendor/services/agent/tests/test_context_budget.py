@@ -30,10 +30,12 @@ from google.genai import types as genai_types
 
 from grace2_agent.context_budget import (
     CompactionResult,
+    CONTEXT_WINDOW_ABORT_NOTE,
     ContextWindowExceededError,
     FABRICATION_CAVEAT,
     _parse_num_ctx_from_show_response,
     _reset_num_ctx_cache_for_tests,
+    build_context_window_abort_note,
     compact_contents,
     compute_budget_tokens,
     discover_num_ctx,
@@ -45,6 +47,7 @@ from grace2_agent.context_budget import (
     looks_like_fabricated_action_claim,
     num_ctx_env_fallback,
     num_ctx_from_suffix,
+    openai_max_output_tokens,
     proactive_target_ratio,
     reactive_target_ratio,
     reserve_output_tokens,
@@ -119,16 +122,36 @@ class TestEstimator:
 
 class TestBudget:
     def test_defaults(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_CONTEXT_RESERVE_OUTPUT_TOKENS", raising=False)
+        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
         monkeypatch.delenv("GRACE2_CONTEXT_SAFETY_TOKENS", raising=False)
-        assert reserve_output_tokens() == 2048
+        assert reserve_output_tokens() == 4096
         assert safety_tokens() == 1024
-        assert compute_budget_tokens(16384) == 16384 - 2048 - 1024
+        assert compute_budget_tokens(16384) == 16384 - 4096 - 1024
 
     def test_budget_floors_at_256_for_a_tiny_num_ctx(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_CONTEXT_RESERVE_OUTPUT_TOKENS", raising=False)
+        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
         monkeypatch.delenv("GRACE2_CONTEXT_SAFETY_TOKENS", raising=False)
         assert compute_budget_tokens(100) == 256
+
+    def test_openai_max_output_tokens_default_and_override(self, monkeypatch):
+        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
+        assert openai_max_output_tokens() == 4096
+        monkeypatch.setenv("GRACE2_OPENAI_MAX_TOKENS", "1024")
+        assert openai_max_output_tokens() == 1024
+        # Garbage falls back to the safe default (same _env_int contract as
+        # every other context-budget env knob).
+        monkeypatch.setenv("GRACE2_OPENAI_MAX_TOKENS", "not-a-number")
+        assert openai_max_output_tokens() == 4096
+
+    def test_reserve_output_tokens_is_coupled_to_max_output_tokens(self, monkeypatch):
+        """BUG 3 (post-OPEN-14 acceptance rerun): the proactive budget's
+        output reserve must be the SAME number as the max_tokens cap sent on
+        the wire -- a single source of truth, not two independently
+        configured knobs that can drift apart."""
+        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
+        assert reserve_output_tokens() == openai_max_output_tokens() == 4096
+        monkeypatch.setenv("GRACE2_OPENAI_MAX_TOKENS", "777")
+        assert reserve_output_tokens() == openai_max_output_tokens() == 777
 
     def test_ratio_defaults_and_overrides(self, monkeypatch):
         monkeypatch.delenv("GRACE2_CONTEXT_PROACTIVE_RATIO", raising=False)
@@ -475,3 +498,28 @@ class TestFabricationBackstop:
     def test_fabrication_caveat_text_is_honest_and_stable(self):
         assert "no tools were executed" in FABRICATION_CAVEAT
         assert "not verified" in FABRICATION_CAVEAT
+
+
+# ---------------------------------------------------------------------------
+# BUG 1 / BUG 2 (post-OPEN-14 acceptance rerun): the abort-note builder wired
+# into server.py's ``except ContextWindowExceededError`` handler.
+# ---------------------------------------------------------------------------
+
+
+class TestContextWindowAbortNote:
+    def test_plain_abort_note_has_no_fabrication_caveat(self):
+        note = build_context_window_abort_note(fabricated_claim=False)
+        assert note == CONTEXT_WINDOW_ABORT_NOTE
+        assert FABRICATION_CAVEAT not in note
+        assert "context window" in note
+        assert "unverified" in note
+        assert "new case" in note.lower() or "larger-context model" in note.lower()
+
+    def test_fabricated_claim_leads_with_the_caveat(self):
+        """BUG 2: on the abort path, a zero-tool-call turn whose partial text
+        claims a completed action must see the fabrication caveat BEFORE the
+        context-window explanation, not after (or not at all)."""
+        note = build_context_window_abort_note(fabricated_claim=True)
+        assert FABRICATION_CAVEAT in note
+        assert CONTEXT_WINDOW_ABORT_NOTE in note
+        assert note.index(FABRICATION_CAVEAT) < note.index(CONTEXT_WINDOW_ABORT_NOTE)

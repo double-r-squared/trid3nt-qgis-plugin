@@ -5,8 +5,8 @@
 history + a list of ``genai_types.FunctionDeclaration`` tool specs + a system
 prompt -- converts them to OpenAI chat-completions wire shapes at the boundary,
 and yields the SAME ``StreamEvent`` union (``TextDeltaEvent`` /
-``FunctionCallEvent`` / ``UsageMetadataEvent``) that the server.py dispatch
-loop consumes.
+``FunctionCallEvent`` / ``UsageMetadataEvent`` / ``CompactionStartEvent`` /
+``CompactionCompleteEvent``) that the server.py dispatch loop consumes.
 
 This single provider covers any OpenAI-compatible endpoint:
   - Local: Ollama (http://localhost:11434/v1), vLLM, llama.cpp server, LM Studio
@@ -45,6 +45,11 @@ Design notes:
      - ``stream_options={"include_usage": True}`` is sent so the final chunk
        carries usage metadata (usage is tolerated absent for providers that do
        not support it).
+     - ``max_tokens`` (``context_budget.openai_max_output_tokens``, env
+       ``GRACE2_OPENAI_MAX_TOKENS``, default 4096) caps every request so a
+       clipped/looping round cannot run away for minutes before the reactive
+       clip guard (below) gets a chance to react at stream end (BUG 3,
+       post-OPEN-14 acceptance rerun).
      - Tool-call argument deltas are accumulated per index (``delta.tool_calls``
        index field) across chunks; on ``finish_reason=="tool_calls"`` the
        accumulated JSON is parsed and ``FunctionCallEvent``s are emitted.
@@ -73,6 +78,8 @@ from typing import Any
 from google.genai import types as genai_types
 
 from .adapter import (
+    CompactionCompleteEvent,
+    CompactionStartEvent,
     FunctionCallEvent,
     StreamEvent,
     TextDeltaEvent,
@@ -80,9 +87,7 @@ from .adapter import (
     UsageMetadataEvent,
 )
 from .context_budget import (
-    CLIP_RETRY_NOTE,
     ContextWindowExceededError,
-    PROACTIVE_COMPACTION_NOTE,
     compact_contents,
     compute_budget_tokens,
     discover_num_ctx,
@@ -90,6 +95,7 @@ from .context_budget import (
     estimate_tokens_for_messages,
     estimate_tokens_for_tools,
     is_prompt_clipped,
+    openai_max_output_tokens,
     proactive_target_ratio,
     reactive_target_ratio,
 )
@@ -533,6 +539,21 @@ async def stream_openai(
     recompaction + retry is attempted; a second clip raises
     ``ContextWindowExceededError`` (caught by server.py and surfaced as an
     honest typed envelope instead of a fabricated or generic failure).
+
+    Compaction UX (Part A): every ``compact_contents`` call is bracketed by a
+    ``CompactionStartEvent`` immediately followed by a
+    ``CompactionCompleteEvent(before_tokens=..., after_tokens=...)`` -- NOT a
+    ``TextDeltaEvent`` glued onto the model's own reply (the pre-Part-A
+    ``PROACTIVE_COMPACTION_NOTE`` / ``CLIP_RETRY_NOTE`` narration seam,
+    removed). ``server.py``'s dispatch loop turns that pair into a durable
+    pipeline card (``pipeline_emitter.mint_compaction_card`` /
+    ``complete_compaction_card``) instead. The PROACTIVE call site (below)
+    gates the pair on ``result.changed`` (mirroring the original note's own
+    gate -- an under-budget turn that never compacts must show no card at
+    all). The REACTIVE clip-guard call site does NOT gate it: a detected clip
+    always means a retry is happening, so the card always reports its honest
+    before/after count even on a no-op pass (mirrors the original
+    ``CLIP_RETRY_NOTE``, which was likewise unconditional on that path).
     """
     try:
         from openai import AsyncOpenAI
@@ -587,7 +608,13 @@ async def stream_openai(
             messages = contents_to_openai_messages(
                 working_contents, system_prompt=system_prompt, show_thinking=show_thinking
             )
-            yield TextDeltaEvent(delta=PROACTIVE_COMPACTION_NOTE)
+            # Compaction UX (Part A): typed events, not a narration note --
+            # see the docstring above and context_budget.COMPACTING_LABEL /
+            # compaction_complete_label.
+            yield CompactionStartEvent()
+            yield CompactionCompleteEvent(
+                before_tokens=result.before_tokens, after_tokens=result.after_tokens
+            )
 
     attempt = 0
     while True:
@@ -598,6 +625,16 @@ async def stream_openai(
             "stream": True,
             "stream_options": {"include_usage": True},
             "temperature": 0.7,
+            # BUG 3 (post-OPEN-14 acceptance rerun): cap generation so a
+            # clipped/looping round cannot stream 16k-26k tokens of runaway
+            # narration for ~22 minutes before the reactive clip guard below
+            # gets a chance to react (it only inspects usage AFTER the round
+            # ends). Verified live against Ollama's OpenAI-compat endpoint
+            # (2026-07-12, llama3.2:3b): max_tokens maps to num_predict and
+            # truncates the completion at exactly this count under streaming.
+            # ``context_budget.reserve_output_tokens`` reserves this SAME
+            # value (single source of truth) -- see openai_max_output_tokens.
+            "max_tokens": openai_max_output_tokens(),
         }
         if tools:
             kwargs["tools"] = tools
@@ -634,7 +671,17 @@ async def stream_openai(
         messages = contents_to_openai_messages(
             working_contents, system_prompt=system_prompt, show_thinking=show_thinking
         )
-        yield TextDeltaEvent(delta=CLIP_RETRY_NOTE)
+        # Compaction UX (Part A): same typed-event pair as the proactive
+        # path above -- UNCONDITIONAL (unlike the proactive site's
+        # ``if result.changed:`` gate), matching the pre-Part-A
+        # ``CLIP_RETRY_NOTE`` this replaces: a detected clip always means a
+        # retry is happening, whether or not this pass finds more to shrink
+        # (an already-near-minimal history still reports its honest
+        # before==after count -- not a fabrication, just a no-op pass).
+        yield CompactionStartEvent()
+        yield CompactionCompleteEvent(
+            before_tokens=result.before_tokens, after_tokens=result.after_tokens
+        )
 
 
 __all__ = [

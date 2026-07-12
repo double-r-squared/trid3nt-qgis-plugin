@@ -1767,7 +1767,20 @@ class Trid3ntDock(QDockWidget):
                 if step.parent_step_id:
                     lines.append(f"    {step.tool_name} - {step.state}")
                 else:
-                    label = step.tool_name or step.name
+                    # Compaction UX (Part A): "context:compact" is the one
+                    # step whose tool_name is a plain internal id
+                    # ("context:compact") while step.name carries the actual
+                    # human-readable state -- "Compacting conversation..."
+                    # then "Conversation compacted (Nk -> Mk tokens)". Every
+                    # other tool's tool_name IS already the readable label
+                    # (or at least as readable as step.name), so this stays
+                    # scoped to the one case where preferring name is
+                    # strictly better, never changing existing behavior.
+                    label = (
+                        step.name
+                        if step.tool_name == "context:compact"
+                        else (step.tool_name or step.name)
+                    )
                     suffix = f" ({step.substep_label})" if step.substep_label else ""
                     lines.append(f"{label} - {step.state}{suffix}")
                     if step.error_message:

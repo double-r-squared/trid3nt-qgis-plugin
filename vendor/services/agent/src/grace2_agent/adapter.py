@@ -153,8 +153,51 @@ class UsageMetadataEvent:
     cache_hit: bool = False
 
 
+@dataclass(frozen=True)
+class CompactionStartEvent:
+    """Context-budget compaction (``context_budget.compact_contents``) is
+    about to run for this turn -- proactive (before the request) or reactive
+    (after a detected clip; see ``openai_adapter.stream_openai``).
+
+    Compaction UX (Part A): yielded by the OpenAI-compatible adapter in
+    place of the old ``TextDeltaEvent(delta=PROACTIVE_COMPACTION_NOTE /
+    CLIP_RETRY_NOTE)`` narration seam. ``server.py``'s dispatch loop mints a
+    durable running card ("Compacting conversation...") the instant this
+    arrives (``pipeline_emitter.mint_compaction_card``) instead of gluing a
+    disclaimer sentence onto the model's own reply -- the F10 running-tool-
+    card treatment, animated on the wire, persisted so it survives a Case
+    reopen. Carries no fields: the token counts are not yet final (the
+    compacted-side count is only known once ``compact_contents`` returns),
+    they ride the matching ``CompactionCompleteEvent``. Never emitted by the
+    Bedrock / Vertex / scripted paths (compaction is a local/OpenAI-path-only
+    concern -- see ``context_budget`` module docstring); the server loop must
+    tolerate it being absent.
+    """
+
+
+@dataclass(frozen=True)
+class CompactionCompleteEvent:
+    """The compaction a preceding ``CompactionStartEvent`` announced has
+    finished. ``before_tokens`` / ``after_tokens`` are
+    ``context_budget.CompactionResult.before_tokens`` /
+    ``.after_tokens`` -- the server-side dispatch loop renames the running
+    card to its terminal "Conversation compacted (Nk -> Mk tokens)" label and
+    flips it to ``complete`` on receipt (``pipeline_emitter.
+    complete_compaction_card``). Always paired 1:1 with a prior
+    ``CompactionStartEvent`` within the same adapter call.
+    """
+
+    before_tokens: int
+    after_tokens: int
+
+
 StreamEvent = (
-    TextDeltaEvent | ThinkingDeltaEvent | FunctionCallEvent | UsageMetadataEvent
+    TextDeltaEvent
+    | ThinkingDeltaEvent
+    | FunctionCallEvent
+    | UsageMetadataEvent
+    | CompactionStartEvent
+    | CompactionCompleteEvent
 )
 
 
@@ -2648,6 +2691,8 @@ __all__ = [
     "ThinkingDeltaEvent",
     "FunctionCallEvent",
     "UsageMetadataEvent",
+    "CompactionStartEvent",
+    "CompactionCompleteEvent",
     "SYSTEM_PROMPT",
     "build_client",
     "build_contents_from_history",

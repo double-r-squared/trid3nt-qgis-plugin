@@ -53,6 +53,31 @@ All four pieces are individually unit-testable without a live Ollama or
 network access; ``discover_num_ctx`` is the only piece that makes a network
 call, and it degrades gracefully (best-effort) through its fallback chain on
 any fault.
+
+POST-OPEN-14 ACCEPTANCE RERUN FOLLOW-UPS (3 bugs, sessions
+01KXAGEJAAPWDH0YSEGYQK5QVG / 01KXAJ1WKWDC0XS7VW4RY6CVF6):
+
+  BUG 1 -- a ``ContextWindowExceededError`` abort could persist NEITHER the
+    typed failure card NOR any acknowledgement in the chat transcript itself
+    (server.py's except-block ordering; see server.py ``_stream_gemini_reply``
+    / ``_dispatch_gemini_and_persist``). Fixed by persisting first, and by
+    appending ``CONTEXT_WINDOW_ABORT_NOTE`` to the turn's already-persisted
+    partial narration so the reader sees the abort verdict right after the
+    unverified streamed text, not only in a transient error envelope a
+    dead/detached socket may never deliver.
+
+  BUG 2 -- the fabrication backstop (item 4 below) was only wired into the
+    normal zero-tool-call terminal branch, so an abort mid-fabrication
+    persisted an unqualified false claim. ``build_context_window_abort_note``
+    folds the same regex check into the abort path.
+
+  BUG 3 -- no ``max_tokens`` cap meant a clipped/looping generation could run
+    for ~22 minutes before the reactive clip guard (item 3) got a chance to
+    react (it only inspects usage AFTER the stream ends). Fixed by
+    ``openai_max_output_tokens`` (env ``GRACE2_OPENAI_MAX_TOKENS``, default
+    4096), sent as ``max_tokens`` on every request in
+    ``openai_adapter.stream_openai`` and COUPLED to ``reserve_output_tokens``
+    so the proactive budget can never drift from the real request cap.
 """
 
 from __future__ import annotations
@@ -77,11 +102,16 @@ logger = logging.getLogger("grace2_agent.context_budget")
 #: suffix resolves a model's context window (``GRACE2_OPENAI_NUM_CTX``).
 NUM_CTX_FALLBACK_DEFAULT = 16384
 
-#: Tokens reserved for the model's OWN reply. The adapter does not currently
-#: request an explicit ``max_tokens`` cap (verified: no such kwarg is sent in
-#: ``openai_adapter.stream_openai``), so this is a conservative headroom
-#: estimate, not a value read back from the request.
-RESERVE_OUTPUT_TOKENS_DEFAULT = 2048
+#: The ``max_tokens`` cap sent on every LOCAL ``chat.completions`` request
+#: (``openai_adapter.stream_openai``) -- BUG 3, post-OPEN-14 acceptance
+#: rerun: an uncapped clipped-prompt turn streamed 16k-26k tokens of looped
+#: "Computing hillshade..." narration for ~22 minutes before the reactive
+#: clip guard could react at stream end (it only inspects usage AFTER the
+#: stream finishes). Also the single source of truth for
+#: ``reserve_output_tokens()`` below -- the proactive budget must reserve
+#: exactly what the request is allowed to generate, never a different
+#: number, or the two silently drift apart.
+OPENAI_MAX_TOKENS_DEFAULT = 4096
 
 #: Extra fixed headroom below the raw arithmetic budget (tokenizer estimate
 #: error, chat-template overhead not visible to the char/4 estimator, etc).
@@ -132,10 +162,24 @@ def num_ctx_env_fallback() -> int:
     return _env_int("GRACE2_OPENAI_NUM_CTX", NUM_CTX_FALLBACK_DEFAULT, minimum=512)
 
 
+def openai_max_output_tokens() -> int:
+    """``GRACE2_OPENAI_MAX_TOKENS`` -- the ``max_tokens`` cap passed on every
+    LOCAL ``chat.completions`` request (BUG 3). Verified live against Ollama's
+    OpenAI-compat endpoint (2026-07-12, llama3.2:3b): ``max_tokens`` maps to
+    ``num_predict`` and the completion truncates at exactly that count
+    (``finish_reason="length"``, ``usage.completion_tokens == max_tokens``),
+    under both streaming and non-streaming requests.
+    """
+    return _env_int("GRACE2_OPENAI_MAX_TOKENS", OPENAI_MAX_TOKENS_DEFAULT, minimum=1)
+
+
 def reserve_output_tokens() -> int:
-    return _env_int(
-        "GRACE2_CONTEXT_RESERVE_OUTPUT_TOKENS", RESERVE_OUTPUT_TOKENS_DEFAULT, minimum=0
-    )
+    """Tokens reserved for the model's own reply -- COUPLED to
+    ``openai_max_output_tokens()`` (BUG 3 fix, single source of truth): the
+    adapter now caps generation at that many tokens on every request, so the
+    proactive budget must reserve exactly that many, never a separately
+    configured number that could drift out of sync with the real cap."""
+    return openai_max_output_tokens()
 
 
 def safety_tokens() -> int:
@@ -524,18 +568,71 @@ def compact_contents(
 
 
 # ---------------------------------------------------------------------------
-# Narration seams (cheap: extra TextDeltaEvent, no new envelope types).
+# Compaction UX (Part A) -- durable pipeline-card labels.
 # ---------------------------------------------------------------------------
+#
+# SUPERSEDES the OPEN-14 narration seam (a bare ``TextDeltaEvent`` note glued
+# onto the model's own reply -- ``PROACTIVE_COMPACTION_NOTE`` /
+# ``CLIP_RETRY_NOTE``, removed here). ``openai_adapter.stream_openai`` now
+# yields typed ``adapter.CompactionStartEvent`` / ``CompactionCompleteEvent``
+# instead; ``server.py``'s dispatch loop mints/completes a durable pipeline
+# card through ``pipeline_emitter.mint_compaction_card`` /
+# ``complete_compaction_card`` (the F10 running-tool-card treatment, animated
+# live, persisted so it survives a Case reopen) using the two labels below.
+# No new envelope type: the card rides the EXISTING ``PipelineStep`` /
+# ``ToolCardRecord`` wire shape every atomic-tool card already uses.
 
-PROACTIVE_COMPACTION_NOTE = (
-    "[Note: earlier turns in this conversation were summarized to fit this "
-    "model's context window.]\n\n"
+#: The running card's label, from the instant compaction starts until it
+#: completes (mint time only -- never shown again once renamed).
+COMPACTING_LABEL = "Compacting conversation..."
+
+
+def compaction_complete_label(before_tokens: int, after_tokens: int) -> str:
+    """Terminal card label for a finished compaction pass.
+
+    ``before_tokens`` / ``after_tokens`` are
+    ``CompactionResult.before_tokens`` / ``.after_tokens`` -- rounded to the
+    nearest thousand (a nonzero count floors at 1k so a small budget never
+    misleadingly reads "0k"). Example: ``compaction_complete_label(12800,
+    3900)`` -> ``"Conversation compacted (13k -> 4k tokens)"``.
+    """
+
+    def _k(n: int) -> str:
+        if n <= 0:
+            return "0k"
+        return f"{max(1, round(n / 1000))}k"
+
+    return f"Conversation compacted ({_k(before_tokens)} -> {_k(after_tokens)} tokens)"
+
+
+#: Appended to the persisted partial-reply text (post-OPEN-14 acceptance
+#: rerun, BUG 1) when a turn aborts on ``ContextWindowExceededError``: the
+#: streamed narration up to that point is ALREADY persisted (the reader has
+#: no other signal it was cut short), so the abort verdict must land right
+#: after it in the SAME chat row, not only in the transient error envelope
+#: (which a dead/detached socket may never deliver).
+CONTEXT_WINDOW_ABORT_NOTE = (
+    "\n\n[This reply exceeded the model's context window and was aborted - "
+    "the statements above are unverified. Start a new case or switch to a "
+    "larger-context model.]"
 )
 
-CLIP_RETRY_NOTE = (
-    "\n\n[Note: that reply did not fit this model's context window and may "
-    "be incomplete or inaccurate -- retrying with a shorter conversation...]\n\n"
-)
+
+def build_context_window_abort_note(*, fabricated_claim: bool) -> str:
+    """The text appended to a turn's persisted partial reply on a
+    ``ContextWindowExceededError`` abort (BUG 1 + BUG 2).
+
+    When ``fabricated_claim`` is True -- the aborting turn dispatched ZERO
+    tool calls AND its partial narration matches
+    ``looks_like_fabricated_action_claim`` (BUG 2: the same fabrication
+    backstop wired into the normal zero-tool-call terminal branch was being
+    skipped entirely on the abort path) -- the appended text LEADS with
+    ``FABRICATION_CAVEAT`` so the reader sees "no tools were executed" before
+    the context-window explanation, not after.
+    """
+    if fabricated_claim:
+        return f"\n\n{FABRICATION_CAVEAT}{CONTEXT_WINDOW_ABORT_NOTE}"
+    return CONTEXT_WINDOW_ABORT_NOTE
 
 
 # ---------------------------------------------------------------------------
@@ -633,10 +730,12 @@ def looks_like_fabricated_action_claim(text: str | None) -> bool:
 __all__ = [
     "CompactionResult",
     "ContextWindowExceededError",
+    "CONTEXT_WINDOW_ABORT_NOTE",
+    "COMPACTING_LABEL",
     "FABRICATION_CAVEAT",
-    "CLIP_RETRY_NOTE",
-    "PROACTIVE_COMPACTION_NOTE",
+    "build_context_window_abort_note",
     "compact_contents",
+    "compaction_complete_label",
     "compute_budget_tokens",
     "discover_num_ctx",
     "estimate_tokens",
@@ -647,6 +746,7 @@ __all__ = [
     "looks_like_fabricated_action_claim",
     "num_ctx_env_fallback",
     "num_ctx_from_suffix",
+    "openai_max_output_tokens",
     "proactive_target_ratio",
     "reactive_target_ratio",
     "reserve_output_tokens",

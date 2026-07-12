@@ -1618,6 +1618,94 @@ async def test_route_sim_terminal_marks_complete_and_failed(
 
 
 # --------------------------------------------------------------------------- #
+# 9b. Compaction card (Part A -- compaction UX)
+# --------------------------------------------------------------------------- #
+#
+# Wire-shape / lifecycle coverage against a FAKE (no-persist-hook) emitter --
+# see tests/test_compaction_card_persistence.py for the persistence-row-shape
+# + full dispatch-loop integration coverage.
+
+
+class TestCompactionCard:
+    @pytest.mark.asyncio
+    async def test_mint_compaction_card_is_a_plain_running_tool_card(
+        self, emitter: PipelineEmitter, sink: _CapturingSink
+    ) -> None:
+        """The running card is role="tool" (NEVER "compute" -- there is no
+        Batch job bound to a local compaction pass), tool_name
+        "context:compact", state running, labeled COMPACTING_LABEL."""
+        from grace2_agent.context_budget import COMPACTING_LABEL
+        from grace2_agent.pipeline_emitter import mint_compaction_card
+
+        step_id = await mint_compaction_card(emitter=emitter)
+        assert step_id is not None
+
+        step = _pipeline_frames(sink)[-1]["payload"]["steps"][-1]
+        assert step["step_id"] == step_id
+        assert step["role"] == "tool"
+        assert step["batch_job_id"] is None
+        assert step["batch_status"] is None
+        assert step["tool_name"] == "context:compact"
+        assert step["name"] == COMPACTING_LABEL
+        assert step["state"] == "running"
+        assert step["started_at"] is not None
+
+    @pytest.mark.asyncio
+    async def test_complete_compaction_card_renames_and_completes(
+        self, emitter: PipelineEmitter, sink: _CapturingSink
+    ) -> None:
+        from grace2_agent.context_budget import compaction_complete_label
+        from grace2_agent.pipeline_emitter import (
+            complete_compaction_card,
+            mint_compaction_card,
+        )
+
+        step_id = await mint_compaction_card(emitter=emitter)
+        await complete_compaction_card(
+            emitter=emitter, step_id=step_id, before_tokens=5000, after_tokens=1200
+        )
+
+        step = _pipeline_frames(sink)[-1]["payload"]["steps"][-1]
+        assert step["step_id"] == step_id
+        assert step["state"] == "complete"
+        assert step["name"] == compaction_complete_label(5000, 1200)
+        assert step["name"] == "Conversation compacted (5k -> 1k tokens)"
+        assert step["role"] == "tool"  # unchanged by the rename
+        assert step["tool_name"] == "context:compact"  # unchanged by the rename
+
+    @pytest.mark.asyncio
+    async def test_mint_compaction_card_none_emitter_is_noop(self) -> None:
+        from grace2_agent.pipeline_emitter import mint_compaction_card
+
+        assert await mint_compaction_card(emitter=None) is None
+
+    @pytest.mark.asyncio
+    async def test_complete_compaction_card_none_step_id_is_noop(
+        self, emitter: PipelineEmitter, sink: _CapturingSink
+    ) -> None:
+        """No mint (or a failed mint) -> ``step_id`` is None -> the terminal
+        call must never raise and must emit nothing."""
+        from grace2_agent.pipeline_emitter import complete_compaction_card
+
+        n_before = len(sink.frames)
+        await complete_compaction_card(
+            emitter=emitter, step_id=None, before_tokens=100, after_tokens=50
+        )
+        assert len(sink.frames) == n_before
+
+    def test_rename_step_unknown_id_is_noop(self, emitter: PipelineEmitter) -> None:
+        # Must not raise for an id the emitter never minted.
+        emitter.rename_step("does-not-exist", name="whatever")
+
+    def test_compaction_complete_label_rounds_and_floors_at_1k(self) -> None:
+        from grace2_agent.context_budget import compaction_complete_label
+
+        assert compaction_complete_label(12800, 3900) == "Conversation compacted (13k -> 4k tokens)"
+        assert compaction_complete_label(400, 100) == "Conversation compacted (1k -> 1k tokens)"
+        assert compaction_complete_label(0, 0) == "Conversation compacted (0k -> 0k tokens)"
+
+
+# --------------------------------------------------------------------------- #
 # 10. Off-loop densify (WS-30s drop-cycle fix)
 # --------------------------------------------------------------------------- #
 #

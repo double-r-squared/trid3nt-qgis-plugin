@@ -82,6 +82,7 @@ from grace2_contracts.ws import (
     ToolIoPayload,
 )
 
+from .context_budget import COMPACTING_LABEL, compaction_complete_label
 from .layer_uri_emit import emit_layer_uri
 
 __all__ = [
@@ -101,6 +102,8 @@ __all__ = [
     "current_turn_case",
     "mint_dispatch_and_sim_cards",
     "route_sim_terminal",
+    "mint_compaction_card",
+    "complete_compaction_card",
 ]
 
 
@@ -1659,6 +1662,51 @@ class PipelineEmitter:
         await self.mark_running(step_id)
         return step_id
 
+    async def add_durable_step(self, *, name: str, tool_name: str) -> str:
+        """Append a plain ``role="tool"`` step that starts RUNNING immediately
+        and is durable end-to-end: the running card is persisted at mint and
+        the terminal write UPSERTS the SAME row (running -> terminal in
+        place, no duplicate).
+
+        Generalizes ``add_compute_step``'s running-then-upsert-terminal
+        lifecycle for a server-internal action that is NOT an AWS-Batch-bound
+        solve (e.g. the context-window compaction card, Part A compaction
+        UX) — it must render as an ordinary on-box tool card, never carry the
+        compute-card's ``role="compute"`` / ``batch_job_id`` /
+        ``batch_status`` fields (there is no Batch job to bind to). Returns
+        the new ``step_id``.
+        """
+        step_id = await self.add_step(name=name, tool_name=tool_name)
+        step = self._require_step(step_id)
+        # Durable-card lifecycle: pin a STABLE persisted row id NOW so the
+        # running write and the later terminal write upsert the SAME
+        # ``chat_history`` row (mirrors ``add_compute_step``).
+        step.card_message_id = new_ulid()
+        await self.mark_running(step_id)
+        return step_id
+
+    def rename_step(self, step_id: str, *, name: str) -> None:
+        """Patch a step's display ``name`` (label) in place.
+
+        Every OTHER step type fixes its label at ``add_step`` /
+        ``add_compute_step`` mint time and never needs this — the running vs.
+        complete phrasing difference the web client shows is driven by
+        ``PipelineCard.humanizeStepName`` keying off the (unchanging)
+        ``name``, not by the server renaming anything. The compaction card
+        (Part A) is the first whose terminal label depends on data only
+        known AFTER the work completes (the actual before/after token
+        counts) — this flips it from the running "Compacting
+        conversation..." label to the terminal "Conversation compacted (Nk
+        -> Mk tokens)" summary right before ``mark_complete`` emits/persists
+        it. Synchronous (no wire emission of its own — the caller's next
+        ``mark_*`` / ``persist_*`` call carries the new name). Best-effort
+        no-op if ``step_id`` is unknown.
+        """
+        step = self._steps.get(step_id)
+        if step is None:
+            return
+        step.name = name
+
     async def update_compute_status(
         self, step_id: str, batch_status: str
     ) -> None:
@@ -2675,3 +2723,80 @@ async def route_sim_terminal(
             await emitter.persist_terminal_compute_card(sim_step_id)
     except Exception as exc:  # noqa: BLE001 — observability, never break the solve
         logger.warning("route_sim_terminal failed (non-fatal): %s", exc)
+
+
+# --------------------------------------------------------------------------- #
+# Compaction card (Part A -- compaction UX)
+# --------------------------------------------------------------------------- #
+#
+# server.py's dispatch loop calls these on ``adapter.CompactionStartEvent`` /
+# ``CompactionCompleteEvent`` (yielded by ``openai_adapter.stream_openai``
+# whenever ``context_budget.compact_contents`` actually changes something).
+# Mirrors ``mint_dispatch_and_sim_cards`` / ``route_sim_terminal``'s
+# running-then-upsert-terminal shape, collapsed to a SINGLE card: compaction
+# is one atomic local pass, not an off-box submit+solve pair, so it gets one
+# ``role="tool"`` card (never ``"compute"`` — there is no Batch job bound to
+# a local compaction) that starts running and is later renamed + completed.
+# No new envelope type — this rides the exact same ``PipelineStep`` /
+# ``ToolCardRecord`` wire shape every atomic-tool card already uses.
+
+
+async def mint_compaction_card(*, emitter: "PipelineEmitter | None") -> str | None:
+    """Mint the durable running "Compacting conversation..." card.
+
+    Best-effort: ``emitter is None`` (direct/verify/CI call with no
+    ``_ensure_emitter`` binding) or any emit/persist failure returns ``None``
+    and compaction proceeds unchanged — the card is an observability
+    affordance, never a correctness gate for the compaction it describes.
+    Returns the new step's id so the caller can pass it to
+    ``complete_compaction_card`` once the pass finishes.
+    """
+    if emitter is None:
+        return None
+    try:
+        step_id = await emitter.add_durable_step(
+            name=COMPACTING_LABEL, tool_name="context:compact"
+        )
+        # Durability (NATE "nothing about the chat is transient"): persist
+        # the running card NOW, mirroring ``persist_running_compute_card`` —
+        # a reconnect/reopen mid-pass replays the spinning card instead of
+        # dropping it. ``complete_compaction_card`` upserts the SAME row.
+        await emitter.persist_running_compute_card(step_id)
+        return step_id
+    except Exception as exc:  # noqa: BLE001 — observability, never break the turn
+        logger.warning("mint_compaction_card failed (non-fatal): %s", exc)
+        return None
+
+
+async def complete_compaction_card(
+    *,
+    emitter: "PipelineEmitter | None",
+    step_id: str | None,
+    before_tokens: int,
+    after_tokens: int,
+) -> None:
+    """Drive the compaction card minted by ``mint_compaction_card`` to its
+    terminal state.
+
+    Renames the step's label to the "Conversation compacted (Nk -> Mk
+    tokens)" summary (``context_budget.compaction_complete_label``) BEFORE
+    ``mark_complete`` so both the live terminal emission and the persisted
+    upsert carry the final text — never the stale "Compacting
+    conversation..." running label. No-op when the emitter or ``step_id`` is
+    absent (mint failed, or was never called — e.g. no emitter bound on a
+    direct/verify/CI call). Best-effort: an emit/persist failure is
+    swallowed, same discipline as ``route_sim_terminal``.
+    """
+    if emitter is None or step_id is None:
+        return
+    try:
+        emitter.rename_step(
+            step_id, name=compaction_complete_label(before_tokens, after_tokens)
+        )
+        await emitter.mark_complete(step_id)
+        # Durability: upserts the SAME row ``mint_compaction_card`` persisted
+        # running (mirrors ``persist_terminal_compute_card``) so the card
+        # survives a Case reopen with its final renamed label + state.
+        await emitter.persist_terminal_compute_card(step_id)
+    except Exception as exc:  # noqa: BLE001 — observability, never break the turn
+        logger.warning("complete_compaction_card failed (non-fatal): %s", exc)
