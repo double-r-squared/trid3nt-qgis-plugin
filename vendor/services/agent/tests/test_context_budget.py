@@ -38,6 +38,7 @@ from grace2_agent.context_budget import (
     build_context_window_abort_note,
     compact_contents,
     compute_budget_tokens,
+    contents_normalize_char_cap,
     discover_num_ctx,
     estimate_tokens,
     estimate_tokens_for_contents,
@@ -45,6 +46,8 @@ from grace2_agent.context_budget import (
     estimate_tokens_for_tools,
     is_prompt_clipped,
     looks_like_fabricated_action_claim,
+    narration_row_harden_chars,
+    normalize_contents_row_sizes,
     num_ctx_env_fallback,
     num_ctx_from_suffix,
     openai_max_output_tokens,
@@ -82,6 +85,24 @@ def case_state_note_content(text: str = "These layers are ALREADY produced...") 
     """A stand-in for the row server.py appends as the case-state note --
     just an ordinary role=user text Content structurally."""
     return genai_types.Content(role="user", parts=[genai_types.Part(text=text)])
+
+
+def mixed_narration_and_call_content(
+    text: str, name: str, args: dict[str, Any], call_id: str = "c1"
+) -> genai_types.Content:
+    """A model turn that narrates BEFORE calling a tool -- ONE Content row
+    carrying both a ``text`` Part and a ``function_call`` Part together (the
+    real shape ``adapter.build_contents_from_history``'s ``parts_blob``
+    full-fidelity decode can reconstruct, per Gemini's own multi-Part
+    candidate shape). ``_is_droppable_row`` correctly refuses to drop this
+    row (it has a function_call Part); the pre-fix hardening step only
+    touched ``function_response`` Parts, so the narration text rode through
+    every step untouched -- the STILL-OVER-AFTER-STEP-A BUG (module
+    docstring)."""
+    fc = genai_types.FunctionCall(name=name, args=args, id=call_id)
+    return genai_types.Content(
+        role="model", parts=[genai_types.Part(text=text), genai_types.Part(function_call=fc)]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +306,113 @@ class TestCompactionLadder:
         assert result.contents == contents
         assert result.dropped == 0
         assert result.folded is False
+
+
+# ---------------------------------------------------------------------------
+# STILL-OVER-AFTER-STEP-A BUG (module docstring): live-reproduced shape --
+# ``dropped=7 hardened=0 folded=False`` while still ~6k tokens over budget.
+# ---------------------------------------------------------------------------
+
+
+class TestStillOverAfterStepABug:
+    def test_real_shape_giant_mixed_narration_rows_gets_under_target(self):
+        """Real-shape repro: several 100KB+ mixed narration+function_call
+        rows (a model turn that narrates before calling a tool -- ONE
+        Content row, per adapter.build_contents_from_history's parts_blob
+        full-fidelity decode), a case-state note, a current user message.
+        None of the giant rows are droppable (_is_droppable_row) and the old
+        harden step only touched function_response Parts -- pre-fix this
+        left the ladder stuck ~6k tokens over target with
+        dropped>0 hardened=0 folded=False. Post-fix the ladder must get
+        under target using the narration-text-cap + fold levers."""
+        rows = [
+            mixed_narration_and_call_content(
+                "y" * 120_000, f"fetch_layer_{i}", {"i": i}, call_id=f"c{i}"
+            )
+            for i in range(7)
+        ]
+        tail = [case_state_note_content(), user_content("what is the peak depth now?")]
+        contents = rows + tail
+        budget = estimate_tokens_for_contents(tail) + 2000
+        result = compact_contents(contents, budget_tokens=budget, target_ratio=0.75)
+        target = int(budget * 0.75)
+        assert result.after_tokens <= target
+        assert result.dropped == 0  # every row carries a function_call Part
+        assert result.hardened >= 1  # the narration-text-cap pass fired
+        # Protected tail always survives, untouched (small -- no cap needed).
+        assert result.contents[-2:] == tail
+
+    def test_giant_single_row_is_capped_at_contents_build_time(self):
+        """SECONDARY fix: a single history row must never carry 100KB+ into
+        a future turn's contents, even on a turn that ends up UNDER budget
+        overall (the defensive normalize pass runs unconditionally, before
+        the budget math)."""
+        giant = model_content("z" * 200_000)
+        tail = [case_state_note_content(), user_content("current question")]
+        contents = [giant] + tail
+        # Budget generous enough that, post-normalize, the turn is under
+        # target -- the no-op path -- but pre-fix the giant row would have
+        # survived verbatim regardless.
+        cap = contents_normalize_char_cap()
+        budget = (cap // 4) + estimate_tokens_for_contents(tail) + 500
+        result = compact_contents(contents, budget_tokens=budget, target_ratio=1.0)
+        capped_row = result.contents[0]
+        assert len(capped_row.parts[0].text) <= cap + len(" ...[truncated]")
+        assert capped_row.parts[0].text != giant.parts[0].text
+        assert result.contents[-2:] == tail
+
+    def test_still_over_after_a_proceeds_to_b_then_c(self):
+        """Every non-protected row carries a function_call Part (nothing for
+        step (a) to drop -- dropped stays 0), so the ladder MUST fall
+        through to (b) narration-cap and then (c) fold to get under a very
+        tight target."""
+        rows = [
+            mixed_narration_and_call_content(
+                "n" * 50_000, f"fetch_layer_{i}", {"i": i}, call_id=f"c{i}"
+            )
+            for i in range(10)
+        ]
+        tail = [case_state_note_content(), user_content("current question")]
+        contents = rows + tail
+        budget = estimate_tokens_for_contents(tail) + 50
+        result = compact_contents(contents, budget_tokens=budget, target_ratio=1.0)
+        assert result.dropped == 0
+        assert result.hardened >= 1
+        assert result.folded is True
+        assert result.contents[-2:] == tail
+
+    def test_protected_note_too_big_logs_warning_and_truncates(self, caplog):
+        """When the excess lives ENTIRELY in the protected tail (nothing
+        left in ``working`` for (a)/(b)/(c) to act on), the ladder must not
+        silently no-op: it truncates the oversized protected narration row
+        and logs a WARNING naming which block was too big."""
+        huge_note = case_state_note_content("s" * 50_000)
+        current_question = user_content("small question")
+        contents = [huge_note, current_question]
+        with caplog.at_level("WARNING", logger="grace2_agent.context_budget"):
+            result = compact_contents(contents, budget_tokens=200, target_ratio=1.0)
+        assert any(
+            "protected content alone exceeds target" in r.message
+            and "case-state note" in r.message
+            for r in caplog.records
+        )
+        # The oversized note was truncated in place...
+        assert result.contents[-2].parts[0].text != huge_note.parts[0].text
+        assert len(result.contents[-2].parts[0].text) <= narration_row_harden_chars() + len(
+            " ...[truncated]"
+        )
+        # ...but the small terminal user message is untouched, same object.
+        assert result.contents[-1] is current_question
+
+    def test_normalize_contents_row_sizes_caps_every_row_independent_of_compact_contents(self):
+        """Unit-level coverage of the normalize helper on its own (not just
+        as exercised through compact_contents)."""
+        small = user_content("hi")
+        giant = model_content("q" * 50_000)
+        out = normalize_contents_row_sizes([small, giant], max_chars=1000)
+        assert out[0] is small  # untouched rows keep object identity
+        assert out[1] is not giant
+        assert len(out[1].parts[0].text) <= 1000 + len(" ...[truncated]")
 
 
 # ---------------------------------------------------------------------------

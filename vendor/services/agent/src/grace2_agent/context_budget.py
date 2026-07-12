@@ -54,6 +54,39 @@ network access; ``discover_num_ctx`` is the only piece that makes a network
 call, and it degrades gracefully (best-effort) through its fallback chain on
 any fault.
 
+STILL-OVER-AFTER-STEP-A BUG (2x reproduced, trid3nt-local/logs/agent.log,
+session 01KX8GCZKNBAFEJ9SY1C8VNVND-adjacent runs): ``proactive compaction
+model=qwen3:8b-16k num_ctx=16384 budget=11264 before_est=64485
+after_est=17066 dropped=7 hardened=0 folded=False`` -- still ~6k tokens over
+budget, yet steps (b) (harden) and (c) (fold) never fired, and the turn then
+clipped (``prompt_tokens=16384``) and aborted. Root cause: steps (b) and (c)
+were BOTH gated on ``if working and ...`` -- once step (a) exhausted every
+row it is allowed to drop (either because that emptied ``working``
+completely, or because the only rows left carry a ``function_call`` /
+``function_response`` Part alongside a giant narration ``text`` Part --
+``adapter.build_contents_from_history``'s ``parts_blob`` full-fidelity path
+can legitimately reconstruct a model turn as ONE ``Content`` with both a
+text preamble and a tool call, and ``_is_droppable_row`` correctly refuses
+to drop that row), the excess tokens end up living entirely in rows step
+(b)'s old function-response-only hardening never touches, or in the
+PROTECTED tail (the case-state note / terminal user message,
+``_protected_tail_len``). An empty ``working`` list is falsy in Python, so
+both ``if working`` checks silently no-op instead of running -- the ladder
+returned still-over-budget with no further mitigation and no signal
+anything was wrong. Fixed by: (1) step (b) now also caps any oversized
+``text`` Part directly (not just ``function_response`` Parts), so a mixed
+narration+function_call row is no longer immune; (2) a new step (d) that,
+only when the ladder is still over target with nothing left in ``working``,
+applies that same text cap to the PROTECTED tail (the one case a narration
+row's TEXT LENGTH is not "structurally protected" the way its
+existence/position is -- see ``compact_contents``) and logs a WARNING
+naming which protected block was oversized; (3) a defensive per-row
+``normalize_contents_row_sizes`` pass, run unconditionally at the top of
+``compact_contents``, caps every row's text to
+``CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT`` so a single runaway row (the
+177KB-message shape from the live log) never survives this function even on
+a turn that happens to sit under budget overall.
+
 POST-OPEN-14 ACCEPTANCE RERUN FOLLOW-UPS (3 bugs, sessions
 01KXAGEJAAPWDH0YSEGYQK5QVG / 01KXAJ1WKWDC0XS7VW4RY6CVF6):
 
@@ -130,6 +163,25 @@ REACTIVE_TARGET_RATIO_DEFAULT = 0.60
 #: down to roughly this many chars by the hardening step.
 TOOL_RESULT_HARDEN_CHARS_DEFAULT = 200
 
+#: Step (b)/(d) narration cap: any ``text`` Part longer than this is
+#: truncated (ellipsis-marked) once the ladder is still over target after
+#: dropping (step a) and tool-result hardening -- covers (b) a row that
+#: mixes narration text with a ``function_call``/``function_response`` Part
+#: (never droppable, per ``_is_droppable_row``, and never touched by the old
+#: function-response-only harden) and (d) the PROTECTED tail as a last
+#: resort. Deliberately much smaller than ``CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT``
+#: -- this only fires once the turn is already proven over budget.
+NARRATION_ROW_HARDEN_CHARS_DEFAULT = 2000
+
+#: Defensive per-row TEXT cap applied unconditionally, to every row, at the
+#: very top of ``compact_contents`` (the ladder's "normalization pass") --
+#: guards against a single history row carrying 100KB+ into a future turn's
+#: prompt even when the OVERALL total happens to sit under budget this turn
+#: (the live-log failure mode: 177KB single-row agent narration messages).
+#: NOT a persistence-side change -- persistence is untouched; this only
+#: shapes what ``compact_contents`` hands back for the CURRENT turn.
+CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT = 8000
+
 #: The token estimator: ``ceil(total_chars / CHARS_PER_TOKEN)``.
 CHARS_PER_TOKEN = 4
 
@@ -199,6 +251,22 @@ def tool_result_harden_chars() -> int:
         "GRACE2_CONTEXT_TOOL_RESULT_HARDEN_CHARS",
         TOOL_RESULT_HARDEN_CHARS_DEFAULT,
         minimum=20,
+    )
+
+
+def narration_row_harden_chars() -> int:
+    return _env_int(
+        "GRACE2_CONTEXT_NARRATION_HARDEN_CHARS",
+        NARRATION_ROW_HARDEN_CHARS_DEFAULT,
+        minimum=100,
+    )
+
+
+def contents_normalize_char_cap() -> int:
+    return _env_int(
+        "GRACE2_CONTEXT_NORMALIZE_CHAR_CAP",
+        CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT,
+        minimum=500,
     )
 
 
@@ -456,6 +524,63 @@ def _harden_content(
     return genai_types.Content(role=content.role, parts=new_parts), True
 
 
+def _cap_text_parts(
+    content: genai_types.Content, max_chars: int
+) -> tuple[genai_types.Content, bool]:
+    """Truncate any oversized ``text`` Part in ``content`` to ``max_chars``
+    (ellipsis-marked). ``function_call`` / ``function_response`` Parts are
+    left untouched -- those have their own dedicated hardening
+    (``_harden_function_response_part``). This is what actually shrinks a
+    giant AGENT NARRATION row, whether it lives alone or alongside a
+    ``function_call`` Part in the same row (the mixed-row shape the old
+    function-response-only harden could never reach -- see module
+    docstring, STILL-OVER-AFTER-STEP-A BUG)."""
+    parts = list(getattr(content, "parts", None) or [])
+    changed = False
+    new_parts: list[genai_types.Part] = []
+    for part in parts:
+        text = getattr(part, "text", None)
+        if text is not None and len(text) > max_chars:
+            new_parts.append(genai_types.Part(text=text[:max_chars] + " ...[truncated]"))
+            changed = True
+        else:
+            new_parts.append(part)
+    if not changed:
+        return content, False
+    return genai_types.Content(role=content.role, parts=new_parts), True
+
+
+def normalize_contents_row_sizes(
+    contents: list[genai_types.Content], max_chars: int | None = None
+) -> list[genai_types.Content]:
+    """Defensive per-row TEXT cap (module docstring, SECONDARY fix) -- run
+    unconditionally at the top of ``compact_contents`` regardless of whether
+    the turn is over budget, so a single runaway narration row (the
+    177KB-message failure mode) never survives this function even on a turn
+    whose OVERALL total happens to sit under budget. Rows that need no
+    change keep their original object identity (callers -- notably the
+    existing test suite -- rely on protected-tail rows being untouched
+    verbatim when nothing was actually oversized)."""
+    if max_chars is None:
+        max_chars = contents_normalize_char_cap()
+    out: list[genai_types.Content] = []
+    for c in contents:
+        capped, changed = _cap_text_parts(c, max_chars)
+        out.append(capped if changed else c)
+    return out
+
+
+def _protected_row_labels(n: int) -> list[str]:
+    """Human-readable names for the protected tail, in order, for the step
+    (d) WARNING log (``_protected_tail_len`` contract: last <=2 rows are
+    [case-state note, terminal user message])."""
+    if n == 2:
+        return ["case-state note (protected)", "terminal user message (protected)"]
+    if n == 1:
+        return ["terminal user message (protected)"]
+    return [f"protected row {i}" for i in range(n)]
+
+
 def _digest_line_for_content(content: genai_types.Content) -> str | None:
     role = getattr(content, "role", "user") or "user"
     for part in getattr(content, "parts", None) or []:
@@ -489,23 +614,47 @@ def compact_contents(
     budget_tokens: int,
     target_ratio: float,
     harden_chars: int | None = None,
+    narration_chars: int | None = None,
 ) -> CompactionResult:
-    """Run the 3-step compaction ladder against ``contents`` until the
-    estimated token count is at/under ``budget_tokens * target_ratio``
-    (HYSTERESIS -- see module docstring). No-ops (returns ``changed=False``)
-    when already under target.
+    """Run the compaction ladder against ``contents`` until the estimated
+    token count is at/under ``budget_tokens * target_ratio`` (HYSTERESIS --
+    see module docstring). No-ops (returns ``changed=False``) when already
+    under target.
 
     Ladder, each step checked before the next fires:
-      (a) drop the OLDEST unprotected row, one at a time;
-      (b) harden long tool-result rows, oldest first;
-      (c) fold ALL remaining unprotected rows into one digest row.
+      (a) drop the OLDEST unprotected DROPPABLE (plain-narration, no
+          function_call/function_response Part) row, one at a time;
+      (b) harden long tool-result rows, oldest first, THEN cap any
+          remaining oversized narration ``text`` Part directly -- covers a
+          row that mixes narration text with a function_call/function_response
+          Part, which (a) correctly refuses to drop and the old
+          function-response-only harden could never shrink (STILL-OVER-
+          AFTER-STEP-A BUG, module docstring);
+      (c) fold ALL remaining unprotected rows into one digest row;
+      (d) ONLY when still over target with nothing left in ``working`` --
+          i.e. the excess lives entirely in the PROTECTED tail -- cap any
+          oversized narration text there too and log a WARNING naming which
+          protected block was too big. This is the ONLY circumstance under
+          which a protected row is ever mutated: its POSITION/EXISTENCE stays
+          structurally protected (never dropped, never folded away), but a
+          narration row's TEXT LENGTH is not exempt from this defensive cap.
 
-    The terminal user message and (when present) the case-state note are
-    NEVER touched by any step (``_protected_tail_len``).
+    Guarantee: after this returns, either ``after_tokens <= target``, or the
+    excess is structurally irreducible (protected content alone, even after
+    step (d)'s cap, still exceeds target) -- in which case a WARNING is
+    logged naming the shortfall rather than failing silently.
     """
     if harden_chars is None:
         harden_chars = tool_result_harden_chars()
+    if narration_chars is None:
+        narration_chars = narration_row_harden_chars()
     target = max(int(budget_tokens * target_ratio), 1)
+
+    # Defensive normalization pass (SECONDARY fix, module docstring): cap
+    # every row's text BEFORE any budget math, so a single runaway row never
+    # survives this function even on a turn that ends up under budget
+    # overall.
+    contents = normalize_contents_row_sizes(contents)
 
     protect_n = _protected_tail_len(contents)
     protected = list(contents[len(contents) - protect_n :]) if protect_n else []
@@ -549,11 +698,64 @@ def compact_contents(
                 working[i] = new_content
                 hardened += 1
 
+    # (b, continued) cap any remaining oversized narration text directly --
+    # the BUG FIX: a row step (a) could not drop (it carries a
+    # function_call/function_response Part alongside its text) and step
+    # (b)'s function-response-only harden could not shrink (its bulk is in a
+    # ``text`` Part, not the response) previously rode through untouched.
+    if working and _current_tokens() > target:
+        for i in range(len(working)):
+            if _current_tokens() <= target:
+                break
+            new_content, changed = _cap_text_parts(working[i], narration_chars)
+            if changed:
+                working[i] = new_content
+                hardened += 1
+
     # (c) fold everything remaining into one extractive digest row.
     folded = False
     if working and _current_tokens() > target:
         working = [_build_digest_row(working)]
         folded = True
+
+    # (d) BUG FIX: previously, whenever (a) fully drained ``working`` (or it
+    # started empty) while the PROTECTED tail alone still exceeded target,
+    # both (b) and (c) silently no-op'd on ``if working and ...`` (an empty
+    # list is falsy) -- the 2x-reproduced live failure (module docstring,
+    # STILL-OVER-AFTER-STEP-A BUG). A narration row is never *structurally*
+    # protected from a defensive text cap the way it is from DROP/FOLD, so:
+    # cap any oversized text Part remaining in ``protected`` and log loudly
+    # naming which block was too big.
+    if _current_tokens() > target:
+        labels = _protected_row_labels(len(protected))
+        any_capped = False
+        for i in range(len(protected)):
+            row_tokens_before = estimate_tokens(_content_text_repr(protected[i]))
+            new_content, changed = _cap_text_parts(protected[i], narration_chars)
+            if changed:
+                any_capped = True
+                label = labels[i] if i < len(labels) else f"protected row {i}"
+                logger.warning(
+                    "context-budget: protected content alone exceeds target "
+                    "(target=%d tokens) -- %s carried ~%d tokens; truncating "
+                    "its narration text to %d chars (the ONLY case "
+                    "compact_contents ever mutates a protected row)",
+                    target, label, row_tokens_before, narration_chars,
+                )
+                protected[i] = new_content
+                hardened += 1
+            if _current_tokens() <= target:
+                break
+        if _current_tokens() > target:
+            logger.warning(
+                "context-budget: compaction still %d tokens over target "
+                "(target=%d) after the full ladder%s -- remaining content is "
+                "structurally irreducible (protected function_call/"
+                "function_response Parts, or the cap still leaves it over); "
+                "the turn will proceed over budget",
+                _current_tokens() - target, target,
+                " (protected-row text was truncated)" if any_capped else "",
+            )
 
     after_tokens = _current_tokens()
     return CompactionResult(
@@ -737,6 +939,7 @@ __all__ = [
     "compact_contents",
     "compaction_complete_label",
     "compute_budget_tokens",
+    "contents_normalize_char_cap",
     "discover_num_ctx",
     "estimate_tokens",
     "estimate_tokens_for_contents",
@@ -744,6 +947,8 @@ __all__ = [
     "estimate_tokens_for_tools",
     "is_prompt_clipped",
     "looks_like_fabricated_action_claim",
+    "narration_row_harden_chars",
+    "normalize_contents_row_sizes",
     "num_ctx_env_fallback",
     "num_ctx_from_suffix",
     "openai_max_output_tokens",
