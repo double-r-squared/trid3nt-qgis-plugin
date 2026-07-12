@@ -79,6 +79,20 @@ from .adapter import (
     ThinkingDeltaEvent,
     UsageMetadataEvent,
 )
+from .context_budget import (
+    CLIP_RETRY_NOTE,
+    ContextWindowExceededError,
+    PROACTIVE_COMPACTION_NOTE,
+    compact_contents,
+    compute_budget_tokens,
+    discover_num_ctx,
+    estimate_tokens,
+    estimate_tokens_for_messages,
+    estimate_tokens_for_tools,
+    is_prompt_clipped,
+    proactive_target_ratio,
+    reactive_target_ratio,
+)
 
 logger = logging.getLogger("grace2_agent.openai_adapter")
 
@@ -393,53 +407,14 @@ def contents_to_openai_messages(
 # ---------------------------------------------------------------------------
 
 
-async def stream_openai(
-    contents: list[genai_types.Content],
-    tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
-    system_prompt: str | None = None,
-    model: str | None = None,
-    show_thinking: bool = False,
+async def _stream_one_round(
+    client: Any, kwargs: dict[str, Any]
 ) -> AsyncIterator[StreamEvent]:
-    """Stream one OpenAI-compatible turn, yielding the GRACE ``StreamEvent`` union.
-
-    Mirrors ``bedrock_adapter.stream_bedrock``: one call == one model round.
-    The dispatch loop in ``server.py`` appends function_call + function_response
-    Contents and re-calls until no tool calls remain.
-
-    The ``openai`` package is imported inside this function so the rest of the
-    agent starts cleanly on environments where the package is not installed
-    (the dep is dormant unless MODEL_PROVIDER=openai is selected).
+    """Stream ONE ``chat.completions.create`` round, yielding the GRACE
+    ``StreamEvent`` union. Split out of ``stream_openai`` (OPEN-14) so the
+    caller can wrap it in the clip-guard retry loop without duplicating the
+    chunk-accumulation logic.
     """
-    try:
-        from openai import AsyncOpenAI
-    except ImportError as exc:
-        raise RuntimeError(
-            "MODEL_PROVIDER=openai requires the 'openai' package. "
-            "Install it with: pip install 'openai>=1.40'"
-        ) from exc
-
-    resolved_model = openai_model(model)
-    base_url = openai_base_url()
-    api_key = openai_api_key()
-
-    client = AsyncOpenAI(base_url=base_url, api_key=api_key)
-
-    messages = contents_to_openai_messages(
-        contents, system_prompt=system_prompt, show_thinking=show_thinking
-    )
-    tools = tool_declarations_to_openai_tools(tool_declarations)
-
-    kwargs: dict[str, Any] = {
-        "model": resolved_model,
-        "messages": messages,
-        "stream": True,
-        "stream_options": {"include_usage": True},
-        "temperature": 0.7,
-    }
-    if tools:
-        kwargs["tools"] = tools
-        kwargs["tool_choice"] = "auto"
-
     # Per-index accumulator for fragmented tool-call argument deltas.
     # Structure: {index: {"id": str, "name": str, "args_buf": str}}
     tool_call_accumulators: dict[int, dict[str, Any]] = {}
@@ -528,6 +503,138 @@ async def stream_openai(
             call_id=acc["id"] or None,
             args=args if isinstance(args, dict) else {},
         )
+
+
+async def stream_openai(
+    contents: list[genai_types.Content],
+    tool_declarations: list[genai_types.FunctionDeclaration] | None = None,
+    system_prompt: str | None = None,
+    model: str | None = None,
+    show_thinking: bool = False,
+) -> AsyncIterator[StreamEvent]:
+    """Stream one OpenAI-compatible turn, yielding the GRACE ``StreamEvent`` union.
+
+    Mirrors ``bedrock_adapter.stream_bedrock``: one call == one model round.
+    The dispatch loop in ``server.py`` appends function_call + function_response
+    Contents and re-calls until no tool calls remain.
+
+    The ``openai`` package is imported inside this function so the rest of the
+    agent starts cleanly on environments where the package is not installed
+    (the dep is dormant unless MODEL_PROVIDER=openai is selected).
+
+    OPEN-14 (context-budget compaction + overflow guard, LOCAL path only):
+    before the request is sent, ``contents`` is proactively compacted if the
+    estimated prompt would exceed the model's discovered ``num_ctx`` budget
+    (see ``context_budget.compact_contents``). After the round completes, the
+    ACTUAL reported ``usage.prompt_tokens`` is checked against ``num_ctx``; a
+    value ``>= num_ctx`` proves Ollama silently clipped the prompt (the
+    tell-tale shape of the 2x-reproduced incident this closes -- the model
+    loses its tool contract and narrates a fabricated success). One harder
+    recompaction + retry is attempted; a second clip raises
+    ``ContextWindowExceededError`` (caught by server.py and surfaced as an
+    honest typed envelope instead of a fabricated or generic failure).
+    """
+    try:
+        from openai import AsyncOpenAI
+    except ImportError as exc:
+        raise RuntimeError(
+            "MODEL_PROVIDER=openai requires the 'openai' package. "
+            "Install it with: pip install 'openai>=1.40'"
+        ) from exc
+
+    resolved_model = openai_model(model)
+    base_url = openai_base_url()
+    api_key = openai_api_key()
+
+    client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+
+    num_ctx = await discover_num_ctx(base_url, resolved_model)
+    budget = compute_budget_tokens(num_ctx)
+
+    tools = tool_declarations_to_openai_tools(tool_declarations)
+    tool_tokens = estimate_tokens_for_tools(tools)
+    # Budget available to the CONTENT rows (the part the ladder can shrink) --
+    # tool schemas and the system prompt are fixed overhead per turn.
+    sys_tokens = estimate_tokens(system_prompt) if system_prompt else 0
+    content_budget = max(budget - tool_tokens - sys_tokens, 256)
+
+    working_contents = list(contents)
+    messages = contents_to_openai_messages(
+        working_contents, system_prompt=system_prompt, show_thinking=show_thinking
+    )
+
+    # PROACTIVE BUDGET CHECK: estimate over the ACTUAL wire messages + tool
+    # schemas (the closest available proxy to what Ollama really receives).
+    est_tokens = estimate_tokens_for_messages(messages) + tool_tokens
+    if est_tokens > budget:
+        result = compact_contents(
+            working_contents, budget_tokens=content_budget, target_ratio=proactive_target_ratio()
+        )
+        if result.changed:
+            logger.info(
+                "context-budget: proactive compaction model=%s num_ctx=%d budget=%d "
+                "before_est=%d after_est=%d dropped=%d hardened=%d folded=%s",
+                resolved_model,
+                num_ctx,
+                budget,
+                est_tokens,
+                result.after_tokens + tool_tokens + sys_tokens,
+                result.dropped,
+                result.hardened,
+                result.folded,
+            )
+            working_contents = result.contents
+            messages = contents_to_openai_messages(
+                working_contents, system_prompt=system_prompt, show_thinking=show_thinking
+            )
+            yield TextDeltaEvent(delta=PROACTIVE_COMPACTION_NOTE)
+
+    attempt = 0
+    while True:
+        attempt += 1
+        kwargs: dict[str, Any] = {
+            "model": resolved_model,
+            "messages": messages,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "temperature": 0.7,
+        }
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+
+        round_usage: UsageMetadataEvent | None = None
+        async for event in _stream_one_round(client, kwargs):
+            if isinstance(event, UsageMetadataEvent):
+                round_usage = event
+            yield event
+
+        prompt_tokens = round_usage.prompt_token_count if round_usage is not None else None
+        if not is_prompt_clipped(prompt_tokens, num_ctx):
+            return
+
+        # REACTIVE CLIP GUARD: the send WAS clipped -- the round we just
+        # streamed is unreliable (this is exactly how the incident's
+        # fabricated-success narration happened: zero tool calls, confident
+        # prose, prompt clipped to num_ctx). Recompact HARDER and retry once.
+        logger.info(
+            "context-budget: clip detected model=%s attempt=%d prompt_tokens=%s num_ctx=%d",
+            resolved_model,
+            attempt,
+            prompt_tokens,
+            num_ctx,
+        )
+        if attempt >= 2:
+            raise ContextWindowExceededError(num_ctx)
+
+        result = compact_contents(
+            working_contents, budget_tokens=content_budget, target_ratio=reactive_target_ratio()
+        )
+        working_contents = result.contents
+        messages = contents_to_openai_messages(
+            working_contents, system_prompt=system_prompt, show_thinking=show_thinking
+        )
+        yield TextDeltaEvent(delta=CLIP_RETRY_NOTE)
 
 
 __all__ = [

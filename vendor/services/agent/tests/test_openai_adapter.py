@@ -5,6 +5,11 @@ Tests cover:
      including tool history round-trip (function_call + function_response)
   2. tool_declarations_to_openai_tools: FunctionDeclaration[] -> tools[] sanitisation
   3. stream_openai: streaming accumulator on synthetic chunk sequences (no network)
+  4. OPEN-14: stream_openai's context-budget wiring -- proactive compaction
+     before the request, and the reactive clip-guard retry-then-typed-error
+     path (num_ctx discovery is monkeypatched throughout, no live Ollama
+     required; see tests/test_context_budget.py for the discovery/ladder/
+     regex unit tests in isolation)
 """
 from __future__ import annotations
 
@@ -17,12 +22,18 @@ from google.genai import types as genai_types
 
 from grace2_agent.openai_adapter import (
     contents_to_openai_messages,
+    stream_openai,
     tool_declarations_to_openai_tools,
 )
 from grace2_agent.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     UsageMetadataEvent,
+)
+from grace2_agent.context_budget import (
+    CLIP_RETRY_NOTE,
+    ContextWindowExceededError,
+    PROACTIVE_COMPACTION_NOTE,
 )
 
 
@@ -485,3 +496,209 @@ class TestOpenaiModelPrecedence:
         monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
         with pytest.raises(RuntimeError):
             openai_model("us.amazon.nova-pro-v1:0")
+
+
+# ---------------------------------------------------------------------------
+# 5. OPEN-14: context-budget wiring inside stream_openai (proactive
+#    compaction + the reactive clip-guard retry-then-typed-error path).
+#    ``discover_num_ctx`` is monkeypatched everywhere here -- no live Ollama.
+# ---------------------------------------------------------------------------
+
+
+def _text_chunk(text: str) -> MagicMock:
+    chunk = MagicMock()
+    chunk.choices = [MagicMock()]
+    chunk.choices[0].delta.content = text
+    chunk.choices[0].delta.tool_calls = None
+    chunk.choices[0].finish_reason = None
+    chunk.usage = None
+    return chunk
+
+
+def _usage_chunk(prompt: int, completion: int = 10, total: int | None = None) -> MagicMock:
+    chunk = MagicMock()
+    chunk.choices = []
+    usage = MagicMock()
+    usage.prompt_tokens = prompt
+    usage.completion_tokens = completion
+    usage.total_tokens = total if total is not None else prompt + completion
+    chunk.usage = usage
+    return chunk
+
+
+def _final_empty_chunk() -> MagicMock:
+    chunk = MagicMock()
+    chunk.choices = [MagicMock()]
+    chunk.choices[0].delta.content = None
+    chunk.choices[0].delta.tool_calls = None
+    chunk.choices[0].finish_reason = "stop"
+    chunk.usage = None
+    return chunk
+
+
+def _make_stream(chunks: list) -> MagicMock:
+    async def _aiter():
+        for c in chunks:
+            yield c
+
+    stream = MagicMock()
+    stream.__aenter__ = AsyncMock(return_value=_aiter())
+    stream.__aexit__ = AsyncMock(return_value=False)
+    return stream
+
+
+class TestContextBudgetWiring:
+    def _env(self, monkeypatch):
+        monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "http://localhost:11434/v1")
+        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "test-model")
+        monkeypatch.setenv("GRACE2_OPENAI_API_KEY", "not-needed")
+
+    def _long_history(self, n: int = 60) -> list[genai_types.Content]:
+        contents = []
+        for i in range(n):
+            contents.append(
+                genai_types.Content(
+                    role="user" if i % 2 == 0 else "model",
+                    parts=[genai_types.Part(text=f"turn {i}: " + "x" * 200)],
+                )
+            )
+        contents.append(user_content("what is the status now?"))
+        return contents
+
+    @pytest.mark.asyncio
+    async def test_proactive_compaction_shrinks_the_sent_prompt(self, monkeypatch):
+        """A huge history over a SMALL discovered num_ctx triggers proactive
+        compaction: a note is emitted first, and the request actually SENT is
+        smaller than the raw uncompacted history."""
+        self._env(monkeypatch)
+        captured: dict[str, Any] = {}
+
+        async def _fake_discover(base_url, model_name):
+            return 600  # tiny window -- the 60-row history blows this budget
+
+        async def _capture_create(**kwargs):
+            captured.update(kwargs)
+            return _make_stream([_text_chunk("ok"), _usage_chunk(100), _final_empty_chunk()])
+
+        with patch("openai.AsyncOpenAI") as mock_cls, \
+             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = _capture_create
+            mock_cls.return_value = mock_client
+
+            events = []
+            async for ev in stream_openai(contents=self._long_history()):
+                events.append(ev)
+
+        text_events = [e for e in events if isinstance(e, TextDeltaEvent)]
+        assert text_events[0].delta == PROACTIVE_COMPACTION_NOTE
+        # The actually-sent messages are far smaller than the raw 60-row
+        # history would have been (proves compaction ran BEFORE the call).
+        sent_chars = sum(len(m.get("content") or "") for m in captured["messages"])
+        assert sent_chars < 60 * 200  # well under the raw history's own text
+
+    @pytest.mark.asyncio
+    async def test_no_compaction_when_under_budget(self, monkeypatch):
+        """A small turn under a normal num_ctx is never touched."""
+        self._env(monkeypatch)
+
+        async def _fake_discover(base_url, model_name):
+            return 16384
+
+        with patch("openai.AsyncOpenAI") as mock_cls, \
+             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+            mock_client = MagicMock()
+
+            async def _create(**kwargs):
+                return _make_stream([_text_chunk("hi"), _usage_chunk(50), _final_empty_chunk()])
+
+            mock_client.chat.completions.create = _create
+            mock_cls.return_value = mock_client
+
+            events = []
+            async for ev in stream_openai(contents=[user_content("hello")]):
+                events.append(ev)
+
+        text_events = [e for e in events if isinstance(e, TextDeltaEvent)]
+        assert all(e.delta != PROACTIVE_COMPACTION_NOTE for e in text_events)
+
+    @pytest.mark.asyncio
+    async def test_clip_guard_retries_once_then_succeeds(self, monkeypatch):
+        """Round 1 reports usage.prompt_tokens >= num_ctx (clipped) -- the
+        adapter recompacts, emits the retry note, and retries ONCE. Round 2
+        is clean -- the turn completes normally, no exception."""
+        self._env(monkeypatch)
+
+        async def _fake_discover(base_url, model_name):
+            return 1000
+
+        streams = [
+            _make_stream(
+                [_text_chunk("fabricated success"), _usage_chunk(1000), _final_empty_chunk()]
+            ),
+            _make_stream(
+                [_text_chunk("the real answer"), _usage_chunk(400), _final_empty_chunk()]
+            ),
+        ]
+        create_calls = 0
+
+        async def _create(**kwargs):
+            nonlocal create_calls
+            stream = streams[create_calls]
+            create_calls += 1
+            return stream
+
+        with patch("openai.AsyncOpenAI") as mock_cls, \
+             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = _create
+            mock_cls.return_value = mock_client
+
+            events = []
+            async for ev in stream_openai(contents=[user_content("do the thing")]):
+                events.append(ev)
+
+        assert create_calls == 2
+        text = "".join(e.delta for e in events if isinstance(e, TextDeltaEvent))
+        assert "fabricated success" in text  # round 1's text still streamed live
+        assert CLIP_RETRY_NOTE in text  # honest caveat in between
+        assert "the real answer" in text  # round 2's real text follows
+        usage_events = [e for e in events if isinstance(e, UsageMetadataEvent)]
+        assert usage_events[-1].prompt_token_count == 400
+
+    @pytest.mark.asyncio
+    async def test_clip_guard_raises_typed_error_after_second_clip(self, monkeypatch):
+        """Both rounds report a clipped prompt -- the adapter gives up after
+        ONE retry (two attempts total) and raises the typed error."""
+        self._env(monkeypatch)
+
+        async def _fake_discover(base_url, model_name):
+            return 1000
+
+        streams = [
+            _make_stream([_text_chunk("bad 1"), _usage_chunk(1000), _final_empty_chunk()]),
+            _make_stream([_text_chunk("bad 2"), _usage_chunk(1000), _final_empty_chunk()]),
+        ]
+        create_calls = 0
+
+        async def _create(**kwargs):
+            nonlocal create_calls
+            stream = streams[create_calls]
+            create_calls += 1
+            return stream
+
+        with patch("openai.AsyncOpenAI") as mock_cls, \
+             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = _create
+            mock_cls.return_value = mock_client
+
+            events = []
+            with pytest.raises(ContextWindowExceededError) as excinfo:
+                async for ev in stream_openai(contents=[user_content("do the thing")]):
+                    events.append(ev)
+
+        assert create_calls == 2  # exactly one retry, never a third attempt
+        assert excinfo.value.num_ctx == 1000
+        assert "16k" not in str(excinfo.value)  # honest -- reflects THIS model's window
+        assert "1k" in str(excinfo.value)

@@ -142,6 +142,11 @@ from .auth_handshake import (
     get_auth_token_timeout_s,
 )
 from .case_lifecycle import CaseLifecycleError, ensure_case_qgs
+from .context_budget import (
+    FABRICATION_CAVEAT,
+    ContextWindowExceededError,
+    looks_like_fabricated_action_claim,
+)
 from .credential_registry import (
     CredentialProvider,
     generic_provider_for_tool,
@@ -3117,6 +3122,18 @@ async def _stream_gemini_reply(
     # failed-then-corrected pair into the lessons store (GRACE2_LESSONS gate).
     _lessons_turn_calls: list[dict] = []
 
+    # OPEN-14 FABRICATION BACKSTOP (item 4): tracks whether ANY round of this
+    # turn dispatched a tool call. A turn that ends with this still False AND
+    # whose closing narration claims a completed geospatial action (the
+    # incident shape: prompt silently clipped -> model loses its tool
+    # contract -> narrates fabricated success with zero tool calls) gets an
+    # honest caveat appended -- see the ``not turn_function_calls`` block
+    # below. Never set True by a round that merely REQUESTED calls that later
+    # failed validation -- ``turn_function_calls`` is the model's raw
+    # request, which is exactly the signal we want (a model that TRIED to act
+    # is not fabricating; one that never tried and claims success is).
+    _turn_ever_called_tool = False
+
     iterations = 0
     try:
         while iterations < _step_cap:
@@ -3252,7 +3269,45 @@ async def _stream_gemini_reply(
                     iterations,
                     len(turn_text_parts),
                 )
+                # OPEN-14 FABRICATION BACKSTOP (item 4): this is the FIRST
+                # and ONLY tool-call-free round this turn ever had (a turn
+                # only reaches a second iteration by having dispatched calls
+                # in an earlier round, which would have set
+                # ``_turn_ever_called_tool`` below). Conservative: only fires
+                # when the closing text pairs a completed-action verb with a
+                # geospatial-output noun in the same sentence -- see
+                # ``context_budget.looks_like_fabricated_action_claim``.
+                # Ordinary Q&A answers, and any turn that dispatched even one
+                # tool call, never trigger this. Scoped to the LOCAL
+                # (MODEL_PROVIDER=openai) path only -- ``_provider`` is
+                # already resolved once above (job-0287) -- OPEN-14 is a
+                # local-model-path guard and must not vary Bedrock's
+                # production narration.
+                if _provider == "openai" and not _turn_ever_called_tool:
+                    _closing_text = "".join(turn_text_parts)
+                    if looks_like_fabricated_action_claim(_closing_text):
+                        logger.warning(
+                            "context-budget: fabrication backstop fired "
+                            "session=%s iter=%d (zero tool calls this turn)",
+                            state.session_id,
+                            iterations,
+                        )
+                        if current_message_id is None:
+                            current_message_id = new_ulid()
+                        _caveat = f"\n\n{FABRICATION_CAVEAT}"
+                        await _session_safe_send(websocket, state.session_id,
+                            _new_envelope(
+                                "agent-message-chunk",
+                                state.session_id,
+                                AgentMessageChunkPayload(
+                                    message_id=current_message_id, delta=_caveat, done=False
+                                ),
+                            )
+                        )
+                        turn_narration.append(_caveat)
+                        _segment_buf.append(_caveat)
                 break
+            _turn_ever_called_tool = True
 
             # GUARD 3 (loop watchdog): compute THIS round's (tool, args_hash)
             # signature now, but feed it to the watchdog AFTER dispatch (below)
@@ -4032,6 +4087,34 @@ async def _stream_gemini_reply(
             "failure) session=%s: %s",
             state.session_id,
             exc,
+        )
+    except ContextWindowExceededError as exc:
+        # OPEN-14 REACTIVE CLIP GUARD: the local (Ollama/OpenAI-compat) model's
+        # prompt was clipped by num_ctx even after one recompaction + retry
+        # (openai_adapter.stream_openai). Distinct typed envelope -- NOT the
+        # generic LLM_UNAVAILABLE bucket -- so the honesty floor tells the
+        # user exactly why the turn stopped (a genuinely oversized Case, not a
+        # transient model outage) and what to do about it. Mirrors the BUG 4b
+        # terminal-failure-card persist so a reconnect / Case-reopen replay
+        # shows the failed card rather than a phantom "still running" spinner.
+        logger.warning(
+            "context-budget: turn aborted, context window exceeded session=%s "
+            "num_ctx=%d",
+            state.session_id,
+            exc.num_ctx,
+        )
+        await _send_error(
+            websocket,
+            state.session_id,
+            "CONTEXT_WINDOW_EXCEEDED",
+            str(exc),
+            retryable=False,
+        )
+        await _persist_terminal_failure_card(
+            state,
+            error_code="CONTEXT_WINDOW_EXCEEDED",
+            message=str(exc),
+            case_id=_turn_case_id(state),
         )
     except Exception as exc:  # noqa: BLE001 — surface as A.6 LLM_UNAVAILABLE
         logger.exception("model stream failed: %s", exc)
