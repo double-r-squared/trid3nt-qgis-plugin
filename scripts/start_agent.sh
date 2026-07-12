@@ -47,6 +47,10 @@ export GRACE2_AGENT_HOST="${GRACE2_AGENT_HOST:-0.0.0.0}"
 unset GRACE2_COGNITO_USER_POOL_ID 2>/dev/null || true
 unset GRACE2_COGNITO_APP_CLIENT_ID 2>/dev/null || true
 
+# NATE 2026-07-12: no follow-up offers in replies - the user asks for what
+# they want next. Appended to the local model's system prompt (openai path).
+export GRACE2_OPENAI_EXTRA_SYSTEM="${GRACE2_OPENAI_EXTRA_SYSTEM:-Never end a reply with an offer, suggestion, or recommendation for a next step (no 'Would you like...', no 'I can also...'). State what was done or found, then stop. The user decides what happens next.}"
+
 echo "[start_agent] starting agent (WS :8765, HTTP :8766)..."
 echo "[start_agent] MODEL_PROVIDER=$MODEL_PROVIDER GRACE2_OPENAI_MODEL=$GRACE2_OPENAI_MODEL"
 echo "[start_agent] logs -> $LOG_FILE"
