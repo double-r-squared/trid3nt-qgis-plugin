@@ -1089,7 +1089,20 @@ export function PipelineCard({
   // only appears once the card visually settles (so a fast-complete still reads
   // its present-tense running verb during the dwell). All other states already
   // use the running/active phrasing, so a failed/cancelled card is unaffected.
-  const labelText = humanizeStepName(step.name, displayState);
+  //
+  // Compaction UX (Part A): "context:compact" is the one step whose label
+  // TEXT itself changes between running and terminal (mint: "Compacting
+  // conversation...", terminal: "Conversation compacted (Nk -> Mk tokens)" --
+  // token counts only known once the pass completes, so they cannot ride a
+  // static HUMANIZED_STEP_NAMES phrasing pair the way every other tool's
+  // fixed-name running/complete verbs do). Render `step.name` verbatim,
+  // bypassing humanizeStepName's HUMANIZED_STEP_NAMES lookup + titleCase
+  // fallback + auto-appended "..." (both of which would mangle already-
+  // human-readable, already-punctuated prose).
+  const labelText =
+    step.tool_name === "context:compact"
+      ? step.name
+      : humanizeStepName(step.name, displayState);
 
   // The label uses an animated rainbow gradient when running (unless the
   // user prefers reduced motion). Background-clip:text is the gradient

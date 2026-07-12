@@ -91,6 +91,56 @@ describe("PipelineCard — name rendering", () => {
   });
 });
 
+// --- Compaction card label bypass (Part A, compaction UX) ---------------- //
+
+describe("PipelineCard — context:compact label bypass (Part A)", () => {
+  it("renders the running label verbatim, not humanized/title-cased", () => {
+    render(
+      <PipelineCard
+        step={makeStep({
+          state: "running",
+          tool_name: "context:compact",
+          name: "Compacting conversation...",
+        })}
+      />,
+    );
+    const label = screen.getByTestId("pipeline-card-name");
+    // Verbatim: no title-casing (would mangle "conversation"/"compacting")
+    // and no auto-appended second "…" on top of the literal "..." already
+    // in the string.
+    expect(label.textContent).toBe("Compacting conversation...");
+  });
+
+  it("renders the terminal label verbatim, carrying the token counts", () => {
+    render(
+      <PipelineCard
+        step={makeStep({
+          state: "complete",
+          tool_name: "context:compact",
+          name: "Conversation compacted (13k -> 4k tokens)",
+        })}
+      />,
+    );
+    const label = screen.getByTestId("pipeline-card-name");
+    expect(label.textContent).toBe("Conversation compacted (13k -> 4k tokens)");
+  });
+
+  it("every OTHER tool_name still goes through humanizeStepName unchanged", () => {
+    render(
+      <PipelineCard
+        step={makeStep({
+          state: "running",
+          tool_name: "fetch_dem_tool",
+          name: "op_running",
+        })}
+      />,
+    );
+    const label = screen.getByTestId("pipeline-card-name");
+    expect(label.textContent).not.toBe("op_running");
+    expect(label.textContent).toContain("Op Running");
+  });
+});
+
 // --- Visual state surfaces (job-0162 spec) ------------------------------- //
 
 describe("PipelineCard — job-0162 visual states", () => {
