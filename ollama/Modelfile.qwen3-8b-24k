@@ -1,0 +1,14 @@
+# qwen3:8b-24k -- same base + params as qwen3:8b-16k but num_ctx 24576.
+# Context-window fix 2026-07-12: tool schemas + system prompt alone were
+# ~15.7k tokens of the 16k window; 24k chosen over 32k because the RTX 2060
+# has 8GB VRAM (weights ~5.0GB + f16 KV ~147MB/1k ctx: 24k -> ~8.5GB total,
+# ~1GB CPU spill; 32k -> ~9.6GB, too much offload on a 16GB box).
+# Rebuild: ollama create qwen3:8b-24k -f Modelfile.qwen3-8b-24k
+FROM qwen3:8b-16k
+PARAMETER num_ctx 24576
+PARAMETER repeat_penalty 1
+PARAMETER stop <|im_start|>
+PARAMETER stop <|im_end|>
+PARAMETER temperature 0.6
+PARAMETER top_k 20
+PARAMETER top_p 0.95

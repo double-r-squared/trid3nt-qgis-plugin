@@ -217,11 +217,123 @@ class TestToolDeclarationsToOpenaiTools:
         assert params["type"] == "object"
         assert params["properties"] == {}
 
-    def test_description_truncated_to_1000_chars(self):
+    def test_description_truncated_to_1000_chars_when_cap_disabled(self, monkeypatch):
+        # With the slimming cap disabled (0), the legacy hard [:1000] bound
+        # still applies.
+        monkeypatch.setenv("GRACE2_OPENAI_TOOL_DESC_CAP", "0")
         long_desc = "x" * 2000
         decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
         tools = tool_declarations_to_openai_tools([decl])
         assert len(tools[0]["function"]["description"]) == 1000
+
+    # -- 2026-07-12 LOCAL-wire tool-schema slimming (context-window fix) ----
+
+    def test_tool_description_capped_at_default_600(self):
+        long_desc = "word " * 300  # 1500 chars, plenty of word boundaries
+        decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
+        tools = tool_declarations_to_openai_tools([decl])
+        desc = tools[0]["function"]["description"]
+        assert len(desc) <= 600
+        assert desc.endswith("...")
+
+    def test_truncation_at_word_boundary(self):
+        long_desc = "alpha bravo charlie delta " * 40  # >600 chars
+        decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
+        tools = tool_declarations_to_openai_tools([decl])
+        desc = tools[0]["function"]["description"]
+        assert desc.endswith("...")
+        body = desc[: -len("...")]
+        # The kept text is a clean prefix of the original that ends exactly at
+        # a word boundary -- never mid-word.
+        assert long_desc.startswith(body)
+        assert long_desc[len(body)] == " "
+
+    def test_short_description_untouched_no_marker(self):
+        decl = genai_types.FunctionDeclaration(name="tool", description="Short and sweet.")
+        tools = tool_declarations_to_openai_tools([decl])
+        assert tools[0]["function"]["description"] == "Short and sweet."
+
+    def test_param_description_capped_at_default_200(self):
+        long_param_desc = "param detail " * 40  # 520 chars
+        decl = self._make_decl("tool", "Tool desc", {"field": long_param_desc})
+        tools = tool_declarations_to_openai_tools([decl])
+        pdesc = tools[0]["function"]["parameters"]["properties"]["field"]["description"]
+        assert len(pdesc) <= 200
+        assert pdesc.endswith("...")
+
+    def test_nested_items_description_capped(self):
+        decl = genai_types.FunctionDeclaration(
+            name="batch",
+            description="Batch operation",
+            parameters=genai_types.Schema(
+                type=genai_types.Type.OBJECT,
+                properties={
+                    "ids": genai_types.Schema(
+                        type=genai_types.Type.ARRAY,
+                        items=genai_types.Schema(
+                            type=genai_types.Type.STRING,
+                            description="id detail " * 40,  # 400 chars
+                        ),
+                        description="List of IDs",
+                    )
+                },
+            ),
+        )
+        tools = tool_declarations_to_openai_tools([decl])
+        items = tools[0]["function"]["parameters"]["properties"]["ids"]["items"]
+        assert len(items["description"]) <= 200
+        assert items["description"].endswith("...")
+
+    def test_cap_zero_disables_all_slimming(self, monkeypatch):
+        monkeypatch.setenv("GRACE2_OPENAI_TOOL_DESC_CAP", "0")
+        long_desc = "word " * 160  # 800 chars, under the legacy 1000 bound
+        long_param = "param detail " * 40  # 520 chars
+        decl = self._make_decl("tool", long_desc, {"field": long_param})
+        tools = tool_declarations_to_openai_tools([decl])
+        fn = tools[0]["function"]
+        assert fn["description"] == long_desc[:1000]
+        assert (
+            fn["parameters"]["properties"]["field"]["description"] == long_param
+        )
+
+    def test_env_override_cap_value(self, monkeypatch):
+        monkeypatch.setenv("GRACE2_OPENAI_TOOL_DESC_CAP", "100")
+        long_desc = "word " * 100
+        decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
+        tools = tool_declarations_to_openai_tools([decl])
+        desc = tools[0]["function"]["description"]
+        assert len(desc) <= 100
+        assert desc.endswith("...")
+
+    def test_non_description_fields_untouched_by_cap(self):
+        decl = genai_types.FunctionDeclaration(
+            name="pick",
+            description="d " * 400,  # forces tool-desc truncation
+            parameters=genai_types.Schema(
+                type=genai_types.Type.OBJECT,
+                properties={
+                    "mode": genai_types.Schema(
+                        type=genai_types.Type.STRING,
+                        enum=["auto", "medium", "strict"],
+                        description="m " * 200,  # forces param-desc truncation
+                    ),
+                    "count": genai_types.Schema(type=genai_types.Type.INTEGER),
+                },
+                required=["mode"],
+            ),
+        )
+        tools = tool_declarations_to_openai_tools([decl])
+        params = tools[0]["function"]["parameters"]
+        # Structure and non-description fields byte-identical to the uncapped
+        # conversion: enum members, required list, types.
+        assert params["properties"]["mode"]["enum"] == ["auto", "medium", "strict"]
+        assert params["required"] == ["mode"]
+        assert params["properties"]["mode"]["type"] == "string"
+        assert params["properties"]["count"]["type"] == "integer"
+        assert params["type"] == "object"
+        assert tools[0]["function"]["name"] == "pick"
+        # And the serialized tool is still valid JSON end-to-end.
+        json.loads(json.dumps(tools[0]))
 
     def test_type_map_uppercase_to_lowercase(self):
         """Genai uppercase TYPE -> lowercase JSON Schema type."""

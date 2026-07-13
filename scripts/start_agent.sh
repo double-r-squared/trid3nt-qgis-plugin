@@ -78,8 +78,8 @@ fi
 # and fully non-fatal -- Ollama may be down, or the box may be pointed at a
 # non-Ollama provider (remote/Bedrock), and neither should fail agent
 # startup. Derives the model from the same env the agent itself just
-# loaded ($ENV_FILE, sourced above); falls back to qwen3:8b-16k if unset.
-WARM_MODEL="${GRACE2_OPENAI_MODEL:-qwen3:8b-16k}"
+# loaded ($ENV_FILE, sourced above); falls back to qwen3:8b-24k if unset.
+WARM_MODEL="${GRACE2_OPENAI_MODEL:-qwen3:8b-24k}"
 (
   curl -s -m 90 http://127.0.0.1:11434/api/generate \
     -d '{"model":"'"$WARM_MODEL"'","keep_alive":"24h"}' \

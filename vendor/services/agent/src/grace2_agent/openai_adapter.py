@@ -194,6 +194,95 @@ _TYPE_MAP = {
     "TYPE_UNSPECIFIED": "string",
 }
 
+# ---------------------------------------------------------------------------
+# Tool-schema slimming (LOCAL path only -- 2026-07-12 context-window fix)
+# ---------------------------------------------------------------------------
+#
+# MEASURED FAILURE THIS FIXES: on qwen3:8b-16k (num_ctx=16384) the tool
+# schemas + system prompt alone were ~15.7k tokens on the wire, so a 2-prompt
+# session hit an honest CONTEXT_WINDOW_EXCEEDED abort while the actual
+# conversation content was only ~6k tokens (live log 2026-07-12: whole-prompt
+# est 22107 vs budget 11264). The registry's tool/param descriptions are
+# written for large cloud models; the local wire caps them at schema-BUILD
+# time instead. ONLY description strings are ever touched -- name, type,
+# enum, required, properties, items structure pass through untouched (guard
+# rail), so the truncation can never break the JSON schema contract.
+#
+# GRACE2_OPENAI_TOOL_DESC_CAP (default 600) caps each TOOL description;
+# GRACE2_OPENAI_PARAM_DESC_CAP (default 200) caps each PARAMETER (and nested
+# schema) description. Setting GRACE2_OPENAI_TOOL_DESC_CAP=0 disables ALL
+# slimming (the single kill switch -- restores the legacy [:1000] behavior);
+# GRACE2_OPENAI_PARAM_DESC_CAP=0 disables only the param-level cap.
+# Truncation is word-boundary with a trailing "..." marker. bedrock_adapter
+# and adapter.py are deliberately NOT touched -- cloud models keep the full
+# descriptions.
+
+TOOL_DESC_CAP_DEFAULT = 600
+PARAM_DESC_CAP_DEFAULT = 200
+
+_TRUNC_MARKER = "..."
+
+# One INFO stats line per process (startup/first-build), not per round.
+_SCHEMA_STATS_LOGGED = False
+
+
+def _desc_cap_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        val = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    return val if val >= 0 else default
+
+
+def tool_desc_cap() -> int:
+    """``GRACE2_OPENAI_TOOL_DESC_CAP`` -- per-tool description cap in chars
+    (default 600). 0 disables all tool-schema description slimming."""
+    return _desc_cap_env("GRACE2_OPENAI_TOOL_DESC_CAP", TOOL_DESC_CAP_DEFAULT)
+
+
+def param_desc_cap() -> int:
+    """``GRACE2_OPENAI_PARAM_DESC_CAP`` -- per-parameter description cap in
+    chars (default 200). 0 disables the param-level cap only."""
+    return _desc_cap_env("GRACE2_OPENAI_PARAM_DESC_CAP", PARAM_DESC_CAP_DEFAULT)
+
+
+def _truncate_word_boundary(text: str, cap: int) -> str:
+    """Truncate ``text`` to at most ``cap`` chars, cutting at a word boundary
+    and appending a trailing ``...`` marker. Text that already fits is
+    returned unchanged (identity -- no marker)."""
+    if cap <= 0 or len(text) <= cap:
+        return text
+    room = max(cap - len(_TRUNC_MARKER), 1)
+    cut = text[:room]
+    space = cut.rfind(" ")
+    # Back up to the last space so we never cut mid-word; but if the text has
+    # no usable space in the back half (e.g. one giant token), hard-cut
+    # rather than throwing away most of the budget.
+    if space > room // 2:
+        cut = cut[:space]
+    return cut.rstrip() + _TRUNC_MARKER
+
+
+def _cap_schema_descriptions(schema: Any, cap: int) -> None:
+    """Recursively truncate every ``description`` string inside a converted
+    JSON Schema, in place. ONLY ``description`` values are modified --
+    type/enum/format/required and the properties/items STRUCTURE are never
+    touched (guard rail: the cap can only ever shorten prose, never break
+    the schema contract)."""
+    if cap <= 0 or not isinstance(schema, dict):
+        return
+    desc = schema.get("description")
+    if isinstance(desc, str):
+        schema["description"] = _truncate_word_boundary(desc, cap)
+    props = schema.get("properties")
+    if isinstance(props, dict):
+        for sub in props.values():
+            _cap_schema_descriptions(sub, cap)
+    _cap_schema_descriptions(schema.get("items"), cap)
+
 
 def _genai_schema_to_json_schema(node: Any) -> dict[str, Any]:
     """Recursively convert a genai-dumped Schema dict to JSON Schema."""
@@ -229,7 +318,13 @@ def _genai_schema_to_json_schema(node: Any) -> dict[str, Any]:
 def tool_declarations_to_openai_tools(
     tool_declarations: list[genai_types.FunctionDeclaration] | None,
 ) -> list[dict[str, Any]]:
-    """Convert genai FunctionDeclarations to OpenAI ``tools[]`` (function type)."""
+    """Convert genai FunctionDeclarations to OpenAI ``tools[]`` (function type).
+
+    Applies the LOCAL-wire description caps (``tool_desc_cap`` /
+    ``param_desc_cap``, see the slimming block above) at build time, and logs
+    ONE INFO line (first build per process) with the total serialized size
+    before and after capping so the win is measurable in the agent log."""
+    global _SCHEMA_STATS_LOGGED
     tools: list[dict[str, Any]] = []
     for decl in tool_declarations or []:
         dumped = decl.model_dump(mode="json", exclude_none=True)
@@ -250,6 +345,32 @@ def tool_declarations_to_openai_tools(
                 },
             }
         )
+
+    t_cap = tool_desc_cap()
+    want_stats = bool(tools) and not _SCHEMA_STATS_LOGGED
+    before_chars = len(json.dumps(tools, default=str)) if want_stats else 0
+
+    if t_cap > 0:
+        p_cap = param_desc_cap()
+        for tool in tools:
+            fn = tool["function"]
+            fn["description"] = _truncate_word_boundary(fn["description"], t_cap)
+            _cap_schema_descriptions(fn["parameters"], p_cap)
+
+    if want_stats:
+        after_chars = len(json.dumps(tools, default=str))
+        logger.info(
+            "tool-schema slimming: %d tools, before=%d chars (~%d tokens est) "
+            "after=%d chars (~%d tokens est) tool_desc_cap=%d param_desc_cap=%d",
+            len(tools),
+            before_chars,
+            (before_chars + 3) // 4,
+            after_chars,
+            (after_chars + 3) // 4,
+            t_cap,
+            param_desc_cap() if t_cap > 0 else 0,
+        )
+        _SCHEMA_STATS_LOGGED = True
     return tools
 
 
@@ -586,7 +707,22 @@ async def stream_openai(
 
     # PROACTIVE BUDGET CHECK: estimate over the ACTUAL wire messages + tool
     # schemas (the closest available proxy to what Ollama really receives).
-    est_tokens = estimate_tokens_for_messages(messages) + tool_tokens
+    msg_tokens = estimate_tokens_for_messages(messages)
+    est_tokens = msg_tokens + tool_tokens
+    # One honest pre-send line per model round (2026-07-12 context-window
+    # fix): the compaction line below only fires when a turn is OVER budget,
+    # which left healthy turns unmeasurable in the log.
+    logger.info(
+        "context-budget: pre-send model=%s num_ctx=%d budget=%d est_total=%d "
+        "msgs=%d tools=%d sys=%d",
+        resolved_model,
+        num_ctx,
+        budget,
+        est_tokens,
+        msg_tokens,
+        tool_tokens,
+        sys_tokens,
+    )
     if est_tokens > budget:
         result = compact_contents(
             working_contents, budget_tokens=content_budget, target_ratio=proactive_target_ratio()
@@ -691,4 +827,6 @@ __all__ = [
     "openai_model",
     "openai_base_url",
     "openai_api_key",
+    "tool_desc_cap",
+    "param_desc_cap",
 ]
