@@ -209,6 +209,15 @@ class SettingsDialog(QDialog):
         self.auto_basemap_checkbox.setChecked(settings.auto_basemap)
         form.addRow("Basemap", self.auto_basemap_checkbox)
 
+        # NATE live-feedback 2026-07-13: "Show model thinking" moved here from
+        # the dock body (item-4 pattern: preferences live in Settings, apply
+        # on Save; the dock stays chat + input only).
+        self.show_thinking_checkbox = QCheckBox(
+            "Show model thinking (reasoning stream above answers)"
+        )
+        self.show_thinking_checkbox.setChecked(settings.show_thinking)
+        form.addRow("Model", self.show_thinking_checkbox)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -224,6 +233,7 @@ class SettingsDialog(QDialog):
         self._settings.canvas_aoi = self.canvas_aoi_checkbox.isChecked()
         self._settings.selection_aoi = self.selection_aoi_checkbox.isChecked()
         self._settings.auto_basemap = self.auto_basemap_checkbox.isChecked()
+        self._settings.show_thinking = self.show_thinking_checkbox.isChecked()
         super().accept()
 
 
@@ -1381,16 +1391,9 @@ class Trid3ntDock(QDockWidget):
         # instead of live-applying from checkboxes here. ``self.aoi_status``
         # below stays as the compact read-only status line, refreshed from
         # settings at build time, on every send, and after Settings closes.
-        # F9 (live-feedback 2026-07-09): "Show model thinking" toggle.
-        # When checked, the next user-message carries show_thinking=True and the
-        # dock renders the model's reasoning-channel tokens as a collapsible grey
-        # block above each answer. Default ON.
-        thinking_row = QHBoxLayout()
-        self.thinking_checkbox = QCheckBox("Show model thinking")
-        self.thinking_checkbox.setChecked(self.settings.show_thinking)
-        self.thinking_checkbox.toggled.connect(self._on_thinking_toggled)
-        thinking_row.addWidget(self.thinking_checkbox)
-        outer.addLayout(thinking_row)
+        # F9 "Show model thinking" moved into the Settings dialog (NATE
+        # live-feedback 2026-07-13) -- the send path keeps reading
+        # ``self.settings.show_thinking``; nothing else changes.
         self.aoi_status = QLabel(aoi.aoi_status_text(None, False))
         self.aoi_status.setStyleSheet(_STATUS_LINE_STYLE)
         outer.addWidget(self.aoi_status)
@@ -1586,10 +1589,6 @@ class Trid3ntDock(QDockWidget):
 
     def _refresh_aoi_status(self) -> None:
         self._aoi_for_send()
-
-    def _on_thinking_toggled(self, checked: bool) -> None:
-        """F9 (live-feedback 2026-07-09): persist the show_thinking preference."""
-        self.settings.show_thinking = checked
 
     # -- probe (map-click point sample) --------------------------------------- #
 
