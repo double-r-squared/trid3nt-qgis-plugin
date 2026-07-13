@@ -448,6 +448,38 @@ def parse_chat_history(session_state_payload: dict) -> list:
     return out[-CHAT_HISTORY_REPLAY_MAX:]
 
 
+def parse_charts(session_state_payload: dict) -> list:
+    """Parse ``session_state.charts`` rows (persisted ``ChartEmissionPayload``
+    dicts -- contracts ``chart_contracts.py``) for the dock's Charts panel
+    (OpenQuake result parity, live-feedback 2026-07-13).
+
+    The server hydrates the session document's append-only ``charts`` array
+    into every ``case-open`` rehydration (oldest-first, job-0294b), so the
+    envelope the plugin already receives carries them -- no extra fetch.
+    Each row is the exact payload a live ``chart-emission`` frame carries:
+    ``chart_id`` + ``title`` + ``caption`` + the Vega-Lite ``vega_lite_spec``.
+    Defensive like ``parse_chat_history``: a missing/non-list field, a
+    non-dict row, or a row without a usable chart_id/spec is skipped, never
+    raised on -- a bad persisted chart must not break a case switch. Order
+    is preserved (the panel shows the newest = last).
+    """
+    rows = session_state_payload.get("charts") or []
+    if not isinstance(rows, list):
+        return []
+    out: list = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        chart_id = row.get("chart_id")
+        spec = row.get("vega_lite_spec")
+        if not isinstance(chart_id, str) or not chart_id:
+            continue
+        if not isinstance(spec, dict) or not spec:
+            continue
+        out.append(row)
+    return out
+
+
 @dataclass
 class CaseOpenInfo:
     """The rehydration a ``case-open`` envelope carries (select response).
@@ -468,6 +500,10 @@ class CaseOpenInfo:
     layers: list = field(default_factory=list)  # list[LayerEvent]
     bbox: Optional[Tuple[float, float, float, float]] = None
     chat_messages: list = field(default_factory=list)  # list[{"role","content"}]
+    # OpenQuake result parity (live-feedback 2026-07-13): the persisted
+    # ``session_state.charts`` replay set (ChartEmissionPayload dicts,
+    # oldest-first) -- feeds the dock's Charts panel on case open.
+    charts: list = field(default_factory=list)
     raw: dict = field(default_factory=dict)
 
 
@@ -545,6 +581,7 @@ def parse_case_open(payload: dict) -> Optional[CaseOpenInfo]:
         layers=parse_layer_events(session_state),
         bbox=bbox,
         chat_messages=parse_chat_history(session_state),
+        charts=parse_charts(session_state),
         raw=payload,
     )
 
@@ -973,6 +1010,8 @@ class AgentEvent:
       case-open       raw payload
       payload-warning raw payload (the dock renders the gate card; see gate.py)
       case-list       {"cases": [CaseInfo, ...], "payload": <raw>}
+      chart           raw ChartEmissionPayload (live chart-emission frame;
+                      the dock's Charts panel renders it -- 2026-07-13)
       raw             {"type": <envelope type>, "payload": <raw>}
     """
 
@@ -1305,6 +1344,13 @@ class AgentClient:
             return AgentEvent("case-open", payload)
         if etype == "tool-payload-warning":
             return AgentEvent("payload-warning", payload)
+        if etype == "chart-emission":
+            # OpenQuake result parity (live-feedback 2026-07-13): a live
+            # mid-turn chart (ChartEmissionPayload -- Vega-Lite spec + title
+            # + caption). Previously fell through to "raw" and was dropped
+            # by the dock; the persisted replay twin rides in the case-open
+            # ``session_state.charts`` (``parse_charts``).
+            return AgentEvent("chart", payload)
         if etype == "case-list":
             cases = parse_case_list(payload)
             # Mirror of the last_session_state stash above: the startup

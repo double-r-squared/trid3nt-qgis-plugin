@@ -80,7 +80,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from . import aoi, case_export, gate, probe, push_layer
+from . import aoi, case_export, charts, gate, probe, push_layer
 from .layers import LayerMaterializer, ensure_basemap, zoom_to_bbox4326, zoom_to_extent
 from .plugin_settings import MODE_LOCAL, MODE_REMOTE, PluginSettings
 from .trid3nt_client import (
@@ -1363,6 +1363,19 @@ class Trid3ntDock(QDockWidget):
         self._probe_panel.setVisible(False)
         outer.addWidget(self._probe_panel)
 
+        # OpenQuake result parity (live-feedback 2026-07-13): the Charts
+        # panel -- the QGIS twin of the web's chart cards (hazard curves,
+        # UHS, damage distributions, ...). Same pinned-collapsible pattern
+        # as the probe panel: charts render HERE, never in the chat message
+        # list (NATE's clutter rule). Populated from the case-open replay
+        # (``session_state.charts``) and live ``chart-emission`` frames;
+        # cleared on case switch. Hidden until the case has a chart.
+        self.charts_panel = charts.ChartsPanel(
+            toggle_style=_THINKING_TOGGLE_STYLE,
+            block_style=_THINKING_BLOCK_STYLE,
+        )
+        outer.addWidget(self.charts_panel)
+
         # Item 4 (live-feedback 2026-07-09): the AOI toggles (canvas /
         # selected polygon) moved into Settings -- apply-on-Save there now,
         # instead of live-applying from checkboxes here. ``self.aoi_status``
@@ -1445,6 +1458,9 @@ class Trid3ntDock(QDockWidget):
         # switch. Hide it (its next click repopulates it).
         self._probe_panel.setVisible(False)
         self.probe_result_label.setText("")
+        # Charts are per-Case state too (live-feedback 2026-07-13): the
+        # case-open replay below repopulates the panel for the new case.
+        self.charts_panel.clear()
         while self.messages_layout.count() > 1:
             item = self.messages_layout.takeAt(0)
             widget = item.widget()
@@ -2162,6 +2178,17 @@ class Trid3ntDock(QDockWidget):
             message = data.get("message") or data.get("detail") or ""
             self._ensure_pending().add_note(f"{code}: {message}", error=True)
             self._scroll_to_bottom()
+        elif kind == "chart":
+            # OpenQuake result parity (live-feedback 2026-07-13): a live
+            # mid-turn chart. The Charts panel renders it (never a chat
+            # widget); one pointer note in the transcript so the turn's
+            # narrative says where the chart went.
+            if self.charts_panel.add_chart(data):
+                title = data.get("title") or "chart"
+                self._ensure_pending().add_note(
+                    f"Chart added below: {title}"
+                )
+                self._scroll_to_bottom()
         elif kind == "payload-warning":
             self._show_gate_card(data)
         elif kind == "case-open":
@@ -2227,6 +2254,11 @@ class Trid3ntDock(QDockWidget):
                 # pushing the conversation far up -- fold the batch into the
                 # collapsed "Layers (N)" toggle (errors stay visible).
                 self._ensure_pending().add_layer_notes(notes)
+        # OpenQuake result parity (live-feedback 2026-07-13): replay the
+        # case's persisted charts into the Charts panel (the web shows the
+        # hazard-curve card on case open; the dock now matches). The panel
+        # stays hidden for chart-less cases -- no chat noise either way.
+        self.charts_panel.set_charts(info.charts)
         if self.settings.auto_basemap:
             note = ensure_basemap()
             if note:
