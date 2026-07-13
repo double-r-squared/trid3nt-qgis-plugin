@@ -1,0 +1,78 @@
+"""Dock UI regression batch (live-feedback 2026-07-12).
+
+Four live-reported dock bugs, all Qt-layout/visibility behavior that the
+pure-python stub tests cannot see -- so, like ``TestQtBridgeStart``, the
+checks run in a SUBPROCESS under the system interpreter (the one with
+``qgis.PyQt``) and skip honestly when absent:
+
+  BUG 1  long user message clipped to one visual line (wrapped-QLabel
+         height-for-width never honored by the aligned HBox cell)
+  BUG 2  empty grey assistant bubble when qwen3 emits whitespace-only
+         text deltas after </think> on a thinking+tool-only turn
+  BUG 3a per-layer materialization notes (21 lines on a case open)
+         now fold into one default-collapsed "Layers (N)" toggle
+  BUG 3b probe output moved out of chat into the pinned panel
+  BUG 4  gate card must sit BETWEEN the pre-gate entry and the
+         post-decision response (was: response streamed above the card)
+
+The harness (``qt_dock_ui_harness.py``) prints the measured 1-line vs
+wrapped bubble heights so the fix is quantified, not vibes.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import unittest
+
+
+def _qt_python() -> str | None:
+    """First interpreter that can import qgis.PyQt (same probe as
+    test_milestone3.TestQtBridgeStart)."""
+    candidates = []
+    which = shutil.which("python3")
+    if which:
+        candidates.append(which)
+    candidates.append("/usr/bin/python3")
+    for py in dict.fromkeys(candidates):
+        if not os.path.exists(py):
+            continue
+        try:
+            probe = subprocess.run(
+                [py, "-c", "from qgis.PyQt.QtCore import QCoreApplication"],
+                capture_output=True,
+                timeout=60,
+                env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if probe.returncode == 0:
+            return py
+    return None
+
+
+class TestDockUiBatch(unittest.TestCase):
+    def test_dock_ui_fix_batch(self):
+        py = _qt_python()
+        if py is None:
+            self.skipTest("no interpreter with qgis.PyQt available")
+        harness = os.path.join(os.path.dirname(__file__), "qt_dock_ui_harness.py")
+        proc = subprocess.run(
+            [py, "-u", harness],
+            capture_output=True,
+            timeout=180,
+            text=True,
+            env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+        )
+        self.assertEqual(
+            proc.returncode,
+            0,
+            "dock ui harness failed (rc="
+            f"{proc.returncode})\nstdout: {proc.stdout}\nstderr: {proc.stderr}",
+        )
+        self.assertIn("DOCK-UI-OK", proc.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

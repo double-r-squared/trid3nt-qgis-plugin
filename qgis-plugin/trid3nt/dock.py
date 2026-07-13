@@ -233,6 +233,60 @@ _THINKING_BLOCK_STYLE = (
     "background-color: palette(window); border-left: 2px solid palette(mid); "
     "border-radius: 2px; padding: 4px 6px; font-size: 8pt; color: palette(mid);"
 )
+# Probe-panel error variant (BUG 3b, live-feedback 2026-07-12): the same
+# block chrome as the thinking body but in the error red, so a failed probe
+# is unmistakable without landing in chat.
+_PROBE_ERROR_BLOCK_STYLE = (
+    "background-color: palette(window); border-left: 2px solid #f85149; "
+    "border-radius: 2px; padding: 4px 6px; font-size: 8pt; color: #f85149;"
+)
+
+
+class _WrapLabel(QLabel):
+    """Word-wrapping QLabel whose WRAPPED height the layouts actually honor.
+
+    BUG 1 (live-feedback 2026-07-12): "show me the landcover over washington
+    state" painted as ONE clipped visual line in the user bubble. Classic Qt
+    wrapped-label clip: QBoxLayout gives an alignment-constrained item its
+    sizeHint height -- computed at the UNWRAPPED width -- so the label's real
+    wrapped height (heightForWidth of the width it actually got) is never
+    honored (measured pre-fix: 73px painted vs 133px needed at a 320px-wide
+    dock; the assistant bubble clipped the same way, 153px vs 193px). Fix:
+    re-assert minimumHeight from heightForWidth(actual width) on every
+    resize/setText -- minimum sizes propagate through every layout +
+    scroll-area combination even where height-for-width does not.
+    """
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(text, parent)
+        self.setWordWrap(True)
+
+    def _sync_min_height(self) -> None:
+        width = self.width()
+        if width <= 0:
+            return
+        wrapped = self.heightForWidth(width)
+        if wrapped > 0 and wrapped != self.minimumHeight():
+            self.setMinimumHeight(wrapped)
+
+    def setText(self, text: str) -> None:  # noqa: N802 -- Qt-mandated name
+        super().setText(text)
+        self._sync_min_height()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
+        super().resizeEvent(event)
+        self._sync_min_height()
+
+
+def _is_error_note(note: str) -> bool:
+    """BUG 3a (live-feedback 2026-07-12): materializer notes are plain
+    strings, so classify by the honest failure vocabulary layers.py uses --
+    error-ish notes must stay VISIBLE outside the collapsed Layers toggle."""
+    lowered = note.lower()
+    return any(
+        token in lowered
+        for token in ("fail", "error", "skipp", "reject", "unknown")
+    )
 
 
 class _AssistantEntry:
@@ -259,8 +313,7 @@ class _AssistantEntry:
         self._thinking_toggle.clicked.connect(self._toggle_thinking)
         thinking_lay.addWidget(self._thinking_toggle)
 
-        self._thinking_label = QLabel("")
-        self._thinking_label.setWordWrap(True)
+        self._thinking_label = _WrapLabel("")
         self._thinking_label.setTextFormat(Qt.PlainText)
         self._thinking_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self._thinking_label.setStyleSheet(_THINKING_BLOCK_STYLE)
@@ -270,18 +323,40 @@ class _AssistantEntry:
         lay.addWidget(self._thinking_container)
         self._thinking_text = ""
 
-        self.label = QLabel("")
-        self.label.setWordWrap(True)
+        self.label = _WrapLabel("")
         self.label.setTextFormat(Qt.PlainText)
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.label.setStyleSheet(_ASSISTANT_BUBBLE_STYLE)
-        self.label.setVisible(False)  # only once text arrives
+        self.label.setVisible(False)  # only once NON-whitespace text arrives
         lay.addWidget(self.label, 0, Qt.AlignLeft)
 
         # Transient pipeline lines (replaced on every pipeline-state frame).
         self.pipeline_area = QVBoxLayout()
         self.pipeline_area.setSpacing(0)
         lay.addLayout(self.pipeline_area)
+
+        # BUG 3a (live-feedback 2026-07-12, NATE: layer notes "should show
+        # up somewhere else or collapse because they are in the way and push
+        # the last prompt or response way up in the chat"): per-layer
+        # materialization notes fold into ONE "Layers (N)" toggle styled
+        # like the thinking toggle, DEFAULT COLLAPSED. Error notes never
+        # land here -- ``add_layer_notes`` routes them to ``add_note`` so
+        # failures stay visible.
+        self._layers_toggle = QPushButton("Layers (0)")
+        self._layers_toggle.setFlat(True)
+        self._layers_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self._layers_toggle.setCheckable(True)
+        self._layers_toggle.setChecked(False)  # default collapsed
+        self._layers_toggle.clicked.connect(self._toggle_layer_notes)
+        self._layers_toggle.setVisible(False)
+        lay.addWidget(self._layers_toggle)
+        self._layers_body = QWidget()
+        self._layers_body_lay = QVBoxLayout(self._layers_body)
+        self._layers_body_lay.setContentsMargins(8, 0, 0, 0)
+        self._layers_body_lay.setSpacing(0)
+        self._layers_body.setVisible(False)
+        lay.addWidget(self._layers_body)
+        self._layers_count = 0
 
         # Persistent notes (layer adds, errors) -- append-only.
         self.notes_area = QVBoxLayout()
@@ -291,6 +366,9 @@ class _AssistantEntry:
         # Insert above the terminal stretch.
         parent_layout.insertWidget(parent_layout.count() - 1, self.container)
         self.text = ""
+        # BUG 2 (live-feedback 2026-07-12): True once the FIRST non-whitespace
+        # answer token arrived (reveals the bubble + collapses thinking).
+        self._answer_started = False
 
     # -- thinking block ---------------------------------------------------- #
 
@@ -312,11 +390,24 @@ class _AssistantEntry:
     # -- answer text ------------------------------------------------------- #
 
     def append_delta(self, delta: str) -> None:
-        if not self.text and self._thinking_text:
-            # First answer token: collapse the thinking block.
-            self.collapse_thinking()
+        # BUG 2 (live-feedback 2026-07-12): qwen3 emits whitespace-only text
+        # deltas after </think>, and revealing the bubble on ANY delta
+        # painted an empty grey box on thinking+tool-only turns. Reveal the
+        # label (and collapse the thinking block) only on the first
+        # NON-whitespace content; a turn whose text is all whitespace keeps
+        # the bubble hidden and the thinking block expanded.
         self.text += delta
-        self.label.setText(self.text)
+        if not self.text.strip():
+            return
+        if not self._answer_started:
+            self._answer_started = True
+            if self._thinking_text:
+                # First NON-whitespace answer token: collapse the thinking
+                # block (was: first token of any kind).
+                self.collapse_thinking()
+        # Display-side lstrip only: the whitespace-only prefix qwen3 emits
+        # would otherwise pad the top of the bubble with blank lines.
+        self.label.setText(self.text.lstrip())
         self.label.setVisible(True)
 
     def set_pipeline_lines(self, lines: List[str]) -> None:
@@ -326,18 +417,40 @@ class _AssistantEntry:
             if w is not None:
                 w.deleteLater()
         for line in lines:
-            lbl = QLabel(line)
-            lbl.setWordWrap(True)
+            lbl = _WrapLabel(line)
             lbl.setTextFormat(Qt.PlainText)
             lbl.setStyleSheet(_STATUS_LINE_STYLE)
             self.pipeline_area.addWidget(lbl)
 
     def add_note(self, text: str, error: bool = False) -> None:
-        lbl = QLabel(text)
-        lbl.setWordWrap(True)
+        lbl = _WrapLabel(text)
         lbl.setTextFormat(Qt.PlainText)
         lbl.setStyleSheet(_ERROR_LINE_STYLE if error else _STATUS_LINE_STYLE)
         self.notes_area.addWidget(lbl)
+
+    # -- collapsed layer-note batch (BUG 3a, live-feedback 2026-07-12) ------ #
+
+    def _toggle_layer_notes(self) -> None:
+        self._layers_body.setVisible(self._layers_toggle.isChecked())
+
+    def add_layer_notes(self, notes: List[str]) -> None:
+        """Fold a batch of layer-materialization notes into the collapsed
+        "Layers (N)" toggle. Error-ish notes (``_is_error_note``) go through
+        ``add_note(error=True)`` instead -- never swallowed by the collapse.
+        Repeated batches on the same entry extend the count in place."""
+        for note in notes:
+            if _is_error_note(note):
+                self.add_note(note, error=True)
+                continue
+            lbl = _WrapLabel(note)
+            lbl.setTextFormat(Qt.PlainText)
+            lbl.setStyleSheet(_STATUS_LINE_STYLE)
+            self._layers_body_lay.addWidget(lbl)
+            self._layers_count += 1
+        if self._layers_count:
+            self._layers_toggle.setText(f"Layers ({self._layers_count})")
+            self._layers_toggle.setVisible(True)
+            self._layers_body.setVisible(self._layers_toggle.isChecked())
 
 
 class GateCard(QFrame):
@@ -1041,6 +1154,34 @@ class Trid3ntDock(QDockWidget):
         self.scroll.setWidget(self.messages_host)
         outer.addWidget(self.scroll, 1)
 
+        # BUG 3b (live-feedback 2026-07-12, NATE verbatim: "the probe should
+        # show the data somewhere else this should not show up in chat
+        # period"): probe output renders HERE -- a collapsible panel pinned
+        # under the message list, near the Probe toggle's effect -- and is
+        # REPLACED in place on each map click. Nothing probe-related is
+        # added to the chat message list anymore (results, in-flight status,
+        # and errors alike). Hidden until the first probe interaction.
+        self._probe_panel = QWidget()
+        probe_lay = QVBoxLayout(self._probe_panel)
+        probe_lay.setContentsMargins(0, 0, 0, 0)
+        probe_lay.setSpacing(0)
+        self.probe_results_toggle = QPushButton("Probe results")
+        self.probe_results_toggle.setFlat(True)
+        self.probe_results_toggle.setCheckable(True)
+        self.probe_results_toggle.setChecked(True)  # expanded while probing
+        self.probe_results_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.probe_results_toggle.clicked.connect(self._toggle_probe_results)
+        probe_lay.addWidget(self.probe_results_toggle)
+        self.probe_result_label = _WrapLabel("")
+        self.probe_result_label.setTextFormat(Qt.PlainText)
+        self.probe_result_label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse
+        )
+        self.probe_result_label.setStyleSheet(_THINKING_BLOCK_STYLE)
+        probe_lay.addWidget(self.probe_result_label)
+        self._probe_panel.setVisible(False)
+        outer.addWidget(self._probe_panel)
+
         # Item 4 (live-feedback 2026-07-09): the AOI toggles (canvas /
         # selected polygon) moved into Settings -- apply-on-Save there now,
         # instead of live-applying from checkboxes here. ``self.aoi_status``
@@ -1086,12 +1227,20 @@ class Trid3ntDock(QDockWidget):
         container = QWidget()
         lay = QHBoxLayout(container)
         lay.setContentsMargins(40, 2, 0, 2)
-        lbl = QLabel(text)
-        lbl.setWordWrap(True)
+        lbl = _WrapLabel(text)
         lbl.setTextFormat(Qt.PlainText)
         lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
         lbl.setStyleSheet(_USER_BUBBLE_STYLE)
-        lbl.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        # BUG 1 (live-feedback 2026-07-12): the bare QSizePolicy(h, v) ctor
+        # DROPS the height-for-width flag QLabel.setWordWrap had set, which
+        # (with the AlignRight cell) clipped long messages to one visual
+        # line. Restore the flag so the layout asks the label how tall its
+        # wrapped text is; _WrapLabel's min-height re-assert covers the
+        # layout paths that still ignore height-for-width. Horizontal
+        # Maximum + AlignRight keep the hug-the-text right-aligned look.
+        policy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        policy.setHeightForWidth(True)
+        lbl.setSizePolicy(policy)
         lay.addWidget(lbl, 0, Qt.AlignRight)
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, container)
         self._scroll_to_bottom()
@@ -1110,6 +1259,11 @@ class Trid3ntDock(QDockWidget):
         target from the previous case must never receive the new case's
         deltas."""
         self._pending = None
+        # BUG 3b (live-feedback 2026-07-12): the probe panel shows CASE
+        # data -- a table from the previous case must not linger across a
+        # switch. Hide it (its next click repopulates it).
+        self._probe_panel.setVisible(False)
+        self.probe_result_label.setText("")
         while self.messages_layout.count() > 1:
             item = self.messages_layout.takeAt(0)
             widget = item.widget()
@@ -1307,9 +1461,27 @@ class Trid3ntDock(QDockWidget):
                 canvas.setMapTool(self._prev_map_tool)
             self._prev_map_tool = None
 
+    def _toggle_probe_results(self) -> None:
+        self.probe_result_label.setVisible(
+            self.probe_results_toggle.isChecked()
+        )
+
+    def _set_probe_output(self, text: str, error: bool = False) -> None:
+        """BUG 3b (live-feedback 2026-07-12): the latest probe status /
+        result / error goes to the pinned panel under the message list,
+        replaced in place on each click -- NEVER a chat note."""
+        self._probe_panel.setVisible(True)
+        self.probe_result_label.setText(text)
+        self.probe_result_label.setStyleSheet(
+            _PROBE_ERROR_BLOCK_STYLE if error else _THINKING_BLOCK_STYLE
+        )
+        self.probe_result_label.setVisible(
+            self.probe_results_toggle.isChecked()
+        )
+
     def _on_probe_canvas_clicked(self, point, _button) -> None:
         if not self._case_id:
-            self._note(
+            self._set_probe_output(
                 "No active case -- open or start a case first.", error=True
             )
             return
@@ -1317,11 +1489,13 @@ class Trid3ntDock(QDockWidget):
             canvas = self.iface.mapCanvas()
             authid = canvas.mapSettings().destinationCrs().authid()
         except Exception:  # noqa: BLE001 -- no canvas (headless)
-            self._note("Probe failed: no map canvas available.", error=True)
+            self._set_probe_output(
+                "Probe failed: no map canvas available.", error=True
+            )
             return
         lonlat = self._point_to_lonlat4326(point, authid)
         if lonlat is None:
-            self._note(
+            self._set_probe_output(
                 "Probe failed: could not transform the clicked point to "
                 "EPSG:4326.",
                 error=True,
@@ -1333,7 +1507,9 @@ class Trid3ntDock(QDockWidget):
             if self.settings.mode == MODE_LOCAL
             else case_export.ws_url_to_http_base(self.settings.remote_url)
         )
-        self._note(f"Probing {probe.probe_location_label(lon, lat)} ...")
+        self._set_probe_output(
+            f"Probing {probe.probe_location_label(lon, lat)} ..."
+        )
         task = _ProbePointTask(base_url, self._case_id, lon, lat, parent=self)
         task.finished.connect(self._on_probe_finished)
         task.errored.connect(self._on_probe_errored)
@@ -1343,11 +1519,11 @@ class Trid3ntDock(QDockWidget):
     def _on_probe_finished(self, lon: float, lat: float, result: dict) -> None:
         lines = probe.format_probe_result(result)
         header = f"Probe {probe.probe_location_label(lon, lat)}:"
-        self._note("\n".join([header] + [f"  {ln}" for ln in lines]))
+        self._set_probe_output("\n".join([header] + [f"  {ln}" for ln in lines]))
 
     def _on_probe_errored(self, lon: float, lat: float, message: str) -> None:
         label = probe.probe_location_label(lon, lat)
-        self._note(f"Probe {label} failed: {message}", error=True)
+        self._set_probe_output(f"Probe {label} failed: {message}", error=True)
 
     # -- connection ----------------------------------------------------------- #
 
@@ -1792,9 +1968,10 @@ class Trid3ntDock(QDockWidget):
             if layers and self._case_id:
                 notes = self.materializer.materialize(layers)
                 if notes:
-                    entry = self._ensure_pending()
-                    for note in notes:
-                        entry.add_note(note)
+                    # BUG 3a (live-feedback 2026-07-12): one collapsed
+                    # "Layers (N)" toggle per batch, not N chat lines
+                    # (errors stay visible outside the collapse).
+                    self._ensure_pending().add_layer_notes(notes)
                     self._scroll_to_bottom()
         elif kind == "error":
             code = data.get("error_code") or "ERROR"
@@ -1857,8 +2034,12 @@ class Trid3ntDock(QDockWidget):
         self._note(f"Case '{info.title}' active")
         if info.layers:
             notes = self.materializer.materialize(info.layers)
-            for note in notes:
-                self._note(note)
+            if notes:
+                # BUG 3a (live-feedback 2026-07-12): the case-open replay
+                # used to paint one chat line PER layer (21 on a real case),
+                # pushing the conversation far up -- fold the batch into the
+                # collapsed "Layers (N)" toggle (errors stay visible).
+                self._ensure_pending().add_layer_notes(notes)
         if self.settings.auto_basemap:
             note = ensure_basemap()
             if note:
@@ -1948,6 +2129,15 @@ class Trid3ntDock(QDockWidget):
             return
         card = GateCard(warning, self._on_gate_decision)
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        # BUG 4 (live-feedback 2026-07-12, NATE: the card sat "at the bottom
+        # and the response chat is above"): the streaming _AssistantEntry
+        # was created BEFORE the card, so everything after the user's
+        # confirm streamed into the entry ABOVE it. Close out the pending
+        # entry here -- the next event (thinking/chunk/pipeline/note) mints
+        # a FRESH entry via _ensure_pending, which inserts before the
+        # terminal stretch, i.e. BELOW the card -- the cloud web's
+        # chronological turn flow.
+        self._pending = None
         self._scroll_to_bottom()
 
     def _on_gate_decision(
