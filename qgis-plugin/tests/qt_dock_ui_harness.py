@@ -22,10 +22,19 @@ Offscreen, no agent, no network. Checks:
   5. BUG 4 (gate-card ordering): a gate card closes out the streaming
      entry; post-decision output lands in a NEW entry BELOW the card
      (user bubble -> pre-gate entry -> card -> post-gate entry).
+  6. MARKDOWN (feature 2026-07-13): assistant answers stream PLAIN
+     (an unclosed ``` fence mid-stream never hits the markdown parser),
+     convert to rendered rich text on turn-complete and on replay; a TALL
+     markdown message (header + paragraphs + json code block + table +
+     list) must paint at its full wrapped height at BOTH a narrow (320px)
+     and a wide (640px) dock width -- the F36 _WrapLabel min-height
+     re-assert must hold for rich text too. User bubbles and the thinking
+     block stay Qt.PlainText.
 
 Exits 0 and prints DOCK-UI-OK plus the measured heights; asserts (nonzero)
-otherwise. Also grabs docs/proof/90-dock-ui-batch.png (offscreen QWidget
-grab -- a LAYOUT proof, not a pixel-parity claim vs live QGIS rendering).
+otherwise. Also grabs docs/proof/90-dock-ui-batch.png and the markdown
+proof docs/proof/93-dock-markdown.png (offscreen QWidget grabs -- LAYOUT
+proofs, not pixel-parity claims vs live QGIS rendering).
 """
 
 from __future__ import annotations
@@ -230,7 +239,193 @@ assert 0 <= i_pre < i_card < i_post, (
     f"gate card out of order: pre={i_pre} card={i_card} post={i_post}"
 )
 
-# ---- proof screenshot (layout proof, not pixel parity with live QGIS) ------ #
+# ---- 6. MARKDOWN (feature 2026-07-13): stream plain, finalize rich --------- #
+
+from qgis.PyQt.QtCore import Qt  # noqa: E402
+
+MD = (
+    "### Flood summary\n\n"
+    "The **peak depth** is *2.4 m* near the outfall, concentrated in the "
+    "low-lying blocks east of the channel where the DEM dips below the "
+    "2-year stage.\n\n"
+    "1. Depth raster added to the case\n"
+    "2. Velocity raster added to the case\n\n"
+    "```json\n"
+    "{\n"
+    '  "depth_m": 2.4,\n'
+    '  "cells": 120000,\n'
+    '  "solver": "sfincs"\n'
+    "}\n"
+    "```\n\n"
+    "| Layer | Max | Units |\n"
+    "|-------|-----|-------|\n"
+    "| Depth | 2.4 | m |\n"
+    "| Velocity | 1.1 | m/s |\n\n"
+    "Inline `run_solver` reference and a [docs link](https://example.com)."
+)
+
+# Close out section 5's still-pending entry through the real terminal seam.
+dock._on_event("turn-complete", {})
+assert dock._pending is None, "turn-complete did not close the pending entry"
+
+dock._add_user_bubble("summarize the flood run")
+md_entry = dock._ensure_pending()
+# Stream in two chunks with an UNCLOSED ``` fence in between -- mid-stream
+# text must stay plain (never parsed as markdown) and must not crash.
+split = MD.index('"cells"')
+dock._on_event("chunk", {"delta": MD[:split]})
+pump()
+assert md_entry.label.textFormat() == Qt.PlainText, (
+    "mid-stream label left PlainText (markdown parsed an unclosed fence)"
+)
+assert md_entry.label.isVisible(), "streamed text not visible mid-stream"
+dock._on_event("chunk", {"delta": MD[split:]})
+pump()
+assert md_entry.label.textFormat() == Qt.PlainText, (
+    "label converted before turn-complete"
+)
+dock._on_event("turn-complete", {})
+pump()
+assert dock._pending is None, "turn-complete did not close the markdown entry"
+assert md_entry.label.textFormat() == Qt.RichText, (
+    "turn-complete did not convert the answer to rich markdown"
+)
+html = md_entry.label.text()
+assert "<table" in html, "markdown table missing from the rendered HTML"
+assert "background-color:" in html, "code-block background styling missing"
+# The code background must be the REAL theme Base color, visibly distinct
+# from the bubble grey -- regression guard: the bubble stylesheet polishes
+# the LABEL's palette (Base -> the bubble background), so generating from
+# label.palette() produced an invisible code background.
+from qgis.PyQt.QtGui import QPalette  # noqa: E402
+
+container_pal = md_entry.container.palette()
+base_name = container_pal.color(QPalette.Base).name()
+midlight_name = container_pal.color(QPalette.Midlight).name()
+assert f"background-color:{base_name}" in html, (
+    f"code background is not the theme Base color ({base_name}); "
+    "was it generated from the stylesheet-polluted label palette?"
+)
+assert base_name != midlight_name, (
+    "offscreen palette degenerate -- Base equals Midlight, test is void"
+)
+assert "monospace" in html, "monospace code styling missing"
+assert not md_entry.label.openExternalLinks(), "openExternalLinks must stay off"
+assert md_entry.label.textInteractionFlags() == Qt.TextSelectableByMouse, (
+    "interaction flags changed -- links must not be activatable"
+)
+
+# The dock-integrated entry must also be unclipped at its ACTUAL width
+# (a floating QDockWidget cannot shrink below its header row's minimum,
+# so the narrow/wide sweep below uses the bare message-list stack).
+md_h_dock = md_entry.label.height()
+md_hfw_dock = md_entry.label.heightForWidth(md_entry.label.width())
+assert md_hfw_dock > 0, "heightForWidth broke for rich text"
+assert md_h_dock >= md_hfw_dock, (
+    f"tall markdown clipped in the dock: {md_h_dock} < {md_hfw_dock}"
+)
+
+# Wrap-height sweep at EXACT 320px / 640px widths: replicate the dock's
+# message-list stack (QScrollArea widgetResizable -> host QVBoxLayout with
+# terminal stretch -> _AssistantEntry) without the dock header, whose
+# button row forces a ~620px minimum on a floating dock offscreen.
+from qgis.PyQt.QtWidgets import QScrollArea, QVBoxLayout, QWidget  # noqa: E402
+
+mhost = QWidget()
+mlay = QVBoxLayout(mhost)
+mlay.setContentsMargins(2, 2, 2, 2)
+mlay.setSpacing(4)
+mlay.addStretch(1)
+mscroll = QScrollArea()
+mscroll.setWidgetResizable(True)
+mscroll.setWidget(mhost)
+mscroll.resize(320, 700)
+mscroll.show()
+sweep_entry = _AssistantEntry(mlay)
+sweep_entry.append_delta(MD)
+sweep_entry.finalize_markdown()
+pump(20)
+md_h_narrow = sweep_entry.label.height()
+md_w_narrow = sweep_entry.label.width()
+md_hfw_narrow = sweep_entry.label.heightForWidth(md_w_narrow)
+print(
+    f"[markdown] narrow(320px view): label {md_w_narrow}px wide, "
+    f"height={md_h_narrow}, needed(heightForWidth)={md_hfw_narrow}"
+)
+assert md_hfw_narrow > 0, "heightForWidth broke for rich text (narrow)"
+assert md_h_narrow >= md_hfw_narrow, (
+    f"tall markdown clipped at narrow width: {md_h_narrow} < {md_hfw_narrow}"
+)
+# The label must WRAP at the narrow width, not force the scroll host wider
+# (rich-text QLabels report the document's ideal unwrapped width as their
+# minimumSizeHint -- regression guard for finalize_markdown's
+# setMinimumWidth(1) cap).
+assert md_w_narrow <= 320, (
+    f"markdown label overflowed the 320px view: {md_w_narrow}px wide"
+)
+
+mscroll.resize(640, 700)
+pump(20)
+md_h_wide = sweep_entry.label.height()
+md_w_wide = sweep_entry.label.width()
+md_hfw_wide = sweep_entry.label.heightForWidth(md_w_wide)
+print(
+    f"[markdown] wide(640px view): label {md_w_wide}px wide, "
+    f"height={md_h_wide}, needed(heightForWidth)={md_hfw_wide}"
+)
+assert md_h_wide >= md_hfw_wide, (
+    f"tall markdown clipped at wide width: {md_h_wide} < {md_hfw_wide}"
+)
+# The finalized bubble must actually USE the wider view (regression guard
+# for the ~217px wrapped-sizeHint pin the AlignLeft cell caused).
+assert md_w_wide > md_w_narrow, (
+    f"markdown label did not widen with the view: {md_w_narrow} -> {md_w_wide}"
+)
+# And RE-WRAP there: heightForWidth clamps to minimumHeight, so before the
+# _WrapLabel clear-then-measure fix the min-height ratcheted at the narrow
+# height forever (narrow->wide left a dead-space block instead of reflowing).
+assert md_h_wide < md_h_narrow, (
+    f"markdown label did not reflow when widened: {md_h_narrow} -> {md_h_wide}"
+)
+mscroll.hide()
+
+# Replay path (case open): final text -> rendered markdown immediately.
+replay_before = dock.messages_layout.count()
+dock._replay_chat_history(
+    [
+        {"role": "user", "content": "what did the run find?"},
+        {"role": "agent", "content": MD},
+    ]
+)
+pump()
+assert dock.messages_layout.count() == replay_before + 2, "replay rows missing"
+replay_container = dock.messages_layout.itemAt(
+    dock.messages_layout.count() - 2
+).widget()
+replay_labels = [
+    l for l in replay_container.findChildren(QLabel)
+    if l.textFormat() == Qt.RichText
+]
+assert replay_labels, "replayed assistant message was not markdown-rendered"
+
+# User bubble + thinking block stay PLAIN text.
+user_lbl = next(
+    l for l in dock.messages_host.findChildren(QLabel)
+    if l.text() == "summarize the flood run"
+)
+assert user_lbl.textFormat() == Qt.PlainText, "user bubble must stay plain text"
+think_entry = _AssistantEntry(dock.messages_layout)
+think_entry.append_thinking_delta("**not** markdown, raw musing")
+think_entry.append_delta("Done.")
+think_entry.finalize_markdown()
+pump()
+assert think_entry._thinking_label.textFormat() == Qt.PlainText, (
+    "thinking block must stay plain text"
+)
+assert think_entry.label.textFormat() == Qt.RichText, "finalize skipped the answer"
+print("[markdown] stream-plain -> finalize-rich, replay rich, user/thinking plain")
+
+# ---- proof screenshots (layout proof, not pixel parity with live QGIS) ----- #
 
 os.makedirs(PROOF_DIR, exist_ok=True)
 shot = os.path.join(PROOF_DIR, "90-dock-ui-batch.png")
@@ -238,9 +433,24 @@ pump(20)
 dock.grab().save(shot)
 print(f"[proof] offscreen dock grab -> {shot}")
 
+# Dedicated markdown proof: a clean dock with one user bubble + the rendered
+# markdown reply (header, bold, list, json code block, table, inline code).
+mdock = Trid3ntDock(FakeIface())
+mdock._auto_connect_done_this_show = True
+mdock.resize(420, 760)
+mdock.show()
+mdock._add_user_bubble("summarize the flood run")
+mdock._replay_chat_history([{"role": "agent", "content": MD}])
+pump(20)
+md_shot = os.path.join(PROOF_DIR, "93-dock-markdown.png")
+mdock.grab().save(md_shot)
+print(f"[proof] offscreen markdown grab -> {md_shot}")
+
 print(
     "DOCK-UI-OK "
     f"bubble1line={short_h} bubble6line={long_h} needed={long_hfw} "
-    f"assistant={a_h}/{a_hfw}"
+    f"assistant={a_h}/{a_hfw} "
+    f"markdown-narrow={md_h_narrow}/{md_hfw_narrow}@{md_w_narrow}px "
+    f"markdown-wide={md_h_wide}/{md_hfw_wide}@{md_w_wide}px"
 )
 sys.exit(0)

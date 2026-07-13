@@ -255,6 +255,12 @@ class _WrapLabel(QLabel):
     re-assert minimumHeight from heightForWidth(actual width) on every
     resize/setText -- minimum sizes propagate through every layout +
     scroll-area combination even where height-for-width does not.
+
+    Feature 2026-07-13 (markdown answers): finalized assistant labels
+    switch to Qt.RichText HTML -- heightForWidth then routes through the
+    rich-text document layout instead of plain-text metrics, but the same
+    min-height re-assert covers it (verified by the markdown-height case
+    in tests/qt_dock_ui_harness.py at 320px and 640px dock widths).
     """
 
     def __init__(self, text: str = "", parent=None):
@@ -265,6 +271,14 @@ class _WrapLabel(QLabel):
         width = self.width()
         if width <= 0:
             return
+        # QLabel.heightForWidth CLAMPS to the current minimumHeight
+        # (measured: minH=541 -> hfw(594px)=541 where the true wrapped
+        # height is 409), which turned this re-assert into a ratchet: once
+        # set tall at a narrow width it could never shrink back when the
+        # dock got wider. Clear the minimum first so hfw reports the TRUE
+        # wrapped height, then re-assert (no event loop runs in between).
+        if self.minimumHeight() > 0:
+            self.setMinimumHeight(0)
         wrapped = self.heightForWidth(width)
         if wrapped > 0 and wrapped != self.minimumHeight():
             self.setMinimumHeight(wrapped)
@@ -276,6 +290,110 @@ class _WrapLabel(QLabel):
     def resizeEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
         super().resizeEvent(event)
         self._sync_min_height()
+
+
+def _markdown_to_display_html(text: str, palette) -> str:
+    """Render assistant markdown to Qt rich-text HTML (feature 2026-07-13).
+
+    Why md->HTML (QTextDocument.setMarkdown + toHtml) instead of the
+    lighter QLabel.setTextFormat(Qt.MarkdownText): the label route parses
+    the same GitHub dialect but offers ZERO styling hooks -- measured on
+    this Qt build (5.15.15), fenced code blocks come out in the default
+    PROPORTIONAL font with no background (the importer stamps a
+    FontFamilies property that resolves empty instead of a real monospace
+    family), and tables get no cell padding. Going through the document
+    lets us style the model before serializing: code blocks get a
+    palette-derived background + a real monospace font, inline code spans
+    get the same treatment, tables get solid borders + cell padding. The
+    HTML then renders in a Qt.RichText label -- same QTextDocument engine,
+    so wrapping/heightForWidth behave like any rich-text label.
+
+    Colors come from ``palette`` (Base for the code background, Mid for
+    table borders) so light and dark QGIS themes both stay readable --
+    no hardcoded hex that assumes one theme.
+
+    Raises on truly broken input (caller catches and keeps plain text).
+    """
+    from qgis.PyQt.QtGui import (
+        QBrush,
+        QColor,
+        QPalette,
+        QTextCharFormat,
+        QTextCursor,
+        QTextDocument,
+        QTextFormat,
+        QTextFrameFormat,
+        QTextTable,
+    )
+
+    code_bg = palette.color(QPalette.Base)
+    border = palette.color(QPalette.Mid)
+
+    doc = QTextDocument()
+    doc.setMarkdown(text)  # default features = GitHub dialect (tables, fences)
+
+    # Collect first, mutate after: merging char formats mid-iteration can
+    # split/merge the fragment list under the iterator. Positions stay valid
+    # across the merges (formatting never changes text length).
+    code_blocks: List[int] = []                 # block positions
+    code_spans: List[Tuple[int, int, bool]] = []  # (pos, length, in_code_block)
+    block = doc.begin()
+    while block.isValid():
+        fmt = block.blockFormat()
+        is_code_block = fmt.hasProperty(QTextFormat.BlockCodeLanguage) or (
+            hasattr(QTextFormat, "BlockCodeFence")
+            and fmt.hasProperty(QTextFormat.BlockCodeFence)
+        )
+        if is_code_block:
+            code_blocks.append(block.position())
+        it = block.begin()
+        while not it.atEnd():
+            frag = it.fragment()
+            cf = frag.charFormat()
+            # The markdown importer marks code (fenced AND inline) with a
+            # FontFamilies property (empty on this build -- hence the
+            # monospace re-stamp) and/or fontFixedPitch.
+            if (
+                is_code_block
+                or cf.fontFixedPitch()
+                or cf.hasProperty(QTextFormat.FontFamilies)
+            ):
+                code_spans.append((frag.position(), frag.length(), is_code_block))
+            it += 1
+        block = block.next()
+
+    for pos in code_blocks:
+        cur = QTextCursor(doc)
+        cur.setPosition(pos)
+        bf = cur.blockFormat()
+        bf.setBackground(code_bg)
+        cur.setBlockFormat(bf)
+    for pos, length, in_code_block in code_spans:
+        cur = QTextCursor(doc)
+        cur.setPosition(pos)
+        cur.setPosition(pos + length, QTextCursor.KeepAnchor)
+        mono = QTextCharFormat()
+        mono.setFontFamily("monospace")
+        mono.setFontFixedPitch(True)
+        if not in_code_block:
+            # Inline code: per-span background (block bg covers the fences).
+            mono.setBackground(code_bg)
+        cur.mergeCharFormat(mono)
+
+    def _style_tables(frame) -> None:
+        for child in frame.childFrames():
+            if isinstance(child, QTextTable):
+                tf = child.format()
+                tf.setBorder(0.5)
+                tf.setBorderBrush(QBrush(border))
+                tf.setBorderStyle(QTextFrameFormat.BorderStyle_Solid)
+                tf.setCellPadding(4.0)
+                tf.setCellSpacing(0.0)
+                child.setFormat(tf)
+            _style_tables(child)
+
+    _style_tables(doc.rootFrame())
+    return doc.toHtml()
 
 
 def _is_error_note(note: str) -> bool:
@@ -326,6 +444,12 @@ class _AssistantEntry:
         self.label = _WrapLabel("")
         self.label.setTextFormat(Qt.PlainText)
         self.label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        # Feature 2026-07-13 (markdown answers) link policy: markdown links
+        # render styled but are NOT clickable -- interaction flags stay
+        # TextSelectableByMouse only (no LinksAccessibleByMouse), and
+        # openExternalLinks is explicitly off. No silent click-to-open-
+        # arbitrary-URL surface.
+        self.label.setOpenExternalLinks(False)
         self.label.setStyleSheet(_ASSISTANT_BUBBLE_STYLE)
         self.label.setVisible(False)  # only once NON-whitespace text arrives
         lay.addWidget(self.label, 0, Qt.AlignLeft)
@@ -369,6 +493,9 @@ class _AssistantEntry:
         # BUG 2 (live-feedback 2026-07-12): True once the FIRST non-whitespace
         # answer token arrived (reveals the bubble + collapses thinking).
         self._answer_started = False
+        # Feature 2026-07-13: True once the final markdown render happened
+        # (turn-complete / gate closeout / replay) -- runs at most once.
+        self._finalized = False
 
     # -- thinking block ---------------------------------------------------- #
 
@@ -399,6 +526,13 @@ class _AssistantEntry:
         self.text += delta
         if not self.text.strip():
             return
+        if self._finalized:
+            # Defensive (feature 2026-07-13): a delta after the final
+            # markdown render (should not happen -- finalize runs at the
+            # terminal seams) drops back to plain-text streaming so raw
+            # text is never fed through a RichText label.
+            self._finalized = False
+            self.label.setTextFormat(Qt.PlainText)
         if not self._answer_started:
             self._answer_started = True
             if self._thinking_text:
@@ -408,6 +542,53 @@ class _AssistantEntry:
         # Display-side lstrip only: the whitespace-only prefix qwen3 emits
         # would otherwise pad the top of the bubble with blank lines.
         self.label.setText(self.text.lstrip())
+        self.label.setVisible(True)
+
+    def finalize_markdown(self) -> None:
+        """Feature 2026-07-13 (markdown answers): the turn is FINAL --
+        re-render the accumulated answer text as markdown.
+
+        While STREAMING the label stays Qt.PlainText (``append_delta``
+        re-sets it token by token) so a half-open ``` fence never flickers
+        through a markdown parser mid-stream; this converts exactly once,
+        at the terminal seams (turn-complete, gate-card closeout, chat
+        replay -- replay text is always final). Never raises: a conversion
+        failure keeps the already-painted plain text -- an honest
+        degradation, never a crashed dock. The thinking block, notes and
+        pipeline lines stay plain text by design (raw model musing / status
+        vocabulary must never be interpreted as markup)."""
+        if self._finalized:
+            return
+        self._finalized = True
+        stripped = self.text.strip()
+        if not stripped:
+            return  # nothing revealed (whitespace-only turn) -- keep hidden
+        try:
+            # Palette from the CONTAINER, not the label: the bubble
+            # stylesheet's background-color re-polishes the label's own
+            # palette (measured: label Base -> #cacaca, the bubble grey),
+            # which would generate an invisible code-block background. The
+            # container has no stylesheet, so its palette is the real
+            # theme palette (light or dark QGIS alike).
+            html = _markdown_to_display_html(stripped, self.container.palette())
+        except Exception:  # noqa: BLE001 -- plain text stays, never crash
+            return
+        self.label.setTextFormat(Qt.RichText)
+        self.label.setText(html)
+        # Rich-text QLabels misreport widths two ways (both measured):
+        # minimumSizeHint = the document's ideal UNWRAPPED width (553px for
+        # a code-block+table answer -- would force the scroll host wider
+        # than a narrow dock and grow a horizontal scrollbar), while the
+        # wrapped sizeHint heuristic picks ~217px (the AlignLeft cell would
+        # pin the bubble that narrow even in a wide dock). Cap the explicit
+        # minimum width to defeat the first, and drop the AlignLeft
+        # constraint so the finalized bubble takes the layout's full width
+        # -- wraps at narrow docks, uses the room at wide ones; the F36
+        # _WrapLabel min-HEIGHT re-assert keeps the wrapped height honored.
+        self.label.setMinimumWidth(1)
+        layout = self.container.layout()
+        if layout is not None:
+            layout.setAlignment(self.label, Qt.Alignment())
         self.label.setVisible(True)
 
     def set_pipeline_lines(self, lines: List[str]) -> None:
@@ -1287,6 +1468,9 @@ class Trid3ntDock(QDockWidget):
             elif role == "agent":
                 entry = _AssistantEntry(self.messages_layout)
                 entry.append_delta(content)
+                # Feature 2026-07-13: replayed text is always final --
+                # render its markdown immediately.
+                entry.finalize_markdown()
 
     # -- AOI ------------------------------------------------------------------ #
 
@@ -1990,6 +2174,9 @@ class Trid3ntDock(QDockWidget):
                     self._cases_dialog.set_cases(self._cases)
         elif kind == "turn-complete":
             if self._pending is not None:
+                # Feature 2026-07-13: the answer text is final -- convert
+                # the plain streamed text to rendered markdown now.
+                self._pending.finalize_markdown()
                 self._pending = None
 
     def _on_case_open_event(self, payload: dict) -> None:
@@ -2137,6 +2324,10 @@ class Trid3ntDock(QDockWidget):
         # a FRESH entry via _ensure_pending, which inserts before the
         # terminal stretch, i.e. BELOW the card -- the cloud web's
         # chronological turn flow.
+        if self._pending is not None:
+            # Feature 2026-07-13: this entry receives no more deltas --
+            # final-render its markdown before closing it out.
+            self._pending.finalize_markdown()
         self._pending = None
         self._scroll_to_bottom()
 
@@ -2159,6 +2350,11 @@ class Trid3ntDock(QDockWidget):
             return
         self.input_edit.clear()
         self._add_user_bubble(text)
+        if self._pending is not None:
+            # Feature 2026-07-13, defensive: a WS drop can strand a
+            # streaming entry that never saw turn-complete -- final-render
+            # it before minting the new turn's entry.
+            self._pending.finalize_markdown()
         self._pending = _AssistantEntry(self.messages_layout)
         self._scroll_to_bottom()
         bbox, source = self._aoi_for_send()

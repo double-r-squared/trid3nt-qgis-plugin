@@ -15,6 +15,11 @@ checks run in a SUBPROCESS under the system interpreter (the one with
   BUG 4  gate card must sit BETWEEN the pre-gate entry and the
          post-decision response (was: response streamed above the card)
 
+Plus the 2026-07-13 markdown feature: assistant answers stream plain,
+convert to rendered markdown (header/bold/list/code-block/table) on
+turn-complete and on replay, and a tall markdown message must paint at
+its full wrapped height at 320px and 640px dock widths.
+
 The harness (``qt_dock_ui_harness.py``) prints the measured 1-line vs
 wrapped bubble heights so the fix is quantified, not vibes.
 """
@@ -53,25 +58,50 @@ def _qt_python() -> str | None:
 
 
 class TestDockUiBatch(unittest.TestCase):
-    def test_dock_ui_fix_batch(self):
+    """One harness subprocess run, shared by the assertions below."""
+
+    _proc: subprocess.CompletedProcess | None = None
+
+    @classmethod
+    def setUpClass(cls):
         py = _qt_python()
         if py is None:
-            self.skipTest("no interpreter with qgis.PyQt available")
+            return  # each test skips honestly
         harness = os.path.join(os.path.dirname(__file__), "qt_dock_ui_harness.py")
-        proc = subprocess.run(
+        cls._proc = subprocess.run(
             [py, "-u", harness],
             capture_output=True,
             timeout=180,
             text=True,
             env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
         )
+
+    def _stdout(self) -> str:
+        if self._proc is None:
+            self.skipTest("no interpreter with qgis.PyQt available")
         self.assertEqual(
-            proc.returncode,
+            self._proc.returncode,
             0,
             "dock ui harness failed (rc="
-            f"{proc.returncode})\nstdout: {proc.stdout}\nstderr: {proc.stderr}",
+            f"{self._proc.returncode})\nstdout: {self._proc.stdout}"
+            f"\nstderr: {self._proc.stderr}",
         )
-        self.assertIn("DOCK-UI-OK", proc.stdout)
+        return self._proc.stdout
+
+    def test_dock_ui_fix_batch(self):
+        self.assertIn("DOCK-UI-OK", self._stdout())
+
+    def test_markdown_rendering(self):
+        """Feature 2026-07-13: stream plain -> finalize rich markdown,
+        replay rich, tall message unclipped at 320px and 640px widths."""
+        out = self._stdout()
+        self.assertIn("[markdown] narrow(320px view)", out)
+        self.assertIn("[markdown] wide(640px view)", out)
+        self.assertIn(
+            "[markdown] stream-plain -> finalize-rich, replay rich, "
+            "user/thinking plain",
+            out,
+        )
 
 
 if __name__ == "__main__":
