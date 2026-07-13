@@ -505,3 +505,74 @@ def test_live_california_window():
     assert res.style_preset == "earthquakes"
     assert res.uri is not None
     assert res.bbox is not None
+
+
+# ---------------------------------------------------------------------------
+# 2026-07-13 typed no-data contract (live OPEN-17-adjacent incident): a
+# 0-event fetch must surface as a TYPED no-data outcome the model can relay
+# (typed error + structured suggestions), never a publishable success shape
+# with layer handles.
+# ---------------------------------------------------------------------------
+
+
+def test_public_tool_zero_events_raises_typed_no_data(monkeypatch):
+    """PUBLIC tool surface: a faked 0-event FDSN body raises the typed error."""
+    import grace2_agent.tools.fetch_usgs_earthquakes as M
+
+    monkeypatch.setattr(
+        M, "_http_get", lambda url, timeout=90.0: (_empty_geojson(), 200)
+    )
+
+    # Drive read_through's fetch_fn directly (cache plumbing is not under
+    # test); the zero-event typed raise must escape before any cache write.
+    def _fake_read_through(*, metadata, params, ext, fetch_fn):
+        fetch_fn()
+        raise AssertionError("fetch_fn must raise on zero events")
+
+    monkeypatch.setattr(M, "read_through", _fake_read_through)
+
+    with pytest.raises(EarthquakesNoEventsError) as ei:
+        fetch_usgs_earthquakes(
+            bbox=(-100.0, 46.0, -99.0, 47.0), min_magnitude=5.0
+        )
+    err = ei.value
+    assert err.error_code == "USGS_EARTHQUAKES_NO_EVENTS"
+    assert err.retryable is False
+    # Structured recovery options for the model to relay verbatim.
+    assert err.suggestions
+    joined = " ".join(err.suggestions).lower()
+    assert "min_magnitude" in joined
+
+
+def test_no_events_error_envelope_is_not_publishable_success():
+    """The model-facing envelope: status=error, no layer handles, suggestions."""
+    from grace2_agent.adapter import summarize_tool_result
+
+    err = EarthquakesNoEventsError(
+        "No earthquakes matched bbox=(-100.0, 46.0, -99.0, 47.0) over "
+        "2026-06-13..2026-07-13 (M>=5.0)."
+    )
+    env = summarize_tool_result("fetch_usgs_earthquakes", None, error=err)
+    assert env["status"] == "error"
+    assert env["error_code"] == "USGS_EARTHQUAKES_NO_EVENTS"
+    assert env["retryable"] is False
+    # NO layer handles / uri / publishable-success keys anywhere.
+    flat = json.dumps(env).lower()
+    assert "layer_id" not in flat
+    assert "layer_handles" not in flat
+    assert '"uri"' not in flat
+    # Structured suggestions surfaced as a list.
+    assert isinstance(env["suggestions"], list)
+    assert env["suggestions"]
+    assert any("min_magnitude" in s for s in env["suggestions"])
+
+
+def test_error_envelope_without_suggestions_attr_is_unchanged():
+    """Errors that carry no ``suggestions`` keep the pre-2026-07-13 shape."""
+    from grace2_agent.adapter import summarize_tool_result
+
+    env = summarize_tool_result(
+        "fetch_usgs_earthquakes", None, error=EarthquakesUpstreamError("boom")
+    )
+    assert env["status"] == "error"
+    assert "suggestions" not in env

@@ -159,6 +159,14 @@ class EarthquakesNoEventsError(EarthquakesError):
 
     error_code = "USGS_EARTHQUAKES_NO_EVENTS"
     retryable = False
+    #: Structured recovery options, harvested into the error envelope by
+    #: ``adapter.summarize_tool_result`` so a small model can relay the
+    #: choices to the user verbatim instead of inventing a layer handle.
+    suggestions = (
+        "widen the time window (start_date / end_date)",
+        "lower min_magnitude",
+        "expand the bbox to a more seismically active area",
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -87,6 +87,7 @@ __all__ = [
     "SessionUriRegistry",
     "UriResolutionError",
     "activate_registry",
+    "ambient_layer_handle_inventory",
     "deactivate_registry",
     "get_uri_registry",
     "lookup_handle_for_uri",
@@ -887,6 +888,29 @@ def lookup_handle_for_uri(
     if handle and not handle.startswith("uri:"):
         return handle
     return None
+
+
+def ambient_layer_handle_inventory(limit: int = 8) -> list[str]:
+    """Most-recent-first LAYER handles of the ambient (dispatch) registry.
+
+    Used by ``publish_layer``'s unknown-handle guard (2026-07-13, OPEN-17
+    class): when a small model passes a placeholder like
+    ``'LayerURI_from_previous_step'``, the typed error NAMES the handles that
+    actually exist in this case so the retry is self-correcting. Minted
+    ``uri:<basename>`` records are fuzzy-match plumbing, not real layer ids,
+    so they are excluded. Returns ``[]`` outside an active dispatch (tests /
+    direct programmatic calls) or when nothing has been produced yet.
+    """
+    reg = _ACTIVE_REGISTRY.get()
+    if reg is None:
+        return []
+    recs = [
+        r
+        for r in reg._records.values()
+        if r.uri and not r.handle.startswith("uri:")
+    ]
+    recs.sort(key=lambda r: r.seq, reverse=True)
+    return [r.handle for r in recs[: max(0, limit)]]
 
 
 def observe_published_layer(

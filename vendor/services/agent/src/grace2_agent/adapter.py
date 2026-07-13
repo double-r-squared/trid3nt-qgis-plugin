@@ -1942,7 +1942,7 @@ def summarize_tool_result(
     if error is not None:
         code, retryable = _classify_error(error)
         message = str(error)[:500]
-        return {
+        envelope = {
             "tool": tool_name,
             "status": "error",
             "error_code": code,
@@ -1954,6 +1954,18 @@ def summarize_tool_result(
             "error": message,
             "error_type": type(error).__name__,
         }
+        # Typed no-data / recovery contract (2026-07-13): a tool exception
+        # may carry a ``suggestions`` sequence of short recovery options
+        # (e.g. ``EarthquakesNoEventsError``: widen window / lower
+        # min_magnitude). Surface it as a STRUCTURED list so a small model
+        # relays the options to the user instead of inventing a next step
+        # (live incident: 0-event fetch -> fabricated publish_layer handle).
+        raw_suggestions = getattr(error, "suggestions", None)
+        if isinstance(raw_suggestions, (list, tuple)):
+            suggestions = [str(s) for s in raw_suggestions if str(s).strip()]
+            if suggestions:
+                envelope["suggestions"] = suggestions[:8]
+        return envelope
 
     if result is None:
         return {"tool": tool_name, "status": "no_result"}

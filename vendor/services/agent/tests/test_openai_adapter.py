@@ -27,6 +27,7 @@ import pytest
 from google.genai import types as genai_types
 
 from grace2_agent.openai_adapter import (
+    _TOOL_DISCIPLINE_SYSTEM,
     contents_to_openai_messages,
     stream_openai,
     tool_declarations_to_openai_tools,
@@ -82,17 +83,22 @@ def user_fr_content(name: str, response: dict[str, Any], call_id: str | None = N
 class TestContentsToOpenaiMessages:
 
     def test_simple_user_message(self):
+        # 2026-07-13: even without a caller system_prompt, the baked local
+        # tool-discipline line rides as a system message (OPEN-17 class).
         contents = [user_content("Hello")]
         msgs = contents_to_openai_messages(contents)
-        assert len(msgs) == 1
-        assert msgs[0]["role"] == "user"
-        assert msgs[0]["content"] == "Hello"
+        assert len(msgs) == 2
+        assert msgs[0]["role"] == "system"
+        assert msgs[0]["content"] == _TOOL_DISCIPLINE_SYSTEM
+        assert msgs[1]["role"] == "user"
+        assert msgs[1]["content"] == "Hello"
 
     def test_system_prompt_prepended(self):
         contents = [user_content("Hi")]
         msgs = contents_to_openai_messages(contents, system_prompt="Be helpful.")
         assert msgs[0]["role"] == "system"
-        assert msgs[0]["content"] == "Be helpful."
+        # Caller prompt first, baked tool-discipline line appended.
+        assert msgs[0]["content"] == f"Be helpful.\n{_TOOL_DISCIPLINE_SYSTEM}"
         assert msgs[1]["role"] == "user"
 
     def test_model_role_maps_to_assistant(self):
@@ -102,7 +108,8 @@ class TestContentsToOpenaiMessages:
         ]
         msgs = contents_to_openai_messages(contents)
         roles = [m["role"] for m in msgs]
-        assert roles == ["user", "assistant"]
+        # Leading system = the baked tool-discipline line (2026-07-13).
+        assert roles == ["system", "user", "assistant"]
 
     def test_function_call_becomes_tool_calls(self):
         """function_call Part -> assistant message with tool_calls list."""
@@ -170,8 +177,10 @@ class TestContentsToOpenaiMessages:
             if roles[i] == roles[i + 1] and roles[i] != "tool":
                 # This could happen for coalesced content - that's fine
                 pass
-        # Basic structure: starts with user, ends with user
-        assert roles[0] == "user"
+        # Basic structure: baked discipline system line first, then the
+        # conversation starts with user and ends with user.
+        assert roles[0] == "system"
+        assert roles[1] == "user"
         assert roles[-1] == "user"
         # All tool results paired with assistant tool-call turns
         tool_msgs = [m for m in msgs if m.get("role") == "tool"]

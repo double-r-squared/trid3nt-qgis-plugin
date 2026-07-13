@@ -157,6 +157,10 @@ class PublishLayerError(RuntimeError):
     - ``WORKER_JOB_FAILED`` - execution reached FAILED terminal state.
     - ``WORKER_JOB_CANCELLED`` - execution was cancelled externally.
     - ``QGS_URI_PARSE_ERROR`` - malformed ``project_qgs_uri``.
+    - ``UNKNOWN_LAYER_HANDLE`` (2026-07-13, retryable) - ``layer_uri`` is a
+      bare placeholder token or fabricated scheme that no registry entry
+      resolved; the message names the case's available handles so the model
+      retries with one verbatim (OPEN-17 small-model class).
     - ``LAYER_URI_NOT_FOUND`` (job-0257, retryable) - ``layer_uri`` does not
       exist in GCS and no unambiguous auto-correction was found. The message
       lists the real objects under the same prefix so the LLM can retry with
@@ -2202,6 +2206,75 @@ def _poll_execution(
         time.sleep(poll_interval_s)
 
 
+#: URI schemes ``publish_layer`` can actually consume. Anything scheme-shaped
+#: outside this set (e.g. a fabricated ``qgis://project1``) or a bare token
+#: with no scheme/path shape at all (e.g. ``'LayerURI_from_previous_step'``)
+#: is an UNRESOLVED HANDLE: a real handle would have been substituted with its
+#: registered URI by ``uri_registry.resolve_params`` before dispatch.
+_CONSUMABLE_URI_SCHEMES = ("s3://", "gs://", "http://", "https://", "file://")
+
+
+def _looks_like_unresolved_handle(layer_uri: str) -> bool:
+    """True when ``layer_uri`` cannot be a consumable URI or filesystem path.
+
+    OPEN-17 class (2026-07-13, live local-8B incident): small models call
+    ``publish_layer`` in the SAME iteration as the producing tool with literal
+    placeholders ('LayerURI_from_previous_step') or invented pseudo-URIs
+    ('qgis://project1'). Those fail deep in the publish path with an
+    unhelpful GDAL/storage error. This predicate gates them at the door so
+    the tool raises a typed, self-correcting error that NAMES the actually
+    available handles instead.
+
+    Conservative by construction — everything a valid caller passes today is
+    accepted: registered handles are already server-resolved to real URIs
+    before the tool body runs; composers pass ``s3://``/``gs://``/tile-template
+    URLs; ``/vsi*`` GDAL paths and absolute filesystem paths pass through.
+    """
+    v = (layer_uri or "").strip()
+    if not v:
+        return True
+    # Angle brackets and literal ellipses are never valid in a real URI -
+    # they are template-placeholder shapes, BOTH observed live 2026-07-13:
+    # 'gs://<result-fetched_usgs_earthquakes-uri>' and
+    # 's3://.../earthquakes_layer.fgb' (the latter slipped past a scheme
+    # allowlist and hit the F32 benign vector no-op, minting a success-shaped
+    # "Layer published" for a fabricated URI). Tile-template braces
+    # ({z}/{x}/{y}) remain VALID input for the idempotent-republish branch,
+    # so braces are NOT placeholder markers.
+    if "<" in v or ">" in v or "..." in v:
+        return True
+    if v.startswith("/vsi") or v.startswith("/") or v.startswith("\\"):
+        return False  # GDAL virtual path / absolute filesystem path
+    if any(v.startswith(scheme) for scheme in _CONSUMABLE_URI_SCHEMES):
+        return False
+    return True  # bare token (placeholder/handle) or unknown scheme
+
+
+def _unknown_handle_error(layer_uri: str) -> "PublishLayerError":
+    """Typed, retryable unknown-handle error naming the available handles."""
+    from ..uri_registry import ambient_layer_handle_inventory
+
+    handles = ambient_layer_handle_inventory(limit=8)
+    if handles:
+        inventory = (
+            "available handles in this case: "
+            + ", ".join(repr(h) for h in handles)
+            + "; pass one verbatim"
+        )
+    else:
+        inventory = (
+            "no layers have been produced in this case yet - run a fetch or "
+            "composer tool first"
+        )
+    return PublishLayerError(
+        "UNKNOWN_LAYER_HANDLE",
+        f"unknown layer handle {layer_uri!r}; {inventory}, or skip "
+        f"publish_layer entirely - fetch and composer tools auto-publish "
+        f"their own results.",
+        retryable=True,
+    )
+
+
 def derive_layer_id(layer_uri: str, registry: Any | None = None) -> str:
     """Derive a stable ``layer_id`` when the caller omitted one (2026-07-08).
 
@@ -2514,6 +2587,16 @@ def publish_layer(
         - ``run_model_flood_scenario`` / ``run_model_flood_habitat_scenario`` -
           call this as the final step of the workflow chain.
     """
+    # OPEN-17 (2026-07-13): unknown/placeholder handle guard. A registered
+    # handle was already substituted with its real URI by the server's
+    # ``uri_registry.resolve_params`` seam before this body runs, so a bare
+    # token ('LayerURI_from_previous_step') or a fabricated scheme
+    # ('qgis://project1') reaching this point can NEVER publish. Fail at the
+    # door with a typed, retryable error that names the case's actually
+    # available handles so a small model self-corrects instead of spiraling.
+    if _looks_like_unresolved_handle(layer_uri):
+        raise _unknown_handle_error(layer_uri)
+
     # 2026-07-08 small-model resilience: layer_id is optional. Local 8B models
     # call publish_layer without it (live TypeError: missing 1 required
     # positional argument: 'layer_id'). The server dispatch seam injects the

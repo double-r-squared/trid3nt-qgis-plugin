@@ -102,6 +102,17 @@ from .context_budget import (
 
 logger = logging.getLogger("grace2_agent.openai_adapter")
 
+#: Baked local-model tool-discipline system line (2026-07-13, OPEN-17 class:
+#: a 0-event fetch was followed by a publish_layer call carrying an invented
+#: placeholder handle). Appended to EVERY openai-path system prompt in
+#: ``contents_to_openai_messages`` - see the call-site comment for why the
+#: start_agent.sh GRACE2_OPENAI_EXTRA_SYSTEM default is not enough.
+_TOOL_DISCIPLINE_SYSTEM = (
+    "Fetch and composer tools publish their own layers - only call "
+    "publish_layer when you have a handle returned by a previous tool "
+    "result, passed verbatim. If a fetch returns no data, say so and stop."
+)
+
 # Logged once per process if the session model id looks like a Bedrock id.
 _BEDROCK_ID_WARN_DONE = False
 
@@ -454,6 +465,17 @@ def contents_to_openai_messages(
         extra_system = extra_system.replace("/no_think", "").strip()
     if extra_system:
         system_prompt = f"{system_prompt}\n{extra_system}" if system_prompt else extra_system
+    # 2026-07-13 (local small-model tool discipline, OPEN-17 class): baked
+    # HERE - not only in start_agent.sh's GRACE2_OPENAI_EXTRA_SYSTEM default -
+    # because a user .env.local that sets EXTRA_SYSTEM (e.g. a bare
+    # "/no_think") silently SHADOWS that baked default (live-proven
+    # 2026-07-13: the running agent's env carried only "/no_think"). The
+    # openai path is the local build's path, so this stays local-only.
+    system_prompt = (
+        f"{system_prompt}\n{_TOOL_DISCIPLINE_SYSTEM}"
+        if system_prompt
+        else _TOOL_DISCIPLINE_SYSTEM
+    )
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
