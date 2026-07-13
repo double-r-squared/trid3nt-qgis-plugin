@@ -6,6 +6,33 @@
 
 import { chromium, devices } from "playwright";
 
+// DATA-INTEGRITY GUARD (2026-07-12): the trid3nt-local server maps EVERY
+// anonymous session to one shared local user, so booting the app RESUMES
+// that user's last-active REAL case. Prompting without creating a case
+// first mutated real cases (bbox overwrite + layer pollution). Always
+// create a brand-new case before sending any prompt.
+async function createFreshCase(page) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = page.locator('[data-testid="grace2-cases-new"]').first();
+  if (await btn.isVisible().catch(() => false)) {
+    await btn.click().catch(() => {});
+  } else {
+    const roleBtn = page.getByRole("button", { name: /new case/i }).first();
+    if (await roleBtn.count().catch(() => 0)) {
+      await roleBtn.click().catch(() => {});
+    } else {
+      throw new Error("createFreshCase: no new-case button; refusing to prompt into an existing case");
+    }
+  }
+  await wait(2500);
+  const gate = page.locator('[data-testid="grace2-save-gate-modal-continue"]').first();
+  if (await gate.isVisible().catch(() => false)) {
+    await gate.click().catch(() => {});
+    await wait(800);
+  }
+}
+
+
 const APP_URL = "http://127.0.0.1:5173/app";
 const results = [];
 const pass = (id, ev) => { results.push({ id, ok: true, ev }); console.log("PASS", id, ev); };
@@ -18,6 +45,7 @@ const page = await ctx.newPage();
 await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(4000);
 
+await createFreshCase(page);
 const input = page.locator("textarea, input[placeholder*='Ask'], input[placeholder*='ask']").first();
 await input.waitFor({ timeout: 15000 });
 await input.fill("Show me landcover over Washington state");

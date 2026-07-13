@@ -3,6 +3,33 @@
 // (mid-turn cards/thinking = F1), then checks layer loading state (F3) and
 // visible raster (F4). Screenshots at T+15s, T+60s, end.
 import { chromium } from "playwright";
+
+// DATA-INTEGRITY GUARD (2026-07-12): the trid3nt-local server maps EVERY
+// anonymous session to one shared local user, so booting the app RESUMES
+// that user's last-active REAL case. Prompting without creating a case
+// first mutated real cases (bbox overwrite + layer pollution). Always
+// create a brand-new case before sending any prompt.
+async function createFreshCase(page) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = page.locator('[data-testid="grace2-cases-new"]').first();
+  if (await btn.isVisible().catch(() => false)) {
+    await btn.click().catch(() => {});
+  } else {
+    const roleBtn = page.getByRole("button", { name: /new case/i }).first();
+    if (await roleBtn.count().catch(() => 0)) {
+      await roleBtn.click().catch(() => {});
+    } else {
+      throw new Error("createFreshCase: no new-case button; refusing to prompt into an existing case");
+    }
+  }
+  await wait(2500);
+  const gate = page.locator('[data-testid="grace2-save-gate-modal-continue"]').first();
+  if (await gate.isVisible().catch(() => false)) {
+    await gate.click().catch(() => {});
+    await wait(800);
+  }
+}
+
 const OUT = "/tmp/claude-1000/-home-nate-Documents-GRACE-2/fd2df08a-a572-4b62-ba9a-e82d8a0a740e/scratchpad";
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
@@ -13,6 +40,7 @@ await page.waitForTimeout(6000);
 const gate = await page.locator("text=/sign in/i").count();
 console.log("auth-gate visible:", gate > 0);
 // find the chat input
+await createFreshCase(page);
 const input = page.locator("textarea, input[placeholder*='Ask'], input[placeholder*='ask']").first();
 await input.waitFor({ timeout: 20000 });
 await input.fill("show me landcover over washington state");

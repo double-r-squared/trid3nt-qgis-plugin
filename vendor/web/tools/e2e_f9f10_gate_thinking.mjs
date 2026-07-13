@@ -14,6 +14,33 @@
 
 import { chromium } from "playwright";
 
+// DATA-INTEGRITY GUARD (2026-07-12): the trid3nt-local server maps EVERY
+// anonymous session to one shared local user, so booting the app RESUMES
+// that user's last-active REAL case. Prompting without creating a case
+// first mutated real cases (bbox overwrite + layer pollution). Always
+// create a brand-new case before sending any prompt.
+async function createFreshCase(page) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = page.locator('[data-testid="grace2-cases-new"]').first();
+  if (await btn.isVisible().catch(() => false)) {
+    await btn.click().catch(() => {});
+  } else {
+    const roleBtn = page.getByRole("button", { name: /new case/i }).first();
+    if (await roleBtn.count().catch(() => 0)) {
+      await roleBtn.click().catch(() => {});
+    } else {
+      throw new Error("createFreshCase: no new-case button; refusing to prompt into an existing case");
+    }
+  }
+  await wait(2500);
+  const gate = page.locator('[data-testid="grace2-save-gate-modal-continue"]').first();
+  if (await gate.isVisible().catch(() => false)) {
+    await gate.click().catch(() => {});
+    await wait(800);
+  }
+}
+
+
 const AGENT_URL = "http://127.0.0.1:8766/api/health";
 const APP_URL   = "http://127.0.0.1:5173/app";
 const TIMEOUT_GATE_MS  = 6 * 60 * 1000;  // 6 min - local no-timeout
@@ -60,6 +87,7 @@ if (gateVisible) fail("C0_NO_AUTH_GATE", "sign-in text visible after load");
 else             pass("C0_NO_AUTH_GATE", "no auth gate");
 
 // Send the prompt
+await createFreshCase(page);
 const input = page.locator("textarea, input[placeholder*='Ask'], input[placeholder*='ask']").first();
 try { await input.waitFor({ timeout: 15000 }); } catch { fail("INPUT_FOUND", "no chat input found"); printAndExit(); }
 await input.fill("show me landcover over washington state");
