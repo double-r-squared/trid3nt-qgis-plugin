@@ -49,6 +49,33 @@ async function clickAnyConfirm(page) {
   return false;
 }
 
+
+// DATA-INTEGRITY GUARD (2026-07-12): the local server maps EVERY anonymous
+// session to one shared local user, so a fresh boot RESUMES that user's
+// last-active REAL case. Prompting without creating a case first mutated
+// real cases (bbox overwrite + layer pollution). Always create a brand-new
+// case before sending any prompt; never select or reuse an existing case.
+async function createFreshCase(page) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = page.locator('[data-testid="grace2-cases-new"]').first();
+  if (await btn.isVisible().catch(() => false)) {
+    await btn.click().catch(() => {});
+  } else {
+    const roleBtn = page.getByRole("button", { name: /new case/i }).first();
+    if (await roleBtn.count().catch(() => 0)) {
+      await roleBtn.click().catch(() => {});
+    } else {
+      throw new Error("createFreshCase: no new-case button; refusing to prompt into an existing case");
+    }
+  }
+  await wait(2500);
+  const gate = page.locator('[data-testid="grace2-save-gate-modal-continue"]').first();
+  if (await gate.isVisible().catch(() => false)) {
+    await gate.click().catch(() => {});
+    await wait(800);
+  }
+}
+
 async function main() {
   fs.mkdirSync(PROOF_DIR, { recursive: true });
   const browser = await playwright.chromium.launch({ headless: true });
@@ -61,9 +88,10 @@ async function main() {
   if (await cont.isVisible().catch(() => false)) await cont.click();
   await sleep(4000);
 
-  // open the existing debris case when present (retry flow), else stay on the fresh case
-  const priorRow = page.locator('text=/Post-fire Debris/i').first();
-  if (await priorRow.isVisible().catch(() => false)) { await priorRow.click(); await sleep(3000); }
+  // DATA-INTEGRITY (2026-07-12): never select an existing case (the local
+  // server maps all anon sessions to one shared user, so 'existing' means a
+  // REAL user case). Always run in a brand-new case.
+  await createFreshCase(page);
 
   // ---- 1. debris flow, LLM-driven ----
   await sendPrompt(

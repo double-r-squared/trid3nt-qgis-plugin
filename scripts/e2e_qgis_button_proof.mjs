@@ -9,6 +9,33 @@ const playwright = req(path.join(__dirname, "../vendor/web/node_modules/playwrig
 const PROOF = path.resolve(__dirname, "../docs/proof");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+
+// DATA-INTEGRITY GUARD (2026-07-12): the local server maps EVERY anonymous
+// session to one shared local user, so a fresh boot RESUMES that user's
+// last-active REAL case. Prompting without creating a case first mutated
+// real cases (bbox overwrite + layer pollution). Always create a brand-new
+// case before sending any prompt; never select or reuse an existing case.
+async function createFreshCase(page) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = page.locator('[data-testid="grace2-cases-new"]').first();
+  if (await btn.isVisible().catch(() => false)) {
+    await btn.click().catch(() => {});
+  } else {
+    const roleBtn = page.getByRole("button", { name: /new case/i }).first();
+    if (await roleBtn.count().catch(() => 0)) {
+      await roleBtn.click().catch(() => {});
+    } else {
+      throw new Error("createFreshCase: no new-case button; refusing to prompt into an existing case");
+    }
+  }
+  await wait(2500);
+  const gate = page.locator('[data-testid="grace2-save-gate-modal-continue"]').first();
+  if (await gate.isVisible().catch(() => false)) {
+    await gate.click().catch(() => {});
+    await wait(800);
+  }
+}
+
 async function main() {
   const browser = await playwright.chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1600, height: 950 } });
@@ -18,7 +45,9 @@ async function main() {
   if (await cont.isVisible().catch(() => false)) await cont.click();
   await sleep(3000);
 
-  // this context is a fresh anon user: create a case with layers first
+  // DATA-INTEGRITY (2026-07-12): the local server maps all anon sessions to
+  // one shared user, so boot resumes a REAL case. Create a fresh case first.
+  await createFreshCase(page);
   const input = page.locator('[data-testid="chat-input"] textarea, textarea').first();
   await input.click({ force: true });
   await input.fill("Fetch a digital elevation model and the county boundaries for downtown Tampa, Florida.");

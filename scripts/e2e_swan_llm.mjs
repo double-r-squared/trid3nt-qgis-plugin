@@ -146,6 +146,33 @@ async function detectNudgeNeeded(page) {
   return /provide.{0,40}more|please.{0,40}(provide|specify|give)|need.{0,30}(bbox|location)|require.{0,30}(bbox|location)|clarif|cannot.*proceed|missing.*param|which.*(city|area|location)/i.test(text);
 }
 
+
+// DATA-INTEGRITY GUARD (2026-07-12): the local server maps EVERY anonymous
+// session to one shared local user, so a fresh boot RESUMES that user's
+// last-active REAL case. Prompting without creating a case first mutated
+// real cases (bbox overwrite + layer pollution). Always create a brand-new
+// case before sending any prompt; never select or reuse an existing case.
+async function createFreshCase(page) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = page.locator('[data-testid="grace2-cases-new"]').first();
+  if (await btn.isVisible().catch(() => false)) {
+    await btn.click().catch(() => {});
+  } else {
+    const roleBtn = page.getByRole("button", { name: /new case/i }).first();
+    if (await roleBtn.count().catch(() => 0)) {
+      await roleBtn.click().catch(() => {});
+    } else {
+      throw new Error("createFreshCase: no new-case button; refusing to prompt into an existing case");
+    }
+  }
+  await wait(2500);
+  const gate = page.locator('[data-testid="grace2-save-gate-modal-continue"]').first();
+  if (await gate.isVisible().catch(() => false)) {
+    await gate.click().catch(() => {});
+    await wait(800);
+  }
+}
+
 async function main() {
   console.log("[e2e-swan] === LLM-driven SWAN wave simulation on qwen3:8b-16k ===");
   const { chromium } = playwright;
@@ -206,6 +233,8 @@ async function main() {
   console.log("[e2e-swan] initial screenshot: 20-swan-local.png");
 
   console.log("[e2e-swan] sending SWAN wave prompt...");
+  await createFreshCase(page);
+
   await sendChatMessage(page, SWAN_PROMPT);
   const promptSentAt = Date.now();
 

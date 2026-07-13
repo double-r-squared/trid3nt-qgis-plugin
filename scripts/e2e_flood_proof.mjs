@@ -2,12 +2,20 @@
  * e2e_flood_proof.mjs -- Flood inundation layer proof screenshots
  *
  * Goals:
- *   1. Open the app, select the Chattanooga SFINCS case (run 01KWT8BWTMTSB7H4NPMD4QWQET)
- *   2. Verify depth layers exist in LayerPanel
- *   3. Ensure peak depth is on top, landcover toggled off or low opacity
- *   4. Screenshot peak depth view -> 22-flood-peak-inundation.png
- *   5. Step through animation frames -> 23/24/25-flood-anim-*.png
- *   6. Start a fresh flood run and capture mid-run -> 26-flood-run-progress.png
+ *   1. Open the app as a dedicated e2e anon user, create a BRAND-NEW case
+ *   2. Start a fresh flood run and capture mid-run -> 26-flood-run-progress.png
+ *   3. Verify depth layers exist in LayerPanel (post-run OPEN-12 scan)
+ *   4. Ensure peak depth is on top, landcover toggled off or low opacity
+ *   5. Screenshot peak depth view -> 22-flood-peak-inundation.png
+ *   6. Step through animation frames -> 23/24/25-flood-anim-*.png
+ *
+ * DATA-INTEGRITY RULE (2026-07-12): this driver MUST NOT select or reuse an
+ * existing case, and MUST NOT boot as a real user's anonymous_user_id. A
+ * previous version pinned the app to the real user's id and clicked existing
+ * case rows (with a "pick first row" fallback), which ran Chattanooga flood
+ * sims INTO the user's real cases -- overwriting their bbox and stacking
+ * DEM/NLCD/flood-depth layers into loaded_layer_summaries. Always: dedicated
+ * e2e user + New-case button + fresh case, nothing else.
  *
  * Run:
  *   cd /home/nate/Documents/trid3nt-local
@@ -50,8 +58,9 @@ const PROOF_DIR = path.resolve(__dirname, "../docs/proof");
 fs.mkdirSync(PROOF_DIR, { recursive: true });
 
 const APP_URL = "http://127.0.0.1:5173";
-const CASE_RUN_ID = "01KWT8BWTMTSB7H4NPMD4QWQET";
-const CASE_TITLE_FRAGMENT = "Chattanooga";
+// Dedicated e2e anon user. NEVER set this to a real user's id -- the driver
+// would then see (and could mutate) that user's cases.
+const E2E_USER_ID = "e2e-flood-proof";
 const FLOOD_BBOX = "[-85.32, 35.03, -85.28, 35.07]";
 const FLOOD_PROMPT =
   "Run a small pluvial rain-on-grid SFINCS flood simulation for a 4km box in " +
@@ -203,31 +212,6 @@ async function toggleLayerVisibility(page, nameFragment, makeVisible) {
   return true;
 }
 
-async function setLayerOpacity(page, nameFragment, opacity) {
-  // Expand the layer row first to reveal opacity slider
-  const row = await getLayerRowByName(page, nameFragment);
-  if (!row) return false;
-  const expandBtn = row.locator('[data-testid="layer-expand"]').first();
-  if (await expandBtn.isVisible().catch(() => false)) {
-    await expandBtn.click();
-    await sleep(500);
-  }
-  const opacitySlider = row.locator('[data-testid="layer-opacity"]').first();
-  if (!(await opacitySlider.isVisible().catch(() => false))) {
-    // Try the parent area
-    const opacityRow = page.locator('[data-testid="layer-opacity"]').first();
-    if (await opacityRow.isVisible().catch(() => false)) {
-      await opacityRow.fill(String(opacity));
-      await sleep(300);
-      return true;
-    }
-    return false;
-  }
-  await opacitySlider.fill(String(opacity));
-  await sleep(300);
-  return true;
-}
-
 async function minioListing() {
   const MC_BIN = path.resolve(__dirname, "../bin/mc");
   try {
@@ -269,14 +253,14 @@ async function main() {
     }
   });
 
-  // Set anon token - use the SAME user_id that owns the Chattanooga case
-  // (01KWT89MZNKYHEMQAP5CNEY89A) so the WebSocket session maps to that user's cases.
-  // Pre-accept the save gate (sessionStorage) to avoid the modal on new case creation.
-  await context.addInitScript(() => {
+  // Boot as the DEDICATED e2e anon user (never a real user's id) and
+  // pre-accept the save gate (sessionStorage) to avoid the modal on new case
+  // creation.
+  await context.addInitScript((userId) => {
     window.localStorage.setItem("grace2_anonymous_accepted", "true");
-    window.localStorage.setItem("grace2.anonymous_user_id", "01KWT89MZNKYHEMQAP5CNEY89A");
+    window.localStorage.setItem("grace2.anonymous_user_id", userId);
     window.sessionStorage.setItem("grace2-save-gate-accepted", "1");
-  });
+  }, E2E_USER_ID);
 
   console.log("[flood-proof] navigating to", APP_URL + "/app");
   await page.goto(APP_URL + "/app", { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -310,66 +294,174 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("[flood-proof] app ready, looking for Chattanooga case...");
+  console.log("[flood-proof] app ready");
   await page.screenshot({ path: path.join(PROOF_DIR, "_debug-app-loaded.png") });
 
   // ============================================================
-  // Step 1: Find and click on the Chattanooga flood case
+  // Step 1: ALWAYS create a brand-new case. Never select or reuse
+  // an existing case (see DATA-INTEGRITY RULE at the top).
   // ============================================================
-  const caseRows = page.locator('[data-testid="grace2-case-row"]');
-  const caseCount = await caseRows.count().catch(() => 0);
-  console.log("[flood-proof] found", caseCount, "case rows");
-
-  // Try to find the Chattanooga case by title fragment or run ID
-  let casePicked = false;
-  for (let i = 0; i < caseCount; i++) {
-    const row = caseRows.nth(i);
-    const text = await row.innerText().catch(() => "");
-    if (
-      text.toLowerCase().includes(CASE_TITLE_FRAGMENT.toLowerCase()) ||
-      text.toLowerCase().includes("sfincs") ||
-      text.toLowerCase().includes("flood")
-    ) {
-      console.log("[flood-proof] found case row:", text.slice(0, 80).trim());
-      await row.click();
-      casePicked = true;
-      await sleep(3000);
-      break;
+  let caseCreated = false;
+  const newCaseBtn = page.locator('[data-testid="grace2-cases-new"]').first();
+  if (await newCaseBtn.isVisible().catch(() => false)) {
+    await newCaseBtn.click();
+    caseCreated = true;
+    console.log("[flood-proof] clicked new-case button (grace2-cases-new)");
+  } else {
+    // Fallback: role-based lookup, same as web/tools/e2e_midcase_swap.mjs
+    const roleBtn = page.getByRole("button", { name: /new case/i }).first();
+    if (await roleBtn.count().catch(() => 0)) {
+      await roleBtn.click().catch(() => {});
+      caseCreated = true;
+      console.log("[flood-proof] clicked new-case button (role fallback)");
     }
   }
-
-  if (!casePicked && caseCount > 0) {
-    console.log("[flood-proof] no matching case by name, picking most recent (first row)");
-    await caseRows.first().click();
-    casePicked = true;
-    await sleep(3000);
+  if (!caseCreated) {
+    console.error("[flood-proof] FATAL: no new-case button found; refusing to run against an existing case");
+    await page.screenshot({ path: path.join(PROOF_DIR, "_debug-no-new-case-btn.png") });
+    await browser.close();
+    process.exit(1);
   }
+  await sleep(1500);
+  // Dismiss the save-gate modal if it appears (anonymous user)
+  await dismissSaveGate(page);
 
-  if (!casePicked) {
-    console.log("[flood-proof] no cases found - skipping to fresh run");
-  }
-
-  // Wait for layers to appear
-  if (casePicked) {
-    console.log("[flood-proof] waiting for layers to load...");
-    try {
-      await waitFor(async () => {
-        const lc = await layerCount(page);
-        return lc > 0;
-      }, 20000, 1000, "layers > 0");
-    } catch (_) {
-      console.log("[flood-proof] no layers appeared after 20s");
-    }
+  // Wait for the case-open to settle: chat input visible and not blocked
+  try {
+    await waitFor(async () => {
+      const modal = page.locator('[data-testid="grace2-save-gate-modal"]');
+      if (await modal.isVisible().catch(() => false)) {
+        // dismiss it first
+        const cont = page.locator('[data-testid="grace2-save-gate-modal-continue"]');
+        if (await cont.isVisible().catch(() => false)) await cont.click().catch(() => {});
+      }
+      const el = page.locator('[data-testid="chat-input"] textarea, textarea').first();
+      const blocked = await page.locator('[data-testid="grace2-save-gate-modal"]').isVisible().catch(() => false);
+      return (await el.isVisible().catch(() => false)) && !blocked;
+    }, 15000, 500, "chat input unblocked");
+  } catch (_) {
+    console.log("[flood-proof] WARN: chat input may still be blocked by modal");
   }
 
   const lc0 = await layerCount(page);
-  console.log("[flood-proof] layer count after case select:", lc0);
+  console.log("[flood-proof] layer count in fresh case (expect 0):", lc0);
 
   // ============================================================
-  // Step 2: Layer panel analysis + fix ordering for screenshots
+  // Step 2: Fresh flood run + mid-run screenshot 26
   // ============================================================
+  console.log("[flood-proof] starting a fresh flood run for screenshot 26...");
 
-  // Check layer names
+  const preRunListing = await minioListing();
+  const preRunPrefixes = runPrefixes(preRunListing);
+
+  await sendChatMessage(page, FLOOD_PROMPT);
+  const runStartedAt = Date.now();
+
+  const MAX_WAIT_MS = 20 * 60 * 1000; // 20 minutes
+  const POLL_MS = 3000;
+  let screenshot26Done = false;
+  let resultRunId = null;
+  let pipelineCardsSeen = false;
+  const deadline2 = Date.now() + MAX_WAIT_MS;
+
+  console.log("[flood-proof] polling for run progress...");
+  while (Date.now() < deadline2) {
+    await sleep(POLL_MS);
+    const elapsed = Math.round((Date.now() - runStartedAt) / 1000);
+
+    await clickConfirmations(page);
+
+    // Check for pipeline cards
+    if (!pipelineCardsSeen) {
+      const toolCardSels = [
+        '[data-testid="pipeline-card-stack"]',
+        '[data-testid="grace2-sheet-tool-strip"]',
+        '[data-testid="resolution-picker-card"]',
+        '[data-testid="sandbox-card-proceed"]',
+      ];
+      for (const sel of toolCardSels) {
+        const count = await page.locator(sel).count().catch(() => 0);
+        if (count > 0) {
+          pipelineCardsSeen = true;
+          console.log("[flood-proof] pipeline cards visible via " + sel + " (+" + elapsed + "s)");
+          break;
+        }
+      }
+    }
+
+    // Take screenshot 26 once pipeline cards appear
+    if (pipelineCardsSeen && !screenshot26Done) {
+      await page.screenshot({ path: path.join(PROOF_DIR, "26-flood-run-progress.png") });
+      console.log("[flood-proof] screenshot: 26-flood-run-progress.png (pipeline cards)");
+      screenshot26Done = true;
+    }
+
+    // Check MinIO for new run prefix
+    const nowListing = await minioListing();
+    const nowPrefixes = runPrefixes(nowListing);
+    for (const p of nowPrefixes) {
+      if (!preRunPrefixes.has(p)) {
+        resultRunId = p;
+        if (!screenshot26Done) {
+          await page.screenshot({ path: path.join(PROOF_DIR, "26-flood-run-progress.png") });
+          console.log("[flood-proof] screenshot: 26-flood-run-progress.png (new run prefix)");
+          screenshot26Done = true;
+        }
+      }
+    }
+
+    if (screenshot26Done && resultRunId) {
+      // Wait a bit more for depth layer to appear, then we're done
+      console.log("[flood-proof] run prefix found: " + resultRunId + " (+" + elapsed + "s), waiting for depth layers...");
+      const lc2 = await layerCount(page);
+      if (lc2 > 2) {
+        console.log("[flood-proof] layers appeared: " + lc2);
+        break;
+      }
+    }
+
+    if (elapsed % 30 < POLL_MS / 1000 + 1) {
+      console.log("[flood-proof] still polling... +" + elapsed + "s | pipeline=" + pipelineCardsSeen + " | runId=" + resultRunId);
+    }
+  }
+
+  if (!screenshot26Done) {
+    await page.screenshot({ path: path.join(PROOF_DIR, "26-flood-run-progress.png") });
+    console.log("[flood-proof] screenshot: 26-flood-run-progress.png (timeout fallback)");
+  }
+
+  // ============================================================
+  // OPEN-12 fix: the Step-2 hasDepthLayers/groupCount scan ran BEFORE the
+  // fresh run, so it only ever measured pre-existing case layers. Re-scan
+  // the panel AFTER the run, waiting up to 150s for the fresh depth rows
+  // (publishes land a few seconds after the solve completes).
+  // ============================================================
+  let hasDepthLayersFinal = false;
+  let groupCountFinal = 0;
+  {
+    const deadline = Date.now() + 150000;
+    while (Date.now() < deadline) {
+      const rows = page.locator('[data-testid="layer-row"], [data-testid="layer-group-row"]');
+      const n = await rows.count().catch(() => 0);
+      const names = [];
+      for (let i = 0; i < n; i++) {
+        names.push((await rows.nth(i).innerText().catch(() => "")).toLowerCase());
+      }
+      hasDepthLayersFinal = names.some(
+        (t) => t.includes("flood depth") || t.includes("depth step") || t.includes("peak flood")
+      );
+      groupCountFinal = await page.locator('[data-testid="layer-group-row"]').count().catch(() => 0);
+      if (hasDepthLayersFinal && groupCountFinal > 0) break;
+      await sleep(3000);
+    }
+    console.log(
+      "[flood-proof] post-run panel scan: depth=" + hasDepthLayersFinal + " groups=" + groupCountFinal
+    );
+  }
+
+  // ============================================================
+  // Step 3: Layer panel analysis on the FRESH case's layers
+  // ============================================================
   const allRows = page.locator('[data-testid="layer-row"], [data-testid="layer-group-row"]');
   const allRowCount = await allRows.count().catch(() => 0);
   const layerNames = [];
@@ -379,11 +471,6 @@ async function main() {
     layerNames.push(text.trim().slice(0, 60));
   }
   console.log("[flood-proof] layers in panel:", layerNames);
-
-  const hasDepthLayers = layerNames.some(
-    (n) => n.toLowerCase().includes("flood depth") || n.toLowerCase().includes("depth step") || n.toLowerCase().includes("peak flood")
-  );
-  console.log("[flood-proof] has depth/flood layers:", hasDepthLayers);
 
   // Turn off landcover to let flood layer show through
   await toggleLayerVisibility(page, "Land Cover", false);
@@ -399,7 +486,7 @@ async function main() {
   console.log("[flood-proof] screenshot: 22-flood-peak-inundation.png (peak depth visible)");
 
   // ============================================================
-  // Step 3: Animation screenshots
+  // Step 4: Animation screenshots
   // ============================================================
   // Look for animation group row (layer-group-row)
   const groupRows = page.locator('[data-testid="layer-group-row"]');
@@ -488,7 +575,6 @@ async function main() {
     } else {
       // No group frames visible - use individual layer rows for stepped view
       console.log("[flood-proof] no frame selectors found, using per-frame layer toggles");
-      // Find all flood depth frame rows in the panel (these may be individual layer-rows)
       const layerRowList = page.locator('[data-testid="layer-row"]');
       const lrCount = await layerRowList.count().catch(() => 0);
       const floodFrameRows = [];
@@ -594,153 +680,6 @@ async function main() {
     }
   }
 
-  // ============================================================
-  // Step 4: Fresh flood run + mid-run screenshot 26
-  // ============================================================
-  console.log("[flood-proof] starting a fresh flood run for screenshot 26...");
-
-  const preRunListing = await minioListing();
-  const preRunPrefixes = runPrefixes(preRunListing);
-
-  // Open new case (click the + button in cases panel)
-  const newCaseBtn = page.locator('[data-testid="grace2-cases-new"]');
-  if (await newCaseBtn.isVisible().catch(() => false)) {
-    await newCaseBtn.click();
-    await sleep(1500);
-    console.log("[flood-proof] clicked new case");
-    // Dismiss the save-gate modal if it appears (anonymous user)
-    const saveGateContinue = page.locator('[data-testid="grace2-save-gate-modal-continue"]');
-    if (await saveGateContinue.isVisible().catch(() => false)) {
-      await saveGateContinue.click();
-      console.log("[flood-proof] dismissed save gate modal");
-      await sleep(1500);
-    }
-  } else {
-    console.log("[flood-proof] no new-case button visible, sending prompt to current case");
-  }
-
-  // Wait for chat input to be ready for the fresh run
-  try {
-    await waitFor(async () => {
-      const modal = page.locator('[data-testid="grace2-save-gate-modal"]');
-      if (await modal.isVisible().catch(() => false)) {
-        // dismiss it first
-        const cont = page.locator('[data-testid="grace2-save-gate-modal-continue"]');
-        if (await cont.isVisible().catch(() => false)) await cont.click().catch(() => {});
-      }
-      const el = page.locator('[data-testid="chat-input"] textarea, textarea').first();
-      const blocked = await page.locator('[data-testid="grace2-save-gate-modal"]').isVisible().catch(() => false);
-      return (await el.isVisible().catch(() => false)) && !blocked;
-    }, 15000, 500, "chat input unblocked");
-  } catch (_) {
-    console.log("[flood-proof] WARN: chat input may still be blocked by modal");
-  }
-
-  await sendChatMessage(page, FLOOD_PROMPT);
-  const runStartedAt = Date.now();
-
-  const MAX_WAIT_MS = 20 * 60 * 1000; // 20 minutes
-  const POLL_MS = 3000;
-  let screenshot26Done = false;
-  let resultRunId = null;
-  let pipelineCardsSeen = false;
-  const deadline2 = Date.now() + MAX_WAIT_MS;
-
-  console.log("[flood-proof] polling for run progress...");
-  while (Date.now() < deadline2) {
-    await sleep(POLL_MS);
-    const elapsed = Math.round((Date.now() - runStartedAt) / 1000);
-
-    await clickConfirmations(page);
-
-    // Check for pipeline cards
-    if (!pipelineCardsSeen) {
-      const toolCardSels = [
-        '[data-testid="pipeline-card-stack"]',
-        '[data-testid="grace2-sheet-tool-strip"]',
-        '[data-testid="resolution-picker-card"]',
-        '[data-testid="sandbox-card-proceed"]',
-      ];
-      for (const sel of toolCardSels) {
-        const count = await page.locator(sel).count().catch(() => 0);
-        if (count > 0) {
-          pipelineCardsSeen = true;
-          console.log("[flood-proof] pipeline cards visible via " + sel + " (+" + elapsed + "s)");
-          break;
-        }
-      }
-    }
-
-    // Take screenshot 26 once pipeline cards appear
-    if (pipelineCardsSeen && !screenshot26Done) {
-      await page.screenshot({ path: path.join(PROOF_DIR, "26-flood-run-progress.png") });
-      console.log("[flood-proof] screenshot: 26-flood-run-progress.png (pipeline cards)");
-      screenshot26Done = true;
-    }
-
-    // Check MinIO for new run prefix
-    const nowListing = await minioListing();
-    const nowPrefixes = runPrefixes(nowListing);
-    for (const p of nowPrefixes) {
-      if (!preRunPrefixes.has(p)) {
-        resultRunId = p;
-        if (!screenshot26Done) {
-          await page.screenshot({ path: path.join(PROOF_DIR, "26-flood-run-progress.png") });
-          console.log("[flood-proof] screenshot: 26-flood-run-progress.png (new run prefix)");
-          screenshot26Done = true;
-        }
-      }
-    }
-
-    if (screenshot26Done && resultRunId) {
-      // Wait a bit more for depth layer to appear, then we're done
-      console.log("[flood-proof] run prefix found: " + resultRunId + " (+" + elapsed + "s), waiting for depth layers...");
-      const lc2 = await layerCount(page);
-      if (lc2 > 2) {
-        console.log("[flood-proof] layers appeared: " + lc2);
-        break;
-      }
-    }
-
-    if (elapsed % 30 < POLL_MS / 1000 + 1) {
-      console.log("[flood-proof] still polling... +" + elapsed + "s | pipeline=" + pipelineCardsSeen + " | runId=" + resultRunId);
-    }
-  }
-
-  if (!screenshot26Done) {
-    await page.screenshot({ path: path.join(PROOF_DIR, "26-flood-run-progress.png") });
-    console.log("[flood-proof] screenshot: 26-flood-run-progress.png (timeout fallback)");
-  }
-
-  // ============================================================
-  // OPEN-12 fix: the Step-2 hasDepthLayers/groupCount scan ran BEFORE the
-  // fresh run, so it only ever measured pre-existing case layers. Re-scan
-  // the panel AFTER the run, waiting up to 150s for the fresh depth rows
-  // (publishes land a few seconds after the solve completes).
-  // ============================================================
-  let hasDepthLayersFinal = hasDepthLayers;
-  let groupCountFinal = groupCount;
-  {
-    const deadline = Date.now() + 150000;
-    while (Date.now() < deadline) {
-      const rows = page.locator('[data-testid="layer-row"], [data-testid="layer-group-row"]');
-      const n = await rows.count().catch(() => 0);
-      const names = [];
-      for (let i = 0; i < n; i++) {
-        names.push((await rows.nth(i).innerText().catch(() => "")).toLowerCase());
-      }
-      hasDepthLayersFinal = names.some(
-        (t) => t.includes("flood depth") || t.includes("depth step") || t.includes("peak flood")
-      );
-      groupCountFinal = await page.locator('[data-testid="layer-group-row"]').count().catch(() => 0);
-      if (hasDepthLayersFinal && groupCountFinal > 0) break;
-      await sleep(3000);
-    }
-    console.log(
-      "[flood-proof] post-run panel scan: depth=" + hasDepthLayersFinal + " groups=" + groupCountFinal
-    );
-  }
-
   await browser.close();
 
   // ============================================================
@@ -754,7 +693,7 @@ async function main() {
     "26-flood-run-progress.png",
   ];
   console.log("\n=== e2e_flood_proof.mjs SUMMARY ===");
-  console.log("case_picked:", casePicked);
+  console.log("case_created:", caseCreated, "(e2e user: " + E2E_USER_ID + ")");
   console.log("has_depth_layers:", hasDepthLayersFinal);
   console.log("animation_groups:", groupCountFinal);
   console.log("fresh_run_id:", resultRunId || "(none)");
