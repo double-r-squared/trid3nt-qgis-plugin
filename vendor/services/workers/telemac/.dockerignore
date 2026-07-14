@@ -1,0 +1,8 @@
+# Keep the TELEMAC worker build context minimal (container-hygiene rule).
+__pycache__/
+*.pyc
+.pytest_cache/
+test_*.py
+*_test.py
+Dockerfile
+.dockerignore

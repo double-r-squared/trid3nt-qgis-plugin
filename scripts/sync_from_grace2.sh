@@ -30,6 +30,7 @@ SUBTREES=(
   services/workers/_modflow_build
   services/workers/_modflow_postprocess
   services/workers/elmfire
+  services/workers/telemac
   packages/contracts
   web
 )

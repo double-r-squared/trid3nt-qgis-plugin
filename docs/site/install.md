@@ -72,6 +72,7 @@ Fortran solvers into the image; the build is one-time and cached):
 ```sh
 sg docker -c 'docker build -t trid3nt-local/geoclaw:latest -f vendor/services/workers/geoclaw/Dockerfile vendor/'
 sg docker -c 'docker build -t trid3nt-local/swan:latest vendor/services/workers/swan/'
+sg docker -c 'docker build -t trid3nt-local/telemac:latest vendor/services/workers/telemac/'  # or: bash scripts/build_telemac_image.sh
 ```
 
 These three image names are what `.env.local` points at (`GRACE2_SFINCS_IMAGE`,

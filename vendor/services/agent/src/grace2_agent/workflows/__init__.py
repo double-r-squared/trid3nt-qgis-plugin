@@ -59,5 +59,6 @@ from . import model_news_event_ingest as _model_news_event_ingest  # noqa: F401 
 from . import model_nws_flood_event_scenario as _model_nws_flood_event_scenario  # noqa: F401  — job-0229 Case 3 composer
 from . import pelicun_damage_with_buildings as _pelicun_damage_with_buildings  # noqa: F401  — job-0147 buildings→Pelicun composer
 from . import model_conservation_priority as _model_conservation_priority  # noqa: F401  -- conservation micro-North-Star composer (NAIP base + NDVI + MoBI + GBIF + IUCN); registers run_model_conservation_priority
+from . import run_telemac as _run_telemac  # noqa: F401  -- P2: registers the telemac_river_dye local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); no LLM tool yet (P4)
 
 __all__: list[str] = []
