@@ -5363,6 +5363,15 @@ async def _handle_case_command(
             )
             return
         state.active_case_id = new_case_id
+        # Stale-AOI fix: a fresh Case must NOT inherit the previous Case's AOI
+        # anchor. Reset the in-session bbox to None BEFORE the conditional seed
+        # (mirrors the select/deselect handlers) so a bbox-less create starts
+        # with no anchor -> _turn_case_bbox re-geocodes from the place name in
+        # the first prompt instead of reusing the prior Case's extent. Without
+        # this, creating a fresh Case right after (e.g.) a Chattanooga flood
+        # Case left state.case_bbox pointing at Chattanooga, so a "Twin Falls,
+        # Idaho" prompt ran in Tennessee.
+        state.case_bbox = None
         # #170 AOI-first: seed the in-session AOI anchor so the FIRST turn's
         # _turn_case_bbox returns the user's pre-set extent (mirrors
         # _pin_case_aoi_from_solve). Absent/invalid bbox => leave as-is (None).

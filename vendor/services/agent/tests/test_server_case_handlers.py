@@ -214,6 +214,66 @@ def test_case_create_without_bbox_leaves_aoi_unset(
     assert state.case_bbox is None
 
 
+def test_case_create_without_bbox_resets_stale_aoi_anchor(
+    _persistence_bound: Persistence,
+) -> None:
+    """Stale-AOI regression: a fresh Case must NOT inherit the PREVIOUS Case's
+    in-session AOI anchor.
+
+    Simulates the real incident — a Case was opened/solved with a bbox set
+    (``state.case_bbox`` non-None, e.g. the Chattanooga flood extent), then the
+    user creates a NEW Case with no bbox. The create handler must reset
+    ``state.case_bbox`` to None so the first turn re-geocodes from the place
+    name (Twin Falls, Idaho) instead of reusing Chattanooga's extent.
+
+    NOTE: unlike ``test_case_create_without_bbox_leaves_aoi_unset`` (which
+    starts from a fresh state where ``case_bbox`` is already None and so passes
+    even without the fix), this test pre-seeds a stale anchor, so it FAILS
+    without the reset line in the create handler.
+    """
+    ws = MockWebSocket()
+    state = _fresh_state()
+    state.authenticated_user_id = new_ulid()
+    # Prior Case left a stale AOI anchor (Chattanooga flood extent).
+    state.case_bbox = [-85.32, 35.03, -85.28, 35.07]
+    cmd = CaseCommandEnvelopePayload(
+        command="create", args={"title": "Twin Falls groundwater"}
+    )
+    asyncio.run(_handle_case_command(ws, state, cmd))
+
+    # Fresh Case created and the stale anchor is gone.
+    assert state.active_case_id is not None
+    assert state.case_bbox is None
+    case = asyncio.run(_persistence_bound.get_case(state.active_case_id))
+    assert case is not None
+    assert case.bbox is None
+
+
+def test_case_create_with_bbox_overrides_stale_aoi_anchor(
+    _persistence_bound: Persistence,
+) -> None:
+    """The #170 AOI-first path still works after the stale-anchor reset: a
+    create carrying a valid ``args.bbox`` seeds the NEW extent even when a
+    prior (different) anchor was cached — the reset clears the old one, the
+    conditional seed installs the new one."""
+    ws = MockWebSocket()
+    state = _fresh_state()
+    state.authenticated_user_id = new_ulid()
+    # Stale prior anchor (Chattanooga) that must be replaced, not merged.
+    state.case_bbox = [-85.32, 35.03, -85.28, 35.07]
+    new_bbox = [-114.5, 42.5, -114.4, 42.6]  # Twin Falls, Idaho
+    cmd = CaseCommandEnvelopePayload(
+        command="create",
+        args={"title": "AOI-first Idaho case", "bbox": new_bbox},
+    )
+    asyncio.run(_handle_case_command(ws, state, cmd))
+
+    assert state.case_bbox == new_bbox
+    case = asyncio.run(_persistence_bound.get_case(state.active_case_id))
+    assert case is not None
+    assert list(case.bbox) == new_bbox
+
+
 def test_case_select_emits_case_open_with_chat_history(
     _persistence_bound: Persistence,
 ) -> None:
