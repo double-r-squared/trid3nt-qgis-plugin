@@ -2113,6 +2113,15 @@ def summarize_tool_result(
             "status": "ok",
             "result": _coerce_to_summary_value(result),
         }
+        # HONESTY FLOOR (2026-07-13 DEM 3DEP->GLO-30 ladder): a bare LayerURI
+        # result normally repr-coerces clipped to 200 chars, which would drop
+        # the trailing ``fallback_note`` field. When a cross-source fallback
+        # happened, hoist the note to a top-level key so the LLM ALWAYS sees
+        # that the delivered data is the fallback source, never the primary.
+        # Scoped to fallback layers only -- every other result is unchanged.
+        _fb_note = getattr(result, "fallback_note", None)
+        if isinstance(_fb_note, str) and _fb_note:
+            payload["fallback_note"] = _fb_note
 
     # Final char-budget clip: serialize, if oversized clip and re-wrap.
     try:

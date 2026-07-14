@@ -719,3 +719,57 @@ def test_fetch_fn_output_preserves_dem_crs_without_proj_env():
                 f"job-0257 regression: hillshade CRS degraded to {src.crs} "
                 f"(expected EPSG:5070 from the DEM)"
             )
+
+
+# ---------------------------------------------------------------------------
+# 2026-07-13 DEM fallback ladder (FIX 3): the Copernicus GLO-30 fallback DEM
+# handle must flow through compute_hillshade UNCHANGED. The fallback layer's
+# uri points at a COG written by fetch_copernicus_dem._write_dem_cog (COG
+# driver, EPSG:4326 degrees, float32, nodata=-9999) -- a DIFFERENT byte shape
+# than the 3DEP EPSG:5070 path -- so this proves the uniform dem_uri contract
+# with the real writer + real gdaldem, not by assumption.
+# ---------------------------------------------------------------------------
+
+
+@_SKIP_GDALDEM
+def test_copernicus_fallback_dem_flows_through_hillshade():
+    """A GLO-30-shaped DEM COG (the 3DEP-fallback artifact) hillshades fine."""
+    from grace2_agent.tools.compute_hillshade import _make_fetch_fn
+    from grace2_agent.tools.fetch_copernicus_dem import _write_dem_cog
+
+    # A small synthetic elevation grid over a Berkeley-ish bbox, produced by
+    # the SAME writer the fallback path uses (float32, EPSG:4326, nodata).
+    size = 32
+    bbox = (-122.35, 37.82, -122.20, 37.92)
+    rows = np.linspace(200.0, 20.0, size, dtype=np.float32)
+    dem = np.repeat(rows[:, None], size, axis=1)
+    dem[0, 0] = np.nan  # one nodata cell -- exercised through _NODATA fill
+    cog_bytes = _write_dem_cog(dem, bbox, size, size)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dem_path = os.path.join(tmpdir, "copdem_fallback.tif")
+        with open(dem_path, "wb") as f:
+            f.write(cog_bytes)
+
+        hs_bytes = _make_fetch_fn(
+            dem_uri=dem_path,  # local path branch -- same contract as s3://
+            style="standard",
+            algorithm="Horn",
+            azimuth=315.0,
+            altitude=45.0,
+            z_factor=1.0,
+            storage_client=None,
+        )
+
+        out_path = os.path.join(tmpdir, "hs.tif")
+        with open(out_path, "wb") as f:
+            f.write(hs_bytes)
+        with rasterio.open(out_path) as src:
+            assert src.count >= 1
+            band = src.read(1)
+            # Real luminance variation from the N-S slope, not a flat fill.
+            assert band.max() > band.min()
+            assert src.crs is not None
+            assert src.crs.to_epsg() == 4326, (
+                f"fallback DEM CRS not preserved: {src.crs}"
+            )

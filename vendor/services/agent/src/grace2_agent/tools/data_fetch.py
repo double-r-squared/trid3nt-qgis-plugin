@@ -179,6 +179,24 @@ class DemPartialCoverageError(UpstreamAPIError):
     retryable = True
 
 
+class DemPrimaryTimeoutError(UpstreamAPIError):
+    """The 3DEP DEM attempt exceeded its hard wall-clock budget.
+
+    2026-07-13 live incident (session 01KXF54K...): USGS 3DEP was down
+    ("Service is currently not available") and ``py3dep.get_dem`` ground away
+    inside its internal WMS retry loop with NO per-fetch time cap, eating the
+    remaining AGENT_TURN_TIMEOUT budget before failing. This typed error is
+    raised by ``_fetch_3dep_dem_bytes_bounded`` when the attempt blows the
+    ``GRACE2_DEM_PRIMARY_TIMEOUT_S`` budget (default 90 s) and is treated
+    EXACTLY like a 3DEP service failure: in ``source="auto"`` mode it feeds
+    the Copernicus GLO-30 fallback ladder; pinned ``source="3dep"`` surfaces
+    it with a suggestion to retry on Copernicus.
+    """
+
+    error_code = "DEM_PRIMARY_TIMEOUT"
+    retryable = True
+
+
 # Nominatim usage policy requires a descriptive User-Agent identifying the
 # application + a contact. We bake the project name + repo URL; override the
 # contact email via env var ``GRACE2_NOMINATIM_USER_AGENT`` for ops.
@@ -499,6 +517,101 @@ def _fetch_3dep_dem_bytes(
     return data
 
 
+# ---------------------------------------------------------------------------
+# 3DEP fail-fast budget + Copernicus fallback ladder (2026-07-13 live incident).
+# ---------------------------------------------------------------------------
+# Live failure this fixes (session 01KXF54K..., 3DEP down with "Service is
+# currently not available"): (A) py3dep.get_dem has internal retries and no
+# per-fetch time cap, so a dead 3DEP service grinds until the turn dies on
+# AGENT_TURN_TIMEOUT; (B) fetch_dem had NO fallback despite the norm
+# (primary -> fallback -> honest typed error) and Copernicus GLO-30 being a
+# keyless global 30 m alternative already implemented in this codebase.
+
+#: Env override for the hard wall-clock budget (seconds) on the 3DEP attempt.
+_DEM_PRIMARY_TIMEOUT_ENV = "GRACE2_DEM_PRIMARY_TIMEOUT_S"
+_DEM_PRIMARY_TIMEOUT_DEFAULT_S = 90.0
+
+#: ``source`` spellings that PIN Copernicus GLO-30 (no 3DEP attempt).
+_DEM_SOURCE_COPERNICUS_ALIASES = frozenset(
+    {"copernicus", "cop-dem-glo-30", "glo-30", "glo30", "copernicus_glo30"}
+)
+
+#: ``source`` spellings that PIN USGS 3DEP (explicit request: NO silent
+#: cross-source fallback; a service failure surfaces with a suggestion to
+#: retry on Copernicus instead).
+_DEM_SOURCE_3DEP_PIN_ALIASES = frozenset(
+    {"3dep", "usgs", "usgs-3dep", "usgs_3dep", "usgs3dep", "3dep_seamless"}
+)
+
+
+def _dem_primary_timeout_s() -> float:
+    """Wall-clock budget (s) for the 3DEP attempt; env-overridable, default 90."""
+    raw = os.environ.get(_DEM_PRIMARY_TIMEOUT_ENV, "")
+    try:
+        val = float(raw)
+        if val > 0:
+            return val
+    except (TypeError, ValueError):
+        pass
+    return _DEM_PRIMARY_TIMEOUT_DEFAULT_S
+
+
+def _fetch_3dep_dem_bytes_bounded(
+    bbox: tuple[float, float, float, float],
+    resolution_m: int,
+    timeout_s: float,
+) -> bytes:
+    """Run ``_fetch_3dep_dem_bytes`` under a hard wall-clock budget.
+
+    ``fetch_dem`` is one of the ``_ALWAYS_OFFLOAD_SYNC_TOOLS`` -- the whole tool
+    body already runs on an ``asyncio.to_thread`` worker, so the budget is
+    enforced here with a nested DAEMON thread + ``join(timeout)`` rather than
+    ``asyncio.wait_for`` (there is no loop in this thread to await on).
+
+    Timeout semantics (dangling-thread safety): on expiry the worker thread is
+    ABANDONED and its eventual result/exception is written only into the
+    thread-local ``box`` dict that nothing else reads -- it is discarded, never
+    surfaced, and never reaches shared state. In particular the cache write
+    inside ``read_through`` cannot happen for a timed-out attempt, because
+    ``read_through`` only writes when its ``fetch_fn`` RETURNS and this
+    ``fetch_fn`` RAISES ``DemPrimaryTimeoutError`` instead. The daemon flag
+    keeps an in-flight py3dep grind from blocking interpreter shutdown.
+    """
+    import threading
+
+    box: dict[str, Any] = {}
+
+    def _runner() -> None:
+        try:
+            # Late-bound module-global lookup so test monkeypatching of
+            # ``_fetch_3dep_dem_bytes`` keeps working through the wrapper.
+            box["data"] = _fetch_3dep_dem_bytes(bbox, resolution_m)
+        except BaseException as exc:  # noqa: BLE001 -- carried to the caller
+            box["exc"] = exc
+
+    worker = threading.Thread(
+        target=_runner, name="fetch-dem-3dep-bounded", daemon=True
+    )
+    worker.start()
+    worker.join(timeout=timeout_s)
+    if worker.is_alive():
+        raise DemPrimaryTimeoutError(
+            f"USGS 3DEP attempt exceeded the {timeout_s:.0f}s wall-clock budget "
+            f"(env {_DEM_PRIMARY_TIMEOUT_ENV}) for bbox={bbox} "
+            f"resolution={resolution_m}m; treating as a 3DEP service failure. "
+            "The in-flight attempt was abandoned and its result discarded."
+        )
+    if "exc" in box:
+        raise box["exc"]
+    return box["data"]
+
+
+def _short_exc(exc: BaseException, limit: int = 220) -> str:
+    """One-line, length-clipped exception text for honest fallback notes."""
+    text = " ".join(str(exc).split())
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
 @register_tool(
     _FETCH_DEM_METADATA,
     # Annotations: readOnlyHint=True, openWorldHint=True (USGS 3DEP py3dep),
@@ -508,18 +621,24 @@ def _fetch_3dep_dem_bytes(
 def fetch_dem(
     bbox: tuple[float, float, float, float],
     resolution_m: int = 10,
-    source: str = "3dep",
+    source: str = "auto",
     # job-0164: absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP by default; GLOBAL Copernicus GLO-30 via source="copernicus").
+    """Fetch a digital elevation model (DEM) / terrain elevation for a bounding box (USGS 3DEP first with automatic Copernicus GLO-30 fallback; either source pinnable).
 
     Use this (not ``fetch_topobathy``, which is coastal land+seafloor) for a plain
-    ground-elevation DEM. Pass ``source="copernicus"`` for terrain OUTSIDE the US
-    (the Alps, Andes, Himalaya, Africa, ...) -- that ABSORBS the former
-    ``fetch_copernicus_dem`` (keyless global GLO-30 30 m). The default
-    ``source="3dep"`` keeps the current US 10 m behavior byte-for-byte.
+    ground-elevation DEM. The default ``source="auto"`` tries USGS 3DEP (US, 10 m)
+    first and, if the 3DEP SERVICE is unavailable / times out, automatically falls
+    back to Copernicus GLO-30 (keyless GLOBAL 30 m) for the same bbox -- the
+    returned layer name and ``fallback_note`` say so honestly (GLO-30 data is
+    never presented as 3DEP). Prefer omitting ``source`` (or passing "auto");
+    pass ``source="copernicus"`` for terrain OUTSIDE the US (the Alps, Andes,
+    Himalaya, Africa, ...) -- that ABSORBS the former ``fetch_copernicus_dem``
+    (keyless global GLO-30 30 m). Pass ``source="3dep"`` ONLY to pin 3DEP: a
+    pinned source never silently switches (a 3DEP outage then surfaces a typed
+    error suggesting Copernicus).
 
     **What it does:** Downloads a Cloud-Optimized GeoTIFF of ground elevation
     from the USGS 3D Elevation Program (3DEP) via the ``py3dep`` library and
@@ -557,9 +676,12 @@ def fetch_dem(
       10 m or 30 m are fastest on 3DEP's tile tree. A large bbox may deliver a
       coarser grid than requested (a pixel-budget auto-coarsen); the delivered
       spacing is stamped into the result.
-    - ``source`` (str, default ``"3dep"``): ``"3dep"`` (USGS 3DEP, US-only,
-      honors ``resolution_m``) or ``"copernicus"`` (Copernicus GLO-30, global
-      30 m, keyless -- delegates to the folded-in ``fetch_copernicus_dem``).
+    - ``source`` (str, default ``"auto"``): ``"auto"`` (USGS 3DEP first,
+      automatic Copernicus GLO-30 fallback on a 3DEP service failure/timeout --
+      honestly labeled); ``"3dep"`` (PIN USGS 3DEP, US-only, honors
+      ``resolution_m``, no cross-source fallback); or ``"copernicus"`` (PIN
+      Copernicus GLO-30, global 30 m, keyless -- delegates to the folded-in
+      ``fetch_copernicus_dem``).
 
     **Returns:**
     A ``LayerURI`` pointing at a Cloud-Optimized GeoTIFF in the cache bucket
@@ -581,16 +703,16 @@ def fetch_dem(
     # SOURCE consolidation: the global Copernicus GLO-30 path is folded in as a
     # source mode (the former fetch_copernicus_dem). Same LayerURI raster
     # contract + continuous_dem ramp; the impl lives in the copernicus module.
-    if isinstance(source, str) and source.strip().lower() in {
-        "copernicus",
-        "cop-dem-glo-30",
-        "glo-30",
-        "glo30",
-        "copernicus_glo30",
-    }:
+    src = source.strip().lower() if isinstance(source, str) else "auto"
+    if src in _DEM_SOURCE_COPERNICUS_ALIASES:
         from .fetch_copernicus_dem import _copernicus_dem_impl
 
         return _copernicus_dem_impl(bbox)
+
+    # Pin semantics (2026-07-13 fallback ladder): an EXPLICIT source="3dep" is
+    # honored with no silent cross-source fallback; anything else ("auto", the
+    # default, or an unrecognized spelling) is the 3DEP-primary auto-ladder.
+    pinned_3dep = src in _DEM_SOURCE_3DEP_PIN_ALIASES
 
     # Continent ceiling (F16-for-DEM, 2026-07-10): mirrors fetch_landcover's
     # 5,000,000 km^2 hard cap. Below this, auto-coarsen instead of hard-fail
@@ -626,12 +748,82 @@ def fetch_dem(
     # so the two never collide on the same cache key (matches fetch_landcover).
     quantized = round_bbox_to_resolution(bbox, effective_res)
     params = {"bbox": list(quantized), "resolution_m": effective_res}
-    result = read_through(
-        metadata=_FETCH_DEM_METADATA,
-        params=params,
-        ext="tif",
-        fetch_fn=lambda: _fetch_3dep_dem_bytes(quantized, effective_res),
-    )
+    timeout_s = _dem_primary_timeout_s()
+    try:
+        result = read_through(
+            metadata=_FETCH_DEM_METADATA,
+            params=params,
+            ext="tif",
+            fetch_fn=lambda: _fetch_3dep_dem_bytes_bounded(
+                quantized, effective_res, timeout_s
+            ),
+        )
+    except DemPartialCoverageError:
+        # DATA-coverage signal, not service health: 3DEP responded but the
+        # raster under-covers the bbox. Existing typed consumers (the urban
+        # workflow's 1m->10m ladder, the agent's honest narration) act on it;
+        # propagate unchanged rather than folding into the service ladder.
+        raise
+    except UpstreamAPIError as primary_exc:
+        # SERVICE failure (unavailable / 5xx / DemPrimaryTimeoutError budget
+        # blow). User errors (BboxInvalidError) raised above never reach here.
+        if pinned_3dep:
+            pinned_err = UpstreamAPIError(
+                f"USGS 3DEP DEM fetch failed for bbox={quantized} "
+                f"resolution={effective_res}m: {_short_exc(primary_exc)} -- "
+                "source='3dep' was explicitly requested, so no cross-source "
+                "fallback was attempted. If 3DEP is down, retry with "
+                "source='copernicus' (global Copernicus GLO-30, 30 m) or "
+                "source='auto' (3DEP first, GLO-30 fallback)."
+            )
+            # Structured recovery options: summarize_tool_result surfaces a
+            # ``suggestions`` list so the model relays real options verbatim.
+            pinned_err.suggestions = [  # type: ignore[attr-defined]
+                "Retry with source='copernicus' (global GLO-30, 30 m).",
+                "Retry with source='auto' to allow the automatic fallback.",
+            ]
+            raise pinned_err from primary_exc
+        logger.warning(
+            "fetch_dem: 3DEP primary failed (%s); attempting Copernicus "
+            "GLO-30 fallback for bbox=%s",
+            _short_exc(primary_exc),
+            bbox,
+        )
+        from .fetch_copernicus_dem import _copernicus_dem_impl
+
+        try:
+            cop_layer = _copernicus_dem_impl(bbox)
+        except Exception as cop_exc:  # noqa: BLE001 -- typed both-failed error
+            both_err = UpstreamAPIError(
+                f"DEM fetch failed on BOTH sources for bbox={bbox} -- "
+                f"USGS 3DEP (primary): {_short_exc(primary_exc)}; "
+                f"Copernicus GLO-30 (fallback): {_short_exc(cop_exc)}. "
+                "No elevation data was fetched."
+            )
+            raise both_err from cop_exc
+        # HONESTY FLOOR: never present GLO-30 data as 3DEP. The name suffix
+        # reaches the layer list + the LLM's repr summary; fallback_note is the
+        # structured field (LayerURI additive contract, 2026-07-13).
+        res_note = (
+            ""
+            if requested_res == 30
+            else (
+                f" GLO-30 is fixed 30 m, so the requested {requested_res} m "
+                "3DEP resolution does not apply."
+            )
+        )
+        return cop_layer.model_copy(
+            update={
+                "name": cop_layer.name + " (Copernicus GLO-30 -- 3DEP unavailable)",
+                "fallback_note": (
+                    "Automatic source fallback: USGS 3DEP (primary) was "
+                    f"unavailable ({_short_exc(primary_exc)}), so this DEM is "
+                    "Copernicus GLO-30 30 m data for the same bbox."
+                    + res_note
+                    + " Do not present this layer as 3DEP."
+                ),
+            }
+        )
     assert result.uri is not None, "fetch_dem is cacheable; uri must be set"
     name = f"USGS 3DEP DEM ({effective_res}m)"
     if downsampled:

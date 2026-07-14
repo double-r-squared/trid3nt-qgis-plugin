@@ -252,6 +252,14 @@ class LayerURI(GraceModel):
     units: str | None = None
     bbox: tuple[float, float, float, float] | None = None  # (min_lon, min_lat, max_lon, max_lat); triggers zoom-to
     legend: LegendKey | None = None  # data-driven render key; None => legacy style_preset rendering
+    # Cross-source fallback honesty marker (2026-07-13, DEM 3DEP->GLO-30
+    # ladder): set ONLY when a tool substituted a fallback data source for the
+    # requested/default primary (e.g. ``fetch_dem`` with USGS 3DEP down returns
+    # Copernicus GLO-30 instead). Carries a human-readable note naming BOTH
+    # sources so the LLM/user can never mistake fallback data for the primary
+    # (honesty floor). ``None`` => the layer is exactly the requested source.
+    # Additive + optional per the GraceModel forward-compat rule.
+    fallback_note: str | None = None
 
 
 # --------------------------------------------------------------------------- #
