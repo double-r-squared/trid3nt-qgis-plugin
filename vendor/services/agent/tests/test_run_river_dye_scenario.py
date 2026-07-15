@@ -249,6 +249,30 @@ def test_composer_geocode_dispatch_and_manifest_overrides():
     assert reach["nav_direction"] == "DM"
 
 
+def test_composer_reuses_prefetched_river_geometry_uri():
+    """When a river_geometry_uri is supplied the composer reuses it for the seed
+    and does NOT call fetch_river_geometry (the live post-fetch routing path)."""
+    from grace2_agent.workflows import model_river_dye_release_scenario as comp
+    from grace2_agent.tools import solver as solver_mod
+
+    captured: dict = {}
+    cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
+        comp, solver_mod, captured
+    )
+    provided = "s3://trid3nt-cache/cache/static-30d/river_geometry/prefetched.fgb"
+    with cm_multi, cm_solver, cm_wait, cm_bind:
+        peak = asyncio.run(
+            comp.model_river_dye_release_scenario(
+                location="Twin Falls, Idaho",
+                river_geometry_uri=provided,
+            )
+        )
+    assert isinstance(peak, TelemacDyeLayerURI)
+    # The provided uri was used for the seed; fetch_river_geometry was NOT called.
+    assert captured["seed_uri"] == provided
+    assert "river_bbox" not in captured  # _fake_registry_fn('fetch_river_geometry') never ran
+
+
 def test_composer_falls_back_to_centroid_when_no_river_seed():
     """When river-seed extraction returns None the composer seeds the geocoded
     centroid (the worker NLDI-snaps it) -- honest degrade, never a dead-end."""

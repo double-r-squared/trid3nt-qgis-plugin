@@ -290,6 +290,7 @@ async def model_river_dye_release_scenario(
     sim_duration_s: float = DEFAULT_SIM_DURATION_S,
     source_q_m3s: float = DEFAULT_SOURCE_Q_M3S,
     channel_width_m: float = DEFAULT_CHANNEL_WIDTH_M,
+    river_geometry_uri: str | None = None,
     *,
     compute_class: str = "medium",
     pipeline_emitter: Any | None = None,
@@ -297,8 +298,10 @@ async def model_river_dye_release_scenario(
     """Compose place/AOI -> river reach -> TELEMAC-2D dye pulse -> animated layer.
 
     Supply exactly one of ``location`` (a place name, geocoded - the natural-prompt
-    path) or ``bbox`` (an explicit AOI, e.g. a drawn canvas AOI). Returns the
-    published ``TelemacDyeLayerURI`` (a ``LayerURI`` subtype) so the emit_tool_call
+    path) or ``bbox`` (an explicit AOI, e.g. a drawn canvas AOI). Optionally pass a
+    ``river_geometry_uri`` (an already-fetched ``fetch_river_geometry`` flowline) to
+    reuse it for the seed instead of re-fetching. Returns the published
+    ``TelemacDyeLayerURI`` (a ``LayerURI`` subtype) so the emit_tool_call
     ``add_loaded_layer`` gate fires and ``export_case_to_qgis`` discovers the
     SELAFIN mesh sibling for animation.
 
@@ -314,13 +317,17 @@ async def model_river_dye_release_scenario(
         )
 
     emitter = pipeline_emitter or current_emitter()
+    prefetched_river = bool(river_geometry_uri and str(river_geometry_uri).strip())
 
     # Plan the user-meaningful atomic-tool count for the breadcrumb: geocode
-    # (place path only) + fetch_river_geometry + run_solver + postprocess +
-    # publish_layer. Each substep is a no-op when no emitter is bound.
-    _planned = 4  # fetch_river_geometry + run_solver + postprocess + publish
+    # (place path only) + fetch_river_geometry (only when NOT pre-fetched) +
+    # run_solver + postprocess + publish_layer. Each substep is a no-op when no
+    # emitter is bound.
+    _planned = 3  # run_solver + postprocess + publish
     if has_loc:
         _planned += 1  # geocode_location
+    if not prefetched_river:
+        _planned += 1  # fetch_river_geometry
     begin_substeps(current_emitter(), _planned)
 
     # --- Stage 1: resolve the AOI + centroid (F46: geocode, never hand-type) -- #
@@ -349,16 +356,21 @@ async def model_river_dye_release_scenario(
 
     river_bbox = _bbox_around(center_lon, center_lat, DEFAULT_RIVER_AOI_HALF_DEG)
 
-    # --- Stage 2: fetch the river flowline + pick a mid-reach seed ------------ #
-    fetch_river_fn = _registry_fn("fetch_river_geometry")
-    async with substep(current_emitter(), "fetch_river_geometry"):
-        river_layer = await _maybe_emit(
-            pipeline_emitter,
-            name="Fetch river geometry",
-            tool_name="fetch_river_geometry",
-            invoke=lambda: fetch_river_fn(bbox=river_bbox),
-        )
-    river_uri = _layer_field(river_layer, "uri")
+    # --- Stage 2: obtain the river flowline (reuse a provided one, else fetch)
+    #     + pick a mid-reach seed. When the caller already fetched the reach
+    #     (fetch_river_geometry -> river_geometry_uri), reuse it -- no re-fetch. -- #
+    if prefetched_river:
+        river_uri: str | None = str(river_geometry_uri)
+    else:
+        fetch_river_fn = _registry_fn("fetch_river_geometry")
+        async with substep(current_emitter(), "fetch_river_geometry"):
+            river_layer = await _maybe_emit(
+                pipeline_emitter,
+                name="Fetch river geometry",
+                tool_name="fetch_river_geometry",
+                invoke=lambda: fetch_river_fn(bbox=river_bbox),
+            )
+        river_uri = _layer_field(river_layer, "uri")
     seed: tuple[float, float] | None = None
     if river_uri:
         seed = await asyncio.to_thread(_river_seed_from_geometry, str(river_uri))

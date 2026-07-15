@@ -136,6 +136,11 @@ async def run_river_seepage_job(
           river leak into the aquifer", or to model river-coupled groundwater.
 
     Do NOT use this for:
+        - A dye / contaminant / tracer spill that travels DOWNSTREAM in the river
+          SURFACE water (the plume moving down the channel itself, not seeping into
+          the aquifer) — use ``run_telemac``. This tool is GROUNDWATER seepage
+          (water UNDER the ground); ``run_telemac`` is the surface flow IN the
+          river.
         - A point spill with NO river coupling (use ``run_modflow_job``).
         - Surface-water / inundation flooding (use ``run_model_flood_scenario``
           — that is SFINCS).

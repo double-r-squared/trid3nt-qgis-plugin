@@ -87,29 +87,38 @@ async def run_telemac(
     sim_duration_s: float = 3600.0,
     source_q_m3s: float = 8.0,
     channel_width_m: float = 60.0,
+    river_geometry_uri: str | None = None,
     compute_class: str = "medium",
     # job-0164: absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> TelemacDyeLayerURI | dict[str, Any]:
-    """Simulate a contaminant DYE / tracer spill in a river and animate it downstream.
+    """Dye / contaminant / tracer SPILL IN A RIVER, carried DOWNSTREAM in the water.
 
-    Runs a TELEMAC-2D shallow-water solve with an advected tracer over a REAL river
-    reach: a finite dye pulse is released at a mid-reach point source, then the
-    plume travels downstream and dilutes. Produces a peak dye-concentration map
-    layer PLUS the engine's native time-stepped mesh, which the client animates
-    (a Temporal Controller scrubber over the dye field).
+    THE tool for "a dye spill in the river", "a contaminant / pollutant spilled
+    into the river / stream and how it travels / moves / flows downstream", "track
+    a spill down the river", "a tracer released into the channel". It runs a
+    TELEMAC-2D shallow-water solve with an advected tracer over a REAL river reach:
+    a finite dye pulse is released at a mid-reach point source, then the plume
+    travels downstream IN THE SURFACE WATER and dilutes. Produces a peak
+    dye-concentration map layer PLUS the engine's native time-stepped mesh, which
+    the client animates (a Temporal Controller scrubber over the dye field).
 
     Use this when:
-        - The user asks to model a CONTAMINANT / DYE / TRACER / POLLUTANT SPILL or
-          RELEASE INTO A RIVER / STREAM / CHANNEL and wants to see how it travels
-          downstream (the plume + how far / how strong / how long).
+        - The user asks to simulate a CONTAMINANT / DYE / TRACER / POLLUTANT /
+          CHEMICAL SPILL or RELEASE INTO A RIVER / STREAM / CREEK / CHANNEL and
+          wants to see how it TRAVELS / MOVES / FLOWS / SPREADS DOWNSTREAM in the
+          flowing water (the plume + how far / how strong / how long).
+        - Any "spill in the river ... downstream" surface-water transport request.
 
     Do NOT use this for:
+        - GROUNDWATER / AQUIFER contamination, river<->aquifer SEEPAGE, or a
+          plume moving through the SUBSURFACE / soil (use ``run_modflow_job`` /
+          ``run_model_river_seepage_scenario``). THIS tool is the SURFACE water IN
+          the river channel; seepage tools are the water UNDER the ground. A dye
+          spill that travels DOWN THE RIVER is THIS tool, not seepage.
         - Riverine / coastal / pluvial FLOODING depth (use ``run_model_flood_scenario``
           = SFINCS, or ``run_swmm_urban_flood`` = urban drainage).
-        - GROUNDWATER contamination plumes / aquifer transport (use ``run_modflow_job``
-          / ``run_model_river_seepage_scenario``).
         - Dam-break / tsunami / surge inundation (use ``run_geoclaw_inundation``).
 
     Params:
@@ -129,6 +138,12 @@ async def run_telemac(
         source_q_m3s: carrier discharge of the point source, m3/s (small vs the
             river inflow). Default 8.
         channel_width_m: modeled channel width, m. Default 60 (a broad river).
+        river_geometry_uri: OPTIONAL. If you ALREADY called
+            ``fetch_river_geometry`` for this reach, pass its returned layer
+            ``uri`` here and this tool reuses that flowline for the spill point
+            (no re-fetch). Otherwise leave unset and the tool fetches the reach
+            itself from the place / AOI. (You do NOT need to fetch the river
+            first -- ``location`` alone is enough.)
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
 
     Returns:
@@ -189,6 +204,7 @@ async def run_telemac(
             sim_duration_s=float(sim_duration_s),
             source_q_m3s=float(source_q_m3s),
             channel_width_m=float(channel_width_m),
+            river_geometry_uri=(str(river_geometry_uri) if river_geometry_uri else None),
             compute_class=compute_class,
         )
         logger.info(
