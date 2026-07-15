@@ -429,6 +429,11 @@ async def run_model_river_seepage_scenario(
         - The user asks to model river-coupled groundwater / streambed seepage.
 
     Do NOT use this for:
+        - A dye / contaminant / tracer spill that travels DOWNSTREAM in the river
+          SURFACE water (the plume moving down the channel itself) — use
+          ``run_telemac``. This tool models GROUNDWATER seepage (water UNDER the
+          ground); ``run_telemac`` models the surface flow IN the river. "A dye
+          spill in the river that travels downstream" is ``run_telemac``.
         - A point spill with NO river (use ``run_modflow_job`` /
           ``run_model_groundwater_contamination_scenario``).
         - Surface-water flooding (use ``run_model_flood_scenario`` — SFINCS).
