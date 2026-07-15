@@ -316,6 +316,7 @@ from . import run_geoclaw_tool  # noqa: E402,F401 - sprint-17: registers run_geo
 from . import run_openquake_tool  # noqa: E402,F401 - sprint-17: registers run_seismic_hazard_psha (OpenQuake PSHA seismic-hazard bridge; imports model_seismic_hazard_scenario)
 from . import run_landlab_tool  # noqa: E402,F401 - sprint-17: registers run_landlab_susceptibility (Landlab landslide-probability / overland-flow bridge; imports model_landslide_scenario)
 from . import run_swan_tool  # noqa: E402,F401 -- SWAN Phase 1: registers run_swan_waves (SWAN third-generation spectral nearshore wave-field bridge; ADDITIVE comparison engine vs SFINCS+SnapWave; imports model_wave_scenario)
+from . import run_telemac_tool  # noqa: E402,F401 -- TELEMAC river-dye P4: registers run_telemac (TELEMAC-2D advected-tracer river-dye engine: geocode place -> real river reach -> finite mid-reach dye pulse -> peak concentration COG + ANIMATED SELAFIN mesh sibling; imports model_river_dye_release_scenario)
 # AWS / Australian-Water-School "Making Waves: Wave Modeling with SWAN" lecture
 # (reports/references/lecture_aws_swan_making_waves): two pure-analytic coastal
 # post-processors flagged as easy/trivial candidate tools -- no fetch, no solver,

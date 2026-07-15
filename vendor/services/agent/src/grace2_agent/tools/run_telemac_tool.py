@@ -1,0 +1,216 @@
+"""Atomic tool ``run_telemac`` - TELEMAC-2D river-dye surface-tracer engine (P4).
+
+The LLM-facing exposure of the TELEMAC-2D river-dye engine (a hazard family the
+flood/groundwater engines do not cover: a CONTAMINANT DYE / TRACER released into
+a flowing river reach, advected + diluted downstream as an ANIMATED plume).
+``run_telemac(...)`` takes natural args (a place OR the case AOI + optional spill
+knobs, all with sensible demo defaults so a bare "dye spill in the river near X"
+runs), runs the deterministic geocode -> river-reach -> stage -> solve ->
+postprocess chain (``workflows/model_river_dye_release_scenario.py``), and returns
+a ``TelemacDyeLayerURI`` the emitter loads onto the map (it subclasses
+``LayerURI`` so the ``emit_tool_call`` ``add_loaded_layer`` gate fires AND
+``export_case_to_qgis`` discovers the SELAFIN mesh sibling for animation).
+
+This is the TELEMAC analogue of ``run_geoclaw_inundation`` (GeoClaw) /
+``run_seismic_hazard_psha`` (OpenQuake) / ``run_swan_waves`` (SWAN). Like those
+wrappers it declares ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+``source_class="workflow_dispatch"`` (FR-DC-6 - workflow exposure surface; never
+touches the cache shim). Confirmation before consequence (Invariant 9 - a solver
+run) is enforced by the server confirmation hook around this tool.
+
+TELEMAC is LOCAL-DOCKER / BATCH ONLY (the opentelemac engine lives in the worker
+image, never the agent venv), so the composer always dispatches through the
+generic run_solver seam.
+
+Determinism boundary (Invariant 1): every dye number the agent narrates comes
+from the typed ``TelemacDyeLayerURI.dye_cmax_mgl`` / ``.plume_reach_m`` /
+``.active_frames`` fields the postprocess computed - never free-generated. The
+``fallback_note`` carries the honesty floor (idealized-bed demo).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Any
+
+from grace2_contracts.telemac_contracts import TelemacDyeLayerURI
+from grace2_contracts.tool_registry import AtomicToolMetadata
+
+from . import register_tool
+from ..tool_arg_normalizer import coerce_bbox_value
+from ..workflows.model_river_dye_release_scenario import (
+    TelemacDyeScenarioError,
+    model_river_dye_release_scenario,
+)
+from ..workflows.postprocess_telemac import PostprocessTelemacError
+
+logger = logging.getLogger("grace2_agent.tools.run_telemac_tool")
+
+__all__ = ["run_telemac", "RunTelemacError"]
+
+
+class RunTelemacError(RuntimeError):
+    """Raised when the TELEMAC dye chain fails fatally before producing a layer."""
+
+    def __init__(self, error_code: str, message: str) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+
+
+_RUN_TELEMAC_METADATA = AtomicToolMetadata(
+    name="run_telemac",
+    ttl_class="live-no-cache",
+    source_class="workflow_dispatch",
+    cacheable=False,
+)
+
+
+@register_tool(
+    _RUN_TELEMAC_METADATA,
+    # readOnlyHint=False (runs a solver writing output COG + mesh artifacts),
+    # openWorldHint=False (worker container + intra-cloud object store),
+    # destructiveHint=False (writes go to a new runs/ prefix),
+    # idempotentHint=False (each call mints a new run_id + output keys).
+    read_only_hint=False,
+    open_world_hint=False,
+    destructive_hint=False,
+    idempotent_hint=False,
+)
+async def run_telemac(
+    location: str | None = None,
+    bbox: tuple[float, float, float, float] | list[float] | str | None = None,
+    spill_fraction: float = 0.25,
+    spill_duration_s: float = 300.0,
+    dye_concentration_mgl: float = 100.0,
+    reach_length_km: float = 6.0,
+    sim_duration_s: float = 3600.0,
+    source_q_m3s: float = 8.0,
+    channel_width_m: float = 60.0,
+    compute_class: str = "medium",
+    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    **_extra_ignored: Any,
+) -> TelemacDyeLayerURI | dict[str, Any]:
+    """Simulate a contaminant DYE / tracer spill in a river and animate it downstream.
+
+    Runs a TELEMAC-2D shallow-water solve with an advected tracer over a REAL river
+    reach: a finite dye pulse is released at a mid-reach point source, then the
+    plume travels downstream and dilutes. Produces a peak dye-concentration map
+    layer PLUS the engine's native time-stepped mesh, which the client animates
+    (a Temporal Controller scrubber over the dye field).
+
+    Use this when:
+        - The user asks to model a CONTAMINANT / DYE / TRACER / POLLUTANT SPILL or
+          RELEASE INTO A RIVER / STREAM / CHANNEL and wants to see how it travels
+          downstream (the plume + how far / how strong / how long).
+
+    Do NOT use this for:
+        - Riverine / coastal / pluvial FLOODING depth (use ``run_model_flood_scenario``
+          = SFINCS, or ``run_swmm_urban_flood`` = urban drainage).
+        - GROUNDWATER contamination plumes / aquifer transport (use ``run_modflow_job``
+          / ``run_model_river_seepage_scenario``).
+        - Dam-break / tsunami / surge inundation (use ``run_geoclaw_inundation``).
+
+    Params:
+        location: a place name near the river (e.g. "Twin Falls, Idaho"). Supply
+            this OR ``bbox`` - the location is GEOCODED (never hand-typed coords).
+        bbox: OPTIONAL explicit AOI ``(min_lon, min_lat, max_lon, max_lat)`` in
+            EPSG:4326 (e.g. a drawn canvas AOI). Supply this OR ``location``.
+        spill_fraction: along-reach position of the spill point, 0=upstream ..
+            1=downstream. Default 0.25 (near the top of the reach so the plume has
+            room to travel).
+        spill_duration_s: how long the dye source injects before it turns off
+            (the finite pulse window), seconds. Default 300.
+        dye_concentration_mgl: source dye concentration, mg/L. Default 100.
+        reach_length_km: how far downstream to model from the release, km.
+            Default 6.
+        sim_duration_s: simulated physical time, seconds. Default 3600.
+        source_q_m3s: carrier discharge of the point source, m3/s (small vs the
+            river inflow). Default 8.
+        channel_width_m: modeled channel width, m. Default 60 (a broad river).
+        compute_class: FR-CE-3 compute class. Default ``"medium"``.
+
+    Returns:
+        On success: a ``TelemacDyeLayerURI`` (a ``LayerURI`` subtype) - the emitter
+        appends it to ``session-state.loaded_layers`` and the map renders the peak
+        dye COG; the client also materializes + animates the SELAFIN mesh sibling.
+        It carries ``dye_cmax_mgl`` + ``dye_peak_time_s`` + ``plume_reach_m`` +
+        ``active_frames`` (Invariant 1 - the agent narrates these typed numbers,
+        never invents them) + a ``fallback_note`` labeling it an idealized-bed demo.
+
+        On failure: a dict with ``status="error"`` + ``error_code`` +
+        ``error_message`` so the LLM narrates the failure honestly (no layer).
+
+    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
+    ``source_class="workflow_dispatch"`` - the cache shim is NOT invoked.
+    """
+    coerced_bbox: tuple[float, float, float, float] | None = None
+    if bbox is not None:
+        cb = coerce_bbox_value(bbox)
+        if cb is None:
+            return {
+                "status": "error",
+                "error_code": "TELEMAC_PARAMS_INVALID",
+                "error_message": (
+                    f"invalid bbox (expected 4 numbers min_lon,min_lat,max_lon,"
+                    f"max_lat): {bbox!r}"
+                ),
+            }
+        coerced_bbox = tuple(cb)  # type: ignore[assignment]
+
+    has_loc = bool(location and str(location).strip())
+    if has_loc == (coerced_bbox is not None):  # both or neither
+        return {
+            "status": "error",
+            "error_code": "TELEMAC_PARAMS_INCOMPLETE",
+            "error_message": (
+                "run_telemac needs exactly one of a place `location` (geocoded) "
+                "or an explicit `bbox` AOI. For a natural prompt like 'dye spill "
+                "in the river near <place>', pass location='<place>'."
+            ),
+        }
+
+    logger.info(
+        "run_telemac location=%r bbox=%s spill_frac=%.3g pulse_s=%.0f dye=%.4g "
+        "reach_km=%.3g sim_s=%.0f",
+        location, coerced_bbox, spill_fraction, spill_duration_s,
+        dye_concentration_mgl, reach_length_km, sim_duration_s,
+    )
+
+    try:
+        peak = await model_river_dye_release_scenario(
+            location=location if has_loc else None,
+            bbox=coerced_bbox,
+            spill_fraction=float(spill_fraction),
+            spill_duration_s=float(spill_duration_s),
+            dye_concentration_mgl=float(dye_concentration_mgl),
+            reach_length_km=float(reach_length_km),
+            sim_duration_s=float(sim_duration_s),
+            source_q_m3s=float(source_q_m3s),
+            channel_width_m=float(channel_width_m),
+            compute_class=compute_class,
+        )
+        logger.info(
+            "run_telemac complete layer_id=%s dye_cmax_mgl=%.4g plume_reach_m=%s "
+            "active_frames=%s uri=%s",
+            peak.layer_id, peak.dye_cmax_mgl, peak.plume_reach_m,
+            peak.active_frames, peak.uri,
+        )
+        return peak
+    except asyncio.CancelledError:
+        raise
+    except (TelemacDyeScenarioError, PostprocessTelemacError) as exc:
+        logger.warning("run_telemac failed: %s (%s)", getattr(exc, "error_code", "?"), exc)
+        return {
+            "status": "error",
+            "error_code": getattr(exc, "error_code", "TELEMAC_RUN_FAILED"),
+            "error_message": str(exc),
+        }
+    except Exception as exc:  # noqa: BLE001 - defensive catch-all
+        logger.exception("run_telemac unexpected failure")
+        return {
+            "status": "error",
+            "error_code": "TELEMAC_INTERNAL_ERROR",
+            "error_message": str(exc),
+        }
