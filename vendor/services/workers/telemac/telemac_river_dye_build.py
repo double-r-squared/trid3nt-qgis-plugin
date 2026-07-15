@@ -57,7 +57,14 @@ class ReachConfig:
     # hydraulics
     inflow_q_m3s: float = 250.0         # steady upstream discharge
     init_depth_m: float = 2.5           # initial constant water depth
-    dye_conc_mgl: float = 100.0         # injected dye at the upstream inflow
+    dye_conc_mgl: float = 100.0         # dye concentration of the spill pulse
+    # FINITE SPILL PULSE (realism default): a mid-reach point source injects dye
+    # for a short window then stops, so the slug TRAVELS downstream and dilutes
+    # rather than the old continuous upstream-inflow injection saturating the
+    # whole reach. Clean flow (inflow->outflow) still drives it.
+    spill_frac: float = 0.25            # along-channel position of the spill (0=up,1=down)
+    pulse_window_s: float = 300.0       # dye-on window; source turns OFF after
+    source_q_m3s: float = 8.0           # carrier discharge of the point source (small vs inflow)
     duration_s: float = 3600.0
     time_step_s: float = 1.0
     graphic_period: int = 200
@@ -467,10 +474,80 @@ def write_cli(mesh, path):
 # ---------------------------------------------------------------------------
 # 6. Deck author + liquid-boundary mapping (gotcha 4)
 # ---------------------------------------------------------------------------
+#: Basename of the TELEMAC-2D SOURCES FILE (the time series for the finite
+#: mid-reach dye pulse). Written by author_deck next to the .cas; referenced by
+#: basename in the deck (the solver stages it into its temp workdir). The worker
+#: entrypoint lists this in its outputs so the pulse forcing is uploaded as
+#: evidence next to the result .slf.
+SOURCES_FILENAME = "river_sources.txt"
+
+
+def spill_point(mesh, cfg):
+    """Mid-reach spill (X, Y, node index) at ``cfg.spill_frac`` of the channel.
+
+    Walks the smoothed centerline to the ``spill_frac`` arc-length point, then
+    snaps to the nearest INTERIOR mesh node (never a boundary-ring node, so the
+    point source is a genuine in-channel release, not on the inflow/outflow cap
+    or a wall). TELEMAC snaps ABSCISSAE/ORDINATES OF SOURCES to the nearest node
+    anyway; we pre-snap so the reported coordinate is an actual wet node.
+    """
+    cl = mesh["centerline"]
+    seglen = np.hypot(np.diff(cl[:, 0]), np.diff(cl[:, 1]))
+    cum = np.concatenate([[0.0], np.cumsum(seglen)])
+    total = float(cum[-1])
+    target = float(np.clip(cfg.spill_frac, 0.0, 1.0)) * total
+    j = int(np.clip(np.searchsorted(cum, target), 1, len(cl) - 1))
+    seg = max(cum[j] - cum[j - 1], 1e-9)
+    st = (target - cum[j - 1]) / seg
+    px = cl[j - 1, 0] + st * (cl[j, 0] - cl[j - 1, 0])
+    py = cl[j - 1, 1] + st * (cl[j, 1] - cl[j - 1, 1])
+    ring = set(int(n) for n in mesh["ring"])
+    d2 = (mesh["X"] - px) ** 2 + (mesh["Y"] - py) ** 2
+    for idx in np.argsort(d2):
+        if int(idx) not in ring:
+            return float(mesh["X"][idx]), float(mesh["Y"][idx]), int(idx)
+    return float(px), float(py), -1
+
+
+def write_sources_pulse(path, cfg):
+    """Write the SOURCES FILE: a FINITE dye pulse then the point source stops.
+
+    Columns are the TELEMAC-2D sources-file names (same reader as the liquid-
+    boundary file): ``T`` (s), ``Q(1)`` (m3/s carrier discharge), ``TR(1,1)``
+    (dye mg/L). Q + dye are held over ``[0, pulse_window_s]`` then step to zero
+    (a spill that stops), so the slug travels downstream and dilutes/passes. The
+    final time exceeds DURATION so time interpolation never runs off the end.
+    """
+    w = float(cfg.pulse_window_s)
+    q = float(cfg.source_q_m3s)
+    dye = float(cfg.dye_conc_mgl)
+    tend = max(float(cfg.duration_s) + 100.0, w + 100.0)
+    lines = [
+        "#",
+        "T Q(1) TR(1,1)",
+        "s m3/s mg/l",
+        f"0.0 {q:.3f} {dye:.3f}",
+        f"{w:.3f} {q:.3f} {dye:.3f}",
+        f"{w + 0.1:.3f} 0.0 0.0",
+        f"{tend:.3f} 0.0 0.0",
+    ]
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
-    """Write the .cas. lb_order maps TELEMAC liquid-boundary index (1-based, in
-    boundary-walk order) -> 'inflow' or 'outflow'. PRESCRIBED lists are written
-    in that liquid-boundary order (gotcha 4). bed = dem_meta dict."""
+    """Write the .cas (+ the SOURCES FILE for the finite spill pulse).
+
+    lb_order maps the TELEMAC liquid-boundary index (1-based, in boundary-walk
+    order) -> 'inflow' or 'outflow'; PRESCRIBED lists are written in that order
+    (gotcha 4). bed = dem_meta dict.
+
+    DYE forcing = a FINITE PULSE at a mid-reach POINT SOURCE (not the old
+    continuous upstream-inflow injection): clean flow (inflow Q, outflow stage)
+    drives the reach with ZERO dye at the boundaries; the point source injects
+    dye for ``pulse_window_s`` then turns off, so the plume advects downstream
+    and dilutes/passes rather than saturating the whole reach.
+    """
     bed_outflow = bed["bed_top_m"] - bed["bed_drop_m"]
     outflow_stage = bed_outflow + cfg.init_depth_m
     q = []; elev = []; tracer = []
@@ -478,23 +555,31 @@ def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
         if role == "inflow":
             q.append(f"{cfg.inflow_q_m3s}")
             elev.append("0.0")
-            tracer.append(f"{cfg.dye_conc_mgl}")
+            tracer.append("0.0")     # clean flow -- dye enters via the point source
         else:  # outflow: prescribe a downstream stage = bed + target depth
             q.append("0.0")
             elev.append(f"{outflow_stage:.3f}")
             tracer.append("0.0")
+
+    sx, sy, snode = spill_point(mesh, cfg)
+    src_path = os.path.join(os.path.dirname(os.path.abspath(cas_path)), SOURCES_FILENAME)
+    write_sources_pulse(src_path, cfg)
+
     cas = f"""/-------------------------------------------------------------------/
 /  TELEMAC-2D  P1 REAL RIVER DYE  -  {cfg.name}
 /  Mesh from NHDPlus flowlines (Gmsh, tagged physical groups) -> rank IPOBO.
-/  Dye prescribed at the upstream inflow liquid boundary, advects downstream
-/  following the REAL river curves to the outflow.
+/  Clean flow (inflow->outflow) drives the reach; a FINITE dye pulse is
+/  released at a mid-reach point source (~{cfg.spill_frac:.0%} along, node
+/  {snode}, x={sx:.1f} y={sy:.1f}) for {cfg.pulse_window_s:.0f}s then stops, so
+/  the plume advects downstream following the REAL river curves and dilutes.
 /  Liquid-boundary order (walk): {lb_order}
 /-------------------------------------------------------------------/
 GEOMETRY FILE                   = {os.path.basename(slf)}
 BOUNDARY CONDITIONS FILE        = {os.path.basename(cli)}
 RESULTS FILE                    = {os.path.basename(res)}
+SOURCES FILE                    = {SOURCES_FILENAME}
 /
-TITLE : '{cfg.name} REAL RIVER DYE'
+TITLE : '{cfg.name} REAL RIVER DYE PULSE'
 VARIABLES FOR GRAPHIC PRINTOUTS = 'U,V,H,S,B,T1'
 GRAPHIC PRINTOUT PERIOD         = {cfg.graphic_period}
 LISTING PRINTOUT PERIOD         = 500
@@ -507,6 +592,12 @@ INITIAL DEPTH                   = {cfg.init_depth_m:.3f}
 /
 PRESCRIBED FLOWRATES            = {';'.join(q)}
 PRESCRIBED ELEVATIONS           = {';'.join(elev)}
+/
+MAXIMUM NUMBER OF SOURCES        = 20
+ABSCISSAE OF SOURCES             = {sx:.3f}
+ORDINATES OF SOURCES             = {sy:.3f}
+WATER DISCHARGE OF SOURCES       = 0.0
+VALUES OF THE TRACERS AT THE SOURCES = 0.0
 /
 LAW OF BOTTOM FRICTION          = 3
 FRICTION COEFFICIENT            = 33.

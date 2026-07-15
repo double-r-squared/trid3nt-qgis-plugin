@@ -75,6 +75,12 @@ _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
 #: at time offset N (seconds) -- see ``_select_peak_depth_dataset_group``.
 _PEAK_DEPTH_GROUP_RE = re.compile(r"^maximum_water_depth_timemax:(\d+)$")
 
+#: Tracer/concentration dataset-group name fragments (TELEMAC-2D DYE, generic
+#: tracers) -- ``_select_tracer_dataset_group`` prefers one of these as the
+#: active scalar so a mesh whose "interesting" field is a tracer (not depth)
+#: renders the plume by default instead of MDAL's first group (velocity/bed).
+_TRACER_GROUP_HINTS = ("dye", "tracer", "concentration", "conc")
+
 #: The OSM raster tile TEMPLATE ensure_basemap() adds (contains {z}/{x}/{y}).
 _OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 _OSM_LAYER_NAME = "OpenStreetMap"
@@ -372,6 +378,30 @@ def _select_peak_depth_dataset_group(layer) -> bool:
     return True
 
 
+def _select_tracer_dataset_group(layer) -> bool:
+    """Set ``layer``'s active scalar dataset group to a TRACER/concentration
+    group (TELEMAC-2D ``DYE``, or any group whose name hints a tracer) so the
+    plume is the DEFAULT-rendered field. MDAL activates its FIRST group (for a
+    TELEMAC ``.slf`` that is VELOCITY U -- not the dye), so without this the
+    native mesh loads but shows the wrong variable. Returns True when a tracer
+    group was selected; False (a no-op) when the mesh carries none -- QGIS's own
+    default selection stands, never a crash. Additive to
+    ``_select_peak_depth_dataset_group`` (SFINCS depth wins first; this is the
+    fallback for tracer meshes) so no flood engine regresses."""
+    for i in range(layer.datasetGroupCount()):
+        try:
+            name = layer.datasetGroupMetadata(QgsMeshDatasetIndex(i, 0)).name()
+        except Exception:  # noqa: BLE001 -- a bad group index is skipped, not fatal
+            continue
+        low = (name or "").lower()
+        if any(h in low for h in _TRACER_GROUP_HINTS):
+            settings = layer.rendererSettings()
+            settings.setActiveScalarDatasetGroup(i)
+            layer.setRendererSettings(settings)
+            return True
+    return False
+
+
 class LayerMaterializer:
     """Per-connection materializer: one group, one added-id set, one temp dir."""
 
@@ -656,7 +686,11 @@ class LayerMaterializer:
                 layer.setCrs(crs)
             else:
                 notes.append(f"{name}: mesh CRS unknown - set manually via layer properties")
-            _select_peak_depth_dataset_group(layer)
+            # Choose the DEFAULT active scalar group: SFINCS cumulative peak-depth
+            # first (flood meshes), else a tracer/concentration group (TELEMAC dye
+            # meshes -- MDAL would otherwise show VELOCITY U, not the plume).
+            if not _select_peak_depth_dataset_group(layer):
+                _select_tracer_dataset_group(layer)
             QgsProject.instance().addMapLayer(layer, False)
             group.insertLayer(0, layer)
             self.last_added_layers.append(layer)

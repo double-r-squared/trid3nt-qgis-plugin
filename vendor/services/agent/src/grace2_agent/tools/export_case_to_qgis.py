@@ -329,6 +329,35 @@ def _resolve_mesh_crs(bucket: str, mesh_key: str) -> str | None:
         return None
 
 
+def _resolve_telemac_mesh_crs(bucket: str, run_id: str) -> str | None:
+    """CRS for a TELEMAC SELAFIN mesh: read ``utm_epsg`` from the run's
+    ``telemac_metrics.json`` sibling and format it as ``EPSG:<code>``.
+
+    SELAFIN (.slf) files embed NO coordinate system, so MDAL reports an empty
+    CRS and the plugin cannot place the mesh on the basemap. The worker's
+    ``telemac_metrics.json`` (uploaded alongside the result .slf) carries the
+    reach UTM zone the mesh was built in, which is the mesh's true CRS. Returns
+    ``None`` on ANY failure (missing/unreadable metrics, no ``utm_epsg``) -- the
+    mesh entry is still listed (honest degrade: the plugin notes "set CRS
+    manually")."""
+    try:
+        obj = _s3_client().get_object(Bucket=bucket, Key=f"{run_id}/telemac_metrics.json")
+        metrics = json.loads(obj["Body"].read().decode("utf-8"))
+        epsg = metrics.get("utm_epsg")
+        if epsg is None:
+            return None
+        return f"EPSG:{int(epsg)}"
+    except Exception as exc:  # noqa: BLE001 -- CRS is a nicety, never a gate
+        logger.warning(
+            "export_case_to_qgis: could not resolve TELEMAC mesh CRS for "
+            "s3://%s/%s (%s)",
+            bucket,
+            run_id,
+            exc,
+        )
+        return None
+
+
 #: raster ``style_preset`` -> ``(mesh sibling filename, format id, display
 #: name prefix)``. One entry per hazard-model engine that publishes a run-
 #: level mesh sibling; SFINCS's is the engine's own native quadtree solve
@@ -346,6 +375,17 @@ _MESH_SIBLING_BY_STYLE_PRESET: dict[str, tuple[str, str, str]] = {
         "modflow_mesh.nc",
         "modflow_ugrid_netcdf",
         "MODFLOW mesh",
+    ),
+    # TELEMAC-2D river-dye: the solver's NATIVE result SELAFIN (MDAL opens .slf
+    # directly + animates its time-stepped DYE dataset group). Unlike SFINCS/
+    # MODFLOW whose mesh siblings are NetCDF carrying a ``crs`` variable, SELAFIN
+    # embeds NO CRS, so its CRS is resolved from the run's telemac_metrics.json
+    # (utm_epsg) instead -- see ``_resolve_telemac_mesh_crs`` / the format branch
+    # in ``_mesh_entry_for_layer``.
+    "continuous_dye_concentration": (
+        "r2d_river.slf",
+        "telemac_selafin",
+        "TELEMAC dye mesh",
     ),
 }
 
@@ -381,11 +421,18 @@ def _mesh_entry_for_layer(layer: dict[str, Any]) -> dict[str, Any] | None:
         _s3_client().head_object(Bucket=bucket, Key=mesh_key)
     except Exception:  # noqa: BLE001 -- no mesh sibling (or bucket unreachable) -- no entry
         return None
+    # CRS resolution is format-specific: NetCDF meshes (SFINCS/MODFLOW) carry a
+    # ``crs`` variable; a SELAFIN (.slf) does not, so TELEMAC reads utm_epsg from
+    # the run's telemac_metrics.json sibling instead.
+    if mesh_format == "telemac_selafin":
+        crs_authid = _resolve_telemac_mesh_crs(bucket, run_id)
+    else:
+        crs_authid = _resolve_mesh_crs(bucket, mesh_key)
     return {
         "kind": "mesh",
         "format": mesh_format,
         "s3_uri": f"s3://{bucket}/{mesh_key}",
-        "crs_authid": _resolve_mesh_crs(bucket, mesh_key),
+        "crs_authid": crs_authid,
         "name": f"{name_prefix} ({run_id[:8]})",
     }
 

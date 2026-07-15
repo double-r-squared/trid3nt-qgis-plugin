@@ -226,12 +226,19 @@ def run_pipeline(data_dir: Path, reach_overrides: dict[str, Any], run_id: str | 
         dye_nodes_final = 0
         front_x_final = float("nan")
         cmax_overall = 0.0
+        peak_time_s = 0.0
+        active_frames = 0        # frames with the dye pulse present in-reach
         for i in range(len(times)):
             c = np.asarray(tf.get_data_value(vn, i))
-            cmax_overall = max(cmax_overall, float(c.max()))
+            fmax = float(c.max())
+            if fmax > cmax_overall:
+                cmax_overall = fmax
+                peak_time_s = float(times[i])
+            if fmax > 1.0:
+                active_frames += 1
             if i == len(times) - 1:
                 m = c > 1.0
-                cmax_final = float(c.max())
+                cmax_final = fmax
                 dye_nodes_final = int(m.sum())
                 front_x_final = float(x[m].max()) if m.any() else float("nan")
         tf.close()
@@ -241,6 +248,11 @@ def run_pipeline(data_dir: Path, reach_overrides: dict[str, Any], run_id: str | 
             "dye_cmax_overall": round(cmax_overall, 3),
             "dye_cmax_final": round(cmax_final, 3),
             "dye_nodes_final": dye_nodes_final,
+            # FINITE PULSE: the plume travels down and passes, so the FINAL frame
+            # is often clear (front None) -- the overall/peak/active-frame fields
+            # honestly carry "how strong, when, how long present".
+            "dye_peak_time_s": round(peak_time_s, 1),
+            "dye_active_frames": int(active_frames),
             "dye_front_x_final_m": (
                 round(front_x_final, 1)
                 if front_x_final == front_x_final else None

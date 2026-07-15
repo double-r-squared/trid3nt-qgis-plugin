@@ -64,6 +64,8 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     "dye_var",
     "dye_cmax_final",
     "dye_cmax_overall",
+    "dye_peak_time_s",
+    "dye_active_frames",
     "dye_front_x_final_m",
     "result_slf",
     "npoin",
