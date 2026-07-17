@@ -175,16 +175,24 @@ async def run_telemac(
         coerced_bbox = tuple(cb)  # type: ignore[assignment]
 
     has_loc = bool(location and str(location).strip())
-    if has_loc == (coerced_bbox is not None):  # both or neither
+    # OPEN-24 (2026-07-16): need AT LEAST one of location/bbox. The old guard
+    # demanded EXACTLY one and errored when BOTH were given - but the model,
+    # having just geocoded the place, naturally passes BOTH the place name AND
+    # the resulting bbox, so a correct natural-prompt call was rejected. When
+    # both are present prefer the explicit bbox (drop the redundant location);
+    # only a genuinely empty AOI is an error.
+    if not has_loc and coerced_bbox is None:
         return {
             "status": "error",
             "error_code": "TELEMAC_PARAMS_INCOMPLETE",
             "error_message": (
-                "run_telemac needs exactly one of a place `location` (geocoded) "
-                "or an explicit `bbox` AOI. For a natural prompt like 'dye spill "
-                "in the river near <place>', pass location='<place>'."
+                "run_telemac needs a place `location` (geocoded) or an explicit "
+                "`bbox` AOI. For a natural prompt like 'dye spill in the river "
+                "near <place>', pass location='<place>'."
             ),
         }
+    if has_loc and coerced_bbox is not None:
+        has_loc = False  # explicit bbox wins; ignore the redundant location
 
     logger.info(
         "run_telemac location=%r bbox=%s spill_frac=%.3g pulse_s=%.0f dye=%.4g "
