@@ -57,10 +57,21 @@ __all__ = [
 
 logger = logging.getLogger("grace2_agent.workflows.postprocess_telemac")
 
-#: Concentration (mg/L) below which a node is treated as "no dye" (dilution floor)
-#: for the wet mask, plume-extent, and metric aggregation. 1 mg/L mirrors the
-#: worker's tracer-sanity threshold so the agent and worker agree on "present".
+#: Concentration (mg/L) below which a node is treated as "no dye". OPEN-23
+#: (2026-07-16): a HARDCODED 1.0 mg/L false-flagged real-but-dilute plumes as
+#: TELEMAC_OUTPUT_EMPTY (e.g. a heavily-diluted spill peaking at 0.18 mg/L over
+#: a long reach). The detection floor is now RELATIVE to the run's own peak
+#: (``max(_DYE_WET_FLOOR, _DYE_WET_FRAC * dye_cmax)``): any run with a real
+#: plume passes at any concentration, while a genuinely empty run (peak ~0)
+#: still fails via the tiny absolute floor. ``TELEMAC_DYE_WET_MGL`` is retained
+#: as a legacy default only.
 TELEMAC_DYE_WET_MGL: float = 1.0
+#: Absolute floor (mg/L) that separates a real (any-concentration) plume from a
+#: genuinely empty solve; below this, dye is treated as never injected.
+_DYE_WET_FLOOR: float = 1e-3
+#: Fraction of the run's peak concentration that defines the plume edge for the
+#: wet mask / extent metrics (5% of source-strength = the visible ribbon).
+_DYE_WET_FRAC: float = 0.05
 
 #: Target GROUND resolution (m/px) for the adaptive dye COG. A river channel is
 #: narrow (tens of metres), so ~10 m/px keeps the plume a smooth ribbon rather
@@ -233,7 +244,7 @@ def _grid_shape(bbox, res_m: float) -> tuple[int, int]:
     return nrows, ncols
 
 
-def _rasterize_nodes_to_grid(lon, lat, vals, bbox, out_shape, clip_dist_deg):
+def _rasterize_nodes_to_grid(lon, lat, vals, bbox, out_shape, clip_dist_deg, wet_floor=0.0):
     """Linear-interpolate scattered node values onto a regular 4326 grid, then
     clip to the channel: a cell whose nearest node is farther than
     ``clip_dist_deg`` is set to NaN (griddata otherwise fills the whole convex
@@ -260,7 +271,7 @@ def _rasterize_nodes_to_grid(lon, lat, vals, bbox, out_shape, clip_dist_deg):
     grid = np.asarray(grid, dtype="float64")
     grid[dist > clip_dist_deg] = np.nan
     grid[~np.isfinite(grid)] = np.nan
-    grid[grid < TELEMAC_DYE_WET_MGL] = np.nan
+    grid[grid < wet_floor] = np.nan
     return grid
 
 
@@ -360,7 +371,11 @@ def postprocess_telemac(
     peak_i = int(np.argmax(per_frame_cmax))
     dye_cmax = float(per_frame_cmax.max())
     dye_peak_time_s = float(times[peak_i]) if times.size else None
-    active_frames = int((per_frame_cmax > TELEMAC_DYE_WET_MGL).sum())
+    # OPEN-23: detection floor relative to THIS run's peak (+ a tiny absolute
+    # floor for genuinely-empty solves), so a dilute-but-real plume is not
+    # false-flagged as OUTPUT_EMPTY.
+    wet = max(_DYE_WET_FLOOR, _DYE_WET_FRAC * dye_cmax)
+    active_frames = int((per_frame_cmax > wet).sum())
     node_peak = dye.max(axis=0)  # per-node peak over time (the published grid)
 
     # Plume travel: farthest downstream displacement of the wet-mass centroid.
@@ -377,7 +392,7 @@ def postprocess_telemac(
         cys = []
         for i in range(dye.shape[0]):
             c = dye[i]
-            m = c > TELEMAC_DYE_WET_MGL
+            m = c > wet
             if m.any() and c[m].sum() > 0:
                 cxs.append(float((x_utm[m] * c[m]).sum() / c[m].sum()))
                 cys.append(float((y_utm[m] * c[m]).sum() / c[m].sum()))
@@ -388,10 +403,10 @@ def postprocess_telemac(
     except Exception:  # noqa: BLE001 -- travel metric is best-effort
         plume_reach_m = None
 
-    if not np.isfinite(node_peak).any() or float(np.nanmax(node_peak)) < TELEMAC_DYE_WET_MGL:
+    if not np.isfinite(node_peak).any() or float(np.nanmax(node_peak)) < wet:
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
-            message=f"DYE never exceeded {TELEMAC_DYE_WET_MGL} {dye_units} "
+            message=f"DYE never exceeded the detection floor {wet:.4g} {dye_units} "
             f"anywhere in {slf.name} (peak {dye_cmax:.4g})",
             details={"dye_cmax_mgl": dye_cmax},
         )
@@ -408,7 +423,7 @@ def postprocess_telemac(
     # clip distance: ~1.5 output cells (keeps only near-channel cells).
     clip_dist_deg = 1.5 * max((bbox[2] - bbox[0]) / shape[1], (bbox[3] - bbox[1]) / shape[0])
     try:
-        grid = _rasterize_nodes_to_grid(lon, lat, node_peak, bbox, shape, clip_dist_deg)
+        grid = _rasterize_nodes_to_grid(lon, lat, node_peak, bbox, shape, clip_dist_deg, wet_floor=wet)
     except Exception as exc:  # noqa: BLE001
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_READ_FAILED",
@@ -447,7 +462,7 @@ def postprocess_telemac(
     finally:
         cog_io.safe_unlink(cog)
 
-    vmax = round(max(dye_cmax, TELEMAC_DYE_WET_MGL), 3)
+    vmax = round(max(dye_cmax, wet), 6)
     legend = LegendKey(
         kind="continuous",
         colormap="viridis",
