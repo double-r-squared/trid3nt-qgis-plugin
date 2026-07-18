@@ -140,6 +140,10 @@ TIMESTEP_REF_S: float = 1.0
 MESH_TIMESTEP_REF_M: float = 20.0
 #: floor on the coupled timestep (a runaway-fine mesh can't drive dt to zero).
 TIMESTEP_FLOOR_S: float = 0.2
+#: wall-clock target for the SUGGESTED mesh's solve (NATE 2026-07-18: solves
+#: land well under an hour at the default; the ladder still offers finer rungs
+#: whose honest estimates the user can knowingly accept).
+SOLVE_TIME_BUDGET_S: float = 2700.0
 
 
 def suggest_time_step_s(mesh_size_m: float) -> float:
@@ -980,7 +984,7 @@ async def preview_telemac_mesh(
         reach_length_km = float(params.get("reach_length_km") or DEFAULT_REACH_LENGTH_KM)
     except (TypeError, ValueError):
         reach_length_km = DEFAULT_REACH_LENGTH_KM
-    reach_length_km = min(max(reach_length_km, 0.5), 15.0)
+    reach_length_km = min(max(reach_length_km, 0.5), 8.0)
     try:
         channel_width_m = float(params.get("channel_width_m") or DEFAULT_CHANNEL_WIDTH_M)
     except (TypeError, ValueError):
@@ -1095,19 +1099,35 @@ async def preview_telemac_mesh(
                 "TELEMAC_MESH_BUILD_FAILED",
                 f"mesh-only preview metrics carry no node count (run {mesh_run_id}).",
             )
-        if attempt == 1 and npoin > MESH_NODE_CAP * 1.15:
-            h_honest = mesh_size_m * (npoin / MESH_NODE_CAP) ** 0.5
-            logger.warning(
-                "preview_telemac_mesh: measured %d nodes at h=%.3g blows the "
-                "%d cap (stated width %.0f m vs real banks) - rebuilding once "
-                "at h=%.3g",
-                npoin, mesh_size_m, MESH_NODE_CAP, channel_width_m, h_honest,
-            )
-            mesh_size_m = round(h_honest, 1)
-            time_step_s = suggest_time_step_s(mesh_size_m)
-            reach["mesh_size_m"] = mesh_size_m
-            reach["time_step_s"] = time_step_s
-            continue
+        if attempt == 1:
+            # Re-clamp the SUGGESTED h from the MEASURED node count against
+            # BOTH budgets: the node cap (OPEN-29) and a wall-clock target
+            # (NATE 2026-07-18: any rung the user picks should solve fast;
+            # the suggestion itself must land under ~45 min). nodes ~ 1/h^2.
+            h_needed = mesh_size_m
+            if npoin > MESH_NODE_CAP * 1.15:
+                h_needed = max(h_needed, mesh_size_m * (npoin / MESH_NODE_CAP) ** 0.5)
+            dur = float(reach.get("duration_s") or DEFAULT_SIM_DURATION_S)
+            for _ in range(4):  # dt(h) is piecewise; a few passes converge
+                n_pred = npoin * (mesh_size_m / h_needed) ** 2
+                est = estimate_telemac_solve_seconds(
+                    int(n_pred), dur, suggest_time_step_s(h_needed))
+                if est <= SOLVE_TIME_BUDGET_S:
+                    break
+                h_needed *= (est / SOLVE_TIME_BUDGET_S) ** 0.5
+            if h_needed > mesh_size_m * 1.05:
+                logger.warning(
+                    "preview_telemac_mesh: measured %d nodes at h=%.3g breaks "
+                    "the budget (cap %d nodes / %ds solve) - rebuilding once "
+                    "at h=%.3g",
+                    npoin, mesh_size_m, MESH_NODE_CAP,
+                    int(SOLVE_TIME_BUDGET_S), h_needed,
+                )
+                mesh_size_m = round(h_needed, 1)
+                time_step_s = suggest_time_step_s(mesh_size_m)
+                reach["mesh_size_m"] = mesh_size_m
+                reach["time_step_s"] = time_step_s
+                continue
         break
 
     # --- Emit the wireframe as a role='input' vector layer + zoom-to --------- #

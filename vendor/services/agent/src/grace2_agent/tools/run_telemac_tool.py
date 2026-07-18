@@ -273,7 +273,7 @@ async def run_telemac(
             "run_telemac: reach_length_km %r outside [0.5, 15] - clamped",
             reach_length_km,
         )
-        reach_length_km = min(max(reach_length_km, 0.5), 15.0)
+        reach_length_km = min(max(reach_length_km, 0.5), 8.0)
 
     # Ill-posed forcing hardening (live 2026-07-17: spill_fraction=1.0 planted
     # the source ON the outflow boundary -> TELEMAC startup abort 'GIVE A
