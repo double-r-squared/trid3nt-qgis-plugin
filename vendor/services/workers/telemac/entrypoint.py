@@ -239,22 +239,46 @@ def run_pipeline(
         lon, lat = tr_back.transform(X, Y)
         bbox4326 = [float(lon.min()), float(lat.min()),
                     float(lon.max()), float(lat.max())]
-        wireframe_capped = bool(e.shape[0] > 30000)
-        if wireframe_capped:
-            # one closed linestring PER boundary ring (outer + island holes);
-            # drawing the concatenated multi-ring walk as a single polyline
-            # painted bogus chords between rings (live 2026-07-18)
-            walks = mesh.get("boundary_rings") or [mesh["ring"]]
-            coords = []
-            for w in walks:
-                w = np.asarray(w, dtype=np.int64)
-                w_closed = np.append(w, w[:1])
-                coords.append([[float(lon[i]), float(lat[i])] for i in w_closed])
-        else:
-            coords = [
-                [[float(lon[a]), float(lat[a])], [float(lon[b]), float(lat[b])]]
-                for a, b in e
-            ]
+        # Wireframe budget: past the edge cap SUBSAMPLE interior edges rather
+        # than dropping to boundary-only (NATE 2026-07-18: the hollow preview
+        # read as "less detailed / wrong mesh"). Boundary rings (banks +
+        # island walls, one closed linestring per ring) are ALWAYS complete;
+        # interior edges take whatever budget remains at a uniform stride.
+        EDGE_BUDGET = 30000
+        walks = [np.asarray(w, dtype=np.int64)
+                 for w in (mesh.get("boundary_rings") or [mesh["ring"]])]
+        bnd_pairs = set()
+        ring_coords = []
+        for w in walks:
+            w_closed = np.append(w, w[:1])
+            ring_coords.append([[float(lon[i]), float(lat[i])] for i in w_closed])
+            for a, b in zip(w_closed[:-1], w_closed[1:]):
+                bnd_pairs.add((min(int(a), int(b)), max(int(a), int(b))))
+        interior = [(a, b) for a, b in e if (int(a), int(b)) not in bnd_pairs]
+        room = max(EDGE_BUDGET - len(bnd_pairs), 0)
+        wireframe_capped = bool(len(interior) > room)
+        if wireframe_capped and room > 0:
+            stride = int(np.ceil(len(interior) / room))
+            interior = interior[::stride]
+        elif room == 0:
+            interior = []
+        coords = ring_coords + [
+            [[float(lon[a]), float(lat[a])], [float(lon[b]), float(lat[b])]]
+            for a, b in interior
+        ]
+        # inflow/outflow caps as separate features (role property) so clients
+        # can color the open boundaries like the proof renders
+        cls = mesh["cls"]; ring_all = mesh["ring"]
+        cap_feats = []
+        for role in ("inflow", "outflow"):
+            pts = [[float(lon[int(n)]), float(lat[int(n)])]
+                   for k, n in enumerate(ring_all) if cls[k] == role]
+            if pts:
+                cap_feats.append({
+                    "type": "Feature",
+                    "geometry": {"type": "MultiPoint", "coordinates": pts},
+                    "properties": {"kind": "telemac-mesh-preview", "role": role},
+                })
         preview = {
             "type": "FeatureCollection",
             "features": [{
@@ -262,12 +286,15 @@ def run_pipeline(
                 "geometry": {"type": "MultiLineString", "coordinates": coords},
                 "properties": {
                     "kind": "telemac-mesh-preview",
+                    "role": "mesh",
                     "npoin": int(mesh["npoin"]),
                     "nelem": int(len(ik)),
                     "mesh_size_m": float(cfg.mesh_size_m),
+                    "n_islands": mesh.get("n_islands"),
+                    "water_coverage_frac": mesh.get("water_coverage_frac"),
                     "wireframe_capped": wireframe_capped,
                 },
-            }],
+            }, *cap_feats],
         }
         (data_dir / "mesh_preview.geojson").write_text(
             json.dumps(preview), encoding="utf-8")
