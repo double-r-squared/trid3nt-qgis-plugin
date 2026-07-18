@@ -229,6 +229,20 @@ class PipelineStep:
     parent_step_id: Optional[str] = None
     substep_label: Optional[str] = None
     error_message: Optional[str] = None
+    # Item R4 (live-feedback 2026-07-18): the two-card sim observability
+    # fields (contract ws.PipelineStep, task-149). ``role`` discriminates the
+    # off-box solver card ("compute", minted by
+    # pipeline_emitter.mint_dispatch_and_sim_cards with tool_name
+    # "<solver>:solve") from a plain tool card ("tool"); the dock routes
+    # compute steps to the collapsible SimCard instead of grey rows.
+    # ``batch_job_id`` is "local-docker:<run_id>" on the local seam;
+    # ``batch_status`` mirrors the control plane verbatim; ``duration_ms``
+    # is stamped on the terminal transition only.
+    role: str = "tool"
+    batch_job_id: Optional[str] = None
+    batch_status: Optional[str] = None
+    progress_percent: Optional[int] = None
+    duration_ms: Optional[int] = None
 
 
 def parse_pipeline_steps(pipeline_state_payload: dict) -> list[PipelineStep]:
@@ -257,6 +271,21 @@ def parse_pipeline_steps(pipeline_state_payload: dict) -> list[PipelineStep]:
                 else None,
                 error_message=row.get("error_message")
                 if isinstance(row.get("error_message"), str)
+                else None,
+                # Item R4 (live-feedback 2026-07-18): sim-card fields; all
+                # optional on the wire, all default-preserving here.
+                role=str(row.get("role") or "tool"),
+                batch_job_id=row.get("batch_job_id")
+                if isinstance(row.get("batch_job_id"), str)
+                else None,
+                batch_status=row.get("batch_status")
+                if isinstance(row.get("batch_status"), str)
+                else None,
+                progress_percent=row.get("progress_percent")
+                if isinstance(row.get("progress_percent"), int)
+                else None,
+                duration_ms=row.get("duration_ms")
+                if isinstance(row.get("duration_ms"), int)
                 else None,
             )
         )
@@ -1012,6 +1041,11 @@ class AgentEvent:
       case-list       {"cases": [CaseInfo, ...], "payload": <raw>}
       chart           raw ChartEmissionPayload (live chart-emission frame;
                       the dock's Charts panel renders it -- 2026-07-13)
+      solve-progress  raw SolveProgressPayload (live big-sim telemetry tick;
+                      the dock's SimCard consumes it -- item R4, 2026-07-18)
+      tool-io         raw ToolIoPayload (raw-args sidecar keyed by step_id;
+                      the dock's tool chips read a short arg summary from it
+                      -- item R2, 2026-07-18)
       raw             {"type": <envelope type>, "payload": <raw>}
     """
 
@@ -1351,6 +1385,22 @@ class AgentClient:
             # by the dock; the persisted replay twin rides in the case-open
             # ``session_state.charts`` (``parse_charts``).
             return AgentEvent("chart", payload)
+        if etype == "solve-progress":
+            # Item R4 (live-feedback 2026-07-18): live big-sim telemetry tick
+            # (contract ws.SolveProgressPayload -- run_id / solver /
+            # grid_resolution_m / active_cell_count / vcpus / elapsed_seconds
+            # / eta_seconds / phase, emitted every ~10 s by
+            # workflows.solve_progress.drive_live_solve_progress). Previously
+            # fell through to "raw" and was dropped; the dock's SimCard now
+            # consumes it.
+            return AgentEvent("solve-progress", payload)
+        if etype == "tool-io":
+            # Item R2 (live-feedback 2026-07-18): the raw tool-args sidecar
+            # keyed by pipeline step_id (contract ws.ToolIoPayload; the server
+            # emits an input-only frame at dispatch START, then the full one
+            # on completion). The dock's tool chip rows render a short arg
+            # summary from ``raw_args``.
+            return AgentEvent("tool-io", payload)
         if etype == "case-list":
             cases = parse_case_list(payload)
             # Mirror of the last_session_state stash above: the startup

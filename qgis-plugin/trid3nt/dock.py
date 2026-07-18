@@ -52,12 +52,14 @@ cross-thread signals (auto-queued by Qt).
 from __future__ import annotations
 
 import datetime
+import json
 import tempfile
 import threading
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import QObject, Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import (
+    QAction,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -65,6 +67,7 @@ from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -79,6 +82,10 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+# Item R6 (live-feedback 2026-07-18): layer-type constant for registering the
+# "Push layer to case" layer-tree context-menu action (vector + raster).
+from qgis.core import QgsMapLayer
 
 from . import aoi, case_export, charts, gate, probe, push_layer
 from .layers import LayerMaterializer, ensure_basemap, zoom_to_bbox4326, zoom_to_extent
@@ -123,6 +130,21 @@ _GATE_CARD_STYLE = (
 _GATE_TITLE_STYLE = "color: #d29922; font-weight: bold; border: none;"
 _GATE_BODY_STYLE = "border: none; font-size: 9pt;"
 _GATE_NOTE_STYLE = "border: none; color: palette(mid); font-size: 8pt;"
+# Item R2 (live-feedback 2026-07-18): tool-usage chip -- a compact bordered
+# monospace badge so tool calls read as a visually DISTINCT class from the
+# grey info notes (layer added / thinking / chart pointers). Subtle blue
+# accent, deliberately not loud; the muted detail text (state + substep +
+# short arg summary) rides beside it in the same row.
+_TOOL_CHIP_STYLE = (
+    "font-family: monospace; font-size: 8pt; color: #58a6ff; "
+    "border: 1px solid #58a6ff; border-radius: 7px; padding: 0px 6px;"
+)
+_TOOL_CHIP_DETAIL_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
+# Item R4 (live-feedback 2026-07-18): simulation-card chrome -- purple, the
+# color the web reserves for sim progress affordances; the collapse pattern
+# itself is the exact GateCard summary + "show details" affordance.
+_SIM_CARD_STYLE = "QFrame { border: 1px solid #8957e5; border-radius: 8px; }"
+_SIM_TITLE_STYLE = "color: #8957e5; font-weight: bold; border: none;"
 
 
 class SettingsDialog(QDialog):
@@ -416,6 +438,47 @@ def _markdown_to_display_html(text: str, palette) -> str:
     return doc.toHtml()
 
 
+def _solver_engine_label(solver: str) -> str:
+    """Item R4 (live-feedback 2026-07-18): "telemac_river_dye" or
+    "telemac_river_dye:solve" -> "TELEMAC" -- the SimCard title names the
+    ENGINE; the full run identity stays visible in the metadata table.
+    Pure string math on the emitter's own naming convention
+    (``mint_dispatch_and_sim_cards`` stamps ``tool_name="<solver>:solve"``,
+    solver ids lead with the engine: sfincs_* / modflow_* / telemac_*)."""
+    base = (solver or "").split(":", 1)[0]
+    head = base.split("_", 1)[0]
+    return head.upper() if head else "SOLVER"
+
+
+def _short_args_summary(raw_args: str, max_len: int = 64) -> str:
+    """Item R2 (live-feedback 2026-07-18): a compact ``k=v, k=v`` arg summary
+    for the tool chip row, from the ``tool-io`` sidecar's pre-serialized
+    ``raw_args`` JSON string (contract ws.ToolIoPayload). First 3 keys only,
+    each value clipped; nested structures collapse to "..." (the chip is a
+    summary, not an IO dump). Defensive: non-JSON / non-dict / empty input
+    yields "" -- the chip then renders without args, never a crash."""
+    try:
+        args = json.loads(raw_args)
+    except (ValueError, TypeError):
+        return ""
+    if not isinstance(args, dict) or not args:
+        return ""
+    parts: List[str] = []
+    for key, value in args.items():
+        if isinstance(value, (dict, list)):
+            value = "..."
+        text = f"{key}={value}"
+        if len(text) > 24:
+            text = text[:21] + "..."
+        parts.append(text)
+        if len(parts) >= 3:
+            break
+    summary = ", ".join(parts)
+    if len(summary) > max_len:
+        summary = summary[: max_len - 3] + "..."
+    return summary
+
+
 def _is_error_note(note: str) -> bool:
     """BUG 3a (live-feedback 2026-07-12): materializer notes are plain
     strings, so classify by the honest failure vocabulary layers.py uses --
@@ -472,7 +535,18 @@ class _AssistantEntry:
         self.label.setOpenExternalLinks(False)
         self.label.setStyleSheet(_ASSISTANT_BUBBLE_STYLE)
         self.label.setVisible(False)  # only once NON-whitespace text arrives
-        lay.addWidget(self.label, 0, Qt.AlignLeft)
+        # Item R1 (live-feedback 2026-07-18): while STREAMING, the bubble used
+        # to sit in an AlignLeft cell, so every chunk re-measured the label's
+        # preferred width and the bubble snapped to a different width per
+        # chunk -- hard to read mid-stream. The label now takes the layout's
+        # FULL width (chat width minus this entry's 40px right margin) from
+        # the first chunk: the wrap width is STABLE and only the height grows
+        # as text flows (no per-chunk width re-measurement -- the cell width
+        # is dock-driven, not text-driven). setMinimumWidth(1) pre-applies
+        # finalize_markdown's minimum-width cap so the plain-text wrapped
+        # label can never force the scroll host wider either.
+        self.label.setMinimumWidth(1)
+        lay.addWidget(self.label)
 
         # Transient pipeline lines (replaced on every pipeline-state frame).
         self.pipeline_area = QVBoxLayout()
@@ -605,23 +679,55 @@ class _AssistantEntry:
         # constraint so the finalized bubble takes the layout's full width
         # -- wraps at narrow docks, uses the room at wide ones; the F36
         # _WrapLabel min-HEIGHT re-assert keeps the wrapped height honored.
+        # (Item R1, 2026-07-18: the streaming label is now ALSO full-width
+        # with the same min-width cap, so both lines below are defensive
+        # no-ops kept for the rich-text swap's independence.)
         self.label.setMinimumWidth(1)
         layout = self.container.layout()
         if layout is not None:
             layout.setAlignment(self.label, Qt.Alignment())
         self.label.setVisible(True)
 
-    def set_pipeline_lines(self, lines: List[str]) -> None:
+    def set_pipeline_rows(self, rows: List[dict]) -> None:
+        """Item R2 (live-feedback 2026-07-18): repaint the transient pipeline
+        area (replaced on every pipeline-state frame, as before). Each row is
+
+          {"chip": tool name or None, "detail": muted text, "indent": bool}
+
+        A row WITH a chip renders as the bordered monospace tool badge plus
+        the muted detail text beside it -- visually a different class from
+        the grey info notes. A row with ``chip=None`` (compaction narration,
+        step error text) stays the plain grey status line it always was."""
         while self.pipeline_area.count():
             item = self.pipeline_area.takeAt(0)
             w = item.widget()
             if w is not None:
                 w.deleteLater()
-        for line in lines:
-            lbl = _WrapLabel(line)
-            lbl.setTextFormat(Qt.PlainText)
-            lbl.setStyleSheet(_STATUS_LINE_STYLE)
-            self.pipeline_area.addWidget(lbl)
+        for row in rows:
+            chip = row.get("chip")
+            detail = row.get("detail") or ""
+            if not chip:
+                if detail:
+                    lbl = _WrapLabel(detail)
+                    lbl.setTextFormat(Qt.PlainText)
+                    lbl.setStyleSheet(_STATUS_LINE_STYLE)
+                    self.pipeline_area.addWidget(lbl)
+                continue
+            holder = QWidget()
+            hl = QHBoxLayout(holder)
+            hl.setContentsMargins(4 + (16 if row.get("indent") else 0), 1, 0, 1)
+            hl.setSpacing(6)
+            chip_lbl = QLabel(chip)
+            chip_lbl.setTextFormat(Qt.PlainText)
+            chip_lbl.setStyleSheet(_TOOL_CHIP_STYLE)
+            hl.addWidget(chip_lbl)
+            if detail:
+                detail_lbl = QLabel(detail)
+                detail_lbl.setTextFormat(Qt.PlainText)
+                detail_lbl.setStyleSheet(_TOOL_CHIP_DETAIL_STYLE)
+                hl.addWidget(detail_lbl, 1)
+            hl.addStretch(0)
+            self.pipeline_area.addWidget(holder)
 
     def add_note(self, text: str, error: bool = False) -> None:
         lbl = _WrapLabel(text)
@@ -998,6 +1104,207 @@ class GateCard(QFrame):
         self.details_toggle.setText("hide details" if checked else "show details")
 
 
+class SimCard(QFrame):
+    """Item R4 (live-feedback 2026-07-18): ONE collapsible card per off-box
+    solver run -- parity with the cloud web's sim card -- replacing the grey
+    pipeline rows for ``role="compute"`` steps.
+
+    Wire sources (read from the live agent contracts, never guessed):
+
+      * ``pipeline-state`` compute steps (contract ws.PipelineStep, the
+        task-149 two-card sim observability): minted running by
+        ``pipeline_emitter.mint_dispatch_and_sim_cards`` with
+        ``tool_name="<solver>:solve"`` + ``batch_job_id``
+        ("local-docker:<run_id>" on the local seam) + ``batch_status``;
+        driven terminal (complete / failed / cancelled, ``duration_ms``,
+        ``error_message``) by ``route_sim_terminal``.
+      * ``solve-progress`` ticks (contract ws.SolveProgressPayload, emitted
+        every ~10 s by ``workflows.solve_progress.drive_live_solve_progress``
+        -- the exact path the TELEMAC dye composer
+        ``model_river_dye_release_scenario`` / ``run_telemac`` arms): run_id /
+        solver / grid_resolution_m / active_cell_count / vcpus /
+        elapsed_seconds / eta_seconds / phase.
+
+    The small metadata table updates IN PLACE as events arrive; unknown
+    fields honestly read "-" (e.g. TELEMAC arms its progress driver with no
+    cell count, and dt is on NEITHER wire shape -- nothing is fabricated,
+    Invariant 1). The collapse affordance (one-line summary + "show details"
+    re-expand) is the exact ``GateCard`` pattern reused verbatim: expanded
+    while RUNNING, folding to "Simulation complete - TELEMAC" (or failed /
+    cancelled) on the terminal transition, details re-expandable read-only.
+    """
+
+    _FIELDS: Tuple[Tuple[str, str], ...] = (
+        ("engine", "Engine"),
+        ("run_id", "Run id"),
+        ("status", "Status"),
+        ("progress", "Progress"),
+        ("nodes", "Nodes"),
+        ("grid", "Grid"),
+        ("vcpus", "vCPUs"),
+        ("elapsed", "Elapsed"),
+        ("eta", "ETA"),
+        ("duration", "Duration"),
+    )
+
+    def __init__(self, engine_label: str, parent=None):
+        super().__init__(parent)
+        self._engine = engine_label
+        self._terminal = False
+        self.setStyleSheet(_SIM_CARD_STYLE)
+        self.setFrameShape(QFrame.StyledPanel)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(3)
+
+        # Collapsed one-line summary + "show details" -- the exact GateCard
+        # collapse affordance (item 5, live-feedback 2026-07-09), reused.
+        summary_row = QHBoxLayout()
+        self.summary_lbl = QLabel("")
+        self.summary_lbl.setWordWrap(True)
+        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setStyleSheet(_SIM_TITLE_STYLE)
+        summary_row.addWidget(self.summary_lbl, 1)
+        self.details_toggle = QPushButton("show details")
+        self.details_toggle.setFlat(True)
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.details_toggle.clicked.connect(self._toggle_details)
+        summary_row.addWidget(self.details_toggle)
+        self._summary_container = QWidget()
+        self._summary_container.setLayout(summary_row)
+        self._summary_container.setVisible(False)
+        outer.addWidget(self._summary_container)
+
+        self._body = QWidget()
+        body_lay = QVBoxLayout(self._body)
+        body_lay.setContentsMargins(0, 0, 0, 0)
+        body_lay.setSpacing(3)
+        outer.addWidget(self._body)
+
+        self.title_lbl = QLabel(f"Simulation running - {engine_label}")
+        self.title_lbl.setStyleSheet(_SIM_TITLE_STYLE)
+        body_lay.addWidget(self.title_lbl)
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(1)
+        self._values: Dict[str, QLabel] = {}
+        for i, (key, label) in enumerate(self._FIELDS):
+            key_lbl = QLabel(label)
+            key_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            val_lbl = QLabel("-")
+            val_lbl.setTextFormat(Qt.PlainText)
+            val_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            val_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            grid.addWidget(key_lbl, i, 0)
+            grid.addWidget(val_lbl, i, 1)
+            self._values[key] = val_lbl
+        grid.setColumnStretch(1, 1)
+        body_lay.addLayout(grid)
+        self._set("engine", engine_label)
+
+        self.error_lbl = QLabel("")
+        self.error_lbl.setWordWrap(True)
+        self.error_lbl.setTextFormat(Qt.PlainText)
+        self.error_lbl.setStyleSheet(_ERROR_LINE_STYLE)
+        self.error_lbl.setVisible(False)
+        body_lay.addWidget(self.error_lbl)
+
+    # -- table plumbing ------------------------------------------------------- #
+
+    @property
+    def engine(self) -> str:
+        return self._engine
+
+    @property
+    def terminal(self) -> bool:
+        return self._terminal
+
+    def _set(self, key: str, text: str) -> None:
+        lbl = self._values.get(key)
+        if lbl is not None and text:
+            lbl.setText(text)
+
+    @staticmethod
+    def _fmt_seconds(seconds: float) -> str:
+        s = int(max(0.0, round(seconds)))
+        return f"{s // 60}:{s % 60:02d}"
+
+    # -- event folds ---------------------------------------------------------- #
+
+    def update_from_step(self, step: PipelineStep) -> None:
+        """Fold a ``role="compute"`` pipeline step into the table; the first
+        terminal state (complete / failed / cancelled) flips the title and
+        collapses the card (a later replayed frame never re-flips it)."""
+        if step.batch_job_id:
+            # Local-docker handles read "local-docker:<run_id>" -- show the
+            # run_id part (a bare AWS Batch jobId passes through unchanged).
+            self._set("run_id", step.batch_job_id.split(":", 1)[-1])
+        status_bits = [step.state]
+        if step.batch_status and step.batch_status.lower() != step.state:
+            status_bits.append(step.batch_status)
+        self._set("status", " / ".join(status_bits))
+        if step.progress_percent is not None:
+            self._set("progress", f"{step.progress_percent}%")
+        if step.duration_ms is not None:
+            self._set("duration", self._fmt_seconds(step.duration_ms / 1000.0))
+        if step.state in ("complete", "failed", "cancelled") and not self._terminal:
+            self._terminal = True
+            if step.state == "failed" and step.error_message:
+                self.error_lbl.setText(step.error_message)
+                self.error_lbl.setVisible(True)
+            title = {
+                "complete": f"Simulation complete - {self._engine}",
+                "failed": f"Simulation failed - {self._engine}",
+                "cancelled": f"Simulation cancelled - {self._engine}",
+            }[step.state]
+            self.title_lbl.setText(title)
+            self._collapse(title)
+
+    def update_from_progress(self, data: dict) -> None:
+        """Fold a ``solve-progress`` tick into the table. Defensive reads --
+        every field is optional on the wire; a terminal card ignores the
+        live-only fields (a straggler tick must not repaint 'running')."""
+        run_id = data.get("run_id")
+        if isinstance(run_id, str) and run_id:
+            self._set("run_id", run_id)
+        nodes = data.get("active_cell_count")
+        if isinstance(nodes, (int, float)) and not isinstance(nodes, bool):
+            self._set("nodes", f"{int(nodes):,}")
+        grid_res = data.get("grid_resolution_m")
+        if isinstance(grid_res, (int, float)) and not isinstance(grid_res, bool):
+            self._set("grid", f"{grid_res:g} m")
+        vcpus = data.get("vcpus")
+        if isinstance(vcpus, (int, float)) and not isinstance(vcpus, bool):
+            self._set("vcpus", f"{int(vcpus)}")
+        if not self._terminal:
+            elapsed = data.get("elapsed_seconds")
+            if isinstance(elapsed, (int, float)) and not isinstance(elapsed, bool):
+                self._set("elapsed", self._fmt_seconds(float(elapsed)))
+            eta = data.get("eta_seconds")
+            if isinstance(eta, (int, float)) and not isinstance(eta, bool):
+                self._set("eta", self._fmt_seconds(float(eta)))
+            phase = data.get("phase")
+            if isinstance(phase, str) and phase:
+                self._set("status", f"running / {phase}")
+
+    # -- collapse (the GateCard affordance) ------------------------------------ #
+
+    def _collapse(self, line: str) -> None:
+        self.summary_lbl.setText(line)
+        self._summary_container.setVisible(True)
+        self._body.setVisible(False)
+        self.details_toggle.setChecked(False)
+        self.details_toggle.setText("show details")
+
+    def _toggle_details(self, checked: bool) -> None:
+        self._body.setVisible(checked)
+        self.details_toggle.setText("hide details" if checked else "show details")
+
+
 class _ExportTask(QObject):
     """POST /api/export-qgis off the UI thread (cross-thread signal emit).
 
@@ -1336,9 +1643,25 @@ class Trid3ntDock(QDockWidget):
         # AUTO-CONNECT (live-feedback 2026-07-09): fires once per dock SHOW,
         # reset on hide -- see ``showEvent``/``hideEvent``/``_auto_connect_local_once``.
         self._auto_connect_done_this_show = False
+        # Item R4 (live-feedback 2026-07-18): live SimCards keyed by the
+        # compute step's step_id; reset on case switch (_clear_messages).
+        self._sim_cards: Dict[str, SimCard] = {}
+        # Item R2 (live-feedback 2026-07-18): short arg summaries from the
+        # tool-io sidecar, keyed by step_id, for the tool chip rows.
+        self._tool_args_by_step: Dict[str, str] = {}
+        # Item R3 (live-feedback 2026-07-18): the AOI notice is INLINE now --
+        # the latest computed status line + the last one actually emitted as
+        # a transcript note (dedupe: only a CHANGED notice notes again).
+        self._aoi_status_line: str = ""
+        self._last_aoi_note: Optional[str] = None
 
         self._build_ui()
         self._wire_bridge()
+        # Item R6 (live-feedback 2026-07-18): the persistent "Push layer"
+        # header button was UI noise (NATE ask) -- the push action now lives
+        # in the QGIS layer-tree context menu ("Push layer to case").
+        self._push_tree_actions: List = []
+        self._register_layer_tree_push_action()
 
     # -- Qt lifecycle -------------------------------------------------------- #
 
@@ -1399,16 +1722,12 @@ class Trid3ntDock(QDockWidget):
         self.new_case_btn.clicked.connect(self.new_case)
         header.addWidget(self.new_case_btn)
 
-        # Bidirectional layer push: send iface.activeLayer() into the
-        # current case as a first-class input layer (the reverse seam of
-        # "Open in QGIS").
-        self.push_layer_btn = QToolButton()
-        self.push_layer_btn.setText("Push layer")
-        self.push_layer_btn.setToolTip(
-            "Send the active QGIS layer to the current case"
-        )
-        self.push_layer_btn.clicked.connect(self._push_active_layer)
-        header.addWidget(self.push_layer_btn)
+        # Item R6 (live-feedback 2026-07-18): the "Push layer" header button
+        # is REMOVED (UI-noise reduction, NATE ask). The bidirectional layer
+        # push (the reverse seam of "Open in QGIS") lives in the QGIS
+        # layer-tree context menu instead -- see
+        # ``_register_layer_tree_push_action``; ``_push_active_layer`` is
+        # still the backing method.
 
         # Map-click point probe: click the canvas to sample every raster
         # layer (and detected animation-frame sequence) on the current case
@@ -1503,16 +1822,16 @@ class Trid3ntDock(QDockWidget):
 
         # Item 4 (live-feedback 2026-07-09): the AOI toggles (canvas /
         # selected polygon) moved into Settings -- apply-on-Save there now,
-        # instead of live-applying from checkboxes here. ``self.aoi_status``
-        # below stays as the compact read-only status line, refreshed from
-        # settings at build time, on every send, and after Settings closes.
-        # F9 "Show model thinking" moved into the Settings dialog (NATE
-        # live-feedback 2026-07-13) -- the send path keeps reading
-        # ``self.settings.show_thinking``; nothing else changes.
-        self.aoi_status = QLabel(aoi.aoi_status_text(None, False))
-        self.aoi_status.setStyleSheet(_STATUS_LINE_STYLE)
-        outer.addWidget(self.aoi_status)
-        self._refresh_aoi_status()
+        # instead of live-applying from checkboxes here. F9 "Show model
+        # thinking" moved into the Settings dialog (NATE live-feedback
+        # 2026-07-13) -- the send path keeps reading
+        # ``self.settings.show_thinking``.
+        # Item R3 (live-feedback 2026-07-18): the pinned AOI status line that
+        # used to sit HERE (above the composer) is removed -- nothing pinned
+        # above the composer except the composer itself. The notice now lands
+        # INLINE in the transcript as a normal note row when it occurs (see
+        # ``_send``); ``_aoi_for_send`` keeps computing the honest text into
+        # ``self._aoi_status_line``.
 
         # Input row
         input_row = QHBoxLayout()
@@ -1571,6 +1890,13 @@ class Trid3ntDock(QDockWidget):
         target from the previous case must never receive the new case's
         deltas."""
         self._pending = None
+        # Item R4/R2/R3 (live-feedback 2026-07-18): per-case transcript
+        # state -- the SimCard registry (widgets die in the loop below), the
+        # tool-io arg summaries, and the last inline AOI note (a new case
+        # should restate the current AOI on its first send).
+        self._sim_cards.clear()
+        self._tool_args_by_step.clear()
+        self._last_aoi_note = None
         # BUG 3b (live-feedback 2026-07-12): the probe panel shows CASE
         # data -- a table from the previous case must not linger across a
         # switch. Hide it (its next click repopulates it).
@@ -1681,9 +2007,12 @@ class Trid3ntDock(QDockWidget):
         self,
     ) -> Tuple[Optional[Tuple[float, float, float, float]], Optional[str]]:
         """The ``(bbox, source)`` to attach right now, or ``(None, None)``
-        (off / unresolved / too big). Also refreshes the status line so the
-        user sees WHY. Selection (when its toggle is on and features are
-        selected) overrides the canvas extent -- see ``aoi.choose_aoi``.
+        (off / unresolved / too big). Also recomputes the honest status text
+        into ``self._aoi_status_line`` -- item R3 (live-feedback 2026-07-18):
+        no pinned widget anymore; ``_send`` emits the line as an inline
+        transcript note when it changes. Selection (when its toggle is on and
+        features are selected) overrides the canvas extent -- see
+        ``aoi.choose_aoi``.
 
         Item 4 (live-feedback 2026-07-09): the two toggles now live ONLY in
         Settings (apply-on-Save), so this reads them straight off
@@ -1695,15 +2024,12 @@ class Trid3ntDock(QDockWidget):
         canvas_bbox = self._canvas_bbox4326() if canvas_enabled else None
         bbox, source = aoi.choose_aoi(selection_bbox, canvas_bbox, selection_enabled)
         enabled = canvas_enabled or selection_enabled
-        self.aoi_status.setText(
-            aoi.aoi_status_text(bbox, enabled, source=source or "canvas")
+        self._aoi_status_line = aoi.aoi_status_text(
+            bbox, enabled, source=source or "canvas"
         )
         if bbox is not None and aoi.bbox_within_guard(bbox):
             return bbox, source
         return None, None
-
-    def _refresh_aoi_status(self) -> None:
-        self._aoi_for_send()
 
     # -- probe (map-click point sample) --------------------------------------- #
 
@@ -1908,10 +2234,9 @@ class Trid3ntDock(QDockWidget):
         prev_basemap = self.settings.basemap_preset
         dlg = SettingsDialog(self.settings, self)
         dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
-        # Item 4: the AOI toggles now live only in Settings -- refresh the
-        # dock's read-only status line from whatever landed (Save or
-        # Cancel; re-reading unchanged settings on Cancel is harmless).
-        self._refresh_aoi_status()
+        # Item 4: the AOI toggles live only in Settings. Item R3 (2026-07-18):
+        # no pinned status line to repaint anymore -- the next send recomputes
+        # the AOI and notes any CHANGED notice inline in the transcript.
         # BK-1b: Save persisted the preset but ensure_basemap only ran on
         # case-open/export, so the combo looked dead until the next case
         # switch. An explicit preset change in Settings applies here, not
@@ -2171,6 +2496,42 @@ class Trid3ntDock(QDockWidget):
         label = f"'{layer_name}'" if layer_name else "Push layer"
         self._note(f"{label} failed: {message}", error=True)
 
+    def _register_layer_tree_push_action(self) -> None:
+        """Item R6 (live-feedback 2026-07-18): the push action lives in the
+        QGIS layer-tree context menu now (right-click a layer -> "Push layer
+        to case"), replacing the removed header button. One QAction per layer
+        type (vector + raster; the QGIS API registers per-type), both backed
+        by ``_push_active_layer`` -- right-clicking a tree entry makes it the
+        current/active layer, so the existing active-layer path is exactly
+        right. Removed again in ``shutdown`` so a plugin reload never stacks
+        duplicate menu entries."""
+        for layer_type in (QgsMapLayer.VectorLayer, QgsMapLayer.RasterLayer):
+            action = QAction("Push layer to case", self)
+            action.triggered.connect(self._push_active_layer)
+            try:
+                self.iface.addCustomActionForLayerType(
+                    action, "", layer_type, True
+                )
+            except Exception:  # noqa: BLE001 -- headless/stub iface in tests
+                continue
+            self._push_tree_actions.append(action)
+
+    def _route_compute_step(self, step: PipelineStep) -> None:
+        """Item R4 (live-feedback 2026-07-18): a ``role="compute"`` pipeline
+        step renders as ONE persistent collapsible SimCard keyed by step_id
+        (inserted before the terminal stretch like every message widget) --
+        never a transient grey row. Replayed frames fold into the same card;
+        ``_clear_messages`` (case switch) resets the registry."""
+        card = self._sim_cards.get(step.step_id)
+        if card is None:
+            card = SimCard(_solver_engine_label(step.tool_name))
+            self._sim_cards[step.step_id] = card
+            self.messages_layout.insertWidget(
+                self.messages_layout.count() - 1, card
+            )
+            self._scroll_to_bottom()
+        card.update_from_step(step)
+
     def _note(self, text: str, error: bool = False) -> None:
         self._ensure_pending().add_note(text, error=error)
         self._scroll_to_bottom()
@@ -2257,14 +2618,23 @@ class Trid3ntDock(QDockWidget):
             self._scroll_to_bottom()
         elif kind == "pipeline":
             steps = data.get("steps") or []
-            lines = []
+            rows: List[dict] = []
             for step in steps:
                 if not isinstance(step, PipelineStep):
                     continue
                 if step.tool_name.lower() in _LLM_STEP_NAMES:
                     continue
+                if step.role == "compute":
+                    # Item R4 (live-feedback 2026-07-18): the off-box solver
+                    # step renders as ONE persistent collapsible SimCard, not
+                    # a transient grey row -- see _route_compute_step.
+                    self._route_compute_step(step)
+                    continue
                 if step.parent_step_id:
-                    lines.append(f"    {step.tool_name} - {step.state}")
+                    rows.append(
+                        {"chip": step.tool_name, "detail": step.state,
+                         "indent": True}
+                    )
                 else:
                     # Compaction UX (Part A): "context:compact" is the one
                     # step whose tool_name is a plain internal id
@@ -2272,19 +2642,33 @@ class Trid3ntDock(QDockWidget):
                     # human-readable state -- "Compacting conversation..."
                     # then "Conversation compacted (Nk -> Mk tokens)". Every
                     # other tool's tool_name IS already the readable label
-                    # (or at least as readable as step.name), so this stays
-                    # scoped to the one case where preferring name is
-                    # strictly better, never changing existing behavior.
-                    label = (
-                        step.name
-                        if step.tool_name == "context:compact"
-                        else (step.tool_name or step.name)
-                    )
-                    suffix = f" ({step.substep_label})" if step.substep_label else ""
-                    lines.append(f"{label} - {step.state}{suffix}")
+                    # (or at least as readable as step.name), so compaction
+                    # keeps its plain grey status line (chip=None) while real
+                    # tools get the item-R2 chip row.
+                    if step.tool_name == "context:compact":
+                        suffix = (
+                            f" ({step.substep_label})" if step.substep_label else ""
+                        )
+                        rows.append(
+                            {"chip": None,
+                             "detail": f"{step.name} - {step.state}{suffix}"}
+                        )
+                    else:
+                        detail = step.state
+                        if step.substep_label:
+                            detail += f" ({step.substep_label})"
+                        args = self._tool_args_by_step.get(step.step_id)
+                        if args:
+                            detail += f"  {args}"
+                        rows.append(
+                            {"chip": step.tool_name or step.name,
+                             "detail": detail}
+                        )
                     if step.error_message:
-                        lines.append(f"    {step.error_message}")
-            self._ensure_pending().set_pipeline_lines(lines)
+                        rows.append(
+                            {"chip": None, "detail": f"    {step.error_message}"}
+                        )
+            self._ensure_pending().set_pipeline_rows(rows)
             self._scroll_to_bottom()
         elif kind == "session-state":
             layers = data.get("layers") or []
@@ -2312,6 +2696,23 @@ class Trid3ntDock(QDockWidget):
                     f"Chart added below: {title}"
                 )
                 self._scroll_to_bottom()
+        elif kind == "solve-progress":
+            # Item R4 (live-feedback 2026-07-18): the ~10 s big-sim telemetry
+            # tick. It carries run_id, not step_id; the local seam runs one
+            # sim at a time, so fold it into every non-terminal SimCard (the
+            # card itself run_id-stamps and ignores live-only fields once
+            # terminal -- a straggler tick never repaints a finished card).
+            for card in self._sim_cards.values():
+                if not card.terminal:
+                    card.update_from_progress(data)
+        elif kind == "tool-io":
+            # Item R2 (live-feedback 2026-07-18): raw-args sidecar keyed by
+            # step_id (emitted at dispatch START, so the summary is in place
+            # before the pipeline frame paints the chip row).
+            sid = data.get("step_id")
+            raw = data.get("raw_args")
+            if isinstance(sid, str) and sid and isinstance(raw, str):
+                self._tool_args_by_step[sid] = _short_args_summary(raw)
         elif kind == "payload-warning":
             self._show_gate_card(data)
         elif kind == "case-open":
@@ -2516,6 +2917,12 @@ class Trid3ntDock(QDockWidget):
         self._pending = _AssistantEntry(self.messages_layout)
         self._scroll_to_bottom()
         bbox, source = self._aoi_for_send()
+        # Item R3 (live-feedback 2026-07-18): the AOI notice is INLINE in the
+        # transcript now (the pinned above-composer line is gone). Note it on
+        # CHANGE only, so a stable AOI does not restate itself every send.
+        if self._aoi_status_line and self._aoi_status_line != self._last_aoi_note:
+            self._pending.add_note(self._aoi_status_line)
+            self._last_aoi_note = self._aoi_status_line
         wire_text = (
             aoi.attach_aoi_to_text(text, bbox, source=source or "canvas")
             if bbox
@@ -2531,4 +2938,12 @@ class Trid3ntDock(QDockWidget):
     # -- teardown ------------------------------------------------------------- #
 
     def shutdown(self) -> None:
+        # Item R6 (live-feedback 2026-07-18): unhook the layer-tree push
+        # actions so a plugin reload never stacks duplicate menu entries.
+        for action in self._push_tree_actions:
+            try:
+                self.iface.removeCustomActionForLayerType(action)
+            except Exception:  # noqa: BLE001
+                pass
+        self._push_tree_actions = []
         self.bridge.stop()
