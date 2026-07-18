@@ -38,6 +38,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 import numpy as np
+from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +64,15 @@ class ReachConfig:
     # rather than the old continuous upstream-inflow injection saturating the
     # whole reach. Clean flow (inflow->outflow) still drives it.
     spill_frac: float = 0.25            # along-channel position of the spill (0=up,1=down)
+    # BK-6 release-point picker: explicit spill location (EPSG:4326). When BOTH
+    # are set they OVERRIDE spill_frac - the source snaps to the nearest
+    # interior mesh node to this point (validated within 2 channel widths).
+    release_lon: float = None           # type: ignore[assignment]
+    release_lat: float = None           # type: ignore[assignment]
+    # BK-7 real-bank meshing: "auto" samples USGS NHDArea river polygons for
+    # per-station left/right bank offsets (mesh follows the REAL river);
+    # "constant" keeps the legacy fixed-width ribbon.
+    bank_source: str = "auto"
     pulse_window_s: float = 300.0       # dye-on window; source turns OFF after
     source_q_m3s: float = 8.0           # carrier discharge of the point source (small vs inflow)
     duration_s: float = 3600.0
@@ -196,15 +206,242 @@ def process_centerline(ll: np.ndarray, cfg: ReachConfig):
 
 
 # ---------------------------------------------------------------------------
-# 3. Channel banks + Gmsh mesh (adapts P0 build_gmsh_channel, honoring gotchas)
+# 2b. BK-7: real river banks from USGS NHDArea polygons
 # ---------------------------------------------------------------------------
-def _offset_banks(cl: np.ndarray, width: float):
+_NHDAREA_URL = (
+    "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/"
+    "MapServer/8/query"
+)
+
+
+def fetch_bank_polygons(bbox4326, timeout=30.0):
+    """NHDArea water polygons intersecting ``bbox4326`` (lonlat) as a list of
+    (exterior_ring, [hole_rings]) lonlat arrays. None on ANY failure/empty -
+    the caller falls back to the constant-width ribbon (honest degrade)."""
+    import json as _json
+    import urllib.parse
+    import urllib.request
+
+    params = urllib.parse.urlencode({
+        "geometry": ",".join(f"{v:.6f}" for v in bbox4326),
+        "geometryType": "esriGeometryEnvelope",
+        "inSR": "4326", "outSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "outFields": "ftype", "f": "geojson",
+        # big-river hardening (Columbia hang): server-side simplification
+        # (~5 m at mid-latitudes) + a record cap - the reach bbox only needs
+        # local bank detail, not the full mainstem polygon.
+        "maxAllowableOffset": "0.00005",
+        "resultRecordCount": "50",
+    })
+    try:
+        with urllib.request.urlopen(f"{_NHDAREA_URL}?{params}", timeout=timeout) as r:
+            data = _json.loads(r.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001 -- degrade, never dead-end
+        LOG.warning("NHDArea fetch failed (%s); constant-width fallback", exc)
+        return None
+    polys = []
+    for f in data.get("features") or []:
+        g = f.get("geometry") or {}
+        if g.get("type") == "Polygon":
+            rings = g.get("coordinates") or []
+            if rings:
+                polys.append((np.asarray(rings[0], dtype=float),
+                              [np.asarray(rr, dtype=float) for rr in rings[1:]]))
+        elif g.get("type") == "MultiPolygon":
+            for rings in g.get("coordinates") or []:
+                if rings:
+                    polys.append((np.asarray(rings[0], dtype=float),
+                                  [np.asarray(rr, dtype=float) for rr in rings[1:]]))
+    return polys or None
+
+
+def estimate_bank_offsets(cl, polys_utm, max_half=800.0, step=4.0,
+                          min_half=8.0, valid_frac_floor=0.3):
+    """Per-station (left, right) bank distances from the water polygons.
+
+    Casts a perpendicular transect at every centerline station, marks which
+    samples are WATER (inside an exterior ring minus its holes), and takes the
+    contiguous water run nearest the centerline. Stations with no water within
+    ~30 m are interpolated from neighbours; if fewer than ``valid_frac_floor``
+    of stations see water at all, returns None (constant-width fallback).
+    Profiles are smoothed + gradient-limited so gmsh bank offsetting stays
+    simple (no bowties from step changes)."""
+    import shapely.geometry as sg
+    try:
+        import shapely
+        _contains = lambda g, xs, ys: shapely.contains_xy(g, xs, ys)  # noqa: E731
+    except Exception:  # noqa: BLE001 -- shapely<2 fallback
+        from shapely.prepared import prep
+        def _contains(g, xs, ys, _p={}):
+            pg = _p.setdefault(id(g), prep(g))
+            return np.array([pg.contains(sg.Point(x, y)) for x, y in zip(xs, ys)])
+
+    water = [sg.Polygon(ext, holes=[h for h in holes if len(h) >= 4])
+             for ext, holes in polys_utm if len(ext) >= 4]
+    water = [w.buffer(0) for w in water if not w.is_empty]
+    if not water:
+        return None
+    from shapely.ops import unary_union
+    # CLIP to the transect envelope BEFORE the union (Columbia hang fix): the
+    # fetched mainstem polygon can span far beyond the reach; unclipped it
+    # makes every point-in-polygon test walk hundreds of thousands of
+    # vertices. The clip box = centerline extent + max_half margin.
+    clip = sg.box(cl[:, 0].min() - max_half, cl[:, 1].min() - max_half,
+                  cl[:, 0].max() + max_half, cl[:, 1].max() + max_half)
+    water = [w.intersection(clip) for w in water]
+    water = [w for w in water if not w.is_empty]
+    if not water:
+        return None
+    union = unary_union(water)
+    try:
+        nv = sum(len(g.exterior.coords) for g in getattr(union, "geoms", [union])
+                 if g.geom_type == "Polygon")
+        LOG.info("bank union: %d polys, ~%d verts after clip", len(water), nv)
+    except Exception:  # noqa: BLE001
+        pass
+
     x, y = cl[:, 0], cl[:, 1]
     dx = np.gradient(x); dy = np.gradient(y)
     seg = np.hypot(dx, dy); seg[seg == 0] = 1e-9
     nx = -dy / seg; ny = dx / seg
-    left = np.column_stack([x + nx * width / 2, y + ny * width / 2])
-    right = np.column_stack([x - nx * width / 2, y - ny * width / 2])
+    ts = np.arange(-max_half, max_half + step, step)
+    n = len(cl)
+    left = np.full(n, np.nan); right = np.full(n, np.nan)
+    for i in range(n):
+        sx = x[i] + nx[i] * ts
+        sy = y[i] + ny[i] * ts
+        try:
+            wet = np.asarray(_contains(union, sx, sy), dtype=bool)
+        except Exception:  # noqa: BLE001
+            return None
+        if not wet.any():
+            continue
+        # contiguous wet runs; pick the one nearest t=0 (within 30 m)
+        idx = np.flatnonzero(wet)
+        splits = np.flatnonzero(np.diff(idx) > 1)
+        runs = np.split(idx, splits + 1)
+        zero = len(ts) // 2
+        best, bestd = None, 1e18
+        for run in runs:
+            d = 0.0 if run[0] <= zero <= run[-1] else min(
+                abs(ts[run[0]]), abs(ts[run[-1]]))
+            if d < bestd:
+                best, bestd = run, d
+        if best is None or bestd > 30.0:
+            continue
+        # offsets relative to the centerline station (positive both sides)
+        left[i] = max(min_half, ts[best[-1]])
+        right[i] = max(min_half, -ts[best[0]])
+    valid = np.isfinite(left) & np.isfinite(right)
+    if valid.mean() < valid_frac_floor:
+        return None
+    # interpolate gaps from valid neighbours
+    ii = np.arange(n)
+    for arr in (left, right):
+        good = np.isfinite(arr)
+        arr[~good] = np.interp(ii[~good], ii[good], arr[good])
+    # RECENTER + SMOOTH-FIRST (Columbia fold fix v2): the fold root causes were
+    # (a) an off-center axis needing huge one-sided offsets and (b) building
+    # the axis from RAW noisy per-station offsets (jagged axis -> oscillating
+    # normals -> both banks fold). Correct order: smooth the shift/half-width
+    # PROFILES first, then build the mid-water axis, then RESAMPLE it to
+    # uniform spacing (kills kinks), then curvature-clamp.
+    def _rsmooth(a, kk):
+        pad = kk // 2
+        ap = np.r_[a[pad:0:-1], a, a[-2:-pad - 2:-1]]
+        return np.convolve(ap, np.ones(kk) / kk, mode="valid")
+
+    shift = _rsmooth((left - right) / 2.0, 15)
+    halfw = _rsmooth((left + right) / 2.0, 15)
+    cl_mid = np.column_stack([x + nx * shift, y + ny * shift])
+    cl_mid[:, 0] = _rsmooth(cl_mid[:, 0], 9)
+    cl_mid[:, 1] = _rsmooth(cl_mid[:, 1], 9)
+
+    # uniform arc-length resample of the axis (+ halfw onto the new stations)
+    seg2 = np.hypot(*np.diff(cl_mid, axis=0).T)
+    s = np.concatenate([[0.0], np.cumsum(seg2)])
+    ds = float(np.median(seg))
+    n_new = max(int(s[-1] / ds), 8)
+    s_new = np.linspace(0.0, s[-1], n_new + 1)
+    cl_mid = np.column_stack([np.interp(s_new, s, cl_mid[:, 0]),
+                              np.interp(s_new, s, cl_mid[:, 1])])
+    halfw = np.interp(s_new, s, halfw)
+
+    # CURVATURE CLAMP: half-width <= 0.7 * local bend radius makes a fold
+    # geometrically impossible (3-point circumradius, +-4 stations).
+    n2 = len(cl_mid)
+    radius = np.full(n2, 1e9)
+    for i in range(4, n2 - 4):
+        a, b, c = cl_mid[i - 4], cl_mid[i], cl_mid[i + 4]
+        ab = np.hypot(*(b - a)); bc = np.hypot(*(c - b)); ca = np.hypot(*(a - c))
+        area2 = abs((b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]))
+        if area2 > 1e-6:
+            radius[i] = (ab * bc * ca) / (2.0 * area2)
+    halfw = np.minimum(halfw, np.maximum(min_half, 0.7 * radius))
+
+    # final half-width smoothing + clamps + gradient limit
+    max_delta = 0.35 * ds
+    halfw = _rsmooth(halfw, 9)
+    np.clip(halfw, min_half, max_half, out=halfw)
+    for _ in range(200):
+        d = np.diff(halfw)
+        over = np.abs(d) > max_delta
+        if not over.any():
+            break
+        d = np.clip(d, -max_delta, max_delta)
+        halfw[1:] = halfw[0] + np.cumsum(d)
+        np.clip(halfw, min_half, max_half, out=halfw)
+    return cl_mid, halfw, round(float(valid.mean()), 3)
+
+
+# ---------------------------------------------------------------------------
+# 3. Channel banks + Gmsh mesh (adapts P0 build_gmsh_channel, honoring gotchas)
+# ---------------------------------------------------------------------------
+def _offset_banks(cl: np.ndarray, width: float, offsets=None):
+    x, y = cl[:, 0], cl[:, 1]
+    dx = np.gradient(x); dy = np.gradient(y)
+    seg = np.hypot(dx, dy); seg[seg == 0] = 1e-9
+    nx = -dy / seg; ny = dx / seg
+    if offsets is not None:
+        lo, ro = offsets
+        ds_med = float(np.median(seg))
+        half_med = float(np.median((np.asarray(lo) + np.asarray(ro)) / 2.0))
+        # HYBRID BY SCALE (Columbia fold fix v3): large offsets (wide rivers)
+        # amplify tiny normal jitter into micro self-intersections, and that is
+        # exactly the regime where width VARIATION is negligible (+-14% on the
+        # Columbia). So: offsets > 3x station spacing -> GEOS offset_curve at
+        # the CONSTANT median half-width (guaranteed simple by the geometry
+        # kernel); small offsets (creeks, where variation is the whole point:
+        # 16-46 m at Twin Falls) keep the per-station variable construction
+        # (proven fold-free at that scale).
+        if half_med > 3.0 * ds_med:
+            try:
+                import shapely.geometry as _sg
+                axis = _sg.LineString(cl)
+                def _side(dist):
+                    try:
+                        line = axis.offset_curve(dist)
+                    except AttributeError:  # shapely<2
+                        line = axis.parallel_offset(abs(dist),
+                                                    "left" if dist > 0 else "right")
+                    if line.geom_type == "MultiLineString":
+                        line = max(line.geoms, key=lambda g: g.length)
+                    pts = np.asarray(line.coords)
+                    # GEOS may reverse the right-side curve; align to the axis
+                    if np.hypot(*(pts[0] - cl[0])) > np.hypot(*(pts[-1] - cl[0])):
+                        pts = pts[::-1]
+                    return pts
+                left = _side(+half_med)
+                right = _side(-half_med)
+                return left, right
+            except Exception:  # noqa: BLE001 -- fall through to per-station
+                pass
+        left = np.column_stack([x + nx * lo, y + ny * lo])
+        right = np.column_stack([x - nx * ro, y - ny * ro])
+    else:
+        left = np.column_stack([x + nx * width / 2, y + ny * width / 2])
+        right = np.column_stack([x - nx * width / 2, y - ny * width / 2])
     return left, right
 
 
@@ -222,8 +459,25 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     inflow/outflow node sets (P0 gotchas 1-3, 7).
     """
     import gmsh
+    import signal
 
-    left, right = _offset_banks(cl, cfg.channel_width_m)
+    offsets = getattr(cfg, "bank_offsets", None)
+    left, right = _offset_banks(cl, cfg.channel_width_m, offsets)
+    # gmsh-hang hardening (live: wide-river banks hung generate(2) for 18+ min
+    # silently; a 50 km reach did the same earlier). Bound the WHOLE build with
+    # SIGALRM (single-threaded worker) -> honest MESH_BUILD_TIMEOUT. Also dump
+    # the exact geometry first so a failing case is reproducible offline.
+    try:
+        np.savez(str(Path(cfg.workdir) / "banks_debug.npz"),
+                 cl=cl, left=left, right=right)
+    except Exception:  # noqa: BLE001 -- debug dump is best-effort
+        pass
+
+    def _gmsh_timeout(_sig, _frm):
+        raise TimeoutError("MESH_BUILD_TIMEOUT: gmsh exceeded 240 s")
+
+    signal.signal(signal.SIGALRM, _gmsh_timeout)
+    signal.alarm(240)
     # gotcha 7: if banks self-intersect at a bend, smooth harder until simple
     tries = 0
     while not _banks_valid(left, right) and tries < 6:
@@ -231,8 +485,17 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
         cl = np.column_stack([np.convolve(cl[:, 0], k, mode="same"),
                               np.convolve(cl[:, 1], k, mode="same")])
         cl[0] = cl[0]; cl[-1] = cl[-1]
-        left, right = _offset_banks(cl, cfg.channel_width_m)
+        if offsets is not None:
+            offsets = (np.convolve(offsets[0], k, mode="same"),
+                       np.convolve(offsets[1], k, mode="same"))
+        left, right = _offset_banks(cl, cfg.channel_width_m, offsets)
         tries += 1
+    if not _banks_valid(left, right):
+        signal.alarm(0)
+        raise RuntimeError(
+            "MESH_BANKS_INVALID: bank offset curves still self-intersect "
+            "after smoothing retries - refusing to mesh a folded channel"
+        )
     banks_ok = _banks_valid(left, right)
 
     gmsh.initialize()
@@ -286,6 +549,7 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     in_nodes = pg_nodes(g_in)
     out_nodes = pg_nodes(g_out)
     gmsh.finalize()
+    signal.alarm(0)
 
     # coincident-node guard
     from scipy.spatial import cKDTree
@@ -492,15 +756,35 @@ def spill_point(mesh, cfg):
     anyway; we pre-snap so the reported coordinate is an actual wet node.
     """
     cl = mesh["centerline"]
-    seglen = np.hypot(np.diff(cl[:, 0]), np.diff(cl[:, 1]))
-    cum = np.concatenate([[0.0], np.cumsum(seglen)])
-    total = float(cum[-1])
-    target = float(np.clip(cfg.spill_frac, 0.0, 1.0)) * total
-    j = int(np.clip(np.searchsorted(cum, target), 1, len(cl) - 1))
-    seg = max(cum[j] - cum[j - 1], 1e-9)
-    st = (target - cum[j - 1]) / seg
-    px = cl[j - 1, 0] + st * (cl[j, 0] - cl[j - 1, 0])
-    py = cl[j - 1, 1] + st * (cl[j, 1] - cl[j - 1, 1])
+    # BK-6: an explicit user-picked release point (set as UTM by run_pipeline
+    # from cfg.release_lon/lat) overrides the spill_frac walk - but only when
+    # it lands within 2 channel widths of the mesh (else fall back + note).
+    rel = getattr(cfg, "release_utm", None)
+    px = py = None
+    if rel is not None:
+        rx, ry = float(rel[0]), float(rel[1])
+        d2r = (mesh["X"] - rx) ** 2 + (mesh["Y"] - ry) ** 2
+        # accept radius: 2 stated widths OR 1.5x the widest REAL bank span
+        # (wide rivers like the Columbia dwarf the stated default width)
+        lim = 2.0 * float(cfg.channel_width_m)
+        off = getattr(cfg, "bank_offsets", None)
+        if off is not None:
+            lim = max(lim, 1.5 * float((off[0] + off[1]).max()))
+        if float(np.sqrt(d2r.min())) <= lim:
+            px, py = rx, ry
+            mesh["release_point_used"] = True
+        else:
+            mesh["release_point_rejected_dist_m"] = round(float(np.sqrt(d2r.min())), 1)
+    if px is None:
+        seglen = np.hypot(np.diff(cl[:, 0]), np.diff(cl[:, 1]))
+        cum = np.concatenate([[0.0], np.cumsum(seglen)])
+        total = float(cum[-1])
+        target = float(np.clip(cfg.spill_frac, 0.0, 1.0)) * total
+        j = int(np.clip(np.searchsorted(cum, target), 1, len(cl) - 1))
+        seg = max(cum[j] - cum[j - 1], 1e-9)
+        st = (target - cum[j - 1]) / seg
+        px = cl[j - 1, 0] + st * (cl[j, 0] - cl[j - 1, 0])
+        py = cl[j - 1, 1] + st * (cl[j, 1] - cl[j - 1, 1])
     ring = set(int(n) for n in mesh["ring"])
     d2 = (mesh["X"] - px) ** 2 + (mesh["Y"] - py) ** 2
     for idx in np.argsort(d2):

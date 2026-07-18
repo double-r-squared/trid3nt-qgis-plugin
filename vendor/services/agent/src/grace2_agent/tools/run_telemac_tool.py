@@ -88,6 +88,11 @@ async def run_telemac(
     source_q_m3s: float = 8.0,
     channel_width_m: float = 60.0,
     river_geometry_uri: str | None = None,
+    mesh_resolution: str = "auto",
+    mesh_resolution_m: float | None = None,
+    release_lon: float | None = None,
+    release_lat: float | None = None,
+    substance: str = "dye",
     compute_class: str = "medium",
     # job-0164: absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
@@ -144,6 +149,25 @@ async def run_telemac(
             (no re-fetch). Otherwise leave unset and the tool fetches the reach
             itself from the place / AOI. (You do NOT need to fetch the river
             first -- ``location`` alone is enough.)
+        mesh_resolution: mesh GRANULARITY lever (BK-3c). One of ``"auto"`` (the
+            default - the tool sizes the mesh from the reach geometry under a node
+            budget), ``"fine"`` (more cells across the channel; sharper plume,
+            slower solve), or ``"coarse"`` (fewer cells; faster, blockier). Set it
+            from the user's intent, e.g. "high-res mesh" -> ``"fine"``, "quick /
+            coarse run" -> ``"coarse"``. NOT hardcoded - the chosen edge length +
+            node estimate come back on the layer so they can be shown/approved.
+        mesh_resolution_m: OPTIONAL explicit mesh target edge length in METERS
+            (e.g. 8.0). Overrides ``mesh_resolution``. Still clamped under the node
+            budget so a reckless value can't wedge the solve. Leave unset unless
+            the user asks for a specific resolution.
+        release_lon: EPSG:4326 longitude of the USER-PICKED spill point (BK-6).
+            Comes from the approve-mesh gate's map click - do NOT invent it.
+        release_lat: EPSG:4326 latitude of the user-picked spill point.
+        substance: WHAT was spilled - e.g. "dye", "oil", "diesel", "sewage",
+            "chemical". Set from the user's words. Modeled as a PASSIVELY
+            ADVECTED dissolved tracer (transport + dilution); labels/narration
+            follow the substance. (True oil-slick physics - spreading,
+            evaporation, beaching - is the separate oil-spill module, WIP.)
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
 
     Returns:
@@ -164,15 +188,36 @@ async def run_telemac(
     if bbox is not None:
         cb = coerce_bbox_value(bbox)
         if cb is None:
-            return {
-                "status": "error",
-                "error_code": "TELEMAC_PARAMS_INVALID",
-                "error_message": (
-                    f"invalid bbox (expected 4 numbers min_lon,min_lat,max_lon,"
-                    f"max_lat): {bbox!r}"
-                ),
-            }
-        coerced_bbox = tuple(cb)  # type: ignore[assignment]
+            # LLM-arg salvage (live 2026-07-17: bbox='Twin Falls, Idaho'): a
+            # non-numeric string bbox is almost always a PLACE NAME - shift it
+            # into location instead of dead-ending the call.
+            if isinstance(bbox, str) and any(c.isalpha() for c in bbox) \
+                    and not (location and str(location).strip()):
+                logger.warning(
+                    "run_telemac: bbox %r is a place name - using as location",
+                    bbox,
+                )
+                location, bbox = bbox, None
+            else:
+                return {
+                    "status": "error",
+                    "error_code": "TELEMAC_PARAMS_INVALID",
+                    "error_message": (
+                        f"invalid bbox (expected 4 numbers min_lon,min_lat,"
+                        f"max_lon,max_lat): {bbox!r}"
+                    ),
+                }
+        else:
+            coerced_bbox = tuple(cb)  # type: ignore[assignment]
+
+    # LLM-arg salvage: river_geometry_uri must be a real object-store URI; the
+    # model sometimes invents pseudo-calls ('fetch_river_geometry(...)').
+    if river_geometry_uri and not str(river_geometry_uri).startswith(("s3://", "gs://")):
+        logger.warning(
+            "run_telemac: river_geometry_uri %r is not an object URI - ignoring",
+            river_geometry_uri,
+        )
+        river_geometry_uri = None
 
     has_loc = bool(location and str(location).strip())
     # OPEN-24 (2026-07-16): need AT LEAST one of location/bbox. The old guard
@@ -194,6 +239,82 @@ async def run_telemac(
     if has_loc and coerced_bbox is not None:
         has_loc = False  # explicit bbox wins; ignore the redundant location
 
+    # LLM-invented compute_class hardening (live 2026-07-17: the model passed
+    # compute_class='dye_spill' and the dispatch crashed AFTER the geocode +
+    # river fetch). Coerce anything outside the known ladder to 'medium' -
+    # same job-0164 family as the **_extra_ignored absorption above.
+    _ALLOWED_COMPUTE = {"small", "medium", "standard", "large", "xlarge", "gpu"}
+    if str(compute_class).strip().lower() not in _ALLOWED_COMPUTE:
+        logger.warning(
+            "run_telemac: unknown compute_class %r coerced to 'medium'",
+            compute_class,
+        )
+        compute_class = "medium"
+
+    # LLM-invented reach-scale hardening (live 2026-07-17: the model asked for a
+    # 50 km reach; gmsh hung/crashed banking the 2802-point meandering
+    # centerline and the run died silently). Clamp to the modelable window - a
+    # dye plume travels ~5-10 km in the demo sim durations anyway.
+    try:
+        reach_length_km = float(reach_length_km)
+    except (TypeError, ValueError):
+        reach_length_km = 6.0
+    if not (0.5 <= reach_length_km <= 15.0):
+        logger.warning(
+            "run_telemac: reach_length_km %r outside [0.5, 15] - clamped",
+            reach_length_km,
+        )
+        reach_length_km = min(max(reach_length_km, 0.5), 15.0)
+
+    # Ill-posed forcing hardening (live 2026-07-17: spill_fraction=1.0 planted
+    # the source ON the outflow boundary -> TELEMAC startup abort 'GIVE A
+    # POSITIVE DEPTH ... AT THE ENTRANCE'; source_q=100 was ~40% of river
+    # inflow). Keep the source strictly INTERIOR and small vs the carrier flow.
+    try:
+        spill_fraction = float(spill_fraction)
+    except (TypeError, ValueError):
+        spill_fraction = 0.25
+    if not (0.05 <= spill_fraction <= 0.9):
+        logger.warning(
+            "run_telemac: spill_fraction %r outside [0.05, 0.9] - clamped "
+            "(source must sit inside the reach, not on a boundary)",
+            spill_fraction,
+        )
+        spill_fraction = min(max(spill_fraction, 0.05), 0.9)
+    try:
+        sim_duration_s = float(sim_duration_s)
+    except (TypeError, ValueError):
+        sim_duration_s = 3600.0
+    if not (600.0 <= sim_duration_s <= 14400.0):
+        logger.warning(
+            "run_telemac: sim_duration_s %r outside [600, 14400] - clamped",
+            sim_duration_s,
+        )
+        sim_duration_s = min(max(sim_duration_s, 600.0), 14400.0)
+    # substance sanitize (label only - never solver-affecting)
+    substance = "".join(c for c in str(substance or "dye").strip().lower()
+                        if c.isalnum() or c in " -_")[:24] or "dye"
+    try:
+        channel_width_m = float(channel_width_m)
+    except (TypeError, ValueError):
+        channel_width_m = 60.0
+    if not (10.0 <= channel_width_m <= 1500.0):
+        logger.warning(
+            "run_telemac: channel_width_m %r outside [10, 1500] - clamped",
+            channel_width_m,
+        )
+        channel_width_m = min(max(channel_width_m, 10.0), 1500.0)
+    try:
+        source_q_m3s = float(source_q_m3s)
+    except (TypeError, ValueError):
+        source_q_m3s = 8.0
+    if not (0.5 <= source_q_m3s <= 30.0):
+        logger.warning(
+            "run_telemac: source_q_m3s %r outside [0.5, 30] - clamped",
+            source_q_m3s,
+        )
+        source_q_m3s = min(max(source_q_m3s, 0.5), 30.0)
+
     logger.info(
         "run_telemac location=%r bbox=%s spill_frac=%.3g pulse_s=%.0f dye=%.4g "
         "reach_km=%.3g sim_s=%.0f",
@@ -213,6 +334,11 @@ async def run_telemac(
             source_q_m3s=float(source_q_m3s),
             channel_width_m=float(channel_width_m),
             river_geometry_uri=(str(river_geometry_uri) if river_geometry_uri else None),
+            mesh_resolution=str(mesh_resolution or "auto"),
+            mesh_resolution_m=(float(mesh_resolution_m) if mesh_resolution_m is not None else None),
+            release_lon=(float(release_lon) if release_lon is not None else None),
+            release_lat=(float(release_lat) if release_lat is not None else None),
+            substance=substance,
             compute_class=compute_class,
         )
         logger.info(

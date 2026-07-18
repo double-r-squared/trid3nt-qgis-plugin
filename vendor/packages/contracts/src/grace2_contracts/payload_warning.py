@@ -153,9 +153,12 @@ class GranularitySuggestion(GraceModel):
     # fetch), not just the SWMM/SFINCS solver mesh. compute_class stays a free
     # str, so a fetch gate sets compute_class="fetch" with no Literal change.
     # "landcover" added to support state-scale NLCD auto-coarsening.
-    engine: Literal["swmm", "sfincs", "dem", "topobathy", "landcover"]
+    # "telemac" + "mesh_resolution_m" added for the BK-3b approve-mesh gate
+    # (river-dye unstructured mesh: the rung is the gmsh target edge length).
+    engine: Literal["swmm", "sfincs", "dem", "topobathy", "landcover", "telemac"]
     resolution_param: Literal[
-        "target_resolution_m", "grid_resolution_m", "resolution_m"
+        "target_resolution_m", "grid_resolution_m", "resolution_m",
+        "mesh_resolution_m",
     ]
     suggested_resolution_m: float = Field(gt=0.0)
     resolution_choices: list[float] = Field(default_factory=list)

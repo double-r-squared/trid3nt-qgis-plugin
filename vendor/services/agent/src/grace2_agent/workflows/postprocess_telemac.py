@@ -299,6 +299,7 @@ def postprocess_telemac(
     run_id: str,
     utm_epsg: int,
     reach_name: str = "river_dye",
+    substance: str = "dye",
     dye_units: str = "mg/L",
     runs_bucket: str | None = None,
     target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
@@ -469,7 +470,7 @@ def postprocess_telemac(
         vmin=0.0,
         vmax=vmax,
         units=dye_units,
-        label=f"Dye concentration ({dye_units})",
+        label=f"{(substance or 'dye').title()} concentration ({dye_units})",
     )
     # Honesty floor: this is an idealized demo release (flat/planar idealized bed
     # + a prescribed dispersion coefficient), NOT a calibrated site study.
@@ -479,7 +480,7 @@ def postprocess_telemac(
     )
     layer = TelemacDyeLayerURI(
         layer_id=f"telemac-dye-peak-{run_id}",
-        name=f"Peak dye concentration ({reach_name})",
+        name=f"Peak {(substance or 'dye')} concentration ({reach_name})",
         layer_type="raster",
         uri=uri,
         style_preset=TELEMAC_DYE_STYLE_PRESET,

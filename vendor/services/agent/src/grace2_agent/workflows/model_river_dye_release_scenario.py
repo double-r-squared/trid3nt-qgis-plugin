@@ -90,6 +90,142 @@ DEFAULT_SOURCE_Q_M3S: float = 8.0
 DEFAULT_DYE_CONC_MGL: float = 100.0
 DEFAULT_SIM_DURATION_S: float = 3600.0
 
+# --------------------------------------------------------------------------- #
+# Mesh granularity autoscaler (BK-3c) - resolution is a USER/LLM lever, NEVER a
+# hardcoded constant. The worker meshes a channel ribbon of length L (the reach)
+# x width W with a single uniform gmsh target edge length ``h`` (mesh_size_m).
+# Two physics/cost constraints bound ``h``:
+#   (1) ACROSS-CHANNEL RESOLUTION: the plume must be resolved across the channel,
+#       so we need >= N cells spanning the width -> h <= W / N. N is set by the
+#       chosen resolution preset (fine = more cells across, coarse = fewer). This
+#       is the dominant constraint for a narrow reach.
+#   (2) NODE BUDGET: a triangulated ribbon of area A = L*W has ~A/(k*h^2) nodes
+#       (k ~ 0.87 for good-quality equilateral triangles). Cap it at NODE_CAP so
+#       a long reach can't explode the solve -> h >= sqrt(A / (k*NODE_CAP)).
+# The final h is max(across-channel target, budget floor), then clamped to an
+# absolute [MESH_H_FLOOR_M, W/2] sanity range (>= 2 cells across no matter what).
+# An explicit override_m (LLM/user "use 8 m edges") wins outright but is still
+# budget-clamped so a reckless value can't wedge the solver.
+# --------------------------------------------------------------------------- #
+#: cells-across-the-channel target per resolution preset. "medium"/"auto" ~= the
+#: legacy DEFAULT_MESH_SIZE_M (14 m on a 60 m channel = ~4.3 cells across).
+MESH_CELLS_ACROSS_BY_PRESET: dict[str, float] = {
+    "fine": 6.0,
+    "medium": 60.0 / DEFAULT_MESH_SIZE_M,  # ~4.3, parity with the old default
+    "auto": 60.0 / DEFAULT_MESH_SIZE_M,
+    "coarse": 3.0,
+}
+#: node-count ceiling for a single local-docker TELEMAC reach (keeps the solve to
+#: minutes, not hours). The autoscaler coarsens ``h`` to stay under this.
+MESH_NODE_CAP: int = 60000
+#: triangulated-ribbon node-density constant (nodes ~= area / (k * h^2)).
+#: CALIBRATED against two live TELEMAC meshes of the 8 km x 60 m Snake reach
+#: (h=20 -> 3011 nodes -> k=0.40; h=10 -> 10230 nodes -> k=0.47), so the node
+#: estimate the approve-mesh gate shows tracks reality within ~15%.
+_MESH_NODE_K: float = 0.43
+#: absolute gmsh edge-length floor (below this gmsh quality + solve cost degrade).
+MESH_H_FLOOR_M: float = 3.0
+#: TELEMAC-2D timestep MUST be coupled to the mesh edge length or the solve
+#: DIVERGES (CFL). Proven live 2026-07-17 on the 8 km Snake reach:
+#:   (h=20, dt=1.0)   -> OK      (h=14, dt=1.0) -> OK (historical default)
+#:   (h=10, dt=1.0)   -> CRASH   (h=10, dt=0.714) -> CRASH   (h=10, dt=0.5) -> OK
+#: The stable dt scales with the edge length (constant Courant):
+#: dt = TIMESTEP_REF_S * min(1, h / MESH_TIMESTEP_REF_M). Anchored at h=20 m ->
+#: 1 s so the law passes THROUGH both live-proven-stable points - (20, 1.0) and
+#: (10, 0.5) - and lands at or below the stable dt at every tested size (h=14 ->
+#: 0.7 s, safely under its proven-stable 1.0 s; a smaller dt at a fixed mesh is
+#: strictly more stable). An earlier /14 anchor shipped h=10 -> 0.714 s, which
+#: the live solve REJECTED - hence the conservative /20. This makes "fine" usable.
+TIMESTEP_REF_S: float = 1.0
+MESH_TIMESTEP_REF_M: float = 20.0
+#: floor on the coupled timestep (a runaway-fine mesh can't drive dt to zero).
+TIMESTEP_FLOOR_S: float = 0.2
+
+
+def suggest_time_step_s(mesh_size_m: float) -> float:
+    """CFL-safe TELEMAC timestep for a given mesh edge length (BK-3c / OPEN-27).
+
+    dt scales with the edge length (constant Courant), capped at the proven-stable
+    1 s for meshes >= 14 m so the default is unchanged, floored so a very fine mesh
+    still terminates. Threaded into the worker manifest as ``time_step_s`` (an
+    existing ReachConfig field) - no worker rebuild needed.
+    """
+    h = max(float(mesh_size_m), MESH_H_FLOOR_M)
+    dt = TIMESTEP_REF_S * min(1.0, h / MESH_TIMESTEP_REF_M)
+    return round(max(dt, TIMESTEP_FLOOR_S), 3)
+
+
+#: Conservative TELEMAC throughput in node-steps/second, calibrated on the two
+#: live 2026-07-17 runs (coarse 3011 nodes x 10800 steps = 86 s; fine 10230 x
+#: 21600 = 358 s -> rates 0.377M and 0.618M/s; take the SLOWER so estimates err
+#: HIGH - never promise fast then run slow). Covers the worker's full wall
+#: (NLDI + DEM + probe + final solve) for a typical reach.
+_TELEMAC_NODE_STEPS_PER_S: float = 377_000.0
+#: Fixed overhead outside the node-step model (container start + fetches).
+_TELEMAC_SOLVE_OVERHEAD_S: float = 45.0
+
+
+def estimate_telemac_solve_seconds(
+    npoin: int, sim_duration_s: float, time_step_s: float
+) -> float:
+    """Conservative wall-clock estimate for a full TELEMAC dye solve.
+
+    ``wall ~= npoin * (sim_duration / dt) / RATE + overhead`` - the gate card's
+    ``estimated_solve_seconds``. Errs high by design (the calibrated rate is the
+    slower of the two live datapoints)."""
+    steps = max(float(sim_duration_s), 0.0) / max(float(time_step_s), 1e-6)
+    est = max(int(npoin), 0) * steps / _TELEMAC_NODE_STEPS_PER_S
+    return round(est + _TELEMAC_SOLVE_OVERHEAD_S, 1)
+
+
+def _estimate_mesh_nodes(reach_length_km: float, channel_width_m: float, h: float) -> int:
+    """Estimated node count for a length x width channel ribbon meshed at edge ``h``."""
+    area = max(reach_length_km, 0.0) * 1000.0 * max(channel_width_m, 0.0)
+    if h <= 0.0 or area <= 0.0:
+        return 0
+    return int(round(area / (_MESH_NODE_K * h * h)))
+
+
+def suggest_mesh_size_m(
+    reach_length_km: float,
+    channel_width_m: float,
+    resolution: str = "auto",
+    override_m: float | None = None,
+) -> tuple[float, int, str]:
+    """Pick the mesh target edge length ``h`` (BK-3c). Returns ``(h, est_nodes, label)``.
+
+    ``resolution`` is a preset ("auto"/"medium"/"fine"/"coarse"); ``override_m`` is
+    an explicit edge length that wins outright (still budget-clamped). Never
+    returns the hardcoded default blindly - it is always derived from the reach
+    geometry + the chosen lever, so a small AOI gets a fine mesh and a long reach
+    gets coarsened under the node budget.
+    """
+    L = max(float(reach_length_km), 0.0)
+    W = max(float(channel_width_m), 1.0)
+    preset = str(resolution or "auto").strip().lower()
+
+    # budget floor: coarsest h that keeps node count <= MESH_NODE_CAP.
+    area = L * 1000.0 * W
+    budget_floor = (area / (_MESH_NODE_K * MESH_NODE_CAP)) ** 0.5 if area > 0 else MESH_H_FLOOR_M
+
+    if override_m is not None and float(override_m) > 0.0:
+        h = float(override_m)
+        label = f"custom {h:.3g} m"
+    else:
+        cells = MESH_CELLS_ACROSS_BY_PRESET.get(preset, MESH_CELLS_ACROSS_BY_PRESET["auto"])
+        h = W / cells
+        label = f"auto ({preset})" if preset in ("auto",) else preset
+
+    # apply constraints: never finer than the absolute floor / budget floor, never
+    # coarser than 2 cells across the channel.
+    h = max(h, MESH_H_FLOOR_M, budget_floor)
+    h = min(h, W / 2.0)
+    if override_m is not None and h > float(override_m):
+        label += f" -> {h:.3g} m (budget-clamped)"
+
+    est_nodes = _estimate_mesh_nodes(L, W, h)
+    return round(h, 3), est_nodes, label
+
 
 # --------------------------------------------------------------------------- #
 # Typed errors
@@ -117,6 +253,88 @@ class TelemacDyeScenarioInputError(TelemacDyeScenarioError):
 # --------------------------------------------------------------------------- #
 # Registry / geometry helpers
 # --------------------------------------------------------------------------- #
+async def _call_registry_tool(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
+    """Invoke a registry tool fn that may be sync (returns the value) or async
+    (returns an awaitable) - normalize both (what _maybe_emit does internally)."""
+    import inspect
+
+    out = fn(*args, **kwargs)
+    if inspect.isawaitable(out):
+        out = await out
+    return out
+
+
+def _is_state_snap_geocode(geo: Any) -> bool:
+    """True when geocode_location fell back to a WHOLE-STATE bbox.
+
+    A state-snap centroid is the middle of the state - as a river-reach seed it
+    is ~100+ km of drift (THE root cause of OPEN-25a: 'Snake River near Twin
+    Falls' geocoding to central Idaho). Never seed a reach from one."""
+    return isinstance(geo, dict) and (
+        geo.get("source") == "state-bbox-fallback"
+        or geo.get("fallback_reason") is not None
+    )
+
+
+def _locality_tail(location: str) -> str | None:
+    """Extract the locality phrase from a river+locality compound query.
+
+    'Snake River near Twin Falls, Idaho' -> 'Twin Falls, Idaho'. Nominatim
+    often has no feature for the compound but pins the locality fine; the
+    worker NLDI-snaps the locality seed to the nearest flowline anyway."""
+    import re
+
+    for sep in ("near", "at", "by", "outside", "in"):
+        m = re.search(rf"\b{sep}\b(.+)$", location, flags=re.IGNORECASE)
+        if m:
+            tail = m.group(1).strip(" ,")
+            if tail and tail.lower() != location.strip().lower():
+                return tail
+    return None
+
+
+async def _geocode_seed_center(
+    geocode_fn: Any, location: str, geo: Any
+) -> tuple[float, float, str]:
+    """Resolve (lon, lat, name) for the reach seed from a geocode result,
+    REJECTING state-snaps (OPEN-25a hardening).
+
+    ``geo`` is the first-attempt result (already fetched by the caller so the
+    emit-wrapped card shows the user's own phrase). On a state-snap, retry
+    ONCE with the locality tail; if that also snaps (or no tail exists), raise
+    the typed ambiguity error instead of simulating the wrong river."""
+    if _is_state_snap_geocode(geo):
+        tail = _locality_tail(location)
+        retry = None
+        if tail:
+            logger.info(
+                "telemac seed geocode: %r snapped to a whole state; retrying "
+                "with locality tail %r", location, tail,
+            )
+            try:
+                retry = await _call_registry_tool(geocode_fn, tail)
+            except Exception as exc:  # noqa: BLE001 -- fall through to the typed error
+                logger.warning("telemac seed geocode retry failed: %s", exc)
+        if retry is not None and not _is_state_snap_geocode(retry):
+            geo = retry
+        else:
+            raise TelemacDyeScenarioError(
+                "TELEMAC_DYE_GEOCODE_AMBIGUOUS",
+                f"geocode_location({location!r}) only matched a whole US state "
+                "- too coarse to place a river reach (the centroid would be "
+                "~100 km off). Give a more specific place (a city/town near "
+                "the reach) or an explicit bbox AOI.",
+            )
+    glat = geo.get("latitude") if isinstance(geo, dict) else None
+    glon = geo.get("longitude") if isinstance(geo, dict) else None
+    if glat is None or glon is None:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_DYE_GEOCODE_FAILED",
+            f"geocode_location({location!r}) returned no centroid lat/lon.",
+        )
+    return float(glon), float(glat), str(geo.get("name") or location)
+
+
 def _registry_fn(name: str) -> Any:
     entry = TOOL_REGISTRY.get(name)
     if entry is None:
@@ -199,9 +417,15 @@ def _river_seed_from_geometry(river_uri: str) -> tuple[float, float] | None:
 # --------------------------------------------------------------------------- #
 # Manifest staging (cache bucket)
 # --------------------------------------------------------------------------- #
-def _stage_manifest(reach: dict[str, Any], run_tag: str) -> str:
+def _stage_manifest(
+    reach: dict[str, Any], run_tag: str, *, mesh_only: bool = False
+) -> str:
     """Write the ``telemac_river_dye`` worker manifest to the cache bucket and
-    return its ``s3://`` URI (``run_solver`` downloads it to the rundir)."""
+    return its ``s3://`` URI (``run_solver`` downloads it to the rundir).
+
+    ``mesh_only=True`` (BK-3b approve-mesh gate) flags the worker's fast
+    mesh-preview mode: build the mesh, write ``river.slf`` + the EPSG:4326
+    ``mesh_preview.geojson`` wireframe + gate-stat metrics, skip the solve."""
     from ..tools.solver import _get_s3_client
 
     cache_bucket = (os.environ.get("GRACE2_CACHE_BUCKET") or "").strip()
@@ -210,20 +434,26 @@ def _stage_manifest(reach: dict[str, Any], run_tag: str) -> str:
             "TELEMAC_DYE_STAGING_FAILED",
             "GRACE2_CACHE_BUCKET must be set to stage the TELEMAC manifest.",
         )
+    outputs = [
+        "r2d_river.slf",
+        "river.slf",
+        "river.cli",
+        "t2d_river.cas",
+        "full_listing.log",
+        "telemac_metrics.json",
+    ]
+    if mesh_only:
+        outputs = ["river.slf", "river.cli", "mesh_preview.geojson",
+                   "telemac_metrics.json"]
     manifest = {
         "reach": reach,
         "run_id": run_tag,
         "inputs": [],  # the pipeline self-fetches NHDPlus + the DEM
         "telemac_args": [],  # the image CMD drives the entrypoint
-        "outputs": [
-            "r2d_river.slf",
-            "river.slf",
-            "river.cli",
-            "t2d_river.cas",
-            "full_listing.log",
-            "telemac_metrics.json",
-        ],
+        "outputs": outputs,
     }
+    if mesh_only:
+        manifest["mesh_only"] = True
     key = f"telemac/{run_tag}/manifest.json"
     s3 = _get_s3_client()
     s3.put_object(
@@ -291,6 +521,11 @@ async def model_river_dye_release_scenario(
     source_q_m3s: float = DEFAULT_SOURCE_Q_M3S,
     channel_width_m: float = DEFAULT_CHANNEL_WIDTH_M,
     river_geometry_uri: str | None = None,
+    mesh_resolution: str = "auto",
+    mesh_resolution_m: float | None = None,
+    release_lon: float | None = None,
+    release_lat: float | None = None,
+    substance: str = "dye",
     *,
     compute_class: str = "medium",
     pipeline_emitter: Any | None = None,
@@ -340,15 +575,11 @@ async def model_river_dye_release_scenario(
                 tool_name="geocode_location",
                 invoke=lambda: geocode_fn(location),
             )
-        glat = geo.get("latitude") if isinstance(geo, dict) else None
-        glon = geo.get("longitude") if isinstance(geo, dict) else None
-        if glat is None or glon is None:
-            raise TelemacDyeScenarioError(
-                "TELEMAC_DYE_GEOCODE_FAILED",
-                f"geocode_location({location!r}) returned no centroid lat/lon.",
-            )
-        center_lon, center_lat = float(glon), float(glat)
-        location_name = str(geo.get("name") or location)
+        # OPEN-25a hardening: reject whole-state snaps (retry with the locality
+        # tail, else typed ambiguity error - never seed from a state centroid).
+        center_lon, center_lat, location_name = await _geocode_seed_center(
+            geocode_fn, str(location), geo
+        )
     else:
         assert bbox is not None
         center_lon, center_lat = _bbox_center(bbox)
@@ -384,6 +615,24 @@ async def model_river_dye_release_scenario(
     seed_lon, seed_lat = seed
 
     # --- Stage 3: stage the worker manifest (ReachConfig overrides) ----------- #
+    # BK-3c: mesh resolution is derived from the reach geometry + the chosen lever
+    # (auto/preset/explicit override), NEVER the hardcoded default. Surfaced on the
+    # returned layer so the agent narrates it and the approve-mesh gate can show it.
+    mesh_size_m, mesh_node_estimate, mesh_resolution_label = suggest_mesh_size_m(
+        reach_length_km=reach_length_km,
+        channel_width_m=channel_width_m,
+        resolution=mesh_resolution,
+        override_m=mesh_resolution_m,
+    )
+    # OPEN-27: couple the timestep to the mesh so a finer mesh does not diverge
+    # (CFL). Proven live: fine h=10 crashed at fixed dt=1 s, ran clean at dt<=0.5.
+    time_step_s = suggest_time_step_s(mesh_size_m)
+    logger.info(
+        "model_river_dye_release_scenario mesh granularity: %s -> h=%.3g m "
+        "(~%d nodes, dt=%.3g s, reach=%.3g km x %.3g m)",
+        mesh_resolution_label, mesh_size_m, mesh_node_estimate, time_step_s,
+        reach_length_km, channel_width_m,
+    )
     reach_name = _slug(location_name)
     reach: dict[str, Any] = {
         "name": reach_name,
@@ -392,8 +641,14 @@ async def model_river_dye_release_scenario(
         "nav_direction": "DM",
         "distance_km": float(reach_length_km),
         "channel_width_m": float(channel_width_m),
-        "mesh_size_m": DEFAULT_MESH_SIZE_M,
+        "mesh_size_m": mesh_size_m,
+        "time_step_s": time_step_s,
         "dye_conc_mgl": float(dye_concentration_mgl),
+        # BK-6: user-picked release point overrides spill_frac (worker snaps to
+        # the nearest interior mesh node, validated within 2 channel widths).
+        **({"release_lon": round(float(release_lon), 6),
+            "release_lat": round(float(release_lat), 6)}
+           if release_lon is not None and release_lat is not None else {}),
         "spill_frac": float(min(max(spill_fraction, 0.0), 1.0)),
         "pulse_window_s": float(spill_duration_s),
         "source_q_m3s": float(source_q_m3s),
@@ -490,6 +745,7 @@ async def model_river_dye_release_scenario(
                 run_id=batch_run_id,
                 utm_epsg=utm_epsg,
                 reach_name=reach_name,
+                substance=substance,
             )
     finally:
         try:
@@ -507,7 +763,8 @@ async def model_river_dye_release_scenario(
     # --- Stage 6: publish the peak COG (render chokepoint) + honest narration - #
     async with substep(emitter, "publish_layer"):
         peak = await asyncio.to_thread(
-            _publish_peak_layer, raw_peak, batch_run_id, location_name, reach_name
+            _publish_peak_layer, raw_peak, batch_run_id, location_name, reach_name,
+            mesh_size_m, mesh_node_estimate, mesh_resolution_label, substance,
         )
 
     logger.info(
@@ -547,23 +804,47 @@ def _slug(name: str) -> str:
 
 
 def _publish_peak_layer(
-    raw_peak: TelemacDyeLayerURI, run_id: str, location_name: str, reach_name: str
+    raw_peak: TelemacDyeLayerURI, run_id: str, location_name: str, reach_name: str,
+    mesh_size_m: float | None = None,
+    mesh_node_estimate: int | None = None,
+    mesh_resolution_label: str | None = None,
+    substance: str = "dye",
 ) -> TelemacDyeLayerURI:
     """Publish the peak dye COG through publish_layer (render chokepoint) and
     enrich the narration. On publish failure the raw peak is returned UNCHANGED
     (the raw s3:// COG still lets export_case_to_qgis discover the mesh sibling;
-    the dispatch-level emit_layer_uri guardrail handles the map honesty)."""
+    the dispatch-level emit_layer_uri guardrail handles the map honesty).
+
+    The three mesh_* params are the composer's chosen granularity (BK-3c),
+    threaded explicitly - referencing composer locals here was a NameError that
+    crashed every publish (caught by the BK-3b seam audit)."""
+    surrogate = ""
+    if substance and substance != "dye":
+        surrogate = (
+            f" NOTE: {substance} is modeled as a passively advected dissolved "
+            f"tracer (transport + dilution only) - NOT slick physics "
+            f"(no spreading/evaporation/weathering/beaching)."
+        )
     honesty = (
-        f"Idealized demo: a FINITE mid-reach point-source dye pulse released on "
+        f"Idealized demo: a FINITE mid-reach point-source {substance or 'dye'} "
+        f"pulse released on "
         f"the real {location_name} river reach (NLDI/NHDPlus geometry) over a "
         f"planar idealized channel bed with prescribed tracer dispersion. The "
-        f"raster is the PEAK dye envelope over the run; the animation plays from "
-        f"the native SELAFIN mesh. Not a calibrated site study."
+        f"raster is the PEAK concentration envelope over the run; the animation "
+        f"plays from the native SELAFIN mesh. Not a calibrated site study."
+        + surrogate
     )
+    # BK-3c: the chosen mesh granularity travels on every return branch so the
+    # agent can narrate it and the approve-mesh gate can display it.
+    mesh_meta = {
+        "mesh_size_m": mesh_size_m,
+        "mesh_node_estimate": mesh_node_estimate,
+        "mesh_resolution_label": mesh_resolution_label,
+    }
     if raw_peak.layer_type != "raster" or not (
         raw_peak.uri.startswith("gs://") or raw_peak.uri.startswith("s3://")
     ):
-        return raw_peak.model_copy(update={"fallback_note": honesty})
+        return raw_peak.model_copy(update={"fallback_note": honesty, **mesh_meta})
     layer_id_for_pub = f"telemac-dye-peak-{run_id}"
     try:
         published_uri = publish_layer(
@@ -577,7 +858,7 @@ def _publish_peak_layer(
             "error_code=%s (%s) - returning the unpublished peak.",
             layer_id_for_pub, exc.error_code, exc,
         )
-        return raw_peak.model_copy(update={"fallback_note": honesty})
+        return raw_peak.model_copy(update={"fallback_note": honesty, **mesh_meta})
     return TelemacDyeLayerURI(
         layer_id=layer_id_for_pub,
         name=raw_peak.name,
@@ -593,7 +874,219 @@ def _publish_peak_layer(
         dye_peak_time_s=raw_peak.dye_peak_time_s,
         plume_reach_m=raw_peak.plume_reach_m,
         active_frames=raw_peak.active_frames,
+        mesh_size_m=mesh_size_m,
+        mesh_node_estimate=mesh_node_estimate,
+        mesh_resolution_label=mesh_resolution_label,
     )
+
+
+# --------------------------------------------------------------------------- #
+# BK-3b: fast mesh-only preview for the approve-mesh gate
+# --------------------------------------------------------------------------- #
+async def preview_telemac_mesh(
+    params: dict[str, Any], *, emitter: Any = None
+) -> dict[str, Any]:
+    """Build (only) the TELEMAC mesh for the approve-mesh gate - no solve.
+
+    Called by the server's ``_build_telemac_mesh_envelope`` (the ``run_telemac``
+    solver-confirm gate builder, mirror of the SWMM #154 builder) BEFORE the tool
+    dispatches: resolves the same seed the composer will, stages a ``mesh_only``
+    worker manifest, runs the fast mesh-only container (~10-25 s: gmsh, no DEM,
+    no solve), emits the resulting triangle-wireframe GeoJSON as a role="input"
+    map layer + a zoom-to, and returns the REAL gate stats::
+
+        {run_id, mesh_size_m, time_step_s, npoin, nelem, edge_mean_m,
+         est_solve_seconds, resolution_label, location_name, bbox}
+
+    MUST-MATCH NOTE: the seed derivation below (geocode -> river fetch -> mid-
+    reach seed, centroid fallback) intentionally mirrors Stages 1-2 of
+    ``model_river_dye_release_scenario`` - both are cache-backed tool calls, so
+    the approved solve re-derives the SAME seed and reproduces the previewed
+    mesh. If you change the seed logic THERE, change it HERE.
+
+    Raises on any failure - the gate caller fails OPEN (card skipped, tool runs
+    with its own typed errors), matching the SWMM builder convention.
+    """
+    from ..layer_uri_emit import publish_input_layer
+    from ..tool_arg_normalizer import coerce_bbox_value
+    from ..tools.solver import (
+        _get_runs_bucket,
+        _get_s3_client,
+        run_solver,
+        wait_for_completion,
+    )
+    from grace2_contracts.execution import LayerURI
+
+    location = params.get("location")
+    coerced_bbox = None
+    raw_bbox = params.get("bbox")
+    if raw_bbox is not None:
+        cb = coerce_bbox_value(raw_bbox)
+        if cb is not None:
+            coerced_bbox = tuple(cb)
+        elif isinstance(raw_bbox, str) and any(c.isalpha() for c in raw_bbox) \
+                and not (location and str(location).strip()):
+            location = raw_bbox  # LLM put a place name in the bbox field
+    has_loc = bool(location and str(location).strip())
+    if has_loc and coerced_bbox is not None:
+        has_loc = False  # explicit bbox wins (mirror of run_telemac OPEN-24)
+    if not has_loc and coerced_bbox is None:
+        raise ValueError("preview_telemac_mesh: no location/bbox in params")
+
+    # Mirror of the tool's LLM-arg hardening (the gate builder sees RAW params):
+    # a 50 km reach live-hung gmsh on the meandering centerline - clamp.
+    try:
+        reach_length_km = float(params.get("reach_length_km") or DEFAULT_REACH_LENGTH_KM)
+    except (TypeError, ValueError):
+        reach_length_km = DEFAULT_REACH_LENGTH_KM
+    reach_length_km = min(max(reach_length_km, 0.5), 15.0)
+    try:
+        channel_width_m = float(params.get("channel_width_m") or DEFAULT_CHANNEL_WIDTH_M)
+    except (TypeError, ValueError):
+        channel_width_m = DEFAULT_CHANNEL_WIDTH_M
+    channel_width_m = min(max(channel_width_m, 10.0), 1500.0)
+    try:
+        sim_duration_s = float(params.get("sim_duration_s") or DEFAULT_SIM_DURATION_S)
+    except (TypeError, ValueError):
+        sim_duration_s = DEFAULT_SIM_DURATION_S
+    sim_duration_s = min(max(sim_duration_s, 600.0), 14400.0)
+    mesh_resolution = str(params.get("mesh_resolution") or "auto")
+    mesh_resolution_m = params.get("mesh_resolution_m")
+    river_geometry_uri = params.get("river_geometry_uri")
+    if river_geometry_uri and not str(river_geometry_uri).startswith(("s3://", "gs://")):
+        river_geometry_uri = None  # pseudo-call string, not a real URI
+
+    # --- Stage 1-2 mirror (QUIET: no substep/tool cards pre-gate) ------------ #
+    if has_loc:
+        geocode_fn = _registry_fn("geocode_location")
+        geo = await _call_registry_tool(geocode_fn, location)
+        # OPEN-25a hardening (same as the main composer): reject state-snaps.
+        center_lon, center_lat, location_name = await _geocode_seed_center(
+            geocode_fn, str(location), geo
+        )
+    else:
+        assert coerced_bbox is not None
+        center_lon, center_lat = _bbox_center(coerced_bbox)  # type: ignore[arg-type]
+        location_name = f"AOI ({center_lat:.4f}, {center_lon:.4f})"
+
+    river_bbox = _bbox_around(center_lon, center_lat, DEFAULT_RIVER_AOI_HALF_DEG)
+    if river_geometry_uri and str(river_geometry_uri).strip():
+        river_uri: str | None = str(river_geometry_uri)
+    else:
+        fetch_river_fn = _registry_fn("fetch_river_geometry")
+        river_layer = await _call_registry_tool(fetch_river_fn, bbox=river_bbox)
+        river_uri = _layer_field(river_layer, "uri")
+    seed: tuple[float, float] | None = None
+    if river_uri:
+        seed = await asyncio.to_thread(_river_seed_from_geometry, str(river_uri))
+    if seed is None:
+        seed = (center_lon, center_lat)
+    seed_lon, seed_lat = seed
+
+    # --- Granularity (BK-3c) + reach dict (mirror of Stage 3) ---------------- #
+    mesh_size_m, mesh_node_estimate, mesh_resolution_label = suggest_mesh_size_m(
+        reach_length_km=reach_length_km,
+        channel_width_m=channel_width_m,
+        resolution=mesh_resolution,
+        override_m=(float(mesh_resolution_m) if mesh_resolution_m else None),
+    )
+    time_step_s = suggest_time_step_s(mesh_size_m)
+    reach: dict[str, Any] = {
+        "name": _slug(location_name),
+        "seed_lon": round(seed_lon, 6),
+        "seed_lat": round(seed_lat, 6),
+        "nav_direction": "DM",
+        "distance_km": reach_length_km,
+        "channel_width_m": channel_width_m,
+        "mesh_size_m": mesh_size_m,
+        "time_step_s": time_step_s,
+    }
+    run_tag = new_ulid()
+    manifest_uri = await asyncio.to_thread(
+        _stage_manifest, reach, run_tag, mesh_only=True
+    )
+    logger.info(
+        "preview_telemac_mesh dispatch run_tag=%s seed=(%.5f,%.5f) h=%.3g dt=%.3g",
+        run_tag, seed_lon, seed_lat, mesh_size_m, time_step_s,
+    )
+
+    # --- Fast mesh-only worker run (no sim cards; the gate IS the surface) --- #
+    handle = run_solver(
+        solver=TELEMAC_SOLVER_NAME,
+        model_setup_uri=manifest_uri,
+        compute_class="small",
+    )
+    # A healthy mesh-only run is ~10-40 s; 180 s bounds a hung gmsh so a broken
+    # preview cannot park the turn for 7 minutes before the gate falls open.
+    run_result = await wait_for_completion(handle, poll_interval_s=3, timeout_s=180)
+    if run_result is None or run_result.status != "complete":
+        raise TelemacDyeScenarioError(
+            "TELEMAC_MESH_BUILD_FAILED",
+            "mesh-only preview run did not complete "
+            f"(status={getattr(run_result, 'status', None)}).",
+        )
+    mesh_run_id = getattr(run_result, "run_id", None) or handle.run_id
+
+    def _read_mesh_metrics() -> dict[str, Any]:
+        s3 = _get_s3_client()
+        obj = s3.get_object(
+            Bucket=_get_runs_bucket(), Key=f"{mesh_run_id}/telemac_metrics.json"
+        )
+        loaded = json.loads(obj["Body"].read().decode("utf-8"))
+        return loaded if isinstance(loaded, dict) else {}
+
+    m = await asyncio.to_thread(_read_mesh_metrics)
+    npoin = int(m.get("npoin") or 0)
+    nelem = int(m.get("nelem") or 0)
+    bbox4326 = m.get("bbox4326")
+    if npoin <= 0:
+        raise TelemacDyeScenarioError(
+            "TELEMAC_MESH_BUILD_FAILED",
+            f"mesh-only preview metrics carry no node count (run {mesh_run_id}).",
+        )
+
+    # --- Emit the wireframe as a role='input' vector layer + zoom-to --------- #
+    # current_emitter() is NOT bound in the pre-dispatch gate context (live
+    # finding 2026-07-17: emitter=NONE) - the server passes state.emitter in.
+    if emitter is None:
+        emitter = current_emitter()
+    preview_layer = LayerURI(
+        layer_id=f"telemac-mesh-preview-{mesh_run_id}",
+        name=f"Mesh preview ({mesh_size_m:g} m edges, {npoin:,} nodes)",
+        layer_type="vector",
+        uri=f"s3://{_get_runs_bucket()}/{mesh_run_id}/mesh_preview.geojson",
+        style_preset="nhdplus_flowlines",  # known line preset -> sane wireframe styling
+        role="input",
+        bbox=tuple(bbox4326) if bbox4326 else None,
+    )
+    emitted = await publish_input_layer(emitter, preview_layer)
+    logger.info(
+        "preview_telemac_mesh wireframe emit: emitter=%s emitted=%s layer=%s",
+        "bound" if emitter is not None else "NONE", emitted,
+        preview_layer.layer_id,
+    )
+    if emitter is not None and bbox4326:
+        try:
+            await emitter.emit_map_command("zoom-to", {"bbox": list(bbox4326)})
+        except Exception as exc:  # noqa: BLE001 -- preview zoom is best-effort
+            logger.warning("preview_telemac_mesh zoom-to failed: %s", exc)
+
+    return {
+        "run_id": mesh_run_id,
+        "mesh_size_m": float(mesh_size_m),
+        "time_step_s": float(time_step_s),
+        "npoin": npoin,
+        "nelem": nelem,
+        "edge_mean_m": m.get("edge_mean_m"),
+        "est_solve_seconds": estimate_telemac_solve_seconds(
+            npoin, sim_duration_s, time_step_s
+        ),
+        "resolution_label": mesh_resolution_label,
+        "node_estimate": mesh_node_estimate,
+        "location_name": location_name,
+        "bbox": bbox4326,
+        "wireframe_capped": bool(m.get("wireframe_capped")),
+    }
 
 
 async def _maybe_emit_chart(emitter: Any, metrics: dict[str, Any], location_name: str) -> None:

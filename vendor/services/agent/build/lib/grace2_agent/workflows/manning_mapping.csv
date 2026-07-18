@@ -1,0 +1,85 @@
+# manning_mapping.csv — NLCD Land Cover class integer → Manning's n roughness coefficient
+#
+# VERSION: 1.0.0
+# VINTAGE: NLCD 2021 (Multi-Resolution Land Characteristics Consortium L48)
+# DATE_AUTHORED: 2026-06-07 (job-0042-engine-20260606)
+# OWNER: engine specialist
+#
+# OQ-4 §4 (docs/decisions/oq-4-hydromt-depth.md) — Invariant 7 mitigation:
+# this CSV is the substrate the build_sfincs_model NLCD vintage validation
+# gate checks. The gate verifies the fetched NLCD vintage's class set is a
+# subset of nlcd_class values in this file; on mismatch it raises
+# SFINCSSetupError("LULC_MAPPING_MISMATCH") BEFORE HydroMT's roughness
+# component runs (HydroMT silently fills unmatched classes with default
+# Manning's values, logging a warning — a silent-wrong-answer pattern this
+# gate closes).
+#
+# SOURCES (citations):
+#   * Liu, S., & DeGroote, J. (2010). "Sensitivity analysis of Manning's
+#     roughness for floodplain flow modeling," J. Hydraulic Eng., 136(11).
+#     Wetlands / floodplain adjustments are anchored here.
+#   * Chow, V. T. (1959). "Open-Channel Hydraulics," McGraw-Hill, Table 5-6.
+#     Classical channel/floodplain Manning's n source — foundational
+#     reference used by FEMA, USGS, and the SFINCS / HydroMT-SFINCS
+#     defaults registry.
+#   * HydroMT-SFINCS default Manning's mapping for NLCD CONUS L48
+#     (https://github.com/Deltares/hydromt_sfincs), `setup_manning_roughness`
+#     bundled "vito_2015_to_manning.csv" (ESA) and the equivalent
+#     NLCD-based defaults inside Deltares' Examples/SFINCS_test_data tree.
+#   * USGS WSP 2339 (Arcement & Schneider, 1989) — "Guide for Selecting
+#     Manning's Roughness Coefficients for Natural Channels and Flood Plains."
+#     Foundational floodplain land-cover-to-Manning's lookup; the basis for
+#     the Liu & DeGroote and HydroMT-SFINCS values used here.
+#
+# NLCD 2021 CLASS LEGEND (MRLC; same legend valid for 2001/2004/2006/2008/
+# 2011/2013/2016/2019/2021 — the substrate covers every NLCD vintage MRLC
+# WMS exposes per data_fetch.py::_NLCD_WMS_LAYER_BY_YEAR):
+#   * Class 0 is "nodata" / unclassified (no roughness assigned; cells
+#     should be masked by HydroMT's mask component).
+#   * Class 11 "Open Water" — n=0.025 (Chow 1959, table 5-6, "smooth open
+#     surface").
+#   * Class 12 "Perennial Ice/Snow" — n=0.025 (treated as open-water-class
+#     smooth surface; rare in M5/Fort Myers).
+#   * Class 21-24 Developed (Open / Low / Medium / High Intensity) —
+#     n=0.035-0.150 (HydroMT-SFINCS defaults — built-up density ramp).
+#   * Class 31 "Barren Land (Rock/Sand/Clay)" — n=0.030 (Chow 1959).
+#   * Class 41-43 Forest (Deciduous / Evergreen / Mixed) — n=0.150-0.180
+#     (USGS WSP 2339 medium-density forest floodplain).
+#   * Class 51-52 Shrub/Scrub — n=0.080 (USGS WSP 2339 light brush).
+#   * Class 71-74 Herbaceous (Grassland / Sedge / Lichens / Moss) — n=0.040
+#     (Chow 1959 short grass + HydroMT default).
+#   * Class 81-82 Cultivated / Pasture / Crops — n=0.035-0.045 (Chow 1959
+#     row crops, mature; USGS WSP 2339 cultivated).
+#   * Class 90 "Woody Wetlands" — n=0.120 (Liu & DeGroote 2010 wetlands
+#     adjustment — densely vegetated wetland surface).
+#   * Class 95 "Emergent Herbaceous Wetlands" — n=0.080 (Liu & DeGroote
+#     2010 sparse-wetland adjustment; also Chow 1959 dense weeds).
+#
+# All NLCD 2021 L48 integer classes are covered. If a future NLCD release
+# (e.g. Annual NLCD Collection 1.0 / 2023) ships with class integers not in
+# this file, the validation gate fails closed — the substrate must be
+# updated before SFINCS setup proceeds.
+#
+# Format: CSV with header. nlcd_class is integer; manning_n is float.
+# Lines beginning with '#' are comments. Empty lines are ignored.
+nlcd_class,manning_n,description
+11,0.025,Open Water
+12,0.025,Perennial Ice/Snow
+21,0.035,Developed Open Space
+22,0.060,Developed Low Intensity
+23,0.100,Developed Medium Intensity
+24,0.150,Developed High Intensity
+31,0.030,Barren Land (Rock/Sand/Clay)
+41,0.150,Deciduous Forest
+42,0.150,Evergreen Forest
+43,0.180,Mixed Forest
+51,0.080,Dwarf Scrub
+52,0.080,Shrub/Scrub
+71,0.040,Grassland/Herbaceous
+72,0.040,Sedge/Herbaceous
+73,0.040,Lichens
+74,0.040,Moss
+81,0.035,Pasture/Hay
+82,0.045,Cultivated Crops
+90,0.120,Woody Wetlands
+95,0.080,Emergent Herbaceous Wetlands

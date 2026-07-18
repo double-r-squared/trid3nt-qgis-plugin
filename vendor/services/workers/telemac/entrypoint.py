@@ -116,7 +116,12 @@ def _write_metrics(data_dir: Path, payload: dict[str, Any]) -> Path:
     return path
 
 
-def run_pipeline(data_dir: Path, reach_overrides: dict[str, Any], run_id: str | None) -> dict[str, Any]:
+def run_pipeline(
+    data_dir: Path,
+    reach_overrides: dict[str, Any],
+    run_id: str | None,
+    mesh_only: bool = False,
+) -> dict[str, Any]:
     """Run the proven P1 pipeline in ``data_dir``; return a metrics dict.
 
     Mirrors ``run_p1.py`` end-to-end: fetch the real river centerline (NLDI
@@ -144,15 +149,167 @@ def run_pipeline(data_dir: Path, reach_overrides: dict[str, Any], run_id: str | 
     tr = pmeta.pop("lonlat_transformer")
     LOG.info("centerline processed: %s", pmeta)
 
+    # 2b. BK-7: real river banks from NHDArea polygons (honest fallback to the
+    # constant-width ribbon when the fetch/sampling cannot see water).
+    bank_source = "constant"
+    bank_stats = {}
+    if str(getattr(cfg, "bank_source", "auto")).lower() != "constant":
+        _bank_t0 = time.time()
+        try:
+            lon0, lat0 = ll[:, 0].min(), ll[:, 1].min()
+            lon1, lat1 = ll[:, 0].max(), ll[:, 1].max()
+            pad = 0.01
+            polys = B.fetch_bank_polygons(
+                (lon0 - pad, lat0 - pad, lon1 + pad, lat1 + pad))
+            if polys:
+                polys_utm = []
+                for ext, holes in polys:
+                    ex, ey = tr.transform(ext[:, 0], ext[:, 1])
+                    hs = []
+                    for h in holes:
+                        hx, hy = tr.transform(h[:, 0], h[:, 1])
+                        hs.append(np.column_stack([hx, hy]))
+                    polys_utm.append((np.column_stack([ex, ey]), hs))
+                LOG.info("bank polygons fetched in %.1fs; sampling...",
+                         time.time() - _bank_t0)
+                res = B.estimate_bank_offsets(cl, polys_utm)
+                LOG.info("bank sampling done at %.1fs", time.time() - _bank_t0)
+                if res is not None:
+                    # recentered mid-water axis + symmetric half-widths
+                    cl, halfw, frac = res
+                    cfg.bank_offsets = (halfw, halfw)
+                    bank_source = "nhdarea"
+                    bank_stats = {
+                        "bank_valid_frac": frac,
+                        "bank_width_min_m": round(float(2 * halfw.min()), 1),
+                        "bank_width_mean_m": round(float(2 * halfw.mean()), 1),
+                        "bank_width_max_m": round(float(2 * halfw.max()), 1),
+                    }
+                    LOG.info("real banks: nhdarea frac=%.2f width min/mean/max="
+                             "%.0f/%.0f/%.0f m", frac,
+                             bank_stats["bank_width_min_m"],
+                             bank_stats["bank_width_mean_m"],
+                             bank_stats["bank_width_max_m"])
+                else:
+                    LOG.warning("bank sampling saw too little water; "
+                                "constant-width fallback")
+            else:
+                LOG.warning("no NHDArea polygons; constant-width fallback")
+        except Exception:  # noqa: BLE001 -- banks are an enhancement, never fatal
+            LOG.exception("bank estimation failed; constant-width fallback")
+
     # 3. Gmsh mesh (tagged boundary)
     mesh = B.build_channel_mesh(cl, cfg)
     LOG.info("mesh: npoin=%d nelem=%d nptfr=%d in=%d out=%d banks_ok=%s smooth_tries=%d",
              mesh["npoin"], len(mesh["ikle"]), mesh["nptfr"], mesh["n_in"],
              mesh["n_out"], mesh["banks_ok"], mesh["smooth_tries"])
 
+    # MESH_ONLY (BK-3b approve-mesh gate): stop after the mesh is built. The DEM
+    # bed is SKIPPED entirely - bed elevation only sets node Z (BOTTOM), never
+    # connectivity, so npoin/nelem/edge stats shown at the gate are EXACT for the
+    # eventual solve mesh - and skipping it sidesteps the untimed DEM fetch
+    # (OPEN-25) plus ~30 s wall. Writes river.slf (Z=0) + river.cli +
+    # mesh_preview.geojson (triangle edges, EPSG:4326) + gate-stat metrics.
+    if mesh_only:
+        import numpy as _np  # noqa: WPS433 -- local alias for clarity
+
+        slf = str(data_dir / "river.slf")
+        cli = str(data_dir / "river.cli")
+        B.write_slf(mesh, _np.zeros(int(mesh["npoin"])), slf)
+        B.write_cli(mesh, cli)
+
+        X, Y, ik = mesh["X"], mesh["Y"], np.asarray(mesh["ikle"])  # 0-based ikle
+        # unique undirected edges -> lengths (vectorized)
+        e = np.vstack([ik[:, [0, 1]], ik[:, [1, 2]], ik[:, [2, 0]]])
+        e = np.unique(np.sort(e, axis=1), axis=0)
+        seg = np.hypot(X[e[:, 0]] - X[e[:, 1]], Y[e[:, 0]] - Y[e[:, 1]])
+
+        # triangle-edge wireframe in EPSG:4326 (one MultiLineString feature).
+        # Cap the wireframe at 30k edges (a max-budget mesh would be ~5 MB of
+        # GeoJSON); past the cap emit the boundary ring only - honest note in
+        # metrics either way.
+        from pyproj import Transformer as _T  # noqa: WPS433
+        tr_back = _T.from_crs(tr.target_crs, 4326, always_xy=True)
+        lon, lat = tr_back.transform(X, Y)
+        bbox4326 = [float(lon.min()), float(lat.min()),
+                    float(lon.max()), float(lat.max())]
+        wireframe_capped = bool(e.shape[0] > 30000)
+        if wireframe_capped:
+            ring = mesh["ring"].astype(np.int64)
+            ring_closed = np.append(ring, ring[:1])
+            coords = [[[float(lon[i]), float(lat[i])] for i in ring_closed]]
+        else:
+            coords = [
+                [[float(lon[a]), float(lat[a])], [float(lon[b]), float(lat[b])]]
+                for a, b in e
+            ]
+        preview = {
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "geometry": {"type": "MultiLineString", "coordinates": coords},
+                "properties": {
+                    "kind": "telemac-mesh-preview",
+                    "npoin": int(mesh["npoin"]),
+                    "nelem": int(len(ik)),
+                    "mesh_size_m": float(cfg.mesh_size_m),
+                    "wireframe_capped": wireframe_capped,
+                },
+            }],
+        }
+        (data_dir / "mesh_preview.geojson").write_text(
+            json.dumps(preview), encoding="utf-8")
+
+        metrics = {
+            # correct_end=True: the mesh phase ENDED CORRECTLY (there is no
+            # solve to reach CORRECT END OF RUN); classify_exit treats a clean
+            # exit + correct_end as ok, and mesh_only labels the run honestly.
+            "status": "ok",
+            "correct_end": True,
+            "mesh_only": True,
+            "run_id": run_id,
+            "geometry_slf": "river.slf",
+            "cli": "river.cli",
+            "preview_geojson": "mesh_preview.geojson",
+            "reach_name": cfg.name,
+            "seed_comid": fmeta.get("seed_comid"),
+            "n_flowlines": fmeta.get("n_flowlines"),
+            "utm_epsg": pmeta.get("utm_epsg"),
+            "centerline_length_m": pmeta.get("centerline_length_m"),
+            "npoin": int(mesh["npoin"]),
+            "nelem": int(len(ik)),
+            "nptfr": int(mesh["nptfr"]),
+            "n_inflow_nodes": int(mesh["n_in"]),
+            "n_outflow_nodes": int(mesh["n_out"]),
+            "mesh_size_m": float(cfg.mesh_size_m),
+            "time_step_s": float(cfg.time_step_s),
+            "edge_min_m": round(float(seg.min()), 2),
+            "edge_mean_m": round(float(seg.mean()), 2),
+            "edge_max_m": round(float(seg.max()), 2),
+            "bbox4326": bbox4326,
+            "bed_assigned": False,
+            "bank_source": bank_source,
+            **bank_stats,
+            "wireframe_capped": wireframe_capped,
+            "wall_s": round(time.time() - t0, 1),
+        }
+        LOG.info("mesh_only complete: npoin=%d nelem=%d edge_mean=%.1fm wall=%.1fs",
+                 metrics["npoin"], metrics["nelem"], metrics["edge_mean_m"],
+                 metrics["wall_s"])
+        return metrics
+
     # 4. Copernicus DEM bed + gentle downstream slope
     Z, bed = B.fetch_dem_bed(mesh, cfg, tr)
     LOG.info("dem bed: %s", bed)
+
+    # BK-6: project the user-picked release point (lonlat) into the mesh UTM
+    # so spill_point can honor it (validated there within 2 channel widths).
+    if getattr(cfg, "release_lon", None) is not None \
+            and getattr(cfg, "release_lat", None) is not None:
+        rx, ry = tr.transform(float(cfg.release_lon), float(cfg.release_lat))
+        cfg.release_utm = (float(rx), float(ry))
+        LOG.info("release point provided: (%.5f, %.5f) -> UTM (%.1f, %.1f)",
+                 cfg.release_lon, cfg.release_lat, rx, ry)
 
     slf = str(data_dir / "river.slf")
     cli = str(data_dir / "river.cli")
@@ -202,6 +359,10 @@ def run_pipeline(data_dir: Path, reach_overrides: dict[str, Any], run_id: str | 
         "n_inflow_nodes": int(mesh["n_in"]),
         "n_outflow_nodes": int(mesh["n_out"]),
         "lb_order": lb or guess,
+        "bank_source": bank_source,
+        **bank_stats,
+        "release_point_used": bool(mesh.get("release_point_used")),
+        "release_point_rejected_dist_m": mesh.get("release_point_rejected_dist_m"),
         "enforced_slope": bed.get("enforced_slope"),
         "bed_drop_m": bed.get("bed_drop_m"),
         "reach_len_m": bed.get("reach_len_m"),
@@ -300,6 +461,7 @@ def main(argv: list[str] | None = None) -> int:
 
     reach_overrides: dict[str, Any] = {}
     run_id = args.run_id or None
+    mesh_only = False
     try:
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -307,6 +469,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("manifest must be a JSON object")
             reach_overrides = manifest.get("reach") or {}
             run_id = run_id or manifest.get("run_id")
+            mesh_only = bool(manifest.get("mesh_only"))
         else:
             LOG.warning("no manifest at %s; running with default ReachConfig",
                         manifest_path)
@@ -320,7 +483,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        metrics = run_pipeline(data_dir, reach_overrides, run_id)
+        metrics = run_pipeline(data_dir, reach_overrides, run_id, mesh_only=mesh_only)
     except Exception as exc:  # noqa: BLE001 -- any pipeline failure is a typed metrics error
         LOG.exception("telemac pipeline failed")
         _write_metrics(data_dir, {

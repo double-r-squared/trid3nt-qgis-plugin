@@ -77,6 +77,17 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
     "centerline_length_m",
     "lb_order",
     "wall_s",
+    # BK-3b mesh-only preview runs (the approve-mesh gate reads these).
+    "mesh_only",
+    "mesh_size_m",
+    "time_step_s",
+    "edge_min_m",
+    "edge_mean_m",
+    "edge_max_m",
+    "bbox4326",
+    "preview_geojson",
+    "bank_source",
+    "bank_width_mean_m",
 )
 
 

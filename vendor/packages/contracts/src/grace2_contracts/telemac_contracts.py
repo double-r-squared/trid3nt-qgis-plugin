@@ -52,6 +52,14 @@ class TelemacDyeLayerURI(LayerURI):
         active_frames: OPTIONAL number of output frames in which the plume was
             present in-reach (>= 0) -- how long the dye lingered before it passed.
             ``None`` when unavailable.
+        mesh_size_m: OPTIONAL target gmsh edge length (m, > 0) the mesh was built
+            at -- the GRANULARITY the solve actually used (BK-3c). The agent cites
+            this so mesh resolution is a visible, narratable lever, never hidden.
+        mesh_node_estimate: OPTIONAL estimated node count for that resolution
+            (>= 0) -- the size/cost signal the approve-mesh gate surfaces.
+        mesh_resolution_label: OPTIONAL human label for how the resolution was
+            chosen ("auto (medium)", "fine", "custom 8 m", ...). ``None`` when
+            unavailable.
 
     ``layer_type`` is ``"raster"`` (the peak-concentration COG); the animation is
     played from the SELAFIN mesh sibling, not per-frame COGs. The raster uses the
@@ -62,3 +70,6 @@ class TelemacDyeLayerURI(LayerURI):
     dye_peak_time_s: float | None = Field(default=None, ge=0.0)
     plume_reach_m: float | None = Field(default=None, ge=0.0)
     active_frames: int | None = Field(default=None, ge=0)
+    mesh_size_m: float | None = Field(default=None, gt=0.0)
+    mesh_node_estimate: int | None = Field(default=None, ge=0)
+    mesh_resolution_label: str | None = Field(default=None)

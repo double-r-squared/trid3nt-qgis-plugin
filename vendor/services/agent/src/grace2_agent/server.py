@@ -438,6 +438,16 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # whole AOI, so no rupture/incident-area user input is needed for classical
     # PSHA (that is scenario mode, which is not built).
     "run_seismic_hazard_psha",
+    # BK-3b approve-mesh gate (2026-07-17): the TELEMAC river-dye solver joins
+    # the confirm set with the RICHEST card yet: the builder runs the FAST
+    # mesh-only worker (gmsh, no DEM, no solve, ~10-25 s), emits the actual
+    # triangle-wireframe mesh onto the map as a role="input" vector layer, and
+    # the card carries a GranularitySuggestion (mesh_resolution_m ladder + REAL
+    # node/element counts + CFL-coupled dt + conservative solve estimate). The
+    # user SEES the mesh before approving the expensive solve; narrow_scope
+    # re-runs with a different edge length. Closes the docstring debt in
+    # run_telemac_tool.py (it claimed a confirmation hook that did not exist).
+    "run_telemac",
     # FIRE-3: the ELMFIRE wildfire-spread composer joins the confirm set
     # (Invariant 9 — a consequential solver run: LANDFIRE fetches + a
     # containerized level-set solve). The card is built by
@@ -7073,6 +7083,101 @@ async def _gate_on_code_exec(
     return True, approved
 
 
+async def _build_telemac_mesh_envelope(
+    params: dict, emitter: Any = None
+) -> tuple[Any, dict]:
+    """Build the BK-3b approve-mesh confirm card for ``run_telemac``.
+
+    The heavy-work-in-builder license comes from the SWMM #154 builder below
+    (it fetches + reads the actual DEM there): this builder goes one further
+    and runs the FAST mesh-only worker (``preview_telemac_mesh``: gmsh mesh,
+    no DEM, no solve, ~10-25 s) so the card shows the REAL mesh - the
+    triangle wireframe lands on the map as a role="input" vector layer with a
+    zoom-to BEFORE the card appears, and every number on the card (node /
+    element count, CFL-coupled dt, conservative solve-time estimate) comes
+    from that actual mesh, not an area model.
+
+    Returns ``(envelope, preview_stats)`` - the stats dict is what the
+    decision tail pins into the approved params so the solve reproduces the
+    previewed mesh exactly.
+
+    Raises on ANY failure (geocode, river fetch, worker, metrics) - the
+    caller's try/except fails OPEN so a preview problem never blocks the tool
+    (which then raises its own typed errors on the same underlying fault).
+    """
+    from grace2_contracts.payload_warning import (
+        GranularitySuggestion,
+        PayloadWarningEnvelopePayload,
+    )
+    from .workflows.model_river_dye_release_scenario import (
+        MESH_H_FLOOR_M,
+        MESH_NODE_CAP,
+        preview_telemac_mesh,
+    )
+
+    stats = await preview_telemac_mesh(params, emitter=emitter)
+    h = float(stats["mesh_size_m"])
+    npoin = int(stats["npoin"])
+    nelem = int(stats["nelem"])
+    dt = float(stats["time_step_s"])
+    est_s = float(stats["est_solve_seconds"])
+    where = stats.get("location_name") or params.get("location") or "?"
+
+    # Resolution ladder around the suggested edge length (finer halves, coarser
+    # doubles), floored at the gmsh-quality minimum. The client recomputes the
+    # cell/ETA readout per rung from the suggested-ratio model; the REAL numbers
+    # for the suggested rung are the ones below.
+    rungs = sorted({
+        max(round(h * f, 1), MESH_H_FLOOR_M) for f in (0.5, 0.75, 1.0, 1.5, 2.0)
+    })
+    granularity = GranularitySuggestion(
+        engine="telemac",
+        resolution_param="mesh_resolution_m",
+        suggested_resolution_m=h,
+        resolution_choices=[float(r) for r in rungs],
+        estimated_active_cells=npoin,
+        estimated_solve_seconds=est_s,
+        vcpus=os.cpu_count() or 1,
+        compute_class="local",
+        cell_cap=int(MESH_NODE_CAP),
+        coarsened="clamped" in str(stats.get("resolution_label") or ""),
+        reason=(
+            f"Mesh previewed on the map: {npoin:,} nodes / {nelem:,} triangles "
+            f"at {h:g} m edges; CFL-coupled timestep {dt:g} s."
+        )[:512],
+        spot_label=None,
+    )
+    envelope = PayloadWarningEnvelopePayload(
+        warning_id=new_ulid(),
+        tool_name="run_telemac",
+        tool_args={
+            "location": str(where),
+            "mesh_resolution_m": h,
+            "nodes": npoin,
+            "elements": nelem,
+            "time_step_s": dt,
+            "compute_class": "local",
+            # BK-6: the client card enters "Select release point" mode - the
+            # user clicks the map inside the mesh; Continue stays greyed until
+            # a point exists; the point rides back in revised_args.
+            "release_point_required": True,
+            "mesh_bbox": list(stats.get("bbox") or []),
+        },
+        estimated_mb=0.0,
+        threshold_mb=0.0,
+        recommendation=(
+            f"The river mesh for {where} is previewed on the map "
+            f"({npoin:,} nodes at {h:g} m edges, dt {dt:g} s; est solve "
+            f"~{est_s / 60.0:.0f} min). Click the map INSIDE the mesh to place "
+            "the spill release point (click again to move it), then Continue. "
+            "You can also pick a finer/coarser mesh, or cancel."
+        )[:512],
+        options=["proceed", "cancel", "narrow_scope"],
+        granularity=granularity,
+    )
+    return envelope, stats
+
+
 async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]:
     """Build the #154 granularity confirm card for ``run_swmm_urban_flood``.
 
@@ -7955,6 +8060,11 @@ async def _gate_on_solver_confirm(
     # for every non-flood gated tool.
     flood_output_interval_min: float | None = None
     flood_cadence_gated: bool = False
+    # BK-3b: the TELEMAC approve-mesh preview stats (real npoin/h/dt from the
+    # mesh-only worker run) so the decision tail can pin the previewed edge
+    # length on proceed / honour a chosen rung on narrow_scope. None for every
+    # non-TELEMAC gated tool.
+    telemac_preview: dict | None = None
     # Combined run-settings gate (sprint-16): the flood SFINCS resolution
     # suggestion (bbox-area estimate) so the decision tail can pin the suggested
     # grid_resolution_m on ``proceed`` or honour the user's chosen rung on a
@@ -8092,6 +8202,14 @@ async def _gate_on_solver_confirm(
             flood_cadence_gated = True
             # narrow_scope is offered iff the card carried an override block.
             flood_override_offered = "narrow_scope" in envelope.options
+        elif tool_name == "run_telemac":
+            # BK-3b approve-mesh gate: the builder runs the FAST mesh-only
+            # worker and emits the wireframe preview layer BEFORE the card, so
+            # the user approves a mesh they can SEE (with real node counts +
+            # the CFL-coupled dt on the card). ~10-25 s pre-card.
+            envelope, telemac_preview = await _build_telemac_mesh_envelope(
+                params, emitter=state.emitter
+            )
         elif tool_name == "run_swmm_urban_flood":
             # #154 granularity gate (sprint-16): make mesh resolution a USER
             # lever (memory: feedback_user_controlled_granularity). The enriched
@@ -8316,6 +8434,38 @@ async def _gate_on_solver_confirm(
             )
             return True, approved
 
+        # BK-3b TELEMAC approve-mesh override: honour the chosen edge length.
+        # The composer's own override path (suggest_mesh_size_m override_m)
+        # budget-clamps a reckless value and suggest_time_step_s re-couples the
+        # CFL dt automatically, so no server-side clamp is needed here.
+        if telemac_preview is not None:
+            revised = decision_payload.revised_args or {}
+            try:
+                chosen_h = float(
+                    revised.get("mesh_resolution_m", telemac_preview["mesh_size_m"])
+                )
+            except (TypeError, ValueError):
+                chosen_h = float(telemac_preview["mesh_size_m"])
+            approved = dict(params)
+            approved["confirmed"] = True
+            approved["mesh_resolution_m"] = chosen_h
+            # BK-6: the user-picked release point rides revised_args.
+            for _rk in ("release_lon", "release_lat"):
+                if revised.get(_rk) is not None:
+                    try:
+                        approved[_rk] = float(revised[_rk])
+                    except (TypeError, ValueError):
+                        pass
+            logger.info(
+                "telemac approve-mesh narrow_scope session=%s warning_id=%s "
+                "previewed_h=%.3g chosen_h=%.3g",
+                state.session_id,
+                warning_id,
+                float(telemac_preview["mesh_size_m"]),
+                chosen_h,
+            )
+            return True, approved
+
         # #154 granularity override: ONLY meaningful for the SWMM gate (it
         # advertised a GranularitySuggestion). For any other gated solver a
         # narrow_scope reply is meaningless -> fail-closed (existing behavior).
@@ -8430,6 +8580,11 @@ async def _gate_on_solver_confirm(
     # card the user approved) and inject confirmed. Other solvers just confirm.
     approved = dict(params)
     approved["confirmed"] = True
+    # BK-3b: pin the PREVIEWED edge length so the solve mesh is byte-for-byte
+    # the mesh the user saw + approved (same seed via cache-backed geocode/river
+    # fetch + same explicit h -> gmsh reproduces the mesh).
+    if telemac_preview is not None:
+        approved["mesh_resolution_m"] = float(telemac_preview["mesh_size_m"])
     if swmm_autoscale is not None:
         approved["target_resolution_m"] = float(swmm_autoscale.resolution_m)
         approved["enable_autoscale"] = False
