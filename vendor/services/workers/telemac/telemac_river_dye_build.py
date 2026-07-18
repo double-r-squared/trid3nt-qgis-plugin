@@ -575,11 +575,50 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
             "after smoothing retries - refusing to mesh a folded channel"
         )
     banks_ok = _banks_valid(left, right)
+    ms = cfg.mesh_size_m
+
+    # M3 island holes: any part of the ribbon NOT covered by the water polygons
+    # (interior holes AND islands that split the waterbody into separate polys,
+    # e.g. Cottonwood Island at Longview - M2 particles crossed it) becomes a
+    # gmsh hole with a closed wall boundary. Kept clear of the outer boundary
+    # (buffer -1.5*h) so the outer ring stays a single clean cycle; tiny
+    # slivers below (2.5*h)^2 are dropped (unmeshable at edge length h).
+    island_rings: list[np.ndarray] = []
+    water_polys = getattr(cfg, "water_polys_utm", None)
+    if water_polys:
+        try:
+            import shapely.geometry as sg
+            from shapely.ops import unary_union
+
+            ribbon = sg.Polygon(np.vstack([left, right[::-1]]))
+            if not ribbon.is_valid:
+                ribbon = ribbon.buffer(0)
+            water = unary_union([
+                sg.Polygon(ext, holes=[h for h in holes if len(h) >= 4])
+                for ext, holes in water_polys if len(ext) >= 4
+            ]).buffer(0)
+            land = ribbon.buffer(-1.5 * ms).difference(water)
+            geoms = getattr(land, "geoms", [land])
+            for g in geoms:
+                if g.is_empty or g.area < (2.5 * ms) ** 2:
+                    continue
+                g = g.simplify(ms / 2.0)
+                if g.is_empty or not g.is_valid:
+                    continue
+                ext = np.asarray(g.exterior.coords)
+                if len(ext) >= 5:
+                    island_rings.append(ext[:-1])  # drop closing duplicate
+            if island_rings:
+                LOG.info("island holes: %d (areas %s m2)", len(island_rings),
+                         [int(sg.Polygon(r).area) for r in island_rings])
+        except Exception as exc:  # noqa: BLE001 -- islands are an enhancement,
+            # never a mesh blocker; fall back to the hole-less ribbon
+            LOG.warning("island-hole derivation failed (%s) - meshing without", exc)
+            island_rings = []
 
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
     gmsh.model.add(cfg.name)
-    ms = cfg.mesh_size_m
 
     def add_pts(pts):
         return [gmsh.model.geo.addPoint(float(px), float(py), 0.0, ms)
@@ -592,7 +631,16 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     inflow = gmsh.model.geo.addLine(rpts[0], lpts[0])     # upstream cap
     outflow = gmsh.model.geo.addLine(lpts[-1], rpts[-1])  # downstream cap
     loop = gmsh.model.geo.addCurveLoop([left_wall, outflow, -right_wall, inflow])
-    surf = gmsh.model.geo.addPlaneSurface([loop])
+    hole_loops = []
+    for hr in island_rings:
+        # straight LINE chain, not a spline: splines overshoot at polygon
+        # corners and can poke outside the surface, which kills generate(2)
+        # silently (live: 9 islands -> zero triangles)
+        hpts = add_pts(hr)
+        hlines = [gmsh.model.geo.addLine(hpts[i], hpts[(i + 1) % len(hpts)])
+                  for i in range(len(hpts))]
+        hole_loops.append(gmsh.model.geo.addCurveLoop(hlines))
+    surf = gmsh.model.geo.addPlaneSurface([loop, *hole_loops])
     gmsh.model.geo.synchronize()
 
     g_in = gmsh.model.addPhysicalGroup(1, [inflow])
@@ -613,6 +661,13 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     for et, en in zip(etypes, enodes):
         if et == 2:
             tri_tags = en.reshape(-1, 3).astype(np.int64)
+    if tri_tags is None or len(tri_tags) == 0:
+        gmsh.finalize()
+        signal.alarm(0)
+        raise RuntimeError(
+            "MESH_BUILD_EMPTY: gmsh generated no triangles (bad hole/boundary "
+            f"geometry? islands={len(island_rings)})"
+        )
     used = np.unique(tri_tags)
     t2i = {int(t): i for i, t in enumerate(used)}
     npoin = len(used)
@@ -650,11 +705,24 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     bnd = [ed[k] for k, n in ec.items() if n == 1]
     nxt = {u: v for u, v in bnd}
     assert len(nxt) == len(bnd), "non-manifold boundary"
-    start = bnd[0][0]; ring = [start]; cur = nxt[start]
-    while cur != start:
-        ring.append(cur); cur = nxt[cur]
-    assert len(ring) == len(bnd), "boundary not a single closed ring"
-    ring = np.array(ring, dtype=np.int64)
+    # M3: with island holes the boundary is SEVERAL closed cycles. Walk them
+    # all; the triangle-oriented directed edges already wind outer-CCW /
+    # holes-CW (domain on the left), which is the TELEMAC convention. IPOBO
+    # ranks run consecutively ring by ring, OUTER (longest) first.
+    rings: list[list[int]] = []
+    unvisited = set(nxt)
+    while unvisited:
+        start = next(iter(unvisited))
+        walk = [start]; cur = nxt[start]
+        while cur != start:
+            walk.append(cur); cur = nxt[cur]
+        unvisited -= set(walk)
+        rings.append(walk)
+    assert sum(len(w) for w in rings) == len(bnd), "boundary walk lost edges"
+    rings.sort(key=len, reverse=True)
+    n_islands = len(rings) - 1
+    boundary_rings = [np.array(w, dtype=np.int64) for w in rings]
+    ring = np.array([n for w in rings for n in w], dtype=np.int64)
 
     # gotcha 3: rank-based IPOBO
     nptfr = len(ring)
@@ -680,6 +748,7 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
                 litbor=litbor, cls=cls, in_nodes=in_nodes, out_nodes=out_nodes,
                 n_in=int((cls == "inflow").sum()),
                 n_out=int((cls == "outflow").sum()),
+                n_islands=n_islands, boundary_rings=boundary_rings,
                 banks_ok=banks_ok, smooth_tries=tries, centerline=cl)
 
 

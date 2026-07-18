@@ -178,6 +178,9 @@ def run_pipeline(
                     # recentered mid-water axis + symmetric half-widths
                     cl, halfw, frac = res
                     cfg.bank_offsets = (halfw, halfw)
+                    # M3: the mesh builder carves ribbon-minus-water as island
+                    # holes (walls), so slicks/dye route around real islands.
+                    cfg.water_polys_utm = polys_utm
                     bank_source = "nhdarea"
                     bank_stats = {
                         "bank_valid_frac": frac,
@@ -235,9 +238,15 @@ def run_pipeline(
                     float(lon.max()), float(lat.max())]
         wireframe_capped = bool(e.shape[0] > 30000)
         if wireframe_capped:
-            ring = mesh["ring"].astype(np.int64)
-            ring_closed = np.append(ring, ring[:1])
-            coords = [[[float(lon[i]), float(lat[i])] for i in ring_closed]]
+            # one closed linestring PER boundary ring (outer + island holes);
+            # drawing the concatenated multi-ring walk as a single polyline
+            # painted bogus chords between rings (live 2026-07-18)
+            walks = mesh.get("boundary_rings") or [mesh["ring"]]
+            coords = []
+            for w in walks:
+                w = np.asarray(w, dtype=np.int64)
+                w_closed = np.append(w, w[:1])
+                coords.append([[float(lon[i]), float(lat[i])] for i in w_closed])
         else:
             coords = [
                 [[float(lon[a]), float(lat[a])], [float(lon[b]), float(lat[b])]]
