@@ -80,6 +80,7 @@ DEFAULT_OUTPUTS = [
     "drogues.txt",         # oil class: raw particle track (TecPlot ASCII)
     "particles.json",      # oil class: parsed slick snapshots (EPSG:4326)
     "oil_spill.txt",       # oil class: the steering file used (evidence)
+    "slick.geojson",       # oil class: renderable slick snapshots
 ]
 
 #: Metrics filename the ``LocalSolverSpec.classify_exit`` reads from the rundir.
@@ -184,6 +185,21 @@ def run_pipeline(
                     # recentered mid-water axis + symmetric half-widths
                     cl, halfw, frac = res
                     cfg.bank_offsets = (halfw, halfw)
+                    # Discharge must scale to the MEASURED river (live
+                    # 2026-07-18: the Snake-tuned 250 m3/s default left the
+                    # 1.3km-wide Columbia nearly stagnant/shallow - wrong for
+                    # dye velocity AND fatal for oil slicks). When the caller
+                    # kept the default, estimate q = width * depth * 0.7 m/s.
+                    # Data-driven NWM streamflow is the follow-up (#223).
+                    if float(cfg.inflow_q_m3s) == 250.0:
+                        w_mean = float(2 * halfw.mean())
+                        q_est = round(w_mean * float(cfg.init_depth_m) * 0.7, 0)
+                        if q_est > 250.0:
+                            LOG.info(
+                                "inflow scaled to measured river: 250 -> %.0f "
+                                "m3/s (width %.0f m x depth %.1f m x 0.7 m/s)",
+                                q_est, w_mean, cfg.init_depth_m)
+                            cfg.inflow_q_m3s = q_est
                     # M3: the mesh builder carves ribbon-minus-water as island
                     # holes (walls), so slicks/dye route around real islands.
                     cfg.water_polys_utm = polys_utm
@@ -409,6 +425,19 @@ def run_pipeline(
                                          for a, b in zip(lo, la)]})
             (data_dir / "particles.json").write_text(
                 json.dumps({"snapshots": snaps}), encoding="utf-8")
+            # slick.geojson: renderable snapshot points (t_s property) the
+            # composer publishes as a vector layer, mesh-preview-style
+            keep = [snaps[0], snaps[len(snaps) // 2], snaps[-1]] \
+                if len(snaps) >= 3 else snaps
+            feats = [{
+                "type": "Feature",
+                "geometry": {"type": "MultiPoint", "coordinates": sn["lonlat"]},
+                "properties": {"kind": "oil-slick", "t_s": sn["t_s"],
+                               "n": len(sn["lonlat"])},
+            } for sn in keep if sn["lonlat"]]
+            (data_dir / "slick.geojson").write_text(
+                json.dumps({"type": "FeatureCollection", "features": feats}),
+                encoding="utf-8")
             if zones and zones[0][1] and zones[-1][1]:
                 import numpy as _np2  # noqa: WPS433
                 c0 = _np2.mean(zones[0][1], axis=0)

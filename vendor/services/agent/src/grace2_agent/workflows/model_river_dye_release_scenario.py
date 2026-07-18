@@ -145,6 +145,30 @@ TIMESTEP_FLOOR_S: float = 0.2
 #: whose honest estimates the user can knowingly accept).
 SOLVE_TIME_BUDGET_S: float = 2700.0
 
+#: M3 substance classes: oil-family substances ALSO run the TELEMAC oil-spill
+#: module (floating particle slick + the dissolved fraction in the tracer);
+#: everything else runs the proven dissolved-tracer path with the label lever.
+#: Keys are matched as substrings of the sanitized substance string.
+OIL_SUBSTANCE_PRESETS: dict[str, str] = {
+    "diesel": "diesel",
+    "gasoline": "diesel",
+    "petrol": "diesel",
+    "heavy fuel": "heavy_fuel",
+    "heavy_fuel": "heavy_fuel",
+    "bunker": "heavy_fuel",
+    "crude": "light_crude",
+    "oil": "light_crude",   # generic 'oil' - matched LAST (substring order)
+}
+
+
+def classify_substance(substance: str) -> tuple[str, str | None]:
+    """('oil', preset) for oil-family substances, ('tracer', None) otherwise."""
+    s = str(substance or "dye").strip().lower()
+    for key, preset in OIL_SUBSTANCE_PRESETS.items():
+        if key in s:
+            return "oil", preset
+    return "tracer", None
+
 
 def suggest_time_step_s(mesh_size_m: float) -> float:
     """CFL-safe TELEMAC timestep for a given mesh edge length (BK-3c / OPEN-27).
@@ -668,11 +692,17 @@ async def model_river_dye_release_scenario(
     # OPEN-26: hand the worker the NAMED watercourse so it re-seeds onto the
     # gnis_name mainstem (confluence disambiguation, Columbia-proven).
     river_name = _named_watercourse(location or location_name) or ""
+    substance_class, oil_preset = classify_substance(substance)
+    if substance_class == "oil":
+        logger.info("substance %r -> oil class (preset %s): slick particles + "
+                    "dissolved tracer", substance, oil_preset)
     reach: dict[str, Any] = {
         "name": reach_name,
         "seed_lon": round(seed_lon, 6),
         "seed_lat": round(seed_lat, 6),
         **({"river_name": river_name} if river_name else {}),
+        **({"substance_class": "oil", "oil_preset": oil_preset}
+           if substance_class == "oil" else {}),
         "nav_direction": "DM",
         "distance_km": float(reach_length_km),
         "channel_width_m": float(channel_width_m),
@@ -818,6 +848,31 @@ async def model_river_dye_release_scenario(
         batch_run_id, reach_name, peak.dye_cmax_mgl, peak.plume_reach_m,
         peak.active_frames, peak.uri,
     )
+
+    # --- M3 oil class: publish the floating-slick track as a vector layer ---- #
+    # (mesh-preview pattern: the worker wrote slick.geojson next to the result;
+    # best-effort - a missing slick never voids the concentration layer)
+    if substance_class == "oil" and emitter is not None:
+        try:
+            from grace2_contracts.execution import LayerURI  # noqa: WPS433
+
+            from ..layer_uri_emit import publish_input_layer  # noqa: WPS433
+            from ..tools.solver import _get_runs_bucket  # noqa: WPS433
+
+            slick_layer = LayerURI(
+                layer_id=f"telemac-oil-slick-{batch_run_id}",
+                name=f"Oil slick track ({oil_preset}, {reach_name})",
+                layer_type="vector",
+                uri=f"s3://{_get_runs_bucket()}/{batch_run_id}/slick.geojson",
+                style_preset="nhdplus_flowlines",
+                role="output",
+                bbox=peak.bbox,
+            )
+            emitted = await publish_input_layer(emitter, slick_layer)
+            logger.info("oil slick layer emitted=%s id=%s", emitted,
+                        slick_layer.layer_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("oil slick layer skipped: %s", exc)
 
     # --- Best-effort downstream concentration chart (never blocks) ----------- #
     if emitter is not None:
