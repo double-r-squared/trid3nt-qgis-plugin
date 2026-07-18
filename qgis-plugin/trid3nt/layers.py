@@ -85,6 +85,26 @@ _TRACER_GROUP_HINTS = ("dye", "tracer", "concentration", "conc")
 _OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 _OSM_LAYER_NAME = "OpenStreetMap"
 
+# BK-1: base-map preset library (Settings dropdown). Each entry = (layer name,
+# XYZ template, zmax). Names double as the QGIS layer names so switching
+# presets can find + remove the previous one. ESRI imagery is the satellite
+# view NATE wants under the TELEMAC mesh wireframe.
+BASEMAP_PRESETS = {
+    "OpenStreetMap": (_OSM_LAYER_NAME, _OSM_TEMPLATE, 19),
+    "ESRI World Imagery (satellite)": (
+        "ESRI World Imagery",
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/"
+        "MapServer/tile/{z}/{y}/{x}",
+        19,
+    ),
+    "CartoDB Dark Matter": (
+        "CartoDB Dark Matter",
+        "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        20,
+    ),
+}
+_ALL_BASEMAP_LAYER_NAMES = [v[0] for v in BASEMAP_PRESETS.values()]
+
 #: Prefix shared by every TRID3NT-owned layer-tree group: the live per-case
 #: group ("TRID3NT <case>", ``LayerMaterializer.set_case``) AND the "Open
 #: case in QGIS" export group ("TRID3NT export <case>",
@@ -102,23 +122,34 @@ def _safe_filename(name: str) -> str:
 # -- basemap + canvas zoom (the "canvas is just white" fix) ------------------ #
 
 
-def ensure_basemap() -> Optional[str]:
-    """Add an OpenStreetMap XYZ basemap layer if the project doesn't already
-    have one, inserted LAST in the layer tree root (bottom of the stack, so
-    it renders under every case group). Returns a status note, or None when
-    a basemap already exists. Never raises -- a rejected uri is an honest
-    note, not a crash.
+def ensure_basemap(preset: str = "OpenStreetMap") -> Optional[str]:
+    """Ensure the CHOSEN base-map preset (BK-1 Settings dropdown) is the one
+    on the map: adds it if missing (inserted LAST -- bottom of the stack) and
+    removes any OTHER preset's layer so switching in Settings swaps cleanly.
+    Returns a status note, or None when the chosen preset is already there.
+    Never raises -- a rejected uri is an honest note, not a crash.
     """
+    name, template, zmax = BASEMAP_PRESETS.get(
+        preset, BASEMAP_PRESETS["OpenStreetMap"]
+    )
     project = QgsProject.instance()
-    if project.mapLayersByName(_OSM_LAYER_NAME):
-        return None
-    uri = qgis_xyz_uri(_OSM_TEMPLATE, zmin=0, zmax=19)
-    layer = QgsRasterLayer(uri, _OSM_LAYER_NAME, "wms")
+    # drop other presets' layers (switching satellite <-> dark <-> osm)
+    removed_other = False
+    for other in _ALL_BASEMAP_LAYER_NAMES:
+        if other == name:
+            continue
+        for lyr in project.mapLayersByName(other):
+            project.removeMapLayer(lyr.id())
+            removed_other = True
+    if project.mapLayersByName(name):
+        return f"basemap switched to {name}" if removed_other else None
+    uri = qgis_xyz_uri(template, zmin=0, zmax=zmax)
+    layer = QgsRasterLayer(uri, name, "wms")
     if not layer.isValid():
-        return "OpenStreetMap basemap: QGIS rejected the XYZ uri -- skipped"
+        return f"{name} basemap: QGIS rejected the XYZ uri -- skipped"
     project.addMapLayer(layer, False)
     project.layerTreeRoot().addLayer(layer)  # appends LAST -- bottom of stack
-    return "OpenStreetMap basemap added"
+    return f"{name} basemap added"
 
 
 def zoom_to_extent(canvas, rect: Optional["QgsRectangle"], margin: float = 0.1) -> bool:

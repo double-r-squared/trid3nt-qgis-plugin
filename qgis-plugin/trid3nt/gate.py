@@ -185,12 +185,26 @@ class GateDecision:
     note: str = ""
 
 
+def release_point_required(warning: PayloadWarning) -> bool:
+    """BK-6: the envelope's tool_args flag that this gate needs a user-picked
+    release point before Continue is allowed."""
+    return bool((warning.tool_args or {}).get("release_point_required"))
+
+
+def release_point_bbox(warning: PayloadWarning) -> Optional[list]:
+    """The previewed mesh bbox [min_lon, min_lat, max_lon, max_lat] the click
+    must land inside (None when the envelope did not carry one)."""
+    bb = (warning.tool_args or {}).get("mesh_bbox")
+    return bb if isinstance(bb, list) and len(bb) == 4 else None
+
+
 def resolve_gate_decision(
     warning: PayloadWarning,
     cancel: bool = False,
     chosen_resolution_m: Optional[float] = None,
     interval_min: Optional[float] = None,
     duration_hr: Optional[float] = None,
+    release_point: Optional[tuple] = None,
 ) -> GateDecision:
     """Map the card's UI state to the confirmation envelope (web rules).
 
@@ -206,7 +220,20 @@ def resolve_gate_decision(
     if cancel:
         return GateDecision("cancel", None)
 
+    # BK-6: a release-point gate REFUSES to submit until a point is placed;
+    # once placed, the point rides revised_args (so the decision is always
+    # narrow_scope -- proceed cannot carry revised_args by contract).
+    if release_point_required(warning) and release_point is None:
+        return GateDecision(
+            None, None,
+            "Click the map inside the previewed mesh to place the release "
+            "point first (click again to move it).",
+        )
+
     revised: dict = {}
+    if release_point_required(warning) and release_point is not None:
+        revised["release_lon"] = round(float(release_point[0]), 6)
+        revised["release_lat"] = round(float(release_point[1]), 6)
     g = warning.granularity
     if g and chosen_resolution_m is not None:
         suggested = warning.suggested_resolution_m

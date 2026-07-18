@@ -118,6 +118,14 @@ class PluginSettings:
         self._set("selection_aoi", "true" if value else "false")
 
     @property
+    def basemap_preset(self) -> str:
+        return self._get("basemap_preset", "OpenStreetMap")
+
+    @basemap_preset.setter
+    def basemap_preset(self, value: str) -> None:
+        self._set("basemap_preset", str(value))
+
+    @property
     def auto_basemap(self) -> bool:
         """Item 4 (live-feedback 2026-07-09): "Add OpenStreetMap basemap
         automatically" toggle (default ON). When ON, ``layers.ensure_basemap``
