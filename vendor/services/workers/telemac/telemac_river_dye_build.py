@@ -31,13 +31,17 @@ ASCII only. No product/agent code touched.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
+import urllib.parse
 import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass, field
 
 import numpy as np
+
+LOG = logging.getLogger("trid3nt.worker.telemac.build")
 from pathlib import Path
 
 
@@ -73,6 +77,12 @@ class ReachConfig:
     # per-station left/right bank offsets (mesh follows the REAL river);
     # "constant" keeps the legacy fixed-width ribbon.
     bank_source: str = "auto"
+    # OPEN-26 wrong-watercourse fix: when the prompt NAMES the river, re-seed
+    # onto the NAMED GNIS mainstem before the NLDI position-snap. A raw
+    # geocode-point snap near a confluence (Longview = Columbia x Cowlitz)
+    # routinely lands on the tributary or a slough; the named-flowline query
+    # (proven manually on the Columbia, comid 24520442) disambiguates.
+    river_name: str = ""
     pulse_window_s: float = 300.0       # dye-on window; source turns OFF after
     source_q_m3s: float = 8.0           # carrier discharge of the point source (small vs inflow)
     duration_s: float = 3600.0
@@ -101,6 +111,57 @@ def _snap_comid(lon: float, lat: float) -> int:
     fc = json.loads(_http_get(url))
     p = fc["features"][0]["properties"]
     return int(p.get("comid") or p.get("nhdplus_comid"))
+
+
+_NHDPLUS_HR = "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer"
+
+
+def _named_flowline_seed(
+    name: str, lon: float, lat: float, search_deg: float = 0.15
+) -> tuple[float, float] | None:
+    """Nearest vertex of the NAMED GNIS flowline to (lon, lat), or None.
+
+    Queries NHDPlus_HR layer 3 (NetworkNHDFlowline) by gnis_name within a
+    ~search_deg envelope around the raw seed. Fail-OPEN: any error / no match
+    returns None and the caller keeps the raw position-snap (honest degrade).
+    """
+    safe = name.replace("'", "''").strip()
+    if not safe:
+        return None
+    env = json.dumps({
+        "xmin": lon - search_deg, "ymin": lat - search_deg,
+        "xmax": lon + search_deg, "ymax": lat + search_deg,
+        "spatialReference": {"wkid": 4326},
+    })
+    q = urllib.parse.urlencode({
+        "f": "geojson",
+        "where": f"UPPER(gnis_name)=UPPER('{safe}')",
+        "geometry": env, "geometryType": "esriGeometryEnvelope",
+        "inSR": 4326, "outSR": 4326,
+        "spatialRel": "esriSpatialRelIntersects",
+        "outFields": "gnis_name", "returnGeometry": "true",
+        "maxAllowableOffset": 0.0005, "resultRecordCount": 200,
+    })
+    try:
+        fc = json.loads(_http_get(f"{_NHDPLUS_HR}/3/query?{q}", timeout=45.0))
+    except Exception as exc:  # noqa: BLE001 -- network fail-open to raw seed
+        LOG.warning("named-flowline seed query failed (%s) - raw seed kept", exc)
+        return None
+    best: tuple[float, float] | None = None
+    best_d2 = float("inf")
+    for feat in fc.get("features") or []:
+        geom = feat.get("geometry") or {}
+        lines = (
+            [geom.get("coordinates")]
+            if geom.get("type") == "LineString"
+            else geom.get("coordinates") or []
+        )
+        for line in lines:
+            for v in line or []:
+                d2 = (v[0] - lon) ** 2 + (v[1] - lat) ** 2
+                if d2 < best_d2:
+                    best_d2, best = d2, (float(v[0]), float(v[1]))
+    return best
 
 
 def _stitch_flowlines(features) -> list[tuple[float, float]]:
@@ -143,13 +204,30 @@ def _stitch_flowlines(features) -> list[tuple[float, float]]:
 
 def fetch_river_centerline(cfg: ReachConfig):
     """Return (lonlat centerline array, meta dict) from real NHDPlus flowlines."""
-    comid = _snap_comid(cfg.seed_lon, cfg.seed_lat)
+    seed_lon, seed_lat, seed_kind = cfg.seed_lon, cfg.seed_lat, "position"
+    if cfg.river_name:
+        named = _named_flowline_seed(cfg.river_name, seed_lon, seed_lat)
+        if named is not None:
+            seed_lon, seed_lat, seed_kind = named[0], named[1], "named-flowline"
+            LOG.info(
+                "named-flowline re-seed %r: (%.5f,%.5f) -> (%.5f,%.5f)",
+                cfg.river_name, cfg.seed_lon, cfg.seed_lat, seed_lon, seed_lat,
+            )
+        else:
+            LOG.warning(
+                "named-flowline re-seed %r found nothing - raw seed kept",
+                cfg.river_name,
+            )
+    comid = _snap_comid(seed_lon, seed_lat)
     url = f"{_NLDI}/comid/{comid}/navigation/{cfg.nav_direction}/flowlines?distance={cfg.distance_km}"
     fc = json.loads(_http_get(url))
     feats = fc["features"]
     path = _stitch_flowlines(feats)
     ll = np.array(path, dtype=float)
-    meta = dict(seed_comid=comid, n_flowlines=len(feats), n_raw_vertices=len(ll))
+    meta = dict(
+        seed_comid=comid, n_flowlines=len(feats), n_raw_vertices=len(ll),
+        seed_kind=seed_kind,
+    )
     return ll, meta
 
 
@@ -910,6 +988,26 @@ PRESCRIBED TRACERS VALUES       = {';'.join(tracer)}
 SCHEME FOR ADVECTION OF TRACERS          = 1
 COEFFICIENT FOR DIFFUSION OF TRACERS     = 1.E-1
 """
+    # DAMOCLES hard 72-char line limit: one over-long line (e.g. a long
+    # geocoded reach name in a comment or the TITLE) derails the parser into
+    # "KEY-WORD ... IS UNKNOWN" on a LATER, valid line. Live-hit 2026-07-18:
+    # 'longview_cowlitz_county_washington_98632_united_' made an 86-char
+    # comment + ~80-char TITLE and DAMOCLES blamed 'GEOMETRY FILE' at line 10.
+    # Comments are safely sliced; the quoted TITLE is shortened keeping quotes.
+    lines = []
+    for ln in cas.splitlines():
+        if len(ln) <= 72:
+            lines.append(ln)
+        elif ln.startswith("/"):
+            lines.append(ln[:72])
+        elif ln.startswith("TITLE"):
+            lines.append(f"TITLE : '{cfg.name[:40]} DYE PULSE'"[:72])
+        else:
+            lines.append(ln)  # data lines are worker-generated and short
+    cas = "\n".join(lines) + "\n"
+    over = [ln for ln in lines if len(ln) > 72]
+    if over:
+        LOG.warning("cas lines still >72 chars after clamp: %r", over[:3])
     with open(cas_path, "w") as f:
         f.write(cas)
 

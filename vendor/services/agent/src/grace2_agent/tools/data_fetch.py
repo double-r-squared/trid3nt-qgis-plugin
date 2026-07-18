@@ -4645,6 +4645,10 @@ def fetch_river_geometry(
     - Downstream: ``build_sfincs_model`` (river-burning DEM step),
       ``delineate_watershed``, stream-network display in map panel.
     """
+    if isinstance(source, str) and source.strip().lower() in ("nhdplus", "nhd"):
+        # F25-class alias: the model's natural label for the NHDPlus family.
+        # The fallback chain is OSM-primary regardless, so aliasing is safe.
+        source = "nhdplus_hr"
     if source not in ("nhdplus_hr", "osm"):
         # Reserved future sources (NHDPlus V2, MERIT-Hydro) — not in v0.1.
         raise BboxInvalidError(

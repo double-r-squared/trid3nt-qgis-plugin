@@ -237,7 +237,16 @@ async def run_telemac(
             ),
         }
     if has_loc and coerced_bbox is not None:
-        has_loc = False  # explicit bbox wins; ignore the redundant location
+        # LOCATION wins (flipped 2026-07-18, live-proven): the model fabricated
+        # bbox (-124.2,46.0,-124.0,46.2) - open water at the Columbia MOUTH -
+        # alongside location='...near Longview, WA'; the NLDI snap 404'd. The
+        # geocoded location is ground truth; an LLM-invented bbox is not (a
+        # user-drawn AOI arrives via case state, never this arg).
+        logger.warning(
+            "run_telemac: both location and bbox supplied - dropping the LLM "
+            "bbox %s in favour of geocoding %r", coerced_bbox, location,
+        )
+        coerced_bbox = None
 
     # LLM-invented compute_class hardening (live 2026-07-17: the model passed
     # compute_class='dye_spill' and the dispatch crashed AFTER the geocode +
