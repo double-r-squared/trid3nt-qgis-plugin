@@ -158,7 +158,10 @@ def run_pipeline(
         try:
             lon0, lat0 = ll[:, 0].min(), ll[:, 1].min()
             lon1, lat1 = ll[:, 0].max(), ll[:, 1].max()
-            pad = 0.01
+            # pad must cover FAR channels behind mid-river islands (NATE
+            # 2026-07-18: Fisher/Cottonwood back-channels were unmeshed - the
+            # 0.01deg pad + corridor clipped them off laterally)
+            pad = 0.03
             polys = B.fetch_bank_polygons(
                 (lon0 - pad, lat0 - pad, lon1 + pad, lat1 + pad))
             if polys:

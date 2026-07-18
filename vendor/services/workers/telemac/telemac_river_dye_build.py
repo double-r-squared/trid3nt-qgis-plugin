@@ -310,7 +310,7 @@ def fetch_bank_polygons(bbox4326, timeout=30.0):
         # (~5 m at mid-latitudes) + a record cap - the reach bbox only needs
         # local bank detail, not the full mainstem polygon.
         "maxAllowableOffset": "0.00005",
-        "resultRecordCount": "50",
+        "resultRecordCount": "200",
     })
     try:
         with urllib.request.urlopen(f"{_NHDAREA_URL}?{params}", timeout=timeout) as r:
@@ -554,7 +554,10 @@ def _water_polygon_domain(cl: np.ndarray, cfg: ReachConfig, ms: float):
     if offsets is None:
         return None
     half_max = float(np.max((np.asarray(offsets[0]) + np.asarray(offsets[1])) / 2.0))
-    W = 2.0 * (half_max * 1.3 + 2.0 * ms)  # generous corridor width
+    # The corridor exists ONLY to cut the reach at its two ends - laterally it
+    # must never cut water (NATE 2026-07-18: the back-channels behind Fisher
+    # and Cottonwood islands were clipped off at ~1.3x the sampled half-width).
+    W = 2.0 * max(4.0 * half_max, 2500.0)
     left, right = _offset_banks(cl, W, None)
     corridor = sg.Polygon(np.vstack([left, right[::-1]]))
     if not corridor.is_valid:
