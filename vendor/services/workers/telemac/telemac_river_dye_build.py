@@ -587,9 +587,37 @@ def _water_polygon_domain(cl: np.ndarray, cfg: ReachConfig, ms: float):
     # end-cap lines = the corridor's end edges (transects at cl[0] / cl[-1])
     cap_in = (tuple(left[0]), tuple(right[0]))
     cap_out = (tuple(left[-1]), tuple(right[-1]))
+    # COVERAGE GUARD (NATE 2026-07-18, after the amputated back-channels): the
+    # meshed domain must account for ~all of the RIVER'S OWN water between the
+    # end transects. Reference = the connected water component under the
+    # centerline, clipped by a laterally-UNBOUNDED slab (20 km half-width) so
+    # a too-narrow corridor cannot hide what it cut off; disconnected ponds
+    # and sloughs never depress the number. Rides metrics + the gate card.
+    try:
+        slab_l, slab_r = _offset_banks(cl, 40000.0, None)
+        slab = sg.Polygon(np.vstack([slab_l, slab_r[::-1]]))
+        if not slab.is_valid:
+            slab = slab.buffer(0)
+        river_comp = None
+        for c in getattr(water, "geoms", [water]):
+            if c.contains(mid) or c.distance(mid) < 50.0:
+                river_comp = c
+                break
+        ref_area = float(river_comp.intersection(slab).area) if river_comp is not None else 0.0
+        coverage = float(main.area / ref_area) if ref_area > 0 else 1.0
+        coverage = min(coverage, 1.0)
+    except Exception as exc:  # noqa: BLE001 -- guard must never block meshing
+        LOG.warning("water-coverage computation failed (%s)", exc)
+        coverage = 1.0
+    if coverage < 0.90:
+        LOG.warning(
+            "water-coverage LOW: mesh domain covers %.0f%% of the river's "
+            "water in the reach (%.1fM of %.1fM m2) - water may be unmeshed",
+            coverage * 100, main.area / 1e6, ref_area / 1e6)
     LOG.info("water-polygon domain: %d exterior pts, %d island holes, "
-             "area %.0f m2", len(ext), len(holes), main.area)
-    return ext, holes, cap_in, cap_out
+             "area %.0f m2, water coverage %.1f%%",
+             len(ext), len(holes), main.area, coverage * 100)
+    return ext, holes, cap_in, cap_out, coverage
 
 
 def _dist_to_segment(pts: np.ndarray, a, b) -> np.ndarray:
@@ -660,7 +688,7 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     ext_pts = on_in = on_out = None
     island_rings: list[np.ndarray] = []
     if domain is not None:
-        ext_pts, island_rings, cap_in, cap_out = domain
+        ext_pts, island_rings, cap_in, cap_out, water_coverage = domain
         d_in = _dist_to_segment(ext_pts, *cap_in)
         d_out = _dist_to_segment(ext_pts, *cap_out)
         on_in = d_in < ms
@@ -868,6 +896,8 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
                 n_out=int((cls == "outflow").sum()),
                 n_islands=n_islands, boundary_rings=boundary_rings,
                 domain_mode="water-polygon" if domain is not None else "ribbon",
+                water_coverage_frac=(round(float(water_coverage), 4)
+                                     if domain is not None else None),
                 banks_ok=banks_ok, smooth_tries=tries, centerline=cl)
 
 
