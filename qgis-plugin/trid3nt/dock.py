@@ -1905,12 +1905,21 @@ class Trid3ntDock(QDockWidget):
             self.connect_agent()
 
     def _open_settings(self) -> None:
+        prev_basemap = self.settings.basemap_preset
         dlg = SettingsDialog(self.settings, self)
         dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
         # Item 4: the AOI toggles now live only in Settings -- refresh the
         # dock's read-only status line from whatever landed (Save or
         # Cancel; re-reading unchanged settings on Cancel is harmless).
         self._refresh_aoi_status()
+        # BK-1b: Save persisted the preset but ensure_basemap only ran on
+        # case-open/export, so the combo looked dead until the next case
+        # switch. An explicit preset change in Settings applies here, not
+        # gated on auto_basemap (that checkbox governs automatic adds).
+        if self.settings.basemap_preset != prev_basemap:
+            note = ensure_basemap(self.settings.basemap_preset)
+            if note:
+                self._note(note)
 
     def _open_cases(self) -> None:
         dlg = CasesDialog(self, self._cases)
