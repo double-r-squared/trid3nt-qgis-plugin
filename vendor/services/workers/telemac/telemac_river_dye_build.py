@@ -530,6 +530,75 @@ def _banks_valid(left: np.ndarray, right: np.ndarray) -> bool:
     return sg.LineString(left).is_simple and sg.LineString(right).is_simple
 
 
+def _water_polygon_domain(cl: np.ndarray, cfg: ReachConfig, ms: float):
+    """The TRUE water-polygon mesh domain, or None to fall back to the ribbon.
+
+    NATE 2026-07-18: the ribbon outline (smoothed sampled half-widths +
+    curvature clamps + straight caps) visibly mismatches the river. Instead of
+    approximating, mesh the NHDArea water polygon DIRECTLY: clip the water
+    union to a corridor around the reach, take the component under the
+    centerline, and use its exterior as the outer boundary (holes = islands).
+    The corridor's end cuts leave straight cap segments ON the end transect
+    lines - those become the inflow/outflow boundaries.
+
+    Returns (exterior_ring[N,2], hole_rings, cap_in_line, cap_out_line) where
+    the cap lines are ((x0,y0),(x1,y1)) segments the caps lie on.
+    """
+    import shapely.geometry as sg
+    from shapely.ops import unary_union
+
+    water_polys = getattr(cfg, "water_polys_utm", None)
+    if not water_polys:
+        return None
+    offsets = getattr(cfg, "bank_offsets", None)
+    if offsets is None:
+        return None
+    half_max = float(np.max((np.asarray(offsets[0]) + np.asarray(offsets[1])) / 2.0))
+    W = 2.0 * (half_max * 1.3 + 2.0 * ms)  # generous corridor width
+    left, right = _offset_banks(cl, W, None)
+    corridor = sg.Polygon(np.vstack([left, right[::-1]]))
+    if not corridor.is_valid:
+        corridor = corridor.buffer(0)
+    water = unary_union([
+        sg.Polygon(ext, holes=[h for h in holes if len(h) >= 4])
+        for ext, holes in water_polys if len(ext) >= 4
+    ]).buffer(0)
+    clip = water.intersection(corridor)
+    if clip.is_empty:
+        return None
+    mid = sg.Point(cl[len(cl) // 2])
+    comps = list(getattr(clip, "geoms", [clip]))
+    comps = [c for c in comps if isinstance(c, sg.Polygon) and not c.is_empty]
+    if not comps:
+        return None
+    main = min(comps, key=lambda c: c.distance(mid))
+    main = main.simplify(ms / 2.0)
+    if main.is_empty or not main.is_valid or main.area < (10 * ms) ** 2:
+        return None
+    ext = np.asarray(main.exterior.coords)[:-1]
+    holes = []
+    for hole in main.interiors:
+        hp = sg.Polygon(hole)
+        if hp.area >= (2.5 * ms) ** 2 and len(hole.coords) >= 5:
+            holes.append(np.asarray(hole.coords)[:-1])
+    # end-cap lines = the corridor's end edges (transects at cl[0] / cl[-1])
+    cap_in = (tuple(left[0]), tuple(right[0]))
+    cap_out = (tuple(left[-1]), tuple(right[-1]))
+    LOG.info("water-polygon domain: %d exterior pts, %d island holes, "
+             "area %.0f m2", len(ext), len(holes), main.area)
+    return ext, holes, cap_in, cap_out
+
+
+def _dist_to_segment(pts: np.ndarray, a, b) -> np.ndarray:
+    """Distances from pts[N,2] to segment a-b (vectorized)."""
+    a = np.asarray(a, dtype=float); b = np.asarray(b, dtype=float)
+    ab = b - a
+    denom = float(ab @ ab) or 1e-12
+    t = np.clip(((pts - a) @ ab) / denom, 0.0, 1.0)
+    proj = a + t[:, None] * ab
+    return np.hypot(*(pts - proj).T)
+
+
 def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     """Gmsh mesh of the real channel-following polygon; tagged boundary groups.
 
@@ -577,15 +646,37 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     banks_ok = _banks_valid(left, right)
     ms = cfg.mesh_size_m
 
-    # M3 island holes: any part of the ribbon NOT covered by the water polygons
-    # (interior holes AND islands that split the waterbody into separate polys,
-    # e.g. Cottonwood Island at Longview - M2 particles crossed it) becomes a
-    # gmsh hole with a closed wall boundary. Kept clear of the outer boundary
-    # (buffer -1.5*h) so the outer ring stays a single clean cycle; tiny
-    # slivers below (2.5*h)^2 are dropped (unmeshable at edge length h).
+    # TRUE water-polygon domain (NATE 2026-07-18: the ribbon outline mismatches
+    # the river). When it resolves, the mesh boundary IS the NHDArea bank line
+    # and holes are the real islands; the ribbon below stays as the fallback.
+    domain = None
+    try:
+        domain = _water_polygon_domain(cl, cfg, ms)
+    except Exception as exc:  # noqa: BLE001 -- polygon domain is best-effort
+        LOG.warning("water-polygon domain failed (%s) - ribbon fallback", exc)
+    ext_pts = on_in = on_out = None
     island_rings: list[np.ndarray] = []
+    if domain is not None:
+        ext_pts, island_rings, cap_in, cap_out = domain
+        d_in = _dist_to_segment(ext_pts, *cap_in)
+        d_out = _dist_to_segment(ext_pts, *cap_out)
+        on_in = d_in < ms
+        on_out = d_out < ms
+        n_in_edges = int(np.sum(on_in & np.roll(on_in, -1)))
+        n_out_edges = int(np.sum(on_out & np.roll(on_out, -1)))
+        if n_in_edges == 0 or n_out_edges == 0:
+            LOG.warning(
+                "water-polygon domain has no cap edges (in=%d out=%d) - "
+                "ribbon fallback", n_in_edges, n_out_edges)
+            domain = None
+            island_rings = []
+
+    # Ribbon fallback island holes: any ribbon area NOT covered by water
+    # (interior holes AND channel-splitting islands like Cottonwood) becomes a
+    # walled hole. Kept clear of the outer boundary; slivers below (2.5*h)^2
+    # dropped (unmeshable at edge length h).
     water_polys = getattr(cfg, "water_polys_utm", None)
-    if water_polys:
+    if domain is None and water_polys:
         try:
             import shapely.geometry as sg
             from shapely.ops import unary_union
@@ -624,13 +715,37 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
         return [gmsh.model.geo.addPoint(float(px), float(py), 0.0, ms)
                 for px, py in pts]
 
-    lpts = add_pts(left)     # left bank upstream->downstream
-    rpts = add_pts(right)
-    left_wall = gmsh.model.geo.addSpline(lpts)
-    right_wall = gmsh.model.geo.addSpline(rpts)
-    inflow = gmsh.model.geo.addLine(rpts[0], lpts[0])     # upstream cap
-    outflow = gmsh.model.geo.addLine(lpts[-1], rpts[-1])  # downstream cap
-    loop = gmsh.model.geo.addCurveLoop([left_wall, outflow, -right_wall, inflow])
+    if domain is not None:
+        # exterior = the REAL bank line as a closed chain of straight edges;
+        # edges whose BOTH endpoints lie on an end-transect line become the
+        # inflow/outflow caps, the rest are walls
+        ptags = add_pts(ext_pts)
+        n_ext = len(ptags)
+        in_lines, out_lines, wall_lines, ordered = [], [], [], []
+        for i in range(n_ext):
+            j = (i + 1) % n_ext
+            ln = gmsh.model.geo.addLine(ptags[i], ptags[j])
+            ordered.append(ln)
+            if on_in[i] and on_in[j]:
+                in_lines.append(ln)
+            elif on_out[i] and on_out[j]:
+                out_lines.append(ln)
+            else:
+                wall_lines.append(ln)
+        loop = gmsh.model.geo.addCurveLoop(ordered)
+        wall_group_curves = wall_lines
+        inflow_curves, outflow_curves = in_lines, out_lines
+    else:
+        lpts = add_pts(left)     # left bank upstream->downstream
+        rpts = add_pts(right)
+        left_wall = gmsh.model.geo.addSpline(lpts)
+        right_wall = gmsh.model.geo.addSpline(rpts)
+        inflow = gmsh.model.geo.addLine(rpts[0], lpts[0])     # upstream cap
+        outflow = gmsh.model.geo.addLine(lpts[-1], rpts[-1])  # downstream cap
+        loop = gmsh.model.geo.addCurveLoop(
+            [left_wall, outflow, -right_wall, inflow])
+        wall_group_curves = [left_wall, right_wall]
+        inflow_curves, outflow_curves = [inflow], [outflow]
     hole_loops = []
     for hr in island_rings:
         # straight LINE chain, not a spline: splines overshoot at polygon
@@ -643,9 +758,9 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     surf = gmsh.model.geo.addPlaneSurface([loop, *hole_loops])
     gmsh.model.geo.synchronize()
 
-    g_in = gmsh.model.addPhysicalGroup(1, [inflow])
-    g_out = gmsh.model.addPhysicalGroup(1, [outflow])
-    gmsh.model.addPhysicalGroup(1, [left_wall, right_wall])
+    g_in = gmsh.model.addPhysicalGroup(1, inflow_curves)
+    g_out = gmsh.model.addPhysicalGroup(1, outflow_curves)
+    gmsh.model.addPhysicalGroup(1, wall_group_curves)
     gmsh.model.addPhysicalGroup(2, [surf])
 
     gmsh.model.mesh.generate(2)
@@ -749,6 +864,7 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
                 n_in=int((cls == "inflow").sum()),
                 n_out=int((cls == "outflow").sum()),
                 n_islands=n_islands, boundary_rings=boundary_rings,
+                domain_mode="water-polygon" if domain is not None else "ribbon",
                 banks_ok=banks_ok, smooth_tries=tries, centerline=cl)
 
 
