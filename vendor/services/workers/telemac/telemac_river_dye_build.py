@@ -83,6 +83,19 @@ class ReachConfig:
     # routinely lands on the tributary or a slough; the named-flowline query
     # (proven manually on the Columbia, comid 24520442) disambiguates.
     river_name: str = ""
+    # M3 substance classes: "tracer" = the existing dissolved-tracer path;
+    # "oil" ALSO activates the TELEMAC oil-spill module (steering file presence
+    # auto-activates in v9) - a floating particle slick rides on TOP of the
+    # tracer solve (the module's soluble fraction feeds T1). oil_preset picks
+    # the steering parameters from OIL_PRESETS.
+    substance_class: str = "tracer"
+    oil_preset: str = "light_crude"
+    n_drogues: int = 100                # slick particle count (oil class)
+    drogues_period_s: int = 60          # particle snapshot cadence, seconds
+    # release AFTER the startup transient: constant-depth init drains shallow
+    # margins for the first minutes and strands early-released floats (live:
+    # 100 -> 8 particles by t=180s at LT=60; deep-water spike was unaffected)
+    oil_release_step: int = 600
     pulse_window_s: float = 300.0       # dye-on window; source turns OFF after
     source_q_m3s: float = 8.0           # carrier discharge of the point source (small vs inflow)
     duration_s: float = 3600.0
@@ -1115,6 +1128,84 @@ def write_sources_pulse(path, cfg):
         f.write("\n".join(lines) + "\n")
 
 
+# M2-spike-proven oil steering parameters (oilspill.f reader format). Fractions
+# sum to 1.0 per preset; HAP rows = FM TB SOLU KDISS KVOL.
+OIL_PRESETS: dict[str, dict] = {
+    "light_crude": dict(
+        compo=[(0.5, 645.0), (0.3, 830.0)],
+        hap=[(0.2, 673.0, 0.018, 1.0e-5, 5.0e-5)],
+        rho=850.0, eta=1.0e-5, voldev=20.0, tamb=288.0, etal=1),
+    "diesel": dict(
+        compo=[(0.6, 560.0), (0.25, 700.0)],
+        hap=[(0.15, 610.0, 0.005, 1.0e-5, 8.0e-5)],
+        rho=840.0, eta=4.0e-6, voldev=10.0, tamb=288.0, etal=1),
+    "heavy_fuel": dict(
+        compo=[(0.75, 900.0), (0.2, 1050.0)],
+        hap=[(0.05, 800.0, 0.001, 5.0e-6, 1.0e-5)],
+        rho=960.0, eta=5.0e-4, voldev=30.0, tamb=288.0, etal=1),
+}
+
+_OIL_TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "oil_templates")
+
+
+def write_oil_inputs(cfg, sx: float, sy: float, workdir: str) -> None:
+    """Author the oil-module inputs next to the cas (M2-spike-proven layout).
+
+    Writes ``oil_spill.txt`` from the preset and ``user_fortran/oil_flot.f``
+    from the template with the release moved to the SPILL POINT (the default
+    OIL_FLOT is a hardcoded Loire demo at LT=10000).
+    """
+    p = OIL_PRESETS.get(str(cfg.oil_preset), OIL_PRESETS["light_crude"])
+    lines = [f"{cfg.oil_preset.upper()} - trid3nt oil preset", str(len(p["compo"])),
+             "FM_COMPO TB_COMPO"]
+    lines += [f"{fm} {tb}" for fm, tb in p["compo"]]
+    lines += ["NB_HAP", str(len(p["hap"])), "FM_HAP TB_HAP SOLU KDISS KVOL"]
+    lines += [" ".join(str(v) for v in row) for row in p["hap"]]
+    lines += ["RHO_OIL", str(p["rho"]), "ETA_OIL", str(p["eta"]),
+              "VOLDEV", str(p["voldev"]), "TAMB", str(p["tamb"]),
+              "ETAL", str(p["etal"])]
+    with open(os.path.join(workdir, "oil_spill.txt"), "w") as f:
+        f.write("\n".join(lines) + "\n")
+    tpl = open(os.path.join(_OIL_TEMPLATE_DIR, "oil_flot_template.f")).read()
+    tpl = tpl.replace("IF(LT.EQ.60)", f"IF(LT.EQ.{int(cfg.oil_release_step)})")
+    # the template release coords (whatever the spike pinned) -> this reach's
+    # spill point; the template stores them as <num>.D0 literals
+    import re as _re
+    tpl = _re.sub(r"COORD_X=\d+\.D0", f"COORD_X={sx:.0f}.D0", tpl)
+    tpl = _re.sub(r"COORD_Y=\d+\.D0", f"COORD_Y={sy:.0f}.D0", tpl)
+    uf = os.path.join(workdir, "user_fortran")
+    os.makedirs(uf, exist_ok=True)
+    with open(os.path.join(uf, "oil_flot.f"), "w") as f:
+        f.write(tpl)
+    LOG.info("oil inputs authored: preset=%s release=(%.0f,%.0f) step=%d",
+             cfg.oil_preset, sx, sy, cfg.oil_release_step)
+
+
+def parse_drogues(path: str) -> list[tuple[float, list[tuple[float, float]]]]:
+    """TecPlot ASCII drogues file -> [(t_seconds, [(x, y), ...]), ...]."""
+    import re as _re
+
+    zones: list[tuple[float, list[tuple[float, float]]]] = []
+    cur_t, cur = None, []
+    for line in open(path):
+        if line.startswith("ZONE"):
+            if cur_t is not None:
+                zones.append((cur_t, cur))
+            m = _re.search(r"SOLUTIONTIME=\s*([\d.]+)", line)
+            cur_t, cur = (float(m.group(1)) if m else 0.0), []
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 3:
+            try:
+                cur.append((float(parts[1]), float(parts[2])))
+            except ValueError:
+                pass
+    if cur_t is not None:
+        zones.append((cur_t, cur))
+    return zones
+
+
 def author_deck(cfg, mesh, slf, cli, res, cas_path, lb_order, bed):
     """Write the .cas (+ the SOURCES FILE for the finite spill pulse).
 
@@ -1206,6 +1297,49 @@ PRESCRIBED TRACERS VALUES       = {';'.join(tracer)}
 SCHEME FOR ADVECTION OF TRACERS          = 1
 COEFFICIENT FOR DIFFUSION OF TRACERS     = 1.E-1
 """
+    if str(getattr(cfg, "substance_class", "tracer")).lower() == "oil":
+        # M3 oil class: the module rides ON TOP of the tracer solve (its
+        # soluble fraction feeds T1); presence of the steering file activates
+        # it (v9). The slick releases at the THALWEG near the spill point -
+        # the deepest interior node within 300 m - because OIL_BEACHING kills
+        # floats in shallow margins (live: 100 particles dead in ~80 steps at
+        # a shallow release node while the same preset thrived 250 m away).
+        # CLEARANCE-snap (live-bisected 2026-07-18): floats released near a
+        # wall/island boundary are silently dropped from the drogues tracker
+        # within ~minutes (oil balance still counts their mass as surface),
+        # while a release 437m clear survived 100/100 for the full run. Pick
+        # the interior node with MAX distance-from-any-boundary within 400m
+        # of the spill point, tie-broken by deeper bed.
+        ox, oy = sx, sy
+        X_, Y_ = mesh["X"], mesh["Y"]
+        interior = mesh["ipob"] == 0
+        near = (np.hypot(X_ - sx, Y_ - sy) < 400.0) & interior
+        if np.any(near):
+            from scipy.spatial import cKDTree
+            bx = np.column_stack([X_[~interior], Y_[~interior]])
+            clr, _ = cKDTree(bx).query(
+                np.column_stack([X_[near], Y_[near]]))
+            score = clr.copy()
+            bed_z = mesh.get("bed_z")
+            if bed_z is not None:
+                bz = np.asarray(bed_z)[near]
+                score = clr - 0.01 * (bz - bz.min())  # clearance first, depth tie-break
+            idx = np.where(near)[0][np.argmax(score)]
+            ox, oy = float(X_[idx]), float(Y_[idx])
+            LOG.info("oil release clearance-snapped: (%.0f,%.0f) -> (%.0f,%.0f) "
+                     "(wall clearance %.0f m)", sx, sy, ox, oy,
+                     float(clr[np.argmax(score)]))
+        write_oil_inputs(cfg, ox, oy, os.path.dirname(os.path.abspath(cas_path)))
+        cas += (
+            "/\n"
+            "FORTRAN FILE                    = user_fortran\n"
+            "OIL SPILL STEERING FILE         = oil_spill.txt\n"
+            f"MAXIMUM NUMBER OF DROGUES       = {int(cfg.n_drogues)}\n"
+            f"PRINTOUT PERIOD FOR DROGUES     = "
+            f"{max(int(cfg.drogues_period_s / max(cfg.time_step_s, 1e-6)), 1)}\n"
+            "ASCII DROGUES FILE              = drogues.txt\n"
+        )
+
     # DAMOCLES hard 72-char line limit: one over-long line (e.g. a long
     # geocoded reach name in a comment or the TITLE) derails the parser into
     # "KEY-WORD ... IS UNKNOWN" on a LATER, valid line. Live-hit 2026-07-18:

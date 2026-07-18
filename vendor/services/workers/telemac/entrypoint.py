@@ -77,6 +77,9 @@ DEFAULT_OUTPUTS = [
     "t2d_river.cas",       # the authored steering deck
     "full_listing.log",    # the solver listing (evidence)
     "telemac_metrics.json",  # the run summary (classify_exit reads this)
+    "drogues.txt",         # oil class: raw particle track (TecPlot ASCII)
+    "particles.json",      # oil class: parsed slick snapshots (EPSG:4326)
+    "oil_spill.txt",       # oil class: the steering file used (evidence)
 ]
 
 #: Metrics filename the ``LocalSolverSpec.classify_exit`` reads from the rundir.
@@ -342,6 +345,7 @@ def run_pipeline(
 
     # 4. Copernicus DEM bed + gentle downstream slope
     Z, bed = B.fetch_dem_bed(mesh, cfg, tr)
+    mesh["bed_z"] = Z  # oil release snaps to the local thalweg (deepest node)
     LOG.info("dem bed: %s", bed)
 
     # BK-6: project the user-picked release point (lonlat) into the mesh UTM
@@ -380,6 +384,44 @@ def run_pipeline(
     # persist the full solver listing as evidence
     (data_dir / "full_listing.log").write_text(out, encoding="utf-8")
 
+    # M3 oil class: parse the drogues particle track into particles.json
+    # (EPSG:4326 snapshots) + summary metrics. Fail-open - a parse problem
+    # never voids a CORRECT END solve.
+    oil_stats: dict[str, Any] = {}
+    drogues_path = data_dir / "drogues.txt"
+    if str(getattr(cfg, "substance_class", "tracer")).lower() == "oil" \
+            and drogues_path.exists():
+        try:
+            from pyproj import Transformer as _T  # noqa: WPS433
+
+            zones = B.parse_drogues(str(drogues_path))
+            tr_back = _T.from_crs(pmeta.get("utm_epsg") or 32610, 4326,
+                                  always_xy=True)
+            snaps = []
+            for t_s, pts in zones:
+                if not pts:
+                    snaps.append({"t_s": t_s, "lonlat": []})
+                    continue
+                xs, ys = zip(*pts)
+                lo, la = tr_back.transform(xs, ys)
+                snaps.append({"t_s": t_s,
+                              "lonlat": [[round(a, 6), round(b, 6)]
+                                         for a, b in zip(lo, la)]})
+            (data_dir / "particles.json").write_text(
+                json.dumps({"snapshots": snaps}), encoding="utf-8")
+            if zones and zones[0][1] and zones[-1][1]:
+                import numpy as _np2  # noqa: WPS433
+                c0 = _np2.mean(zones[0][1], axis=0)
+                c1 = _np2.mean(zones[-1][1], axis=0)
+                oil_stats = {
+                    "oil_particles": len(zones[-1][1]),
+                    "oil_snapshots": len(zones),
+                    "oil_drift_m": round(float(_np2.hypot(*(c1 - c0))), 1),
+                }
+            LOG.info("oil particles parsed: %s", oil_stats)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("drogues parse failed (%s) - slick layer skipped", exc)
+
     wall_s = round(time.time() - t0, 1)
 
     metrics: dict[str, Any] = {
@@ -402,6 +444,8 @@ def run_pipeline(
         "n_outflow_nodes": int(mesh["n_out"]),
         "lb_order": lb or guess,
         "bank_source": bank_source,
+        **oil_stats,
+        "substance_class": str(getattr(cfg, "substance_class", "tracer")),
         "domain_mode": mesh.get("domain_mode"),
         "n_islands": mesh.get("n_islands"),
         "water_coverage_frac": mesh.get("water_coverage_frac"),

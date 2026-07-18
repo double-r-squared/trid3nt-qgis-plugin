@@ -1,0 +1,10 @@
+/ TELEMAC-2D v9 oil-spill module cas keywords (M2-spike-proven 2026-07-18).
+/ The steering file's PRESENCE auto-activates the module (lecdon_telemac2d.f);
+/ release location/time live in the user_fortran OIL_FLOT override.
+/ M2 OIL-SPILL SPIKE: steering file presence AUTO-ACTIVATES the module (v9);
+/ release via user_fortran OIL_FLOT at LT=60 around the dye source point.
+FORTRAN FILE                    = user_fortran
+OIL SPILL STEERING FILE         = oil_spill.txt
+MAXIMUM NUMBER OF DROGUES       = 100
+PRINTOUT PERIOD FOR DROGUES     = 60
+ASCII DROGUES FILE              = drogues.txt
