@@ -1215,19 +1215,32 @@ class AgentClient:
             queue_if_closed=True,
         )
 
-    def case_command(self, command: str, case_id: Optional[str] = None) -> None:
-        """Send a generic ``case-command`` (``create`` / ``delete`` / ...)
-        WITHOUT blocking on the reply -- unlike ``create_case`` (used only
-        during the initial connect handshake), the reply here flows through
-        the normal ``next_event`` pump like ``select_case``'s does (a
-        ``create`` reply arrives as a ``case-open`` the dock rebinds on; a
-        ``delete`` reply arrives as a fresh ``case-list``).
+    def case_command(
+        self,
+        command: str,
+        case_id: Optional[str] = None,
+        args: Optional[dict] = None,
+    ) -> None:
+        """Send a generic ``case-command`` (``create`` / ``delete`` /
+        ``set-bbox`` / ...) WITHOUT blocking on the reply -- unlike
+        ``create_case`` (used only during the initial connect handshake), the
+        reply here flows through the normal ``next_event`` pump like
+        ``select_case``'s does (a ``create`` reply arrives as a ``case-open``
+        the dock rebinds on; a ``delete`` reply arrives as a fresh
+        ``case-list``).
+
+        ``args`` (per-case-bbox 2026-07-19): the free-form
+        ``CaseCommandEnvelopePayload.args`` slot -- ``set-bbox`` rides its
+        edited AOI here as ``{"bbox": [w, s, e, n]}`` (EPSG:4326), the same
+        carrier ``create`` already uses for ``title`` / ``bbox``. Defaults to
+        an empty dict so every existing caller (create with no args, delete)
+        is byte-identical to before.
 
         Mirrors ``select_case``'s envelope shape and queue-if-closed
-        behaviour: a New/Delete tapped mid-reconnect must not be silently
-        dropped.
+        behaviour: a New/Delete/set-bbox tapped mid-reconnect must not be
+        silently dropped.
         """
-        payload: dict = {"command": command, "args": {}}
+        payload: dict = {"command": command, "args": dict(args) if args else {}}
         if case_id is not None:
             payload["case_id"] = case_id
         self._send(

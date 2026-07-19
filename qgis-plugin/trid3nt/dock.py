@@ -1634,6 +1634,20 @@ class Trid3ntDock(QDockWidget):
         # toggling off restores it (never steals the tool permanently).
         self._probe_map_tool = None
         self._prev_map_tool = None
+        # Persistent per-case bbox (per-case-bbox 2026-07-19, cloud parity):
+        # the case AOI the agent references every turn + the user can re-draw.
+        # ``_case_bbox`` is the current EPSG:4326 ``(w, s, e, n)`` (None until a
+        # case-open carries one / the user draws one); ``_aoi_rubber`` is the
+        # dashed outline-only overlay that shows it on the canvas. Both are
+        # CLEARED on every case switch (``_clear_messages``) + disconnect
+        # (``disconnect_agent``) so a stale box never lingers across a switch.
+        # The "Set AOI" tool reuses the release-point pick discipline: ON saves
+        # the canvas' current tool + installs ``QgsMapToolExtent``, OFF restores
+        # it (``_aoi_map_tool`` / ``_prev_aoi_tool``, mirroring the probe pair).
+        self._case_bbox: Optional[Tuple[float, float, float, float]] = None
+        self._aoi_rubber = None
+        self._aoi_map_tool = None
+        self._prev_aoi_tool = None
         self._refresh_debounce = Debouncer()
         # Item d (live-feedback 2026-07-09): a case picked from the Cases
         # dialog before/while connecting -- opened via ``_on_case_ready``
@@ -1742,6 +1756,22 @@ class Trid3ntDock(QDockWidget):
         )
         self.probe_btn.toggled.connect(self._toggle_probe_tool)
         header.addWidget(self.probe_btn)
+
+        # Persistent per-case bbox (per-case-bbox 2026-07-19): drag a rectangle
+        # on the map to set THIS case's area of interest -- the extent the
+        # agent references every turn (state.case_bbox). Checkable, same
+        # discipline as Probe: ON saves whatever tool is active + installs a
+        # QgsMapToolExtent; the chosen extent persists via case-command
+        # set-bbox and restores the prior tool. Only usable with a live case +
+        # connection (guarded in _toggle_aoi_draw).
+        self.aoi_btn = QToolButton()
+        self.aoi_btn.setText("Set AOI")
+        self.aoi_btn.setCheckable(True)
+        self.aoi_btn.setToolTip(
+            "Drag a rectangle on the map to set this case's area of interest"
+        )
+        self.aoi_btn.toggled.connect(self._toggle_aoi_draw)
+        header.addWidget(self.aoi_btn)
 
         self.settings_btn = QToolButton()
         self.settings_btn.setText("Settings")
@@ -1897,6 +1927,10 @@ class Trid3ntDock(QDockWidget):
         self._sim_cards.clear()
         self._tool_args_by_step.clear()
         self._last_aoi_note = None
+        # Per-case-bbox 2026-07-19: the previous case's AOI overlay must not
+        # linger across a switch -- _on_case_open_event repaints it below from
+        # the newly-opened case's own bbox (or leaves it cleared when absent).
+        self._clear_aoi_overlay()
         # BUG 3b (live-feedback 2026-07-12): the probe panel shows CASE
         # data -- a table from the previous case must not linger across a
         # switch. Hide it (its next click repopulates it).
@@ -2165,6 +2199,166 @@ class Trid3ntDock(QDockWidget):
         label = probe.probe_location_label(lon, lat)
         self._set_probe_output(f"Probe {label} failed: {message}", error=True)
 
+    # -- case AOI (persistent per-case bbox, per-case-bbox 2026-07-19) --------- #
+
+    def _render_aoi_overlay(
+        self, bbox4326: Tuple[float, float, float, float]
+    ) -> None:
+        """Paint (or repaint) the case AOI as a DASHED, outline-only rectangle
+        on the canvas -- the QGIS twin of the web's analysis-extent overlay.
+
+        The bbox is EPSG:4326 ``(w, s, e, n)``; the canvas may be 3857/other,
+        so the ring is transformed 4326 -> canvas CRS via QgsCoordinateTransform
+        exactly like ``layers.zoom_to_bbox4326`` (never hand-rolled). A single
+        reused ``QgsRubberBand`` (built lazily -- it needs a live canvas) holds
+        the geometry; a subtle blue accent, Qt.DotLine pen, transparent fill so
+        it reads as an EXTENT, not a filled feature. Headless-safe: no canvas
+        (or any construction failure) is a silent no-op, never a crash -- the
+        state (``_case_bbox``) is still authoritative for the agent.
+        """
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- headless / no iface -- no overlay
+            return
+        try:
+            from qgis.core import (
+                QgsCoordinateReferenceSystem,
+                QgsCoordinateTransform,
+                QgsGeometry,
+                QgsProject,
+                QgsRectangle,
+                QgsWkbTypes,
+            )
+            from qgis.gui import QgsRubberBand
+            from qgis.PyQt.QtGui import QColor
+
+            lon_min, lat_min, lon_max, lat_max = bbox4326
+            rect = QgsRectangle(lon_min, lat_min, lon_max, lat_max)
+            dst_crs = canvas.mapSettings().destinationCrs()
+            src_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+            if src_crs != dst_crs:
+                transform = QgsCoordinateTransform(
+                    src_crs, dst_crs, QgsProject.instance().transformContext()
+                )
+                rect = transform.transformBoundingBox(rect)
+            if self._aoi_rubber is None:
+                self._aoi_rubber = QgsRubberBand(
+                    canvas, QgsWkbTypes.PolygonGeometry
+                )
+                accent = QColor("#58a6ff")
+                self._aoi_rubber.setColor(accent)
+                self._aoi_rubber.setWidth(2)
+                # Outline-only: a fully transparent fill leaves just the ring.
+                self._aoi_rubber.setFillColor(QColor(0, 0, 0, 0))
+                try:
+                    self._aoi_rubber.setLineStyle(Qt.DotLine)
+                except Exception:  # noqa: BLE001 -- older builds lack it
+                    pass
+            self._aoi_rubber.setToGeometry(QgsGeometry.fromRect(rect), None)
+            self._aoi_rubber.show()
+        except Exception:  # noqa: BLE001 -- overlay is cosmetic; never crash
+            return
+
+    def _clear_aoi_overlay(self) -> None:
+        """Drop the case AOI state + hide the overlay -- called on every case
+        switch (``_clear_messages``) and disconnect (``disconnect_agent``) so a
+        stale box from the previous case never lingers on the canvas."""
+        self._case_bbox = None
+        if self._aoi_rubber is None:
+            return
+        try:
+            from qgis.core import QgsWkbTypes
+
+            self._aoi_rubber.reset(QgsWkbTypes.PolygonGeometry)
+            self._aoi_rubber.hide()
+        except Exception:  # noqa: BLE001 -- best-effort teardown
+            pass
+
+    def _toggle_aoi_draw(self, checked: bool) -> None:
+        """Install/restore the canvas map tool for the "Set AOI" button --
+        the exact release-point / probe discipline: ON saves whatever tool is
+        active then installs a ``QgsMapToolExtent`` (its ``extentChanged``
+        signal is the box analog of the point tool's ``canvasClicked``); OFF
+        restores the saved tool so the canvas is never left on a tool the user
+        did not ask for. Guarded: only usable with a live case + connection
+        (mirrors the probe-click guard) -- without one the button snaps back
+        off with an honest status line."""
+        try:
+            canvas = self.iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- headless / no canvas -- no-op
+            return
+        if checked:
+            if not (self._case_id and self.bridge.running):
+                self.status_label.setText(
+                    "Not connected -- open a case first to set its AOI"
+                )
+                # Snap back off WITHOUT re-entering this slot (blockSignals),
+                # so the guard cannot recurse through the toggled signal.
+                self.aoi_btn.blockSignals(True)
+                self.aoi_btn.setChecked(False)
+                self.aoi_btn.blockSignals(False)
+                return
+            if self._aoi_map_tool is None:
+                try:
+                    from qgis.gui import QgsMapToolExtent
+
+                    self._aoi_map_tool = QgsMapToolExtent(canvas)
+                    self._aoi_map_tool.extentChanged.connect(
+                        self._on_aoi_extent_chosen
+                    )
+                except Exception:  # noqa: BLE001 -- older build lacks the tool
+                    # Honest degradation (a press/drag/release rubber-band
+                    # fallback is deferred): snap off + say so, never a crash.
+                    self._note(
+                        "Set AOI is unavailable in this QGIS build "
+                        "(QgsMapToolExtent missing).",
+                        error=True,
+                    )
+                    self.aoi_btn.blockSignals(True)
+                    self.aoi_btn.setChecked(False)
+                    self.aoi_btn.blockSignals(False)
+                    return
+            self._prev_aoi_tool = canvas.mapTool()
+            canvas.setMapTool(self._aoi_map_tool)
+        else:
+            if canvas.mapTool() is self._aoi_map_tool:
+                canvas.setMapTool(self._prev_aoi_tool)
+            self._prev_aoi_tool = None
+
+    def _on_aoi_extent_chosen(self, rect) -> None:
+        """A rectangle was dragged with the "Set AOI" tool: convert the
+        canvas-CRS ``QgsRectangle`` -> EPSG:4326 (via ``_rect_to_bbox4326``,
+        the same CRS path the canvas/selection AOI uses), update the state,
+        repaint the overlay, persist it (case-command ``set-bbox`` -> the
+        server sets ``state.case_bbox`` so the pin/snap paths fire every
+        turn), then restore the prior map tool + uncheck the button."""
+        try:
+            canvas = self.iface.mapCanvas()
+            authid = canvas.mapSettings().destinationCrs().authid()
+        except Exception:  # noqa: BLE001 -- headless / no canvas
+            return
+        if rect is None or rect.isEmpty():
+            return
+        bbox = self._rect_to_bbox4326(rect, authid)
+        if bbox is None:
+            self._note(
+                "Could not set AOI: the drawn extent did not resolve to "
+                "EPSG:4326.",
+                error=True,
+            )
+            self.aoi_btn.setChecked(False)  # restores the prior tool
+            return
+        self._case_bbox = bbox
+        self._render_aoi_overlay(bbox)
+        if self._case_id and self.bridge.running:
+            self.bridge.case_command(
+                "set-bbox", self._case_id, {"bbox": list(bbox)}
+            )
+            self._note(f"Case AOI set to {aoi.format_bbox(bbox)}")
+        # Restore the prior map tool + pop the button (setChecked(False) runs
+        # _toggle_aoi_draw's OFF branch, which restores canvas.mapTool()).
+        self.aoi_btn.setChecked(False)
+
     # -- connection ----------------------------------------------------------- #
 
     def _wire_bridge(self) -> None:
@@ -2214,6 +2408,9 @@ class Trid3ntDock(QDockWidget):
         self.bridge.stop()
         self._connected = False
         self._case_id = None
+        # Per-case-bbox 2026-07-19: the case AOI is per-case state -- a
+        # disconnect ends the case binding, so the overlay must go too.
+        self._clear_aoi_overlay()
         self._set_case_label("")
         self._set_dot("disconnected")
         self.status_label.setText("Not connected")
@@ -2338,7 +2535,15 @@ class Trid3ntDock(QDockWidget):
             self.status_label.setText("Not connected -- press Connect first")
             return
         self._note("Starting a new case ...")
-        self.bridge.case_command("create")
+        # Per-case-bbox 2026-07-19: every new case gets a DEFAULT AOI = the
+        # current canvas extent, so state.case_bbox is populated from turn one
+        # (no more empty-AOI case where the model guesses which extent to use).
+        # Carried through the same args.bbox slot create_case uses; the user
+        # can re-draw it later with "Set AOI". A canvas with no resolvable CRS
+        # falls back to the legacy bbox-less create (args stays empty).
+        canvas_bbox = self._canvas_bbox4326()
+        args = {"bbox": list(canvas_bbox)} if canvas_bbox else None
+        self.bridge.case_command("create", args=args)
 
     def delete_case(self, case_id: str, title: str) -> None:
         """Delete a case (case-command delete). The server re-emits
@@ -2788,6 +2993,13 @@ class Trid3ntDock(QDockWidget):
             if note:
                 self._note(note)
         self._zoom_after_case_open(info)
+        # Per-case-bbox 2026-07-19: show the just-opened case's persisted AOI
+        # as the dashed overlay (the exact bbox the agent references each turn
+        # via state.case_bbox), so the user sees + can re-draw it. A bbox-less
+        # case leaves the overlay cleared (already reset in _clear_messages).
+        self._case_bbox = info.bbox
+        if info.bbox is not None:
+            self._render_aoi_overlay(info.bbox)
         self._scroll_to_bottom()
 
     def _zoom_after_case_open(self, info) -> None:
