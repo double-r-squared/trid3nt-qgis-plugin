@@ -94,10 +94,14 @@ from .trid3nt_client import (
     CaseInfo,
     CaseListRequestError,
     Debouncer,
+    ModelListRequestError,
     PipelineStep,
+    ProviderConfigRequestError,
     fetch_case_list,
+    fetch_model_list,
     find_fallback_bbox,
     parse_case_open,
+    post_provider_config,
 )
 from .ws_bridge import AgentBridge
 
@@ -264,6 +268,9 @@ class SettingsDialog(QDialog):
     def __init__(self, settings: PluginSettings, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._settings = settings
+        # Keep-alive refs for the OpenRouter free-model fetch tasks (design
+        # 2026-07-19) -- initialised BEFORE _reload_model_choices runs below.
+        self._model_list_tasks: List["_ModelListTask"] = []
         self.setWindowTitle("TRID3NT settings")
         form = QFormLayout(self)
 
@@ -391,13 +398,11 @@ class SettingsDialog(QDialog):
         form.addRow("Model id", self.model_combo)
 
         provider_note = QLabel(
-            "Changing MODEL applies on your NEXT message (the id rides the "
-            "user-message, no restart). Changing PROVIDER or the API key needs "
-            "an AGENT RESTART -- the provider base_url and key are the agent "
-            "process env (GRACE2_OPENAI_BASE_URL / GRACE2_OPENAI_API_KEY / "
-            "GRACE2_OPENAI_NUM_CTX), which the plugin cannot set live. Set them "
-            "in the agent's .env.local and restart the agent to apply. Leave "
-            "the model id blank to use the agent's default model."
+            "On Save, the provider + API key + model are pushed to the running "
+            "agent and apply on your NEXT message -- no restart. (If the agent "
+            "is unreachable, Save still persists them; set them in the agent's "
+            ".env.local and restart to apply instead.) Leave the model id blank "
+            "to use the agent's default model."
         )
         provider_note.setWordWrap(True)
         provider_note.setStyleSheet(_STATUS_LINE_STYLE)
@@ -421,11 +426,40 @@ class SettingsDialog(QDialog):
         self._settings.basemap_preset = self.basemap_combo.currentText()
         self._settings.show_thinking = self.show_thinking_checkbox.isChecked()
         # OpenRouter model-extensibility (design 2026-07-19): persist provider
-        # + key + model. Only model_id rides live; provider/key await restart.
+        # + key + model, then PUSH the live config to the agent so a
+        # provider/key switch applies on the NEXT message with no restart
+        # (Feature 3). model_id also rides the user-message live.
         self._settings.provider = self.provider_combo.currentText()
         self._settings.openrouter_api_key = self.provider_key_edit.text()
         self._settings.model_id = self.model_combo.currentText()
+        self._push_provider_config()
         super().accept()
+
+    def _push_provider_config(self) -> None:
+        """POST the persisted provider config to the agent OFF-THREAD (Feature
+        3, design 2026-07-19) so a dead/asleep agent HTTP listener never freezes
+        this dialog on Save. The base_url + num_ctx come from the provider
+        preset (the plugin's source of truth for what env a provider needs);
+        the api_key is the persisted secret. The honest result lands on the
+        DOCK status (this dialog is closing), routed via the parent dock's
+        handlers. SECURITY: the api_key rides the POST body but is NEVER logged
+        here or in the client helper."""
+        preset = PROVIDER_PRESETS.get(self._settings.provider) or {}
+        payload = {
+            "base_url": preset.get("base_url", ""),
+            "api_key": self._settings.openrouter_api_key,
+            "model": self._settings.model_id,
+            "num_ctx": preset.get("num_ctx", ""),
+        }
+        dock = self.parent()
+        task = _ProviderConfigTask(self._settings.export_api, payload, dock)
+        # Own the task on the DOCK (not this closing dialog) so the daemon
+        # thread + QObject outlive accept() -- mirrors _case_list_tasks.
+        if dock is not None and hasattr(dock, "_provider_config_tasks"):
+            dock._provider_config_tasks.append(task)
+            task.finished.connect(dock._on_provider_config_finished)
+            task.errored.connect(dock._on_provider_config_errored)
+        task.start()
 
     def _reload_model_choices(self, provider: str) -> None:
         """Swap the model combo's dropdown to the curated shortlist for
@@ -441,6 +475,43 @@ class SettingsDialog(QDialog):
             self.model_combo.addItem(model)
         self.model_combo.setCurrentText(current_text)
         self.model_combo.blockSignals(False)
+        # Feature 2 (design 2026-07-19): for an OpenRouter preset, fetch the
+        # LIVE free + tool-capable model list off the UI thread and swap it in
+        # on success; the static shortlist above stays as the honest fallback
+        # on any error/timeout. Combo stays editable, so any id is typeable.
+        base_url = (preset.get("base_url") or "").lower()
+        if "openrouter.ai" in base_url:
+            task = _ModelListTask(self._settings.export_api, provider, self)
+            self._model_list_tasks.append(task)
+            task.finished.connect(self._on_model_list_finished)
+            task.errored.connect(self._on_model_list_errored)
+            task.start()
+
+    def _on_model_list_finished(self, ids: list, provider: str) -> None:
+        """Repopulate the model combo with the LIVE free-model ids (Feature 2).
+        Stale-guarded: the user may have switched provider again while the
+        fetch was in flight, so only apply for the CURRENT provider. Preserves
+        whatever the user has typed (editable combo -- only items swap)."""
+        try:
+            if self.provider_combo.currentText() != provider or not ids:
+                return
+            current_text = self.model_combo.currentText()
+            self.model_combo.blockSignals(True)
+            self.model_combo.clear()
+            for mid in ids:
+                self.model_combo.addItem(mid)
+            self.model_combo.setCurrentText(current_text)
+            self.model_combo.blockSignals(False)
+        except RuntimeError:
+            # Underlying combo was destroyed (dialog closed mid-fetch) -- the
+            # static shortlist already shipped, nothing more to do.
+            return
+
+    def _on_model_list_errored(self, message: str) -> None:
+        # The static PROVIDER_PRESETS shortlist is already in the combo as the
+        # honest fallback -- a live-fetch failure is silent by design (no UI to
+        # repaint on a possibly-closed dialog).
+        return
 
 
 # Style constants for the thinking block (F9, live-feedback 2026-07-09).
@@ -1628,6 +1699,67 @@ class _CaseListTask(QObject):
         self.finished.emit(cases)
 
 
+class _ProviderConfigTask(QObject):
+    """POST /api/provider-config off the UI thread (Feature 3, OpenRouter
+    model-extensibility 2026-07-19) -- follows the ``_CaseListTask`` pattern
+    (cross-thread signal emit) so a dead/asleep agent HTTP listener never
+    freezes the Settings dialog on Save. SECURITY: the payload carries the
+    provider api key; this task NEVER logs it, and the client helper
+    (``post_provider_config``) is likewise silent."""
+
+    finished = pyqtSignal(dict)  # {"ok", "model", "base_url_host"}
+    errored = pyqtSignal(str)    # honest message (never contains the key)
+
+    def __init__(self, base_url: str, payload: dict, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self._base_url = base_url
+        self._payload = payload
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            result = post_provider_config(self._base_url, self._payload)
+        except ProviderConfigRequestError as exc:
+            self.errored.emit(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
+            self.errored.emit(f"{type(exc).__name__}: {exc}")
+            return
+        self.finished.emit(result)
+
+
+class _ModelListTask(QObject):
+    """GET /api/local-models off the UI thread (Feature 2, OpenRouter
+    free-model dropdown 2026-07-19) -- follows the ``_CaseListTask`` pattern.
+    ``finished`` carries ``(model_ids, provider)`` so a stale fetch for a
+    since-changed provider is ignored at the call site; ``errored`` is a
+    silent fallback to the static shortlist."""
+
+    finished = pyqtSignal(list, str)  # (model_ids, provider)
+    errored = pyqtSignal(str)         # honest message
+
+    def __init__(self, base_url: str, provider: str, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self._base_url = base_url
+        self._provider = provider
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            ids, _default = fetch_model_list(self._base_url)
+        except ModelListRequestError as exc:
+            self.errored.emit(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001 -- surfaced, never silent
+            self.errored.emit(f"{type(exc).__name__}: {exc}")
+            return
+        self.finished.emit(ids, self._provider)
+
+
 class _PushLayerTask(QObject):
     """Push the active QGIS layer into a case via ``push_layer.py``, off the
     UI thread (cross-thread signal emit) -- follows the ``_ExportTask``
@@ -1864,6 +1996,9 @@ class Trid3ntDock(QDockWidget):
         self._case_list_tasks: List[_CaseListTask] = []  # keep-alive refs
         self._push_tasks: List[_PushLayerTask] = []  # keep-alive refs
         self._probe_tasks: List[_ProbePointTask] = []  # keep-alive refs
+        # OpenRouter model-extensibility (design 2026-07-19): the Settings Save
+        # provider-config POST tasks -- owned here (not the closing dialog).
+        self._provider_config_tasks: List[_ProviderConfigTask] = []
         # The Probe map tool (design point 2): built lazily on first toggle-on
         # (QgsMapToolEmitPoint needs a live canvas). ``_prev_map_tool`` is the
         # canvas' tool saved right before the Probe tool is installed, so
@@ -2997,6 +3132,29 @@ class Trid3ntDock(QDockWidget):
     def _note(self, text: str, error: bool = False) -> None:
         self._ensure_pending().add_note(text, error=error)
         self._scroll_to_bottom()
+
+    # -- provider-config (OpenRouter model-extensibility, Feature 3) ----------- #
+
+    def _on_provider_config_finished(self, result: dict) -> None:
+        """The agent accepted the live provider config (Settings Save): the
+        switch applies on the NEXT message with no restart."""
+        model = result.get("model") or "the agent default model"
+        host = result.get("base_url_host") or ""
+        where = f" via {host}" if host else ""
+        self._note(
+            f"Provider config applied -- {model}{where} applies on your next "
+            "message (no restart)."
+        )
+
+    def _on_provider_config_errored(self, message: str) -> None:
+        """The agent HTTP listener was unreachable/errored on Save -- the
+        settings persisted, but the live push did not land, so keep the honest
+        restart-to-apply guidance (the dialog's static note said the same)."""
+        self._note(
+            "Could not reach the agent to apply the provider config live -- "
+            "restart the agent to apply the new provider/key.",
+            error=True,
+        )
 
     # -- bridge slots (UI thread) ---------------------------------------------- #
 

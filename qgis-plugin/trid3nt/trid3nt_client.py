@@ -60,6 +60,10 @@ __all__ = [
     "CaseInfo",
     "CaseListRequestError",
     "CaseOpenInfo",
+    "ModelListRequestError",
+    "ProviderConfigRequestError",
+    "fetch_model_list",
+    "post_provider_config",
     "ConnectionClosed",
     "Debouncer",
     "HandshakeFailed",
@@ -434,6 +438,129 @@ def fetch_case_list(base_url: str, timeout: float = 5.0) -> list:
     if not isinstance(payload, dict):
         raise CaseListRequestError("case list API returned a non-object body")
     return parse_case_list(payload)
+
+
+# --------------------------------------------------------------------------- #
+# OpenRouter model-extensibility (design 2026-07-19) -- provider-config POST +
+# live model-list GET, both against the local agent's HTTP listener.
+# --------------------------------------------------------------------------- #
+
+
+class ProviderConfigRequestError(Exception):
+    """``post_provider_config`` failed -- transport, HTTP status, or a non-JSON
+    body. Carries an honest, user-facing message that NEVER contains the api
+    key."""
+
+
+def post_provider_config(base_url: str, payload: dict, timeout: float = 5.0) -> dict:
+    """``POST {base_url}/api/provider-config`` -- push the LIVE provider config
+    to the agent so a provider/model/key switch applies on the NEXT message
+    with no agent restart (the agent's OpenAI adapter reads ``GRACE2_OPENAI_*``
+    from ``os.environ`` at call time). ``payload`` = ``{base_url, api_key,
+    model, num_ctx}`` (any subset). Plain ``urllib`` (stdlib only, same posture
+    as ``fetch_case_list``) -- no WebSocket involved.
+
+    Returns the agent's ``{"ok", "model", "base_url_host"}`` result dict, or
+    raises ``ProviderConfigRequestError`` with an honest message on any fault.
+    SECURITY: the api_key rides the POST body but is NEVER logged here, and a
+    raised message never echoes it (the agent likewise scrubs it).
+    """
+    url = f"{base_url.rstrip('/')}/api/provider-config"
+    raw = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=raw,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            body = resp.read()
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            parsed = json.loads(exc.read().decode("utf-8", "replace"))
+            if isinstance(parsed, dict):
+                detail = str(parsed.get("error") or "")
+        except Exception:  # noqa: BLE001 -- body may be anything
+            pass
+        raise ProviderConfigRequestError(
+            detail or f"provider-config request failed (HTTP {exc.code})"
+        ) from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise ProviderConfigRequestError(
+            f"agent HTTP API unreachable at {url} ({exc})"
+        ) from exc
+    try:
+        result = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ProviderConfigRequestError(
+            f"provider-config returned non-JSON: {exc}"
+        ) from exc
+    if not isinstance(result, dict):
+        raise ProviderConfigRequestError(
+            "provider-config returned a non-object body"
+        )
+    return result
+
+
+class ModelListRequestError(Exception):
+    """``fetch_model_list`` failed -- transport, HTTP status, or a non-JSON
+    body. Carries an honest, user-facing message."""
+
+
+def fetch_model_list(
+    base_url: str, timeout: float = 8.0
+) -> Tuple[list, Optional[str]]:
+    """``GET {base_url}/api/local-models`` -> ``(model_ids, default)``.
+
+    For an OpenRouter provider the agent returns the FREE + tool-capable model
+    ids (design 2026-07-19); for local Ollama it returns the installed models.
+    The plugin's model combo stays EDITABLE either way, so any id is still
+    typeable -- this list is a convenience dropdown, not a whitelist. Plain
+    ``urllib`` (stdlib only). Raises ``ModelListRequestError`` on any fault so
+    the caller can fall back to its static shortlist.
+    """
+    url = f"{base_url.rstrip('/')}/api/local-models"
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            parsed = json.loads(exc.read().decode("utf-8", "replace"))
+            if isinstance(parsed, dict):
+                detail = str(parsed.get("error") or "")
+        except Exception:  # noqa: BLE001 -- body may be anything
+            pass
+        raise ModelListRequestError(
+            detail or f"model list request failed (HTTP {exc.code})"
+        ) from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise ModelListRequestError(
+            f"agent HTTP API unreachable at {url} ({exc})"
+        ) from exc
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ModelListRequestError(
+            f"model list returned non-JSON: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ModelListRequestError("model list returned a non-object body")
+    ids: list = []
+    models = payload.get("models")
+    if isinstance(models, list):
+        for m in models:
+            if isinstance(m, dict):
+                mid = m.get("id")
+                if isinstance(mid, str) and mid.strip():
+                    ids.append(mid.strip())
+    default = payload.get("default")
+    if not isinstance(default, str) or not default.strip():
+        default = None
+    return ids, default
 
 
 # --------------------------------------------------------------------------- #
