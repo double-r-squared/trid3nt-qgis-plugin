@@ -425,6 +425,118 @@ assert think_entry._thinking_label.textFormat() == Qt.PlainText, (
 assert think_entry.label.textFormat() == Qt.RichText, "finalize skipped the answer"
 print("[markdown] stream-plain -> finalize-rich, replay rich, user/thinking plain")
 
+# ---- 7. NATE 2026-07-19 chat-UI batch (N1 fold / N2 tree / N3 state / ------- #
+#         N4 collapsed-progress / N5 sim-card ordering) ----------------------- #
+
+from trid3nt.dock import SimCard  # noqa: E402
+from trid3nt.trid3nt_client import PipelineStep  # noqa: E402
+
+# N3 (chip color = state) + N2 (nested child = tree connector): a chip's
+# border/text color tracks the step state and a child row carries the ASCII
+# "|->" connector.
+chip_entry = _AssistantEntry(dock.messages_layout)
+chip_entry.set_pipeline_rows(
+    [
+        {"chip": "fetch_dem", "detail": "complete", "state": "complete"},
+        {"chip": "build_mesh", "detail": "running", "state": "running"},
+        {"chip": "run_solver", "detail": "failed", "state": "failed"},
+        {"chip": "sub_fetch", "detail": "complete", "state": "complete",
+         "indent": True},
+    ]
+)
+pump()
+chip_styles = {}
+connector_seen = False
+for i in range(chip_entry.pipeline_area.count()):
+    holder = chip_entry.pipeline_area.itemAt(i).widget()
+    if holder is None:
+        continue
+    for lbl in holder.findChildren(QLabel):
+        if lbl.text() == "|->":
+            connector_seen = True
+        else:
+            chip_styles[lbl.text()] = lbl.styleSheet()
+assert "#3fb950" in chip_styles.get("fetch_dem", ""), "complete chip not green"
+assert "#8b949e" in chip_styles.get("build_mesh", ""), "running chip not grey"
+assert "#f85149" in chip_styles.get("run_solver", ""), "failed chip not red"
+assert "#3fb950" in chip_styles.get("sub_fetch", ""), "child chip color wrong"
+assert connector_seen, "nested child row missing the |-> tree connector"
+print("[N3/N2] chip state colors green/grey/red + child tree connector")
+
+# N1: a RUNNING SimCard folds + unfolds at ANY time (not just terminal).
+sim = SimCard("TELEMAC")
+dock.messages_layout.insertWidget(dock.messages_layout.count() - 1, sim)
+pump()
+assert not sim.terminal, "fresh sim card should be non-terminal"
+assert sim.details_toggle.isVisible(), "toggle not visible on a running card"
+assert sim._body.isVisible(), "running card body should start expanded"
+sim.details_toggle.setChecked(False)
+sim._toggle_details(False)
+pump()
+assert not sim._body.isVisible(), "could not collapse a RUNNING card"
+sim.details_toggle.setChecked(True)
+sim._toggle_details(True)
+pump()
+assert sim._body.isVisible(), "could not re-expand a RUNNING card"
+print("[N1] running sim card folds + unfolds anytime")
+
+# N4: collapsed/expanded card shows live progress on the RIGHT.
+sim.update_from_progress(
+    {"run_id": "r1", "elapsed_seconds": 90, "phase": "routing",
+     "active_cell_count": 12000}
+)
+pump()
+assert "1:30" in sim.progress_lbl.text(), (
+    f"live progress readout missing elapsed: {sim.progress_lbl.text()!r}"
+)
+assert "routing" in sim.progress_lbl.text(), "live progress readout missing phase"
+print(f"[N4] live progress readout on the right: {sim.progress_lbl.text()!r}")
+
+# N4/N1: terminal transition auto-collapses + shows the final duration.
+sim.update_from_step(
+    PipelineStep(
+        step_id="s-sim", name="telemac:solve",
+        tool_name="telemac_river_dye:solve", state="complete", role="compute",
+        batch_job_id="local-docker:r1", duration_ms=165000,
+    )
+)
+pump()
+assert sim.terminal, "sim card did not go terminal"
+assert not sim._body.isVisible(), "terminal card did not auto-collapse"
+assert "complete" in sim.summary_lbl.text().lower(), "terminal summary wrong"
+assert "2:45" in sim.progress_lbl.text(), (
+    f"terminal duration missing from readout: {sim.progress_lbl.text()!r}"
+)
+print("[N4] terminal card: auto-collapsed, duration on the right")
+
+# N5: a sim-card insert closes the streaming entry so narration lands BELOW.
+dock._add_user_bubble("run the dye sim")
+sim_pre = _AssistantEntry(dock.messages_layout)
+dock._pending = sim_pre
+sim_pre.append_delta("Dispatching the solver now.")
+dock._route_compute_step(
+    PipelineStep(
+        step_id="s-order", name="telemac:solve",
+        tool_name="telemac_river_dye:solve", state="running", role="compute",
+        batch_job_id="local-docker:r2",
+    )
+)
+pump()
+assert dock._pending is None, "sim card did not close the pending entry"
+sim_post = dock._ensure_pending()
+sim_post.append_delta("Solver is running.")
+pump()
+inserted = dock._sim_cards.get("s-order")
+assert inserted is not None, "sim card not registered"
+i_pre = dock.messages_layout.indexOf(sim_pre.container)
+i_card = dock.messages_layout.indexOf(inserted)
+i_post = dock.messages_layout.indexOf(sim_post.container)
+print(f"[N5] sim order pre={i_pre} card={i_card} post={i_post}")
+assert 0 <= i_pre < i_card < i_post, (
+    f"sim card out of order: pre={i_pre} card={i_card} post={i_post}"
+)
+print("[N5] sim card lands inline: pre-entry -> card -> post-entry")
+
 # ---- proof screenshots (layout proof, not pixel parity with live QGIS) ----- #
 
 os.makedirs(PROOF_DIR, exist_ok=True)

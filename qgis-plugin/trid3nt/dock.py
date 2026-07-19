@@ -124,26 +124,65 @@ _ASSISTANT_BUBBLE_STYLE = (
 _STATUS_LINE_STYLE = "color: palette(mid); font-size: 8pt; padding-left: 4px;"
 _ERROR_LINE_STYLE = "color: #f85149; font-size: 8pt; padding-left: 4px;"
 # Amber caution frame for the gate card (mirrors the web's warning palette).
+# Item N6 (live-feedback 2026-07-19): a SUBTLE amber fill (low-alpha accent,
+# so it tints faintly over EITHER a light or dark QGIS window background --
+# no hard color that assumes one theme) so the card reads as a distinct
+# panel, not an outline floating on the chat.
 _GATE_CARD_STYLE = (
-    "QFrame { border: 1px solid #d29922; border-radius: 8px; }"
+    "QFrame { border: 1px solid #d29922; border-radius: 8px; "
+    "background-color: rgba(210, 153, 34, 7%); }"
 )
 _GATE_TITLE_STYLE = "color: #d29922; font-weight: bold; border: none;"
 _GATE_BODY_STYLE = "border: none; font-size: 9pt;"
 _GATE_NOTE_STYLE = "border: none; color: palette(mid); font-size: 8pt;"
 # Item R2 (live-feedback 2026-07-18): tool-usage chip -- a compact bordered
 # monospace badge so tool calls read as a visually DISTINCT class from the
-# grey info notes (layer added / thinking / chart pointers). Subtle blue
-# accent, deliberately not loud; the muted detail text (state + substep +
-# short arg summary) rides beside it in the same row.
-_TOOL_CHIP_STYLE = (
-    "font-family: monospace; font-size: 8pt; color: #58a6ff; "
-    "border: 1px solid #58a6ff; border-radius: 7px; padding: 0px 6px;"
-)
+# grey info notes (layer added / thinking / chart pointers). The muted
+# detail text (state + substep + short arg summary) rides beside it in the
+# same row.
+#
+# Item N3 (live-feedback 2026-07-19): the chip color now tracks STATE instead
+# of a fixed blue -- GREEN on success (complete), GREY while in progress
+# (pending / running / unknown), RED on failure (failed / cancelled). Kept
+# subtle: an OUTLINED chip (border + text in the state color), never a loud
+# fill. ``_tool_chip_style`` composes the stylesheet from the step state.
+_CHIP_STATE_COLORS = {
+    "complete": "#3fb950",   # green -- success
+    "failed": "#f85149",     # red -- failure
+    "cancelled": "#f85149",  # red -- failure
+}
+_CHIP_PENDING_COLOR = "#8b949e"  # grey -- pending / running / unknown
+
+
+def _tool_chip_style(state: Optional[str]) -> str:
+    """Item N3 (live-feedback 2026-07-19): outlined tool-chip stylesheet whose
+    border+text color is driven off the step state (green complete / grey
+    in-progress / red failed). Same monospace badge chrome as before."""
+    color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
+    return (
+        f"font-family: monospace; font-size: 8pt; color: {color}; "
+        f"border: 1px solid {color}; border-radius: 7px; padding: 0px 6px;"
+    )
+
+
 _TOOL_CHIP_DETAIL_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
+# Item N2 (live-feedback 2026-07-19): nested/sub-step tool rows render as a
+# directory tree -- an ASCII "|->" connector before the child chip, kept in
+# the blue accent, so a parent -> child hierarchy reads clearly instead of a
+# flat indented chip list.
+_TREE_CONNECTOR_STYLE = (
+    "font-family: monospace; font-size: 8pt; color: #58a6ff; border: none;"
+)
 # Item R4 (live-feedback 2026-07-18): simulation-card chrome -- purple, the
 # color the web reserves for sim progress affordances; the collapse pattern
 # itself is the exact GateCard summary + "show details" affordance.
-_SIM_CARD_STYLE = "QFrame { border: 1px solid #8957e5; border-radius: 8px; }"
+# Item N6 (live-feedback 2026-07-19): a SUBTLE purple fill (low-alpha accent,
+# tints faintly over either a light or dark QGIS window -- no hard theme
+# assumption) so the card reads as a distinct panel, not a bare outline.
+_SIM_CARD_STYLE = (
+    "QFrame { border: 1px solid #8957e5; border-radius: 8px; "
+    "background-color: rgba(137, 87, 229, 7%); }"
+)
 _SIM_TITLE_STYLE = "color: #8957e5; font-weight: bold; border: none;"
 
 
@@ -692,12 +731,21 @@ class _AssistantEntry:
         """Item R2 (live-feedback 2026-07-18): repaint the transient pipeline
         area (replaced on every pipeline-state frame, as before). Each row is
 
-          {"chip": tool name or None, "detail": muted text, "indent": bool}
+          {"chip": tool name or None, "detail": muted text, "indent": bool,
+           "state": step state}
 
         A row WITH a chip renders as the bordered monospace tool badge plus
         the muted detail text beside it -- visually a different class from
         the grey info notes. A row with ``chip=None`` (compaction narration,
-        step error text) stays the plain grey status line it always was."""
+        step error text) stays the plain grey status line it always was.
+
+        Item N2 (live-feedback 2026-07-19): an ``indent`` row is a nested/
+        sub-step child -- it renders under its parent with an ASCII "|->"
+        tree connector (in the blue accent) so the parent -> child hierarchy
+        reads as a directory tree, not a flat indented chip list.
+        Item N3 (live-feedback 2026-07-19): the chip border+text color tracks
+        ``state`` (green complete / grey in-progress / red failed) via
+        ``_tool_chip_style``; a row with no ``state`` falls back to grey."""
         while self.pipeline_area.count():
             item = self.pipeline_area.takeAt(0)
             w = item.widget()
@@ -715,11 +763,20 @@ class _AssistantEntry:
                 continue
             holder = QWidget()
             hl = QHBoxLayout(holder)
-            hl.setContentsMargins(4 + (16 if row.get("indent") else 0), 1, 0, 1)
+            indent = bool(row.get("indent"))
+            # Item N2: children sit under their parent with a modest left
+            # inset plus the tree connector glyph -- not just a flat indent.
+            hl.setContentsMargins(4 + (12 if indent else 0), 1, 0, 1)
             hl.setSpacing(6)
+            if indent:
+                conn = QLabel("|->")
+                conn.setTextFormat(Qt.PlainText)
+                conn.setStyleSheet(_TREE_CONNECTOR_STYLE)
+                hl.addWidget(conn)
             chip_lbl = QLabel(chip)
             chip_lbl.setTextFormat(Qt.PlainText)
-            chip_lbl.setStyleSheet(_TOOL_CHIP_STYLE)
+            # Item N3: state-driven chip color (green/grey/red outlined chip).
+            chip_lbl.setStyleSheet(_tool_chip_style(row.get("state")))
             hl.addWidget(chip_lbl)
             if detail:
                 detail_lbl = QLabel(detail)
@@ -1151,6 +1208,12 @@ class SimCard(QFrame):
         super().__init__(parent)
         self._engine = engine_label
         self._terminal = False
+        # Item N4 (live-feedback 2026-07-19): the latest live-progress bits so
+        # the collapsed summary's right-side readout can recompose from
+        # whichever wire (step pct or progress-tick elapsed/phase) last spoke.
+        self._pct: Optional[int] = None
+        self._elapsed_str: str = ""
+        self._phase: str = ""
         self.setStyleSheet(_SIM_CARD_STYLE)
         self.setFrameShape(QFrame.StyledPanel)
 
@@ -1158,34 +1221,38 @@ class SimCard(QFrame):
         outer.setContentsMargins(8, 6, 8, 6)
         outer.setSpacing(3)
 
-        # Collapsed one-line summary + "show details" -- the exact GateCard
-        # collapse affordance (item 5, live-feedback 2026-07-09), reused.
+        # Item N1 (live-feedback 2026-07-19): the summary row + "show/hide
+        # details" toggle is ALWAYS visible now (was: revealed only on the
+        # terminal collapse, so a RUNNING card could not be folded). The
+        # toggle is live from the first frame -- expanded while running,
+        # foldable anytime; the terminal transition auto-collapses (kept).
+        # Item N4: the live progress readout (pct / elapsed / phase) rides on
+        # the RIGHT of this row, next to the toggle, so a COLLAPSED card still
+        # shows progress at a glance without expanding.
         summary_row = QHBoxLayout()
-        self.summary_lbl = QLabel("")
+        self.summary_lbl = QLabel(f"Simulation running - {engine_label}")
         self.summary_lbl.setWordWrap(True)
         self.summary_lbl.setTextFormat(Qt.PlainText)
         self.summary_lbl.setStyleSheet(_SIM_TITLE_STYLE)
         summary_row.addWidget(self.summary_lbl, 1)
-        self.details_toggle = QPushButton("show details")
+        self.progress_lbl = QLabel("")
+        self.progress_lbl.setTextFormat(Qt.PlainText)
+        self.progress_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        summary_row.addWidget(self.progress_lbl)
+        self.details_toggle = QPushButton("hide details")
         self.details_toggle.setFlat(True)
         self.details_toggle.setCheckable(True)
+        self.details_toggle.setChecked(True)  # expanded while running
         self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
         self.details_toggle.clicked.connect(self._toggle_details)
         summary_row.addWidget(self.details_toggle)
-        self._summary_container = QWidget()
-        self._summary_container.setLayout(summary_row)
-        self._summary_container.setVisible(False)
-        outer.addWidget(self._summary_container)
+        outer.addLayout(summary_row)
 
         self._body = QWidget()
         body_lay = QVBoxLayout(self._body)
         body_lay.setContentsMargins(0, 0, 0, 0)
         body_lay.setSpacing(3)
         outer.addWidget(self._body)
-
-        self.title_lbl = QLabel(f"Simulation running - {engine_label}")
-        self.title_lbl.setStyleSheet(_SIM_TITLE_STYLE)
-        body_lay.addWidget(self.title_lbl)
 
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
@@ -1249,6 +1316,8 @@ class SimCard(QFrame):
         self._set("status", " / ".join(status_bits))
         if step.progress_percent is not None:
             self._set("progress", f"{step.progress_percent}%")
+            self._pct = step.progress_percent
+            self._refresh_progress_readout()
         if step.duration_ms is not None:
             self._set("duration", self._fmt_seconds(step.duration_ms / 1000.0))
         if step.state in ("complete", "failed", "cancelled") and not self._terminal:
@@ -1261,7 +1330,14 @@ class SimCard(QFrame):
                 "failed": f"Simulation failed - {self._engine}",
                 "cancelled": f"Simulation cancelled - {self._engine}",
             }[step.state]
-            self.title_lbl.setText(title)
+            # Item N4: on the terminal transition the right-side readout shows
+            # the final duration (the live pct/elapsed/phase is done).
+            if step.duration_ms is not None:
+                self.progress_lbl.setText(
+                    self._fmt_seconds(step.duration_ms / 1000.0)
+                )
+            else:
+                self.progress_lbl.setText("")
             self._collapse(title)
 
     def update_from_progress(self, data: dict) -> None:
@@ -1283,24 +1359,49 @@ class SimCard(QFrame):
         if not self._terminal:
             elapsed = data.get("elapsed_seconds")
             if isinstance(elapsed, (int, float)) and not isinstance(elapsed, bool):
-                self._set("elapsed", self._fmt_seconds(float(elapsed)))
+                self._elapsed_str = self._fmt_seconds(float(elapsed))
+                self._set("elapsed", self._elapsed_str)
             eta = data.get("eta_seconds")
             if isinstance(eta, (int, float)) and not isinstance(eta, bool):
                 self._set("eta", self._fmt_seconds(float(eta)))
             phase = data.get("phase")
             if isinstance(phase, str) and phase:
+                self._phase = phase
                 self._set("status", f"running / {phase}")
+            # Item N4: refresh the collapsed summary's right-side readout live.
+            self._refresh_progress_readout()
+
+    def _refresh_progress_readout(self) -> None:
+        """Item N4 (live-feedback 2026-07-19): recompose the summary row's
+        right-side progress readout (pct - elapsed - phase) from the latest
+        live bits, so a COLLAPSED card shows progress at a glance. Live only:
+        a terminal card shows the final duration there instead (set in
+        ``update_from_step``), so this no-ops once terminal."""
+        if self._terminal:
+            return
+        parts: List[str] = []
+        if self._pct is not None:
+            parts.append(f"{self._pct}%")
+        if self._elapsed_str:
+            parts.append(self._elapsed_str)
+        if self._phase:
+            parts.append(self._phase)
+        self.progress_lbl.setText(" - ".join(parts))
 
     # -- collapse (the GateCard affordance) ------------------------------------ #
 
     def _collapse(self, line: str) -> None:
+        """Item N1 (live-feedback 2026-07-19): auto-fold on the terminal
+        transition (kept). The summary row + toggle stay visible (they always
+        are now); only the body hides, and the user can re-expand it."""
         self.summary_lbl.setText(line)
-        self._summary_container.setVisible(True)
         self._body.setVisible(False)
         self.details_toggle.setChecked(False)
         self.details_toggle.setText("show details")
 
     def _toggle_details(self, checked: bool) -> None:
+        # Item N1: live at ANY time -- the user can fold/unfold a RUNNING card,
+        # not just a terminal one.
         self._body.setVisible(checked)
         self.details_toggle.setText("hide details" if checked else "show details")
 
@@ -2729,6 +2830,12 @@ class Trid3ntDock(QDockWidget):
         ``_clear_messages`` (case switch) resets the registry."""
         card = self._sim_cards.get(step.step_id)
         if card is None:
+            # Item N5 (live-feedback 2026-07-19): mirror the BUG-4 gate-card
+            # discipline -- close out the current streaming entry BEFORE the
+            # card inserts, so post-card narration mints a FRESH entry BELOW
+            # it (chronological turn flow; the card never strands at the
+            # bottom while text piles above it).
+            self._close_pending_for_card()
             card = SimCard(_solver_engine_label(step.tool_name))
             self._sim_cards[step.step_id] = card
             self.messages_layout.insertWidget(
@@ -2736,6 +2843,21 @@ class Trid3ntDock(QDockWidget):
             )
             self._scroll_to_bottom()
         card.update_from_step(step)
+
+    def _close_pending_for_card(self) -> None:
+        """Items BUG-4 / N5 (live-feedback 2026-07-12 / -07-19): a card (gate
+        or sim) is about to insert -- close out the current streaming
+        assistant entry so subsequent narration mints a FRESH entry BELOW the
+        card via ``_ensure_pending`` (chronological turn flow; the card never
+        strands at the bottom while text piles above it). The entry's
+        transient pipeline rows are cleared first so they re-render in the new
+        entry below rather than duplicating, frozen, above the card."""
+        if self._pending is not None:
+            self._pending.set_pipeline_rows([])
+            # Feature 2026-07-13: this entry receives no more deltas --
+            # final-render its markdown before closing it out.
+            self._pending.finalize_markdown()
+        self._pending = None
 
     def _note(self, text: str, error: bool = False) -> None:
         self._ensure_pending().add_note(text, error=error)
@@ -2836,9 +2958,11 @@ class Trid3ntDock(QDockWidget):
                     self._route_compute_step(step)
                     continue
                 if step.parent_step_id:
+                    # Item N2/N3 (live-feedback 2026-07-19): nested child ->
+                    # tree row (indent), chip color driven off the state.
                     rows.append(
                         {"chip": step.tool_name, "detail": step.state,
-                         "indent": True}
+                         "indent": True, "state": step.state}
                     )
                 else:
                     # Compaction UX (Part A): "context:compact" is the one
@@ -2865,9 +2989,11 @@ class Trid3ntDock(QDockWidget):
                         args = self._tool_args_by_step.get(step.step_id)
                         if args:
                             detail += f"  {args}"
+                        # Item N3 (live-feedback 2026-07-19): state drives the
+                        # chip color (green/grey/red).
                         rows.append(
                             {"chip": step.tool_name or step.name,
-                             "detail": detail}
+                             "detail": detail, "state": step.state}
                         )
                     if step.error_message:
                         rows.append(
@@ -3088,18 +3214,14 @@ class Trid3ntDock(QDockWidget):
         )
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
         # BUG 4 (live-feedback 2026-07-12, NATE: the card sat "at the bottom
-        # and the response chat is above"): the streaming _AssistantEntry
-        # was created BEFORE the card, so everything after the user's
-        # confirm streamed into the entry ABOVE it. Close out the pending
-        # entry here -- the next event (thinking/chunk/pipeline/note) mints
-        # a FRESH entry via _ensure_pending, which inserts before the
-        # terminal stretch, i.e. BELOW the card -- the cloud web's
-        # chronological turn flow.
-        if self._pending is not None:
-            # Feature 2026-07-13: this entry receives no more deltas --
-            # final-render its markdown before closing it out.
-            self._pending.finalize_markdown()
-        self._pending = None
+        # and the response chat is above") / Item N5 (2026-07-19): the
+        # streaming _AssistantEntry was created BEFORE the card, so everything
+        # after the user's confirm streamed into the entry ABOVE it. Close out
+        # the pending entry here (shared _close_pending_for_card discipline) --
+        # the next event (thinking/chunk/pipeline/note) mints a FRESH entry
+        # via _ensure_pending, which inserts before the terminal stretch, i.e.
+        # BELOW the card -- the cloud web's chronological turn flow.
+        self._close_pending_for_card()
         self._scroll_to_bottom()
 
     def _on_gate_decision(
