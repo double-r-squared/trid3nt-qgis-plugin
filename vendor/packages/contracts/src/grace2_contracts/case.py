@@ -492,7 +492,7 @@ class CaseOpenEnvelopePayload(GraceModel):
 # last-opened Case, so root prompts skipped auto-create and dispatched into
 # the stale Case.
 CaseCommand = Literal[
-    "create", "select", "deselect", "rename", "archive", "delete"
+    "create", "select", "deselect", "rename", "archive", "delete", "set-bbox"
 ]
 
 

@@ -2336,6 +2336,23 @@ def build_function_response_content(
     )
 
 
+def build_user_text_content(text: str) -> genai_types.Content:
+    """Build a plain ``user``-role text Content (OPEN-16 empty-completion nudge).
+
+    The same one-Part text shape ``build_contents_from_history`` uses for the
+    live user message (adapter.py line 1245) -- factored out so the multi-turn
+    loop can append a corrective user turn (e.g. the empty-completion retry
+    nudge) to ``contents`` without server.py hand-rolling google.genai types.
+    Bedrock's Converse boundary maps a ``user`` text Content to a ``user``
+    message; the scripted adapter ignores content bodies -- so this is safe on
+    every provider path that consumes ``contents``.
+    """
+    return genai_types.Content(
+        role="user",
+        parts=[genai_types.Part(text=text)],
+    )
+
+
 # ---------------------------------------------------------------------------
 # stream_events — tool-aware streaming (job-0154, root fix)
 # ---------------------------------------------------------------------------

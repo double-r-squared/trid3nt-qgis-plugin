@@ -170,6 +170,26 @@ def classify_substance(substance: str) -> tuple[str, str | None]:
     return "tracer", None
 
 
+def plausible_release_coords(
+    release_lon: Any, release_lat: Any
+) -> tuple[float, float] | None:
+    """``(lon, lat)`` when BOTH parse as in-range EPSG:4326 coords, else None.
+
+    Agent-side mirror of the worker's ``resolve_centerline_seed`` plausibility
+    gate (the worker image imports no agent code): numeric, lon in [-180, 180],
+    lat in [-90, 90] (NaN/inf fail the range comparisons). Used by the tool
+    sanitize, the reach-dict threading, the preview mirror and the approve-mesh
+    gate so all four agree on what counts as a usable release point."""
+    try:
+        lon = float(release_lon)
+        lat = float(release_lat)
+    except (TypeError, ValueError):
+        return None
+    if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
+        return None
+    return (lon, lat)
+
+
 def suggest_time_step_s(mesh_size_m: float) -> float:
     """CFL-safe TELEMAC timestep for a given mesh edge length (BK-3c / OPEN-27).
 
@@ -582,6 +602,9 @@ async def model_river_dye_release_scenario(
     release_lat: float | None = None,
     substance: str = "dye",
     *,
+    release_seeds_reach: bool | None = None,
+    seed_release_lon: float | None = None,
+    seed_release_lat: float | None = None,
     compute_class: str = "medium",
     pipeline_emitter: Any | None = None,
 ) -> TelemacDyeLayerURI:
@@ -696,6 +719,25 @@ async def model_river_dye_release_scenario(
     if substance_class == "oil":
         logger.info("substance %r -> oil class (preset %s): slick particles + "
                     "dissolved tracer", substance, oil_preset)
+    # 2026-07-18 release-seeding: plausible release coords ride the manifest;
+    # whether they ALSO seed the worker's centerline/corridor resolution
+    # (nearest flowline to the RELEASE, not the geocode center) is the
+    # release_seeds_reach tri-state. None = no gate ran (raw dispatch) ->
+    # call-provided coords seed the reach; the approve-mesh decision tail pins
+    # False for a gate-picked click so it moves the SOURCE only (BK-3b: the
+    # approved solve must reproduce the previewed mesh).
+    release_pair = plausible_release_coords(release_lon, release_lat)
+    # BK-3b decouple: when the gate click overwrote release_lon/release_lat,
+    # the decision tail threads the ORIGINAL call coords separately so the
+    # reach still seeds from the pair the preview meshed from - the click
+    # moves the SOURCE only. Absent (the common case) the release coords
+    # seed as before.
+    seed_release_pair = plausible_release_coords(seed_release_lon, seed_release_lat)
+    if release_seeds_reach is None:
+        release_seeds_reach = release_pair is not None
+    seeds_reach = bool(release_seeds_reach) and (
+        release_pair is not None or seed_release_pair is not None
+    )
     reach: dict[str, Any] = {
         "name": reach_name,
         "seed_lon": round(seed_lon, 6),
@@ -711,9 +753,14 @@ async def model_river_dye_release_scenario(
         "dye_conc_mgl": float(dye_concentration_mgl),
         # BK-6: user-picked release point overrides spill_frac (worker snaps to
         # the nearest interior mesh node, validated within 2 channel widths).
-        **({"release_lon": round(float(release_lon), 6),
-            "release_lat": round(float(release_lat), 6)}
-           if release_lon is not None and release_lat is not None else {}),
+        **({"release_lon": round(release_pair[0], 6),
+            "release_lat": round(release_pair[1], 6)}
+           if release_pair is not None else {}),
+        **({"seed_from_release": True,
+            **({"seed_release_lon": round(seed_release_pair[0], 6),
+                "seed_release_lat": round(seed_release_pair[1], 6)}
+               if seed_release_pair is not None else {})}
+           if seeds_reach else {}),
         "spill_frac": float(min(max(spill_fraction, 0.0), 1.0)),
         "pulse_window_s": float(spill_duration_s),
         "source_q_m3s": float(source_q_m3s),
@@ -865,7 +912,7 @@ async def model_river_dye_release_scenario(
                 layer_type="vector",
                 uri=f"s3://{_get_runs_bucket()}/{batch_run_id}/slick.geojson",
                 style_preset="nhdplus_flowlines",
-                role="output",
+                role="primary",
                 bbox=peak.bbox,
             )
             emitted = await publish_input_layer(emitter, slick_layer)
@@ -1002,7 +1049,10 @@ async def preview_telemac_mesh(
     reach seed, centroid fallback) intentionally mirrors Stages 1-2 of
     ``model_river_dye_release_scenario`` - both are cache-backed tool calls, so
     the approved solve re-derives the SAME seed and reproduces the previewed
-    mesh. If you change the seed logic THERE, change it HERE.
+    mesh. Call-provided release coords are mirrored the same way (2026-07-18):
+    both manifests carry release_lon/release_lat + seed_from_release, so the
+    worker re-seeds the reach from the RELEASE identically in preview + solve.
+    If you change the seed logic THERE, change it HERE.
 
     Raises on any failure - the gate caller fails OPEN (card skipped, tool runs
     with its own typed errors), matching the SWMM builder convention.
@@ -1055,6 +1105,17 @@ async def preview_telemac_mesh(
     river_geometry_uri = params.get("river_geometry_uri")
     if river_geometry_uri and not str(river_geometry_uri).startswith(("s3://", "gs://")):
         river_geometry_uri = None  # pseudo-call string, not a real URI
+    # 2026-07-18 release-seeding mirror: plausible CALL-provided release coords
+    # ride the preview manifest (release point + seed_from_release) so the
+    # previewed mesh resolves the reach the RELEASE point pins - not whatever
+    # water body sits nearest the geocoded city center (the Longview failure
+    # meshed the Cowlitz with the requested Columbia release outside the mesh
+    # bbox). The gate builder then verifies the built mesh bbox actually
+    # covers the point (never silently mesh elsewhere). Pre-gate params are
+    # RAW LLM args, so plausibility is re-checked exactly like the tool does.
+    release_pair = plausible_release_coords(
+        params.get("release_lon"), params.get("release_lat")
+    )
 
     # --- Stage 1-2 mirror (QUIET: no substep/tool cards pre-gate) ------------ #
     if has_loc:
@@ -1097,6 +1158,12 @@ async def preview_telemac_mesh(
         "seed_lon": round(seed_lon, 6),
         "seed_lat": round(seed_lat, 6),
         **({"river_name": preview_river_name} if preview_river_name else {}),
+        # Call-provided release coords seed the worker's centerline/corridor
+        # (see the release-seeding mirror note above); the approved solve
+        # threads the SAME keys so the reach re-resolves identically.
+        **({"release_lon": round(release_pair[0], 6),
+            "release_lat": round(release_pair[1], 6),
+            "seed_from_release": True} if release_pair is not None else {}),
         "nav_direction": "DM",
         "distance_km": reach_length_km,
         "channel_width_m": channel_width_m,

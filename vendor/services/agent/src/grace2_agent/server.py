@@ -121,6 +121,7 @@ from .adapter import (
     build_layers_present_note,
     build_function_call_content,
     build_function_response_content,
+    build_user_text_content,
     build_tool_declarations,
     load_settings,
     rehydrate_history_from_case,
@@ -610,6 +611,29 @@ _DELIVERABLE_COMPLETE_DIRECTIVE: str = (
     "explicitly asked for ADDITIONAL analysis beyond this, do NOT call more "
     "tools -- give a brief (1-3 sentence) final summary of what was produced "
     "and stop. Calling further tools now will not improve the answer."
+)
+
+#: OPEN-16 EMPTY-COMPLETION RETRY (live 2026-07-19): the local qwen3 model
+#: occasionally returns a round with ZERO tool calls AND ZERO non-whitespace
+#: text (log: "gemini loop terminal ... text_chunks=0"). This is NOT context
+#: overflow (that is the OPEN-14 compaction/clip guard) -- the model has room
+#: and simply emits nothing, so the turn used to die silently and the user
+#: request never ran. Instead of breaking, the loop RETRIES the round with a
+#: corrective user-role nudge appended (production tool-runner pattern:
+#: OpenAI tool-runner / LangChain retry-with-nudge, NOT a blind resend),
+#: BOUNDED by this cap so an always-empty model can never loop forever (same
+#: safety discipline as the loop watchdog). Scoped to the LOCAL
+#: (MODEL_PROVIDER=openai) path only -- a legitimately empty Bedrock round
+#: must NOT change.
+_EMPTY_COMPLETION_RETRY_CAP: int = 2
+
+#: The corrective user-role nudge appended to ``contents`` before a retried
+#: empty round (OPEN-16). Plain instruction -- either act (tool) or answer;
+#: never another empty message.
+_EMPTY_COMPLETION_NUDGE: str = (
+    "Your previous response was empty. Either call the appropriate tool to "
+    "fulfill the request, or reply with your answer. Do not return an empty "
+    "message."
 )
 
 
@@ -3160,6 +3184,12 @@ async def _stream_gemini_reply(
     # is not fabricating; one that never tried and claims success is).
     _turn_ever_called_tool = False
 
+    # OPEN-16 EMPTY-COMPLETION RETRY: per-turn counter of empty-round retries
+    # already spent, capped at ``_EMPTY_COMPLETION_RETRY_CAP``. Past the cap the
+    # empty round falls through to the existing terminal break (never an infinite
+    # loop). Local-path only (guarded on ``_provider == "openai"`` below).
+    _empty_retries = 0
+
     iterations = 0
     try:
         while iterations < _step_cap:
@@ -3324,6 +3354,49 @@ async def _stream_gemini_reply(
             # is finished — either narrated the answer or had nothing more to
             # do.  Break out of the loop.
             if not turn_function_calls:
+                # OPEN-16 EMPTY-COMPLETION RETRY: a round with ZERO tool calls
+                # (we are in this branch) AND ZERO non-whitespace text is the
+                # qwen3 empty-completion shape -- the model emitted nothing at
+                # all, so the user's request would silently die here. Rather
+                # than break, retry the round with a corrective user nudge,
+                # bounded by ``_EMPTY_COMPLETION_RETRY_CAP``. Ordering: this
+                # runs BEFORE the OPEN-14 fabrication backstop below, but the
+                # two are disjoint -- an EMPTY round has no closing text, so
+                # ``looks_like_fabricated_action_claim("")`` is always False;
+                # the backstop only ever fires on a NON-empty narration round.
+                # Scoped to the LOCAL (MODEL_PROVIDER=openai) path -- ``_provider``
+                # is resolved once above (job-0287) -- so Bedrock's production
+                # narration (a legitimately empty round) is byte-unchanged. The
+                # empty round already incremented ``iterations`` (counts toward
+                # ``_step_cap``) and never set ``_turn_ever_called_tool`` / never
+                # touched the loop watchdog (both live in the tool-dispatch path
+                # below), so a retry cannot escape the step cap nor trip the
+                # runaway guard.
+                _empty_round = not "".join(turn_text_parts).strip()
+                if (
+                    _provider == "openai"
+                    and _empty_round
+                    and _empty_retries < _EMPTY_COMPLETION_RETRY_CAP
+                ):
+                    _empty_retries += 1
+                    logger.warning(
+                        "empty-completion retry %d/%d session=%s iter=%d",
+                        _empty_retries,
+                        _EMPTY_COMPLETION_RETRY_CAP,
+                        state.session_id,
+                        iterations,
+                    )
+                    # Corrective user-role nudge, built with the same plain-text
+                    # Content idiom the initial user message uses (adapter.
+                    # build_user_text_content) -- no hand-rolled google.genai
+                    # types here. Appended so the retried round sees "your last
+                    # turn was empty, act or answer".
+                    contents.append(build_user_text_content(_EMPTY_COMPLETION_NUDGE))
+                    # Observability is log-only (above): a retry must not inject
+                    # a transient note into the persisted narration segment, and
+                    # inventing a new envelope type is out of scope (NATE is
+                    # live) -- the log.warning is the durable retry witness.
+                    continue
                 logger.info(
                     "gemini loop terminal session=%s iter=%d text_chunks=%d",
                     state.session_id,
@@ -5533,6 +5606,73 @@ async def _handle_case_command(
         )
         return
 
+    if command == "set-bbox":
+        # Persistent per-case AOI (NATE 2026-07-19, cloud parity): the plugin's
+        # draw/edit tool sends the user's rectangle here so CaseSummary.bbox is
+        # durably the user's chosen extent - not None until a tool happens to
+        # pin it. The agent already injects state.case_bbox into EVERY turn
+        # (_turn_case_bbox -> build_layers_present_note) and snaps fetch bbox
+        # params to it, so a set case bbox is exactly what stops the model
+        # re-deriving/geocoding the area every turn. Clones the rename branch:
+        # write the field, re-snapshot the view + thin manifest, re-emit the
+        # case-list; ALSO update state.case_bbox when this is the OPEN case so
+        # the very next turn's in-prompt AOI line is correct with no reopen.
+        if not cmd.case_id:
+            await _send_error(
+                websocket,
+                state.session_id,
+                "INTERNAL_ERROR",
+                "case-command(set-bbox) requires case_id",
+            )
+            return
+        bbox = _coerce_bbox4((cmd.args or {}).get("bbox"))
+        if bbox is None:
+            await _send_error(
+                websocket,
+                state.session_id,
+                "INTERNAL_ERROR",
+                "case-command(set-bbox) requires args.bbox = "
+                "[min_lon, min_lat, max_lon, max_lat]",
+            )
+            return
+        existing = await p.get_case(cmd.case_id)
+        if existing is None:
+            await _send_error(
+                websocket,
+                state.session_id,
+                "INTERNAL_ERROR",
+                f"case-command(set-bbox): case {cmd.case_id!r} not found",
+            )
+            return
+        updated = existing.model_copy(
+            update={"bbox": list(bbox), "updated_at": now_utc()}
+        )
+        try:
+            await p.upsert_case(updated)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("case-command(set-bbox) upsert failed: %s", exc)
+            await _send_error(
+                websocket,
+                state.session_id,
+                "INTERNAL_ERROR",
+                f"case set-bbox failed: {exc}",
+            )
+            return
+        # Open case: refresh the durable in-session pin so the next turn's
+        # AOI line + fetch-bbox snapping use the new extent immediately.
+        if cmd.case_id == state.active_case_id:
+            state.case_bbox = list(bbox)
+        await _persist_case_view_snapshot(state, case_id=cmd.case_id)
+        await _persist_case_manifest(state, case_id=cmd.case_id)
+        await _emit_case_list(websocket, state, force=True)
+        logger.info(
+            "case-command set-bbox session=%s case=%s bbox=%s",
+            state.session_id,
+            cmd.case_id,
+            list(bbox),
+        )
+        return
+
     if command == "archive":
         if not cmd.case_id:
             await _send_error(
@@ -7112,6 +7252,7 @@ async def _build_telemac_mesh_envelope(
     from .workflows.model_river_dye_release_scenario import (
         MESH_H_FLOOR_M,
         MESH_NODE_CAP,
+        plausible_release_coords,
         preview_telemac_mesh,
     )
 
@@ -7122,6 +7263,42 @@ async def _build_telemac_mesh_envelope(
     dt = float(stats["time_step_s"])
     est_s = float(stats["est_solve_seconds"])
     where = stats.get("location_name") or params.get("location") or "?"
+
+    # 2026-07-18 release-coverage guard: when the CALL carried plausible
+    # release coords the preview seeds the reach from them, so the built mesh
+    # should contain the release point. If it STILL does not (coords off any
+    # flowline, snap landed on a different water body), say so ON THE CARD -
+    # never silently mesh elsewhere. The tri-state pin below also lets the
+    # decision tail tell call-provided coords (seed the reach) apart from the
+    # gate-picked click (source only).
+    _rel = plausible_release_coords(
+        params.get("release_lon"), params.get("release_lat")
+    )
+    stats["release_seeds_reach"] = _rel is not None
+    # BK-3b decouple: keep the EXACT pair the preview seeded the reach from so
+    # the decision tail can thread it as separate seed keys - the BK-6 click
+    # overwrites release_lon/release_lat, and re-seeding from the click would
+    # silently mesh a DIFFERENT reach than the one the user approved.
+    stats["release_seed_pair"] = list(_rel) if _rel is not None else None
+    release_note = ""
+    _mesh_bbox = list(stats.get("bbox") or [])
+    if _rel is not None and len(_mesh_bbox) == 4:
+        _rlon, _rlat = _rel
+        if not (
+            float(_mesh_bbox[0]) <= _rlon <= float(_mesh_bbox[2])
+            and float(_mesh_bbox[1]) <= _rlat <= float(_mesh_bbox[3])
+        ):
+            release_note = (
+                f" WARNING: the requested release point ({_rlon:.4f}, "
+                f"{_rlat:.4f}) is OUTSIDE this mesh - the meshed reach may be "
+                "the wrong water body. Cancel and name the river / a closer "
+                "place, or click a release point inside this mesh."
+            )
+            logger.warning(
+                "telemac approve-mesh: requested release point (%.5f, %.5f) "
+                "is outside the previewed mesh bbox %s",
+                _rlon, _rlat, _mesh_bbox,
+            )
 
     # Resolution ladder around the suggested edge length (finer halves, coarser
     # doubles), floored at the gmsh-quality minimum. The client recomputes the
@@ -7165,13 +7342,18 @@ async def _build_telemac_mesh_envelope(
         },
         estimated_mb=0.0,
         threshold_mb=0.0,
+        # The release-coverage warning is APPENDED and must survive the 512
+        # cap - the base prose is trimmed first, never the warning.
         recommendation=(
-            f"The river mesh for {where} is previewed on the map "
-            f"({npoin:,} nodes at {h:g} m edges, dt {dt:g} s; est solve "
-            f"~{est_s / 60.0:.0f} min). Click the map INSIDE the mesh to place "
-            "the spill release point (click again to move it), then Continue. "
-            "You can also pick a finer/coarser mesh, or cancel."
-        )[:512],
+            (
+                f"The river mesh for {where} is previewed on the map "
+                f"({npoin:,} nodes at {h:g} m edges, dt {dt:g} s; est solve "
+                f"~{est_s / 60.0:.0f} min). Click the map INSIDE the mesh to "
+                "place the spill release point (click again to move it), then "
+                "Continue. You can also pick a finer/coarser mesh, or cancel."
+            )[: 512 - len(release_note)]
+            + release_note
+        ),
         options=["proceed", "cancel", "narrow_scope"],
         granularity=granularity,
     )
@@ -8449,6 +8631,24 @@ async def _gate_on_solver_confirm(
             approved = dict(params)
             approved["confirmed"] = True
             approved["mesh_resolution_m"] = chosen_h
+            # 2026-07-18 release-seeding tri-state: pin whether the ORIGINAL
+            # call carried plausible release coords (the builder recorded it)
+            # BEFORE the click override below - call-provided coords seed the
+            # reach (the preview already meshed from them); a gate-picked
+            # click must only move the SOURCE (BK-3b: the approved solve
+            # reproduces the previewed mesh, never relocates it).
+            approved["_release_seeds_reach"] = bool(
+                telemac_preview.get("release_seeds_reach")
+            )
+            # BK-3b decouple: the BK-6 loop below overwrites release_lon/
+            # release_lat with the gate click, so preserve the ORIGINAL call
+            # coords the preview seeded the reach from as separate seed keys -
+            # the approved solve re-seeds from THESE (reproducing the
+            # previewed mesh) while the click only moves the source.
+            _seed_pair = telemac_preview.get("release_seed_pair")
+            if approved["_release_seeds_reach"] and _seed_pair is not None:
+                approved["_seed_release_lon"] = float(_seed_pair[0])
+                approved["_seed_release_lat"] = float(_seed_pair[1])
             # BK-6: the user-picked release point rides revised_args.
             for _rk in ("release_lon", "release_lat"):
                 if revised.get(_rk) is not None:
@@ -8585,6 +8785,12 @@ async def _gate_on_solver_confirm(
     # fetch + same explicit h -> gmsh reproduces the mesh).
     if telemac_preview is not None:
         approved["mesh_resolution_m"] = float(telemac_preview["mesh_size_m"])
+        # 2026-07-18: on plain proceed the release coords (if any) are still
+        # the call-provided originals - pin the same tri-state the preview
+        # used so the solve re-seeds the reach exactly like the preview did.
+        approved["_release_seeds_reach"] = bool(
+            telemac_preview.get("release_seeds_reach")
+        )
     if swmm_autoscale is not None:
         approved["target_resolution_m"] = float(swmm_autoscale.resolution_m)
         approved["enable_autoscale"] = False

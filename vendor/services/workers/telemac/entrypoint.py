@@ -29,6 +29,11 @@ Manifest schema (the ``telemac_river_dye`` worker contract):
       "reach": {                       # ReachConfig field overrides (all optional)
         "name": "snake_river_twin_falls",
         "seed_lon": -114.307, "seed_lat": 42.579,
+        "release_lon": -122.934, "release_lat": 46.106,  # BK-6 source picker
+        "seed_from_release": true,     # call-provided release seeds the reach
+        "seed_release_lon": -122.934, "seed_release_lat": 46.106,
+        # ^ BK-3b decouple: ORIGINAL call coords the reach seed follows when a
+        #   gate click overwrote release_lon/release_lat (source moves only)
         "nav_direction": "DM", "distance_km": 6.0,
         "channel_width_m": 60.0, "mesh_size_m": 14.0,
         "inflow_q_m3s": 250.0, "init_depth_m": 2.5,
@@ -442,8 +447,19 @@ def run_pipeline(
                 import numpy as _np2  # noqa: WPS433
                 c0 = _np2.mean(zones[0][1], axis=0)
                 c1 = _np2.mean(zones[-1][1], axis=0)
+                # Honest exit accounting (drogue root-cause 2026-07-18):
+                # TELEMAC deletes a float from the drogues file when its
+                # trajectory crosses a LIQUID boundary (streamline.f SCHAR11,
+                # IFABOR=0) - i.e. it EXITED the domain through the outlet.
+                # released - final is therefore "exited" (beached mass shows
+                # separately in the listing's oil balance), never a tracker
+                # bug; report it so a low survivor count reads honestly.
+                released = len(zones[0][1])
+                remaining = len(zones[-1][1])
                 oil_stats = {
-                    "oil_particles": len(zones[-1][1]),
+                    "oil_particles": remaining,
+                    "oil_particles_released": released,
+                    "oil_particles_exited_domain": max(0, released - remaining),
                     "oil_snapshots": len(zones),
                     "oil_drift_m": round(float(_np2.hypot(*(c1 - c0))), 1),
                 }

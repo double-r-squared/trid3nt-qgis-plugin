@@ -9,7 +9,7 @@ renders the dye advecting down the REAL river curves.
 This is the artifact the P2 worker image will call. Factored into:
   fetch_river_centerline() -> real NHDPlus geometry
   process_centerline()     -> project/resample/smooth to UTM meters
-  fetch_dem_bed()          -> Copernicus GLO-30 DEM sample
+  fetch_dem_bed()          -> Copernicus GLO-30 DEM sample (USGS 3DEP fallback)
   build_channel_mesh()     -> Gmsh mesh (all P0 gotchas honored)
   assign_bed()             -> DEM onto nodes + gentle downstream slope
   write_slf() / write_cli()-> SELAFIN geometry + boundary conditions
@@ -34,6 +34,7 @@ import json
 import logging
 import os
 import subprocess
+import time
 import urllib.parse
 import urllib.request
 from collections import defaultdict
@@ -73,6 +74,23 @@ class ReachConfig:
     # interior mesh node to this point (validated within 2 channel widths).
     release_lon: float = None           # type: ignore[assignment]
     release_lat: float = None           # type: ignore[assignment]
+    # 2026-07-18 release-seeding: when True, a plausible release point ALSO
+    # seeds the centerline/corridor resolution (nearest flowline to the
+    # RELEASE, not the geocode center). Fix for bare release coords with no
+    # river name meshing the water body nearest the CITY (a Longview prompt
+    # meshed the Cowlitz instead of the Columbia, and the built mesh did not
+    # even contain the requested release point). The composer arms it ONLY
+    # for CALL-provided coords; a gate-picked map click moves the SOURCE,
+    # never the reach (BK-3b: the approved solve must reproduce the previewed
+    # mesh). See resolve_centerline_seed.
+    seed_from_release: bool = False
+    # 2026-07-18 BK-3b decouple: when the approve-mesh gate click moved the
+    # SOURCE (overwriting release_lon/release_lat), the manifest threads the
+    # ORIGINAL call coords here so the reach seed still follows the pair the
+    # preview meshed from - the click moves the source only, never the reach.
+    # Absent (the common case) the release coords seed as before.
+    seed_release_lon: float = None      # type: ignore[assignment]
+    seed_release_lat: float = None      # type: ignore[assignment]
     # BK-7 real-bank meshing: "auto" samples USGS NHDArea river polygons for
     # per-station left/right bank offsets (mesh follows the REAL river);
     # "constant" keeps the legacy fixed-width ribbon.
@@ -215,17 +233,75 @@ def _stitch_flowlines(features) -> list[tuple[float, float]]:
     return path
 
 
+def resolve_centerline_seed(
+    seed_lon: float,
+    seed_lat: float,
+    release_lon=None,
+    release_lat=None,
+    seed_from_release: bool = False,
+    seed_release_lon=None,
+    seed_release_lat=None,
+):
+    """The (lon, lat, kind) the centerline/corridor resolution centers on.
+
+    Pure decision function (no network; offline-tested in
+    tests/test_release_seed_preference.py). The release point wins over the
+    geocode seed ONLY when the manifest armed ``seed_from_release`` AND the
+    coords are plausible EPSG:4326 (numeric, lon in [-180, 180], lat in
+    [-90, 90] - NaN/inf fail the range gate). Anything else keeps the seed
+    byte-for-byte, so the proven location-seeded paths are unchanged.
+    ``kind`` is ``"position"`` (geocode seed kept) or ``"release-position"``.
+
+    2026-07-18 BK-3b decouple: ``seed_release_lon``/``seed_release_lat`` are
+    the ORIGINAL call coords the preview meshed from, threaded separately
+    when an approve-mesh gate click overwrote ``release_lon``/``release_lat``
+    (the click moves the SOURCE only). When armed they take precedence for
+    the reach seed; an implausible pair degrades to the release coords, so
+    the pre-existing manifests (keys absent) behave byte-identically.
+    """
+    base = (float(seed_lon), float(seed_lat), "position")
+    if not seed_from_release:
+        return base
+    for lon_v, lat_v in (
+        (seed_release_lon, seed_release_lat),
+        (release_lon, release_lat),
+    ):
+        try:
+            lon = float(lon_v)
+            lat = float(lat_v)
+        except (TypeError, ValueError):
+            continue
+        if not (-180.0 <= lon <= 180.0 and -90.0 <= lat <= 90.0):
+            continue
+        return (lon, lat, "release-position")
+    return base
+
+
 def fetch_river_centerline(cfg: ReachConfig):
     """Return (lonlat centerline array, meta dict) from real NHDPlus flowlines."""
-    seed_lon, seed_lat, seed_kind = cfg.seed_lon, cfg.seed_lat, "position"
+    seed_lon, seed_lat, seed_kind = resolve_centerline_seed(
+        cfg.seed_lon, cfg.seed_lat,
+        getattr(cfg, "release_lon", None), getattr(cfg, "release_lat", None),
+        seed_from_release=bool(getattr(cfg, "seed_from_release", False)),
+        seed_release_lon=getattr(cfg, "seed_release_lon", None),
+        seed_release_lat=getattr(cfg, "seed_release_lat", None),
+    )
+    if seed_kind == "release-position":
+        LOG.info(
+            "release-seeded reach: corridor resolution centered on the release "
+            "point (%.5f,%.5f), not the geocode seed (%.5f,%.5f)",
+            seed_lon, seed_lat, cfg.seed_lon, cfg.seed_lat,
+        )
     if cfg.river_name:
         named = _named_flowline_seed(cfg.river_name, seed_lon, seed_lat)
         if named is not None:
-            seed_lon, seed_lat, seed_kind = named[0], named[1], "named-flowline"
+            named_kind = ("named-flowline" if seed_kind == "position"
+                          else "release-named-flowline")
             LOG.info(
                 "named-flowline re-seed %r: (%.5f,%.5f) -> (%.5f,%.5f)",
-                cfg.river_name, cfg.seed_lon, cfg.seed_lat, seed_lon, seed_lat,
+                cfg.river_name, seed_lon, seed_lat, named[0], named[1],
             )
+            seed_lon, seed_lat, seed_kind = named[0], named[1], named_kind
         else:
             LOG.warning(
                 "named-flowline re-seed %r found nothing - raw seed kept",
@@ -917,35 +993,51 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
 # ---------------------------------------------------------------------------
 # 4. DEM bed onto mesh nodes + enforced gentle downstream slope
 # ---------------------------------------------------------------------------
-def fetch_dem_bed(mesh: dict, cfg: ReachConfig, tr):
-    """Sample Copernicus GLO-30 DEM at mesh nodes; fit a gentle downstream bed.
+# OPEN-25b DEM retry ladder knobs. 2026-07-18 the Planetary Computer STAC
+# endpoint served Azure Front Door 503 HTML and the old one-shot fetch killed
+# runs outright; the data-source norm is primary -> fallback -> honest typed
+# error. Module-level so tests (and a hot ops fix) can shrink the ladder.
+_DEM_STAC_ATTEMPTS = 3
+_DEM_STAC_BACKOFF_S = (5.0, 20.0, 60.0)
+_3DEP_IMAGE_URL = ("https://elevation.nationalmap.gov/arcgis/rest/services/"
+                   "3DEPElevation/ImageServer/exportImage")
 
-    Real canyon DEM is the SURFACE (canyon rim + water), noisy along the thalweg.
-    We (a) sample raw DEM at each node (lon/lat), (b) compute along-channel
-    distance s per node, (c) fit bed = z0 - slope*s using a robust downstream
-    trend clamped to [min_bed_slope, max_bed_slope] so flow always moves.
-    Both the measured DEM drop and the enforced slope are reported.
+
+def _retryable_dem_excs():
+    """Network-shaped exceptions worth a retry on the STAC rung.
+
+    pystac_client is guard-imported: it is always in the worker image but may
+    be absent in offline test envs (the ladder still works without it).
+    """
+    import requests
+    import rasterio
+
+    excs = [requests.exceptions.RequestException,
+            rasterio.errors.RasterioIOError]
+    try:
+        from pystac_client.exceptions import APIError
+        excs.append(APIError)
+    except ImportError:
+        pass
+    return tuple(excs)
+
+
+def _sample_dem_stac(lon, lat, bbox):
+    """Primary DEM rung: Planetary Computer STAC cop-dem-glo-30 point sample.
+
+    Returns per-node elevations (NaN where unsampled), or None when the
+    catalog has no tiles for the bbox (deterministic - retries cannot help).
     """
     import planetary_computer as pc
     import pystac_client
     import rasterio
 
-    X, Y = mesh["X"], mesh["Y"]
-    # node lon/lat (inverse transform)
-    inv = tr  # Transformer 4326->utm; build inverse
-    from pyproj import Transformer
-    back = Transformer.from_crs(inv.target_crs, 4326, always_xy=True)
-    lon, lat = back.transform(X, Y)
-    pad = 0.01
-    bbox = [float(lon.min() - pad), float(lat.min() - pad),
-            float(lon.max() + pad), float(lat.max() + pad)]
-
     cat = pystac_client.Client.open(
         "https://planetarycomputer.microsoft.com/api/stac/v1")
     items = list(cat.search(collections=["cop-dem-glo-30"], bbox=bbox).items())
     if not items:
-        raise RuntimeError(f"no Copernicus GLO-30 tiles for bbox {bbox}")
-    z_raw = np.full(len(X), np.nan)
+        return None
+    z_raw = np.full(len(lon), np.nan)
     with rasterio.Env(GDAL_HTTP_MAX_RETRY="3", GDAL_HTTP_TIMEOUT="30"):
         for it in items:
             href = pc.sign(it).assets["data"].href
@@ -957,6 +1049,122 @@ def fetch_dem_bed(mesh: dict, cfg: ReachConfig, tr):
                     samp[samp == nod] = np.nan
                 take = np.isnan(z_raw) & ~np.isnan(samp)
                 z_raw[take] = samp[take]
+    return z_raw
+
+
+def _sample_dem_3dep(lon, lat, bbox):
+    """Fallback DEM rung: USGS 3DEP ImageServer exportImage point sample.
+
+    Exports ONE bbox GeoTIFF at ~1 arcsecond (the GLO-30-equivalent grid, so
+    the bed fit sees the same resolution class) and samples the SAME lon/lat
+    node points the STAC rung samples - identical z_raw contract downstream.
+    """
+    import requests
+    import rasterio  # noqa: F401 -- MemoryFile needs the rasterio env
+    from rasterio.io import MemoryFile
+
+    # ~1 arcsec pixels over the padded bbox; the ImageServer caps exports at
+    # 4100 px/side so clamp (a capped reach just samples slightly coarser)
+    ncols = int(np.clip(round((bbox[2] - bbox[0]) * 3600.0), 64, 4000))
+    nrows = int(np.clip(round((bbox[3] - bbox[1]) * 3600.0), 64, 4000))
+    resp = requests.get(_3DEP_IMAGE_URL, params={
+        "bbox": ",".join(str(v) for v in bbox),
+        "bboxSR": "4326",
+        "imageSR": "4326",
+        "size": f"{ncols},{nrows}",
+        "format": "tiff",
+        "pixelType": "F32",
+        "f": "image",
+    }, timeout=180)
+    resp.raise_for_status()
+    body = resp.content
+    if body[:4] not in (b"II*\x00", b"MM\x00*"):
+        # ArcGIS reports errors as HTTP-200 JSON/HTML - keep that honest
+        raise RuntimeError(f"3DEP exportImage returned non-tiff: {body[:160]!r}")
+    with MemoryFile(body) as mf, mf.open() as src:
+        samp = np.array(list(src.sample(np.column_stack([lon, lat]))),
+                        dtype=float).ravel()
+        nod = src.nodata
+        if nod is not None:
+            samp[samp == nod] = np.nan
+    samp[~np.isfinite(samp)] = np.nan
+    samp[samp < -1.0e4] = np.nan  # ocean/void sentinels (e.g. -3.4e38)
+    if not np.isfinite(samp).any():
+        raise RuntimeError("3DEP exportImage returned no valid elevations for "
+                           f"bbox {bbox} (outside 3DEP coverage?)")
+    return samp
+
+
+def _fetch_dem_samples(lon, lat, bbox):
+    """OPEN-25b DEM ladder: STAC x3 (5/20/60 s backoff) -> 3DEP -> typed error.
+
+    Returns (z_raw, dem_source). Both rungs exhausted raises the plain
+    RuntimeError the pipeline already surfaces as a typed metrics error
+    (entrypoint.main catches it -> status=error) - no new error shape.
+    """
+    retryable = _retryable_dem_excs()
+    last_err = "unreached"
+    for attempt in range(1, _DEM_STAC_ATTEMPTS + 1):
+        try:
+            z = _sample_dem_stac(lon, lat, bbox)
+        except retryable as exc:
+            last_err = f"{type(exc).__name__}: {exc}"
+            LOG.warning("dem: STAC attempt %d/%d failed (%s)",
+                        attempt, _DEM_STAC_ATTEMPTS, last_err)
+            # No sleep after the FINAL attempt - go straight to the fallback
+            # (a full outage should cost 5+20 s of backoff, not 85 s).
+            if attempt < _DEM_STAC_ATTEMPTS:
+                time.sleep(_DEM_STAC_BACKOFF_S[min(attempt - 1,
+                                                   len(_DEM_STAC_BACKOFF_S) - 1)])
+            continue
+        except Exception as exc:  # noqa: BLE001 -- malformed item/JSON etc.
+            # Non-retryable STAC failure modes (KeyError on a malformed item,
+            # JSON decode on an HTTP-200 garbage body) must still reach the
+            # 3DEP rung rather than escaping raw - retrying them is useless.
+            last_err = f"{type(exc).__name__}: {exc}"
+            LOG.warning("dem: STAC non-retryable failure (%s) - skipping to "
+                        "fallback", last_err)
+            break
+        if z is None:
+            last_err = f"no cop-dem-glo-30 tiles for bbox {bbox}"
+            LOG.warning("dem: %s", last_err)
+            break
+        if not np.isfinite(z).any():
+            last_err = "STAC sample returned no valid elevations"
+            LOG.warning("dem: %s for bbox %s", last_err, bbox)
+            break
+        return z, "cop-dem-glo-30"
+    LOG.warning("dem: falling back to USGS 3DEP for bbox %s", bbox)
+    try:
+        return _sample_dem_3dep(lon, lat, bbox), "usgs-3dep"
+    except Exception as exc:  # noqa: BLE001 -- both rungs down -> honest error
+        raise RuntimeError(
+            f"DEM fetch failed for bbox {bbox}: Planetary Computer STAC "
+            f"({last_err}) then USGS 3DEP fallback "
+            f"({type(exc).__name__}: {exc})") from exc
+
+
+def fetch_dem_bed(mesh: dict, cfg: ReachConfig, tr):
+    """Sample Copernicus GLO-30 DEM at mesh nodes; fit a gentle downstream bed.
+
+    Real canyon DEM is the SURFACE (canyon rim + water), noisy along the thalweg.
+    We (a) sample raw DEM at each node (lon/lat), (b) compute along-channel
+    distance s per node, (c) fit bed = z0 - slope*s using a robust downstream
+    trend clamped to [min_bed_slope, max_bed_slope] so flow always moves.
+    Both the measured DEM drop and the enforced slope are reported.
+    """
+    X, Y = mesh["X"], mesh["Y"]
+    # node lon/lat (inverse transform)
+    inv = tr  # Transformer 4326->utm; build inverse
+    from pyproj import Transformer
+    back = Transformer.from_crs(inv.target_crs, 4326, always_xy=True)
+    lon, lat = back.transform(X, Y)
+    pad = 0.01
+    bbox = [float(lon.min() - pad), float(lat.min() - pad),
+            float(lon.max() + pad), float(lat.max() + pad)]
+
+    # OPEN-25b: retry ladder + 3DEP fallback (never a one-shot fetch)
+    z_raw, dem_source = _fetch_dem_samples(lon, lat, bbox)
 
     # along-channel distance s: project each node onto the centerline polyline
     cl = mesh["centerline"]
@@ -974,6 +1182,7 @@ def fetch_dem_bed(mesh: dict, cfg: ReachConfig, tr):
     Z = z_up - slope * s_node
     # fill any nan raw with fitted
     dem_meta = dict(
+        dem_source=dem_source,
         dem_min=float(np.nanmin(z_raw)), dem_max=float(np.nanmax(z_raw)),
         n_dem_nan=int((~valid).sum()),
         measured_slope=float(measured_slope),

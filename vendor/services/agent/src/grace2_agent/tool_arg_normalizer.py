@@ -739,6 +739,34 @@ def normalize_args(
     """
     if not raw_args:
         return {}
+    # run_telemac combined-coordinate alias (live 2026-07-18, 3x): qwen packs
+    # the release point into ONE string field 'spill_location_latlon'
+    # ("lat,lon") instead of release_lat/release_lon. This MUST normalize
+    # HERE - the BK-3b gate preview reads normalized args before the tool
+    # function runs, and the approve-click later injects release_* so a
+    # tool-level parse guarded on "coords absent" never fires (proven live:
+    # the preview meshed the wrong river while the coords sat unread).
+    if (tool_name == "run_telemac"
+            and isinstance(raw_args.get("spill_location_latlon"), str)
+            and raw_args.get("release_lat") is None
+            and raw_args.get("release_lon") is None):
+        try:
+            _lat_s, _lon_s = raw_args["spill_location_latlon"].split(",", 1)
+            raw_args = dict(raw_args)
+            raw_args["release_lat"] = float(_lat_s)
+            raw_args["release_lon"] = float(_lon_s)
+            raw_args.pop("spill_location_latlon")
+            logger.info(
+                "normalize_args(run_telemac): spill_location_latlon -> "
+                "release_lat=%s release_lon=%s",
+                raw_args["release_lat"], raw_args["release_lon"],
+            )
+        except (ValueError, TypeError):
+            logger.warning(
+                "normalize_args(run_telemac): unparseable "
+                "spill_location_latlon %r - left for the tool to drop",
+                raw_args.get("spill_location_latlon"),
+            )
     accepted, accepts_var_keyword = _accepted_params(fn)
     tool_aliases = _TOOL_SPECIFIC_ALIASES.get(tool_name, {})
     out: dict[str, Any] = {}
