@@ -191,9 +191,14 @@ def main():
                          if REGION_HINT in str(c.get("name", "")).lower()),
                         cands[0] if cands else None)
             if pick:
+                # Contract field is ``choice`` (Literal["region","whole_state"]),
+                # NOT ``decision`` -- a stale field name made the server's
+                # RegionChoiceProvidedEnvelopePayload.model_validate reject this
+                # frame, so the paused turn hung on the 24h local gate. Match
+                # RegionChoiceProvidedEnvelopePayload exactly.
                 cli._send("region-choice-provided", {
                     "request_id": p.get("request_id"),
-                    "decision": "region",
+                    "choice": "region",
                     "selected_region_id": pick.get("region_id"),
                     "selected_bbox": pick.get("bbox"),
                 }, queue_if_closed=True)
