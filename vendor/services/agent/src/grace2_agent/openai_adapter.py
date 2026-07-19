@@ -149,6 +149,23 @@ def openai_api_key() -> str:
     return os.environ.get("GRACE2_OPENAI_API_KEY", "not-needed")
 
 
+def openai_default_headers() -> dict[str, str] | None:
+    """Optional per-provider request headers (OpenRouter model extensibility,
+    NATE 2026-07-19). OpenRouter accepts an ``HTTP-Referer`` + ``X-Title`` for
+    app attribution/ranking; other OpenAI-compatible providers ignore them.
+    Both env-driven and OMITTED entirely when unset, so the local-ollama and
+    every existing provider path is byte-unchanged (returns None -> AsyncOpenAI
+    default headers)."""
+    headers: dict[str, str] = {}
+    referer = os.environ.get("GRACE2_OPENAI_HTTP_REFERER", "").strip()
+    if referer:
+        headers["HTTP-Referer"] = referer
+    title = os.environ.get("GRACE2_OPENAI_X_TITLE", "").strip()
+    if title:
+        headers["X-Title"] = title
+    return headers or None
+
+
 def openai_model(session_model: str | None = None) -> str:
     """Resolve the OpenAI model name to send.
 
@@ -710,7 +727,11 @@ async def stream_openai(
     base_url = openai_base_url()
     api_key = openai_api_key()
 
-    client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+    client = AsyncOpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        default_headers=openai_default_headers(),
+    )
 
     num_ctx = await discover_num_ctx(base_url, resolved_model)
     budget = compute_budget_tokens(num_ctx)
