@@ -431,9 +431,23 @@ async def discover_num_ctx(base_url: str | None, model_name: str) -> int:
     return discovered
 
 
-def _reset_num_ctx_cache_for_tests() -> None:
-    """Test-only: clear the process-lifetime discovery cache between cases."""
+def reset_num_ctx_cache() -> None:
+    """Clear the process-lifetime ``num_ctx`` discovery cache.
+
+    Public seam (OpenRouter model-extensibility, design 2026-07-19): a LIVE
+    provider/model switch pushed via ``POST /api/provider-config`` must let a
+    same-name model re-discover its context window on the next turn instead of
+    serving the stale cached value (e.g. the local ollama 16k default lingering
+    after a switch to a 32k OpenRouter preset). Named WITHOUT the
+    ``_for_tests`` suffix so production code can call it honestly.
+    """
     _NUM_CTX_CACHE.clear()
+
+
+def _reset_num_ctx_cache_for_tests() -> None:
+    """Test-only alias of :func:`reset_num_ctx_cache` (kept for the existing
+    test-suite call sites)."""
+    reset_num_ctx_cache()
 
 
 # ---------------------------------------------------------------------------

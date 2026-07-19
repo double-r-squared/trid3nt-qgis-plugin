@@ -1499,6 +1499,67 @@ async def _handle_export_qgis_post(raw_body: bytes) -> bytes:
     return json.dumps(result, separators=(",", ":")).encode("utf-8")
 
 
+class _ProviderConfigBadRequest(Exception):
+    """POST /api/provider-config body was malformed. SECURITY: the message
+    NEVER echoes the request body or the api_key -- only field-shape complaints
+    (a malformed body could itself be a mistyped key)."""
+
+
+def _apply_provider_config(raw_body: bytes) -> bytes:
+    """Update the OpenAI-provider process env from the POST body and return the
+    encoded ``{"ok", "model", "base_url_host"}`` result.
+
+    OpenRouter model-extensibility (design 2026-07-19): the plugin's Settings
+    key-form POSTs ``{base_url, api_key, model, num_ctx}`` (all optional) here.
+    ``openai_adapter`` reads ``GRACE2_OPENAI_*`` from ``os.environ`` at CALL
+    time and builds ``AsyncOpenAI`` per-call, so mutating the env takes effect
+    on the NEXT turn with NO restart. For each present, non-empty field the
+    matching env var is set (str()-ed so a numeric ``num_ctx`` rides cleanly);
+    a same-name model then re-discovers its context window via the public
+    ``reset_num_ctx_cache`` seam.
+
+    SECURITY: the api_key is written to ``os.environ`` but is NEVER logged,
+    echoed in the response, or placed in a raised message -- only the base URL
+    HOST and the effective model name leave this function.
+    """
+    try:
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body.strip() else None
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        # Deliberately generic -- a decode error message can carry a fragment of
+        # the raw body, which may be the mistyped key. Never surface it.
+        raise _ProviderConfigBadRequest("body must be valid JSON") from None
+    if not isinstance(payload, dict):
+        raise _ProviderConfigBadRequest(
+            'body must be a JSON object like {"base_url": "...", "model": "..."}'
+        )
+    field_env = {
+        "base_url": "GRACE2_OPENAI_BASE_URL",
+        "api_key": "GRACE2_OPENAI_API_KEY",
+        "model": "GRACE2_OPENAI_MODEL",
+        "num_ctx": "GRACE2_OPENAI_NUM_CTX",
+    }
+    for field, env_name in field_env.items():
+        if field in payload and payload[field] is not None:
+            value = str(payload[field]).strip()
+            if value:
+                os.environ[env_name] = value
+    # A same-name model must re-discover its num_ctx (the provider/num_ctx
+    # switch invalidates the process-lifetime cache).
+    try:
+        from .context_budget import reset_num_ctx_cache
+
+        reset_num_ctx_cache()
+    except Exception:  # noqa: BLE001 -- cache reset is best-effort, never fatal
+        pass
+    effective_model = os.environ.get("GRACE2_OPENAI_MODEL", "").strip() or None
+    base_url = os.environ.get("GRACE2_OPENAI_BASE_URL", "").strip()
+    host = _base_url_host(base_url) if base_url else ""
+    return json.dumps(
+        {"ok": True, "model": effective_model, "base_url_host": host},
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
 def _export_qgis_root() -> Path:
     """The only directory the file route may serve from: the export tool's
     output root (same default as ``export_case_to_qgis``)."""
@@ -1847,16 +1908,134 @@ def _ollama_tags_url() -> str:
 
 
 class _LocalModelsUpstreamError(Exception):
-    """Ollama /api/tags unreachable or returned an unusable payload."""
+    """Ollama /api/tags (or OpenRouter /models) unreachable or unusable."""
+
+
+# OpenRouter free-model dropdown (design 2026-07-19). ``GET /models`` on
+# OpenRouter is large (~300 entries) and rarely changes; cache the FILTERED
+# result per base_url for a process TTL so the plugin's provider-change
+# repopulate does not re-fetch every open. A restart (or a different base_url
+# key) naturally bypasses staleness -- there is no explicit invalidation, by
+# design. Mirrors the context_budget ``_NUM_CTX_CACHE`` module-cache pattern.
+_OPENROUTER_MODELS_TTL_S = 600.0
+_OPENROUTER_MODELS_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
+
+
+def _base_url_host(base_url: str) -> str:
+    """Lowercased host of an OpenAI-compatible base URL ("" when unparsable)."""
+    from urllib.parse import urlsplit
+
+    return (urlsplit(base_url).hostname or "").lower()
+
+
+def _filter_openrouter_models(raw: Any) -> list[dict[str, str]]:
+    """PURE: an OpenRouter ``GET /models`` body -> ``[{"id","label"}]`` of the
+    FREE, TOOL-CAPABLE models only.
+
+      FREE          = ``pricing.prompt == "0"`` AND ``pricing.completion == "0"``
+                      OR the id ends with ``:free``.
+      TOOL-CAPABLE  = ``"tools"`` present in ``supported_parameters``. A model
+                      MISSING ``supported_parameters`` is kept OUT of the free
+                      list (to be safe -- the agent is tool_choice=auto every
+                      round; a model that cannot honor tools narrates a fake
+                      answer, the design's top risk).
+
+    Never raises on absent / oddly-typed keys -- a malformed row is skipped,
+    never fatal, so one bad entry cannot blank the whole list.
+    """
+    data = raw.get("data") if isinstance(raw, dict) else None
+    if not isinstance(data, list):
+        return []
+    out: list[dict[str, str]] = []
+    for m in data:
+        if not isinstance(m, dict):
+            continue
+        mid = m.get("id")
+        if not isinstance(mid, str) or not mid.strip():
+            continue
+        mid = mid.strip()
+        pricing = m.get("pricing")
+        prompt_free = completion_free = False
+        if isinstance(pricing, dict):
+            prompt_free = pricing.get("prompt") == "0"
+            completion_free = pricing.get("completion") == "0"
+        is_free = (prompt_free and completion_free) or mid.endswith(":free")
+        if not is_free:
+            continue
+        supported = m.get("supported_parameters")
+        if not isinstance(supported, list) or "tools" not in supported:
+            continue
+        label = mid if mid.endswith(":free") else f"{mid} (free)"
+        out.append({"id": mid, "label": label})
+    return out
+
+
+def _fetch_openrouter_models(base_url: str) -> bytes:
+    """SYNC (httpx): OpenRouter free + tool-capable models in the SAME shape the
+    Ollama branch returns -- ``{"models":[{"id","label"}], "default": ...}``.
+
+    Sends the configured provider key as a ``Bearer`` header (reuses
+    ``openai_adapter.openai_api_key()``); the key is NEVER logged. Result is
+    cached per ``base_url`` with a process TTL (see ``_OPENROUTER_MODELS_CACHE``).
+    Raises ``_LocalModelsUpstreamError`` on any upstream fault -> honest 502.
+    """
+    import time
+
+    import httpx
+
+    from .openai_adapter import openai_api_key
+
+    now = time.monotonic()
+    cached = _OPENROUTER_MODELS_CACHE.get(base_url)
+    if cached is not None and (now - cached[0]) < _OPENROUTER_MODELS_TTL_S:
+        models = cached[1]
+    else:
+        url = f"{base_url.rstrip('/')}/models"
+        headers: dict[str, str] = {}
+        key = openai_api_key()
+        if key and key != "not-needed":
+            headers["Authorization"] = f"Bearer {key}"
+        try:
+            with httpx.Client(timeout=8.0) as client:
+                resp = client.get(url, headers=headers)
+                resp.raise_for_status()
+                payload = resp.json()
+        except Exception as exc:  # noqa: BLE001 -- unreachable / 4xx / non-JSON
+            # NB: the message carries only the URL (host + path), never the key.
+            raise _LocalModelsUpstreamError(
+                f"OpenRouter model list unreachable at {url}: {exc}"
+            ) from exc
+        models = _filter_openrouter_models(payload)
+        _OPENROUTER_MODELS_CACHE[base_url] = (now, models)
+
+    default = os.environ.get("GRACE2_OPENAI_MODEL", "").strip() or None
+    # Configured default first, so a client picking entry 0 gets the served
+    # model. Build a NEW list -- never mutate the cached list in place.
+    ordered = list(models)
+    if default is not None:
+        for i, m in enumerate(ordered):
+            if m["id"] == default:
+                ordered.insert(0, ordered.pop(i))
+                break
+    return json.dumps(
+        {"models": ordered, "default": default}, separators=(",", ":")
+    ).encode("utf-8")
 
 
 def _fetch_local_models() -> bytes:
     """SYNC (httpx; caller wraps in ``asyncio.to_thread``): build the JSON body.
 
-    Raises ``_LocalModelsUpstreamError`` on any upstream fault so the handler
-    emits an honest 502 -- never a fabricated empty success.
+    Branches on the configured provider base URL: an ``openrouter.ai`` host
+    lists the FREE + tool-capable OpenRouter models (design 2026-07-19); any
+    other base URL (local Ollama) lists the installed Ollama models. Raises
+    ``_LocalModelsUpstreamError`` on any upstream fault so the handler emits an
+    honest 502 -- never a fabricated empty success.
     """
     import httpx
+
+    base = os.environ.get("GRACE2_OPENAI_BASE_URL", "").strip()
+    if base and _base_url_host(base).endswith("openrouter.ai"):
+        return _fetch_openrouter_models(base)
 
     url = _ollama_tags_url()
     try:
@@ -2257,6 +2436,51 @@ async def _handle_http(
         except Exception:  # noqa: BLE001
             logger.exception("probe-point run failed")
             writer.write(_format_response(500, b'{"error":"probe point failed"}'))
+        await writer.drain()
+        writer.close()
+        return
+
+    if method == "POST" and proxy_path == "/api/provider-config":
+        # OpenRouter model-extensibility (design 2026-07-19): the plugin's
+        # Settings key-form POSTs the live provider config here so a
+        # provider/model/key switch takes effect on the NEXT turn with NO agent
+        # restart (openai_adapter reads GRACE2_OPENAI_* from os.environ at call
+        # time + rebuilds AsyncOpenAI per-call). Local-mode gated EXACTLY like
+        # /api/local-models -- absent (404) on the cloud surface. SECURITY: the
+        # api_key rides the body, is written to env, and is NEVER logged or
+        # echoed -- only the base_url host + effective model return.
+        if not _local_models_route_enabled():
+            writer.write(_format_response(404, b'{"error":"not found"}'))
+            await writer.drain()
+            writer.close()
+            return
+        raw_body = b""
+        if content_length > 0:
+            try:
+                raw_body = await asyncio.wait_for(
+                    reader.readexactly(content_length), timeout=30.0
+                )
+            except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                raw_body = b""
+        try:
+            body = _apply_provider_config(raw_body)
+            writer.write(_format_response(200, body))
+        except _ProviderConfigBadRequest as exc:
+            writer.write(
+                _format_response(
+                    400,
+                    json.dumps({"error": str(exc)}, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001 -- NEVER surface the body/key in logs
+            # A generic static message + no request context: the traceback
+            # references the raw body variable by name only, never its value.
+            logger.exception("provider-config update failed")
+            writer.write(
+                _format_response(500, b'{"error":"provider config update failed"}')
+            )
         await writer.drain()
         writer.close()
         return
