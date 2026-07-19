@@ -53,8 +53,8 @@ if [ "${1:-}" = "--local" ]; then
   echo "[use_openrouter] reverted to LOCAL ollama ($LOCAL_MODEL)"
 else
   KEY="${1:-}"
-  MODEL="${2:-deepseek/deepseek-chat}"
-  NUM_CTX="${3:-65536}"
+  MODEL="${2:-nvidia/nemotron-3-super-120b-a12b:free}"
+  NUM_CTX="${3:-32768}"
   if [ -z "$KEY" ]; then
     echo "Usage: $0 <OPENROUTER_API_KEY> [model] [num_ctx]" >&2
     echo "       $0 --local" >&2
