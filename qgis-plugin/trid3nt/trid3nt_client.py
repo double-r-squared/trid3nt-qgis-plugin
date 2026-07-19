@@ -578,14 +578,20 @@ def parse_chat_history(session_state_payload: dict) -> list:
     contracts ``case.py``) into plain ``{"role", "content"}`` dicts for the
     dock's case-open chat replay.
 
-    Only ``user``/``agent`` rows are surfaced -- the replay is the plain
-    CONVERSATION (user bubbles + assistant bubbles, no thinking blocks), not
-    the full tool-card/system stream ``role`` also carries. Defensive: a
-    missing/non-list ``chat_history``, a non-dict row, or a row with a
-    missing/non-string ``role``/``content`` is skipped, never raised on -- a
-    bad persisted row must not break a case switch. Capped to the most
-    recent ``CHAT_HISTORY_REPLAY_MAX`` rows (persisted order is oldest-first,
-    so the cap keeps the TAIL -- the most recent conversation).
+    ``user``/``agent`` rows surface as the plain CONVERSATION (user bubbles +
+    assistant bubbles, no thinking blocks). Item H (qgis-ux-batch 2026-07-19):
+    ``role == "tool"`` rows are ALSO surfaced now (they were dropped, so a
+    reopened case lost its whole tool-call chain -- the dock lagged the web
+    client, which already replays ``tool_card`` on reopen). A tool row carries
+    the typed ``tool_card`` dict (the contract-blessed ``ToolCardRecord``
+    payload -- name/state/args/response) plus the ``content`` JSON twin; the
+    dock's ``_replay_chat_history`` renders it as a collapsed tool-card row.
+    ``system`` rows stay dropped. Defensive: a missing/non-list ``chat_history``,
+    a non-dict row, or a row with a missing/non-string ``role``/``content`` (and,
+    for tool rows, no usable ``tool_card`` either) is skipped, never raised on --
+    a bad persisted row must not break a case switch. Capped to the most recent
+    ``CHAT_HISTORY_REPLAY_MAX`` rows (persisted order is oldest-first, so the cap
+    keeps the TAIL -- the most recent conversation).
     """
     rows = session_state_payload.get("chat_history") or []
     if not isinstance(rows, list):
@@ -596,6 +602,18 @@ def parse_chat_history(session_state_payload: dict) -> list:
             continue
         role = row.get("role")
         content = row.get("content")
+        if role == "tool":
+            # Carry the typed tool_card dict (preferred render source) plus the
+            # content JSON twin; skip only when NEITHER is usable.
+            tool_card = row.get("tool_card")
+            if not isinstance(tool_card, dict) and not (
+                isinstance(content, str) and content
+            ):
+                continue
+            out.append(
+                {"role": "tool", "tool_card": tool_card, "content": content}
+            )
+            continue
         if role not in ("user", "agent"):
             continue
         if not isinstance(content, str) or not content:

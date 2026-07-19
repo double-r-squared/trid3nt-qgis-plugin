@@ -75,6 +75,7 @@ from qgis.PyQt.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -117,6 +118,16 @@ _DOT_COLORS = {
     "connecting": "#d29922",
     "connected": "#3fb950",
     "error": "#f85149",
+}
+# Item B1 (qgis-ux-batch 2026-07-19): the dock titlebar shows the CONNECTION
+# STATE (the top-left signifier), not the static "TRID3NT" brand word -- the
+# dot state maps to a short human label the titlebar carries. "error" reads as
+# "Disconnected" (a failed/expired connection IS disconnected to the user).
+_DOT_TITLES = {
+    "disconnected": "Disconnected",
+    "connecting": "Connecting",
+    "connected": "Connected",
+    "error": "Disconnected",
 }
 
 _USER_BUBBLE_STYLE = (
@@ -265,9 +276,19 @@ class SettingsDialog(QDialog):
     checkboxes alike, copies into ``settings`` in the ``accept()`` branch.
     """
 
-    def __init__(self, settings: PluginSettings, parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        settings: PluginSettings,
+        parent: Optional[QWidget] = None,
+        on_disconnect=None,
+        connected: bool = False,
+    ):
         super().__init__(parent)
         self._settings = settings
+        # Item B3 (qgis-ux-batch 2026-07-19): the dock's disconnect path + the
+        # live connection state, so the Disconnect button below is enabled only
+        # while connected.
+        self._on_disconnect = on_disconnect
         # Keep-alive refs for the OpenRouter free-model fetch tasks (design
         # 2026-07-19) -- initialised BEFORE _reload_model_choices runs below.
         self._model_list_tasks: List["_ModelListTask"] = []
@@ -408,6 +429,19 @@ class SettingsDialog(QDialog):
         provider_note.setStyleSheet(_STATUS_LINE_STYLE)
         form.addRow("", provider_note)
 
+        # Item B3 (qgis-ux-batch 2026-07-19): DISCONNECT moved off the header
+        # top row (pure-button rule) into Settings. Enabled only while a
+        # connection is up; clicking it runs the dock's disconnect teardown then
+        # closes the dialog WITHOUT saving (reject) -- it is an action button,
+        # not a settings edit, so it should not also push provider config.
+        self.disconnect_btn = QPushButton("Disconnect from agent")
+        self.disconnect_btn.setEnabled(bool(connected) and on_disconnect is not None)
+        self.disconnect_btn.setToolTip(
+            "End the current agent connection (only available while connected)"
+        )
+        self.disconnect_btn.clicked.connect(self._disconnect_and_close)
+        form.addRow("Connection", self.disconnect_btn)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -434,6 +468,13 @@ class SettingsDialog(QDialog):
         self._settings.model_id = self.model_combo.currentText()
         self._push_provider_config()
         super().accept()
+
+    def _disconnect_and_close(self) -> None:
+        """Item B3 (qgis-ux-batch 2026-07-19): run the dock's disconnect path
+        then close the dialog without saving (an action, not a settings edit)."""
+        if self._on_disconnect is not None:
+            self._on_disconnect()
+        self.reject()
 
     def _push_provider_config(self) -> None:
         """POST the persisted provider config to the agent OFF-THREAD (Feature
@@ -577,6 +618,61 @@ class _WrapLabel(QLabel):
     def resizeEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
         super().resizeEvent(event)
         self._sync_min_height()
+
+
+class _ChatInput(QPlainTextEdit):
+    """Item A (qgis-ux-batch 2026-07-19): the composer input -- a MULTI-LINE
+    auto-growing field (was a one-line QLineEdit that clipped long prompts, so
+    a long self-audit prompt scrolled off the right edge invisibly). ENTER
+    sends (calls ``send_callback``, the dock's ``_send``); SHIFT+ENTER (and any
+    Ctrl/Meta chord) inserts a newline instead. The field grows with its
+    content from one line up to ``_MAX_LINES`` then scrolls -- mirrors the web
+    composer's textarea. Word-wrap is on so a long single-line prompt wraps
+    into the growing box instead of scrolling horizontally.
+    """
+
+    _MIN_LINES = 1
+    _MAX_LINES = 7
+
+    def __init__(self, send_callback, parent=None):
+        super().__init__(parent)
+        self._send_callback = send_callback
+        self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Grow with the document; recomputed on every edit (clamped to
+        # _MIN_LINES.._MAX_LINES, then the vertical scrollbar takes over).
+        self.textChanged.connect(self._adjust_height)
+        self._adjust_height()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
+        key = event.key()
+        if key in (Qt.Key_Return, Qt.Key_Enter):
+            # SHIFT+ENTER inserts a newline; a bare ENTER sends. Ctrl/Meta are
+            # treated like Shift (never send) so a stray chord never fires an
+            # accidental send mid-edit.
+            if event.modifiers() & (
+                Qt.ShiftModifier | Qt.ControlModifier | Qt.MetaModifier
+            ):
+                super().keyPressEvent(event)
+                return
+            self._send_callback()
+            return
+        super().keyPressEvent(event)
+
+    def _adjust_height(self) -> None:
+        # One line = the font line spacing; the document height (wrap-aware,
+        # includes the document margin) drives the visible row count, clamped
+        # so the field never collapses below one line nor grows past
+        # _MAX_LINES (the scrollbar takes over beyond that).
+        doc = self.document()
+        line_h = self.fontMetrics().lineSpacing()
+        margin = int(doc.documentMargin()) * 2
+        frame = int(self.frameWidth()) * 2
+        min_h = line_h * self._MIN_LINES + margin + frame
+        max_h = line_h * self._MAX_LINES + margin + frame
+        needed = int(doc.size().height()) + frame
+        self.setFixedHeight(int(min(max(needed, min_h), max_h)))
 
 
 def _markdown_to_display_html(text: str, palette) -> str:
@@ -2144,14 +2240,34 @@ class Trid3ntDock(QDockWidget):
         self.aoi_btn.toggled.connect(self._toggle_aoi_draw)
         header.addWidget(self.aoi_btn)
 
+        # Item D (qgis-ux-batch 2026-07-19): clear the current case AOI -- drops
+        # the overlay + local bbox AND resets state.case_bbox server-side (the
+        # set-bbox clear equivalent), so the agent stops anchoring on the old
+        # extent. Sits next to "Set AOI". Not checkable (a one-shot action).
+        self.clear_aoi_btn = QToolButton()
+        self.clear_aoi_btn.setText("Clear AOI")
+        self.clear_aoi_btn.setToolTip("Clear this case's area of interest")
+        self.clear_aoi_btn.clicked.connect(self._clear_aoi)
+        header.addWidget(self.clear_aoi_btn)
+
+        # Item B2 (qgis-ux-batch 2026-07-19): Settings collapses to a COG glyph
+        # (icon-only look) -- the header button row is pure buttons, no word
+        # labels competing with the connection signifier. The gear glyph is the
+        # button's only content (effectively icon-only); the tooltip names it.
         self.settings_btn = QToolButton()
-        self.settings_btn.setText("Settings")
+        self.settings_btn.setText("\u2699")  # gear glyph (cog); icon-only look
+        self.settings_btn.setToolTip("Settings")
         self.settings_btn.clicked.connect(self._open_settings)
         header.addWidget(self.settings_btn)
 
+        # Item B3 (qgis-ux-batch 2026-07-19): the top-row Connect button ONLY
+        # connects now (never toggles to "Disconnect") -- DISCONNECT moved into
+        # the Settings dialog. It stays labeled "Connect" and is DISABLED while
+        # connected/connecting (re-enabled by the disconnect/failure paths), so
+        # a disconnected user still has a one-tap Connect where they expect it.
         self.connect_btn = QToolButton()
         self.connect_btn.setText("Connect")
-        self.connect_btn.clicked.connect(self._toggle_connection)
+        self.connect_btn.clicked.connect(self.connect_agent)
         header.addWidget(self.connect_btn)
         outer.addLayout(header)
 
@@ -2234,15 +2350,20 @@ class Trid3ntDock(QDockWidget):
         # ``_send``); ``_aoi_for_send`` keeps computing the honest text into
         # ``self._aoi_status_line``.
 
-        # Input row
+        # Input row -- Item A (qgis-ux-batch 2026-07-19): a multi-line
+        # auto-growing composer (_ChatInput) replaces the one-line QLineEdit
+        # that clipped long prompts. ENTER sends, SHIFT+ENTER newlines. The
+        # Send button anchors to the BOTTOM so it stays aligned with the last
+        # line as the field grows.
         input_row = QHBoxLayout()
-        self.input_edit = QLineEdit()
-        self.input_edit.setPlaceholderText("Ask for data or a simulation...")
-        self.input_edit.returnPressed.connect(self._send)
+        self.input_edit = _ChatInput(self._send)
+        self.input_edit.setPlaceholderText(
+            "Ask for data or a simulation... (Enter to send, Shift+Enter for a new line)"
+        )
         input_row.addWidget(self.input_edit, 1)
         self.send_btn = QPushButton("Send")
         self.send_btn.clicked.connect(self._send)
-        input_row.addWidget(self.send_btn)
+        input_row.addWidget(self.send_btn, 0, Qt.AlignBottom)
         outer.addLayout(input_row)
 
         self.setWidget(body)
@@ -2250,6 +2371,10 @@ class Trid3ntDock(QDockWidget):
     def _set_dot(self, state: str) -> None:
         color = _DOT_COLORS.get(state, _DOT_COLORS["disconnected"])
         self.dot.setStyleSheet(f"background-color: {color}; {_DOT_STYLE}")
+        # Item B1 (qgis-ux-batch 2026-07-19): the dock titlebar IS the top-left
+        # connection signifier now -- repaint it to the state every time the dot
+        # changes (connect/reconnect/fail/disconnect all route through here).
+        self.setWindowTitle(_DOT_TITLES.get(state, _DOT_TITLES["disconnected"]))
 
     def _scroll_to_bottom(self) -> None:
         bar = self.scroll.verticalScrollBar()
@@ -2325,6 +2450,13 @@ class Trid3ntDock(QDockWidget):
         brand-new case) is a no-op -- clean slate, just the active note."""
         for row in messages:
             role = row.get("role")
+            if role == "tool":
+                # Item H (qgis-ux-batch 2026-07-19): render the persisted tool
+                # card as a collapsed transcript row. The tool row has no plain
+                # content bubble -- it carries the typed tool_card -- so it is
+                # handled BEFORE the content-string guard below.
+                self._replay_tool_card(row.get("tool_card"), row.get("content"))
+                continue
             content = row.get("content")
             if not isinstance(content, str) or not content:
                 continue
@@ -2336,6 +2468,88 @@ class Trid3ntDock(QDockWidget):
                 # Feature 2026-07-13: replayed text is always final --
                 # render its markdown immediately.
                 entry.finalize_markdown()
+
+    def _replay_tool_card(self, tool_card, content) -> None:
+        """Item H (qgis-ux-batch 2026-07-19): render ONE persisted tool card
+        from the case-open replay as a collapsed transcript row.
+
+        The live tool cards are transient pipeline chips (``set_pipeline_rows``,
+        replaced every frame + never persisted), so a reopened case otherwise
+        showed no tool-call chain at all. This reads the SAME fields the live
+        tool-io path uses off the typed ``ToolCardRecord`` (contracts
+        ``case.py``): ``tool_name``/``state``/``label`` for the state-colored
+        chip, ``raw_args`` summarized into the chip detail, and
+        ``function_response`` as the collapsed (read-only) body. Falls back to
+        the ``content`` JSON twin when the typed card is absent; a malformed or
+        empty card is a silent no-op (never breaks the case switch).
+        """
+        card = tool_card if isinstance(tool_card, dict) else None
+        if card is None and isinstance(content, str) and content:
+            try:
+                parsed = json.loads(content)
+            except (ValueError, TypeError):
+                parsed = None
+            if isinstance(parsed, dict):
+                card = parsed
+        if not card:
+            return
+        name = card.get("tool_name") or card.get("label") or "tool"
+        state = card.get("state")
+        raw_args = card.get("raw_args")
+        response = card.get("function_response")
+        is_error = bool(card.get("is_error"))
+        args_summary = (
+            _short_args_summary(raw_args) if isinstance(raw_args, str) else ""
+        )
+
+        container = QWidget()
+        lay = QVBoxLayout(container)
+        lay.setContentsMargins(4, 1, 40, 1)
+        lay.setSpacing(1)
+
+        # Chip row: the state-colored tool badge + a short arg summary beside
+        # it -- visually the same class as the live pipeline chip rows.
+        header = QWidget()
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(6)
+        chip_lbl = QLabel(str(name))
+        chip_lbl.setTextFormat(Qt.PlainText)
+        chip_lbl.setStyleSheet(_tool_chip_style(state))
+        hl.addWidget(chip_lbl)
+        if args_summary:
+            detail_lbl = QLabel(args_summary)
+            detail_lbl.setTextFormat(Qt.PlainText)
+            detail_lbl.setStyleSheet(_TOOL_CHIP_DETAIL_STYLE)
+            hl.addWidget(detail_lbl, 1)
+        else:
+            hl.addStretch(1)
+        lay.addWidget(header)
+
+        # Collapsible response body -- collapsed by default (read-only replay);
+        # error responses get the red block chrome (mirrors the probe error).
+        if isinstance(response, str) and response:
+            toggle = QPushButton("Result")
+            toggle.setFlat(True)
+            toggle.setCheckable(True)
+            toggle.setChecked(False)
+            toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+            body = _WrapLabel(response)
+            body.setTextFormat(Qt.PlainText)
+            body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            body.setStyleSheet(
+                _PROBE_ERROR_BLOCK_STYLE if is_error else _THINKING_BLOCK_STYLE
+            )
+            body.setVisible(False)
+            toggle.clicked.connect(
+                lambda _checked=False, b=body, t=toggle: b.setVisible(t.isChecked())
+            )
+            lay.addWidget(toggle)
+            lay.addWidget(body)
+
+        self.messages_layout.insertWidget(
+            self.messages_layout.count() - 1, container
+        )
 
     # -- AOI ------------------------------------------------------------------ #
 
@@ -2730,6 +2944,28 @@ class Trid3ntDock(QDockWidget):
         # _toggle_aoi_draw's OFF branch, which restores canvas.mapTool()).
         self.aoi_btn.setChecked(False)
 
+    def _clear_aoi(self) -> None:
+        """Item D (qgis-ux-batch 2026-07-19): clear the current case AOI.
+
+        Drops the local overlay + nulls ``self._case_bbox`` (``_clear_aoi_overlay``)
+        AND resets ``state.case_bbox`` server-side so the agent stops anchoring
+        every turn on the old extent -- the clear equivalent of the Set-AOI
+        ``set-bbox`` send (an empty ``bbox`` = CLEAR; the server treats an
+        explicit null/empty bbox as a reset). Honest note either way; with no
+        live case + connection there is nothing to sync, so it only clears the
+        local overlay and says so.
+        """
+        had = self._case_bbox is not None
+        self._clear_aoi_overlay()  # hides overlay + nulls self._case_bbox
+        if self._case_id and self.bridge.running:
+            # Mirror the Set-AOI send with an empty bbox (the CLEAR carrier).
+            self.bridge.case_command("set-bbox", self._case_id, {"bbox": None})
+            self._note("Case AOI cleared" if had else "No AOI was set")
+        else:
+            self._note(
+                "AOI overlay cleared (not connected -- nothing to sync)"
+            )
+
     # -- connection ----------------------------------------------------------- #
 
     def _wire_bridge(self) -> None:
@@ -2754,7 +2990,10 @@ class Trid3ntDock(QDockWidget):
             return
         self._set_dot("connecting")
         self.status_label.setText(f"Connecting to {url} ...")
-        self.connect_btn.setText("Disconnect")
+        # Item B3 (qgis-ux-batch 2026-07-19): the top-row button only CONNECTS;
+        # disable it while a connection is up/in-flight (Disconnect lives in
+        # Settings now). Re-enabled by disconnect_agent + the failure paths.
+        self.connect_btn.setEnabled(False)
         title = "QGIS session " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         self._session_case_title = title
         anon = self.settings.anonymous_user_id or None
@@ -2785,7 +3024,8 @@ class Trid3ntDock(QDockWidget):
         self._set_case_label("")
         self._set_dot("disconnected")
         self.status_label.setText("Not connected")
-        self.connect_btn.setText("Connect")
+        # Item B3: re-arm the top-row Connect button (disabled while connected).
+        self.connect_btn.setEnabled(True)
 
     def _set_case_label(self, title: str) -> None:
         self._case_title = title
@@ -2800,7 +3040,16 @@ class Trid3ntDock(QDockWidget):
 
     def _open_settings(self) -> None:
         prev_basemap = self.settings.basemap_preset
-        dlg = SettingsDialog(self.settings, self)
+        # Item B3 (qgis-ux-batch 2026-07-19): DISCONNECT lives in Settings now
+        # (off the header top row). Hand the dialog the dock's disconnect path +
+        # the current connection state so its Disconnect button is enabled only
+        # while connected and drives the exact same teardown as before.
+        dlg = SettingsDialog(
+            self.settings,
+            self,
+            on_disconnect=self.disconnect_agent,
+            connected=self.bridge.running,
+        )
         dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
         # Item 4: the AOI toggles live only in Settings. Item R3 (2026-07-18):
         # no pinned status line to repaint anymore -- the next send recomputes
@@ -2906,13 +3155,20 @@ class Trid3ntDock(QDockWidget):
             self.status_label.setText("Not connected -- press Connect first")
             return
         self._note("Starting a new case ...")
-        # Per-case-bbox 2026-07-19: every new case gets a DEFAULT AOI = the
-        # current canvas extent, so state.case_bbox is populated from turn one
-        # (no more empty-AOI case where the model guesses which extent to use).
-        # Carried through the same args.bbox slot create_case uses; the user
-        # can re-draw it later with "Set AOI". A canvas with no resolvable CRS
-        # falls back to the legacy bbox-less create (args stays empty).
-        canvas_bbox = self._canvas_bbox4326()
+        # Item C (qgis-ux-batch 2026-07-19): a NEW case must never inherit the
+        # PREVIOUS case's AOI rectangle -- drop the overlay + null the local
+        # bbox BEFORE creating, so a stale box never lingers into the fresh
+        # case (_on_case_open_event repaints from the new case's own bbox, or
+        # leaves it cleared when the new case has none). _clear_aoi_overlay
+        # also nulls self._case_bbox.
+        self._clear_aoi_overlay()
+        # Item C: the canvas-extent default AOI is now GATED on the "Use map
+        # canvas as area of interest" setting. ON = seed state.case_bbox with
+        # the current canvas extent (the "set to our aoi" case) so the model
+        # anchors from turn one; OFF = a bbox-LESS create -- a clean slate with
+        # no AOI until the user Sets one or the LLM sets it. A canvas with no
+        # resolvable CRS also falls back to the bbox-less create.
+        canvas_bbox = self._canvas_bbox4326() if self.settings.canvas_aoi else None
         args = {"bbox": list(canvas_bbox)} if canvas_bbox else None
         self.bridge.case_command("create", args=args)
 
@@ -3169,7 +3425,11 @@ class Trid3ntDock(QDockWidget):
         self.materializer.set_case(case_id, self._session_case_title or None)
         self._set_case_label(self._session_case_title or case_id[:8])
         self._set_dot("connected")
-        self.status_label.setText(f"Connected -- case {case_id[:8]}")
+        # Item B1 (qgis-ux-batch 2026-07-19): the status signifier no longer
+        # carries the case-id chip -- the case identity lives in ``case_label``
+        # ("Case: <title>"), a more readable line, so the top-left signifier
+        # stays a pure connection state.
+        self.status_label.setText("Connected")
         # Item d (live-feedback 2026-07-09): a case picked from the Cases
         # dialog while disconnected/mid-handshake -- the connection just
         # created its own fresh "QGIS session ..." case; now switch to the
@@ -3185,7 +3445,7 @@ class Trid3ntDock(QDockWidget):
         self._pending_open_case = None  # the connect this was riding died
         self._set_dot("error")
         self.status_label.setText(f"Connection failed: {message}")
-        self.connect_btn.setText("Connect")
+        self.connect_btn.setEnabled(True)  # Item B3: re-arm Connect
 
     def _on_auth_expired(self, message: str) -> None:
         """The token was rejected (broker 401/403 or in-band AUTH_REQUIRED):
@@ -3197,7 +3457,7 @@ class Trid3ntDock(QDockWidget):
         self.status_label.setText(
             "Token expired or rejected -- paste a fresh one in Settings"
         )
-        self.connect_btn.setText("Connect")
+        self.connect_btn.setEnabled(True)  # Item B3: re-arm Connect
         self._note(f"Authentication failed: {message}", error=True)
 
     def _on_closed(self, reason: str) -> None:
@@ -3208,7 +3468,7 @@ class Trid3ntDock(QDockWidget):
         elif reason != "stopped":
             self._set_dot("error")
             self.status_label.setText(f"Disconnected: {reason}")
-        self.connect_btn.setText("Connect")
+        self.connect_btn.setEnabled(True)  # Item B3: re-arm Connect
 
     def _on_reconnecting(self, reason: str) -> None:
         # Transport lost; the worker's capped-jitter ladder is running.
@@ -3219,8 +3479,9 @@ class Trid3ntDock(QDockWidget):
     def _on_resumed(self) -> None:
         self._connected = True
         self._set_dot("connected")
-        suffix = f" -- case {self._case_id[:8]}" if self._case_id else ""
-        self.status_label.setText(f"Reconnected{suffix}")
+        # Item B1 (qgis-ux-batch 2026-07-19): no case-id chip in the signifier
+        # (the case identity lives in ``case_label``).
+        self.status_label.setText("Reconnected")
 
     def _on_event(self, kind: str, data: object) -> None:
         if not isinstance(data, dict):
@@ -3347,6 +3608,29 @@ class Trid3ntDock(QDockWidget):
                 self._cases = [c for c in cases if isinstance(c, CaseInfo)]
                 if self._cases_dialog is not None:
                     self._cases_dialog.set_cases(self._cases)
+        elif kind == "raw" and data.get("type") == "map-command":
+            # Item G (qgis-ux-batch 2026-07-19): the agent frames a mesh preview
+            # (and other explicit re-frames) via a "zoom-to" map-command, since
+            # the preview layer itself is published role=input with bbox=None
+            # (so it does NOT self-zoom -- that would yank the camera for every
+            # silent input layer). The plugin dropped every map-command (no
+            # etype branch in trid3nt_client._classify -> arrives here as
+            # kind="raw"), so the fine EPSG:4326 wireframe sat sub-pixel under
+            # the AOI, invisible. Honor ONLY the explicit zoom-to here: frame
+            # the mesh (which sends one) without disturbing silent input layers.
+            payload = data.get("payload") or {}
+            if payload.get("command") == "zoom-to":
+                bbox = (payload.get("args") or {}).get("bbox")
+                try:
+                    canvas = self.iface.mapCanvas()
+                except Exception:  # noqa: BLE001 -- headless: nothing to zoom
+                    canvas = None
+                if (
+                    canvas is not None
+                    and isinstance(bbox, (list, tuple))
+                    and len(bbox) == 4
+                ):
+                    zoom_to_bbox4326(canvas, tuple(bbox))
         elif kind == "turn-complete":
             if self._pending is not None:
                 # Feature 2026-07-13: the answer text is final -- convert
@@ -3528,7 +3812,9 @@ class Trid3ntDock(QDockWidget):
     # -- sending ------------------------------------------------------------- #
 
     def _send(self) -> None:
-        text = self.input_edit.text().strip()
+        # Item A (qgis-ux-batch 2026-07-19): multi-line composer -- read the
+        # full document (toPlainText), not the one-line QLineEdit .text().
+        text = self.input_edit.toPlainText().strip()
         if not text:
             return
         if not (self._case_id and self.bridge.running):
