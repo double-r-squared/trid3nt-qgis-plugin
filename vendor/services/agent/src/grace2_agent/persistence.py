@@ -2118,7 +2118,12 @@ class FileMCPClient:
         """Atomic JSON write: tmp file + os.replace (POSIX-atomic rename)."""
         tmp = path.with_suffix(path.suffix + ".tmp")
         with tmp.open("w", encoding="utf-8") as fh:
-            _json_for_file.dump(store, fh, indent=2, sort_keys=True)
+            # OPEN-28: default=str so a raw datetime in any document (e.g. the
+            # shadow-telemetry ``called_at_utc``) serializes instead of raising
+            # ``TypeError: Object of type datetime is not JSON serializable`` -
+            # which was silently dropping the model-tagged shadow rows on the
+            # file substrate (the per-model recall@k slice depends on them).
+            _json_for_file.dump(store, fh, indent=2, sort_keys=True, default=str)
             fh.flush()
             try:
                 _os_for_file.fsync(fh.fileno())

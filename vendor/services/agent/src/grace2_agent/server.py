@@ -2965,6 +2965,25 @@ async def _stream_gemini_reply(
     from .bedrock_adapter import model_provider as _model_provider
 
     _provider = _model_provider()
+    # #225 per-model telemetry: resolve the EFFECTIVE model that actually
+    # serves this turn (not the possibly-None explicit selection) so telemetry
+    # rows for DEFAULT-model turns are tagged with the real model instead of
+    # collapsing into the "unknown" bucket in the by_model accuracy slice. On
+    # the openai/OpenRouter path this applies openai_model's own precedence
+    # (selection -> GRACE2_OPENAI_MODEL); on bedrock, the selection or the
+    # configured default. Best-effort -- a resolution error must never break
+    # the turn, so fall back to the raw selection.
+    try:
+        if _provider == "openai":
+            from . import openai_adapter as _oa  # noqa: WPS433
+            _effective_model = _oa.openai_model(bedrock_model)
+        elif _provider == "bedrock":
+            from .bedrock_adapter import bedrock_model_id as _bmid  # noqa: WPS433
+            _effective_model = bedrock_model or _bmid()
+        else:
+            _effective_model = bedrock_model
+    except Exception:  # noqa: BLE001 -- telemetry tag only, never fatal
+        _effective_model = bedrock_model
     # No Vertex client under bedrock OR the scripted/replay sandbox (neither has,
     # nor needs, GCP ADC -- their stream_* branches ignore ``client``).
     client = None if _provider in ("bedrock", "scripted", "replay", "fake") else build_client(settings)
@@ -3008,7 +3027,7 @@ async def _stream_gemini_reply(
                     mode=_retrieval_mode,
                     k=_retrieval_k,
                     full_registry_size=len(TOOL_REGISTRY),
-                    model_id=bedrock_model,
+                    model_id=_effective_model,
                 )
             except Exception:  # noqa: BLE001 — telemetry must never break dispatch
                 logger.warning(
@@ -3868,7 +3887,7 @@ async def _stream_gemini_reply(
                     error_code=_tel_error_code,
                     cached_content_token_count=_tel_cached_tokens,
                     result_usable=_tel_result_usable,
-                    model_id=bedrock_model,
+                    model_id=_effective_model,
                     # turn_id = the per-user-message dispatch (pipeline) id: the
                     # recall@k join key against this turn's shadow-selection row.
                     turn_id=pipeline_id,
