@@ -1265,7 +1265,9 @@ class AgentClient:
         self._send("session-resume", {"case_id": self.case_id})
         return True
 
-    def send_chat(self, text: str, show_thinking: bool = False) -> None:
+    def send_chat(
+        self, text: str, show_thinking: bool = False, model_id: str = ""
+    ) -> None:
         """Send a user chat message.
 
         :param text: The message text.
@@ -1273,10 +1275,19 @@ class AgentClient:
             ``show_thinking=True`` on the payload so the local model's reasoning
             channel is forwarded as ``agent-thinking-chunk`` envelopes. Only
             meaningful locally; cloud agents ignore the field.
+        :param model_id: OpenRouter model-extensibility (design 2026-07-19) -
+            when truthy, ride ``model_id`` on the payload so the server's
+            ``resolve_selected_model`` picks THIS model for the turn (any
+            openai/OpenRouter model id passes verbatim). Empty = the agent's
+            env default (``GRACE2_OPENAI_MODEL``). Mirrors the ``show_thinking``
+            add exactly: a LIVE per-turn switch, no agent restart. (Provider
+            base_url/api_key are agent-process env, NOT sent here.)
         """
         payload: dict = {"text": text, "case_id": self.case_id}
         if show_thinking:
             payload["show_thinking"] = True
+        if model_id:
+            payload["model_id"] = model_id
         self._send(
             "user-message",
             payload,

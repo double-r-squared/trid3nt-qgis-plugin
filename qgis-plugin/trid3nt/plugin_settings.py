@@ -150,6 +150,50 @@ class PluginSettings:
         self._set("show_thinking", "true" if value else "false")
 
     @property
+    def provider(self) -> str:
+        """OpenRouter model-extensibility (design 2026-07-19): the selected
+        LLM PROVIDER preset label (``PROVIDER_PRESETS`` key in dock.py --
+        local-ollama / openrouter-free / openrouter-paid / openai / groq).
+        Provider is agent-process ENV (base_url + key-env name), so changing
+        it only persists the choice + shows the restart note -- the plugin
+        cannot inject the agent's env live. Default = the local ollama seam."""
+        return self._get("provider", "local-ollama") or "local-ollama"
+
+    @provider.setter
+    def provider(self, value: str) -> None:
+        self._set("provider", str(value).strip() or "local-ollama")
+
+    @property
+    def model_id(self) -> str:
+        """OpenRouter model-extensibility (design 2026-07-19): the per-turn
+        model id ridden on the user-message payload (mirrors ``show_thinking``:
+        the agent's ``resolve_selected_model`` passes any openai/OpenRouter
+        model id verbatim). Empty string = use the agent's env default
+        (``GRACE2_OPENAI_MODEL``) -- so an unset picker changes nothing.
+        Switching MODEL within a provider is LIVE (no restart)."""
+        return self._get("model_id", "")
+
+    @model_id.setter
+    def model_id(self, value: str) -> None:
+        self._set("model_id", value.strip())
+
+    @property
+    def openrouter_api_key(self) -> str:
+        """OpenRouter model-extensibility (design 2026-07-19): the provider
+        API key (SECRET -- OPENROUTER_API_KEY / OPENAI_API_KEY / GROQ_API_KEY
+        per preset). Password-echoed in the dialog, NEVER logged. This is
+        agent-process ENV too (``GRACE2_OPENAI_API_KEY``): the plugin only
+        PERSISTS it here + shows the restart note; it is never sent over the
+        WS (no per-message carrier exists, and leaking a live key on the wire
+        would be a security hole). Auto-writing .env.local + restart is
+        DEFERRED per design."""
+        return self._get("openrouter_api_key", "")
+
+    @openrouter_api_key.setter
+    def openrouter_api_key(self, value: str) -> None:
+        self._set("openrouter_api_key", value.strip())
+
+    @property
     def anonymous_user_id(self) -> str:
         """Server-assigned anonymous user id, replayed on reconnect so the
         same local User record re-binds (mirrors the web client).

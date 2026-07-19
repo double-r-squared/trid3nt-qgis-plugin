@@ -186,6 +186,71 @@ _SIM_CARD_STYLE = (
 _SIM_TITLE_STYLE = "color: #8957e5; font-weight: bold; border: none;"
 
 
+# OpenRouter model-extensibility (design 2026-07-19). Static provider preset
+# table -- label -> the agent-process ENV a given provider needs (base_url +
+# key-env NAME) + a curated TOOL-CAPABLE model shortlist + the num_ctx the
+# agent should set so the context-clip guard does not false-trip. The plugin
+# CANNOT inject the agent's env (base_url/key/num_ctx live in the agent
+# process, set via .env.local + restart); this table is the picker's source
+# of truth AND documents exactly which env vars a provider switch requires,
+# so the "restart to apply" note is honest rather than hand-wavy. ``models``
+# is a curated shortlist only -- the model combo is EDITABLE so the user can
+# paste ANY id the provider serves. The agent is tool-heavy (tool_choice=auto
+# every round); many free models ignore tools and narrate a fake answer, so
+# the shortlist sticks to ids known to honor tool-calling (design "Risks").
+PROVIDER_PRESETS: dict = {
+    "local-ollama": {
+        "base_url": "http://127.0.0.1:11434/v1",
+        "key_env": "",  # not needed for a local ollama seam
+        "num_ctx": "24576",
+        "models": [
+            "qwen3:8b-24k",
+            "qwen2.5:7b",
+            "llama3.1:8b",
+        ],
+    },
+    "openrouter-free": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_env": "OPENROUTER_API_KEY",
+        "num_ctx": "32768",
+        "models": [
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "mistralai/mistral-small-3.1-24b-instruct:free",
+        ],
+    },
+    "openrouter-paid": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_env": "OPENROUTER_API_KEY",
+        "num_ctx": "65536",
+        "models": [
+            "deepseek/deepseek-chat",
+            "meta-llama/llama-3.3-70b-instruct",
+            "qwen/qwen-2.5-72b-instruct",
+            "mistralai/mistral-large",
+        ],
+    },
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "key_env": "OPENAI_API_KEY",
+        "num_ctx": "128000",
+        "models": [
+            "gpt-4o-mini",
+            "gpt-4o",
+        ],
+    },
+    "groq": {
+        "base_url": "https://api.groq.com/openai/v1",
+        "key_env": "GROQ_API_KEY",
+        "num_ctx": "32768",
+        "models": [
+            "llama-3.3-70b-versatile",
+            "qwen-2.5-32b",
+        ],
+    },
+}
+
+
 class SettingsDialog(QDialog):
     """Mode local/remote, URLs, pasted token, MinIO + export API endpoints,
     AOI toggles, and the auto-basemap toggle.
@@ -288,6 +353,56 @@ class SettingsDialog(QDialog):
         self.show_thinking_checkbox.setChecked(settings.show_thinking)
         form.addRow("Model", self.show_thinking_checkbox)
 
+        # OpenRouter model-extensibility (design 2026-07-19): provider + api
+        # key + model picker. Only the MODEL rides the user-message live
+        # (mirrors show_thinking); PROVIDER (base_url) + api-key are agent
+        # process env the plugin cannot inject, so those two persist here and
+        # need an agent restart -- the note below is honest about that.
+        self.provider_combo = QComboBox()
+        for preset_label in PROVIDER_PRESETS:
+            self.provider_combo.addItem(preset_label)
+        p_idx = self.provider_combo.findText(settings.provider)
+        self.provider_combo.setCurrentIndex(p_idx if p_idx >= 0 else 0)
+        form.addRow("Provider", self.provider_combo)
+
+        # SECRET: password echo, mirrors token_edit; NEVER logged. This is the
+        # agent's GRACE2_OPENAI_API_KEY (OPENROUTER_API_KEY / OPENAI_API_KEY /
+        # GROQ_API_KEY per preset) -- persisted here, applied on agent restart;
+        # never sent over the WS (no per-message carrier, and a live key must
+        # not leak onto the wire).
+        self.provider_key_edit = QLineEdit(settings.openrouter_api_key)
+        self.provider_key_edit.setEchoMode(QLineEdit.Password)
+        self.provider_key_edit.setPlaceholderText(
+            "provider API key (OpenRouter / OpenAI / Groq)"
+        )
+        form.addRow("Provider API key", self.provider_key_edit)
+
+        # EDITABLE combo pre-filled with the curated tool-capable shortlist for
+        # the selected provider -- editable so the user can paste ANY model id.
+        # Empty text = the agent's env default (GRACE2_OPENAI_MODEL); a MODEL
+        # switch applies on the NEXT message with no restart.
+        self.model_combo = QComboBox()
+        self.model_combo.setEditable(True)
+        self._reload_model_choices(settings.provider)
+        self.model_combo.setCurrentText(settings.model_id)
+        # Repopulate the shortlist when the provider changes (keeps whatever
+        # the user has typed -- only the dropdown items swap).
+        self.provider_combo.currentTextChanged.connect(self._reload_model_choices)
+        form.addRow("Model id", self.model_combo)
+
+        provider_note = QLabel(
+            "Changing MODEL applies on your NEXT message (the id rides the "
+            "user-message, no restart). Changing PROVIDER or the API key needs "
+            "an AGENT RESTART -- the provider base_url and key are the agent "
+            "process env (GRACE2_OPENAI_BASE_URL / GRACE2_OPENAI_API_KEY / "
+            "GRACE2_OPENAI_NUM_CTX), which the plugin cannot set live. Set them "
+            "in the agent's .env.local and restart the agent to apply. Leave "
+            "the model id blank to use the agent's default model."
+        )
+        provider_note.setWordWrap(True)
+        provider_note.setStyleSheet(_STATUS_LINE_STYLE)
+        form.addRow("", provider_note)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -305,7 +420,27 @@ class SettingsDialog(QDialog):
         self._settings.auto_basemap = self.auto_basemap_checkbox.isChecked()
         self._settings.basemap_preset = self.basemap_combo.currentText()
         self._settings.show_thinking = self.show_thinking_checkbox.isChecked()
+        # OpenRouter model-extensibility (design 2026-07-19): persist provider
+        # + key + model. Only model_id rides live; provider/key await restart.
+        self._settings.provider = self.provider_combo.currentText()
+        self._settings.openrouter_api_key = self.provider_key_edit.text()
+        self._settings.model_id = self.model_combo.currentText()
         super().accept()
+
+    def _reload_model_choices(self, provider: str) -> None:
+        """Swap the model combo's dropdown to the curated shortlist for
+        ``provider`` WITHOUT clobbering whatever the user has typed (the combo
+        is editable -- only the item list changes, the edit text is preserved).
+        Bound to the provider combo's ``currentTextChanged`` and called once at
+        construction."""
+        preset = PROVIDER_PRESETS.get(provider) or {}
+        current_text = self.model_combo.currentText()
+        self.model_combo.blockSignals(True)
+        self.model_combo.clear()
+        for model in preset.get("models", []):
+            self.model_combo.addItem(model)
+        self.model_combo.setCurrentText(current_text)
+        self.model_combo.blockSignals(False)
 
 
 # Style constants for the thinking block (F9, live-feedback 2026-07-09).
@@ -3265,7 +3400,15 @@ class Trid3ntDock(QDockWidget):
         try:
             # F9: pass show_thinking so the server enables reasoning-channel
             # forwarding for this turn (local mode only; remote ignores the field).
-            self.bridge.send_chat(wire_text, show_thinking=self.settings.show_thinking)
+            # OpenRouter model-extensibility (design 2026-07-19): ride the picked
+            # model_id (empty = agent env default) so a MODEL switch applies
+            # live on the next message with no agent restart -- mirrors the
+            # show_thinking add. Provider base_url/key stay agent-process env.
+            self.bridge.send_chat(
+                wire_text,
+                show_thinking=self.settings.show_thinking,
+                model_id=self.settings.model_id,
+            )
         except Exception as exc:  # noqa: BLE001
             self._pending.add_note(f"send failed: {exc}", error=True)
 

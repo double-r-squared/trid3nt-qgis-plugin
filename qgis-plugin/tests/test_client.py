@@ -322,6 +322,32 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertFalse(sent[0]["payload"].get("show_thinking", False),
                          "show_thinking must be absent or False when not requested")
 
+    def test_send_chat_carries_model_id_when_set(self):
+        """OpenRouter model-extensibility (design 2026-07-19): send_chat with a
+        truthy model_id rides ``model_id`` on the user-message payload verbatim
+        (mirrors show_thinking) so the server picks the model for the turn."""
+        client = self._connect()
+        client.connect()
+        client.create_case("model id test")
+        client.send_chat("hello", model_id="deepseek/deepseek-chat")
+        events = self._collect_until_turn_complete(client)
+        sent = [e for e in self.server.received if e["type"] == "user-message"]
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]["payload"].get("model_id"), "deepseek/deepseek-chat")
+
+    def test_send_chat_without_model_id_omits_key(self):
+        """Default send_chat (model_id="") must NOT include model_id on wire --
+        an empty picker means 'use the agent's env default model'."""
+        client = self._connect()
+        client.connect()
+        client.create_case("no model id test")
+        client.send_chat("plain message")
+        events = self._collect_until_turn_complete(client)
+        sent = [e for e in self.server.received if e["type"] == "user-message"]
+        self.assertEqual(len(sent), 1)
+        self.assertNotIn("model_id", sent[0]["payload"],
+                         "model_id must be absent when the picker is empty")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
