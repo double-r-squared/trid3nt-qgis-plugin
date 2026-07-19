@@ -16,3 +16,7 @@ runs/
 vendor/elmfire/
 cache/
 vendor/services/agent/build/
+
+# Secret-bearing local env (OpenRouter/API keys) - never commit
+.env.local
+.env.*.local
