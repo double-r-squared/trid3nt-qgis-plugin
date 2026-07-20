@@ -281,14 +281,17 @@ class SettingsDialog(QDialog):
         settings: PluginSettings,
         parent: Optional[QWidget] = None,
         on_disconnect=None,
+        on_connect=None,
         connected: bool = False,
     ):
         super().__init__(parent)
         self._settings = settings
-        # Item B3 (qgis-ux-batch 2026-07-19): the dock's disconnect path + the
-        # live connection state, so the Disconnect button below is enabled only
-        # while connected.
+        # Item B3 (qgis-ux-batch 2026-07-19) + NATE 2026-07-20: the dock's
+        # connect + disconnect paths + the live connection state, so BOTH
+        # actions live here (off the header button row) and each is enabled
+        # only in the state where it applies.
         self._on_disconnect = on_disconnect
+        self._on_connect = on_connect
         # Keep-alive refs for the OpenRouter free-model fetch tasks (design
         # 2026-07-19) -- initialised BEFORE _reload_model_choices runs below.
         self._model_list_tasks: List["_ModelListTask"] = []
@@ -434,13 +437,25 @@ class SettingsDialog(QDialog):
         # connection is up; clicking it runs the dock's disconnect teardown then
         # closes the dialog WITHOUT saving (reject) -- it is an action button,
         # not a settings edit, so it should not also push provider config.
+        # NATE 2026-07-20: CONNECT lives here too now (off the header row). One
+        # Connect + one Disconnect side by side; each enabled only in the state
+        # where it applies (Connect when down, Disconnect when up).
+        conn_row = QHBoxLayout()
+        self.connect_btn = QPushButton("Connect to agent")
+        self.connect_btn.setEnabled(not bool(connected) and on_connect is not None)
+        self.connect_btn.setToolTip(
+            "Start the agent connection (only available while disconnected)"
+        )
+        self.connect_btn.clicked.connect(self._connect_and_close)
+        conn_row.addWidget(self.connect_btn)
         self.disconnect_btn = QPushButton("Disconnect from agent")
         self.disconnect_btn.setEnabled(bool(connected) and on_disconnect is not None)
         self.disconnect_btn.setToolTip(
             "End the current agent connection (only available while connected)"
         )
         self.disconnect_btn.clicked.connect(self._disconnect_and_close)
-        form.addRow("Connection", self.disconnect_btn)
+        conn_row.addWidget(self.disconnect_btn)
+        form.addRow("Connection", conn_row)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -474,6 +489,14 @@ class SettingsDialog(QDialog):
         then close the dialog without saving (an action, not a settings edit)."""
         if self._on_disconnect is not None:
             self._on_disconnect()
+        self.reject()
+
+    def _connect_and_close(self) -> None:
+        """NATE 2026-07-20: run the dock's connect path then close without
+        saving (an action, not a settings edit) -- the Connect twin of the
+        Disconnect button, both off the header row."""
+        if self._on_connect is not None:
+            self._on_connect()
         self.reject()
 
     def _push_provider_config(self) -> None:
@@ -632,13 +655,13 @@ class _ChatInput(QPlainTextEdit):
     """
 
     _MIN_LINES = 1
-    _MAX_LINES = 7
+    _MAX_LINES = 12
 
     def __init__(self, send_callback, parent=None):
         super().__init__(parent)
         self._send_callback = send_callback
         self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         # Grow with the document; recomputed on every edit (clamped to
         # _MIN_LINES.._MAX_LINES, then the vertical scrollbar takes over).
@@ -1856,6 +1879,30 @@ class _ModelListTask(QObject):
         self.finished.emit(ids, self._provider)
 
 
+class _EffectiveModelTask(QObject):
+    """GET the agent's EFFECTIVE (env-default) model id off the UI thread, so
+    the status strip can show the running model even when the user did not pick
+    one in Settings (e.g. NATE's nemotron set via .env.local). Reuses
+    ``fetch_model_list`` (its second return value is the agent default). Silent
+    on failure -- the label just keeps whatever it had. NATE 2026-07-20."""
+
+    finished = pyqtSignal(str)  # the agent default model id ("" if unknown)
+
+    def __init__(self, base_url: str, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self._base_url = base_url
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            _ids, default = fetch_model_list(self._base_url)
+        except Exception:  # noqa: BLE001 -- silent: the label keeps its text
+            return
+        self.finished.emit(str(default or ""))
+
+
 class _PushLayerTask(QObject):
     """Push the active QGIS layer into a case via ``push_layer.py``, off the
     UI thread (cross-thread signal emit) -- follows the ``_ExportTask``
@@ -2180,19 +2227,35 @@ class Trid3ntDock(QDockWidget):
         outer.setContentsMargins(6, 6, 6, 6)
         outer.setSpacing(4)
 
-        # Header: status dot | status text | cases | settings | connect
-        header = QHBoxLayout()
+        # Row 1 (status strip): the connection dot (left) + the active LLM
+        # model name. The dot's COLOUR is the connection signifier (green =
+        # connected); the text shows the RUNNING MODEL -- not a redundant
+        # "Connected" word (the dot means that) and not a case-id (that lives
+        # in the case title). Buttons live on their OWN row below so this stays
+        # a pure status strip. NATE 2026-07-20.
+        status_row = QHBoxLayout()
         self.dot = QLabel()
         self._set_dot("disconnected")
-        header.addWidget(self.dot)
-        self.status_label = QLabel("Not connected")
+        status_row.addWidget(self.dot)
+        self.status_label = QLabel("")
         self.status_label.setStyleSheet("font-size: 9pt;")
-        header.addWidget(self.status_label, 1)
+        status_row.addWidget(self.status_label, 1)
+        outer.addLayout(status_row)
 
+        # The agent's effective model id (settings picker override, else the
+        # agent env default probed on connect) shown in the status strip.
+        self._effective_model: str = ""
+        self._effective_model_tasks: List["_EffectiveModelTask"] = []
+
+        # Row 2 (actions): PURE buttons -- Cases / New / Probe / Set AOI /
+        # Clear AOI / Settings(cog). Connect + Disconnect BOTH live in Settings
+        # now (the dock auto-connects in local mode; a greyed header Connect
+        # button was noise -- NATE 2026-07-20).
+        button_row = QHBoxLayout()
         self.cases_btn = QToolButton()
         self.cases_btn.setText("Cases")
         self.cases_btn.clicked.connect(self._open_cases)
-        header.addWidget(self.cases_btn)
+        button_row.addWidget(self.cases_btn)
 
         # Item 3 (live-feedback 2026-07-09): header shortcut for a fresh
         # case, next to Cases -- the case-open reply rebinds the dock
@@ -2201,7 +2264,7 @@ class Trid3ntDock(QDockWidget):
         self.new_case_btn.setText("New")
         self.new_case_btn.setToolTip("Start a fresh case")
         self.new_case_btn.clicked.connect(self.new_case)
-        header.addWidget(self.new_case_btn)
+        button_row.addWidget(self.new_case_btn)
 
         # Item R6 (live-feedback 2026-07-18): the "Push layer" header button
         # is REMOVED (UI-noise reduction, NATE ask). The bidirectional layer
@@ -2222,7 +2285,7 @@ class Trid3ntDock(QDockWidget):
             "Click the map to sample the case's layers at a point"
         )
         self.probe_btn.toggled.connect(self._toggle_probe_tool)
-        header.addWidget(self.probe_btn)
+        button_row.addWidget(self.probe_btn)
 
         # Persistent per-case bbox (per-case-bbox 2026-07-19): drag a rectangle
         # on the map to set THIS case's area of interest -- the extent the
@@ -2238,7 +2301,7 @@ class Trid3ntDock(QDockWidget):
             "Drag a rectangle on the map to set this case's area of interest"
         )
         self.aoi_btn.toggled.connect(self._toggle_aoi_draw)
-        header.addWidget(self.aoi_btn)
+        button_row.addWidget(self.aoi_btn)
 
         # Item D (qgis-ux-batch 2026-07-19): clear the current case AOI -- drops
         # the overlay + local bbox AND resets state.case_bbox server-side (the
@@ -2248,28 +2311,19 @@ class Trid3ntDock(QDockWidget):
         self.clear_aoi_btn.setText("Clear AOI")
         self.clear_aoi_btn.setToolTip("Clear this case's area of interest")
         self.clear_aoi_btn.clicked.connect(self._clear_aoi)
-        header.addWidget(self.clear_aoi_btn)
+        button_row.addWidget(self.clear_aoi_btn)
 
         # Item B2 (qgis-ux-batch 2026-07-19): Settings collapses to a COG glyph
         # (icon-only look) -- the header button row is pure buttons, no word
         # labels competing with the connection signifier. The gear glyph is the
         # button's only content (effectively icon-only); the tooltip names it.
+        button_row.addStretch(1)  # push Settings to the right end of the row
         self.settings_btn = QToolButton()
         self.settings_btn.setText("\u2699")  # gear glyph (cog); icon-only look
-        self.settings_btn.setToolTip("Settings")
+        self.settings_btn.setToolTip("Settings (connect / disconnect live here)")
         self.settings_btn.clicked.connect(self._open_settings)
-        header.addWidget(self.settings_btn)
-
-        # Item B3 (qgis-ux-batch 2026-07-19): the top-row Connect button ONLY
-        # connects now (never toggles to "Disconnect") -- DISCONNECT moved into
-        # the Settings dialog. It stays labeled "Connect" and is DISABLED while
-        # connected/connecting (re-enabled by the disconnect/failure paths), so
-        # a disconnected user still has a one-tap Connect where they expect it.
-        self.connect_btn = QToolButton()
-        self.connect_btn.setText("Connect")
-        self.connect_btn.clicked.connect(self.connect_agent)
-        header.addWidget(self.connect_btn)
-        outer.addLayout(header)
+        button_row.addWidget(self.settings_btn)
+        outer.addLayout(button_row)
 
         # Active-case title (milestone 3 case switching): which case the
         # chat and the layer group are bound to right now.
@@ -2357,9 +2411,7 @@ class Trid3ntDock(QDockWidget):
         # line as the field grows.
         input_row = QHBoxLayout()
         self.input_edit = _ChatInput(self._send)
-        self.input_edit.setPlaceholderText(
-            "Ask for data or a simulation... (Enter to send, Shift+Enter for a new line)"
-        )
+        self.input_edit.setPlaceholderText("Ask for data or a simulation...")
         input_row.addWidget(self.input_edit, 1)
         self.send_btn = QPushButton("Send")
         self.send_btn.clicked.connect(self._send)
@@ -2993,7 +3045,6 @@ class Trid3ntDock(QDockWidget):
         # Item B3 (qgis-ux-batch 2026-07-19): the top-row button only CONNECTS;
         # disable it while a connection is up/in-flight (Disconnect lives in
         # Settings now). Re-enabled by disconnect_agent + the failure paths.
-        self.connect_btn.setEnabled(False)
         title = "QGIS session " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         self._session_case_title = title
         anon = self.settings.anonymous_user_id or None
@@ -3025,7 +3076,6 @@ class Trid3ntDock(QDockWidget):
         self._set_dot("disconnected")
         self.status_label.setText("Not connected")
         # Item B3: re-arm the top-row Connect button (disabled while connected).
-        self.connect_btn.setEnabled(True)
 
     def _set_case_label(self, title: str) -> None:
         self._case_title = title
@@ -3048,6 +3098,7 @@ class Trid3ntDock(QDockWidget):
             self.settings,
             self,
             on_disconnect=self.disconnect_agent,
+            on_connect=self.connect_agent,
             connected=self.bridge.running,
         )
         dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
@@ -3138,7 +3189,7 @@ class Trid3ntDock(QDockWidget):
         this only stamps optimistically and sends.
         """
         if not self.bridge.running:
-            self.status_label.setText("Not connected -- press Connect first")
+            self.status_label.setText("Not connected -- open Settings to connect")
             return
         self._case_id = case_id
         self._note(f"Switching to case '{title}' ...")
@@ -3152,7 +3203,7 @@ class Trid3ntDock(QDockWidget):
         same path a case SELECT rebinds through.
         """
         if not self.bridge.running:
-            self.status_label.setText("Not connected -- press Connect first")
+            self.status_label.setText("Not connected -- open Settings to connect")
             return
         self._note("Starting a new case ...")
         # Item C (qgis-ux-batch 2026-07-19): a NEW case must never inherit the
@@ -3178,7 +3229,7 @@ class Trid3ntDock(QDockWidget):
         If the deleted case was the dock's active one, clear the case label
         gracefully -- the connection itself stays up."""
         if not self.bridge.running:
-            self.status_label.setText("Not connected -- press Connect first")
+            self.status_label.setText("Not connected -- open Settings to connect")
             return
         self._note(f"Deleting case '{title}' ...")
         self.bridge.case_command("delete", case_id)
@@ -3414,22 +3465,54 @@ class Trid3ntDock(QDockWidget):
 
     # -- bridge slots (UI thread) ---------------------------------------------- #
 
+    def _refresh_model_label(self) -> None:
+        """Row-1 status TEXT = the active LLM model name (the green dot already
+        means "connected"). Prefer the user's Settings model pick; else the
+        agent's env default probed on connect; else empty (the dot carries the
+        state). NATE 2026-07-20 -- drop the redundant "Connected"/case-id text."""
+        model = (self.settings.model_id or self._effective_model or "").strip()
+        if model:
+            # Short readable form: drop any provider prefix ("nvidia/...") but
+            # keep the model id + a ":free" tag; full id lives in the tooltip.
+            self.status_label.setText(model.split("/")[-1])
+            self.status_label.setToolTip(model)
+        else:
+            self.status_label.setText("")
+            self.status_label.setToolTip("")
+
+    def _probe_effective_model(self) -> None:
+        """Ask the agent for its env-default model (off-thread) so the status
+        strip shows the real running model even when the Settings picker is
+        blank (NATE's nemotron via .env.local). No-op when the user picked a
+        model explicitly (that value is authoritative)."""
+        if self.settings.model_id:
+            return
+        task = _EffectiveModelTask(self.settings.export_api, self)
+        task.finished.connect(self._on_effective_model)
+        self._effective_model_tasks.append(task)  # keep-alive
+        task.start()
+
+    def _on_effective_model(self, model_id: str) -> None:
+        self._effective_model = model_id or ""
+        self._refresh_model_label()
+
     def _on_connected(self, user_id: str, is_anonymous: bool) -> None:
         self._connected = True
         if is_anonymous and self.settings.mode == MODE_LOCAL:
             self.settings.anonymous_user_id = user_id
-        self.status_label.setText(f"Connected ({'anonymous' if is_anonymous else user_id})")
+        self._refresh_model_label()
+        self._probe_effective_model()
 
     def _on_case_ready(self, case_id: str) -> None:
         self._case_id = case_id
         self.materializer.set_case(case_id, self._session_case_title or None)
         self._set_case_label(self._session_case_title or case_id[:8])
         self._set_dot("connected")
-        # Item B1 (qgis-ux-batch 2026-07-19): the status signifier no longer
-        # carries the case-id chip -- the case identity lives in ``case_label``
-        # ("Case: <title>"), a more readable line, so the top-left signifier
-        # stays a pure connection state.
-        self.status_label.setText("Connected")
+        # Item B1 (qgis-ux-batch 2026-07-19) + NATE 2026-07-20: the status
+        # signifier carries neither the case-id chip nor a "Connected" word --
+        # the case identity lives in ``case_label`` ("Case: <title>") and the
+        # green dot means connected; the status TEXT shows the active model.
+        self._refresh_model_label()
         # Item d (live-feedback 2026-07-09): a case picked from the Cases
         # dialog while disconnected/mid-handshake -- the connection just
         # created its own fresh "QGIS session ..." case; now switch to the
@@ -3445,7 +3528,6 @@ class Trid3ntDock(QDockWidget):
         self._pending_open_case = None  # the connect this was riding died
         self._set_dot("error")
         self.status_label.setText(f"Connection failed: {message}")
-        self.connect_btn.setEnabled(True)  # Item B3: re-arm Connect
 
     def _on_auth_expired(self, message: str) -> None:
         """The token was rejected (broker 401/403 or in-band AUTH_REQUIRED):
@@ -3457,7 +3539,6 @@ class Trid3ntDock(QDockWidget):
         self.status_label.setText(
             "Token expired or rejected -- paste a fresh one in Settings"
         )
-        self.connect_btn.setEnabled(True)  # Item B3: re-arm Connect
         self._note(f"Authentication failed: {message}", error=True)
 
     def _on_closed(self, reason: str) -> None:
@@ -3468,7 +3549,6 @@ class Trid3ntDock(QDockWidget):
         elif reason != "stopped":
             self._set_dot("error")
             self.status_label.setText(f"Disconnected: {reason}")
-        self.connect_btn.setEnabled(True)  # Item B3: re-arm Connect
 
     def _on_reconnecting(self, reason: str) -> None:
         # Transport lost; the worker's capped-jitter ladder is running.
@@ -3479,9 +3559,10 @@ class Trid3ntDock(QDockWidget):
     def _on_resumed(self) -> None:
         self._connected = True
         self._set_dot("connected")
-        # Item B1 (qgis-ux-batch 2026-07-19): no case-id chip in the signifier
-        # (the case identity lives in ``case_label``).
-        self.status_label.setText("Reconnected")
+        # Item B1 (qgis-ux-batch 2026-07-19) + NATE 2026-07-20: no case-id chip
+        # and no "Reconnected" word in the signifier -- the green dot means
+        # connected; the status text returns to the active model name.
+        self._refresh_model_label()
 
     def _on_event(self, kind: str, data: object) -> None:
         if not isinstance(data, dict):
@@ -3675,7 +3756,7 @@ class Trid3ntDock(QDockWidget):
         self.materializer.set_case(info.case_id, info.title)
         self._set_case_label(info.title)
         self._set_dot("connected")
-        self.status_label.setText(f"Connected -- case {info.case_id[:8]}")
+        self._refresh_model_label()  # status text = active model, not case-id
         self._replay_chat_history(info.chat_messages)
         self._note(f"Case '{info.title}' active")
         if info.layers:
@@ -3818,7 +3899,7 @@ class Trid3ntDock(QDockWidget):
         if not text:
             return
         if not (self._case_id and self.bridge.running):
-            self.status_label.setText("Not connected -- press Connect first")
+            self.status_label.setText("Not connected -- open Settings to connect")
             return
         self.input_edit.clear()
         self._add_user_bubble(text)
