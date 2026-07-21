@@ -119,16 +119,9 @@ _DOT_COLORS = {
     "connected": "#3fb950",
     "error": "#f85149",
 }
-# Item B1 (qgis-ux-batch 2026-07-19): the dock titlebar shows the CONNECTION
-# STATE (the top-left signifier), not the static "TRID3NT" brand word -- the
-# dot state maps to a short human label the titlebar carries. "error" reads as
-# "Disconnected" (a failed/expired connection IS disconnected to the user).
-_DOT_TITLES = {
-    "disconnected": "Disconnected",
-    "connecting": "Connecting",
-    "connected": "Connected",
-    "error": "Disconnected",
-}
+# H1 (NATE 2026-07-20): _DOT_TITLES removed -- the titlebar no longer carries
+# the connection STATE (the coloured dot alone signifies it). The titlebar
+# shows the active CASE NAME (else "TRID3NT"); see ``_set_case_label``.
 
 _USER_BUBBLE_STYLE = (
     "background-color: #1f6feb; color: white; border-radius: 8px; padding: 6px 9px;"
@@ -314,75 +307,37 @@ class SettingsDialog(QDialog):
         self.token_edit.setEchoMode(QLineEdit.Password)
         self.token_edit.setPlaceholderText("paste bearer token (remote mode)")
         form.addRow("Remote token", self.token_edit)
-
-        # Milestone 3 item 5: token HELP, not a Cognito flow. Honest about
-        # where a token comes from today and what expiry looks like.
-        token_help = QLabel(
-            "Get a token: sign in to the TRID3NT web app, open the browser "
-            "dev tools (F12) > Network > WS, and copy the value of the "
-            "st= query parameter on the /ws WebSocket request. That is the "
-            "carrier the cloud broker authenticates BEFORE the upgrade; the "
-            "plugin sends it the same way (plus the in-band auth-token "
-            "envelope). Tokens EXPIRE: when the dock status says the token "
-            "expired, paste a fresh one here and press Connect -- the plugin "
-            "will not silently retry a dead token."
-        )
-        token_help.setWordWrap(True)
-        token_help.setStyleSheet(_STATUS_LINE_STYLE)
-        form.addRow("Get token help", token_help)
+        # S2 (NATE 2026-07-20): the "Get token help" label row is REMOVED (the
+        # explanation moves to a future Help page -- keep the dialog terse).
 
         self.minio_edit = QLineEdit(settings.minio_endpoint)
         form.addRow("Local MinIO endpoint", self.minio_edit)
 
         self.export_api_edit = QLineEdit(settings.export_api)
         form.addRow("Local export API", self.export_api_edit)
+        # S3 (NATE 2026-07-20): the big export/anonymous NOTE under "Local export
+        # API" is REMOVED (the explanation moves to a future Help page).
 
-        note = QLabel(
-            "Local mode connects anonymously. Remote mode sends the pasted "
-            "token (?st= carrier + auth-token envelope). The export API is "
-            "the local agent's HTTP listener (Open case in QGIS). "
-            "Reconnect to apply."
-        )
-        note.setWordWrap(True)
-        note.setStyleSheet(_STATUS_LINE_STYLE)
-        form.addRow(note)
+        # S7 (NATE 2026-07-20): the AOI selector checkboxes (canvas / selected
+        # polygon) are REMOVED -- the canvas-as-AOI path is gone (A2). The AOI is
+        # now the explicit Set-AOI rectangle OR the agent geocodes it.
 
-        # Item 4: AOI toggles + auto-basemap moved here from the dock (they
-        # used to live-apply; now they apply only on Save, like every other
-        # field in this dialog).
-        self.canvas_aoi_checkbox = QCheckBox("Use map canvas as area of interest")
-        self.canvas_aoi_checkbox.setChecked(settings.canvas_aoi)
-        form.addRow("AOI", self.canvas_aoi_checkbox)
-
-        self.selection_aoi_checkbox = QCheckBox(
-            "Use selected polygon as AOI (overrides canvas)"
-        )
-        self.selection_aoi_checkbox.setChecked(settings.selection_aoi)
-        form.addRow("", self.selection_aoi_checkbox)
-
-        self.auto_basemap_checkbox = QCheckBox(
-            "Add basemap automatically"
-        )
-        self.auto_basemap_checkbox.setChecked(settings.auto_basemap)
-        form.addRow("Basemap", self.auto_basemap_checkbox)
-
-        # BK-1: base-map PRESET picker (satellite under the mesh, dark, OSM).
+        # S5 (NATE 2026-07-20): the basemap PRESET picker (half width) sits on
+        # ONE row with the "Add basemap automatically" toggle to its RIGHT --
+        # was two separate rows (auto-basemap row + basemap-combo row).
         from .layers import BASEMAP_PRESETS
         self.basemap_combo = QComboBox()
         for preset_name in BASEMAP_PRESETS:
             self.basemap_combo.addItem(preset_name)
         idx = self.basemap_combo.findText(settings.basemap_preset)
         self.basemap_combo.setCurrentIndex(idx if idx >= 0 else 0)
-        form.addRow("", self.basemap_combo)
-
-        # NATE live-feedback 2026-07-13: "Show model thinking" moved here from
-        # the dock body (item-4 pattern: preferences live in Settings, apply
-        # on Save; the dock stays chat + input only).
-        self.show_thinking_checkbox = QCheckBox(
-            "Show model thinking (reasoning stream above answers)"
-        )
-        self.show_thinking_checkbox.setChecked(settings.show_thinking)
-        form.addRow("Model", self.show_thinking_checkbox)
+        self.basemap_combo.setMaximumWidth(160)  # ~half width; toggle rides right
+        self.auto_basemap_checkbox = QCheckBox("Add basemap automatically")
+        self.auto_basemap_checkbox.setChecked(settings.auto_basemap)
+        basemap_row = QHBoxLayout()
+        basemap_row.addWidget(self.basemap_combo)
+        basemap_row.addWidget(self.auto_basemap_checkbox, 1)
+        form.addRow("Basemap", basemap_row)
 
         # OpenRouter model-extensibility (design 2026-07-19): provider + api
         # key + model picker. Only the MODEL rides the user-message live
@@ -421,46 +376,61 @@ class SettingsDialog(QDialog):
         self.provider_combo.currentTextChanged.connect(self._reload_model_choices)
         form.addRow("Model id", self.model_combo)
 
-        provider_note = QLabel(
-            "On Save, the provider + API key + model are pushed to the running "
-            "agent and apply on your NEXT message -- no restart. (If the agent "
-            "is unreachable, Save still persists them; set them in the agent's "
-            ".env.local and restart to apply instead.) Leave the model id blank "
-            "to use the agent's default model."
-        )
-        provider_note.setWordWrap(True)
-        provider_note.setStyleSheet(_STATUS_LINE_STYLE)
-        form.addRow("", provider_note)
+        # S6 (NATE 2026-07-20): "Show model thinking" -> "Show Reasoning",
+        # relocated to sit directly UNDER the "Model id" row (with the model
+        # controls, not up in the generic section). Still bound to
+        # settings.show_thinking on Save.
+        self.show_thinking_checkbox = QCheckBox("Show Reasoning")
+        self.show_thinking_checkbox.setChecked(settings.show_thinking)
+        form.addRow("", self.show_thinking_checkbox)
 
-        # Item B3 (qgis-ux-batch 2026-07-19): DISCONNECT moved off the header
-        # top row (pure-button rule) into Settings. Enabled only while a
-        # connection is up; clicking it runs the dock's disconnect teardown then
-        # closes the dialog WITHOUT saving (reject) -- it is an action button,
-        # not a settings edit, so it should not also push provider config.
-        # NATE 2026-07-20: CONNECT lives here too now (off the header row). One
-        # Connect + one Disconnect side by side; each enabled only in the state
-        # where it applies (Connect when down, Disconnect when up).
-        conn_row = QHBoxLayout()
-        self.connect_btn = QPushButton("Connect to agent")
-        self.connect_btn.setEnabled(not bool(connected) and on_connect is not None)
-        self.connect_btn.setToolTip(
-            "Start the agent connection (only available while disconnected)"
+        # S3 (NATE 2026-07-20): the long provider_note ("On Save ...") is
+        # REMOVED -- keep the dialog terse (explanation -> future Help page).
+
+        # S4 (NATE 2026-07-20): Connect/Disconnect collapse to ONE toggle
+        # button -- its TEXT + action depend on the connection state at build
+        # time. Connected -> "Disconnect from agent" (runs the disconnect
+        # teardown); disconnected -> "Connect to agent" (runs the connect path).
+        # Both close the dialog WITHOUT saving (an action, not a settings edit,
+        # so it does not also push provider config).
+        self.conn_toggle_btn = QPushButton()
+        if connected:
+            self.conn_toggle_btn.setText("Disconnect from agent")
+            self.conn_toggle_btn.setToolTip("End the current agent connection")
+            self.conn_toggle_btn.setEnabled(on_disconnect is not None)
+            self.conn_toggle_btn.clicked.connect(self._disconnect_and_close)
+        else:
+            self.conn_toggle_btn.setText("Connect to agent")
+            self.conn_toggle_btn.setToolTip("Start the agent connection")
+            self.conn_toggle_btn.setEnabled(on_connect is not None)
+            self.conn_toggle_btn.clicked.connect(self._connect_and_close)
+        form.addRow("Connection", self.conn_toggle_btn)
+
+        # S1 (NATE 2026-07-20): the remote-only rows (Remote agent URL + Remote
+        # token) show ONLY in REMOTE mode -- hidden in LOCAL. Toggled live off
+        # the mode combo and seeded from the current mode. Hiding a QFormLayout
+        # row hides BOTH the field and its label (labelForField).
+        self._form = form
+        self._remote_rows = [self.remote_url_edit, self.token_edit]
+        self.mode_combo.currentTextChanged.connect(
+            self._apply_mode_field_visibility
         )
-        self.connect_btn.clicked.connect(self._connect_and_close)
-        conn_row.addWidget(self.connect_btn)
-        self.disconnect_btn = QPushButton("Disconnect from agent")
-        self.disconnect_btn.setEnabled(bool(connected) and on_disconnect is not None)
-        self.disconnect_btn.setToolTip(
-            "End the current agent connection (only available while connected)"
-        )
-        self.disconnect_btn.clicked.connect(self._disconnect_and_close)
-        conn_row.addWidget(self.disconnect_btn)
-        form.addRow("Connection", conn_row)
+        self._apply_mode_field_visibility(self.mode_combo.currentText())
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)
+
+    def _apply_mode_field_visibility(self, mode: str) -> None:
+        """S1 (NATE 2026-07-20): remote-only rows visible only in REMOTE mode
+        -- hide the field AND its label in LOCAL (labelForField)."""
+        show = mode == MODE_REMOTE
+        for field in self._remote_rows:
+            field.setVisible(show)
+            label = self._form.labelForField(field)
+            if label is not None:
+                label.setVisible(show)
 
     def accept(self) -> None:
         self._settings.mode = self.mode_combo.currentText()
@@ -469,8 +439,8 @@ class SettingsDialog(QDialog):
         self._settings.token = self.token_edit.text()
         self._settings.minio_endpoint = self.minio_edit.text()
         self._settings.export_api = self.export_api_edit.text()
-        self._settings.canvas_aoi = self.canvas_aoi_checkbox.isChecked()
-        self._settings.selection_aoi = self.selection_aoi_checkbox.isChecked()
+        # S7 (NATE 2026-07-20): canvas_aoi / selection_aoi checkboxes removed --
+        # no writes here (the canvas-as-AOI path is gone, A2).
         self._settings.auto_basemap = self.auto_basemap_checkbox.isChecked()
         self._settings.basemap_preset = self.basemap_combo.currentText()
         self._settings.show_thinking = self.show_thinking_checkbox.isChecked()
@@ -655,7 +625,7 @@ class _ChatInput(QPlainTextEdit):
     """
 
     _MIN_LINES = 1
-    _MAX_LINES = 12
+    _MAX_LINES = 10
 
     def __init__(self, send_callback, parent=None):
         super().__init__(parent)
@@ -663,9 +633,15 @@ class _ChatInput(QPlainTextEdit):
         self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        # Grow with the document; recomputed on every edit (clamped to
-        # _MIN_LINES.._MAX_LINES, then the vertical scrollbar takes over).
-        self.textChanged.connect(self._adjust_height)
+        # C2 (NATE 2026-07-20): grow RELIABLY one row per new line / wrap. Drive
+        # off the document LAYOUT's documentSizeChanged -- it fires AFTER the
+        # relayout resolves the new document height, so the box never lags a row
+        # behind (the old textChanged hook fired BEFORE relayout, so the height
+        # was computed from the pre-edit layout and trailed the text). Grow, do
+        # not scroll, until the _MAX_LINES cap (scrollbar stays OFF above).
+        self.document().documentLayout().documentSizeChanged.connect(
+            self._adjust_height
+        )
         self._adjust_height()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 -- Qt-mandated name
@@ -683,19 +659,35 @@ class _ChatInput(QPlainTextEdit):
             return
         super().keyPressEvent(event)
 
-    def _adjust_height(self) -> None:
-        # One line = the font line spacing; the document height (wrap-aware,
-        # includes the document margin) drives the visible row count, clamped
-        # so the field never collapses below one line nor grows past
-        # _MAX_LINES (the scrollbar takes over beyond that).
+    def _adjust_height(self, *args) -> None:  # documentSizeChanged passes a QSizeF
+        # C2 (NATE 2026-07-20): compute the field height FROM the document layout
+        # so it visibly grows one row per new line (or wrap) and shrinks back
+        # when lines are removed. IMPORTANT quirk: for a QPlainTextEdit the
+        # layout is QPlainTextDocumentLayout, whose ``documentSize().height()``
+        # is the LINE COUNT (visual lines, wraps included) -- NOT pixels (that
+        # lines-as-pixels confusion was the old break). So convert to pixels by
+        # multiplying the row count by the per-line spacing:
+        #   h = lineSpacing * ceil(doc.size().height()) + 2*documentMargin
+        #       + 2*frameWidth
+        # clamped between one line and _MAX_LINES lines. A single Shift+Enter
+        # bumps the line count by one -> +one lineSpacing -> exactly one new row
+        # (grow, do not scroll, until the cap -- the vertical scrollbar is OFF).
+        import math
+
         doc = self.document()
         line_h = self.fontMetrics().lineSpacing()
         margin = int(doc.documentMargin()) * 2
         frame = int(self.frameWidth()) * 2
-        min_h = line_h * self._MIN_LINES + margin + frame
-        max_h = line_h * self._MAX_LINES + margin + frame
-        needed = int(doc.size().height()) + frame
-        self.setFixedHeight(int(min(max(needed, min_h), max_h)))
+        chrome = margin + frame
+        lines = max(self._MIN_LINES, math.ceil(doc.size().height()))
+        min_h = line_h * self._MIN_LINES + chrome
+        max_h = line_h * self._MAX_LINES + chrome
+        needed = line_h * lines + chrome
+        height = int(min(max(needed, min_h), max_h))
+        # Apply BOTH bounds so the field is pinned to exactly this height (the
+        # layout cannot stretch/squeeze it away from the row count).
+        self.setMinimumHeight(height)
+        self.setMaximumHeight(height)
 
 
 def _markdown_to_display_html(text: str, palette) -> str:
@@ -2162,6 +2154,9 @@ class Trid3ntDock(QDockWidget):
         self._aoi_rubber = None
         self._aoi_map_tool = None
         self._prev_aoi_tool = None
+        # A1 (NATE 2026-07-20): True while the Set-AOI canvas key-filter (BACKSPACE
+        # /DELETE -> _clear_aoi) is installed -- see ``_toggle_aoi_draw``.
+        self._aoi_key_filter_on = False
         self._refresh_debounce = Debouncer()
         # Item d (live-feedback 2026-07-09): a case picked from the Cases
         # dialog before/while connecting -- opened via ``_on_case_ready``
@@ -2247,24 +2242,22 @@ class Trid3ntDock(QDockWidget):
         self._effective_model: str = ""
         self._effective_model_tasks: List["_EffectiveModelTask"] = []
 
-        # Row 2 (actions): PURE buttons -- Cases / New / Probe / Set AOI /
-        # Clear AOI / Settings(cog). Connect + Disconnect BOTH live in Settings
-        # now (the dock auto-connects in local mode; a greyed header Connect
-        # button was noise -- NATE 2026-07-20).
+        # Row 2 (actions): PURE buttons -- Cases / Probe / Set AOI /
+        # Settings(cog). Connect + Disconnect BOTH live in Settings now (the
+        # dock auto-connects in local mode; a greyed header Connect button was
+        # noise -- NATE 2026-07-20). H3: "New" dropped (creation via the Cases
+        # dialog); A1: "Clear AOI" dropped (BACKSPACE clears while Set-AOI is
+        # active).
         button_row = QHBoxLayout()
         self.cases_btn = QToolButton()
         self.cases_btn.setText("Cases")
         self.cases_btn.clicked.connect(self._open_cases)
         button_row.addWidget(self.cases_btn)
 
-        # Item 3 (live-feedback 2026-07-09): header shortcut for a fresh
-        # case, next to Cases -- the case-open reply rebinds the dock
-        # (fresh layer group, header title) via the existing handler.
-        self.new_case_btn = QToolButton()
-        self.new_case_btn.setText("New")
-        self.new_case_btn.setToolTip("Start a fresh case")
-        self.new_case_btn.clicked.connect(self.new_case)
-        button_row.addWidget(self.new_case_btn)
+        # H3 (NATE 2026-07-20): the header "New" case button is REMOVED --
+        # case creation stays available in the Cases dialog. The ``new_case()``
+        # METHOD remains (the Cases dialog + the auto/startup paths still call
+        # it); only the header widget is gone.
 
         # Item R6 (live-feedback 2026-07-18): the "Push layer" header button
         # is REMOVED (UI-noise reduction, NATE ask). The bidirectional layer
@@ -2303,15 +2296,11 @@ class Trid3ntDock(QDockWidget):
         self.aoi_btn.toggled.connect(self._toggle_aoi_draw)
         button_row.addWidget(self.aoi_btn)
 
-        # Item D (qgis-ux-batch 2026-07-19): clear the current case AOI -- drops
-        # the overlay + local bbox AND resets state.case_bbox server-side (the
-        # set-bbox clear equivalent), so the agent stops anchoring on the old
-        # extent. Sits next to "Set AOI". Not checkable (a one-shot action).
-        self.clear_aoi_btn = QToolButton()
-        self.clear_aoi_btn.setText("Clear AOI")
-        self.clear_aoi_btn.setToolTip("Clear this case's area of interest")
-        self.clear_aoi_btn.clicked.connect(self._clear_aoi)
-        button_row.addWidget(self.clear_aoi_btn)
+        # A1 (NATE 2026-07-20): the "Clear AOI" header button is REMOVED --
+        # clearing is MULTIPLEXED into the Set-AOI tool: while Set-AOI is active
+        # (aoi_btn checked), pressing BACKSPACE or DELETE clears the current AOI
+        # via ``_clear_aoi`` (a canvas eventFilter installed only while the tool
+        # is on). ``_clear_aoi`` stays as the backing method.
 
         # Item B2 (qgis-ux-batch 2026-07-19): Settings collapses to a COG glyph
         # (icon-only look) -- the header button row is pure buttons, no word
@@ -2325,13 +2314,9 @@ class Trid3ntDock(QDockWidget):
         button_row.addWidget(self.settings_btn)
         outer.addLayout(button_row)
 
-        # Active-case title (milestone 3 case switching): which case the
-        # chat and the layer group are bound to right now.
-        self.case_label = QLabel("")
-        self.case_label.setStyleSheet("font-size: 9pt; font-weight: bold;")
-        self.case_label.setWordWrap(True)
-        self.case_label.setVisible(False)
-        outer.addWidget(self.case_label)
+        # H2 (NATE 2026-07-20): the under-button "Case: <title>" line is REMOVED
+        # -- the active case name now rides the dock TITLEBAR (``_set_case_label``
+        # -> setWindowTitle), freeing this vertical space.
 
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
@@ -2406,16 +2391,14 @@ class Trid3ntDock(QDockWidget):
 
         # Input row -- Item A (qgis-ux-batch 2026-07-19): a multi-line
         # auto-growing composer (_ChatInput) replaces the one-line QLineEdit
-        # that clipped long prompts. ENTER sends, SHIFT+ENTER newlines. The
-        # Send button anchors to the BOTTOM so it stays aligned with the last
-        # line as the field grows.
+        # that clipped long prompts. ENTER sends, SHIFT+ENTER newlines.
+        # C1 (NATE 2026-07-20): the Send button is REMOVED -- ENTER already
+        # sends, so the composer is the sole full-width widget in the row
+        # (``_send`` stays, wired to ENTER via ``_ChatInput``).
         input_row = QHBoxLayout()
         self.input_edit = _ChatInput(self._send)
         self.input_edit.setPlaceholderText("Ask for data or a simulation...")
         input_row.addWidget(self.input_edit, 1)
-        self.send_btn = QPushButton("Send")
-        self.send_btn.clicked.connect(self._send)
-        input_row.addWidget(self.send_btn, 0, Qt.AlignBottom)
         outer.addLayout(input_row)
 
         self.setWidget(body)
@@ -2423,10 +2406,10 @@ class Trid3ntDock(QDockWidget):
     def _set_dot(self, state: str) -> None:
         color = _DOT_COLORS.get(state, _DOT_COLORS["disconnected"])
         self.dot.setStyleSheet(f"background-color: {color}; {_DOT_STYLE}")
-        # Item B1 (qgis-ux-batch 2026-07-19): the dock titlebar IS the top-left
-        # connection signifier now -- repaint it to the state every time the dot
-        # changes (connect/reconnect/fail/disconnect all route through here).
-        self.setWindowTitle(_DOT_TITLES.get(state, _DOT_TITLES["disconnected"]))
+        # H1 (NATE 2026-07-20): the titlebar no longer carries the CONNECTION
+        # STATE -- the coloured dot alone signifies connection. The titlebar
+        # instead shows the active CASE NAME (else "TRID3NT"), driven from the
+        # case paths via ``_set_case_label``; nothing to repaint here.
 
     def _scroll_to_bottom(self) -> None:
         bar = self.scroll.verticalScrollBar()
@@ -2677,29 +2660,26 @@ class Trid3ntDock(QDockWidget):
     def _aoi_for_send(
         self,
     ) -> Tuple[Optional[Tuple[float, float, float, float]], Optional[str]]:
-        """The ``(bbox, source)`` to attach right now, or ``(None, None)``
-        (off / unresolved / too big). Also recomputes the honest status text
-        into ``self._aoi_status_line`` -- item R3 (live-feedback 2026-07-18):
-        no pinned widget anymore; ``_send`` emits the line as an inline
-        transcript note when it changes. Selection (when its toggle is on and
-        features are selected) overrides the canvas extent -- see
-        ``aoi.choose_aoi``.
+        """The ``(bbox, source)`` to attach right now, or ``(None, None)``.
 
-        Item 4 (live-feedback 2026-07-09): the two toggles now live ONLY in
-        Settings (apply-on-Save), so this reads them straight off
-        ``self.settings`` instead of dock checkboxes.
+        A2 (NATE 2026-07-20): the AOI model is now EXPLICIT-only -- the user
+        DREW an AOI (the Set-AOI rectangle, persisted as ``self._case_bbox``,
+        which the rehydrated case bbox also populates) OR no AOI is set and the
+        AGENT geocodes the location from the message. The canvas-as-AOI and
+        selection-polygon paths are GONE (no reads of ``settings.canvas_aoi`` /
+        ``settings.selection_aoi``). Returns the drawn/persisted case bbox when
+        one exists and is within the size guard, else ``(None, None)``.
+
+        Also refreshes ``self._aoi_status_line`` -- the honest one-liner
+        ``_send`` emits inline on change (empty = no AOI = nothing to note; the
+        agent geocodes silently).
         """
-        canvas_enabled = self.settings.canvas_aoi
-        selection_enabled = self.settings.selection_aoi
-        selection_bbox = self._selection_bbox4326() if selection_enabled else None
-        canvas_bbox = self._canvas_bbox4326() if canvas_enabled else None
-        bbox, source = aoi.choose_aoi(selection_bbox, canvas_bbox, selection_enabled)
-        enabled = canvas_enabled or selection_enabled
-        self._aoi_status_line = aoi.aoi_status_text(
-            bbox, enabled, source=source or "canvas"
-        )
+        bbox = self._case_bbox
         if bbox is not None and aoi.bbox_within_guard(bbox):
-            return bbox, source
+            dlon, dlat = aoi.bbox_span_deg(bbox)
+            self._aoi_status_line = f"AOI: drawn {dlon:.2f} x {dlat:.2f} deg"
+            return bbox, "drawn"
+        self._aoi_status_line = ""
         return None, None
 
     # -- probe (map-click point sample) --------------------------------------- #
@@ -2957,10 +2937,37 @@ class Trid3ntDock(QDockWidget):
                     return
             self._prev_aoi_tool = canvas.mapTool()
             canvas.setMapTool(self._aoi_map_tool)
+            # A1 (NATE 2026-07-20): while Set-AOI is ON, BACKSPACE/DELETE clears
+            # the current AOI. A canvas eventFilter (installed here, removed in
+            # the OFF branch) catches those keys and routes to _clear_aoi -- the
+            # clearing is multiplexed into the Set-AOI tool (no separate button).
+            canvas.installEventFilter(self)
+            self._aoi_key_filter_on = True
         else:
             if canvas.mapTool() is self._aoi_map_tool:
                 canvas.setMapTool(self._prev_aoi_tool)
             self._prev_aoi_tool = None
+            if getattr(self, "_aoi_key_filter_on", False):
+                canvas.removeEventFilter(self)
+                self._aoi_key_filter_on = False
+
+    def eventFilter(self, obj, event):  # noqa: N802 -- Qt-mandated name
+        """A1 (NATE 2026-07-20): while the Set-AOI tool is active, BACKSPACE or
+        DELETE on the canvas clears the current AOI (``_clear_aoi``). The filter
+        is installed only while ``aoi_btn`` is checked (see ``_toggle_aoi_draw``);
+        guard on that flag + key so nothing else on the canvas is intercepted,
+        and always fall through to the base filter for every other event."""
+        from qgis.PyQt.QtCore import QEvent
+
+        if (
+            getattr(self, "_aoi_key_filter_on", False)
+            and self.aoi_btn.isChecked()
+            and event.type() == QEvent.KeyPress
+            and event.key() in (Qt.Key_Backspace, Qt.Key_Delete)
+        ):
+            self._clear_aoi()
+            return True
+        return super().eventFilter(obj, event)
 
     def _on_aoi_extent_chosen(self, rect) -> None:
         """A rectangle was dragged with the "Set AOI" tool: convert the
@@ -3048,15 +3055,15 @@ class Trid3ntDock(QDockWidget):
         title = "QGIS session " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         self._session_case_title = title
         anon = self.settings.anonymous_user_id or None
-        # #170 AOI-first: create the case WITH the canvas/selection extent so
-        # the very first turn's _turn_case_bbox anchors on it (guard applies).
-        case_bbox, _source = self._aoi_for_send()
+        # A2 (NATE 2026-07-20): a fresh case is BBOX-LESS -- never seed the
+        # canvas extent on create. The AOI is set explicitly later (the Set-AOI
+        # rectangle) or the agent geocodes it; there is no canvas-as-AOI path.
         self.bridge.start(
             url,
             token=self.settings.effective_token(),
             anonymous_user_id=anon if self.settings.mode == MODE_LOCAL else None,
             case_title=title,
-            case_bbox=list(case_bbox) if case_bbox else None,
+            case_bbox=None,
             # Live-feedback 2026-07-09: in local mode REUSE the resumed /
             # newest existing case instead of minting a fresh "QGIS session
             # ..." case on every connect (with auto-connect that regrew case
@@ -3078,9 +3085,13 @@ class Trid3ntDock(QDockWidget):
         # Item B3: re-arm the top-row Connect button (disabled while connected).
 
     def _set_case_label(self, title: str) -> None:
+        # H1/H2 (NATE 2026-07-20): the case name moved to the dock TITLEBAR --
+        # the under-button "Case: <title>" line (self.case_label) is gone. One
+        # method both the case-open and no-case paths call: a title = that case
+        # in the titlebar; empty = the "TRID3NT" brand word (fresh/no-case/
+        # disconnect). The dot colour (not the titlebar) signifies connection.
         self._case_title = title
-        self.case_label.setText(f"Case: {title}" if title else "")
-        self.case_label.setVisible(bool(title))
+        self.setWindowTitle(title if title else "TRID3NT")
 
     def _toggle_connection(self) -> None:
         if self.bridge.running:
@@ -3213,15 +3224,10 @@ class Trid3ntDock(QDockWidget):
         # leaves it cleared when the new case has none). _clear_aoi_overlay
         # also nulls self._case_bbox.
         self._clear_aoi_overlay()
-        # Item C: the canvas-extent default AOI is now GATED on the "Use map
-        # canvas as area of interest" setting. ON = seed state.case_bbox with
-        # the current canvas extent (the "set to our aoi" case) so the model
-        # anchors from turn one; OFF = a bbox-LESS create -- a clean slate with
-        # no AOI until the user Sets one or the LLM sets it. A canvas with no
-        # resolvable CRS also falls back to the bbox-less create.
-        canvas_bbox = self._canvas_bbox4326() if self.settings.canvas_aoi else None
-        args = {"bbox": list(canvas_bbox)} if canvas_bbox else None
-        self.bridge.case_command("create", args=args)
+        # A2 (NATE 2026-07-20): a NEW case is BBOX-LESS -- the canvas-as-AOI
+        # seed is gone. A clean slate with no AOI until the user Sets one (the
+        # Set-AOI rectangle) or the LLM geocodes it.
+        self.bridge.case_command("create", args=None)
 
     def delete_case(self, case_id: str, title: str) -> None:
         """Delete a case (case-command delete). The server re-emits
@@ -3235,9 +3241,9 @@ class Trid3ntDock(QDockWidget):
         self.bridge.case_command("delete", case_id)
         if case_id == self._case_id:
             self._case_id = None
-            self._case_title = ""
-            self.case_label.setText("No case")
-            self.case_label.setVisible(True)
+            # H2 (NATE 2026-07-20): no under-button label anymore -- reset the
+            # titlebar to the "TRID3NT" brand word (no active case).
+            self._set_case_label("")
 
     def refresh_cases(self) -> str:
         """Debounced case-list refresh (one session-resume round trip -- see
@@ -3508,10 +3514,10 @@ class Trid3ntDock(QDockWidget):
         self.materializer.set_case(case_id, self._session_case_title or None)
         self._set_case_label(self._session_case_title or case_id[:8])
         self._set_dot("connected")
-        # Item B1 (qgis-ux-batch 2026-07-19) + NATE 2026-07-20: the status
-        # signifier carries neither the case-id chip nor a "Connected" word --
-        # the case identity lives in ``case_label`` ("Case: <title>") and the
-        # green dot means connected; the status TEXT shows the active model.
+        # NATE 2026-07-20: the status strip carries neither the case-id chip nor
+        # a "Connected" word -- the case identity rides the dock TITLEBAR
+        # (``_set_case_label``), the green dot means connected, and the status
+        # TEXT shows the active model.
         self._refresh_model_label()
         # Item d (live-feedback 2026-07-09): a case picked from the Cases
         # dialog while disconnected/mid-handshake -- the connection just
