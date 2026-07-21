@@ -57,7 +57,7 @@ import tempfile
 import threading
 from typing import Dict, List, Optional, Tuple
 
-from qgis.PyQt.QtCore import QObject, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QObject, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QAction,
     QCheckBox,
@@ -136,8 +136,12 @@ _ERROR_LINE_STYLE = "color: #f85149; font-size: 8pt; padding-left: 4px;"
 # so it tints faintly over EITHER a light or dark QGIS window background --
 # no hard color that assumes one theme) so the card reads as a distinct
 # panel, not an outline floating on the chat.
+# STYLE-1 (NATE 2026-07-20): scope the fill to the FRAME (#gatecard) so it does
+# NOT cascade onto the child text labels. A bare "QFrame { background-color }"
+# selector tints every descendant QLabel too -> the "highlighted text" NATE did
+# not want. The card FILL is kept (it is enough); only the text highlight is gone.
 _GATE_CARD_STYLE = (
-    "QFrame { border: 1px solid #d29922; border-radius: 8px; "
+    "QFrame#gatecard { border: 1px solid #d29922; border-radius: 8px; "
     "background-color: rgba(210, 153, 34, 7%); }"
 )
 _GATE_TITLE_STYLE = "color: #d29922; font-weight: bold; border: none;"
@@ -181,6 +185,67 @@ _TOOL_CHIP_DETAIL_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
 _TREE_CONNECTOR_STYLE = (
     "font-family: monospace; font-size: 8pt; color: #58a6ff; border: none;"
 )
+
+# T1..T7 (NATE 2026-07-20): the tool-call surface is now ONE parent card (a
+# QFrame containing the inner tool rows) -- NOT the flat chip pills above. The
+# constants below drive ``_ToolCard`` (the single builder used by BOTH the live
+# pipeline path AND the case-open replay path, T9).
+#
+# T2: the card BORDER spans the full chat width and adapts on resize (the frame
+# is a plain QVBoxLayout child -- no fixed/min width -- so it fills whatever the
+# resizable dock gives it), and the font is a notch LARGER than the old 8pt
+# pills (9pt here). A subtle border, no loud fill (theme-neutral -- reads over a
+# light or dark QGIS window alike, matching the gate/sim card discipline).
+_TOOLCARD_FRAME_STYLE = (
+    "QFrame#toolcard { border: 1px solid palette(mid); border-radius: 8px; "
+    "background-color: rgba(128, 128, 128, 6%); }"
+)
+# The chevron + "Tools (N)" header line at the top of the card (T3).
+_TOOLCARD_HEADER_STYLE = (
+    "color: palette(text); font-size: 9pt; border: none; text-align: left;"
+)
+# The muted metadata block pinned at the BOTTOM of the card body (T7).
+_TOOLCARD_META_STYLE = "color: palette(mid); font-size: 8pt; border: none;"
+# The small ">" nesting prefix on every inner row (T4).
+_TOOLCARD_PREFIX_STYLE = (
+    "font-family: monospace; font-size: 9pt; color: palette(mid); border: none;"
+)
+
+
+def _tool_row_text_style(state: Optional[str]) -> str:
+    """T4 (NATE 2026-07-20): the inner tool-row LABEL keeps the exact
+    state-driven TEXT COLOR the old chip used (green complete / grey in-progress
+    / red failed via ``_CHIP_STATE_COLORS``) -- only the chip's border/padding/
+    radius (the "bubble frame") is dropped, and the font bumps 8pt -> 9pt (T2's
+    larger card). No border, no background -- just the coloured monospace label
+    nested under the parent card."""
+    color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
+    return f"font-family: monospace; font-size: 9pt; color: {color}; border: none;"
+
+
+def _tool_status_style(state: Optional[str]) -> str:
+    """T5: the right-edge status glyph (animated spinner while running, a check
+    on success, an x on failure) is coloured off the same state map."""
+    color = _CHIP_STATE_COLORS.get((state or "").lower(), _CHIP_PENDING_COLOR)
+    return f"font-family: monospace; font-size: 9pt; color: {color}; border: none;"
+
+
+# T5: the classic ascii spinner cycled on a QTimer while a row is RUNNING; the
+# terminal glyphs replace the old "running..."/"completed" words (a check on
+# success, an x on failure). These check/x symbols are the status glyphs NATE
+# explicitly sanctioned (they are text symbols, not emoji).
+_SPINNER_FRAMES = ("|", "/", "-", "\\")
+_STATUS_GLYPH_DONE = "✓"  # check mark
+_STATUS_GLYPH_FAIL = "✗"  # ballot x
+_TERMINAL_STATES = {"complete", "failed", "cancelled"}
+
+
+def _is_running_state(state: Optional[str]) -> bool:
+    """A row is RUNNING (spinner) when its state is not one of the terminal
+    values -- pending / running / unknown all animate; complete/failed/
+    cancelled show the terminal glyph."""
+    return (state or "").lower() not in _TERMINAL_STATES
+
 # Item R4 (live-feedback 2026-07-18): simulation-card chrome -- purple, the
 # color the web reserves for sim progress affordances; the collapse pattern
 # itself is the exact GateCard summary + "show details" affordance.
@@ -188,7 +253,7 @@ _TREE_CONNECTOR_STYLE = (
 # tints faintly over either a light or dark QGIS window -- no hard theme
 # assumption) so the card reads as a distinct panel, not a bare outline.
 _SIM_CARD_STYLE = (
-    "QFrame { border: 1px solid #8957e5; border-radius: 8px; "
+    "QFrame#simcard { border: 1px solid #8957e5; border-radius: 8px; "
     "background-color: rgba(137, 87, 229, 7%); }"
 )
 _SIM_TITLE_STYLE = "color: #8957e5; font-weight: bold; border: none;"
@@ -846,6 +911,226 @@ def _is_error_note(note: str) -> bool:
     )
 
 
+class _ToolCard(QFrame):
+    """T1..T7/T9 (NATE 2026-07-20): ONE parent tool card -- a full-width QFrame
+    that CONTAINS the inner tool calls, replacing the old flat chip pills.
+
+    There is exactly ONE representation: this parent card IS the container; the
+    inner tool calls live inside it (never a small pill AND a large card). The
+    SAME widget is built by both the live pipeline path (``_AssistantEntry.
+    render_tool_card``) and the case-open replay path (``_replay_tool_group``),
+    so a reopened case shows the identical parent format (T9).
+
+    Layout:
+
+      [chevron]  Tools (N)                      <- header (T3)
+        > tool_a                            [glyph]
+        > tool_b                            [glyph]   <- inner rows (T4/T5/T6)
+        (optional collapsible result body under a row, replay only -- T9)
+        <one muted metadata block>                    <- bottom of body (T7)
+
+    T3 collapse rules: the inner body is EXPANDED while ANY inner tool runs (so
+    the user can watch live) and COLLAPSES once every inner tool is terminal --
+    and it re-expands if a new running row appears after an intermediate
+    all-terminal frame. The FIRST chevron click latches ``_user_toggled`` and
+    auto-collapse never fights the user's manual choice thereafter.
+
+    T5 spinner: a shared ``QTimer`` cycles the ascii spinner frames across every
+    RUNNING row's status glyph; terminal rows show a check (success) or x
+    (failure) instead. The timer only runs while at least one row is running.
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.setObjectName("toolcard")
+        self.setStyleSheet(_TOOLCARD_FRAME_STYLE)
+        self.setFrameShape(QFrame.NoFrame)
+        # T2: fill the chat width, adapt on resize -- no fixed/min width.
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 4, 8, 4)
+        outer.setSpacing(2)
+
+        # Header: chevron (T3) + "Tools (N)" title. The chevron is a native
+        # QToolButton arrow (style-drawn triangle -- not an emoji/text glyph).
+        header = QWidget()
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(4)
+        self._chevron = QToolButton()
+        self._chevron.setAutoRaise(True)
+        self._chevron.setArrowType(Qt.DownArrow)  # expanded by default
+        self._chevron.setStyleSheet("QToolButton { border: none; }")
+        self._chevron.clicked.connect(self._toggle)
+        hl.addWidget(self._chevron)
+        self._title = QLabel("Tools")
+        self._title.setTextFormat(Qt.PlainText)
+        self._title.setStyleSheet(_TOOLCARD_HEADER_STYLE)
+        hl.addWidget(self._title)
+        hl.addStretch(1)
+        outer.addWidget(header)
+
+        # Collapsible body: the inner tool rows + the bottom metadata block.
+        self._body = QWidget()
+        self._body_lay = QVBoxLayout(self._body)
+        self._body_lay.setContentsMargins(2, 0, 0, 0)
+        self._body_lay.setSpacing(1)
+        outer.addWidget(self._body)
+
+        self._expanded = True             # default EXPANDED while running (T3)
+        # T3 (fixed 2026-07-21): the collapse is AUTO (expand while any inner
+        # tool runs, collapse once ALL are terminal) UNTIL the user clicks the
+        # chevron -- then ``_user_toggled`` latches and auto never fights their
+        # choice again. The old one-shot ``_auto_collapsed`` latched on the
+        # FIRST all-terminal frame (tool A done before B starts) and never
+        # re-expanded when B began; tracking manual intent instead fixes that.
+        self._user_toggled = False
+        self._spinner_labels: List[QLabel] = []
+        self._spinner_frame = 0
+        self._spinner_timer = QTimer(self)
+        self._spinner_timer.setInterval(120)
+        self._spinner_timer.timeout.connect(self._tick_spinner)
+
+    # -- collapse ---------------------------------------------------------- #
+
+    def _apply_expanded(self) -> None:
+        self._body.setVisible(self._expanded)
+        self._chevron.setArrowType(
+            Qt.DownArrow if self._expanded else Qt.RightArrow
+        )
+
+    def _toggle(self) -> None:
+        self._user_toggled = True  # from now on, auto-collapse never overrides
+        self._expanded = not self._expanded
+        self._apply_expanded()
+
+    # -- spinner (T5) ------------------------------------------------------ #
+
+    def _tick_spinner(self) -> None:
+        self._spinner_frame = (self._spinner_frame + 1) % len(_SPINNER_FRAMES)
+        frame = _SPINNER_FRAMES[self._spinner_frame]
+        for lbl in self._spinner_labels:
+            lbl.setText(frame)
+
+    def _clear_body(self) -> None:
+        self._spinner_labels = []
+        while self._body_lay.count():
+            item = self._body_lay.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+
+    # -- the ONE builder used by live + replay (T9) ------------------------ #
+
+    def set_content(self, inner_rows: List[dict], meta_lines: List[str]) -> None:
+        """Rebuild the inner rows + bottom metadata from ``inner_rows`` (each a
+        ``{"label", "state", "nested", "result", "is_error"}`` dict) and
+        ``meta_lines`` (muted strings). Called every live pipeline frame (cheap
+        rebuild -- the frame/chevron/collapse state persist on ``self``) and
+        once on replay (all-terminal rows -> immediate auto-collapse)."""
+        self._clear_body()
+        any_running = False
+        n_tools = 0
+        for row in inner_rows:
+            label = str(row.get("label") or "")
+            if not label:
+                continue
+            n_tools += 1
+            state = row.get("state")
+            nested = bool(row.get("nested"))
+            running = _is_running_state(state)
+            if running:
+                any_running = True
+
+            row_w = QWidget()
+            rl = QHBoxLayout(row_w)
+            # T4: a small ">" prefix for visual nesting (drops the old bubble
+            # frame + tree-connector arrow that cut into the text); a deeper
+            # inset for a sub-step child so hierarchy still reads.
+            rl.setContentsMargins(4 + (12 if nested else 0), 0, 0, 0)
+            rl.setSpacing(6)
+            prefix = QLabel(">")
+            prefix.setTextFormat(Qt.PlainText)
+            prefix.setStyleSheet(_TOOLCARD_PREFIX_STYLE)
+            rl.addWidget(prefix)
+            # T4: the label keeps the EXACT state-driven text colour + plain
+            # non-wrapping behaviour of the old chip (only the frame is gone).
+            name_lbl = QLabel(label)
+            name_lbl.setTextFormat(Qt.PlainText)
+            name_lbl.setStyleSheet(_tool_row_text_style(state))
+            rl.addWidget(name_lbl)
+            rl.addStretch(1)
+            # T5/T6: the ONLY right-edge element is the status glyph now (the
+            # per-row arg/metadata summary is dropped -- it moves to the bottom
+            # block, T7). Running -> animated spinner; complete -> check;
+            # failed/cancelled -> x.
+            status = QLabel()
+            status.setTextFormat(Qt.PlainText)
+            status.setStyleSheet(_tool_status_style(state))
+            if running:
+                status.setText(_SPINNER_FRAMES[self._spinner_frame])
+                self._spinner_labels.append(status)
+            else:
+                status.setText(
+                    _STATUS_GLYPH_FAIL
+                    if (state or "").lower() in ("failed", "cancelled")
+                    else _STATUS_GLYPH_DONE
+                )
+            rl.addWidget(status)
+            self._body_lay.addWidget(row_w)
+
+            # T9 (replay): the tool RESULT shows UNDER its row, inside the card,
+            # as a collapsed read-only body (error responses get the red block).
+            result = row.get("result")
+            if isinstance(result, str) and result:
+                is_error = bool(row.get("is_error"))
+                toggle = QPushButton("Result")
+                toggle.setFlat(True)
+                toggle.setCheckable(True)
+                toggle.setChecked(False)
+                toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+                body = _WrapLabel(result)
+                body.setTextFormat(Qt.PlainText)
+                body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                body.setStyleSheet(
+                    _PROBE_ERROR_BLOCK_STYLE if is_error else _THINKING_BLOCK_STYLE
+                )
+                body.setMinimumWidth(1)  # E1: never force a horizontal scrollbar
+                body.setVisible(False)
+                toggle.clicked.connect(
+                    lambda _c=False, b=body, t=toggle: b.setVisible(t.isChecked())
+                )
+                self._body_lay.addWidget(toggle)
+                self._body_lay.addWidget(body)
+
+        # T7: one muted metadata block pinned at the BOTTOM of the body, under
+        # all the inner rows, so every bit of text lives inside the card border.
+        clean_meta = [m for m in meta_lines if m]
+        if clean_meta:
+            meta = _WrapLabel("\n".join(clean_meta))
+            meta.setTextFormat(Qt.PlainText)
+            meta.setStyleSheet(_TOOLCARD_META_STYLE)
+            meta.setMinimumWidth(1)  # E1: wrap, never a horizontal scrollbar
+            self._body_lay.addWidget(meta)
+
+        self._title.setText(f"Tools ({n_tools})" if n_tools else "Tools")
+
+        # T5: run the spinner only while a row is live.
+        if any_running and not self._spinner_timer.isActive():
+            self._spinner_timer.start()
+        elif not any_running and self._spinner_timer.isActive():
+            self._spinner_timer.stop()
+
+        # T3: auto behavior (until the user takes manual control) -- EXPANDED
+        # while any inner tool runs (so NATE can monitor), COLLAPSED once every
+        # inner tool is terminal. Re-expands if a new running row appears after
+        # an intermediate all-terminal frame; a manual chevron click disables it.
+        if n_tools and not self._user_toggled:
+            self._expanded = any_running
+        self._apply_expanded()
+
+
 class _AssistantEntry:
     """One pending/complete assistant bubble + its status-line area."""
 
@@ -904,33 +1189,21 @@ class _AssistantEntry:
         self.label.setMinimumWidth(1)
         lay.addWidget(self.label)
 
-        # Transient pipeline lines (replaced on every pipeline-state frame).
+        # T1/T9 (NATE 2026-07-20): the tool calls of this turn live in ONE
+        # parent ``_ToolCard`` hosted here (lazily created on the first pipeline
+        # frame). ``pipeline_area`` is the slot it sits in; the card itself
+        # persists across frames (chevron state, auto-collapse memory, spinner)
+        # -- only its inner rows re-render per frame.
         self.pipeline_area = QVBoxLayout()
         self.pipeline_area.setSpacing(0)
         lay.addLayout(self.pipeline_area)
+        self._tool_card: Optional[_ToolCard] = None
 
-        # BUG 3a (live-feedback 2026-07-12, NATE: layer notes "should show
-        # up somewhere else or collapse because they are in the way and push
-        # the last prompt or response way up in the chat"): per-layer
-        # materialization notes fold into ONE "Layers (N)" toggle styled
-        # like the thinking toggle, DEFAULT COLLAPSED. Error notes never
-        # land here -- ``add_layer_notes`` routes them to ``add_note`` so
-        # failures stay visible.
-        self._layers_toggle = QPushButton("Layers (0)")
-        self._layers_toggle.setFlat(True)
-        self._layers_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
-        self._layers_toggle.setCheckable(True)
-        self._layers_toggle.setChecked(False)  # default collapsed
-        self._layers_toggle.clicked.connect(self._toggle_layer_notes)
-        self._layers_toggle.setVisible(False)
-        lay.addWidget(self._layers_toggle)
-        self._layers_body = QWidget()
-        self._layers_body_lay = QVBoxLayout(self._layers_body)
-        self._layers_body_lay.setContentsMargins(8, 0, 0, 0)
-        self._layers_body_lay.setSpacing(0)
-        self._layers_body.setVisible(False)
-        lay.addWidget(self._layers_body)
-        self._layers_count = 0
+        # T8 (NATE 2026-07-20): the "Layers (N)" toggle is GONE -- the user sees
+        # rendered layers in the QGIS map / layer tree already, so the in-chat
+        # listing was clutter. The materialization path (``materializer.
+        # materialize`` -> actual QGIS layers) is untouched; only layer FAILURE
+        # notes still surface (via ``add_layer_notes`` -> ``add_note`` below).
 
         # Persistent notes (layer adds, errors) -- append-only.
         self.notes_area = QVBoxLayout()
@@ -1044,94 +1317,50 @@ class _AssistantEntry:
             layout.setAlignment(self.label, Qt.Alignment())
         self.label.setVisible(True)
 
-    def set_pipeline_rows(self, rows: List[dict]) -> None:
-        """Item R2 (live-feedback 2026-07-18): repaint the transient pipeline
-        area (replaced on every pipeline-state frame, as before). Each row is
+    def render_tool_card(
+        self, inner_rows: List[dict], meta_lines: List[str]
+    ) -> None:
+        """T1/T9 (NATE 2026-07-20): update this turn's parent ``_ToolCard`` (the
+        ONE tool-call representation). Lazily creates the card on the first
+        frame, then feeds every subsequent pipeline frame through the same
+        builder (``_ToolCard.set_content``) -- so the chevron/collapse/spinner
+        state persists while the inner rows re-render. ``inner_rows`` are the
+        ``{"label","state","nested","result","is_error"}`` dicts the pipeline
+        handler assembles; ``meta_lines`` is the bottom metadata block (T7)."""
+        if self._tool_card is None:
+            self._tool_card = _ToolCard()
+            self.pipeline_area.addWidget(self._tool_card)
+        self._tool_card.set_content(inner_rows, meta_lines)
 
-          {"chip": tool name or None, "detail": muted text, "indent": bool,
-           "state": step state}
-
-        A row WITH a chip renders as the bordered monospace tool badge plus
-        the muted detail text beside it -- visually a different class from
-        the grey info notes. A row with ``chip=None`` (compaction narration,
-        step error text) stays the plain grey status line it always was.
-
-        Item N2 (live-feedback 2026-07-19): an ``indent`` row is a nested/
-        sub-step child -- it renders under its parent with an ASCII "|->"
-        tree connector (in the blue accent) so the parent -> child hierarchy
-        reads as a directory tree, not a flat indented chip list.
-        Item N3 (live-feedback 2026-07-19): the chip border+text color tracks
-        ``state`` (green complete / grey in-progress / red failed) via
-        ``_tool_chip_style``; a row with no ``state`` falls back to grey."""
-        while self.pipeline_area.count():
-            item = self.pipeline_area.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
-        for row in rows:
-            chip = row.get("chip")
-            detail = row.get("detail") or ""
-            if not chip:
-                if detail:
-                    lbl = _WrapLabel(detail)
-                    lbl.setTextFormat(Qt.PlainText)
-                    lbl.setStyleSheet(_STATUS_LINE_STYLE)
-                    self.pipeline_area.addWidget(lbl)
-                continue
-            holder = QWidget()
-            hl = QHBoxLayout(holder)
-            indent = bool(row.get("indent"))
-            # Item N2: children sit under their parent with a modest left
-            # inset plus the tree connector glyph -- not just a flat indent.
-            hl.setContentsMargins(4 + (12 if indent else 0), 1, 0, 1)
-            hl.setSpacing(6)
-            if indent:
-                conn = QLabel("|->")
-                conn.setTextFormat(Qt.PlainText)
-                conn.setStyleSheet(_TREE_CONNECTOR_STYLE)
-                hl.addWidget(conn)
-            chip_lbl = QLabel(chip)
-            chip_lbl.setTextFormat(Qt.PlainText)
-            # Item N3: state-driven chip color (green/grey/red outlined chip).
-            chip_lbl.setStyleSheet(_tool_chip_style(row.get("state")))
-            hl.addWidget(chip_lbl)
-            if detail:
-                detail_lbl = QLabel(detail)
-                detail_lbl.setTextFormat(Qt.PlainText)
-                detail_lbl.setStyleSheet(_TOOL_CHIP_DETAIL_STYLE)
-                hl.addWidget(detail_lbl, 1)
-            hl.addStretch(0)
-            self.pipeline_area.addWidget(holder)
+    def clear_tool_card(self) -> None:
+        """Drop the parent tool card (used when a sim/gate card closes out the
+        pending entry so a fresh entry below owns the next turn's tools -- the
+        old ``set_pipeline_rows([])`` clear equivalent)."""
+        if self._tool_card is not None:
+            self._tool_card.deleteLater()
+            self._tool_card = None
 
     def add_note(self, text: str, error: bool = False) -> None:
         lbl = _WrapLabel(text)
         lbl.setTextFormat(Qt.PlainText)
         lbl.setStyleSheet(_ERROR_LINE_STYLE if error else _STATUS_LINE_STYLE)
+        # E1 (NATE 2026-07-20): an error/status line WRAPS with the resizable
+        # chat panel and never pins the scroll host wide -- cap the minimum
+        # width so even a long unbroken token reflows instead of forcing a
+        # horizontal scrollbar.
+        lbl.setMinimumWidth(1)
         self.notes_area.addWidget(lbl)
 
-    # -- collapsed layer-note batch (BUG 3a, live-feedback 2026-07-12) ------ #
-
-    def _toggle_layer_notes(self) -> None:
-        self._layers_body.setVisible(self._layers_toggle.isChecked())
-
     def add_layer_notes(self, notes: List[str]) -> None:
-        """Fold a batch of layer-materialization notes into the collapsed
-        "Layers (N)" toggle. Error-ish notes (``_is_error_note``) go through
-        ``add_note(error=True)`` instead -- never swallowed by the collapse.
-        Repeated batches on the same entry extend the count in place."""
+        """T8 (NATE 2026-07-20): the collapsed "Layers (N)" toggle is gone -- a
+        SUCCESSFUL layer note is dropped from chat (the user sees the layer in
+        the map / layer tree). Only FAILURE notes (``_is_error_note``) still
+        surface, as visible error lines, so a materialization failure is never
+        silently swallowed. The actual layer materialization happens in the
+        caller (``materializer.materialize``) and is untouched."""
         for note in notes:
             if _is_error_note(note):
                 self.add_note(note, error=True)
-                continue
-            lbl = _WrapLabel(note)
-            lbl.setTextFormat(Qt.PlainText)
-            lbl.setStyleSheet(_STATUS_LINE_STYLE)
-            self._layers_body_lay.addWidget(lbl)
-            self._layers_count += 1
-        if self._layers_count:
-            self._layers_toggle.setText(f"Layers ({self._layers_count})")
-            self._layers_toggle.setVisible(True)
-            self._layers_body.setVisible(self._layers_toggle.isChecked())
 
 
 class GateCard(QFrame):
@@ -1163,6 +1392,7 @@ class GateCard(QFrame):
         self._rp_marker = None
         self.rp_button = None
         self.rp_status = None
+        self.setObjectName("gatecard")  # STYLE-1: scope the fill, no text highlight
         self.setStyleSheet(_GATE_CARD_STYLE)
         self.setFrameShape(QFrame.StyledPanel)
 
@@ -1531,6 +1761,7 @@ class SimCard(QFrame):
         self._pct: Optional[int] = None
         self._elapsed_str: str = ""
         self._phase: str = ""
+        self.setObjectName("simcard")  # STYLE-1: scope the fill, no text highlight
         self.setStyleSheet(_SIM_CARD_STYLE)
         self.setFrameShape(QFrame.StyledPanel)
 
@@ -2008,8 +2239,17 @@ class CasesDialog(QDialog):
         lay = QVBoxLayout(self)
 
         self.listw = QListWidget()
+        # R1 (NATE 2026-07-20): single-click still OPENS a case (unchanged). The
+        # rows are now inline-EDITABLE for rename (F2 via keyboard selection, or
+        # the context-menu "Rename" which starts the same inline edit). Mouse
+        # double-click keeps opening -- single-click-open fires first, so it is
+        # the rename gesture that yields to open, by design ("do not let edit
+        # mode hijack opening"). ``_populating`` guards the ``itemChanged`` slot
+        # so programmatic repopulation (``set_cases``) never mis-fires a rename.
+        self._populating = False
         self.listw.itemClicked.connect(self._open_item)
         self.listw.itemDoubleClicked.connect(self._open_item)
+        self.listw.itemChanged.connect(self._commit_rename)
         self.listw.setContextMenuPolicy(Qt.CustomContextMenu)
         self.listw.customContextMenuRequested.connect(self._show_context_menu)
         lay.addWidget(self.listw, 1)
@@ -2039,6 +2279,9 @@ class CasesDialog(QDialog):
         current = self.listw.currentItem()
         if current is not None:
             selected = current.data(Qt.UserRole)
+        # R1: guard the itemChanged rename slot while we rebuild the list, so a
+        # programmatic clear/add never looks like a user rename commit.
+        self._populating = True
         self.listw.clear()
         for case in cases:
             label = case.title
@@ -2049,9 +2292,12 @@ class CasesDialog(QDialog):
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, case.case_id)
             item.setData(Qt.UserRole + 1, case.title)
+            # R1: inline-editable for rename (double-click / F2 / context menu).
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
             self.listw.addItem(item)
             if case.case_id == selected:
                 self.listw.setCurrentItem(item)
+        self._populating = False
         if not cases:
             self.info_lbl.setText(
                 "No cases received yet -- the list arrives from the agent on "
@@ -2088,15 +2334,58 @@ class CasesDialog(QDialog):
         if not isinstance(case_id, str) or not case_id:
             return
         menu = QMenu(self)
+        rename_action = menu.addAction("Rename")
         export_action = menu.addAction("Export GeoTIFFs")
         delete_action = menu.addAction("Delete")
         global_pos = self.listw.viewport().mapToGlobal(pos)
         chosen = menu.exec_(global_pos) if hasattr(menu, "exec_") else menu.exec(global_pos)
-        if chosen is export_action:
+        if chosen is rename_action:
+            self._begin_rename(item)
+        elif chosen is export_action:
             self._dock.open_case_in_qgis(case_id, str(title))
             self.accept()
         elif chosen is delete_action:
             self._delete_case(case_id, str(title))
+
+    def _begin_rename(self, item: QListWidgetItem) -> None:
+        """R1: start the inline rename edit on ``item``. The row text carries
+        the decorated label (title + optional ``[status]`` + ``(date)``); swap
+        it to the PLAIN title first so the user edits just the name, then open
+        the editor. ``_populating`` guards this programmatic setText."""
+        plain = item.data(Qt.UserRole + 1) or item.text()
+        self._populating = True
+        item.setText(str(plain))
+        self._populating = False
+        self.listw.setCurrentItem(item)
+        self.listw.editItem(item)
+
+    def _commit_rename(self, item: QListWidgetItem) -> None:
+        """R1: an inline edit committed. Send the rename case-command (mirrors
+        how delete/select flow through the dock bridge) with the case_id + new
+        title, then refresh the list. A blank or unchanged title is a no-op that
+        restores the row label. ``_populating`` short-circuits programmatic
+        text changes (``set_cases`` / ``_begin_rename``)."""
+        if self._populating:
+            return
+        case_id = item.data(Qt.UserRole)
+        old_title = item.data(Qt.UserRole + 1)
+        new_title = item.text().strip()
+        if not isinstance(case_id, str) or not case_id:
+            return
+        if not new_title or new_title == old_title:
+            # Restore the row's stored title (blank/no-op edits never rename).
+            self._populating = True
+            item.setText(str(old_title or ""))
+            self._populating = False
+            return
+        # Optimistic local update (the refresh below re-authoritatively repaints
+        # the decorated label once the server confirms).
+        self._populating = True
+        item.setData(Qt.UserRole + 1, new_title)
+        item.setText(new_title)
+        self._populating = False
+        self._dock.rename_case(case_id, new_title)
+        self.info_lbl.setText(self._dock.refresh_cases())
 
     def _delete_case(self, case_id: str, title: str) -> None:
         reply = QMessageBox.question(
@@ -2172,11 +2461,12 @@ class Trid3ntDock(QDockWidget):
         # Item R2 (live-feedback 2026-07-18): short arg summaries from the
         # tool-io sidecar, keyed by step_id, for the tool chip rows.
         self._tool_args_by_step: Dict[str, str] = {}
-        # Item R3 (live-feedback 2026-07-18): the AOI notice is INLINE now --
-        # the latest computed status line + the last one actually emitted as
-        # a transcript note (dedupe: only a CHANGED notice notes again).
-        self._aoi_status_line: str = ""
-        self._last_aoi_note: Optional[str] = None
+        # O1 (NATE 2026-07-20): the standing "AOI: drawn X x Y deg" readout is
+        # GONE (clutter). The ONLY AOI note is the one-time inline transcript
+        # note ``_on_aoi_extent_chosen`` emits WHEN the user actually sets the
+        # AOI ("Case AOI set to ..."). Nothing is restated per-send anymore, so
+        # the old ``_aoi_status_line`` / ``_last_aoi_note`` dedupe pair is
+        # removed with it.
 
         self._build_ui()
         self._wire_bridge()
@@ -2327,6 +2617,12 @@ class Trid3ntDock(QDockWidget):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.NoFrame)
+        # E1 (NATE 2026-07-20): the transcript NEVER grows a horizontal
+        # scrollbar -- error text (and every other chat line) must reflow with
+        # the resizable chat panel, not pin it wide. AlwaysOff (was the default
+        # ScrollBarAsNeeded, which a long unbroken error token could trip);
+        # wrapped labels cap their minimum width to 1 so content reflows.
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.messages_host = QWidget()
         self.messages_layout = QVBoxLayout(self.messages_host)
         self.messages_layout.setContentsMargins(2, 2, 2, 2)
@@ -2382,12 +2678,10 @@ class Trid3ntDock(QDockWidget):
         # thinking" moved into the Settings dialog (NATE live-feedback
         # 2026-07-13) -- the send path keeps reading
         # ``self.settings.show_thinking``.
-        # Item R3 (live-feedback 2026-07-18): the pinned AOI status line that
-        # used to sit HERE (above the composer) is removed -- nothing pinned
-        # above the composer except the composer itself. The notice now lands
-        # INLINE in the transcript as a normal note row when it occurs (see
-        # ``_send``); ``_aoi_for_send`` keeps computing the honest text into
-        # ``self._aoi_status_line``.
+        # Item R3 (live-feedback 2026-07-18) + O1 (NATE 2026-07-20): NO pinned
+        # AOI status line above the composer, AND no per-send restated readout
+        # either. The ONLY AOI note is the one-time "Case AOI set to ..." line
+        # ``_on_aoi_extent_chosen`` emits when the user actually sets the AOI.
 
         # Input row -- Item A (qgis-ux-batch 2026-07-19): a multi-line
         # auto-growing composer (_ChatInput) replaces the one-line QLineEdit
@@ -2451,13 +2745,12 @@ class Trid3ntDock(QDockWidget):
         target from the previous case must never receive the new case's
         deltas."""
         self._pending = None
-        # Item R4/R2/R3 (live-feedback 2026-07-18): per-case transcript
-        # state -- the SimCard registry (widgets die in the loop below), the
-        # tool-io arg summaries, and the last inline AOI note (a new case
-        # should restate the current AOI on its first send).
+        # Item R4/R2 (live-feedback 2026-07-18): per-case transcript state --
+        # the SimCard registry (widgets die in the loop below) + the tool-io
+        # arg summaries. (O1, NATE 2026-07-20: the per-send AOI note dedupe is
+        # gone -- the AOI note now fires only on an explicit Set-AOI.)
         self._sim_cards.clear()
         self._tool_args_by_step.clear()
-        self._last_aoi_note = None
         # Per-case-bbox 2026-07-19: the previous case's AOI overlay must not
         # linger across a switch -- _on_case_open_event repaints it below from
         # the newly-opened case's own bbox (or leaves it cleared when absent).
@@ -2477,47 +2770,70 @@ class Trid3ntDock(QDockWidget):
                 widget.deleteLater()
 
     def _replay_chat_history(self, messages: List[dict]) -> None:
-        """ITEM B: repaint a just-opened case's persisted conversation
-        (plain user/assistant bubbles, no thinking/pipeline chrome -- this
-        is a read-only replay, not a live stream) before the "Case '<title>'
-        active" note. ``messages`` is already role/content-filtered and
-        capped by ``trid3nt_client.parse_chat_history``; an empty list (a
-        brand-new case) is a no-op -- clean slate, just the active note."""
+        """ITEM B / T9 (NATE 2026-07-20): repaint a just-opened case's persisted
+        conversation before the "Case '<title>' active" note.
+
+        T9 unifies the replay path with the live path: a run of consecutive
+        persisted ``role="tool"`` rows is grouped into ONE parent ``_ToolCard``
+        (the SAME widget the live pipeline builds), with each tool's RESULT
+        shown under it INSIDE the card -- so a reopened case shows the identical
+        parent format instead of a stack of separate flat cards. E2: a persisted
+        tool FAILURE (``is_error``) survives the reopen as a red row + result
+        inside that card. Any persisted THINKING (defensive -- read off the row
+        if a future server carries it) replays as the collapsed thinking block
+        on the agent entry (NATE lost both the tool chain + thinking on refresh).
+
+        ``messages`` is already role/content-filtered + capped by
+        ``trid3nt_client.parse_chat_history``; an empty list is a no-op."""
+        tool_group: List[dict] = []
         for row in messages:
             role = row.get("role")
             if role == "tool":
-                # Item H (qgis-ux-batch 2026-07-19): render the persisted tool
-                # card as a collapsed transcript row. The tool row has no plain
-                # content bubble -- it carries the typed tool_card -- so it is
-                # handled BEFORE the content-string guard below.
-                self._replay_tool_card(row.get("tool_card"), row.get("content"))
+                # Accumulate the tool run -- flushed into ONE card when the run
+                # ends (next non-tool row, or end of history).
+                card = self._resolve_tool_card(
+                    row.get("tool_card"), row.get("content")
+                )
+                if card is not None:
+                    tool_group.append(card)
                 continue
+            # A non-tool row closes any open tool run.
+            if tool_group:
+                self._replay_tool_group(tool_group)
+                tool_group = []
             content = row.get("content")
+            # E2: a persisted terminal-error row (defensive -- a future server
+            # role="error", or an agent row flagged is_error) replays as a
+            # wrapped inline error line, same place it appeared live.
+            if role == "error" or row.get("is_error"):
+                if isinstance(content, str) and content:
+                    self._note(content, error=True)
+                continue
             if not isinstance(content, str) or not content:
                 continue
             if role == "user":
                 self._add_user_bubble(content)
             elif role == "agent":
                 entry = _AssistantEntry(self.messages_layout)
+                # T9: replay any persisted reasoning as the collapsed thinking
+                # block (defensive -- parse_chat_history drops it today, so this
+                # only fires once the server persists thinking on the row).
+                thinking = row.get("thinking") or row.get("reasoning")
+                if isinstance(thinking, str) and thinking.strip():
+                    entry.append_thinking_delta(thinking)
+                    entry.collapse_thinking()
                 entry.append_delta(content)
                 # Feature 2026-07-13: replayed text is always final --
                 # render its markdown immediately.
                 entry.finalize_markdown()
+        if tool_group:
+            self._replay_tool_group(tool_group)
 
-    def _replay_tool_card(self, tool_card, content) -> None:
-        """Item H (qgis-ux-batch 2026-07-19): render ONE persisted tool card
-        from the case-open replay as a collapsed transcript row.
-
-        The live tool cards are transient pipeline chips (``set_pipeline_rows``,
-        replaced every frame + never persisted), so a reopened case otherwise
-        showed no tool-call chain at all. This reads the SAME fields the live
-        tool-io path uses off the typed ``ToolCardRecord`` (contracts
-        ``case.py``): ``tool_name``/``state``/``label`` for the state-colored
-        chip, ``raw_args`` summarized into the chip detail, and
-        ``function_response`` as the collapsed (read-only) body. Falls back to
-        the ``content`` JSON twin when the typed card is absent; a malformed or
-        empty card is a silent no-op (never breaks the case switch).
-        """
+    @staticmethod
+    def _resolve_tool_card(tool_card, content) -> Optional[dict]:
+        """Resolve ONE persisted tool row to its ``ToolCardRecord`` dict
+        (contracts ``case.py``): the typed ``tool_card`` when present, else the
+        ``content`` JSON twin. Malformed/empty -> None (skipped, never raises)."""
         card = tool_card if isinstance(tool_card, dict) else None
         if card is None and isinstance(content, str) and content:
             try:
@@ -2526,64 +2842,48 @@ class Trid3ntDock(QDockWidget):
                 parsed = None
             if isinstance(parsed, dict):
                 card = parsed
-        if not card:
+        return card or None
+
+    def _replay_tool_group(self, cards: List[dict]) -> None:
+        """T9: render a run of persisted tool rows as ONE parent ``_ToolCard``
+        -- the SAME builder the live pipeline uses (``_ToolCard.set_content``).
+
+        Each card becomes an inner row (``tool_name``/``label`` + ``state``)
+        with its ``function_response`` shown under it as a collapsed read-only
+        body INSIDE the card; ``is_error`` rows render as a failed row (x glyph)
+        with the red result block. The parent card is all-terminal on replay, so
+        ``set_content`` auto-collapses it (matching the live end-state, T3); the
+        chevron re-expands it. The bottom metadata block (T7) carries each
+        tool's short arg summary."""
+        inner_rows: List[dict] = []
+        meta_lines: List[str] = []
+        for card in cards:
+            name = card.get("tool_name") or card.get("label") or "tool"
+            state = card.get("state")
+            is_error = bool(card.get("is_error"))
+            raw_args = card.get("raw_args")
+            response = card.get("function_response")
+            # E2: an error card shows the failed (x) glyph regardless of the
+            # raw state word.
+            row_state = "failed" if is_error else state
+            inner_rows.append(
+                {"label": str(name),
+                 "state": row_state,
+                 "nested": False,
+                 "result": response if isinstance(response, str) else None,
+                 "is_error": is_error}
+            )
+            args_summary = (
+                _short_args_summary(raw_args) if isinstance(raw_args, str) else ""
+            )
+            if args_summary:
+                meta_lines.append(f"{name}: {args_summary}")
+        if not inner_rows:
             return
-        name = card.get("tool_name") or card.get("label") or "tool"
-        state = card.get("state")
-        raw_args = card.get("raw_args")
-        response = card.get("function_response")
-        is_error = bool(card.get("is_error"))
-        args_summary = (
-            _short_args_summary(raw_args) if isinstance(raw_args, str) else ""
-        )
-
-        container = QWidget()
-        lay = QVBoxLayout(container)
-        lay.setContentsMargins(4, 1, 40, 1)
-        lay.setSpacing(1)
-
-        # Chip row: the state-colored tool badge + a short arg summary beside
-        # it -- visually the same class as the live pipeline chip rows.
-        header = QWidget()
-        hl = QHBoxLayout(header)
-        hl.setContentsMargins(0, 0, 0, 0)
-        hl.setSpacing(6)
-        chip_lbl = QLabel(str(name))
-        chip_lbl.setTextFormat(Qt.PlainText)
-        chip_lbl.setStyleSheet(_tool_chip_style(state))
-        hl.addWidget(chip_lbl)
-        if args_summary:
-            detail_lbl = QLabel(args_summary)
-            detail_lbl.setTextFormat(Qt.PlainText)
-            detail_lbl.setStyleSheet(_TOOL_CHIP_DETAIL_STYLE)
-            hl.addWidget(detail_lbl, 1)
-        else:
-            hl.addStretch(1)
-        lay.addWidget(header)
-
-        # Collapsible response body -- collapsed by default (read-only replay);
-        # error responses get the red block chrome (mirrors the probe error).
-        if isinstance(response, str) and response:
-            toggle = QPushButton("Result")
-            toggle.setFlat(True)
-            toggle.setCheckable(True)
-            toggle.setChecked(False)
-            toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
-            body = _WrapLabel(response)
-            body.setTextFormat(Qt.PlainText)
-            body.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            body.setStyleSheet(
-                _PROBE_ERROR_BLOCK_STYLE if is_error else _THINKING_BLOCK_STYLE
-            )
-            body.setVisible(False)
-            toggle.clicked.connect(
-                lambda _checked=False, b=body, t=toggle: b.setVisible(t.isChecked())
-            )
-            lay.addWidget(toggle)
-            lay.addWidget(body)
-
+        tool_card = _ToolCard()
+        tool_card.set_content(inner_rows, meta_lines)
         self.messages_layout.insertWidget(
-            self.messages_layout.count() - 1, container
+            self.messages_layout.count() - 1, tool_card
         )
 
     # -- AOI ------------------------------------------------------------------ #
@@ -2670,16 +2970,13 @@ class Trid3ntDock(QDockWidget):
         ``settings.selection_aoi``). Returns the drawn/persisted case bbox when
         one exists and is within the size guard, else ``(None, None)``.
 
-        Also refreshes ``self._aoi_status_line`` -- the honest one-liner
-        ``_send`` emits inline on change (empty = no AOI = nothing to note; the
-        agent geocodes silently).
+        O1 (NATE 2026-07-20): this NO LONGER stamps a standing status line --
+        the AOI is noted once at set time (``_on_aoi_extent_chosen``), never
+        restated per send.
         """
         bbox = self._case_bbox
         if bbox is not None and aoi.bbox_within_guard(bbox):
-            dlon, dlat = aoi.bbox_span_deg(bbox)
-            self._aoi_status_line = f"AOI: drawn {dlon:.2f} x {dlat:.2f} deg"
             return bbox, "drawn"
-        self._aoi_status_line = ""
         return None, None
 
     # -- probe (map-click point sample) --------------------------------------- #
@@ -3245,6 +3542,24 @@ class Trid3ntDock(QDockWidget):
             # titlebar to the "TRID3NT" brand word (no active case).
             self._set_case_label("")
 
+    def rename_case(self, case_id: str, new_title: str) -> None:
+        """R1 (NATE 2026-07-20): rename a case (case-command ``rename`` with
+        ``args={"title": ...}``, the server-supported verb). Mirrors
+        ``delete_case``'s bridge send + not-connected guard. The server re-emits
+        the case-list, which repaints the open Cases dialog via ``set_cases``;
+        if the renamed case is the dock's active one, refresh the titlebar
+        label to the new title."""
+        new_title = (new_title or "").strip()
+        if not new_title:
+            return
+        if not self.bridge.running:
+            self.status_label.setText("Not connected -- open Settings to connect")
+            return
+        self._note(f"Renaming case to '{new_title}' ...")
+        self.bridge.case_command("rename", case_id, {"title": new_title})
+        if case_id == self._case_id:
+            self._set_case_label(new_title)
+
     def refresh_cases(self) -> str:
         """Debounced case-list refresh (one session-resume round trip -- see
         ``trid3nt_client.request_case_list_refresh`` for the tradeoff).
@@ -3436,7 +3751,7 @@ class Trid3ntDock(QDockWidget):
         transient pipeline rows are cleared first so they re-render in the new
         entry below rather than duplicating, frozen, above the card."""
         if self._pending is not None:
-            self._pending.set_pipeline_rows([])
+            self._pending.clear_tool_card()
             # Feature 2026-07-13: this entry receives no more deltas --
             # final-render its markdown before closing it out.
             self._pending.finalize_markdown()
@@ -3585,8 +3900,15 @@ class Trid3ntDock(QDockWidget):
             entry.append_delta(str(data.get("delta") or ""))
             self._scroll_to_bottom()
         elif kind == "pipeline":
+            # T1..T7 (NATE 2026-07-20): assemble the parent tool card's inner
+            # rows + the ONE bottom metadata block. Each inner row is just a
+            # tool label + its state (the card renders ">" + label + a status
+            # glyph, T4/T5/T6); the per-row arg/state detail that used to ride
+            # on the right (T6) is DROPPED from the row and folded into the
+            # muted metadata block at the bottom of the card (T7).
             steps = data.get("steps") or []
-            rows: List[dict] = []
+            inner_rows: List[dict] = []
+            meta_lines: List[str] = []
             for step in steps:
                 if not isinstance(step, PipelineStep):
                     continue
@@ -3595,52 +3917,39 @@ class Trid3ntDock(QDockWidget):
                 if step.role == "compute":
                     # Item R4 (live-feedback 2026-07-18): the off-box solver
                     # step renders as ONE persistent collapsible SimCard, not
-                    # a transient grey row -- see _route_compute_step.
+                    # an inner tool row -- see _route_compute_step.
                     self._route_compute_step(step)
                     continue
-                if step.parent_step_id:
-                    # Item N2/N3 (live-feedback 2026-07-19): nested child ->
-                    # tree row (indent), chip color driven off the state.
-                    rows.append(
-                        {"chip": step.tool_name, "detail": step.state,
-                         "indent": True, "state": step.state}
+                if step.tool_name == "context:compact":
+                    # Compaction narration is not a tool call -- keep it as a
+                    # muted metadata line, not a ">" tool row.
+                    suffix = (
+                        f" ({step.substep_label})" if step.substep_label else ""
                     )
-                else:
-                    # Compaction UX (Part A): "context:compact" is the one
-                    # step whose tool_name is a plain internal id
-                    # ("context:compact") while step.name carries the actual
-                    # human-readable state -- "Compacting conversation..."
-                    # then "Conversation compacted (Nk -> Mk tokens)". Every
-                    # other tool's tool_name IS already the readable label
-                    # (or at least as readable as step.name), so compaction
-                    # keeps its plain grey status line (chip=None) while real
-                    # tools get the item-R2 chip row.
-                    if step.tool_name == "context:compact":
-                        suffix = (
-                            f" ({step.substep_label})" if step.substep_label else ""
-                        )
-                        rows.append(
-                            {"chip": None,
-                             "detail": f"{step.name} - {step.state}{suffix}"}
-                        )
-                    else:
-                        detail = step.state
-                        if step.substep_label:
-                            detail += f" ({step.substep_label})"
-                        args = self._tool_args_by_step.get(step.step_id)
-                        if args:
-                            detail += f"  {args}"
-                        # Item N3 (live-feedback 2026-07-19): state drives the
-                        # chip color (green/grey/red).
-                        rows.append(
-                            {"chip": step.tool_name or step.name,
-                             "detail": detail, "state": step.state}
-                        )
-                    if step.error_message:
-                        rows.append(
-                            {"chip": None, "detail": f"    {step.error_message}"}
-                        )
-            self._ensure_pending().set_pipeline_rows(rows)
+                    meta_lines.append(f"{step.name} - {step.state}{suffix}")
+                    continue
+                inner_rows.append(
+                    {"label": step.tool_name or step.name,
+                     "state": step.state,
+                     "nested": bool(step.parent_step_id)}
+                )
+                # T7: the arg summary (was the per-row right-side detail, T6)
+                # + any substep label + error text join the bottom metadata.
+                bits: List[str] = []
+                if step.substep_label:
+                    bits.append(step.substep_label)
+                args = self._tool_args_by_step.get(step.step_id)
+                if args:
+                    bits.append(args)
+                if bits:
+                    meta_lines.append(
+                        f"{step.tool_name or step.name}: " + "  ".join(bits)
+                    )
+                if step.error_message:
+                    meta_lines.append(
+                        f"{step.tool_name or step.name}: {step.error_message}"
+                    )
+            self._ensure_pending().render_tool_card(inner_rows, meta_lines)
             self._scroll_to_bottom()
         elif kind == "session-state":
             layers = data.get("layers") or []
@@ -3917,12 +4226,10 @@ class Trid3ntDock(QDockWidget):
         self._pending = _AssistantEntry(self.messages_layout)
         self._scroll_to_bottom()
         bbox, source = self._aoi_for_send()
-        # Item R3 (live-feedback 2026-07-18): the AOI notice is INLINE in the
-        # transcript now (the pinned above-composer line is gone). Note it on
-        # CHANGE only, so a stable AOI does not restate itself every send.
-        if self._aoi_status_line and self._aoi_status_line != self._last_aoi_note:
-            self._pending.add_note(self._aoi_status_line)
-            self._last_aoi_note = self._aoi_status_line
+        # O1 (NATE 2026-07-20): no per-send AOI note anymore -- the bbox still
+        # rides the wire text (below), but the transcript note fires only WHEN
+        # the user sets/changes the AOI (``_on_aoi_extent_chosen``), never as a
+        # standing restated readout.
         wire_text = (
             aoi.attach_aoi_to_text(text, bbox, source=source or "canvas")
             if bbox
