@@ -45,7 +45,7 @@ def main() -> int:
     app = QgsApplication([], False)
     app.initQgis()
     try:
-        from trid3nt.layers import stamp_temporal
+        from trid3nt.render.layers import stamp_temporal
 
         tmp = tempfile.mkdtemp(prefix="trid3nt_temporal_harness_")
         names = [f"Flood_depth_step_{i}" for i in (1, 2, 3)] + ["Peak_flood_depth"]

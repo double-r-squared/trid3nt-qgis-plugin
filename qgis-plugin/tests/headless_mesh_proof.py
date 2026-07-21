@@ -177,7 +177,7 @@ from qgis.core import QgsApplication  # noqa: E402
 qgs = QgsApplication([], False)
 qgs.initQgis()
 
-from trid3nt.layers import LayerMaterializer  # noqa: E402
+from trid3nt.render.layers import LayerMaterializer  # noqa: E402
 from trid3nt.plugin_settings import PluginSettings  # noqa: E402
 
 materializer = LayerMaterializer(settings=PluginSettings())

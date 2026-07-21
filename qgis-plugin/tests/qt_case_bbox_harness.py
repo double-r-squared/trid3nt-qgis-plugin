@@ -52,7 +52,7 @@ QCoreApplication.setApplicationName("trid3nt-case-bbox-harness")
 qgs = QgsApplication([], False)
 qgs.initQgis()
 
-from trid3nt.dock import Trid3ntDock  # noqa: E402
+from trid3nt.ui.dock import Trid3ntDock  # noqa: E402
 
 
 class RecBridge:

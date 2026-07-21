@@ -27,7 +27,7 @@ import sys
 import time
 
 sys.path.insert(0, "/home/nate/Documents/trid3nt-local/qgis-plugin")
-from trid3nt.trid3nt_client import AgentClient
+from trid3nt.net.trid3nt_client import AgentClient
 
 STUB = bool(os.environ.get("E2E_STUB"))
 URL = os.environ.get("E2E_URL", "ws://127.0.0.1:8765")

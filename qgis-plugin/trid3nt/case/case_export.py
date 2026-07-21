@@ -77,10 +77,10 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-try:  # package context (real plugin runtime: dock.py does `from . import case_export`)
-    from .trid3nt_client import s3_to_http
+try:  # package context (real plugin runtime: net/case are sibling subpackages)
+    from ..net.trid3nt_client import s3_to_http
 except ImportError:  # flat/test context (tests sys.path.insert the trid3nt/ dir directly)
-    from trid3nt_client import s3_to_http  # type: ignore[no-redef]
+    from net.trid3nt_client import s3_to_http  # type: ignore[no-redef]
 
 __all__ = [
     "DEFAULT_EXPORT_API",

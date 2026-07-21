@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from qgis.PyQt.QtWidgets import QApplication  # noqa: E402
 
-from trid3nt.dock import PROVIDER_PRESETS, SettingsDialog  # noqa: E402
+from trid3nt.ui.settings_dialog import PROVIDER_PRESETS, SettingsDialog  # noqa: E402
 from trid3nt.plugin_settings import PluginSettings  # noqa: E402
 
 _API_KEY = "sk-or-HARNESS-SECRET"

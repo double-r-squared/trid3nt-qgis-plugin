@@ -54,7 +54,8 @@ QCoreApplication.setApplicationName("trid3nt-dock-ui-harness")
 
 app = QApplication([])
 
-from trid3nt.dock import GateCard, Trid3ntDock, _AssistantEntry  # noqa: E402
+from trid3nt.ui.cards import GateCard, _AssistantEntry  # noqa: E402
+from trid3nt.ui.dock import Trid3ntDock  # noqa: E402
 
 PROOF_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "docs", "proof")
@@ -152,9 +153,13 @@ assert not ws_entry._thinking_toggle.isChecked(), (
 )
 print("[bug2] first non-whitespace delta: bubble shown, thinking collapsed")
 
-# ---- 3. BUG 3a: Layers (N) collapse, errors stay outside ------------------- #
+# ---- 3. T8 (NATE 2026-07-20): the "Layers (N)" toggle is GONE ------------- #
+# The user sees rendered layers in the QGIS map / layer tree, so successful
+# layer notes are dropped from chat; only FAILURE notes still surface (visible
+# error lines). The materialization path itself is untouched (tested elsewhere).
 
 layer_entry = _AssistantEntry(dock.messages_layout)
+assert not hasattr(layer_entry, "_layers_toggle"), "Layers toggle should be removed"
 layer_entry.add_layer_notes(
     [
         "Added raster layer 'DEM (USGS 3DEP)'",
@@ -163,26 +168,13 @@ layer_entry.add_layer_notes(
     ]
 )
 pump()
-assert layer_entry._layers_toggle.isVisible(), "Layers toggle not shown"
-assert layer_entry._layers_toggle.text() == "Layers (2)", (
-    f"bad toggle label: {layer_entry._layers_toggle.text()!r}"
-)
-assert not layer_entry._layers_body.isVisible(), "Layers body not collapsed by default"
-assert layer_entry.notes_area.count() == 1, "error note was swallowed by the collapse"
+# Only the ONE failure note surfaces; the two successful notes are dropped.
+assert layer_entry.notes_area.count() == 1, "expected only the error note to surface"
 err_lbl = layer_entry.notes_area.itemAt(0).widget()
 assert "failed" in err_lbl.text() and err_lbl.isVisible(), "error note not visible"
-layer_entry._layers_toggle.setChecked(True)
-layer_entry._toggle_layer_notes()
-pump()
-assert layer_entry._layers_body.isVisible(), "expanding the Layers toggle failed"
-inner = layer_entry._layers_body_lay.count()
-assert inner == 2, f"expected 2 collapsed lines, got {inner}"
-layer_entry.add_layer_notes(["Added vector layer 'Rivers'"])
-assert layer_entry._layers_toggle.text() == "Layers (3)", "second batch did not extend N"
-layer_entry._layers_toggle.setChecked(False)
-layer_entry._toggle_layer_notes()
-pump()
-print("[bug3a] Layers (N) collapse: default collapsed, errors outside, batches extend")
+layer_entry.add_layer_notes(["Added vector layer 'Rivers'"])  # success -> dropped
+assert layer_entry.notes_area.count() == 1, "a successful note leaked into chat"
+print("[T8] Layers toggle removed: successes dropped, failures still visible")
 
 # ---- 4. BUG 3b: probe output pinned to the panel, never in chat ------------ #
 
@@ -428,40 +420,68 @@ print("[markdown] stream-plain -> finalize-rich, replay rich, user/thinking plai
 # ---- 7. NATE 2026-07-19 chat-UI batch (N1 fold / N2 tree / N3 state / ------- #
 #         N4 collapsed-progress / N5 sim-card ordering) ----------------------- #
 
-from trid3nt.dock import SimCard  # noqa: E402
-from trid3nt.trid3nt_client import PipelineStep  # noqa: E402
+from trid3nt.ui.cards import SimCard  # noqa: E402
+from trid3nt.net.trid3nt_client import PipelineStep  # noqa: E402
 
-# N3 (chip color = state) + N2 (nested child = tree connector): a chip's
-# border/text color tracks the step state and a child row carries the ASCII
-# "|->" connector.
+# T1..T5 (NATE 2026-07-20): the parent tool card. render_tool_card builds ONE
+# _ToolCard whose inner rows keep the state-driven TEXT color (green/grey/red),
+# each prefixed with ">" (T4), and carry a right-edge status glyph -- a spinner
+# frame while running, a check on success, an x on failure (T5). While a row is
+# still running the card stays EXPANDED (T3).
+from trid3nt.ui.cards import _SPINNER_FRAMES, _STATUS_GLYPH_DONE, _STATUS_GLYPH_FAIL  # noqa: E402,E501
+
 chip_entry = _AssistantEntry(dock.messages_layout)
-chip_entry.set_pipeline_rows(
+chip_entry.render_tool_card(
     [
-        {"chip": "fetch_dem", "detail": "complete", "state": "complete"},
-        {"chip": "build_mesh", "detail": "running", "state": "running"},
-        {"chip": "run_solver", "detail": "failed", "state": "failed"},
-        {"chip": "sub_fetch", "detail": "complete", "state": "complete",
-         "indent": True},
-    ]
+        {"label": "fetch_dem", "state": "complete", "nested": False},
+        {"label": "build_mesh", "state": "running", "nested": False},
+        {"label": "run_solver", "state": "failed", "nested": False},
+        {"label": "sub_fetch", "state": "complete", "nested": True},
+    ],
+    ["fetch_dem: bbox=..."],
 )
 pump()
-chip_styles = {}
-connector_seen = False
-for i in range(chip_entry.pipeline_area.count()):
-    holder = chip_entry.pipeline_area.itemAt(i).widget()
+card = chip_entry._tool_card
+assert card is not None, "render_tool_card did not create a parent _ToolCard"
+assert card._body.isVisible(), "card body should be EXPANDED while a row runs (T3)"
+name_styles = {}
+prefix_seen = 0
+glyphs = []
+for i in range(card._body_lay.count()):
+    holder = card._body_lay.itemAt(i).widget()
     if holder is None:
         continue
-    for lbl in holder.findChildren(QLabel):
-        if lbl.text() == "|->":
-            connector_seen = True
-        else:
-            chip_styles[lbl.text()] = lbl.styleSheet()
-assert "#3fb950" in chip_styles.get("fetch_dem", ""), "complete chip not green"
-assert "#8b949e" in chip_styles.get("build_mesh", ""), "running chip not grey"
-assert "#f85149" in chip_styles.get("run_solver", ""), "failed chip not red"
-assert "#3fb950" in chip_styles.get("sub_fetch", ""), "child chip color wrong"
-assert connector_seen, "nested child row missing the |-> tree connector"
-print("[N3/N2] chip state colors green/grey/red + child tree connector")
+    labels = holder.findChildren(QLabel)
+    texts = [lbl.text() for lbl in labels]
+    if ">" in texts:
+        prefix_seen += 1
+    for lbl in labels:
+        t = lbl.text()
+        if t in ("fetch_dem", "build_mesh", "run_solver", "sub_fetch"):
+            name_styles[t] = lbl.styleSheet()
+        elif t in (_STATUS_GLYPH_DONE, _STATUS_GLYPH_FAIL) or t in _SPINNER_FRAMES:
+            glyphs.append(t)
+assert "#3fb950" in name_styles.get("fetch_dem", ""), "complete row not green"
+assert "#8b949e" in name_styles.get("build_mesh", ""), "running row not grey"
+assert "#f85149" in name_styles.get("run_solver", ""), "failed row not red"
+assert prefix_seen == 4, f"expected a '>' prefix on all 4 rows, got {prefix_seen}"
+assert _STATUS_GLYPH_DONE in glyphs, "no success check glyph"
+assert _STATUS_GLYPH_FAIL in glyphs, "no failure x glyph"
+assert any(g in _SPINNER_FRAMES for g in glyphs), "no running spinner glyph"
+# T3: once every row is terminal the inner list AUTO-COLLAPSES (one shot).
+chip_entry.render_tool_card(
+    [
+        {"label": "fetch_dem", "state": "complete", "nested": False},
+        {"label": "build_mesh", "state": "complete", "nested": False},
+    ],
+    [],
+)
+pump()
+assert not card._body.isVisible(), "card did not auto-collapse when all rows done (T3)"
+card._toggle()  # the chevron re-expands it
+pump()
+assert card._body.isVisible(), "chevron re-expand failed"
+print("[T1..T5] parent tool card: >-prefixed rows, state colors, glyphs, auto-collapse")
 
 # N1: a RUNNING SimCard folds + unfolds at ANY time (not just terminal).
 sim = SimCard("TELEMAC")

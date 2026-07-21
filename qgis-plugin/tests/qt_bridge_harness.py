@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from qgis.PyQt.QtCore import QCoreApplication  # noqa: E402
 
-from trid3nt.ws_bridge import AgentBridge  # noqa: E402
+from trid3nt.net.ws_bridge import AgentBridge  # noqa: E402
 
 
 def main() -> int:

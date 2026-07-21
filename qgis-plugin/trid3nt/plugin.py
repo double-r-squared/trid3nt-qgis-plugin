@@ -46,7 +46,7 @@ class Trid3ntPlugin:
         if self.dock is None:
             # Lazy import so plugin discovery stays cheap and a Qt problem in
             # the dock cannot break classFactory.
-            from .dock import Trid3ntDock
+            from .ui.dock import Trid3ntDock
 
             self.dock = Trid3ntDock(self.iface, self.iface.mainWindow())
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dock)

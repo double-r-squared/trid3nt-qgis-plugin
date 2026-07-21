@@ -109,7 +109,7 @@ class FakeIface:
 iface = FakeIface()
 
 from trid3nt.plugin import Trid3ntPlugin  # noqa: E402
-from trid3nt.dock import GateCard  # noqa: E402
+from trid3nt.ui.cards import GateCard  # noqa: E402
 
 _qs = QSettings()
 _prior = {

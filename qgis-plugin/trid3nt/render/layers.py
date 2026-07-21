@@ -66,8 +66,8 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QDateTime, Qt
 
 from . import temporal
-from .plugin_settings import MODE_LOCAL, PluginSettings
-from .trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
+from ..plugin_settings import MODE_LOCAL, PluginSettings
+from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
 
