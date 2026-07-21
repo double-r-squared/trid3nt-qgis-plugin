@@ -4,7 +4,41 @@ SCRIPTS   := $(REPO_ROOT)/scripts
 RUN_DIR   := $(REPO_ROOT)/run
 LOG_DIR   := $(REPO_ROOT)/logs
 
-.PHONY: binaries minio titiler agent venv web status stop
+.PHONY: binaries minio titiler agent venv web status stop setup up down plugin env help
+
+# ---- orchestration (the clone -> run flow) ----------------------------------
+help:
+	@echo "TRID3NT Local -- bundled local server + QGIS plugin"
+	@echo ""
+	@echo "  make setup    one-time: create .env.local, fetch binaries, build the agent venv"
+	@echo "  (edit .env.local: set your LLM endpoint/key -- see .env.openrouter.example)"
+	@echo "  make up        start the local stack (minio + titiler + agent)"
+	@echo "  make plugin    install the QGIS plugin into your QGIS profile (then reload it)"
+	@echo "  make web       start the browser client on :5173 (optional; phone/laptop)"
+	@echo "  make status    health-check the running services"
+	@echo "  make down      stop everything"
+
+# One-time bootstrap: env template + binaries (minio/mf6/...) + the agent venv.
+setup: env binaries venv
+	@echo "setup done. Edit .env.local (LLM endpoint + key), then: make up"
+
+# Create .env.local from the template on first run (never clobber an existing one).
+env:
+	@if [ -f $(REPO_ROOT)/.env.local ]; then \
+	  echo ".env.local already exists -- leaving it untouched"; \
+	else \
+	  cp $(REPO_ROOT)/.env.openrouter.example $(REPO_ROOT)/.env.local; \
+	  echo "created .env.local from .env.openrouter.example -- SET your LLM endpoint + key"; \
+	fi
+
+# Start the backend stack the plugin/web talk to (minio must precede the agent).
+up: minio titiler agent
+	@echo "stack up. Install the plugin (make plugin) + reload QGIS, or open the web client (make web)."
+
+down: stop
+
+plugin:
+	@bash $(SCRIPTS)/install_plugin.sh
 
 binaries:
 	@bash $(SCRIPTS)/fetch_binaries.sh
@@ -48,9 +82,12 @@ status:
 	@printf "titiler (8080): " && \
 	  if curl -sf http://127.0.0.1:8080/healthz > /dev/null 2>&1; \
 	  then echo "OK"; else echo "FAIL"; fi
+	@printf "agent  (8766): " && \
+	  if curl -sf http://127.0.0.1:8766/api/telemetry/summary > /dev/null 2>&1; \
+	  then echo "OK"; else echo "FAIL"; fi
 	@printf "ollama (11434): " && \
 	  if curl -sf http://127.0.0.1:11434/api/tags > /dev/null 2>&1; \
-	  then echo "OK"; else echo "FAIL"; fi
+	  then echo "OK (optional local LLM)"; else echo "not running (optional)"; fi
 
 stop:
 	@echo "=== stopping TRID3NT Local services ==="
@@ -75,4 +112,11 @@ stop:
 	  else echo "agent not running (stale pid $$PID)"; fi; \
 	  rm -f $(RUN_DIR)/agent.pid; \
 	else echo "no agent.pid found"; fi
+	@if [ -f $(RUN_DIR)/web.pid ]; then \
+	  PID=$$(cat $(RUN_DIR)/web.pid); \
+	  if kill -0 $$PID 2>/dev/null; then \
+	    echo "stopping web (pid $$PID)"; kill $$PID; \
+	  else echo "web not running (stale pid $$PID)"; fi; \
+	  rm -f $(RUN_DIR)/web.pid; \
+	else echo "no web.pid found"; fi
 	@echo "done"

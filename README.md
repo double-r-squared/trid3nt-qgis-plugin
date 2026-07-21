@@ -1,114 +1,101 @@
 # TRID3NT Local
 
-Offline / local-first build of TRID3NT (GRACE-2): the AI workbench for
-multi-hazard geospatial modeling, running entirely on your own machine.
+Local-first build of TRID3NT: an AI workbench for multi-hazard geospatial
+modeling that runs entirely on your own machine. This repo bundles **the local
+server (the agent backend)** + **the QGIS plugin** that drives it, so one clone
+gives you a working end-to-end setup.
 
-- One local server + the same web UI as the cloud app (browser opens localhost)
-- Pluggable LLM via any OpenAI-compatible endpoint: local (Ollama, vLLM,
+- **QGIS plugin** (primary client) + the same **web UI** as the cloud app
+- **Pluggable LLM** via any OpenAI-compatible endpoint: local (Ollama, vLLM,
   llama.cpp, LM Studio) or cloud (OpenAI, Groq, DeepSeek, OpenRouter, ...)
-- Simulations run locally: MODFLOW 6 first, SFINCS next; more engines follow
+- **Real solvers run locally**: MODFLOW 6, TELEMAC, SFINCS, SWMM, and more via
+  local `docker` containers; MODFLOW runs against a local `mf6` binary
 - File-based persistence + local tile rendering -- no cloud account required
 
-Status: pre-alpha scaffold. Design doc lands in `docs/design/`.
+The agent code under `vendor/` is a tracked copy of the canonical **GRACE-2**
+repo (the shared server core); this bundle is the LOCAL runtime profile of it.
+To extend the harness (write a tool / add an engine), see the GRACE-2 authoring
+guides: `docs/authoring/writing-a-tool.md` and `docs/authoring/adding-an-engine.md`.
 
 ## Quickstart
 
 Prerequisites: Linux x86_64, Python 3.12, Node 20+, [uv](https://astral.sh/uv),
-[ollama](https://ollama.com) running locally (for local LLM; any OpenAI-compatible
-endpoint also works), and **Docker** (required for the SFINCS engine -- the
-`deltares/sfincs-cpu` container runs the solve). Your user must be in the `docker`
-group; if you were just added, either log out/in or wrap docker-touching commands
-(including the agent start) in `sg docker -c '...'` so the running shell picks up the
-group. Pull the SFINCS image once: `sg docker -c 'docker pull deltares/sfincs-cpu:sfincs-v2.3.3'`.
-
-### 1. Download binaries (mf6, minio, mc)
+and **Docker** (for the container-based solvers). Your user must be in the
+`docker` group (log out/in after being added, or wrap docker-touching commands in
+`sg docker -c '...'`). An LLM endpoint: either [ollama](https://ollama.com) local,
+or an API key for OpenAI/OpenRouter/Groq/etc.
 
 ```sh
-bash scripts/fetch_binaries.sh
-# or:
-make binaries
+make setup     # one-time: create .env.local, fetch binaries (mf6/minio/mc), build the agent venv
+#              then edit .env.local -- set your LLM endpoint + key (see .env.openrouter.example)
+make up        # start the local stack: minio (:9000) + titiler (:8080) + agent (:8765 WS / :8766 HTTP)
+make plugin    # install the QGIS plugin into your QGIS profile
+#              then in QGIS: enable the TRID3NT plugin (or Plugin Reloader to reload)
+make status    # health-check the services
 ```
 
-Downloads MODFLOW 6.5.0 static binary to `./bin/mf6` and MinIO server + client to
-`./bin/minio` + `./bin/mc`. Idempotent -- safe to re-run.
-
-### 2. Create the TiTiler venv
+Optional browser client (also reachable from a phone/laptop on your LAN/tailnet):
 
 ```sh
-uv venv --python 3.12 venvs/titiler
-uv pip install --python venvs/titiler/bin/python "titiler.application==2.0.4" uvicorn httpx
+make web       # vite dev server on :5173 (open http://<this-host>:5173)
 ```
 
-### 3. Configure environment
+Stop everything with `make down`. Run `make help` for the target list.
 
-Copy `.env.local` and edit as needed (LLM endpoint, model name):
+### LLM endpoint (.env.local)
 
-```sh
-cp .env.local .env.local.mine   # optional personal override
-```
+`make setup` copies `.env.openrouter.example` to `.env.local`. Set the provider:
+- Local Ollama: `MODEL_PROVIDER=openai`, `GRACE2_OPENAI_BASE_URL=http://127.0.0.1:11434/v1`,
+  `GRACE2_OPENAI_MODEL=<your ollama model>`, `GRACE2_OPENAI_API_KEY=not-needed`.
+- OpenRouter / OpenAI / Groq: set `GRACE2_OPENAI_BASE_URL` + `GRACE2_OPENAI_MODEL` +
+  `GRACE2_OPENAI_API_KEY`. Helper: `scripts/use_openrouter.sh <KEY> [model]`.
+The model can also be switched live from the plugin's Settings (no restart).
 
-The defaults point at Ollama on localhost, MinIO on :9000, TiTiler on :8080.
+### Engine backends (.env.local)
 
-Engine backend selection (in `.env.local`):
-- `GRACE2_MODFLOW_LOCAL=1` -- run MODFLOW against the local `mf6` binary (`GRACE2_MF6_BIN`).
-- `GRACE2_SOLVER_BACKEND=local-docker` -- run SFINCS via the local `deltares/sfincs-cpu`
-  docker container. Also set `GRACE2_SFINCS_IMAGE=deltares/sfincs-cpu:sfincs-v2.3.3` and
-  `GRACE2_RUNS_DIR=<repo>/data/runs` (the host rundir mounted into the container at `/data`).
-  These two backends are independent: MODFLOW checks `GRACE2_MODFLOW_LOCAL` first, so switching
-  `GRACE2_SOLVER_BACKEND` to `local-docker` does not affect MODFLOW. Start (or restart) the
-  agent inside the docker group so it can reach the docker socket:
-  `sg docker -c 'bash scripts/start_agent.sh'`.
+- `GRACE2_MODFLOW_LOCAL=1` -- MODFLOW runs against the local `mf6` binary (`GRACE2_MF6_BIN`).
+- `GRACE2_SOLVER_BACKEND=local-docker` -- container solvers (SFINCS/TELEMAC/...) run via
+  local docker. Set `GRACE2_RUNS_DIR=<repo>/data/runs` (the host rundir mounted at `/data`).
+  Pull an engine image once, e.g. `sg docker -c 'docker pull deltares/sfincs-cpu:sfincs-v2.3.3'`.
+  These two are independent (MODFLOW checks `GRACE2_MODFLOW_LOCAL` first). Start the agent
+  inside the docker group so it can reach the socket: `sg docker -c 'make agent'`.
 
-### 4. Start services
+## Service URLs
 
-```sh
-make minio     # starts MinIO + creates buckets trid3nt-runs + trid3nt-cache
-make titiler   # starts TiTiler on :8080 backed by MinIO
-make agent     # (not yet built -- placeholder)
-make web       # (not yet configured -- placeholder)
-```
+| Service        | URL                          | Notes                          |
+|----------------|------------------------------|--------------------------------|
+| Agent WS       | ws://localhost:8765          | plugin/web connect here        |
+| Agent HTTP     | http://localhost:8766        | tool catalog + telemetry       |
+| TiTiler        | http://localhost:8080        | raster tile server             |
+| MinIO API      | http://localhost:9000        | S3-compatible object storage   |
+| MinIO Console  | http://localhost:9001        | web UI (user: trid3nt)         |
+| Web UI         | http://localhost:5173        | optional browser client        |
+| Ollama         | http://localhost:11434       | optional local LLM             |
 
-### 5. Check status
-
-```sh
-make status
-# minio  (9000): OK
-# titiler (8080): OK
-# ollama (11434): OK
-```
-
-### 6. Stop services
-
-```sh
-make stop
-```
-
-### Service URLs
-
-| Service        | URL                         | Notes                        |
-|----------------|-----------------------------|------------------------------|
-| MinIO API      | http://localhost:9000       | S3-compatible object storage |
-| MinIO Console  | http://localhost:9001       | web UI (user: trid3nt)       |
-| TiTiler        | http://localhost:8080       | raster tile server           |
-| TiTiler health | http://localhost:8080/healthz | version JSON                |
-| Ollama         | http://localhost:11434      | local LLM endpoint           |
-| Agent WS       | ws://localhost:8765         | (not yet built)              |
-| Web UI         | http://localhost:5173       | (not yet configured)         |
-
-### Data directories (gitignored)
-
-- `./bin/` -- downloaded binaries
-- `./venvs/` -- Python virtual environments
-- `./data/minio/` -- MinIO object storage
-- `./data/persistence/` -- agent file-based persistence (cases, layers)
-- `./logs/` -- service log files
-- `./run/` -- PID files
-
-## Layout (planned)
+## Repo layout
 
 ```
-server/     local agent server (WS + HTTP, LLM provider seam, local solver exec)
-web/        the SPA (same UI as cloud, localhost backend)
-workers/    engine runners (mf6 subprocess, SFINCS docker)
-docs/       design + user docs
+qgis-plugin/trid3nt/   the QGIS plugin (net/ ui/ render/ case/ + plugin.py)
+qgis-plugin/tests/     plugin test harnesses + headless E2E drivers
+vendor/                the local server core, tracked copy synced from GRACE-2:
+  services/agent/        the agent (WS + tool dispatch + turn loop + persistence)
+  services/workers/      engine workers (mf6, telemac, sfincs, ... run via docker)
+  packages/contracts/    shared pydantic contracts
+  web/                   the browser SPA
+scripts/               run + deploy scripts (start_*, install_plugin, build_*_image, ...)
+bin/ venvs/ data/ logs/ run/   gitignored runtime (binaries, venvs, storage, logs, pids)
 ```
+
+## Deploy seams (when you change code)
+
+Three independent seams -- a git commit alone deploys none of them:
+- **Agent code**: edit canonical GRACE-2, then `scripts/sync_from_grace2.sh` +
+  restart the agent (`make agent`). The agent runs `vendor/`, not GRACE-2.
+- **QGIS plugin**: `make plugin` (rsyncs into the QGIS profile), then reload in QGIS.
+- **Worker image**: `scripts/build_<engine>_image.sh` (e.g. `build_telemac_image.sh`).
+
+## Data directories (gitignored)
+
+`./bin/` binaries · `./venvs/` Python envs · `./data/minio/` object storage ·
+`./data/persistence/` agent cases/layers · `./logs/` · `./run/` PID files ·
+`./cache/` HTTP cache.
