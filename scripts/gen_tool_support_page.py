@@ -46,28 +46,28 @@ STATUS_LEGEND = {
 # verified against the server tool sources).
 KEY_EARMARKS = {
     "fetch_airnow_air_quality": (
-        "`GRACE2_AIRNOW_API_KEY`",
+        "`TRID3NT_AIRNOW_API_KEY`",
         "free key from docs.airnowapi.org; also accepted per-call as `api_key`/`secret_ref`",
     ),
     "fetch_cama_flood_discharge": (
-        "`GRACE2_CAMA_FLOOD_BASE_URL`",
+        "`TRID3NT_CAMA_FLOOD_BASE_URL`",
         "upstream became registration-gated (U-Tokyo Google Form issues a password); "
         "point this at the credentialed mirror URL",
     ),
     "fetch_ebird_observations": (
-        "`GRACE2_EBIRD_API_KEY`",
+        "`TRID3NT_EBIRD_API_KEY`",
         "free key from ebird.org/api/keygen",
     ),
     "fetch_era5_reanalysis": (
-        "`GRACE2_COPERNICUS_CDS_API_KEY`",
+        "`TRID3NT_COPERNICUS_CDS_API_KEY`",
         "Copernicus CDS credentials (a `~/.cdsapirc` file also works via cdsapi)",
     ),
     "fetch_iucn_red_list_range": (
-        "`GRACE2_IUCN_RED_LIST_API_KEY`",
+        "`TRID3NT_IUCN_RED_LIST_API_KEY`",
         "IUCN Red List API token (apiv3.iucnredlist.org)",
     ),
     "fetch_openaq_measurements": (
-        "`GRACE2_OPENAQ_API_KEY`",
+        "`TRID3NT_OPENAQ_API_KEY`",
         "free key from explore.openaq.org",
     ),
 }
@@ -76,12 +76,12 @@ KEY_EARMARKS = {
 # (the error surfaces downstream of the missing credential).
 KEY_ADJACENT = {
     "fetch_firms_active_fire": (
-        "`GRACE2_FIRMS_MAP_KEY`",
+        "`TRID3NT_FIRMS_MAP_KEY`",
         "sweep FAIL: the literal 'demo' MAP_KEY fallback was rejected by FIRMS; "
         "get a free MAP_KEY from firms.modaps.eosdis.nasa.gov",
     ),
     "fetch_gtsm_tide_surge": (
-        "`GRACE2_COPERNICUS_CDS_API_KEY`",
+        "`TRID3NT_COPERNICUS_CDS_API_KEY`",
         "sweep FAIL: CDS retrieve failed on missing Copernicus credentials "
         "(same CDS setup as fetch_era5_reanalysis)",
     ),

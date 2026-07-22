@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from grace2_agent.tools.export_case_to_qgis import (
+from trid3nt_server.tools.export_case_to_qgis import (
     ExportCaseError,
     ExportInputError,
     NoExportableLayersError,
@@ -465,7 +465,7 @@ async def test_empty_layers_list_raises(tmp_path: Path) -> None:
 
 
 def test_tool_is_registered() -> None:
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("export_case_to_qgis")
     assert entry is not None

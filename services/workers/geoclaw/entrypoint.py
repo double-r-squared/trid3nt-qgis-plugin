@@ -3,7 +3,7 @@
 The GeoClaw analogue of ``services/workers/swmm/entrypoint.py`` /
 ``services/workers/modflow/entrypoint.py``. Same OBJECT-STORE-IN -> RUN ->
 OBJECT-STORE-OUT envelope; SCHEME-AWARE (``s3://`` via boto3 when
-``GRACE2_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage otherwise). The
+``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage otherwise). The
 worker contract is solver-agnostic, so the staging/upload/completion envelope is
 copied verbatim from the SWMM worker; only the SOLVER step + a deck-authoring
 step differ.
@@ -45,8 +45,8 @@ Contract (FR-CE-1/2/3 — IDENTICAL to the SWMM worker, only the solver + a
                 }
 
     Output:
-        <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/<every output file>
-        <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/completion.json
+        <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/<every output file>
+        <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/completion.json
             Terminal manifest (mirrors the SWMM completion schema; the
             stdout/stderr field names carry the ``geoclaw_`` prefix). Truthful:
             this image asserts only that Clawpack executed and produced fort.q
@@ -67,15 +67,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.geoclaw")
+LOG = logging.getLogger("trid3nt.worker.geoclaw")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 
-SCRATCH = Path(os.environ.get("GRACE2_GEOCLAW_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_GEOCLAW_SCRATCH", "/opt/grace2/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
 
 def _utc_now() -> str:
@@ -102,8 +102,8 @@ def _split_object_uri(uri: str) -> tuple[str, str, str]:
 
 
 def _output_scheme() -> str:
-    """Runs-bucket output scheme — ``s3`` or ``gs`` (env ``GRACE2_OBJECT_STORE``)."""
-    b = (os.environ.get("GRACE2_OBJECT_STORE") or "gcs").strip().lower()
+    """Runs-bucket output scheme — ``s3`` or ``gs`` (env ``TRID3NT_OBJECT_STORE``)."""
+    b = (os.environ.get("TRID3NT_OBJECT_STORE") or "gcs").strip().lower()
     return "s3" if b in {"s3", "aws"} else "gs"
 
 
@@ -506,8 +506,8 @@ def _run_geoclaw(cwd: Path) -> tuple[int, Path, Path]:
                 return proc.returncode, stdout_path, stderr_path
 
         # Step 2: the headless Clawpack solve. ``make .output`` is the canonical
-        # target; GRACE2_GEOCLAW_MAKE overrides it for test/alternative drivers.
-        make_target = os.environ.get("GRACE2_GEOCLAW_MAKE", "make .output")
+        # target; TRID3NT_GEOCLAW_MAKE overrides it for test/alternative drivers.
+        make_target = os.environ.get("TRID3NT_GEOCLAW_MAKE", "make .output")
         LOG.info("geoclaw: exec %s (cwd=%s)", make_target, cwd)
         proc = subprocess.run(
             make_target,
@@ -544,18 +544,18 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="grace2-geoclaw-entrypoint",
+        prog="trid3nt-geoclaw-entrypoint",
         description="GeoClaw (Clawpack) AWS Batch worker entrypoint (FR-CE-1/2/3).",
     )
     p.add_argument(
         "--run-id",
-        default=os.environ.get("GRACE2_RUN_ID", "").strip(),
-        help="Run identifier (also $GRACE2_RUN_ID).",
+        default=os.environ.get("TRID3NT_RUN_ID", "").strip(),
+        help="Run identifier (also $TRID3NT_RUN_ID).",
     )
     p.add_argument(
         "--manifest-uri",
-        default=os.environ.get("GRACE2_MANIFEST_URI", "").strip(),
-        help="s3:// / gs:// URI of the setup manifest (also $GRACE2_MANIFEST_URI).",
+        default=os.environ.get("TRID3NT_MANIFEST_URI", "").strip(),
+        help="s3:// / gs:// URI of the setup manifest (also $TRID3NT_MANIFEST_URI).",
     )
     return p
 
@@ -647,10 +647,10 @@ def main(argv: list[str] | None = None) -> int:
     run_id = args.run_id
     manifest_uri = args.manifest_uri
     if not run_id:
-        LOG.error("run_id is required (pass --run-id or set $GRACE2_RUN_ID)")
+        LOG.error("run_id is required (pass --run-id or set $TRID3NT_RUN_ID)")
         return 2
     if not manifest_uri:
-        LOG.error("manifest_uri is required (pass --manifest-uri or set $GRACE2_MANIFEST_URI)")
+        LOG.error("manifest_uri is required (pass --manifest-uri or set $TRID3NT_MANIFEST_URI)")
         return 2
 
     LOG.info(

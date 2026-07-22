@@ -43,13 +43,13 @@ from typing import Any
 
 import pytest
 
-from grace2_agent import server as server_mod
-from grace2_agent.persistence import (
+from trid3nt_server import server as server_mod
+from trid3nt_server.persistence import (
     CASES_COLLECTION,
     CHAT_COLLECTION,
     Persistence,
 )
-from grace2_agent.server import (
+from trid3nt_server.server import (
     SessionState,
     _emit_case_list,
     _emit_case_open,
@@ -58,12 +58,12 @@ from grace2_agent.server import (
     get_persistence,
     set_persistence,
 )
-from grace2_contracts.case import (
+from trid3nt_contracts.case import (
     CaseChatMessage,
     CaseCommandEnvelopePayload,
     CaseSummary,
 )
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.common import new_ulid
 
 from .test_persistence import MockMCPClient, _fresh_case_summary
 
@@ -678,8 +678,8 @@ def test_create_dual_writes_manifest_alongside_snapshot() -> None:
     the snapshot, at ``case-manifests/{case_id}.json``, validating as a
     ``CaseManifest``. The snapshot path is unchanged.
     """
-    from grace2_agent.persistence import case_manifest_key, case_view_snapshot_key
-    from grace2_contracts.case import CaseManifest
+    from trid3nt_server.persistence import case_manifest_key, case_view_snapshot_key
+    from trid3nt_contracts.case import CaseManifest
 
     saved = get_persistence()
     mock = MockMCPClient()
@@ -734,7 +734,7 @@ def test_create_dual_writes_manifest_alongside_snapshot() -> None:
 
 def test_persist_case_manifest_noop_without_active_case() -> None:
     """``_persist_case_manifest`` is a no-op with no Case bound (never raises)."""
-    from grace2_agent.server import _persist_case_manifest
+    from trid3nt_server.server import _persist_case_manifest
 
     saved = get_persistence()
     mock = MockMCPClient()
@@ -750,7 +750,7 @@ def test_persist_case_manifest_noop_without_active_case() -> None:
 
 def test_persist_case_manifest_noop_without_persistence() -> None:
     """``_persist_case_manifest`` is a no-op with no Persistence bound."""
-    from grace2_agent.server import _persist_case_manifest
+    from trid3nt_server.server import _persist_case_manifest
 
     saved = get_persistence()
     set_persistence(None)

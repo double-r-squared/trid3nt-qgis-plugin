@@ -4,12 +4,12 @@
 Measures the LOCAL model's (qwen3:8b-24k) FIRST tool choice for a candidate
 user prompt, reproducing the LIVE agent's per-turn assembly EXACTLY:
 
-  * tool-retrieval enforce, K=8 (GRACE2_TOOL_RETRIEVAL / GRACE2_TOOL_RETRIEVAL_K)
+  * tool-retrieval enforce, K=8 (TRID3NT_TOOL_RETRIEVAL / TRID3NT_TOOL_RETRIEVAL_K)
     -- the warm discover index subsets the ~194-tool registry to the visible set
     (HOT_SET floor UNION top-K retrieved). run_telemac / the seepage tools are
     NOT in the hot set, so retrieval is the gatekeeper.
-  * SYSTEM_PROMPT (+ lessons appendix when GRACE2_LESSONS=on)
-  * GRACE2_OPENAI_EXTRA_SYSTEM + baked tool-discipline line (added inside the
+  * SYSTEM_PROMPT (+ lessons appendix when TRID3NT_LESSONS=on)
+  * TRID3NT_OPENAI_EXTRA_SYSTEM + baked tool-discipline line (added inside the
     openai adapter, same as live)
   * temperature 0.7, single model round -- NO geocode, NO solve. We capture the
     first FunctionCallEvent the model emits and STOP.
@@ -34,15 +34,15 @@ from pathlib import Path
 
 # --- Env: mirror the LIVE agent (already set in its process env) ------------- #
 os.environ.setdefault("MODEL_PROVIDER", "openai")
-os.environ.setdefault("GRACE2_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
-os.environ.setdefault("GRACE2_OPENAI_API_KEY", "not-needed")
-os.environ.setdefault("GRACE2_OPENAI_MODEL", "qwen3:8b-24k")
-os.environ.setdefault("GRACE2_TOOL_RETRIEVAL", "enforce")
-os.environ.setdefault("GRACE2_TOOL_RETRIEVAL_K", "8")
-os.environ.setdefault("GRACE2_LESSONS", "on")
+os.environ.setdefault("TRID3NT_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
+os.environ.setdefault("TRID3NT_OPENAI_API_KEY", "not-needed")
+os.environ.setdefault("TRID3NT_OPENAI_MODEL", "qwen3:8b-24k")
+os.environ.setdefault("TRID3NT_TOOL_RETRIEVAL", "enforce")
+os.environ.setdefault("TRID3NT_TOOL_RETRIEVAL_K", "8")
+os.environ.setdefault("TRID3NT_LESSONS", "on")
 # The live agent's extra-system (verbatim from /proc/<agent>/environ).
 os.environ.setdefault(
-    "GRACE2_OPENAI_EXTRA_SYSTEM",
+    "TRID3NT_OPENAI_EXTRA_SYSTEM",
     "Never end a reply with an offer, suggestion, or recommendation for a next "
     "step (no 'Would you like...', no 'I can also...'). State what was done or "
     "found, then stop. The user decides what happens next. Fetch and composer "
@@ -54,22 +54,22 @@ os.environ.setdefault(
 AGENT_SRC = Path(__file__).resolve().parent.parent / "server" / "src"
 sys.path.insert(0, str(AGENT_SRC))
 
-import grace2_agent.main as _main  # noqa: E402
+import trid3nt_server.main as _main  # noqa: E402
 
 _main._import_tools_registry()
 
-from grace2_agent.adapter import (  # noqa: E402
+from trid3nt_server.adapter import (  # noqa: E402
     SYSTEM_PROMPT,
     build_contents_from_history,
     build_tool_declarations,
 )
-from grace2_agent.lessons import lessons_appendix, lessons_enabled  # noqa: E402
-from grace2_agent.openai_adapter import stream_openai, FunctionCallEvent  # noqa: E402
-from grace2_agent.tools import TOOL_REGISTRY  # noqa: E402
-from grace2_agent.tools import discover_dataset as _dd  # noqa: E402
-from grace2_agent.tools.tool_retrieval import retrieve_visible_tools  # noqa: E402
+from trid3nt_server.lessons import lessons_appendix, lessons_enabled  # noqa: E402
+from trid3nt_server.openai_adapter import stream_openai, FunctionCallEvent  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.tools import discover_dataset as _dd  # noqa: E402
+from trid3nt_server.tools.tool_retrieval import retrieve_visible_tools  # noqa: E402
 
-RETRIEVAL_K = int(os.environ.get("GRACE2_TOOL_RETRIEVAL_K", "8"))
+RETRIEVAL_K = int(os.environ.get("TRID3NT_TOOL_RETRIEVAL_K", "8"))
 
 TELEMAC = {"run_telemac"}
 SEEPAGE = {"run_river_seepage_job", "run_model_river_seepage_scenario"}

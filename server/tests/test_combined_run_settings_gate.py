@@ -29,8 +29,8 @@ import json
 
 import pytest
 
-from grace2_contracts import new_ulid
-from grace2_contracts.ws import PayloadConfirmationEnvelopePayload
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 
 # A small coastal Gulf AOI (Fort Myers / Mexico Beach scale) - used for the
 # bbox-bearing gate paths.
@@ -68,7 +68,7 @@ async def _drive_decision(server, decision, revised=None):
 # 1) The SFINCS bbox-area suggestion is loop-safe + ladder/cap-correct.
 # --------------------------------------------------------------------------- #
 def test_sfincs_suggest_from_bbox_is_loop_safe_and_capped() -> None:
-    from grace2_agent.workflows.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs_builder import (
         SFINCS_RES_LADDER,
         suggest_sfincs_resolution_from_bbox,
     )
@@ -87,7 +87,7 @@ def test_sfincs_suggest_from_bbox_is_loop_safe_and_capped() -> None:
 
 
 def test_sfincs_suggest_huge_aoi_coarsens() -> None:
-    from grace2_agent.workflows.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs_builder import (
         suggest_sfincs_resolution_from_bbox,
     )
 
@@ -103,7 +103,7 @@ def test_sfincs_suggest_huge_aoi_coarsens() -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_coastal_gate_emits_combined_run_settings(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     params = {
@@ -142,8 +142,8 @@ async def test_coastal_gate_emits_combined_run_settings(monkeypatch) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_coastal_proceed_pins_both(monkeypatch) -> None:
-    from grace2_agent import server
-    from grace2_agent.workflows.sfincs_builder import (
+    from trid3nt_server import server
+    from trid3nt_server.workflows.sfincs_builder import (
         suggest_sfincs_resolution_from_bbox,
     )
 
@@ -170,7 +170,7 @@ async def test_coastal_proceed_pins_both(monkeypatch) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_coastal_narrow_scope_pins_both_overrides(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     params = {"bbox": COASTAL_BBOX, "duration_hr": 6, "coastal": True}
@@ -196,8 +196,8 @@ async def test_coastal_narrow_scope_pins_both_overrides(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_coastal_narrow_scope_partial_override(monkeypatch) -> None:
     """Override ONLY the cadence; the resolution falls back to the suggestion."""
-    from grace2_agent import server
-    from grace2_agent.workflows.sfincs_builder import (
+    from trid3nt_server import server
+    from trid3nt_server.workflows.sfincs_builder import (
         suggest_sfincs_resolution_from_bbox,
     )
 
@@ -223,7 +223,7 @@ async def test_coastal_narrow_scope_partial_override(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_coastal_narrow_scope_interval_floored(monkeypatch) -> None:
     """A below-floor cadence override is floored at 1 min (deck floor parity)."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     params = {"bbox": COASTAL_BBOX, "duration_hr": 6, "coastal": True}
@@ -244,7 +244,7 @@ async def test_coastal_narrow_scope_interval_floored(monkeypatch) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_pluvial_bbox_gate_has_granularity_no_time_scale(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     # No coastal/quadtree/surge signal -> pluvial -> hourly cadence (no row).
@@ -275,7 +275,7 @@ async def test_pluvial_bbox_gate_has_granularity_no_time_scale(monkeypatch) -> N
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_bbox_less_pluvial_narrow_scope_fails_closed(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     params = {"location_query": "Fort Myers, Florida"}

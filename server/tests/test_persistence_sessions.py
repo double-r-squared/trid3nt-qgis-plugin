@@ -18,13 +18,13 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     FileMCPClient,
     Persistence,
     SESSIONS_COLLECTION,
 )
-from grace2_contracts import new_ulid
-from grace2_contracts.collections import SessionDocument
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.collections import SessionDocument
 
 
 # --------------------------------------------------------------------------- #
@@ -171,7 +171,7 @@ def test_touch_addtoset_dedupes_project_ids(file_persistence):
 
 
 def test_upsert_session_record_round_trip(file_persistence):
-    from grace2_contracts import now_utc
+    from trid3nt_contracts import now_utc
 
     sid = new_ulid()
     now = now_utc()

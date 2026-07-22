@@ -35,19 +35,19 @@ import logging
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.adapter import GeminiSettings, TextDeltaEvent, FunctionCallEvent
-from grace2_agent import tools as agent_tools
-from grace2_agent.context_budget import (
+from trid3nt_server import server
+from trid3nt_server.adapter import GeminiSettings, TextDeltaEvent, FunctionCallEvent
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.context_budget import (
     CONTEXT_WINDOW_ABORT_NOTE,
     ContextWindowExceededError,
     FABRICATION_CAVEAT,
 )
-from grace2_agent.persistence import make_file_persistence
-from grace2_agent.tools import RegisteredTool
-from grace2_contracts.case import CaseCommandEnvelopePayload
-from grace2_contracts.common import new_ulid
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server.persistence import make_file_persistence
+from trid3nt_server.tools import RegisteredTool
+from trid3nt_contracts.case import CaseCommandEnvelopePayload
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
 class FakeWS:
@@ -102,7 +102,7 @@ async def _drive_real_stream(ws, state, fake_stream):
     with a mocked ``stream_events_with_contents`` (``fake_stream``)."""
     from unittest.mock import patch
 
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     settings = GeminiSettings(
         model="m", project="p", location="us-central1", use_vertex=True
@@ -293,7 +293,7 @@ async def test_both_failure_logs_fire_when_persist_and_send_each_raise(
         yield TextDeltaEvent(delta="partial text")
         raise ContextWindowExceededError(16384)
 
-    with caplog.at_level(logging.ERROR, logger="grace2_agent.server"):
+    with caplog.at_level(logging.ERROR, logger="trid3nt_server.server"):
         # Must not raise out of the dispatch wrapper -- both failures are
         # caught + logged, never propagated.
         await _drive_real_stream(ws, state, fake_stream)

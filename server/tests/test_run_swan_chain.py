@@ -33,7 +33,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_contracts.swan_contracts import (
+from trid3nt_contracts.swan_contracts import (
     SWAN_WAVE_HEIGHT_STYLE_PRESET,
     SwanRunArgs,
     SwanWaveBoundary,
@@ -96,7 +96,7 @@ def test_wave_field_layer_uri_round_trip():
 # (2) build_spec assembly.
 # ===========================================================================
 def test_build_spec_synthesizes_demo_boundary():
-    from grace2_agent.workflows.run_swan import build_swan_build_spec
+    from trid3nt_server.workflows.run_swan import build_swan_build_spec
 
     args = SwanRunArgs(bbox=_AOI, mode="stationary")  # no explicit boundary
     spec = build_swan_build_spec(args, mesh_cells=(60, 80))
@@ -115,7 +115,7 @@ def test_build_spec_synthesizes_demo_boundary():
 
 
 def test_build_spec_respects_explicit_boundary_and_wind():
-    from grace2_agent.workflows.run_swan import build_swan_build_spec
+    from trid3nt_server.workflows.run_swan import build_swan_build_spec
 
     args = SwanRunArgs(
         bbox=_AOI,
@@ -134,8 +134,8 @@ def test_build_spec_respects_explicit_boundary_and_wind():
 # (3) Solver registration + bridge tool registered.
 # ===========================================================================
 def test_swan_registered_in_solver_workflow_registry():
-    from grace2_agent.tools.solver import SOLVER_WORKFLOW_REGISTRY
-    from grace2_agent.workflows.run_swan import (
+    from trid3nt_server.tools.solver import SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.workflows.run_swan import (
         SWAN_SOLVER_NAME,
         register_swan_solver,
     )
@@ -145,8 +145,8 @@ def test_swan_registered_in_solver_workflow_registry():
 
 
 def test_run_swan_waves_registered_in_tool_registry():
-    import grace2_agent.tools  # noqa: F401 -- fire eager imports
-    from grace2_agent.tools import TOOL_REGISTRY
+    import trid3nt_server.tools  # noqa: F401 -- fire eager imports
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     assert "run_swan_waves" in TOOL_REGISTRY
 
@@ -154,7 +154,7 @@ def test_run_swan_waves_registered_in_tool_registry():
 def test_run_swan_waves_typed_error_on_missing_bbox():
     import asyncio
 
-    from grace2_agent.tools.run_swan_tool import run_swan_waves
+    from trid3nt_server.tools.run_swan_tool import run_swan_waves
 
     out = asyncio.run(run_swan_waves(bbox=None))
     assert isinstance(out, dict)
@@ -175,7 +175,7 @@ def test_run_swan_waves_typed_error_on_missing_bbox():
 # (empty solve). The old fetch only checked ``.uri`` and SILENTLY fed that DEM. We
 # now reject a bathymetry-absent result with a typed SWAN_NO_BATHYMETRY error.
 def test_fetch_bathy_rejects_land_only_dem():
-    from grace2_agent.workflows.model_wave_scenario import (
+    from trid3nt_server.workflows.model_wave_scenario import (
         SwanComposerError,
         _fetch_bathy_for_swan,
     )
@@ -188,7 +188,7 @@ def test_fetch_bathy_rejects_land_only_dem():
         fallback_warning = "no CUDEM coverage; degraded to 3DEP land-only"
 
     with patch(
-        "grace2_agent.tools.fetch_topobathy.fetch_topobathy",
+        "trid3nt_server.tools.fetch_topobathy.fetch_topobathy",
         lambda b: _LandOnlyLayer(),
     ):
         with pytest.raises(SwanComposerError) as ei:
@@ -198,7 +198,7 @@ def test_fetch_bathy_rejects_land_only_dem():
 
 
 def test_fetch_bathy_accepts_real_bathymetry():
-    from grace2_agent.workflows.model_wave_scenario import _fetch_bathy_for_swan
+    from trid3nt_server.workflows.model_wave_scenario import _fetch_bathy_for_swan
 
     bbox = (-85.55, 29.8, -85.25, 30.05)
 
@@ -208,7 +208,7 @@ def test_fetch_bathy_accepts_real_bathymetry():
         fallback_warning = None
 
     with patch(
-        "grace2_agent.tools.fetch_topobathy.fetch_topobathy",
+        "trid3nt_server.tools.fetch_topobathy.fetch_topobathy",
         lambda b: _SeamlessLayer(),
     ):
         uri = _fetch_bathy_for_swan(bbox)
@@ -216,7 +216,7 @@ def test_fetch_bathy_accepts_real_bathymetry():
 
 
 def test_fetch_bathy_typed_error_when_topobathy_fails():
-    from grace2_agent.workflows.model_wave_scenario import (
+    from trid3nt_server.workflows.model_wave_scenario import (
         SwanComposerError,
         _fetch_bathy_for_swan,
     )
@@ -227,7 +227,7 @@ def test_fetch_bathy_typed_error_when_topobathy_fails():
         raise RuntimeError("CUDEM host unreachable")
 
     with patch(
-        "grace2_agent.tools.fetch_topobathy.fetch_topobathy", _boom
+        "trid3nt_server.tools.fetch_topobathy.fetch_topobathy", _boom
     ):
         with pytest.raises(SwanComposerError) as ei:
             _fetch_bathy_for_swan(bbox)
@@ -263,7 +263,7 @@ def _synthetic_swan_mat(
 
 
 def test_read_swan_mat_fields_reads_hs_tp_dir(tmp_path: Path):
-    from grace2_agent.workflows.postprocess_swan import read_swan_mat_fields
+    from trid3nt_server.workflows.postprocess_swan import read_swan_mat_fields
 
     mat = tmp_path / "swan_out.mat"
     _synthetic_swan_mat(mat, 6, 4, lambda i, j, f: 2.0 if j >= 2 else 0.0)
@@ -277,7 +277,7 @@ def test_read_swan_mat_fields_reads_hs_tp_dir(tmp_path: Path):
 
 
 def test_compute_swan_wave_metrics_on_synthetic_grid():
-    from grace2_agent.workflows.postprocess_swan import compute_swan_wave_metrics
+    from trid3nt_server.workflows.postprocess_swan import compute_swan_wave_metrics
 
     hs = np.full((8, 8), 0.0)
     hs[4:, :] = 2.5  # half wave-bearing
@@ -304,7 +304,7 @@ def _fake_upload(local_cog, run_id, runs_bucket=None, *, dest_filename="x.tif"):
 def test_postprocess_swan_end_to_end_shape(tmp_path: Path):
     """A multi-frame synthetic run yields the EXACT (layers, metrics) shape:
     peak primary + contiguous 'Wave height step N' frames, all VALID COGs."""
-    from grace2_agent.workflows import postprocess_swan as ps
+    from trid3nt_server.workflows import postprocess_swan as ps
 
     mat = tmp_path / "swan_out.mat"
     # 5 frames; wave height rises then falls so the peak is the middle frame.
@@ -355,7 +355,7 @@ def test_postprocess_swan_end_to_end_shape(tmp_path: Path):
 # map. The fix upsamples the masked Hs grid (nearest-neighbour, no data invented)
 # so the COG crosses the overview-build threshold.
 def test_upsample_for_cog_preserves_values_and_mask():
-    from grace2_agent.workflows.postprocess_swan import _upsample_for_cog
+    from trid3nt_server.workflows.postprocess_swan import _upsample_for_cog
 
     # a tiny 4x4 grid with a calm/wave NaN edge.
     g = np.array(
@@ -385,7 +385,7 @@ def test_written_hs_cog_has_overviews(tmp_path: Path):
     multi-level zoom span (the no-overview COG is what made the layer not paint)."""
     import rasterio
 
-    from grace2_agent.workflows.postprocess_swan import (
+    from trid3nt_server.workflows.postprocess_swan import (
         _COG_MIN_DIM_PX,
         _write_hs_cog_4326,
     )
@@ -411,7 +411,7 @@ def test_postprocess_swan_peak_cog_renderable_with_overviews(tmp_path: Path):
     overviews + the wave-height style preset (the full no-paint fix)."""
     import rasterio
 
-    from grace2_agent.workflows import postprocess_swan as ps
+    from trid3nt_server.workflows import postprocess_swan as ps
 
     mat = tmp_path / "swan_out.mat"
     _synthetic_swan_mat(mat, 100, 100, lambda i, j, f: 3.0 if j >= 40 else 0.0)
@@ -444,7 +444,7 @@ def test_swan_wave_height_preset_resolves_to_titiler_rescale_colormap():
     """The SWAN wave-height preset must resolve to a TiTiler /tiles URL with a
     valid rescale + colormap (gnbu over 0..6 m) -- never a washed-out empty style
     or a raw s3://. This is the publish-side half of the render contract."""
-    from grace2_agent.tools.publish_layer import _registry_style_params
+    from trid3nt_server.tools.publish_layer import _registry_style_params
 
     assert SWAN_WAVE_HEIGHT_STYLE_PRESET == "continuous_wave_height"
     params = _registry_style_params("continuous_wave_height")
@@ -454,7 +454,7 @@ def test_swan_wave_height_preset_resolves_to_titiler_rescale_colormap():
 
 
 def test_postprocess_swan_empty_output_raises(tmp_path: Path):
-    from grace2_agent.workflows.postprocess_swan import (
+    from trid3nt_server.workflows.postprocess_swan import (
         PostprocessSwanError,
         postprocess_swan,
     )
@@ -468,7 +468,7 @@ def test_postprocess_swan_empty_output_raises(tmp_path: Path):
 def test_postprocess_swan_all_calm_raises_honesty_floor(tmp_path: Path):
     """Honesty floor: a run whose Hs is everywhere below the calm threshold is NOT
     a usable wave field -- it raises SWAN_OUTPUT_EMPTY, never status ok."""
-    from grace2_agent.workflows.postprocess_swan import (
+    from trid3nt_server.workflows.postprocess_swan import (
         PostprocessSwanError,
         postprocess_swan,
     )
@@ -504,8 +504,8 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     call carries solver='swan' + the staged manifest_uri."""
     import asyncio
 
-    from grace2_agent.workflows import model_wave_scenario as comp
-    from grace2_agent.workflows.run_swan import SwanStaging
+    from trid3nt_server.workflows import model_wave_scenario as comp
+    from trid3nt_server.workflows.run_swan import SwanStaging
 
     run_args = SwanRunArgs(bbox=_AOI, mode="nonstationary", output_frames=4)
 
@@ -558,7 +558,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     # The composer imports run_solver / wait_for_completion / EmitterBinding /
     # set_emitter_binding INSIDE the function (from ..tools.solver import ...), so
     # they must be patched at the SOURCE module, not on the composer module.
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.tools import solver as solver_mod
 
     with patch.object(comp, "_fetch_bathy_for_swan", lambda b: "s3://cache/topo.tif"), \
          patch.object(comp, "stage_swan_manifest", _fake_stage), \
@@ -596,7 +596,7 @@ def test_coerce_boundary_snaps_net_outgoing_dir_inward():
     """side=S with dir=0 (waves from the north) is net-OUTGOING through the
     southern open-water boundary -> SWAN injects ~no energy and paints an empty
     raster. The coercion snaps it to the side-inward bearing (180 deg)."""
-    from grace2_agent.workflows.run_swan import _coerce_boundary_inward
+    from trid3nt_server.workflows.run_swan import _coerce_boundary_inward
 
     b = SwanWaveBoundary(hs_m=8.0, tp_s=12.0, dir_deg=0.0, spread_deg=25.0, side="S")
     c = _coerce_boundary_inward(b)
@@ -610,7 +610,7 @@ def test_coerce_boundary_snaps_net_outgoing_dir_inward():
 def test_coerce_boundary_keeps_sane_oblique_dir():
     """A direction within 90 deg of the side-inward bearing is a legitimate
     oblique sea-state and is left untouched."""
-    from grace2_agent.workflows.run_swan import _coerce_boundary_inward
+    from trid3nt_server.workflows.run_swan import _coerce_boundary_inward
 
     b = SwanWaveBoundary(hs_m=3.0, tp_s=9.0, dir_deg=160.0, spread_deg=25.0, side="S")
     assert _coerce_boundary_inward(b).dir_deg == pytest.approx(160.0)
@@ -618,7 +618,7 @@ def test_coerce_boundary_keeps_sane_oblique_dir():
 
 def test_coerce_boundary_per_side_inward_bearings():
     """Each side snaps an opposite-pointing direction to its inward bearing."""
-    from grace2_agent.workflows.run_swan import _coerce_boundary_inward
+    from trid3nt_server.workflows.run_swan import _coerce_boundary_inward
 
     cases = {"N": (180.0, 0.0), "E": (270.0, 90.0), "S": (0.0, 180.0), "W": (90.0, 270.0)}
     for side, (bad_dir, want) in cases.items():
@@ -628,7 +628,7 @@ def test_coerce_boundary_per_side_inward_bearings():
 
 def test_build_swan_build_spec_applies_inward_coercion():
     """The contradictory pair reaches the worker as a corrected, inward dir."""
-    from grace2_agent.workflows.run_swan import build_swan_build_spec
+    from trid3nt_server.workflows.run_swan import build_swan_build_spec
 
     b = SwanWaveBoundary(hs_m=8.0, tp_s=12.0, dir_deg=0.0, spread_deg=25.0, side="S")
     args = SwanRunArgs(bbox=(-85.55, 29.85, -85.3, 30.05), boundary=b)
@@ -643,7 +643,7 @@ def test_build_swan_build_spec_applies_inward_coercion():
 def test_normalize_boundary_side_words_and_phrases():
     """Words / phrases the LLM emits must coerce to a single cardinal so the
     strict Literal["N","S","E","W"] contract does not fail the first attempt."""
-    from grace2_agent.tools.run_swan_tool import _normalize_boundary_side
+    from trid3nt_server.tools.run_swan_tool import _normalize_boundary_side
 
     assert _normalize_boundary_side("S") == "S"
     assert _normalize_boundary_side("south") == "S"
@@ -663,7 +663,7 @@ def test_normalize_boundary_side_words_and_phrases():
 def test_normalized_side_builds_a_valid_boundary():
     """The normalized side feeds the strict SwanWaveBoundary contract cleanly --
     a multi-char input ('from the south') no longer trips validation."""
-    from grace2_agent.tools.run_swan_tool import _normalize_boundary_side
+    from trid3nt_server.tools.run_swan_tool import _normalize_boundary_side
 
     side = _normalize_boundary_side("from the south")
     assert side == "S"

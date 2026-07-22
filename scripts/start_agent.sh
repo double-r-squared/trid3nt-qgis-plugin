@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# start_agent.sh -- start the TRID3NT server (grace2_agent) for local dev
-# Loads .env.local, starts the agent via python -m grace2_agent.main
+# start_agent.sh -- start the TRID3NT server (trid3nt_server) for local dev
+# Loads .env.local, starts the agent via python -m trid3nt_server.main
 # Logs to ./logs/agent.log, writes PID to ./run/agent.pid (setsid/nohup style)
 set -euo pipefail
 
@@ -41,7 +41,7 @@ source "$ENV_FILE"
 set +a
 
 # Override: ensure host is LAN-accessible, not loopback-only
-export GRACE2_AGENT_HOST="${GRACE2_AGENT_HOST:-0.0.0.0}"
+export TRID3NT_AGENT_HOST="${TRID3NT_AGENT_HOST:-0.0.0.0}"
 
 # Ensure no AWS Cognito pool is set (local = anonymous auth)
 
@@ -49,13 +49,13 @@ export GRACE2_AGENT_HOST="${GRACE2_AGENT_HOST:-0.0.0.0}"
 # they want next. Appended to the local model's system prompt (openai path).
 # 2026-07-13: + publish_layer handle discipline / honest-empty stop (OPEN-17
 # class: 0-event fetch -> fabricated publish_layer handle in the same turn).
-export GRACE2_OPENAI_EXTRA_SYSTEM="${GRACE2_OPENAI_EXTRA_SYSTEM:-Never end a reply with an offer, suggestion, or recommendation for a next step (no 'Would you like...', no 'I can also...'). State what was done or found, then stop. The user decides what happens next. Fetch and composer tools publish their own layers - only call publish_layer when you have a handle returned by a previous tool result, passed verbatim. If a fetch returns no data, say so and stop.}"
+export TRID3NT_OPENAI_EXTRA_SYSTEM="${TRID3NT_OPENAI_EXTRA_SYSTEM:-Never end a reply with an offer, suggestion, or recommendation for a next step (no 'Would you like...', no 'I can also...'). State what was done or found, then stop. The user decides what happens next. Fetch and composer tools publish their own layers - only call publish_layer when you have a handle returned by a previous tool result, passed verbatim. If a fetch returns no data, say so and stop.}"
 
 echo "[start_agent] starting agent (WS :8765, HTTP :8766)..."
-echo "[start_agent] MODEL_PROVIDER=$MODEL_PROVIDER GRACE2_OPENAI_MODEL=$GRACE2_OPENAI_MODEL"
+echo "[start_agent] MODEL_PROVIDER=$MODEL_PROVIDER TRID3NT_OPENAI_MODEL=$TRID3NT_OPENAI_MODEL"
 echo "[start_agent] logs -> $LOG_FILE"
 
-setsid nohup "$PYTHON" -m grace2_agent.main \
+setsid nohup "$PYTHON" -m trid3nt_server.main \
   >> "$LOG_FILE" 2>&1 &
 
 AGENT_PID=$!
@@ -79,7 +79,7 @@ fi
 # non-Ollama provider (remote/Bedrock), and neither should fail agent
 # startup. Derives the model from the same env the agent itself just
 # loaded ($ENV_FILE, sourced above); falls back to qwen3:8b-24k if unset.
-WARM_MODEL="${GRACE2_OPENAI_MODEL:-qwen3:8b-24k}"
+WARM_MODEL="${TRID3NT_OPENAI_MODEL:-qwen3:8b-24k}"
 (
   curl -s -m 90 http://127.0.0.1:11434/api/generate \
     -d '{"model":"'"$WARM_MODEL"'","keep_alive":"24h"}' \

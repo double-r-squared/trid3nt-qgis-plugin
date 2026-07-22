@@ -9,7 +9,7 @@ Coverage:
 - Empty (no-features) bbox → zero raster, no error.
 - Cache miss invokes fetch_fn once and writes the store.
 - Cache hit on second call with same params skips fetch_fn.
-- Live (env ``GRACE2_TEST_LIVE_BUILDINGS=1``): Fort Myers bbox → density raster
+- Live (env ``TRID3NT_TEST_LIVE_BUILDINGS=1``): Fort Myers bbox → density raster
   whose high-count pixels coincide with the known dense neighbourhood and
   whose ocean/river pixels read zero (codified job-0086 geography test).
 """
@@ -26,9 +26,9 @@ from unittest.mock import patch
 
 import pytest
 
-import grace2_agent.tools.compute_building_density as cbd
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.compute_building_density import (
+import trid3nt_server.tools.compute_building_density as cbd
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.compute_building_density import (
     BuildingDensityInputError,
     BuildingDensityUpstreamError,
     _build_density_grid,
@@ -52,7 +52,7 @@ _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 # Fort Myers, FL bounding box (overlaps the city centre + Caloosahatchee).
 _FORT_MYERS_BBOX = (-82.0, 26.5, -81.8, 26.7)
 
-_LIVE_BUILDINGS = os.environ.get("GRACE2_TEST_LIVE_BUILDINGS") == "1"
+_LIVE_BUILDINGS = os.environ.get("TRID3NT_TEST_LIVE_BUILDINGS") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +100,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -377,10 +377,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return b"fake-cog-bytes"
 
     with patch(
-        "grace2_agent.tools.compute_building_density._fetch_building_density_bytes",
+        "trid3nt_server.tools.compute_building_density._fetch_building_density_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "grace2_agent.tools.compute_building_density.read_through",
+        "trid3nt_server.tools.compute_building_density.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = compute_building_density(
@@ -408,10 +408,10 @@ def test_cache_hit_skips_fetch_fn():
         return b"fake-cog-bytes"
 
     with patch(
-        "grace2_agent.tools.compute_building_density._fetch_building_density_bytes",
+        "trid3nt_server.tools.compute_building_density._fetch_building_density_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "grace2_agent.tools.compute_building_density.read_through",
+        "trid3nt_server.tools.compute_building_density.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = compute_building_density(bbox=_FORT_MYERS_BBOX, cell_size_m=100.0)
@@ -429,10 +429,10 @@ def test_cache_key_differentiates_cell_size():
         return b"fake-cog-bytes-" + str(cell_size_m).encode()
 
     with patch(
-        "grace2_agent.tools.compute_building_density._fetch_building_density_bytes",
+        "trid3nt_server.tools.compute_building_density._fetch_building_density_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "grace2_agent.tools.compute_building_density.read_through",
+        "trid3nt_server.tools.compute_building_density.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r100 = compute_building_density(bbox=_FORT_MYERS_BBOX, cell_size_m=100.0)
@@ -561,13 +561,13 @@ def test_index_failure_is_typed_upstream_error():
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_BUILDINGS=1 to run).
+# Live integration test (TRID3NT_TEST_LIVE_BUILDINGS=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_BUILDINGS,
-    reason="Set GRACE2_TEST_LIVE_BUILDINGS=1 to run live MS Building Footprints tests",
+    reason="Set TRID3NT_TEST_LIVE_BUILDINGS=1 to run live MS Building Footprints tests",
 )
 def test_live_fort_myers_density_geographic_correctness():
     """LIVE: real MS data over Fort Myers bbox.
@@ -695,7 +695,7 @@ def test_live_fort_myers_density_geographic_correctness():
 
 @pytest.mark.skipif(
     not _LIVE_BUILDINGS,
-    reason="Set GRACE2_TEST_LIVE_BUILDINGS=1 to run live MS Building Footprints tests",
+    reason="Set TRID3NT_TEST_LIVE_BUILDINGS=1 to run live MS Building Footprints tests",
 )
 def test_live_index_fetch_returns_united_states_rows():
     """LIVE: the MS dataset-links.csv index is reachable and has US rows."""

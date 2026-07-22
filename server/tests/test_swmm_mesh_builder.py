@@ -1,5 +1,5 @@
 """End-to-end proof for the DEM -> quasi-2D SWMM mesh builder (sprint-16 P2,
-``grace2_agent.workflows.swmm_mesh_builder``).
+``trid3nt_server.workflows.swmm_mesh_builder``).
 
 These tests PROVE the engine core runnable, not just constructable:
 
@@ -42,8 +42,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from grace2_agent.workflows import swmm_mesh_builder as mb
-from grace2_agent.workflows.swmm_mesh_builder import (
+from trid3nt_server.workflows import swmm_mesh_builder as mb
+from trid3nt_server.workflows.swmm_mesh_builder import (
     SWMM_RES_LADDER,
     SWMMMeshError,
     autoscale_swmm_resolution,

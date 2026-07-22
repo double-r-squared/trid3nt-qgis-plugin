@@ -5,7 +5,7 @@ Two features, both offline (no live network, no live agent):
 
 Feature 3 -- POST /api/provider-config:
   - CLOUD posture: route ABSENT (404) unless MODEL_PROVIDER=openai;
-  - a well-formed body updates os.environ[GRACE2_OPENAI_*] and returns
+  - a well-formed body updates os.environ[TRID3NT_OPENAI_*] and returns
     {"ok", "model", "base_url_host"} -- the effect the openai adapter reads at
     the next call (no restart);
   - the num_ctx discovery cache is reset so a same-name model re-discovers;
@@ -24,8 +24,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from grace2_agent import tool_catalog_http
-from grace2_agent import context_budget
+from trid3nt_server import tool_catalog_http
+from trid3nt_server import context_budget
 
 
 # ---------------------------------------------------------------------------
@@ -122,10 +122,10 @@ def test_provider_config_absent_when_provider_bedrock(monkeypatch):
 
 def test_provider_config_updates_env_and_returns_host(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    monkeypatch.delenv("GRACE2_OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("GRACE2_OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
-    monkeypatch.delenv("GRACE2_OPENAI_NUM_CTX", raising=False)
+    monkeypatch.delenv("TRID3NT_OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("TRID3NT_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("TRID3NT_OPENAI_NUM_CTX", raising=False)
     # Seed the num_ctx cache; the update must clear it.
     context_budget._NUM_CTX_CACHE["some-model"] = 4096
 
@@ -149,12 +149,12 @@ def test_provider_config_updates_env_and_returns_host(monkeypatch):
     # Env actually mutated -- the adapter reads these at the next call.
     import os
 
-    assert os.environ["GRACE2_OPENAI_BASE_URL"] == "https://openrouter.ai/api/v1"
-    assert os.environ["GRACE2_OPENAI_API_KEY"] == "sk-or-SECRET-do-not-leak"
-    assert os.environ["GRACE2_OPENAI_MODEL"] == (
+    assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "https://openrouter.ai/api/v1"
+    assert os.environ["TRID3NT_OPENAI_API_KEY"] == "sk-or-SECRET-do-not-leak"
+    assert os.environ["TRID3NT_OPENAI_MODEL"] == (
         "meta-llama/llama-3.3-70b-instruct:free"
     )
-    assert os.environ["GRACE2_OPENAI_NUM_CTX"] == "32768"
+    assert os.environ["TRID3NT_OPENAI_NUM_CTX"] == "32768"
     # num_ctx cache cleared so a same-name model re-discovers.
     assert context_budget._NUM_CTX_CACHE == {}
 
@@ -164,9 +164,9 @@ def test_provider_config_updates_env_and_returns_host(monkeypatch):
 
 def test_provider_config_partial_body_only_sets_present(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
-    monkeypatch.setenv("GRACE2_OPENAI_API_KEY", "keep-me")
-    monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
+    monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
+    monkeypatch.setenv("TRID3NT_OPENAI_API_KEY", "keep-me")
+    monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
 
     # Only model present -> base_url + key untouched.
     writer = _dispatch("/api/provider-config", b'{"model":"qwen3:8b-24k"}')
@@ -174,21 +174,21 @@ def test_provider_config_partial_body_only_sets_present(monkeypatch):
     assert _status(out) == 200
     import os
 
-    assert os.environ["GRACE2_OPENAI_BASE_URL"] == "http://127.0.0.1:11434/v1"
-    assert os.environ["GRACE2_OPENAI_API_KEY"] == "keep-me"
-    assert os.environ["GRACE2_OPENAI_MODEL"] == "qwen3:8b-24k"
+    assert os.environ["TRID3NT_OPENAI_BASE_URL"] == "http://127.0.0.1:11434/v1"
+    assert os.environ["TRID3NT_OPENAI_API_KEY"] == "keep-me"
+    assert os.environ["TRID3NT_OPENAI_MODEL"] == "qwen3:8b-24k"
     assert _resp_body(out)["base_url_host"] == "127.0.0.1"
 
 
 def test_provider_config_empty_values_do_not_clobber(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    monkeypatch.setenv("GRACE2_OPENAI_API_KEY", "existing-key")
+    monkeypatch.setenv("TRID3NT_OPENAI_API_KEY", "existing-key")
     # Empty api_key string must NOT overwrite an existing key.
     writer = _dispatch("/api/provider-config", b'{"api_key":"","model":"m"}')
     assert _status(bytes(writer.buffer)) == 200
     import os
 
-    assert os.environ["GRACE2_OPENAI_API_KEY"] == "existing-key"
+    assert os.environ["TRID3NT_OPENAI_API_KEY"] == "existing-key"
 
 
 def test_provider_config_malformed_body_is_honest_400(monkeypatch):
@@ -303,10 +303,10 @@ class _FakeHttpxClient:
 def test_fetch_local_models_routes_to_openrouter(monkeypatch):
     import httpx
 
-    monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
-    monkeypatch.setenv("GRACE2_OPENAI_API_KEY", "sk-or-live-key")
+    monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("TRID3NT_OPENAI_API_KEY", "sk-or-live-key")
     monkeypatch.setenv(
-        "GRACE2_OPENAI_MODEL", "qwen/qwen-2.5-72b-instruct:free"
+        "TRID3NT_OPENAI_MODEL", "qwen/qwen-2.5-72b-instruct:free"
     )
     # Fresh cache so the fetch actually runs.
     tool_catalog_http._OPENROUTER_MODELS_CACHE.clear()
@@ -347,8 +347,8 @@ def test_fetch_local_models_routes_to_openrouter(monkeypatch):
 def test_fetch_openrouter_upstream_error_is_typed(monkeypatch):
     import httpx
 
-    monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
-    monkeypatch.delenv("GRACE2_OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.delenv("TRID3NT_OPENAI_API_KEY", raising=False)
     tool_catalog_http._OPENROUTER_MODELS_CACHE.clear()
 
     class _BoomClient(_FakeHttpxClient):

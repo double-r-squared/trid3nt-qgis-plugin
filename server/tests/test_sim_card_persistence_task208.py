@@ -35,11 +35,11 @@ import json
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.pipeline_emitter import route_sim_terminal
-from grace2_agent.persistence import make_file_persistence
-from grace2_contracts.case import CaseCommandEnvelopePayload
-from grace2_contracts.common import new_ulid
+from trid3nt_server import server
+from trid3nt_server.pipeline_emitter import route_sim_terminal
+from trid3nt_server.persistence import make_file_persistence
+from trid3nt_contracts.case import CaseCommandEnvelopePayload
+from trid3nt_contracts.common import new_ulid
 
 
 class FakeWS:
@@ -245,7 +245,7 @@ async def test_only_compute_card_persisted_not_dispatch(file_persistence) -> Non
 
 @pytest.mark.asyncio
 async def test_no_persist_hook_still_marks_terminal(file_persistence) -> None:
-    from grace2_agent.pipeline_emitter import PipelineEmitter
+    from trid3nt_server.pipeline_emitter import PipelineEmitter
 
     frames: list[str] = []
 
@@ -440,7 +440,7 @@ class _FakeHandle:
 
 @pytest.mark.asyncio
 async def test_mint_persists_dispatch_and_running_sim(file_persistence) -> None:
-    from grace2_agent.pipeline_emitter import mint_dispatch_and_sim_cards
+    from trid3nt_server.pipeline_emitter import mint_dispatch_and_sim_cards
 
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
@@ -466,7 +466,7 @@ async def test_bare_resume_ships_dispatch_and_running_sim(file_persistence) -> N
     """A bare session-resume (NOT a case-open) ships BOTH the dispatch card and
     the running sim card in the resume session-state's ``chat_history`` so the
     reconnecting client can surface them with no manual refresh."""
-    from grace2_agent.pipeline_emitter import mint_dispatch_and_sim_cards
+    from trid3nt_server.pipeline_emitter import mint_dispatch_and_sim_cards
 
     ws1 = FakeWS()
     state1 = server.SessionState(session_id=new_ulid())

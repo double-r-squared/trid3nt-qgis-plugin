@@ -17,7 +17,7 @@ Coverage:
    features raises POLYGON_FILTER_EMPTY.
 8. ``test_unknown_raster_uri_raises_typed_error``
 9. ``test_unknown_polygon_uri_raises_typed_error``
-10. Live (env GRACE2_TEST_LIVE_CLIP=1): clip a synthetic Fort-Myers-sized DEM to
+10. Live (env TRID3NT_TEST_LIVE_CLIP=1): clip a synthetic Fort-Myers-sized DEM to
     a Lee-County-shaped polygon → verify the masked pixels fall inside the polygon
     bounds and at least one pixel was masked.
 """
@@ -33,8 +33,8 @@ import rasterio
 from rasterio.crs import CRS
 from rasterio.transform import from_bounds
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.clip_raster_to_polygon import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.clip_raster_to_polygon import (
     ClipRasterPolygonError,
     clip_raster_to_polygon,
 )
@@ -454,7 +454,7 @@ def test_cache_miss_then_hit_skips_mask(tmp_path):
     fake_sc = FakeStorageClient()
     mask_call_count = [0]
     original_mask = __import__(
-        "grace2_agent.tools.clip_raster_to_polygon", fromlist=["_mask_and_write"]
+        "trid3nt_server.tools.clip_raster_to_polygon", fromlist=["_mask_and_write"]
     )._mask_and_write
 
     def _counting_mask(*args, **kwargs):
@@ -462,7 +462,7 @@ def test_cache_miss_then_hit_skips_mask(tmp_path):
         return original_mask(*args, **kwargs)
 
     with patch(
-        "grace2_agent.tools.clip_raster_to_polygon._mask_and_write",
+        "trid3nt_server.tools.clip_raster_to_polygon._mask_and_write",
         side_effect=_counting_mask,
     ):
         r1 = clip_raster_to_polygon(
@@ -519,7 +519,7 @@ def test_empty_filter_raises_typed_error(tmp_path):
 
 def test_unknown_raster_uri_raises_typed_error():
     """Non-gs:// non-file raster URI raises UNKNOWN_RASTER_URI."""
-    from grace2_agent.tools.clip_raster_to_polygon import _get_source_crs
+    from trid3nt_server.tools.clip_raster_to_polygon import _get_source_crs
 
     with pytest.raises(ClipRasterPolygonError) as exc_info:
         _get_source_crs("/nonexistent/path/missing.tif")
@@ -551,10 +551,10 @@ def test_unknown_polygon_uri_raises_typed_error(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_CLIP") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_CLIP") == "1"
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_CLIP=1 to enable")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_CLIP=1 to enable")
 def test_live_clip_fortmyers_dem_to_lee_county_shape(tmp_path):
     """Live geographic-correctness gate.
 

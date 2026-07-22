@@ -1,0 +1,1795 @@
+# tool_query_corpus.yaml
+# Synthetic example-query corpus for the TRID3NT discover_dataset retrieval substrate.
+# Each key is an @register_tool function name; values are realistic user-prompt-style queries
+# that should route to that tool. 5-10 specific queries per tool, with synonym coverage,
+# regional variants, and adjacent-intent routing.
+# Generated: job-B4 (Wave 4.10 discover_dataset retrieval substrate)
+
+# ---------------------------------------------------------------------------
+# Terrain / Elevation
+# ---------------------------------------------------------------------------
+
+fetch_dem:
+  - "show me elevation data for the Grand Canyon"
+  - "I need a DEM around Yellowstone National Park"
+  - "give me topography raster for the Rocky Mountains"
+  - "what does the terrain look like near Fort Myers, Florida"
+  - "fetch elevation around the Houston Ship Channel for flood modeling"
+  - "I need a digital elevation model clipped to Lee County, FL"
+  - "pull the terrain grid for this watershed before I run the solver"
+  - "show me the ground elevation surface over New Orleans"
+
+fetch_3dep_extra:
+  - "I want 3-meter resolution elevation for downtown Seattle"
+  - "give me 1 m LiDAR DEM for the Caldor Fire scar"
+  - "fetch the highest-res elevation available for San Francisco Bay"
+  - "I need 1/9 arc-second elevation tiles for the Los Angeles basin"
+  - "pull 30-meter 3DEP DEM for Alaska — the standard tool only goes to 10m"
+  - "get me 5-meter elevation for the Kenai Peninsula, AK"
+  - "fetch sub-meter terrain for the Oroville Dam spillway area"
+
+compute_hillshade:
+  - "make the terrain shaded so I can see the ridgelines"
+  - "add a hillshade background behind the flood layer"
+  - "I want a shaded relief map of the Cascade Range"
+  - "render the terrain with sunlight from the northwest"
+  - "show me a 3D-looking terrain base for this volcanic area"
+  - "compute hillshade for the DEM I just fetched over the Sierra Nevada"
+  - "the map looks flat — add terrain shading"
+
+compute_slope:
+  - "show me the slope map for this watershed"
+  - "I need terrain steepness for landslide susceptibility analysis"
+  - "calculate the gradient of the hillside in this burn scar"
+  - "which areas around the dam are the steepest?"
+  - "give me a slope raster over the Camp Fire footprint for debris-flow risk"
+  - "map terrain steepness near the mudslide area in Montecito"
+  - "I want slope percentage for the proposed solar farm site"
+
+compute_aspect:
+  - "which direction do the slopes face in this study area?"
+  - "compute terrain aspect over the wildfire perimeter"
+  - "show me north-facing vs south-facing slopes in the burn area"
+  - "what aspect is most exposed to the wind in this canyon?"
+  - "I need slope face direction for a solar irradiance analysis"
+  - "calculate terrain aspect so I can see where snow will accumulate"
+
+compute_colored_relief:
+  - "can you show me a gradient relief over this area"
+  - "gradient relief of the same bbox"
+  - "make a shaded relief map here"
+  - "shaded gradient relief from the DEM"
+  - "colored relief map of this region"
+  - "color the elevation raster by altitude"
+  - "give me a hypsometric tint DEM for this mountain range"
+  - "I want a rainbow-colored elevation map of Glacier National Park"
+  - "render the DEM with a standard elevation color ramp"
+  - "add a colored elevation basemap for the Appalachian Mountains"
+  - "shade the terrain by height like a classic topo map"
+
+# ---------------------------------------------------------------------------
+# Land Use / Land Cover
+# ---------------------------------------------------------------------------
+
+fetch_landcover:
+  - "show me land use data for South Florida"
+  - "I need NLCD landcover for the Houston area"
+  - "fetch land classification raster for this watershed before SFINCS setup"
+  - "what is the land cover around the Everglades?"
+  - "give me land-use categories for the Sacramento Valley"
+  - "I want a landcover map for the wildland-urban interface near Chico, CA"
+  - "show me the vegetation map for this Texas coastal plain"
+  - "I need landcover to compute Manning's roughness for the SFINCS model"
+
+extract_landcover_class:
+  - "extract just the wetland pixels from the NLCD raster"
+  - "show me only urban/developed areas in this landcover layer"
+  - "give me a binary mask of forest in the fire study area"
+  - "isolate cropland cells from this landcover grid"
+  - "I want just the open-water class from this NLCD dataset"
+  - "create a mask of low-intensity development from the landcover"
+  - "pull out the shrubland pixels for rangeland fuel analysis"
+
+compute_impervious_surface:
+  - "how much of this watershed is paved or developed?"
+  - "compute impervious surface fraction for the Miami metro area"
+  - "show me runoff potential from impervious cover in Houston"
+  - "I need impervious surface percentage for SFINCS infiltration setup"
+  - "what fraction of the Dallas urban core is impervious?"
+  - "map the developed / sealed surface for this coastal city"
+  - "calculate percent-paved for each cell in this flood-risk zone"
+
+# ---------------------------------------------------------------------------
+# Population / Buildings
+# ---------------------------------------------------------------------------
+
+fetch_population:
+  - "how many people live in this flood zone?"
+  - "show me population density for the Tampa Bay area"
+  - "I need a population raster for exposure analysis near New Orleans"
+  - "fetch WorldPop population data for the Houston Ship Channel area"
+  - "what is the population at risk in this storm surge footprint?"
+  - "give me population counts for evacuation zone A in Lee County"
+  - "I want gridded population for a Caribbean island scenario"
+
+fetch_hrsl_population:
+  - "I need 30-meter population density for the Miami metro"
+  - "give me high-resolution population grid for Manila Bay"
+  - "fetch HRSL population for this Bangladesh flood plain"
+  - "I want Meta HRSL data for coastal Bangladesh at 30m resolution"
+  - "how dense is the population in this African coastal city at 30m?"
+  - "I need the highest-resolution open population dataset for Jakarta"
+
+fetch_buildings:
+  - "show me building footprints in Lee County, Florida"
+  - "I need building polygons for damage assessment after the hurricane"
+  - "fetch Microsoft building footprints for the Houston flooding area"
+  - "give me structures in the flood inundation zone"
+  - "what buildings are in the projected storm surge footprint?"
+  - "I want all the building outlines in this zip code for exposure modeling"
+
+compute_building_density:
+  - "show me where buildings are most concentrated in this city"
+  - "give me a building density raster for urban exposure analysis"
+  - "how dense is the built environment in this flood zone?"
+  - "visualize urban form for this coastal metro area"
+  - "I need buildings per square kilometer for this watershed"
+  - "compute structure density over the wildland-urban interface"
+
+fetch_usace_nsi:
+  - "I need the National Structure Inventory for flood loss estimation"
+  - "give me HAZUS occupancy and replacement values for buildings in this bbox"
+  - "fetch NSI data so Pelicun can compute structural losses"
+  - "I want per-structure replacement cost for all buildings in this flood zone"
+  - "show me the USACE structure inventory for New Orleans"
+  - "I need foundation heights and FIRM flood zones for these structures"
+  - "pull NSI data for the Fort Myers area for damage assessment"
+  - "what are the structure values at risk in this 100-year floodplain?"
+
+# ---------------------------------------------------------------------------
+# Rivers / Hydrology
+# ---------------------------------------------------------------------------
+
+fetch_river_geometry:
+  - "show me the rivers and streams in this watershed"
+  - "I need NHDPlus flowlines for SFINCS river burning"
+  - "fetch the stream network for the Caloosahatchee River basin"
+  - "give me the hydrography layer for this Florida coastal plain"
+  - "I want the river centerlines for HydroMT hydro-conditioning"
+  - "show me all the waterways in this county"
+  - "pull NHDPlus high-res flowlines for the Sacramento Delta"
+
+fetch_noaa_nwm_streamflow:
+  - "what are current river discharge rates along the Mississippi?"
+  - "show me NWM streamflow for the Caloosahatchee right now"
+  - "how high is the river flowing in this watershed?"
+  - "I need real-time discharge for SFINCS fluvial boundary forcing"
+  - "fetch streamflow forecast for all rivers in this bbox"
+  - "show me the National Water Model output for this flood event"
+  - "what is the current streamflow in cubic meters per second for this basin?"
+  - "I need upstream hydrograph for the compound flood model"
+
+fetch_nhdplus_nldi_navigate:
+  - "trace the river network upstream from this gauge"
+  - "show me all tributaries feeding into this confluence"
+  - "navigate downstream from this dam to the coast"
+  - "I want all the connected flowlines upstream of this flood sensor"
+  - "trace water flow downstream from this point for 50 kilometers"
+  - "give me the full upstream tributary network from this location"
+  - "find every river segment between this gauge and the bay"
+
+fetch_cama_flood_discharge:
+  - "I need global river discharge for SFINCS setup in Bangladesh"
+  - "fetch CaMa-Flood fluvial forcing for the Mekong Delta scenario"
+  - "give me gridded discharge for the Amazon basin flood model"
+  - "I need non-CONUS river flow for compound flood setup in Southeast Asia"
+  - "fetch global fluvial boundary conditions for the Niger River delta"
+  - "I want CaMa-Flood discharge for the compound flood research workflow"
+
+lookup_precip_return_period:
+  - "what is the 100-year rainfall depth at this location?"
+  - "give me Atlas 14 precipitation frequency estimates for Houston"
+  - "what is the 24-hour 10-year storm depth for Fort Myers?"
+  - "I need design-storm precipitation for a pluvial flood scenario"
+  - "what return period is this rainfall event in Charlotte, NC?"
+  - "fetch NOAA Atlas 14 PFDS for this watershed centroid"
+  - "I want the 2-year, 10-year, and 100-year 1-hour storm depths for Tampa"
+
+fetch_statsgo_soils:
+  - "give me soil K-factor for this watershed for erosion modeling"
+  - "I need soil erodibility data over the Camp Fire footprint"
+  - "fetch STATSGO soil properties for debris-flow susceptibility analysis"
+  - "what is the soil thickness in this post-fire area?"
+  - "I need hydrologic soil group data for runoff curve numbers"
+  - "show me soil erodibility raster for the western US wildfire area"
+
+fetch_gcn250_curve_numbers:
+  - "I need SCS curve numbers for a SFINCS model outside the US"
+  - "fetch global infiltration parameters for this South Asian flood scenario"
+  - "give me GCN250 curve numbers for the Bangladesh coastal plain"
+  - "I need antecedent moisture conditions for this tropical storm setup"
+  - "pull curve numbers for the HydroMT pluvial flood workflow in Africa"
+  - "fetch global runoff CNs for compound flood modeling in the Nile delta"
+
+# ---------------------------------------------------------------------------
+# Hazard: Floods / Storm Surge / Sea Level
+# ---------------------------------------------------------------------------
+
+fetch_fema_nfhl_zones:
+  - "show me the FEMA flood map for Lee County"
+  - "what is the 100-year floodplain near downtown Houston?"
+  - "I want the Special Flood Hazard Area polygons for this zip code"
+  - "give me NFIP flood insurance rate zones for this property"
+  - "show me the regulatory floodplain boundaries in New Orleans"
+  - "are there Zone AE or VE flood zones in this coastal area?"
+  - "I need the FIRM zones for flood insurance underwriting in Miami"
+  - "show me the Base Flood Elevation lines for this river corridor"
+
+fetch_noaa_coops_tides:
+  - "show me tide gauge readings at Fort Myers for Hurricane Ian"
+  - "what were the water levels at Key West during the storm?"
+  - "I need hourly tide observations for SFINCS coastal boundary forcing"
+  - "fetch CO-OPS water level data for the Gulf Coast during this surge event"
+  - "give me observed tidal elevations at all stations near Tampa Bay"
+  - "I need storm surge water levels from NOAA gauges for this date range"
+  - "fetch tidal predictions for the Charleston, SC harbor"
+
+fetch_gtsm_tide_surge:
+  - "I need coastal boundary forcing for a compound flood model outside the US"
+  - "fetch GTSM surge for the Bay of Bengal tropical cyclone scenario"
+  - "give me tide and surge time series for this non-CONUS coastal bbox"
+  - "I need Deltares GTSM data for the SFINCS model in the Philippines"
+  - "fetch global storm surge for this Indian Ocean cyclone"
+  - "give me coastal water levels from GTSM for the Bangladesh flood setup"
+  - "I need compound flood boundary conditions for a Mediterranean coast scenario"
+
+fetch_noaa_slr_scenarios:
+  - "show me areas that will flood if sea level rises 2 feet"
+  - "I want the NOAA sea-level-rise inundation map for this coastal city"
+  - "give me the 1m and 3m SLR scenario polygons for South Florida"
+  - "what neighborhoods flood under a 6-foot sea-level-rise scenario?"
+  - "show me coastal inundation at 1, 2, 4, and 6 feet of SLR near Miami"
+  - "I need the NOAA SLR viewer data for planning-level analysis in Charleston"
+  - "compare 0.5-foot and 3-foot sea-level-rise footprints for this coastline"
+
+fetch_noaa_slr_confidence:
+  - "how confident is the sea-level-rise inundation mapping at 3 feet here"
+  - "show me the NOAA SLR mapping confidence raster for this coast"
+  - "where is the sea-level-rise inundation high vs low confidence at 2 ft"
+  - "give me the SLR mapping uncertainty overlay for this coastline"
+  - "flag the low-confidence sea-level-rise areas before I report exposure"
+  - "NOAA SLR viewer confidence layer at 5 feet for this estuary"
+
+fetch_noaa_slr_marsh:
+  - "how does the marsh migrate under 3 feet of sea-level rise"
+  - "show me the NOAA marsh-migration projection for this estuary"
+  - "where do coastal wetlands shift or drown under 2 ft of SLR"
+  - "give me the salt-marsh migration raster for this coastline"
+  - "project the tidal marsh transition under a 6-foot sea-level-rise scenario"
+  - "NOAA SLR viewer marsh layer at 1.5 feet for this bay"
+
+fetch_mrms_qpe:
+  - "how much rain fell over Houston during this storm event?"
+  - "show me radar-derived precipitation accumulation for this flood event"
+  - "I need gauge-corrected rainfall totals for SFINCS pluvial forcing"
+  - "fetch MRMS QPE for the 48-hour window around Hurricane Ian landfall"
+  - "give me gridded precipitation accumulation over the Midwest flooding"
+  - "what was the total rainfall in this watershed over the last 24 hours?"
+  - "I need MRMS precipitation for post-event rainfall-runoff analysis"
+
+fetch_hrrr_forecast:
+  - "show me the wind forecast for the Gulf Coast over the next 6 hours"
+  - "what is the 2-meter temperature forecast for the Dallas area?"
+  - "I need HRRR wind speed for wildfire spread modeling"
+  - "fetch short-range precipitation forecast for the Houston area"
+  - "give me NOAA HRRR surface wind at forecast hour 12 for Florida"
+  - "I need 10-meter wind for a storm surge model boundary setup"
+  - "fetch HRRR surface pressure forecast for this hurricane approach"
+  - "what does the wind look like over the next 18 hours in this basin?"
+
+# ---------------------------------------------------------------------------
+# Hazard: Wildfires / Fire Weather
+# ---------------------------------------------------------------------------
+
+fetch_firms_active_fire:
+  - "show me active fire hotspots in California right now"
+  - "where are the satellite fire detections in Oregon today?"
+  - "I need NASA FIRMS fire points for this wildfire event"
+  - "show me thermal anomaly detections around the active wildfire perimeter"
+  - "give me active fire locations with Fire Radiative Power in this bbox"
+  - "are there any active fires near this forest community today?"
+  - "fetch satellite fire detections for the last 7 days over western US"
+
+fetch_nifc_fire_perimeters:
+  - "show me the active wildfire perimeters in California"
+  - "what is the current size and containment of all active megafires?"
+  - "give me the live fire boundary for the Park Fire in Northern California"
+  - "I need the current NIFC fire polygon for this incident"
+  - "show me every active wildfire in the western US right now"
+  - "fetch the WFIGS fire perimeter for this incident by name"
+  - "what percent contained is the biggest fire in New Mexico?"
+
+fetch_wfigs_incident:
+  - "look up the Iron Fire near Eureka Utah in the NIFC incident data"
+  - "find the exact location and discovery date of the Santa Rosa Island fire"
+  - "resolve this named wildfire incident to a point and a bounding box"
+  - "where exactly is the Hastings Fire and when did it start?"
+  - "get the WFIGS incident point and AOI for the Grapevine fire in Nevada"
+  - "look the fire up by name and give me an AOI box around it"
+  - "what are the coordinates and size of this named active fire incident?"
+
+fetch_goes_animation:
+  - "recreate the CIRA GOES fire animation over a six hour window on this date"
+  - "animate GOES-18 GeoColor and Fire Temperature for the fire at 5-minute cadence"
+  - "make a GOES satellite timelapse of the fire evolving over the afternoon"
+  - "show the fire growing on GOES-West imagery frame by frame"
+  - "build a scrubbable GOES fire-temperature loop over this AOI and time range"
+  - "I want the geostationary satellite animation of the fire cluster"
+
+fetch_goes_archive_animation:
+  - "animate the GOES Fire Temperature loop for a fire on a past date"
+  - "recreate the GOES-18 fire-temperature animation for 2026-06-22 from the archive"
+  - "make a historical GOES satellite timelapse of the fire from the raw S3 archive"
+  - "build a Fire Temperature scrubber over a window on an old date, not just recent frames"
+  - "the SLIDER animation only has recent frames -- pull the historical GOES archive instead"
+  - "composite GOES Fire Temperature from the raw C07 C06 C05 bands for this past fire"
+  - "animate the GOES true color daytime imagery loop over this fire from the archive"
+  - "make a natural-color GOES timelapse at the finest native visible resolution for this AOI"
+
+fetch_goes_active_fire:
+  - "where is the active fire in this AOI right now from GOES"
+  - "detect the active-fire hot pixels with the GOES split-window discriminator"
+  - "run the Matson-Dozier C07-vs-C13 active-fire detector over this bbox"
+  - "give me a transparent GOES hotspot overlay of genuine active fire, not warm land"
+  - "flag the burning pixels in this scene from raw GOES ABI brightness temperatures"
+  - "show GOES active fire detections as a hot-pixel raster I can lay over a basemap"
+
+fetch_glm_lightning:
+  - "show me the lightning over this storm from GOES GLM"
+  - "map the GOES lightning group energy density over this convective cluster"
+  - "where is the most electrically active part of this thunderstorm"
+  - "overlay GLM optical lightning on top of the GOES satellite imagery for this AOI"
+  - "give me a purple lightning-density raster over this hurricane right now"
+  - "animate the GLM lightning activity over this storm minute by minute"
+  - "how much lightning is this cell producing from the geostationary lightning mapper"
+
+fetch_viirs_day_fire:
+  - "recreate the JPSS VIIRS Day Fire animation over a four-day window"
+  - "animate the VIIRS Day Fire passes over the Channel Islands day by day"
+  - "make a polar satellite timelapse of the fire from Suomi-NPP and NOAA-20"
+  - "show every daytime VIIRS overpass of the fire as a scrubbable frame"
+  - "build the multi-day VIIRS Day Fire loop over this offshore AOI"
+  - "I want the JPSS day fire imagery animation labelled with real pass times"
+
+fetch_mtbs_burn_severity:
+  - "show me historic wildfire burn scars in this area"
+  - "I need MTBS burn severity for post-fire debris-flow analysis"
+  - "give me the burn severity map for the Camp Fire footprint"
+  - "what fires burned through this watershed in the last 10 years?"
+  - "fetch MTBS polygons for all wildfires in Southern California since 2000"
+  - "I need burn severity to assess post-fire habitat degradation"
+  - "show me the burn scar extent and severity for the Dixie Fire"
+
+fetch_landfire_fuels:
+  - "I need LANDFIRE fuel models for wildfire spread simulation"
+  - "fetch LANDFIRE Scott and Burgan 40 fuel model for this area"
+  - "give me surface fuel model raster for FARSITE input"
+  - "I need the fuel moisture content inputs for FlamMap over this bbox"
+  - "fetch LANDFIRE existing vegetation type for fire risk context"
+  - "show me the fire-fuel conditions for this WUI community"
+  - "I need LANDFIRE LF2022 fuels for this ELMFIRE domain"
+
+fetch_usfs_canopy_fuels:
+  - "I need canopy bulk density for crown fire transition modeling"
+  - "give me canopy base height for FlamMap input in this forest"
+  - "fetch CBH and CBD for the Sierra Nevada wildfire scenario"
+  - "I need crown fuel inputs for FARSITE over this California forest"
+  - "what is the canopy base height in this old-growth forest area?"
+  - "fetch LANDFIRE canopy bulk density for the Rocky Mountain scenario"
+
+fetch_hrrr_smoke:
+  - "show me smoke forecast for Northern California wildfires"
+  - "where is the wildfire smoke traveling over the next 12 hours?"
+  - "I need HRRR-Smoke aerosol optical depth for this region"
+  - "fetch smoke column mass density forecast for the Pacific Northwest"
+  - "show me air quality forecast for the Sacramento Valley during fire season"
+  - "I need PM2.5 smoke forecast for this wildfire event"
+  - "give me near-surface smoke concentration over this evacuated area"
+
+fetch_gridmet:
+  - "what is the fuel moisture index for this fire-prone area?"
+  - "give me fire-danger weather for the past week in this watershed"
+  - "I need daily temperature and humidity for drought analysis in the West"
+  - "fetch 100-hour fuel moisture for this historic fire date"
+  - "show me the dead fuel moisture raster for this California study area"
+  - "I need historical gridded wind speed for this fire weather analysis"
+  - "fetch energy release component for the western US fire season"
+  - "give me 1000-hour fuel moisture for the fire spread model"
+
+# ---------------------------------------------------------------------------
+# Weather Observations / Atmospheric
+# ---------------------------------------------------------------------------
+
+fetch_asos_metar:
+  - "what were the wind speeds at the Fort Myers airport during Hurricane Ian?"
+  - "show me surface weather observations from stations near the flood event"
+  - "I need METAR data from airports around Tampa Bay yesterday"
+  - "fetch ASOS temperature and wind readings during this hurricane landfall"
+  - "give me surface weather station data for the 24 hours before this storm"
+  - "what was the wind direction and gusts at the Nashville airport on that date?"
+  - "show me pressure, temperature, and visibility at weather stations in this area"
+
+fetch_raws_weather:
+  - "show me fire-weather station data near the active wildfire"
+  - "what were the wind speed and relative humidity at RAWS stations during the Caldor Fire?"
+  - "I need fire-weather observations from remote stations in this forest"
+  - "fetch RAWS data from stations near the WUI community evacuation zone"
+  - "give me temperature and RH readings from fire stations in this national forest"
+  - "what were the weather conditions at the RAWS station nearest the ignition point?"
+  - "I need sub-hourly fire weather observations for this time window"
+
+fetch_nexrad_reflectivity:
+  - "show me the current radar for the storm approaching Tampa"
+  - "put the NEXRAD radar on the map for this hurricane event"
+  - "I want live radar reflectivity over the Houston flooding area"
+  - "display current US radar mosaic on the map"
+  - "show me the thunderstorm radar signature for the Midwest squall line"
+  - "overlay live NEXRAD radar on the map for situational awareness"
+
+fetch_goes_satellite:
+  - "show me the current satellite image of the hurricane"
+  - "I want GOES-16 infrared imagery for the storm approaching the Gulf Coast"
+  - "display the current cloud cover over the wildfire area"
+  - "show me GOES satellite for near-real-time weather context"
+  - "I need current CONUS cloud imagery for the tropical cyclone"
+  - "overlay GOES water vapor channel on the map for synoptic context"
+  - "show me the satellite view of the storm right now"
+
+run_model_satellite_fire_animation:
+  - "pull the news on the fires near Eureka Utah and recreate the CIRA GOES animation"
+  - "recreate the satellite fire animation of this wildfire cluster end to end"
+  - "look the fire up by name, draw an AOI, and animate the GOES or VIIRS imagery"
+  - "recreate the JPSS VIIRS Day Fire animation of the Santa Rosa Island fire"
+  - "make the full fire-animation pipeline: incident lookup, bbox, imagery frames, overlays"
+  - "show me the AOI and time window then animate the fire from satellite imagery"
+
+enhance_satellite_image:
+  - "polish this satellite image so it looks more like CIRA GeoColor"
+  - "de-haze the true-color image, it looks washed out and blue"
+  - "enhance and sharpen this GOES true-color frame for presentation"
+  - "clean up the satellite imagery, remove the haze and make the land pop"
+  - "white-balance and sharpen this RGB image so it reads more natural"
+  - "upscale and enhance the satellite picture to a higher resolution"
+  - "make this true-color composite look crisper and less hazy like GeoColor"
+  - "apply a polish pass to the NAIP true-color image before publishing it"
+  - "remove the atmospheric haze from this RGB satellite COG"
+
+fetch_era5_reanalysis:
+  - "I need global wind forcing for a SFINCS storm surge model outside the US"
+  - "fetch ERA5 surface wind for the Bay of Bengal cyclone event"
+  - "give me ERA5 total precipitation for this non-CONUS flood scenario"
+  - "I need reanalysis pressure and wind data for the compound flood substrate"
+  - "fetch ERA5 significant wave height for the Mediterranean storm surge"
+  - "give me Copernicus reanalysis data for the global fire weather case"
+  - "I need ERA5 10m wind components for compound flood model forcing"
+  - "fetch ERA5 surface runoff for this tropical cyclone study area"
+
+# ---------------------------------------------------------------------------
+# NWS Alerts
+# ---------------------------------------------------------------------------
+
+fetch_nws_event:
+  - "show me active weather alerts in Florida right now"
+  - "what NWS warnings are in effect for Harris County, TX?"
+  - "are there any flood warnings active in South Carolina?"
+  - "show me current hurricane warnings for the Gulf Coast"
+  - "what weather advisories affect this zip code right now?"
+  - "show me active tornado watches and warnings in Oklahoma"
+
+fetch_nws_alerts_conus:
+  - "show me ALL active NWS alerts across the entire US"
+  - "give me a national weather alert map for today"
+  - "what are the most severe weather warnings anywhere in the country right now?"
+  - "show me every hurricane and tropical storm warning in America"
+  - "I want a CONUS-wide view of all active severe weather watches"
+  - "show me the full nationwide NWS alert picture for this storm system"
+
+fetch_storm_events_db:
+  - "what storms hit Florida in 2017?"
+  - "show me historical tornado touchdowns in Oklahoma since 2000"
+  - "give me NOAA Storm Events records for Hurricane Ian"
+  - "what flooding events occurred in Harris County, TX over the last 10 years?"
+  - "I need historical hail events for this insurance analysis"
+  - "show me past hurricane landfalls in North Carolina"
+  - "what is the historical storm event record for this watershed?"
+
+# ---------------------------------------------------------------------------
+# Infrastructure / Critical Assets
+# ---------------------------------------------------------------------------
+
+fetch_usace_levees:
+  - "show me the levees protecting New Orleans"
+  - "what levee systems are in this flood zone?"
+  - "give me the USACE National Levee Database features for the Sacramento Delta"
+  - "I need leveed-area polygons for compound flood infrastructure context"
+  - "show me levee embankments in this floodplain"
+  - "are there federally inspected levees in this risk area?"
+  - "fetch NLD levee routes for the Mississippi River corridor"
+
+fetch_usace_dams:
+  - "what dams are upstream of this flood-vulnerable community?"
+  - "show me all high-hazard dams in California"
+  - "give me the National Inventory of Dams for this watershed"
+  - "I need dam height, storage, and hazard classification for this region"
+  - "which dams in this state have a poor condition assessment?"
+  - "show me dams with deficient emergency action plans in this basin"
+  - "fetch NID dam inventory for the Oroville area"
+
+fetch_roads_osm:
+  - "show me the roads in this flood impact area"
+  - "give me road network for evacuation routing context"
+  - "I need carriageway centerlines for this county"
+  - "overlay roads on the flood inundation map"
+  - "show me transportation infrastructure in this hurricane impact zone"
+  - "fetch OSM roads for the wildfire evacuation corridor"
+  - "I need road network for accessibility analysis after the flood"
+
+# ---------------------------------------------------------------------------
+# Administrative Boundaries
+# ---------------------------------------------------------------------------
+
+fetch_administrative_boundaries:
+  - "show me county boundaries for South Florida"
+  - "I need state outline polygons for this regional overview"
+  - "give me Census TIGER county lines for the Houston area"
+  - "show me city boundaries for the Tampa–St. Petersburg metro"
+  - "I want ZIP code tabulation area polygons for demographic aggregation"
+  - "fetch the state boundary so I can clip this flood layer to Florida"
+  - "give me US Census tract boundaries for this urban area"
+
+geocode_location:
+  - "find the bounding box for Fort Myers, Florida"
+  - "geocode Hurricane Ian's landfall location"
+  - "I need the coordinates for the Sacramento–San Joaquin Delta"
+  - "where is New Orleans — give me the bbox"
+  - "find the extent of Harris County, Texas"
+  - "geocode Tampa Bay area so I can fetch data there"
+  - "I need the bbox for the Everglades National Park"
+
+clip_raster_to_bbox:
+  - "clip this DEM to the county boundary I fetched"
+  - "I need to trim this national-scale precipitation raster to my study area"
+  - "crop the population raster to this flood inundation extent"
+  - "clip the landcover grid down to just this watershed bbox"
+  - "trim this large-area DEM to the Fort Myers case extent"
+  - "cut this HRRR wind raster to my storm domain"
+
+clip_raster_to_polygon:
+  - "clip this flood-depth raster to the state of Florida polygon"
+  - "I need the DEM clipped to the watershed boundary, not a rectangle"
+  - "mask the precipitation raster to Lee County's exact boundary"
+  - "clip the population grid inside the FEMA flood zone polygon"
+  - "I want LANDFIRE fuels data clipped to this fire management unit boundary"
+  - "clip the NLCD raster to the national park boundary polygon"
+
+clip_vector_to_polygon:
+  - "clip these GBIF occurrence points to the Florida state boundary"
+  - "I need to trim nationwide NWS alerts to just this state polygon"
+  - "clip the building footprints to the flood zone polygon"
+  - "filter these national dam points down to those inside this watershed"
+  - "clip the road network to the hurricane impact zone polygon"
+
+# ---------------------------------------------------------------------------
+# Conservation / Biodiversity
+# ---------------------------------------------------------------------------
+
+fetch_wdpa_protected_areas:
+  - "show me protected areas in South Florida"
+  - "give me National Wildlife Refuge polygons near the Everglades"
+  - "I need WDPA conservation areas for this habitat analysis"
+  - "show me national parks and protected lands in this study area"
+  - "overlay protected area boundaries on the flood risk map"
+  - "what fraction of this flood footprint is inside a protected area?"
+  - "give me Marine Protected Area polygons for this coastal zone"
+  - "I need IUCN-category protected lands for this conservation assessment"
+
+fetch_gbif_occurrences:
+  - "show me Florida panther sightings in this area"
+  - "give me species occurrence records for biodiversity analysis in this bbox"
+  - "I need GBIF observation points to overlay on the flood risk surface"
+  - "where have Florida manatees been reported near Fort Myers?"
+  - "show me bird species occurrence records in this national park"
+  - "fetch GBIF data for endemic plant species in this fire-affected region"
+  - "I want species observation points for this conservation baseline"
+
+fetch_inaturalist_observations:
+  - "where are the recent manatee sightings along this coast?"
+  - "show me iNaturalist observations of American alligators in South Florida"
+  - "I need citizen-science species sightings for this habitat area"
+  - "give me recent monarch butterfly observations along this flyway"
+  - "show me wildlife observations near the wildfire perimeter"
+  - "what species have been spotted in this recently flooded wetland?"
+  - "I need research-grade iNaturalist records for this conservation layer"
+
+fetch_ebird_observations:
+  - "what birds have been seen in this wetland in the last 30 days?"
+  - "show me recent waterfowl sightings in this flooded refuge"
+  - "give me eBird observations of Bewick's Wren over this wildfire footprint"
+  - "I need recent bird sightings for this avian biodiversity analysis"
+  - "fetch bird observation data for the Everglades National Park"
+  - "what raptors were spotted near this fire perimeter recently?"
+  - "I want eBird data to assess habitat quality in this post-flood area"
+
+fetch_iucn_red_list_range:
+  - "what is the IUCN conservation status of the Florida panther?"
+  - "show me the Red List range for the West Indian manatee"
+  - "give me IUCN threat category and habitat info for this endangered species"
+  - "I need IUCN Red List data for the species at risk in this flood zone"
+  - "fetch conservation status and range for the loggerhead sea turtle"
+  - "what is the Red List category for this critically endangered mammal?"
+
+fetch_nwi_wetlands:
+  - "show me the wetlands in this area"
+  - "map the NWI wetlands for this bbox"
+  - "give me the marshes and swamps around here"
+  - "I need National Wetlands Inventory polygons for this habitat analysis"
+  - "which freshwater emergent and forested wetlands are in this footprint?"
+  - "overlay the estuarine wetlands on the flood map"
+  - "fetch Cowardin-classified wetland boundaries for this coastal zone"
+  - "how much wetland is in this study area and what types?"
+
+fetch_nhd_waterbodies:
+  - "show me the lakes and ponds in this area"
+  - "map the NHD waterbodies for this bbox"
+  - "give me the reservoirs and lakes near here"
+  - "which water bodies are inside this hazard footprint?"
+  - "I need lake and pond polygons for this habitat overlay"
+  - "fetch the open-water bodies for this watershed"
+  - "show me the named lakes in this county"
+  - "how many waterbodies does this plume footprint touch?"
+
+fetch_movebank_tracks:
+  - "show me migration tracks for sandhill cranes over this wildfire area"
+  - "give me sea turtle telemetry paths near this storm surge zone"
+  - "I need animal movement trajectories for this wildlife corridor analysis"
+  - "show me Movebank tracks for whooping cranes crossing this region"
+  - "fetch GPS tracks for this mammal species over the flood footprint"
+  - "I want elephant movement paths layered over this flood-risk surface"
+  - "show me bird migration corridors through this proposed wind-farm area"
+
+# ---------------------------------------------------------------------------
+# Damage Assessment
+# ---------------------------------------------------------------------------
+
+run_pelicun_damage_assessment:
+  - "run a damage assessment for buildings in this flood zone"
+  - "compute structural losses from this flood scenario using fragility curves"
+  - "I need Pelicun flood damage estimates for the Fort Myers housing stock"
+  - "assess how many structures reach the DS3 damage state under this surge"
+  - "give me repair cost statistics for this hurricane damage scenario"
+  - "run a loss estimation for residential buildings in this 100-year flood footprint"
+  - "I want building damage probability curves for this storm surge event"
+  - "compute expected damage and 95% confidence intervals for this flood depth raster"
+
+compute_zonal_statistics:
+  - "how many people are in the projected flood inundation zone?"
+  - "what is the total building replacement value exposed to this storm surge?"
+  - "compute mean flood depth within each census tract"
+  - "how much forest area burned in each county in this fire?"
+  - "I need average wind speed within the damage footprint polygon"
+  - "sum population at risk within each flood zone category"
+  - "calculate the area of wetlands inside this fire perimeter"
+  - "what fraction of developed land is in the flood zone?"
+
+analyze_affected_fields:
+  - "which farm fields does the contamination plume reach?"
+  - "tell me which agricultural fields the groundwater plume affects and how badly"
+  - "rank the affected farm fields by peak concentration in this contaminant plume"
+  - "which crops are hit by the spill plume and how much of each field is over the threshold?"
+  - "intersect the plume with the field boundaries and show the worst-hit fields"
+  - "how many fields does the contaminant reach above the detection threshold?"
+  - "which fields are contaminated by this groundwater plume, with the peak mg/L in each?"
+
+run_model_contamination_affected_fields:
+  - "model a contaminant spill near this farmland and tell me which fields it reaches"
+  - "model a groundwater plume up-gradient of these fields and rank the affected farm fields"
+  - "simulate a solvent leak near Ames Iowa and show which crops the plume contaminates"
+  - "place a spill west of the cropland, run the plume, and tell me which farm fields are hit"
+  - "which agricultural fields would a contaminant spill near this area affect? model it end to end"
+  - "run the groundwater contamination plume and the affected-field analysis for this farm area"
+
+# ---------------------------------------------------------------------------
+# Catalog / Discovery
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Infrastructure / Modeling Utilities
+# ---------------------------------------------------------------------------
+
+publish_layer:
+  - "publish this flood depth raster so I can see it on the map"
+  - "add this COG layer to QGIS Server so MapLibre can render it"
+  - "make this flood output visible on the map"
+  - "I need to register this raster with the WMS server"
+  - "publish the postprocessed flood layer to the project"
+
+run_solver:
+  - "run the SFINCS flood model now that the setup is ready"
+  - "submit the solver job to Cloud Workflows"
+  - "kick off the flood simulation — the model is staged"
+  - "execute the solver with the HydroMT model setup"
+  - "start the flood simulation on Cloud Run and give me the execution handle"
+
+run_swan_waves:
+  - "model the incoming waves coming onshore at Mexico Beach with SWAN"
+  - "give me a defensible nearshore wave field with significant wave height, peak period and direction"
+  - "run a SWAN spectral wave simulation over this coastal AOI to compare against SnapWave"
+  - "show me the wave heights Hs Tp and mean wave direction for this coastline"
+  - "compute an engineering-grade wave climate to validate against buoy data"
+  - "run SWAN standalone so I can compare it with the SFINCS+SnapWave wave field on this case"
+
+compute_wave_nomograph:
+  - "what wave height would a 20 m/s wind build over 50 km of open water?"
+  - "estimate the significant wave height and peak period from wind speed and fetch"
+  - "quick sanity check on the wave height for this wind and fetch before I run SWAN"
+  - "is a 3 meter offshore wave height reasonable for a 25 knot wind and 80 km fetch?"
+  - "use the nomograph to get Hs and Tp from wind and fetch"
+  - "fetch-limited wave growth estimate for this wind over the lake"
+  - "give me a ballpark significant wave height for a storm wind blowing across the bay"
+  - "what is the fully developed sea state for a 30 m/s wind?"
+
+compute_overtopping:
+  - "how much water overtops this seawall given the wave height and crest freeboard?"
+  - "compute the EurOtop mean wave overtopping discharge over the levee"
+  - "what is the overtopping rate for a 2 m wave on a 1:2 dike slope with 3 m freeboard?"
+  - "is the crest of this revetment high enough to limit overtopping?"
+  - "estimate overtopping discharge in litres per second per metre for this coastal structure"
+  - "take the SWAN wave height and period and compute overtopping over the breakwater"
+  - "wave overtopping rate for a rock-armoured sloped seawall with this crest level"
+  - "how much overtopping for these waves over a dike with roughness reduction"
+
+wait_for_completion:
+  - "wait for the SFINCS run to finish and get the result"
+  - "poll the solver execution until it completes"
+  - "block until the flood model run is done"
+  - "monitor the simulation and return the run result"
+  - "check when the solver finishes and return the output URI"
+
+qgis_process:
+  - "run the QGIS watershed delineation algorithm on this DEM"
+  - "submit a GRASS hydrology process on the worker"
+  - "execute the QGIS fill sinks algorithm for hydrological conditioning"
+  - "run a SAGA terrain analysis on this elevation raster"
+  - "use the QGIS buffer algorithm to create a 500m zone around these points"
+
+web_fetch:
+  - "read the content of this USGS report page"
+  - "fetch the news article at this URL about the flood event"
+  - "pull the metadata from this research paper abstract page"
+  - "check what's on this government flood-zone data portal page"
+  - "read the text body of this NWS forecast discussion page"
+
+fetch_nws_event:
+  - "are there any flood warnings active in Lee County right now?"
+  - "show me NWS severe weather alerts for the state of Florida"
+  - "what hurricane warnings are currently in effect for the Gulf Coast?"
+  - "give me active NWS alerts for Harris County, TX"
+  - "show me winter storm warnings in Colorado today"
+
+
+# --- tool-retrieval STEP 7 backfill (NATE 2026-06-23) ---
+# The 46 registered tools that had NO routing queries, brought to 100% registry
+# coverage so discover_dataset / retrieve_visible_tools recall is trustworthy.
+# Generated from each tool's docstring; same style as the entries above.
+aggregate_claims_across_sources:
+  - "i fetched three news articles about the same chemical spill, pull out the agreed date, location, and what leaked"
+  - "cross-check these agency pages and tell me how many gallons were spilled and how confident you are"
+  - "reconcile the casualty counts across all the sources i pulled for this train derailment"
+  - "which contaminant do the most sources agree was released here, and which ones disagree"
+  - "i have several reports about this event, give me the best-supported facts with provenance urls"
+  - "extract the spill date, town, and chemical from these fetched articles and score the agreement"
+  - "consolidate what the wire stories say about this incident into one set of claims with confidence"
+  - "how many sources back the vinyl chloride figure versus the other numbers in these texts"
+aggregate_property_within_zone:
+  - "what is the total damage cost for the buildings inside the flood zone polygon"
+  - "sum the structure replacement value for everything within the county boundary"
+  - "average building value for the parcels whose centroid falls in this protected area"
+  - "total NSI structure exposure inside the FEMA flood zone"
+  - "add up the Pelicun damage for the features within this admin boundary"
+  - "max replacement cost among the structures inside the WDPA polygon"
+  - "aggregate the species occurrence counts that fall within these protected-area polygons"
+  - "give me the combined property value for the buildings clipped to this zone layer"
+code_exec_request:
+  - "compute the 95th percentile flood depth over the city polygon from the actual pixels"
+  - "cross-tabulate the damage by land-cover class for the layers on the map"
+  - "run a custom calculation on this layer that none of the standard tools can do"
+  - "write a short python snippet to derive a statistic from this raster and show me the result"
+  - "i need an ad-hoc aggregation across these two layers, can you script it and let me approve the code"
+  - "calculate a weird derived metric from the features in this vector layer programmatically"
+  - "do some custom number-crunching on the on-map layers in a sandbox"
+  - "compute the correlation between elevation and damage for the pixels in this AOI with python"
+compute_blended_composite:
+  - "drape the hillshade over the land cover and bake it into one shaded layer"
+  - "make a shaded relief by multiplying the colored relief with the hillshade"
+  - "combine the NLCD land cover and the hillshade into a single shaded-terrain raster"
+  - "shade the land cover with the terrain so it looks like a cartographic basemap"
+  - "blend these two rasters into one composite with a multiply mode"
+  - "give me a shaded land-cover map keeping the real NLCD class colors but draped over relief"
+  - "overlay the hillshade as a shaded base under the land-cover layer baked together"
+  - "produce a draped terrain composite from the colored DEM and the hillshade at half opacity"
+compute_canopy_height:
+  - "how tall are the trees in this small forest AOI"
+  - "estimate the canopy height across this preserve and paint it on the map"
+  - "show me a tree-canopy-top height raster for this neighborhood"
+  - "run the canopy height model on the NAIP imagery for this bbox"
+  - "give me per-pixel forest height in metres over this area so i can do zonal stats on it"
+  - "what's the tree height distribution across this woodland patch"
+  - "produce an estimated canopy height layer from sub-metre aerial imagery here"
+  - "map the height of the tree cover for this small ag field"
+compute_contours:
+  - "show me the topographic contour lines for this AOI"
+  - "draw elevation isolines over this area at a 10 metre interval"
+  - "give me a contour map of the terrain here"
+  - "add topo lines on top of the hillshade for this bbox"
+  - "generate elevation contours from the DEM with a sensible interval"
+  - "i want discrete elevation steps as line features for this region"
+  - "overlay topographic contour lines on the colored relief base"
+  - "make contour lines from this DEM so i can see the terrain shape as isolines"
+compute_cross_section:
+  - "draw a section view of the ground and water surface along this line"
+  - "plot the flood depth along the road through this neighborhood"
+  - "give me a cross-section profile of the head surface versus the land surface across the seepage zone"
+  - "overlay the DEM and the bathymetry along this transect so I can see bank to channel"
+  - "show me the freeboard along the levee, ground line versus water surface on one chart"
+  - "how deep is the inundation at each point along this drawn line"
+  - "sample the flood layer along this transect and chart distance versus depth"
+  - "compare the pre-event and post-event surface along this section line"
+compute_impact_envelope:
+  - "how much damage will the 100-year flood cause in Fort Myers"
+  - "estimate the expected dollar losses for this inundation scenario"
+  - "how many structures are impacted by the flood we just modeled"
+  - "summarize the flood impact for this case, structures damaged and population at risk"
+  - "give me the displaced population for the Hurricane Ian flooding"
+  - "run a damage and loss assessment on this flood depth layer using the building inventory"
+  - "what are the total expected damages and the 95th percentile loss for this scenario"
+  - "tally up the affected buildings and economic loss from the flood raster"
+compute_layer_bounds:
+  - "resize the bounding box to encompass all the features in this layer"
+  - "fit the map to this layer so I can see everything"
+  - "zoom to all the points in this dataset"
+  - "what is the geographic extent of this layer"
+  - "show me the whole extent of the flood layer on the map"
+  - "frame the view around all of these buildings"
+  - "give me the bounding box of this raster in lat lon"
+  - "pan and zoom so the entire layer is in view"
+compute_ndvi:
+  - "show me the vegetation greenness for this area from Sentinel-2"
+  - "map where the healthy vegetation is across this bbox"
+  - "compute the NDVI vegetation index over this AOI"
+  - "give me a canopy vigor map from the least-cloudy recent satellite scene"
+  - "where is the dense green biomass versus the bare soil in this region"
+  - "make me a vegetation condition layer for this watershed from Sentinel L2A"
+  - "overlay a green-to-red vegetation vigor raster for the conservation stack here"
+  - "how green is the vegetation in this AOI right now from satellite imagery"
+compute_terrain_profile:
+  - "show the elevation profile across this ridge"
+  - "plot the terrain profile along the road I drew"
+  - "what does the ground look like along this transect, height versus distance"
+  - "give me a long profile of the valley floor from the DEM"
+  - "draw an elevation cross-section of the hillside along this line"
+  - "overlay the bare-earth DEM and the topo-bathy elevation along this section"
+  - "sample the 3DEP elevation along this path and chart it"
+  - "how does the ground rise and fall along this drawn line"
+count_features_above_threshold:
+  - "how many buildings have a damage ratio above 0.5"
+  - "count the structures where the ground elevation is below 2 meters"
+  - "how many features have a population density of at least 1000"
+  - "tally the number of critically damaged structures after the Pelicun run"
+  - "count how many parcels exceed a replacement value of 500000"
+  - "how many of these features are above the threshold on that attribute"
+  - "give me the count of structures with flood depth over 1 meter in this layer"
+  - "how many points have a value greater than or equal to this cutoff"
+cut_features_with_polygon:
+  - "erase the lake polygon out of these land parcels but keep their attributes"
+  - "punch a hole in these analysis polygons where the protected zone overlaps"
+  - "subtract this no-build buffer from the developable area and keep the field columns"
+  - "cut this water body out of the cropland fields"
+  - "remove the overlap region from these features without losing their IDs"
+  - "trim these polygons back from the cutter and keep everything else intact"
+  - "difference these parcels against this mask polygon in place"
+  - "carve out the wetland from the parcel layer so the rest survives with its data"
+discover_dataset:
+  - "which tool should i use to show flood zones"
+  - "find me the right function for national parks polygons in yosemite"
+  - "what tool fetches hurricane wind probabilities"
+  - "i need a shortlist of tools that could get me biodiversity data"
+  - "route this request to the best matching atomic tool"
+  - "help me pick a tool for mapping field boundaries over an aoi"
+  - "search the tool catalog for something that does active fire detection"
+  - "what's the closest tool for getting aerial imagery"
+fetch_field_boundaries:
+  - "show me the farm fields over this aoi in iowa"
+  - "pull the agricultural field boundaries for this bbox in the us"
+  - "map the cropland parcels around ames so i can see which fields a flood covers"
+  - "i want the fields of the world polygons for this area in japan"
+  - "overlay the usda crop sequence boundaries on this case"
+  - "which ag fields are inside this contamination plume"
+  - "get the fiboa field-boundary vectors for this denmark aoi"
+  - "outline the individual farm parcels in this region for exposure mapping"
+fetch_goes_blend_animation:
+  - "recreate the cira geocolor and fire temperature fire animation over this aoi"
+  - "make me the combined satellite loop where the active fire glows on the true-color scene"
+  - "animate the goes-18 blended geocolor plus fire temperature for 2026-06-22"
+  - "build the single composite fire timelapse from goes over this window"
+  - "show the fire evolving on satellite with the hot pixels overlaid on geocolor in one scrubber"
+  - "give me the cira-style blended fire loop at 5 minute cadence over this bbox"
+  - "default goes fire animation showing smoke and active fire together"
+  - "play back the fire on goes-west with the fire-temperature glow baked onto the imagery"
+fetch_mobi:
+  - "show me the biodiversity importance for this region"
+  - "where are the imperiled-species hotspots in this bbox"
+  - "map the conservation-priority areas over this us aoi"
+  - "give me the natureserve mobi imperiled-species richness raster"
+  - "highlight where at-risk species concentrate for this state"
+  - "fetch the range-size rarity layer for this area"
+  - "i need the biodiversity-priority raster for the conservation stack here"
+  - "show protection-weighted rarity outside protected land for this bbox"
+fetch_naip:
+  - "give me high-res aerial imagery for this neighborhood"
+  - "pull a true-color naip basemap over this small preserve"
+  - "show me sub-meter aerial photography for this us bbox"
+  - "fetch the usda aerial leaf-on imagery as the base layer"
+  - "i want a detailed aerial photo basemap under my species points"
+  - "overlay high-resolution rgb aerial imagery for this site"
+  - "get the planetary computer naip image for this aoi"
+  - "drop an aerial true-color base layer for this conservation area"
+fetch_topobathy:
+  - "give me a seamless coastal elevation surface that includes the sea floor and the land together for mexico beach"
+  - "i need a topobathy DEM with bathymetry stitched to the topography for this shoreline AOI"
+  - "pull the CUDEM merged topo-bathy tiles plus 3DEP land for my coastal flood run"
+  - "the land-only DEM leaves the nearshore as nodata, get me one with the underwater bed for surge routing"
+  - "a continuous bed from the hills out to deep water in NAVD88 meters for the SFINCS coastal deck"
+  - "how deep is the water just offshore here, build me an elevation grid that includes water depth"
+  - "fetch the NOAA NCEI 1/9 arc-second topobathymetry for the florida panhandle coast"
+  - "i want the nearshore bathymetry merged with the USGS terrain so my coastal model has no gap at the waterline"
+fetch_usgs_nwis_gauges:
+  - "show me the USGS stream gauges in washington state"
+  - "where are the river gauges near boise and what are they reading"
+  - "give me the real observed discharge at the stream gages upstream of this town"
+  - "map the active USGS water gauges in this bbox with their latest gage height"
+  - "i need the actual instrument readings not the modeled flow, plot the NWIS gauging stations"
+  - "pull the full discharge hydrograph at the gauges for the hurricane michael week as a river forcing"
+  - "current cfs and stage at every active gage in florida from waterdata.usgs.gov"
+  - "give me the last 7 days of streamflow time series at the gauges in this watershed"
+fill_gaps:
+  - "find the sliver gaps between these adjacent parcels and turn them into polygons"
+  - "there are little voids between the FTW field boundaries, fill them in"
+  - "what areas are uncovered between these building footprints that should tile cleanly"
+  - "harvest the enclosed gaps between my digitized polygons so the coverage has no holes"
+  - "clean up the topology of these ML-derived field outlines and emit the missing interstitial polygons"
+  - "fill the courtyards and slivers trapped between these adjacent OSM buildings"
+  - "generate the backfill polygons for the gaps in this parcel coverage"
+  - "show me the enclosed empty spaces between these polygons as new features"
+generate_choropleth_legend:
+  - "summarize the choropleth classes behind this styled layer"
+  - "how many features fall in each quantile class of this map"
+  - "show me the legend distribution for the population density choropleth"
+  - "give me a class-break breakdown of the values driving the color ramp"
+  - "chart how the features split across the five color classes on this layer"
+  - "what value ranges hold how much of the data in this choropleth"
+  - "break this vector layer into quantile classes and count features per class"
+  - "i want the legend bar chart that matches the choropleth coloring"
+generate_damage_distribution:
+  - "show me the damage-state distribution after the pelicun run"
+  - "chart how many structures are in each damage state DS0 through DS4"
+  - "what's the damage-state breakdown for the buildings in this assessment"
+  - "give me a bar chart of slight versus moderate versus complete damage counts"
+  - "how many of the assessed structures are destroyed versus undamaged, as a chart"
+  - "plot the per-asset damage states from the pelicun ds_mean results"
+  - "i want to see the structural damage breakdown across the portfolio"
+  - "visualize the distribution of building damage levels from the damage layer"
+generate_histogram:
+  - "show me a histogram of the flood depths in this layer"
+  - "what does the damage-ratio distribution look like, chart it"
+  - "histogram the population density raster"
+  - "give me the distribution of cell values for this elevation grid"
+  - "plot a frequency distribution of the discharge attribute on these features"
+  - "bin the values of this raster and show me the counts as bars"
+  - "i want to see the spread of the water-depth values across the AOI"
+  - "chart the distribution of a numeric column on this vector layer"
+generate_time_series:
+  - "plot how the discharge changes over time for this gauge layer"
+  - "show me the precipitation time series for this AOI"
+  - "chart the trend of water levels across the timesteps"
+  - "give me a line chart of value vs time for this multiband raster"
+  - "graph the per-band mean over the hours for this HRRR layer"
+  - "make a line graph of this temporal layer's value through time"
+  - "how does this layer evolve over time, plot it as a curve"
+  - "show the time series of stage from this observed-gauge layer"
+list_categories:
+  - "what kinds of tools do you have, list the categories"
+  - "i'm not sure where to start, show me the top-level tool groups"
+  - "what domains can you work in, give me the category list"
+  - "show me all the available tool categories with descriptions"
+  - "which buckets do the tools fall into, list them"
+  - "help me narrow down what's available across the whole catalog"
+  - "what areas of analysis can this workbench cover"
+  - "give me an overview of the tool families you support"
+list_tools_in_category:
+  - "show me all the tools in the hazard modeling category"
+  - "what tools are inside the weather and atmosphere group"
+  - "list the members of the coastal category"
+  - "open the conservation ecology category and show its tools"
+  - "which tools live under terrain and elevation"
+  - "give me the tools in the damage assessment bucket"
+  - "what's available in the geographic primitives category"
+  - "expand the fire category and show every tool in it"
+merge_features:
+  - "dissolve these adjacent polygons into one shape"
+  - "merge the selected parcels into a single AOI"
+  - "combine these touching field boundaries into one field"
+  - "fuse the fragmented flood-zone polygons together"
+  - "union these features into one combined geometry"
+  - "merge these line segments into one multi-part feature"
+  - "collapse all the features in this layer into a single dissolved polygon"
+  - "combine these into one and keep the first feature's attributes"
+postprocess_pelicun:
+  - "how much damage in total after the pelicun run"
+  - "give me the portfolio loss totals for this damage layer"
+  - "how many structures are damaged and how many destroyed"
+  - "what's the expected loss in dollars across all buildings"
+  - "how many people are displaced from this damage assessment"
+  - "summarize the per-asset damage layer into headline impact numbers"
+  - "roll up the pelicun damage FGB into an impact envelope"
+  - "what's the aggregate damage breakdown by occupancy class"
+request_spatial_input:
+  - "let me draw the flood walls and flap gates on the map"
+  - "i want to outline the exact neighborhood block myself"
+  - "pause and let me sketch the area of interest by hand"
+  - "let me place barriers on the map before the urban flood run"
+  - "i'll draw the AOI for the SWMM model, open the draw tool"
+  - "let me click the precise spot on the map, i can't name it"
+  - "ask me to drag a rectangle for the bbox i have in mind"
+  - "let me digitize the dammed walls and one-way drains for the storm sim"
+run_geoclaw_inundation:
+  - "model the tsunami run-up along this stretch of coast and animate the inundation"
+  - "what happens if the dam breaks upstream of this town, how deep does it flood"
+  - "simulate an embankment failure and route the reservoir release over the terrain below"
+  - "run a GeoClaw shallow-water inundation for a levee breach in this bbox"
+  - "show me the wave run-up and peak overland depth from a magnitude 8 earthquake offshore"
+  - "animate the dam-break flood wave moving across the floodplain frame by frame"
+  - "model storm-surge run-up over the topography here with adaptive mesh refinement"
+  - "how far inland does the tsunami reach and what is the max depth over this AOI"
+run_landlab_susceptibility:
+  - "map where the slopes are likely to fail on this hillside after heavy rain"
+  - "model landslide susceptibility and factor of safety across this catchment"
+  - "where is slope instability highest in this bbox, give me a probability of failure raster"
+  - "run the infinite-slope landslide model with soil cohesion and friction over this terrain"
+  - "route a rainfall pulse over the DEM and show me the peak surface runoff depth"
+  - "compute overland flow from a storm across this watershed"
+  - "which hillslopes are prone to debris flows or slumps here"
+  - "give me a slope-stability hazard map for this mountainous AOI"
+run_model_conservation_priority:
+  - "show me conservation priorities around the ACE Basin with imagery and biodiversity"
+  - "map vegetation, imperiled-species importance, and panther sightings near Big Cypress"
+  - "build a conservation-priority stack for this region with aerial base and species data"
+  - "where should we focus protection here, give me NDVI plus biodiversity plus occurrences"
+  - "overlay NatureServe biodiversity importance, NAIP, and GBIF records for this AOI"
+  - "stack the habitat and biodiversity layers for this watershed for a conservation plan"
+  - "show imperiled-species richness, vegetation greenness, and threatened ranges together"
+  - "make the SC-DNR style priority map for this preserve with species occurrence points"
+run_model_flood_habitat_scenario:
+  - "model a 100-year flood in Big Cypress and show Florida panther occurrences with it"
+  - "combine flood depth with protected-area boundaries and species records over this bbox"
+  - "how does a design-storm flood affect the protected areas and wildlife here"
+  - "run the flood plus habitat exposure case with WDPA polygons and GBIF species"
+  - "flood inundation overlaid with park boundaries and threatened species in this preserve"
+  - "compute flood impact within the national preserve and list the species occurrences"
+  - "model the storm flood, clip it to Apalachicola National Forest, and add the species layers"
+  - "give me flood depth, protected lands, and biodiversity impact metrics in one run"
+run_model_flood_scenario:
+  - "model flooding"
+  - "model the flood in this area and show me the inundation depth"
+  - "simulate flooding here and map how deep the water gets"
+  - "model the flood from a 100-year storm in Fort Myers and show me the inundation depth"
+  - "how deep will the water get in this bbox during a 25-year design storm"
+  - "simulate flood extent for a 500-year return period over New Orleans, 48 hour duration"
+  - "run a coastal surge inundation near the shoreline including the sea floor bathymetry"
+  - "estimate peak flood depth for this AOI from a hurricane rainfall event"
+  - "model the compound flood here with storm surge plus river discharge plus rain"
+  - "animate the storm surge rolling in over Mexico Beach with waves"
+  - "run a SFINCS flood simulation routing water around the buildings downtown"
+run_model_goes_fire_animation:
+  - "animate the GOES fire loop over this AOI and just run it without asking me to confirm"
+  - "recreate the CIRA GeoColor and Fire Temperature animation over this bbox"
+  - "make a scrubbable GOES-18 fire animation for the most recent few hours over this area"
+  - "blend the true-color and fire-temperature GOES frames into one animated loop here"
+  - "animate the satellite fire imagery for this bbox and add the FIRMS hot pixels"
+  - "run the unattended GOES fire timelapse over this window, snap to whatever frames exist"
+  - "show the wildfire evolving over this region from geostationary imagery, hourly frames"
+  - "loop the GOES-19 East fire-temperature scene over this AOI with active-fire detections"
+run_model_glm_lightning_animation:
+  - "animate the GOES-19 GLM lightning over this storm for this time window"
+  - "recreate the CIRA visible plus group energy density lightning loop for this Gulf hurricane"
+  - "show the lightning flickering over this convective cluster as a scrubbable purple overlay on the visible imagery"
+  - "make a one-minute GLM group energy density animation over this bbox and daytime window"
+  - "bake the purple lightning density over the grayscale GOES-19 visible base and animate it here"
+  - "where is the most electrically active part of this Gulf storm over this hour, animated"
+  - "run the direct GLM lightning animation for this AOI and UTC window, no news lookup"
+  - "scrubbable lightning loop over the storm: GOES-East GLM energy density with a visible base"
+run_model_groundwater_contamination_scenario:
+  - "here is a news article about a tce spill in twin falls, model the contaminant plume in the groundwater"
+  - "a tanker leaked solvent near this town, how far will it spread through the aquifer"
+  - "i pasted a story about a chemical release, simulate the groundwater contamination plume from it"
+  - "model the spill in this article and tell me the peak concentration and plume footprint"
+  - "this link describes a pce leak at a factory, build the contaminant plume for it"
+  - "an industrial solvent spilled into the ground here, how concentrated will the groundwater get downstream"
+  - "turn this spill report into a modeled groundwater plume layer with how big the plume is"
+  - "news says benzene leaked over six hours, run the aquifer contamination model on it"
+run_model_news_event_ingest:
+  - "here are a couple news article urls about this spill, pull out the location, amount, and contaminant for me to review"
+  - "ingest these nws alert area codes and storm events db entries and derive the event parameters"
+  - "i have an incident report link, extract the derived parameters before we model anything"
+  - "summarize the key facts (where, how much, what) from these sources about the hurricane so i can approve them"
+  - "read these articles about the flood and give me the location bbox and scale with confidence scores"
+  - "gather what these sources say about the wildfire and show me the aggregated claims for review"
+  - "pull the contaminant and release size out of this news coverage but do not run a simulation yet"
+  - "cross-reference these source urls and storm event ids and tell me the best-supported event details"
+run_model_nws_flood_event_scenario:
+  - "model the flood that's actually happening right now from the active flood warning in idaho"
+  - "there is a flash flood warning over this area, run an inundation model on the warned region"
+  - "show the current nws flood warnings and model the flood with the observed radar rainfall"
+  - "take the live flood warning polygon and simulate how deep the water gets using mrms precip"
+  - "model the real-time flooding under the highest-severity flood warning right now"
+  - "tie the active flash flood warning here to a depth map using observed precipitation, not a design storm"
+  - "what does the flooding look like for the warning that's in effect, using actual measured rain"
+  - "run the inundation for the second flood warning in the list over its warned area"
+run_model_river_seepage_scenario:
+  - "is this river reach gaining or losing water to the aquifer near the spill point"
+  - "model the streambed seepage and tell me how much the river exchanges with the groundwater"
+  - "a contaminant entered the groundwater along this creek, model the river-coupled plume"
+  - "show me where the river leaks into the aquifer versus where it draws baseflow out"
+  - "run a river<->aquifer exchange model for this stream and the tce release along it"
+  - "how much does this river seep into the ground here, give me gaining and losing flux"
+  - "drape a riv boundary on this reach and model the along-river contaminant seepage"
+  - "model groundwater seepage from this river including the solute that enters with it"
+run_modflow_job:
+  - "run a modflow groundwater plume sim with these exact spill parameters: point, contaminant, release rate, duration"
+  - "i already have the forcing numbers, simulate the contaminant transport in the aquifer"
+  - "model how far a benzene spill at this lat lon spreads given 0.01 kg/s for 30 days"
+  - "run mf6 gwt transport for this point spill and give me the peak concentration and plume area"
+  - "simulate a conservative tracer plume in the groundwater from this release with k and porosity i specify"
+  - "build a groundwater contamination plume directly from these spill forcing fields, no news article"
+  - "estimate the aquifer plume extent for a chemical spill with explicit release rate and duration"
+  - "do a modflow transport solve for this contaminant point source at this coordinate"
+run_pelicun_with_buildings:
+  - "estimate building-level flood damage over this area using the flood depth layer we just made"
+  - "show me which buildings are damaged across the flood zone, not an administrative aggregate"
+  - "run a spatially-distributed pelicun damage assessment on the building density grid for this bbox"
+  - "pair the flood depth raster with building footprints and give me damage states and repair costs"
+  - "compute hazus flood damage per building cell over this international bbox where nsi is unavailable"
+  - "map the damage choropleth following the real built-area grid for the flood we just ran"
+  - "assess structure damage and loss ratios over the buildings in this flooded extent"
+  - "give me ds_mean and repair cost per cell for the buildings under this flood depth layer"
+run_river_seepage_job:
+  - "model how this river leaks into the aquifer along the reach in this AOI"
+  - "is this stretch of the stream gaining or losing groundwater"
+  - "simulate a TCE spill discharged into the creek that seeps into the aquifer"
+  - "run a MODFLOW river-coupled groundwater seepage scenario for this flowline"
+  - "how much baseflow does the river exchange with the aquifer here, gaining vs losing"
+  - "map the contaminant that enters the groundwater along the river where it leaks in"
+  - "drape this NLDI river polyline onto the groundwater grid and solve the streambed seepage"
+  - "show the river-bed leakage and the solute plume that travels in with the seepage"
+run_seismic_hazard_psha:
+  - "give me a probabilistic seismic hazard map for this AOI"
+  - "what peak ground acceleration has a 10% chance of exceedance in 50 years here"
+  - "run a PSHA over this bbox with the Boore-Atkinson GMPE"
+  - "map the 475-year return-period earthquake ground motion for this region"
+  - "compute the PGA hazard input for a Pelicun building damage assessment"
+  - "generate a spectral acceleration SA(1.0) hazard map over this area"
+  - "how strong is the ground shaking with 2% probability of exceedance over this city"
+  - "run the OpenQuake classical hazard with a Gutenberg-Richter area source for this footprint"
+run_swmm_urban_flood:
+  - "model street-level pluvial flooding from a 100-year design storm over this neighborhood"
+  - "run a SWMM urban stormwater flood around the buildings in this city block"
+  - "how deep will the water get in the streets during a 6-hour cloudburst here"
+  - "simulate drainage flooding with a sound barrier wall and green flap gates on this AOI"
+  - "model overland flow routing around building obstructions like a PCSWMM scenario"
+  - "run a quasi-2D urban flood with an Atlas-14 nested hyetograph over this bbox"
+  - "animate the rising water depth on the streets timestep by timestep for this storm"
+  - "show where stormwater ponds against the flood wall in this downtown block"
+  - "how much TSS and bacteria washes off the streets to the storm outfall in this storm"
+  - "model E.coli buildup and washoff from a 2-inch storm over this residential catchment"
+  - "what is the outfall pollutograph and cumulative sediment load for this urban storm"
+  - "estimate the first-flush pollutant load to the drain from this neighborhood cloudburst"
+  - "simulate stormwater suspended-solids and nutrient washoff to the outfall on this block"
+  - "how many organisms of fecal coliform reach the outfall after N dry days of buildup here"
+summarize_layer_statistics:
+  - "what's the range of flood depths in this layer, min max and mean"
+  - "give me summary statistics for this raster layer"
+  - "how many features are in this vector dataset"
+  - "show me a histogram of the values in this population layer"
+  - "what are the min, max, mean and sum for this DEM layer I just loaded"
+  - "summarize the numeric attributes of this building footprint layer"
+  - "what's the average and peak value across this hazard raster"
+  - "break down the distribution of this layer into bins so I can see the spread"
+
+# --- tool-retrieval STEP 7 follow-up: the 4 tools that register ONLY via the
+# full startup path (catalog + qgis_discovery), missed by the plain-import gap
+# scan. catalog_* restored verbatim; the qgis discovery pair newly written. ---
+catalog_search:
+  - "what public hazard datasets are available for flood risk?"
+  - "find a curated data source for wildfire risk mapping"
+  - "search the catalog for FEMA or USGS flood data"
+  - "what vetted sources do you have for sea-level rise inundation?"
+  - "find publicly available datasets for wind hazard analysis"
+  - "what hazard catalog entries cover earthquake shaking?"
+catalog_fetch:
+  - "fetch that USFS Wildfire Hazard Potential dataset from the catalog"
+  - "download the FEMA National Risk Index layer I found in the catalog"
+  - "pull the NOAA Sea Level Rise Viewer entry we discovered"
+  - "retrieve the USGS National Seismic Hazard Map from the catalog"
+  - "get the NOAA SLOSH storm surge layer I found in the catalog search"
+list_qgis_algorithms:
+  - "what QGIS processing algorithms are available on the worker"
+  - "list the geoprocessing algorithms I can run on this data"
+  - "show me the available qgis processing tools for vector analysis"
+  - "what raster processing algorithms does the toolbox have"
+  - "enumerate the qgis algorithms so I can pick one to run"
+  - "which native qgis processing operations are installed"
+describe_qgis_algorithm:
+  - "describe the parameters of this qgis processing algorithm"
+  - "what inputs and outputs does this native qgis algorithm take"
+  - "show me the signature for this qgis processing algorithm"
+  - "explain the arguments for the zonal statistics processing algorithm"
+  - "what options does this qgis processing tool accept"
+  - "give me the input schema for this qgis algorithm before I run it"
+
+list_run_frames:
+  - "list the per-step flood depth frames for this run so I can animate them"
+  - "give me the ordered frame URIs for the lightning sequence from that solve"
+  - "I want to run a glow effect over every GLM flash frame in this run"
+  - "get all the animation-frame COGs for the flood depth layer of this simulation"
+  - "what are the time-step frame URIs for this run? I want a first/peak/last panel"
+  - "pull the ordered frames of the wave field so the sandbox can process each one"
+  - "enumerate the frame layers from this run's manifest for a temporal max"
+
+# --- a+b+c batch (2026-06-27): 7 new tools ---
+digitize_water_body:
+  - "outline / digitize the boundary of a lake or reservoir"
+  - "vectorize this water body into polygons"
+  - "where is the open surface water in this area"
+  - "map the extent of a pond / lake / reservoir from satellite imagery"
+  - "NDWI water mask for an AOI"
+  - "show me the shoreline of this reservoir as a vector layer"
+  - "detect surface water from Sentinel-2 for a bounding box"
+  - "how big is this lake / what is its surface area"
+fetch_usgs_earthquakes:
+  - "show me the earthquakes in California this month"
+  - "map recent quakes near Anchorage with their magnitude and depth"
+  - "where did earthquakes happen in the last 30 days in this bbox"
+  - "give me magnitude 5 and above earthquakes worldwide over the past year"
+  - "did anything shake near Ridgecrest last week, plot the epicenters"
+  - "plot the USGS recorded seismic events with marker sized by magnitude"
+  - "list the felt earthquakes above M4 in southern California recently"
+  - "show observed earthquake epicenters and depths around the San Andreas fault"
+fetch_hifld_critical_infrastructure:
+  - "where are the hospitals near this city"
+  - "show me fire stations in this area"
+  - "find public schools inside the flood zone"
+  - "police stations critical infrastructure map"
+  - "what hospitals are in the surge footprint"
+  - "HIFLD critical infrastructure points by type"
+  - "power plants near my area of interest"
+  - "schools and fire stations for evacuation planning"
+fetch_cdc_svi:
+  - "CDC social vulnerability index for this area"
+  - "show SVI social vulnerability by census tract"
+  - "which neighborhoods are most socially vulnerable"
+  - "social vulnerability overlay for the flood zone"
+  - "CDC ATSDR SVI overall and theme scores"
+  - "map equity and environmental justice vulnerability"
+  - "rank census tracts by social vulnerability percentile"
+  - "most vulnerable population exposed to the hazard"
+fetch_sentinel2_truecolor:
+  - "recent satellite image of this area"
+  - "show me what this place looks like from space"
+  - "Sentinel-2 true color natural color imagery"
+  - "current satellite basemap for a bounding box"
+  - "before and after satellite view of a location"
+  - "cloud-free true color image global"
+  - "what does this area look like now aerial satellite"
+  - "Sentinel-2 visible RGB image for a bbox"
+compute_home_range_kde:
+  - "home range of this animal from its GPS tracks"
+  - "compute the 50% and 95% utilization distribution isopleths"
+  - "kernel density estimate KDE home range from telemetry fixes"
+  - "core use area for the tracked individual"
+  - "where does this animal spend most of its time"
+  - "draw the home range polygon from Movebank track points"
+  - "95% KDE range boundary for the tagged animal"
+  - "utilization distribution core area vs full range from movement data"
+compute_movement_trajectory:
+  - "compute movement metrics from animal tracking points"
+  - "speed turning angle and step length along a GPS track"
+  - "trajectory path length net displacement and straightness"
+  - "annotate a movebank track with per-segment movement statistics"
+  - "how fast and how far did the tracked animal move"
+  - "turn the telemetry fixes into a movement trajectory layer"
+  - "movement speed and bearing per segment from timestamped points"
+  - "straightness index of an animal migration path"
+
+# --- fetchers2 batch (2026-06-27): 8 keyless fetchers ---
+fetch_epa_frs_facilities:
+  - "show EPA regulated facilities near this area"
+  - "where are the TRI toxic release sites in this bbox"
+  - "find Superfund NPL sites near my area of interest"
+  - "which chemical facilities are inside the contamination plume"
+  - "EPA hazardous waste and air emission facilities map"
+  - "industrial dischargers in the Houston ship channel"
+  - "regulated facilities exposed to the groundwater plume"
+  - "brownfield and Superfund sites for the flood footprint"
+fetch_us_drought_monitor:
+  - "show me the US Drought Monitor map for this area"
+  - "how bad is the drought in Arizona right now"
+  - "give me current drought conditions and categories near here"
+  - "which areas are in severe or extreme drought"
+  - "drought intensity polygons D0 through D4 for the Southwest"
+  - "what was the drought severity here in August 2021"
+  - "map exceptional drought across the region for wildfire risk context"
+  - "show drought categories over my agricultural fields"
+fetch_overpass_pois:
+  - "show me the hospitals in this area"
+  - "where are the fire stations near this flood zone"
+  - "overlay schools and pharmacies on the map"
+  - "find places of worship that could serve as shelters"
+  - "fetch OSM points for amenity=fuel gas stations here"
+  - "which supermarkets are inside the inundation footprint"
+  - "show power substations in this bbox"
+  - "map all the fire hydrants in these blocks"
+fetch_census_acs:
+  - "median household income by census tract"
+  - "show poverty rate choropleth for this county"
+  - "demographics for environmental justice analysis"
+  - "median home value per tract"
+  - "percent of renter households by neighborhood"
+  - "households with no vehicle by census tract"
+  - "ACS census demographics for a bounding box"
+  - "median age population by tract"
+fetch_landsat_imagery:
+  - "show me a Landsat satellite image of this area"
+  - "what did this area look like decades ago / historical satellite imagery before-and-after change"
+  - "land surface temperature / urban heat island map for this city"
+  - "false-color infrared composite showing vegetation and water"
+  - "Landsat thermal imagery in degrees Celsius for a bbox"
+  - "natural-color 30 m satellite picture of an area"
+  - "compare this region across years using Landsat archive imagery"
+  - "color-infrared Landsat scene where healthy vegetation is bright red"
+fetch_noaa_sst:
+  - "sea surface temperature in the Gulf of Mexico"
+  - "how warm is the ocean water off Florida"
+  - "SST anomaly marine heatwave map"
+  - "coral bleaching heat stress sea temperature"
+  - "ocean surface temperature for hurricane fuel"
+  - "NOAA daily sea surface temperature for a bbox"
+  - "show me SST near the coast today"
+  - "water temperature anomaly versus normal"
+fetch_openfema_disasters:
+  - "which counties in Florida have had a federally declared disaster"
+  - "show me FEMA hurricane disaster declarations in Texas since 2017"
+  - "where have flood disasters been declared near here"
+  - "map of FEMA disaster declarations by county"
+  - "how many times has this county been declared a disaster area"
+  - "FEMA major disaster declarations DR EM for Louisiana"
+  - "historical hurricane declaration counties in the Gulf coast"
+  - "FEMA tornado disaster declarations by county in Oklahoma"
+fetch_esri_landcover_10m:
+  - "land cover land use map for a location outside the US"
+  - "what land cover is here forest crops urban built area global"
+  - "10m Esri Impact Observatory annual land cover for Africa Asia South America"
+  - "global land use classification raster for a bbox by year"
+  - "show me trees vs crops vs built-up area for this region"
+  - "non-US land cover layer like NLCD but worldwide"
+  - "Sentinel-2 derived 9-class land cover for a country"
+  - "annual land cover change comparison between two years"
+
+# --- batch3+4 (2026-06-27): 14 fetchers ---
+fetch_usgs_volcano_alerts:
+  - "current volcano alert levels"
+  - "which volcanoes are at watch or warning"
+  - "volcano aviation color code map"
+  - "is Kilauea erupting alert status"
+  - "show Alaska Aleutian volcanoes on alert"
+  - "Cascade Range volcano alert levels"
+  - "USGS volcano hazards current activity"
+  - "map volcanoes by alert level normal advisory watch warning"
+fetch_usgs_water_quality:
+  - "show me the nitrate water quality sample sites in this agricultural watershed"
+  - "where has arsenic been measured in the groundwater near here and what are the latest concentrations"
+  - "map the USGS water quality monitoring stations for lead in this bbox with their values"
+  - "i want the observed nitrate concentrations to compare against the modeled contamination plume"
+  - "pull the EPA water quality portal sites for specific conductance over this area"
+  - "plot dissolved oxygen sample sites and their latest readings for this river basin"
+  - "give me the real measured pH samples at monitoring locations in this county"
+  - "fetch observed water quality sample points for nitrate to ground truth the MODFLOW plume"
+fetch_usgs_groundwater_levels:
+  - "show me the USGS groundwater monitoring wells in the high plains aquifer in central kansas"
+  - "where are the observed groundwater wells near this farm and how deep is the water table"
+  - "plot the depth to water at the USGS monitoring wells in this bbox"
+  - "i need the real observed heads to compare against my MODFLOW modeled groundwater levels"
+  - "map the groundwater level monitoring wells in kansas with their latest water-level reading"
+  - "what is the groundwater elevation at the wells near this contamination plume"
+  - "give me the USGS NWIS groundwater levels (depth to water and water table elevation) for this area"
+  - "show the observed water-table monitoring wells in florida and their datums"
+fetch_snotel_snow:
+  - "show me the SNOTEL snow stations in the colorado rockies and their current snow water equivalent"
+  - "where are the snowpack gauges in the sierra nevada and how much SWE do they have"
+  - "map the snow water equivalent at the SNOTEL stations near lake tahoe"
+  - "current snow depth at the NRCS snow telemetry sites in the wasatch mountains"
+  - "plot the SNOTEL stations in this bbox with their latest swe in inches"
+  - "what is the observed snowpack at the automated snow stations in the cascades"
+  - "give me the snow water equivalent and snow depth at the SNOTEL gauges upstream of this basin"
+  - "list the active SNOTEL snow stations in alaska with their elevation and SWE"
+fetch_sentinel1_sar:
+  - "all-weather radar image that sees through clouds and at night"
+  - "Sentinel-1 SAR backscatter image for a bounding box"
+  - "flood extent mapping when the sky is cloudy or smoky"
+  - "radar imagery where flooded water reads as dark low backscatter"
+  - "VV / VH polarization C-band SAR for an area"
+  - "see the ground despite hurricane clouds or wildfire smoke"
+  - "SAR backscatter in decibels for a bbox"
+  - "before and after radar flood map of a location"
+fetch_modis_lst:
+  - "land surface temperature map for this city in degrees Celsius"
+  - "urban heat island surface temperature for a metro area"
+  - "MODIS 8-day LST thermal grid for a bbox"
+  - "how hot is the ground surface during this heat wave"
+  - "daytime vs nighttime land surface temperature comparison"
+  - "drought thermal stress surface temperature over a region"
+  - "surface skin temperature heat map (not air temperature)"
+  - "overnight heat retention land surface temperature for heat-risk"
+fetch_hifld_transmission_lines:
+  - "where are the electric power transmission lines near Houston"
+  - "show the high-voltage power grid in this area"
+  - "which transmission lines cross the flood footprint"
+  - "HIFLD electric transmission line network exposure"
+  - "what 345 kV power lines are at risk in this bbox"
+  - "map the bulk power transmission corridors for this region"
+  - "power grid lines and owners near the coast"
+  - "lifeline infrastructure transmission lines inside the hazard area"
+fetch_lehd_jobs:
+  - "how many jobs are inside this flood inundation footprint"
+  - "employment density by census tract for Houston"
+  - "where are the jobs at risk in this hazard area"
+  - "low wage jobs exposed to the contamination plume"
+  - "workplace employment choropleth for a metro area"
+  - "economic exposure of jobs to wildfire or flooding"
+  - "LEHD LODES workplace area characteristics by tract"
+  - "daytime working population by tract for recovery planning"
+fetch_nws_river_forecast:
+  - "NWS river forecast gauges and flood stage for a river near a city"
+  - "which river gauges are forecast to reach flood stage (minor moderate major) in this area"
+  - "AHPS NWPS river forecast points with observed and forecast stage in a bounding box"
+  - "flood warning river gauge flood category no_flood action minor moderate major"
+  - "show river flood forecast and flood thresholds for gauges along a flood-prone river"
+  - "current and forecast river stage and flood status for stream gauges in an area"
+  - "national water prediction service river gauge observed vs forecast crest"
+  - "river flooding forecast stage feet for gauges in this bbox"
+fetch_copernicus_dem:
+  - "global elevation model for the Alps"
+  - "DEM for a non-US area like the Andes or Himalaya"
+  - "Copernicus GLO-30 30m elevation for a bounding box"
+  - "terrain elevation outside the United States"
+  - "digital elevation model for a watershed in Europe"
+  - "ground surface heights for slope and hillshade over a foreign region"
+  - "30 meter global DEM raster for a mountain range"
+  - "elevation data where USGS 3DEP does not cover"
+fetch_chirps_precipitation:
+  - "CHIRPS rainfall precipitation for a region and month"
+  - "quasi-global monthly precipitation raster outside CONUS"
+  - "monsoon season rainfall totals in India / Africa / South Asia"
+  - "drought baseline precipitation for a data-sparse region"
+  - "daily rainfall mm for an event date in the tropics"
+  - "satellite-gauge blended precipitation grid for agriculture water balance"
+  - "antecedent rainfall context for a flood outside radar coverage"
+  - "5km gridded precipitation millimeters by bbox and date"
+fetch_ghsl_population:
+  - "how many people live in this area outside the US"
+  - "global gridded population raster for a non-US city"
+  - "GHSL GHS-POP residential population grid for a bbox"
+  - "population at risk inside a flood or wildfire footprint anywhere on Earth"
+  - "people per 100m cell for an international AOI"
+  - "JRC global human settlement population persons per cell"
+  - "exposure population density input for a non-US hazard footprint"
+  - "cross-check population against HRSL or WorldPop with a different methodology"
+fetch_jrc_global_surface_water:
+  - "where is water permanent versus seasonal"
+  - "long-term surface water occurrence frequency for this river"
+  - "where has water ever been the flood envelope baseline"
+  - "is this lake or reservoir shrinking or growing over the decades"
+  - "how many months per year is this wetland flooded"
+  - "JRC global surface water occurrence map"
+  - "permanent vs intermittent water bodies in this floodplain"
+  - "30 year Landsat water history for this area"
+fetch_soilgrids:
+  - "soil texture clay sand silt percent for a region"
+  - "global soil organic carbon and bulk density raster"
+  - "soil pH map outside the US for agriculture"
+  - "SoilGrids soil property at a depth for infiltration modeling"
+  - "what is the soil clay content here for hydrology"
+  - "global 250m soil substrate for a non-US area"
+  - "ISRIC soil properties for crop or infiltration analysis"
+  - "soil bulk density and organic carbon for a watershed"
+
+# --- batch5 (2026-06-27): 6 fetchers ---
+fetch_epa_ejscreen:
+  - "EPA EJScreen environmental justice indices by census block group"
+  - "which neighborhoods have the worst PM2.5 ozone or air quality burden"
+  - "environmental justice overlay cumulative pollution exposure choropleth"
+  - "block groups near Superfund NPL or RMP or TSDF facility proximity percentile"
+  - "traffic proximity lead paint pre-1960 housing diesel particulate by block group"
+  - "EJScreen demographic index percent minority low income map"
+  - "show environmental burden percentile for this city or county"
+  - "EJ index PM2.5 traffic wastewater discharger percentile block group"
+fetch_tsunami_events:
+  - "historical tsunamis near Japan"
+  - "show me past tsunami events in the Pacific"
+  - "where have tsunamis hit the coast"
+  - "biggest tsunamis in Chile by water height"
+  - "the 2011 Tohoku tsunami source and deaths"
+  - "tsunami run-up heights along the Indonesian coast"
+  - "tsunami history for the Mediterranean"
+  - "tidal wave events caused by earthquakes and volcanoes"
+fetch_climate_normals:
+  - "average annual temperature climate normal for a place"
+  - "normal yearly rainfall precipitation baseline near me"
+  - "30-year climate normals 1991-2020 stations"
+  - "what is climatologically normal temperature here"
+  - "climate baseline to compare a heat wave or drought against"
+  - "NOAA NCEI station climate normals annual temperature and precipitation"
+  - "long-term average temperature and precipitation by station in a bounding box"
+fetch_noaa_coops_currents:
+  - "tidal current speed and direction at San Francisco Bay right now"
+  - "NOAA CO-OPS tidal currents flood ebb at a tidal inlet"
+  - "what is the current at the Golden Gate / New York Harbor"
+  - "predicted slack flood ebb current timing for a coastal channel"
+  - "tide gauge current stations speed in knots near a harbor"
+  - "ocean current flow direction at a US tidal inlet for navigation"
+  - "ebb and flood current vectors for spill drift at an estuary"
+fetch_airnow_air_quality:
+  - "what is the current air quality near the wildfire"
+  - "show PM2.5 AQI monitors around Los Angeles"
+  - "current ozone and particulate air quality observations in a bbox"
+  - "EPA AirNow air quality index points for smoke exposure"
+  - "which air quality monitors are affected by the smoke plume"
+  - "show me current AQI category at EPA monitors near this fire"
+  - "real-time PM10 PM2.5 ozone NO2 SO2 readings for a region"
+  - "air quality monitoring stations and their AQI in this area"
+fetch_openaq_measurements:
+  - "air quality measurements in a city"
+  - "what is the PM2.5 in Delhi right now"
+  - "global air pollution monitoring stations NO2 O3 SO2"
+  - "show ground-station air quality near London"
+  - "current pollutant concentrations around a wildfire smoke plume"
+  - "PM10 and ozone observations outside the US"
+  - "OpenAQ air quality sensor readings for a bbox"
+  - "carbon monoxide and nitrogen dioxide monitoring near a region"
+compute_sediment_yield:
+  - "map annual soil loss over this watershed"
+  - "RUSLE erosion model for these fields"
+  - "where is soil erosion worst in this area"
+  - "sediment yield map upstream of the reservoir"
+  - "soil loss in tons per hectare per year for this AOI"
+  - "erosion risk after this land use change"
+  - "which slopes are eroding the fastest here"
+  - "estimate hillslope erosion from rainfall soil and land cover"
+delineate_watershed:
+  - "delineate the watershed above this point"
+  - "what area drains to this gauge / outfall"
+  - "catchment boundary for this stream crossing"
+  - "drainage basin polygon upstream of my pour point"
+  - "show the contributing area for this dam site"
+  - "watershed boundary from the DEM at this location"
+  - "how big is the basin that drains to here"
+extract_stream_network:
+  - "extract the stream network from the DEM"
+  - "where are the drainage lines / channels in this area"
+  - "trace the streams for this bounding box"
+  - "DEM-derived river network with a flow accumulation threshold"
+  - "show headwater channels not on the NHD map"
+  - "map the natural drainage paths across this terrain"
+  - "flow accumulation stream lines for this AOI"
+
+# ---------------------------------------------------------------------------
+# Backfill (2026-07-07): registered tools that were missing corpus entries
+# (test_every_registered_tool_has_corpus_queries was red). 5+ routing
+# queries each so retrieve_visible_tools can recall them.
+# ---------------------------------------------------------------------------
+
+export_case_to_qgis:
+  - "export this case to QGIS"
+  - "download these layers as a QGIS project"
+  - "give me a geopackage of the case layers"
+  - "open these results in QGIS on my desktop"
+  - "export the map layers for offline GIS work"
+  - "save everything as a qgz project file"
+
+fetch_fault_sources:
+  - "show active fault traces near this area"
+  - "GEM global active faults for California"
+  - "fault lines with slip rates around the basin"
+  - "which mapped faults could drive the seismic hazard here"
+  - "fault source inputs for a PSHA run"
+  - "known earthquake faults crossing this AOI"
+
+model_debris_flow:
+  - "post-fire debris flow hazard for this burn scar"
+  - "which drainages could produce debris flows after the fire"
+  - "debris flow likelihood and volume for these basins"
+  - "USGS style emergency debris-flow assessment"
+  - "mudslide risk in the burned watershed after a storm"
+  - "rank stream segments by post-fire debris flow hazard"
+
+run_model_sustainable_yield_scenario:
+  - "how much can this well field pump sustainably"
+  - "drawdown after ten years of pumping"
+  - "sustainable yield of the aquifer here"
+  - "groundwater level decline from a proposed well"
+  - "MODFLOW pumping drawdown scenario for this site"
+
+run_model_mine_dewatering_scenario:
+  - "how much inflow to dewater the open pit"
+  - "mine dewatering drawdown cone extent"
+  - "pit dewatering pumping requirement estimate"
+  - "how far does the dewatering cone of depression reach"
+  - "groundwater inflow to a proposed quarry pit"
+
+run_model_regional_water_budget_scenario:
+  - "water budget for this aquifer"
+  - "zonal groundwater budget for the region"
+  - "where does the recharge go in this basin"
+  - "inflows and outflows of the regional aquifer"
+  - "groundwater balance partition for this area"
+
+run_model_mar_scenario:
+  - "managed aquifer recharge mounding under the spreading basin"
+  - "how high does the water table mound below the infiltration basin"
+  - "MAR recharge basin scenario"
+  - "artificial recharge groundwater mound extent"
+  - "simulate a managed recharge project here"
+
+run_model_asr_scenario:
+  - "aquifer storage and recovery cycle simulation"
+  - "how much injected water can we recover from the ASR well"
+  - "ASR injection storage recovery scenario"
+  - "store treated water in the aquifer and recover it later"
+  - "recovery efficiency of an ASR scheme at this site"
+
+run_model_wetland_hydroperiod_scenario:
+  - "wetland hydroperiod under groundwater pumping"
+  - "how long does the wetland stay wet each year"
+  - "water table at the marsh through the seasons"
+  - "will pumping dry out this wetland"
+  - "wetland inundation duration simulation"
+
+run_model_multi_species_scenario:
+  - "simulate multiple contaminants at once"
+  - "multi species plume transport from one source"
+  - "PCE and TCE plumes from the same spill"
+  - "several solutes in one groundwater flow model"
+  - "compare plumes for two chemicals released together"
+
+run_model_capture_zone_scenario:
+  - "capture zone of this supply well"
+  - "where does the well draw its water from"
+  - "backward particle tracking to the wellhead"
+  - "delineate the capture area for the pumping well"
+  - "time of travel capture zone polygon"
+
+run_model_wellhead_protection_scenario:
+  - "wellhead protection area for this well"
+  - "WHPA delineation around the drinking water well"
+  - "source water protection zone map"
+  - "five year time of travel wellhead zone"
+  - "protection area around the municipal supply well"
+
+run_model_saltwater_intrusion_scenario:
+  - "saltwater intrusion under coastal pumping"
+  - "how far inland does the salt wedge move"
+  - "sea level rise saltwater wedge simulation"
+  - "coastal aquifer salinity intrusion scenario"
+  - "will the supply well turn salty if we keep pumping"
+
+# ---------------------------------------------------------------------------
+# Quick-win batch (2026-07-07)
+# ---------------------------------------------------------------------------
+
+compute_change_detection:
+  - "what changed here between 2020 and 2024"
+  - "detect deforestation in this area from satellite imagery"
+  - "before and after vegetation change map for this bbox"
+  - "compare NDVI between last summer and this summer"
+  - "where did the reservoir shrink between these two dates"
+  - "map vegetation loss since the fire using two-date imagery"
+  - "change detection polygons for land clearing near the highway"
+  - "show gain and loss areas between two Sentinel-2 dates"
+
+compute_idf_curve:
+  - "show me the IDF curve for Houston"
+  - "rainfall intensity duration frequency chart for this location"
+  - "plot design storm intensities for all return periods here"
+  - "precipitation frequency curves at this point"
+  - "IDF chart from NOAA Atlas 14 for the project site"
+  - "depth duration frequency table as a chart for Miami"
+  - "what do the 2 through 1000 year rainfall curves look like here"
+
+compute_flood_depth_damage:
+  - "how much building damage does this flood cause"
+  - "estimate dollar losses from the flood depth layer"
+  - "which structures are damaged by the inundation and how badly"
+  - "quick depth damage screening for the simulated flood"
+  - "apply a HAZUS depth damage curve to the buildings here"
+  - "total estimated flood damage in dollars for this scenario"
+  - "rank buildings by flood damage fraction from this depth raster"
+
+compute_urban_heat_island:
+  - "how strong is the urban heat island in this city"
+  - "how much hotter is downtown than the parks"
+  - "surface temperature by land cover class for this metro"
+  - "urban heat island delta between built up areas and vegetation"
+  - "night time heat retention in the city versus the countryside"
+  - "which land cover classes are hottest here"
+  - "heat island analysis from MODIS LST and landcover"
+
+compute_model_residuals:
+  - "how well does the simulated head match the observed wells"
+  - "compare modeled groundwater head to observed monitoring wells"
+  - "compute residuals between the MODFLOW head raster and real measurements"
+  - "is the model biased high or low compared to observations"
+  - "calibrate this head layer against USGS groundwater levels"
+  - "observed versus modeled residual map for the plume concentration raster"
+  - "RMSE and mean error of the simulated head against the wells"
+  - "check model fit against real measurements at these points"
+run_telemac:
+  # NATE 2026-07-20 live mis-route fix: the bare "dye plume travels downstream"
+  # family MUST land here (surface-water transport), not river_seepage
+  # (groundwater exchange). Front-loaded exact phrasings + variants.
+  - "simulate how a dye plume travels downstream over the next few hours"
+  - "simulate how a dye plume travels downstream in the river"
+  - "how far does the dye travel downstream in the river"
+  - "how far does the contaminant travel down the river in the surface water"
+  - "model a spill moving down the river and how far the plume travels"
+  - "a dye plume moving downstream through the river channel with the current"
+  - "watch a dye plume travel downstream and dilute as it moves down the river"
+  - "a tanker truck overturned and spilled chemicals into the river, show how the contamination travels downstream"
+  - "simulate a contaminant spill in the river and animate it flowing downstream through the channel"
+  - "model a pollutant released into the surface water of the river and track it moving downstream with the current"
+  - "someone dumped a chemical into the river, how far downstream does the plume travel"
+  - "run a surface-water dye tracer released into the river and follow it down the channel"
+  - "an oil spill on the river, show the slick drifting downstream over the next few hours"
+  - "model how a spill in the river washes downstream and dilutes as it goes"
+  - "simulate contaminant transport down the river channel from a spill released at this point"
+  - "a factory discharged a pollutant into the stream, animate it flowing downriver with the flow"
+  - "show a dye release in the river moving downstream and following the channel bends"
+  - "river spill: how does the contaminant plume advect down the river in the surface water"
+  - "chemical released into the river upstream, where does it go and how fast does it move down the reach"
+  - an oil spill from a barge on the river, where does the oil go downstream
+  - simulate an oil spill in the Columbia River and how it moves downstream
+  - diesel spilled into the river, track the plume in the water
+  - a fuel spill in the river near the city, model the transport downstream
+  - sewage released into the river, how far downstream does it travel
+
+# ---------------------------------------------------------------------------
+# Authoring template (docs/authoring/writing-a-tool.md). example_bbox_area is
+# the COPY-ME example tool; it registers ONLY when TRID3NT_ENABLE_EXAMPLE_TOOL is
+# set. These queries demonstrate the mandatory tool-corpus + retrieval-visibility
+# rule for a new tool -- they route this example's synonyms to it in the BM25 +
+# dense discover index so retrieve_visible_tools(prompt, None, 8) surfaces it.
+# ---------------------------------------------------------------------------
+example_bbox_area:
+  - "roughly how many square kilometres does this bounding box cover"
+  - "estimate the ground area of this bbox in square km"
+  - "what is the approximate area of this box on the map"
+  - "how large is this area of interest in square kilometers"
+  - "compute the width height and area of this bounding box"
+  - "give me a quick area sanity check for this rectangle extent"

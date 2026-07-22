@@ -22,11 +22,11 @@ import asyncio
 
 import pytest
 
-from grace2_agent.tool_arg_normalizer import normalize_args
-from grace2_agent.tools import TOOL_REGISTRY
+from trid3nt_server.tool_arg_normalizer import normalize_args
+from trid3nt_server.tools import TOOL_REGISTRY
 
 # Import the workflow module so it registers.
-import grace2_agent.workflows.model_flood_scenario  # noqa: F401
+import trid3nt_server.workflows.model_flood_scenario  # noqa: F401
 
 
 def _invoke_via_normalizer(tool_name: str, raw: dict) -> object:

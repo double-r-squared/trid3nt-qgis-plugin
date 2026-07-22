@@ -26,8 +26,8 @@ from unittest.mock import patch
 import geopandas as gpd
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_airnow_air_quality import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_airnow_air_quality import (
     AQI_CATEGORY_NAMES,
     PRESERVED_PROPERTIES,
     VALID_PARAMETERS,
@@ -138,7 +138,7 @@ def test_tool_is_registered():
 
 
 def test_metadata_invariants():
-    from grace2_agent.tools.fetch_airnow_air_quality import _METADATA
+    from trid3nt_server.tools.fetch_airnow_air_quality import _METADATA
 
     assert _METADATA.name == "fetch_airnow_air_quality"
     assert _METADATA.ttl_class == "dynamic-1h"
@@ -177,7 +177,7 @@ def test_auth_error_not_retryable():
 def test_missing_key_error_is_credential_shaped():
     """The generic credential pipeline must recognise the missing-key error
     by suffix (no per-provider registry entry required)."""
-    from grace2_agent import credential_registry as cr
+    from trid3nt_server import credential_registry as cr
 
     assert cr.is_credential_shaped_error(
         "fetch_airnow_air_quality", AirNowMissingKeyError("x")
@@ -310,7 +310,7 @@ def test_all_aqi_categories_have_names():
 
 
 def test_resolve_api_key_explicit_kwarg_wins(monkeypatch):
-    monkeypatch.setenv("GRACE2_AIRNOW_API_KEY", "ENVKEY")
+    monkeypatch.setenv("TRID3NT_AIRNOW_API_KEY", "ENVKEY")
     assert _resolve_api_key("KWARGKEY", None) == "KWARGKEY"
 
 
@@ -319,19 +319,19 @@ def test_resolve_api_key_secret_ref_str_shortcut():
 
 
 def test_resolve_api_key_env_fallback(monkeypatch):
-    monkeypatch.delenv("GRACE2_AIRNOW_API_KEY", raising=False)
-    monkeypatch.setenv("GRACE2_AIRNOW_API_KEY", "ENVKEY")
+    monkeypatch.delenv("TRID3NT_AIRNOW_API_KEY", raising=False)
+    monkeypatch.setenv("TRID3NT_AIRNOW_API_KEY", "ENVKEY")
     assert _resolve_api_key(None, None) == "ENVKEY"
 
 
 def test_resolve_api_key_no_path_raises_missing_key(monkeypatch):
-    monkeypatch.delenv("GRACE2_AIRNOW_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_AIRNOW_API_KEY", raising=False)
     with pytest.raises(AirNowMissingKeyError):
         _resolve_api_key(None, None)
 
 
 def test_resolve_api_key_via_persistence_secret_ref(monkeypatch):
-    monkeypatch.delenv("GRACE2_AIRNOW_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_AIRNOW_API_KEY", raising=False)
 
     class FakePersistence:
         async def get_secret_value(self, ref: Any) -> str:
@@ -349,7 +349,7 @@ def test_resolve_api_key_via_persistence_secret_ref(monkeypatch):
 
 
 def test_resolve_api_key_persistence_failure_raises_missing_key(monkeypatch):
-    monkeypatch.delenv("GRACE2_AIRNOW_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_AIRNOW_API_KEY", raising=False)
 
     class BoomPersistence:
         async def get_secret_value(self, ref: Any) -> str:
@@ -373,7 +373,7 @@ def test_resolve_api_key_persistence_failure_raises_missing_key(monkeypatch):
 
 
 def test_no_key_raises_missing_key_pre_network(monkeypatch):
-    monkeypatch.delenv("GRACE2_AIRNOW_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_AIRNOW_API_KEY", raising=False)
     # No httpx patch -> if it tried the network the test would still pass via
     # the pre-network raise; the point is it NEVER fabricates a layer.
     with pytest.raises(AirNowMissingKeyError):
@@ -577,7 +577,7 @@ def test_end_to_end_success_returns_layer_uri(monkeypatch):
     failure), so this works without AWS creds: it returns the fresh bytes +
     an s3:// uri either way.
     """
-    monkeypatch.setenv("GRACE2_AIRNOW_API_KEY", "TESTKEY")
+    monkeypatch.setenv("TRID3NT_AIRNOW_API_KEY", "TESTKEY")
     payload = [
         _obs(34.10, -118.20, "2026-06-27T23:00", "PM25", aqi=64),
         _obs(34.05, -118.45, "2026-06-27T23:00", "OZONE", aqi=37, category=1),
@@ -595,7 +595,7 @@ def test_end_to_end_success_returns_layer_uri(monkeypatch):
 
 
 def test_end_to_end_auth_failure_surfaces_credential_error(monkeypatch):
-    monkeypatch.setenv("GRACE2_AIRNOW_API_KEY", "BADKEY")
+    monkeypatch.setenv("TRID3NT_AIRNOW_API_KEY", "BADKEY")
     resp = _FakeHTTPResponse(
         401,
         text='{"WebServiceError":[{"Message":"Request not authenticated."}]}',

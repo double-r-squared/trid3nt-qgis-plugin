@@ -36,7 +36,7 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from grace2_contracts.elmfire_contracts import (
+from trid3nt_contracts.elmfire_contracts import (
     ELMFIRE_TOA_STYLE_PRESET,
     FUEL_MOISTURE_PRESETS,
     ElmfireRunArgs,
@@ -119,7 +119,7 @@ def test_fire_layer_uri_round_trip():
 # (2) Deck-spec assembly.
 # ===========================================================================
 def test_build_elmfire_deck_spec_maps_args():
-    from grace2_agent.workflows.run_elmfire import build_elmfire_deck_spec
+    from trid3nt_server.workflows.run_elmfire import build_elmfire_deck_spec
 
     args = ElmfireRunArgs(
         bbox=_AOI,
@@ -154,11 +154,11 @@ def test_build_elmfire_deck_spec_maps_args():
 # (3) Solver registration + local docker spec.
 # ===========================================================================
 def test_elmfire_registered_in_solver_registries():
-    from grace2_agent.tools.solver import (
+    from trid3nt_server.tools.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )
-    from grace2_agent.workflows.run_elmfire import (
+    from trid3nt_server.workflows.run_elmfire import (
         ELMFIRE_SOLVER_NAME,
         register_elmfire_local_spec,
         register_elmfire_solver,
@@ -171,11 +171,11 @@ def test_elmfire_registered_in_solver_registries():
 
 
 def test_elmfire_local_spec_docker_argv(monkeypatch, tmp_path):
-    from grace2_agent.workflows.run_elmfire import elmfire_local_spec
+    from trid3nt_server.workflows.run_elmfire import elmfire_local_spec
 
-    monkeypatch.setenv("GRACE2_ELMFIRE_CPUS", "3")
+    monkeypatch.setenv("TRID3NT_ELMFIRE_CPUS", "3")
     monkeypatch.setenv(
-        "GRACE2_ELMFIRE_DOCKER_HOST", "unix:///run/user/1000/docker.sock"
+        "TRID3NT_ELMFIRE_DOCKER_HOST", "unix:///run/user/1000/docker.sock"
     )
     spec = elmfire_local_spec()
     assert spec.solver == "elmfire"
@@ -199,8 +199,8 @@ def test_elmfire_local_spec_docker_argv(monkeypatch, tmp_path):
 
 def test_batch_job_def_seam_constant():
     # FIRE-4 seam: the job-def NAME constant exists; nothing seeds the Batch
-    # registry (the lane stays inert until GRACE2_AWS_BATCH_JOB_DEF_ELMFIRE).
-    from grace2_agent.workflows.run_elmfire import ELMFIRE_BATCH_JOB_DEF_NAME
+    # registry (the lane stays inert until TRID3NT_AWS_BATCH_JOB_DEF_ELMFIRE).
+    from trid3nt_server.workflows.run_elmfire import ELMFIRE_BATCH_JOB_DEF_NAME
 
     assert ELMFIRE_BATCH_JOB_DEF_NAME == "grace2-elmfire"
 
@@ -215,7 +215,7 @@ def test_tool_typed_error_on_missing_bbox():
     test env - any non-params error proves validation passed)."""
     import asyncio
 
-    from grace2_agent.tools.model_fire_spread import model_fire_spread
+    from trid3nt_server.tools.model_fire_spread import model_fire_spread
 
     out = asyncio.run(
         model_fire_spread(
@@ -233,7 +233,7 @@ def test_tool_typed_error_on_missing_bbox():
 
 
 def test_tool_typed_error_on_missing_ignition():
-    from grace2_agent.tools.model_fire_spread import model_fire_spread
+    from trid3nt_server.tools.model_fire_spread import model_fire_spread
 
     out = asyncio.run(model_fire_spread(bbox=list(_AOI), ignition_lonlat=None))
     assert out["status"] == "error"
@@ -248,7 +248,7 @@ def test_tool_typed_error_on_missing_ignition():
 
 
 def test_tool_typed_error_on_bad_preset():
-    from grace2_agent.tools.model_fire_spread import model_fire_spread
+    from trid3nt_server.tools.model_fire_spread import model_fire_spread
 
     out = asyncio.run(
         model_fire_spread(
@@ -319,7 +319,7 @@ def test_read_fire_raster_stamps_missing_crs(tmp_path: Path):
     """The CRS stamp: a CRS-less BIL read carries the deck EPSG (the in-code
     equivalent of FIRE-1's gdal_translate -a_srs); a CRS-carrying file keeps
     its own CRS (never silently overridden)."""
-    from grace2_agent.workflows.postprocess_elmfire import read_fire_raster
+    from trid3nt_server.workflows.postprocess_elmfire import read_fire_raster
 
     bare = _write_bil(tmp_path / "time_of_arrival_1.bil", _toa_array())
     arr, _t, crs, cellsize = read_fire_raster(bare, epsg=5070)
@@ -336,7 +336,7 @@ def test_read_fire_raster_stamps_missing_crs(tmp_path: Path):
 
 
 def test_toa_frame_grids_threshold_per_hour():
-    from grace2_agent.workflows.postprocess_elmfire import toa_frame_grids
+    from trid3nt_server.workflows.postprocess_elmfire import toa_frame_grids
 
     duration_s = 6 * 3600.0
     toa = _toa_array(duration_s)
@@ -360,7 +360,7 @@ def test_postprocess_elmfire_end_to_end_shape(tmp_path: Path):
     """Synthetic ToA + flame-length + spread-rate BILs -> the (layers, metrics)
     shape: primary ToA COG + contiguous 'Burned area step N' frames + aux COGs
     with the ft->m conversions applied exactly once."""
-    from grace2_agent.workflows import postprocess_elmfire as pe
+    from trid3nt_server.workflows import postprocess_elmfire as pe
 
     out = tmp_path / "outputs"
     out.mkdir()
@@ -426,7 +426,7 @@ def test_postprocess_elmfire_end_to_end_shape(tmp_path: Path):
 
 
 def test_postprocess_elmfire_empty_output_raises(tmp_path: Path):
-    from grace2_agent.workflows.postprocess_elmfire import (
+    from trid3nt_server.workflows.postprocess_elmfire import (
         PostprocessElmfireError,
         postprocess_elmfire,
     )
@@ -441,7 +441,7 @@ def test_postprocess_elmfire_empty_output_raises(tmp_path: Path):
 def test_postprocess_elmfire_zero_spread_is_typed(tmp_path: Path):
     """All-nodata ToA (nothing burned) -> the typed ELMFIRE_NO_SPREAD result,
     never a blank 'modeled ok' with empty layers (honesty floor)."""
-    from grace2_agent.workflows.postprocess_elmfire import (
+    from trid3nt_server.workflows.postprocess_elmfire import (
         PostprocessElmfireError,
         postprocess_elmfire,
     )
@@ -525,13 +525,13 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
     """Fetches mocked (synthetic rasters), docker/solver mocked, synthetic
     solver outputs -> REAL deck build + REAL postprocess -> the primary
     FireSpreadLayerURI + frames + aux COGs as LayerURIs. No AWS, no docker."""
-    from grace2_agent.tools import solver as solver_mod
-    from grace2_agent.workflows import model_fire_spread_scenario as comp
-    from grace2_agent.workflows import postprocess_elmfire as pe
-    from grace2_agent.workflows.run_elmfire import load_deck_builder
+    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.workflows import model_fire_spread_scenario as comp
+    from trid3nt_server.workflows import postprocess_elmfire as pe
+    from trid3nt_server.workflows.run_elmfire import load_deck_builder
 
     # Local backend so staging stays on the filesystem (file:// manifest).
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
 
     src_dir = tmp_path / "srcs"
     src_dir.mkdir()
@@ -669,13 +669,13 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
 # (7) Confirm gate: the tool is gated + the card carries cells + runtime.
 # ===========================================================================
 def test_model_fire_spread_in_solver_confirm_tools():
-    from grace2_agent.server import SOLVER_CONFIRM_TOOLS
+    from trid3nt_server.server import SOLVER_CONFIRM_TOOLS
 
     assert "model_fire_spread" in SOLVER_CONFIRM_TOOLS
 
 
 def test_fire_confirm_envelope_carries_cells_and_runtime():
-    from grace2_agent.server import _build_fire_confirm_envelope
+    from trid3nt_server.server import _build_fire_confirm_envelope
 
     env = _build_fire_confirm_envelope(
         {
@@ -703,7 +703,7 @@ class TestArgShapeCoercion:
     coerce instead of failing the run."""
 
     def test_ignition_string_coerces(self):
-        from grace2_contracts.elmfire_contracts import ElmfireRunArgs
+        from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 
         args = ElmfireRunArgs(
             bbox=(-121.0, 38.9, -120.7, 39.1),
@@ -712,7 +712,7 @@ class TestArgShapeCoercion:
         assert args.ignition_lonlat == (-120.85, 39.02)
 
     def test_ignition_dict_coerces(self):
-        from grace2_contracts.elmfire_contracts import ElmfireRunArgs
+        from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 
         args = ElmfireRunArgs(
             bbox=(-121.0, 38.9, -120.7, 39.1),
@@ -721,7 +721,7 @@ class TestArgShapeCoercion:
         assert args.ignition_lonlat == (-120.85, 39.02)
 
     def test_point_bbox_derives_domain_from_ignition(self):
-        from grace2_contracts.elmfire_contracts import (
+        from trid3nt_contracts.elmfire_contracts import (
             DEFAULT_FIRE_DOMAIN_HALFWIDTH_DEG as D,
             ElmfireRunArgs,
         )
@@ -734,7 +734,7 @@ class TestArgShapeCoercion:
         )
 
     def test_missing_bbox_derives_domain(self):
-        from grace2_contracts.elmfire_contracts import ElmfireRunArgs
+        from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 
         args = ElmfireRunArgs(ignition_lonlat=(-120.85, 39.02))
         assert args.bbox is not None
@@ -742,7 +742,7 @@ class TestArgShapeCoercion:
         assert lo_lon < -120.85 < hi_lon and lo_lat < 39.02 < hi_lat
 
     def test_bbox_string_four_coerces(self):
-        from grace2_contracts.elmfire_contracts import ElmfireRunArgs
+        from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 
         args = ElmfireRunArgs(
             bbox="-121.0, 38.9, -120.7, 39.1",
@@ -753,7 +753,7 @@ class TestArgShapeCoercion:
     def test_garbage_ignition_still_fails_honestly(self):
         import pytest
         from pydantic import ValidationError
-        from grace2_contracts.elmfire_contracts import ElmfireRunArgs
+        from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 
         with pytest.raises(ValidationError):
             ElmfireRunArgs(
@@ -762,7 +762,7 @@ class TestArgShapeCoercion:
             )
 
     def test_lonlon_latlat_bbox_reorders(self):
-        from grace2_contracts.elmfire_contracts import ElmfireRunArgs
+        from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 
         args = ElmfireRunArgs(
             bbox="-121.0,-120.7,38.9,39.1", ignition_lonlat=(-120.85, 39.02)
@@ -770,7 +770,7 @@ class TestArgShapeCoercion:
         assert args.bbox == (-121.0, 38.9, -120.7, 39.1)
 
     def test_incoherent_bbox_derives_from_ignition(self):
-        from grace2_contracts.elmfire_contracts import ElmfireRunArgs
+        from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 
         args = ElmfireRunArgs(
             bbox=(999.0, 5.0, -3.0, 1.0), ignition_lonlat=(-120.85, 39.02)
@@ -779,7 +779,7 @@ class TestArgShapeCoercion:
         assert lo_lon < -120.85 < hi_lon and lo_lat < 39.02 < hi_lat
 
     def test_bracketed_bbox_string_coerces(self):
-        from grace2_contracts.elmfire_contracts import ElmfireRunArgs
+        from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 
         args = ElmfireRunArgs(
             bbox="[-121.0, 38.9, -120.7, 39.1]",
@@ -788,7 +788,7 @@ class TestArgShapeCoercion:
         assert args.bbox == (-121.0, 38.9, -120.7, 39.1)
 
     def test_latlon_point_pairs_derive(self):
-        from grace2_contracts.elmfire_contracts import ElmfireRunArgs
+        from trid3nt_contracts.elmfire_contracts import ElmfireRunArgs
 
         args = ElmfireRunArgs(
             bbox="39.02,-120.85,39.02,-120.85",
@@ -805,7 +805,7 @@ class TestArgShapeCoercion:
         test env) - the only forbidden outcomes are the params errors."""
         import asyncio
 
-        from grace2_agent.tools.model_fire_spread import model_fire_spread
+        from trid3nt_server.tools.model_fire_spread import model_fire_spread
 
         result = asyncio.run(
             model_fire_spread(

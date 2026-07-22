@@ -11,7 +11,7 @@ Usage:
       --out /tmp/mexbeach_inundation_first_peak_last.png
 
 Reads the per-frame flood_depth_frame_NN.tif + flood_depth_peak.tif COGs from
-s3://$GRACE2_RUNS_BUCKET/<run-id>/ (boto3 / vsis3, creds from the env).
+s3://$TRID3NT_RUNS_BUCKET/<run-id>/ (boto3 / vsis3, creds from the env).
 """
 from __future__ import annotations
 
@@ -84,9 +84,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--wet-depth", type=float, default=0.05)
     args = ap.parse_args(argv)
 
-    bucket = (os.environ.get("GRACE2_RUNS_BUCKET") or "").strip()
+    bucket = (os.environ.get("TRID3NT_RUNS_BUCKET") or "").strip()
     if not bucket:
-        print("GRACE2_RUNS_BUCKET must be set")
+        print("TRID3NT_RUNS_BUCKET must be set")
         return 2
 
     frame_uris = _list_frames(bucket, args.run_id)

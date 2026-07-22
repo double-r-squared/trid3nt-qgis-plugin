@@ -18,7 +18,7 @@ Unit (no network):
 - Cache miss invokes the inner fetcher once; cache hit skips it.
 - Honest-empty: an inner fetcher that raises ``GHSLPopEmptyError`` propagates.
 
-Live (env-guarded by GRACE2_TEST_LIVE_GHSL=1):
+Live (env-guarded by TRID3NT_TEST_LIVE_GHSL=1):
 - Lagos (Nigeria) bbox returns a CRS-tagged COG with population sum in a
   plausible range (~10^7 persons; matches the dev probe of ~12.5M);
   output bounds fall inside the requested bbox; CRS is EPSG:4326.
@@ -32,8 +32,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_ghsl_population import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_ghsl_population import (
     GHSLPopBboxRequiredError,
     GHSLPopEmptyError,
     GHSLPopInputError,
@@ -57,7 +57,7 @@ _LAGOS_BBOX = (3.10, 6.35, 3.70, 6.75)
 # A bbox far south over open ocean (south of coverage) for the empty path.
 _DEEP_SOUTH_OCEAN_BBOX = (0.0, -80.0, 5.0, -75.0)
 
-_LIVE_GHSL = os.environ.get("GRACE2_TEST_LIVE_GHSL") == "1"
+_LIVE_GHSL = os.environ.get("TRID3NT_TEST_LIVE_GHSL") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ def _fake_cog_bytes(tag: str = "TEST") -> bytes:
 
 
 def _make_read_through_injector(fake: _FakeStore):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -161,7 +161,7 @@ def test_deep_south_ocean_raises_empty_via_fetch():
 
     Calls ``_fetch_ghsl_pop_bytes`` directly to bypass the cache short-circuit.
     """
-    from grace2_agent.tools.fetch_ghsl_population import _fetch_ghsl_pop_bytes
+    from trid3nt_server.tools.fetch_ghsl_population import _fetch_ghsl_pop_bytes
 
     with pytest.raises(GHSLPopEmptyError):
         _fetch_ghsl_pop_bytes(bbox=_DEEP_SOUTH_OCEAN_BBOX)
@@ -258,10 +258,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return _fake_cog_bytes("MISS")
 
     with patch(
-        "grace2_agent.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
+        "trid3nt_server.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
         side_effect=fake_inner,
     ), patch(
-        "grace2_agent.tools.fetch_ghsl_population.read_through",
+        "trid3nt_server.tools.fetch_ghsl_population.read_through",
         side_effect=_make_read_through_injector(fake),
     ):
         result = fetch_ghsl_population(bbox=_LAGOS_BBOX)
@@ -281,10 +281,10 @@ def test_cache_hit_skips_fetch_fn():
         return _fake_cog_bytes("HIT")
 
     with patch(
-        "grace2_agent.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
+        "trid3nt_server.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
         side_effect=fake_inner,
     ), patch(
-        "grace2_agent.tools.fetch_ghsl_population.read_through",
+        "trid3nt_server.tools.fetch_ghsl_population.read_through",
         side_effect=_make_read_through_injector(fake),
     ):
         r1 = fetch_ghsl_population(bbox=_LAGOS_BBOX)
@@ -297,10 +297,10 @@ def test_cache_hit_skips_fetch_fn():
 def test_layer_uri_shape_has_persons_units_and_raster_role():
     fake = _FakeStore()
     with patch(
-        "grace2_agent.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
+        "trid3nt_server.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
         return_value=_fake_cog_bytes("SHAPE"),
     ), patch(
-        "grace2_agent.tools.fetch_ghsl_population.read_through",
+        "trid3nt_server.tools.fetch_ghsl_population.read_through",
         side_effect=_make_read_through_injector(fake),
     ):
         result = fetch_ghsl_population(bbox=_LAGOS_BBOX)
@@ -321,10 +321,10 @@ def test_empty_fetch_propagates():
         raise GHSLPopEmptyError("synthetic empty")
 
     with patch(
-        "grace2_agent.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
+        "trid3nt_server.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
         side_effect=boom,
     ), patch(
-        "grace2_agent.tools.fetch_ghsl_population.read_through",
+        "trid3nt_server.tools.fetch_ghsl_population.read_through",
         side_effect=_make_read_through_injector(fake),
     ):
         with pytest.raises(GHSLPopEmptyError):
@@ -345,7 +345,7 @@ def test_synthetic_single_tile_cog_roundtrip(tmp_path):
     rasterio = pytest.importorskip("rasterio")
     from rasterio.transform import from_bounds as transform_from_bounds
 
-    import grace2_agent.tools.fetch_ghsl_population as mod
+    import trid3nt_server.tools.fetch_ghsl_population as mod
 
     # Synthetic 10-deg tile matching the R9_C19 footprint (Lagos). Use enough
     # pixels that the small Lagos window (0.6x0.4 deg) covers multiple cells.
@@ -399,12 +399,12 @@ def test_synthetic_single_tile_cog_roundtrip(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_GHSL, reason="set GRACE2_TEST_LIVE_GHSL=1 to run")
+@pytest.mark.skipif(not _LIVE_GHSL, reason="set TRID3NT_TEST_LIVE_GHSL=1 to run")
 def test_live_lagos_population_sum_plausible():
     import numpy as np
     import rasterio
 
-    from grace2_agent.tools.fetch_ghsl_population import _fetch_ghsl_pop_bytes
+    from trid3nt_server.tools.fetch_ghsl_population import _fetch_ghsl_pop_bytes
 
     cog = _fetch_ghsl_pop_bytes(bbox=_round_bbox(_LAGOS_BBOX))
     import io

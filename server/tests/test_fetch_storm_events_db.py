@@ -15,7 +15,7 @@ Coverage (no network needed):
 - Cache hit: second call with same params skips fetch_fn.
 - _resolve_csv_url extracts highest-processed-date file from index HTML.
 
-Live tests (network-gated by GRACE2_TEST_LIVE_STORM=1):
+Live tests (network-gated by TRID3NT_TEST_LIVE_STORM=1):
 - Real fetch for year=2022, state='FL' returns >0 features.
 """
 
@@ -31,8 +31,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_storm_events_db import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_storm_events_db import (
     StormEventsArgError,
     StormEventsEmptyError,
     StormEventsError,
@@ -54,7 +54,7 @@ from grace2_agent.tools.fetch_storm_events_db import (
 
 
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
-_LIVE_STORM = os.environ.get("GRACE2_TEST_LIVE_STORM") == "1"
+_LIVE_STORM = os.environ.get("TRID3NT_TEST_LIVE_STORM") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -323,10 +323,10 @@ def test_full_name_and_iso_share_cache_key():
         return fake_fgb
 
     with patch(
-        "grace2_agent.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "grace2_agent.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -544,7 +544,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -583,10 +583,10 @@ def test_cache_miss_invokes_fetch_and_writes():
         return fake_fgb
 
     with patch(
-        "grace2_agent.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "grace2_agent.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_storm_events_db(
@@ -613,10 +613,10 @@ def test_cache_hit_skips_fetch():
         return fake_fgb
 
     with patch(
-        "grace2_agent.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "grace2_agent.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -642,10 +642,10 @@ def test_event_types_order_does_not_split_cache():
         return fake_fgb
 
     with patch(
-        "grace2_agent.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "grace2_agent.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -1012,10 +1012,10 @@ def test_bbox_splits_cache_key():
         return fake_fgb
 
     with patch(
-        "grace2_agent.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "grace2_agent.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -1040,10 +1040,10 @@ def test_window_splits_cache_key_but_repeats_hit():
         return fake_fgb
 
     with patch(
-        "grace2_agent.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "grace2_agent.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -1076,10 +1076,10 @@ def test_no_window_no_bbox_is_backward_compatible_cache_key():
         return fake_fgb
 
     with patch(
-        "grace2_agent.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "grace2_agent.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(year=2022, state="FL", event_types=["Hurricane"])
@@ -1090,13 +1090,13 @@ def test_no_window_no_bbox_is_backward_compatible_cache_key():
 
 
 # ---------------------------------------------------------------------------
-# Live test — only runs with GRACE2_TEST_LIVE_STORM=1.
+# Live test — only runs with TRID3NT_TEST_LIVE_STORM=1.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_STORM,
-    reason="set GRACE2_TEST_LIVE_STORM=1 to run live NOAA Storm Events test",
+    reason="set TRID3NT_TEST_LIVE_STORM=1 to run live NOAA Storm Events test",
 )
 def test_live_fetch_2022_florida_hurricane(tmp_path):
     """Real NOAA fetch for year=2022, state='FL', event_types=['Hurricane']
@@ -1107,7 +1107,7 @@ def test_live_fetch_2022_florida_hurricane(tmp_path):
     # for the live upstream test. The fetch path is fully real.
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_storm_events_db(

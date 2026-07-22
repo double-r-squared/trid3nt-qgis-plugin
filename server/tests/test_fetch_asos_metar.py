@@ -10,7 +10,7 @@ Coverage:
 - Cache miss → fetch_fn invoked; cache hit → fetch_fn skipped.
 - LayerURI shape: layer_type="vector", role="context", units="mixed", uri in gs://.
 - Payload estimate: estimate_payload_mb returns a positive float.
-- Live (env GRACE2_TEST_LIVE_ASOS=1): real IEM CGI returns ≥1 station observation
+- Live (env TRID3NT_TEST_LIVE_ASOS=1): real IEM CGI returns ≥1 station observation
   for Fort Myers area over the most recent 24h; FGB round-trips; coordinates in
   the expected US envelope.
 """
@@ -26,8 +26,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_asos_metar import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_asos_metar import (
     ASASMETAREmptyError,
     ASASMETARInputError,
     ASASMETARUpstreamError,
@@ -46,7 +46,7 @@ from grace2_agent.tools.fetch_asos_metar import (
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
 # Live test gate.
-_LIVE_ASOS = os.environ.get("GRACE2_TEST_LIVE_ASOS") == "1"
+_LIVE_ASOS = os.environ.get("TRID3NT_TEST_LIVE_ASOS") == "1"
 
 # Fort Myers / Naples area bbox — used for smoke tests.
 _FORT_MYERS_BBOX = (-82.5, 25.8, -81.0, 27.5)
@@ -101,7 +101,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -347,10 +347,10 @@ def test_no_stations_in_bbox_raises_empty_error():
 
     # Patch _discover_stations_in_bbox to return empty list.
     with patch(
-        "grace2_agent.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
         return_value=[],
     ), patch(
-        "grace2_agent.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(ASASMETAREmptyError, match="No IEM ASOS stations"):
@@ -378,13 +378,13 @@ def test_mocked_end_to_end_writes_fgb_to_cache():
         return csv_bytes
 
     with patch(
-        "grace2_agent.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
         side_effect=fake_discover,
     ), patch(
-        "grace2_agent.tools.fetch_asos_metar._fetch_asos_csv_bytes",
+        "trid3nt_server.tools.fetch_asos_metar._fetch_asos_csv_bytes",
         side_effect=fake_fetch_csv,
     ), patch(
-        "grace2_agent.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_asos_metar(
@@ -428,13 +428,13 @@ def test_layer_uri_shape():
     csv_bytes = _synthetic_asos_csv(n_obs_per_station=1)
 
     with patch(
-        "grace2_agent.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
         return_value=_SYNTHETIC_STATIONS,
     ), patch(
-        "grace2_agent.tools.fetch_asos_metar._fetch_asos_csv_bytes",
+        "trid3nt_server.tools.fetch_asos_metar._fetch_asos_csv_bytes",
         return_value=csv_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_asos_metar(
@@ -467,13 +467,13 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return _SYNTHETIC_STATIONS
 
     with patch(
-        "grace2_agent.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
         side_effect=counting_discover,
     ), patch(
-        "grace2_agent.tools.fetch_asos_metar._fetch_asos_csv_bytes",
+        "trid3nt_server.tools.fetch_asos_metar._fetch_asos_csv_bytes",
         return_value=csv_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_asos_metar(
@@ -502,13 +502,13 @@ def test_different_bbox_produces_different_cache_key():
         return _SYNTHETIC_STATIONS
 
     with patch(
-        "grace2_agent.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
         side_effect=noop_discover,
     ), patch(
-        "grace2_agent.tools.fetch_asos_metar._fetch_asos_csv_bytes",
+        "trid3nt_server.tools.fetch_asos_metar._fetch_asos_csv_bytes",
         return_value=csv_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_asos_metar(
@@ -564,13 +564,13 @@ def test_geographic_gate_synthetic_obs_in_us_envelope():
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_ASOS=1 to run).
+# Live integration test (TRID3NT_TEST_LIVE_ASOS=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_ASOS,
-    reason="Set GRACE2_TEST_LIVE_ASOS=1 to run live IEM ASOS tests",
+    reason="Set TRID3NT_TEST_LIVE_ASOS=1 to run live IEM ASOS tests",
 )
 def test_live_fort_myers_asos_returns_observations():
     """LIVE: real IEM CGI returns ≥1 ASOS observation for Fort Myers area over 24h.
@@ -581,7 +581,7 @@ def test_live_fort_myers_asos_returns_observations():
     - All point coordinates are within the US lon/lat envelope.
     - Required columns (station, valid, tmpf) present.
     """
-    from grace2_agent.tools.fetch_asos_metar import (
+    from trid3nt_server.tools.fetch_asos_metar import (
         _discover_stations_in_bbox,
         _fetch_asos_csv_bytes,
         _parse_csv_to_fgb,
@@ -651,7 +651,7 @@ def test_live_fort_myers_asos_returns_observations():
 
 @pytest.mark.skipif(
     not _LIVE_ASOS,
-    reason="Set GRACE2_TEST_LIVE_ASOS=1 to run live IEM ASOS tests",
+    reason="Set TRID3NT_TEST_LIVE_ASOS=1 to run live IEM ASOS tests",
 )
 def test_live_full_tool_call_returns_layer_uri():
     """LIVE: full fetch_asos_metar call returns a valid LayerURI with gs:// uri.

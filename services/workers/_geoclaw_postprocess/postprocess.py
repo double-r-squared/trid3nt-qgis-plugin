@@ -1,6 +1,6 @@
 """Worker-side GeoClaw fort.q AMR frames -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``grace2_agent.workflows.postprocess_geoclaw``. Runs
+Byte-faithful port of ``trid3nt_server.workflows.postprocess_geoclaw``. Runs
 inside the Batch worker AFTER ``xgeoclaw`` / ``python setrun.py`` has produced
 its ``_output/fort.q*`` frames; rasterizes each frame's water depth onto a
 regular EPSG:4326 grid (finest-wins AMR coverage), writes peak + per-frame
@@ -27,7 +27,7 @@ from typing import Any
 from services.workers._raster_postprocess import manifest as _manifest
 from services.workers._raster_postprocess.band_stats import compute_band_stats
 
-LOG = logging.getLogger("grace2.worker.geoclaw_postprocess")
+LOG = logging.getLogger("trid3nt.worker.geoclaw_postprocess")
 
 #: Worker-side wet-depth floor (agent uses 0.05).
 NODATA_DEPTH_M: float = 0.001
@@ -43,7 +43,7 @@ GEOCLAW_MAX_TOTAL_CELLS: int = 5_000_000
 _FGMAX_SENTINEL_ABS: float = 1e8
 
 #: Upper bound on emitted animation frames.
-MAX_FRAMES: int = int(os.environ.get("GRACE2_MAX_FLOOD_FRAMES", "144"))
+MAX_FRAMES: int = int(os.environ.get("TRID3NT_MAX_FLOOD_FRAMES", "144"))
 
 _PEAK_COG: str = "geoclaw_depth_peak.tif"
 _FRAME_COG_TMPL: str = "geoclaw_depth_frame_{n:02d}.tif"

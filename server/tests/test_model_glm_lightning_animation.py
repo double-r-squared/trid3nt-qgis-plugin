@@ -19,9 +19,9 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.workflows import model_glm_lightning_animation as anim
-from grace2_agent.workflows.model_glm_lightning_animation import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.workflows import model_glm_lightning_animation as anim
+from trid3nt_server.workflows.model_glm_lightning_animation import (
     DEFAULT_ACCUM_S,
     GLMAnimEmptyError,
     GLMAnimInputError,
@@ -53,7 +53,7 @@ def test_run_wrapper_is_registered():
 
 
 def test_categorized_under_hazard_and_weather():
-    from grace2_agent.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
+    from trid3nt_server.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
 
     assert (
         PRIMARY_CATEGORY.get("run_model_glm_lightning_animation") == "hazard_modeling"
@@ -163,8 +163,8 @@ def _wire_synthetic(monkeypatch, *, base_band_seen=None, news_guard=None):
     ``news_guard`` (a set) records any news/geocode tool the composer would dispatch
     -- it must stay EMPTY (the DIRECT contract).
     """
-    import grace2_agent.tools.cache as cachemod
-    import grace2_agent.tools.fetch_glm_lightning as glmmod
+    import trid3nt_server.tools.cache as cachemod
+    import trid3nt_server.tools.fetch_glm_lightning as glmmod
 
     base_dt = datetime(2025, 7, 5, 18, 0, tzinfo=timezone.utc)
 
@@ -425,7 +425,7 @@ def test_baked_frame_is_real_rgb_cog(monkeypatch):
     # the bytes fetch_fn produced is a valid 3-band RGB EPSG:4326 COG.
     # (re-run the fetch through the recorded params is unnecessary; the data was
     #  validated by read_through running fetch_fn -- assert via a fresh bake.)
-    from grace2_agent.workflows.model_glm_lightning_animation import (
+    from trid3nt_server.workflows.model_glm_lightning_animation import (
         _bake_glm_frame_cog_bytes,
     )
 
@@ -464,7 +464,7 @@ def test_ir_base_band_threads_through(monkeypatch):
 # Honesty floor: no in-AOI lightning -> typed empty (NEVER a blank animation).
 # ---------------------------------------------------------------------------
 def test_no_lightning_anywhere_raises_typed_empty(monkeypatch):
-    import grace2_agent.tools.fetch_glm_lightning as glmmod
+    import trid3nt_server.tools.fetch_glm_lightning as glmmod
 
     base_dt = datetime(2025, 7, 5, 18, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(
@@ -500,7 +500,7 @@ def test_no_lightning_anywhere_raises_typed_empty(monkeypatch):
 def test_empty_buckets_skipped_not_emitted_blank(monkeypatch):
     """A bucket with no lightning is skipped; the run proceeds with the rest."""
     _wire_synthetic(monkeypatch)
-    import grace2_agent.tools.fetch_glm_lightning as glmmod
+    import trid3nt_server.tools.fetch_glm_lightning as glmmod
 
     real_list = glmmod._list_glm_keys_in_window
     calls = {"n": 0}

@@ -15,7 +15,7 @@ Coverage:
 - Cache miss → fetch_fn invoked; cache hit → fetch_fn skipped (FR-DC-4 dedup).
 - Geographic-correctness gate (job-0086 codified lesson): every returned
   perimeter polygon's centroid falls inside the US-fires envelope.
-- Live (env GRACE2_TEST_LIVE_NIFC=1): real NIFC FeatureService CONUS sweep
+- Live (env TRID3NT_TEST_LIVE_NIFC=1): real NIFC FeatureService CONUS sweep
   returns ≥0 features; if non-zero, polygon centroids fall inside the US
   envelope.
 """
@@ -31,8 +31,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_nifc_fire_perimeters import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_nifc_fire_perimeters import (
     CONUS_BBOX,
     NIFCFireError,
     NIFCFireInputError,
@@ -55,7 +55,7 @@ from grace2_agent.tools.fetch_nifc_fire_perimeters import (
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
 # Marker for live tests
-_LIVE_NIFC = os.environ.get("GRACE2_TEST_LIVE_NIFC") == "1"
+_LIVE_NIFC = os.environ.get("TRID3NT_TEST_LIVE_NIFC") == "1"
 
 # US-fires envelope for the geographic-correctness gate. Covers CONUS, AK,
 # HI. Centroid of any NIFC perimeter should fall inside this box. The
@@ -113,7 +113,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -330,7 +330,7 @@ def test_user_agent_header_sent_on_request():
             captured_headers.update(headers or {})
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         _fetch_nifc_geojson(
             "https://services3.arcgis.com/.../FeatureServer/0/query",
             {"f": "geojson"},
@@ -354,10 +354,10 @@ def test_10_feature_conus_response_writes_fgb_with_10_polygons():
     fake_geojson = _sample_nifc_geojson(10)
 
     with patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nifc_fire_perimeters()
@@ -406,10 +406,10 @@ def test_bbox_filter_narrows_call_to_state_envelope():
         return fake_geojson
 
     with patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
         side_effect=fake_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         ca_bbox = (-124.5, 32.5, -114.1, 42.0)
@@ -433,10 +433,10 @@ def test_bbox_cache_key_differs_from_global_call():
     fake_geojson = _sample_nifc_geojson(3)
 
     with patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_global = fetch_nifc_fire_perimeters()
@@ -453,10 +453,10 @@ def test_large_feature_count_handles_single_page():
     fake_geojson = _sample_nifc_geojson(75)
 
     with patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nifc_fire_perimeters()
@@ -529,7 +529,7 @@ def test_500_raises_typed_upstream_error():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         with pytest.raises(NIFCFireUpstreamError, match="500"):
             _fetch_nifc_geojson(
                 "https://services3.arcgis.com/.../FeatureServer/0/query",
@@ -552,7 +552,7 @@ def test_network_failure_wraps_to_upstream_error():
         def get(self, url, params=None, headers=None):
             raise httpx.ConnectError("simulated DNS failure")
 
-    with patch("grace2_agent.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         with pytest.raises(NIFCFireUpstreamError, match="request failed"):
             _fetch_nifc_geojson(
                 "https://services3.arcgis.com/.../FeatureServer/0/query",
@@ -582,7 +582,7 @@ def test_arcgis_error_envelope_in_200_body_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         with pytest.raises(NIFCFireUpstreamError, match="error envelope"):
             _fetch_nifc_geojson(
                 "https://services3.arcgis.com/.../FeatureServer/0/query",
@@ -612,7 +612,7 @@ def test_non_feature_collection_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         with pytest.raises(NIFCFireUpstreamError, match="FeatureCollection"):
             _fetch_nifc_geojson(
                 "https://services3.arcgis.com/.../FeatureServer/0/query",
@@ -642,10 +642,10 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return fake_bytes
 
     with patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters._fetch_nifc_bytes",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_nifc_fire_perimeters()
@@ -666,10 +666,10 @@ def test_layer_uri_shape_for_global_sweep():
     """Global / CONUS sweep produces a LayerURI tagged role=primary."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters._fetch_nifc_bytes",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_bytes",
         return_value=_fake_fgb_bytes("CONUS"),
     ), patch(
-        "grace2_agent.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nifc_fire_perimeters()
@@ -801,13 +801,13 @@ def test_geojson_to_fgb_drops_null_geometry_rows():
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_NIFC=1 to run).
+# Live integration test (TRID3NT_TEST_LIVE_NIFC=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_NIFC,
-    reason="Set GRACE2_TEST_LIVE_NIFC=1 to run live NIFC tests",
+    reason="Set TRID3NT_TEST_LIVE_NIFC=1 to run live NIFC tests",
 )
 def test_live_conus_sweep_returns_valid_response():
     """LIVE: real NIFC FeatureService CONUS sweep returns valid FGB (≥0 features).
@@ -866,7 +866,7 @@ def test_live_conus_sweep_returns_valid_response():
 
 @pytest.mark.skipif(
     not _LIVE_NIFC,
-    reason="Set GRACE2_TEST_LIVE_NIFC=1 to run live NIFC tests",
+    reason="Set TRID3NT_TEST_LIVE_NIFC=1 to run live NIFC tests",
 )
 def test_live_bbox_filter_returns_subset():
     """LIVE: a Western-US bbox returns a subset of the CONUS sweep."""

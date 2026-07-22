@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.categories import (
+from trid3nt_server.categories import (
     HOT_SET_TOOLS,
     AllowedToolSet,
     tools_for_category,
@@ -24,7 +24,7 @@ from grace2_agent.categories import (
 @pytest.fixture(scope="module", autouse=True)
 def _populate_registry() -> None:
     """Ensure the full tool registry is loaded so category-member queries work."""
-    from grace2_agent.main import _import_tools_registry
+    from trid3nt_server.main import _import_tools_registry
 
     _import_tools_registry()
 
@@ -42,7 +42,7 @@ def test_fresh_allowed_set_equals_hot_set() -> None:
 
 def test_hot_set_tools_pass_validation() -> None:
     """Every hot-set tool must validate against a fresh AllowedToolSet."""
-    from grace2_agent.categories import validate_function_call
+    from trid3nt_server.categories import validate_function_call
 
     allowed = AllowedToolSet()
     for name in HOT_SET_TOOLS:

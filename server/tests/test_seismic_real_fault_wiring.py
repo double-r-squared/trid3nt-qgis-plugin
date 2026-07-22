@@ -28,19 +28,19 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_contracts.openquake_contracts import (
+from trid3nt_contracts.openquake_contracts import (
     DEFAULT_SITE_GRID_SPACING_KM,
     OpenQuakeRunArgs,
     SeismicHazardLayerURI,
 )
 
-import grace2_agent.workflows.model_seismic_hazard_scenario as comp
-from grace2_agent.workflows.model_seismic_hazard_scenario import (
+import trid3nt_server.workflows.model_seismic_hazard_scenario as comp
+from trid3nt_server.workflows.model_seismic_hazard_scenario import (
     REAL_FAULT_SITE_GRID_SPACING_KM,
     assemble_build_spec,
     resolve_fault_sources,
 )
-from grace2_agent.workflows.postprocess_openquake import (
+from trid3nt_server.workflows.postprocess_openquake import (
     SEISMIC_HAZARD_STYLE_PRESET,
 )
 
@@ -119,7 +119,7 @@ def test_assemble_build_spec_explicit_grid_is_honored_over_refine():
 def test_resolve_fault_sources_real_path_calls_fetcher():
     """resolve_fault_sources CALLS fetch_fault_sources and, on a hit, returns the
     records + a 'real GEM active-fault' narration line."""
-    import grace2_agent.tools.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetch_fault_sources as ff
 
     with patch.object(
         ff, "fetch_fault_sources", return_value=_fault_result([_FAULT_REC])
@@ -137,7 +137,7 @@ def test_resolve_fault_sources_real_path_calls_fetcher():
 def test_resolve_fault_sources_empty_falls_back_honestly():
     """No faults in the AOI => empty records + the fetcher's typed honest note
     (NEVER fabricates a fault, NEVER raises)."""
-    import grace2_agent.tools.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetch_fault_sources as ff
 
     fetch_note = "No GEM active faults intersect this AOI."
     with patch.object(
@@ -152,8 +152,8 @@ def test_resolve_fault_sources_empty_falls_back_honestly():
 def test_resolve_fault_sources_fetch_error_degrades_to_synthetic():
     """A genuine upstream fetch error degrades to the synthetic path (empty
     records + an honest note) rather than failing the hazard run."""
-    import grace2_agent.tools.fetch_fault_sources as ff
-    from grace2_agent.tools.fetch_fault_sources import FaultSourcesUpstreamError
+    import trid3nt_server.tools.fetch_fault_sources as ff
+    from trid3nt_server.tools.fetch_fault_sources import FaultSourcesUpstreamError
 
     with patch.object(
         ff, "fetch_fault_sources", side_effect=FaultSourcesUpstreamError("boom")
@@ -215,7 +215,7 @@ def _wire_common_mocks(monkeypatch, staged_capture):
     def _fake_run_solver(*, solver, model_setup_uri, compute_class):
         return _Handle()
 
-    import grace2_agent.tools.solver as solver_mod
+    import trid3nt_server.tools.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "run_solver", _fake_run_solver, raising=False)
     monkeypatch.setattr(solver_mod, "wait_for_completion", _fake_wait, raising=False)
@@ -243,7 +243,7 @@ async def test_composer_uses_real_faults_when_present(monkeypatch):
       - stages the build_spec WITH the fault source model (+ refined grid),
       - returns a layer narrating source_model_kind == 'real-fault'.
     """
-    import grace2_agent.tools.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetch_fault_sources as ff
 
     fetch_mock = patch.object(
         ff, "fetch_fault_sources", return_value=_fault_result([_FAULT_REC])
@@ -279,7 +279,7 @@ async def test_composer_falls_back_and_narrates_honestly_when_no_faults(monkeypa
       - returns a layer narrating source_model_kind == 'synthetic-area' and
         NEVER claims real faults.
     """
-    import grace2_agent.tools.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetch_fault_sources as ff
 
     fetch_note = "No GEM active faults intersect this AOI."
     fetch_mock = patch.object(
@@ -310,8 +310,8 @@ async def test_composer_falls_back_and_narrates_honestly_when_no_faults(monkeypa
 async def test_composer_degrades_to_synthetic_on_fetch_error(monkeypatch):
     """A fault-fetch UPSTREAM error must NOT fail the hazard run: the composer
     degrades to the synthetic area source and narrates honestly."""
-    import grace2_agent.tools.fetch_fault_sources as ff
-    from grace2_agent.tools.fetch_fault_sources import FaultSourcesUpstreamError
+    import trid3nt_server.tools.fetch_fault_sources as ff
+    from trid3nt_server.tools.fetch_fault_sources import FaultSourcesUpstreamError
 
     fetch_mock = patch.object(
         ff, "fetch_fault_sources", side_effect=FaultSourcesUpstreamError("down")

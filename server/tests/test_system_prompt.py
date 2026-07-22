@@ -20,7 +20,7 @@ visible to reviewers.
 
 from __future__ import annotations
 
-from grace2_agent.adapter import SYSTEM_PROMPT
+from trid3nt_server.adapter import SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------

@@ -25,9 +25,9 @@ import os
 
 import pytest
 
-from grace2_agent import sandbox_hardening as H
-from grace2_agent import sandbox_runner as sr
-from grace2_agent.sandbox_runner import run_sandbox_local
+from trid3nt_server import sandbox_hardening as H
+from trid3nt_server import sandbox_runner as sr
+from trid3nt_server.sandbox_runner import run_sandbox_local
 
 _HAS_BWRAP = H.jail_available()
 _requires_bwrap = pytest.mark.skipif(
@@ -37,10 +37,10 @@ _requires_bwrap = pytest.mark.skipif(
 
 @pytest.fixture(autouse=True)
 def _local_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GRACE2_SANDBOX_LOCAL", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_LOCAL", "1")
     monkeypatch.setenv("MPLBACKEND", "Agg")
-    # Default ON for hardening; individual tests toggle GRACE2_SANDBOX_BWRAP.
-    monkeypatch.delenv("GRACE2_SANDBOX_HARDENED", raising=False)
+    # Default ON for hardening; individual tests toggle TRID3NT_SANDBOX_BWRAP.
+    monkeypatch.delenv("TRID3NT_SANDBOX_HARDENED", raising=False)
 
 
 # --------------------------------------------------------------------------- #
@@ -51,7 +51,7 @@ def _local_mode(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_benign_compute_hardened_layer_a_only(monkeypatch: pytest.MonkeyPatch) -> None:
     """Layer-A-only (jail disabled): a benign numpy script returns the right
     result envelope — the hardening must not change the result shape."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "0")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "0")
     env = run_sandbox_local(
         "import numpy as np\nresult = float(np.mean([10, 20, 30, 40]))"
     )
@@ -63,7 +63,7 @@ def test_benign_compute_hardened_layer_a_only(monkeypatch: pytest.MonkeyPatch) -
 def test_benign_compute_jailed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Through the bwrap jail a benign numpy script still returns the right
     result (the venv deps import inside the read-only jail via PYTHONPATH)."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "1")
     env = run_sandbox_local(
         "import numpy as np\nprint('inside jail')\nresult = float(np.mean([2, 4, 6]))"
     )
@@ -124,7 +124,7 @@ def test_build_child_env_scrubs_aws_and_disables_imds() -> None:
     # IMDS is disabled + the cap is pinned.
     assert child["AWS_EC2_METADATA_DISABLED"] == "true"
     assert child["AWS_METADATA_SERVICE_NUM_ATTEMPTS"] == "1"
-    assert child["GRACE2_SANDBOX_TIMEOUT"] == "42"
+    assert child["TRID3NT_SANDBOX_TIMEOUT"] == "42"
 
     # The leak-assertion accepts this env (intentional IMDS knobs are exempt).
     H.assert_env_scrubbed(child)
@@ -146,7 +146,7 @@ def test_child_env_scrubbed_end_to_end(monkeypatch: pytest.MonkeyPatch) -> None:
     """End-to-end: inject AWS creds in the PARENT, run user code that reads its own
     os.environ back — the child must see NONE of them + metadata disabled. Runs in
     Layer-A-only mode so the assertion holds even where bwrap is absent."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "0")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "0")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAEXFILTRATE")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "supersecret")
     monkeypatch.setenv("AWS_SESSION_TOKEN", "tok")
@@ -181,8 +181,8 @@ def test_preexec_is_callable_on_posix() -> None:
 
 
 def test_rlimit_spec_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GRACE2_SANDBOX_RLIMIT_AS_MB", "1024")
-    monkeypatch.setenv("GRACE2_SANDBOX_RLIMIT_NPROC", "64")
+    monkeypatch.setenv("TRID3NT_SANDBOX_RLIMIT_AS_MB", "1024")
+    monkeypatch.setenv("TRID3NT_SANDBOX_RLIMIT_NPROC", "64")
     spec = H.rlimit_spec()
     assert spec["as_bytes"] == 1024 * 1024 * 1024
     assert spec["nproc"] == 64
@@ -191,8 +191,8 @@ def test_rlimit_spec_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_memory_cap_kills_unbounded_allocation(monkeypatch: pytest.MonkeyPatch) -> None:
     """A child that allocates past RLIMIT_AS dies (MemoryError) rather than
     OOM-ing the shared box. Layer-A-only so it runs without bwrap."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "0")
-    monkeypatch.setenv("GRACE2_SANDBOX_RLIMIT_AS_MB", "256")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "0")
+    monkeypatch.setenv("TRID3NT_SANDBOX_RLIMIT_AS_MB", "256")
     code = (
         "try:\n"
         "    big = bytearray(1024 * 1024 * 1024)  # 1 GiB > 256 MiB AS cap\n"
@@ -213,21 +213,21 @@ def test_memory_cap_kills_unbounded_allocation(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_bwrap_mode_selection(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "0")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "0")
     assert H._bwrap_mode() == "0"
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "1")
     assert H._bwrap_mode() == "1"
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "auto")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "auto")
     assert H._bwrap_mode() == "auto"
-    monkeypatch.delenv("GRACE2_SANDBOX_BWRAP", raising=False)
+    monkeypatch.delenv("TRID3NT_SANDBOX_BWRAP", raising=False)
     assert H._bwrap_mode() == "auto"  # default
 
 
 def test_jail_required_but_absent_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    """GRACE2_SANDBOX_BWRAP=1 with no bwrap binary fails closed (JailUnavailable),
+    """TRID3NT_SANDBOX_BWRAP=1 with no bwrap binary fails closed (JailUnavailable),
     never silently degrading to the weaker Layer-A-only posture."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "1")
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP_BIN", "/nonexistent/bwrap")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP_BIN", "/nonexistent/bwrap")
     with pytest.raises(H.JailUnavailable):
         H.build_jailed_cmd(
             ["python", "x.py"],
@@ -239,7 +239,7 @@ def test_jail_required_but_absent_raises(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_build_jailed_cmd_disabled_returns_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "0")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "0")
     cmd = ["python", "x.py"]
     final, env, jailed = H.build_jailed_cmd(
         cmd, {"AWS_EC2_METADATA_DISABLED": "true"},
@@ -251,7 +251,7 @@ def test_build_jailed_cmd_disabled_returns_unchanged(monkeypatch: pytest.MonkeyP
 
 @_requires_bwrap
 def test_build_jailed_cmd_wraps_with_netns(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "1")
     final, env, jailed = H.build_jailed_cmd(
         ["python", "/x/executor.py", "--payload-file", "/tmp/wd/payload.json"],
         {"AWS_EC2_METADATA_DISABLED": "true", "PATH": "/usr/bin"},
@@ -276,7 +276,7 @@ def test_jail_ro_binds_staged_inputs_dir(monkeypatch: pytest.MonkeyPatch) -> Non
     """sandbox-staging: the pre-fetched staged-inputs dir is bound READ-ONLY into
     the jail (so the network-denied executor can open the layer/frame COGs as
     local files) WHILE --unshare-net stays in force."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "1")
     staged = "/tmp/wd/staged_inputs"
     final, env, jailed = H.build_jailed_cmd(
         ["python", "/x/executor.py", "--payload-file", "/tmp/wd/payload.json"],
@@ -300,7 +300,7 @@ def test_jail_ro_binds_staged_inputs_dir(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_jail_no_staged_bind_when_none(monkeypatch: pytest.MonkeyPatch) -> None:
     """When no staged dir is supplied (no s3 refs), NO extra ro-bind is added —
     the jail args are unchanged from the no-staging baseline."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "1")
     final, _env, jailed = H.build_jailed_cmd(
         ["python", "/x/executor.py", "--payload-file", "/tmp/wd/payload.json"],
         {"AWS_EC2_METADATA_DISABLED": "true", "PATH": "/usr/bin"},
@@ -317,7 +317,7 @@ def test_build_jailed_cmd_accepts_staged_inputs_kwarg(monkeypatch: pytest.Monkey
     """The ``staged_inputs_dir`` kwarg is accepted on the disabled path too (no
     bwrap needed): with the jail OFF, build_jailed_cmd returns the cmd unchanged
     and never trips on the new kwarg (back-compat for the un-jailed dev path)."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "0")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "0")
     cmd = ["python", "x.py"]
     final, _env, jailed = H.build_jailed_cmd(
         cmd, {"AWS_EC2_METADATA_DISABLED": "true"},
@@ -335,7 +335,7 @@ def test_jail_blocks_imds_via_subprocess_bypass(monkeypatch: pytest.MonkeyPatch)
     curl/ctypes concern) — STILL cannot reach IMDS because the kernel network
     namespace has no interfaces. 'Network is unreachable' from the kernel, not a
     Python guard."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "1")
     code = (
         "import subprocess, sys\n"
         "out = subprocess.run(\n"
@@ -360,7 +360,7 @@ def test_jail_blocks_imds_via_subprocess_bypass(monkeypatch: pytest.MonkeyPatch)
 def test_jail_hides_host_filesystem(monkeypatch: pytest.MonkeyPatch) -> None:
     """The jail's read-only/tmpfs mounts hide the host fs: ~/.aws and the editable
     install must NOT be readable from inside."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "1")
     code = (
         "import os\n"
         "result = {\n"

@@ -26,20 +26,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from google.genai import types as genai_types
 
-from grace2_agent.openai_adapter import (
+from trid3nt_server.openai_adapter import (
     _TOOL_DISCIPLINE_SYSTEM,
     contents_to_openai_messages,
     stream_openai,
     tool_declarations_to_openai_tools,
 )
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     CompactionCompleteEvent,
     CompactionStartEvent,
     FunctionCallEvent,
     TextDeltaEvent,
     UsageMetadataEvent,
 )
-from grace2_agent.context_budget import (
+from trid3nt_server.context_budget import (
     ContextWindowExceededError,
     openai_max_output_tokens,
     reserve_output_tokens,
@@ -229,7 +229,7 @@ class TestToolDeclarationsToOpenaiTools:
     def test_description_truncated_to_1000_chars_when_cap_disabled(self, monkeypatch):
         # With the slimming cap disabled (0), the legacy hard [:1000] bound
         # still applies.
-        monkeypatch.setenv("GRACE2_OPENAI_TOOL_DESC_CAP", "0")
+        monkeypatch.setenv("TRID3NT_OPENAI_TOOL_DESC_CAP", "0")
         long_desc = "x" * 2000
         decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
         tools = tool_declarations_to_openai_tools([decl])
@@ -294,7 +294,7 @@ class TestToolDeclarationsToOpenaiTools:
         assert items["description"].endswith("...")
 
     def test_cap_zero_disables_all_slimming(self, monkeypatch):
-        monkeypatch.setenv("GRACE2_OPENAI_TOOL_DESC_CAP", "0")
+        monkeypatch.setenv("TRID3NT_OPENAI_TOOL_DESC_CAP", "0")
         long_desc = "word " * 160  # 800 chars, under the legacy 1000 bound
         long_param = "param detail " * 40  # 520 chars
         decl = self._make_decl("tool", long_desc, {"field": long_param})
@@ -306,7 +306,7 @@ class TestToolDeclarationsToOpenaiTools:
         )
 
     def test_env_override_cap_value(self, monkeypatch):
-        monkeypatch.setenv("GRACE2_OPENAI_TOOL_DESC_CAP", "100")
+        monkeypatch.setenv("TRID3NT_OPENAI_TOOL_DESC_CAP", "100")
         long_desc = "word " * 100
         decl = genai_types.FunctionDeclaration(name="tool", description=long_desc)
         tools = tool_declarations_to_openai_tools([decl])
@@ -456,9 +456,9 @@ class TestStreamOpenai:
     async def _collect_events(self, chunks: list) -> list:
         """Run stream_openai with a mocked client, collect all events."""
         import os
-        os.environ["GRACE2_OPENAI_BASE_URL"] = "http://localhost:11434/v1"
-        os.environ["GRACE2_OPENAI_MODEL"] = "test-model"
-        os.environ["GRACE2_OPENAI_API_KEY"] = "not-needed"
+        os.environ["TRID3NT_OPENAI_BASE_URL"] = "http://localhost:11434/v1"
+        os.environ["TRID3NT_OPENAI_MODEL"] = "test-model"
+        os.environ["TRID3NT_OPENAI_API_KEY"] = "not-needed"
 
         # Build an async mock context manager for the stream.
         async def _aiter_chunks():
@@ -470,7 +470,7 @@ class TestStreamOpenai:
         mock_stream.__aexit__ = AsyncMock(return_value=False)
         mock_create = AsyncMock(return_value=mock_stream)
 
-        from grace2_agent.openai_adapter import stream_openai
+        from trid3nt_server.openai_adapter import stream_openai
         with patch("openai.AsyncOpenAI") as mock_cls:
             mock_client = MagicMock()
             mock_client.chat.completions.create = mock_create
@@ -548,9 +548,9 @@ class TestStreamOpenai:
     async def test_no_tool_declarations_sends_no_tools(self):
         """When tool_declarations is None/empty, no 'tools' key in request."""
         import os
-        os.environ["GRACE2_OPENAI_BASE_URL"] = "http://localhost:11434/v1"
-        os.environ["GRACE2_OPENAI_MODEL"] = "test-model"
-        os.environ["GRACE2_OPENAI_API_KEY"] = "not-needed"
+        os.environ["TRID3NT_OPENAI_BASE_URL"] = "http://localhost:11434/v1"
+        os.environ["TRID3NT_OPENAI_MODEL"] = "test-model"
+        os.environ["TRID3NT_OPENAI_API_KEY"] = "not-needed"
 
         captured_kwargs: dict = {}
 
@@ -566,7 +566,7 @@ class TestStreamOpenai:
             captured_kwargs.update(kwargs)
             return mock_stream
 
-        from grace2_agent.openai_adapter import stream_openai
+        from trid3nt_server.openai_adapter import stream_openai
         with patch("openai.AsyncOpenAI") as mock_cls:
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
@@ -583,46 +583,46 @@ class TestStreamOpenai:
 
 
 class TestOpenaiModelPrecedence:
-    """Per-turn session model overrides the GRACE2_OPENAI_MODEL default;
+    """Per-turn session model overrides the TRID3NT_OPENAI_MODEL default;
     Bedrock-shaped session ids are ignored (fall back to the env default)."""
 
     def test_session_model_overrides_env_default(self, monkeypatch):
-        from grace2_agent.openai_adapter import openai_model
+        from trid3nt_server.openai_adapter import openai_model
 
-        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "qwen3:8b-16k")
+        monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
         assert openai_model("llama3.2:3b") == "llama3.2:3b"
 
     def test_env_default_used_when_no_session_model(self, monkeypatch):
-        from grace2_agent.openai_adapter import openai_model
+        from trid3nt_server.openai_adapter import openai_model
 
-        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "qwen3:8b-16k")
+        monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
         assert openai_model(None) == "qwen3:8b-16k"
 
     def test_bedrock_shaped_session_id_falls_back_to_env(self, monkeypatch):
-        from grace2_agent.openai_adapter import openai_model
+        from trid3nt_server.openai_adapter import openai_model
 
-        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "qwen3:8b-16k")
+        monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
         assert (
             openai_model("us.anthropic.claude-sonnet-4-6") == "qwen3:8b-16k"
         )
 
     def test_session_model_works_with_no_env_default(self, monkeypatch):
-        from grace2_agent.openai_adapter import openai_model
+        from trid3nt_server.openai_adapter import openai_model
 
-        monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
         assert openai_model("llama3.2:3b") == "llama3.2:3b"
 
     def test_nothing_configured_raises(self, monkeypatch):
-        from grace2_agent.openai_adapter import openai_model
+        from trid3nt_server.openai_adapter import openai_model
 
-        monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
         with pytest.raises(RuntimeError):
             openai_model(None)
 
     def test_bedrock_shaped_session_id_with_no_env_raises(self, monkeypatch):
-        from grace2_agent.openai_adapter import openai_model
+        from trid3nt_server.openai_adapter import openai_model
 
-        monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
         with pytest.raises(RuntimeError):
             openai_model("us.amazon.nova-pro-v1:0")
 
@@ -678,9 +678,9 @@ def _make_stream(chunks: list) -> MagicMock:
 
 class TestContextBudgetWiring:
     def _env(self, monkeypatch):
-        monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "http://localhost:11434/v1")
-        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "test-model")
-        monkeypatch.setenv("GRACE2_OPENAI_API_KEY", "not-needed")
+        monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://localhost:11434/v1")
+        monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "test-model")
+        monkeypatch.setenv("TRID3NT_OPENAI_API_KEY", "not-needed")
 
     def _long_history(self, n: int = 60) -> list[genai_types.Content]:
         contents = []
@@ -711,7 +711,7 @@ class TestContextBudgetWiring:
             return _make_stream([_text_chunk("ok"), _usage_chunk(100), _final_empty_chunk()])
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
             mock_cls.return_value = mock_client
@@ -741,7 +741,7 @@ class TestContextBudgetWiring:
             return 16384
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
             mock_client = MagicMock()
 
             async def _create(**kwargs):
@@ -787,7 +787,7 @@ class TestContextBudgetWiring:
             return stream
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _create
             mock_cls.return_value = mock_client
@@ -835,7 +835,7 @@ class TestContextBudgetWiring:
             return stream
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _create
             mock_cls.return_value = mock_client
@@ -863,14 +863,14 @@ class TestContextBudgetWiring:
 
 class TestMaxTokensCap:
     def _env(self, monkeypatch):
-        monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "http://localhost:11434/v1")
-        monkeypatch.setenv("GRACE2_OPENAI_MODEL", "test-model")
-        monkeypatch.setenv("GRACE2_OPENAI_API_KEY", "not-needed")
+        monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://localhost:11434/v1")
+        monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "test-model")
+        monkeypatch.setenv("TRID3NT_OPENAI_API_KEY", "not-needed")
 
     @pytest.mark.asyncio
     async def test_max_tokens_sent_on_every_request_default(self, monkeypatch):
         self._env(monkeypatch)
-        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
 
         async def _fake_discover(base_url, model_name):
             return 16384
@@ -882,7 +882,7 @@ class TestMaxTokensCap:
             return _make_stream([_text_chunk("hi"), _usage_chunk(50), _final_empty_chunk()])
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
             mock_cls.return_value = mock_client
@@ -897,7 +897,7 @@ class TestMaxTokensCap:
         self, monkeypatch
     ):
         self._env(monkeypatch)
-        monkeypatch.setenv("GRACE2_OPENAI_MAX_TOKENS", "512")
+        monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "512")
 
         async def _fake_discover(base_url, model_name):
             return 16384
@@ -909,7 +909,7 @@ class TestMaxTokensCap:
             return _make_stream([_text_chunk("hi"), _usage_chunk(50), _final_empty_chunk()])
 
         with patch("openai.AsyncOpenAI") as mock_cls, \
-             patch("grace2_agent.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
+             patch("trid3nt_server.openai_adapter.discover_num_ctx", side_effect=_fake_discover):
             mock_client = MagicMock()
             mock_client.chat.completions.create = _capture_create
             mock_cls.return_value = mock_client
@@ -953,7 +953,7 @@ class TestTransientUpstreamRetry:
         return client
 
     async def _run(self, side_effects, monkeypatch):
-        import grace2_agent.openai_adapter as oa
+        import trid3nt_server.openai_adapter as oa
 
         async def _nosleep(_seconds):  # noqa: ANN001, ANN202
             return None
@@ -1042,7 +1042,7 @@ class TestTransientUpstreamRetry:
     def test_is_transient_upstream_classification(self):
         """Unit-level truth table for _is_transient_upstream."""
         import openai
-        from grace2_agent.openai_adapter import _is_transient_upstream
+        from trid3nt_server.openai_adapter import _is_transient_upstream
 
         req = self._req()
         # Transient:

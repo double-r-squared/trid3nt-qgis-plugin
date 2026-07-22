@@ -15,7 +15,7 @@ Coverage:
 - Upstream error envelope raises ``MTBSUpstreamError``.
 
 Tests that hit the real MTBS ArcGIS endpoint are gated by
-``GRACE2_TEST_LIVE_MTBS=1``. They verify the California-bbox query returns
+``TRID3NT_TEST_LIVE_MTBS=1``. They verify the California-bbox query returns
 at least one known fire (e.g. Camp Fire 2018) — the job-0086 codified
 geography-not-just-bytes lesson applies here.
 """
@@ -30,8 +30,8 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_mtbs_burn_severity import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_mtbs_burn_severity import (
     MTBSBboxError,
     MTBSError,
     MTBSUpstreamError,
@@ -58,7 +58,7 @@ _CA_BBOX = (-122.0, 38.0, -119.0, 40.0)
 # Open-water bbox far offshore (no MTBS polygons).
 _OCEAN_BBOX = (-30.0, 10.0, -25.0, 15.0)
 
-_LIVE_MTBS = os.environ.get("GRACE2_TEST_LIVE_MTBS") == "1"
+_LIVE_MTBS = os.environ.get("TRID3NT_TEST_LIVE_MTBS") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -310,10 +310,10 @@ def test_mocked_50_features_returns_50_polygons():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
         return_value=_mtbs_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity.read_through",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_mtbs_burn_severity(bbox=_CA_BBOX)
@@ -353,10 +353,10 @@ def test_mocked_year_range_narrows_via_where_clause():
 
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
         side_effect=capture_one_page,
     ), patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity.read_through",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_mtbs_burn_severity(bbox=_CA_BBOX, year_range=(2018, 2018))
@@ -372,10 +372,10 @@ def test_mocked_empty_bbox_returns_zero_features():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
         return_value=_mtbs_response([], exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity.read_through",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_mtbs_burn_severity(bbox=_OCEAN_BBOX)
@@ -423,10 +423,10 @@ def test_mocked_pagination_across_3000_features():
             raise AssertionError(f"unexpected offset={offset}")
 
     with patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
         side_effect=side_effect,
     ), patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity.read_through",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_mtbs_burn_severity(bbox=_CA_BBOX)
@@ -457,10 +457,10 @@ def test_cache_miss_then_hit_skips_fetch_fn():
         return _mtbs_response(features, exceeded=False)
 
     with patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
         side_effect=page_side_effect,
     ), patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity.read_through",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_mtbs_burn_severity(bbox=_CA_BBOX)
@@ -478,10 +478,10 @@ def test_year_range_changes_cache_key():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
         return_value=_mtbs_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity.read_through",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_all = fetch_mtbs_burn_severity(bbox=_CA_BBOX)
@@ -499,10 +499,10 @@ def test_upstream_error_envelope_raises_mtbs_upstream_error():
         raise MTBSUpstreamError("MTBS query returned error envelope")
 
     with patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
         side_effect=raise_upstream,
     ), patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity.read_through",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity.read_through",
         side_effect=_make_read_through_injector(FakeStorageClient()),
     ):
         with pytest.raises(MTBSUpstreamError):
@@ -535,10 +535,10 @@ def test_layer_uri_shape():
     fake_gcs = FakeStorageClient()
     features = [_fire_polygon_feature("Test Fire", year=2020)]
     with patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity._mtbs_query_one_page",
         return_value=_mtbs_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_mtbs_burn_severity.read_through",
+        "trid3nt_server.tools.fetch_mtbs_burn_severity.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_mtbs_burn_severity(bbox=_CA_BBOX, year_range=(2018, 2023))
@@ -555,13 +555,13 @@ def test_layer_uri_shape():
 
 
 # ---------------------------------------------------------------------------
-# Live integration tests (GRACE2_TEST_LIVE_MTBS=1 to run).
+# Live integration tests (TRID3NT_TEST_LIVE_MTBS=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_MTBS,
-    reason="Set GRACE2_TEST_LIVE_MTBS=1 to run live MTBS download tests",
+    reason="Set TRID3NT_TEST_LIVE_MTBS=1 to run live MTBS download tests",
 )
 def test_live_california_returns_known_fires():
     """LIVE: queries real MTBS and verifies a CA bbox returns known fires.
@@ -570,7 +570,7 @@ def test_live_california_returns_known_fires():
     geography (≥1 fire from the year range falls inside the requested bbox).
     """
     import geopandas as gpd
-    from grace2_agent.tools.fetch_mtbs_burn_severity import (
+    from trid3nt_server.tools.fetch_mtbs_burn_severity import (
         _fetch_mtbs_bytes,
     )
 

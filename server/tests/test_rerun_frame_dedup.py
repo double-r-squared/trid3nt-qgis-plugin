@@ -18,10 +18,10 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_contracts import new_ulid
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.pipeline_emitter import (
+from trid3nt_server.pipeline_emitter import (
     PipelineEmitter,
     _frame_series_key,
 )
@@ -96,7 +96,7 @@ def test_swmm_and_sfincs_frames_share_series_key() -> None:
 
 def _frame_summary(layer: LayerURI):
     """Build the ProjectLayerSummary the emitter would, for the key helper."""
-    from grace2_contracts.collections import ProjectLayerSummary
+    from trid3nt_contracts.collections import ProjectLayerSummary
 
     return ProjectLayerSummary(
         layer_id=layer.layer_id,
@@ -201,7 +201,7 @@ async def test_non_frame_layers_keep_cog_identity_dedup() -> None:
 def test_persist_side_frame_series_regex_matches_token() -> None:
     """The server reuses the same _FLOOD_FRAME_NAME_RE token so the persisted
     prune keys identically to the emitter."""
-    from grace2_agent.server import _FLOOD_FRAME_NAME_RE
+    from trid3nt_server.server import _FLOOD_FRAME_NAME_RE
 
     assert _FLOOD_FRAME_NAME_RE.match("Flood depth step 7")
     assert _FLOOD_FRAME_NAME_RE.match("Flood depth step 12")

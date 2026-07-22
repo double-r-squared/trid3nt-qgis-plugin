@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from grace2_agent import tool_catalog_http
+from trid3nt_server import tool_catalog_http
 
 
 class _FakeReader:

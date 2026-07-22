@@ -31,7 +31,7 @@ import numpy as np
 import pytest
 
 # --- Lightweight registration tests (no SWMM dep) ------------------------- #
-from grace2_agent.workflows.run_swmm import (
+from trid3nt_server.workflows.run_swmm import (
     SWMM_SOLVER_NAME,
     is_local_mode,
     register_swmm_solver,
@@ -43,7 +43,7 @@ _WEB_STEP_TOKEN_RE = re.compile(r"\b(?:step|frame|idx|index)\s*\+?(\d{1,4})\b", 
 
 def test_swmm_registered_in_solver_workflow_registry():
     """'swmm' is a first-class entry in SOLVER_WORKFLOW_REGISTRY (mirrors sfincs)."""
-    from grace2_agent.tools.solver import (
+    from trid3nt_server.tools.solver import (
         LOCAL_EXEC_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
     )
@@ -69,8 +69,8 @@ def test_run_swmm_urban_flood_registered_and_typed_error():
     raises) on a missing/invalid bbox."""
     import asyncio
 
-    import grace2_agent.tools as T
-    from grace2_agent.tools.run_swmm_tool import run_swmm_urban_flood
+    import trid3nt_server.tools as T
+    from trid3nt_server.tools.run_swmm_tool import run_swmm_urban_flood
 
     assert "run_swmm_urban_flood" in T.TOOL_REGISTRY
 
@@ -93,7 +93,7 @@ def test_run_swmm_urban_flood_obstacles_alias_does_not_trip_params_invalid(monke
     run_args without running the heavy solver chain."""
     import asyncio
 
-    from grace2_agent.tools import run_swmm_tool as RT
+    from trid3nt_server.tools import run_swmm_tool as RT
 
     captured: dict = {}
 
@@ -126,7 +126,7 @@ def test_run_swmm_urban_flood_bogus_building_representation_is_params_invalid(mo
     composer is never reached."""
     import asyncio
 
-    from grace2_agent.tools import run_swmm_tool as RT
+    from trid3nt_server.tools import run_swmm_tool as RT
 
     reached = {"composer": False}
 
@@ -159,8 +159,8 @@ def test_stage_swmm_manifest_uploads_inp_and_manifest(tmp_path, monkeypatch):
     """
     import json as _json
 
-    from grace2_agent.tools import solver as solver_mod
-    from grace2_agent.workflows.run_swmm import SWMMStaging, stage_swmm_manifest
+    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.workflows.run_swmm import SWMMStaging, stage_swmm_manifest
 
     # A real on-disk .inp the helper reads + uploads.
     inp = tmp_path / "mesh.inp"
@@ -184,7 +184,7 @@ def test_stage_swmm_manifest_uploads_inp_and_manifest(tmp_path, monkeypatch):
             puts.append({"Bucket": kw["Bucket"], "Key": kw["Key"], "Body": data})
             return {}
 
-    monkeypatch.setenv("GRACE2_CACHE_BUCKET", "test-cache-bucket")
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache-bucket")
     solver_mod.set_s3_client(_FakeS3())
     try:
         manifest_uri = stage_swmm_manifest(staging)
@@ -222,11 +222,11 @@ swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")
 rasterio = pytest.importorskip("rasterio")
 
-from grace2_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs  # noqa: E402
-from grace2_agent.workflows.model_urban_flood_swmm import (  # noqa: E402
+from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs  # noqa: E402
+from trid3nt_server.workflows.model_urban_flood_swmm import (  # noqa: E402
     model_urban_flood_swmm,
 )
-from grace2_agent.workflows.run_swmm import (  # noqa: E402
+from trid3nt_server.workflows.run_swmm import (  # noqa: E402
     build_and_stage_swmm_deck,
     run_swmm_local,
 )
@@ -359,7 +359,7 @@ def _patch_publish_layer(monkeypatch, calls: list | None = None):  # noqa: ANN00
         return _titiler_template(layer_uri)
 
     monkeypatch.setattr(
-        "grace2_agent.workflows.model_urban_flood_swmm.publish_layer", _pub
+        "trid3nt_server.workflows.model_urban_flood_swmm.publish_layer", _pub
     )
 
 
@@ -387,10 +387,10 @@ def _install_mesh_upload_s3(monkeypatch) -> "_MeshUploadS3":
 
     Uses monkeypatch.setattr on the solver module global so the bound client +
     runs bucket are auto-restored at test teardown (no global leak)."""
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.tools import solver as solver_mod
 
     fake = _MeshUploadS3()
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
     # _get_s3_client() returns the module global _S3_CLIENT when set; patching it
     # here is auto-reverted by monkeypatch (unlike solver.set_s3_client which sets
     # a global that would leak across tests).
@@ -466,7 +466,7 @@ def test_full_local_chain_emits_peak_plus_frames(synthetic_inputs, monkeypatch):
 
     # Stub the COG upload (no object store in-test).
     monkeypatch.setattr(
-        "grace2_agent.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
         _fake_upload,
     )
     # BREAK A: stub publish_layer so the peak + each frame are routed through the
@@ -478,7 +478,7 @@ def test_full_local_chain_emits_peak_plus_frames(synthetic_inputs, monkeypatch):
     _install_mesh_upload_s3(monkeypatch)
     # Bind a fake emitter so the out-of-band frame emission is captured (mirrors
     # the WS dispatch ContextVar binding).
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     fake = _FakeEmitter()
     token = pe._CURRENT_EMITTER.set(fake)
@@ -599,7 +599,7 @@ def test_tool_wrapper_drives_full_chain(synthetic_inputs, monkeypatch):
     dem_path, footprints, barriers = synthetic_inputs
 
     monkeypatch.setattr(
-        "grace2_agent.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
         _fake_upload,
     )
     # BREAK A: stub publish_layer (no QGIS/TiTiler worker in-test).
@@ -610,19 +610,19 @@ def test_tool_wrapper_drives_full_chain(synthetic_inputs, monkeypatch):
     # Stub the composer's DEM + buildings acquisition to the synthetic inputs so
     # the tool path needs no live fetch.
     monkeypatch.setattr(
-        "grace2_agent.workflows.model_urban_flood_swmm._fetch_dem_for_urban",
+        "trid3nt_server.workflows.model_urban_flood_swmm._fetch_dem_for_urban",
         lambda bbox: (dem_path, "synthetic"),
     )
     monkeypatch.setattr(
-        "grace2_agent.workflows.model_urban_flood_swmm._fetch_buildings_for_urban",
+        "trid3nt_server.workflows.model_urban_flood_swmm._fetch_buildings_for_urban",
         lambda bbox: footprints,
     )
     monkeypatch.setattr(
-        "grace2_agent.workflows.model_urban_flood_swmm._atlas14_total_depth_mm",
+        "trid3nt_server.workflows.model_urban_flood_swmm._atlas14_total_depth_mm",
         lambda bbox, rp, dur: 120.0,
     )
 
-    from grace2_agent.tools.run_swmm_tool import run_swmm_urban_flood
+    from trid3nt_server.tools.run_swmm_tool import run_swmm_urban_flood
 
     out = asyncio.run(
         run_swmm_urban_flood(
@@ -662,9 +662,9 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
     """
     import asyncio
 
-    from grace2_agent.tools import solver as _solver
-    from grace2_agent.workflows import model_urban_flood_swmm as M
-    from grace2_agent.workflows.run_swmm import run_swmm_local
+    from trid3nt_server.tools import solver as _solver
+    from trid3nt_server.workflows import model_urban_flood_swmm as M
+    from trid3nt_server.workflows.run_swmm import run_swmm_local
 
     dem_path, footprints, barriers = synthetic_inputs
 
@@ -674,7 +674,7 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
 
     # Stub the COG upload + publish (no object store / QGIS worker in-test).
     monkeypatch.setattr(
-        "grace2_agent.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
         _fake_upload,
     )
     _patch_publish_layer(monkeypatch)
@@ -791,7 +791,7 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
     _solver.set_runs_bucket(_RUNS_BUCKET)
     _solver.set_s3_client(_FakeS3())
 
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     fake = _FakeEmitter()
     token = pe._CURRENT_EMITTER.set(fake)

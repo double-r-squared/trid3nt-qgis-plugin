@@ -21,12 +21,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from grace2_agent.workflows import swmm_mesh_builder as mb
+from trid3nt_server.workflows import swmm_mesh_builder as mb
 
 swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")
 
-from grace2_contracts.swmm_contracts import resolve_pollutant_presets  # noqa: E402
+from trid3nt_contracts.swmm_contracts import resolve_pollutant_presets  # noqa: E402
 
 # --- synthetic DEM (same geometry as test_swmm_mesh_builder) ---------------
 _N = 20

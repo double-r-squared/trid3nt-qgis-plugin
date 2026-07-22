@@ -33,10 +33,10 @@ import json
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.pipeline_emitter import PipelineEmitter
-from grace2_contracts.case import CaseChatMessage, CaseSessionState, CaseSummary
-from grace2_contracts.common import new_ulid, now_utc
+from trid3nt_server import server
+from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_contracts.case import CaseChatMessage, CaseSessionState, CaseSummary
+from trid3nt_contracts.common import new_ulid, now_utc
 
 
 class FakeWS:

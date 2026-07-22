@@ -15,7 +15,7 @@ Coverage:
 - Mocked happy path: a single-NetCDF response → FlatGeobuf with feature count.
 - Cache hit: second identical call reuses cached FlatGeobuf.
 
-Live test (gated by ``GRACE2_TEST_LIVE_GTSM=1`` + CDS key):
+Live test (gated by ``TRID3NT_TEST_LIVE_GTSM=1`` + CDS key):
 - Florida coast bbox + Hurricane Ian dates → real time-series with finite
   values; evidence captured to ``reports/inflight/.../evidence/gtsm_live.txt``.
 """
@@ -34,8 +34,8 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_gtsm_tide_surge import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_gtsm_tide_surge import (
     GTSMAuthError,
     GTSMEmptyError,
     GTSMInputError,
@@ -70,8 +70,8 @@ _IAN_START = "2022-09-26"
 _IAN_END = "2022-09-29"
 
 # Live test gates.
-_LIVE_GTSM = os.environ.get("GRACE2_TEST_LIVE_GTSM") == "1"
-_LIVE_CDS_KEY = os.environ.get("GRACE2_COPERNICUS_CDS_API_KEY")
+_LIVE_GTSM = os.environ.get("TRID3NT_TEST_LIVE_GTSM") == "1"
+_LIVE_CDS_KEY = os.environ.get("TRID3NT_COPERNICUS_CDS_API_KEY")
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -356,13 +356,13 @@ def test_estimate_payload_mb_scales_with_window():
 
 
 def test_resolve_api_key_explicit_kwarg_wins():
-    with patch.dict(os.environ, {"GRACE2_COPERNICUS_CDS_API_KEY": "env-value"}):
+    with patch.dict(os.environ, {"TRID3NT_COPERNICUS_CDS_API_KEY": "env-value"}):
         out = _resolve_api_key(api_key="explicit-value", secret_ref=None)
     assert out == "explicit-value"
 
 
 def test_resolve_api_key_env_var_fallback():
-    with patch.dict(os.environ, {"GRACE2_COPERNICUS_CDS_API_KEY": "env-value"}):
+    with patch.dict(os.environ, {"TRID3NT_COPERNICUS_CDS_API_KEY": "env-value"}):
         out = _resolve_api_key(api_key=None, secret_ref=None)
     assert out == "env-value"
 
@@ -620,7 +620,7 @@ def test_end_to_end_mocked_happy_path(tmp_path, monkeypatch):
     zip_bytes = _make_zip_with_ncs([nc_path])
 
     # Patch the CDS retrieve at module level.
-    from grace2_agent.tools import fetch_gtsm_tide_surge as mod
+    from trid3nt_server.tools import fetch_gtsm_tide_surge as mod
 
     monkeypatch.setattr(
         mod, "_cds_retrieve_with_timeout", _fake_cds_retrieve_factory(zip_bytes)
@@ -676,7 +676,7 @@ def test_cache_hit_on_second_identical_call(tmp_path, monkeypatch):
     )
     zip_bytes = _make_zip_with_ncs([nc_path])
 
-    from grace2_agent.tools import fetch_gtsm_tide_surge as mod
+    from trid3nt_server.tools import fetch_gtsm_tide_surge as mod
 
     call_count = {"n": 0}
 
@@ -731,7 +731,7 @@ def test_output_flavor_distinct_cache_keys(tmp_path, monkeypatch):
     )
     zip_sr = _make_zip_with_ncs([nc_path_sr])
 
-    from grace2_agent.tools import fetch_gtsm_tide_surge as mod
+    from trid3nt_server.tools import fetch_gtsm_tide_surge as mod
 
     def selective_retrieve(api_url, api_key, request, out_path, timeout_s=300):
         var_list = request["variable"]
@@ -776,7 +776,7 @@ def test_output_flavor_distinct_cache_keys(tmp_path, monkeypatch):
 
 @pytest.mark.skipif(
     not (_LIVE_GTSM and _LIVE_CDS_KEY),
-    reason="set GRACE2_TEST_LIVE_GTSM=1 + GRACE2_COPERNICUS_CDS_API_KEY",
+    reason="set TRID3NT_TEST_LIVE_GTSM=1 + TRID3NT_COPERNICUS_CDS_API_KEY",
 )
 def test_live_florida_coast_hurricane_ian(tmp_path):
     """Live test: fetch GTSM water-level for Florida coast over Hurricane Ian.
@@ -789,7 +789,7 @@ def test_live_florida_coast_hurricane_ian(tmp_path):
     # Inject the fake GCS so the live test does not require live cache-bucket
     # write permission. The CDS retrieve is real.
     fake_gcs = FakeStorageClient()
-    from grace2_agent.tools import fetch_gtsm_tide_surge as mod
+    from trid3nt_server.tools import fetch_gtsm_tide_surge as mod
 
     patched_rt = _make_read_through_injector(fake_gcs)
     orig_rt = mod.read_through

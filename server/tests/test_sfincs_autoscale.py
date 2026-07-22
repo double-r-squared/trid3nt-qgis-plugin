@@ -27,11 +27,11 @@ import numpy as np
 import rasterio
 from rasterio.transform import from_bounds
 
-from grace2_agent.telemetry import (
+from trid3nt_server.telemetry import (
     build_solve_telemetry_record,
     emit_solve_telemetry,
 )
-from grace2_agent.workflows.sfincs_builder import (
+from trid3nt_server.workflows.sfincs_builder import (
     SFINCS_RES_LADDER,
     autoscale_grid_resolution,
     compute_cell_cap,
@@ -97,7 +97,7 @@ def test_more_vcpus_lowers_estimate() -> None:
 def test_cap_inversion_self_consistent() -> None:
     """The estimated solve at the computed cap is at/under the solve budget net
     of overhead — the cap and the perf model agree."""
-    from grace2_agent.workflows import sfincs_builder as sb
+    from trid3nt_server.workflows import sfincs_builder as sb
 
     for vcpus in (4, 8, 16, 32):
         cap = compute_cell_cap(vcpus)
@@ -121,7 +121,7 @@ def test_resolve_solve_vcpus_maps_compute_class() -> None:
 
 
 def test_resolve_solve_vcpus_env_override(monkeypatch) -> None:
-    monkeypatch.setenv("GRACE2_SFINCS_SOLVE_VCPUS", "24")
+    monkeypatch.setenv("TRID3NT_SFINCS_SOLVE_VCPUS", "24")
     assert resolve_solve_vcpus("small") == 24  # env wins outright
 
 
@@ -250,11 +250,11 @@ def test_pathological_huge_aoi_clamps_to_coarsest_rung(tmp_path: Path, monkeypat
     """An absurdly large AOI that overruns the cap even at 200 m clamps to the
     coarsest ladder rung (non-empty) rather than producing an empty grid."""
     # Force a tiny cap so any real DEM overruns every rung.
-    monkeypatch.setenv("GRACE2_SFINCS_MIN_CELL_CAP", "1")
-    monkeypatch.setenv("GRACE2_SFINCS_SOLVE_BUDGET_S", "0.0001")
+    monkeypatch.setenv("TRID3NT_SFINCS_MIN_CELL_CAP", "1")
+    monkeypatch.setenv("TRID3NT_SFINCS_SOLVE_BUDGET_S", "0.0001")
     import importlib
 
-    from grace2_agent.workflows import sfincs_builder as sb
+    from trid3nt_server.workflows import sfincs_builder as sb
 
     importlib.reload(sb)
     try:
@@ -266,22 +266,22 @@ def test_pathological_huge_aoi_clamps_to_coarsest_rung(tmp_path: Path, monkeypat
         assert res.grid_resolution_m == max(sb.SFINCS_RES_LADDER)
         assert res.estimated_active_cells >= 1  # never zero/empty
     finally:
-        monkeypatch.delenv("GRACE2_SFINCS_MIN_CELL_CAP", raising=False)
-        monkeypatch.delenv("GRACE2_SFINCS_SOLVE_BUDGET_S", raising=False)
+        monkeypatch.delenv("TRID3NT_SFINCS_MIN_CELL_CAP", raising=False)
+        monkeypatch.delenv("TRID3NT_SFINCS_SOLVE_BUDGET_S", raising=False)
         importlib.reload(sb)
 
 
 def test_resolution_ladder_env_override(monkeypatch) -> None:
-    monkeypatch.setenv("GRACE2_SFINCS_RES_LADDER", "25, 75, 150")
+    monkeypatch.setenv("TRID3NT_SFINCS_RES_LADDER", "25, 75, 150")
     import importlib
 
-    from grace2_agent.workflows import sfincs_builder as sb
+    from trid3nt_server.workflows import sfincs_builder as sb
 
     importlib.reload(sb)
     try:
         assert sb.SFINCS_RES_LADDER == (25.0, 75.0, 150.0)
     finally:
-        monkeypatch.delenv("GRACE2_SFINCS_RES_LADDER", raising=False)
+        monkeypatch.delenv("TRID3NT_SFINCS_RES_LADDER", raising=False)
         importlib.reload(sb)
 
 
@@ -323,10 +323,10 @@ def test_solve_telemetry_record_shape() -> None:
 
 def test_emit_solve_telemetry_writes_jsonl(tmp_path: Path, monkeypatch, caplog) -> None:
     out = tmp_path / "solve_telem.jsonl"
-    monkeypatch.setenv("GRACE2_SOLVE_TELEMETRY_PATH", str(out))
+    monkeypatch.setenv("TRID3NT_SOLVE_TELEMETRY_PATH", str(out))
     import logging
 
-    with caplog.at_level(logging.INFO, logger="grace2_agent.solve_telemetry"):
+    with caplog.at_level(logging.INFO, logger="trid3nt_server.solve_telemetry"):
         rec = emit_solve_telemetry(
             run_id="RUNXYZ",
             backend="aws-batch",
@@ -351,7 +351,7 @@ def test_emit_solve_telemetry_writes_jsonl(tmp_path: Path, monkeypatch, caplog) 
 def test_emit_solve_telemetry_never_raises_on_bad_path(monkeypatch) -> None:
     # A directory that does not exist as a writable file path — write fails,
     # but the emit must not raise (telemetry never breaks the solve loop).
-    monkeypatch.setenv("GRACE2_SOLVE_TELEMETRY_PATH", "/this/dir/does/not/exist/x.jsonl")
+    monkeypatch.setenv("TRID3NT_SOLVE_TELEMETRY_PATH", "/this/dir/does/not/exist/x.jsonl")
     rec = emit_solve_telemetry(
         run_id="R",
         backend="local-docker",

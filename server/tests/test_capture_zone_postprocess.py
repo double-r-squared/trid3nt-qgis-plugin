@@ -28,8 +28,8 @@ from pathlib import Path
 
 import pytest
 
-from grace2_agent.workflows import postprocess_modflow as pp
-from grace2_agent.workflows.postprocess_modflow import (
+from trid3nt_server.workflows import postprocess_modflow as pp
+from trid3nt_server.workflows.postprocess_modflow import (
     PostprocessMODFLOWError,
     postprocess_capture_zone,
 )

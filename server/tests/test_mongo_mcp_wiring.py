@@ -2,16 +2,16 @@
 
 Coverage:
     1. ``test_no_mcp_falls_back_to_dev_persistence`` — when
-       ``GRACE2_MONGO_MCP_STDIO`` is unset (the default local-dev case),
+       ``TRID3NT_MONGO_MCP_STDIO`` is unset (the default local-dev case),
        ``init_persistence_from_env`` does NOT raise and the server starts
        with file-backed dev Persistence (or None if dev persistence is also
        disabled).  The agent must never crash on a fresh clone.
 
     2. ``test_no_mcp_stdio_returns_prebound_or_none`` — with no MCP env vars
-       and ``GRACE2_DEV_PERSISTENCE=0`` (CI escape hatch), the function
+       and ``TRID3NT_DEV_PERSISTENCE=0`` (CI escape hatch), the function
        returns ``None`` gracefully.
 
-    3. ``test_mcp_stdio_1_attempts_connection`` — when ``GRACE2_MONGO_MCP_STDIO=1``
+    3. ``test_mcp_stdio_1_attempts_connection`` — when ``TRID3NT_MONGO_MCP_STDIO=1``
        is set, ``init_persistence_from_env`` calls ``MCPClient.start`` and
        constructs a ``Persistence`` backed by the live client.  Uses a mocked
        transport: no real Atlas connection is made.
@@ -38,12 +38,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     MCPClientProtocol,
     Persistence,
     make_file_persistence,
 )
-from grace2_agent.server import (
+from trid3nt_server.server import (
     get_persistence,
     init_persistence_from_env,
     set_persistence,
@@ -79,16 +79,16 @@ def _clean_persistence_singleton():
 async def test_no_mcp_falls_back_to_dev_persistence(tmp_path):
     """Without MCP env vars, init_persistence_from_env does not raise.
 
-    When ``GRACE2_DEV_PERSISTENCE=1`` (forced on) and
-    ``GRACE2_DEV_PERSISTENCE_DIR`` points at a temp dir, the function returns
+    When ``TRID3NT_DEV_PERSISTENCE=1`` (forced on) and
+    ``TRID3NT_DEV_PERSISTENCE_DIR`` points at a temp dir, the function returns
     a file-backed ``Persistence`` and binds the singleton.  The agent service
     must survive a fresh clone with zero Atlas configuration.
     """
     set_persistence(None)
     try:
         env_overrides = {
-            "GRACE2_DEV_PERSISTENCE": "1",
-            "GRACE2_DEV_PERSISTENCE_DIR": str(tmp_path),
+            "TRID3NT_DEV_PERSISTENCE": "1",
+            "TRID3NT_DEV_PERSISTENCE_DIR": str(tmp_path),
         }
         with patch.dict(
             os.environ,
@@ -96,7 +96,7 @@ async def test_no_mcp_falls_back_to_dev_persistence(tmp_path):
             clear=False,
         ):
             # Remove MCP vars so the file-fallback branch is taken.
-            for key in ("GRACE2_MONGO_MCP_STDIO", "GRACE2_MONGO_MCP_URL"):
+            for key in ("TRID3NT_MONGO_MCP_STDIO", "TRID3NT_MONGO_MCP_URL"):
                 os.environ.pop(key, None)
 
             # Pre-bind dev persistence (mirrors what main._maybe_bind_dev_persistence does).
@@ -114,7 +114,7 @@ async def test_no_mcp_falls_back_to_dev_persistence(tmp_path):
 
 @pytest.mark.asyncio
 async def test_no_mcp_stdio_returns_prebound_or_none():
-    """With no MCP env vars and GRACE2_DEV_PERSISTENCE=0, returns None.
+    """With no MCP env vars and TRID3NT_DEV_PERSISTENCE=0, returns None.
 
     This is the CI escape hatch: the M1 in-memory path is preserved and the
     agent service starts without any persistence.  Callers handle None gracefully.
@@ -123,10 +123,10 @@ async def test_no_mcp_stdio_returns_prebound_or_none():
     try:
         with patch.dict(
             os.environ,
-            {"GRACE2_DEV_PERSISTENCE": "0"},
+            {"TRID3NT_DEV_PERSISTENCE": "0"},
             clear=False,
         ):
-            for key in ("GRACE2_MONGO_MCP_STDIO", "GRACE2_MONGO_MCP_URL"):
+            for key in ("TRID3NT_MONGO_MCP_STDIO", "TRID3NT_MONGO_MCP_URL"):
                 os.environ.pop(key, None)
 
             result = await init_persistence_from_env()
@@ -138,9 +138,9 @@ async def test_no_mcp_stdio_returns_prebound_or_none():
 
 
 # GCP decommissioned: the live MongoDB-MCP (Atlas) stdio bootstrap was removed
-# from ``init_persistence_from_env`` along with ``grace2_agent.mcp`` (it relied
+# from ``init_persistence_from_env`` along with ``trid3nt_server.mcp`` (it relied
 # on GCP Secret Manager for the SRV). The two tests that exercised the
-# ``GRACE2_MONGO_MCP_STDIO=1`` -> ``MCPClient.start`` path are gone; prod
+# ``TRID3NT_MONGO_MCP_STDIO=1`` -> ``MCPClient.start`` path are gone; prod
 # persistence on AWS is the file / DynamoDB backend bound at startup. The
 # ``MCPClientProtocol`` seam (below) stays as the abstract surface DynamoDB and
 # the file backend implement.

@@ -31,7 +31,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_contracts.geoclaw_contracts import (
+from trid3nt_contracts.geoclaw_contracts import (
     GEOCLAW_DEPTH_STYLE_PRESET,
     GeoClawDepthLayerURI,
     GeoClawRunArgs,
@@ -90,7 +90,7 @@ def test_depth_layer_uri_round_trip():
 # (2) build_spec assembly.
 # ===========================================================================
 def test_build_spec_dam_break():
-    from grace2_agent.workflows.run_geoclaw import build_geoclaw_build_spec
+    from trid3nt_server.workflows.run_geoclaw import build_geoclaw_build_spec
 
     args = GeoClawRunArgs(
         bbox=_AOI, scenario="dam_break", dam_break_depth_m=12.0, output_frames=10
@@ -108,7 +108,7 @@ def test_build_spec_dam_break():
 
 
 def test_build_spec_tsunami_with_staged_dtopo():
-    from grace2_agent.workflows.run_geoclaw import build_geoclaw_build_spec
+    from trid3nt_server.workflows.run_geoclaw import build_geoclaw_build_spec
 
     args = GeoClawRunArgs(bbox=_AOI, scenario="tsunami", source_magnitude=8.4)
     spec = build_geoclaw_build_spec(args, dtopo_dest="dtopo.tt3")
@@ -118,7 +118,7 @@ def test_build_spec_tsunami_with_staged_dtopo():
 
 
 def test_build_spec_surge_with_forcing_and_source_point():
-    from grace2_agent.workflows.run_geoclaw import build_geoclaw_build_spec
+    from trid3nt_server.workflows.run_geoclaw import build_geoclaw_build_spec
 
     args = GeoClawRunArgs(
         bbox=_AOI, scenario="surge", sea_level_m=2.0, source_lonlat=(-85.4, 29.8)
@@ -131,7 +131,7 @@ def test_build_spec_surge_with_forcing_and_source_point():
 
 
 def test_build_spec_threads_domain_bbox_and_source_override():
-    from grace2_agent.workflows.run_geoclaw import build_geoclaw_build_spec
+    from trid3nt_server.workflows.run_geoclaw import build_geoclaw_build_spec
 
     args = GeoClawRunArgs(
         bbox=_AOI, scenario="tsunami", source_lonlat=(-85.5, 29.9)
@@ -147,7 +147,7 @@ def test_build_spec_threads_domain_bbox_and_source_override():
 
 
 def test_build_spec_omits_domain_bbox_when_equal_to_aoi():
-    from grace2_agent.workflows.run_geoclaw import build_geoclaw_build_spec
+    from trid3nt_server.workflows.run_geoclaw import build_geoclaw_build_spec
 
     args = GeoClawRunArgs(bbox=_AOI, scenario="dam_break")
     spec = build_geoclaw_build_spec(args, domain_bbox=tuple(_AOI))
@@ -159,7 +159,7 @@ def test_build_spec_omits_domain_bbox_when_equal_to_aoi():
 # (2b) Offshore-domain planning + bathymetry-aware source placement.
 # ===========================================================================
 def test_plan_geoclaw_domain_extends_offshore_for_tsunami():
-    from grace2_agent.workflows.run_geoclaw import plan_geoclaw_domain
+    from trid3nt_server.workflows.run_geoclaw import plan_geoclaw_domain
 
     # tsunami: the domain extends off the AOI on all sides AND encloses the
     # requested offshore source with a buffer.
@@ -172,7 +172,7 @@ def test_plan_geoclaw_domain_extends_offshore_for_tsunami():
 
 
 def test_plan_geoclaw_domain_unchanged_for_dam_break_and_surge():
-    from grace2_agent.workflows.run_geoclaw import plan_geoclaw_domain
+    from trid3nt_server.workflows.run_geoclaw import plan_geoclaw_domain
 
     assert plan_geoclaw_domain(_AOI, "dam_break", None) == tuple(_AOI)
     assert plan_geoclaw_domain(_AOI, "surge", (-85.4, 29.8)) == tuple(_AOI)
@@ -182,7 +182,7 @@ def test_plan_geoclaw_grid_coarse_base_and_bounded_amr():
     """The SOLVER_TIMEOUT fix: a COARSE base grid (a few thousand cells) over the
     full domain + AMR bounded so the AOI finest mesh stays within the cell budget.
     """
-    from grace2_agent.workflows.run_geoclaw import (
+    from trid3nt_server.workflows.run_geoclaw import (
         _GEOCLAW_BASE_CELLS_MAX,
         _GEOCLAW_FINEST_CELL_BUDGET,
         _GEOCLAW_MAX_AMR_LEVELS,
@@ -216,7 +216,7 @@ def test_plan_geoclaw_grid_large_aoi_is_budget_clamped():
     """A LARGE AOI is clamped to fewer levels (coarser run-up) so the finest mesh
     never exceeds the budget -- the run still completes with non-zero inundation.
     """
-    from grace2_agent.workflows.run_geoclaw import (
+    from trid3nt_server.workflows.run_geoclaw import (
         _GEOCLAW_FINEST_CELL_BUDGET,
         plan_geoclaw_domain,
         plan_geoclaw_grid,
@@ -242,7 +242,7 @@ def test_geoclaw_propagation_level_mirrors_worker_formula():
     worker emits). 2 levels above base (level 3), capped at one-below-finest,
     floored at the base.
     """
-    from grace2_agent.workflows.run_geoclaw import _geoclaw_propagation_level
+    from trid3nt_server.workflows.run_geoclaw import _geoclaw_propagation_level
 
     # The worker formula, re-derived here independently (kept BYTE-mirrored):
     def _worker_propagation_level(amr_levels: int) -> int:
@@ -268,7 +268,7 @@ def test_resolve_offshore_source_picks_deepest_seaward_cell(tmp_path):
     import rasterio
     from rasterio.transform import from_bounds
 
-    from grace2_agent.workflows.run_geoclaw import resolve_offshore_source
+    from trid3nt_server.workflows.run_geoclaw import resolve_offshore_source
 
     dom = (-86.5, 28.9, -85.0, 30.5)
     width, height = 30, 32
@@ -300,7 +300,7 @@ def test_resolve_offshore_source_honors_valid_requested_source(tmp_path):
     import rasterio
     from rasterio.transform import from_bounds
 
-    from grace2_agent.workflows.run_geoclaw import resolve_offshore_source
+    from trid3nt_server.workflows.run_geoclaw import resolve_offshore_source
 
     dom = (-86.5, 28.9, -85.0, 30.5)
     width, height = 24, 24
@@ -322,7 +322,7 @@ def test_resolve_offshore_source_returns_none_on_dry_domain(tmp_path):
     import rasterio
     from rasterio.transform import from_bounds
 
-    from grace2_agent.workflows.run_geoclaw import resolve_offshore_source
+    from trid3nt_server.workflows.run_geoclaw import resolve_offshore_source
 
     dom = (-86.5, 28.9, -85.0, 30.5)
     width, height = 16, 16
@@ -360,7 +360,7 @@ def test_finalize_geoclaw_domain_encloses_offshore_source(tmp_path):
     # domain, so the resolved deep-water source lands WEST of (outside) it. The
     # composer must re-size the domain to ENCLOSE the source. Reproduce: a DEM that
     # spans well west of the initial domain, deep water only in that far-west strip.
-    from grace2_agent.workflows.run_geoclaw import (
+    from trid3nt_server.workflows.run_geoclaw import (
         finalize_geoclaw_domain,
         plan_geoclaw_domain,
         resolve_offshore_source,
@@ -399,7 +399,7 @@ def test_finalize_geoclaw_domain_encloses_offshore_source(tmp_path):
 
 def test_finalize_geoclaw_domain_noop_for_dam_break_and_surge():
     # Non-offshore scenarios (internal/uniform source) keep domain == AOI.
-    from grace2_agent.workflows.run_geoclaw import finalize_geoclaw_domain
+    from trid3nt_server.workflows.run_geoclaw import finalize_geoclaw_domain
 
     assert finalize_geoclaw_domain(_AOI, "dam_break", None, "file:///none") == tuple(_AOI)
     assert finalize_geoclaw_domain(_AOI, "surge", (-85.4, 29.8), "file:///none") == tuple(_AOI)
@@ -409,7 +409,7 @@ def test_finalize_geoclaw_domain_raises_when_source_uncoverable(tmp_path):
     # Guardrail (loud failure, like the flat-ocean gate): if the DEM coverage does
     # NOT reach the source longitude, clamping pulls the domain off the source ->
     # GEOCLAW_SOURCE_OUTSIDE_DOMAIN rather than a silent zero-inundation solve.
-    from grace2_agent.workflows.run_geoclaw import (
+    from trid3nt_server.workflows.run_geoclaw import (
         GeoClawWorkflowError,
         finalize_geoclaw_domain,
     )
@@ -445,7 +445,7 @@ def test_reproject_dem_to_4326_makes_utm_topo_overlap_lonlat_domain(tmp_path):
     from rasterio.transform import from_bounds
     from rasterio.warp import transform_bounds
 
-    from grace2_agent.workflows.run_geoclaw import reproject_dem_to_4326
+    from trid3nt_server.workflows.run_geoclaw import reproject_dem_to_4326
 
     # A Crescent City-like lon/lat GeoClaw domain (the failing live AOI's shape).
     dom = (-124.45, 41.5, -123.9, 42.1)
@@ -486,7 +486,7 @@ def test_reproject_dem_to_4326_passthrough_when_already_lonlat(tmp_path):
     import rasterio
     from rasterio.transform import from_bounds
 
-    from grace2_agent.workflows.run_geoclaw import reproject_dem_to_4326
+    from trid3nt_server.workflows.run_geoclaw import reproject_dem_to_4326
 
     dom = (-124.45, 41.5, -123.9, 42.1)
     transform = from_bounds(*dom, 16, 16)
@@ -503,7 +503,7 @@ def test_reproject_dem_to_4326_passthrough_when_already_lonlat(tmp_path):
 def test_reproject_dem_to_4326_degrades_on_unreachable_uri():
     # Best-effort: an unreadable URI returns the original unchanged (the run then
     # fails loudly downstream with the honest overlap message, never silently here).
-    from grace2_agent.workflows.run_geoclaw import reproject_dem_to_4326
+    from trid3nt_server.workflows.run_geoclaw import reproject_dem_to_4326
 
     bad = "file:///nonexistent/grace2/topo.tif"
     assert reproject_dem_to_4326(bad) == bad
@@ -513,8 +513,8 @@ def test_reproject_dem_to_4326_degrades_on_unreachable_uri():
 # (3) Solver registration + bridge tool registered.
 # ===========================================================================
 def test_geoclaw_registered_in_solver_workflow_registry():
-    from grace2_agent.tools.solver import SOLVER_WORKFLOW_REGISTRY
-    from grace2_agent.workflows.run_geoclaw import (
+    from trid3nt_server.tools.solver import SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.workflows.run_geoclaw import (
         GEOCLAW_SOLVER_NAME,
         register_geoclaw_solver,
     )
@@ -526,7 +526,7 @@ def test_geoclaw_registered_in_solver_workflow_registry():
 def test_run_geoclaw_inundation_typed_error_on_missing_bbox():
     import asyncio
 
-    from grace2_agent.tools.run_geoclaw_tool import run_geoclaw_inundation
+    from trid3nt_server.tools.run_geoclaw_tool import run_geoclaw_inundation
 
     out = asyncio.run(run_geoclaw_inundation(bbox=None))
     assert isinstance(out, dict)
@@ -571,7 +571,7 @@ def _synthetic_fort_q(mx: int, my: int, bbox, depth_fn, level: int = 1) -> str:
 
 
 def test_parse_fort_q_frame_reads_patch_depths():
-    from grace2_agent.workflows.postprocess_geoclaw import parse_fort_q_frame
+    from trid3nt_server.workflows.postprocess_geoclaw import parse_fort_q_frame
 
     # a 4x3 patch with depth = i + 10*j so each cell is identifiable.
     text = _synthetic_fort_q(4, 3, _AOI, lambda i, j: float(i + 10 * j))
@@ -586,7 +586,7 @@ def test_parse_fort_q_frame_reads_patch_depths():
 
 
 def test_rasterize_and_metrics_on_synthetic_frame():
-    from grace2_agent.workflows.postprocess_geoclaw import (
+    from trid3nt_server.workflows.postprocess_geoclaw import (
         compute_geoclaw_depth_metrics,
         parse_fort_q_frame,
         rasterize_frame_to_grid,
@@ -610,7 +610,7 @@ def test_rasterize_and_metrics_on_synthetic_frame():
 
 def _mk_patch(level, mx, my, xlow, ylow, dx, dy, depth_fn):
     """Build a _Patch directly (bypassing fort.q text) for rasterize tests."""
-    from grace2_agent.workflows.postprocess_geoclaw import _Patch
+    from trid3nt_server.workflows.postprocess_geoclaw import _Patch
 
     h = np.full((my, mx), np.nan, dtype="float64")
     for j in range(my):
@@ -622,7 +622,7 @@ def _mk_patch(level, mx, my, xlow, ylow, dx, dy, depth_fn):
 def test_compute_geoclaw_grid_shape_adaptive_floor_and_cap():
     """Adaptive shape: ~8 km AOI -> ~300-400 px/side at 25 m; huge AOI capped;
     tiny AOI floored at the legacy 256 (never coarser)."""
-    from grace2_agent.workflows.postprocess_geoclaw import (
+    from trid3nt_server.workflows.postprocess_geoclaw import (
         GEOCLAW_MAX_PX_PER_SIDE,
         GEOCLAW_MAX_TOTAL_CELLS,
         GEOCLAW_MIN_PX_PER_SIDE,
@@ -660,7 +660,7 @@ def test_rasterize_paint_fill_is_gap_free_and_finest_wins():
     """A COARSE patch painted onto a FINER output grid must produce NO interior
     NaN holes within its wetted footprint (paint-fill, not nearest-scatter); a
     finer nested patch OVERWRITES it in the overlap (finest-wins)."""
-    from grace2_agent.workflows.postprocess_geoclaw import rasterize_frame_to_grid
+    from trid3nt_server.workflows.postprocess_geoclaw import rasterize_frame_to_grid
 
     min_lon, min_lat, max_lon, max_lat = _AOI
     # Coarse level-1 patch (10x10) covering the whole AOI, uniformly wet at 1.0.
@@ -701,7 +701,7 @@ def test_rasterize_paint_fill_is_gap_free_and_finest_wins():
 def test_rasterize_paint_fill_beats_nearest_scatter_wet_count():
     """Before/after: at a finer-than-patch output grid the paint-fill fills the
     whole wetted footprint where a nearest-scatter would leave most cells NaN."""
-    from grace2_agent.workflows.postprocess_geoclaw import (
+    from trid3nt_server.workflows.postprocess_geoclaw import (
         NODATA_DEPTH_M,
         rasterize_frame_to_grid,
     )
@@ -739,7 +739,7 @@ def _fake_upload(local_cog, run_id, runs_bucket=None, *, dest_filename="x.tif"):
 def test_postprocess_geoclaw_end_to_end_shape(tmp_path: Path):
     """A multi-frame synthetic run yields the EXACT (layers, metrics) shape:
     peak primary + contiguous 'Flood depth step N' frames, all VALID COGs."""
-    from grace2_agent.workflows import postprocess_geoclaw as pg
+    from trid3nt_server.workflows import postprocess_geoclaw as pg
 
     out = tmp_path / "_output"
     out.mkdir()
@@ -785,7 +785,7 @@ def test_postprocess_geoclaw_end_to_end_shape(tmp_path: Path):
 
 
 def test_postprocess_geoclaw_empty_output_raises(tmp_path: Path):
-    from grace2_agent.workflows.postprocess_geoclaw import (
+    from trid3nt_server.workflows.postprocess_geoclaw import (
         PostprocessGeoClawError,
         postprocess_geoclaw,
     )
@@ -838,7 +838,7 @@ def _write_fgmax_fixture(out: Path, rows: list[tuple]) -> None:
 def test_read_fgmax_output_parses_depth_and_arrival(tmp_path: Path):
     """read_fgmax_output maps the 9-col layout -> max_depth/inundation/arrival,
     with never-arrived sentinels -> NaN (so they do NOT poison the min)."""
-    from grace2_agent.workflows.postprocess_geoclaw import read_fgmax_output
+    from trid3nt_server.workflows.postprocess_geoclaw import read_fgmax_output
 
     # rows: (x, y, level, B, h, s, t_hmax, t_smax, arrival_time)
     rows = [
@@ -876,7 +876,7 @@ def test_read_fgmax_output_all_never_set_is_zero_not_negative(tmp_path: Path):
     (every h/B/arrival == FG_NOTSET = -0.99999e99) must yield max_depth_m == 0.0
     and arrival None -- NOT a huge negative depth that crashes the
     GeoClawDepthLayerURI(ge=0.0) validator."""
-    from grace2_agent.workflows.postprocess_geoclaw import read_fgmax_output
+    from trid3nt_server.workflows.postprocess_geoclaw import read_fgmax_output
 
     rows = [
         (-85.50, 29.90, 1, _FG_NOTSET, _FG_NOTSET, _FG_NOTSET, _FG_NOTSET,
@@ -897,7 +897,7 @@ def test_read_fgmax_output_all_never_set_is_zero_not_negative(tmp_path: Path):
 
 def test_read_fgmax_output_absent_returns_none(tmp_path: Path):
     """No fgmax file (dam_break / surge / fgmax disabled) -> None, NOT an error."""
-    from grace2_agent.workflows.postprocess_geoclaw import read_fgmax_output
+    from trid3nt_server.workflows.postprocess_geoclaw import read_fgmax_output
 
     (tmp_path / "_output").mkdir()
     assert read_fgmax_output(tmp_path) is None
@@ -906,7 +906,7 @@ def test_read_fgmax_output_absent_returns_none(tmp_path: Path):
 def test_postprocess_geoclaw_fgmax_overrides_fortq(tmp_path: Path):
     """With fgmax present, postprocess OVERRIDES the fort.q max_depth with the
     fgmax between-frame peak and sets arrival_time_s on the peak layer."""
-    from grace2_agent.workflows import postprocess_geoclaw as pg
+    from trid3nt_server.workflows import postprocess_geoclaw as pg
 
     out = tmp_path / "_output"
     out.mkdir()
@@ -1012,7 +1012,7 @@ def test_ocean_mask_publishes_overland_only(tmp_path: Path):
     the INITIALLY-WET ocean band and PRESERVED over the newly-wetted LAND; metrics
     reflect the OVERLAND field (land run-up depth + smaller flooded area); an
     explicit nodata value is stamped on every COG."""
-    from grace2_agent.workflows import postprocess_geoclaw as pg
+    from trid3nt_server.workflows import postprocess_geoclaw as pg
 
     _write_coastal_run(tmp_path / "_output", n_frames=3)
     topo = _split_topo()
@@ -1061,7 +1061,7 @@ def test_ocean_mask_initial_wet_catches_zero_topo_ocean(tmp_path: Path):
     initial-wet criterion tags it correctly — the ocean band (wet at t=0) is masked
     even though its topo is 0.0. Before/after: `topo<0` alone masks 0 cells; the
     initial-wet mask removes the whole 32x16 ocean band."""
-    from grace2_agent.workflows import postprocess_geoclaw as pg
+    from trid3nt_server.workflows import postprocess_geoclaw as pg
 
     _write_coastal_run(tmp_path / "_output", n_frames=3)
     # Ocean topo reads ~0 m (flat, NOT negative) — the ETOPO-coast failure mode.
@@ -1097,7 +1097,7 @@ def test_ocean_mask_topo_or_catches_below_datum_dry_start(tmp_path: Path):
     floods later is still ocean and must be masked (the CUDEM regression guard). The
     initial-wet criterion alone would MISS it (dry at t=0); the `topo<0` OR-term
     catches it."""
-    from grace2_agent.workflows import postprocess_geoclaw as pg
+    from trid3nt_server.workflows import postprocess_geoclaw as pg
 
     # EAST ocean is DRY at t=0 (land_wet_at_t0=False + we make ocean start dry by
     # writing land-only frame 0), but topo marks the east as below-datum sea.
@@ -1134,7 +1134,7 @@ def test_ocean_mask_topo_or_catches_below_datum_dry_start(tmp_path: Path):
 def test_ocean_mask_noop_when_no_permanent_water(tmp_path: Path):
     """mask_ocean=True but NO permanent water (no cell wet at t=0 AND all topo>=0):
     a strict NO-OP — every later-wetted cell is preserved, nothing masked."""
-    from grace2_agent.workflows import postprocess_geoclaw as pg
+    from trid3nt_server.workflows import postprocess_geoclaw as pg
 
     # Frame 0 all dry; later frames wet the whole domain (a pure inland flood, no sea).
     out = tmp_path / "_output"
@@ -1170,7 +1170,7 @@ def test_ocean_mask_off_preserves_inland_flood(tmp_path: Path):
     """dam_break (mask_ocean=False): the mask is NOT applied, so the legitimate
     inland flood over EVERY cell (incl. the initially-wet 10.0 side) is preserved
     (the mask can never erase an inland flood)."""
-    from grace2_agent.workflows import postprocess_geoclaw as pg
+    from trid3nt_server.workflows import postprocess_geoclaw as pg
 
     _write_coastal_run(tmp_path / "_output", n_frames=3)
     topo = _split_topo(land_west=5.0, ocean_east=-5.0)
@@ -1220,8 +1220,8 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     run_solver call carries solver='geoclaw' + the staged manifest_uri."""
     import asyncio
 
-    from grace2_agent.workflows import model_dambreak_geoclaw_scenario as comp
-    from grace2_agent.workflows.run_geoclaw import GeoClawStaging
+    from trid3nt_server.workflows import model_dambreak_geoclaw_scenario as comp
+    from trid3nt_server.workflows.run_geoclaw import GeoClawStaging
 
     run_args = GeoClawRunArgs(bbox=_AOI, scenario="dam_break", output_frames=4)
 
@@ -1284,7 +1284,7 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
     # The composer imports run_solver / wait_for_completion / EmitterBinding /
     # set_emitter_binding INSIDE the function (from ..tools.solver import ...), so
     # they must be patched at the SOURCE module, not on the composer module.
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.tools import solver as solver_mod
 
     with patch.object(comp, "_fetch_topo_for_geoclaw", lambda b, **k: "s3://cache/topo.tif"), \
          patch.object(comp, "stage_geoclaw_manifest", _fake_stage), \

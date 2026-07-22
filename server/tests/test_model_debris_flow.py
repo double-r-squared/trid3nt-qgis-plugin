@@ -33,10 +33,10 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.model_debris_flow import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.model_debris_flow import (
     AoiTooLargeError,
     DebrisFlowInputError,
     DebrisFlowLayerURI,

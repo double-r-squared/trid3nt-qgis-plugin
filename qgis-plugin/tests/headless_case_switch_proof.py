@@ -27,7 +27,7 @@ NO persisted bbox and NO vector layers, and asserts:
           current view") instead of silently doing nothing.
 
 Uses two cases already sitting in the local dev persistence store (see
-``data/persistence/grace2_dev/projects.json``) that belong to the same
+``data/persistence/trid3nt_dev/projects.json``) that belong to the same
 local anonymous user this proof authenticates as -- no LLM turn needed, so
 the proof is fast and does not queue behind other live work.
 

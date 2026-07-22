@@ -1,6 +1,6 @@
 """#6 SYNC-TOOL OFF-LOAD -- in-code ALWAYS-OFFLOAD set for proven-heavy tools.
 
-The staged ``GRACE2_SYNC_TOOL_OFFLOAD`` env flag ships dark (mode ``off``) and
+The staged ``TRID3NT_SYNC_TOOL_OFFLOAD`` env flag ships dark (mode ``off``) and
 flipping it to ``global`` on the box is a gated production-mode change. But a
 coastal-flood turn died at code 1005 because the LLM-driven ``fetch_topobathy``
 tool ran a ~61 s CUDEM tile merge + reproject + 189 MB COG materialize INLINE on
@@ -31,10 +31,10 @@ import pathlib
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent import tools as agent_tools
-from grace2_agent.tools import RegisteredTool
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server import server
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.tools import RegisteredTool
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 _SRC = pathlib.Path(server.__file__).resolve().parent
 _WORKFLOWS = _SRC / "workflows"

@@ -18,7 +18,7 @@ Coverage:
 - LayerURI shape: layer_type, role, style_preset, units verified.
 - Cache hit: second identical call reuses cached FlatGeobuf.
 
-Live tests (gated by ``GRACE2_TEST_LIVE_EBIRD=1`` + ``GRACE2_EBIRD_API_KEY``):
+Live tests (gated by ``TRID3NT_TEST_LIVE_EBIRD=1`` + ``TRID3NT_EBIRD_API_KEY``):
 - ``bewwre`` (Bewick's Wren) over CA bbox → ≥0 features; evidence captured.
 """
 
@@ -31,8 +31,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_ebird_observations import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_ebird_observations import (
     EBirdAuthError,
     EBirdError,
     EBirdInputError,
@@ -65,8 +65,8 @@ _SMALL_BBOX = (-122.4, 38.0, -122.0, 38.4)
 _MULTI_TILE_BBOX = (-122.0, 38.0, -119.0, 40.0)
 
 # Live test gates.
-_LIVE_EBIRD = os.environ.get("GRACE2_TEST_LIVE_EBIRD") == "1"
-_LIVE_EBIRD_KEY = os.environ.get("GRACE2_EBIRD_API_KEY")
+_LIVE_EBIRD = os.environ.get("TRID3NT_TEST_LIVE_EBIRD") == "1"
+_LIVE_EBIRD_KEY = os.environ.get("TRID3NT_EBIRD_API_KEY")
 
 # Bewick's Wren — common in California per audit.md.
 _BEWICK_WREN_CODE = "bewwre"
@@ -120,7 +120,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -360,14 +360,14 @@ def test_bbox_to_tile_centers_huge_bbox_raises():
 def test_resolve_api_key_explicit_kwarg_wins():
     """An explicit ``api_key`` kwarg short-circuits all other paths."""
     # Set the env var to a different value; the kwarg should still win.
-    with patch.dict(os.environ, {"GRACE2_EBIRD_API_KEY": "env-value"}):
+    with patch.dict(os.environ, {"TRID3NT_EBIRD_API_KEY": "env-value"}):
         out = _resolve_api_key(api_key="explicit-value", secret_ref=None)
     assert out == "explicit-value"
 
 
 def test_resolve_api_key_env_var_fallback():
     """With no kwarg and no secret_ref, env var wins."""
-    with patch.dict(os.environ, {"GRACE2_EBIRD_API_KEY": "env-value"}):
+    with patch.dict(os.environ, {"TRID3NT_EBIRD_API_KEY": "env-value"}):
         out = _resolve_api_key(api_key=None, secret_ref=None)
     assert out == "env-value"
 
@@ -375,7 +375,7 @@ def test_resolve_api_key_env_var_fallback():
 def test_resolve_api_key_secret_ref_str_shortcut():
     """The test-only str shortcut on secret_ref delivers the value verbatim."""
     with patch.dict(os.environ, {}, clear=True):
-        # Save & restore the GRACE2_EBIRD_API_KEY if present in the live env.
+        # Save & restore the TRID3NT_EBIRD_API_KEY if present in the live env.
         # patch.dict(clear=True) removed it for this test.
         out = _resolve_api_key(api_key=None, secret_ref="secret-direct-value")
     assert out == "secret-direct-value"
@@ -553,10 +553,10 @@ def test_mocked_happy_path_single_tile():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, records)])
 
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_ebird_observations(
@@ -625,10 +625,10 @@ def test_mocked_multi_tile_dedup_across_tiles():
     mock_client = _MockHTTPClient(responses)
 
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_ebird_observations(
@@ -663,10 +663,10 @@ def test_mocked_empty_response_returns_empty_flatgeobuf():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, [])])
 
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_ebird_observations(
@@ -691,10 +691,10 @@ def test_missing_key_raises_pre_network():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, [])])
 
     with patch.dict(os.environ, {}, clear=True), patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(EBirdMissingKeyError):
@@ -716,10 +716,10 @@ def test_mocked_401_raises_auth_error_not_retryable():
     )
 
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(EBirdAuthError) as exc_info:
@@ -740,10 +740,10 @@ def test_mocked_404_raises_input_error_bad_species():
     )
 
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(EBirdInputError) as exc_info:
@@ -763,10 +763,10 @@ def test_mocked_5xx_raises_upstream_error_retryable():
     )
 
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(EBirdUpstreamError) as exc_info:
@@ -791,10 +791,10 @@ def test_cache_hit_skips_fetch_fn():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, records)])
 
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         r1 = fetch_ebird_observations(
@@ -820,10 +820,10 @@ def test_layer_uri_shape_fields():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, records)])
 
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_ebird_observations(
@@ -853,10 +853,10 @@ def test_cache_key_omits_api_key():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, records)])
 
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         r1 = fetch_ebird_observations(
@@ -882,7 +882,7 @@ def test_cache_key_omits_api_key():
 
 @pytest.mark.skipif(
     not (_LIVE_EBIRD and _LIVE_EBIRD_KEY),
-    reason="GRACE2_TEST_LIVE_EBIRD=1 + GRACE2_EBIRD_API_KEY not set",
+    reason="TRID3NT_TEST_LIVE_EBIRD=1 + TRID3NT_EBIRD_API_KEY not set",
 )
 def test_live_bewickwren_over_ca_bbox(tmp_path):
     """LIVE: Bewick's Wren over a CA bbox (audit.md example).
@@ -896,7 +896,7 @@ def test_live_bewickwren_over_ca_bbox(tmp_path):
 
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_ebird_observations(

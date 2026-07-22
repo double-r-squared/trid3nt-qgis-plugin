@@ -1,4 +1,4 @@
-"""Tests for ``grace2_contracts.errors.ToolInputError`` (job-0114-schema).
+"""Tests for ``trid3nt_contracts.errors.ToolInputError`` (job-0114-schema).
 
 Verifies:
 - All three closed-enum codes round-trip cleanly.
@@ -7,7 +7,7 @@ Verifies:
 - Unknown code is rejected.
 - Extra fields are rejected (``extra='forbid'`` inheritance from GraceModel).
 - JSON round-trip is idempotent.
-- The convenience re-export from ``grace2_contracts.tool_registry`` returns
+- The convenience re-export from ``trid3nt_contracts.tool_registry`` returns
   the same class as the authoritative module.
 """
 
@@ -18,8 +18,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import errors as errors_mod
-from grace2_contracts.errors import (
+from trid3nt_contracts import errors as errors_mod
+from trid3nt_contracts.errors import (
     TOOL_INPUT_ERROR_CODES,
     ToolInputError,
 )
@@ -135,16 +135,16 @@ def test_tool_input_error_wire_form_contains_all_three_fields() -> None:
 
 
 def test_tool_input_error_reexport_from_tool_registry_is_same_class() -> None:
-    """``grace2_contracts.tool_registry`` re-exports the same class object.
+    """``trid3nt_contracts.tool_registry`` re-exports the same class object.
 
     Tool authors who already import from ``tool_registry`` can pick up
     ``ToolInputError`` without a second import line, but both paths must
     point at the authoritative class.
     """
-    from grace2_contracts.tool_registry import (
+    from trid3nt_contracts.tool_registry import (
         TOOL_INPUT_ERROR_CODES as reexport_codes,
     )
-    from grace2_contracts.tool_registry import (
+    from trid3nt_contracts.tool_registry import (
         ToolInputError as reexport_cls,
     )
 

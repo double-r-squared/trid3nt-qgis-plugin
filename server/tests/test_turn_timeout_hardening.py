@@ -12,7 +12,7 @@ iteration) never returned and never raised, so:
     wedged on that turn, so NO model (even Sonnet) could respond,
   * selecting Haiku/Nova produced NOTHING on the wire -- a silent death.
 
-THE FIX (server/src/grace2_agent/bedrock_adapter.py):
+THE FIX (server/src/trid3nt_server/bedrock_adapter.py):
 
   1. the ``bedrock-runtime`` client now carries a botocore ``Config`` with a
      bounded ``read_timeout`` / ``connect_timeout`` + a small retry policy, so a
@@ -42,8 +42,8 @@ from unittest.mock import patch
 import pytest
 from botocore.exceptions import ClientError, ReadTimeoutError
 
-from grace2_agent import bedrock_adapter as ba
-from grace2_agent.adapter import TextDeltaEvent
+from trid3nt_server import bedrock_adapter as ba
+from trid3nt_server.adapter import TextDeltaEvent
 
 
 # --------------------------------------------------------------------------- #
@@ -310,9 +310,9 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
       * we assert (a) an LLM_UNAVAILABLE error envelope reached the wire, and
         (b) AFTER the turn task completes, ``inflight_turn_count() == 0``
         -- the failed call did NOT wedge the loop."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_contracts import new_ulid
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_contracts import new_ulid
 
     settings = agent_server.GeminiSettings(
         model="bedrock", project="test", location="us-west-2", use_vertex=False
@@ -369,9 +369,9 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_normal_turn_path_unaffected(monkeypatch):
     """A healthy text turn still completes + clears busy (no regression)."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_contracts import new_ulid
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_contracts import new_ulid
 
     settings = agent_server.GeminiSettings(
         model="bedrock", project="test", location="us-west-2", use_vertex=False
@@ -415,10 +415,10 @@ async def test_solve_tool_path_unaffected_by_model_bound(monkeypatch):
     Confirms the LLM read_timeout bound does NOT reach into the tool
     dispatch path: a turn that calls a tool then narrates runs to a clean
     terminal with the live-turn registry cleared."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_agent.adapter import FunctionCallEvent
-    from grace2_contracts import new_ulid
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_server.adapter import FunctionCallEvent
+    from trid3nt_contracts import new_ulid
 
     settings = agent_server.GeminiSettings(
         model="bedrock", project="test", location="us-west-2", use_vertex=False

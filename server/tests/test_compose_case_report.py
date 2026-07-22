@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from grace2_agent.tools import compute_exposure_summary as exposure_mod
-from grace2_agent.tools.compose_case_report import (
+from trid3nt_server.tools import compute_exposure_summary as exposure_mod
+from trid3nt_server.tools.compose_case_report import (
     CaseReportInputError,
     CaseReportNotFoundError,
     compose_case_report,
@@ -67,7 +67,7 @@ def _install_case(monkeypatch, layers, case_id="case-9", bbox=None, **extra):
         created_at=extra.pop("created_at", "2026-06-20T12:00:00Z"),
         **extra,
     )
-    import grace2_agent.telemetry as telemetry
+    import trid3nt_server.telemetry as telemetry
 
     monkeypatch.setattr(telemetry, "get_persistence", lambda: FakePersistence(case))
     return case
@@ -156,7 +156,7 @@ async def test_report_written_with_layers_and_stats(
     # Honest exposure absence.
     assert "No exposure summary was computed this session" in text
     # The result dict is LayerURI-free (plain scalars/strings only).
-    from grace2_contracts.execution import LayerURI
+    from trid3nt_contracts.execution import LayerURI
 
     assert not any(isinstance(v, LayerURI) for v in result.values())
 
@@ -254,7 +254,7 @@ async def test_default_output_dir_uses_export_env(
     monkeypatch, tmp_path: Path, case_layers
 ) -> None:
     _install_case(monkeypatch, case_layers)
-    monkeypatch.setenv("GRACE2_EXPORT_DIR", str(tmp_path / "exports"))
+    monkeypatch.setenv("TRID3NT_EXPORT_DIR", str(tmp_path / "exports"))
     result = await compose_case_report(case_id="case-9", include_layer_stats=False)
     assert result["report_path"].startswith(str(tmp_path / "exports"))
     assert Path(result["report_path"]).is_file()
@@ -286,7 +286,7 @@ async def test_no_case_typed_error(monkeypatch, case_layers) -> None:
 
 
 def test_registered_in_tool_registry() -> None:
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("compose_case_report")
     assert entry is not None

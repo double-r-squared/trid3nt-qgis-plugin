@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import yaml
 
-from grace2_agent.workflows.sfincs_builder import (
+from trid3nt_server.workflows.sfincs_builder import (
     _PANDAS_GUARD_OK,
     BuildOptions,
     DischargeForcing,
@@ -541,7 +541,7 @@ def test_tsunami_ldn_synth_leads_with_depression(tmp_path) -> None:
     series LEADS with a depression (a trough precedes the crest)."""
     import csv as _csv
 
-    from grace2_agent.workflows.sfincs_forcing_adapter import synthesize_tsunami_bzs
+    from trid3nt_server.workflows.sfincs_forcing_adapter import synthesize_tsunami_bzs
 
     out = synthesize_tsunami_bzs(
         _MEXICO_BEACH_BBOX,
@@ -575,7 +575,7 @@ def test_tsunami_solitary_synth_is_single_crest(tmp_path) -> None:
     leading trough (the series minimum is ~0, not a deep withdrawal)."""
     import csv as _csv
 
-    from grace2_agent.workflows.sfincs_forcing_adapter import synthesize_tsunami_bzs
+    from trid3nt_server.workflows.sfincs_forcing_adapter import synthesize_tsunami_bzs
 
     out = synthesize_tsunami_bzs(
         _MEXICO_BEACH_BBOX,
@@ -596,7 +596,7 @@ def test_tsunami_synth_feeds_waterlevel_deck(tmp_path) -> None:
     """The tsunami synth dict flows through a WaterlevelForcing -> the deck emits
     setup_waterlevel_forcing + setup_mask_bounds(btype waterlevel) so the bzs is
     not inert."""
-    from grace2_agent.workflows.sfincs_forcing_adapter import synthesize_tsunami_bzs
+    from trid3nt_server.workflows.sfincs_forcing_adapter import synthesize_tsunami_bzs
 
     out = synthesize_tsunami_bzs(
         _MEXICO_BEACH_BBOX,

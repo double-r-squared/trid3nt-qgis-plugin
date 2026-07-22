@@ -16,7 +16,7 @@ Coverage:
 - LayerURI shape: layer_type="vector", role="primary", units="kn".
 - Extra-kwargs absorption (LLM hallucination guard).
 
-Live test (gated by GRACE2_TEST_LIVE_COOPS=1):
+Live test (gated by TRID3NT_TEST_LIVE_COOPS=1):
     Real CO-OPS API request for San Francisco Bay (4 current stations) for
     both observed and predicted products. Confirms >=1 station, FGB round-trip,
     speed_kn >= 0, direction_deg in [0, 360), coords in the SF Bay envelope.
@@ -33,8 +33,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_noaa_coops_currents import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_noaa_coops_currents import (
     COOPSCurrentsEmptyError,
     COOPSCurrentsInputError,
     COOPSCurrentsUpstreamError,
@@ -57,7 +57,7 @@ from grace2_agent.tools.fetch_noaa_coops_currents import (
 # San Francisco Bay bbox (4 current stations: s06010, s08010, s09010, s10010).
 _SF_BAY_BBOX: tuple[float, float, float, float] = (-123.0, 37.4, -122.0, 38.2)
 
-_LIVE_COOPS = os.environ.get("GRACE2_TEST_LIVE_COOPS") == "1"
+_LIVE_COOPS = os.environ.get("TRID3NT_TEST_LIVE_COOPS") == "1"
 
 _NOW = datetime.datetime(2026, 6, 27, 23, 0, 0, tzinfo=datetime.timezone.utc)
 
@@ -94,7 +94,7 @@ _PINNED_NOW = datetime.datetime(2026, 6, 27, 12, 0, 0, tzinfo=datetime.timezone.
 
 
 def _make_read_through_injector(fake_gcs):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -222,7 +222,7 @@ def test_discover_stations_in_bbox_filters_correctly():
         {"id": "n05010", "name": "NY Harbor", "lat": "40.70", "lng": "-74.02"},  # out
     ]
     with patch(
-        "grace2_agent.tools.fetch_noaa_coops_currents._http_get",
+        "trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
         return_value=_make_station_catalog(catalog),
     ):
         result = _discover_stations_in_bbox(_SF_BAY_BBOX)
@@ -238,7 +238,7 @@ def test_discover_stations_empty_bbox():
         {"id": "bh0101", "name": "Boston", "lat": "42.35", "lng": "-71.05"},
     ])
     with patch(
-        "grace2_agent.tools.fetch_noaa_coops_currents._http_get",
+        "trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
         return_value=catalog,
     ), pytest.raises(COOPSCurrentsEmptyError):
         _discover_stations_in_bbox(_SF_BAY_BBOX)
@@ -246,7 +246,7 @@ def test_discover_stations_empty_bbox():
 
 def test_discover_stations_upstream_error():
     with patch(
-        "grace2_agent.tools.fetch_noaa_coops_currents._http_get",
+        "trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
         side_effect=COOPSCurrentsUpstreamError("network timeout"),
     ), pytest.raises(COOPSCurrentsUpstreamError):
         _discover_stations_in_bbox(_SF_BAY_BBOX)
@@ -451,9 +451,9 @@ def test_fetch_tool_cache_miss_then_hit():
 
     injector = _make_read_through_injector(fake_gcs)
     with (
-        patch("grace2_agent.tools.fetch_noaa_coops_currents._http_get",
+        patch("trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
               side_effect=fake_http_get),
-        patch("grace2_agent.tools.fetch_noaa_coops_currents.read_through",
+        patch("trid3nt_server.tools.fetch_noaa_coops_currents.read_through",
               side_effect=injector),
     ):
         r1 = fetch_noaa_coops_currents(bbox=_SF_BAY_BBOX, product="currents")
@@ -489,9 +489,9 @@ def test_layer_uri_shape():
 
     injector = _make_read_through_injector(FakeStorageClient())
     with (
-        patch("grace2_agent.tools.fetch_noaa_coops_currents._http_get",
+        patch("trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
               side_effect=fake_http_get),
-        patch("grace2_agent.tools.fetch_noaa_coops_currents.read_through",
+        patch("trid3nt_server.tools.fetch_noaa_coops_currents.read_through",
               side_effect=injector),
     ):
         result = fetch_noaa_coops_currents(bbox=_SF_BAY_BBOX, product="currents")
@@ -530,9 +530,9 @@ def test_extra_kwargs_absorbed():
 
     injector = _make_read_through_injector(FakeStorageClient())
     with (
-        patch("grace2_agent.tools.fetch_noaa_coops_currents._http_get",
+        patch("trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
               side_effect=fake_http_get),
-        patch("grace2_agent.tools.fetch_noaa_coops_currents.read_through",
+        patch("trid3nt_server.tools.fetch_noaa_coops_currents.read_through",
               side_effect=injector),
     ):
         result = fetch_noaa_coops_currents(
@@ -555,11 +555,11 @@ def test_round_bbox_to_6dp():
 
 
 # ---------------------------------------------------------------------------
-# Live smoke test (requires GRACE2_TEST_LIVE_COOPS=1).
+# Live smoke test (requires TRID3NT_TEST_LIVE_COOPS=1).
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_COOPS, reason="set GRACE2_TEST_LIVE_COOPS=1 to run live CO-OPS test")
+@pytest.mark.skipif(not _LIVE_COOPS, reason="set TRID3NT_TEST_LIVE_COOPS=1 to run live CO-OPS test")
 @pytest.mark.parametrize("product", ["currents", "currents_predictions"])
 def test_live_fetch_sf_bay(product):
     """Live: fetch SF Bay tidal currents for both products."""
@@ -567,7 +567,7 @@ def test_live_fetch_sf_bay(product):
 
     import geopandas as gpd
 
-    from grace2_agent.tools.fetch_noaa_coops_currents import (
+    from trid3nt_server.tools.fetch_noaa_coops_currents import (
         _fetch_coops_currents_bytes,
     )
 

@@ -25,8 +25,8 @@ import json
 
 import pytest
 
-from grace2_contracts import new_ulid
-from grace2_contracts.ws import PayloadConfirmationEnvelopePayload
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 
 ARTICLE = """\
 TWIN FALLS, IDAHO — A tanker overturned south of Twin Falls, Idaho, releasing
@@ -57,7 +57,7 @@ class _FakeState:
 
 def _patch_extraction(monkeypatch):
     """Avoid live geocoding: patch extract_spill_parameters with a fixed derived dict."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     derived = {
         "spill_location_latlon": (42.556, -114.470),
@@ -71,7 +71,7 @@ def _patch_extraction(monkeypatch):
         "clamps_applied": [],
         "extraction_notes": [],
     }
-    import grace2_agent.workflows.model_groundwater_contamination_scenario as m
+    import trid3nt_server.workflows.model_groundwater_contamination_scenario as m
 
     monkeypatch.setattr(m, "extract_spill_parameters", lambda text, geocode=True: derived)
     return derived
@@ -79,7 +79,7 @@ def _patch_extraction(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_gate_emits_card_and_approve_injects_confirmed(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _patch_extraction(monkeypatch)
     ws = _FakeWS()
@@ -113,7 +113,7 @@ async def test_gate_emits_card_and_approve_injects_confirmed(monkeypatch) -> Non
 
 @pytest.mark.asyncio
 async def test_gate_cancel_fails_closed(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _patch_extraction(monkeypatch)
     ws = _FakeWS()
@@ -142,7 +142,7 @@ async def test_gate_cancel_fails_closed(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_gate_timeout_fails_closed(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _patch_extraction(monkeypatch)
     monkeypatch.setattr(server, "CODE_EXEC_CONFIRM_TIMEOUT_SECONDS", 0)
@@ -160,8 +160,8 @@ async def test_gate_timeout_fails_closed(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_extraction_failure_falls_through_to_composer(monkeypatch) -> None:
     """The gate must not mask parameter problems — composer raises its own error."""
-    from grace2_agent import server
-    import grace2_agent.workflows.model_groundwater_contamination_scenario as m
+    from trid3nt_server import server
+    import trid3nt_server.workflows.model_groundwater_contamination_scenario as m
 
     def _boom(text, geocode=True):
         raise ValueError("no spill scale found")
@@ -178,7 +178,7 @@ async def test_extraction_failure_falls_through_to_composer(monkeypatch) -> None
 
 
 def test_solver_tool_registered_in_confirm_set() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     assert (
         "run_model_groundwater_contamination_scenario" in server.SOLVER_CONFIRM_TOOLS
@@ -187,7 +187,7 @@ def test_solver_tool_registered_in_confirm_set() -> None:
 
 def test_wrapper_defaults_fail_closed() -> None:
     """The registered wrapper must NOT hardcode confirmed=True (the job-0235 bug)."""
-    from grace2_agent.workflows.model_groundwater_contamination_scenario import (
+    from trid3nt_server.workflows.model_groundwater_contamination_scenario import (
         run_model_groundwater_contamination_scenario as wrapper,
     )
 
@@ -202,7 +202,7 @@ async def test_dispatch_path_strips_llm_supplied_confirmed(monkeypatch) -> None:
     gating. We verify the strip+gate wiring at the dispatch site by checking
     the gate still runs (emits the card) even when the LLM supplied
     confirmed=True."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _patch_extraction(monkeypatch)
     ws = _FakeWS()
@@ -240,7 +240,7 @@ def test_dispatch_source_contains_strip_and_gate() -> None:
     """Belt-and-braces: the dispatch site strips LLM-supplied ``confirmed`` for
     SOLVER_CONFIRM_TOOLS before gating (source-level assertion so a refactor
     that drops the strip line fails loudly)."""
-    import grace2_agent.server as server_mod
+    import trid3nt_server.server as server_mod
 
     src = inspect.getsource(server_mod._invoke_tool_via_emitter)
     assert "SOLVER_CONFIRM_TOOLS" in src
@@ -252,7 +252,7 @@ def test_code_exec_request_in_hot_set() -> None:
     """job-0247 (OQ-0247-CODE-EXEC-NOT-IN-HOT-SET): code_exec_request must be
     hot-set-reachable — round-4 live showed the validator rejecting Gemini's
     CORRECT first-turn call, producing a false 'cannot run Python' narration."""
-    from grace2_agent.categories import HOT_SET_TOOLS
+    from trid3nt_server.categories import HOT_SET_TOOLS
 
     assert "code_exec_request" in HOT_SET_TOOLS
 
@@ -261,7 +261,7 @@ def test_code_exec_request_in_hot_set() -> None:
 async def test_flood_gate_emits_args_card_and_approve(monkeypatch) -> None:
     """job-0256: run_model_flood_scenario is gated; the card carries the call
     args (no extraction) and approve injects confirmed=True."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws = _FakeWS()
     state = _FakeState()
@@ -289,7 +289,7 @@ async def test_flood_gate_emits_args_card_and_approve(monkeypatch) -> None:
 
 
 def test_flood_solvers_in_confirm_set() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     assert "run_model_flood_scenario" in server.SOLVER_CONFIRM_TOOLS
     assert "run_model_flood_habitat_scenario" in server.SOLVER_CONFIRM_TOOLS
@@ -301,7 +301,7 @@ async def test_psha_gate_emits_card_and_approve(monkeypatch) -> None:
     """run_seismic_hazard_psha is gated; the card is a simple proceed/cancel
     confirm summarizing the PSHA (AOI area, IMT, PoE -> return period) and
     approve injects confirmed=True (no granularity picker)."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws = _FakeWS()
     state = _FakeState()
@@ -341,7 +341,7 @@ async def test_psha_gate_emits_card_and_approve(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_psha_gate_cancel_fails_closed() -> None:
     """A cancel decision fails closed (no dispatch) like the other solvers."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws = _FakeWS()
     state = _FakeState()
@@ -366,14 +366,14 @@ async def test_psha_gate_cancel_fails_closed() -> None:
 
 
 def test_psha_solver_in_confirm_set() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     assert "run_seismic_hazard_psha" in server.SOLVER_CONFIRM_TOOLS
 
 
 # --------------------------------------------------------------------------- #
 # Local-cloud fingerprint seam (NATE 2026-07-08): confirm-card prose is
-# deployment-aware. The LOCAL build (GRACE2_SOLVER_BACKEND=local-docker)
+# deployment-aware. The LOCAL build (TRID3NT_SOLVER_BACKEND=local-docker)
 # never says "cloud solve" / "AWS Batch"; the cloud lane (aws-batch / unset)
 # keeps the exact prior wording byte-for-byte.
 # --------------------------------------------------------------------------- #
@@ -391,9 +391,9 @@ def test_psha_solver_in_confirm_set() -> None:
 async def test_flood_gate_recommendation_deployment_aware(
     monkeypatch, backend: str, expected: str, forbidden: str
 ) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", backend)
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend)
     ws = _FakeWS()
     state = _FakeState()
     # bbox included so the card also carries a granularity block.
@@ -453,9 +453,9 @@ async def test_flood_gate_recommendation_deployment_aware(
 async def test_psha_gate_recommendation_deployment_aware(
     monkeypatch, backend: str, expected: str, forbidden: str
 ) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", backend)
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend)
     ws = _FakeWS()
     state = _FakeState()
     params = {
@@ -524,7 +524,7 @@ async def test_gate_turn_memory_auto_applies_same_tool_same_bbox() -> None:
     non-bbox arg -- e.g. a fixed `dataset`) must NOT gate again; the earlier
     proceed decision is replayed and the remembered resolution_m override
     carries onto the new call's params."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
 
@@ -557,7 +557,7 @@ async def test_gate_turn_memory_auto_applies_same_tool_same_bbox() -> None:
 @pytest.mark.asyncio
 async def test_gate_turn_memory_different_bbox_gates_again() -> None:
     """A different bbox in the same turn is a memory MISS -- gates fresh."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
 
@@ -583,7 +583,7 @@ async def test_gate_turn_memory_different_bbox_gates_again() -> None:
 async def test_gate_turn_memory_cancel_not_memoized_gates_again() -> None:
     """A 'cancel' decision must NOT be memoized -- an identical retry gates
     again (the user might reconsider on a corrected retry)."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
 
@@ -611,7 +611,7 @@ async def test_gate_turn_memory_new_turn_gates_again() -> None:
     """A fresh turn (state.gate_decisions_this_turn reset, mirroring the
     real per-turn reset in server.py's dispatch entrypoint) gates again even
     for the SAME tool + bbox that was approved last turn."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
 
@@ -642,7 +642,7 @@ def test_gate_decisions_this_turn_reset_at_new_dispatch() -> None:
     back the cross-turn leak this fix closes."""
     import inspect
 
-    import grace2_agent.server as server_mod
+    import trid3nt_server.server as server_mod
 
     src = inspect.getsource(server_mod)
     assert "state.gate_decisions_this_turn = {}" in src
@@ -651,7 +651,7 @@ def test_gate_decisions_this_turn_reset_at_new_dispatch() -> None:
 def test_gate_memory_key_bboxless_tool_uses_full_args() -> None:
     """A gated tool with no bbox arg (e.g. the groundwater composers) keys
     on the full normalized args dict, so ANY arg change gates fresh."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     k1 = server._gate_memory_key(
         "run_model_groundwater_contamination_scenario", {"article_text": ARTICLE}

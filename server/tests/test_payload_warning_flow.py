@@ -26,22 +26,22 @@ from typing import Any
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.server import (
+from trid3nt_server import server
+from trid3nt_server.server import (
     SessionState,
     _invoke_tool_via_emitter,
     _maybe_gate_on_payload_warning,
 )
-from grace2_agent.tools import (
+from trid3nt_server.tools import (
     TOOL_REGISTRY,
     RegisteredTool,
     clear_registry_for_tests,
 )
-from grace2_contracts.common import new_ulid
-from grace2_contracts.payload_warning import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.payload_warning import (
     PayloadConfirmationEnvelopePayload,
 )
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
 # --------------------------------------------------------------------------- #
@@ -412,13 +412,13 @@ def test_missing_estimator_callable_falls_through_to_dispatch() -> None:
 
 
 def test_threshold_env_override() -> None:
-    """``GRACE2_PAYLOAD_WARNING_MB`` env var lowers the threshold below 25 MB."""
+    """``TRID3NT_PAYLOAD_WARNING_MB`` env var lowers the threshold below 25 MB."""
     import os
     _register_dummy("env_tool")
     ws = MockWebSocket()
     state = SessionState(session_id=new_ulid())
-    saved = os.environ.get("GRACE2_PAYLOAD_WARNING_MB")
-    os.environ["GRACE2_PAYLOAD_WARNING_MB"] = "5"
+    saved = os.environ.get("TRID3NT_PAYLOAD_WARNING_MB")
+    os.environ["TRID3NT_PAYLOAD_WARNING_MB"] = "5"
     try:
         async def _run() -> None:
             gate_task = asyncio.create_task(
@@ -441,9 +441,9 @@ def test_threshold_env_override() -> None:
         asyncio.run(_run())
     finally:
         if saved is None:
-            os.environ.pop("GRACE2_PAYLOAD_WARNING_MB", None)
+            os.environ.pop("TRID3NT_PAYLOAD_WARNING_MB", None)
         else:
-            os.environ["GRACE2_PAYLOAD_WARNING_MB"] = saved
+            os.environ["TRID3NT_PAYLOAD_WARNING_MB"] = saved
 
 
 # --------------------------------------------------------------------------- #
@@ -495,7 +495,7 @@ def test_invoke_tool_via_emitter_skips_after_cancel() -> None:
     error envelope back to Gemini (error_code=PAYLOAD_WARNING_CANCELLED,
     retryable=False).
     """
-    from grace2_agent.server import PayloadWarningCancelledError
+    from trid3nt_server.server import PayloadWarningCancelledError
 
     _register_dummy("integration_cancel_tool")
     ws = MockWebSocket()

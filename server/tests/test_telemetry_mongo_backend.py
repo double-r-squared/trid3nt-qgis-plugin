@@ -27,7 +27,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from grace2_agent.telemetry import compute_args_hash, emit_tool_call_event
+from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ async def test_emits_to_mongo_when_mcp_bound() -> None:
     """When Persistence is bound, the event goes to Mongo (insert-one) not to file."""
     persistence = _make_mock_persistence()
 
-    with patch("grace2_agent.telemetry.get_persistence", return_value=persistence):
+    with patch("trid3nt_server.telemetry.get_persistence", return_value=persistence):
         await emit_tool_call_event(**_DEFAULT_EMIT_KWARGS)
         await _drain()
 
@@ -100,8 +100,8 @@ async def test_falls_back_to_local_file_when_mcp_unbound() -> None:
         path = tf.name
     try:
         with (
-            patch("grace2_agent.telemetry.get_persistence", return_value=None),
-            patch.dict(os.environ, {"GRACE2_TELEMETRY_PATH": path}),
+            patch("trid3nt_server.telemetry.get_persistence", return_value=None),
+            patch.dict(os.environ, {"TRID3NT_TELEMETRY_PATH": path}),
         ):
             await emit_tool_call_event(**_DEFAULT_EMIT_KWARGS)
             # Drain enough turns for the executor-based file write to complete.
@@ -135,7 +135,7 @@ async def test_validates_against_ToolCallTelemetryDocument_schema() -> None:
 
     bad_kwargs = dict(_DEFAULT_EMIT_KWARGS, source="robot")  # not a valid Literal
 
-    with patch("grace2_agent.telemetry.get_persistence", return_value=persistence):
+    with patch("trid3nt_server.telemetry.get_persistence", return_value=persistence):
         # Must NOT raise even though the document is invalid.
         await emit_tool_call_event(**bad_kwargs)  # type: ignore[arg-type]
         await _drain()
@@ -158,7 +158,7 @@ async def test_handles_persistence_failure_gracefully() -> None:
         side_effect=RuntimeError("connection refused")
     )
 
-    with patch("grace2_agent.telemetry.get_persistence", return_value=persistence):
+    with patch("trid3nt_server.telemetry.get_persistence", return_value=persistence):
         # Must NOT raise.
         await emit_tool_call_event(**_DEFAULT_EMIT_KWARGS)
         await _drain()
@@ -189,7 +189,7 @@ async def test_emits_required_fields() -> None:
         cached_content_token_count=4096,
     )
 
-    with patch("grace2_agent.telemetry.get_persistence", return_value=persistence):
+    with patch("trid3nt_server.telemetry.get_persistence", return_value=persistence):
         await emit_tool_call_event(**kwargs)
         await _drain()
 
@@ -238,10 +238,10 @@ async def test_import_error_falls_through_to_local_file() -> None:
     try:
         with (
             patch(
-                "grace2_agent.telemetry.get_persistence",
+                "trid3nt_server.telemetry.get_persistence",
                 side_effect=ImportError("not yet wired"),
             ),
-            patch.dict(os.environ, {"GRACE2_TELEMETRY_PATH": path}),
+            patch.dict(os.environ, {"TRID3NT_TELEMETRY_PATH": path}),
         ):
             await emit_tool_call_event(**_DEFAULT_EMIT_KWARGS)
             await asyncio.sleep(0.1)

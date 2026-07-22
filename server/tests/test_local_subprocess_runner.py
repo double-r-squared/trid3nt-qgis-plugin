@@ -27,8 +27,8 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError
 
-import grace2_agent.tools.solver as solver_mod
-from grace2_agent.tools.solver import (
+import trid3nt_server.tools.solver as solver_mod
+from trid3nt_server.tools.solver import (
     LOCAL_SOLVER_SPEC_REGISTRY,
     set_emitter_binding,
     set_runs_bucket,
@@ -91,9 +91,9 @@ def reset_seams():
 def local_backend_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Set env vars for local-docker backend with a temp runs dir."""
     runs_dir = tmp_path / "runs"
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
-    monkeypatch.setenv("GRACE2_RUNS_DIR", str(runs_dir))
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(runs_dir))
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
     return runs_dir
 
 
@@ -139,7 +139,7 @@ def _wait_completion(
 def test_swmm_registered_in_local_spec_registry() -> None:
     """run_swmm.register_swmm_solver() must populate LOCAL_SOLVER_SPEC_REGISTRY."""
     # Force the registration by importing the module (idempotent).
-    import grace2_agent.workflows.run_swmm as _swmm_mod  # noqa: F401
+    import trid3nt_server.workflows.run_swmm as _swmm_mod  # noqa: F401
     del _swmm_mod
 
     assert "swmm" in LOCAL_SOLVER_SPEC_REGISTRY, (
@@ -149,7 +149,7 @@ def test_swmm_registered_in_local_spec_registry() -> None:
 
 
 def test_landlab_registered_in_local_spec_registry() -> None:
-    import grace2_agent.workflows.run_landlab as _ll_mod
+    import trid3nt_server.workflows.run_landlab as _ll_mod
     del _ll_mod
 
     assert "landlab" in LOCAL_SOLVER_SPEC_REGISTRY, (
@@ -158,7 +158,7 @@ def test_landlab_registered_in_local_spec_registry() -> None:
 
 
 def test_openquake_registered_in_local_spec_registry() -> None:
-    import grace2_agent.workflows.model_seismic_hazard_scenario as _oq_mod
+    import trid3nt_server.workflows.model_seismic_hazard_scenario as _oq_mod
     del _oq_mod
 
     assert "openquake" in LOCAL_SOLVER_SPEC_REGISTRY, (
@@ -172,7 +172,7 @@ def test_openquake_registered_in_local_spec_registry() -> None:
 
 
 def test_swmm_build_argv_calls_run_inp_py() -> None:
-    from grace2_agent.workflows.run_swmm import swmm_local_spec
+    from trid3nt_server.workflows.run_swmm import swmm_local_spec
 
     spec = swmm_local_spec()
     run_id = "TEST-001"
@@ -188,7 +188,7 @@ def test_swmm_build_argv_calls_run_inp_py() -> None:
 
 
 def test_landlab_build_argv_calls_run_chain_py() -> None:
-    from grace2_agent.workflows.run_landlab import landlab_local_spec
+    from trid3nt_server.workflows.run_landlab import landlab_local_spec
 
     spec = landlab_local_spec()
     run_id = "TEST-002"
@@ -201,7 +201,7 @@ def test_landlab_build_argv_calls_run_chain_py() -> None:
 
 
 def test_openquake_build_argv_calls_run_oq_py() -> None:
-    from grace2_agent.workflows.model_seismic_hazard_scenario import openquake_local_spec
+    from trid3nt_server.workflows.model_seismic_hazard_scenario import openquake_local_spec
 
     spec = openquake_local_spec()
     run_id = "TEST-003"
@@ -219,7 +219,7 @@ def test_openquake_build_argv_calls_run_oq_py() -> None:
 
 
 def test_swmm_spec_has_pythonpath_override() -> None:
-    from grace2_agent.workflows.run_swmm import swmm_local_spec
+    from trid3nt_server.workflows.run_swmm import swmm_local_spec
 
     spec = swmm_local_spec()
     assert spec.env_overrides is not None, "swmm spec must set env_overrides"
@@ -232,7 +232,7 @@ def test_swmm_spec_has_pythonpath_override() -> None:
 
 
 def test_landlab_spec_has_pythonpath_override() -> None:
-    from grace2_agent.workflows.run_landlab import landlab_local_spec
+    from trid3nt_server.workflows.run_landlab import landlab_local_spec
 
     spec = landlab_local_spec()
     assert spec.env_overrides is not None
@@ -242,7 +242,7 @@ def test_landlab_spec_has_pythonpath_override() -> None:
 
 
 def test_openquake_spec_has_pythonpath_override() -> None:
-    from grace2_agent.workflows.model_seismic_hazard_scenario import openquake_local_spec
+    from trid3nt_server.workflows.model_seismic_hazard_scenario import openquake_local_spec
 
     spec = openquake_local_spec()
     assert spec.env_overrides is not None
@@ -263,7 +263,7 @@ def test_launch_writes_manifest_to_rundir(
 ) -> None:
     """launch_local_solver must write manifest.json to the rundir so the shim
     can read it via the ``--manifest manifest.json`` flag."""
-    from grace2_agent.tools.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.tools.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -328,7 +328,7 @@ def test_subprocess_runner_exit0_produces_ok_completion(
 ) -> None:
     """With a real subprocess that exits 0, the supervisor must write
     completion.json with status='ok' and upload it to the runs bucket."""
-    from grace2_agent.tools.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.tools.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -381,7 +381,7 @@ def test_subprocess_runner_nonzero_exit_produces_error_completion(
 ) -> None:
     """A subprocess that exits non-zero must produce status='error' in
     completion.json."""
-    from grace2_agent.tools.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.tools.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -427,9 +427,9 @@ def test_env_overrides_set_in_subprocess_environment(
     local_backend_env: Path,
 ) -> None:
     """env_overrides must appear in the subprocess environment.
-    We verify by having the subprocess write os.environ['GRACE2_TEST_PYPATH']
+    We verify by having the subprocess write os.environ['TRID3NT_TEST_PYPATH']
     to a file and checking the file contents."""
-    from grace2_agent.tools.solver import launch_local_solver, LocalSolverSpec
+    from trid3nt_server.tools.solver import launch_local_solver, LocalSolverSpec
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -447,7 +447,7 @@ def test_env_overrides_set_in_subprocess_environment(
         script = (
             f"import os, pathlib; "
             f"pathlib.Path({str(output_file)!r}).write_text("
-            f"os.environ.get('GRACE2_TEST_PYPATH', 'MISSING'))"
+            f"os.environ.get('TRID3NT_TEST_PYPATH', 'MISSING'))"
         )
         return [sys.executable, "-c", script]
 
@@ -465,7 +465,7 @@ def test_env_overrides_set_in_subprocess_environment(
         stderr_uri_field="stderr_uri",
         exec_kind="exec",
         classify_exit=classify_exit,
-        env_overrides={"GRACE2_TEST_PYPATH": "/injected/repo/root"},
+        env_overrides={"TRID3NT_TEST_PYPATH": "/injected/repo/root"},
     )
 
     handle = launch_local_solver(spec, "s3://b/env_test.json", compute_class="standard")

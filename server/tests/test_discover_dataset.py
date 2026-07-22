@@ -31,7 +31,7 @@ from typing import Any
 import pytest
 
 # Force the full tool + workflow surface to register before the index builds.
-from grace2_agent.tools import (  # noqa: F401 — registration side-effect
+from trid3nt_server.tools import (  # noqa: F401 — registration side-effect
     TOOL_REGISTRY,
     catalog,
     data_fetch,
@@ -40,9 +40,9 @@ from grace2_agent.tools import (  # noqa: F401 — registration side-effect
     qgis_discovery,
     solver,
 )
-from grace2_agent.workflows import model_flood_scenario  # noqa: F401 — registration side-effect
+from trid3nt_server.workflows import model_flood_scenario  # noqa: F401 — registration side-effect
 
-from grace2_agent.tools.discover_dataset import (
+from trid3nt_server.tools.discover_dataset import (
     _close_vocab_matches,
     _default_corpus_path,
     _expand_query_tokens,
@@ -321,7 +321,7 @@ def test_typo_gradinet_relief_routes_without_exact_corpus_queries(
     corpus["compute_colored_relief"] = stripped
     corpus_file = tmp_path / "corpus_stripped.yaml"
     corpus_file.write_text(_yaml.safe_dump(corpus))
-    monkeypatch.setenv("GRACE2_TOOL_CORPUS_YAML", str(corpus_file))
+    monkeypatch.setenv("TRID3NT_TOOL_CORPUS_YAML", str(corpus_file))
     _reset_index_for_tests()  # rebuild against the stripped corpus
 
     # Mechanism: the typo token is out-of-vocab and corrects to "gradient".

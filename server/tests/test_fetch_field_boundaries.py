@@ -16,7 +16,7 @@ Coverage:
 
 The source GeoParquet read (``_read_fields_gdf``) is mocked in every test so
 the suite never touches the network. A live end-to-end probe against the real
-Source Cooperative endpoints is gated by ``GRACE2_TEST_LIVE_FIELDS=1``.
+Source Cooperative endpoints is gated by ``TRID3NT_TEST_LIVE_FIELDS=1``.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_field_boundaries import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_field_boundaries import (
     FTW_DATASETS,
     FieldsInputError,
     FieldsNoCoverageError,
@@ -51,7 +51,7 @@ _IOWA_BBOX = (-93.70, 42.00, -93.60, 42.08)
 # Mid-South-Atlantic open ocean — outside every registered region.
 _OCEAN_BBOX = (-40.0, 0.0, -39.0, 1.0)
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_FIELDS") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_FIELDS") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -174,7 +174,7 @@ def test_registered_with_expected_metadata():
 
 
 def test_in_land_cover_development_category():
-    from grace2_agent.categories import tools_for_category
+    from trid3nt_server.categories import tools_for_category
 
     assert "fetch_field_boundaries" in tools_for_category("land_cover_development")
 
@@ -262,10 +262,10 @@ def test_coverage_returns_vector_layer_with_polygons():
     fake = FakeStorageClient()
     gdf = _fields_gdf(3)
     with patch(
-        "grace2_agent.tools.fetch_field_boundaries.read_through",
+        "trid3nt_server.tools.fetch_field_boundaries.read_through",
         _make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_field_boundaries._read_fields_gdf",
+        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf",
         return_value=gdf,
     ) as mock_read:
         layer = fetch_field_boundaries(_IOWA_BBOX)
@@ -294,10 +294,10 @@ def test_coverage_returns_vector_layer_with_polygons():
 def test_empty_aoi_returns_valid_zero_feature_layer():
     fake = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_field_boundaries.read_through",
+        "trid3nt_server.tools.fetch_field_boundaries.read_through",
         _make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_field_boundaries._read_fields_gdf",
+        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf",
         return_value=_empty_gdf(),
     ):
         layer = fetch_field_boundaries(_IOWA_BBOX)
@@ -314,7 +314,7 @@ def test_empty_aoi_returns_valid_zero_feature_layer():
 def test_no_coverage_bbox_raises_before_any_read():
     # An ocean bbox must raise FieldsNoCoverageError and never invoke the source.
     with patch(
-        "grace2_agent.tools.fetch_field_boundaries._read_fields_gdf"
+        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf"
     ) as mock_read:
         with pytest.raises(FieldsNoCoverageError):
             fetch_field_boundaries(_OCEAN_BBOX)
@@ -325,10 +325,10 @@ def test_cache_hit_skips_second_source_read():
     fake = FakeStorageClient()
     gdf = _fields_gdf(2)
     with patch(
-        "grace2_agent.tools.fetch_field_boundaries.read_through",
+        "trid3nt_server.tools.fetch_field_boundaries.read_through",
         _make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_field_boundaries._read_fields_gdf",
+        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf",
         return_value=gdf,
     ) as mock_read:
         layer1 = fetch_field_boundaries(_IOWA_BBOX)
@@ -345,10 +345,10 @@ def test_cache_key_differs_by_dataset_and_bbox():
     gdf = _fields_gdf(1)
     other_bbox = (-90.0, 41.0, -89.9, 41.1)
     with patch(
-        "grace2_agent.tools.fetch_field_boundaries.read_through",
+        "trid3nt_server.tools.fetch_field_boundaries.read_through",
         _make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_field_boundaries._read_fields_gdf",
+        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf",
         return_value=gdf,
     ):
         l1 = fetch_field_boundaries(_IOWA_BBOX)
@@ -363,9 +363,9 @@ def test_cache_key_differs_by_dataset_and_bbox():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_FIELDS=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_FIELDS=1 to run")
 def test_live_us_usda_iowa_returns_fields():
-    from grace2_agent.tools.fetch_field_boundaries import _read_fields_gdf, _select_dataset
+    from trid3nt_server.tools.fetch_field_boundaries import _read_fields_gdf, _select_dataset
 
     ds = _select_dataset(_IOWA_BBOX, None)
     gdf = _read_fields_gdf(ds, _IOWA_BBOX)

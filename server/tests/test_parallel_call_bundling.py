@@ -34,13 +34,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     FunctionCallEvent,
     GeminiSettings,
     TextDeltaEvent,
     stream_events_with_contents,
 )
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
 
 # Re-use the chunk builders shape used by test_multi_turn_loop.py.
@@ -196,8 +196,8 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn():
     """Three parallel function_calls in one Gemini response → all three
     dispatch → all three function_response Parts land in the SAME
     follow-up contents list (one re-stream call, not three)."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     # Use 3 hot-set tools so ``validate_function_call`` doesn't reject them
     # before they reach the dispatch step. The goal is the bundling shape,
@@ -326,8 +326,8 @@ async def test_loop_dispatches_parallel_calls_split_across_chunks():
     """When Gemini's one turn streams across multiple chunks (the wire
     shape — chunks are token-level), all function_calls across all chunks
     in that ONE turn are still bundled into a single follow-up turn."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     # Turn 1: two chunks of function_calls (3 calls total).
     # Use hot-set tools so dispatch validation accepts them.

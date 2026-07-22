@@ -17,9 +17,9 @@ from datetime import datetime, timezone
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import fetch_glm_lightning as glmmod
-from grace2_agent.tools.fetch_glm_lightning import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import fetch_glm_lightning as glmmod
+from trid3nt_server.tools.fetch_glm_lightning import (
     GED_FJ_CEILING,
     GLMBboxRequiredError,
     GLMEmptyError,
@@ -32,7 +32,7 @@ from grace2_agent.tools.fetch_glm_lightning import (
     estimate_payload_mb,
     fetch_glm_lightning,
 )
-from grace2_agent.tools.fetch_goes_archive_animation import _OUT_RES_DEG, _grid_for_bbox
+from trid3nt_server.tools.fetch_goes_archive_animation import _OUT_RES_DEG, _grid_for_bbox
 
 # A small AOI for fast synthetic grids (2 deg x 2 deg @ 0.02 deg -> 100 x 100).
 _UT_BBOX = (-1.0, -1.0, 1.0, 1.0)
@@ -70,7 +70,7 @@ def test_tool_is_registered():
 
 
 def test_tool_categorized_under_weather_and_fire():
-    from grace2_agent.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
+    from trid3nt_server.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
 
     assert PRIMARY_CATEGORY.get("fetch_glm_lightning") == "weather_atmosphere"
     assert SECONDARY_CATEGORIES.get("fetch_glm_lightning") == ("fire",)
@@ -403,7 +403,7 @@ def test_satellite_spelling_accepted_and_canonicalized(
 def test_genuinely_unknown_satellite_raises_loud_glm_input_error():
     """A non-existent bird (GOES-99) fails LOUD as this tool's own typed error,
     not the shared normalizer's base GOESInputError (no leak across the seam)."""
-    from grace2_agent.tools.fetch_goes_satellite import GOESInputError
+    from trid3nt_server.tools.fetch_goes_satellite import GOESInputError
 
     with pytest.raises(GLMInputError) as ei:
         fetch_glm_lightning(bbox=_UT_BBOX, satellite="GOES-99")

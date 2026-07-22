@@ -134,13 +134,13 @@ WORKDIR /opt/grace2
 
 ENV PYTHONPATH=/opt/grace2 \
     PYTHONUNBUFFERED=1 \
-    GRACE2_SWAN_SCRATCH=/opt/grace2/work
+    TRID3NT_SWAN_SCRATCH=/opt/grace2/work
 
 # Runtime config -- overridable from the AWS Batch container env block.
-ENV GRACE2_OBJECT_STORE=s3 \
-    GRACE2_RUNS_BUCKET="" \
-    GRACE2_RUN_ID="" \
-    GRACE2_MANIFEST_URI="" \
+ENV TRID3NT_OBJECT_STORE=s3 \
+    TRID3NT_RUNS_BUCKET="" \
+    TRID3NT_RUN_ID="" \
+    TRID3NT_MANIFEST_URI="" \
     OMP_NUM_THREADS=8 \
     AWS_REGION=us-west-2
 
@@ -155,7 +155,7 @@ print('swn render OK len=', len(render_swn_command_file(parse_build_spec({'mode'
 
 # ENTRYPOINT runs this image as a one-shot solver job. CMD is empty so AWS Batch
 # containerOverrides command feeds straight through as argv; env-var fallbacks
-# (GRACE2_RUN_ID, GRACE2_MANIFEST_URI) are parsed by the entrypoint if no CLI
+# (TRID3NT_RUN_ID, TRID3NT_MANIFEST_URI) are parsed by the entrypoint if no CLI
 # flags are passed (mirror of the SFINCS/GeoClaw/SWMM pattern).
 ENTRYPOINT ["python3", "-m", "services.workers.swan.entrypoint"]
 CMD []

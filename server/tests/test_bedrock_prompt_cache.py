@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent import bedrock_adapter as ba
+from trid3nt_server import bedrock_adapter as ba
 
 
 _SYS = "You are TRID3NT, a hazard-modeling agent. " * 50  # large static system prompt

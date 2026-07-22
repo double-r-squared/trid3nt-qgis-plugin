@@ -41,22 +41,22 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from grace2_agent.workflows.model_flood_scenario import (
+from trid3nt_server.workflows.model_flood_scenario import (
     PrecipForcingError,
     compute_precip_area_mean_mm_per_hr,
     model_flood_scenario,
 )
-from grace2_agent.workflows.sfincs_builder import (
+from trid3nt_server.workflows.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     SFINCSSetupError,
     _generate_hydromt_yaml_config,
     build_sfincs_model,
 )
-from grace2_agent.tools.publish_layer import PublishLayerError
-from grace2_contracts import new_ulid
-from grace2_contracts.envelope import AssessmentEnvelope
-from grace2_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
+from trid3nt_server.tools.publish_layer import PublishLayerError
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.envelope import AssessmentEnvelope
+from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
 
 
 # --------------------------------------------------------------------------- #
@@ -439,18 +439,18 @@ async def test_none_path_forcing_spec_identical_to_baseline() -> None:
         return _run_result_ok(run_id, handle.handle_id)
 
     with (
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-        patch("grace2_agent.workflows.model_flood_scenario.lookup_precip_return_period", return_value=_precip_result()) as mock_lookup,
-        patch("grace2_agent.workflows.model_flood_scenario.build_sfincs_model", side_effect=_capture_build),
-        patch("grace2_agent.workflows.model_flood_scenario.run_solver", return_value=handle),
-        patch("grace2_agent.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        patch("trid3nt_server.workflows.model_flood_scenario.lookup_precip_return_period", return_value=_precip_result()) as mock_lookup,
+        patch("trid3nt_server.workflows.model_flood_scenario.build_sfincs_model", side_effect=_capture_build),
+        patch("trid3nt_server.workflows.model_flood_scenario.run_solver", return_value=handle),
+        patch("trid3nt_server.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
         patch(
-            "grace2_agent.workflows.model_flood_scenario.postprocess_flood",
+            "trid3nt_server.workflows.model_flood_scenario.postprocess_flood",
             return_value=([_flood_layer(run_id)], _DEPTH_METRICS),
         ),
-        patch("grace2_agent.workflows.model_flood_scenario.publish_layer", side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test")),
+        patch("trid3nt_server.workflows.model_flood_scenario.publish_layer", side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test")),
     ):
         envelope = await model_flood_scenario(
             bbox=_BBOX,
@@ -492,18 +492,18 @@ async def test_raster_path_skips_atlas14_and_builds_observed_forcing() -> None:
             Path(td) / "mrms.tif", np.full((12, 12), 72.0, dtype="float32")
         )
         with (
-            patch("grace2_agent.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-            patch("grace2_agent.workflows.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
-            patch("grace2_agent.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-            patch("grace2_agent.workflows.model_flood_scenario.lookup_precip_return_period") as mock_lookup,
-            patch("grace2_agent.workflows.model_flood_scenario.build_sfincs_model", side_effect=_capture_build),
-            patch("grace2_agent.workflows.model_flood_scenario.run_solver", return_value=handle),
-            patch("grace2_agent.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+            patch("trid3nt_server.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
+            patch("trid3nt_server.workflows.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
+            patch("trid3nt_server.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+            patch("trid3nt_server.workflows.model_flood_scenario.lookup_precip_return_period") as mock_lookup,
+            patch("trid3nt_server.workflows.model_flood_scenario.build_sfincs_model", side_effect=_capture_build),
+            patch("trid3nt_server.workflows.model_flood_scenario.run_solver", return_value=handle),
+            patch("trid3nt_server.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
             patch(
-                "grace2_agent.workflows.model_flood_scenario.postprocess_flood",
+                "trid3nt_server.workflows.model_flood_scenario.postprocess_flood",
                 return_value=([_flood_layer(run_id)], _DEPTH_METRICS),
             ),
-            patch("grace2_agent.workflows.model_flood_scenario.publish_layer", side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test")),
+            patch("trid3nt_server.workflows.model_flood_scenario.publish_layer", side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test")),
         ):
             envelope = await model_flood_scenario(
                 bbox=_BBOX,
@@ -545,10 +545,10 @@ async def test_raster_path_skips_atlas14_and_builds_observed_forcing() -> None:
 async def test_raster_path_unreadable_raster_returns_failed_envelope() -> None:
     """An unreadable forcing raster surfaces as a typed failed envelope (not a raise)."""
     with (
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-        patch("grace2_agent.workflows.model_flood_scenario.lookup_precip_return_period") as mock_lookup,
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        patch("trid3nt_server.workflows.model_flood_scenario.lookup_precip_return_period") as mock_lookup,
     ):
         envelope = await model_flood_scenario(
             bbox=_BBOX,
@@ -589,7 +589,7 @@ def test_s3_forcing_read_computes_area_mean_via_boto3() -> None:
         p_uniform = _write_precip_raster(tmp / "uniform.tif", uniform)
         raster_bytes = p_uniform.read_bytes()
 
-        # The s3 branch imports read_object_bytes_s3 from grace2_agent.tools.cache
+        # The s3 branch imports read_object_bytes_s3 from trid3nt_server.tools.cache
         # at call time; patch it there so it returns our synthetic COG bytes and
         # asserts it received the s3:// URI verbatim.
         def _fake_read_object_bytes_s3(uri: str) -> bytes:
@@ -597,7 +597,7 @@ def test_s3_forcing_read_computes_area_mean_via_boto3() -> None:
             return raster_bytes
 
         with patch(
-            "grace2_agent.tools.cache.read_object_bytes_s3",
+            "trid3nt_server.tools.cache.read_object_bytes_s3",
             side_effect=_fake_read_object_bytes_s3,
         ) as mock_s3:
             mag, mean_mm = compute_precip_area_mean_mm_per_hr(
@@ -624,7 +624,7 @@ def test_s3_forcing_read_empty_raster_raises_precip_forcing_error() -> None:
         raster_bytes = p.read_bytes()
 
         with patch(
-            "grace2_agent.tools.cache.read_object_bytes_s3",
+            "trid3nt_server.tools.cache.read_object_bytes_s3",
             return_value=raster_bytes,
         ):
             with pytest.raises(PrecipForcingError) as excinfo:
@@ -643,7 +643,7 @@ def test_s3_forcing_read_boto3_failure_raises_read_failed() -> None:
     local-file test) rather than crashing the workflow.
     """
     with patch(
-        "grace2_agent.tools.cache.read_object_bytes_s3",
+        "trid3nt_server.tools.cache.read_object_bytes_s3",
         side_effect=RuntimeError("boto3 get_object failed: AccessDenied"),
     ):
         with pytest.raises(PrecipForcingError) as excinfo:
@@ -665,11 +665,11 @@ def test_gs_forcing_read_path_unchanged_does_not_call_boto3() -> None:
     gs_uri = "gs://test-cache/cache/mrms/precip.tif"
     with (
         patch(
-            "grace2_agent.tools.cache.read_object_bytes_s3",
+            "trid3nt_server.tools.cache.read_object_bytes_s3",
             side_effect=AssertionError("boto3 reader must not be called for gs://"),
         ),
         patch(
-            "grace2_agent.workflows.model_flood_scenario._to_vsigs",
+            "trid3nt_server.workflows.model_flood_scenario._to_vsigs",
             return_value="/vsigs/test-cache/cache/mrms/precip.tif",
         ) as mock_to_vsigs,
         patch("rasterio.open", side_effect=RuntimeError("vsigs open stubbed")),

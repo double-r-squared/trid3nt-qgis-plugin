@@ -26,13 +26,13 @@ from typing import Any
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
-from grace2_agent.persistence import Persistence
-from grace2_contracts.auth import AuthTokenEnvelope
-from grace2_contracts.case import CaseSummary
-from grace2_contracts.common import new_ulid, now_utc
-from grace2_contracts.user import User
+from trid3nt_server import server
+from trid3nt_server.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
+from trid3nt_server.persistence import Persistence
+from trid3nt_contracts.auth import AuthTokenEnvelope
+from trid3nt_contracts.case import CaseSummary
+from trid3nt_contracts.common import new_ulid, now_utc
+from trid3nt_contracts.user import User
 
 
 class FakeMCPClient:
@@ -374,7 +374,7 @@ async def test_token_path_ignores_anon_registry_and_hint() -> None:
 # --------------------------------------------------------------------------- #
 # F1 (live-feedback 2026-07-09): TRID3NT local build -- ONE fixed local user.
 #
-# Local mode (GRACE2_SOLVER_BACKEND=local-docker, the FilePersistence build)
+# Local mode (TRID3NT_SOLVER_BACKEND=local-docker, the FilePersistence build)
 # has exactly one human, but each client (desktop browser, phone, QGIS plugin,
 # Playwright) presented its own sticky anonymous_user_id -- so every device
 # forked its own owner-scoped case list (log 2026-07-09 01:23:14 "hint ...
@@ -384,12 +384,12 @@ async def test_token_path_ignores_anon_registry_and_hint() -> None:
 # These tests run on the REAL local substrate (FileMCPClient) for fidelity.
 # --------------------------------------------------------------------------- #
 
-from grace2_agent import auth_handshake
-from grace2_agent.persistence import FileMCPClient
+from trid3nt_server import auth_handshake
+from trid3nt_server.persistence import FileMCPClient
 
 
 def _local_persistence(monkeypatch, tmp_path) -> Persistence:
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     # Re-arm the once-per-process adoption sweep for test isolation.
     monkeypatch.setattr(auth_handshake, "_local_case_adoption_done", False)
     return Persistence(FileMCPClient(tmp_path))

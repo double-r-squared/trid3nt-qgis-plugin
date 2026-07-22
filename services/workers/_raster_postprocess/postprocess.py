@@ -38,7 +38,7 @@ from . import cog as _cog
 from . import manifest as _manifest
 from . import sfincs_reader as _reader
 
-LOG = logging.getLogger("grace2.worker.raster_postprocess.postprocess")
+LOG = logging.getLogger("trid3nt.worker.raster_postprocess.postprocess")
 
 #: Bounded ProcessPool worker count. Defaults to min(cpu_count, 8) so a c7i box
 #: parallelizes frames without oversubscribing GDAL/BLAS. Override via env for
@@ -52,7 +52,7 @@ def _default_workers() -> int:
 
 
 POSTPROCESS_WORKERS: int = int(
-    os.environ.get("GRACE2_POSTPROCESS_WORKERS", str(_default_workers()))
+    os.environ.get("TRID3NT_POSTPROCESS_WORKERS", str(_default_workers()))
 )
 
 

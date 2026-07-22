@@ -1,4 +1,4 @@
-"""Unit tests for ``grace2_agent.tool_catalog_http`` telemetry-summary path
+"""Unit tests for ``trid3nt_server.tool_catalog_http`` telemetry-summary path
 (Wave 4.11 M7 — routing-quality dashboard backend).
 
 Coverage:
@@ -13,7 +13,7 @@ Coverage:
        into the same canonical fields.
     5. ``test_build_telemetry_summary_file_fallback`` — when Persistence is
        unbound, the builder falls back to the local JSONL path and respects
-       ``GRACE2_TELEMETRY_PATH``.
+       ``TRID3NT_TELEMETRY_PATH``.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from grace2_agent.tool_catalog_http import (
+from trid3nt_server.tool_catalog_http import (
     _aggregate_records,
     _empty_summary,
     _normalize_record,
@@ -151,7 +151,7 @@ def test_normalize_record_local_file_and_mongo():
 def test_build_telemetry_summary_file_fallback(tmp_path, monkeypatch):
     # Ensure get_persistence returns None so the file path is used.
     monkeypatch.setattr(
-        "grace2_agent.tool_catalog_http._get_telemetry_path",
+        "trid3nt_server.tool_catalog_http._get_telemetry_path",
         lambda: tmp_path / "telemetry.jsonl",
     )
     fp = tmp_path / "telemetry.jsonl"
@@ -163,7 +163,7 @@ def test_build_telemetry_summary_file_fallback(tmp_path, monkeypatch):
             fh.write(json.dumps(r) + "\n")
 
     # Force the server.get_persistence import to return None.
-    import grace2_agent.tool_catalog_http as mod
+    import trid3nt_server.tool_catalog_http as mod
 
     async def go():
         # Patch the inline import at call-time by inserting a fake server module.
@@ -172,8 +172,8 @@ def test_build_telemetry_summary_file_fallback(tmp_path, monkeypatch):
     # Quietly suppress any incidental Persistence import via monkeypatching
     # server.get_persistence to None at the module level.
     try:
-        import grace2_agent.server as _srv  # noqa: F401
-        monkeypatch.setattr("grace2_agent.server.get_persistence", lambda: None)
+        import trid3nt_server.server as _srv  # noqa: F401
+        monkeypatch.setattr("trid3nt_server.server.get_persistence", lambda: None)
     except Exception:
         pass
 
@@ -192,15 +192,15 @@ def test_build_telemetry_summary_carries_by_model_and_accuracy(
     carries the four headline accuracy metrics AND the per-model breakdown, so
     the dashboard's by-model A/B section + KPI cards have real data to render."""
     monkeypatch.setattr(
-        "grace2_agent.tool_catalog_http._get_telemetry_path",
+        "trid3nt_server.tool_catalog_http._get_telemetry_path",
         lambda: tmp_path / "telemetry.jsonl",
     )
     # No solve sink for this test — keep the solve section zero-state.
     monkeypatch.setattr(
-        "grace2_agent.tool_catalog_http._get_solve_telemetry_path",
+        "trid3nt_server.tool_catalog_http._get_solve_telemetry_path",
         lambda: tmp_path / "no_solves.jsonl",
     )
-    monkeypatch.setattr("grace2_agent.server.get_persistence", lambda: None)
+    monkeypatch.setattr("trid3nt_server.server.get_persistence", lambda: None)
 
     fp = tmp_path / "telemetry.jsonl"
     with fp.open("w") as fh:

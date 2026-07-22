@@ -26,10 +26,10 @@ import json
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.tools import import_user_layer as iul
-from grace2_contracts.case import CaseSummary
-from grace2_contracts.common import new_ulid
+from trid3nt_server import server
+from trid3nt_server.tools import import_user_layer as iul
+from trid3nt_contracts.case import CaseSummary
+from trid3nt_contracts.common import new_ulid
 
 
 def _geojson_bytes() -> bytes:
@@ -200,7 +200,7 @@ async def test_ingest_vector_happy_path(monkeypatch, fake_persistence):
 
 @pytest.mark.asyncio
 async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
-    from grace2_agent.tools import publish_layer as publish_layer_mod
+    from trid3nt_server.tools import publish_layer as publish_layer_mod
 
     case_id = new_ulid()
     fake_persistence._cases[case_id] = _case(case_id)
@@ -247,7 +247,7 @@ async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
 async def test_ingest_raster_reprojects_non_4326_crs(monkeypatch, fake_persistence):
     """A raster in EPSG:3857 is reprojected to a EPSG:4326 bbox (proves the
     rasterio.warp.transform_bounds branch, not just the already-4326 path)."""
-    from grace2_agent.tools import publish_layer as publish_layer_mod
+    from trid3nt_server.tools import publish_layer as publish_layer_mod
 
     case_id = new_ulid()
     fake_persistence._cases[case_id] = _case(case_id)

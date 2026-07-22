@@ -25,10 +25,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.cache import compute_cache_key
-from grace2_agent.tools import compute_ndvi as ndvi_mod
-from grace2_agent.tools.compute_ndvi import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.cache import compute_cache_key
+from trid3nt_server.tools import compute_ndvi as ndvi_mod
+from trid3nt_server.tools.compute_ndvi import (
     _METADATA,
     _STYLE_PRESET,
     NDVIBboxError,
@@ -54,7 +54,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,
@@ -112,7 +112,7 @@ def test_tool_is_registered() -> None:
 def test_style_preset_is_in_titiler_registry() -> None:
     """The ndvi preset must resolve to a real (rescale, colormap) so a
     single-band NDVI COG is never published as bare grayscale."""
-    from grace2_agent.tools.publish_layer import _registry_style_params
+    from trid3nt_server.tools.publish_layer import _registry_style_params
 
     params = _registry_style_params(_STYLE_PRESET)
     assert params is not None

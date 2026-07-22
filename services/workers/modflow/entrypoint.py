@@ -3,7 +3,7 @@
 Sprint-13 / MOD-1 / job-0220 / FR-CE-1/2/3. The MODFLOW-6 analogue of
 services/workers/sfincs/entrypoint.py. Same OBJECT-STORE-IN -> RUN ->
 OBJECT-STORE-OUT envelope; SCHEME-AWARE like the SFINCS shim (``s3://`` via
-boto3 when ``GRACE2_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage
+boto3 when ``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage
 otherwise — see the object-store abstraction below). The two MODFLOW-specific
 differences from the SFINCS shim are:
 
@@ -27,7 +27,7 @@ Contract:
     Input  (env or CLI):
         --run-id RUN_ID
             Run identifier. Outputs land under
-            gs://${GRACE2_RUNS_BUCKET}/${RUN_ID}/.
+            gs://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/.
         --manifest-uri gs://bucket/path/manifest.json
             JSON setup manifest. Schema (design doc § 6):
                 {
@@ -54,8 +54,8 @@ Contract:
             uploaded to the runs bucket after mf6 exits.
 
     Output:
-        gs://${GRACE2_RUNS_BUCKET}/${RUN_ID}/<every output file>
-        gs://${GRACE2_RUNS_BUCKET}/${RUN_ID}/completion.json
+        gs://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/<every output file>
+        gs://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/completion.json
             Terminal manifest. Schema (mirrors the SFINCS completion schema
             with mf6_* keys + a `converged` boolean + echoed `model_crs`):
                 {
@@ -105,16 +105,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.modflow")
+LOG = logging.getLogger("trid3nt.worker.modflow")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 
-MF6_BIN = os.environ.get("GRACE2_MF6_BIN", "/usr/local/bin/mf6")
-SCRATCH = Path(os.environ.get("GRACE2_MF6_SCRATCH", "/opt/grace2/work"))
+MF6_BIN = os.environ.get("TRID3NT_MF6_BIN", "/usr/local/bin/mf6")
+SCRATCH = Path(os.environ.get("TRID3NT_MF6_SCRATCH", "/opt/grace2/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
 # MODFLOW 6.4+ list-file string emitted when the outer solver loop exhausts
 # its iteration budget without meeting the dvclose tolerance. Pinned to the
@@ -136,7 +136,7 @@ def _utc_now() -> str:
 # I/O BY URI SCHEME: ``gs://`` via google-cloud-storage (lazy import — a pure-S3
 # Batch image never pays for the GCP SDK), ``s3://`` via boto3 (job-0289 lesson:
 # boto3, NOT s3fs/anonymous). The runs-bucket OUTPUT scheme follows
-# ``GRACE2_OBJECT_STORE`` (``s3`` -> ``s3://``, default ``gcs`` -> ``gs://``) so
+# ``TRID3NT_OBJECT_STORE`` (``s3`` -> ``s3://``, default ``gcs`` -> ``gs://``) so
 # completion.json + outputs land in the same store the agent polls. The GCS
 # behavior is byte-identical to the pre-port path.
 # --------------------------------------------------------------------------- #
@@ -163,8 +163,8 @@ def _parse_gs_uri(uri: str) -> tuple[str, str]:
 
 
 def _output_scheme() -> str:
-    """Runs-bucket output scheme — ``s3`` or ``gs`` (env ``GRACE2_OBJECT_STORE``)."""
-    b = (os.environ.get("GRACE2_OBJECT_STORE") or "gcs").strip().lower()
+    """Runs-bucket output scheme — ``s3`` or ``gs`` (env ``TRID3NT_OBJECT_STORE``)."""
+    b = (os.environ.get("TRID3NT_OBJECT_STORE") or "gcs").strip().lower()
     return "s3" if b in {"s3", "aws"} else "gs"
 
 
@@ -314,25 +314,25 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="grace2-modflow-entrypoint",
+        prog="trid3nt-modflow-entrypoint",
         description="MODFLOW 6 Cloud Run Job entrypoint (FR-CE-1/2/3).",
     )
     p.add_argument(
         "--run-id",
-        default=os.environ.get("GRACE2_RUN_ID", "").strip(),
-        help="Run identifier (also $GRACE2_RUN_ID).",
+        default=os.environ.get("TRID3NT_RUN_ID", "").strip(),
+        help="Run identifier (also $TRID3NT_RUN_ID).",
     )
     p.add_argument(
         "--manifest-uri",
-        default=os.environ.get("GRACE2_MANIFEST_URI", "").strip(),
-        help="gs:// URI of the setup manifest (also $GRACE2_MANIFEST_URI).",
+        default=os.environ.get("TRID3NT_MANIFEST_URI", "").strip(),
+        help="gs:// URI of the setup manifest (also $TRID3NT_MANIFEST_URI).",
     )
     p.add_argument(
         "--build-spec-uri",
-        default=os.environ.get("GRACE2_BUILD_SPEC_URI", "").strip(),
+        default=os.environ.get("TRID3NT_BUILD_SPEC_URI", "").strip(),
         help=(
             "s3:// URI of the agent-composed MODFLOW BUILD job_spec (also "
-            "$GRACE2_BUILD_SPEC_URI). When set, the worker runs the FloPy deck "
+            "$TRID3NT_BUILD_SPEC_URI). When set, the worker runs the FloPy deck "
             "BUILD (build_modflow_deck) BEFORE the mf6 solve + plume postprocess "
             "(heavy-compute offload), so the always-on agent never builds the deck "
             "or rasterizes the UCN. Takes precedence over --manifest-uri."
@@ -572,12 +572,12 @@ def main(argv: list[str] | None = None) -> int:
     manifest_uri = args.manifest_uri
     build_spec_uri = getattr(args, "build_spec_uri", "") or ""
     if not run_id:
-        LOG.error("run_id is required (pass --run-id or set $GRACE2_RUN_ID)")
+        LOG.error("run_id is required (pass --run-id or set $TRID3NT_RUN_ID)")
         return 2
     if not manifest_uri and not build_spec_uri:
         LOG.error(
             "one of --manifest-uri / --build-spec-uri is required "
-            "(also $GRACE2_MANIFEST_URI / $GRACE2_BUILD_SPEC_URI)"
+            "(also $TRID3NT_MANIFEST_URI / $TRID3NT_BUILD_SPEC_URI)"
         )
         return 2
 

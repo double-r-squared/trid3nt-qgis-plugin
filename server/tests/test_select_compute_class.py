@@ -29,7 +29,7 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools.solver import (
+from trid3nt_server.tools.solver import (
     AWS_BATCH_COMPUTE_CLASS_SIZING,
     COMPUTE_CLASS_FALLBACK,
     COMPUTE_CLASS_LARGE_MAX_ELEMENTS,
@@ -146,8 +146,8 @@ def test_select_then_size_round_trip() -> None:
 
 def _model_setup_with_autoscale(estimated_active_cells: int | None):
     """A ModelSetup-like object carrying autoscale provenance the workflow reads."""
-    from grace2_contracts import new_ulid
-    from grace2_contracts.execution import ModelSetup
+    from trid3nt_contracts import new_ulid
+    from trid3nt_contracts.execution import ModelSetup
 
     autoscale = (
         {"estimated_active_cells": estimated_active_cells, "vcpus": 8}
@@ -169,9 +169,9 @@ def _flood_mocks(monkeypatch):
     """Patch the flood workflow's fetcher chain + downstream so only the
     run_solver compute_class hand-off is under test. Returns the captured
     run_solver kwargs holder."""
-    from grace2_agent.workflows import model_flood_scenario as mod
-    from grace2_contracts import new_ulid
-    from grace2_contracts.execution import ExecutionHandle, LayerURI, RunResult
+    from trid3nt_server.workflows import model_flood_scenario as mod
+    from trid3nt_contracts import new_ulid
+    from trid3nt_contracts.execution import ExecutionHandle, LayerURI, RunResult
 
     captured: dict[str, Any] = {}
     run_id = new_ulid()
@@ -263,7 +263,7 @@ def _flood_mocks(monkeypatch):
 async def test_flood_workflow_passes_computed_large_class(monkeypatch) -> None:
     """A large estimated_active_cells -> run_solver gets 'large', NOT the
     caller's 'medium' default."""
-    from grace2_agent.workflows import model_flood_scenario as mod
+    from trid3nt_server.workflows import model_flood_scenario as mod
 
     captured, patches = _flood_mocks(monkeypatch)
     big_setup = _model_setup_with_autoscale(500_000)  # in the LARGE band
@@ -288,7 +288,7 @@ async def test_flood_workflow_passes_computed_large_class(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_flood_workflow_passes_computed_xlarge_class(monkeypatch) -> None:
     """A very large estimate reaches the new xlarge tier."""
-    from grace2_agent.workflows import model_flood_scenario as mod
+    from trid3nt_server.workflows import model_flood_scenario as mod
 
     captured, patches = _flood_mocks(monkeypatch)
     huge_setup = _model_setup_with_autoscale(3_000_000)
@@ -311,7 +311,7 @@ async def test_flood_workflow_passes_computed_xlarge_class(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_flood_workflow_falls_back_when_no_estimate(monkeypatch) -> None:
     """No autoscale estimate -> the caller's compute_class is used (no crash)."""
-    from grace2_agent.workflows import model_flood_scenario as mod
+    from trid3nt_server.workflows import model_flood_scenario as mod
 
     captured, patches = _flood_mocks(monkeypatch)
     setup_no_estimate = _model_setup_with_autoscale(None)
@@ -345,9 +345,9 @@ async def test_swmm_workflow_passes_computed_class_on_out_of_process_lane(
     composer stages a manifest + dispatches run_solver with the class COMPUTED
     from the built mesh's n_active_cells — a large mesh -> a larger class — then
     awaits wait_for_completion and postprocesses from the Batch download."""
-    from grace2_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
+    from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 
-    from grace2_agent.workflows import model_urban_flood_swmm as mod
+    from trid3nt_server.workflows import model_urban_flood_swmm as mod
 
     # Build-result stub with a LARGE active-cell count (-> 'large' tier).
     build = SimpleNamespace(
@@ -416,9 +416,9 @@ async def test_swmm_workflow_passes_computed_class_on_out_of_process_lane(
         ),
         patch.object(mod, "_cleanup_deck_dir", return_value=None),
         patch.object(mod, "postprocess_swmm", return_value=([peak], {})),
-        patch("grace2_agent.tools.solver.run_solver", side_effect=_fake_run_solver),
+        patch("trid3nt_server.tools.solver.run_solver", side_effect=_fake_run_solver),
         patch(
-            "grace2_agent.tools.solver.wait_for_completion", side_effect=_fake_wait
+            "trid3nt_server.tools.solver.wait_for_completion", side_effect=_fake_wait
         ),
     ):
         result = await mod.model_urban_flood_swmm(

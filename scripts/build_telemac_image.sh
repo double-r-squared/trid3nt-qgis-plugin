@@ -9,7 +9,7 @@
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CTX="$REPO_ROOT/services/workers/telemac"
-IMAGE="${GRACE2_TELEMAC_IMAGE:-trid3nt-local/telemac:latest}"
+IMAGE="${TRID3NT_TELEMAC_IMAGE:-trid3nt-local/telemac:latest}"
 echo "[build] $IMAGE  (context $CTX)"
 docker build -t "$IMAGE" "$CTX"
 echo "[build] done: $IMAGE"

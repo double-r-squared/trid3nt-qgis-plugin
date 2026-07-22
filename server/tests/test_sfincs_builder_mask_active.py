@@ -42,7 +42,7 @@ import numpy as np
 import rasterio
 from rasterio.transform import from_bounds
 
-from grace2_agent.workflows.sfincs_builder import (
+from trid3nt_server.workflows.sfincs_builder import (
     _MASK_FALLBACK_ZMAX,
     _MASK_FALLBACK_ZMIN,
     BuildOptions,

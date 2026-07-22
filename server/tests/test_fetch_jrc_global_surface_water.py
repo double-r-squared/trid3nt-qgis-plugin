@@ -33,9 +33,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import fetch_jrc_global_surface_water as gsw_mod
-from grace2_agent.tools.fetch_jrc_global_surface_water import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import fetch_jrc_global_surface_water as gsw_mod
+from trid3nt_server.tools.fetch_jrc_global_surface_water import (
     JrcSurfaceWaterBandError,
     JrcSurfaceWaterBboxError,
     JrcSurfaceWaterNoCoverageError,
@@ -53,7 +53,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -91,7 +91,7 @@ def _write_value_cog(bbox, value_array, *, nodata: int) -> str:
 
     h, w = value_array.shape
     transform = rasterio.transform.from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], w, h)
-    fd, path = tempfile.mkstemp(suffix=".tif", prefix="grace2_jrc_gsw_src_")
+    fd, path = tempfile.mkstemp(suffix=".tif", prefix="trid3nt_jrc_gsw_src_")
     os.close(fd)
     with rasterio.open(
         path, "w", driver="GTiff", height=h, width=w, count=1, dtype="uint8",
@@ -389,7 +389,7 @@ def test_all_nodata_mosaic_raises_typed_error() -> None:
 
 
 def test_distinct_bands_have_distinct_cache_keys() -> None:
-    from grace2_agent.tools.cache import compute_cache_key
+    from trid3nt_server.tools.cache import compute_cache_key
 
     base = {"bbox": list(_BBOX), "collection": gsw_mod._COLLECTION}
     k_occ = compute_cache_key(

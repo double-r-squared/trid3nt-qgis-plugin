@@ -28,9 +28,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 import pytest
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from grace2_agent.tools.cache import (
+from trid3nt_server.tools.cache import (
     CACHE_KEY_HEX_LEN,
     cache_path,
     compute_cache_key,

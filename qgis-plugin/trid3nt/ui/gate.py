@@ -7,7 +7,7 @@ that is NOT a widget, so the contract behaviour is unit-testable without QGIS.
 
 Contract source of truth (mirrored EXACTLY, not paraphrased):
 
-* ``contracts/src/grace2_contracts/payload_warning.py``
+* ``contracts/src/trid3nt_contracts/payload_warning.py``
   - warning payload fields: ``warning_id``, ``tool_name``, ``tool_args``,
     ``estimated_mb``, ``threshold_mb``, ``recommendation``,
     ``alternative_args``, ``options`` (non-empty subset of
@@ -299,7 +299,7 @@ def resolve_gate_decision(
 #
 # Contract source of truth (mirrored EXACTLY, not paraphrased):
 #
-# * ``contracts/src/grace2_contracts/sandbox_contracts.py``
+# * ``contracts/src/trid3nt_contracts/sandbox_contracts.py``
 #   (``CodeExecRequestPayload``): fields ``code_exec_id`` (ULID; doubles as
 #   the confirmation correlation key), ``python_code`` (the EXACT code,
 #   verbatim, never a paraphrase), ``layer_refs`` (``{var: uri}`` OR

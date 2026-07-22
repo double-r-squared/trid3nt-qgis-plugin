@@ -27,9 +27,9 @@ cloud-to-local rewiring is environment variables -- no fork of the agent code.
 |---------|-----------------|----------------------|------|
 | LLM | AWS Bedrock (Sonnet default) | Ollama `qwen3:8b-16k` (or any OpenAI-compatible endpoint) | `MODEL_PROVIDER=openai` + `openai_adapter.py` |
 | Object storage | S3 runs + cache buckets | MinIO on `:9000` (S3-compatible, zero code change) | `AWS_ENDPOINT_URL` |
-| Persistence | DynamoDB (`trid3nt_*` tables) | FilePersistence -- JSON store on disk | `GRACE2_DEV_PERSISTENCE_DIR` |
+| Persistence | DynamoDB (`trid3nt_*` tables) | FilePersistence -- JSON store on disk | `TRID3NT_DEV_PERSISTENCE_DIR` |
 | Raster rendering | TiTiler EC2 (always-on) | none -- the QGIS plugin loads COGs directly from MinIO via GDAL `/vsicurl/` and styles them client-side | `publish_layer` emits raw `s3://` COG URIs |
-| Solvers | AWS Batch (Spot, scale-to-zero) | Local subprocess / local docker per engine | `GRACE2_SOLVER_BACKEND`, per-engine gates |
+| Solvers | AWS Batch (Spot, scale-to-zero) | Local subprocess / local docker per engine | `TRID3NT_SOLVER_BACKEND`, per-engine gates |
 
 Data fetchers need internet (USGS/NOAA/OSM/etc. are public HTTPS or anonymous public S3) but
 no cloud account. "Offline" means no-cloud-ACCOUNT, not air-gapped.

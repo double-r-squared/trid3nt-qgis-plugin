@@ -31,18 +31,18 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.adapter import (
+from trid3nt_server import server
+from trid3nt_server.adapter import (
     CompactionCompleteEvent,
     CompactionStartEvent,
     GeminiSettings,
     TextDeltaEvent,
 )
-from grace2_agent.context_budget import COMPACTING_LABEL, compaction_complete_label
-from grace2_agent.pipeline_emitter import complete_compaction_card, mint_compaction_card
-from grace2_agent.persistence import make_file_persistence
-from grace2_contracts.case import CaseCommandEnvelopePayload
-from grace2_contracts.common import new_ulid
+from trid3nt_server.context_budget import COMPACTING_LABEL, compaction_complete_label
+from trid3nt_server.pipeline_emitter import complete_compaction_card, mint_compaction_card
+from trid3nt_server.persistence import make_file_persistence
+from trid3nt_contracts.case import CaseCommandEnvelopePayload
+from trid3nt_contracts.common import new_ulid
 
 
 class FakeWS:
@@ -175,7 +175,7 @@ async def _drive_real_stream(ws, state, fake_stream):
     with a mocked ``stream_events_with_contents`` (``fake_stream``)."""
     from unittest.mock import patch
 
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     settings = GeminiSettings(
         model="m", project="p", location="us-central1", use_vertex=True

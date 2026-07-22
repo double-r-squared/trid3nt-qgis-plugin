@@ -20,10 +20,10 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.persistence import CASES_COLLECTION, Persistence
-from grace2_agent.server import MIGRATION_ANON_UID
-from grace2_contracts.case import CaseSummary
-from grace2_contracts.common import new_ulid, now_utc
+from trid3nt_server.persistence import CASES_COLLECTION, Persistence
+from trid3nt_server.server import MIGRATION_ANON_UID
+from trid3nt_contracts.case import CaseSummary
+from trid3nt_contracts.common import new_ulid, now_utc
 
 
 # --------------------------------------------------------------------------- #
@@ -218,7 +218,7 @@ async def test_migrated_case_visible_to_migration_owner_only() -> None:
 async def test_server_run_migration_wrapper_best_effort() -> None:
     """``server._run_preauth_case_migration`` runs against the bound singleton
     and is a safe no-op when Persistence is unbound."""
-    from grace2_agent.server import (
+    from trid3nt_server.server import (
         _run_preauth_case_migration,
         set_persistence,
     )

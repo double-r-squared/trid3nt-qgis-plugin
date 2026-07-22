@@ -25,7 +25,7 @@ import datetime as dt
 
 import pytest
 
-from grace2_agent.workflows import sfincs_spiderweb as S
+from trid3nt_server.workflows import sfincs_spiderweb as S
 
 
 # --------------------------------------------------------------------------- #
@@ -259,7 +259,7 @@ def test_utm_zone_from_lon_lat():
 
 
 def test_emitter_emits_spwfile_utmzone_baro():
-    from grace2_agent.workflows.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs_builder import (
         BuildOptions,
         ForcingSpec,
         SpiderwebForcing,
@@ -288,7 +288,7 @@ def test_emitter_emits_spwfile_utmzone_baro():
 
 
 def test_emitter_xor_refuses_wind_with_spiderweb():
-    from grace2_agent.workflows.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs_builder import (
         BuildOptions,
         ForcingSpec,
         SFINCSSetupError,
@@ -313,7 +313,7 @@ def test_emitter_xor_refuses_wind_with_spiderweb():
 
 def test_pure_pluvial_deck_emits_no_spiderweb_keys():
     # Regression guard: a non-storm deck stays byte-identical (no spw keys).
-    from grace2_agent.workflows.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs_builder import (
         BuildOptions,
         ForcingSpec,
         _generate_hydromt_yaml_config,
@@ -344,7 +344,7 @@ def test_pure_pluvial_deck_emits_no_spiderweb_keys():
 
 
 def test_fetch_storm_tracks_radii_parse_blank_tolerant():
-    from grace2_agent.tools.fetch_storm_tracks import _parse_ibtracs_csv
+    from trid3nt_server.tools.fetch_storm_tracks import _parse_ibtracs_csv
 
     header = (
         "SID,SEASON,BASIN,NAME,ISO_TIME,LAT,LON,NATURE,USA_WIND,USA_PRES,"

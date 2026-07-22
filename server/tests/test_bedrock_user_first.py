@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.bedrock_adapter import (
+from trid3nt_server.bedrock_adapter import (
     _ensure_messages_start_with_user,
     _build_converse_kwargs,
 )
@@ -102,13 +102,13 @@ class TestBuildConverseKwargsNormalization:
         assert messages[0]["role"] == "user"
 
     def test_log_preview_when_enabled(self, caplog):
-        """LLM input preview is logged when GRACE2_LOG_LLM_INPUT is set."""
+        """LLM input preview is logged when TRID3NT_LOG_LLM_INPUT is set."""
         import logging
         caplog.set_level(logging.INFO)
 
         with patch.dict(
             "os.environ",
-            {"GRACE2_LOG_LLM_INPUT": "1"}
+            {"TRID3NT_LOG_LLM_INPUT": "1"}
         ):
             kwargs = _build_converse_kwargs(
                 contents=[],
@@ -129,9 +129,9 @@ class TestBuildConverseKwargsNormalization:
         caplog.set_level(logging.INFO)
 
         with patch.dict("os.environ", {}, clear=False):
-            # Ensure GRACE2_LOG_LLM_INPUT is not set.
-            if "GRACE2_LOG_LLM_INPUT" in __import__("os").environ:
-                del __import__("os").environ["GRACE2_LOG_LLM_INPUT"]
+            # Ensure TRID3NT_LOG_LLM_INPUT is not set.
+            if "TRID3NT_LOG_LLM_INPUT" in __import__("os").environ:
+                del __import__("os").environ["TRID3NT_LOG_LLM_INPUT"]
 
             kwargs = _build_converse_kwargs(
                 contents=[],

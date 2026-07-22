@@ -175,7 +175,7 @@ def test_split_object_uri_rejects_bad_scheme():
 
 
 def test_output_scheme_and_runs_uri(monkeypatch):
-    monkeypatch.setenv("GRACE2_OBJECT_STORE", "s3")
+    monkeypatch.setenv("TRID3NT_OBJECT_STORE", "s3")
     monkeypatch.setattr("services.workers.canopy.entrypoint.RUNS_BUCKET", "runs-b")
     assert _output_scheme() == "s3"
     assert _runs_uri("RID", "canopy_height.tif") == "s3://runs-b/RID/canopy_height.tif"

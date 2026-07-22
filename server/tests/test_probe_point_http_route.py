@@ -7,7 +7,7 @@ entries, the layer cap) is covered by ``test_probe_point.py``. Mirrors
 ``test_ingest_layer_http_route.py``:
 
   - the route served UNCONDITIONALLY (the local build hardwires
-    ``solver_backend()`` to local-docker, so ``GRACE2_SOLVER_BACKEND`` no
+    ``solver_backend()`` to local-docker, so ``TRID3NT_SOLVER_BACKEND`` no
     longer gates it);
   - POST /api/probe-point happy path (monkeypatched core fn) -> 200;
   - POST /api/probe-point missing/invalid fields -> typed 400 (core never
@@ -23,8 +23,8 @@ import json
 
 import pytest
 
-from grace2_agent import tool_catalog_http
-from grace2_agent.tools.probe_point import (
+from trid3nt_server import tool_catalog_http
+from trid3nt_server.tools.probe_point import (
     ProbePointCaseNotFoundError,
     ProbePointInputError,
 )
@@ -103,7 +103,7 @@ def _body_json(out: bytes) -> dict:
 
 @pytest.fixture(autouse=True)
 def _local_mode(monkeypatch):
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
 
 
 # ---------------------------------------------------------------------------
@@ -123,9 +123,9 @@ def test_probe_point_route_served_regardless_of_backend_env(monkeypatch):
     """
     for arm in ("unset", "aws-batch"):
         if arm == "unset":
-            monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+            monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
         else:
-            monkeypatch.setenv("GRACE2_SOLVER_BACKEND", arm)
+            monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", arm)
         out = _drive(_post("/api/probe-point", b"{}"))
         assert _status(out) == 400
         assert "case_id" in _body_json(out)["error"]

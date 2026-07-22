@@ -31,8 +31,8 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from grace2_agent.tools import publish_layer as pl
-from grace2_agent.tools.publish_layer import (
+from trid3nt_server.tools import publish_layer as pl
+from trid3nt_server.tools.publish_layer import (
     _categorical_legend_from_colormap,
     _parse_style_params,
     legend_for_published_layer,
@@ -252,10 +252,10 @@ def test_legend_fail_open_returns_none_on_unreadable_bytes() -> None:
 def _s3_titiler(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force the AWS s3 publish branch (storage_scheme == 's3').
 
-    TiTiler exit: no GRACE2_TILE_SERVER_BASE - publish_layer emits the raw
+    TiTiler exit: no TRID3NT_TILE_SERVER_BASE - publish_layer emits the raw
     s3:// COG uri and the legend stash is keyed by that uri.
     """
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(cache_mod, "storage_scheme", lambda: "s3")
 

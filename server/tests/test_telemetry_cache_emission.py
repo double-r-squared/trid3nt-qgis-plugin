@@ -26,9 +26,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import UsageMetadataEvent
-from grace2_agent.server import SessionState, _emit_cache_status
-from grace2_agent.telemetry import compute_args_hash, emit_tool_call_event
+from trid3nt_server.adapter import UsageMetadataEvent
+from trid3nt_server.server import SessionState, _emit_cache_status
+from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 
 
 @pytest.mark.asyncio
@@ -89,7 +89,7 @@ async def test_telemetry_records_cached_tokens() -> None:
     with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tf:
         path = tf.name
     try:
-        with patch.dict(os.environ, {"GRACE2_TELEMETRY_PATH": path}):
+        with patch.dict(os.environ, {"TRID3NT_TELEMETRY_PATH": path}):
             await emit_tool_call_event(
                 session_id="SESSION_X",
                 ts="2026-06-09T00:00:00Z",

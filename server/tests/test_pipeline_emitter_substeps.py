@@ -36,9 +36,9 @@ import json
 from typing import Any
 
 import pytest
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
-from grace2_agent.pipeline_emitter import (
+from trid3nt_server.pipeline_emitter import (
     PipelineEmitter,
     begin_substeps,
     substep,

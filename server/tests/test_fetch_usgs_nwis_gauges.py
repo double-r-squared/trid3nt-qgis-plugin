@@ -18,7 +18,7 @@ Coverage:
 - LayerURI shape: layer_type="vector", role="primary", style_preset, bbox set.
 - Payload estimator returns a positive float.
 
-Live test (gated by GRACE2_TEST_LIVE_NWIS=1): real USGS IV request for a
+Live test (gated by TRID3NT_TEST_LIVE_NWIS=1): real USGS IV request for a
 small Boise-area bbox; confirms >=1 gauge with a finite discharge reading.
 """
 
@@ -33,8 +33,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_usgs_nwis_gauges import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_usgs_nwis_gauges import (
     NwisBboxTooLargeError,
     NwisGaugesError,
     NwisInputError,
@@ -58,7 +58,7 @@ from grace2_agent.tools.fetch_usgs_nwis_gauges import (
 # Constants / fixtures.
 # ---------------------------------------------------------------------------
 
-_LIVE_NWIS = os.environ.get("GRACE2_TEST_LIVE_NWIS") == "1"
+_LIVE_NWIS = os.environ.get("TRID3NT_TEST_LIVE_NWIS") == "1"
 
 # Whole-Washington bbox: ~8 deg lon x ~3.5 deg lat = ~28 deg^2 — EXCEEDS the
 # USGS ~25 deg^2 bBox limit (this is exactly the case NATE hit).
@@ -202,7 +202,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -261,7 +261,7 @@ def test_supports_global_query_is_false():
 
 
 def test_categorized_under_hydrology():
-    from grace2_agent.categories import PRIMARY_CATEGORY, tools_for_category
+    from trid3nt_server.categories import PRIMARY_CATEGORY, tools_for_category
 
     assert PRIMARY_CATEGORY.get("fetch_usgs_nwis_gauges") == "hydrology"
     assert "fetch_usgs_nwis_gauges" in tools_for_category("hydrology")
@@ -471,9 +471,9 @@ def test_whole_state_bbox_with_state_code_succeeds():
         return iv_json
 
     with (
-        patch("grace2_agent.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
         patch(
-            "grace2_agent.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -503,9 +503,9 @@ def test_iv_happy_path_layer_uri_shape():
     ])
 
     with (
-        patch("grace2_agent.tools.fetch_usgs_nwis_gauges._http_get", return_value=iv_json),
+        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", return_value=iv_json),
         patch(
-            "grace2_agent.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -566,9 +566,9 @@ def test_iv_empty_falls_back_to_site_service():
         return empty_iv  # IV returns nothing
 
     with (
-        patch("grace2_agent.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
         patch(
-            "grace2_agent.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -611,9 +611,9 @@ def test_both_empty_raises_no_stations_error():
         return _make_iv_json([])  # no IV sites
 
     with (
-        patch("grace2_agent.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
         patch(
-            "grace2_agent.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
         pytest.raises(NwisNoStationsError, match="No active USGS NWIS gauge"),
@@ -666,9 +666,9 @@ def test_extra_kwargs_absorbed():
         _ts("13206000", "BOISE R", 43.62, -116.20, "00060", "1234"),
     ])
     with (
-        patch("grace2_agent.tools.fetch_usgs_nwis_gauges._http_get", return_value=iv_json),
+        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", return_value=iv_json),
         patch(
-            "grace2_agent.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -807,9 +807,9 @@ def test_window_mode_layer_uri_carries_hydrograph(monkeypatch):
         return iv_window
 
     with (
-        patch("grace2_agent.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
         patch(
-            "grace2_agent.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -851,11 +851,11 @@ def test_window_mode_no_stations_raises(monkeypatch):
 
     with (
         patch(
-            "grace2_agent.tools.fetch_usgs_nwis_gauges._http_get",
+            "trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get",
             return_value=_make_iv_json([]),
         ),
         patch(
-            "grace2_agent.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
         pytest.raises(NwisNoStationsError, match="window"),
@@ -865,16 +865,16 @@ def test_window_mode_no_stations_raises(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_NWIS=1 to run).
+# Live integration test (TRID3NT_TEST_LIVE_NWIS=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_NWIS,
-    reason="Set GRACE2_TEST_LIVE_NWIS=1 to run live USGS NWIS tests",
+    reason="Set TRID3NT_TEST_LIVE_NWIS=1 to run live USGS NWIS tests",
 )
 def test_live_boise_iv_returns_gauges():
-    from grace2_agent.tools.fetch_usgs_nwis_gauges import _fetch_usgs_nwis_gauges_bytes
+    from trid3nt_server.tools.fetch_usgs_nwis_gauges import _fetch_usgs_nwis_gauges_bytes
 
     fgb_bytes, extent = _fetch_usgs_nwis_gauges_bytes(
         state_code=None, bbox=_BOISE_BBOX

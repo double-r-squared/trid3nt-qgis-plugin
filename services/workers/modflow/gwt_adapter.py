@@ -31,7 +31,7 @@ whose fields carry every number a downstream tool would narrate.
 Contract note: `build_modflow_deck` takes plain keyword arguments whose names
 match the `MODFLOWRunArgs` Pydantic contract (authored in parallel by
 job-0222 and bound in Stage 2 / job-0227). This module deliberately does NOT
-import from `grace2_contracts` - the binding happens upstream.
+import from `trid3nt_contracts` - the binding happens upstream.
 """
 
 from __future__ import annotations
@@ -272,7 +272,7 @@ DEFAULT_MAR_SY = 0.2
 
 #: Wetland-soil specific yield for the wetland_hydroperiod unconfined seasonal
 #: water-table response when the caller supplies none. Mirrors the contract's
-#: ``DEFAULT_WETLAND_SY`` (kept local: this module does NOT import grace2_contracts).
+#: ``DEFAULT_WETLAND_SY`` (kept local: this module does NOT import trid3nt_contracts).
 DEFAULT_WETLAND_SY = 0.2
 
 #: Infiltration-basin recharge rate (m/day) for the MAR archetype when the caller

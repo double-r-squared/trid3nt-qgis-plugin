@@ -1,6 +1,6 @@
 """Worker-side SWMM .out binary -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``grace2_agent.workflows.postprocess_swmm``. Runs inside
+Byte-faithful port of ``trid3nt_server.workflows.postprocess_swmm``. Runs inside
 the Batch worker AFTER pyswmm completes, reads the ``.out`` binary via the
 pyswmm ``Output`` API, scatters per-timestep node depths onto the mesh-cell
 grid (``S_i_j`` convention), reprojects to EPSG:4326, and builds the typed
@@ -27,7 +27,7 @@ from typing import Any
 from services.workers._raster_postprocess import manifest as _manifest
 from services.workers._raster_postprocess.band_stats import compute_band_stats
 
-LOG = logging.getLogger("grace2.worker.swmm_postprocess")
+LOG = logging.getLogger("trid3nt.worker.swmm_postprocess")
 
 #: Worker-side wet-depth floor (agent uses 0.05).
 NODATA_DEPTH_M: float = 0.001
@@ -35,7 +35,7 @@ NODATA_DEPTH_M: float = 0.001
 SWMM_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 
 #: Upper bound on emitted animation frames.
-MAX_FRAMES: int = int(os.environ.get("GRACE2_MAX_FLOOD_FRAMES", "144"))
+MAX_FRAMES: int = int(os.environ.get("TRID3NT_MAX_FLOOD_FRAMES", "144"))
 
 _PEAK_COG: str = "swmm_depth_peak.tif"
 _FRAME_COG_TMPL: str = "swmm_depth_frame_{n:02d}.tif"

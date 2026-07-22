@@ -1,4 +1,4 @@
-"""Unit + integration tests for ``grace2_agent.secrets_handler`` (file vault).
+"""Unit + integration tests for ``trid3nt_server.secrets_handler`` (file vault).
 
 TRID3NT is the local product: the cloud vaults (GCP Secret Manager, AWS SSM
 Parameter Store) are removed. Secrets are stored one-per-file under the
@@ -45,11 +45,11 @@ from pathlib import Path
 
 import pytest
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     SECRETS_COLLECTION,
     Persistence,
 )
-from grace2_agent.secrets_handler import (
+from trid3nt_server.secrets_handler import (
     FILE_VAULT_SCHEME,
     SecretError,
     SecretNotFoundError,
@@ -60,8 +60,8 @@ from grace2_agent.secrets_handler import (
     handle_secrets_list,
     read_secret_value,
 )
-from grace2_contracts.common import new_ulid
-from grace2_contracts.secrets import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.secrets import (
     SecretAddEnvelopePayload,
     SecretRecord,
     SecretsListEnvelopePayload,
@@ -79,7 +79,7 @@ from .test_persistence import MockMCPClient
 @pytest.fixture(autouse=True)
 def _vault_env(monkeypatch, tmp_path):
     """Point the file vault at a tmp persistence root for every test."""
-    monkeypatch.setenv("GRACE2_DEV_PERSISTENCE_DIR", str(tmp_path))
+    monkeypatch.setenv("TRID3NT_DEV_PERSISTENCE_DIR", str(tmp_path))
     yield tmp_path
 
 
@@ -227,8 +227,8 @@ def test_file_delete_secret_purges_entry(_vault_env) -> None:
 
 def test_env_flags_do_not_reroute_writes(_vault_env, monkeypatch) -> None:
     """No cloud fork remains: cloud-ish env flags still write the file vault."""
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "aws-batch")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "aws-batch")
     p, _ = _make_persistence()
     record = _run(
         handle_secret_add(

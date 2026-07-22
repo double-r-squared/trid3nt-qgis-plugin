@@ -28,9 +28,9 @@ import numpy as np
 import pytest
 import rasterio
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import fetch_sentinel1_sar as s1_mod
-from grace2_agent.tools.fetch_sentinel1_sar import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import fetch_sentinel1_sar as s1_mod
+from trid3nt_server.tools.fetch_sentinel1_sar import (
     _METADATA,
     _NODATA,
     _STYLE_PRESET,
@@ -59,7 +59,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,

@@ -22,10 +22,10 @@ import asyncio
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.persistence import make_file_persistence
-from grace2_contracts.case import CaseCommandEnvelopePayload
-from grace2_contracts.common import new_ulid
+from trid3nt_server import server
+from trid3nt_server.persistence import make_file_persistence
+from trid3nt_contracts.case import CaseCommandEnvelopePayload
+from trid3nt_contracts.common import new_ulid
 
 
 class FakeWS:

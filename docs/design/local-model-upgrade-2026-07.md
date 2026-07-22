@@ -13,9 +13,9 @@ chains stall today). This doc ranks the candidates that can actually run on this
 - System RAM: **15 GiB total, ~10 GiB available** (`free -g`; 5-6 GiB in use, 15 GiB swap).
   NOT the 64 GB sometimes assumed -- partial-CPU-offload headroom is ~8-9 GiB, which rules
   out "just spill a 14B to RAM" as a comfortable plan.
-- Serving: Ollama, OpenAI-compatible endpoint (`GRACE2_OPENAI_BASE_URL=http://127.0.0.1:11434/v1`),
+- Serving: Ollama, OpenAI-compatible endpoint (`TRID3NT_OPENAI_BASE_URL=http://127.0.0.1:11434/v1`),
   current model `qwen3:8b-16k` (local `num_ctx 16384` variant of `qwen3:8b`, 5.2 GB Q4),
-  `GRACE2_OPENAI_EXTRA_SYSTEM=/no_think`, `GRACE2_TOOL_RETRIEVAL=enforce`, K=8 over 178 tools.
+  `TRID3NT_OPENAI_EXTRA_SYSTEM=/no_think`, `TRID3NT_TOOL_RETRIEVAL=enforce`, K=8 over 178 tools.
 
 ### KV-cache math (fp16 K+V; bytes/token = 2 x layers x kv_heads x head_dim x 2)
 
@@ -136,7 +136,7 @@ sweep at that speed blows the 240 s per-turn cap constantly. Not viable on this 
   `FROM reecdev/qwen3.5-lowvram:9b` + `PARAMETER num_ctx 16384` -> `qwen3.5:9b-lowvram-16k`.
 - Serve with `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` (halves KV; the
   single cheapest fit lever and it also retroactively helps the current default).
-- Keep `GRACE2_OPENAI_EXTRA_SYSTEM=/no_think` (Qwen3.5 is also thinking-mode-default; verify
+- Keep `TRID3NT_OPENAI_EXTRA_SYSTEM=/no_think` (Qwen3.5 is also thinking-mode-default; verify
   on a smoke prompt that content deltas are non-empty before starting the sweep).
 - Keep K=8 so the A/B against pass 3 is clean.
 - Go/no-go gate before committing to the full sweep: run 10 prompts; if `nvidia-smi` shows
@@ -155,7 +155,7 @@ Continuity target: pass-3 sweep (HIT 45 / MISS 73 / NO_CALL 55 / ERROR 1 over 17
 1. Preserve the baseline: `cp docs/reports/tool-routing-results.jsonl docs/reports/tool-routing-results-qwen3-8b-pass3.jsonl`,
    then reset the live file (the sweep is resumable via that jsonl; a stale copy would skip
    every prompt). Same for the report md if regenerating in place.
-2. Pull + create the 16k variant (above); flip `GRACE2_OPENAI_MODEL=qwen3.5:9b-lowvram-16k`
+2. Pull + create the 16k variant (above); flip `TRID3NT_OPENAI_MODEL=qwen3.5:9b-lowvram-16k`
    in `.env.local`; restart the agent via `scripts/start_agent.sh`.
 3. Wait for the retrieval index warm log (`discover index` warm) -- the 35.7% BEFORE run
    already proved a cold-index fail-open poisons results.
@@ -166,7 +166,7 @@ Continuity target: pass-3 sweep (HIT 45 / MISS 73 / NO_CALL 55 / ERROR 1 over 17
    the MODEL-MISS/RETRIEVAL-MISS split stays 127/0-shaped (it should: retrieval is unchanged).
 7. Continuity bench: `python scripts/tool_routing_bench.py` (same 15 prompts) -> a third
    point on the 35.7 -> 57.1 -> X line.
-8. If X clearly wins: a K=12 arm (`GRACE2_TOOL_RETRIEVAL_K=12`) of the 15-prompt bench first
+8. If X clearly wins: a K=12 arm (`TRID3NT_TOOL_RETRIEVAL_K=12`) of the 15-prompt bench first
    (cheap), full sweep only if the bench does not regress.
 9. Write pass-4 report + failure split; update `docs/site/models.md` matrix.
 

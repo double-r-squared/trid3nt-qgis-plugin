@@ -31,18 +31,18 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools.publish_layer import PublishLayerError
-from grace2_agent.workflows.model_flood_scenario import (
+from trid3nt_server.tools.publish_layer import PublishLayerError
+from trid3nt_server.workflows.model_flood_scenario import (
     model_flood_scenario,
     run_model_flood_scenario,
 )
-from grace2_agent.workflows.postprocess_flood import (
+from trid3nt_server.workflows.postprocess_flood import (
     FLOOD_DEPTH_STYLE_PRESET,
     postprocess_flood,
 )
-from grace2_contracts import new_ulid
-from grace2_contracts.envelope import AssessmentEnvelope
-from grace2_contracts.execution import (
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.envelope import AssessmentEnvelope
+from trid3nt_contracts.execution import (
     ExecutionHandle,
     LayerURI,
     ModelSetup,
@@ -180,19 +180,19 @@ def _patch_chain(publish_side_effect):  # noqa: ANN001, ANN201
         return _run_result_ok(run_id, handle.handle_id)
 
     patches = [
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-        patch("grace2_agent.workflows.model_flood_scenario.lookup_precip_return_period", return_value=_precip_result()),
-        patch("grace2_agent.workflows.model_flood_scenario.build_sfincs_model", return_value=_model_setup()),
-        patch("grace2_agent.workflows.model_flood_scenario.run_solver", return_value=handle),
-        patch("grace2_agent.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        patch("trid3nt_server.workflows.model_flood_scenario.lookup_precip_return_period", return_value=_precip_result()),
+        patch("trid3nt_server.workflows.model_flood_scenario.build_sfincs_model", return_value=_model_setup()),
+        patch("trid3nt_server.workflows.model_flood_scenario.run_solver", return_value=handle),
+        patch("trid3nt_server.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
         patch(
-            "grace2_agent.workflows.model_flood_scenario.postprocess_flood",
+            "trid3nt_server.workflows.model_flood_scenario.postprocess_flood",
             return_value=([_flood_layer(run_id)], _DEPTH_METRICS),
         ),
         patch(
-            "grace2_agent.workflows.model_flood_scenario.publish_layer",
+            "trid3nt_server.workflows.model_flood_scenario.publish_layer",
             side_effect=publish_side_effect,
         ),
     ]
@@ -212,7 +212,7 @@ def test_postprocess_flood_layer_is_styled_and_single() -> None:
 
     with (
         patch(
-            "grace2_agent.workflows.postprocess_flood._resolve_run_output_to_local",
+            "trid3nt_server.workflows.postprocess_flood._resolve_run_output_to_local",
             return_value=Path("/tmp/fake.nc"),
         ),
         patch(
@@ -221,11 +221,11 @@ def test_postprocess_flood_layer_is_styled_and_single() -> None:
             # time-varying output (only hmax/zsmax) frame_cogs/labels are empty,
             # so postprocess_flood emits EXACTLY the single peak layer (the
             # styled-single-layer contract this test guards).
-            "grace2_agent.workflows.postprocess_flood._extract_depth_frames",
+            "trid3nt_server.workflows.postprocess_flood._extract_depth_frames",
             return_value=(Path("/tmp/fake_cog.tif"), dict(_DEPTH_METRICS), [], []),
         ),
         patch(
-            "grace2_agent.workflows.postprocess_flood._upload_cog_to_runs_bucket",
+            "trid3nt_server.workflows.postprocess_flood._upload_cog_to_runs_bucket",
             return_value=cog_uri,
         ),
         patch("pathlib.Path.unlink", return_value=None),

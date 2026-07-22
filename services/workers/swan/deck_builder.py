@@ -415,7 +415,7 @@ def render_swn_command_file(spec: SwanBuildSpec) -> str:
     lines.append("$ Do NOT hand-edit -- regenerate from the build_spec.")
     lines.append(f"$ mode={spec.mode} bbox={spec.bbox}")
     lines.append("$ -------------------------------------------------------------")
-    lines.append("PROJECT 'GRACE2' 'WAVE'")
+    lines.append("PROJECT 'TRID3NT' 'WAVE'")
     # SET general run constants. SWAN reads SET's optional fields POSITIONALLY
     # (``SET [level] [nor] [depmin] ... NAUTICAL``); it does NOT accept a
     # ``KEY=value`` form (the ``=`` sign only follows a real command KEYWORD, and

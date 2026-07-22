@@ -35,8 +35,8 @@ import numpy as np  # noqa: E402  — after the pytest.importorskip gates
 import pandas as pd  # noqa: E402
 from shapely.geometry import Point  # noqa: E402
 
-from grace2_agent.tools import TOOL_REGISTRY  # noqa: E402
-from grace2_agent.tools.postprocess_pelicun import (  # noqa: E402
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.tools.postprocess_pelicun import (  # noqa: E402
     PelicunPostprocessEmptyError,
     PelicunPostprocessInputError,
     PelicunPostprocessSchemaError,
@@ -514,7 +514,7 @@ def test_postprocess_pelicun_s3_staging_branch(monkeypatch, tmp_path) -> None:
     geopandas read + was_remote unlink) without any live AWS. Also asserts the
     staged temp file is cleaned up (the ``finally`` unlink for remote inputs).
     """
-    import grace2_agent.tools.cache as cache_mod
+    import trid3nt_server.tools.cache as cache_mod
 
     rows = [
         _base_row(ctype="RES1", ds_mean=1.5, loss_ratio_mean=0.10,
@@ -579,8 +579,8 @@ def test_postprocess_pelicun_s3_staging_branch(monkeypatch, tmp_path) -> None:
 
 def test_postprocess_pelicun_s3_download_failure_wraps_io_error(monkeypatch) -> None:
     """A boto3 reader failure on the s3:// branch surfaces as PelicunPostprocessIOError."""
-    import grace2_agent.tools.cache as cache_mod
-    from grace2_agent.tools.postprocess_pelicun import PelicunPostprocessIOError
+    import trid3nt_server.tools.cache as cache_mod
+    from trid3nt_server.tools.postprocess_pelicun import PelicunPostprocessIOError
 
     def _boom(uri: str) -> bytes:
         raise RuntimeError("no creds")
@@ -638,7 +638,7 @@ def test_provenance_defaults_when_overrides_omitted() -> None:
 
 def test_postprocess_pelicun_threads_fragility_override(monkeypatch) -> None:
     """The public surface forwards fragility_set / realization_count into the envelope."""
-    import grace2_agent.tools.cache as cache_mod
+    import trid3nt_server.tools.cache as cache_mod
 
     rows = [
         _base_row(ds_mean=1.5, loss_ratio_mean=0.10, repair_cost_mean=25_000.0,
@@ -720,7 +720,7 @@ def test_smoke_synthetic_small_case_validates_envelope() -> None:
 def test_nonfinite_ds_mean_raises_schema_error() -> None:
     """A NaN ds_mean (malformed/foreign FGB) must fail honestly with a typed
     schema error, not an IndexError or a fabricated DS bin (Invariant 7)."""
-    from grace2_agent.tools.postprocess_pelicun import PelicunPostprocessSchemaError
+    from trid3nt_server.tools.postprocess_pelicun import PelicunPostprocessSchemaError
 
     gdf = _make_gdf([_base_row(ds_mean=1.0), _base_row(ds_mean=float("nan"))])
     with pytest.raises(PelicunPostprocessSchemaError, match="non-finite"):

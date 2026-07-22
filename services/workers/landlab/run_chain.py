@@ -42,7 +42,7 @@ import logging
 import sys
 from pathlib import Path
 
-LOG = logging.getLogger("grace2.worker.landlab.run_chain")
+LOG = logging.getLogger("trid3nt.worker.landlab.run_chain")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
@@ -140,7 +140,7 @@ def run_chain(manifest_path: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="grace2-landlab-run-chain",
+        prog="trid3nt-landlab-run-chain",
         description="Landlab chain runner (local subprocess shim).",
     )
     parser.add_argument(

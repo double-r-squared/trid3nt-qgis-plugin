@@ -40,10 +40,10 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.compute_sediment_yield import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.compute_sediment_yield import (
     C_BY_IO_LULC_CLASS,
     SEDIMENT_YIELD_LOG_CLASSES,
     SedimentYieldAoiTooLargeError,
@@ -200,7 +200,7 @@ def test_k_fallback_constant_with_note(
     out_dir.mkdir()
 
     # No k_uri + STATSGO down -> documented constant 0.2 fallback with a note.
-    import grace2_agent.tools.fetch_statsgo_soils as statsgo_mod
+    import trid3nt_server.tools.fetch_statsgo_soils as statsgo_mod
 
     def _boom(**_kw):
         raise RuntimeError("STATSGO offline (test)")
@@ -287,7 +287,7 @@ def test_bad_erosivity_raises(synthetic_inputs) -> None:
 
 def test_style_preset_resolves_log_colormap() -> None:
     """The publish seam turns the preset into a log-spaced interval colormap."""
-    from grace2_agent.tools.publish_layer import _registry_style_params
+    from trid3nt_server.tools.publish_layer import _registry_style_params
 
     params = _registry_style_params("sediment_yield_t_ha_yr")
     assert params is not None and params.startswith("&colormap=")

@@ -15,7 +15,7 @@ Denied, or misleading "no data upstream" errors -- while the same tools work on 
 **globally** by boto3 (>= 1.28) and s3fs/aiobotocore. Anonymous reads of `noaa-goesNN` GLM
 granules and the HRRR zarr mirror get silently redirected to MinIO, which has no such buckets.
 
-**Fix**: shipped -- `server/src/grace2_agent/tools/_public_s3.py` pins
+**Fix**: shipped -- `server/src/trid3nt_server/tools/_public_s3.py` pins
 UNSIGNED public-bucket clients to the real `https://s3.<region>.amazonaws.com` endpoint
 (cloud behavior unchanged, since the env var is unset there). If you add a new tool that
 touches a public bucket, build its client/fs kwargs through `_public_s3` helpers -- never a
@@ -31,7 +31,7 @@ empty; turns look dead even though Ollama logs show tokens being generated.
 **Root cause**: Qwen3-family models default to thinking mode -- every token streams to the
 reasoning channel, and the OpenAI-compatible `content` deltas arrive empty.
 
-**Fix**: `GRACE2_OPENAI_EXTRA_SYSTEM=/no_think` in `.env.local` (shipped). The adapter appends
+**Fix**: `TRID3NT_OPENAI_EXTRA_SYSTEM=/no_think` in `.env.local` (shipped). The adapter appends
 it to the system prompt, disabling thinking. Keep it set for any Qwen3 model; it is harmless
 for models that ignore it.
 
@@ -84,7 +84,7 @@ with no server error.
 netCDF compute) running ON the asyncio event loop stall the server's heartbeat and accept
 path. One abandoned sweep prompt's fetch chain was enough to block all new handshakes.
 
-**Fix**: `GRACE2_SYNC_TOOL_OFFLOAD=global` in `.env.local` (shipped, armed 2026-07-06) --
+**Fix**: `TRID3NT_SYNC_TOOL_OFFLOAD=global` in `.env.local` (shipped, armed 2026-07-06) --
 every sync tool body is off-loaded to a thread. Global mode was proven safe on cloud before
 being armed here. If you unset it, a hand-audited always-offload list still covers the known
 pathological fetchers, but new heavy tools will not be covered.
@@ -115,7 +115,7 @@ or in the persistence store.
 ## `:8766` stats / catalog datetime serialization warnings
 
 **Symptom**: `logs/agent.log` fills with
-`WARNING grace2_agent.telemetry shadow telemetry mongo write failed` +
+`WARNING trid3nt_server.telemetry shadow telemetry mongo write failed` +
 `TypeError: Object of type datetime is not JSON serializable` (hundreds of occurrences), and
 the shadow-selection (recall@K) telemetry that the `:8766` routing-quality/stats endpoints
 read never accumulates.
@@ -125,7 +125,7 @@ The cloud persistence backends accept that type; the local **FilePersistence** s
 `json.dump`, which cannot serialize it, so every shadow write fails.
 
 **Fix / status**: benign but noisy -- telemetry is fail-open by design (never raises into the
-turn), and per-tool-call telemetry still lands in `GRACE2_TELEMETRY_PATH`. The real fix
+turn), and per-tool-call telemetry still lands in `TRID3NT_TELEMETRY_PATH`. The real fix
 (isoformat-encode datetimes before the FilePersistence write) is an open item under the local
 telemetry track (roadmap track 3). Until then, treat the WARNING as known noise and use the
 JSONL telemetry file for stats.

@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from grace2_agent.tools.solver import (
+from trid3nt_server.tools.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     LOCAL_SOLVER_SPEC_REGISTRY,
     SOLVER_WORKFLOW_REGISTRY,
 )
-from grace2_agent.workflows import run_telemac as T
+from trid3nt_server.workflows import run_telemac as T
 
 
 def test_telemac_registered_in_solver_workflow_registry():
@@ -40,7 +40,7 @@ def test_telemac_local_spec_factory_registered():
 
 
 def test_build_argv_is_sfincs_style_volume_mount(tmp_path, monkeypatch):
-    monkeypatch.setenv("GRACE2_TELEMAC_IMAGE", "trid3nt-local/telemac:latest")
+    monkeypatch.setenv("TRID3NT_TELEMAC_IMAGE", "trid3nt-local/telemac:latest")
     spec = T.telemac_local_spec()
     rundir = tmp_path / "run-01"
     rundir.mkdir()
@@ -55,7 +55,7 @@ def test_build_argv_is_sfincs_style_volume_mount(tmp_path, monkeypatch):
 
 
 def test_build_argv_honors_image_env_override(tmp_path, monkeypatch):
-    monkeypatch.setenv("GRACE2_TELEMAC_IMAGE", "custom/telemac:9.9")
+    monkeypatch.setenv("TRID3NT_TELEMAC_IMAGE", "custom/telemac:9.9")
     spec = T.telemac_local_spec()
     argv = spec.build_argv("R", tmp_path, ["--extra"])
     assert argv[-2] == "custom/telemac:9.9"

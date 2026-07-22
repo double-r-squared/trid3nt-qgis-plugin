@@ -2,7 +2,7 @@
 
 Stage 0 lands the mechanism for off-loading synchronous atomic-tool bodies to a
 worker thread (so a slow sync tool can no longer stall the WS keepalive — see
-feedback_no_sync_blocking_on_asyncio_loop) behind the ``GRACE2_SYNC_TOOL_OFFLOAD``
+feedback_no_sync_blocking_on_asyncio_loop) behind the ``TRID3NT_SYNC_TOOL_OFFLOAD``
 env var, DEFAULT OFF. These tests pin:
 
 1. the staged mode helper (``off``/``subset``/``global``) resolves correctly;
@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent import tools as agent_tools
-from grace2_agent.tools import RegisteredTool
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server import server
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.tools import RegisteredTool
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
 def test_should_offload_modes(monkeypatch: pytest.MonkeyPatch) -> None:

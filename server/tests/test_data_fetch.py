@@ -31,9 +31,9 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import data_fetch
-from grace2_agent.tools.data_fetch import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import data_fetch
+from trid3nt_server.tools.data_fetch import (
     BboxInvalidError,
     GeocodeNoMatchError,
     UpstreamAPIError,
@@ -157,7 +157,7 @@ def test_registry_contains_job_0039_subset_after_eager_import():
 
     Inside the test process, the eager-import surface is whatever the test
     module triggers — ``tools/__init__.py`` (passthroughs, FROZEN) + the
-    explicit ``import grace2_agent.tools.data_fetch`` at the top of this
+    explicit ``import trid3nt_server.tools.data_fetch`` at the top of this
     test file (which fires this job's three new ``@register_tool``
     decorators alongside the M4 four). Parallel sprint-07 imports
     (``qgis_discovery`` from job-0034, ``solver`` from job-0041) are
@@ -244,7 +244,7 @@ def test_fetch_dem_happy_path_writes_through_cache(monkeypatch):
     # tool function builds its own client. So instead, we monkeypatch the
     # google.cloud.storage import path inside read_through by overriding the
     # cache module's import-lookup. Cleanest: import the module and patch.
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     original_read_through = cache_mod.read_through
 
@@ -308,7 +308,7 @@ def _effective_res_from_layer(layer) -> int:
 
 
 def _install_fake_dem_fetch(monkeypatch, fake_storage) -> None:
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
@@ -390,7 +390,7 @@ def test_fetch_dem_upstream_failure_reraises(monkeypatch):
     the original no-sentinel re-raise contract.)
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     def boom(_bbox, _res):
         raise UpstreamAPIError("py3dep is unreachable")
@@ -424,7 +424,7 @@ def test_fetch_dem_upstream_failure_reraises(monkeypatch):
 
 
 def _fake_copernicus_layer(bbox):
-    from grace2_contracts.execution import LayerURI
+    from trid3nt_contracts.execution import LayerURI
 
     return LayerURI(
         layer_id="copdem-glo30-test",
@@ -439,7 +439,7 @@ def _fake_copernicus_layer(bbox):
 
 
 def _patch_dem_read_through(monkeypatch, fake_storage):
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -454,7 +454,7 @@ def test_fetch_dem_service_down_falls_back_to_copernicus(monkeypatch):
     """(a) 3DEP service-unavailable -> Copernicus fallback + honest labeling."""
     from unittest.mock import patch
 
-    from grace2_agent.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -488,11 +488,11 @@ def test_fetch_dem_hang_times_out_within_budget_then_falls_back(monkeypatch):
     import time as _time
     from unittest.mock import patch
 
-    from grace2_agent.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
-    monkeypatch.setenv("GRACE2_DEM_PRIMARY_TIMEOUT_S", "0.2")
+    monkeypatch.setenv("TRID3NT_DEM_PRIMARY_TIMEOUT_S", "0.2")
 
     def hang(_bbox, _res):
         _time.sleep(8.0)  # simulates the live 3DEP grind
@@ -523,7 +523,7 @@ def test_fetch_dem_both_sources_fail_raises_typed_error_naming_both(monkeypatch)
     """(c) 3DEP AND Copernicus fail -> one UpstreamAPIError naming both."""
     from unittest.mock import patch
 
-    from grace2_agent.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -550,7 +550,7 @@ def test_fetch_dem_pinned_3dep_no_fallback_suggests_copernicus(monkeypatch):
     """(d) explicit source='3dep' never falls back; error suggests copernicus."""
     from unittest.mock import patch
 
-    from grace2_agent.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -575,7 +575,7 @@ def test_fetch_dem_healthy_3dep_path_unchanged_no_fallback_note(monkeypatch):
     """(e) a healthy 3DEP fetch is unchanged: 3DEP name, no fallback_note."""
     from unittest.mock import patch
 
-    from grace2_agent.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -594,8 +594,8 @@ def test_fetch_dem_partial_coverage_propagates_not_ladder(monkeypatch):
     """DemPartialCoverageError is a DATA signal: no cross-source ladder."""
     from unittest.mock import patch
 
-    from grace2_agent.tools import fetch_copernicus_dem as cop_mod
-    from grace2_agent.tools.data_fetch import DemPartialCoverageError
+    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.data_fetch import DemPartialCoverageError
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -705,7 +705,7 @@ def test_bbox_covers_flags_material_shortfall():
 
 def _patch_read_through(monkeypatch, fake_storage):
     """Route ``data_fetch.read_through`` through a FakeStorageClient + pinned now."""
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -1195,7 +1195,7 @@ def test_fetch_population_acs_opt_in_routes_to_acs_branch(monkeypatch):
     precision queries — that's the Tier-2 routing rule.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -1236,7 +1236,7 @@ def test_fetch_population_default_routes_to_worldpop_not_acs(monkeypatch):
     trivial volume — Tier-1 preference rule says no-key defaults).
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     worldpop_calls: list[tuple[Any, str]] = []
 
@@ -1280,7 +1280,7 @@ def test_fetch_population_default_routes_to_worldpop_not_acs(monkeypatch):
 def test_fetch_population_worldpop_writes_tif_cog_to_cache(monkeypatch):
     """The WorldPop default branch writes a ``.tif`` COG to the population cache prefix."""
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -1421,7 +1421,7 @@ def test_worldpop_url_built_only_for_validated_year_matches_real_format():
 
 def _patch_population_cache(monkeypatch, fake_storage):
     """Route fetch_population's read_through through a fake storage client."""
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -1466,7 +1466,7 @@ def test_fetch_population_cache_key_includes_target_resolution_m(monkeypatch):
 
 def test_geocode_location_happy_path(monkeypatch):
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
     import json as _json
 
     fake_payload = {
@@ -1518,7 +1518,7 @@ def test_geocode_location_rejects_empty_query():
 def _bind_geocode_cache(monkeypatch):
     """Wire read_through to a fresh fake-storage client (shared test plumbing)."""
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -2353,7 +2353,7 @@ def test_bbox_long_axis_km_and_square_km_bbox_roundtrip():
 # ---------------------------------------------------------------------------
 
 
-from grace2_agent.tools.data_fetch import (  # noqa: E402 — after main test surface
+from trid3nt_server.tools.data_fetch import (  # noqa: E402 — after main test surface
     fetch_landcover,
     fetch_river_geometry,
     lookup_precip_return_period,
@@ -2395,7 +2395,7 @@ def test_fetch_landcover_returns_nlcd_vintage_year_sidecar(monkeypatch):
     OQ-39-LANDCOVER-RETURN-SHAPE-CONTRACT-PROMOTION.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -2433,7 +2433,7 @@ def test_fetch_landcover_returns_nlcd_vintage_year_sidecar(monkeypatch):
 def test_fetch_landcover_routes_through_read_through_writes_cache(monkeypatch):
     """FR-CE-8: ``fetch_landcover`` routes through ``read_through`` (cache shim)."""
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -2467,7 +2467,7 @@ def test_fetch_landcover_quantizes_bbox_to_30m_nlcd_grid(monkeypatch):
     resolution should hit the same cache key (dedup-via-quantization).
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -2511,7 +2511,7 @@ def test_fetch_landcover_rejects_unknown_dataset():
 def test_fetch_landcover_bare_nlcd_alias_resolves_to_default_vintage(monkeypatch):
     """``dataset='nlcd'`` (no vintage) is accepted as an alias for the default."""
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -2536,7 +2536,7 @@ def test_fetch_landcover_trailing_underscore_nlcd_alias_resolves_to_default_vint
 ):
     """``dataset='nlcd_'`` (trailing underscore, no year) is accepted the same way."""
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -2566,7 +2566,7 @@ def test_fetch_landcover_unknown_vintage_year_still_errors(monkeypatch):
     before any network call is made.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -2582,7 +2582,7 @@ def test_fetch_landcover_unknown_vintage_year_still_errors(monkeypatch):
 def test_fetch_landcover_esa_worldcover_not_implemented(monkeypatch):
     """ESA WorldCover opt-in is reserved; v0.1 substrate raises UpstreamAPIError."""
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -2647,7 +2647,7 @@ def test_fetch_landcover_cache_key_source_is_mrlc_wcs(monkeypatch):
     time) rather than colliding with the new canonical-bytes entries.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -2707,7 +2707,7 @@ def test_landcover_cache_key_changed_after_palette_fix():
     asserts the keys differ. This is the load-bearing assertion that post-fix
     fetches no longer hit the grey, palette-less cached COG.
     """
-    from grace2_agent.tools.cache import compute_cache_key
+    from trid3nt_server.tools.cache import compute_cache_key
 
     quantized = data_fetch._round_bbox_to_30m_nlcd(FORT_MYERS_BBOX)
 
@@ -2743,11 +2743,11 @@ def test_fetch_landcover_writes_cache_at_new_salted_key(monkeypatch):
     object it lands at matches the salted-params key — NOT the old un-salted key
     that the stale palette-less COG occupies.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         cache_path,
         compute_cache_key,
     )
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     fake_storage = FakeStorageClient()
     monkeypatch.setattr(
@@ -2971,7 +2971,7 @@ def test_fetch_nlcd_landcover_bytes_output_has_overviews(monkeypatch):
         content = flat
         content_type = "image/tiff"
 
-    import grace2_agent.tools.ogc_adapter as ogc_mod
+    import trid3nt_server.tools.ogc_adapter as ogc_mod
 
     monkeypatch.setattr(
         ogc_mod, "fetch_ogc_layer", lambda *a, **kw: _FakeOGCResp()
@@ -3416,7 +3416,7 @@ def test_fetch_river_geometry_happy_path_returns_layer_uri(monkeypatch):
     decided by the internal fallback chain at fetch time.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -3455,7 +3455,7 @@ def test_fetch_river_geometry_cache_key_distinct_per_bbox(monkeypatch):
     different cache paths even though both flow through the OSM-primary chain.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -3491,7 +3491,7 @@ def test_fetch_river_geometry_works_outside_huc4_envelope_via_osm(monkeypatch):
     LayerURI (the OSM fetcher is mocked here so no network is touched).
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -3642,7 +3642,7 @@ def test_fetch_river_geometry_osm_returns_bbox_filling_geometry(monkeypatch):
 def test_fetch_river_geometry_falls_back_to_nhdplus_when_osm_fails(monkeypatch):
     """Fallback ordering: OSM primary fails → NHDPlus HR (when HUC4 resolves) is used."""
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     calls = []
 
@@ -3679,7 +3679,7 @@ def test_fetch_river_geometry_typed_error_when_all_sources_fail(monkeypatch):
     Data-source-fallback norm: never a silent dead-end or hallucinated success.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     def _osm_boom(bbox, *a, **kw):
         raise UpstreamAPIError("simulated Overpass outage")
@@ -3878,7 +3878,7 @@ def test_fetch_river_geometry_waterway_type_distinct_cache_key(monkeypatch):
     set MUST produce a distinct key so it can't alias the default artifact.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     seen_classes = []
 
@@ -3920,7 +3920,7 @@ def test_fetch_river_geometry_default_cache_key_unchanged_by_upgrade(monkeypatch
     a None waterway_type must hash identically to omitting the param entirely.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -4007,7 +4007,7 @@ Date/time (GMT):  Sun Jun  7 07:54:20 2026
 def test_lookup_precip_return_period_happy_path_returns_structured_dict(monkeypatch):
     """100-year 24-hour at Fort Myers center: parsed from the fixture."""
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,
@@ -4042,7 +4042,7 @@ def test_lookup_precip_return_period_quantizes_location_to_atlas14_grid(monkeypa
     Two callers within the same Atlas 14 grid cell hit the same cache entry.
     """
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     fetch_calls: list[tuple[float, float]] = []
 
@@ -4090,7 +4090,7 @@ def test_lookup_precip_return_period_rejects_unsupported_duration():
 def test_lookup_precip_return_period_writes_csv_through_cache(monkeypatch):
     """FR-CE-8: the PFDS CSV is cached under cache/static-30d/precip_return_period/."""
     fake_storage = FakeStorageClient()
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
         data_fetch,

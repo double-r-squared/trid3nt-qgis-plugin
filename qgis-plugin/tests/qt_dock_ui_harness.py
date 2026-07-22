@@ -783,7 +783,7 @@ from trid3nt.ui.cards import _ErrorFold  # noqa: E402
 
 URL_NOTE = (
     "vector 'Rivers & Streams': MinIO fetch failed "
-    "(http://127.0.0.1:9000/grace2-cases/case-0123456789abcdef/layers/"
+    "(http://127.0.0.1:9000/trid3nt-cases/case-0123456789abcdef/layers/"
     "rivers-and-streams.fgb?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-"
     "Credential=minioadmin%2F20260722&X-Amz-Signature="
     "0123456789abcdef0123456789abcdef0123456789abcdef) -- skipped"

@@ -12,15 +12,15 @@ from __future__ import annotations
 
 import pytest
 
-import grace2_agent.tools.discover_dataset as dd
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import tool_retrieval as trmod
-from grace2_agent.tools.tool_retrieval import (
+import trid3nt_server.tools.discover_dataset as dd
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import tool_retrieval as trmod
+from trid3nt_server.tools.tool_retrieval import (
     DEFAULT_K,
     MAX_K,
     retrieve_visible_tools,
 )
-from grace2_agent.categories import (
+from trid3nt_server.categories import (
     HOT_SET_TOOLS,
     AllowedToolSet,
     tools_for_category,
@@ -258,10 +258,10 @@ def _full_registry_names() -> set[str]:
     register only via the startup import path (NOT the plain `from . import
     TOOL_REGISTRY` snapshot), so the coverage check is deterministic regardless
     of test order."""
-    import grace2_agent.main as _m
+    import trid3nt_server.main as _m
 
     _m._import_tools_registry()
-    from grace2_agent.tools import TOOL_REGISTRY as _full
+    from trid3nt_server.tools import TOOL_REGISTRY as _full
 
     return set(_full)
 

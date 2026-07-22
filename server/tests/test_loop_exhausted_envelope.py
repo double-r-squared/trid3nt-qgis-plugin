@@ -24,12 +24,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     GeminiSettings,
     MAX_TURN_ITERATIONS,
 )
-from grace2_agent.server import _send_loop_exhausted, SessionState
-from grace2_contracts import new_ulid
+from trid3nt_server.server import _send_loop_exhausted, SessionState
+from trid3nt_contracts import new_ulid
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +181,7 @@ async def test_stream_gemini_reply_emits_loop_exhausted_on_cap():
     mocked to always return a result; eventually MAX_TURN_ITERATIONS is hit
     and the distinct 'loop_exhausted' envelope must appear on the wire.
     """
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     # Always-looping generator: each call → another function_call chunk.
     def _always_loop(**kwargs):
@@ -244,7 +244,7 @@ async def test_stream_gemini_reply_terminal_chunk_after_loop_exhausted():
     The client waits for done=True to close the stream. If the loop exits via
     the cap-hit path without emitting it, the client hangs indefinitely.
     """
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     fake_client = MagicMock()
     fake_client.models.generate_content_stream.side_effect = lambda **kw: iter([

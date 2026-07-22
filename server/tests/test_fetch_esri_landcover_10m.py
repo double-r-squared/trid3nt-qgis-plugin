@@ -33,10 +33,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.cache import compute_cache_key
-from grace2_agent.tools import fetch_esri_landcover_10m as lc_mod
-from grace2_agent.tools.fetch_esri_landcover_10m import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.cache import compute_cache_key
+from trid3nt_server.tools import fetch_esri_landcover_10m as lc_mod
+from trid3nt_server.tools.fetch_esri_landcover_10m import (
     EsriLandcoverBboxError,
     EsriLandcoverNoCoverageError,
     EsriLandcoverYearError,
@@ -66,7 +66,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -106,7 +106,7 @@ def _write_class_cog(bbox, class_array, *, with_palette: bool = True) -> str:
 
     h, w = class_array.shape
     transform = rasterio.transform.from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], w, h)
-    fd, path = tempfile.mkstemp(suffix=".tif", prefix="grace2_esri_lc_src_")
+    fd, path = tempfile.mkstemp(suffix=".tif", prefix="trid3nt_esri_lc_src_")
     os.close(fd)
     with rasterio.open(
         path, "w", driver="GTiff", height=h, width=w, count=1, dtype="uint8",
@@ -381,7 +381,7 @@ def test_distinct_year_distinct_cache_key() -> None:
 
 def test_tile_grid_small_bbox_single_tile() -> None:
     """A bbox within the tile cap produces exactly one tile equal to the input."""
-    from grace2_agent.tools.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
+    from trid3nt_server.tools.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
 
     # _BBOX is 0.2 * 0.2 = 0.04 deg^2, well under 0.5 cap.
     tiles = _plan_tile_grid(_BBOX, tile_deg2=_TILE_DEG2)
@@ -400,7 +400,7 @@ def test_tile_grid_klickitat_county_no_raise() -> None:
     assert area > 0.5, "test setup: bbox must exceed the old 0.5 cap"
     assert area < 8.0, "test setup: bbox must be within new 8.0 ceiling"
 
-    from grace2_agent.tools.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
+    from trid3nt_server.tools.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
 
     tiles = _plan_tile_grid(bbox, tile_deg2=_TILE_DEG2)
     assert len(tiles) > 1, "bbox above tile cap must produce multiple sub-tiles"
@@ -414,7 +414,7 @@ def test_tile_grid_klickitat_county_no_raise() -> None:
 
 def test_tile_grid_coverage_and_no_gaps() -> None:
     """The union area of all sub-tiles equals the total bbox area (no gaps)."""
-    from grace2_agent.tools.fetch_esri_landcover_10m import _plan_tile_grid
+    from trid3nt_server.tools.fetch_esri_landcover_10m import _plan_tile_grid
 
     # A ~3 deg^2 bbox (6 tiles expected at 0.5 cap).
     bbox = (-121.5, 45.0, -119.5, 46.5)

@@ -12,7 +12,7 @@ Coverage:
 - URL contains status param but NO area/point param (CONUS-wide variant).
 - Geographic-correctness gate (job-0086): every alert polygon in the returned
   FGB whose centroid is in CONUS+territories+marine-zones envelope.
-- Live (env GRACE2_TEST_LIVE_NWS_CONUS=1): real api.weather.gov returns ≥0
+- Live (env TRID3NT_TEST_LIVE_NWS_CONUS=1): real api.weather.gov returns ≥0
   features; if non-zero, polygon centroids fall inside the US envelope.
 """
 
@@ -27,8 +27,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_nws_alerts_conus import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_nws_alerts_conus import (
     NWSConusError,
     NWSConusInputError,
     NWSConusUpstreamError,
@@ -47,7 +47,7 @@ from grace2_agent.tools.fetch_nws_alerts_conus import (
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
 # Marker for live tests
-_LIVE_NWS_CONUS = os.environ.get("GRACE2_TEST_LIVE_NWS_CONUS") == "1"
+_LIVE_NWS_CONUS = os.environ.get("TRID3NT_TEST_LIVE_NWS_CONUS") == "1"
 
 # Generous US+territories+marine-zones envelope for the geographic-correctness
 # gate. Covers CONUS, AK, HI, PR/VI, GU/MP/AS, and the marine zones offshore.
@@ -108,7 +108,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -327,15 +327,15 @@ def test_user_agent_header_sent_on_request():
             captured_headers.update(headers or {})
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient):
-        from grace2_agent.tools.fetch_nws_alerts_conus import _fetch_nws_conus_geojson
+    with patch("trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient):
+        from trid3nt_server.tools.fetch_nws_alerts_conus import _fetch_nws_conus_geojson
         _fetch_nws_conus_geojson("https://api.weather.gov/alerts/active?status=actual")
 
     assert "User-Agent" in captured_headers, (
         f"User-Agent header missing! Captured: {captured_headers}"
     )
     ua = captured_headers["User-Agent"]
-    assert "grace2-agent" in ua, f"User-Agent should identify grace2-agent: {ua!r}"
+    assert "trid3nt-server" in ua, f"User-Agent should identify trid3nt-server: {ua!r}"
     assert "contact" in ua.lower(), (
         f"User-Agent should include a contact per NWS policy: {ua!r}"
     )
@@ -352,10 +352,10 @@ def test_50_alert_conus_response_writes_fgb_with_50_features():
     fake_geojson = _sample_conus_geojson(50)
 
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus._fetch_nws_conus_geojson",
+        "trid3nt_server.tools.fetch_nws_alerts_conus._fetch_nws_conus_geojson",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.read_through",
+        "trid3nt_server.tools.fetch_nws_alerts_conus.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nws_alerts_conus()
@@ -397,10 +397,10 @@ def test_event_types_filter_narrows_in_end_to_end_call():
     fake_geojson = _sample_conus_geojson(50)
 
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus._fetch_nws_conus_geojson",
+        "trid3nt_server.tools.fetch_nws_alerts_conus._fetch_nws_conus_geojson",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.read_through",
+        "trid3nt_server.tools.fetch_nws_alerts_conus.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nws_alerts_conus(event_types=["Hurricane Warning"])
@@ -473,8 +473,8 @@ def test_403_raises_typed_upstream_error_with_useragent_message():
         def get(self, url, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient):
-        from grace2_agent.tools.fetch_nws_alerts_conus import _fetch_nws_conus_geojson
+    with patch("trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient):
+        from trid3nt_server.tools.fetch_nws_alerts_conus import _fetch_nws_conus_geojson
         with pytest.raises(NWSConusUpstreamError, match="403"):
             _fetch_nws_conus_geojson("https://api.weather.gov/alerts/active?status=actual")
 
@@ -500,8 +500,8 @@ def test_network_failure_wraps_to_upstream_error():
         def get(self, url, headers=None):
             raise httpx.ConnectError("simulated DNS failure")
 
-    with patch("grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient):
-        from grace2_agent.tools.fetch_nws_alerts_conus import _fetch_nws_conus_geojson
+    with patch("trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient):
+        from trid3nt_server.tools.fetch_nws_alerts_conus import _fetch_nws_conus_geojson
         with pytest.raises(NWSConusUpstreamError, match="request failed"):
             _fetch_nws_conus_geojson("https://api.weather.gov/alerts/active?status=actual")
 
@@ -522,10 +522,10 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return fake_bytes
 
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
+        "trid3nt_server.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.read_through",
+        "trid3nt_server.tools.fetch_nws_alerts_conus.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_nws_alerts_conus()
@@ -549,10 +549,10 @@ def test_event_types_filter_changes_cache_key():
         return _fake_fgb_bytes(str(event_types))
 
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
+        "trid3nt_server.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.read_through",
+        "trid3nt_server.tools.fetch_nws_alerts_conus.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_all = fetch_nws_alerts_conus()
@@ -571,10 +571,10 @@ def test_event_types_order_does_not_affect_cache_key():
         return _fake_fgb_bytes("X")
 
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
+        "trid3nt_server.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.read_through",
+        "trid3nt_server.tools.fetch_nws_alerts_conus.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_nws_alerts_conus(
@@ -596,10 +596,10 @@ def test_event_types_order_does_not_affect_cache_key():
 def test_layer_uri_shape_for_unfiltered():
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
+        "trid3nt_server.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
         return_value=_fake_fgb_bytes("CONUS"),
     ), patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.read_through",
+        "trid3nt_server.tools.fetch_nws_alerts_conus.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nws_alerts_conus()
@@ -698,13 +698,13 @@ def test_geojson_to_fgb_empty_collection_is_valid():
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_NWS_CONUS=1 to run).
+# Live integration test (TRID3NT_TEST_LIVE_NWS_CONUS=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_NWS_CONUS,
-    reason="Set GRACE2_TEST_LIVE_NWS_CONUS=1 to run live NWS CONUS tests",
+    reason="Set TRID3NT_TEST_LIVE_NWS_CONUS=1 to run live NWS CONUS tests",
 )
 def test_live_conus_sweep_returns_valid_response():
     """LIVE: real api.weather.gov CONUS sweep returns valid FGB (≥0 features).
@@ -768,7 +768,7 @@ def test_live_conus_sweep_returns_valid_response():
 
 @pytest.mark.skipif(
     not _LIVE_NWS_CONUS,
-    reason="Set GRACE2_TEST_LIVE_NWS_CONUS=1 to run live NWS CONUS tests",
+    reason="Set TRID3NT_TEST_LIVE_NWS_CONUS=1 to run live NWS CONUS tests",
 )
 def test_live_conus_with_filter_narrows():
     """LIVE: client-side filter to Flood Warning narrows the CONUS sweep."""
@@ -843,7 +843,7 @@ def test_build_url_without_area_unchanged_conus_sweep():
     ],
 )
 def test_resolve_area_or_raise_accepts(raw, expected):
-    from grace2_agent.tools.fetch_nws_alerts_conus import _resolve_area_or_raise
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _resolve_area_or_raise
     assert _resolve_area_or_raise(raw) == expected
 
 
@@ -851,13 +851,13 @@ def test_resolve_area_or_raise_accepts(raw, expected):
 def test_resolve_area_or_raise_rejects_non_states(raw):
     """Unrecognized areas raise a typed, non-retryable input error that points
     Gemini at fetch_nws_event rather than silently sweeping the nation."""
-    from grace2_agent.tools.fetch_nws_alerts_conus import _resolve_area_or_raise
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _resolve_area_or_raise
     with pytest.raises(NWSConusInputError, match="fetch_nws_event"):
         _resolve_area_or_raise(raw)
 
 
 def test_resolve_area_or_raise_non_string_raises():
-    from grace2_agent.tools.fetch_nws_alerts_conus import _resolve_area_or_raise
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _resolve_area_or_raise
     with pytest.raises(NWSConusInputError):
         _resolve_area_or_raise(("TX",))  # type: ignore[arg-type]
 
@@ -874,10 +874,10 @@ def test_area_texas_end_to_end_sends_area_param_and_labels_layer():
         return fake_geojson
 
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus._fetch_nws_conus_geojson",
+        "trid3nt_server.tools.fetch_nws_alerts_conus._fetch_nws_conus_geojson",
         side_effect=capture_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.read_through",
+        "trid3nt_server.tools.fetch_nws_alerts_conus.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nws_alerts_conus(area="Texas")
@@ -899,10 +899,10 @@ def test_area_changes_cache_key():
         return _fake_fgb_bytes(str(area_code))
 
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
+        "trid3nt_server.tools.fetch_nws_alerts_conus._fetch_nws_alerts_conus_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.read_through",
+        "trid3nt_server.tools.fetch_nws_alerts_conus.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_conus = fetch_nws_alerts_conus()
@@ -921,7 +921,7 @@ def test_garbage_area_raises_before_any_fetch():
     """A non-state area must fail loud (typed input error) without touching
     the network or the cache."""
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.read_through",
+        "trid3nt_server.tools.fetch_nws_alerts_conus.read_through",
     ) as rt:
         with pytest.raises(NWSConusInputError, match="not a recognized"):
             fetch_nws_alerts_conus(area="Gulf of Mexico City")
@@ -990,7 +990,7 @@ def _null_geom_alert(
 
 def test_ugc_to_zone_url_maps_zone_and_county_types():
     """UGC 3rd char selects the NWS zone collection: Z→forecast, C→county."""
-    from grace2_agent.tools.fetch_nws_alerts_conus import _ugc_to_zone_url
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _ugc_to_zone_url
     assert _ugc_to_zone_url("LAZ091") == (
         "https://api.weather.gov/zones/forecast/LAZ091"
     )
@@ -1009,7 +1009,7 @@ def test_ugc_to_zone_url_maps_zone_and_county_types():
 
 def test_zone_urls_for_feature_prefers_affected_zones_and_dedupes():
     """affectedZones are primary; geocode.UGC is the fallback union; no dupes."""
-    from grace2_agent.tools.fetch_nws_alerts_conus import _zone_urls_for_feature
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _zone_urls_for_feature
     props = {
         "affectedZones": ["https://api.weather.gov/zones/forecast/LAZ091"],
         "geocode": {"UGC": ["LAZ091", "LAZ093", "ILC011"]},
@@ -1025,7 +1025,7 @@ def test_zone_urls_for_feature_prefers_affected_zones_and_dedupes():
 
 def test_zone_urls_for_feature_falls_back_to_ugc_when_no_affected_zones():
     """No affectedZones → derive URLs purely from geocode.UGC (fallback norm)."""
-    from grace2_agent.tools.fetch_nws_alerts_conus import _zone_urls_for_feature
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _zone_urls_for_feature
     props = {"geocode": {"UGC": ["FLZ072", "FLC086"]}}
     urls = _zone_urls_for_feature(props)
     assert urls == [
@@ -1075,7 +1075,7 @@ def _zone_http_mock(zone_geoms: dict[str, dict]):
 
 def test_resolve_zone_geometries_attaches_real_polygons():
     """A NULL-geometry alert with affectedZones resolves to a drawable polygon."""
-    from grace2_agent.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
 
     z_url = "https://api.weather.gov/zones/forecast/FLZ072"
     alert = _null_geom_alert(
@@ -1085,7 +1085,7 @@ def test_resolve_zone_geometries_attaches_real_polygons():
 
     FakeClient, calls = _zone_http_mock({z_url: _zone_polygon(-80.2, 26.1)})
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
     ):
         resolved = _resolve_zone_geometries(collection)
 
@@ -1101,7 +1101,7 @@ def test_resolve_zone_geometries_attaches_real_polygons():
 
 def test_resolve_zone_geometries_unions_multiple_zones_to_multipolygon():
     """Several affected zones → MultiPolygon union attached to the alert."""
-    from grace2_agent.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
 
     z1 = "https://api.weather.gov/zones/forecast/FLZ072"
     z2 = "https://api.weather.gov/zones/forecast/FLZ073"
@@ -1115,7 +1115,7 @@ def test_resolve_zone_geometries_unions_multiple_zones_to_multipolygon():
         z2: _zone_polygon(-80.6, 26.5),
     })
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
     ):
         resolved = _resolve_zone_geometries(collection)
 
@@ -1126,7 +1126,7 @@ def test_resolve_zone_geometries_unions_multiple_zones_to_multipolygon():
 
 def test_resolve_zone_geometries_dedupes_shared_zone_across_alerts():
     """Alerts share zones — each distinct zone URL is fetched exactly once."""
-    from grace2_agent.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
 
     shared = "https://api.weather.gov/zones/forecast/FLZ072"
     a1 = _null_geom_alert("Flood Warning", [shared], ["FLZ072"])
@@ -1135,7 +1135,7 @@ def test_resolve_zone_geometries_dedupes_shared_zone_across_alerts():
 
     FakeClient, calls = _zone_http_mock({shared: _zone_polygon(-80.2, 26.1)})
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
     ):
         resolved = _resolve_zone_geometries(collection)
 
@@ -1146,14 +1146,14 @@ def test_resolve_zone_geometries_dedupes_shared_zone_across_alerts():
 
 def test_resolve_zone_geometries_keeps_inline_geometry_untouched():
     """Features that already carry inline geometry are not re-fetched."""
-    from grace2_agent.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
 
     inline = _make_feature("Tornado Warning", "Extreme", -97.0, 35.0)
     collection = {"type": "FeatureCollection", "features": [inline]}
 
     FakeClient, calls = _zone_http_mock({})
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
     ):
         resolved = _resolve_zone_geometries(collection)
 
@@ -1164,7 +1164,7 @@ def test_resolve_zone_geometries_keeps_inline_geometry_untouched():
 
 def test_resolve_zone_geometries_unresolvable_keeps_null_never_fabricates():
     """A zone that 404s: alert keeps its row + NULL geometry (no fabrication)."""
-    from grace2_agent.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _resolve_zone_geometries
 
     bad = "https://api.weather.gov/zones/forecast/ZZZ999"
     alert = _null_geom_alert("Special Weather Statement", [bad], ["ZZZ999"])
@@ -1173,7 +1173,7 @@ def test_resolve_zone_geometries_unresolvable_keeps_null_never_fabricates():
     # Empty mock → every zone URL 404s.
     FakeClient, _calls = _zone_http_mock({})
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
     ):
         resolved = _resolve_zone_geometries(collection)
 
@@ -1213,11 +1213,11 @@ def test_end_to_end_zone_referenced_alerts_become_drawable_fgb():
         z086: _zone_polygon(-81.4, 27.0),
     })
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
     ):
         # _resolve_zone_geometries runs inside the converter pipeline; call it
         # then feed the result to the FGB writer (same order as the tool body).
-        from grace2_agent.tools.fetch_nws_alerts_conus import (
+        from trid3nt_server.tools.fetch_nws_alerts_conus import (
             _resolve_zone_geometries,
         )
         resolved = _resolve_zone_geometries(geojson)
@@ -1269,10 +1269,10 @@ def test_full_fetch_pipeline_resolves_zones_via_bytes_path():
     FakeClient, _calls = _zone_http_mock({z072: _zone_polygon(-80.2, 26.1)})
 
     with patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus._fetch_nws_conus_geojson",
+        "trid3nt_server.tools.fetch_nws_alerts_conus._fetch_nws_conus_geojson",
         return_value=sweep,
     ), patch(
-        "grace2_agent.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_nws_alerts_conus.httpx.Client", FakeClient
     ):
         fgb_bytes = _fetch_nws_alerts_conus_bytes(
             status="actual", event_types=None,
@@ -1297,7 +1297,7 @@ def test_full_fetch_pipeline_resolves_zones_via_bytes_path():
 
 @pytest.mark.skipif(
     not _LIVE_NWS_CONUS,
-    reason="Set GRACE2_TEST_LIVE_NWS_CONUS=1 to run live NWS CONUS tests",
+    reason="Set TRID3NT_TEST_LIVE_NWS_CONUS=1 to run live NWS CONUS tests",
 )
 def test_live_area_tx_every_feature_is_texas():
     """LIVE (job-0261 acceptance): api.weather.gov/alerts/active?area=TX —
@@ -1308,7 +1308,7 @@ def test_live_area_tx_every_feature_is_texas():
     This is the Gemini-free proof that the named state cannot spill into
     its neighbors the way the unscoped CONUS sweep did in the live demo.
     """
-    from grace2_agent.tools.fetch_nws_alerts_conus import _fetch_nws_conus_geojson
+    from trid3nt_server.tools.fetch_nws_alerts_conus import _fetch_nws_conus_geojson
 
     url = _build_nws_conus_url("actual", "TX")
     body = _fetch_nws_conus_geojson(url)

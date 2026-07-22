@@ -23,7 +23,7 @@ Coverage:
 - Payload estimator returns a positive float.
 - Extra-kwargs absorption (LLM hallucination guard).
 
-Live test (gated by GRACE2_TEST_LIVE_WQP=1): real WQP Station+Result request
+Live test (gated by TRID3NT_TEST_LIVE_WQP=1): real WQP Station+Result request
 for a small Iowa corn-belt bbox; confirms >=1 nitrate site with a value.
 """
 
@@ -38,8 +38,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_usgs_water_quality import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_usgs_water_quality import (
     WqpError,
     WqpInputError,
     WqpNoSitesError,
@@ -61,7 +61,7 @@ from grace2_agent.tools.fetch_usgs_water_quality import (
 # Constants / fixtures.
 # ---------------------------------------------------------------------------
 
-_LIVE_WQP = os.environ.get("GRACE2_TEST_LIVE_WQP") == "1"
+_LIVE_WQP = os.environ.get("TRID3NT_TEST_LIVE_WQP") == "1"
 
 # A small Iowa corn-belt bbox (~0.5 x 0.5 = 0.25 deg^2) — heavy nitrate
 # agriculture, well under the area cap.
@@ -124,7 +124,7 @@ class FakeStorageClient:
 
 def _make_read_through_injector(fake_gcs):
     """S3-only in-memory read-through injector (GCP decommissioned)."""
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -201,7 +201,7 @@ def test_categorized_under_hydrology():
     # Category wiring lands centrally (categories.py) in the main session, which
     # unions the metadata this tool returns. Until then PRIMARY_CATEGORY has no
     # entry; once wired it MUST be hydrology. Assert the invariant either way.
-    from grace2_agent.categories import PRIMARY_CATEGORY, tools_for_category
+    from trid3nt_server.categories import PRIMARY_CATEGORY, tools_for_category
 
     primary = PRIMARY_CATEGORY.get("fetch_usgs_water_quality")
     if primary is None:
@@ -486,9 +486,9 @@ def test_happy_path_layer_uri_shape():
         return station_geojson
 
     with (
-        patch("grace2_agent.tools.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
         patch(
-            "grace2_agent.tools.fetch_usgs_water_quality.read_through",
+            "trid3nt_server.tools.fetch_usgs_water_quality.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -531,11 +531,11 @@ def test_no_sites_raises_no_sites_error():
 
     with (
         patch(
-            "grace2_agent.tools.fetch_usgs_water_quality._http_get",
+            "trid3nt_server.tools.fetch_usgs_water_quality._http_get",
             return_value=empty_stations,
         ),
         patch(
-            "grace2_agent.tools.fetch_usgs_water_quality.read_through",
+            "trid3nt_server.tools.fetch_usgs_water_quality.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
         pytest.raises(WqpNoSitesError, match="No Water Quality Portal monitoring"),
@@ -563,9 +563,9 @@ def test_http_400_maps_to_input_error():
         raise WqpInputError("Water Quality Portal rejected the request (HTTP 400)")
 
     with (
-        patch("grace2_agent.tools.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
         patch(
-            "grace2_agent.tools.fetch_usgs_water_quality.read_through",
+            "trid3nt_server.tools.fetch_usgs_water_quality.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
         pytest.raises(WqpInputError, match="HTTP 400"),
@@ -614,9 +614,9 @@ def test_extra_kwargs_absorbed():
         return station_geojson
 
     with (
-        patch("grace2_agent.tools.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
         patch(
-            "grace2_agent.tools.fetch_usgs_water_quality.read_through",
+            "trid3nt_server.tools.fetch_usgs_water_quality.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -630,16 +630,16 @@ def test_extra_kwargs_absorbed():
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_WQP=1 to run).
+# Live integration test (TRID3NT_TEST_LIVE_WQP=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_WQP,
-    reason="Set GRACE2_TEST_LIVE_WQP=1 to run live WQP tests",
+    reason="Set TRID3NT_TEST_LIVE_WQP=1 to run live WQP tests",
 )
 def test_live_iowa_nitrate_returns_sites():
-    from grace2_agent.tools.fetch_usgs_water_quality import _fetch_water_quality_bytes
+    from trid3nt_server.tools.fetch_usgs_water_quality import _fetch_water_quality_bytes
 
     fgb_bytes, extent = _fetch_water_quality_bytes(
         bbox=_IOWA_BBOX, characteristic="Nitrate"

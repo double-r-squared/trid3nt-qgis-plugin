@@ -1,7 +1,7 @@
 """Tests for the Python sandbox host-side runner (job-0232, sprint-13 Stage 2).
 
-Drives ``grace2_agent.sandbox_runner`` in local-subprocess fallback mode
-(``GRACE2_SANDBOX_LOCAL=1``), which runs the SAME ``infra/python-sandbox/
+Drives ``trid3nt_server.sandbox_runner`` in local-subprocess fallback mode
+(``TRID3NT_SANDBOX_LOCAL=1``), which runs the SAME ``infra/python-sandbox/
 executor.py`` harness baked into the Cloud Run Job image. These are the
 environment-adjusted acceptance for the harness (the real VPC egress-deny is
 BLOCKED-ENV — no docker/gcloud on this box — and verified later per the report
@@ -25,7 +25,7 @@ import time
 
 import pytest
 
-from grace2_agent.sandbox_runner import (
+from trid3nt_server.sandbox_runner import (
     SandboxExecutionHandle,
     run_sandbox_local,
     submit_sandbox_job,
@@ -35,7 +35,7 @@ from grace2_agent.sandbox_runner import (
 @pytest.fixture(autouse=True)
 def _force_local_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test in this module runs the local-subprocess fallback."""
-    monkeypatch.setenv("GRACE2_SANDBOX_LOCAL", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_LOCAL", "1")
     monkeypatch.setenv("MPLBACKEND", "Agg")
 
 
@@ -92,7 +92,7 @@ def test_scenario_b_matplotlib_figure_to_chart_payload() -> None:
     assert r["title"] == "Damage distribution"
     assert r["png_base64"], "figure PNG should be inlined"
     assert r["png_truncated"] is False
-    # grace2_contracts is importable in this venv, so a ChartEmissionPayload-shaped
+    # trid3nt_contracts is importable in this venv, so a ChartEmissionPayload-shaped
     # dict must be emitted.
     assert r.get("chart_contract_available") is True
     ce = r["chart_emission"]
@@ -104,8 +104,8 @@ def test_scenario_b_chart_payload_constructs_real_pydantic_model() -> None:
     """The emitted chart_emission dict must construct the real ChartEmissionPayload
     (drift-free against the job-0223 contract — the reconciliation target for
     job-0233)."""
-    from grace2_contracts import new_ulid
-    from grace2_contracts.chart_contracts import (
+    from trid3nt_contracts import new_ulid
+    from trid3nt_contracts.chart_contracts import (
         ChartEmissionPayload,
         is_structurally_valid_vega_lite_spec,
     )
@@ -332,8 +332,8 @@ def test_submit_sandbox_job_always_local_after_gcp_decommission(
 ) -> None:
     """The GCP cloud sandbox path was removed; submit_sandbox_job always runs the
     local-subprocess path and returns a finished result envelope (never a pending
-    handle), even with GRACE2_SANDBOX_LOCAL unset."""
-    monkeypatch.delenv("GRACE2_SANDBOX_LOCAL", raising=False)
+    handle), even with TRID3NT_SANDBOX_LOCAL unset."""
+    monkeypatch.delenv("TRID3NT_SANDBOX_LOCAL", raising=False)
     result = submit_sandbox_job("result = 1 + 1", {})
     assert isinstance(result, dict)
     assert result["status"] == "ok"
@@ -388,7 +388,7 @@ def test_single_uri_string_path_unchanged(tmp_path, monkeypatch) -> None:
     Jail OFF: this exercises the executor's handle-OPENING logic over a local tif
     outside the jail's binds; the jailed staged-path flow is covered separately by
     ``test_staged_frames_open_under_jail_end_to_end``."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "0")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "0")
     tif = str(tmp_path / "depth.tif")
     _write_tiny_tif(tif, 3.0)
     code = (
@@ -410,7 +410,7 @@ def test_list_valued_layer_refs_open_as_list_of_handles(tmp_path, monkeypatch) -
     the var (the multi-frame extension) — a snippet can iterate frames.
 
     Jail OFF (executor handle-opening logic; see the single-uri test note)."""
-    monkeypatch.setenv("GRACE2_SANDBOX_BWRAP", "0")
+    monkeypatch.setenv("TRID3NT_SANDBOX_BWRAP", "0")
     frames = []
     for i, fill in enumerate([1.0, 5.0, 9.0]):
         p = str(tmp_path / f"frame_{i}.tif")
@@ -436,7 +436,7 @@ def test_prefetch_rewrites_s3_uri_to_local_path(monkeypatch, tmp_path) -> None:
     """``stage_layer_refs_locally`` downloads every s3:// URI (single OR list) into
     the workdir and rewrites the refs to LOCAL paths; the executor only ever sees
     local files (the jail is network-denied)."""
-    from grace2_agent import sandbox_runner as sr
+    from trid3nt_server import sandbox_runner as sr
 
     fetched: list[str] = []
 
@@ -445,7 +445,7 @@ def test_prefetch_rewrites_s3_uri_to_local_path(monkeypatch, tmp_path) -> None:
         return b"COG-BYTES-FOR-" + uri.encode()
 
     # Patch the shared boto3 reader the staging path imports.
-    monkeypatch.setattr("grace2_agent.tools.cache.read_object_bytes_s3", _fake_read)
+    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3", _fake_read)
 
     workdir = str(tmp_path / "wd")
     os.makedirs(workdir, exist_ok=True)
@@ -503,7 +503,7 @@ def test_staged_frames_open_under_jail_end_to_end(tmp_path, monkeypatch) -> None
     def _fake_read(uri: str) -> bytes:
         return _tif_bytes(fills[uri])
 
-    monkeypatch.setattr("grace2_agent.tools.cache.read_object_bytes_s3", _fake_read)
+    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3", _fake_read)
 
     code = (
         "import rasterio\n"
@@ -520,7 +520,7 @@ def test_staged_frames_open_under_jail_end_to_end(tmp_path, monkeypatch) -> None
 def test_prefetch_no_staging_when_no_s3(tmp_path) -> None:
     """When NO ref is an s3:// URI, staging is a no-op: refs are returned unchanged
     and ``staged_dir`` is None (the caller skips the extra ro-bind)."""
-    from grace2_agent import sandbox_runner as sr
+    from trid3nt_server import sandbox_runner as sr
 
     workdir = str(tmp_path / "wd")
     os.makedirs(workdir, exist_ok=True)
@@ -533,12 +533,12 @@ def test_prefetch_no_staging_when_no_s3(tmp_path) -> None:
 def test_prefetch_degrades_on_fetch_failure(monkeypatch, tmp_path) -> None:
     """A single failed s3 fetch degrades to the raw URI string (never crashes) so
     the executor's _open_layer falls back + records a _layer_errors entry."""
-    from grace2_agent import sandbox_runner as sr
+    from trid3nt_server import sandbox_runner as sr
 
     def _boom(uri: str) -> bytes:
         raise RuntimeError("simulated S3 outage")
 
-    monkeypatch.setattr("grace2_agent.tools.cache.read_object_bytes_s3", _boom)
+    monkeypatch.setattr("trid3nt_server.tools.cache.read_object_bytes_s3", _boom)
 
     workdir = str(tmp_path / "wd")
     os.makedirs(workdir, exist_ok=True)
@@ -557,7 +557,7 @@ def test_prefetch_degrades_on_fetch_failure(monkeypatch, tmp_path) -> None:
 
 
 def test_executor_path_honors_env_override_first(monkeypatch, tmp_path) -> None:
-    """GRACE2_SANDBOX_EXECUTOR is honored FIRST, unconditionally, before any
+    """TRID3NT_SANDBOX_EXECUTOR is honored FIRST, unconditionally, before any
     repo-root walk-up.
 
     This is the seam the agent deploy relies on: on the /opt/grace2 site-packages
@@ -567,14 +567,14 @@ def test_executor_path_honors_env_override_first(monkeypatch, tmp_path) -> None:
     override -- even to a path that does not exist yet -- proves the on-box fix
     closes the FileNotFoundError-fails-closed gap deterministically.
     """
-    from grace2_agent import sandbox_runner as sr
+    from trid3nt_server import sandbox_runner as sr
 
     override = tmp_path / "python-sandbox" / "executor.py"
-    monkeypatch.setenv("GRACE2_SANDBOX_EXECUTOR", str(override))
+    monkeypatch.setenv("TRID3NT_SANDBOX_EXECUTOR", str(override))
     assert sr._executor_path() == override
 
     # Whitespace-only / empty override is ignored -> falls through to the walk-up.
-    monkeypatch.setenv("GRACE2_SANDBOX_EXECUTOR", "   ")
+    monkeypatch.setenv("TRID3NT_SANDBOX_EXECUTOR", "   ")
     resolved = sr._executor_path()
     assert resolved.name == "executor.py"
     assert resolved.parent.name == "python-sandbox"
@@ -585,13 +585,13 @@ def test_executor_path_default_walkup_resolves_in_repo() -> None:
     infra/python-sandbox/executor.py and it exists on disk."""
     import os as _os
 
-    from grace2_agent import sandbox_runner as sr
+    from trid3nt_server import sandbox_runner as sr
 
-    prior = _os.environ.pop("GRACE2_SANDBOX_EXECUTOR", None)
+    prior = _os.environ.pop("TRID3NT_SANDBOX_EXECUTOR", None)
     try:
         p = sr._executor_path()
         assert p.exists(), f"executor not found at {p}"
         assert p.parts[-2:] == ("python-sandbox", "executor.py")
     finally:
         if prior is not None:
-            _os.environ["GRACE2_SANDBOX_EXECUTOR"] = prior
+            _os.environ["TRID3NT_SANDBOX_EXECUTOR"] = prior

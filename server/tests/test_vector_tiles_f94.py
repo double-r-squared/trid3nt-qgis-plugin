@@ -29,12 +29,12 @@ from typing import Any
 
 import pytest
 
-from grace2_contracts import new_ulid
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.pipeline_emitter import PipelineEmitter
-from grace2_agent.tools import vector_tiles
-from grace2_agent.tools.vector_tiles import (
+from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_server.tools import vector_tiles
+from trid3nt_server.tools.vector_tiles import (
     DENSE_VECTOR_THRESHOLD,
     MAX_INLINE_FEATURES,
     DensifyMeta,
@@ -223,13 +223,13 @@ def test_non_dict_input_is_passthrough() -> None:
 
 
 def test_vector_tiles_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("GRACE2_VECTOR_TILES_ENABLED", raising=False)
-    monkeypatch.delenv("GRACE2_VECTOR_TILES_BASE_URL", raising=False)
+    monkeypatch.delenv("TRID3NT_VECTOR_TILES_ENABLED", raising=False)
+    monkeypatch.delenv("TRID3NT_VECTOR_TILES_BASE_URL", raising=False)
     assert vector_tiles_enabled() is False
     # Even opted-in, no serving base => still OFF.
-    monkeypatch.setenv("GRACE2_VECTOR_TILES_ENABLED", "1")
+    monkeypatch.setenv("TRID3NT_VECTOR_TILES_ENABLED", "1")
     assert vector_tiles_enabled() is False
-    monkeypatch.setenv("GRACE2_VECTOR_TILES_BASE_URL", "https://tiles.example/")
+    monkeypatch.setenv("TRID3NT_VECTOR_TILES_BASE_URL", "https://tiles.example/")
     assert vector_tiles_enabled() is True
 
 
@@ -296,11 +296,11 @@ async def test_dense_vector_emits_simplified_inline_plus_density_tag(
 
     # Stub the object-store read so the choke point gets our dense FC. The
     # densify transform runs AFTER this stub inside _read_vector_uri_as_geojson.
-    import grace2_agent.pipeline_emitter as pe
+    import trid3nt_server.pipeline_emitter as pe
 
     async def _fake_read(uri: str) -> dict[str, Any]:
         # Mirror the real function: read raw, then densify at the choke point.
-        from grace2_agent.tools.vector_tiles import densify_if_needed as _dn
+        from trid3nt_server.tools.vector_tiles import densify_if_needed as _dn
 
         obj, meta = _dn(dense, layer_id=uri)
         if meta is not None:
@@ -339,10 +339,10 @@ async def test_small_vector_stays_inline_with_no_density_tag(
     """A sub-threshold vector keeps the current inline path: full FC, no tag."""
     small = _point_fc(50)
 
-    import grace2_agent.pipeline_emitter as pe
+    import trid3nt_server.pipeline_emitter as pe
 
     async def _fake_read(uri: str) -> dict[str, Any]:
-        from grace2_agent.tools.vector_tiles import densify_if_needed as _dn
+        from trid3nt_server.tools.vector_tiles import densify_if_needed as _dn
 
         obj, meta = _dn(small, layer_id=uri)
         if meta is not None:

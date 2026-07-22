@@ -16,7 +16,7 @@ Auth gate (the three-path waterfall + fail-closed):
   network call (the fetch_fn assertion below confirms no call).
 - secret_ref provider mismatch → IUCNAuthError.
 - secret_ref without a persistence resolver → IUCNAuthError.
-- env-var fallback resolves when GRACE2_IUCN_RED_LIST_API_KEY is set.
+- env-var fallback resolves when TRID3NT_IUCN_RED_LIST_API_KEY is set.
 
 Network-mocked happy path:
 - Mocked IUCN /species response → FlatGeobuf with 1 feature carrying the
@@ -30,8 +30,8 @@ Caching:
   (fetch_fn invoked once). api_key value is NOT part of the cache key.
 
 Live verification (env-gated, skipped by default):
-- ``GRACE2_TEST_LIVE_IUCN_RED_LIST=1`` + a real
-  ``GRACE2_IUCN_RED_LIST_API_KEY`` env var; fetches "Puma concolor" and
+- ``TRID3NT_TEST_LIVE_IUCN_RED_LIST=1`` + a real
+  ``TRID3NT_IUCN_RED_LIST_API_KEY`` env var; fetches "Puma concolor" and
   asserts the IUCN category field is one of the documented enum values
   (not an arbitrary string). The codified job-0086 lesson applies:
   the assertion is on semantic content (category in known enum), not just
@@ -48,8 +48,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_iucn_red_list_range import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_iucn_red_list_range import (
     IUCNAuthError,
     IUCNInputError,
     IUCNUpstreamError,
@@ -59,8 +59,8 @@ from grace2_agent.tools.fetch_iucn_red_list_range import (
     estimate_payload_mb,
     fetch_iucn_red_list_range,
 )
-from grace2_contracts import new_ulid, now_utc
-from grace2_contracts.secrets import SecretRecord
+from trid3nt_contracts import new_ulid, now_utc
+from trid3nt_contracts.secrets import SecretRecord
 
 
 # ---------------------------------------------------------------------------
@@ -69,8 +69,8 @@ from grace2_contracts.secrets import SecretRecord
 
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
-_LIVE_IUCN = os.environ.get("GRACE2_TEST_LIVE_IUCN_RED_LIST") == "1"
-_LIVE_KEY = os.environ.get("GRACE2_IUCN_RED_LIST_API_KEY", "")
+_LIVE_IUCN = os.environ.get("TRID3NT_TEST_LIVE_IUCN_RED_LIST") == "1"
+_LIVE_KEY = os.environ.get("TRID3NT_IUCN_RED_LIST_API_KEY", "")
 
 # The documented IUCN Red List categories (per
 # https://apiv3.iucnredlist.org/api/v3/docs).
@@ -135,7 +135,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -280,18 +280,18 @@ def test_degenerate_inputs_raise_through_public_tool():
 
 def test_no_credentials_raises_auth_error_before_network_call(monkeypatch):
     """No api_key / secret_ref / env var → IUCNAuthError, no network call."""
-    monkeypatch.delenv("GRACE2_IUCN_RED_LIST_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_IUCN_RED_LIST_API_KEY", raising=False)
     # Patch read_through to fail loudly if it's reached — the auth gate must
     # raise BEFORE we get there.
     sentinel = RuntimeError("read_through should not be invoked")
     with patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
         side_effect=sentinel,
     ):
         with pytest.raises(IUCNAuthError) as excinfo:
             fetch_iucn_red_list_range(species_name="Puma concolor")
     # Error message should NOT echo any candidate key value.
-    assert "GRACE2_IUCN_RED_LIST_API_KEY" in str(excinfo.value)
+    assert "TRID3NT_IUCN_RED_LIST_API_KEY" in str(excinfo.value)
 
 
 def test_explicit_api_key_resolves():
@@ -398,7 +398,7 @@ def test_secret_ref_resolves_via_module_persistence_seam():
     """When no ``persistence=`` kwarg is passed, the module-level seam (bound
     by the agent at startup) resolves the vault key — the path the server's
     ``_inject_secret_ref`` exercises (it injects secret_ref alone)."""
-    import grace2_agent.tools.fetch_iucn_red_list_range as iucn_mod
+    import trid3nt_server.tools.fetch_iucn_red_list_range as iucn_mod
 
     good = SecretRecord(
         secret_id=new_ulid(),
@@ -423,8 +423,8 @@ def test_secret_ref_resolves_via_module_persistence_seam():
 
 
 def test_env_var_fallback_resolves(monkeypatch):
-    """Path 3: GRACE2_IUCN_RED_LIST_API_KEY env var resolves when set."""
-    monkeypatch.setenv("GRACE2_IUCN_RED_LIST_API_KEY", "env-resolved-key")
+    """Path 3: TRID3NT_IUCN_RED_LIST_API_KEY env var resolves when set."""
+    monkeypatch.setenv("TRID3NT_IUCN_RED_LIST_API_KEY", "env-resolved-key")
     assert _resolve_api_key(api_key=None, secret_ref=None) == "env-resolved-key"
 
 
@@ -437,14 +437,14 @@ def test_mocked_happy_path_emits_one_feature_flatgeobuf(monkeypatch):
     """A mocked /species response yields a FlatGeobuf with 1 placeholder feature."""
     import geopandas as gpd
 
-    monkeypatch.delenv("GRACE2_IUCN_RED_LIST_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_IUCN_RED_LIST_API_KEY", raising=False)
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         return_value=_iucn_species_payload(),
     ), patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_iucn_red_list_range(
@@ -488,14 +488,14 @@ def test_mocked_empty_result_returns_data_deficient_sentinel(monkeypatch):
     """IUCN returns an empty 'result' list → still 1 feature with DD sentinel."""
     import geopandas as gpd
 
-    monkeypatch.delenv("GRACE2_IUCN_RED_LIST_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_IUCN_RED_LIST_API_KEY", raising=False)
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         return_value=_iucn_species_payload(empty=True, name="Nonexistent fakeus"),
     ), patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_iucn_red_list_range(
@@ -531,7 +531,7 @@ def test_mocked_token_invalid_body_raises_auth_error(monkeypatch):
     """IUCN 'Token not valid!' in body (HTTP 200) → IUCNAuthError."""
     import httpx
 
-    monkeypatch.delenv("GRACE2_IUCN_RED_LIST_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_IUCN_RED_LIST_API_KEY", raising=False)
     fake_gcs = FakeStorageClient()
 
     # Use a fake httpx client to simulate the 200 / message body path.
@@ -547,7 +547,7 @@ def test_mocked_token_invalid_body_raises_auth_error(monkeypatch):
             follow_redirects=True,
         )
 
-    from grace2_agent.tools import fetch_iucn_red_list_range as mod
+    from trid3nt_server.tools import fetch_iucn_red_list_range as mod
 
     real_fetch = mod._fetch_iucn_species_payload
 
@@ -556,10 +556,10 @@ def test_mocked_token_invalid_body_raises_auth_error(monkeypatch):
             return real_fetch(species_name, region, api_key, client=c)
 
     with patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         side_effect=patched_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(IUCNAuthError):
@@ -573,7 +573,7 @@ def test_mocked_5xx_raises_upstream_error(monkeypatch):
     """IUCN returns HTTP 502 → IUCNUpstreamError (retryable)."""
     import httpx
 
-    monkeypatch.delenv("GRACE2_IUCN_RED_LIST_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_IUCN_RED_LIST_API_KEY", raising=False)
     fake_gcs = FakeStorageClient()
 
     def _mock_handler(request: httpx.Request) -> httpx.Response:
@@ -581,7 +581,7 @@ def test_mocked_5xx_raises_upstream_error(monkeypatch):
 
     transport = httpx.MockTransport(_mock_handler)
 
-    from grace2_agent.tools import fetch_iucn_red_list_range as mod
+    from trid3nt_server.tools import fetch_iucn_red_list_range as mod
 
     real_fetch = mod._fetch_iucn_species_payload
 
@@ -590,10 +590,10 @@ def test_mocked_5xx_raises_upstream_error(monkeypatch):
             return real_fetch(species_name, region, api_key, client=c)
 
     with patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         side_effect=patched_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(IUCNUpstreamError):
@@ -605,7 +605,7 @@ def test_mocked_5xx_raises_upstream_error(monkeypatch):
 
 def test_cache_hit_skips_fetch(monkeypatch):
     """Second call with identical (species, region) hits the cache; fetch_fn invoked once."""
-    monkeypatch.delenv("GRACE2_IUCN_RED_LIST_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_IUCN_RED_LIST_API_KEY", raising=False)
     fake_gcs = FakeStorageClient()
 
     call_counter = {"n": 0}
@@ -615,10 +615,10 @@ def test_cache_hit_skips_fetch(monkeypatch):
         return _iucn_species_payload(name=species_name, category="VU")
 
     with patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         side_effect=_counting_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_iucn_red_list_range(
@@ -636,14 +636,14 @@ def test_cache_hit_skips_fetch(monkeypatch):
 
 def test_cache_key_does_not_include_api_key(monkeypatch):
     """Two calls with different api_keys but same (species, region) reuse the cache."""
-    monkeypatch.delenv("GRACE2_IUCN_RED_LIST_API_KEY", raising=False)
+    monkeypatch.delenv("TRID3NT_IUCN_RED_LIST_API_KEY", raising=False)
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         return_value=_iucn_species_payload(),
     ), patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_iucn_red_list_range(species_name="Puma concolor", api_key="k1")
@@ -657,14 +657,14 @@ def test_cache_key_does_not_include_api_key(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Live integration tests (GRACE2_TEST_LIVE_IUCN_RED_LIST=1 + valid key to run).
+# Live integration tests (TRID3NT_TEST_LIVE_IUCN_RED_LIST=1 + valid key to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not (_LIVE_IUCN and _LIVE_KEY),
     reason=(
-        "Set GRACE2_TEST_LIVE_IUCN_RED_LIST=1 + GRACE2_IUCN_RED_LIST_API_KEY "
+        "Set TRID3NT_TEST_LIVE_IUCN_RED_LIST=1 + TRID3NT_IUCN_RED_LIST_API_KEY "
         "to run live IUCN Red List tests"
     ),
 )
@@ -680,7 +680,7 @@ def test_live_puma_concolor_returns_known_category():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_iucn_red_list_range(species_name="Puma concolor")

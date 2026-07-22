@@ -29,19 +29,19 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent import tools as agent_tools
-from grace2_agent.persistence import make_file_persistence
-from grace2_agent.pipeline_emitter import current_emitter, substep, begin_substeps
-from grace2_agent.tools import RegisteredTool
-from grace2_contracts.case import (
+from trid3nt_server import server
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.persistence import make_file_persistence
+from trid3nt_server.pipeline_emitter import current_emitter, substep, begin_substeps
+from trid3nt_server.tools import RegisteredTool
+from trid3nt_contracts.case import (
     CaseChatMessage,
     CaseCommandEnvelopePayload,
     PersistedSubStepRecord,
     ToolCardRecord,
 )
-from grace2_contracts.common import new_ulid, now_utc
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.common import new_ulid, now_utc
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
 class FakeWS:

@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.raster_postprocess.band_stats")
+LOG = logging.getLogger("trid3nt.worker.raster_postprocess.band_stats")
 
 
 def compute_band_stats(cog_path: Path) -> dict[str, Any]:

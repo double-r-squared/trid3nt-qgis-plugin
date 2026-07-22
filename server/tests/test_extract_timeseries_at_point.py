@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from grace2_agent.tools.extract_timeseries_at_point import (
+from trid3nt_server.tools.extract_timeseries_at_point import (
     NoFrameSequenceError,
     TimeseriesInputError,
     detect_frame_sequences,
@@ -60,7 +60,7 @@ def _install_case(monkeypatch, layers, case_id="case-1", title="Anim Case"):
     case = SimpleNamespace(
         case_id=case_id, title=title, bbox=None, loaded_layer_summaries=layers
     )
-    import grace2_agent.telemetry as telemetry
+    import trid3nt_server.telemetry as telemetry
 
     monkeypatch.setattr(telemetry, "get_persistence", lambda: FakePersistence(case))
     return case
@@ -288,7 +288,7 @@ async def test_no_location_typed_error(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_registered_in_tool_registry() -> None:
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("extract_timeseries_at_point")
     assert entry is not None

@@ -695,17 +695,17 @@ def _build_argv_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--manifest",
-        default=os.environ.get("GRACE2_MANIFEST_PATH", "").strip(),
+        default=os.environ.get("TRID3NT_MANIFEST_PATH", "").strip(),
         help="Path to the worker manifest (default /data/manifest.json).",
     )
     p.add_argument(
         "--data-dir",
-        default=os.environ.get("GRACE2_TELEMAC_DATA_DIR", DEFAULT_DATA_DIR).strip(),
+        default=os.environ.get("TRID3NT_TELEMAC_DATA_DIR", DEFAULT_DATA_DIR).strip(),
         help="Working/output dir (the bind-mounted rundir; default /data).",
     )
     p.add_argument(
         "--run-id",
-        default=os.environ.get("GRACE2_RUN_ID", "").strip(),
+        default=os.environ.get("TRID3NT_RUN_ID", "").strip(),
         help="Run identifier (echoed into telemac_metrics.json).",
     )
     return p

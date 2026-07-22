@@ -5,7 +5,7 @@ Contract (sprint-07 / M5 / FR-CE-1/2/3):
     Input  (env or CLI):
         --run-id RUN_ID
             Run identifier. Outputs land under
-            gs://${GRACE2_RUNS_BUCKET}/${RUN_ID}/.
+            gs://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/.
         --manifest-uri gs://bucket/path/setup.json
             JSON setup manifest. Schema:
                 {
@@ -26,8 +26,8 @@ Contract (sprint-07 / M5 / FR-CE-1/2/3):
             bucket after SFINCS exits.
 
     Output:
-        gs://${GRACE2_RUNS_BUCKET}/${RUN_ID}/<every output file>
-        gs://${GRACE2_RUNS_BUCKET}/${RUN_ID}/completion.json
+        gs://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/<every output file>
+        gs://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/completion.json
             Terminal manifest. Schema:
                 {
                   "run_id": "<run_id>",
@@ -73,16 +73,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.sfincs")
+LOG = logging.getLogger("trid3nt.worker.sfincs")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 
-SFINCS_BIN = os.environ.get("GRACE2_SFINCS_BIN", "/usr/local/bin/sfincs")
-SCRATCH = Path(os.environ.get("GRACE2_SFINCS_SCRATCH", "/opt/grace2/work"))
+SFINCS_BIN = os.environ.get("TRID3NT_SFINCS_BIN", "/usr/local/bin/sfincs")
+SCRATCH = Path(os.environ.get("TRID3NT_SFINCS_SCRATCH", "/opt/grace2/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
 
 def _utc_now() -> str:
@@ -96,7 +96,7 @@ def _utc_now() -> str:
 # tools/solver.py ``_read_object_bytes`` scheme dispatch): ``gs://`` via
 # google-cloud-storage (lazy import — a pure-S3 Batch image never pays for the
 # GCP SDK), ``s3://`` via boto3. The runs-bucket OUTPUT scheme follows
-# ``GRACE2_OBJECT_STORE`` (``s3`` → ``s3://``, default ``gcs`` → ``gs://``) so
+# ``TRID3NT_OBJECT_STORE`` (``s3`` → ``s3://``, default ``gcs`` → ``gs://``) so
 # completion.json + outputs land in the same store the agent polls. The GCS
 # behavior is byte-identical to the pre-sprint-16 path.
 # --------------------------------------------------------------------------- #
@@ -123,8 +123,8 @@ def _parse_gs_uri(uri: str) -> tuple[str, str]:
 
 
 def _output_scheme() -> str:
-    """Runs-bucket output scheme — ``s3`` or ``gs`` (env ``GRACE2_OBJECT_STORE``)."""
-    b = (os.environ.get("GRACE2_OBJECT_STORE") or "gcs").strip().lower()
+    """Runs-bucket output scheme — ``s3`` or ``gs`` (env ``TRID3NT_OBJECT_STORE``)."""
+    b = (os.environ.get("TRID3NT_OBJECT_STORE") or "gcs").strip().lower()
     return "s3" if b in {"s3", "aws"} else "gs"
 
 
@@ -302,25 +302,25 @@ def run_raster_postprocess(
 
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="grace2-sfincs-entrypoint",
+        prog="trid3nt-sfincs-entrypoint",
         description="SFINCS Cloud Run Job entrypoint (FR-CE-1/2/3).",
     )
     p.add_argument(
         "--run-id",
-        default=os.environ.get("GRACE2_RUN_ID", "").strip(),
-        help="Run identifier (also $GRACE2_RUN_ID).",
+        default=os.environ.get("TRID3NT_RUN_ID", "").strip(),
+        help="Run identifier (also $TRID3NT_RUN_ID).",
     )
     p.add_argument(
         "--manifest-uri",
-        default=os.environ.get("GRACE2_MANIFEST_URI", "").strip(),
-        help="gs:// URI of the setup manifest (also $GRACE2_MANIFEST_URI).",
+        default=os.environ.get("TRID3NT_MANIFEST_URI", "").strip(),
+        help="gs:// URI of the setup manifest (also $TRID3NT_MANIFEST_URI).",
     )
     p.add_argument(
         "--build-spec-uri",
-        default=os.environ.get("GRACE2_BUILD_SPEC_URI", "").strip(),
+        default=os.environ.get("TRID3NT_BUILD_SPEC_URI", "").strip(),
         help=(
             "s3:// URI of the agent-composed SFINCS BUILD job_spec (also "
-            "$GRACE2_BUILD_SPEC_URI). When set, the worker runs the hydromt "
+            "$TRID3NT_BUILD_SPEC_URI). When set, the worker runs the hydromt "
             "model BUILD (heavy-compute offload) BEFORE the solve + postprocess, "
             "so the always-on agent never loads a DEM/NetCDF. Takes precedence "
             "over --manifest-uri."
@@ -488,12 +488,12 @@ def main(argv: list[str] | None = None) -> int:
     manifest_uri = args.manifest_uri
     build_spec_uri = getattr(args, "build_spec_uri", "") or ""
     if not run_id:
-        LOG.error("run_id is required (pass --run-id or set $GRACE2_RUN_ID)")
+        LOG.error("run_id is required (pass --run-id or set $TRID3NT_RUN_ID)")
         return 2
     if not manifest_uri and not build_spec_uri:
         LOG.error(
             "one of --manifest-uri / --build-spec-uri is required "
-            "(also $GRACE2_MANIFEST_URI / $GRACE2_BUILD_SPEC_URI)"
+            "(also $TRID3NT_MANIFEST_URI / $TRID3NT_BUILD_SPEC_URI)"
         )
         return 2
 

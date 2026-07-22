@@ -30,8 +30,8 @@ import rasterio
 from rasterio.crs import CRS
 from rasterio.transform import from_bounds
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.clip_raster_to_bbox import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.clip_raster_to_bbox import (
     ClipRasterError,
     clip_raster_to_bbox,
 )
@@ -50,16 +50,16 @@ _GDAL_TRANSLATE_AVAILABLE = (
     os.path.isfile(os.path.expanduser("~/miniforge3/envs/grace2/bin/gdal_translate"))
     or bool(__import__("shutil").which("gdal_translate"))
     or (
-        bool(os.environ.get("GRACE2_GDAL_TRANSLATE_BIN"))
-        and os.path.isfile(os.environ.get("GRACE2_GDAL_TRANSLATE_BIN", ""))
+        bool(os.environ.get("TRID3NT_GDAL_TRANSLATE_BIN"))
+        and os.path.isfile(os.environ.get("TRID3NT_GDAL_TRANSLATE_BIN", ""))
     )
 )
 _GDALWARP_AVAILABLE = (
     os.path.isfile(os.path.expanduser("~/miniforge3/envs/grace2/bin/gdalwarp"))
     or bool(__import__("shutil").which("gdalwarp"))
     or (
-        bool(os.environ.get("GRACE2_GDALWARP_BIN"))
-        and os.path.isfile(os.environ.get("GRACE2_GDALWARP_BIN", ""))
+        bool(os.environ.get("TRID3NT_GDALWARP_BIN"))
+        and os.path.isfile(os.environ.get("TRID3NT_GDALWARP_BIN", ""))
     )
 )
 
@@ -245,10 +245,10 @@ def test_clip_quadrant_produces_smaller_raster():
         fake_raster_bytes = open(src_path, "rb").read()
 
         with patch(
-            "grace2_agent.tools.clip_raster_to_bbox._download_raster_bytes",
+            "trid3nt_server.tools.clip_raster_to_bbox._download_raster_bytes",
             return_value=fake_raster_bytes,
         ), patch(
-            "grace2_agent.tools.clip_raster_to_bbox._get_source_crs",
+            "trid3nt_server.tools.clip_raster_to_bbox._get_source_crs",
             return_value=CRS.from_epsg(4326),
         ):
             result = clip_raster_to_bbox(
@@ -305,10 +305,10 @@ def test_clip_reproject_4326_to_3857():
         fake_sc = FakeStorageClient()
 
         with patch(
-            "grace2_agent.tools.clip_raster_to_bbox._download_raster_bytes",
+            "trid3nt_server.tools.clip_raster_to_bbox._download_raster_bytes",
             return_value=fake_raster_bytes,
         ), patch(
-            "grace2_agent.tools.clip_raster_to_bbox._get_source_crs",
+            "trid3nt_server.tools.clip_raster_to_bbox._get_source_crs",
             return_value=CRS.from_epsg(4326),
         ):
             result = clip_raster_to_bbox(
@@ -357,13 +357,13 @@ def test_cache_miss_writes_and_hit_skips_gdal():
             f.write(fake_clip_bytes)
 
     with patch(
-        "grace2_agent.tools.clip_raster_to_bbox._download_raster_bytes",
+        "trid3nt_server.tools.clip_raster_to_bbox._download_raster_bytes",
         return_value=fake_raster_bytes,
     ), patch(
-        "grace2_agent.tools.clip_raster_to_bbox._get_source_crs",
+        "trid3nt_server.tools.clip_raster_to_bbox._get_source_crs",
         return_value=CRS.from_epsg(4326),
     ), patch(
-        "grace2_agent.tools.clip_raster_to_bbox._run_gdal_translate_clip_with_srs",
+        "trid3nt_server.tools.clip_raster_to_bbox._run_gdal_translate_clip_with_srs",
         side_effect=_fake_run_gdal_translate,
     ):
         # First call — should be a cache miss.
@@ -398,7 +398,7 @@ def test_cache_miss_writes_and_hit_skips_gdal():
 
 def test_unknown_raster_uri_raises_typed_error():
     """Non-gs:// non-file URI raises ClipRasterError(UNKNOWN_RASTER_URI)."""
-    from grace2_agent.tools.clip_raster_to_bbox import _get_source_crs
+    from trid3nt_server.tools.clip_raster_to_bbox import _get_source_crs
 
     with pytest.raises(ClipRasterError) as exc_info:
         _get_source_crs("/nonexistent/path/that/does/not/exist.tif")
@@ -435,17 +435,17 @@ def test_gdalwarp_path_when_crs_differs():
             f.write(fake_clip_bytes)
 
     with patch(
-        "grace2_agent.tools.clip_raster_to_bbox._download_raster_bytes",
+        "trid3nt_server.tools.clip_raster_to_bbox._download_raster_bytes",
         return_value=fake_raster_bytes,
     ), patch(
         # Source raster is EPSG:3857, bbox_crs will be "EPSG:4326" → CRS mismatch
-        "grace2_agent.tools.clip_raster_to_bbox._get_source_crs",
+        "trid3nt_server.tools.clip_raster_to_bbox._get_source_crs",
         return_value=CRS.from_epsg(3857),
     ), patch(
-        "grace2_agent.tools.clip_raster_to_bbox._run_gdalwarp_clip",
+        "trid3nt_server.tools.clip_raster_to_bbox._run_gdalwarp_clip",
         side_effect=_fake_gdalwarp,
     ), patch(
-        "grace2_agent.tools.clip_raster_to_bbox._run_gdal_translate_clip_with_srs",
+        "trid3nt_server.tools.clip_raster_to_bbox._run_gdal_translate_clip_with_srs",
         side_effect=_fake_translate,
     ):
         clip_raster_to_bbox(
@@ -479,13 +479,13 @@ def test_returns_layer_uri_fields():
             f.write(fake_clip_bytes)
 
     with patch(
-        "grace2_agent.tools.clip_raster_to_bbox._download_raster_bytes",
+        "trid3nt_server.tools.clip_raster_to_bbox._download_raster_bytes",
         return_value=fake_raster_bytes,
     ), patch(
-        "grace2_agent.tools.clip_raster_to_bbox._get_source_crs",
+        "trid3nt_server.tools.clip_raster_to_bbox._get_source_crs",
         return_value=CRS.from_epsg(4326),
     ), patch(
-        "grace2_agent.tools.clip_raster_to_bbox._run_gdal_translate_clip_with_srs",
+        "trid3nt_server.tools.clip_raster_to_bbox._run_gdal_translate_clip_with_srs",
         side_effect=_fake_run_translate,
     ):
         result = clip_raster_to_bbox(
@@ -511,7 +511,7 @@ def test_returns_layer_uri_fields():
 
 def test_cache_keys_vary_across_params():
     """Cache keys differ for distinct (raster_uri, bbox, bbox_crs, target_crs) combos."""
-    from grace2_agent.tools.cache import compute_cache_key
+    from trid3nt_server.tools.cache import compute_cache_key
 
     base_uri = "gs://bucket/raster/somekey.tif"
     combos = [

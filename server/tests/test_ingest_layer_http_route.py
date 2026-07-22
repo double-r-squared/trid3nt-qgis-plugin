@@ -7,7 +7,7 @@ by ``test_import_user_layer.py``. Mirrors
 ``test_export_qgis_http_route.py`` / ``test_case_list_http_route.py``:
 
   - both routes served UNCONDITIONALLY (the local build hardwires
-    ``solver_backend()`` to local-docker, so ``GRACE2_SOLVER_BACKEND`` no
+    ``solver_backend()`` to local-docker, so ``TRID3NT_SOLVER_BACKEND`` no
     longer gates them);
   - POST /api/ingest-layer happy path (monkeypatched core fn) -> 200;
   - POST /api/ingest-layer missing/invalid fields -> typed 400 (core never
@@ -28,8 +28,8 @@ import json
 
 import pytest
 
-from grace2_agent import tool_catalog_http
-from grace2_agent.tools.import_user_layer import (
+from trid3nt_server import tool_catalog_http
+from trid3nt_server.tools.import_user_layer import (
     CaseNotFoundError,
     ImportLayerInputError,
     ObjectNotFoundError,
@@ -121,7 +121,7 @@ def _body_json(out: bytes) -> dict:
 
 @pytest.fixture(autouse=True)
 def _local_mode(monkeypatch):
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
 
 
 # ---------------------------------------------------------------------------
@@ -141,9 +141,9 @@ def test_ingest_layer_route_served_regardless_of_backend_env(monkeypatch):
     """
     for arm in ("unset", "aws-batch"):
         if arm == "unset":
-            monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+            monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
         else:
-            monkeypatch.setenv("GRACE2_SOLVER_BACKEND", arm)
+            monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", arm)
         out = _drive(_post("/api/ingest-layer", b"{}"))
         assert _status(out) == 400
         assert "case_id" in _body_json(out)["error"]
@@ -160,9 +160,9 @@ def test_ingest_layer_file_route_served_regardless_of_backend_env(monkeypatch):
     )
     for arm in ("unset", "aws-batch"):
         if arm == "unset":
-            monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+            monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
         else:
-            monkeypatch.setenv("GRACE2_SOLVER_BACKEND", arm)
+            monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", arm)
         out = _drive(_post("/api/ingest-layer-file?filename=x.tif", b"data"))
         assert _status(out) == 200
         assert _body_json(out) == {
@@ -361,7 +361,7 @@ def test_ingest_layer_file_oversized_413_before_read(monkeypatch):
         raise AssertionError("upload fn must not run on an oversized body")
 
     monkeypatch.setattr(tool_catalog_http, "_upload_layer_file_fn", lambda: _never)
-    from grace2_agent.tools.import_user_layer import MAX_INGEST_BYTES
+    from trid3nt_server.tools.import_user_layer import MAX_INGEST_BYTES
 
     out = _drive(
         _post_no_length(

@@ -14,7 +14,7 @@ Coverage:
 - Non-line / null-geom features are dropped.
 - Mocked end-to-end: synthetic GeoJSON -> FGB via the fetch+serialize path.
 - Typed upstream errors: HTTP >=400 and ArcGIS error envelope.
-- Live (env GRACE2_TEST_LIVE_HIFLD=1): real ArcGIS query over a Houston bbox
+- Live (env TRID3NT_TEST_LIVE_HIFLD=1): real ArcGIS query over a Houston bbox
   returns >=1 transmission line segment with VOLTAGE.
 """
 
@@ -28,7 +28,7 @@ import pytest
 
 # Import the module directly (the central tools/__init__ union is owned by the
 # main session; this test does not depend on central registration).
-from grace2_agent.tools.fetch_hifld_transmission_lines import (
+from trid3nt_server.tools.fetch_hifld_transmission_lines import (
     HIFLDTransmissionInputError,
     HIFLDTransmissionUpstreamError,
     INFRA_LABEL,
@@ -41,7 +41,7 @@ from grace2_agent.tools.fetch_hifld_transmission_lines import (
     estimate_payload_mb,
 )
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_HIFLD") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_HIFLD") == "1"
 
 # Houston metro bbox used across tests.
 _HOUSTON = (-95.80, 29.50, -95.00, 30.10)
@@ -244,7 +244,7 @@ def test_end_to_end_mocked_fetch_and_serialize():
     """Synthetic GeoJSON -> tool fetcher -> FGB; pagination terminates on short page."""
     import geopandas as gpd
 
-    from grace2_agent.tools import fetch_hifld_transmission_lines as mod
+    from trid3nt_server.tools import fetch_hifld_transmission_lines as mod
 
     fake_geojson = {
         "type": "FeatureCollection",
@@ -285,7 +285,7 @@ def test_end_to_end_mocked_fetch_and_serialize():
 
 
 def test_upstream_http_error_is_typed():
-    from grace2_agent.tools import fetch_hifld_transmission_lines as mod
+    from trid3nt_server.tools import fetch_hifld_transmission_lines as mod
 
     class _Resp:
         status_code = 500
@@ -314,7 +314,7 @@ def test_upstream_http_error_is_typed():
 
 
 def test_error_envelope_is_typed():
-    from grace2_agent.tools import fetch_hifld_transmission_lines as mod
+    from trid3nt_server.tools import fetch_hifld_transmission_lines as mod
 
     class _Resp:
         status_code = 200
@@ -346,9 +346,9 @@ def test_error_envelope_is_typed():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_HIFLD=1 to run live")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_HIFLD=1 to run live")
 def test_live_houston_transmission_returns_lines():
-    from grace2_agent.tools.fetch_hifld_transmission_lines import (
+    from trid3nt_server.tools.fetch_hifld_transmission_lines import (
         _fetch_features_paginated,
     )
 
@@ -360,9 +360,9 @@ def test_live_houston_transmission_returns_lines():
     assert "VOLTAGE" in feats[0]["properties"]
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_HIFLD=1 to run live")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_HIFLD=1 to run live")
 def test_live_voltage_floor_filters():
-    from grace2_agent.tools.fetch_hifld_transmission_lines import (
+    from trid3nt_server.tools.fetch_hifld_transmission_lines import (
         _fetch_features_paginated,
     )
 

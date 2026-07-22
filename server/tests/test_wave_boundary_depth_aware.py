@@ -18,7 +18,7 @@ import math
 
 import pytest
 
-from grace2_agent.workflows.model_flood_scenario import (
+from trid3nt_server.workflows.model_flood_scenario import (
     WaveBoundaryError,
     _depth_aware_offshore_points,
     _synthesize_parametric_wave_boundary,
@@ -232,7 +232,7 @@ def test_synthesize_no_dem_falls_back_to_four_edges_with_time_series():
 def test_synthesize_depth_aware_uses_dem(monkeypatch):
     """With a DEM available, the synthesis selects only the deep (seaward) edge(s)
     and tags the boundary depth-aware."""
-    import grace2_agent.workflows.model_flood_scenario as mfs
+    import trid3nt_server.workflows.model_flood_scenario as mfs
 
     # Stub the DEM depth sampler: south edge deep (Gulf), others shallow/land.
     def _fake_sample(uri, pts, epsg):
@@ -261,7 +261,7 @@ def test_synthesize_depth_aware_uses_dem(monkeypatch):
 
 def test_synthesize_depth_aware_typed_error_propagates(monkeypatch):
     """All edges shallow with a real DEM -> WaveBoundaryError (honest dead-end)."""
-    import grace2_agent.workflows.model_flood_scenario as mfs
+    import trid3nt_server.workflows.model_flood_scenario as mfs
 
     monkeypatch.setattr(
         mfs, "_sample_dem_depth_m", lambda uri, pts, epsg: [-1.0] * len(pts)

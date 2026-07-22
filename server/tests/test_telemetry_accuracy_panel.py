@@ -22,12 +22,12 @@ import asyncio
 import json
 from pathlib import Path
 
-from grace2_agent.adapter import classify_result_usable, summarize_tool_result
-from grace2_agent.telemetry import (
+from trid3nt_server.adapter import classify_result_usable, summarize_tool_result
+from trid3nt_server.telemetry import (
     build_live_solve_progress,
     build_solve_telemetry_record,
 )
-from grace2_agent.tool_catalog_http import (
+from trid3nt_server.tool_catalog_http import (
     _aggregate_records,
     _aggregate_solve_telemetry,
     _empty_solve_telemetry,
@@ -36,7 +36,7 @@ from grace2_agent.tool_catalog_http import (
     _percentile,
     build_telemetry_summary,
 )
-from grace2_contracts.ws import SolveProgressPayload
+from trid3nt_contracts.ws import SolveProgressPayload
 
 
 # --------------------------------------------------------------------------- #
@@ -315,12 +315,12 @@ def test_build_telemetry_summary_folds_solve_section(tmp_path, monkeypatch):
     tel_path = tmp_path / "tel.jsonl"
     solve_path = tmp_path / "solve.jsonl"
     monkeypatch.setattr(
-        "grace2_agent.tool_catalog_http._get_telemetry_path", lambda: tel_path
+        "trid3nt_server.tool_catalog_http._get_telemetry_path", lambda: tel_path
     )
     monkeypatch.setattr(
-        "grace2_agent.tool_catalog_http._get_solve_telemetry_path", lambda: solve_path
+        "trid3nt_server.tool_catalog_http._get_solve_telemetry_path", lambda: solve_path
     )
-    monkeypatch.setattr("grace2_agent.server.get_persistence", lambda: None)
+    monkeypatch.setattr("trid3nt_server.server.get_persistence", lambda: None)
 
     with tel_path.open("w") as fh:
         fh.write(json.dumps(_make_record(result_usable=True)) + "\n")
@@ -348,13 +348,13 @@ def test_build_telemetry_summary_solve_zero_state(tmp_path, monkeypatch):
     """No solve sink -> the solve_telemetry section is the zero-state."""
     tel_path = tmp_path / "tel.jsonl"
     monkeypatch.setattr(
-        "grace2_agent.tool_catalog_http._get_telemetry_path", lambda: tel_path
+        "trid3nt_server.tool_catalog_http._get_telemetry_path", lambda: tel_path
     )
     monkeypatch.setattr(
-        "grace2_agent.tool_catalog_http._get_solve_telemetry_path",
+        "trid3nt_server.tool_catalog_http._get_solve_telemetry_path",
         lambda: tmp_path / "no_solves.jsonl",
     )
-    monkeypatch.setattr("grace2_agent.server.get_persistence", lambda: None)
+    monkeypatch.setattr("trid3nt_server.server.get_persistence", lambda: None)
     with tel_path.open("w") as fh:
         fh.write(json.dumps(_make_record()) + "\n")
 

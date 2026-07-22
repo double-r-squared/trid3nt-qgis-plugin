@@ -8,7 +8,7 @@ Three required tests per kickoff acceptance criteria:
      a fresh counter at 0.
 
 Additional tests:
-  4. Env-var override: GRACE2_MAX_TURNS_PER_SESSION is parsed at import time
+  4. Env-var override: TRID3NT_MAX_TURNS_PER_SESSION is parsed at import time
      into MAX_TURNS_PER_SESSION.
   5. Closing agent-message-chunk emitted alongside the cap-hit session-state.
   6. Subsequent turns after cap fires continue to be refused (idempotent cap).
@@ -30,8 +30,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from grace2_agent.server import SessionState, _handle_max_turns_reached
-from grace2_agent.main import MAX_TURNS_PER_SESSION
+from trid3nt_server.server import SessionState, _handle_max_turns_reached
+from trid3nt_server.main import MAX_TURNS_PER_SESSION
 
 
 # ---------------------------------------------------------------------------
@@ -199,14 +199,14 @@ def test_max_turns_env_var_default():
 
 def test_session_state_payload_active_status_default():
     """SessionStatePayload defaults status to 'active' — no regressions."""
-    from grace2_contracts.ws import SessionStatePayload
+    from trid3nt_contracts.ws import SessionStatePayload
     payload = SessionStatePayload()
     assert payload.status == "active"
 
 
 def test_session_state_payload_max_turns_reached_status():
     """SessionStatePayload accepts status='max_turns_reached' (new enum value)."""
-    from grace2_contracts.ws import SessionStatePayload
+    from trid3nt_contracts.ws import SessionStatePayload
     payload = SessionStatePayload(status="max_turns_reached")
     assert payload.status == "max_turns_reached"
     # Verify it serialises cleanly to JSON
@@ -216,7 +216,7 @@ def test_session_state_payload_max_turns_reached_status():
 
 def test_session_state_payload_rejects_unknown_status():
     """SessionStatePayload rejects an invalid status value (Pydantic guard)."""
-    from grace2_contracts.ws import SessionStatePayload
+    from trid3nt_contracts.ws import SessionStatePayload
     from pydantic import ValidationError
     with pytest.raises(ValidationError):
         SessionStatePayload(status="unknown_status_value")

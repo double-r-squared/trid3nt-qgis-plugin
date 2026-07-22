@@ -25,8 +25,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import GeminiSettings
-from grace2_contracts import new_ulid
+from trid3nt_server.adapter import GeminiSettings
+from trid3nt_contracts import new_ulid
 
 
 # --------------------------------------------------------------------------- #
@@ -95,10 +95,10 @@ async def _drive_one_turn(
     Returns (state, registries_seen, dispatch_log) where registries_seen is the
     list of objects passed to build_tool_declarations (one per turn iteration).
     """
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
-    monkeypatch.setenv("GRACE2_TOOL_RETRIEVAL", mode)
+    monkeypatch.setenv("TRID3NT_TOOL_RETRIEVAL", mode)
 
     turn_responses = iter([iter([c]) for c in chunks])
     fake_client = MagicMock()
@@ -142,8 +142,8 @@ async def _drive_one_turn(
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_off_mode_passes_full_registry_no_shadow(monkeypatch):
-    from grace2_agent import server as agent_server
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     shadow_calls: list = []
     with patch.object(
@@ -163,8 +163,8 @@ async def test_off_mode_passes_full_registry_no_shadow(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_unknown_mode_is_treated_as_off(monkeypatch):
-    from grace2_agent import server as agent_server
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     shadow_calls: list = []
     with patch.object(
@@ -183,9 +183,9 @@ async def test_unknown_mode_is_treated_as_off(monkeypatch):
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_shadow_mode_logs_set_but_sends_full_registry(monkeypatch):
-    from grace2_agent import server as agent_server
-    from grace2_agent.tools import TOOL_REGISTRY
-    import grace2_agent.tools.tool_retrieval as tr
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.tools.tool_retrieval as tr
 
     fake_visible = {"geocode_location", "fetch_dem", "list_categories"}
     shadow_calls: list = []
@@ -212,9 +212,9 @@ async def test_shadow_mode_logs_set_but_sends_full_registry(monkeypatch):
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_shadow_fail_open_on_retrieval_error(monkeypatch):
-    from grace2_agent import server as agent_server
-    from grace2_agent.tools import TOOL_REGISTRY
-    import grace2_agent.tools.tool_retrieval as tr
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.tools.tool_retrieval as tr
 
     def _boom(*_a, **_k):
         raise RuntimeError("index exploded")
@@ -230,9 +230,9 @@ async def test_shadow_fail_open_on_retrieval_error(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_enforce_fail_open_on_empty_result(monkeypatch):
-    from grace2_agent import server as agent_server
-    from grace2_agent.tools import TOOL_REGISTRY
-    import grace2_agent.tools.tool_retrieval as tr
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.tools.tool_retrieval as tr
 
     # An empty would-be set must FAIL-OPEN (never empty / core-only catalog).
     with patch.object(tr, "retrieve_visible_tools", return_value=set()), \
@@ -248,10 +248,10 @@ async def test_enforce_fail_open_on_empty_result(monkeypatch):
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_enforce_subsets_registry_and_keeps_core_floor(monkeypatch):
-    from grace2_agent import server as agent_server
-    from grace2_agent.categories import HOT_SET_TOOLS
-    from grace2_agent.tools import TOOL_REGISTRY
-    import grace2_agent.tools.tool_retrieval as tr
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.categories import HOT_SET_TOOLS
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.tools.tool_retrieval as tr
 
     # Pick a small real subset of registered tools that includes the core floor.
     floor = {t for t in HOT_SET_TOOLS if t in TOOL_REGISTRY}
@@ -279,10 +279,10 @@ async def test_enforce_subsets_registry_and_keeps_core_floor(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_enforce_allowed_set_is_monotonic_across_turns(monkeypatch):
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_agent.tools import TOOL_REGISTRY
-    import grace2_agent.tools.tool_retrieval as tr
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_server.tools import TOOL_REGISTRY
+    import trid3nt_server.tools.tool_retrieval as tr
 
     state = SessionState(session_id=new_ulid())
 
@@ -317,7 +317,7 @@ async def test_enforce_allowed_set_is_monotonic_across_turns(monkeypatch):
 # 5. recall@k computation on a synthetic fixture.
 # --------------------------------------------------------------------------- #
 def test_compute_recall_at_k_synthetic():
-    from grace2_agent.tool_catalog_http import compute_recall_at_k
+    from trid3nt_server.tool_catalog_http import compute_recall_at_k
 
     # Turn A (SWMM flow): dispatched 3 llm tools; retrieval would have kept 2,
     # dropped fetch_buildings -> recall 2/3 for this turn.
@@ -378,7 +378,7 @@ def test_compute_recall_at_k_synthetic():
 
 
 def test_compute_recall_at_k_empty_when_no_shadow():
-    from grace2_agent.tool_catalog_http import compute_recall_at_k
+    from trid3nt_server.tool_catalog_http import compute_recall_at_k
 
     out = compute_recall_at_k(
         [{"source": "llm", "turn_id": "T1", "tool_name": "fetch_dem"}],
@@ -392,7 +392,7 @@ def test_compute_recall_at_k_empty_when_no_shadow():
 def test_build_telemetry_summary_folds_recall_section(monkeypatch, tmp_path):
     """The summary carries a recall_at_k section read from the SAME JSONL sink."""
     import json as _json
-    from grace2_agent import tool_catalog_http as http
+    from trid3nt_server import tool_catalog_http as http
 
     path = tmp_path / "tel.jsonl"
     rows = [
@@ -416,7 +416,7 @@ def test_build_telemetry_summary_folds_recall_section(monkeypatch, tmp_path):
         },
     ]
     path.write_text("\n".join(_json.dumps(r) for r in rows) + "\n", encoding="utf-8")
-    monkeypatch.setenv("GRACE2_TELEMETRY_PATH", str(path))
+    monkeypatch.setenv("TRID3NT_TELEMETRY_PATH", str(path))
 
     # No Persistence bound -> file path.
     with patch.object(http, "_load_recent_records_from_mongo", return_value=[]):
@@ -434,7 +434,7 @@ def test_build_telemetry_summary_folds_recall_section(monkeypatch, tmp_path):
 # 6. fetch_glm_lightning is in the ALWAYS-OFFLOAD set (#6).
 # --------------------------------------------------------------------------- #
 def test_fetch_glm_lightning_always_offloaded():
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     assert "fetch_glm_lightning" in agent_server._ALWAYS_OFFLOAD_SYNC_TOOLS
     # And the predicate off-loads it even in dark off mode.

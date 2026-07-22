@@ -14,13 +14,13 @@ import json
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.pipeline_emitter import (
+from trid3nt_server import server
+from trid3nt_server.pipeline_emitter import (
     PipelineEmitter,
     bind_turn_case,
     current_turn_case,
 )
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.common import new_ulid
 
 
 @pytest.fixture(autouse=True)

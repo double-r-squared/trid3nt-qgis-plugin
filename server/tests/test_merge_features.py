@@ -24,8 +24,8 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import Polygon
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.merge_features import MergeFeaturesError, merge_features
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.merge_features import MergeFeaturesError, merge_features
 
 
 # ---------------------------------------------------------------------------

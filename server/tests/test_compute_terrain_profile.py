@@ -28,14 +28,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.chart_tools import is_chart_emission_result
-from grace2_agent.tools.compute_terrain_profile import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.chart_tools import is_chart_emission_result
+from trid3nt_server.tools.compute_terrain_profile import (
     TerrainProfileError,
     _resolve_line_coords,
     compute_terrain_profile,
 )
-from grace2_contracts.chart_contracts import (
+from trid3nt_contracts.chart_contracts import (
     ChartEmissionPayload,
     is_structurally_valid_vega_lite_spec,
 )

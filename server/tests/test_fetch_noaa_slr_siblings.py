@@ -13,11 +13,11 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import _noaa_slr_raster as slr
-from grace2_agent.tools import fetch_noaa_slr_confidence as confmod
-from grace2_agent.tools import fetch_noaa_slr_marsh as marshmod
-from grace2_agent.tools._noaa_slr_raster import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import _noaa_slr_raster as slr
+from trid3nt_server.tools import fetch_noaa_slr_confidence as confmod
+from trid3nt_server.tools import fetch_noaa_slr_marsh as marshmod
+from trid3nt_server.tools._noaa_slr_raster import (
     NOAASLRRasterInputError,
     NOAASLRRasterUpstreamError,
     round_bbox,
@@ -84,7 +84,7 @@ def test_registered(name, source):
 
 
 def test_categories():
-    from grace2_agent.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
+    from trid3nt_server.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
 
     assert PRIMARY_CATEGORY["fetch_noaa_slr_confidence"] == "coastal"
     assert PRIMARY_CATEGORY["fetch_noaa_slr_marsh"] == "coastal"

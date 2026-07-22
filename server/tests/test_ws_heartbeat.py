@@ -30,7 +30,7 @@ import json
 
 import pytest
 
-from grace2_agent import server
+from trid3nt_server import server
 
 _SESSION = "01J0000000000000000000HBEAT"
 

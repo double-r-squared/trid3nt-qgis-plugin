@@ -7,7 +7,7 @@ the event-loop thread under the dark default, but OFF-LOADS it to a worker
 thread when the mode is armed for that tool — while returning the identical
 result either way (output integrity preserved across the off-load).
 
-This is the programmatic proof that arming Stage 1 (``GRACE2_SYNC_TOOL_OFFLOAD
+This is the programmatic proof that arming Stage 1 (``TRID3NT_SYNC_TOOL_OFFLOAD
 =subset``) is safe: the dispatch path is exercised end-to-end here, so the
 eventual env-flip is verified, not blind.
 """
@@ -18,11 +18,11 @@ import threading
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent import tools as agent_tools
-from grace2_agent.tools import RegisteredTool
-from grace2_contracts.common import new_ulid
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server import server
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.tools import RegisteredTool
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
 class FakeWS:

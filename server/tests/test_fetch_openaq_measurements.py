@@ -21,7 +21,7 @@ Coverage:
 - Cache key omits the api_key.
 - LayerURI shape: layer_type, role, style_preset, units, bbox verified.
 
-Live tests (gated by ``GRACE2_TEST_LIVE_OPENAQ=1`` + ``GRACE2_OPENAQ_API_KEY``):
+Live tests (gated by ``TRID3NT_TEST_LIVE_OPENAQ=1`` + ``TRID3NT_OPENAQ_API_KEY``):
 - A real bbox -> >=0 features; evidence captured.
 - A bogus key against the real endpoint -> OpenAQAuthError (proves the live
   auth gate without needing a valid key).
@@ -36,8 +36,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_openaq_measurements import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_openaq_measurements import (
     DEFAULT_PARAMETERS,
     OpenAQAuthError,
     OpenAQInputError,
@@ -66,8 +66,8 @@ _PINNED_NOW = datetime(2026, 6, 27, 12, 0, 0, tzinfo=timezone.utc)
 _DELHI_BBOX = (76.8, 28.4, 77.4, 28.9)
 
 # Live test gates.
-_LIVE_OPENAQ = os.environ.get("GRACE2_TEST_LIVE_OPENAQ") == "1"
-_LIVE_OPENAQ_KEY = os.environ.get("GRACE2_OPENAQ_API_KEY")
+_LIVE_OPENAQ = os.environ.get("TRID3NT_TEST_LIVE_OPENAQ") == "1"
+_LIVE_OPENAQ_KEY = os.environ.get("TRID3NT_OPENAQ_API_KEY")
 
 # Test API key (mock-only; never sent to real OpenAQ unless the live test runs).
 _MOCK_API_KEY = "test-mock-key-abc123"
@@ -148,7 +148,7 @@ class _FakeStore:
 
 def _make_read_through_injector(fake: _FakeStore):
     """S3-only in-memory read-through injector (drives off ``fake.store``)."""
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -348,12 +348,12 @@ def test_round_bbox_to_6dp():
 
 
 def test_resolve_api_key_explicit_kwarg_wins():
-    with patch.dict(os.environ, {"GRACE2_OPENAQ_API_KEY": "env-value"}):
+    with patch.dict(os.environ, {"TRID3NT_OPENAQ_API_KEY": "env-value"}):
         assert _resolve_api_key(api_key="explicit", secret_ref=None) == "explicit"
 
 
 def test_resolve_api_key_env_var_fallback():
-    with patch.dict(os.environ, {"GRACE2_OPENAQ_API_KEY": "env-value"}):
+    with patch.dict(os.environ, {"TRID3NT_OPENAQ_API_KEY": "env-value"}):
         assert _resolve_api_key(api_key=None, secret_ref=None) == "env-value"
 
 
@@ -390,7 +390,7 @@ def test_resolve_api_key_via_persistence_secret_ref():
 def test_no_key_raises_before_any_network_call():
     """The full tool body raises OPENAQ_KEY_REQUIRED with NO HTTP attempted."""
     with patch.dict(os.environ, {}, clear=True), patch(
-        "grace2_agent.tools.fetch_openaq_measurements.httpx.Client"
+        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client"
     ) as mock_client:
         with pytest.raises(OpenAQMissingKeyError) as exc:
             fetch_openaq_measurements(bbox=_DELHI_BBOX)
@@ -587,10 +587,10 @@ def test_mocked_happy_path_two_call_fanout():
     mock_client = _MockHTTPClient([stations], latest_by_id)
 
     with patch(
-        "grace2_agent.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=_MOCK_API_KEY)
@@ -634,10 +634,10 @@ def test_mocked_empty_bbox_yields_empty_layer_no_error():
     mock_client = _MockHTTPClient([[]], {})
 
     with patch(
-        "grace2_agent.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=_MOCK_API_KEY)
@@ -665,10 +665,10 @@ def test_401_on_locations_raises_auth_error():
         [[]], {}, status_override=401, error_text='{"detail":"Invalid credentials"}'
     )
     with patch(
-        "grace2_agent.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(OpenAQAuthError) as exc:
@@ -682,10 +682,10 @@ def test_422_on_locations_raises_upstream_error():
         [[]], {}, status_override=422, error_text='{"detail":"bad bbox"}'
     )
     with patch(
-        "grace2_agent.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(OpenAQUpstreamError):
@@ -696,10 +696,10 @@ def test_500_on_locations_raises_upstream_error():
     fake = _FakeStore()
     mock_client = _MockHTTPClient([[]], {}, status_override=503, error_text="oops")
     with patch(
-        "grace2_agent.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(OpenAQUpstreamError):
@@ -714,10 +714,10 @@ def test_cache_hit_skips_fetch_fn():
 
     mock_client_1 = _MockHTTPClient([stations], latest_by_id)
     with patch(
-        "grace2_agent.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client_1,
     ):
         r1 = fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=_MOCK_API_KEY)
@@ -729,10 +729,10 @@ def test_cache_hit_skips_fetch_fn():
 
     mock_client_2 = _ExplodingClient([stations], latest_by_id)
     with patch(
-        "grace2_agent.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "grace2_agent.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client_2,
     ):
         r2 = fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=_MOCK_API_KEY)
@@ -750,10 +750,10 @@ def test_cache_key_omits_api_key():
     for key in ("key-AAA", "key-BBB"):
         mock_client = _MockHTTPClient([stations], latest_by_id)
         with patch(
-            "grace2_agent.tools.fetch_openaq_measurements.read_through",
+            "trid3nt_server.tools.fetch_openaq_measurements.read_through",
             side_effect=_make_read_through_injector(fake),
         ), patch(
-            "grace2_agent.tools.fetch_openaq_measurements.httpx.Client",
+            "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
             return_value=mock_client,
         ):
             fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=key)
@@ -769,7 +769,7 @@ def test_cache_key_omits_api_key():
 
 @pytest.mark.skipif(
     not (_LIVE_OPENAQ and _LIVE_OPENAQ_KEY),
-    reason="set GRACE2_TEST_LIVE_OPENAQ=1 + GRACE2_OPENAQ_API_KEY to run",
+    reason="set TRID3NT_TEST_LIVE_OPENAQ=1 + TRID3NT_OPENAQ_API_KEY to run",
 )
 def test_live_openaq_delhi():
     result = fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=_LIVE_OPENAQ_KEY)
@@ -780,7 +780,7 @@ def test_live_openaq_delhi():
 
 @pytest.mark.skipif(
     not _LIVE_OPENAQ,
-    reason="set GRACE2_TEST_LIVE_OPENAQ=1 to run the live auth-gate probe",
+    reason="set TRID3NT_TEST_LIVE_OPENAQ=1 to run the live auth-gate probe",
 )
 def test_live_openaq_bogus_key_raises_auth_error():
     """A bogus key against the REAL endpoint proves the live auth gate."""

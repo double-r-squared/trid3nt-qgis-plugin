@@ -21,12 +21,12 @@ import json
 
 import pytest
 
-from grace2_contracts import new_ulid
-from grace2_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-from grace2_contracts.sandbox_contracts import CodeExecResultPayload
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
+from trid3nt_contracts.sandbox_contracts import CodeExecResultPayload
 
-from grace2_agent.sandbox_runner import run_sandbox_local
-from grace2_agent.tools.code_exec_tool import (
+from trid3nt_server.sandbox_runner import run_sandbox_local
+from trid3nt_server.tools.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     CodeExecConfirmationRequired,
     build_code_exec_result_payload,
@@ -40,9 +40,9 @@ from grace2_agent.tools.code_exec_tool import (
 def _force_local_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every test runs the local-subprocess sandbox + a short cap for the timeout
     scenario (keeps the suite fast; the executor's SIGALRM honors the env)."""
-    monkeypatch.setenv("GRACE2_SANDBOX_LOCAL", "1")
+    monkeypatch.setenv("TRID3NT_SANDBOX_LOCAL", "1")
     monkeypatch.setenv("MPLBACKEND", "Agg")
-    monkeypatch.setenv("GRACE2_SANDBOX_TIMEOUT", "5")
+    monkeypatch.setenv("TRID3NT_SANDBOX_TIMEOUT", "5")
 
 
 # --------------------------------------------------------------------------- #
@@ -82,7 +82,7 @@ class _FakeState:
 async def test_server_gate_approve_injects_confirmed() -> None:
     """The server gate emits ``code-exec-request`` and, on a ``proceed`` reply,
     returns ``(True, params + confirmed=True + code_exec_id)``."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws = _FakeWS()
     state = _FakeState()
@@ -116,7 +116,7 @@ async def test_server_gate_approve_injects_confirmed() -> None:
 @pytest.mark.asyncio
 async def test_server_gate_cancel_blocks_dispatch() -> None:
     """A ``cancel`` reply makes the gate return ``(False, params)`` — fail-closed."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws = _FakeWS()
     state = _FakeState()
@@ -160,13 +160,13 @@ async def test_server_gate_cancel_blocks_dispatch() -> None:
 async def test_server_gate_timeout_raises_typed_and_cleans_registry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No confirmation within GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S -> the gate
+    """No confirmation within TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S -> the gate
     raises ``CodeExecApprovalTimeoutError`` (typed, non-retryable) instead of
     parking forever, emits a contract-valid CONFIRMATION_TIMEOUT ws error, and
     pops the pending-confirmation registry entry."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
-    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "0.2")
+    monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "0.2")
     ws = _FakeWS()
     state = _FakeState()
     params = {"python_code": "result = 1 + 1", "layer_refs": {}}
@@ -194,7 +194,7 @@ async def test_server_gate_timeout_raises_typed_and_cleans_registry(
 async def test_server_gate_cleanup_on_task_cancel() -> None:
     """Cancelling the gate task (session close / turn cancel) pops the pending
     registry entry via the finally -- no leaked futures."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws = _FakeWS()
     state = _FakeState()
@@ -218,21 +218,21 @@ async def test_server_gate_cleanup_on_task_cancel() -> None:
 
 def test_approval_timeout_env_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default 180s; env override honored; malformed / non-positive -> default."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
-    monkeypatch.delenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", raising=False)
+    monkeypatch.delenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", raising=False)
     assert server._code_exec_approval_timeout_s() == 180.0
 
-    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "42.5")
+    monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "42.5")
     assert server._code_exec_approval_timeout_s() == 42.5
 
-    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "abc")
+    monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "abc")
     assert server._code_exec_approval_timeout_s() == 180.0
 
-    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "0")
+    monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "0")
     assert server._code_exec_approval_timeout_s() == 180.0
 
-    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "-5")
+    monkeypatch.setenv("TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S", "-5")
     assert server._code_exec_approval_timeout_s() == 180.0
 
 
@@ -341,7 +341,7 @@ def test_finding2_host_side_bound_envelope_marks_truncation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Directly exercise the host-side parse-then-bound on an oversized field."""
-    from grace2_agent import sandbox_runner as sr
+    from trid3nt_server import sandbox_runner as sr
 
     monkeypatch.setattr(sr, "MAX_ENVELOPE_FIELD_CHARS", 100)
     env = {
@@ -406,7 +406,7 @@ def test_summary_carries_full_payload_under_private_key() -> None:
 def test_adapter_strips_full_payload_from_function_response() -> None:
     """``summarize_tool_result`` must strip ``_code_exec_result`` so Gemini sees
     only the compact summary, not the larger wire payload."""
-    from grace2_agent.adapter import summarize_tool_result
+    from trid3nt_server.adapter import summarize_tool_result
 
     payload = CodeExecResultPayload(
         code_exec_id=new_ulid(),
@@ -453,7 +453,7 @@ def test_dispatch_strips_llm_supplied_confirmed_for_code_exec() -> None:
     (the params are not underscore-hidden from the model's tool schema)."""
     import inspect
 
-    import grace2_agent.server as server_mod
+    import trid3nt_server.server as server_mod
 
     src = inspect.getsource(server_mod._invoke_tool_via_emitter)
     assert 'if tool_name == "code_exec_request":' in src

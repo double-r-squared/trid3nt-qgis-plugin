@@ -44,7 +44,7 @@ _SERVER_PUBLISH_LAYER = os.path.join(
     "..",
     "server",
     "src",
-    "grace2_agent",
+    "trid3nt_server",
     "tools",
     "publish_layer.py",
 )

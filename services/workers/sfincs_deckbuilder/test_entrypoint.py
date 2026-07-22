@@ -148,9 +148,9 @@ class ObjectUriTests(unittest.TestCase):
             ep._split_object_uri("s3://bucket")
 
     def test_output_scheme_env(self):
-        with mock.patch.dict("os.environ", {"GRACE2_OBJECT_STORE": "s3"}):
+        with mock.patch.dict("os.environ", {"TRID3NT_OBJECT_STORE": "s3"}):
             self.assertEqual(ep._output_scheme(), "s3")
-        with mock.patch.dict("os.environ", {"GRACE2_OBJECT_STORE": "gcs"}):
+        with mock.patch.dict("os.environ", {"TRID3NT_OBJECT_STORE": "gcs"}):
             self.assertEqual(ep._output_scheme(), "gs")
 
 
@@ -586,7 +586,7 @@ class ValidateCombinedSpecTests(unittest.TestCase):
 class SfincsBinaryInvocationTests(unittest.TestCase):
     """_run_sfincs + _expand_outputs — the SOLVE half, with a FAKE binary.
 
-    No real SFINCS binary on the dev box; we point GRACE2_SFINCS_BIN at a tiny
+    No real SFINCS binary on the dev box; we point TRID3NT_SFINCS_BIN at a tiny
     shell script that writes a sentinel sfincs_map.nc into CWD and exits 0/N,
     proving the in-process solve invocation + output expansion are correct.
     """
@@ -652,7 +652,7 @@ class CompletionUnionTests(unittest.TestCase):
             return uri
 
         with mock.patch.object(ep, "_put_json", side_effect=fake_put_json), \
-                mock.patch.dict("os.environ", {"GRACE2_OBJECT_STORE": "s3"}):
+                mock.patch.dict("os.environ", {"TRID3NT_OBJECT_STORE": "s3"}):
             ep._write_completion(
                 run_id="R1",
                 status="ok",

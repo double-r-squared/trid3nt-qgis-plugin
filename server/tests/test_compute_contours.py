@@ -34,8 +34,8 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.compute_contours import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.compute_contours import (
     ContourComputeError,
     _derive_interval_m,
     _snap_to_nice_interval,
@@ -214,7 +214,7 @@ def test_compute_contours_registered():
 
 
 def test_compute_contours_terrain_categorized():
-    from grace2_agent.categories import PRIMARY_CATEGORY, tools_for_category
+    from trid3nt_server.categories import PRIMARY_CATEGORY, tools_for_category
 
     assert PRIMARY_CATEGORY["compute_contours"] == "terrain_elevation"
     assert "compute_contours" in tools_for_category("terrain_elevation")
@@ -288,7 +288,7 @@ def test_run_gdal_contour_invocation_args():
         return _Completed()
 
     with patch(
-        "grace2_agent.tools.compute_contours._get_gdal_contour_bin",
+        "trid3nt_server.tools.compute_contours._get_gdal_contour_bin",
         return_value="/usr/bin/gdal_contour",
     ), patch("subprocess.run", side_effect=_fake_run):
         _run_gdal_contour("/tmp/in.tif", "/tmp/out.fgb", interval_m=20.0)
@@ -320,12 +320,12 @@ def test_compute_contours_layer_uri_shape(fake_storage):
             f.write(fake_fgb)
 
     with patch(
-        "grace2_agent.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "grace2_agent.tools.compute_contours._run_gdal_contour",
+        "trid3nt_server.tools.compute_contours._run_gdal_contour",
         side_effect=_fake_gdal_contour,
-    ), patch("grace2_agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
             dem_uri="gs://test-bucket/cache/static-30d/dem/abc123.tif",
             _bucket="test-bucket",
@@ -351,12 +351,12 @@ def test_compute_contours_explicit_interval_in_name(fake_storage):
     fake_fgb = _fake_contour_fgb_bytes()
 
     with patch(
-        "grace2_agent.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "grace2_agent.tools.compute_contours._run_gdal_contour",
+        "trid3nt_server.tools.compute_contours._run_gdal_contour",
         side_effect=lambda inp, out, interval_m: open(out, "wb").write(fake_fgb) or None,
-    ), patch("grace2_agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
             dem_uri="gs://test-bucket/cache/static-30d/dem/abc123.tif",
             interval_m=50.0,
@@ -376,14 +376,14 @@ def test_compute_contours_binary_missing_raises(fake_storage):
     fake_dem = _fake_dem_bytes()
 
     with patch(
-        "grace2_agent.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "grace2_agent.tools.compute_contours._get_gdal_contour_bin",
+        "trid3nt_server.tools.compute_contours._get_gdal_contour_bin",
         side_effect=ContourComputeError(
             "GDAL_CONTOUR_UNAVAILABLE", "gdal_contour binary not found"
         ),
-    ), patch("grace2_agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"):
         with pytest.raises(ContourComputeError) as exc_info:
             compute_contours(
                 dem_uri="gs://test-bucket/dem/abc.tif",
@@ -413,8 +413,8 @@ def test_compute_contours_cache_hit_skips_fetch(fake_storage):
     """On cache hit, gdal_contour is NOT invoked; cached bytes are returned."""
     fake_fgb = _fake_contour_fgb_bytes()
 
-    from grace2_agent.tools.cache import cache_path as make_cache_path
-    from grace2_agent.tools.cache import compute_cache_key
+    from trid3nt_server.tools.cache import cache_path as make_cache_path
+    from trid3nt_server.tools.cache import compute_cache_key
 
     dem_uri = "gs://test-bucket/cache/static-30d/dem/abc123.tif"
     params = {"dem_uri": dem_uri, "interval_m": 10.0}
@@ -428,12 +428,12 @@ def test_compute_contours_cache_hit_skips_fetch(fake_storage):
         contour_called.append(args)
 
     with patch(
-        "grace2_agent.tools.compute_contours._run_gdal_contour",
+        "trid3nt_server.tools.compute_contours._run_gdal_contour",
         side_effect=_no_contour,
     ), patch(
-        "grace2_agent.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.compute_contours._download_dem_bytes",
         return_value=b"",
-    ), patch("grace2_agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
             dem_uri=dem_uri,
             interval_m=10.0,
@@ -452,7 +452,7 @@ def test_compute_contours_cache_hit_skips_fetch(fake_storage):
 
 def test_compute_contours_bbox_fetches_dem(fake_storage):
     """When only bbox is given, the DEM is acquired via fetch_dem (no reinvent)."""
-    from grace2_contracts.execution import LayerURI
+    from trid3nt_contracts.execution import LayerURI
 
     fake_dem = _fake_dem_bytes()
     fake_fgb = _fake_contour_fgb_bytes()
@@ -472,15 +472,15 @@ def test_compute_contours_bbox_fetches_dem(fake_storage):
         )
 
     with patch(
-        "grace2_agent.tools.data_fetch.fetch_dem",
+        "trid3nt_server.tools.data_fetch.fetch_dem",
         side_effect=_fake_fetch_dem,
     ), patch(
-        "grace2_agent.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "grace2_agent.tools.compute_contours._run_gdal_contour",
+        "trid3nt_server.tools.compute_contours._run_gdal_contour",
         side_effect=lambda inp, out, interval_m: open(out, "wb").write(fake_fgb) or None,
-    ), patch("grace2_agent.tools.cache.CACHE_BUCKET", "test-bucket"):
+    ), patch("trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
             bbox=(-100.0, 40.0, -99.9, 40.1),
             _bucket="test-bucket",

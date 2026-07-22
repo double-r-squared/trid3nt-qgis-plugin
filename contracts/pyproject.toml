@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "grace2-contracts"
+name = "trid3nt-contracts"
 version = "0.1.0"
 description = "Shared contracts: WebSocket protocol, AssessmentEnvelope, EventMetadata/ClaimSet, MongoDB collection schemas, CatalogEntry, and solver-execution shapes (SRS v0.3 Appendices A-D)."
 readme = "README.md"
@@ -21,13 +21,13 @@ dev = [
 ]
 
 [project.scripts]
-grace2-export-schemas = "grace2_contracts.export_schemas:main"
+trid3nt-export-schemas = "trid3nt_contracts.export_schemas:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-grace2_contracts = ["py.typed"]
+trid3nt_contracts = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

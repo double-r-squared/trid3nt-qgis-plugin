@@ -12,7 +12,7 @@ Coverage:
 - _cycle_key matches the documented mirror layout.
 - Description audit gate: docstring carries the 6-point audit shape.
 
-Live tests (env-gated ``GRACE2_TEST_LIVE_HRRR_SMOKE=1``):
+Live tests (env-gated ``TRID3NT_TEST_LIVE_HRRR_SMOKE=1``):
 - Live fetch of a small northern-California / southern-Oregon bbox via the
   real S3 mirror. Confirms the published cycle resolves, the slice clips
   inside the bbox, and the returned values are physically plausible
@@ -26,8 +26,8 @@ import os
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_hrrr_smoke import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_hrrr_smoke import (
     HRRRSmokeEmptyError,
     HRRRSmokeError,
     HRRRSmokeInputError,
@@ -55,7 +55,7 @@ _FORT_MYERS_BBOX = (-82.0, 26.4, -81.6, 26.8)
 # Non-CONUS bbox (Hawaii) — used to verify the CONUS gate.
 _HAWAII_BBOX = (-158.0, 21.0, -157.5, 21.5)
 
-_LIVE_HRRR_SMOKE = os.environ.get("GRACE2_TEST_LIVE_HRRR_SMOKE") == "1"
+_LIVE_HRRR_SMOKE = os.environ.get("TRID3NT_TEST_LIVE_HRRR_SMOKE") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +320,7 @@ def test_estimate_payload_mb_bad_bbox_returns_default():
 
 @pytest.mark.skipif(
     not _LIVE_HRRR_SMOKE,
-    reason="set GRACE2_TEST_LIVE_HRRR_SMOKE=1 to enable the live HRRR-Smoke smoke",
+    reason="set TRID3NT_TEST_LIVE_HRRR_SMOKE=1 to enable the live HRRR-Smoke smoke",
 )
 def test_live_fetch_norcal_near_surface_smoke(tmp_path, monkeypatch):
     """Live smoke: fetch near-surface smoke over NorCal, confirm shape + sanity.
@@ -330,7 +330,7 @@ def test_live_fetch_norcal_near_surface_smoke(tmp_path, monkeypatch):
     Zarr read, the LCC → EPSG:4326 reprojection, the bbox clip, and the
     COG write — that's the whole upstream-facing surface.
     """
-    from grace2_agent.tools import fetch_hrrr_smoke as mod
+    from trid3nt_server.tools import fetch_hrrr_smoke as mod
 
     captured: dict[str, bytes] = {}
 
@@ -340,7 +340,7 @@ def test_live_fetch_norcal_near_surface_smoke(tmp_path, monkeypatch):
         captured["bytes"] = data
         out = tmp_path / "live.tif"
         out.write_bytes(data)
-        from grace2_agent.tools.cache import ReadThroughResult
+        from trid3nt_server.tools.cache import ReadThroughResult
 
         return ReadThroughResult(
             uri=f"file://{out}", data=data, hit=False

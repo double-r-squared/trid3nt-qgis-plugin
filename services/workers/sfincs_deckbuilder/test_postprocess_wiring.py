@@ -115,7 +115,7 @@ def test_write_completion_carries_publish_manifest_uri(tmp_path: Path, monkeypat
         return uri
 
     monkeypatch.setattr(ep, "_put_json", _fake_put_json)
-    monkeypatch.setenv("GRACE2_OBJECT_STORE", "s3")
+    monkeypatch.setenv("TRID3NT_OBJECT_STORE", "s3")
     monkeypatch.setattr(ep, "RUNS_BUCKET", "runs-b")
     ep._write_completion(
         run_id="RID", status="ok", exit_code=0, output_uris=["s3://runs-b/RID/x.tif"],

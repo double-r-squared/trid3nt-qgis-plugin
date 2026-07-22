@@ -7,7 +7,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.collections import (
+from trid3nt_contracts.collections import (
     ARTICLES_VECTOR_INDEX,
     EMBEDDING_DIMENSIONS_DEFAULT,
     EMBEDDING_MODEL_DEFAULT,
@@ -29,8 +29,8 @@ from grace2_contracts.collections import (
     ToolCallSummary,
     UserSpatialInput,
 )
-from grace2_contracts.common import new_ulid
-from grace2_contracts.event import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.event import (
     ClaimSet,
     EventLocation,
     EventProvenance,

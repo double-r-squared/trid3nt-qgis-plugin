@@ -27,13 +27,13 @@ from typing import Any
 
 import pytest
 
-from grace2_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
-from grace2_contracts.payload_warning import PayloadWarningEnvelopePayload
+from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
+from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
 
-from grace2_agent.tools import RegisteredTool, TOOL_REGISTRY
-from grace2_agent.tools.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
-from grace2_agent.workflows import model_groundwater_contamination_scenario as gw
-from grace2_agent.workflows.model_groundwater_contamination_scenario import (
+from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY
+from trid3nt_server.tools.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
+from trid3nt_server.workflows import model_groundwater_contamination_scenario as gw
+from trid3nt_server.workflows.model_groundwater_contamination_scenario import (
     Case2Result,
     ConfirmationDeniedError,
     DURATION_MAX_DAYS,
@@ -395,7 +395,7 @@ def test_solver_error_dict_surfaces_as_typed_error(
 
 def test_composer_registered_with_fr_dc6_metadata() -> None:
     """The LLM-facing wrapper is registered with workflow_dispatch metadata."""
-    import grace2_agent.workflows  # noqa: F401 — fire registration
+    import trid3nt_server.workflows  # noqa: F401 — fire registration
 
     entry = TOOL_REGISTRY.get("run_model_groundwater_contamination_scenario")
     assert entry is not None
@@ -405,7 +405,7 @@ def test_composer_registered_with_fr_dc6_metadata() -> None:
 
 
 def test_composer_in_hazard_modeling_category() -> None:
-    from grace2_agent.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
+    from trid3nt_server.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
 
     assert (
         PRIMARY_CATEGORY["run_model_groundwater_contamination_scenario"]

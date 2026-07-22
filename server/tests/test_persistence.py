@@ -1,4 +1,4 @@
-"""Unit + integration tests for ``grace2_agent.persistence`` (job-0115).
+"""Unit + integration tests for ``trid3nt_server.persistence`` (job-0115).
 
 The ``Persistence`` wrapper translates between agent-side typed contracts
 (``CaseSummary`` / ``CaseChatMessage`` / ``User`` / ``SecretRecord``) and the
@@ -20,7 +20,7 @@ Coverage:
 - ``test_revoke_secret_sets_is_active_false`` — revoke is soft.
 - ``test_append_audit_writes_log_entry`` — audit append produces an insert.
 - ``test_live_mcp_write_then_read_or_skip`` — live integration with the
-  MongoDB MCP server when ``GRACE2_MONGO_MCP_STDIO=1``; else surfaces the
+  MongoDB MCP server when ``TRID3NT_MONGO_MCP_STDIO=1``; else surfaces the
   OQ-0115-MCP-NOT-PROVISIONED skip.
 """
 
@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     AUDIT_COLLECTION,
     CASES_COLLECTION,
     CHAT_COLLECTION,
@@ -40,10 +40,10 @@ from grace2_agent.persistence import (
     USERS_COLLECTION,
     Persistence,
 )
-from grace2_contracts.case import CaseChatMessage, CaseSummary
-from grace2_contracts.common import new_ulid
-from grace2_contracts.secrets import SecretRecord
-from grace2_contracts.user import User
+from trid3nt_contracts.case import CaseChatMessage, CaseSummary
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.secrets import SecretRecord
+from trid3nt_contracts.user import User
 
 
 # --------------------------------------------------------------------------- #
@@ -482,17 +482,17 @@ def test_append_audit_writes_log_entry() -> None:
 
 
 @pytest.mark.skipif(
-    os.environ.get("GRACE2_MONGO_MCP_STDIO") != "1",
-    reason="OQ-0115-MCP-NOT-PROVISIONED: set GRACE2_MONGO_MCP_STDIO=1 to run",
+    os.environ.get("TRID3NT_MONGO_MCP_STDIO") != "1",
+    reason="OQ-0115-MCP-NOT-PROVISIONED: set TRID3NT_MONGO_MCP_STDIO=1 to run",
 )
 def test_live_mcp_write_then_read() -> None:  # pragma: no cover — env-guarded
     """Live MCP round-trip: upsert a test Case, fetch it back, delete it.
 
-    Only runs when ``GRACE2_MONGO_MCP_STDIO=1`` and the agent has been launched
+    Only runs when ``TRID3NT_MONGO_MCP_STDIO=1`` and the agent has been launched
     with credentials sufficient to call the SRV secret. Else surfaces as the
     OQ-0115-MCP-NOT-PROVISIONED skip.
     """
-    from grace2_agent.mcp import MCPClient, fetch_srv_from_secret_manager
+    from trid3nt_server.mcp import MCPClient, fetch_srv_from_secret_manager
 
     async def _run() -> None:
         srv = fetch_srv_from_secret_manager()

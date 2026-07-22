@@ -28,11 +28,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import compute_idf_curve as idf_mod
-from grace2_agent.tools import data_fetch as df_mod
-from grace2_agent.tools.chart_tools import is_chart_emission_result
-from grace2_agent.tools.compute_idf_curve import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import compute_idf_curve as idf_mod
+from trid3nt_server.tools import data_fetch as df_mod
+from trid3nt_server.tools.chart_tools import is_chart_emission_result
+from trid3nt_server.tools.compute_idf_curve import (
     IdfCurveInputError,
     IdfCurveNoCoverageError,
     IdfCurveUpstreamError,
@@ -215,8 +215,8 @@ def test_bad_y_axis_raises(offline_pfds) -> None:
 def test_category_and_corpus() -> None:
     import yaml
 
-    from grace2_agent import categories
-    from grace2_agent.tools import discover_dataset as dd
+    from trid3nt_server import categories
+    from trid3nt_server.tools import discover_dataset as dd
 
     assert categories.PRIMARY_CATEGORY["compute_idf_curve"] == "hydrology"
     corpus_path = (

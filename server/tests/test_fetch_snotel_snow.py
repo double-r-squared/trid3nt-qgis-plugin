@@ -20,7 +20,7 @@ Coverage:
 - DATA unreachable but stations exist -> locations with null readings (degrade).
 - Payload estimator returns a positive float.
 
-Live test (gated by GRACE2_TEST_LIVE_SNOTEL=1): real AWDB request for a small
+Live test (gated by TRID3NT_TEST_LIVE_SNOTEL=1): real AWDB request for a small
 Colorado Rockies bbox; confirms >=1 SNOTEL station returned.
 """
 
@@ -34,8 +34,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_snotel_snow import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_snotel_snow import (
     SnotelError,
     SnotelInputError,
     SnotelNoStationsError,
@@ -52,7 +52,7 @@ from grace2_agent.tools.fetch_snotel_snow import (
     fetch_snotel_snow,
 )
 
-_LIVE_SNOTEL = os.environ.get("GRACE2_TEST_LIVE_SNOTEL") == "1"
+_LIVE_SNOTEL = os.environ.get("TRID3NT_TEST_LIVE_SNOTEL") == "1"
 
 # Colorado Front Range / Berthoud Pass mountain bbox — known SNOTEL coverage.
 _CO_BBOX = (-106.5, 39.0, -105.5, 40.0)
@@ -357,8 +357,8 @@ def test_happy_path_layeruri_shape() -> None:
     def fake_http_get(url: str, timeout: float = 0) -> bytes:
         return data_raw if "/data?" in url else stations_raw
 
-    with patch("grace2_agent.tools.fetch_snotel_snow._http_get", side_effect=fake_http_get), patch(
-        "grace2_agent.tools.fetch_snotel_snow.read_through", side_effect=_fake_read_through
+    with patch("trid3nt_server.tools.fetch_snotel_snow._http_get", side_effect=fake_http_get), patch(
+        "trid3nt_server.tools.fetch_snotel_snow.read_through", side_effect=_fake_read_through
     ):
         layer = fetch_snotel_snow(bbox=_CO_BBOX)
 
@@ -379,8 +379,8 @@ def test_no_stations_in_bbox_raises() -> None:
     def fake_http_get(url: str, timeout: float = 0) -> bytes:
         return stations_raw
 
-    with patch("grace2_agent.tools.fetch_snotel_snow._http_get", side_effect=fake_http_get), patch(
-        "grace2_agent.tools.fetch_snotel_snow.read_through", side_effect=_fake_read_through
+    with patch("trid3nt_server.tools.fetch_snotel_snow._http_get", side_effect=fake_http_get), patch(
+        "trid3nt_server.tools.fetch_snotel_snow.read_through", side_effect=_fake_read_through
     ):
         with pytest.raises(SnotelNoStationsError):
             fetch_snotel_snow(bbox=_KS_BBOX)
@@ -400,8 +400,8 @@ def test_data_unreachable_degrades_to_locations() -> None:
         fetch_fn()
         return _FakeResult(f"s3://bucket/x.{ext}")
 
-    with patch("grace2_agent.tools.fetch_snotel_snow._http_get", side_effect=fake_http_get), patch(
-        "grace2_agent.tools.fetch_snotel_snow.read_through", side_effect=capturing_read_through
+    with patch("trid3nt_server.tools.fetch_snotel_snow._http_get", side_effect=fake_http_get), patch(
+        "trid3nt_server.tools.fetch_snotel_snow.read_through", side_effect=capturing_read_through
     ):
         # Should NOT raise — locations survive with null readings.
         layer = fetch_snotel_snow(bbox=_CO_BBOX)
@@ -414,9 +414,9 @@ def test_data_unreachable_degrades_to_locations() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_SNOTEL, reason="set GRACE2_TEST_LIVE_SNOTEL=1 for live AWDB")
+@pytest.mark.skipif(not _LIVE_SNOTEL, reason="set TRID3NT_TEST_LIVE_SNOTEL=1 for live AWDB")
 def test_live_colorado_rockies() -> None:
-    from grace2_agent.tools.fetch_snotel_snow import _fetch_snotel_snow_bytes
+    from trid3nt_server.tools.fetch_snotel_snow import _fetch_snotel_snow_bytes
 
     fgb, extent = _fetch_snotel_snow_bytes(bbox=_CO_BBOX, now=datetime.date(2024, 3, 5))
     assert len(fgb) > 0

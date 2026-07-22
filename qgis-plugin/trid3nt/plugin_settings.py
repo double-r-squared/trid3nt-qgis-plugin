@@ -169,7 +169,7 @@ class PluginSettings:
         model id ridden on the user-message payload (mirrors ``show_thinking``:
         the agent's ``resolve_selected_model`` passes any openai/OpenRouter
         model id verbatim). Empty string = use the agent's env default
-        (``GRACE2_OPENAI_MODEL``) -- so an unset picker changes nothing.
+        (``TRID3NT_OPENAI_MODEL``) -- so an unset picker changes nothing.
         Switching MODEL within a provider is LIVE (no restart)."""
         return self._get("model_id", "")
 
@@ -182,7 +182,7 @@ class PluginSettings:
         """OpenRouter model-extensibility (design 2026-07-19): the provider
         API key (SECRET -- OPENROUTER_API_KEY / OPENAI_API_KEY / GROQ_API_KEY
         per preset). Password-echoed in the dialog, NEVER logged. This is
-        agent-process ENV too (``GRACE2_OPENAI_API_KEY``): the plugin only
+        agent-process ENV too (``TRID3NT_OPENAI_API_KEY``): the plugin only
         PERSISTS it here + shows the restart note; it is never sent over the
         WS (no per-message carrier exists, and leaking a live key on the wire
         would be a security hole). Auto-writing .env.local + restart is

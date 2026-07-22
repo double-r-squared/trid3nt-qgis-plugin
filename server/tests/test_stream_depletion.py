@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from grace2_agent.workflows.postprocess_modflow import (
+from trid3nt_server.workflows.postprocess_modflow import (
     _sfr_obs_value,
     compute_stream_depletion_metrics,
 )

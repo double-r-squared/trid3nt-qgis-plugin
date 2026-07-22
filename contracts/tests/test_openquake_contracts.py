@@ -1,5 +1,5 @@
 """Validation + round-trip tests for the OpenQuake PSHA contracts (sprint-17,
-``grace2_contracts.openquake_contracts``).
+``trid3nt_contracts.openquake_contracts``).
 
 The OpenQuake analogue of the MODFLOW/SWMM contract tests. Covers:
 - ``OpenQuakeRunArgs`` JSON round-trip (idempotent serialize/deserialize) +
@@ -17,8 +17,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.execution import LayerURI
-from grace2_contracts.openquake_contracts import (
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.openquake_contracts import (
     DEFAULT_GMPE,
     DEFAULT_IMT,
     OpenQuakeRunArgs,

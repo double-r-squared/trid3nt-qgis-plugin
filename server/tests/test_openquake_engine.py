@@ -27,15 +27,15 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_contracts.openquake_contracts import (
+from trid3nt_contracts.openquake_contracts import (
     OpenQuakeRunArgs,
     SeismicHazardLayerURI,
 )
-from grace2_agent.workflows.model_seismic_hazard_scenario import (
+from trid3nt_server.workflows.model_seismic_hazard_scenario import (
     OPENQUAKE_SOLVER_NAME,
     assemble_build_spec,
 )
-from grace2_agent.workflows.postprocess_openquake import (
+from trid3nt_server.workflows.postprocess_openquake import (
     HAZARD_FLOOR_VALUE,
     SEISMIC_HAZARD_STYLE_PRESET,
     compute_hazard_metrics,
@@ -140,7 +140,7 @@ def test_compute_hazard_metrics():
 # (3b) Full postprocess -> valid EPSG:4326 COG (publish mocked).
 # ===========================================================================
 def test_postprocess_openquake_end_to_end(monkeypatch):
-    from grace2_agent.workflows import postprocess_openquake as pp
+    from trid3nt_server.workflows import postprocess_openquake as pp
 
     # Force the local file:// upload path (no S3) so no boto3/network is touched.
     monkeypatch.setattr(pp, "_upload_cog", lambda cog, run_id, bucket: f"file://{cog}")
@@ -178,7 +178,7 @@ def test_postprocess_openquake_end_to_end(monkeypatch):
 
 
 def test_postprocess_openquake_empty_csv_raises():
-    from grace2_agent.workflows.postprocess_openquake import (
+    from trid3nt_server.workflows.postprocess_openquake import (
         PostprocessOpenQuakeError,
         postprocess_openquake,
     )
@@ -199,7 +199,7 @@ def test_postprocess_openquake_empty_csv_raises():
 # ===========================================================================
 @pytest.mark.asyncio
 async def test_model_seismic_hazard_scenario_mocked_dispatch(monkeypatch):
-    import grace2_agent.workflows.model_seismic_hazard_scenario as comp
+    import trid3nt_server.workflows.model_seismic_hazard_scenario as comp
 
     args = OpenQuakeRunArgs(bbox=_BBOX)
 
@@ -217,7 +217,7 @@ async def test_model_seismic_hazard_scenario_mocked_dispatch(monkeypatch):
     # (no network). The synthetic-fallback path is the default here; the
     # real-fault wiring has its own dedicated suite
     # (test_seismic_real_fault_wiring.py).
-    import grace2_agent.tools.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetch_fault_sources as ff
 
     monkeypatch.setattr(
         ff,
@@ -255,7 +255,7 @@ async def test_model_seismic_hazard_scenario_mocked_dispatch(monkeypatch):
 
     # run_solver / wait_for_completion are imported INSIDE the composer from
     # ..tools.solver; patch them at that module so the import resolves to stubs.
-    import grace2_agent.tools.solver as solver_mod
+    import trid3nt_server.tools.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "run_solver", _fake_run_solver, raising=False)
     monkeypatch.setattr(solver_mod, "wait_for_completion", _fake_wait, raising=False)

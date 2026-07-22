@@ -42,14 +42,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-LOG = logging.getLogger("grace2.worker.openquake.run_oq")
+LOG = logging.getLogger("trid3nt.worker.openquake.run_oq")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 
 #: The OpenQuake CLI binary (overridable for a non-standard install).
-OQ_BIN = os.environ.get("GRACE2_OQ_BIN", "oq")
+OQ_BIN = os.environ.get("TRID3NT_OQ_BIN", "oq")
 
 
 def run_oq(build_spec_path: str) -> int:
@@ -126,7 +126,7 @@ def run_oq(build_spec_path: str) -> int:
     except FileNotFoundError:
         sys.stderr.write(
             f"run_oq.py: '{OQ_BIN}' not found on PATH -- "
-            "install openquake.engine or set GRACE2_OQ_BIN\n"
+            "install openquake.engine or set TRID3NT_OQ_BIN\n"
         )
         return 127
     except Exception as exc:
@@ -136,7 +136,7 @@ def run_oq(build_spec_path: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="grace2-openquake-run-oq",
+        prog="trid3nt-openquake-run-oq",
         description="OpenQuake runner (local subprocess shim).",
     )
     parser.add_argument(

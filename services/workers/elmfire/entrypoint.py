@@ -3,7 +3,7 @@
 The ELMFIRE analogue of ``services/workers/geoclaw/entrypoint.py`` /
 ``services/workers/swan/entrypoint.py``. Same OBJECT-STORE-IN -> RUN ->
 OBJECT-STORE-OUT envelope; SCHEME-AWARE (``s3://`` via boto3 when
-``GRACE2_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage otherwise). The
+``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage otherwise). The
 worker contract is solver-agnostic, so the staging/upload/completion envelope
 is copied verbatim from the GeoClaw worker; only the SOLVER step differs.
 
@@ -54,8 +54,8 @@ Contract (FR-CE-1/2/3 - IDENTICAL to the GeoClaw/SWAN workers):
                 }
 
     Output:
-        <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/<every matched output file>
-        <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/completion.json
+        <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/<every matched output file>
+        <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/completion.json
             Terminal manifest (mirrors the GeoClaw completion schema; the
             stdout/stderr field names carry the ``elmfire_`` prefix).
             Truthful: this image asserts ELMFIRE executed AND produced at
@@ -77,20 +77,20 @@ import sys
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.elmfire")
+LOG = logging.getLogger("trid3nt.worker.elmfire")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 
-SCRATCH = Path(os.environ.get("GRACE2_ELMFIRE_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_ELMFIRE_SCRATCH", "/opt/grace2/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
 #: The solver binary (release-pinned name; the Dockerfile bakes the matching
 #: default, env overrides on a release bump - mirrors run_elmfire's
-#: GRACE2_ELMFIRE_BINARY seam).
-ELMFIRE_BINARY = os.environ.get("GRACE2_ELMFIRE_BINARY", "elmfire_2025.0526")
+#: TRID3NT_ELMFIRE_BINARY seam).
+ELMFIRE_BINARY = os.environ.get("TRID3NT_ELMFIRE_BINARY", "elmfire_2025.0526")
 
 #: Default output globs (worker-side mirror of run_elmfire.ELMFIRE_OUTPUT_GLOBS;
 #: the manifest's "outputs" list wins when present).
@@ -130,8 +130,8 @@ def _split_object_uri(uri: str) -> tuple[str, str, str]:
 
 
 def _output_scheme() -> str:
-    """Runs-bucket output scheme - ``s3`` or ``gs`` (env ``GRACE2_OBJECT_STORE``)."""
-    b = (os.environ.get("GRACE2_OBJECT_STORE") or "gcs").strip().lower()
+    """Runs-bucket output scheme - ``s3`` or ``gs`` (env ``TRID3NT_OBJECT_STORE``)."""
+    b = (os.environ.get("TRID3NT_OBJECT_STORE") or "gcs").strip().lower()
     return "s3" if b in {"s3", "aws"} else "gs"
 
 
@@ -265,18 +265,18 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="grace2-elmfire-entrypoint",
+        prog="trid3nt-elmfire-entrypoint",
         description="ELMFIRE AWS Batch worker entrypoint (FR-CE-1/2/3).",
     )
     p.add_argument(
         "--run-id",
-        default=os.environ.get("GRACE2_RUN_ID", "").strip(),
-        help="Run identifier (also $GRACE2_RUN_ID).",
+        default=os.environ.get("TRID3NT_RUN_ID", "").strip(),
+        help="Run identifier (also $TRID3NT_RUN_ID).",
     )
     p.add_argument(
         "--manifest-uri",
-        default=os.environ.get("GRACE2_MANIFEST_URI", "").strip(),
-        help="s3:// / gs:// URI of the setup manifest (also $GRACE2_MANIFEST_URI).",
+        default=os.environ.get("TRID3NT_MANIFEST_URI", "").strip(),
+        help="s3:// / gs:// URI of the setup manifest (also $TRID3NT_MANIFEST_URI).",
     )
     return p
 
@@ -329,10 +329,10 @@ def main(argv: list[str] | None = None) -> int:
     run_id = args.run_id
     manifest_uri = args.manifest_uri
     if not run_id:
-        LOG.error("run_id is required (pass --run-id or set $GRACE2_RUN_ID)")
+        LOG.error("run_id is required (pass --run-id or set $TRID3NT_RUN_ID)")
         return 2
     if not manifest_uri:
-        LOG.error("manifest_uri is required (pass --manifest-uri or set $GRACE2_MANIFEST_URI)")
+        LOG.error("manifest_uri is required (pass --manifest-uri or set $TRID3NT_MANIFEST_URI)")
         return 2
 
     LOG.info(

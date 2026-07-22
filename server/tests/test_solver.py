@@ -3,7 +3,7 @@
 GCP Cloud Workflows is decommissioned. The gcp-workflows happy-path / poll /
 cancel / completion-read tests that this file used to carry (driven by a fake
 ``google.cloud.workflows.executions_v1.ExecutionsClient`` via
-``set_workflows_client`` + ``GRACE2_SOLVER_BACKEND=gcp-workflows``) are gone
+``set_workflows_client`` + ``TRID3NT_SOLVER_BACKEND=gcp-workflows``) are gone
 with the backend. What remains here is the backend-AGNOSTIC coverage:
 
 1. ``test_registry_registers_solver_tools_uncacheable`` — both atomic tools
@@ -28,8 +28,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.solver import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.solver import (
     NFR_P_4_TARGET_SECONDS,
     PROGRESS_CLAMP_MAX,
     SOLVER_WORKFLOW_REGISTRY,

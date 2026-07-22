@@ -26,11 +26,11 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_contracts.execution import LayerURI
-from grace2_contracts import new_ulid
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts import new_ulid
 
-from grace2_agent.layer_uri_emit import publish_input_layer
-from grace2_agent.pipeline_emitter import (
+from trid3nt_server.layer_uri_emit import publish_input_layer
+from trid3nt_server.pipeline_emitter import (
     _CURRENT_EMITTER,
     PipelineEmitter,
 )
@@ -73,7 +73,7 @@ async def test_publish_input_layer_forces_role_input_and_no_bbox():
     )
     # Stub the (vector) inline-read so add_loaded_layer does not hit S3.
     with patch(
-        "grace2_agent.pipeline_emitter._read_vector_uri_as_geojson",
+        "trid3nt_server.pipeline_emitter._read_vector_uri_as_geojson",
         return_value={"type": "FeatureCollection", "features": []},
     ):
         ok = await publish_input_layer(emitter, layer)
@@ -164,8 +164,8 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 # ===========================================================================
 # (2) OpenQuake fault serialization + composer wiring.
 # ===========================================================================
-import grace2_agent.workflows.model_seismic_hazard_scenario as seismic  # noqa: E402
-from grace2_agent.workflows.model_seismic_hazard_scenario import (  # noqa: E402
+import trid3nt_server.workflows.model_seismic_hazard_scenario as seismic  # noqa: E402
+from trid3nt_server.workflows.model_seismic_hazard_scenario import (  # noqa: E402
     FAULT_LINE_STYLE_PRESET,
     fault_records_to_feature_collection,
     make_fault_sources_layer_uri,
@@ -218,7 +218,7 @@ def test_make_fault_sources_layer_uri_uploads_and_is_role_input(monkeypatch):
         def put_object(self, **kw):
             puts.append(kw)
 
-    import grace2_agent.tools.solver as solver_mod
+    import trid3nt_server.tools.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
@@ -238,7 +238,7 @@ def test_make_fault_sources_layer_uri_uploads_and_is_role_input(monkeypatch):
 
 def test_make_fault_sources_layer_uri_no_features_returns_none(monkeypatch):
     """No drawable traces => None (best-effort, no upload)."""
-    import grace2_agent.tools.solver as solver_mod
+    import trid3nt_server.tools.solver as solver_mod
 
     called = {"put": False}
 
@@ -259,7 +259,7 @@ def test_make_fault_sources_layer_uri_no_features_returns_none(monkeypatch):
 def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
     """An S3 put failure returns None (the fault input is simply absent), NEVER
     raises."""
-    import grace2_agent.tools.solver as solver_mod
+    import trid3nt_server.tools.solver as solver_mod
 
     class _BoomS3:
         def put_object(self, **kw):
@@ -272,12 +272,12 @@ def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
 
 # --- composer end-to-end (mocked): emits a role="input" fault vector ONLY when
 #     real faults were used; nothing extra when no real faults. ---------------
-from grace2_contracts.openquake_contracts import OpenQuakeRunArgs  # noqa: E402
-from grace2_contracts.openquake_contracts import SeismicHazardLayerURI  # noqa: E402
-from grace2_agent.workflows.postprocess_openquake import (  # noqa: E402
+from trid3nt_contracts.openquake_contracts import OpenQuakeRunArgs  # noqa: E402
+from trid3nt_contracts.openquake_contracts import SeismicHazardLayerURI  # noqa: E402
+from trid3nt_server.workflows.postprocess_openquake import (  # noqa: E402
     SEISMIC_HAZARD_STYLE_PRESET,
 )
-from grace2_agent.workflows.model_seismic_hazard_scenario import (  # noqa: E402
+from trid3nt_server.workflows.model_seismic_hazard_scenario import (  # noqa: E402
     assemble_build_spec,
 )
 
@@ -325,7 +325,7 @@ def _wire_seismic_mocks(monkeypatch):
     async def _fake_wait(handle):
         return _Result()
 
-    import grace2_agent.tools.solver as solver_mod
+    import trid3nt_server.tools.solver as solver_mod
 
     monkeypatch.setattr(
         solver_mod, "run_solver",
@@ -357,7 +357,7 @@ def _wire_seismic_mocks(monkeypatch):
 async def test_composer_emits_fault_input_when_real_faults(monkeypatch):
     """When real faults are used, the composer surfaces a role="input" fault
     VECTOR layer (the fault_sources.geojson) on the emitter."""
-    import grace2_agent.tools.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetch_fault_sources as ff
 
     _wire_seismic_mocks(monkeypatch)
     emitter = _emitter()
@@ -366,7 +366,7 @@ async def test_composer_emits_fault_input_when_real_faults(monkeypatch):
         with patch.object(
             ff, "fetch_fault_sources", return_value=_fault_result([_FAULT_REC])
         ), patch(
-            "grace2_agent.pipeline_emitter._read_vector_uri_as_geojson",
+            "trid3nt_server.pipeline_emitter._read_vector_uri_as_geojson",
             return_value=fault_records_to_feature_collection([_FAULT_REC]),
         ):
             await seismic.model_seismic_hazard_scenario(
@@ -390,7 +390,7 @@ async def test_composer_emits_fault_input_when_real_faults(monkeypatch):
 async def test_composer_emits_no_fault_input_when_no_real_faults(monkeypatch):
     """When NO real fault intersects the AOI, the composer emits NO fault input
     layer (nothing extra surfaced)."""
-    import grace2_agent.tools.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetch_fault_sources as ff
 
     _wire_seismic_mocks(monkeypatch)
     emitter = _emitter()
@@ -417,8 +417,8 @@ async def test_composer_emits_no_fault_input_when_no_real_faults(monkeypatch):
 # ===========================================================================
 # (3) SFINCS surfaces river vector + DEM/landcover rasters as role="input".
 # ===========================================================================
-import grace2_agent.workflows.model_flood_scenario as flood  # noqa: E402
-from grace2_agent.workflows.model_flood_scenario import model_flood_scenario  # noqa: E402
+import trid3nt_server.workflows.model_flood_scenario as flood  # noqa: E402
+from trid3nt_server.workflows.model_flood_scenario import model_flood_scenario  # noqa: E402
 
 
 def _flood_input_layer(kind: str) -> LayerURI:
@@ -509,7 +509,7 @@ async def test_sfincs_surfaces_dem_landcover_river_as_inputs(monkeypatch):
             ),
             patch.object(flood, "publish_layer", side_effect=_mock_publish_layer),
             patch(
-                "grace2_agent.pipeline_emitter._read_vector_uri_as_geojson",
+                "trid3nt_server.pipeline_emitter._read_vector_uri_as_geojson",
                 return_value={"type": "FeatureCollection", "features": []},
             ),
         ):
@@ -541,7 +541,7 @@ async def test_sfincs_surfaces_dem_landcover_river_as_inputs(monkeypatch):
 # ===========================================================================
 # (4 bonus) SWMM building footprints surfaced as a role="input" vector.
 # ===========================================================================
-from grace2_agent.workflows.model_urban_flood_swmm import (  # noqa: E402
+from trid3nt_server.workflows.model_urban_flood_swmm import (  # noqa: E402
     make_buildings_input_layer_uri,
 )
 
@@ -549,7 +549,7 @@ from grace2_agent.workflows.model_urban_flood_swmm import (  # noqa: E402
 def test_make_buildings_input_layer_uri_uploads_role_input(monkeypatch):
     """A buildings FeatureCollection uploads to the runs bucket + returns a
     role="input" vector LayerURI (bbox=None). S3 mocked."""
-    import grace2_agent.tools.solver as solver_mod
+    import trid3nt_server.tools.solver as solver_mod
 
     puts: list[dict] = []
 
@@ -577,7 +577,7 @@ def test_make_buildings_input_layer_uri_uploads_role_input(monkeypatch):
 
 def test_make_buildings_input_layer_uri_empty_returns_none(monkeypatch):
     """An empty / non-FC input returns None (best-effort, no upload, no raise)."""
-    import grace2_agent.tools.solver as solver_mod
+    import trid3nt_server.tools.solver as solver_mod
 
     monkeypatch.setattr(
         solver_mod, "_get_s3_client",
@@ -591,7 +591,7 @@ def test_make_buildings_input_layer_uri_empty_returns_none(monkeypatch):
 
 
 # Small ExecutionHandle factory (avoids importing the whole flood-test harness).
-from grace2_contracts.execution import ExecutionHandle  # noqa: E402
+from trid3nt_contracts.execution import ExecutionHandle  # noqa: E402
 
 
 def ExecutionHandle_helper(run_id: str) -> ExecutionHandle:

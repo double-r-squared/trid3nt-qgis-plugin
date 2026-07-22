@@ -31,7 +31,7 @@ pytest.importorskip("xarray")
 pytest.importorskip("scipy")
 pytest.importorskip("pyproj")
 
-from grace2_agent.workflows.postprocess_flood import (  # noqa: E402
+from trid3nt_server.workflows.postprocess_flood import (  # noqa: E402
     NODATA_DEPTH_M,
     PostprocessError,
     _is_quadtree_output,
@@ -393,7 +393,7 @@ def _make_real_schema_quadtree_ds(
 def test_read_crs_from_real_schema_variable_value() -> None:
     """The cht crs var stores the bare int EPSG as its VALUE (attrs={'EPSG':'-'});
     the reader must return EPSG:32616, NOT the EPSG:3857 fallback."""
-    from grace2_agent.workflows.postprocess_flood import _read_crs_from_dataset
+    from trid3nt_server.workflows.postprocess_flood import _read_crs_from_dataset
 
     ds, _ = _make_real_schema_quadtree_ds(side=8)
     assert _read_crs_from_dataset(ds) == "EPSG:32616"

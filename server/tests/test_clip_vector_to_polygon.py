@@ -21,7 +21,7 @@ Coverage:
    parameter combinations.
 9. ``test_polygon_filter_empty_raises`` — filter matching zero features raises
    ClipVectorError(POLYGON_FILTER_EMPTY).
-10. Live (env GRACE2_TEST_LIVE_CLIPV=1): clip nationwide GBIF panther occurrences
+10. Live (env TRID3NT_TEST_LIVE_CLIPV=1): clip nationwide GBIF panther occurrences
     to TIGER FL state polygon → fewer features than input AND all output
     points fall inside FL's bbox (geographic-correctness gate).
 """
@@ -37,8 +37,8 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import LineString, Point, Polygon
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.clip_vector_to_polygon import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.clip_vector_to_polygon import (
     ClipVectorError,
     clip_vector_to_polygon,
 )
@@ -447,7 +447,7 @@ def test_cache_miss_writes_and_hit_skips_recompute():
         fake_sc = FakeStorageClient()
 
         call_count = [0]
-        from grace2_agent.tools import clip_vector_to_polygon as cvp_mod
+        from trid3nt_server.tools import clip_vector_to_polygon as cvp_mod
 
         original_clip = cvp_mod._clip_vector_locally
 
@@ -456,7 +456,7 @@ def test_cache_miss_writes_and_hit_skips_recompute():
             return original_clip(*args, **kwargs)
 
         with patch(
-            "grace2_agent.tools.clip_vector_to_polygon._clip_vector_locally",
+            "trid3nt_server.tools.clip_vector_to_polygon._clip_vector_locally",
             side_effect=_counting,
         ):
             result1 = clip_vector_to_polygon(
@@ -514,7 +514,7 @@ def test_unknown_vector_uri_raises_typed_error():
 
 def test_cache_keys_vary_across_params():
     """Cache keys differ for distinct (vector_uri, polygon_uri, feature_filter, keep_partial)."""
-    from grace2_agent.tools.cache import compute_cache_key
+    from trid3nt_server.tools.cache import compute_cache_key
 
     base = {
         "vector_uri": "gs://b/v.fgb",
@@ -573,8 +573,8 @@ def test_polygon_filter_empty_raises():
 
 
 @pytest.mark.skipif(
-    os.environ.get("GRACE2_TEST_LIVE_CLIPV") != "1",
-    reason="live test gated by GRACE2_TEST_LIVE_CLIPV=1",
+    os.environ.get("TRID3NT_TEST_LIVE_CLIPV") != "1",
+    reason="live test gated by TRID3NT_TEST_LIVE_CLIPV=1",
 )
 def test_live_clip_gbif_panther_to_florida():
     """Live test: GBIF Puma concolor occurrences (US bbox) clipped to TIGER FL polygon.
@@ -583,10 +583,10 @@ def test_live_clip_gbif_panther_to_florida():
     actual bbox (-87.6, 24.4, -80.0, 31.0). Input is a wider US-east-coast bbox;
     output count < input count; all output points are inside FL.
     """
-    from grace2_agent.tools.fetch_administrative_boundaries import (
+    from trid3nt_server.tools.fetch_administrative_boundaries import (
         fetch_administrative_boundaries,
     )
-    from grace2_agent.tools.fetch_gbif_occurrences import fetch_gbif_occurrences
+    from trid3nt_server.tools.fetch_gbif_occurrences import fetch_gbif_occurrences
 
     # 1. Fetch TIGER state polygons covering FL+GA+AL (so we can filter to FL).
     states_uri = fetch_administrative_boundaries(

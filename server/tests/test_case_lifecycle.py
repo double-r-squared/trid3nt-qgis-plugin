@@ -1,4 +1,4 @@
-"""Unit tests for ``grace2_agent.case_lifecycle`` (job-0121).
+"""Unit tests for ``trid3nt_server.case_lifecycle`` (job-0121).
 
 Coverage:
 - ``test_case_qgs_uri_default_bucket`` — pure function builds the URI.
@@ -29,16 +29,16 @@ from datetime import datetime, timezone
 
 import pytest
 
-from grace2_agent.case_lifecycle import (
+from trid3nt_server.case_lifecycle import (
     DEFAULT_CASE_QGS_BUCKET,
     CaseLifecycleError,
     case_qgs_uri,
     ensure_case_qgs,
     set_gcs_copy,
 )
-from grace2_agent.persistence import Persistence
-from grace2_contracts.case import CaseSummary
-from grace2_contracts.common import new_ulid
+from trid3nt_server.persistence import Persistence
+from trid3nt_contracts.case import CaseSummary
+from trid3nt_contracts.common import new_ulid
 
 # Reuse the MockMCPClient from the persistence tests (the mock is generic).
 from .test_persistence import MockMCPClient, _fresh_case_summary
@@ -57,8 +57,8 @@ def test_case_qgs_uri_default_bucket() -> None:
 
 
 def test_case_qgs_uri_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``GRACE2_CASE_QGS_BUCKET`` env var overrides the bucket."""
-    monkeypatch.setenv("GRACE2_CASE_QGS_BUCKET", "alt-bucket")
+    """``TRID3NT_CASE_QGS_BUCKET`` env var overrides the bucket."""
+    monkeypatch.setenv("TRID3NT_CASE_QGS_BUCKET", "alt-bucket")
     cid = new_ulid()
     uri = case_qgs_uri(cid)
     assert uri == f"gs://alt-bucket/{cid}.qgs"

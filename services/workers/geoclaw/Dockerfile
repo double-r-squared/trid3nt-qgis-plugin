@@ -139,13 +139,13 @@ WORKDIR /opt/grace2
 
 ENV PYTHONPATH=/opt/grace2 \
     PYTHONUNBUFFERED=1 \
-    GRACE2_GEOCLAW_SCRATCH=/opt/grace2/work
+    TRID3NT_GEOCLAW_SCRATCH=/opt/grace2/work
 
 # Runtime config — overridable from the AWS Batch container env block.
-ENV GRACE2_OBJECT_STORE=s3 \
-    GRACE2_RUNS_BUCKET="" \
-    GRACE2_RUN_ID="" \
-    GRACE2_MANIFEST_URI="" \
+ENV TRID3NT_OBJECT_STORE=s3 \
+    TRID3NT_RUNS_BUCKET="" \
+    TRID3NT_RUN_ID="" \
+    TRID3NT_MANIFEST_URI="" \
     AWS_REGION=us-west-2
 
 # Build-time smoke: clawpack/geoclaw import + the entrypoint + the (clawpack-free)
@@ -164,7 +164,7 @@ print('setrun render OK len=', len(render_setrun_py(GeoClawBuildSpec(scenario='d
 
 # ENTRYPOINT runs this image as a one-shot solver job. CMD is empty so AWS Batch
 # containerOverrides command feeds straight through as argv; env-var fallbacks
-# (GRACE2_RUN_ID, GRACE2_MANIFEST_URI) are parsed by the entrypoint if no CLI
+# (TRID3NT_RUN_ID, TRID3NT_MANIFEST_URI) are parsed by the entrypoint if no CLI
 # flags are passed (mirror of the SFINCS/SWMM/MODFLOW pattern).
 ENTRYPOINT ["python3", "-m", "services.workers.geoclaw.entrypoint"]
 CMD []

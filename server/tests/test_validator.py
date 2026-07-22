@@ -27,7 +27,7 @@ import logging
 
 import pytest
 
-from grace2_agent.categories import (
+from trid3nt_server.categories import (
     HOT_SET_TOOLS,
     AllowedToolSet,
     OutOfAllowedSetError,
@@ -38,7 +38,7 @@ from grace2_agent.categories import (
 @pytest.fixture(scope="module", autouse=True)
 def _populate_registry() -> None:
     """Ensure the full registry is loaded."""
-    from grace2_agent.main import _import_tools_registry
+    from trid3nt_server.main import _import_tools_registry
 
     _import_tools_registry()
 
@@ -125,7 +125,7 @@ def test_auto_widen_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
     """The auto-widen path logs at WARNING so telemetry / hot-set tuning can
     see which real tools keep landing outside the hot set."""
     allowed = AllowedToolSet()
-    with caplog.at_level(logging.WARNING, logger="grace2_agent.categories"):
+    with caplog.at_level(logging.WARNING, logger="trid3nt_server.categories"):
         validate_function_call("compute_colored_relief", allowed)
     messages = [r.getMessage() for r in caplog.records]
     assert any(

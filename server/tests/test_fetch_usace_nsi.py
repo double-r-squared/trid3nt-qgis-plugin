@@ -14,7 +14,7 @@ Coverage:
 - Cache miss → fetch_fn invoked; cache hit → fetch_fn skipped (FR-DC-4 dedup).
 - estimate_payload_mb hook returns a finite positive number proportional to
   the bbox area.
-- Live (env ``GRACE2_TEST_LIVE_NSI=1``): real NSI POST against a tiny Fort
+- Live (env ``TRID3NT_TEST_LIVE_NSI=1``): real NSI POST against a tiny Fort
   Myers Beach bbox returns ≥1 NSI structure.
 """
 
@@ -29,8 +29,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_usace_nsi import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_usace_nsi import (
     NSI_BBOX_MAX_SPAN_DEG,
     USACE_NSIError,
     USACE_NSIInputError,
@@ -54,7 +54,7 @@ from grace2_agent.tools.fetch_usace_nsi import (
 _PINNED_NOW = datetime(2026, 6, 9, 12, 0, 0, tzinfo=timezone.utc)
 
 # Marker for live tests
-_LIVE_NSI = os.environ.get("GRACE2_TEST_LIVE_NSI") == "1"
+_LIVE_NSI = os.environ.get("TRID3NT_TEST_LIVE_NSI") == "1"
 
 # Fort Myers Beach — verified live during the smoke test.
 _FORT_MYERS_BBOX = (-81.870, 26.640, -81.860, 26.650)
@@ -109,7 +109,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -303,7 +303,7 @@ def test_user_agent_header_sent_on_request():
             captured_headers.update(headers or {})
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_usace_nsi.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_nsi.httpx.Client", FakeClient):
         _fetch_nsi_geojson(
             "https://nsi.sec.usace.army.mil/nsiapi/structures",
             {"type": "FeatureCollection", "features": []},
@@ -327,10 +327,10 @@ def test_5_feature_response_writes_fgb_with_pelicun_columns():
     fake_geojson = _sample_nsi_geojson(5)
 
     with patch(
-        "grace2_agent.tools.fetch_usace_nsi._fetch_nsi_geojson",
+        "trid3nt_server.tools.fetch_usace_nsi._fetch_nsi_geojson",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_usace_nsi.read_through",
+        "trid3nt_server.tools.fetch_usace_nsi.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_nsi(bbox=_FORT_MYERS_BBOX)
@@ -431,7 +431,7 @@ def test_500_raises_typed_upstream_error():
         def post(self, url, params=None, json=None, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_usace_nsi.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_nsi.httpx.Client", FakeClient):
         with pytest.raises(USACE_NSIUpstreamError, match="500"):
             _fetch_nsi_geojson(
                 "https://nsi.sec.usace.army.mil/nsiapi/structures",
@@ -454,7 +454,7 @@ def test_network_failure_wraps_to_upstream_error():
         def post(self, url, params=None, json=None, headers=None):
             raise httpx.ConnectError("simulated DNS failure")
 
-    with patch("grace2_agent.tools.fetch_usace_nsi.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_nsi.httpx.Client", FakeClient):
         with pytest.raises(USACE_NSIUpstreamError, match="request failed"):
             _fetch_nsi_geojson(
                 "https://nsi.sec.usace.army.mil/nsiapi/structures",
@@ -484,7 +484,7 @@ def test_non_feature_collection_raises():
         def post(self, url, params=None, json=None, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_usace_nsi.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_nsi.httpx.Client", FakeClient):
         with pytest.raises(USACE_NSIUpstreamError, match="error message"):
             _fetch_nsi_geojson(
                 "https://nsi.sec.usace.army.mil/nsiapi/structures",
@@ -515,10 +515,10 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return fake_bytes
 
     with patch(
-        "grace2_agent.tools.fetch_usace_nsi._fetch_nsi_bytes",
+        "trid3nt_server.tools.fetch_usace_nsi._fetch_nsi_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_usace_nsi.read_through",
+        "trid3nt_server.tools.fetch_usace_nsi.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_usace_nsi(bbox=_FORT_MYERS_BBOX)
@@ -569,10 +569,10 @@ def test_layer_uri_shape():
     """LayerURI is tagged role=primary, layer_type=vector, with NSI style."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_usace_nsi._fetch_nsi_bytes",
+        "trid3nt_server.tools.fetch_usace_nsi._fetch_nsi_bytes",
         return_value=_fake_fgb_bytes("FTMYERS"),
     ), patch(
-        "grace2_agent.tools.fetch_usace_nsi.read_through",
+        "trid3nt_server.tools.fetch_usace_nsi.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_nsi(bbox=_FORT_MYERS_BBOX)
@@ -595,10 +595,10 @@ def test_extra_kwargs_are_absorbed():
     """LLM-invented kwargs must not raise; **_extra_ignored absorbs them."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_usace_nsi._fetch_nsi_bytes",
+        "trid3nt_server.tools.fetch_usace_nsi._fetch_nsi_bytes",
         return_value=_fake_fgb_bytes("FTMYERS"),
     ), patch(
-        "grace2_agent.tools.fetch_usace_nsi.read_through",
+        "trid3nt_server.tools.fetch_usace_nsi.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         # Should NOT raise TypeError on the invented kwarg.
@@ -613,11 +613,11 @@ def test_extra_kwargs_are_absorbed():
 
 
 # ---------------------------------------------------------------------------
-# Live smoke (gated on GRACE2_TEST_LIVE_NSI=1).
+# Live smoke (gated on TRID3NT_TEST_LIVE_NSI=1).
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_NSI, reason="GRACE2_TEST_LIVE_NSI not set")
+@pytest.mark.skipif(not _LIVE_NSI, reason="TRID3NT_TEST_LIVE_NSI not set")
 def test_live_fetch_returns_at_least_one_structure():
     """Real NSI POST against the Fort Myers Beach bbox returns ≥1 structure."""
     body = _build_nsi_polygon_body(_FORT_MYERS_BBOX)

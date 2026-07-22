@@ -134,8 +134,8 @@ WORKDIR /opt/grace2
 
 ENV PYTHONPATH=/opt/grace2 \
     PYTHONUNBUFFERED=1 \
-    GRACE2_MF6_BIN=/usr/local/bin/mf6 \
-    GRACE2_MF6_SCRATCH=/opt/grace2/work
+    TRID3NT_MF6_BIN=/usr/local/bin/mf6 \
+    TRID3NT_MF6_SCRATCH=/opt/grace2/work
 
 # Runtime config. GCP is decommissioned: on AWS, MODFLOW runs the mf6 binary
 # directly via the agent's local-exec supervisor (run_modflow.py) — there is NO
@@ -143,14 +143,14 @@ ENV PYTHONPATH=/opt/grace2 \
 # record of the USGS mf6 6.5.0 install the EC2 box reuses; its GCS-only entrypoint
 # is effectively retired. The bucket defaults below are pinned to the AWS S3
 # names for honesty (inert on the live local-exec path).
-#   GRACE2_CACHE_BUCKET  — source bucket (FloPy deck + manifest under modflow/<run_id>/).
-#   GRACE2_RUNS_BUCKET   — destination bucket for outputs (<run_id>/completion.json).
-#   GRACE2_RUN_ID        — the run ID under which outputs land (set per run).
-#   GRACE2_MANIFEST_URI  — URI of the JSON setup manifest the entrypoint reads.
-ENV GRACE2_CACHE_BUCKET=trid3nt-cache \
-    GRACE2_RUNS_BUCKET=trid3nt-runs \
-    GRACE2_RUN_ID="" \
-    GRACE2_MANIFEST_URI=""
+#   TRID3NT_CACHE_BUCKET  — source bucket (FloPy deck + manifest under modflow/<run_id>/).
+#   TRID3NT_RUNS_BUCKET   — destination bucket for outputs (<run_id>/completion.json).
+#   TRID3NT_RUN_ID        — the run ID under which outputs land (set per run).
+#   TRID3NT_MANIFEST_URI  — URI of the JSON setup manifest the entrypoint reads.
+ENV TRID3NT_CACHE_BUCKET=trid3nt-cache \
+    TRID3NT_RUNS_BUCKET=trid3nt-runs \
+    TRID3NT_RUN_ID="" \
+    TRID3NT_MANIFEST_URI=""
 
 # Build-time smoke (mirror of the SFINCS Dockerfile build-time assert): the
 # mf6 binary exists + runs, and the entrypoint module imports cleanly. Catches
@@ -165,7 +165,7 @@ RUN test -x /usr/local/bin/mf6 \
 
 # ENTRYPOINT runs this image as a one-shot solver Job. CMD is empty so Cloud
 # Run Job task args feed straight through as argv to the module; env-var
-# fallbacks (GRACE2_RUN_ID, GRACE2_MANIFEST_URI) are parsed by the entrypoint
+# fallbacks (TRID3NT_RUN_ID, TRID3NT_MANIFEST_URI) are parsed by the entrypoint
 # if no CLI flags are passed (mirror of the SFINCS pattern).
 ENTRYPOINT ["python3", "-m", "services.workers.modflow.entrypoint"]
 CMD []

@@ -13,12 +13,12 @@ import asyncio
 import json
 from typing import Any
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     AUDIT_COLLECTION,
     FileMCPClient,
     Persistence,
 )
-from grace2_agent.server import (
+from trid3nt_server.server import (
     SessionState,
     _maybe_emit_mode2_candidate,
     set_persistence,

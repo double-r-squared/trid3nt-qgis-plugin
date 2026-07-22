@@ -2,7 +2,7 @@
 
 All eight engines run locally. Three execution mechanisms are in play, all behind the same
 `run_solver` / local-supervisor seam the cloud build uses (the supervisor stages deck inputs
-into `$GRACE2_RUNS_DIR/<run_id>/`, launches the engine, uploads outputs to MinIO, and writes
+into `$TRID3NT_RUNS_DIR/<run_id>/`, launches the engine, uploads outputs to MinIO, and writes
 `completion.json` -- identical contract to the AWS Batch workers):
 
 - **binary subprocess** -- a static binary invoked directly (MODFLOW)
@@ -24,18 +24,18 @@ small/coarse AOIs used in the proofs -- they scale with AOI and resolution.
 
 | Engine | Domain | Mechanism | Env gates | Rough local runtime |
 |--------|--------|-----------|-----------|---------------------|
-| **MODFLOW 6** | groundwater (17 archetype composers) | `bin/mf6` binary subprocess (USGS 6.5.0 static, no runtime deps) | `GRACE2_MODFLOW_LOCAL=1`, `GRACE2_MF6_BIN` | solve itself sub-second (~0.07-0.3 s for an archetype deck); the turn is dominated by LLM inference |
-| **SFINCS** | coastal/pluvial flood | docker `deltares/sfincs-cpu:sfincs-v2.3.3`, rundir mounted at `/data` | `GRACE2_SOLVER_BACKEND=local-docker`, `GRACE2_SFINCS_IMAGE`, `GRACE2_RUNS_DIR` | ~40 s for a small pluvial AOI (~23k active cells) incl. hydromt build; minutes end-to-end with fetch + postprocess |
+| **MODFLOW 6** | groundwater (17 archetype composers) | `bin/mf6` binary subprocess (USGS 6.5.0 static, no runtime deps) | `TRID3NT_MODFLOW_LOCAL=1`, `TRID3NT_MF6_BIN` | solve itself sub-second (~0.07-0.3 s for an archetype deck); the turn is dominated by LLM inference |
+| **SFINCS** | coastal/pluvial flood | docker `deltares/sfincs-cpu:sfincs-v2.3.3`, rundir mounted at `/data` | `TRID3NT_SOLVER_BACKEND=local-docker`, `TRID3NT_SFINCS_IMAGE`, `TRID3NT_RUNS_DIR` | ~40 s for a small pluvial AOI (~23k active cells) incl. hydromt build; minutes end-to-end with fetch + postprocess |
 | **SWMM (PySWMM)** | urban stormwater | **in-process** pyswmm (`run_swmm_local`, the dev primary path; a `LocalSolverSpec` also exists for an out-of-process lane) | none beyond the defaults (pyswmm 2.1.0 in the agent venv) | ~2 min for a 3-block box / 10-yr 1-hr storm -- **see the slow-local caveat below** |
 | **Landlab** | landslide susceptibility | subprocess `run_chain.py` (exec_kind=exec, pip-only) | none beyond the defaults | ~42 s (4 km box, 30 m grid, 25 Monte Carlo iterations) |
-| **OpenQuake** | seismic hazard (PSHA) | subprocess `run_oq.py` -> `oq engine` (exec_kind=exec) | `GRACE2_OQ_BIN` (venv `oq`); one-time `oq engine --upgrade-db` on first run | ~41 s (SF Bay PGA, 475-yr return, 20 km grid, real-fault sources) |
-| **GeoClaw** | tsunami / dam-break inundation | docker `trid3nt-local/geoclaw:latest` (locally built; Clawpack 5.14 Fortran compiled into the image), `--network host`, deck pulled from MinIO via `--manifest-uri` | `GRACE2_GEOCLAW_IMAGE` | ~40 s solve for a 30-min tsunami window, 2 AMR levels, 6 frames (the Fortran compile is baked into the image, not per-run) |
-| **SWAN** | spectral waves | docker `trid3nt-local/swan:latest` (locally built), same manifest pattern as GeoClaw | `GRACE2_SWAN_IMAGE` | ~2.5 min for a stationary 101x101 wave field |
+| **OpenQuake** | seismic hazard (PSHA) | subprocess `run_oq.py` -> `oq engine` (exec_kind=exec) | `TRID3NT_OQ_BIN` (venv `oq`); one-time `oq engine --upgrade-db` on first run | ~41 s (SF Bay PGA, 475-yr return, 20 km grid, real-fault sources) |
+| **GeoClaw** | tsunami / dam-break inundation | docker `trid3nt-local/geoclaw:latest` (locally built; Clawpack 5.14 Fortran compiled into the image), `--network host`, deck pulled from MinIO via `--manifest-uri` | `TRID3NT_GEOCLAW_IMAGE` | ~40 s solve for a 30-min tsunami window, 2 AMR levels, 6 frames (the Fortran compile is baked into the image, not per-run) |
+| **SWAN** | spectral waves | docker `trid3nt-local/swan:latest` (locally built), same manifest pattern as GeoClaw | `TRID3NT_SWAN_IMAGE` | ~2.5 min for a stationary 101x101 wave field |
 | **pfdf debris flow** | post-fire debris-flow hazard | **in-process** `model_debris_flow` composer over the vendored `pfdf` 3.0.4 wheel (USGS Staley 2017 likelihood + Gartner 2014 volume + Cannon 2010 hazard class) | none (pfdf ships in the agent venv) | fast -- the AOI is clamped to <= 0.15 deg per side (`AoiTooLargeError`), keeping the 30 m watershed analysis to a few-hundred-pixel grid |
 
 Notes:
 
-- `GRACE2_SOLVER_BACKEND=local-docker` and `GRACE2_MODFLOW_LOCAL=1` are **independent gates**:
+- `TRID3NT_SOLVER_BACKEND=local-docker` and `TRID3NT_MODFLOW_LOCAL=1` are **independent gates**:
   MODFLOW checks its own flag first, so flipping the solver backend never affects it.
 - GeoClaw and SWAN containers reach MinIO at `127.0.0.1:9000` via `--network host`; their
   `build_argv` closure rewrites the staged `--run-id` to the launcher's ULID so container,

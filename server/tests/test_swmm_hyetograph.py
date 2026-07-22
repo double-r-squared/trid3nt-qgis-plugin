@@ -1,5 +1,5 @@
 """Unit tests for the Atlas-14 NESTED (alternating-block) hyetograph builder
-(sprint-16 P1, ``grace2_agent.workflows.swmm_hyetograph``).
+(sprint-16 P1, ``trid3nt_server.workflows.swmm_hyetograph``).
 
 The contract the SWMM engine relies on:
 1. **Mass conservation** — the per-interval depths integrate back to the input
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.workflows.swmm_hyetograph import (
+from trid3nt_server.workflows.swmm_hyetograph import (
     DEFAULT_NESTING_EXPONENT,
     build_nested_hyetograph,
 )

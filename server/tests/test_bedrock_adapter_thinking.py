@@ -31,8 +31,8 @@ from typing import Any
 
 import pytest
 
-from grace2_agent import bedrock_adapter as ba
-from grace2_agent.adapter import TextDeltaEvent
+from trid3nt_server import bedrock_adapter as ba
+from trid3nt_server.adapter import TextDeltaEvent
 
 
 # --------------------------------------------------------------------------- #

@@ -9,7 +9,7 @@ Covers the worker -> agent ``publish_manifest.json`` register-only handoff:
    stashes the data-driven legend keyed by that ``cog_uri`` (resolved from the
    agent style registry + ``band_stats``, NO COG read), mints ``layer_id`` =
    ``<stem>-<run_id>``, registers the COG, and surfaces the top-level metrics.
-   No tile server is needed - the old ``GRACE2_TILE_SERVER_BASE``
+   No tile server is needed - the old ``TRID3NT_TILE_SERVER_BASE``
    publish-or-honest-drop gate is GONE (nothing drops).
 3. ``read_publish_manifest`` returns the typed manifest when present + parses to
    schema 1, and ``None`` (the on-box fallback trigger) when absent / unknown.
@@ -27,14 +27,14 @@ import json
 
 import pytest
 
-from grace2_agent.tools import publish_layer as pl
-from grace2_agent.uri_registry import (
+from trid3nt_server.tools import publish_layer as pl
+from trid3nt_server.uri_registry import (
     SessionUriRegistry,
     activate_registry,
     deactivate_registry,
 )
-from grace2_agent.workflows import register_published_manifest as rpm
-from grace2_contracts.publish_manifest import (
+from trid3nt_server.workflows import register_published_manifest as rpm
+from trid3nt_contracts.publish_manifest import (
     MANIFEST_SCHEMA_VERSION,
     PublishManifest,
     parse_publish_manifest,
@@ -210,7 +210,7 @@ def test_register_manifest_layers_emits_raw_cog_uri_and_registers(
     monkeypatch, active_registry
 ):
     # No tile server anywhere: the TiTiler exit needs none.
-    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
+    monkeypatch.delenv("TRID3NT_TILE_SERVER_BASE", raising=False)
     m = parse_publish_manifest(json.dumps(_depth_manifest_dict()))
     res = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
 
@@ -256,14 +256,14 @@ def test_register_manifest_layers_emits_raw_cog_uri_and_registers(
 def test_register_manifest_layers_needs_no_tile_server(
     monkeypatch, active_registry
 ):
-    """The old GRACE2_TILE_SERVER_BASE publish-or-honest-drop gate is GONE:
+    """The old TRID3NT_TILE_SERVER_BASE publish-or-honest-drop gate is GONE:
     with AND without the env var the registration is identical (raw cog_uri),
     and nothing is ever dropped for lack of a tile server."""
     m = parse_publish_manifest(json.dumps(_depth_manifest_dict()))
 
-    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
+    monkeypatch.delenv("TRID3NT_TILE_SERVER_BASE", raising=False)
     res_without = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", _TILE_BASE)
+    monkeypatch.setenv("TRID3NT_TILE_SERVER_BASE", _TILE_BASE)
     res_with = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
 
     for res in (res_without, res_with):
@@ -279,7 +279,7 @@ def test_register_manifest_layers_needs_no_tile_server(
 def test_register_swan_wave_layers_carries_narration_scalars(
     monkeypatch, active_registry
 ):
-    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
+    monkeypatch.delenv("TRID3NT_TILE_SERVER_BASE", raising=False)
     m = parse_publish_manifest(json.dumps(_wave_manifest_dict()))
     layers, top_metrics, dropped = rpm.register_swan_wave_layers(
         m, run_id="WAVEWAVE", mode="stationary"
@@ -328,7 +328,7 @@ class _RR:
 
 
 def _patch_solver(monkeypatch, *, completion, manifest_bytes=None):
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.tools import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "runs")
     monkeypatch.setattr(
@@ -393,7 +393,7 @@ def test_read_publish_manifest_unknown_schema_returns_none(monkeypatch):
 def test_flood_scenario_branch_is_clean_if_else():
     """The register-only vs on-box fallback split is a clean if/else gated on a
     present manifest, and the heavy on-box steps sit under ``if not register_only``."""
-    import grace2_agent.workflows.model_flood_scenario as mfs
+    import trid3nt_server.workflows.model_flood_scenario as mfs
 
     body = inspect.getsource(mfs.model_flood_scenario)
     # The branch trigger.
@@ -409,7 +409,7 @@ def test_flood_scenario_branch_is_clean_if_else():
 def test_wave_scenario_branch_is_clean_if_else():
     """model_wave_scenario gains the same present-manifest register-only branch in
     front of the on-box download + postprocess_swan fallback."""
-    import grace2_agent.workflows.model_wave_scenario as mws
+    import trid3nt_server.workflows.model_wave_scenario as mws
 
     body = inspect.getsource(mws.model_wave_scenario)
     assert "manifest = await asyncio.to_thread(read_publish_manifest, run_result)" in body

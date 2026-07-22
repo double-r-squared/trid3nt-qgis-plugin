@@ -1,7 +1,7 @@
 # TRID3NT Local -- Models
 
 The LLM is pluggable through the OpenAI-compatible seam (`MODEL_PROVIDER=openai` +
-`GRACE2_OPENAI_BASE_URL`). This page records what has actually been measured locally: which
+`TRID3NT_OPENAI_BASE_URL`). This page records what has actually been measured locally: which
 models can drive the ~176-tool agent, why the default is what it is, and what the routing
 benchmarks say.
 
@@ -40,7 +40,7 @@ so there is room to go higher if you have the VRAM.
 
 Qwen3-family models default to **thinking mode**: all tokens stream to the reasoning channel,
 the OpenAI-compat content deltas arrive empty, and the turn renders no text in the chat.
-`.env.local` ships `GRACE2_OPENAI_EXTRA_SYSTEM=/no_think`, which the adapter appends to the
+`.env.local` ships `TRID3NT_OPENAI_EXTRA_SYSTEM=/no_think`, which the adapter appends to the
 system prompt to disable thinking. Keep it set for any Qwen3 model (it is a generic
 system-suffix seam -- harmless for models that ignore it).
 
@@ -54,7 +54,7 @@ ranked against the tool corpus (BM25 + name-substring + local dense embeddings, 
 RRF, reusing `discover_dataset`'s cached index) and only the top-K tools (plus a hot-set floor,
 union-ed monotonically per Case) are declared to the model.
 
-- `GRACE2_TOOL_RETRIEVAL=enforce`, `GRACE2_TOOL_RETRIEVAL_K=8` locally (code default K=25).
+- `TRID3NT_TOOL_RETRIEVAL=enforce`, `TRID3NT_TOOL_RETRIEVAL_K=8` locally (code default K=25).
 - **Fail-open**: a cold index, an error, or an empty ranking shows the full registry -- the
   layer can never hide every tool.
 - The index is warmed at startup (`asyncio.to_thread`); until the warm completes, retrieval
@@ -112,12 +112,12 @@ The seam makes experiments cheap:
 
 1. `ollama pull <model>`; if it is tool-capable, create a `num_ctx` variant (16384 minimum
    recommended) exactly as for qwen3.
-2. Set `GRACE2_OPENAI_MODEL` in `.env.local` and restart the agent.
+2. Set `TRID3NT_OPENAI_MODEL` in `.env.local` and restart the agent.
 3. Watch VRAM: on an 8 GB card, ~5 GB of Q4 weights + a 16k KV cache is about the ceiling
    (this is precisely why qwen3.5:9b at 6.6 GB failed the "fast" bar). Spill to CPU shows up
    as multi-minute turns, not errors.
 4. Re-run the harnesses to get numbers, not vibes: `scripts/tool_routing_bench.py`
    (15-prompt bench) and `scripts/tool_routing_sweep.py` (per-tool sweep, resumable), then
    `scripts/routing_failure_split.py` for the retrieval-vs-model split.
-5. Escape hatch: point `GRACE2_OPENAI_BASE_URL` + `GRACE2_OPENAI_API_KEY` at any cloud
+5. Escape hatch: point `TRID3NT_OPENAI_BASE_URL` + `TRID3NT_OPENAI_API_KEY` at any cloud
    OpenAI-compatible API when a local model is not cutting it. Same agent, same tools.

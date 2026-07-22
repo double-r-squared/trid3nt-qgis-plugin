@@ -1,19 +1,19 @@
-# Agent image -- the EXISTING grace2_agent WS server, containerized
+# Agent image -- the EXISTING trid3nt_server WS server, containerized
 # BYTE-IDENTICAL for the Fargate-per-session isolation foundation
 # (reports/design/agent_isolation_spike.md, verdict HYBRID_FARGATE_NOW).
 #
 # WHAT THIS IS: one container == one Python process == one user's session. The
-# image runs `grace2-agent` (== `grace2_agent.main:run` -> `server.run_server`)
+# image runs `trid3nt-server` (== `trid3nt_server.main:run` -> `server.run_server`)
 # UNCHANGED. The spike's whole point: today's accidental module-level
 # per-session sharing becomes REAL isolation by construction, because a per-
 # session Fargate task hosts exactly ONE session. No agent code changes.
 #
 # PORTS (honored by server.run_server, do NOT renumber):
-#   8765  WS server                (serve(...), server.py:9897; GRACE2_AGENT_PORT)
-#   8766  catalog + /api/health    (serve_catalog_http; GRACE2_AGENT_HTTP_PORT)
+#   8765  WS server                (serve(...), server.py:9897; TRID3NT_AGENT_PORT)
+#   8766  catalog + /api/health    (serve_catalog_http; TRID3NT_AGENT_HTTP_PORT)
 # The broker proxies the WSS to :8765 and the per-task idle reaper polls
 # :8766/api/health (the authoritative `busy` from is_busy()/liveness_snapshot()).
-# `server.run_server` already binds GRACE2_AGENT_HOST=0.0.0.0 (server.py:9844)
+# `server.run_server` already binds TRID3NT_AGENT_HOST=0.0.0.0 (server.py:9844)
 # so the container is reachable on its task ENI with no app rewrite.
 #
 # BASE CHOICE: ECR Public mirror of the Docker Official python image, NOT Docker
@@ -78,11 +78,11 @@ RUN pip install --upgrade pip setuptools wheel uv
 # worker images.
 #
 # LOCAL contracts package FIRST. server/pyproject.toml declares
-# ``grace2-contracts>=0.1,<0.2`` but that package is NOT on PyPI -- it lives in
+# ``trid3nt-contracts>=0.1,<0.2`` but that package is NOT on PyPI -- it lives in
 # this repo at contracts/ and is consumed verbatim (the on-box deploy,
 # scripts/deploy_agent_bundle.sh, bundles + installs it the same way). Install it
 # here BEFORE the agent so that when ``pip install /build/server`` resolves
-# its dependency set the grace2-contracts requirement is ALREADY satisfied by the
+# its dependency set the trid3nt-contracts requirement is ALREADY satisfied by the
 # locally-built 0.1.0 wheel (pip never reaches PyPI for an already-satisfied pin).
 # Copy ONLY the install inputs (pyproject + README + src) -- NOT the package's
 # .venv / .pytest_cache / egg-info -- so the build context layer stays slim.
@@ -107,12 +107,12 @@ RUN find /opt/venv -depth -type d -name '__pycache__' -exec rm -rf {} + \
 
 # --------------------------------------------------------------------------- #
 # Stage 2: runtime -- slim base + ONLY the venv (which contains the installed
-# grace2_agent package + all deps). No toolchain, no headers, no build context.
+# trid3nt_server package + all deps). No toolchain, no headers, no build context.
 # --------------------------------------------------------------------------- #
 FROM public.ecr.aws/docker/library/python:3.11-slim-bookworm AS runtime
 
 LABEL org.opencontainers.image.title="trid3nt-agent" \
-      org.opencontainers.image.description="Agent WS server (grace2_agent), containerized byte-identical for Fargate-per-session isolation. One container = one session. WS :8765, /api/health :8766. Runs grace2-agent (main:run -> server.run_server)." \
+      org.opencontainers.image.description="Agent WS server (trid3nt_server), containerized byte-identical for Fargate-per-session isolation. One container = one session. WS :8765, /api/health :8766. Runs trid3nt-server (main:run -> server.run_server)." \
       org.opencontainers.image.licenses="proprietary"
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -150,29 +150,29 @@ COPY services/workers /opt/venv/services/workers
 
 # Run as a non-root user (the EC2 systemd unit runs as root for the editable
 # /opt/grace2 mount; the container needs no host mount so it drops privileges).
-RUN useradd --create-home --uid 10001 grace2
-USER grace2
-WORKDIR /home/grace2
+RUN useradd --create-home --uid 10001 trid3nt
+USER trid3nt
+WORKDIR /home/trid3nt
 
 # --- Runtime env: CARRIED OVER from the live systemd unit (deploy facts) -------
-# These are the SAME values the box's systemd grace2-agent service sets. They are
+# These are the SAME values the box's systemd trid3nt-server service sets. They are
 # baked as honest defaults; the Fargate task definition
 # (infra/aws-agent-isolation/ecs.tf) overrides per-environment from variables so
 # a tfvars change never needs an image rebuild. Secrets (none here -- Bedrock/S3/
 # DynamoDB use the task IAM role, NOT keys) are never baked.
-ENV GRACE2_AGENT_HOST=0.0.0.0 \
-    GRACE2_AGENT_PORT=8765 \
-    GRACE2_AGENT_HTTP_PORT=8766 \
+ENV TRID3NT_AGENT_HOST=0.0.0.0 \
+    TRID3NT_AGENT_PORT=8765 \
+    TRID3NT_AGENT_HTTP_PORT=8766 \
     MODEL_PROVIDER=bedrock \
-    GRACE2_AWS_REGION=us-west-2 \
+    TRID3NT_AWS_REGION=us-west-2 \
     AWS_REGION=us-west-2 \
-    GRACE2_PERSISTENCE_BACKEND=dynamodb \
-    GRACE2_DYNAMO_TABLE_PREFIX=grace2_ \
-    GRACE2_STORAGE_BACKEND=s3 \
-    GRACE2_CACHE_BUCKET=trid3nt-cache \
-    GRACE2_RUNS_BUCKET=trid3nt-runs \
-    GRACE2_COGNITO_USER_POOL_ID=us-west-2_mIpKrr727 \
-    GRACE2_COGNITO_CLIENT_ID=43ovkrtt97oh6gsnl006aecera
+    TRID3NT_PERSISTENCE_BACKEND=dynamodb \
+    TRID3NT_DYNAMO_TABLE_PREFIX=grace2_ \
+    TRID3NT_STORAGE_BACKEND=s3 \
+    TRID3NT_CACHE_BUCKET=trid3nt-cache \
+    TRID3NT_RUNS_BUCKET=trid3nt-runs \
+    TRID3NT_COGNITO_USER_POOL_ID=us-west-2_mIpKrr727 \
+    TRID3NT_COGNITO_CLIENT_ID=43ovkrtt97oh6gsnl006aecera
 
 # WS server + catalog/health. The broker proxies to 8765; the idle reaper polls
 # 8766/api/health.
@@ -182,11 +182,11 @@ EXPOSE 8765 8766
 # session-busy signal stays /api/health on 8766, polled by the idle reaper; this
 # is only "is the process serving"). python over curl -> no extra OS dep.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
-    CMD python -c "import urllib.request,os; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('GRACE2_AGENT_HTTP_PORT','8766')+'/api/health', timeout=4)" || exit 1
+    CMD python -c "import urllib.request,os; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('TRID3NT_AGENT_HTTP_PORT','8766')+'/api/health', timeout=4)" || exit 1
 
-# Entrypoint = the console script (pyproject [project.scripts] grace2-agent =
-# grace2_agent.main:run), identical to what the systemd ExecStart runs.
-ENTRYPOINT ["grace2-agent"]
+# Entrypoint = the console script (pyproject [project.scripts] trid3nt-server =
+# trid3nt_server.main:run), identical to what the systemd ExecStart runs.
+ENTRYPOINT ["trid3nt-server"]
 CMD []
 
 # --------------------------------------------------------------------------- #

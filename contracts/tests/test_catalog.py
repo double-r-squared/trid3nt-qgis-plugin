@@ -37,18 +37,18 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import ws
-from grace2_contracts.catalog import CatalogEntry
-from grace2_contracts.collections import (
+from trid3nt_contracts import ws
+from trid3nt_contracts.catalog import CatalogEntry
+from trid3nt_contracts.collections import (
     CATALOG_AUDIT_LOG_INDEXES,
     CATALOG_ENTRIES_INDEXES,
     MONGO_DUMP_KWARGS,
     CatalogAuditLogDocument,
     CatalogEntryDocument,
 )
-from grace2_contracts.common import new_ulid
-from grace2_contracts.export_schemas import export
-from grace2_contracts.ws import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.export_schemas import export
+from trid3nt_contracts.ws import (
     CatalogAdditionResponsePayload,
     OfferCatalogAdditionPayload,
     ProbeFindings,

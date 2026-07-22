@@ -67,7 +67,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.elmfire.deck_builder")
+LOG = logging.getLogger("trid3nt.worker.elmfire.deck_builder")
 
 # --------------------------------------------------------------------------- #
 # Constants.

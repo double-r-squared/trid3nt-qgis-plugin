@@ -18,15 +18,15 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     CASES_COLLECTION,
     CHAT_COLLECTION,
     Persistence,
 )
-from grace2_agent.pipeline_emitter import PipelineEmitter
-from grace2_contracts.case import CaseSummary
-from grace2_contracts.common import new_ulid, now_utc
-from grace2_contracts.collections import ProjectLayerSummary
+from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_contracts.case import CaseSummary
+from trid3nt_contracts.common import new_ulid, now_utc
+from trid3nt_contracts.collections import ProjectLayerSummary
 
 
 class FakeMCPClient:

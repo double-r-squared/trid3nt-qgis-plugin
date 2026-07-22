@@ -21,8 +21,8 @@ import rasterio  # noqa: E402
 from rasterio.transform import from_bounds  # noqa: E402
 from rasterio.warp import Resampling  # noqa: E402
 
-from grace2_agent.workflows import cog_io  # noqa: E402
-from grace2_agent.workflows.cog_io import CogIoError  # noqa: E402
+from trid3nt_server.workflows import cog_io  # noqa: E402
+from trid3nt_server.workflows.cog_io import CogIoError  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #
@@ -186,8 +186,8 @@ def test_upload_s3_uses_content_type_when_set(tmp_path: Path) -> None:
     cog.write_bytes(b"tiff")
     fake_client = MagicMock()
     with (
-        patch("grace2_agent.tools.cache.storage_scheme", return_value="s3"),
-        patch("grace2_agent.tools.solver._get_s3_client", return_value=fake_client),
+        patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
+        patch("trid3nt_server.tools.solver._get_s3_client", return_value=fake_client),
     ):
         uri = cog_io.upload_cog(
             cog, "run1", "bkt", dest_filename="d.tif", content_type="image/tiff"
@@ -203,8 +203,8 @@ def test_upload_s3_omits_content_type_when_none(tmp_path: Path) -> None:
     cog.write_bytes(b"tiff")
     fake_client = MagicMock()
     with (
-        patch("grace2_agent.tools.cache.storage_scheme", return_value="s3"),
-        patch("grace2_agent.tools.solver._get_s3_client", return_value=fake_client),
+        patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
+        patch("trid3nt_server.tools.solver._get_s3_client", return_value=fake_client),
     ):
         cog_io.upload_cog(
             cog, "run1", "bkt", dest_filename="d.tif", content_type=None
@@ -217,11 +217,11 @@ def test_upload_s3_missing_bucket_raises_upload(tmp_path: Path) -> None:
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")
     with (
-        patch("grace2_agent.tools.cache.storage_scheme", return_value="s3"),
+        patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
         patch.dict("os.environ", {}, clear=False),
     ):
         # ensure no env bucket leaks in
-        with patch.dict("os.environ", {"GRACE2_RUNS_BUCKET": ""}, clear=False):
+        with patch.dict("os.environ", {"TRID3NT_RUNS_BUCKET": ""}, clear=False):
             with pytest.raises(CogIoError) as ei:
                 cog_io.upload_cog(cog, "run1", None, dest_filename="d.tif")
     assert ei.value.stage == "UPLOAD"
@@ -233,8 +233,8 @@ def test_upload_s3_put_failure_raises_upload(tmp_path: Path) -> None:
     fake_client = MagicMock()
     fake_client.put_object.side_effect = RuntimeError("boom")
     with (
-        patch("grace2_agent.tools.cache.storage_scheme", return_value="s3"),
-        patch("grace2_agent.tools.solver._get_s3_client", return_value=fake_client),
+        patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
+        patch("trid3nt_server.tools.solver._get_s3_client", return_value=fake_client),
     ):
         with pytest.raises(CogIoError) as ei:
             cog_io.upload_cog(cog, "r", "bkt", dest_filename="d.tif")
@@ -245,8 +245,8 @@ def test_upload_gs_no_bucket_with_fallback_returns_file_uri(tmp_path: Path) -> N
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")
     with (
-        patch("grace2_agent.tools.cache.storage_scheme", return_value="gs"),
-        patch.dict("os.environ", {"GRACE2_RUNS_BUCKET": ""}, clear=False),
+        patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"),
+        patch.dict("os.environ", {"TRID3NT_RUNS_BUCKET": ""}, clear=False),
     ):
         uri = cog_io.upload_cog(
             cog, "r", None, dest_filename="d.tif",
@@ -262,7 +262,7 @@ def test_upload_gs_fsspec_failure_no_fallback_raises(tmp_path: Path) -> None:
     fake_fsspec = MagicMock()
     fake_fsspec.filesystem.return_value.put.side_effect = RuntimeError("gcs down")
     with (
-        patch("grace2_agent.tools.cache.storage_scheme", return_value="gs"),
+        patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"),
         patch.dict("sys.modules", {"fsspec": fake_fsspec}),
     ):
         with pytest.raises(CogIoError) as ei:
@@ -279,7 +279,7 @@ def test_upload_gs_fsspec_failure_with_fallback_returns_file(tmp_path: Path) -> 
     fake_fsspec = MagicMock()
     fake_fsspec.filesystem.return_value.put.side_effect = RuntimeError("gcs down")
     with (
-        patch("grace2_agent.tools.cache.storage_scheme", return_value="gs"),
+        patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"),
         patch.dict("sys.modules", {"fsspec": fake_fsspec}),
     ):
         uri = cog_io.upload_cog(

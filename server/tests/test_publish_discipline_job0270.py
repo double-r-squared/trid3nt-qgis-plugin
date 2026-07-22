@@ -34,14 +34,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import GeminiSettings
-from grace2_contracts import new_ulid
+from trid3nt_server.adapter import GeminiSettings
+from trid3nt_contracts import new_ulid
 
 
 @pytest.fixture(scope="module", autouse=True)
 def _populate_registry() -> None:
     """The full registry must be loaded so compute_colored_relief is real."""
-    from grace2_agent.main import _import_tools_registry
+    from trid3nt_server.main import _import_tools_registry
 
     _import_tools_registry()
 
@@ -110,8 +110,8 @@ async def _drive_loop(turn_chunks: list[list[Any]], fake_invoke) -> tuple[list[l
 
     Returns (contents captured per Gemini call, fake socket, session state).
     """
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     turn_responses = iter([iter(chunks) for chunks in turn_chunks])
     contents_per_turn: list[list[Any]] = []
@@ -152,7 +152,7 @@ async def test_first_call_to_real_non_hot_set_tool_dispatches() -> None:
     """Gemini's FIRST call to compute_colored_relief (real tool, outside the
     hot set) must dispatch — no OUT_OF_ALLOWED_SET bounce, no detour turns.
     This is the demo7/demo8 failure mode, inverted."""
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     dispatch_log: list[str] = []
 
@@ -240,7 +240,7 @@ async def test_layer_producing_tool_response_carries_publish_instruction() -> No
     """The function_response for a layer-producing tool must tell Gemini the
     layer is NOT on the map yet and to call publish_layer with the handle —
     the demo8 publish-omission fix."""
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     async def _fake_invoke(_ws, state, name, args):
         result = {

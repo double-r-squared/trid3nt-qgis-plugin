@@ -29,8 +29,8 @@ import pytest
 pytest.importorskip("xarray")
 pytest.importorskip("pyproj")
 
-from grace2_agent.tools import export_case_to_qgis as export_mod
-from grace2_agent.tools.export_case_to_qgis import export_case_to_qgis
+from trid3nt_server.tools import export_case_to_qgis as export_mod
+from trid3nt_server.tools.export_case_to_qgis import export_case_to_qgis
 
 pytestmark = pytest.mark.asyncio
 
@@ -125,7 +125,7 @@ def _plume_layer(name: str, run_id: str, filename: str = "plume_concentration_43
 
 def _titiler_flood_layer(name: str, run_id: str, filename: str = "flood_depth_peak.tif") -> dict[str, Any]:
     """A flood-depth layer shaped EXACTLY like a real persisted case layer
-    (data/persistence/grace2_dev/projects.json): ``uri`` is the TiTiler
+    (data/persistence/trid3nt_dev/projects.json): ``uri`` is the TiTiler
     ``/cog/tiles/`` DISPLAY template with the actual ``s3://`` object
     percent-encoded in its ``url=`` query param, not a raw ``s3://`` uri."""
     from urllib.parse import quote

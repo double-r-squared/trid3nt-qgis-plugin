@@ -2,15 +2,15 @@
 
 Bypasses the LLM/agent layer entirely:
   1. Builds a sustainable_yield GWF-only deck for Fresno CA using flopy
-  2. Runs mf6 locally (GRACE2_MF6_BIN)
+  2. Runs mf6 locally (TRID3NT_MF6_BIN)
   3. Postprocesses drawdown -> COG in MinIO (trid3nt-runs bucket)
-  4. Publishes TiTiler tile URL if GRACE2_TILE_SERVER_BASE is set
+  4. Publishes TiTiler tile URL if TRID3NT_TILE_SERVER_BASE is set
   5. Prints the DrawdownLayerURI JSON + the MinIO object path
 
 Run:
   cd /home/nate/Documents/trid3nt-local
   env $(grep -v '^#' .env.local | xargs) \
-    GRACE2_MODFLOW_LOCAL=1 \
+    TRID3NT_MODFLOW_LOCAL=1 \
     PYTHONPATH=server/src:contracts/src \
     venvs/agent/bin/python scripts/run_modflow_direct.py
 """
@@ -35,13 +35,13 @@ log = logging.getLogger("run_modflow_direct")
 # Validate environment
 # ---------------------------------------------------------------------------
 
-MF6 = os.environ.get("GRACE2_MF6_BIN", "mf6")
+MF6 = os.environ.get("TRID3NT_MF6_BIN", "mf6")
 if not Path(MF6).is_file():
     # Try PATH
     import shutil
     found = shutil.which(MF6)
     if not found:
-        log.error("mf6 binary not found: GRACE2_MF6_BIN=%s", MF6)
+        log.error("mf6 binary not found: TRID3NT_MF6_BIN=%s", MF6)
         sys.exit(1)
     MF6 = found
 log.info("mf6 binary: %s", MF6)
@@ -60,7 +60,7 @@ WELL_LON = FRESNO_LON
 
 log.info("importing gwt_adapter (flopy) ...")
 try:
-    from grace2_agent.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.run_modflow import build_modflow_deck
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
     sys.exit(1)
@@ -116,12 +116,12 @@ log.info("postprocessing drawdown ...")
 from unittest.mock import patch
 
 # We need boto3 pointing at MinIO.  The env vars set:
-#   AWS_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, GRACE2_RUNS_BUCKET
+#   AWS_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, TRID3NT_RUNS_BUCKET
 # boto3 honors AWS_ENDPOINT_URL natively -- no patching needed.
-from grace2_agent.workflows import postprocess_modflow as pp
+from trid3nt_server.workflows import postprocess_modflow as pp
 
 # For MinIO we need the bucket to exist; create it via boto3 if missing.
-runs_bucket = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+runs_bucket = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 import boto3
 
 s3 = boto3.client(
@@ -203,7 +203,7 @@ result = {
     "model_crs": deck.model_crs,
     "cog_s3_uri": cog_s3_uri,
     "cog_local": cog_local,
-    "tile_server_base": os.environ.get("GRACE2_TILE_SERVER_BASE", "http://127.0.0.1:8080"),
+    "tile_server_base": os.environ.get("TRID3NT_TILE_SERVER_BASE", "http://127.0.0.1:8080"),
 }
 
 artifacts_path = PROOF_DIR / "artifacts.txt"

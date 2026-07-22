@@ -7,8 +7,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.common import new_ulid
-from grace2_contracts.event import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.event import (
     AdminUnit,
     ClaimSet,
     EventLocation,

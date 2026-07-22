@@ -22,7 +22,7 @@ from typing import Any
 
 from . import cog as _cog
 
-LOG = logging.getLogger("grace2.worker.raster_postprocess.sfincs_reader")
+LOG = logging.getLogger("trid3nt.worker.raster_postprocess.sfincs_reader")
 
 #: Style preset KEYS the agent's ``_TITILER_STYLE_REGISTRY`` resolves to a
 #: (rescale, colormap). The worker references the KEY only; it never owns the
@@ -32,7 +32,7 @@ WAVE_HEIGHT_STYLE_PRESET = "continuous_wave_height"
 
 #: Upper bound on per-frame COGs (agent ``MAX_FLOOD_FRAMES`` parity). Driven per
 #: run from the WORKER Batch env so the #154 granularity gate still controls it.
-MAX_FLOOD_FRAMES: int = int(os.environ.get("GRACE2_MAX_FLOOD_FRAMES", "144"))
+MAX_FLOOD_FRAMES: int = int(os.environ.get("TRID3NT_MAX_FLOOD_FRAMES", "144"))
 
 #: SnapWave significant-wave-height variable selection order (agent parity).
 WAVE_HEIGHT_VARIABLES: tuple[str, ...] = ("hm0", "hm0ig")

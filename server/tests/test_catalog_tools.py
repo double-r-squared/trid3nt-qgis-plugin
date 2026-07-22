@@ -21,16 +21,16 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import catalog as catalog_mod
-from grace2_agent.tools import ogc_adapter as ogc_mod
-from grace2_agent.tools.catalog import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import catalog as catalog_mod
+from trid3nt_server.tools import ogc_adapter as ogc_mod
+from trid3nt_server.tools.catalog import (
     CatalogNotFoundError,
     catalog_fetch,
     catalog_search,
     load_catalog,
 )
-from grace2_agent.tools.ogc_adapter import (
+from trid3nt_server.tools.ogc_adapter import (
     OGCAdapterError,
     OGCResponse,
     fetch_ogc_layer,
@@ -96,7 +96,7 @@ def fake_storage_patched(monkeypatch):
     ``s3://`` URIs and reads/writes ``fake.store`` (keyed by object KEY), so the
     cache hit/miss/write assertions hold without touching the network.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -733,7 +733,7 @@ def test_fetch_landcover_routes_through_generic_ogc_adapter(monkeypatch):
     a future refactor can't accidentally fork the WCS implementation
     without this test catching it.
     """
-    from grace2_agent.tools import data_fetch
+    from trid3nt_server.tools import data_fetch
 
     captured: dict = {}
 

@@ -27,9 +27,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import fetch_copernicus_dem as cop_mod
-from grace2_agent.tools.fetch_copernicus_dem import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
+from trid3nt_server.tools.fetch_copernicus_dem import (
     _METADATA,
     _NODATA,
     _STYLE_PRESET,
@@ -56,7 +56,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,
@@ -359,7 +359,7 @@ def test_distinct_bbox_distinct_cache_key() -> None:
 
 def test_fetch_dem_source_copernicus_delegates_to_impl() -> None:
     """``fetch_dem(source="copernicus")`` routes to the shared GLO-30 impl."""
-    from grace2_agent.tools.data_fetch import fetch_dem
+    from trid3nt_server.tools.data_fetch import fetch_dem
 
     sentinel = object()
     with patch.object(cop_mod, "_copernicus_dem_impl", return_value=sentinel) as spy:
@@ -370,12 +370,12 @@ def test_fetch_dem_source_copernicus_delegates_to_impl() -> None:
 
 def test_fetch_dem_default_source_does_not_touch_copernicus() -> None:
     """The default 3DEP path never delegates to the Copernicus impl."""
-    from grace2_agent.tools.data_fetch import fetch_dem
+    from trid3nt_server.tools.data_fetch import fetch_dem
 
     with patch.object(cop_mod, "_copernicus_dem_impl") as spy:
-        with patch("grace2_agent.tools.data_fetch._fetch_3dep_dem_bytes",
+        with patch("trid3nt_server.tools.data_fetch._fetch_3dep_dem_bytes",
                    return_value=b"dem"), \
-             patch("grace2_agent.tools.data_fetch.read_through") as rt:
+             patch("trid3nt_server.tools.data_fetch.read_through") as rt:
             from types import SimpleNamespace
             rt.return_value = SimpleNamespace(uri="s3://c/dem.tif", data=b"dem", hit=False)
             fetch_dem((-82.0, 26.0, -81.9, 26.1), resolution_m=10)

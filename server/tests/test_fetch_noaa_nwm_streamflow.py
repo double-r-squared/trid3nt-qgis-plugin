@@ -8,7 +8,7 @@ Coverage (no network needed):
 - estimate_payload_mb returns the expected shape (positive float).
 - Synthetic feature_id → streamflow lookup parsing.
 
-Live tests (gated by GRACE2_TEST_LIVE_NWM=1):
+Live tests (gated by TRID3NT_TEST_LIVE_NWM=1):
 - Real fetch over a small Fort Myers bbox: confirms NLDI returns COMIDs,
   matches them to streamflow values, and emits a non-empty FlatGeobuf.
 """
@@ -23,9 +23,9 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.cache import compute_cache_key
-from grace2_agent.tools.fetch_noaa_nwm_streamflow import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.cache import compute_cache_key
+from trid3nt_server.tools.fetch_noaa_nwm_streamflow import (
     _CONUS_BBOX,
     _METADATA,
     _parse_valid_time,
@@ -50,7 +50,7 @@ _PINNED_NOW = datetime(2026, 6, 9, 12, 0, 0, tzinfo=timezone.utc)
 # Fort Myers / Caloosahatchee bbox (~1.5° wide for plenty of NLDI hits).
 _FORT_MYERS_BBOX: tuple[float, float, float, float] = (-82.0, 26.4, -81.7, 26.7)
 
-_LIVE_NWM = os.environ.get("GRACE2_TEST_LIVE_NWM") == "1"
+_LIVE_NWM = os.environ.get("TRID3NT_TEST_LIVE_NWM") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +255,7 @@ def test_empty_errors_not_retryable():
 
 @pytest.mark.skipif(
     not _LIVE_NWM,
-    reason="set GRACE2_TEST_LIVE_NWM=1 to run live NWM fetch + NLDI join",
+    reason="set TRID3NT_TEST_LIVE_NWM=1 to run live NWM fetch + NLDI join",
 )
 def test_live_fetch_fort_myers_returns_streamflow():
     """End-to-end live fetch: NWM netCDF + NLDI bbox sample → FlatGeobuf with rows.
@@ -264,7 +264,7 @@ def test_live_fetch_fort_myers_returns_streamflow():
     netCDF + NLDI fetch path.
     """
     from unittest.mock import patch
-    from grace2_agent.tools.fetch_noaa_nwm_streamflow import (
+    from trid3nt_server.tools.fetch_noaa_nwm_streamflow import (
         _fetch_nwm_streamflow_bytes,
     )
 

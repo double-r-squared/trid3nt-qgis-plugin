@@ -17,19 +17,19 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_contracts.tool_registry import AtomicToolMetadata
-from grace2_agent import tools as agent_tools
-from grace2_agent.tools import get_registered_tools
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.tools import get_registered_tools
 
 # Force-import modules that are NOT in the __init__.py eager-import list but
 # whose tools are in scope for annotation coverage. These are loaded by the
 # agent service at startup via server.py / main.py but not by the package
 # __init__.py. Import them here so the live registry is fully populated.
-import grace2_agent.tools.catalog  # noqa: F401 — registers catalog_search + catalog_fetch
-import grace2_agent.tools.data_fetch  # noqa: F401 — registers fetch_dem, fetch_buildings, etc.
-import grace2_agent.tools.publish_layer  # noqa: F401 — registers publish_layer
-import grace2_agent.tools.solver  # noqa: F401 — registers run_solver + wait_for_completion
-import grace2_agent.tools.qgis_discovery  # noqa: F401 — registers list_qgis_algorithms + describe_qgis_algorithm
+import trid3nt_server.tools.catalog  # noqa: F401 — registers catalog_search + catalog_fetch
+import trid3nt_server.tools.data_fetch  # noqa: F401 — registers fetch_dem, fetch_buildings, etc.
+import trid3nt_server.tools.publish_layer  # noqa: F401 — registers publish_layer
+import trid3nt_server.tools.solver  # noqa: F401 — registers run_solver + wait_for_completion
+import trid3nt_server.tools.qgis_discovery  # noqa: F401 — registers list_qgis_algorithms + describe_qgis_algorithm
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +294,7 @@ def test_atomic_tool_metadata_annotation_defaults():
 
 def test_register_tool_annotation_kwargs_override_defaults(empty_registry):
     """Annotation kwargs passed at decorator time override schema defaults."""
-    from grace2_agent.tools import register_tool
+    from trid3nt_server.tools import register_tool
 
     md = AtomicToolMetadata(
         name="test_write_tool",

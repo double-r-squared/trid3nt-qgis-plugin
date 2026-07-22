@@ -38,13 +38,13 @@ import json
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent import tools as agent_tools
-from grace2_agent.persistence import make_file_persistence
-from grace2_agent.tools import RegisteredTool
-from grace2_contracts.case import CaseCommandEnvelopePayload, CaseSummary
-from grace2_contracts.common import new_ulid, now_utc
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server import server
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.persistence import make_file_persistence
+from trid3nt_server.tools import RegisteredTool
+from trid3nt_contracts.case import CaseCommandEnvelopePayload, CaseSummary
+from trid3nt_contracts.common import new_ulid, now_utc
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 FAKE_TOOL = "job0267_fake_tool"
 FAILING_TOOL = "job0267_failing_tool"
@@ -398,7 +398,7 @@ async def test_no_tool_card_write_without_active_case(
     state = server.SessionState(session_id=new_ulid())
     assert state.active_case_id is None
     await server._invoke_tool_via_emitter(ws, state, FAKE_TOOL, {})
-    chat_file = tmp_path / "grace2_dev" / "case_chat_messages.json"
+    chat_file = tmp_path / "trid3nt_dev" / "case_chat_messages.json"
     assert (not chat_file.exists()) or chat_file.read_text().strip() in ("{}", "")
 
 
@@ -418,7 +418,7 @@ async def test_rehydrated_stream_orders_by_created_at(file_persistence) -> None:
     base = now_utc()
     from datetime import timedelta
 
-    from grace2_contracts.case import CaseChatMessage, ToolCardRecord
+    from trid3nt_contracts.case import CaseChatMessage, ToolCardRecord
 
     def _row(role, content, offset_s, card=None):
         return CaseChatMessage(
@@ -616,7 +616,7 @@ async def test_e2e_full_turn_replays_complete_stream(
 # --------------------------------------------------------------------------- #
 
 
-from grace2_agent.adapter import (  # noqa: E402 — grouped with the job-0315 test
+from trid3nt_server.adapter import (  # noqa: E402 — grouped with the job-0315 test
     FunctionCallEvent,
     GeminiSettings,
     TextDeltaEvent,
@@ -630,7 +630,7 @@ async def _drive_real_stream(ws, state, turn_events):
     so tool-card rows persist mid-turn (the whole point of the interleave)."""
     from unittest.mock import patch
 
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     turns = iter(turn_events)
 

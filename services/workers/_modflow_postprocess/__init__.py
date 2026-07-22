@@ -9,7 +9,7 @@ the agent collapses to "read a thin manifest, publish the COG, register the laye
 
 Hard constraints (mirroring ``_raster_postprocess``):
 
-  * AGENT-IMPORT-FREE -- never imports ``grace2_agent.*``. The COG write is
+  * AGENT-IMPORT-FREE -- never imports ``trid3nt_server.*``. The COG write is
     rasterio-only; the manifest reuses the engine-agnostic
     ``services.workers._raster_postprocess`` helpers.
   * Pure + unit-testable -- runs against synthetic deck outputs with no Batch/S3.

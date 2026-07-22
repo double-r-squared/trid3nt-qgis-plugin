@@ -38,8 +38,8 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.extract_landcover_class import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.extract_landcover_class import (
     LandcoverClassError,
     extract_landcover_class,
 )
@@ -405,7 +405,7 @@ def test_cache_miss_hit_skips_recompute():
         call_count = [0]
 
         # Wrap the inner extractor to count invocations.
-        from grace2_agent.tools import extract_landcover_class as mod
+        from trid3nt_server.tools import extract_landcover_class as mod
 
         real_extract = mod._extract_mask_bytes
 
@@ -515,7 +515,7 @@ def test_returns_layer_uri_fields():
 
 def test_cache_keys_vary_across_params():
     """Same uri but different classes / bbox produce distinct cache keys."""
-    from grace2_agent.tools.cache import compute_cache_key
+    from trid3nt_server.tools.cache import compute_cache_key
 
     base_uri = "gs://bucket/landcover.tif"
     combos = [
@@ -545,12 +545,12 @@ def test_cache_keys_vary_across_params():
 # Test 11 — LIVE (env-guarded): Fort Myers NLCD water mask, geography check
 # ---------------------------------------------------------------------------
 
-_LIVE_LANDCOVER = bool(os.environ.get("GRACE2_TEST_LIVE_LANDCOVER"))
+_LIVE_LANDCOVER = bool(os.environ.get("TRID3NT_TEST_LIVE_LANDCOVER"))
 
 
 @pytest.mark.skipif(
     not _LIVE_LANDCOVER,
-    reason="set GRACE2_TEST_LIVE_LANDCOVER=1 to run live Fort Myers NLCD test",
+    reason="set TRID3NT_TEST_LIVE_LANDCOVER=1 to run live Fort Myers NLCD test",
 )
 def test_live_fortmyers_water_mask(tmp_path):
     """Live extract of class=[11] from the Fort Myers cached NLCD COG.
@@ -571,7 +571,7 @@ def test_live_fortmyers_water_mask(tmp_path):
     # Source counts: read class-11 pixel count directly from the NLCD COG.
     from rasterio.io import MemoryFile
 
-    from grace2_agent.tools.cache import read_object_bytes_s3
+    from trid3nt_server.tools.cache import read_object_bytes_s3
 
     with MemoryFile(read_object_bytes_s3(nlcd_uri)) as _mf, _mf.open() as src:
         src_arr = src.read(1)

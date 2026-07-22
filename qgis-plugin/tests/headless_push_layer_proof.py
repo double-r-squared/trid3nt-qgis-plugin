@@ -4,7 +4,7 @@ Proves the FULL plugin-side flow -- temp export -> upload POST ->
 ingest POST -> success note -- by driving the REAL, unmodified
 ``push_layer.py`` (``push_exported_file`` / ``format_push_note``) against a
 STUB HTTP server that mirrors the two agent routes' real contracts
-(``server/src/grace2_agent/tool_catalog_http.py``):
+(``server/src/trid3nt_server/tool_catalog_http.py``):
 
     POST /api/ingest-layer-file?filename=<name>  (raw octet-stream body)
       -> 200 {"s3_uri": "s3://..."}

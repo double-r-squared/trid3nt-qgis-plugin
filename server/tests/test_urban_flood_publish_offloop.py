@@ -28,9 +28,9 @@ import math
 import time
 from contextlib import asynccontextmanager
 
-from grace2_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
-from grace2_agent.tools.publish_layer import PublishLayerError
-from grace2_agent.workflows import model_urban_flood_swmm as M
+from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
+from trid3nt_server.tools.publish_layer import PublishLayerError
+from trid3nt_server.workflows import model_urban_flood_swmm as M
 
 
 # --------------------------------------------------------------------------- #
@@ -281,7 +281,7 @@ def _install_pyswmm_free_chain(monkeypatch, *, solve_fn=None, n_buildings_droppe
 def test_full_composer_publishes_peak_and_frames(monkeypatch):
     """End to end (pyswmm-free): the returned peak + all emitted frames carry
     published http URLs; publish_layer fired peak + per-frame."""
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     _staging, pub_calls = _install_pyswmm_free_chain(monkeypatch)
 
@@ -331,13 +331,13 @@ def test_completion_log_surfaces_n_buildings_dropped(monkeypatch, caplog):
     obstacle count from BuildResult), distinct from n_buildings_affected."""
     import logging
 
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     _install_pyswmm_free_chain(monkeypatch, n_buildings_dropped=7)
 
     fake = _FakeEmitter()
     token = pe._CURRENT_EMITTER.set(fake)
-    caplog.set_level(logging.INFO, logger="grace2_agent.workflows.model_urban_flood_swmm")
+    caplog.set_level(logging.INFO, logger="trid3nt_server.workflows.model_urban_flood_swmm")
     try:
         run_args = SWMMRunArgs(bbox=(-88.0, 36.0, -87.99, 36.01))
         asyncio.run(
@@ -365,7 +365,7 @@ def test_completion_log_surfaces_n_buildings_dropped(monkeypatch, caplog):
 def test_returned_peak_name_surfaces_obstacles(monkeypatch):
     """When buildings were dropped as obstacles, the returned peak's NAME carries
     the obstacle count so it is VISIBLE in the LayerPanel / narration."""
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     _install_pyswmm_free_chain(monkeypatch, n_buildings_dropped=3)
 
@@ -395,7 +395,7 @@ def test_returned_peak_name_unchanged_when_no_obstacles(monkeypatch):
     obstacle suffix), and the completion log shows n_buildings_dropped=0."""
     import logging
 
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     _install_pyswmm_free_chain(monkeypatch, n_buildings_dropped=0)
 
@@ -407,7 +407,7 @@ def test_returned_peak_name_unchanged_when_no_obstacles(monkeypatch):
         def emit(self, record):  # noqa: ANN001
             caplog_msgs.append(record.getMessage())
 
-    lg = logging.getLogger("grace2_agent.workflows.model_urban_flood_swmm")
+    lg = logging.getLogger("trid3nt_server.workflows.model_urban_flood_swmm")
     handler = _H()
     lg.addHandler(handler)
     prev_level = lg.level
@@ -460,7 +460,7 @@ def test_emitted_zoom_to_and_peak_bbox_use_the_floored_aoi(monkeypatch):
     so the drawn rectangle the user sees == the sim/DEM/mesh extent and a
     re-entry snaps to the floored extent (not the collapsed geocode bbox).
     """
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     _install_pyswmm_free_chain(monkeypatch)
 
@@ -503,7 +503,7 @@ def test_emitted_zoom_to_and_peak_bbox_use_the_floored_aoi(monkeypatch):
 def test_full_composer_peak_drop_keeps_metrics(monkeypatch):
     """If publish fails for the peak, the composer still RETURNS a peak with the
     narration scalars (raw s3://) - the dispatch guardrail handles the map drop."""
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     _staging, _ = _install_pyswmm_free_chain(monkeypatch)
 
@@ -536,7 +536,7 @@ def test_solve_runs_off_the_event_loop(monkeypatch):
     """BREAK B: the synchronous solve runs OFF the loop (asyncio.to_thread), so a
     concurrent keepalive coroutine keeps ticking DURING the solve. If the solve
     ran inline on the loop, the keepalive would be starved (0 ticks)."""
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     SOLVE_SECONDS = 0.6
     TICK_INTERVAL = 0.02

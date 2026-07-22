@@ -6,7 +6,7 @@ Three layers, mirroring the single-species contamination + archetype tests:
     reads each (reusing the single-species concentration reader), and returns one
     ``PlumeLayerURI`` per species  -  exercised on SYNTHETIC ucn files (a fake
     HeadFile-backed dir) AND on a REAL local mf6 run when the binary is available
-    (``GRACE2_MODFLOW_LOCAL=1`` + ``GRACE2_MF6_BIN``; the gap-closer for the N-GWT
+    (``TRID3NT_MODFLOW_LOCAL=1`` + ``TRID3NT_MF6_BIN``; the gap-closer for the N-GWT
     binary path).
 
   * ``normalize_species_list`` honesty gates: empty / malformed / duplicate /
@@ -31,16 +31,16 @@ from typing import Any
 
 import pytest
 
-from grace2_contracts.modflow_contracts import (
+from trid3nt_contracts.modflow_contracts import (
     MultiSpeciesPlumeResult,
     PlumeLayerURI,
     SpeciesSpec,
 )
 
-from grace2_agent.tools import RegisteredTool, TOOL_REGISTRY
-from grace2_agent.workflows import postprocess_modflow as pp
-from grace2_agent.workflows import model_multi_species_scenario as ms
-from grace2_agent.workflows.model_multi_species_scenario import (
+from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY
+from trid3nt_server.workflows import postprocess_modflow as pp
+from trid3nt_server.workflows import model_multi_species_scenario as ms
+from trid3nt_server.workflows.model_multi_species_scenario import (
     MultiSpeciesInputError,
     MultiSpeciesResult,
     MultiSpeciesScenarioError,
@@ -57,7 +57,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _find_mf6() -> str | None:
-    env = os.environ.get("GRACE2_MF6_BIN")
+    env = os.environ.get("TRID3NT_MF6_BIN")
     if env and Path(env).exists():
         return env
     on_path = shutil.which("mf6")
@@ -97,7 +97,7 @@ def _fake_geocode(query: str, **_: Any) -> dict[str, Any]:
 def _install_fake_tool(name: str, fn: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     existing = TOOL_REGISTRY.get(name)
     if existing is None:
-        from grace2_agent.tools.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
+        from trid3nt_server.tools.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
 
         metadata = _RUN_MODFLOW_JOB_METADATA
     else:
@@ -275,7 +275,7 @@ def test_postprocess_multi_species_real_mf6(monkeypatch, tmp_path: Path) -> None
     # The agent re-export inserts the worker dir into sys.path lazily (so flopy is
     # only imported when a MODFLOW tool runs) - use it instead of importing the
     # bare ``gwt_adapter`` module (which is not on the path by default).
-    from grace2_agent.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.run_modflow import build_modflow_deck
 
     d = build_modflow_deck(
         workdir=tmp_path,
@@ -366,7 +366,7 @@ async def test_composer_full_chain_two_plumes(
             ]
         )
 
-    import grace2_agent.tools.run_modflow_multi_species_tool as tool
+    import trid3nt_server.tools.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _fake_run)
 
@@ -400,7 +400,7 @@ async def test_composer_surfaces_run_error_dict(
             "error_message": "no non-trivial plume for any species",
         }
 
-    import grace2_agent.tools.run_modflow_multi_species_tool as tool
+    import trid3nt_server.tools.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _err_run)
 
@@ -430,7 +430,7 @@ async def test_wrapper_missing_species_returns_user_input_required(
 
 
 def test_composer_registered_uncacheable() -> None:
-    import grace2_agent.tools  # noqa: F401 - fire registration
+    import trid3nt_server.tools  # noqa: F401 - fire registration
 
     entry = TOOL_REGISTRY.get("run_model_multi_species_scenario")
     assert entry is not None
@@ -440,6 +440,6 @@ def test_composer_registered_uncacheable() -> None:
 
 
 def test_composer_in_hazard_modeling_category() -> None:
-    from grace2_agent.categories import tools_for_category
+    from trid3nt_server.categories import tools_for_category
 
     assert "run_model_multi_species_scenario" in tools_for_category("hazard_modeling")

@@ -41,7 +41,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     FunctionCallEvent,
     GeminiSettings,
     MAX_TURN_ITERATIONS,
@@ -52,7 +52,7 @@ from grace2_agent.adapter import (
     stream_events_with_contents,
     summarize_tool_result,
 )
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
 
 # ---------------------------------------------------------------------------
@@ -271,8 +271,8 @@ async def test_stream_gemini_reply_multi_turn_loop():
             the geocode result — now reachable because the category is open.
     Turn 4: Gemini emits a final narrative text and stops.
     """
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     # Four pre-canned Gemini turns.  Each turn returns one chunk.
     turn1_chunk = _make_fake_chunk_with_function_call(
@@ -455,8 +455,8 @@ async def test_stream_gemini_reply_multi_turn_loop():
 @pytest.mark.asyncio
 async def test_stream_gemini_reply_tool_error_does_not_kill_loop():
     """Dispatch error is summarized into the function_response; loop continues."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "fetch_dem", {"bbox": [-82.0, 26.5, -81.7, 26.8]}, "call-dem"
@@ -499,8 +499,8 @@ async def test_stream_gemini_reply_tool_error_does_not_kill_loop():
 @pytest.mark.asyncio
 async def test_stream_gemini_reply_caps_runaway_loop():
     """A Gemini that emits a function_call every turn is fail-stopped at the cap."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     # Generator that always returns one chunk asking for another tool call.
     def _infinite_calls():
@@ -539,7 +539,7 @@ async def test_stream_gemini_reply_caps_runaway_loop():
     # tool+args (identical fetch_dem), so the LOOP WATCHDOG trips at
     # loop_repeat_n() rounds - well before the historical MAX_TURN_ITERATIONS
     # cap. (A varied-tool runaway hits the step cap instead - next test.)
-    from grace2_agent.runaway_guard import loop_repeat_n
+    from trid3nt_server.runaway_guard import loop_repeat_n
 
     assert dispatch_count <= loop_repeat_n(), (
         f"identical-repeat runaway not watchdog-capped: {dispatch_count} "
@@ -598,8 +598,8 @@ async def test_stream_segments_interleave_distinct_message_ids():
     """text -> tool -> text -> tool -> text emits THREE distinct bubble ids, each
     non-terminal segment finalized (done=True) BEFORE its round's tool frames,
     and no id ever receives an empty-only done=True without prior text."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     # Round 1: narrate then call geocode. Round 2: narrate then call publish.
     # Round 3: narrate, no call (terminal).
@@ -704,8 +704,8 @@ async def test_stream_no_leading_text_before_first_tool_no_empty_bubble():
     """Round 1 = function_call ONLY (no text), round 2 = text. Exactly ONE
     message_id appears across all agent frames (the tool round mints nothing),
     and it carries exactly one done=True."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     turn1 = iter([
         _make_fake_chunk_with_function_call(
@@ -750,8 +750,8 @@ async def test_stream_multiple_calls_one_round_single_finalize():
     """Round 1 = text + TWO function_calls in ONE generation, round 2 = text.
     Exactly TWO distinct bubbles (one contiguous run each), one done=True per
     id, and BOTH tool dispatches occur between the two bubbles' frames."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     turn1 = iter([
         _make_fake_chunk_with_text("Fetching both. "),
@@ -895,8 +895,8 @@ async def test_turn_survives_client_ws_close_mid_dispatch():
     """The client socket dies WHILE a tool runs: the tool result still feeds
     back to the model, the closing narration still persists, and neither an
     LLM_UNAVAILABLE error nor a terminal-failure card is produced."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     turn1 = _make_fake_chunk_with_function_call(
         "fetch_esri_landcover_10m", {"year": "2023"}, "call-lc"
@@ -963,8 +963,8 @@ async def test_turn_survives_client_ws_close_mid_dispatch():
 async def test_client_close_is_not_reported_as_llm_unavailable():
     """Backstop branch: a ConnectionClosed that still escapes into the
     stream-failure handler logs only -- no error envelope, no failure card."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     fake_client = MagicMock()
 
@@ -999,8 +999,8 @@ async def test_client_close_is_not_reported_as_llm_unavailable():
 async def test_genuine_model_failure_still_reports_llm_unavailable():
     """Contrast guard: a REAL model error still surfaces LLM_UNAVAILABLE +
     the persisted terminal-failure card (the separation is not overbroad)."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     fake_client = MagicMock()
 

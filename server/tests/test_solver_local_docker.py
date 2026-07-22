@@ -20,7 +20,7 @@ Coverage maps to the kickoff §4 test list:
 2.  local-docker ``run_solver``: manifest staged from S3 (legacy ``gs_uri``
     field name carrying ``s3://`` VALUES — resolved by scheme), docker
     launched detached with ``--rm --name <run_id> -v <rundir>:/data -w
-    /data $GRACE2_SFINCS_IMAGE``, ExecutionHandle returned immediately.
+    /data $TRID3NT_SFINCS_IMAGE``, ExecutionHandle returned immediately.
 3.  Supervisor writes the EXACT entrypoint.py completion.json schema —
     ok, error, and cancel paths — and uploads outputs + stdout/stderr.
 4.  ``wait_for_completion``: happy / timeout / error; cancel chain =
@@ -44,8 +44,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-import grace2_agent.tools.solver as solver_mod
-from grace2_agent.tools.solver import (
+import trid3nt_server.tools.solver as solver_mod
+from trid3nt_server.tools.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     SOLVER_BACKEND_LOCAL_DOCKER,
     SolverDispatchError,
@@ -56,7 +56,7 @@ from grace2_agent.tools.solver import (
     solver_backend,
     wait_for_completion,
 )
-from grace2_contracts.execution import ExecutionHandle, RunResult
+from trid3nt_contracts.execution import ExecutionHandle, RunResult
 
 # --------------------------------------------------------------------------- #
 # Fakes — boto3-shaped S3 client + legacy GCS client + docker PATH shim
@@ -121,12 +121,12 @@ class FakeGCSClient:
         return _FakeGCSBucket(self._buckets.get(name, {}))
 
 
-#: PATH-shim fake docker. Behaviors via $GRACE2_FAKE_DOCKER_STATE/behavior:
+#: PATH-shim fake docker. Behaviors via $TRID3NT_FAKE_DOCKER_STATE/behavior:
 #: ok (write outputs, exit 0) | fail (stderr, exit 2) | hang (exec sleep 300).
 #: ``docker kill <name>`` kills the run-mode shim via its pidfile.
 _DOCKER_SHIM = r"""#!/usr/bin/env bash
 set -u
-state_dir="${GRACE2_FAKE_DOCKER_STATE:?GRACE2_FAKE_DOCKER_STATE not set}"
+state_dir="${TRID3NT_FAKE_DOCKER_STATE:?TRID3NT_FAKE_DOCKER_STATE not set}"
 printf '%s\n' "$*" >> "$state_dir/calls.log"
 mode="$1"; shift
 if [ "$mode" = "kill" ]; then
@@ -203,7 +203,7 @@ def docker_shim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     state_dir = tmp_path / "docker-state"
     state_dir.mkdir()
     monkeypatch.setenv("PATH", f"{shim_dir}:{os.environ.get('PATH', '')}")
-    monkeypatch.setenv("GRACE2_FAKE_DOCKER_STATE", str(state_dir))
+    monkeypatch.setenv("TRID3NT_FAKE_DOCKER_STATE", str(state_dir))
     return state_dir
 
 
@@ -211,10 +211,10 @@ def docker_shim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def local_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """The local-docker env matrix the kickoff names."""
     runs_dir = tmp_path / "runs"
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
-    monkeypatch.setenv("GRACE2_RUNS_DIR", str(runs_dir))
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
-    monkeypatch.setenv("GRACE2_SFINCS_IMAGE", "fake/sfincs-cpu:test")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(runs_dir))
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
+    monkeypatch.setenv("TRID3NT_SFINCS_IMAGE", "fake/sfincs-cpu:test")
     return runs_dir
 
 
@@ -276,11 +276,11 @@ def test_solver_backend_is_always_local_docker(
 ) -> None:
     # The AWS Batch (and legacy GCP) dispatch arms are removed: this build is
     # local-docker-only, so solver_backend() ALWAYS resolves to local-docker
-    # regardless of GRACE2_SOLVER_BACKEND (the env read is gone).
-    monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+    # regardless of TRID3NT_SOLVER_BACKEND (the env read is gone).
+    monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
     assert solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
     for val in ("aws-batch", "gcp-workflows", "gcp-workflows-someday", "local-docker"):
-        monkeypatch.setenv("GRACE2_SOLVER_BACKEND", val)
+        monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", val)
         assert solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 
 
@@ -292,14 +292,14 @@ def test_solver_backend_is_always_local_docker(
 def test_local_run_solver_requires_runs_bucket(
     reset_seams, local_env, docker_shim, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No GCP-named default on AWS: a missing GRACE2_RUNS_BUCKET fails loudly."""
-    monkeypatch.delenv("GRACE2_RUNS_BUCKET", raising=False)
+    """No GCP-named default on AWS: a missing TRID3NT_RUNS_BUCKET fails loudly."""
+    monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
     s3 = FakeS3Client()
     set_s3_client(s3)
     uri = _seed_manifest(s3)
     with pytest.raises(SolverDispatchError) as exc_info:
         run_solver(solver="sfincs", model_setup_uri=uri)
-    assert "GRACE2_RUNS_BUCKET" in str(exc_info.value)
+    assert "TRID3NT_RUNS_BUCKET" in str(exc_info.value)
 
 
 def test_local_run_solver_rejects_plain_path(reset_seams, local_env, docker_shim) -> None:
@@ -312,7 +312,7 @@ def test_local_run_solver_stages_manifest_and_launches_docker(
     reset_seams, local_env: Path, docker_shim: Path
 ) -> None:
     """The headline: manifest read from S3 (boto3 seam), every ``inputs[]``
-    object staged into ``$GRACE2_RUNS_DIR/<run_id>/`` (legacy ``gs_uri``
+    object staged into ``$TRID3NT_RUNS_DIR/<run_id>/`` (legacy ``gs_uri``
     field name, s3:// VALUES resolved by scheme), docker launched detached
     with the kickoff argv shape, ExecutionHandle returned immediately."""
     s3 = FakeS3Client()
@@ -592,21 +592,21 @@ async def test_local_wait_emits_progress_via_emitter_binding(
 
 
 def test_default_setup_uri_is_scheme_aware(monkeypatch: pytest.MonkeyPatch) -> None:
-    from grace2_agent.workflows.sfincs_builder import _default_setup_uri
+    from trid3nt_server.workflows.sfincs_builder import _default_setup_uri
 
     # GCP is decommissioned: the setup URI is always s3:// regardless of any
-    # GRACE2_STORAGE_BACKEND override (the gs legacy seam is gone).
-    monkeypatch.delenv("GRACE2_STORAGE_BACKEND", raising=False)
-    monkeypatch.setenv("GRACE2_CACHE_BUCKET", "cache-bkt")
+    # TRID3NT_STORAGE_BACKEND override (the gs legacy seam is gone).
+    monkeypatch.delenv("TRID3NT_STORAGE_BACKEND", raising=False)
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "cache-bkt")
     assert _default_setup_uri((0, 0, 1, 1)).startswith(
         "s3://cache-bkt/cache/static-30d/sfincs_setup/"
     )
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
     uri = _default_setup_uri((0, 0, 1, 1))
     assert uri.startswith("s3://cache-bkt/cache/static-30d/sfincs_setup/")
     assert uri.endswith("/manifest.json")
     # A stray legacy override no longer resurrects gs:// — S3-only.
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "gcs")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "gcs")
     assert _default_setup_uri((0, 0, 1, 1)).startswith(
         "s3://cache-bkt/cache/static-30d/sfincs_setup/"
     )
@@ -615,17 +615,17 @@ def test_default_setup_uri_is_scheme_aware(monkeypatch: pytest.MonkeyPatch) -> N
 def test_build_sfincs_model_uploads_deck_via_boto3_under_s3(
     reset_seams, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Under GRACE2_STORAGE_BACKEND=s3 the deck + manifest upload goes via
+    """Under TRID3NT_STORAGE_BACKEND=s3 the deck + manifest upload goes via
     boto3 (NOT fsspec/s3fs) and the manifest's legacy-named ``gs_uri``
     fields carry ``s3://.../deck/...`` values the local-docker staging can
     resolve by scheme."""
-    from grace2_agent.workflows.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs_builder import (
         BuildOptions,
         ForcingSpec,
         build_sfincs_model,
     )
 
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
     s3 = FakeS3Client()
     set_s3_client(s3)
 
@@ -673,15 +673,15 @@ def test_build_sfincs_model_uploads_deck_via_boto3_under_s3(
             clear=False,
         ),
         patch(
-            "grace2_agent.workflows.sfincs_builder._extract_unique_nlcd_classes",
+            "trid3nt_server.workflows.sfincs_builder._extract_unique_nlcd_classes",
             return_value={11},
         ),
         patch(
-            "grace2_agent.workflows.sfincs_builder._stage_gcs_local",
+            "trid3nt_server.workflows.sfincs_builder._stage_gcs_local",
             side_effect=lambda uri: uri,
         ),
         patch(
-            "grace2_agent.workflows.sfincs_builder._default_setup_uri",
+            "trid3nt_server.workflows.sfincs_builder._default_setup_uri",
             return_value=fixed_manifest_uri,
         ),
     ):
@@ -717,7 +717,7 @@ def test_stage_gcs_local_handles_s3_uri(reset_seams) -> None:
     """HydroMT catalog staging resolves s3:// via the boto3 seam (job-0291)."""
     import uuid
 
-    from grace2_agent.workflows.sfincs_builder import _stage_gcs_local
+    from trid3nt_server.workflows.sfincs_builder import _stage_gcs_local
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -732,7 +732,7 @@ def test_stage_gcs_local_handles_s3_uri(reset_seams) -> None:
 
 
 def test_to_vsigs_maps_s3_to_vsis3() -> None:
-    from grace2_agent.workflows.sfincs_builder import _to_vsigs
+    from trid3nt_server.workflows.sfincs_builder import _to_vsigs
 
     assert _to_vsigs("s3://bkt/key.tif") == "/vsis3/bkt/key.tif"
     assert _to_vsigs("/vsis3/bkt/key.tif") == "/vsis3/bkt/key.tif"
@@ -747,7 +747,7 @@ def test_to_vsigs_maps_s3_to_vsis3() -> None:
 
 
 def test_postprocess_resolves_s3_run_output_via_boto3(reset_seams) -> None:
-    from grace2_agent.workflows.postprocess_flood import _resolve_run_output_to_local
+    from trid3nt_server.workflows.postprocess_flood import _resolve_run_output_to_local
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -761,7 +761,7 @@ def test_postprocess_resolves_s3_run_output_via_boto3(reset_seams) -> None:
 
 
 def test_postprocess_s3_read_failure_is_typed(reset_seams) -> None:
-    from grace2_agent.workflows.postprocess_flood import (
+    from trid3nt_server.workflows.postprocess_flood import (
         PostprocessError,
         _resolve_run_output_to_local,
     )
@@ -775,7 +775,7 @@ def test_postprocess_s3_read_failure_is_typed(reset_seams) -> None:
 def test_postprocess_cog_upload_scheme_aware(
     reset_seams, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from grace2_agent.workflows.postprocess_flood import (
+    from trid3nt_server.workflows.postprocess_flood import (
         PostprocessError,
         _upload_cog_to_runs_bucket,
     )
@@ -785,29 +785,29 @@ def test_postprocess_cog_upload_scheme_aware(
     s3 = FakeS3Client()
     set_s3_client(s3)
 
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
     dest = _upload_cog_to_runs_bucket(cog, "RUNX")
     assert dest == "s3://test-runs-bucket/RUNX/flood_depth_peak.tif"
     assert s3.objects[("test-runs-bucket", "RUNX/flood_depth_peak.tif")] == b"COG_BYTES"
 
     # No GCP-named default on AWS: missing bucket env is a typed failure.
-    monkeypatch.delenv("GRACE2_RUNS_BUCKET", raising=False)
+    monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
     with pytest.raises(PostprocessError) as exc_info:
         _upload_cog_to_runs_bucket(cog, "RUNX")
     assert exc_info.value.error_code == "COG_UPLOAD_FAILED"
-    assert "GRACE2_RUNS_BUCKET" in str(exc_info.value)
+    assert "TRID3NT_RUNS_BUCKET" in str(exc_info.value)
 
 
 def test_composer_default_runs_prefix_scheme_aware(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from grace2_agent.workflows.model_flood_scenario import _default_runs_prefix
+    from trid3nt_server.workflows.model_flood_scenario import _default_runs_prefix
 
     # Local-only slim: the fallback always mints the honest s3:// shape the
     # local-docker solver writes under -- never a fabricated gs:// URI.
-    monkeypatch.delenv("GRACE2_STORAGE_BACKEND", raising=False)
-    monkeypatch.delenv("GRACE2_RUNS_BUCKET", raising=False)
+    monkeypatch.delenv("TRID3NT_STORAGE_BACKEND", raising=False)
+    monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
     assert _default_runs_prefix("R1") == "s3://trid3nt-runs/R1/"
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
     assert _default_runs_prefix("R1") == "s3://test-runs-bucket/R1/"

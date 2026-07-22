@@ -13,15 +13,15 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import ws
-from grace2_contracts.chart_contracts import ChartEmissionPayload
-from grace2_contracts.common import GraceModel, new_ulid
-from grace2_contracts.region_choice import (
+from trid3nt_contracts import ws
+from trid3nt_contracts.chart_contracts import ChartEmissionPayload
+from trid3nt_contracts.common import GraceModel, new_ulid
+from trid3nt_contracts.region_choice import (
     RegionCandidate,
     RegionChoiceProvidedEnvelopePayload,
     RegionChoiceRequestEnvelopePayload,
 )
-from grace2_contracts.sandbox_contracts import (
+from trid3nt_contracts.sandbox_contracts import (
     CodeExecRequestPayload,
     CodeExecResultPayload,
 )
@@ -29,19 +29,19 @@ from grace2_contracts.sandbox_contracts import (
 # Re-export the secrets payloads onto ``ws`` so the inline lambdas below stay
 # tidy; the per-module accessors are also still exposed for direct import.
 ws.SecretAddEnvelopePayload = ws.SecretAddEnvelopePayload if hasattr(ws, "SecretAddEnvelopePayload") else __import__(
-    "grace2_contracts.secrets", fromlist=["SecretAddEnvelopePayload"]
+    "trid3nt_contracts.secrets", fromlist=["SecretAddEnvelopePayload"]
 ).SecretAddEnvelopePayload
 ws.SecretRevokeEnvelopePayload = ws.SecretRevokeEnvelopePayload if hasattr(ws, "SecretRevokeEnvelopePayload") else __import__(
-    "grace2_contracts.secrets", fromlist=["SecretRevokeEnvelopePayload"]
+    "trid3nt_contracts.secrets", fromlist=["SecretRevokeEnvelopePayload"]
 ).SecretRevokeEnvelopePayload
 ws.SecretsListEnvelopePayload = ws.SecretsListEnvelopePayload if hasattr(ws, "SecretsListEnvelopePayload") else __import__(
-    "grace2_contracts.secrets", fromlist=["SecretsListEnvelopePayload"]
+    "trid3nt_contracts.secrets", fromlist=["SecretsListEnvelopePayload"]
 ).SecretsListEnvelopePayload
 ws.CredentialRequestEnvelopePayload = ws.CredentialRequestEnvelopePayload if hasattr(ws, "CredentialRequestEnvelopePayload") else __import__(
-    "grace2_contracts.secrets", fromlist=["CredentialRequestEnvelopePayload"]
+    "trid3nt_contracts.secrets", fromlist=["CredentialRequestEnvelopePayload"]
 ).CredentialRequestEnvelopePayload
 ws.CredentialProvidedEnvelopePayload = ws.CredentialProvidedEnvelopePayload if hasattr(ws, "CredentialProvidedEnvelopePayload") else __import__(
-    "grace2_contracts.secrets", fromlist=["CredentialProvidedEnvelopePayload"]
+    "trid3nt_contracts.secrets", fromlist=["CredentialProvidedEnvelopePayload"]
 ).CredentialProvidedEnvelopePayload
 
 
@@ -273,7 +273,7 @@ def test_spatial_input_response_barriers_feed_swmm_contract(session_id: str) -> 
     """The ``role == "barrier"`` subset of a vector_draw reply is field-for-field
     the tagged-LineString FeatureCollection SWMMRunArgs.barriers accepts — i.e.
     the drawn result round-trips straight into the urban engine seam."""
-    from grace2_contracts.swmm_contracts import SWMMRunArgs
+    from trid3nt_contracts.swmm_contracts import SWMMRunArgs
 
     fc = _vector_draw_feature_collection()
     barrier_fc = {

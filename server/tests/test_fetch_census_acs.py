@@ -28,8 +28,8 @@ import tempfile
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_census_acs import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_census_acs import (
     ACS_VARIABLES,
     CensusACSInputError,
     _compute_value,

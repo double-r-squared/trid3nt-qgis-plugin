@@ -15,10 +15,10 @@ Coverage:
 - Cache key collapses str("American alligator") and int(name-resolved-id) onto
   the same path (cache-key uses resolved int per audit.md).
 - Empty quality-grade=any vs research distinct cache paths.
-- Live test (env GRACE2_TEST_LIVE_INAT=1) over manatee + FL Gulf bbox returns
+- Live test (env TRID3NT_TEST_LIVE_INAT=1) over manatee + FL Gulf bbox returns
   ≥1 feature whose coordinates fall inside the bbox.
 
-Live network tests are gated by ``GRACE2_TEST_LIVE_INAT=1``.
+Live network tests are gated by ``TRID3NT_TEST_LIVE_INAT=1``.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_inaturalist_observations import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_inaturalist_observations import (
     INatError,
     INatInputError,
     INatUpstreamError,
@@ -58,7 +58,7 @@ _FL_GULF_BBOX = (-82.4, 26.4, -81.7, 26.9)
 # Everglades / Big Cypress bbox — alligator habitat for live verification.
 _EVERGLADES_BBOX = (-81.5, 25.5, -80.5, 26.5)
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_INAT") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_INAT") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -392,10 +392,10 @@ def test_happy_path_200_records_writes_fgb_with_points_inside_bbox():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page1))
 
     with patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -452,10 +452,10 @@ def test_pagination_walks_until_total_results_exhausted():
         return c
 
     with patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -486,10 +486,10 @@ def test_max_records_caps_fetch():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page))
 
     with patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_inaturalist_observations(
@@ -520,10 +520,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page))
 
     with patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -546,10 +546,10 @@ def test_cache_hit_skips_fetch_fn():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page))
 
     with patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -582,10 +582,10 @@ def test_cache_key_collapses_name_and_resolved_id():
         return _FakeHttpxClient(next_response)
 
     with patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_name = fetch_inaturalist_observations(
@@ -611,10 +611,10 @@ def test_quality_grade_changes_cache_path():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page))
 
     with patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_research = fetch_inaturalist_observations(
@@ -649,10 +649,10 @@ def test_observations_http_error_surfaces_upstream_error():
         return _FakeHttpxClient(make_bad_response)
 
     with patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), pytest.raises(INatUpstreamError):
         fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -663,7 +663,7 @@ def test_observations_http_error_surfaces_upstream_error():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_INAT=1 to enable")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_INAT=1 to enable")
 def test_live_alligator_everglades_returns_geographically_valid_points():
     """Live: American alligator over Everglades returns ≥1 feature whose
     coordinates fall inside the requested bbox (geographic-correctness check,
@@ -673,7 +673,7 @@ def test_live_alligator_everglades_returns_geographically_valid_points():
     bbox = _EVERGLADES_BBOX
 
     with patch(
-        "grace2_agent.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_inaturalist_observations(

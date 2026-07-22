@@ -104,7 +104,7 @@ def no_gcs_cache(monkeypatch):
     Patches read_through to call fetch_fn directly and wrap the result as a
     ReadThroughResult so all tool code works without a GCS bucket.
     """
-    from grace2_agent.tools import cache as cache_module
+    from trid3nt_server.tools import cache as cache_module
 
     class _FakeResult:
         def __init__(self, data: bytes) -> None:
@@ -126,7 +126,7 @@ def no_gcs_cache(monkeypatch):
 class TestSummarizeRaster:
     def test_basic_stats(self, tmp_path):
         """Known 3x3 raster yields correct min/max/mean/sum/count."""
-        from grace2_agent.tools.analytical_qa import summarize_layer_statistics
+        from trid3nt_server.tools.analytical_qa import summarize_layer_statistics
 
         arr = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], dtype=np.float32)
         path = _make_raster(tmp_path, arr)
@@ -146,7 +146,7 @@ class TestSummarizeRaster:
 
     def test_nodata_excluded(self, tmp_path):
         """Nodata pixels are excluded from all statistics."""
-        from grace2_agent.tools.analytical_qa import summarize_layer_statistics
+        from trid3nt_server.tools.analytical_qa import summarize_layer_statistics
 
         arr = np.array([[1.0, -9999.0, 3.0]], dtype=np.float32)
         path = _make_raster(tmp_path, arr, nodata=-9999.0)
@@ -159,7 +159,7 @@ class TestSummarizeRaster:
 
     def test_all_nodata_returns_zero_count(self, tmp_path):
         """All-nodata raster returns count=0 and None statistics."""
-        from grace2_agent.tools.analytical_qa import summarize_layer_statistics
+        from trid3nt_server.tools.analytical_qa import summarize_layer_statistics
 
         arr = np.full((3, 3), -9999.0, dtype=np.float32)
         path = _make_raster(tmp_path, arr, nodata=-9999.0)
@@ -175,7 +175,7 @@ class TestSummarizeRaster:
 
     def test_distribution_10_bins(self, tmp_path):
         """Histogram always has exactly 10 bins."""
-        from grace2_agent.tools.analytical_qa import summarize_layer_statistics
+        from trid3nt_server.tools.analytical_qa import summarize_layer_statistics
 
         arr = np.linspace(0, 100, 100, dtype=np.float32).reshape(10, 10)
         path = _make_raster(tmp_path, arr)
@@ -192,7 +192,7 @@ class TestSummarizeRaster:
 
     def test_provenance_fields(self, tmp_path):
         """Result always carries layer_uri and computed_at."""
-        from grace2_agent.tools.analytical_qa import summarize_layer_statistics
+        from trid3nt_server.tools.analytical_qa import summarize_layer_statistics
 
         arr = np.ones((2, 2), dtype=np.float32)
         path = _make_raster(tmp_path, arr)
@@ -212,7 +212,7 @@ class TestSummarizeRaster:
 class TestSummarizeVector:
     def test_basic_vector_stats(self, tmp_path):
         """Feature count and per-attribute summary for a simple GeoJSON."""
-        from grace2_agent.tools.analytical_qa import summarize_layer_statistics
+        from trid3nt_server.tools.analytical_qa import summarize_layer_statistics
 
         records = [
             {"x": 0.1, "y": 0.1, "value": 10.0, "label": "a"},
@@ -238,7 +238,7 @@ class TestSummarizeVector:
 
     def test_empty_vector_returns_zero_count(self, tmp_path):
         """Empty GeoJSON feature collection returns feature_count=0."""
-        from grace2_agent.tools.analytical_qa import summarize_layer_statistics
+        from trid3nt_server.tools.analytical_qa import summarize_layer_statistics
 
         fc = {"type": "FeatureCollection", "features": []}
         path = str(tmp_path / "empty.geojson")
@@ -260,7 +260,7 @@ class TestSummarizeVector:
 class TestCountFeaturesAboveThreshold:
     def test_basic_count(self, tmp_path):
         """Count features where value >= 15 in a 3-feature layer."""
-        from grace2_agent.tools.analytical_qa import count_features_above_threshold
+        from trid3nt_server.tools.analytical_qa import count_features_above_threshold
 
         records = [
             {"x": 0.1, "y": 0.1, "damage": 5.0},
@@ -282,7 +282,7 @@ class TestCountFeaturesAboveThreshold:
 
     def test_threshold_inclusive(self, tmp_path):
         """Threshold comparison is >= (inclusive)."""
-        from grace2_agent.tools.analytical_qa import count_features_above_threshold
+        from trid3nt_server.tools.analytical_qa import count_features_above_threshold
 
         records = [
             {"x": 0.1, "y": 0.1, "v": 10.0},
@@ -299,7 +299,7 @@ class TestCountFeaturesAboveThreshold:
 
     def test_zero_count_not_an_error(self, tmp_path):
         """No features above threshold returns count=0, total=N."""
-        from grace2_agent.tools.analytical_qa import count_features_above_threshold
+        from trid3nt_server.tools.analytical_qa import count_features_above_threshold
 
         records = [
             {"x": 0.1, "y": 0.1, "v": 1.0},
@@ -316,7 +316,7 @@ class TestCountFeaturesAboveThreshold:
 
     def test_property_not_found_raises(self, tmp_path):
         """Missing property raises AnalyticalQAError with PROPERTY_NOT_FOUND."""
-        from grace2_agent.tools.analytical_qa import (
+        from trid3nt_server.tools.analytical_qa import (
             count_features_above_threshold,
             AnalyticalQAError,
         )
@@ -334,7 +334,7 @@ class TestCountFeaturesAboveThreshold:
 
     def test_all_features_above_threshold(self, tmp_path):
         """count == total when all features are above threshold."""
-        from grace2_agent.tools.analytical_qa import count_features_above_threshold
+        from trid3nt_server.tools.analytical_qa import count_features_above_threshold
 
         records = [
             {"x": 0.1, "y": 0.1, "v": 100.0},
@@ -374,7 +374,7 @@ class TestAggregatePropertyWithinZone:
 
     def test_sum_aggregation(self, tmp_path):
         """sum aggregation includes only in-zone features."""
-        from grace2_agent.tools.analytical_qa import aggregate_property_within_zone
+        from trid3nt_server.tools.analytical_qa import aggregate_property_within_zone
 
         value_path, zone_path = self._make_zone_and_points(tmp_path)
 
@@ -394,7 +394,7 @@ class TestAggregatePropertyWithinZone:
 
     def test_mean_aggregation(self, tmp_path):
         """mean aggregation returns the average of in-zone feature values."""
-        from grace2_agent.tools.analytical_qa import aggregate_property_within_zone
+        from trid3nt_server.tools.analytical_qa import aggregate_property_within_zone
 
         value_path, zone_path = self._make_zone_and_points(tmp_path)
 
@@ -410,7 +410,7 @@ class TestAggregatePropertyWithinZone:
 
     def test_max_aggregation(self, tmp_path):
         """max aggregation returns the maximum of in-zone feature values."""
-        from grace2_agent.tools.analytical_qa import aggregate_property_within_zone
+        from trid3nt_server.tools.analytical_qa import aggregate_property_within_zone
 
         value_path, zone_path = self._make_zone_and_points(tmp_path)
 
@@ -426,7 +426,7 @@ class TestAggregatePropertyWithinZone:
 
     def test_no_features_in_zone_returns_zero_sum(self, tmp_path):
         """When no features fall inside the zone, sum returns 0."""
-        from grace2_agent.tools.analytical_qa import aggregate_property_within_zone
+        from trid3nt_server.tools.analytical_qa import aggregate_property_within_zone
 
         # Zone covers [10, 11] x [10, 11] — none of our points are there.
         zone_ring = [[10.0, 10.0], [11.0, 10.0], [11.0, 11.0], [10.0, 11.0]]
@@ -450,7 +450,7 @@ class TestAggregatePropertyWithinZone:
 
     def test_property_not_found_raises(self, tmp_path):
         """Missing property raises AnalyticalQAError with PROPERTY_NOT_FOUND."""
-        from grace2_agent.tools.analytical_qa import (
+        from trid3nt_server.tools.analytical_qa import (
             aggregate_property_within_zone,
             AnalyticalQAError,
         )
@@ -472,7 +472,7 @@ class TestAggregatePropertyWithinZone:
 
     def test_provenance_fields(self, tmp_path):
         """Result carries value_layer_uri, zone_layer_uri, computed_at."""
-        from grace2_agent.tools.analytical_qa import aggregate_property_within_zone
+        from trid3nt_server.tools.analytical_qa import aggregate_property_within_zone
 
         value_path, zone_path = self._make_zone_and_points(tmp_path)
 
@@ -496,7 +496,7 @@ class TestAggregatePropertyWithinZone:
 class TestRegistration:
     def test_all_three_tools_in_tool_registry(self):
         """All three analytical Q&A tools must appear in TOOL_REGISTRY."""
-        from grace2_agent.tools import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         for name in (
             "summarize_layer_statistics",
@@ -507,7 +507,7 @@ class TestRegistration:
 
     def test_metadata_ttl_class(self):
         """All three tools have ttl_class='dynamic-1h' and cacheable=True."""
-        from grace2_agent.tools import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         for name in (
             "summarize_layer_statistics",
@@ -524,7 +524,7 @@ class TestRegistration:
 
     def test_read_only_hint(self):
         """All three tools declare read_only_hint=True."""
-        from grace2_agent.tools import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         for name in (
             "summarize_layer_statistics",
@@ -538,7 +538,7 @@ class TestRegistration:
 
     def test_all_three_in_primary_category(self):
         """All three tools are in PRIMARY_CATEGORY under geographic_primitives."""
-        from grace2_agent.categories import PRIMARY_CATEGORY
+        from trid3nt_server.categories import PRIMARY_CATEGORY
 
         for name in (
             "summarize_layer_statistics",
@@ -554,7 +554,7 @@ class TestRegistration:
 
     def test_source_class(self):
         """All three tools share source_class='analytical_qa'."""
-        from grace2_agent.tools import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         for name in (
             "summarize_layer_statistics",

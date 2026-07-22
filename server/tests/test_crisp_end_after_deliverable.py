@@ -25,13 +25,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import GeminiSettings, MAX_TURN_ITERATIONS
-from grace2_agent.server import (
+from trid3nt_server.adapter import GeminiSettings, MAX_TURN_ITERATIONS
+from trid3nt_server.server import (
     SessionState,
     _POST_DELIVERABLE_WRAPUP_ROUNDS,
     _is_terminal_composer,
 )
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ async def test_delivered_composer_concludes_without_loop_exhausted():
     within a couple of idle rounds -- WITHOUT emitting ``loop_exhausted`` and
     far under ``MAX_TURN_ITERATIONS``.
     """
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     rounds = {"n": 0}
 
@@ -191,7 +191,7 @@ async def test_composer_function_response_carries_completion_directive():
     well-behaved model to summarize and stop on its own. We capture the contents
     handed to the model on the follow-up round and assert the directive rode in.
     """
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     captured_contents: list = []
     rounds = {"n": 0}
@@ -251,7 +251,7 @@ async def test_non_composer_runaway_still_trips_loop_exhausted():
     composer is ever called, so the crisp-end path stays dormant and the
     historical ``loop_exhausted`` runaway guard must still fire at the cap.
     """
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     rounds = {"n": 0}
 

@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.raster_postprocess.upload")
+LOG = logging.getLogger("trid3nt.worker.raster_postprocess.upload")
 
 _S3_CLIENT: Any = None
 _GCS_CLIENT: Any = None

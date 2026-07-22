@@ -3,7 +3,7 @@
 Sprint-17 — NEW engine. The Landlab analogue of
 ``services/workers/swmm/entrypoint.py`` / ``services/workers/modflow/
 entrypoint.py``: the SAME OBJECT-STORE-IN -> RUN -> OBJECT-STORE-OUT envelope,
-SCHEME-AWARE (``s3://`` via boto3 when ``GRACE2_OBJECT_STORE=s3``, ``gs://`` via
+SCHEME-AWARE (``s3://`` via boto3 when ``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via
 google-cloud-storage otherwise — byte-identical staging/upload envelope to the
 SWMM/MODFLOW shims; the worker contract is solver-agnostic).
 
@@ -22,7 +22,7 @@ solver + stdout/stderr field names carry the ``landlab_`` prefix):
     Input  (env or CLI):
         --run-id RUN_ID
             Run identifier. Outputs land under
-            <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/.
+            <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/.
         --manifest-uri s3://bucket/path/build_spec.json
             JSON setup manifest. Schema:
                 {
@@ -45,8 +45,8 @@ solver + stdout/stderr field names carry the ``landlab_`` prefix):
             ``outputs`` glob-uploads the produced field COG(s).
 
     Output:
-        <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/landlab_field.tif
-        <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/completion.json
+        <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/landlab_field.tif
+        <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/completion.json
             Terminal manifest (mirrors the SWMM/MODFLOW completion schema; the
             stdout/stderr keys carry the ``landlab_`` prefix + a typed
             ``result`` block with the narration scalars the agent postprocess
@@ -88,15 +88,15 @@ import sys
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.landlab")
+LOG = logging.getLogger("trid3nt.worker.landlab")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 
-SCRATCH = Path(os.environ.get("GRACE2_LANDLAB_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_LANDLAB_SCRATCH", "/opt/grace2/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
 #: The default produced field COG filename (the postprocess/composer reads this
 #: + any glob matches from completion.json output_uris).
@@ -118,7 +118,7 @@ def _utc_now() -> str:
 # google-cloud-storage, both lazy-imported). Byte-identical to the SWMM/MODFLOW
 # workers: the worker contract is solver-agnostic, so the staging/upload
 # envelope is shared verbatim. The runs-bucket OUTPUT scheme follows
-# GRACE2_OBJECT_STORE (s3 -> s3://, default gcs -> gs://).
+# TRID3NT_OBJECT_STORE (s3 -> s3://, default gcs -> gs://).
 # --------------------------------------------------------------------------- #
 
 
@@ -135,8 +135,8 @@ def _split_object_uri(uri: str) -> tuple[str, str, str]:
 
 
 def _output_scheme() -> str:
-    """Runs-bucket output scheme — ``s3`` or ``gs`` (env ``GRACE2_OBJECT_STORE``)."""
-    b = (os.environ.get("GRACE2_OBJECT_STORE") or "gcs").strip().lower()
+    """Runs-bucket output scheme — ``s3`` or ``gs`` (env ``TRID3NT_OBJECT_STORE``)."""
+    b = (os.environ.get("TRID3NT_OBJECT_STORE") or "gcs").strip().lower()
     return "s3" if b in {"s3", "aws"} else "gs"
 
 
@@ -395,18 +395,18 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="grace2-landlab-entrypoint",
+        prog="trid3nt-landlab-entrypoint",
         description="Landlab AWS Batch worker entrypoint (FR-CE-1/2/3).",
     )
     p.add_argument(
         "--run-id",
-        default=os.environ.get("GRACE2_RUN_ID", "").strip(),
-        help="Run identifier (also $GRACE2_RUN_ID).",
+        default=os.environ.get("TRID3NT_RUN_ID", "").strip(),
+        help="Run identifier (also $TRID3NT_RUN_ID).",
     )
     p.add_argument(
         "--manifest-uri",
-        default=os.environ.get("GRACE2_MANIFEST_URI", "").strip(),
-        help="s3:// / gs:// URI of the setup manifest (also $GRACE2_MANIFEST_URI).",
+        default=os.environ.get("TRID3NT_MANIFEST_URI", "").strip(),
+        help="s3:// / gs:// URI of the setup manifest (also $TRID3NT_MANIFEST_URI).",
     )
     return p
 
@@ -485,10 +485,10 @@ def main(argv: list[str] | None = None) -> int:
     run_id = args.run_id
     manifest_uri = args.manifest_uri
     if not run_id:
-        LOG.error("run_id is required (pass --run-id or set $GRACE2_RUN_ID)")
+        LOG.error("run_id is required (pass --run-id or set $TRID3NT_RUN_ID)")
         return 2
     if not manifest_uri:
-        LOG.error("manifest_uri is required (pass --manifest-uri or set $GRACE2_MANIFEST_URI)")
+        LOG.error("manifest_uri is required (pass --manifest-uri or set $TRID3NT_MANIFEST_URI)")
         return 2
 
     LOG.info(

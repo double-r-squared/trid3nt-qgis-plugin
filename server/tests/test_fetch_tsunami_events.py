@@ -24,7 +24,7 @@ Coverage:
 - Payload estimator returns a positive float; runups estimate > events estimate.
 - URL builder: events vs runups path, bbox inclusion, global omission.
 
-Live test (gated by GRACE2_TEST_LIVE_NCEI_TSUNAMI=1): a real NCEI request for a
+Live test (gated by TRID3NT_TEST_LIVE_NCEI_TSUNAMI=1): a real NCEI request for a
 Japan bbox; confirms the 2011 Tohoku event (M9.1, max_water_height ~39 m) is
 present.
 """
@@ -38,7 +38,7 @@ from unittest import mock
 
 import pytest
 
-from grace2_agent.tools.fetch_tsunami_events import (
+from trid3nt_server.tools.fetch_tsunami_events import (
     CAUSE_CODES,
     DEFAULT_MIN_YEAR,
     ITEMS_PER_PAGE,
@@ -365,7 +365,7 @@ def test_records_bbox_pads_single_point():
 
 def test_empty_result_raises_no_events():
     with mock.patch(
-        "grace2_agent.tools.fetch_tsunami_events._http_get_json",
+        "trid3nt_server.tools.fetch_tsunami_events._http_get_json",
         return_value=_empty_body(),
     ):
         with pytest.raises(TsunamiNoEventsError):
@@ -377,7 +377,7 @@ def test_empty_result_raises_no_events():
 def test_too_many_pages_raises_too_large():
     over = _events_body(n=3, total_items=99999, total_pages=MAX_PAGES + 5)
     with mock.patch(
-        "grace2_agent.tools.fetch_tsunami_events._http_get_json",
+        "trid3nt_server.tools.fetch_tsunami_events._http_get_json",
         return_value=over,
     ):
         with pytest.raises(TsunamiResultTooLargeError):
@@ -392,7 +392,7 @@ def test_pagination_accumulates_items():
     page2 = _events_body(n=3, total_items=6, total_pages=2)
     bodies = [page1, page2]
     with mock.patch(
-        "grace2_agent.tools.fetch_tsunami_events._http_get_json",
+        "trid3nt_server.tools.fetch_tsunami_events._http_get_json",
         side_effect=bodies,
     ):
         fgb, extent = _fetch_tsunami_bytes(
@@ -411,7 +411,7 @@ def test_pagination_accumulates_items():
 
 def test_upstream_error_propagates():
     with mock.patch(
-        "grace2_agent.tools.fetch_tsunami_events._http_get_json",
+        "trid3nt_server.tools.fetch_tsunami_events._http_get_json",
         side_effect=TsunamiUpstreamError("boom"),
     ):
         with pytest.raises(TsunamiUpstreamError):
@@ -445,7 +445,7 @@ def test_payload_estimator_positive_and_runups_denser():
 
 
 def test_full_tool_returns_layer_uri():
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     fake_uri = "s3://bucket/cache/semi-static-7d/ncei_tsunami/deadbeef.fgb"
 
@@ -461,12 +461,12 @@ def test_full_tool_returns_layer_uri():
 
     body = _events_body(n=3)
     with mock.patch(
-        "grace2_agent.tools.fetch_tsunami_events._http_get_json",
+        "trid3nt_server.tools.fetch_tsunami_events._http_get_json",
         return_value=body,
     ), mock.patch.object(
         cache_mod, "read_through", side_effect=_fake_read_through
     ), mock.patch(
-        "grace2_agent.tools.fetch_tsunami_events.read_through",
+        "trid3nt_server.tools.fetch_tsunami_events.read_through",
         side_effect=_fake_read_through,
     ):
         lyr = fetch_tsunami_events(
@@ -492,8 +492,8 @@ def test_full_tool_rejects_bad_bbox_before_fetch():
 
 
 @pytest.mark.skipif(
-    os.environ.get("GRACE2_TEST_LIVE_NCEI_TSUNAMI") != "1",
-    reason="set GRACE2_TEST_LIVE_NCEI_TSUNAMI=1 to hit the real NCEI service",
+    os.environ.get("TRID3NT_TEST_LIVE_NCEI_TSUNAMI") != "1",
+    reason="set TRID3NT_TEST_LIVE_NCEI_TSUNAMI=1 to hit the real NCEI service",
 )
 def test_live_japan_has_tohoku_2011():
     gpd = pytest.importorskip("geopandas")

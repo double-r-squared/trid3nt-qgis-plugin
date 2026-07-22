@@ -55,12 +55,12 @@ if str(_SRC) not in sys.path:
 
 from google.genai import types as genai_types  # noqa: E402
 
-from grace2_agent.adapter import (  # noqa: E402
+from trid3nt_server.adapter import (  # noqa: E402
     _normalize_callable_for_gemini,
     _strip_private_params,
     build_tool_declarations,
 )
-from grace2_agent.tools import TOOL_REGISTRY  # noqa: E402,F401 — populated on import
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402,F401 — populated on import
 
 
 # ---------------------------------------------------------------------------

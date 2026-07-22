@@ -30,7 +30,7 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from grace2_agent.tools.publish_layer import (
+from trid3nt_server.tools.publish_layer import (
     PublishLayerError,
     _benign_vector_noop,
     _build_cog_with_overviews,
@@ -128,8 +128,8 @@ def test_benign_vector_noop_is_non_error_string() -> None:
 
 @pytest.fixture()
 def _s3_titiler(monkeypatch: pytest.MonkeyPatch) -> None:
-    # TiTiler exit: GRACE2_TILE_SERVER_BASE is dead; only the s3 branch matters.
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    # TiTiler exit: TRID3NT_TILE_SERVER_BASE is dead; only the s3 branch matters.
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
 
 
 def test_publish_layer_vector_s3_returns_benign_no_template_no_register(
@@ -138,7 +138,7 @@ def test_publish_layer_vector_s3_returns_benign_no_template_no_register(
     """A vector on the s3 branch: NO raise, NO tile template, NO registration."""
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -172,7 +172,7 @@ def test_publish_layer_raster_s3_still_raises_for_non_s3(_s3_titiler: None) -> N
 # --------------------------------------------------------------------------- #
 # job-0308 - s3-branch QGIS-vector route (env-gated, NO-OP until infra exists)
 #
-# WHEN GRACE2_QGIS_WMS_BASE is set -> publish_layer composes a styled WMS
+# WHEN TRID3NT_QGIS_WMS_BASE is set -> publish_layer composes a styled WMS
 # GetMap URL for the vector (pointed at the AWS QGIS Server) and registers it
 # as the display face. WHEN it is UNSET -> the existing benign no-op is
 # returned, so live behavior is byte-for-byte unchanged until the AWS QGIS
@@ -203,7 +203,7 @@ def test_build_vector_wms_url_is_well_formed() -> None:
 
 def test_build_vector_wms_url_recognized_as_wms_render_face() -> None:
     """The composed URL is recognized by uri_registry as a WMS display face."""
-    from grace2_agent.uri_registry import _looks_like_wms
+    from trid3nt_server.uri_registry import _looks_like_wms
 
     url = _build_vector_wms_url(
         "https://cf.example.net/ogc/wms",
@@ -220,10 +220,10 @@ def test_publish_layer_vector_s3_env_unset_returns_benign_no_op(
     """ENV UNSET: vector on s3 still benign no-op (current behavior unchanged)."""
     # The _s3_titiler fixture sets storage=s3 + tile base but NOT the QGIS WMS
     # base; ensure it is absent.
-    monkeypatch.delenv("GRACE2_QGIS_WMS_BASE", raising=False)
+    monkeypatch.delenv("TRID3NT_QGIS_WMS_BASE", raising=False)
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -241,10 +241,10 @@ def test_publish_layer_vector_s3_env_set_returns_vector_wms_url(
     _s3_titiler: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ENV SET: vector on s3 -> a well-formed styled WMS URL + display face."""
-    monkeypatch.setenv("GRACE2_QGIS_WMS_BASE", "https://cf.example.net/ogc/wms")
+    monkeypatch.setenv("TRID3NT_QGIS_WMS_BASE", "https://cf.example.net/ogc/wms")
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -268,7 +268,7 @@ def test_publish_layer_vector_s3_env_set_returns_vector_wms_url(
 # --------------------------------------------------------------------------- #
 # job-0308 P0 (LOW forward-path): the .qgs key resolver must accept s3:// as
 # well as gs://. On AWS the canonical .qgs lives at s3://...; if the QGIS-vector
-# WMS branch (GRACE2_QGIS_WMS_BASE set) resolved a gs://-only key it would fail
+# WMS branch (TRID3NT_QGIS_WMS_BASE set) resolved a gs://-only key it would fail
 # on the live AWS stack. The no-op-when-unset path is unaffected.
 # --------------------------------------------------------------------------- #
 
@@ -314,9 +314,9 @@ def test_publish_layer_vector_s3_env_set_with_s3_qgs_uri(
 ) -> None:
     """ENV SET + an s3:// project_qgs_uri -> the WMS branch resolves the key
     (no QGS_URI_PARSE_ERROR) and composes a styled WMS URL with that key."""
-    monkeypatch.setenv("GRACE2_QGIS_WMS_BASE", "https://cf.example.net/ogc/wms")
+    monkeypatch.setenv("TRID3NT_QGIS_WMS_BASE", "https://cf.example.net/ogc/wms")
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: None,
     )
 
@@ -338,9 +338,9 @@ def test_publish_layer_vector_s3_env_set_trailing_slash_base(
     _s3_titiler: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A trailing slash on the WMS base is tolerated (no double slash)."""
-    monkeypatch.setenv("GRACE2_QGIS_WMS_BASE", "https://cf.example.net/ogc/wms/")
+    monkeypatch.setenv("TRID3NT_QGIS_WMS_BASE", "https://cf.example.net/ogc/wms/")
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: None,
     )
 
@@ -354,9 +354,9 @@ def test_publish_layer_vector_s3_env_blank_falls_back_to_no_op(
     _s3_titiler: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A blank (whitespace-only after strip) WMS base falls back to the no-op."""
-    monkeypatch.setenv("GRACE2_QGIS_WMS_BASE", "")
+    monkeypatch.setenv("TRID3NT_QGIS_WMS_BASE", "")
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: None,
     )
 
@@ -469,10 +469,10 @@ def test_publish_layer_s3_auto_translates_no_overview_cog(
         return new_uri
 
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer._read_raster_bytes", _fake_read
+        "trid3nt_server.tools.publish_layer._read_raster_bytes", _fake_read
     )
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer._write_overview_cog", _fake_write
+        "trid3nt_server.tools.publish_layer._write_overview_cog", _fake_write
     )
 
     out = publish_layer(
@@ -492,7 +492,7 @@ def test_publish_layer_s3_overview_cog_published_unchanged(
     good = _cog_with_overviews_bytes()
 
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer._read_raster_bytes",
+        "trid3nt_server.tools.publish_layer._read_raster_bytes",
         lambda uri: good,
     )
 
@@ -500,7 +500,7 @@ def test_publish_layer_s3_overview_cog_published_unchanged(
         raise AssertionError("must NOT re-translate an overview-bearing COG")
 
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer._write_overview_cog", _must_not_write
+        "trid3nt_server.tools.publish_layer._write_overview_cog", _must_not_write
     )
 
     out = publish_layer(
@@ -604,7 +604,7 @@ def test_build_cog_with_overviews_preserves_colormap() -> None:
 
 def test_build_cog_with_overviews_rasterio_preserves_colormap() -> None:
     """The pure-rasterio fallback path (no GDAL CLI) also preserves the table."""
-    from grace2_agent.tools.publish_layer import _build_cog_with_overviews_rasterio
+    from trid3nt_server.tools.publish_layer import _build_cog_with_overviews_rasterio
 
     flat = _paletted_geotiff_bytes()
     cog = _build_cog_with_overviews_rasterio(flat)

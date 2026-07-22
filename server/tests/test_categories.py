@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent import categories
-from grace2_agent.categories import (
+from trid3nt_server import categories
+from trid3nt_server.categories import (
     CATEGORIES,
     HOT_SET_TOOLS,
     PRIMARY_CATEGORY,
@@ -34,8 +34,8 @@ from grace2_agent.categories import (
 def _ensure_full_registry() -> set[str]:
     """Run the full startup import path so workflow/solver/catalog tools
     appear in ``TOOL_REGISTRY``. Returns the set of registered names."""
-    from grace2_agent.main import _import_tools_registry
-    from grace2_agent import tools
+    from trid3nt_server.main import _import_tools_registry
+    from trid3nt_server import tools
 
     _import_tools_registry()
     return set(tools.TOOL_REGISTRY.keys())
@@ -169,7 +169,7 @@ def test_list_categories_returns_twelve_shaped_entries() -> None:
 
 def test_list_categories_is_registered_in_tool_registry() -> None:
     """Meta-tool registration fires at import time."""
-    from grace2_agent import tools
+    from trid3nt_server import tools
 
     assert "list_categories" in tools.TOOL_REGISTRY
     entry = tools.TOOL_REGISTRY["list_categories"]
@@ -216,7 +216,7 @@ def test_list_tools_in_category_unknown_category_raises() -> None:
 
 def test_list_tools_in_category_is_registered() -> None:
     """The second meta-tool registers too."""
-    from grace2_agent import tools
+    from trid3nt_server import tools
 
     assert "list_tools_in_category" in tools.TOOL_REGISTRY
 
@@ -287,7 +287,7 @@ def test_hot_set_dispatch_of_state_scoped_nws_call_is_allowed() -> None:
     pass on a FRESH session (no categories opened, nothing dispatched) —
     exactly the live-demo first turn that previously raised
     OutOfAllowedSetError and pushed Gemini to the unscoped CONUS sweep."""
-    from grace2_agent.categories import AllowedToolSet, validate_function_call
+    from trid3nt_server.categories import AllowedToolSet, validate_function_call
 
     fresh = AllowedToolSet()
     # Must not raise.

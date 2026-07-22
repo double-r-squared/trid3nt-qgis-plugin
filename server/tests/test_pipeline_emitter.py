@@ -36,10 +36,10 @@ import json
 from typing import Any
 
 import pytest
-from grace2_contracts import new_ulid
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.pipeline_emitter import (
+from trid3nt_server.pipeline_emitter import (
     EMITTER_ERROR_CODES,
     PipelineEmitter,
 )
@@ -63,7 +63,7 @@ class _CapturingSink:
 
 @pytest.fixture()
 def session_id() -> str:
-    # Crockford-base32 ULID per grace2_contracts.ULIDStr.
+    # Crockford-base32 ULID per trid3nt_contracts.ULIDStr.
     return new_ulid()
 
 
@@ -529,7 +529,7 @@ async def test_vector_layer_inlines_geojson_into_session_state(
         return fake_fc
 
     monkeypatch.setattr(
-        "grace2_agent.pipeline_emitter._read_vector_uri_as_geojson", fake_reader,
+        "trid3nt_server.pipeline_emitter._read_vector_uri_as_geojson", fake_reader,
     )
 
     vector_layer = LayerURI(
@@ -562,7 +562,7 @@ async def test_vector_layer_inline_geojson_failure_is_non_fatal(
         raise RuntimeError("simulated GCS failure")
 
     monkeypatch.setattr(
-        "grace2_agent.pipeline_emitter._read_vector_uri_as_geojson", boom,
+        "trid3nt_server.pipeline_emitter._read_vector_uri_as_geojson", boom,
     )
 
     vector_layer = LayerURI(
@@ -593,7 +593,7 @@ async def test_raster_layer_does_not_trigger_inline_path(
         return None
 
     monkeypatch.setattr(
-        "grace2_agent.pipeline_emitter._read_vector_uri_as_geojson", fake_reader,
+        "trid3nt_server.pipeline_emitter._read_vector_uri_as_geojson", fake_reader,
     )
 
     raster_layer = LayerURI(
@@ -621,7 +621,7 @@ async def test_reset_loaded_layers_clears_inline_table(
         return {"type": "FeatureCollection", "features": []}
 
     monkeypatch.setattr(
-        "grace2_agent.pipeline_emitter._read_vector_uri_as_geojson", fake_reader,
+        "trid3nt_server.pipeline_emitter._read_vector_uri_as_geojson", fake_reader,
     )
 
     vector_layer = LayerURI(
@@ -882,7 +882,7 @@ async def test_emit_byte_identical_under_signed_urls_true(
 
 def _run_result(status: str, **kw: Any):
     """Build a RunResult with the given terminal status (duck-typed shape)."""
-    from grace2_contracts.execution import RunResult
+    from trid3nt_contracts.execution import RunResult
 
     return RunResult(
         run_id=new_ulid(),
@@ -1053,7 +1053,7 @@ async def test_emit_tool_call_plain_dict_no_status_marks_card_complete(
 
 
 def test_classify_tool_return_recognizes_all_failed_shapes() -> None:
-    from grace2_agent.pipeline_emitter import _classify_tool_return
+    from trid3nt_server.pipeline_emitter import _classify_tool_return
 
     # RunResult shapes.
     assert _classify_tool_return(_run_result("failed", error_code="X"))[0] == "failed"
@@ -1159,7 +1159,7 @@ async def test_emit_tool_io_truncates_large_payload(
 ) -> None:
     """A function_response over the per-field byte cap is truncated, the flag is
     set, and the ORIGINAL byte length is reported (honest 'truncated, N bytes')."""
-    from grace2_contracts.ws import ToolIoPayload
+    from trid3nt_contracts.ws import ToolIoPayload
 
     big = {"rows": ["x" * 1000 for _ in range(200)]}  # well over the 32KB cap
     step_id = await emitter.add_step(name="Query", tool_name="mongo_query")
@@ -1538,7 +1538,7 @@ async def test_mint_dispatch_and_sim_cards_emits_two_cards(
 ) -> None:
     """``mint_dispatch_and_sim_cards`` mints a complete Dispatch tool card + a
     running compute card bound to the handle's jobId."""
-    from grace2_agent.pipeline_emitter import mint_dispatch_and_sim_cards
+    from trid3nt_server.pipeline_emitter import mint_dispatch_and_sim_cards
 
     handle = type(
         "H",
@@ -1565,7 +1565,7 @@ async def test_mint_dispatch_and_sim_cards_emits_two_cards(
 async def test_mint_dispatch_and_sim_cards_none_emitter_is_noop() -> None:
     """``emitter is None`` (direct/smoke call) returns ``None`` and emits
     nothing — the two cards are an observability affordance, never required."""
-    from grace2_agent.pipeline_emitter import mint_dispatch_and_sim_cards
+    from trid3nt_server.pipeline_emitter import mint_dispatch_and_sim_cards
 
     handle = type("H", (), {"workflows_execution_id": "j", "solver": "sfincs"})()
     sim_id = await mint_dispatch_and_sim_cards(
@@ -1580,7 +1580,7 @@ async def test_route_sim_terminal_marks_complete_and_failed(
 ) -> None:
     """``route_sim_terminal`` drives the compute card green on a complete
     RunResult and red on a non-complete one (carrying its error_code)."""
-    from grace2_agent.pipeline_emitter import route_sim_terminal
+    from trid3nt_server.pipeline_emitter import route_sim_terminal
 
     # complete -> green
     sink_ok = _CapturingSink()
@@ -1634,8 +1634,8 @@ class TestCompactionCard:
         """The running card is role="tool" (NEVER "compute" -- there is no
         Batch job bound to a local compaction pass), tool_name
         "context:compact", state running, labeled COMPACTING_LABEL."""
-        from grace2_agent.context_budget import COMPACTING_LABEL
-        from grace2_agent.pipeline_emitter import mint_compaction_card
+        from trid3nt_server.context_budget import COMPACTING_LABEL
+        from trid3nt_server.pipeline_emitter import mint_compaction_card
 
         step_id = await mint_compaction_card(emitter=emitter)
         assert step_id is not None
@@ -1654,8 +1654,8 @@ class TestCompactionCard:
     async def test_complete_compaction_card_renames_and_completes(
         self, emitter: PipelineEmitter, sink: _CapturingSink
     ) -> None:
-        from grace2_agent.context_budget import compaction_complete_label
-        from grace2_agent.pipeline_emitter import (
+        from trid3nt_server.context_budget import compaction_complete_label
+        from trid3nt_server.pipeline_emitter import (
             complete_compaction_card,
             mint_compaction_card,
         )
@@ -1675,7 +1675,7 @@ class TestCompactionCard:
 
     @pytest.mark.asyncio
     async def test_mint_compaction_card_none_emitter_is_noop(self) -> None:
-        from grace2_agent.pipeline_emitter import mint_compaction_card
+        from trid3nt_server.pipeline_emitter import mint_compaction_card
 
         assert await mint_compaction_card(emitter=None) is None
 
@@ -1685,7 +1685,7 @@ class TestCompactionCard:
     ) -> None:
         """No mint (or a failed mint) -> ``step_id`` is None -> the terminal
         call must never raise and must emit nothing."""
-        from grace2_agent.pipeline_emitter import complete_compaction_card
+        from trid3nt_server.pipeline_emitter import complete_compaction_card
 
         n_before = len(sink.frames)
         await complete_compaction_card(
@@ -1698,7 +1698,7 @@ class TestCompactionCard:
         emitter.rename_step("does-not-exist", name="whatever")
 
     def test_compaction_complete_label_rounds_and_floors_at_1k(self) -> None:
-        from grace2_agent.context_budget import compaction_complete_label
+        from trid3nt_server.context_budget import compaction_complete_label
 
         assert compaction_complete_label(12800, 3900) == "Conversation compacted (13k -> 4k tokens)"
         assert compaction_complete_label(400, 100) == "Conversation compacted (1k -> 1k tokens)"
@@ -1754,11 +1754,11 @@ async def test_dense_vector_is_densified_via_off_loop_read(
     """A FeatureCollection above the dense threshold is read AND densified/capped
     through the off-loop path, and the URI-keyed density-meta side-table is
     populated (so the wire layer can be honestly tagged on re-inline)."""
-    from grace2_agent.pipeline_emitter import (
+    from trid3nt_server.pipeline_emitter import (
         _LAST_DENSITY_META_BY_URI,
         _read_vector_uri_as_geojson,
     )
-    from grace2_agent.tools.vector_tiles import (
+    from trid3nt_server.tools.vector_tiles import (
         DENSE_VECTOR_THRESHOLD,
         MAX_INLINE_FEATURES,
     )
@@ -1794,11 +1794,11 @@ async def test_dense_vector_is_densified_via_off_loop_read(
 async def test_small_vector_is_not_densified_off_loop(tmp_path: Any) -> None:
     """Below the threshold the FC is returned unchanged and no density-meta is
     recorded (byte-for-byte the prior inline behavior, just off-loop)."""
-    from grace2_agent.pipeline_emitter import (
+    from trid3nt_server.pipeline_emitter import (
         _LAST_DENSITY_META_BY_URI,
         _read_vector_uri_as_geojson,
     )
-    from grace2_agent.tools.vector_tiles import DENSE_VECTOR_THRESHOLD
+    from trid3nt_server.tools.vector_tiles import DENSE_VECTOR_THRESHOLD
 
     n = max(1, DENSE_VECTOR_THRESHOLD // 2)
     fc = _make_dense_fc(n)
@@ -1827,8 +1827,8 @@ async def test_densify_runs_in_executor_not_on_loop(tmp_path: Any) -> None:
     """
     import time
 
-    from grace2_agent import pipeline_emitter as pe
-    from grace2_agent.tools.vector_tiles import MAX_INLINE_FEATURES
+    from trid3nt_server import pipeline_emitter as pe
+    from trid3nt_server.tools.vector_tiles import MAX_INLINE_FEATURES
 
     fc = _make_dense_fc(MAX_INLINE_FEATURES + 200)
     path = tmp_path / "blocking.geojson"
@@ -1836,7 +1836,7 @@ async def test_densify_runs_in_executor_not_on_loop(tmp_path: Any) -> None:
     uri = str(path)
     pe._LAST_DENSITY_META_BY_URI.pop(uri, None)
 
-    from grace2_agent.tools import vector_tiles as vt
+    from trid3nt_server.tools import vector_tiles as vt
 
     real = vt.densify_if_needed
     started = asyncio.Event()
@@ -1888,9 +1888,9 @@ async def test_densified_result_is_cached_across_reads(tmp_path: Any) -> None:
     reconnect re-densified tens of thousands of features, which pegged the shared
     box and fed the reconnect storm. The cache makes the repeat read an O(1) hit.
     """
-    from grace2_agent import pipeline_emitter as pe
-    from grace2_agent.tools import vector_tiles as vt
-    from grace2_agent.tools.vector_tiles import MAX_INLINE_FEATURES
+    from trid3nt_server import pipeline_emitter as pe
+    from trid3nt_server.tools import vector_tiles as vt
+    from trid3nt_server.tools.vector_tiles import MAX_INLINE_FEATURES
 
     fc = _make_dense_fc(MAX_INLINE_FEATURES + 800)
     path = tmp_path / "cached.geojson"
@@ -1930,7 +1930,7 @@ async def test_densified_result_is_cached_across_reads(tmp_path: Any) -> None:
 async def test_densified_cache_is_fifo_bounded() -> None:
     """The densified-FC cache FIFO-evicts past the cap so the always-on agent
     process can never grow it without limit."""
-    from grace2_agent import pipeline_emitter as pe
+    from trid3nt_server import pipeline_emitter as pe
 
     cap = pe._MAX_DENSIFIED_FC_CACHE_ENTRIES
     pe._DENSIFIED_FC_CACHE_BY_URI.clear()
@@ -1953,7 +1953,7 @@ async def test_densified_cache_is_fifo_bounded() -> None:
 # what the off-loop thread picks up. This thin wrapper just re-exports the
 # function under test so the patch site above is unambiguous.
 async def _read_vector_uri_as_geojson_for_test(uri: str) -> Any:
-    from grace2_agent.pipeline_emitter import _read_vector_uri_as_geojson
+    from trid3nt_server.pipeline_emitter import _read_vector_uri_as_geojson
 
     return await _read_vector_uri_as_geojson(uri)
 
@@ -1969,7 +1969,7 @@ async def test_legend_on_layer_uri_flows_to_session_state(
 ) -> None:
     """A ``LayerURI`` that carries a ``legend`` (composer / Pelicun path) emits it
     on the ``ProjectLayerSummary`` in the next session-state envelope."""
-    from grace2_contracts.execution import LegendClass, LegendKey
+    from trid3nt_contracts.execution import LegendClass, LegendKey
 
     layer = LayerURI(
         layer_id="pelicun_1",
@@ -2002,8 +2002,8 @@ async def test_legend_lifted_from_publish_stash_by_uri(
     """The atomic publish_layer wrap-site rebuilds a LayerURI WITHOUT a legend; the
     emitter lifts the legend publish_layer stashed by display uri onto the
     summary (the continuous-raster path)."""
-    from grace2_agent.tools.publish_layer import _stash_legend_for_uri
-    from grace2_contracts.execution import LegendKey
+    from trid3nt_server.tools.publish_layer import _stash_legend_for_uri
+    from trid3nt_contracts.execution import LegendKey
 
     tile_uri = "https://cf.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2Fb%2Fx.tif&rescale=0,3&colormap_name=ylgnbu"
     _stash_legend_for_uri(

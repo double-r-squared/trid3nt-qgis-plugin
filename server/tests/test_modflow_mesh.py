@@ -30,8 +30,8 @@ pytest.importorskip("xarray")
 pytest.importorskip("netCDF4")
 flopy = pytest.importorskip("flopy")
 
-from grace2_agent.workflows import modflow_mesh as mesh_mod
-from grace2_agent.workflows.modflow_mesh import (
+from trid3nt_server.workflows import modflow_mesh as mesh_mod
+from trid3nt_server.workflows.modflow_mesh import (
     ModflowMeshError,
     build_modflow_ugrid_mesh_netcdf,
     emit_modflow_mesh_artifact,
@@ -268,9 +268,9 @@ def test_emit_uploads_mesh_with_head_and_concentration(
 ) -> None:
     monkeypatch.setattr(mesh_mod, "_grid_georegistration_from_deck", lambda deck_dir: dict(_GEO))
     fake = _FakeS3Client()
-    monkeypatch.setattr("grace2_agent.tools.solver._get_s3_client", lambda: fake, raising=False)
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+    monkeypatch.setattr("trid3nt_server.tools.solver._get_s3_client", lambda: fake, raising=False)
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
     uri = emit_modflow_mesh_artifact(
         str(synthetic_run),
@@ -304,9 +304,9 @@ def test_emit_head_only_when_no_ucn(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
     monkeypatch.setattr(mesh_mod, "_grid_georegistration_from_deck", lambda deck_dir: dict(_GEO))
     fake = _FakeS3Client()
-    monkeypatch.setattr("grace2_agent.tools.solver._get_s3_client", lambda: fake, raising=False)
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+    monkeypatch.setattr("trid3nt_server.tools.solver._get_s3_client", lambda: fake, raising=False)
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
     uri = emit_modflow_mesh_artifact(
         str(run_dir), run_id="01RUNGWFONLY01", model_crs="EPSG:32617", deck_dir="/fake/deck"

@@ -65,8 +65,8 @@ sg docker -c 'docker build -t trid3nt-local/swan:latest -f services/workers/swan
 sg docker -c 'docker build -t trid3nt-local/telemac:latest services/workers/telemac/'  # or: bash scripts/build_telemac_image.sh
 ```
 
-These three image names are what `.env.local` points at (`GRACE2_SFINCS_IMAGE`,
-`GRACE2_GEOCLAW_IMAGE`, `GRACE2_SWAN_IMAGE`).
+These three image names are what `.env.local` points at (`TRID3NT_SFINCS_IMAGE`,
+`TRID3NT_GEOCLAW_IMAGE`, `TRID3NT_SWAN_IMAGE`).
 
 ## 5. MinIO
 
@@ -95,7 +95,7 @@ Why the custom variant and the `/no_think` requirement:
   context; 16384 fits comfortably. See [Models](models.md) for the full rationale.
 - Qwen3's default **thinking mode** routes all tokens to the reasoning channel, so the
   OpenAI-compatible content deltas arrive **empty** and turns render no text. `.env.local`
-  ships `GRACE2_OPENAI_EXTRA_SYSTEM=/no_think`, which appends `/no_think` to the system prompt
+  ships `TRID3NT_OPENAI_EXTRA_SYSTEM=/no_think`, which appends `/no_think` to the system prompt
   and disables thinking mode. Do not remove it while running a Qwen3-family model.
 
 ## 7. Configure the environment
@@ -126,8 +126,8 @@ make stop      # stops minio and the agent via pidfiles
 
 | Port | Service | Notes |
 |------|---------|-------|
-| 8765 | Agent WebSocket | chat protocol (`GRACE2_AGENT_PORT`) |
-| 8766 | Agent HTTP | tool catalog + stats endpoints (`GRACE2_AGENT_HTTP_PORT`) |
+| 8765 | Agent WebSocket | chat protocol (`TRID3NT_AGENT_PORT`) |
+| 8766 | Agent HTTP | tool catalog + stats endpoints (`TRID3NT_AGENT_HTTP_PORT`) |
 | 9000 | MinIO S3 API | `AWS_ENDPOINT_URL` target; console on 9001 |
 | 11434 | Ollama | OpenAI-compatible endpoint at `/v1` |
 
@@ -137,6 +137,6 @@ make stop      # stops minio and the agent via pidfiles
 - `venvs/` -- Python virtual environments (agent)
 - `data/minio/` -- MinIO object storage
 - `data/persistence/` -- agent FilePersistence store (cases, layers)
-- `data/runs/` -- solver rundirs mounted into containers (`GRACE2_RUNS_DIR`)
+- `data/runs/` -- solver rundirs mounted into containers (`TRID3NT_RUNS_DIR`)
 - `data/telemetry/` -- tool-call telemetry JSONL
 - `logs/`, `run/` -- service logs and PID files

@@ -32,16 +32,16 @@ from pathlib import Path
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.persistence import (
+from trid3nt_server import server
+from trid3nt_server.persistence import (
     CASE_VIEWS_BUCKET,
     Persistence,
     case_manifest_key,
     case_view_snapshot_key,
 )
-from grace2_contracts.case import CaseSummary
-from grace2_contracts.collections import ProjectLayerSummary
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.case import CaseSummary
+from trid3nt_contracts.collections import ProjectLayerSummary
+from trid3nt_contracts.common import new_ulid
 
 # Reuse the in-memory MCP backend the persistence suite uses.
 from .test_persistence import MockMCPClient

@@ -13,7 +13,7 @@ Coverage:
   OUTSIDE the bbox is filtered before serialization.
 - Cache hit: a second call with identical params reuses the cached URI.
 
-Live tests (gated by ``GRACE2_TEST_LIVE_GBIF=1``):
+Live tests (gated by ``TRID3NT_TEST_LIVE_GBIF=1``):
 - Florida panther via taxonKey (2435099 = Puma concolor, species-level) over
   Big Cypress / Everglades bbox. Records to evidence/gbif_live.txt.
 - Florida panther via scientific-name string ("Puma concolor") over the same
@@ -31,8 +31,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_gbif_occurrences import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_gbif_occurrences import (
     GBIFError,
     GBIFInputError,
     GBIFUpstreamError,
@@ -67,7 +67,7 @@ _PANTHER_LIVE_TAXON_KEY = 2435099  # Puma concolor — used by the live tests
 _PANTHER_LIVE_SCIENTIFIC_NAME = "Puma concolor"  # name-resolution live path
 
 # Live-test gate.
-_LIVE_GBIF = os.environ.get("GRACE2_TEST_LIVE_GBIF") == "1"
+_LIVE_GBIF = os.environ.get("TRID3NT_TEST_LIVE_GBIF") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -406,10 +406,10 @@ def test_mocked_happy_path_single_page():
     page = _make_search_page(records, end_of_records=True)
 
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, page)
@@ -461,10 +461,10 @@ def test_mocked_pagination_two_pages():
     page2 = _make_search_page(page2_records, end_of_records=True)
 
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.side_effect = [
@@ -515,10 +515,10 @@ def test_mocked_species_name_resolution():
     }
 
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         # Two distinct .Client() invocations: one for resolve, one for search.
         # We return the same MagicMock for both so the .get() calls accumulate.
@@ -549,7 +549,7 @@ def test_mocked_species_name_resolution():
 def test_mocked_unknown_species_name_raises_input_error():
     """A species/match response with usageKey=None raises GBIFInputError."""
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(
@@ -584,7 +584,7 @@ def test_mocked_fuzzy_match_raises_input_error_with_did_you_mean():
         "matchType": "FUZZY",
     }
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, fuzzy_response)
@@ -623,7 +623,7 @@ def test_mocked_higherrank_match_raises_input_error():
         "matchType": "HIGHERRANK",
     }
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, higherrank_response)
@@ -667,10 +667,10 @@ def test_mocked_genus_name_exact_match_resolves():
         end_of_records=True,
     )
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.side_effect = [
@@ -705,7 +705,7 @@ def test_mocked_missing_match_type_raises_input_error():
         "rank": "SPECIES",
     }
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, no_match_type)
@@ -724,10 +724,10 @@ def test_mocked_empty_bbox_returns_empty_flatgeobuf():
     page = _make_search_page([], end_of_records=True)
 
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, page)
@@ -751,10 +751,10 @@ def test_mocked_5xx_raises_upstream_error_retryable():
     """
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(503, text="Service Unavailable")
@@ -784,10 +784,10 @@ def test_cache_hit_skips_fetch_fn():
     )
 
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, page)
@@ -813,10 +813,10 @@ def test_layer_uri_shape_fields():
         end_of_records=True,
     )
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.httpx.Client"
+        "trid3nt_server.tools.fetch_gbif_occurrences.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, page)
@@ -840,7 +840,7 @@ def test_layer_uri_shape_fields():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_GBIF, reason="GRACE2_TEST_LIVE_GBIF=1 not set")
+@pytest.mark.skipif(not _LIVE_GBIF, reason="TRID3NT_TEST_LIVE_GBIF=1 not set")
 def test_live_florida_panther_over_big_cypress(tmp_path):
     """LIVE: Florida panther (Puma concolor, taxonKey 2435099) over Everglades bbox.
 
@@ -855,7 +855,7 @@ def test_live_florida_panther_over_big_cypress(tmp_path):
     """
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gbif_occurrences(
@@ -906,7 +906,7 @@ def test_live_florida_panther_over_big_cypress(tmp_path):
     print("\n" + evidence_text)
 
 
-@pytest.mark.skipif(not _LIVE_GBIF, reason="GRACE2_TEST_LIVE_GBIF=1 not set")
+@pytest.mark.skipif(not _LIVE_GBIF, reason="TRID3NT_TEST_LIVE_GBIF=1 not set")
 def test_live_florida_panther_via_scientific_name_resolves_to_correct_key():
     """LIVE: ``species_key="Puma concolor"`` resolves through species/match
     to taxonKey 2435099 and yields ≥1 in-bbox feature.
@@ -918,7 +918,7 @@ def test_live_florida_panther_via_scientific_name_resolves_to_correct_key():
     """
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_gbif_occurrences.read_through",
+        "trid3nt_server.tools.fetch_gbif_occurrences.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gbif_occurrences(

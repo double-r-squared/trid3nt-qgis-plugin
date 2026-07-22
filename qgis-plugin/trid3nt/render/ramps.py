@@ -7,7 +7,7 @@ module is the pure-python colormap table that backs it -- no qgis imports,
 so the table is testable in the stdlib test venv.
 
 The names mirror the SERVER's TiTiler style registry
-(``server/src/grace2_agent/tools/publish_layer.py`` --
+(``server/src/trid3nt_server/tools/publish_layer.py`` --
 ``_TITILER_STYLE_REGISTRY`` values, the family rules, and the literal
 ``colormap_name=`` emissions). SYNC NOTE: when the server registry gains a
 new colormap name, add it to ``SERVER_COLORMAP_NAMES`` + ``_RAMP_STOPS``

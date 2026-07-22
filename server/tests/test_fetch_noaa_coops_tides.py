@@ -12,7 +12,7 @@ Coverage:
 - Cache miss → fetch_fn invoked; cache hit → fetch_fn skipped.
 - LayerURI shape: layer_type="vector", role="primary", units="m (MLLW)".
 
-Live test (gated by GRACE2_TEST_LIVE_COOPS=1):
+Live test (gated by TRID3NT_TEST_LIVE_COOPS=1):
     Real CO-OPS API request for Fort Myers area (bbox covering stations
     8725520 Fort Myers + 8725114 Naples Bay) over a 1-day window.
     Confirms: ≥1 station returned; FlatGeobuf round-trips; wl_min_m <
@@ -31,8 +31,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_noaa_coops_tides import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_noaa_coops_tides import (
     COOPSTidesEmptyError,
     COOPSTidesInputError,
     COOPSTidesUpstreamError,
@@ -56,7 +56,7 @@ from grace2_agent.tools.fetch_noaa_coops_tides import (
 _FORT_MYERS_BBOX: tuple[float, float, float, float] = (-82.5, 25.5, -81.0, 27.5)
 
 # Live test gate.
-_LIVE_COOPS = os.environ.get("GRACE2_TEST_LIVE_COOPS") == "1"
+_LIVE_COOPS = os.environ.get("TRID3NT_TEST_LIVE_COOPS") == "1"
 
 # Hurricane Ian landfall date.
 _IAN_DATE = "2022-09-28"
@@ -128,7 +128,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -279,7 +279,7 @@ def test_discover_stations_in_bbox_filters_correctly():
     catalog_json = json.dumps({"stations": catalog}).encode("utf-8")
 
     with patch(
-        "grace2_agent.tools.fetch_noaa_coops_tides._http_get",
+        "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
         return_value=catalog_json,
     ):
         result = _discover_stations_in_bbox(_FORT_MYERS_BBOX)
@@ -298,7 +298,7 @@ def test_discover_stations_empty_bbox():
     ]}).encode("utf-8")
 
     with patch(
-        "grace2_agent.tools.fetch_noaa_coops_tides._http_get",
+        "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
         return_value=catalog_json,
     ), pytest.raises(COOPSTidesEmptyError):
         _discover_stations_in_bbox(_FORT_MYERS_BBOX)
@@ -309,7 +309,7 @@ def test_discover_stations_upstream_error():
     from unittest.mock import MagicMock
 
     with patch(
-        "grace2_agent.tools.fetch_noaa_coops_tides._http_get",
+        "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
         side_effect=COOPSTidesUpstreamError("network timeout"),
     ), pytest.raises(COOPSTidesUpstreamError):
         _discover_stations_in_bbox(_FORT_MYERS_BBOX)
@@ -456,11 +456,11 @@ def test_fetch_tool_cache_miss_then_hit():
 
     with (
         patch(
-            "grace2_agent.tools.fetch_noaa_coops_tides._http_get",
+            "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
             side_effect=fake_http_get,
         ),
         patch(
-            "grace2_agent.tools.fetch_noaa_coops_tides.read_through",
+            "trid3nt_server.tools.fetch_noaa_coops_tides.read_through",
             side_effect=injector,
         ),
     ):
@@ -514,11 +514,11 @@ def test_layer_uri_shape():
 
     with (
         patch(
-            "grace2_agent.tools.fetch_noaa_coops_tides._http_get",
+            "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
             side_effect=fake_http_get,
         ),
         patch(
-            "grace2_agent.tools.fetch_noaa_coops_tides.read_through",
+            "trid3nt_server.tools.fetch_noaa_coops_tides.read_through",
             side_effect=injector,
         ),
     ):
@@ -565,11 +565,11 @@ def test_extra_kwargs_absorbed():
 
     with (
         patch(
-            "grace2_agent.tools.fetch_noaa_coops_tides._http_get",
+            "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
             side_effect=fake_http_get,
         ),
         patch(
-            "grace2_agent.tools.fetch_noaa_coops_tides.read_through",
+            "trid3nt_server.tools.fetch_noaa_coops_tides.read_through",
             side_effect=injector,
         ),
     ):
@@ -596,16 +596,16 @@ def test_round_bbox_to_6dp():
 
 
 # ---------------------------------------------------------------------------
-# Live smoke test (requires GRACE2_TEST_LIVE_COOPS=1).
+# Live smoke test (requires TRID3NT_TEST_LIVE_COOPS=1).
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_COOPS, reason="set GRACE2_TEST_LIVE_COOPS=1 to run live CO-OPS test")
+@pytest.mark.skipif(not _LIVE_COOPS, reason="set TRID3NT_TEST_LIVE_COOPS=1 to run live CO-OPS test")
 def test_live_fetch_fort_myers_ian_date():
     """Live: fetch Fort Myers + Naples Bay water_level for Hurricane Ian day."""
     import geopandas as gpd
 
-    from grace2_agent.tools.fetch_noaa_coops_tides import _fetch_coops_tides_bytes
+    from trid3nt_server.tools.fetch_noaa_coops_tides import _fetch_coops_tides_bytes
 
     bbox = (-82.5, 25.5, -81.0, 27.5)
     d0 = date(2022, 9, 28)

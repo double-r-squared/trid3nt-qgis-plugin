@@ -47,9 +47,9 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import secrets
-from grace2_contracts.common import new_ulid
-from grace2_contracts.secrets import (
+from trid3nt_contracts import secrets
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.secrets import (
     SecretAddEnvelopePayload,
     SecretRecord,
     SecretRevokeEnvelopePayload,

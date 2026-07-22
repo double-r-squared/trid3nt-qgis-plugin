@@ -19,7 +19,7 @@ Coverage:
 - Result-too-large: metadata.count over the cap -> EarthquakesResultTooLargeError.
 - Payload estimator returns a positive float; a higher magnitude floor lowers it.
 
-Live test (gated by GRACE2_TEST_LIVE_USGS_QUAKES=1): a real FDSN request for a
+Live test (gated by TRID3NT_TEST_LIVE_USGS_QUAKES=1): a real FDSN request for a
 small seismically active California bbox; confirms >=1 event with a finite mag.
 """
 
@@ -32,7 +32,7 @@ import tempfile
 
 import pytest
 
-from grace2_agent.tools.fetch_usgs_earthquakes import (
+from trid3nt_server.tools.fetch_usgs_earthquakes import (
     DEFAULT_WINDOW_DAYS,
     FDSN_RESULT_LIMIT,
     MAX_WINDOW_DAYS,
@@ -367,7 +367,7 @@ def test_build_flatgeobuf_roundtrips():
 
 
 def test_fetch_bytes_empty_raises_no_events(monkeypatch):
-    import grace2_agent.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetch_usgs_earthquakes as M
 
     monkeypatch.setattr(M, "_http_get", lambda url, timeout=90.0: (_empty_geojson(), 200))
     with pytest.raises(EarthquakesNoEventsError):
@@ -380,7 +380,7 @@ def test_fetch_bytes_empty_raises_no_events(monkeypatch):
 
 
 def test_fetch_bytes_204_raises_no_events(monkeypatch):
-    import grace2_agent.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetch_usgs_earthquakes as M
 
     monkeypatch.setattr(M, "_http_get", lambda url, timeout=90.0: (b"", 204))
     with pytest.raises(EarthquakesNoEventsError):
@@ -393,7 +393,7 @@ def test_fetch_bytes_204_raises_no_events(monkeypatch):
 
 
 def test_fetch_bytes_over_cap_raises_too_large(monkeypatch):
-    import grace2_agent.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetch_usgs_earthquakes as M
 
     body = _synthetic_geojson(n=2, count=FDSN_RESULT_LIMIT + 5)
     monkeypatch.setattr(M, "_http_get", lambda url, timeout=90.0: (body, 200))
@@ -407,7 +407,7 @@ def test_fetch_bytes_over_cap_raises_too_large(monkeypatch):
 
 
 def test_fetch_bytes_400_too_large_raises(monkeypatch):
-    import grace2_agent.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetch_usgs_earthquakes as M
 
     monkeypatch.setattr(
         M,
@@ -424,7 +424,7 @@ def test_fetch_bytes_400_too_large_raises(monkeypatch):
 
 
 def test_fetch_bytes_happy_path(monkeypatch):
-    import grace2_agent.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetch_usgs_earthquakes as M
 
     body = _synthetic_geojson(n=3, count=3)
     monkeypatch.setattr(M, "_http_get", lambda url, timeout=90.0: (body, 200))
@@ -491,8 +491,8 @@ def test_payload_estimator_bounded_by_cap():
 
 
 @pytest.mark.skipif(
-    os.environ.get("GRACE2_TEST_LIVE_USGS_QUAKES") != "1",
-    reason="set GRACE2_TEST_LIVE_USGS_QUAKES=1 to run the live FDSN test",
+    os.environ.get("TRID3NT_TEST_LIVE_USGS_QUAKES") != "1",
+    reason="set TRID3NT_TEST_LIVE_USGS_QUAKES=1 to run the live FDSN test",
 )
 def test_live_california_window():
     now = _dt.datetime.now(_dt.timezone.utc)
@@ -517,7 +517,7 @@ def test_live_california_window():
 
 def test_public_tool_zero_events_raises_typed_no_data(monkeypatch):
     """PUBLIC tool surface: a faked 0-event FDSN body raises the typed error."""
-    import grace2_agent.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetch_usgs_earthquakes as M
 
     monkeypatch.setattr(
         M, "_http_get", lambda url, timeout=90.0: (_empty_geojson(), 200)
@@ -546,7 +546,7 @@ def test_public_tool_zero_events_raises_typed_no_data(monkeypatch):
 
 def test_no_events_error_envelope_is_not_publishable_success():
     """The model-facing envelope: status=error, no layer handles, suggestions."""
-    from grace2_agent.adapter import summarize_tool_result
+    from trid3nt_server.adapter import summarize_tool_result
 
     err = EarthquakesNoEventsError(
         "No earthquakes matched bbox=(-100.0, 46.0, -99.0, 47.0) over "
@@ -569,7 +569,7 @@ def test_no_events_error_envelope_is_not_publishable_success():
 
 def test_error_envelope_without_suggestions_attr_is_unchanged():
     """Errors that carry no ``suggestions`` keep the pre-2026-07-13 shape."""
-    from grace2_agent.adapter import summarize_tool_result
+    from trid3nt_server.adapter import summarize_tool_result
 
     env = summarize_tool_result(
         "fetch_usgs_earthquakes", None, error=EarthquakesUpstreamError("boom")

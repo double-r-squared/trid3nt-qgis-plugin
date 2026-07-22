@@ -63,8 +63,8 @@ site, sourced from this repo.
 
 - Pages: install (make venv / binaries / docker images / ollama), architecture
   (MinIO/TiTiler/FilePersistence/local solvers diagram), model matrix +
-  GRACE2_OPENAI_* env reference, engine matrix (which engine runs how locally),
-  the full .env.local reference (every GRACE2_* knob with default + why),
+  TRID3NT_OPENAI_* env reference, engine matrix (which engine runs how locally),
+  the full .env.local reference (every TRID3NT_* knob with default + why),
   troubleshooting (the sweep's greatest hits: MinIO endpoint redirect, /no_think,
   warm index, docker group, loop offload).
 - Source of truth stays in trid3nt-local/docs/; the GRACE-2 mkdocs.yml pulls it

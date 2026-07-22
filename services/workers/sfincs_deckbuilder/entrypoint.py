@@ -16,7 +16,7 @@ them). The combined worker eliminates the round-trip: after ``build_deck()``
 populates a LOCAL deck dir, the same process invokes the SFINCS binary directly
 on that dir (no download), uploads ``sfincs_map.nc`` + stdout/stderr, and writes
 ONE ``completion.json``. The agent collapses to ONE submit + ONE poll against
-ONE new job-def (``GRACE2_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE``).
+ONE new job-def (``TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE``).
 
 What the combined worker adds on top of the deck-build half:
 
@@ -56,10 +56,10 @@ worker arms-length over the object-store + Batch-submit seam exactly as before.
 Contract:
 
     Input (CLI or env):
-        --run-id RUN_ID                  ($GRACE2_RUN_ID)
+        --run-id RUN_ID                  ($TRID3NT_RUN_ID)
             Run identifier. completion.json + outputs land under
-            {scheme}://${GRACE2_RUNS_BUCKET}/${RUN_ID}/.
-        --build-spec-uri s3://.../build_spec.json   ($GRACE2_BUILD_SPEC_URI)
+            {scheme}://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/.
+        --build-spec-uri s3://.../build_spec.json   ($TRID3NT_BUILD_SPEC_URI)
             JSON build spec (schema_version "v2"). See the module docstring of
             ``validate_build_spec`` / the build_spec_contract scout note for the
             full shape: aoi, topobathy COG, grid + refinement + max_cells,
@@ -89,19 +89,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.sfincs_quadtree")
+LOG = logging.getLogger("trid3nt.worker.sfincs_quadtree")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 
-SCRATCH = Path(os.environ.get("GRACE2_DECK_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_DECK_SCRATCH", "/opt/grace2/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
 # The SFINCS binary the combined image carries (from deltares/sfincs-cpu). The
 # combined worker invokes it IN-PROCESS on the local deck dir after build.
-SFINCS_BIN = os.environ.get("GRACE2_SFINCS_BIN", "/usr/local/bin/sfincs")
+SFINCS_BIN = os.environ.get("TRID3NT_SFINCS_BIN", "/usr/local/bin/sfincs")
 
 # Deck files cht writes, in the order the solve half expects them. Globbed at
 # runtime; this constant only documents the canonical set.
@@ -169,8 +169,8 @@ def _split_object_uri(uri: str) -> tuple[str, str, str]:
 
 
 def _output_scheme() -> str:
-    """Runs-bucket output scheme — ``s3`` or ``gs`` (env GRACE2_OBJECT_STORE)."""
-    b = (os.environ.get("GRACE2_OBJECT_STORE") or "gcs").strip().lower()
+    """Runs-bucket output scheme — ``s3`` or ``gs`` (env TRID3NT_OBJECT_STORE)."""
+    b = (os.environ.get("TRID3NT_OBJECT_STORE") or "gcs").strip().lower()
     return "s3" if b in {"s3", "aws"} else "gs"
 
 
@@ -2077,7 +2077,7 @@ _SNAPWAVE_SHALLOW_BND_MARKER = "dropped below 5 m"
 #: genuine nearshore wave field is a large fraction of the wetted area. Below this
 #: the "modeled" wave layer is degenerate and must NOT read status=ok.
 _WAVE_MIN_COVERAGE_FRAC_OF_DEPTH = float(
-    os.environ.get("GRACE2_WAVE_MIN_COVERAGE_FRAC_OF_DEPTH", "0.05")
+    os.environ.get("TRID3NT_WAVE_MIN_COVERAGE_FRAC_OF_DEPTH", "0.05")
 )
 
 
@@ -2281,7 +2281,7 @@ def _write_completion(
 
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="grace2-sfincs-quadtree",
+        prog="trid3nt-sfincs-quadtree",
         description=(
             "Combined SFINCS quadtree+SnapWave BUILD+SOLVE worker "
             "(AWS Batch, one job)."
@@ -2289,14 +2289,14 @@ def _build_argv_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--run-id",
-        default=os.environ.get("GRACE2_RUN_ID", "").strip(),
-        help="Run identifier (also $GRACE2_RUN_ID).",
+        default=os.environ.get("TRID3NT_RUN_ID", "").strip(),
+        help="Run identifier (also $TRID3NT_RUN_ID).",
     )
     p.add_argument(
         "--build-spec-uri",
-        default=os.environ.get("GRACE2_BUILD_SPEC_URI", "").strip(),
+        default=os.environ.get("TRID3NT_BUILD_SPEC_URI", "").strip(),
         help="s3:// / gs:// URI of the build spec JSON "
-        "(also $GRACE2_BUILD_SPEC_URI).",
+        "(also $TRID3NT_BUILD_SPEC_URI).",
     )
     return p
 
@@ -2313,11 +2313,11 @@ def main(argv: list[str] | None = None) -> int:
     run_id = args.run_id
     build_spec_uri = args.build_spec_uri
     if not run_id:
-        LOG.error("run_id is required (--run-id or $GRACE2_RUN_ID)")
+        LOG.error("run_id is required (--run-id or $TRID3NT_RUN_ID)")
         return 2
     if not build_spec_uri:
         LOG.error(
-            "build_spec_uri is required (--build-spec-uri or $GRACE2_BUILD_SPEC_URI)"
+            "build_spec_uri is required (--build-spec-uri or $TRID3NT_BUILD_SPEC_URI)"
         )
         return 2
 

@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.tool_arg_normalizer import (
+from trid3nt_server.tool_arg_normalizer import (
     LatLonCoercionError,
     coerce_bbox_value,
     coerce_latlon,

@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from grace2_agent.tools.chart_tools import (
+from trid3nt_server.tools.chart_tools import (
     ChartToolError,
     _MAX_ROWS,
     build_chart_payload,
@@ -38,7 +38,7 @@ from grace2_agent.tools.chart_tools import (
     generate_time_series,
     is_chart_emission_result,
 )
-from grace2_contracts.chart_contracts import (
+from trid3nt_contracts.chart_contracts import (
     ChartEmissionPayload,
     is_structurally_valid_vega_lite_spec,
 )
@@ -209,7 +209,7 @@ class TestGenerateHistogram:
 
     def test_raster_sampling_cap_path(self, tmp_path, monkeypatch):
         """Large raster path: cap the sample, still produce 10 bins."""
-        import grace2_agent.tools.chart_tools as ct
+        import trid3nt_server.tools.chart_tools as ct
 
         # Shrink the cap so a small raster exercises the sampling branch.
         monkeypatch.setattr(ct, "_RASTER_SAMPLE_CAP", 50)
@@ -449,7 +449,7 @@ class TestChartEmissionDiscriminator:
 
 class TestSummarizeChartEmission:
     def test_spec_stripped_for_chart(self, tmp_path):
-        from grace2_agent.adapter import summarize_tool_result
+        from trid3nt_server.adapter import summarize_tool_result
 
         records = [{"x": 0.1 * i, "y": 0.1 * i, "v": float(i)} for i in range(30)]
         path = _make_geojson_points(tmp_path, records)
@@ -471,7 +471,7 @@ class TestSummarizeChartEmission:
         assert res["chart_type"] == "bar"
 
     def test_ordinary_dict_preserved(self):
-        from grace2_agent.adapter import summarize_tool_result
+        from trid3nt_server.adapter import summarize_tool_result
 
         ordinary = {"layer_type": "raster", "count": 9, "mean": 5.0}
         summary = summarize_tool_result("summarize_layer_statistics", ordinary)
@@ -505,8 +505,8 @@ class _FakeMCP:
 @pytest.mark.asyncio
 class TestEmitChart:
     async def _make_state(self, session_id=None, case_id=None):
-        from grace2_agent.server import SessionState
-        from grace2_contracts import new_ulid
+        from trid3nt_server.server import SessionState
+        from trid3nt_contracts import new_ulid
 
         # job-0259: active_case_id is now a session-scoped property (not a
         # dataclass field) — set it after construction.
@@ -515,9 +515,9 @@ class TestEmitChart:
         return state
 
     async def test_emits_envelope_and_persists(self, tmp_path, monkeypatch):
-        import grace2_agent.server as server
-        from grace2_agent.persistence import Persistence
-        from grace2_contracts import new_ulid
+        import trid3nt_server.server as server
+        from trid3nt_server.persistence import Persistence
+        from trid3nt_contracts import new_ulid
 
         fake_mcp = _FakeMCP()
         persistence = Persistence(fake_mcp)
@@ -560,8 +560,8 @@ class TestEmitChart:
         assert pushed["schema_version"] == "v1"
 
     async def test_persist_keyed_by_session_when_no_case(self, tmp_path, monkeypatch):
-        import grace2_agent.server as server
-        from grace2_agent.persistence import Persistence
+        import trid3nt_server.server as server
+        from trid3nt_server.persistence import Persistence
 
         fake_mcp = _FakeMCP()
         persistence = Persistence(fake_mcp)
@@ -580,7 +580,7 @@ class TestEmitChart:
 
     async def test_no_persistence_singleton_is_safe(self, tmp_path, monkeypatch):
         """When Persistence is unbound, emit still works, persistence skipped."""
-        import grace2_agent.server as server
+        import trid3nt_server.server as server
 
         monkeypatch.setattr(server, "get_persistence", lambda: None)
         state = await self._make_state()
@@ -594,8 +594,8 @@ class TestEmitChart:
         assert len(ws.sent) == 1
 
     async def test_persistence_failure_does_not_raise(self, tmp_path, monkeypatch):
-        import grace2_agent.server as server
-        from grace2_agent.persistence import Persistence
+        import trid3nt_server.server as server
+        from trid3nt_server.persistence import Persistence
 
         class _BrokenMCP:
             async def call_tool(self, name, arguments=None):
@@ -627,8 +627,8 @@ def test_dispatch_detection_signal(tmp_path):
     analytical_qa summary dict) does not — this is the exact branch condition
     in _stream_gemini_reply.
     """
-    from grace2_agent.tools.analytical_qa import summarize_layer_statistics
-    from grace2_agent.tools import cache as cache_module
+    from trid3nt_server.tools.analytical_qa import summarize_layer_statistics
+    from trid3nt_server.tools import cache as cache_module
 
     # Bypass GCS cache for the analytical tool.
     class _FakeResult:
@@ -665,13 +665,13 @@ class TestRegistration:
     )
 
     def test_all_in_tool_registry(self):
-        from grace2_agent.tools import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         for name in self._TOOLS:
             assert name in TOOL_REGISTRY, name
 
     def test_metadata(self):
-        from grace2_agent.tools import TOOL_REGISTRY
+        from trid3nt_server.tools import TOOL_REGISTRY
 
         for name in self._TOOLS:
             m = TOOL_REGISTRY[name].metadata
@@ -680,7 +680,7 @@ class TestRegistration:
             assert m.read_only_hint is True
 
     def test_category_membership(self):
-        from grace2_agent.categories import PRIMARY_CATEGORY
+        from trid3nt_server.categories import PRIMARY_CATEGORY
 
         for name in self._TOOLS:
             assert PRIMARY_CATEGORY[name] == "geographic_primitives"

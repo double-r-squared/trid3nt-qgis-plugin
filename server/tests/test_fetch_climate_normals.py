@@ -13,7 +13,7 @@ Coverage:
 - Upstream error mapping: HTTP 5xx -> ClimateNormalsUpstreamError(retryable=True).
 - Cache miss -> fetch_fn invoked; cache hit -> fetch_fn skipped.
 - LayerURI shape: layer_type="vector", role="context", units="mixed", s3:// uri.
-- Live (env GRACE2_TEST_LIVE_NORMALS=1): real NCEI returns >=1 station with
+- Live (env TRID3NT_TEST_LIVE_NORMALS=1): real NCEI returns >=1 station with
   annual normals for the Tampa Bay area; FGB round-trips; coords in US envelope.
 """
 
@@ -25,8 +25,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_climate_normals import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_climate_normals import (
     ClimateNormalsEmptyError,
     ClimateNormalsInputError,
     ClimateNormalsUpstreamError,
@@ -39,11 +39,11 @@ from grace2_agent.tools.fetch_climate_normals import (
     fetch_climate_normals,
 )
 
-_MOD = "grace2_agent.tools.fetch_climate_normals"
+_MOD = "trid3nt_server.tools.fetch_climate_normals"
 
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_NORMALS") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_NORMALS") == "1"
 
 # Tampa Bay area bbox — has both first-order (temp+precip) and precip-only stations.
 _TAMPA_BBOX = (-82.7, 27.7, -82.2, 28.2)
@@ -60,7 +60,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -443,7 +443,7 @@ def test_cache_miss_then_hit_skips_fetch():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_NORMALS=1 to run live")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_NORMALS=1 to run live")
 def test_live_ncei_tampa():
     import tempfile
 

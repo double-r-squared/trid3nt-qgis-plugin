@@ -34,11 +34,11 @@ def _categorical_geotiff_bytes(w=256, h=256) -> bytes:
 
 
 def test_extract_unique_nlcd_classes_s3_no_garbage_under_gc(monkeypatch):
-    from grace2_agent.workflows import sfincs_builder
+    from trid3nt_server.workflows import sfincs_builder
     data = _categorical_geotiff_bytes()
     monkeypatch.setattr(sfincs_builder, "read_object_bytes_s3", lambda uri: data, raising=False)
     # also patch the cache module symbol the function imports locally
-    import grace2_agent.tools.cache as cache_mod
+    import trid3nt_server.tools.cache as cache_mod
     monkeypatch.setattr(cache_mod, "read_object_bytes_s3", lambda uri: data)
 
     for _ in range(8):
@@ -50,7 +50,7 @@ def test_extract_unique_nlcd_classes_s3_no_garbage_under_gc(monkeypatch):
 
 
 def test_open_source_is_context_manager():
-    from grace2_agent.tools.extract_landcover_class import _open_source
+    from trid3nt_server.tools.extract_landcover_class import _open_source
     # @contextmanager wraps the generator function -> not a plain generator fn,
     # but calling it returns a context manager with __enter__/__exit__.
     cm = _open_source.__wrapped__ if hasattr(_open_source, "__wrapped__") else _open_source
@@ -58,10 +58,10 @@ def test_open_source_is_context_manager():
 
 
 def test_extract_landcover_open_source_s3_reads_clean_under_gc(monkeypatch):
-    import grace2_agent.tools.extract_landcover_class as elc
+    import trid3nt_server.tools.extract_landcover_class as elc
     data = _categorical_geotiff_bytes()
     monkeypatch.setattr(elc, "read_object_bytes_s3", lambda uri: data, raising=False)
-    import grace2_agent.tools.cache as cache_mod
+    import trid3nt_server.tools.cache as cache_mod
     monkeypatch.setattr(cache_mod, "read_object_bytes_s3", lambda uri: data)
     for _ in range(8):
         gc.collect()

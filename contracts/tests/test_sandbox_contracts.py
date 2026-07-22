@@ -19,13 +19,13 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import (
+from trid3nt_contracts import (
     CodeExecRequestPayload,
     CodeExecResultPayload,
 )
-from grace2_contracts.common import new_ulid
-from grace2_contracts.sandbox_contracts import SANDBOX_AGENT_TO_CLIENT_PAYLOADS
-from grace2_contracts import ws
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.sandbox_contracts import SANDBOX_AGENT_TO_CLIENT_PAYLOADS
+from trid3nt_contracts import ws
 
 
 def test_request_payload_round_trip() -> None:

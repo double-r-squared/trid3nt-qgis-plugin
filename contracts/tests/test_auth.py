@@ -20,7 +20,7 @@ Coverage:
 10. ``test_auth_ack_invalid_tier_rejected`` — open-enum-bounded ``tier``.
 11. ``test_auth_ack_invalid_user_id_rejected`` — ULID discipline on
     ``user_id``.
-12. ``test_auth_envelopes_exported_from_package`` — ``grace2_contracts.auth``
+12. ``test_auth_envelopes_exported_from_package`` — ``trid3nt_contracts.auth``
     is importable from the top-level package.
 """
 
@@ -31,8 +31,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.auth import AuthAckEnvelope, AuthTokenEnvelope
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.auth import AuthAckEnvelope, AuthTokenEnvelope
+from trid3nt_contracts.common import new_ulid
 
 
 # --------------------------------------------------------------------------- #
@@ -217,8 +217,8 @@ def test_auth_ack_invalid_user_id_rejected() -> None:
 
 def test_auth_envelopes_exported_from_package() -> None:
     """The ``auth`` module is importable from the top-level package."""
-    import grace2_contracts
+    import trid3nt_contracts
 
-    assert hasattr(grace2_contracts, "auth")
-    assert grace2_contracts.auth.AuthTokenEnvelope is AuthTokenEnvelope
-    assert grace2_contracts.auth.AuthAckEnvelope is AuthAckEnvelope
+    assert hasattr(trid3nt_contracts, "auth")
+    assert trid3nt_contracts.auth.AuthTokenEnvelope is AuthTokenEnvelope
+    assert trid3nt_contracts.auth.AuthAckEnvelope is AuthAckEnvelope

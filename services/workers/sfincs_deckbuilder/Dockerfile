@@ -1,7 +1,7 @@
 # COMBINED SFINCS coastal quadtree worker (BUILD + SOLVE in one image).
 #
 # Fuses the two former one-shot Batch workers into a single image + a single
-# job-definition (GRACE2_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE):
+# job-definition (TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE):
 #   1. BUILD — Deltares `cht_sfincs` (GPL-3.0, pinned commit) authors a refined
 #      multi-level SFINCS quadtree + SnapWave deck from a build-spec JSON, with
 #      auto-derived refinement, a cell budget cap, and building obstacles.
@@ -121,20 +121,20 @@ WORKDIR /opt/grace2
 
 ENV PYTHONPATH=/opt/grace2 \
     PYTHONUNBUFFERED=1 \
-    GRACE2_DECK_SCRATCH=/opt/grace2/work \
-    GRACE2_SFINCS_BIN=/usr/local/bin/sfincs \
+    TRID3NT_DECK_SCRATCH=/opt/grace2/work \
+    TRID3NT_SFINCS_BIN=/usr/local/bin/sfincs \
     GCP_PROJECT=legacy-cloud-project
 
 # Runtime config — overridable from the AWS Batch job-def containerOverrides.
-# GCP is decommissioned: the live object store is AWS S3 (GRACE2_OBJECT_STORE=s3,
+# GCP is decommissioned: the live object store is AWS S3 (TRID3NT_OBJECT_STORE=s3,
 # scheme-aware entrypoint). These baked defaults are INERT under AWS Batch (the
 # job-def overrides every value per submission) but are pinned to the AWS S3
 # names + scheme for honesty.
-ENV GRACE2_OBJECT_STORE=s3 \
-    GRACE2_CACHE_BUCKET=trid3nt-cache \
-    GRACE2_RUNS_BUCKET=trid3nt-runs \
-    GRACE2_RUN_ID="" \
-    GRACE2_BUILD_SPEC_URI=""
+ENV TRID3NT_OBJECT_STORE=s3 \
+    TRID3NT_CACHE_BUCKET=trid3nt-cache \
+    TRID3NT_RUNS_BUCKET=trid3nt-runs \
+    TRID3NT_RUN_ID="" \
+    TRID3NT_BUILD_SPEC_URI=""
 
 # Build-time smoke (the GDAL/PROJ-clash tripwire): the SFINCS binary exists, the
 # GPL build closure imports, AND the entrypoint module imports — all in ONE
@@ -147,7 +147,7 @@ RUN test -x /usr/local/bin/sfincs \
     && python -c "import xarray; from scipy.interpolate import griddata; import rasterio, pyproj; from pyproj import Transformer; from services.workers._raster_postprocess import postprocess, cog, sfincs_reader, manifest, band_stats; print('raster_postprocess substrate + GDAL/PROJ tripwire OK')"
 
 # One-shot Batch worker: argv flows straight to the entrypoint module; env-var
-# fallbacks (GRACE2_RUN_ID, GRACE2_BUILD_SPEC_URI) are parsed if no CLI flags.
+# fallbacks (TRID3NT_RUN_ID, TRID3NT_BUILD_SPEC_URI) are parsed if no CLI flags.
 # ENTRYPOINT overrides the upstream sfincs default so this image runs the
 # combined BUILD+SOLVE module, not the bare binary.
 ENTRYPOINT ["python", "-m", "services.workers.sfincs_deckbuilder.entrypoint"]

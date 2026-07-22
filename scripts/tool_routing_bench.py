@@ -62,7 +62,7 @@ def _setup_logging() -> None:
 # ULID / ID helper
 # ---------------------------------------------------------------------------
 try:
-    from grace2_contracts import new_ulid
+    from trid3nt_contracts import new_ulid
     def new_id() -> str:
         return new_ulid()
 except ImportError:

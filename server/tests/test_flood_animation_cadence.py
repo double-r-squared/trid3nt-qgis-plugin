@@ -26,16 +26,16 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.workflows.model_flood_scenario import (
+from trid3nt_server.workflows.model_flood_scenario import (
     _COASTAL_OUTPUT_INTERVAL_MIN_DEFAULT,
     _estimate_frame_count,
     _resolve_output_interval_min,
 )
-from grace2_agent.workflows.postprocess_flood import (
+from trid3nt_server.workflows.postprocess_flood import (
     MAX_FLOOD_FRAMES,
     _select_frame_time_indices,
 )
-from grace2_agent.workflows.sfincs_builder import (
+from trid3nt_server.workflows.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     _generate_hydromt_yaml_config,
@@ -121,7 +121,7 @@ def test_postprocess_subsamples_and_logs_when_over_cap(caplog) -> None:
     """A run that STILL exceeds the cap is subsampled EVENLY (never silently)."""
     import logging
 
-    with caplog.at_level(logging.INFO, logger="grace2_agent.workflows.postprocess_flood"):
+    with caplog.at_level(logging.INFO, logger="trid3nt_server.workflows.postprocess_flood"):
         idx = _select_frame_time_indices(MAX_FLOOD_FRAMES * 3)
     assert len(idx) <= MAX_FLOOD_FRAMES
     assert idx[0] == 0 and idx[-1] == MAX_FLOOD_FRAMES * 3 - 1  # endpoints kept
@@ -165,8 +165,8 @@ def test_coastal_deck_dtout_reflects_interval(
 
 def test_quadtree_deckbuild_output_dt_reflects_interval(monkeypatch) -> None:
     """The quadtree+SnapWave deck-build output_dt follows the fine cadence too."""
-    from grace2_agent.tools import solver as solver_mod
-    from grace2_agent.workflows.model_flood_scenario import (
+    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.workflows.model_flood_scenario import (
         _compose_and_upload_deckbuild_spec,
     )
 
@@ -179,8 +179,8 @@ def test_quadtree_deckbuild_output_dt_reflects_interval(monkeypatch) -> None:
             self.objects[(Bucket, Key)] = data
             return {}
 
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_CACHE_BUCKET", "deck-cache-bucket")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "deck-cache-bucket")
     s3 = _FakeS3()
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: s3)
 

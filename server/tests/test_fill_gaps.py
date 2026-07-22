@@ -23,8 +23,8 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import Point, Polygon
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fill_gaps import FillGapsError, fill_gaps
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fill_gaps import FillGapsError, fill_gaps
 
 
 # ---------------------------------------------------------------------------

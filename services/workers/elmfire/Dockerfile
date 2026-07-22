@@ -92,7 +92,7 @@ RUN apt-get update -y && \
 # the tutorials/verification trees belong to the dev image, not the Batch worker.
 COPY --from=builder /elmfire/elmfire/build/linux/bin /opt/elmfire/bin
 ENV ELMFIRE_VER=2025.0526 \
-    GRACE2_ELMFIRE_BINARY=elmfire_2025.0526 \
+    TRID3NT_ELMFIRE_BINARY=elmfire_2025.0526 \
     PATH=/opt/elmfire/bin:$PATH
 
 # Python venv for the entrypoint's S3 envelope (boto3 ONLY - no rasterio, the
@@ -115,13 +115,13 @@ RUN find /opt/grace2/services -name __pycache__ -type d -prune -exec rm -rf {} +
 WORKDIR /opt/grace2
 ENV PYTHONPATH=/opt/grace2 \
     PYTHONUNBUFFERED=1 \
-    GRACE2_ELMFIRE_SCRATCH=/opt/grace2/work
+    TRID3NT_ELMFIRE_SCRATCH=/opt/grace2/work
 
 # Runtime config - overridden from the AWS Batch job-definition env block.
-ENV GRACE2_OBJECT_STORE=s3 \
-    GRACE2_RUNS_BUCKET="" \
-    GRACE2_RUN_ID="" \
-    GRACE2_MANIFEST_URI="" \
+ENV TRID3NT_OBJECT_STORE=s3 \
+    TRID3NT_RUNS_BUCKET="" \
+    TRID3NT_RUN_ID="" \
+    TRID3NT_MANIFEST_URI="" \
     AWS_REGION=us-west-2
 
 # Build-time smoke: entrypoint imports + solver binary executes (prints usage).

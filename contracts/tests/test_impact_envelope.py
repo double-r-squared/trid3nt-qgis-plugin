@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.common import new_ulid
-from grace2_contracts.impact_envelope import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.impact_envelope import (
     ImpactEnvelope,
     OccupancyClassImpact,
 )

@@ -32,8 +32,8 @@ import json
 
 import pytest
 
-from grace2_contracts import new_ulid
-from grace2_contracts.ws import PayloadConfirmationEnvelopePayload
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 
 
 class _FakeWS:
@@ -85,7 +85,7 @@ async def _drive_decision(server, decision: str, revised_args=None) -> None:
 #    solver set; the no-finer-knob fetchers are NOT in either.
 # --------------------------------------------------------------------------- #
 def test_fetch_tools_in_fetch_confirm_set() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     assert "fetch_dem" in server.FETCH_CONFIRM_TOOLS
     assert "fetch_topobathy" in server.FETCH_CONFIRM_TOOLS
@@ -108,7 +108,7 @@ def test_fetch_tools_in_fetch_confirm_set() -> None:
     [("fetch_dem", "dem"), ("fetch_topobathy", "topobathy")],
 )
 async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
@@ -146,7 +146,7 @@ async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool_name", ["fetch_dem", "fetch_topobathy"])
 async def test_proceed_pins_default_resolution(tool_name: str) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
@@ -173,7 +173,7 @@ async def test_proceed_pins_default_resolution(tool_name: str) -> None:
 async def test_narrow_scope_finer_applied_small_aoi(
     tool_name: str, finer: int
 ) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     approver = asyncio.create_task(
@@ -195,7 +195,7 @@ async def test_narrow_scope_finer_applied_small_aoi(
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_narrow_scope_finer_clamped_large_aoi() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
 
@@ -227,7 +227,7 @@ async def test_narrow_scope_finer_clamped_large_aoi() -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_cancel_fails_closed() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     canceller = asyncio.create_task(_drive_decision(server, "cancel"))
@@ -242,7 +242,7 @@ async def test_cancel_fails_closed() -> None:
 
 @pytest.mark.asyncio
 async def test_timeout_fails_closed(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     monkeypatch.setattr(server, "CODE_EXEC_CONFIRM_TIMEOUT_SECONDS", 0)
     ws, state = _FakeWS(), _FakeState()
@@ -261,7 +261,7 @@ async def test_timeout_fails_closed(monkeypatch) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_build_exception_fails_open() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     # A missing/invalid bbox makes the envelope builder raise -> fail OPEN.
@@ -285,7 +285,7 @@ async def test_build_exception_fails_open() -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_solver_branch_unchanged_no_fetch_suggestion(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     params = {"location_query": "Fort Myers, Florida", "return_period_yr": 100}
@@ -311,7 +311,7 @@ def test_fetch_is_not_a_solver_dispatch_marker() -> None:
     """The autostop solver-marker keys off SOLVER_CONFIRM_TOOLS only; a fetcher
     being absent there is what keeps a fetch from skewing the in-flight solve
     count + the auto-stop coupling."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     for fetcher in server.FETCH_CONFIRM_TOOLS:
         assert fetcher not in server.SOLVER_CONFIRM_TOOLS
@@ -321,7 +321,7 @@ def test_fetch_is_not_a_solver_dispatch_marker() -> None:
 # 9) _clamp_fetch_resolution unit: finer floored up, coarser honoured.
 # --------------------------------------------------------------------------- #
 def test_clamp_fetch_resolution_helper() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     # Finer (smaller) than the bound -> floored UP to the bound.
     assert server._clamp_fetch_resolution(1.0, 5.0) == 5.0
@@ -333,7 +333,7 @@ def test_clamp_fetch_resolution_helper() -> None:
 
 # --------------------------------------------------------------------------- #
 # 10) Local-cloud fingerprint seam (NATE 2026-07-08): the LOCAL build
-#     (GRACE2_SOLVER_BACKEND=local-docker) must not surface the cloud
+#     (TRID3NT_SOLVER_BACKEND=local-docker) must not surface the cloud
 #     "fetch (1 vCPU)" compute label on the confirm card -- it renders the
 #     "local" compute lane instead. The cloud lane (aws-batch / unset) keeps
 #     the exact prior values byte-for-byte.
@@ -350,12 +350,12 @@ def test_clamp_fetch_resolution_helper() -> None:
 async def test_fetch_gate_compute_label_deployment_aware(
     monkeypatch, backend: str, expected_compute_class: str
 ) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     if backend:
-        monkeypatch.setenv("GRACE2_SOLVER_BACKEND", backend)
+        monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend)
     else:
-        monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+        monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
 
     ws, state = _FakeWS(), _FakeState()
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
@@ -386,7 +386,7 @@ _WA_STATE_BBOX_DEM = [-124.837922, 45.543029, -116.914037, 49.003324]
 
 @pytest.mark.asyncio
 async def test_dem_state_scale_gate_suggests_honest_coarsened_rung() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _env, sugg = await server._build_fetch_resolution_envelope(  # type: ignore[attr-defined]
         "fetch_dem", _fetch_params(bbox=_WA_STATE_BBOX_DEM)
@@ -416,7 +416,7 @@ async def test_dem_state_scale_gate_suggests_honest_coarsened_rung() -> None:
 def test_fetch_landcover_in_fetch_confirm_set() -> None:
     """fetch_landcover must be in FETCH_CONFIRM_TOOLS so state-scale bboxes
     trigger the resolution gate instead of hard-failing."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     assert "fetch_landcover" in server.FETCH_CONFIRM_TOOLS
     # SEPARATE from the solver set (same invariant as the other fetchers).
@@ -428,7 +428,7 @@ def test_fetch_landcover_in_fetch_confirm_set() -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_landcover_gate_emits_granularity_block() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
@@ -463,7 +463,7 @@ _WA_STATE_BBOX = [-124.7, 45.5, -116.9, 49.0]
 @pytest.mark.asyncio
 async def test_landcover_state_scale_gate_coarsens() -> None:
     """A state-scale bbox triggers a coarsened suggested_resolution_m (> 30 m)."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _env, sugg = await server._build_fetch_resolution_envelope(  # type: ignore[attr-defined]
         "fetch_landcover", _fetch_params(bbox=_WA_STATE_BBOX)
@@ -491,7 +491,7 @@ async def test_landcover_state_scale_gate_coarsens() -> None:
 async def test_landcover_small_bbox_native_resolution_no_gate() -> None:
     """A small bbox needs no coarsening -> the gate is skipped entirely and the
     fetch proceeds at the tool's native 30 m default (no card sent)."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     params = _fetch_params(bbox=_SMALL_BBOX)
@@ -515,7 +515,7 @@ def test_fetch_landcover_state_scale_no_hard_fail(monkeypatch) -> None:
     The hard-fail that was at > 10 000 km^2 is replaced by auto-coarsening;
     only continent-scale bboxes (> 5 000 000 km^2) still hard-fail.
     """
-    from grace2_agent.tools import data_fetch
+    from trid3nt_server.tools import data_fetch
 
     # Stub the WCS fetch so we don't hit the network.
     def _fake_nlcd_bytes(bbox, vintage_year, resolution_m=30):
@@ -545,7 +545,7 @@ def test_fetch_landcover_state_scale_no_hard_fail(monkeypatch) -> None:
 # --------------------------------------------------------------------------- #
 def test_fetch_landcover_small_bbox_native_metadata(monkeypatch) -> None:
     """Small bbox at 30 m: result carries native metadata, downsampled=False."""
-    from grace2_agent.tools import data_fetch
+    from trid3nt_server.tools import data_fetch
 
     def _fake_nlcd_bytes(bbox, vintage_year, resolution_m=30):
         return b"\x49\x49\x2a\x00" + b"\x00" * 256
@@ -574,7 +574,7 @@ def test_fetch_landcover_small_bbox_native_metadata(monkeypatch) -> None:
 def test_fetch_landcover_continent_scale_hard_fail() -> None:
     """A continent-scale bbox (> 5 000 000 km^2) must still raise BboxInvalidError."""
     import pytest
-    from grace2_agent.tools.data_fetch import BboxInvalidError, fetch_landcover
+    from trid3nt_server.tools.data_fetch import BboxInvalidError, fetch_landcover
 
     # Whole-CONUS bbox is ~8 000 000 km^2
     whole_conus = [-125.0, 24.0, -66.0, 50.0]
@@ -590,7 +590,7 @@ def test_fetch_landcover_bypass_enforces_pixel_budget(monkeypatch) -> None:
     """A direct state-scale call with resolution_m=30 (finer than the MRLC
     4000 px/axis budget allows) must be coarsened by the TOOL, and
     effective_resolution_m must describe the delivered grid, not the request."""
-    from grace2_agent.tools import data_fetch
+    from trid3nt_server.tools import data_fetch
 
     def _fake_nlcd_bytes(bbox, vintage_year, resolution_m=30):
         return b"\x49\x49\x2a\x00" + b"\x00" * 256

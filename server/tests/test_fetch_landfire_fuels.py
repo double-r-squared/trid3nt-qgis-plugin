@@ -20,7 +20,7 @@ Coverage:
   - The returned LayerURI's ``layer_id`` encodes the bbox so distinct
     bboxes produce distinct layer ids.
 
-Live test (gated by ``GRACE2_TEST_LIVE_LANDFIRE=1``):
+Live test (gated by ``TRID3NT_TEST_LIVE_LANDFIRE=1``):
 - Real California Sierra Nevada bbox FBFM40 fetch from
   ``lfps.usgs.gov/arcgis/rest/services/Landfire_LF2022``. Writes
   ``evidence/landfire_live.txt`` with a value-distribution summary so the
@@ -37,9 +37,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.cache import compute_cache_key
-from grace2_agent.tools.fetch_landfire_fuels import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.cache import compute_cache_key
+from trid3nt_server.tools.fetch_landfire_fuels import (
     _LANDFIRE_YEAR,
     _LAYER_SERVICE,
     _LAYER_STYLE_PRESET,
@@ -73,7 +73,7 @@ _CA_SIERRA_BBOX: tuple[float, float, float, float] = (-122.0, 38.0, -119.0, 40.0
 # all-nodata gate raises LandfireFuelsEmptyError.
 _OCEAN_BBOX: tuple[float, float, float, float] = (-160.0, 30.0, -158.0, 32.0)
 
-_LIVE_LANDFIRE = os.environ.get("GRACE2_TEST_LIVE_LANDFIRE") == "1"
+_LIVE_LANDFIRE = os.environ.get("TRID3NT_TEST_LIVE_LANDFIRE") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -309,7 +309,7 @@ def test_round_bbox_to_6dp() -> None:
 
 def test_bbox_to_pixel_size_clamps_to_bounds() -> None:
     """A tiny bbox clamps to the _PX_MIN; a huge bbox clamps to _PX_MAX."""
-    from grace2_agent.tools.fetch_landfire_fuels import _PX_MAX, _PX_MIN
+    from trid3nt_server.tools.fetch_landfire_fuels import _PX_MAX, _PX_MIN
 
     # Tiny bbox: ~0.0001° wide ≈ 11 m at mid-lat.
     w, h = _bbox_to_pixel_size((-122.0, 38.0, -121.9999, 38.0001))
@@ -408,16 +408,16 @@ def test_mocked_tiff_fetch_writes_to_cache() -> None:
     tiff = _fake_tiff_bytes()
 
     with patch(
-        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        "trid3nt_server.tools.fetch_landfire_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels.requests.get",
+        "trid3nt_server.tools.fetch_landfire_fuels.requests.get",
         return_value=_make_response(tiff),
     ), patch(
         # The all-nodata gate uses rasterio; in the mocked path we want to
         # short-circuit it so the tiny fake TIFF doesn't fail rasterio's
         # validation.
-        "grace2_agent.tools.fetch_landfire_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetch_landfire_fuels._is_all_nodata",
         return_value=False,
     ):
         layer_uri = fetch_landfire_fuels(bbox=_CA_SIERRA_BBOX, layer="fbfm40")
@@ -447,10 +447,10 @@ def test_mocked_json_error_envelope_raises_upstream() -> None:
     json_body = b'{"error":{"code":400,"message":"Invalid bbox"}}'
 
     with patch(
-        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        "trid3nt_server.tools.fetch_landfire_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels.requests.get",
+        "trid3nt_server.tools.fetch_landfire_fuels.requests.get",
         return_value=_make_response(
             json_body, content_type="application/json"
         ),
@@ -466,10 +466,10 @@ def test_mocked_html_response_raises_upstream() -> None:
     html_body = b"<!DOCTYPE html><html><body>404</body></html>"
 
     with patch(
-        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        "trid3nt_server.tools.fetch_landfire_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels.requests.get",
+        "trid3nt_server.tools.fetch_landfire_fuels.requests.get",
         return_value=_make_response(html_body, content_type="text/html"),
     ):
         with pytest.raises(LandfireFuelsUpstreamError, match="not a TIFF"):
@@ -482,10 +482,10 @@ def test_mocked_http_500_raises_upstream() -> None:
     patched_rt = _make_read_through_injector(fake_gcs)
 
     with patch(
-        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        "trid3nt_server.tools.fetch_landfire_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels.requests.get",
+        "trid3nt_server.tools.fetch_landfire_fuels.requests.get",
         return_value=_make_response(b"server error", status_code=500),
     ):
         with pytest.raises(LandfireFuelsUpstreamError, match="HTTP 500"):
@@ -504,13 +504,13 @@ def test_cache_hit_does_not_refetch() -> None:
         return _make_response(tiff)
 
     with patch(
-        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        "trid3nt_server.tools.fetch_landfire_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels.requests.get",
+        "trid3nt_server.tools.fetch_landfire_fuels.requests.get",
         side_effect=counted_get,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetch_landfire_fuels._is_all_nodata",
         return_value=False,
     ):
         u1 = fetch_landfire_fuels(bbox=_CA_SIERRA_BBOX, layer="fbfm40")
@@ -540,13 +540,13 @@ def test_url_encodes_requested_bbox() -> None:
         return _make_response(_fake_tiff_bytes())
 
     with patch(
-        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        "trid3nt_server.tools.fetch_landfire_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels.requests.get",
+        "trid3nt_server.tools.fetch_landfire_fuels.requests.get",
         side_effect=capture_get,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetch_landfire_fuels._is_all_nodata",
         return_value=False,
     ):
         fetch_landfire_fuels(bbox=_CA_SIERRA_BBOX, layer="fbfm40")
@@ -588,13 +588,13 @@ def test_mocked_cc_ch_fetch_targets_correct_service(
         return _make_response(_fake_tiff_bytes())
 
     with patch(
-        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        "trid3nt_server.tools.fetch_landfire_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels.requests.get",
+        "trid3nt_server.tools.fetch_landfire_fuels.requests.get",
         side_effect=capture_get,
     ), patch(
-        "grace2_agent.tools.fetch_landfire_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetch_landfire_fuels._is_all_nodata",
         return_value=False,
     ):
         layer_uri = fetch_landfire_fuels(bbox=_CA_SIERRA_BBOX, layer=layer)  # type: ignore[arg-type]
@@ -632,7 +632,7 @@ def test_cc_ch_cache_keys_distinct_from_each_other_and_cbh() -> None:
 
 @pytest.mark.skipif(
     not _LIVE_LANDFIRE,
-    reason="set GRACE2_TEST_LIVE_LANDFIRE=1 to enable real LANDFIRE fetches",
+    reason="set TRID3NT_TEST_LIVE_LANDFIRE=1 to enable real LANDFIRE fetches",
 )
 def test_live_california_fbfm40_returns_real_raster() -> None:
     """Live: CA Sierra Nevada FBFM40 fetch returns a real GeoTIFF with class codes.
@@ -646,7 +646,7 @@ def test_live_california_fbfm40_returns_real_raster() -> None:
     patched_rt = _make_read_through_injector(fake_gcs)
 
     with patch(
-        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        "trid3nt_server.tools.fetch_landfire_fuels.read_through",
         side_effect=patched_rt,
     ):
         layer_uri = fetch_landfire_fuels(bbox=_CA_SIERRA_BBOX, layer="fbfm40")
@@ -710,7 +710,7 @@ def test_live_california_fbfm40_returns_real_raster() -> None:
 
 @pytest.mark.skipif(
     not _LIVE_LANDFIRE,
-    reason="set GRACE2_TEST_LIVE_LANDFIRE=1 to enable real LANDFIRE fetches",
+    reason="set TRID3NT_TEST_LIVE_LANDFIRE=1 to enable real LANDFIRE fetches",
 )
 def test_live_layer_options_distinguish() -> None:
     """Live: fbfm13 vs fbfm40 produce distinct cached blobs (different cache keys).
@@ -722,7 +722,7 @@ def test_live_layer_options_distinguish() -> None:
     patched_rt = _make_read_through_injector(fake_gcs)
 
     with patch(
-        "grace2_agent.tools.fetch_landfire_fuels.read_through",
+        "trid3nt_server.tools.fetch_landfire_fuels.read_through",
         side_effect=patched_rt,
     ):
         u40 = fetch_landfire_fuels(bbox=_CA_SIERRA_BBOX, layer="fbfm40")

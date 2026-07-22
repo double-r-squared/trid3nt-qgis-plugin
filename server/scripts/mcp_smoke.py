@@ -3,7 +3,7 @@
 job-0015 AC3: a real MongoDB MCP tool call from the agent process. Fetches
 the SRV from Secret Manager (ADC), launches ``mongodb-mcp-server`` via
 ``npx`` as a stdio sidecar, completes the MCP handshake, lists tools, and
-calls ``list-databases`` then ``list-collections`` against ``grace2_dev``.
+calls ``list-databases`` then ``list-collections`` against ``trid3nt_dev``.
 
 This is the M1 proof that the MCP seam works end-to-end with the live
 substrate. Wiring MCP tools into Gemini's function-calling loop is a
@@ -21,7 +21,7 @@ import json
 import re
 import sys
 
-from grace2_agent.mcp import MCPClient, fetch_srv_from_secret_manager
+from trid3nt_server.mcp import MCPClient, fetch_srv_from_secret_manager
 
 
 def _redact(s: str) -> str:
@@ -53,9 +53,9 @@ async def main() -> int:
         else:
             print(f"< (raw) {json.dumps(result)[:400]}")
 
-        print("> tools/call name=list-collections database=grace2_dev")
+        print("> tools/call name=list-collections database=trid3nt_dev")
         result = await mcp.call_tool(
-            "list-collections", {"database": "grace2_dev"}
+            "list-collections", {"database": "trid3nt_dev"}
         )
         content = result.get("content", [])
         for piece in content:

@@ -15,7 +15,7 @@ Coverage:
 - Cache miss → fetch_fn invoked once; cache hit → fetch_fn skipped.
 - LayerURI shape matches contract.
 - Geographic-correctness gate: point centroids fall inside the US envelope.
-- Live (env GRACE2_TEST_LIVE_USACE_DAMS=1): real NID FeatureService small-bbox
+- Live (env TRID3NT_TEST_LIVE_USACE_DAMS=1): real NID FeatureService small-bbox
   query returns ≥1 dam point in the Fort Myers area.
 """
 
@@ -30,8 +30,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_usace_dams import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_usace_dams import (
     CONUS_BBOX,
     PRESERVED_PROPERTIES,
     USACEDAMSError,
@@ -56,7 +56,7 @@ from grace2_agent.tools.fetch_usace_dams import (
 
 _PINNED_NOW = datetime(2026, 6, 9, 12, 0, 0, tzinfo=timezone.utc)
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_USACE_DAMS") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_USACE_DAMS") == "1"
 
 # US-dam envelope for the geographic-correctness gate. Covers CONUS, AK,
 # HI. Every NID dam point centroid should fall inside this box.
@@ -113,7 +113,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -391,7 +391,7 @@ def test_user_agent_header_sent_on_request():
             captured_headers.update(headers or {})
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
         _fetch_nid_geojson_page(
             "https://services2.arcgis.com/.../FeatureServer/0/query",
             {"f": "geojson"},
@@ -415,10 +415,10 @@ def test_synthetic_response_writes_fgb_with_correct_count():
     fake_geojson = _sample_nid_geojson(5)
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_all_features",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_all_features",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_dams(bbox=(-125.0, 25.0, -65.0, 50.0))
@@ -462,10 +462,10 @@ def test_bbox_vs_global_cache_keys_differ():
     fake_geojson = _sample_nid_geojson(2)
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_all_features",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_all_features",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_global = fetch_usace_dams()
@@ -493,7 +493,7 @@ def test_pagination_loop_stops_on_short_page():
         return {"type": "FeatureCollection", "features": short_page_features}
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=fake_page,
     ):
         out = _fetch_nid_all_features(bbox=None)
@@ -513,7 +513,7 @@ def test_pagination_loop_respects_max_features_cap():
         return {"type": "FeatureCollection", "features": list(full_page)}
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=fake_page,
     ):
         out = _fetch_nid_all_features(bbox=None, max_features=4500)
@@ -548,10 +548,10 @@ def test_extra_kwargs_absorbed_by_signature():
     fake_gcs = FakeStorageClient()
     fake_geojson = _sample_nid_geojson(2)
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_all_features",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_all_features",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         # These kwargs are not declared but must be absorbed.
@@ -591,7 +591,7 @@ def test_500_raises_typed_upstream_error():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSUpstreamError, match="500"):
             _fetch_nid_geojson_page(
                 "https://services2.arcgis.com/.../FeatureServer/0/query",
@@ -614,7 +614,7 @@ def test_network_failure_wraps_to_upstream_error():
         def get(self, url, params=None, headers=None):
             raise httpx.ConnectError("simulated DNS failure")
 
-    with patch("grace2_agent.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSUpstreamError, match="request failed"):
             _fetch_nid_geojson_page(
                 "https://services2.arcgis.com/.../FeatureServer/0/query",
@@ -644,7 +644,7 @@ def test_arcgis_error_envelope_in_200_body_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSUpstreamError, match="error envelope"):
             _fetch_nid_geojson_page(
                 "https://services2.arcgis.com/.../FeatureServer/0/query",
@@ -674,7 +674,7 @@ def test_non_feature_collection_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSUpstreamError, match="FeatureCollection"):
             _fetch_nid_geojson_page(
                 "https://services2.arcgis.com/.../FeatureServer/0/query",
@@ -705,10 +705,10 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return fake_bytes
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_bytes",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_usace_dams(bbox=(-82.5, 26.0, -81.0, 27.0))
@@ -729,10 +729,10 @@ def test_layer_uri_shape_for_global_sweep():
     """Global sweep produces a LayerURI tagged role=primary, layer_type=vector."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_bytes",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_bytes",
         return_value=_fake_fgb_bytes("GLOBAL"),
     ), patch(
-        "grace2_agent.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_dams()
@@ -847,13 +847,13 @@ def test_geojson_to_fgb_drops_null_geometry_rows():
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_USACE_DAMS=1 to run).
+# Live integration test (TRID3NT_TEST_LIVE_USACE_DAMS=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE,
-    reason="Set GRACE2_TEST_LIVE_USACE_DAMS=1 to run live NID tests",
+    reason="Set TRID3NT_TEST_LIVE_USACE_DAMS=1 to run live NID tests",
 )
 def test_live_fort_myers_bbox_returns_dams():
     """LIVE: real NID FeatureService Fort Myers bbox returns ≥1 dam point."""
@@ -884,7 +884,7 @@ def test_live_fort_myers_bbox_returns_dams():
 # degradation. (Appended; do not interleave with the original block.)
 # ===========================================================================
 
-from grace2_agent.tools.fetch_usace_dams import (  # noqa: E402
+from trid3nt_server.tools.fetch_usace_dams import (  # noqa: E402
     USACEDAMSAuthError,
     _NID_AUTHORITATIVE_BASE,
     _NID_BASE,
@@ -981,23 +981,23 @@ def test_build_url_omits_token_when_none():
 
 
 def test_resolve_token_returns_none_when_no_source(monkeypatch):
-    monkeypatch.delenv("GRACE2_USACE_NID_TOKEN", raising=False)
+    monkeypatch.delenv("TRID3NT_USACE_NID_TOKEN", raising=False)
     assert _resolve_nid_token(None, None) is None
 
 
 def test_resolve_token_prefers_explicit_kwarg(monkeypatch):
-    monkeypatch.setenv("GRACE2_USACE_NID_TOKEN", "env-tok")
+    monkeypatch.setenv("TRID3NT_USACE_NID_TOKEN", "env-tok")
     assert _resolve_nid_token("kwarg-tok", None) == "kwarg-tok"
 
 
 def test_resolve_token_uses_string_secret_ref(monkeypatch):
-    monkeypatch.delenv("GRACE2_USACE_NID_TOKEN", raising=False)
+    monkeypatch.delenv("TRID3NT_USACE_NID_TOKEN", raising=False)
     assert _resolve_nid_token(None, "secret-tok") == "secret-tok"
 
 
 def test_resolve_token_falls_back_to_env(monkeypatch):
-    monkeypatch.delenv("GRACE2_USACE_NID_TOKEN", raising=False)
-    monkeypatch.setenv("GRACE2_USACE_NID_TOKEN", "env-tok")
+    monkeypatch.delenv("TRID3NT_USACE_NID_TOKEN", raising=False)
+    monkeypatch.setenv("TRID3NT_USACE_NID_TOKEN", "env-tok")
     assert _resolve_nid_token(None, None) == "env-tok"
 
 
@@ -1053,7 +1053,7 @@ def _token_envelope_client(code: int):
 
 def test_esri_499_token_required_raises_auth_error():
     with patch(
-        "grace2_agent.tools.fetch_usace_dams.httpx.Client",
+        "trid3nt_server.tools.fetch_usace_dams.httpx.Client",
         _token_envelope_client(499),
     ):
         with pytest.raises(USACEDAMSAuthError):
@@ -1062,7 +1062,7 @@ def test_esri_499_token_required_raises_auth_error():
 
 def test_esri_498_invalid_token_raises_auth_error():
     with patch(
-        "grace2_agent.tools.fetch_usace_dams.httpx.Client",
+        "trid3nt_server.tools.fetch_usace_dams.httpx.Client",
         _token_envelope_client(498),
     ):
         with pytest.raises(USACEDAMSAuthError):
@@ -1090,14 +1090,14 @@ def test_http_401_from_authoritative_raises_auth_error():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("grace2_agent.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSAuthError):
             _fetch_nid_geojson_page(_NID_AUTHORITATIVE_BASE, {"f": "json"})
 
 
 def test_auth_error_is_credential_shaped_for_generic_card():
     """The credential pipeline classifies our auth error WITHOUT a registry row."""
-    from grace2_agent.credential_registry import is_credential_shaped_error
+    from trid3nt_server.credential_registry import is_credential_shaped_error
 
     err = USACEDAMSAuthError("USACE NID requires a valid token (ESRI code 498)")
     assert is_credential_shaped_error("fetch_usace_dams", err) is True
@@ -1121,7 +1121,7 @@ def test_fetch_bytes_no_token_uses_mirror_only():
         return {"type": "FeatureCollection", "features": []}
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=recording_page,
     ):
         _fetch_nid_bytes(None, where="1=1", token=None)
@@ -1144,7 +1144,7 @@ def test_fetch_bytes_token_attempts_authoritative_then_degrades_to_mirror():
         return {"type": "FeatureCollection", "features": []}
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=page,
     ):
         _fetch_nid_bytes(None, where="1=1", token="some-token")
@@ -1164,7 +1164,7 @@ def test_fetch_bytes_token_auth_rejection_does_not_degrade():
         return {"type": "FeatureCollection", "features": []}
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=page,
     ):
         with pytest.raises(USACEDAMSAuthError):
@@ -1185,7 +1185,7 @@ def test_empty_filtered_result_serializes_valid_empty_fgb():
     import geopandas as gpd  # noqa: PLC0415
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=lambda url, params: {"type": "FeatureCollection", "features": []},
     ):
         fgb = _fetch_nid_bytes(
@@ -1213,10 +1213,10 @@ def test_filters_distinguish_layer_id_and_cache_key():
     """Different hazard/state filters produce distinct layer ids + cache keys."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_bytes",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_bytes",
         side_effect=lambda *a, **k: _geojson_to_fgb(_sample_nid_geojson(2)),
     ), patch(
-        "grace2_agent.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         l_all = fetch_usace_dams(bbox=(-115.4, 35.8, -114.3, 36.5))
@@ -1239,7 +1239,7 @@ def test_filters_distinguish_layer_id_and_cache_key():
 
 @pytest.mark.skipif(
     not _LIVE,
-    reason="Set GRACE2_TEST_LIVE_USACE_DAMS=1 to run live NID tests",
+    reason="Set TRID3NT_TEST_LIVE_USACE_DAMS=1 to run live NID tests",
 )
 def test_live_state_and_hazard_filter_applies():
     """LIVE: hazard_potential='High' + state='Nevada' returns only matching dams."""
@@ -1265,7 +1265,7 @@ def test_live_state_and_hazard_filter_applies():
 # (DAM_HEIGHT >= {value}, feet). Appended; do not interleave.
 # ===========================================================================
 
-from grace2_agent.tools.fetch_usace_dams import (  # noqa: E402
+from trid3nt_server.tools.fetch_usace_dams import (  # noqa: E402
     _validate_min_height,
 )
 
@@ -1316,10 +1316,10 @@ def test_min_height_threads_into_where_and_distinguishes_cache_key():
         return _geojson_to_fgb(_sample_nid_geojson(2))
 
     with patch(
-        "grace2_agent.tools.fetch_usace_dams._fetch_nid_bytes",
+        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_bytes",
         side_effect=_capture_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         l_all = fetch_usace_dams(bbox=(-115.4, 35.8, -114.3, 36.5))
@@ -1338,7 +1338,7 @@ def test_min_height_threads_into_where_and_distinguishes_cache_key():
 
 def test_min_height_invalid_raises_before_any_fetch():
     with patch(
-        "grace2_agent.tools.fetch_usace_dams.read_through"
+        "trid3nt_server.tools.fetch_usace_dams.read_through"
     ) as mock_rt:
         with pytest.raises(USACEDAMSInputError):
             fetch_usace_dams(

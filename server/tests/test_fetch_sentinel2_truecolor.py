@@ -30,10 +30,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.cache import compute_cache_key
-from grace2_agent.tools import fetch_sentinel2_truecolor as s2_mod
-from grace2_agent.tools.fetch_sentinel2_truecolor import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.cache import compute_cache_key
+from trid3nt_server.tools import fetch_sentinel2_truecolor as s2_mod
+from trid3nt_server.tools.fetch_sentinel2_truecolor import (
     S2TrueColorBboxError,
     S2TrueColorNoImageryError,
     _truecolor_from_bands,
@@ -54,7 +54,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -92,7 +92,7 @@ def _write_band_cog(bbox, value_array, dtype="uint16") -> str:
 
     h, w = value_array.shape
     transform = rasterio.transform.from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], w, h)
-    fd, path = tempfile.mkstemp(suffix=".tif", prefix="grace2_s2tc_src_")
+    fd, path = tempfile.mkstemp(suffix=".tif", prefix="trid3nt_s2tc_src_")
     os.close(fd)
     with rasterio.open(
         path, "w", driver="GTiff", height=h, width=w, count=1, dtype=dtype,
@@ -120,7 +120,7 @@ def test_tool_is_registered() -> None:
 def test_style_preset_is_multiband_passthrough_token() -> None:
     """``s2_truecolor`` must NOT resolve in the single-band registry  --  RGB COGs
     go through the multiband passthrough (baked colors render directly)."""
-    from grace2_agent.tools.publish_layer import _registry_style_params
+    from trid3nt_server.tools.publish_layer import _registry_style_params
 
     assert _registry_style_params("s2_truecolor") is None
 

@@ -29,7 +29,7 @@ pytest.importorskip("swmm_api")
 pytest.importorskip("pyswmm")
 rasterio = pytest.importorskip("rasterio")
 
-from grace2_agent.workflows.postprocess_swmm import (  # noqa: E402
+from trid3nt_server.workflows.postprocess_swmm import (  # noqa: E402
     postprocess_swmm_pollutants,
     read_outfall_loading,
     read_runoff_quality_built_washed,
@@ -81,7 +81,7 @@ def test_runoff_quality_built_washed_count_conversion():
 def test_postprocess_pollutants_metrics_and_layers():
     run, build = _stub_run_build()
     with patch(
-        "grace2_agent.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
         side_effect=_fake_upload,
     ):
         layers, series, metrics = postprocess_swmm_pollutants(
@@ -114,7 +114,7 @@ def test_postprocess_pollutants_metrics_and_layers():
     )
 
     # --- layers: one SWMMPollutantLayerURI per pollutant, role=context ---
-    from grace2_contracts.swmm_contracts import SWMMPollutantLayerURI
+    from trid3nt_contracts.swmm_contracts import SWMMPollutantLayerURI
 
     assert len(layers) == 2
     by_name = {l.pollutant_name: l for l in layers}

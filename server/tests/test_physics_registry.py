@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.workflows.physics_registry import (
+from trid3nt_server.workflows.physics_registry import (
     PHYSICS_REGISTRY,
     PhysicsRegistryError,
     applied_physics_delta,

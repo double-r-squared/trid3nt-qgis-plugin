@@ -13,8 +13,8 @@ Coverage (no network needed):
 - Cache miss: fetch_fn invoked + bytes written.
 - Cache hit: second call with same params skips fetch_fn.
 
-Live tests (network-gated by GRACE2_TEST_LIVE_FIRMS=1 AND a valid
-GRACE2_FIRMS_MAP_KEY env var):
+Live tests (network-gated by TRID3NT_TEST_LIVE_FIRMS=1 AND a valid
+TRID3NT_FIRMS_MAP_KEY env var):
 - Real fetch for California-shape bbox last 7 days returns ≥0 features in
   the bbox.
 """
@@ -28,8 +28,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_firms_active_fire import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_firms_active_fire import (
     FirmsArgError,
     FirmsAuthError,
     FirmsUpstreamError,
@@ -45,7 +45,7 @@ from grace2_agent.tools.fetch_firms_active_fire import (
 
 
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
-_LIVE_FIRMS = os.environ.get("GRACE2_TEST_LIVE_FIRMS") == "1"
+_LIVE_FIRMS = os.environ.get("TRID3NT_TEST_LIVE_FIRMS") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -326,9 +326,9 @@ def test_invalid_map_key_response_raises_auth_error():
     Verified live 2026-06-08: FIRMS returns HTTP 400 + plain-text body
     "Invalid MAP_KEY." for unknown / unregistered keys (DEMO / 'demo' both
     fail this way). The auth-error path must fire BEFORE the HTTP-status
-    guard so the user gets the actionable "set GRACE2_FIRMS_MAP_KEY" message.
+    guard so the user gets the actionable "set TRID3NT_FIRMS_MAP_KEY" message.
     """
-    from grace2_agent.tools.fetch_firms_active_fire import _fetch_firms_csv
+    from trid3nt_server.tools.fetch_firms_active_fire import _fetch_firms_csv
 
     # HTTP 400 + invalid-key body (the actual live behavior).
     mock_resp = MagicMock()
@@ -336,7 +336,7 @@ def test_invalid_map_key_response_raises_auth_error():
     mock_resp.text = "Invalid MAP_KEY.\nInvalid day range. Expects [1..5]."
 
     with patch(
-        "grace2_agent.tools.fetch_firms_active_fire.requests.get",
+        "trid3nt_server.tools.fetch_firms_active_fire.requests.get",
         return_value=mock_resp,
     ):
         with pytest.raises(FirmsAuthError, match="MAP_KEY"):
@@ -353,7 +353,7 @@ def test_invalid_map_key_response_raises_auth_error():
     mock_resp_200.status_code = 200
     mock_resp_200.text = "Invalid MAP_KEY."
     with patch(
-        "grace2_agent.tools.fetch_firms_active_fire.requests.get",
+        "trid3nt_server.tools.fetch_firms_active_fire.requests.get",
         return_value=mock_resp_200,
     ):
         with pytest.raises(FirmsAuthError, match="MAP_KEY"):
@@ -366,14 +366,14 @@ def test_invalid_map_key_response_raises_auth_error():
 
 
 def test_resolve_map_key_honors_env_var():
-    """_resolve_map_key reads GRACE2_FIRMS_MAP_KEY env var; falls back to 'demo'."""
+    """_resolve_map_key reads TRID3NT_FIRMS_MAP_KEY env var; falls back to 'demo'."""
     with patch.dict(
-        os.environ, {"GRACE2_FIRMS_MAP_KEY": "my-real-key-abc"}, clear=False
+        os.environ, {"TRID3NT_FIRMS_MAP_KEY": "my-real-key-abc"}, clear=False
     ):
         assert _resolve_map_key() == "my-real-key-abc"
     # Without the env var (popped), falls back to "demo".
     env = dict(os.environ)
-    env.pop("GRACE2_FIRMS_MAP_KEY", None)
+    env.pop("TRID3NT_FIRMS_MAP_KEY", None)
     with patch.dict(os.environ, env, clear=True):
         assert _resolve_map_key() == "demo"
 
@@ -394,10 +394,10 @@ def test_cache_miss_invokes_fetch_and_writes():
         return fake_fgb
 
     with patch(
-        "grace2_agent.tools.fetch_firms_active_fire._fetch_firms_active_fire_bytes",
+        "trid3nt_server.tools.fetch_firms_active_fire._fetch_firms_active_fire_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_firms_active_fire.read_through",
+        "trid3nt_server.tools.fetch_firms_active_fire.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_firms_active_fire(
@@ -428,10 +428,10 @@ def test_cache_hit_skips_fetch():
         return fake_fgb
 
     with patch(
-        "grace2_agent.tools.fetch_firms_active_fire._fetch_firms_active_fire_bytes",
+        "trid3nt_server.tools.fetch_firms_active_fire._fetch_firms_active_fire_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_firms_active_fire.read_through",
+        "trid3nt_server.tools.fetch_firms_active_fire.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_firms_active_fire(
@@ -451,25 +451,25 @@ def test_cache_hit_skips_fetch():
 
 
 # ---------------------------------------------------------------------------
-# Live test — only runs with GRACE2_TEST_LIVE_FIRMS=1 + valid MAP_KEY.
+# Live test — only runs with TRID3NT_TEST_LIVE_FIRMS=1 + valid MAP_KEY.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_FIRMS,
-    reason="set GRACE2_TEST_LIVE_FIRMS=1 to run live FIRMS test",
+    reason="set TRID3NT_TEST_LIVE_FIRMS=1 to run live FIRMS test",
 )
 def test_live_fetch_california_last_5d(tmp_path):
     """Live FIRMS round-trip with two modes — both verify real upstream contact:
 
-    1. ``GRACE2_FIRMS_MAP_KEY`` set to a valid key → fetch CA bbox last 5d,
+    1. ``TRID3NT_FIRMS_MAP_KEY`` set to a valid key → fetch CA bbox last 5d,
        assert FGB returned with every detected point inside the CA envelope.
        (5 days is the live FIRMS max as of 2026-06-08; kickoff said 10 but
        the upstream enforces [1..5]. See OQ-0108-DAYS-RANGE.)
     2. No real key set → assert ``FirmsAuthError`` raised on real FIRMS
        endpoint (verifies the auth-detection path is wired end-to-end).
     """
-    real_key = os.environ.get("GRACE2_FIRMS_MAP_KEY", "")
+    real_key = os.environ.get("TRID3NT_FIRMS_MAP_KEY", "")
     has_real_key = bool(real_key) and real_key != "demo"
 
     fake_gcs = FakeStorageClient()
@@ -477,7 +477,7 @@ def test_live_fetch_california_last_5d(tmp_path):
     if has_real_key:
         # Real-key mode: assert FGB-with-geography correctness.
         with patch(
-            "grace2_agent.tools.fetch_firms_active_fire.read_through",
+            "trid3nt_server.tools.fetch_firms_active_fire.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ):
             result = fetch_firms_active_fire(
@@ -518,7 +518,7 @@ def test_live_fetch_california_last_5d(tmp_path):
         # No-key mode: verify the auth-detection branch fires end-to-end
         # against the real FIRMS endpoint (no mocking).
         with patch(
-            "grace2_agent.tools.fetch_firms_active_fire.read_through",
+            "trid3nt_server.tools.fetch_firms_active_fire.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ):
             with pytest.raises(FirmsAuthError, match="MAP_KEY"):
@@ -529,5 +529,5 @@ def test_live_fetch_california_last_5d(tmp_path):
                 )
         print(
             "\nlive_test (no key): FIRMS endpoint reached; FirmsAuthError "
-            "fired as expected. Set GRACE2_FIRMS_MAP_KEY to fetch real data."
+            "fired as expected. Set TRID3NT_FIRMS_MAP_KEY to fetch real data."
         )

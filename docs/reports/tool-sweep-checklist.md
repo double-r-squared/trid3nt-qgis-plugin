@@ -47,7 +47,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | fetch_airnow_air_quality | KEY | 0s | AirNowMissingKeyError: no AirNow API key available: pass api_key=..., secret_ref=..., or s |
 | fetch_asos_metar | PASS | 2s |  |
 | fetch_buildings | PASS | 7s |  |
-| fetch_cama_flood_discharge | KEY | 0s | upstream became REGISTRATION-GATED (U-Tokyo Google Form -> issued password); set GRACE2_CA |
+| fetch_cama_flood_discharge | KEY | 0s | upstream became REGISTRATION-GATED (U-Tokyo Google Form -> issued password); set TRID3NT_CA |
 | fetch_cdc_svi | PASS | 1s |  |
 | fetch_census_acs | PASS | 3s |  |
 | fetch_chirps_precipitation | PASS | 5s |  |
@@ -62,7 +62,7 @@ AOI: ~3km downtown Tampa. KEY = needs an API key, earmarked for later.
 | fetch_fault_sources | PASS | 1s |  |
 | fetch_fema_nfhl_zones | PASS | 4s |  |
 | fetch_field_boundaries | PASS | 34s |  |
-| fetch_firms_active_fire | FAIL | 1s | FirmsAuthError: FIRMS rejected the MAP_KEY. Set GRACE2_FIRMS_MAP_KEY to a valid key from h |
+| fetch_firms_active_fire | FAIL | 1s | FirmsAuthError: FIRMS rejected the MAP_KEY. Set TRID3NT_FIRMS_MAP_KEY to a valid key from h |
 | fetch_gbif_occurrences | SKIP-ARGS | 0s | required params not fabricatable: ['species_key'] |
 | fetch_gcn250_curve_numbers | PASS | 11s |  |
 | fetch_ghsl_population | PASS | 13s |  |

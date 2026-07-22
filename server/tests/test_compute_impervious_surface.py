@@ -44,8 +44,8 @@ import rasterio
 from rasterio.io import MemoryFile
 from rasterio.transform import from_bounds
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.compute_impervious_surface import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.compute_impervious_surface import (
     DEVELOPED_CLASS_TO_IMPERVIOUS,
     ImperviousSurfaceError,
     _compute_impervious_bytes,
@@ -451,8 +451,8 @@ def test_compute_impervious_cache_miss_writes():
 
 def test_compute_impervious_cache_hit_skips_compute():
     """Second call hits the cache; source download is NOT invoked."""
-    from grace2_agent.tools.cache import cache_path as make_cache_path
-    from grace2_agent.tools.cache import compute_cache_key
+    from trid3nt_server.tools.cache import cache_path as make_cache_path
+    from trid3nt_server.tools.cache import compute_cache_key
 
     # Pre-seed cache with a known impervious bytes.
     array = np.full((2, 2), 22, dtype=np.uint8)
@@ -629,12 +629,12 @@ def test_scale_helper_impervious_product_clipping():
 
 # The kickoff requires ≥1 live test. The "live" path is: download a real NLCD
 # landcover GeoTIFF and run the developed-class derivation against it.
-# Guarded by GRACE2_RUN_LIVE_NLCD=1 so CI without GCS / network skips it.
+# Guarded by TRID3NT_RUN_LIVE_NLCD=1 so CI without GCS / network skips it.
 
 
 @pytest.mark.skipif(
-    os.environ.get("GRACE2_RUN_LIVE_NLCD") != "1",
-    reason="live NLCD impervious-surface test requires GRACE2_RUN_LIVE_NLCD=1 + GCP ADC",
+    os.environ.get("TRID3NT_RUN_LIVE_NLCD") != "1",
+    reason="live NLCD impervious-surface test requires TRID3NT_RUN_LIVE_NLCD=1 + GCP ADC",
 )
 def test_live_compute_impervious_against_fort_myers_landcover():
     """Live: derive impervious from a real NLCD landcover layer (Fort Myers AOI).
@@ -646,7 +646,7 @@ def test_live_compute_impervious_against_fort_myers_landcover():
         developed classes);
       - mean impervious fraction is < 1.0 (sanity: not all-developed).
     """
-    from grace2_agent.tools.data_fetch import fetch_landcover
+    from trid3nt_server.tools.data_fetch import fetch_landcover
 
     # Small Fort Myers AOI (~few hundred km²).
     bbox = (-82.10, 26.55, -81.80, 26.80)

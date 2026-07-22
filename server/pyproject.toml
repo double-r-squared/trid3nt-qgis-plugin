@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "grace2-agent"
+name = "trid3nt-server"
 version = "0.1.0"
 description = "Agent service: AWS Bedrock Converse agent loop, Appendix-A WebSocket server, S3/DynamoDB persistence, AWS Batch solver dispatch."
 readme = "README.md"
@@ -189,7 +189,7 @@ dependencies = [
     # surface it relies on (pmtiles.tile.zxy_to_tileid + Compression + TileType,
     # pmtiles.writer.Writer, pmtiles.reader.Reader/MmapSource) is provided by the
     # 3.x line (verified against 3.7.0). The build path is env-gated OFF by
-    # default (vector_tiles_enabled() requires GRACE2_VECTOR_TILES_BASE_URL), so
+    # default (vector_tiles_enabled() requires TRID3NT_VECTOR_TILES_BASE_URL), so
     # the dep only matters once an HTTP tile-serving face exists. mapbox-vector-
     # tile + mercantile are pulled transitively (shapely already present via
     # geopandas). NOTE: the SSM file-swap deploy does NOT pip-install, so the
@@ -202,7 +202,7 @@ dependencies = [
     # Bedrock path. AsyncOpenAI + streaming tool-call support requires >= 1.40.
     "openai>=1.40",
     # Consumed verbatim from contracts/ in this repo (editable install).
-    "grace2-contracts>=0.1,<0.2",
+    "trid3nt-contracts>=0.1,<0.2",
 ]
 
 [project.optional-dependencies]
@@ -219,7 +219,7 @@ local-engines = [
 ]
 
 [project.scripts]
-grace2-agent = "grace2_agent.main:run"
+trid3nt-server = "trid3nt_server.main:run"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -231,7 +231,7 @@ where = ["src"]
 # box (editable/source install) worked. Keep this in sync with any new data file
 # loaded via Path(__file__).parent (2026-06-30).
 [tool.setuptools.package-data]
-grace2_agent = [
+trid3nt_server = [
     "workflows/manning_mapping.csv",
     "data/tool_query_corpus.yaml",
     "tools/README.md",

@@ -1,13 +1,13 @@
 """job-0292b (sprint-14-aws) — MODFLOW local backend tests.
 
-MODFLOW routed through the job-0291 ``GRACE2_SOLVER_BACKEND=local-docker``
+MODFLOW routed through the job-0291 ``TRID3NT_SOLVER_BACKEND=local-docker``
 seam, as an **image-less local-exec** spec over the shared
 ``tools.solver.launch_local_solver`` machinery: stage the deck from S3
 (boto3), run the ``mf6`` binary detached (no public MODFLOW image exists —
 the instance carries the SHA-pinned USGS 6.5.0 static binary the GCP
 Dockerfile installs), supervisor uploads outputs + the EXACT
 ``services/workers/modflow/entrypoint.py`` completion.json to
-``s3://$GRACE2_RUNS_BUCKET/<run_id>/``.
+``s3://$TRID3NT_RUNS_BUCKET/<run_id>/``.
 
 Hard constraints honored here (kickoff): **NO docker / NO real mf6 on this
 machine** — the ``mf6`` binary is a PATH-shim bash script (behaviors
@@ -58,18 +58,18 @@ import numpy as np
 import pytest
 from botocore.exceptions import ClientError
 
-import grace2_agent.tools.solver as solver_mod
-import grace2_agent.workflows.postprocess_modflow as pp
-import grace2_agent.workflows.run_modflow as rm
-from grace2_agent.tools.solver import (
+import trid3nt_server.tools.solver as solver_mod
+import trid3nt_server.workflows.postprocess_modflow as pp
+import trid3nt_server.workflows.run_modflow as rm
+from trid3nt_server.tools.solver import (
     LOCAL_EXEC_WORKFLOW_NAME,
     set_emitter_binding,
     set_runs_bucket,
     set_s3_client,
     wait_for_completion,
 )
-from grace2_contracts import new_ulid
-from grace2_contracts.execution import ExecutionHandle, RunResult
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.execution import ExecutionHandle, RunResult
 
 _HAVE_FLOPY = True
 try:  # flopy backs the deck build + the UCN read in the E2E tests
@@ -110,7 +110,7 @@ class FakeS3Client:
         return {}
 
 
-#: PATH-shim fake mf6. Behaviors via $GRACE2_FAKE_MF6_STATE/behavior:
+#: PATH-shim fake mf6. Behaviors via $TRID3NT_FAKE_MF6_STATE/behavior:
 #: ok (write outputs + Normal-termination mfsim.lst, exit 0) | diverge
 #: (exit 0 BUT convergence-failure marker in mfsim.lst — the design-doc §8
 #: list-file-authoritative case) | fail (stderr, exit 3) | hang (exec sleep).
@@ -119,7 +119,7 @@ class FakeS3Client:
 #: concentration grid.
 _MF6_SHIM = r"""#!/usr/bin/env bash
 set -u
-state_dir="${GRACE2_FAKE_MF6_STATE:?GRACE2_FAKE_MF6_STATE not set}"
+state_dir="${TRID3NT_FAKE_MF6_STATE:?TRID3NT_FAKE_MF6_STATE not set}"
 printf 'mf6 %s\n' "$*" >> "$state_dir/calls.log"
 pwd >> "$state_dir/cwd.log"
 behavior="ok"
@@ -198,7 +198,7 @@ def reset_seams():
 @pytest.fixture()
 def mf6_shim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Install the fake mf6 binary (NO real mf6 / docker on this machine) and
-    point ``$GRACE2_MF6_BIN`` at it — the env convention the spec resolves."""
+    point ``$TRID3NT_MF6_BIN`` at it — the env convention the spec resolves."""
     shim_dir = tmp_path / "fake-bin"
     shim_dir.mkdir()
     shim = shim_dir / "mf6"
@@ -206,8 +206,8 @@ def mf6_shim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     shim.chmod(shim.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     state_dir = tmp_path / "mf6-state"
     state_dir.mkdir()
-    monkeypatch.setenv("GRACE2_MF6_BIN", str(shim))
-    monkeypatch.setenv("GRACE2_FAKE_MF6_STATE", str(state_dir))
+    monkeypatch.setenv("TRID3NT_MF6_BIN", str(shim))
+    monkeypatch.setenv("TRID3NT_FAKE_MF6_STATE", str(state_dir))
     return state_dir
 
 
@@ -215,10 +215,10 @@ def mf6_shim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def local_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """The local-backend env matrix (job-0291 + job-0292b additions)."""
     runs_dir = tmp_path / "runs"
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
-    monkeypatch.setenv("GRACE2_RUNS_DIR", str(runs_dir))
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
-    monkeypatch.delenv("GRACE2_MODFLOW_LOCAL", raising=False)
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_RUNS_DIR", str(runs_dir))
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
+    monkeypatch.delenv("TRID3NT_MODFLOW_LOCAL", raising=False)
     return runs_dir
 
 
@@ -306,7 +306,7 @@ def _wait_for_completion_object(
 def test_local_backend_submit_uses_local_exec_launcher(
     reset_seams, local_env: Path, mf6_shim: Path
 ) -> None:
-    """Under GRACE2_SOLVER_BACKEND=local-docker the MODFLOW submit goes through
+    """Under TRID3NT_SOLVER_BACKEND=local-docker the MODFLOW submit goes through
     the local-exec launcher and returns a local-exec-pinned handle (the Cloud
     Workflows path is removed, so this is now structurally guaranteed)."""
     s3 = FakeS3Client()
@@ -343,7 +343,7 @@ def test_local_submit_stages_deck_and_launches_mf6(
     reset_seams, local_env: Path, mf6_shim: Path
 ) -> None:
     """The headline: manifest read from S3 (boto3 seam), the gwf/+gwt/ subdir
-    deck reconstructed in ``$GRACE2_RUNS_DIR/<run_id>/``, mf6 launched
+    deck reconstructed in ``$TRID3NT_RUNS_DIR/<run_id>/``, mf6 launched
     detached with cwd == rundir (mf6 reads mfsim.nam from CWD), handle
     returned immediately with the staged run_id passed through."""
     s3 = FakeS3Client()
@@ -579,9 +579,9 @@ def test_deck_base_uri_scheme_aware(
 ) -> None:
     """The deck prefix follows cache.storage_scheme(): s3:// always after the
     GCP decommission — the gs legacy seam is gone, so even an explicit
-    GRACE2_STORAGE_BACKEND=gcs override resolves to s3://."""
+    TRID3NT_STORAGE_BACKEND=gcs override resolves to s3://."""
     args = __import__(
-        "grace2_contracts.modflow_contracts", fromlist=["MODFLOWRunArgs"]
+        "trid3nt_contracts.modflow_contracts", fromlist=["MODFLOWRunArgs"]
     ).MODFLOWRunArgs(
         spill_location_latlon=(26.64, -81.87),
         contaminant="benzene",
@@ -589,8 +589,8 @@ def test_deck_base_uri_scheme_aware(
         duration_days=30.0,
     )
     # Unset -> S3 default (GCP decommissioned).
-    monkeypatch.delenv("GRACE2_STORAGE_BACKEND", raising=False)
-    monkeypatch.setenv("GRACE2_CACHE_BUCKET", "cache-bkt")
+    monkeypatch.delenv("TRID3NT_STORAGE_BACKEND", raising=False)
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "cache-bkt")
     staging = rm.build_and_stage_modflow_deck(
         args, workdir=tmp_path / "default", stage_to_gcs=False
     )
@@ -598,7 +598,7 @@ def test_deck_base_uri_scheme_aware(
     for entry in staging.manifest_inputs:
         assert entry["gs_uri"].startswith("s3://cache-bkt/modflow/")
 
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
     staging_s3 = rm.build_and_stage_modflow_deck(
         args, workdir=tmp_path / "s3", stage_to_gcs=False
     )
@@ -609,7 +609,7 @@ def test_deck_base_uri_scheme_aware(
         assert entry["gs_uri"].startswith("s3://cache-bkt/modflow/")
 
     # A stray legacy override no longer resurrects gs:// — S3-only.
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "gcs")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "gcs")
     staging_gs = rm.build_and_stage_modflow_deck(
         args, workdir=tmp_path / "gs", stage_to_gcs=False
     )
@@ -620,14 +620,14 @@ def test_deck_base_uri_scheme_aware(
 def test_deck_staging_uploads_via_boto3_under_s3(
     reset_seams, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Under GRACE2_STORAGE_BACKEND=s3 the deck + manifest upload goes via
+    """Under TRID3NT_STORAGE_BACKEND=s3 the deck + manifest upload goes via
     boto3 (NOT fsspec/s3fs — booby-trapped) and every manifest input cites
     an object that actually exists in the store (staging-ready)."""
-    from grace2_contracts.modflow_contracts import MODFLOWRunArgs
+    from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
 
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_CACHE_BUCKET", "deck-bucket")
-    monkeypatch.delenv("GRACE2_MODFLOW_LOCAL", raising=False)
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "deck-bucket")
+    monkeypatch.delenv("TRID3NT_MODFLOW_LOCAL", raising=False)
     s3 = FakeS3Client()
     set_s3_client(s3)
 
@@ -692,8 +692,8 @@ def test_upload_cog_scheme_aware(
     s3 = FakeS3Client()
     set_s3_client(s3)
 
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
     dest = pp._upload_cog(cog, "RUNX", None)
     assert dest == "s3://test-runs-bucket/RUNX/plume_concentration_4326.tif"
     assert (
@@ -703,18 +703,18 @@ def test_upload_cog_scheme_aware(
 
     # No GCP-named default on AWS: missing bucket env is a TYPED failure (the
     # silent file:// fallback was the job-0241 debug-invisible no-render bug).
-    monkeypatch.delenv("GRACE2_RUNS_BUCKET", raising=False)
+    monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
     with pytest.raises(pp.PostprocessMODFLOWError) as exc_info:
         pp._upload_cog(cog, "RUNX", None)
     assert exc_info.value.error_code == "PLUME_COG_UPLOAD_FAILED"
-    assert "GRACE2_RUNS_BUCKET" in str(exc_info.value)
+    assert "TRID3NT_RUNS_BUCKET" in str(exc_info.value)
 
 
 def test_dispatch_publish_layer_passes_s3_through(reset_seams) -> None:
     """s3:// COGs reach publish_layer (the job-0290 TiTiler path) instead of
     being skipped — the job-0254 PlumeLayerURI rendering gap, closed."""
     with patch(
-        "grace2_agent.tools.publish_layer.publish_layer",
+        "trid3nt_server.tools.publish_layer.publish_layer",
         return_value="https://tiles.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=x",
     ) as fake_publish:
         out = pp._dispatch_publish_layer("s3://bkt/RUNX/plume.tif", "plume-RUNX")
@@ -726,7 +726,7 @@ def test_dispatch_publish_layer_passes_s3_through(reset_seams) -> None:
 
 
 def test_dispatch_publish_layer_still_skips_file_uri(reset_seams) -> None:
-    with patch("grace2_agent.tools.publish_layer.publish_layer") as fake_publish:
+    with patch("trid3nt_server.tools.publish_layer.publish_layer") as fake_publish:
         out = pp._dispatch_publish_layer("file:///tmp/plume.tif", "plume-RUNX")
     assert out is None
     fake_publish.assert_not_called()
@@ -738,10 +738,10 @@ def test_publish_layer_raw_s3_for_plume_preset(
     """TiTiler exit: the plume publish returns the raw s3:// COG uri and the
     red-ramp render params (0-10 reds) ride the stashed LEGEND keyed by that
     uri (the plugin renders from it)."""
-    from grace2_agent.tools import publish_layer as pl_mod
-    from grace2_agent.tools.publish_layer import pop_legend_for_uri, publish_layer
+    from trid3nt_server.tools import publish_layer as pl_mod
+    from trid3nt_server.tools.publish_layer import pop_legend_for_uri, publish_layer
 
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
     # No network: the fake key never resolves; the registry preset still pins
     # the style (byte-identical resolver behavior).
     monkeypatch.setattr(pl_mod, "_read_raster_bytes", lambda uri: None)
@@ -780,11 +780,11 @@ async def test_run_modflow_job_local_backend_e2e(
     publish (TiTiler exit) — yielding a typed PlumeLayerURI with non-zero
     metrics.
     """
-    from grace2_agent.tools.run_modflow_tool import run_modflow_job
-    from grace2_contracts.modflow_contracts import PlumeLayerURI
+    from trid3nt_server.tools.run_modflow_tool import run_modflow_job
+    from trid3nt_contracts.modflow_contracts import PlumeLayerURI
 
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_CACHE_BUCKET", "deck-bucket")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "deck-bucket")
     s3 = FakeS3Client()
     set_s3_client(s3)
 
@@ -845,7 +845,7 @@ async def test_run_modflow_job_local_backend_e2e(
     # Published as the raw s3:// COG (TiTiler exit) — the layer envelope
     # carries the COG uri the QGIS plugin opens directly via GDAL, and the
     # red-ramp render params ride the stashed legend keyed by that uri.
-    from grace2_agent.tools.publish_layer import pop_legend_for_uri
+    from trid3nt_server.tools.publish_layer import pop_legend_for_uri
 
     assert result.uri.startswith("s3://test-runs-bucket/")
     assert result.uri.endswith(".tif")

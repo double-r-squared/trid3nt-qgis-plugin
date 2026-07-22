@@ -7,8 +7,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.common import new_ulid
-from grace2_contracts.envelope import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.envelope import (
     AssessmentEnvelope,
     BaseMetrics,
     CriticalFacility,
@@ -189,7 +189,7 @@ def test_grid_resolution_must_be_positive() -> None:
 def test_result_layer_aligns_with_load_layer_args() -> None:
     """The visualization seam: ResultLayer fields map onto map-command load-layer
     args without translation (layer_id, style_preset, optional temporal)."""
-    from grace2_contracts.ws import LoadLayerArgs
+    from trid3nt_contracts.ws import LoadLayerArgs
 
     rl = ResultLayer(
         layer_id="run-01HX-flood-depth",

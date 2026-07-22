@@ -7,9 +7,9 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.common import new_ulid
-from grace2_contracts.envelope import ResultLayer, TemporalConfig
-from grace2_contracts.execution import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.envelope import ResultLayer, TemporalConfig
+from trid3nt_contracts.execution import (
     ExecutionHandle,
     LayerURI,
     LegendClass,
@@ -17,7 +17,7 @@ from grace2_contracts.execution import (
     ModelSetup,
     RunResult,
 )
-from grace2_contracts.ws import LoadLayerArgs, MapTemporal
+from trid3nt_contracts.ws import LoadLayerArgs, MapTemporal
 
 
 def test_model_setup_roundtrip() -> None:

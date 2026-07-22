@@ -1,5 +1,5 @@
 {
-  "_comment": "Smoke-test manifest for the MODFLOW worker (job-0220). Points at the minimal 10x10 single-layer steady-state GWF deck in this fixtures/ dir. Stage these files into gs://${GRACE2_CACHE_BUCKET}/modflow/<run_id>/ alongside this manifest, then invoke the entrypoint with --manifest-uri pointing here. Replace <CACHE_BUCKET> and <RUN_ID> at stage time. This is a pure-GWF deck (no GWT) so the head output proves binary convergence end-to-end; the Case 2 production deck adds the gwf/ + gwt/ subdirectory layout the entrypoint reconstructs.",
+  "_comment": "Smoke-test manifest for the MODFLOW worker (job-0220). Points at the minimal 10x10 single-layer steady-state GWF deck in this fixtures/ dir. Stage these files into gs://${TRID3NT_CACHE_BUCKET}/modflow/<run_id>/ alongside this manifest, then invoke the entrypoint with --manifest-uri pointing here. Replace <CACHE_BUCKET> and <RUN_ID> at stage time. This is a pure-GWF deck (no GWT) so the head output proves binary convergence end-to-end; the Case 2 production deck adds the gwf/ + gwt/ subdirectory layout the entrypoint reconstructs.",
   "inputs": [
     {"gs_uri": "gs://<CACHE_BUCKET>/modflow/<RUN_ID>/mfsim.nam", "dest": "mfsim.nam"},
     {"gs_uri": "gs://<CACHE_BUCKET>/modflow/<RUN_ID>/smoke.tdis", "dest": "smoke.tdis"},

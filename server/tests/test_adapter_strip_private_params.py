@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.adapter import _strip_private_params, build_tool_declarations
-from grace2_agent.tools import TOOL_REGISTRY  # noqa: F401 — populated on import
+from trid3nt_server.adapter import _strip_private_params, build_tool_declarations
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401 — populated on import
 from google.genai import types as genai_types
 
 
@@ -122,7 +122,7 @@ def test_build_tool_declarations_drops_storage_client_for_zonal_statistics() -> 
     underscore property to a registered tool without going through the
     stripping path, this test fails before Gemini does.
     """
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     decls = build_tool_declarations(TOOL_REGISTRY)
     by_name = {d.name: d for d in decls}

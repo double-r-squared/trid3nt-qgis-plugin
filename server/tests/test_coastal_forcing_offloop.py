@@ -32,7 +32,7 @@ import inspect
 import time
 from pathlib import Path
 
-import grace2_agent.workflows.model_flood_scenario as mfs
+import trid3nt_server.workflows.model_flood_scenario as mfs
 
 
 # --------------------------------------------------------------------------- #

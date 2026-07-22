@@ -4,7 +4,7 @@ Compute / shape correctness on SYNTHETIC clustered track points (no Movebank key
 needed), the honest-empty (too-few-points) path, and input validation. The
 ``_compute_home_range_bytes`` core is exercised directly so no S3 round-trip is
 needed in CI; ``compute_home_range_kde`` (the registered tool) is exercised with
-``GRACE2_CACHE_BUCKET`` pointed at a temp dir? — no: read_through is S3-only, so
+``TRID3NT_CACHE_BUCKET`` pointed at a temp dir? — no: read_through is S3-only, so
 the registered-tool path is covered by the prototype's live S3 round-trip and
 here we test the deterministic core + validation surface.
 
@@ -40,8 +40,8 @@ import numpy as np
 import pytest
 from shapely.geometry import LineString, Point
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.compute_home_range_kde import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.compute_home_range_kde import (
     HomeRangeKDEError,
     _compute_home_range_bytes,
     _local_utm_epsg,

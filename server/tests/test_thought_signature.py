@@ -7,7 +7,7 @@ this would trigger a ``thought-signature mismatch`` 400 on the second
 turn of any tool-using conversation. Gemini 2.5 (the current
 ``GEMINI_DEFAULT_MODEL``) does not surface signatures, so the wire is
 None today — the plumbing is forward-compat so the bug does not return
-the moment ``GRACE2_GEMINI_MODEL=gemini-3-pro`` is flipped.
+the moment ``TRID3NT_GEMINI_MODEL=gemini-3-pro`` is flipped.
 
 Coverage:
 
@@ -35,7 +35,7 @@ import pytest
 
 from google.genai import types as genai_types
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     FunctionCallEvent,
     build_contents_from_history,
     build_function_call_content,
@@ -236,7 +236,7 @@ def test_parts_blob_round_trips_function_call_with_signature():
 
 def test_parts_blob_round_trips_function_response():
     """function_response Parts also round-trip cleanly through the blob."""
-    from grace2_agent.adapter import build_function_response_content
+    from trid3nt_server.adapter import build_function_response_content
 
     original = build_function_response_content(
         "fetch_wdpa_protected_areas",

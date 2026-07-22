@@ -3,7 +3,7 @@
 Covers:
   - assemble_build_spec merges validated advanced_physics + is byte-identical
     when None + typed OQ_PHYSICS_INVALID;
-  - the UHS flag flips on only under GRACE2_OPENQUAKE_REGISTRY_QUANTITIES;
+  - the UHS flag flips on only under TRID3NT_OPENQUAKE_REGISTRY_QUANTITIES;
   - parse_hazard_curve_csv / parse_uhs_csv extract summary scalars;
   - publish_openquake_quantities routes the curve + UHS scalars into manifest
     metrics (no layer) via the shared executor.
@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.workflows import postprocess_openquake as oq
-from grace2_agent.workflows.model_seismic_hazard_scenario import (
+from trid3nt_server.workflows import postprocess_openquake as oq
+from trid3nt_server.workflows.model_seismic_hazard_scenario import (
     OpenQuakeWorkflowError,
     assemble_build_spec,
 )
-from grace2_contracts.openquake_contracts import OpenQuakeRunArgs
+from trid3nt_contracts.openquake_contracts import OpenQuakeRunArgs
 
 _BBOX = (-122.5, 37.0, -122.0, 37.5)
 
@@ -31,14 +31,14 @@ def _args(**kw) -> OpenQuakeRunArgs:
 # build_spec physics merge + UHS gating
 # --------------------------------------------------------------------------- #
 def test_build_spec_physics_none_byte_identical(monkeypatch) -> None:
-    monkeypatch.delenv("GRACE2_OPENQUAKE_REGISTRY_QUANTITIES", raising=False)
+    monkeypatch.delenv("TRID3NT_OPENQUAKE_REGISTRY_QUANTITIES", raising=False)
     spec = assemble_build_spec(_args())
     assert "truncation_level" not in spec
     assert "uniform_hazard_spectra" not in spec
 
 
 def test_build_spec_merges_validated_physics(monkeypatch) -> None:
-    monkeypatch.delenv("GRACE2_OPENQUAKE_REGISTRY_QUANTITIES", raising=False)
+    monkeypatch.delenv("TRID3NT_OPENQUAKE_REGISTRY_QUANTITIES", raising=False)
     spec = assemble_build_spec(
         _args(advanced_physics={"truncation_level": 4.0,
                                 "rupture_mesh_spacing_km": 2.0})
@@ -48,14 +48,14 @@ def test_build_spec_merges_validated_physics(monkeypatch) -> None:
 
 
 def test_build_spec_invalid_physics_raises_typed(monkeypatch) -> None:
-    monkeypatch.delenv("GRACE2_OPENQUAKE_REGISTRY_QUANTITIES", raising=False)
+    monkeypatch.delenv("TRID3NT_OPENQUAKE_REGISTRY_QUANTITIES", raising=False)
     with pytest.raises(OpenQuakeWorkflowError) as ei:
         assemble_build_spec(_args(advanced_physics={"bogus": 1.0}))
     assert ei.value.error_code == "OQ_PHYSICS_INVALID"
 
 
 def test_build_spec_uhs_flag_gated_by_env(monkeypatch) -> None:
-    monkeypatch.setenv("GRACE2_OPENQUAKE_REGISTRY_QUANTITIES", "1")
+    monkeypatch.setenv("TRID3NT_OPENQUAKE_REGISTRY_QUANTITIES", "1")
     spec = assemble_build_spec(_args())
     assert spec["uniform_hazard_spectra"] is True
 

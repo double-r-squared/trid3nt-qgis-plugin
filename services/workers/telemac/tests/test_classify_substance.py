@@ -38,7 +38,7 @@ for _p in (_ROOT / "services" / "agent" / "src",
         sys.path.insert(0, sp)
 
 try:
-    from grace2_agent.workflows.model_river_dye_release_scenario import (
+    from trid3nt_server.workflows.model_river_dye_release_scenario import (
         classify_substance,
     )
 except Exception as exc:  # noqa: BLE001 - agent deps absent -> skip, never fail

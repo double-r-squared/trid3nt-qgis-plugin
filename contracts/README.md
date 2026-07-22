@@ -1,4 +1,4 @@
-# grace2-contracts
+# trid3nt-contracts
 
 Shared contracts for this system — the WebSocket protocol, the `AssessmentEnvelope`,
 `EventMetadata` + `ClaimSet`/`NumericClaim`, the five MongoDB collection schemas,
@@ -23,7 +23,7 @@ report rather than being edited in place).
 | `catalog` | `CatalogEntry` for `public_hazard_catalog.yaml` | FR-PHC-2 |
 | `execution` | `ModelSetup`, `RunResult`, `ExecutionHandle` (Cloud Workflows execution-id cancellation seam), `LayerURI` | FR-TA-2, FR-CE-2/3, FR-AS-6 |
 | `tool_metadata` | Tool-docstring conventions + `tool_category` vocabulary (convention only; `agent` owns the registry code) | FR-TA-3, FR-AS-3 |
-| `export_schemas` | CLI / `grace2-export-schemas` script that writes JSON Schemas for every top-level contract | — |
+| `export_schemas` | CLI / `trid3nt-export-schemas` script that writes JSON Schemas for every top-level contract | — |
 
 ## Install (development)
 
@@ -57,10 +57,10 @@ rejection, and the discriminated-union dispatcher invariant on `EventMetadata`.
 
 ```bash
 # Default output: contracts/schemas/
-grace2-export-schemas
+trid3nt-export-schemas
 
 # Or to a custom directory
-grace2-export-schemas contracts/schemas
+trid3nt-export-schemas contracts/schemas
 ```
 
 Output is sorted and `\n`-terminated so re-runs against an unchanged contract

@@ -319,15 +319,15 @@ def main() -> None:
     ap.add_argument("--retry", action="store_true", help="re-run non-PASS tools too")
     args = ap.parse_args()
 
-    import grace2_agent.tools as pkg
-    from grace2_agent.tools import get_registered_tools
+    import trid3nt_server.tools as pkg
+    from trid3nt_server.tools import get_registered_tools
     for m in pkgutil.iter_modules(pkg.__path__):
-        importlib.import_module(f"grace2_agent.tools.{m.name}")
+        importlib.import_module(f"trid3nt_server.tools.{m.name}")
     try:
-        import grace2_agent.workflows as wpkg
+        import trid3nt_server.workflows as wpkg
         for m in pkgutil.iter_modules(wpkg.__path__):
             try:
-                importlib.import_module(f"grace2_agent.workflows.{m.name}")
+                importlib.import_module(f"trid3nt_server.workflows.{m.name}")
             except Exception:
                 pass
     except ImportError:

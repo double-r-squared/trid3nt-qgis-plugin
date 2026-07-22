@@ -1,4 +1,4 @@
-"""Unit + integration tests for ``grace2_agent.auth_handshake`` (local build).
+"""Unit + integration tests for ``trid3nt_server.auth_handshake`` (local build).
 
 The local build has NO token verification (no identity provider): every
 connection resolves through the anonymous path (H.3) or, in local-docker
@@ -31,19 +31,19 @@ import json
 
 import pytest
 
-from grace2_agent.auth_handshake import (
+from trid3nt_server.auth_handshake import (
     AuthResult,
     authenticate_token,
     build_auth_ack,
 )
-from grace2_agent.persistence import Persistence
-from grace2_contracts.auth import AuthAckEnvelope, AuthTokenEnvelope
-from grace2_contracts.common import new_ulid, now_utc
-from grace2_contracts.user import User
+from trid3nt_server.persistence import Persistence
+from trid3nt_contracts.auth import AuthAckEnvelope, AuthTokenEnvelope
+from trid3nt_contracts.common import new_ulid, now_utc
+from trid3nt_contracts.user import User
 
 
 # --------------------------------------------------------------------------- #
-# Mock MCP client (subset of grace2_agent.tests.test_persistence.MockMCPClient)
+# Mock MCP client (subset of trid3nt_server.tests.test_persistence.MockMCPClient)
 # --------------------------------------------------------------------------- #
 
 
@@ -256,7 +256,7 @@ async def test_server_connect_handshake_flow_with_mocks() -> None:
     - A subsequent non-handshake envelope arriving without an auth-token
       flips the implicit-anonymous fallback path on a fresh state.
     """
-    from grace2_agent.server import (
+    from trid3nt_server.server import (
         SessionState,
         _ensure_auth_handshake,
         _handle_auth_token,
@@ -322,7 +322,7 @@ async def test_server_connect_handshake_flow_with_mocks() -> None:
 @pytest.mark.asyncio
 async def test_connection_context_retains_authenticated_user_id() -> None:
     """SessionState.authenticated_user_id survives across a second handshake call."""
-    from grace2_agent.server import (
+    from trid3nt_server.server import (
         SessionState,
         _bind_auth_result,
         _ensure_auth_handshake,

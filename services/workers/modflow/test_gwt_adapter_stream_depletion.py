@@ -11,7 +11,7 @@ required for the pure-geometry assertions (engine invariant 2). The live mf6 run
 (fixtures/sfr_smoke) and proven on bin/mf6 6.5.0.
 
 Run:
-    GRACE2_MODFLOW_LOCAL=1 <agent-venv>/bin/python -m pytest \
+    TRID3NT_MODFLOW_LOCAL=1 <agent-venv>/bin/python -m pytest \
         services/workers/modflow/test_gwt_adapter_stream_depletion.py -q
 """
 

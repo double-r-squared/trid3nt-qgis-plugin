@@ -3,7 +3,7 @@
 
 For every MISS / NO_CALL in tool-routing-results.jsonl, replay the SAME prompt
 through the agent's own ``retrieve_visible_tools`` (BM25+dense top-k, k from
-GRACE2_TOOL_RETRIEVAL_K) with a fresh allowed-set -- no LLM involved -- and ask:
+TRID3NT_TOOL_RETRIEVAL_K) with a fresh allowed-set -- no LLM involved -- and ask:
 was the expected tool even on the shortlist the model saw?
 
   RETRIEVAL-MISS  expected tool NOT in top-k -> the model never had a chance;
@@ -31,21 +31,21 @@ OUT = REPO / "docs" / "reports" / "tool-routing-failure-split.md"
 
 def main() -> None:
     import importlib, pkgutil
-    import grace2_agent.tools as pkg
+    import trid3nt_server.tools as pkg
     for m in pkgutil.iter_modules(pkg.__path__):
-        importlib.import_module(f"grace2_agent.tools.{m.name}")
+        importlib.import_module(f"trid3nt_server.tools.{m.name}")
     try:
-        import grace2_agent.workflows as wpkg
+        import trid3nt_server.workflows as wpkg
         for m in pkgutil.iter_modules(wpkg.__path__):
             try:
-                importlib.import_module(f"grace2_agent.workflows.{m.name}")
+                importlib.import_module(f"trid3nt_server.workflows.{m.name}")
             except Exception:
                 pass
     except ImportError:
         pass
-    from grace2_agent.tools.tool_retrieval import retrieve_visible_tools
+    from trid3nt_server.tools.tool_retrieval import retrieve_visible_tools
 
-    k = int(os.environ.get("GRACE2_TOOL_RETRIEVAL_K", "8"))
+    k = int(os.environ.get("TRID3NT_TOOL_RETRIEVAL_K", "8"))
 
     rows = {}
     for line in RESULTS.read_text().splitlines():

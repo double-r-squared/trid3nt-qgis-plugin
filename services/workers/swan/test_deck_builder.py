@@ -142,7 +142,7 @@ def test_render_swn_stationary_has_load_bearing_blocks():
     spec = parse_build_spec(_spec(mode="stationary"))
     text = render_swn_command_file(spec)
     # PROJECT + SET + run mode + coordinates.
-    assert "PROJECT 'GRACE2' 'WAVE'" in text
+    assert "PROJECT 'TRID3NT' 'WAVE'" in text
     # SET uses positional/keyword SWAN syntax (NO ``KEY=value``) with NAUTICAL
     # last and a DEPMIN threshold; ``LEVEL=``/``NOR=`` were invalid SWAN keywords.
     # EXCEPTION is NOT a SET field (SWAN rejected it there); it moved to INPGRID.
@@ -428,14 +428,14 @@ def test_entrypoint_swanrun_invocation_finds_authored_swn(tmp_path: Path):
     from services.workers.swan.entrypoint import _run_swan
 
     old_path = os.environ.get("PATH", "")
-    old_swan_run = os.environ.pop("GRACE2_SWAN_RUN", None)  # exercise the DEFAULT cmd
+    old_swan_run = os.environ.pop("TRID3NT_SWAN_RUN", None)  # exercise the DEFAULT cmd
     try:
         os.environ["PATH"] = f"{tmp_path}{os.pathsep}{old_path}"
         rc, stdout_path, _stderr_path = _run_swan(tmp_path)
     finally:
         os.environ["PATH"] = old_path
         if old_swan_run is not None:
-            os.environ["GRACE2_SWAN_RUN"] = old_swan_run
+            os.environ["TRID3NT_SWAN_RUN"] = old_swan_run
 
     stdout = stdout_path.read_text()
     # The launcher must NOT have aborted on a missing .swn (the live failure).

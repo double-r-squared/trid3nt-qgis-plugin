@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools._satellite_slider import ts_int_to_iso
-from grace2_agent.tools.fetch_viirs_day_fire import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools._satellite_slider import ts_int_to_iso
+from trid3nt_server.tools.fetch_viirs_day_fire import (
     DAY_FIRE_PRODUCT_SLUG,
     VIIRSDayFireBboxRequiredError,
     VIIRSDayFireInputError,

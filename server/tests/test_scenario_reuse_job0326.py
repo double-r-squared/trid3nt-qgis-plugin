@@ -18,8 +18,8 @@ tests cover the deterministic backstop:
 
 from __future__ import annotations
 
-from grace2_agent.adapter import build_layers_present_note
-from grace2_agent.scenario_reuse import (
+from trid3nt_server.adapter import build_layers_present_note
+from trid3nt_server.scenario_reuse import (
     ScenarioResultIndex,
     layer_id_scenario_type,
     scenario_signature,

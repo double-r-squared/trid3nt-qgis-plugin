@@ -12,7 +12,7 @@ Coverage (no network needed):
 - Cache miss invokes fetch_fn + writes bytes.
 - Cache hit skips fetch_fn (second call returns same URI).
 
-Live tests (network-gated by ``GRACE2_TEST_LIVE_GCN=1`` — downloads ~640 MB
+Live tests (network-gated by ``TRID3NT_TEST_LIVE_GCN=1`` — downloads ~640 MB
 GCN250 ARCII GeoTIFF on first invocation, so disabled by default):
 - Fort Myers FL bbox returns valid CN GeoTIFF with mean in [60, 95] range
   (urban-coastal Florida); evidence written to evidence/gcn250_live.txt.
@@ -31,8 +31,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_gcn250_curve_numbers import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_gcn250_curve_numbers import (
     GCN250BboxRequiredError,
     GCN250EmptyError,
     GCN250InputError,
@@ -49,7 +49,7 @@ from grace2_agent.tools.fetch_gcn250_curve_numbers import (
 
 
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
-_LIVE_GCN = os.environ.get("GRACE2_TEST_LIVE_GCN") == "1"
+_LIVE_GCN = os.environ.get("TRID3NT_TEST_LIVE_GCN") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -149,7 +149,7 @@ def _synth_gcn250_tif_bytes(
 
     arr = np.full((height, width), cn_value, dtype=np.int16)
     transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], width, height)
-    fd, path = tempfile.mkstemp(suffix=".tif", prefix="grace2_gcn250_synth_")
+    fd, path = tempfile.mkstemp(suffix=".tif", prefix="trid3nt_gcn250_synth_")
     os.close(fd)
     try:
         with rasterio.open(
@@ -445,10 +445,10 @@ def test_cache_miss_invokes_fetch_and_writes():
         return fake_tif
 
     with patch(
-        "grace2_agent.tools.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
+        "trid3nt_server.tools.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gcn250_curve_numbers(
@@ -478,10 +478,10 @@ def test_cache_hit_skips_fetch():
         return b"II*\x00" + b"\x00" * 64 + b"_FAKE_GCN250_CACHED"
 
     with patch(
-        "grace2_agent.tools.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
+        "trid3nt_server.tools.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_gcn250_curve_numbers(
@@ -505,10 +505,10 @@ def test_different_amc_gives_different_cache_key():
         return b"II*\x00" + b"\x00" * 64 + bytes([fetch_count["n"]])
 
     with patch(
-        "grace2_agent.tools.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
+        "trid3nt_server.tools.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         dry_result = fetch_gcn250_curve_numbers(
@@ -529,13 +529,13 @@ def test_different_amc_gives_different_cache_key():
 
 
 # ---------------------------------------------------------------------------
-# Live test — only runs with GRACE2_TEST_LIVE_GCN=1 (downloads ~640 MB).
+# Live test — only runs with TRID3NT_TEST_LIVE_GCN=1 (downloads ~640 MB).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_GCN,
-    reason="set GRACE2_TEST_LIVE_GCN=1 to run live GCN250 test (downloads ~640 MB)",
+    reason="set TRID3NT_TEST_LIVE_GCN=1 to run live GCN250 test (downloads ~640 MB)",
 )
 def test_live_fetch_fort_myers_florida(tmp_path):
     """Live GCN250 round-trip — Fort Myers FL bbox returns urban-coastal CN raster.
@@ -558,7 +558,7 @@ def test_live_fetch_fort_myers_florida(tmp_path):
     bbox = (-81.95, 26.55, -81.55, 26.85)
 
     with patch(
-        "grace2_agent.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result_avg = fetch_gcn250_curve_numbers(
@@ -599,7 +599,7 @@ def test_live_fetch_fort_myers_florida(tmp_path):
     # AMC-I vs AMC-III sanity at the same bbox: wet should be > dry.
     fake_gcs2 = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs2),
     ):
         fetch_gcn250_curve_numbers(bbox=bbox, antecedent_moisture="dry")

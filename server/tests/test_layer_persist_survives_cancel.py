@@ -25,15 +25,15 @@ import asyncio
 
 import pytest
 
-import grace2_agent.server as server
-from grace2_agent import tools as agent_tools
-from grace2_agent.pipeline_emitter import current_emitter
-from grace2_agent.persistence import make_file_persistence
-from grace2_agent.tools import RegisteredTool
-from grace2_contracts.case import CaseCommandEnvelopePayload
-from grace2_contracts.common import new_ulid
-from grace2_contracts.execution import LayerURI
-from grace2_contracts.tool_registry import AtomicToolMetadata
+import trid3nt_server.server as server
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.pipeline_emitter import current_emitter
+from trid3nt_server.persistence import make_file_persistence
+from trid3nt_server.tools import RegisteredTool
+from trid3nt_contracts.case import CaseCommandEnvelopePayload
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 SLOW_TOOL = "slow_layer_tool_cancel_durability"
 

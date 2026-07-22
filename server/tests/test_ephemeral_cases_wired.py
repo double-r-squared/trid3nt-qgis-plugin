@@ -37,14 +37,14 @@ from typing import Any
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.persistence import (
+from trid3nt_server import server
+from trid3nt_server.persistence import (
     CASES_COLLECTION,
     FileMCPClient,
     Persistence,
 )
-from grace2_contracts import new_ulid, now_utc
-from grace2_contracts.collections import CASES_ANON_TTL_SECONDS
+from trid3nt_contracts import new_ulid, now_utc
+from trid3nt_contracts.collections import CASES_ANON_TTL_SECONDS
 
 
 # --------------------------------------------------------------------------- #

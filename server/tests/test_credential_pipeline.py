@@ -26,32 +26,32 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.server import (
+from trid3nt_server import server
+from trid3nt_server.server import (
     SessionState,
     _build_credential_request_payload,
     _invoke_tool_via_emitter,
     _maybe_handle_credential_error,
     _resolve_pending_credential,
 )
-from grace2_agent import credential_registry as cr
-from grace2_agent.tools import (
+from trid3nt_server import credential_registry as cr
+from trid3nt_server.tools import (
     TOOL_REGISTRY,
     RegisteredTool,
     clear_registry_for_tests,
 )
-from grace2_agent.tools import fetch_firms_active_fire as firms_mod
-from grace2_agent.tools.fetch_firms_active_fire import (
+from trid3nt_server.tools import fetch_firms_active_fire as firms_mod
+from trid3nt_server.tools.fetch_firms_active_fire import (
     FirmsArgError,
     FirmsAuthError,
     FirmsMissingKeyError,
     _resolve_map_key,
     set_persistence_for_secrets,
 )
-from grace2_contracts.common import new_ulid
-from grace2_contracts.execution import LayerURI
-from grace2_contracts.secrets import CredentialProvidedEnvelopePayload
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.secrets import CredentialProvidedEnvelopePayload
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
 # --------------------------------------------------------------------------- #
@@ -93,7 +93,7 @@ def test_firms_resolve_vault_key_beats_env():
     set_persistence_for_secrets(FakePersistence())
     try:
         with patch.dict(
-            os.environ, {"GRACE2_FIRMS_MAP_KEY": "env-firms-key"}, clear=False
+            os.environ, {"TRID3NT_FIRMS_MAP_KEY": "env-firms-key"}, clear=False
         ):
             out = _resolve_map_key(secret_ref=FakeRecord())
         assert out == "vault-firms-key"
@@ -109,16 +109,16 @@ def test_firms_resolve_str_shortcut():
 
 def test_firms_resolve_explicit_map_key_wins():
     """An explicit map_key kwarg wins over both vault and env."""
-    with patch.dict(os.environ, {"GRACE2_FIRMS_MAP_KEY": "env"}, clear=False):
+    with patch.dict(os.environ, {"TRID3NT_FIRMS_MAP_KEY": "env"}, clear=False):
         assert _resolve_map_key(map_key="explicit", secret_ref="vault") == "explicit"
 
 
 def test_firms_resolve_env_fallback_then_demo():
     """No kwarg / no secret_ref → env var; no env → 'demo' literal."""
-    with patch.dict(os.environ, {"GRACE2_FIRMS_MAP_KEY": "env-only"}, clear=False):
+    with patch.dict(os.environ, {"TRID3NT_FIRMS_MAP_KEY": "env-only"}, clear=False):
         assert _resolve_map_key() == "env-only"
     env = dict(os.environ)
-    env.pop("GRACE2_FIRMS_MAP_KEY", None)
+    env.pop("TRID3NT_FIRMS_MAP_KEY", None)
     with patch.dict(os.environ, env, clear=True):
         assert _resolve_map_key() == "demo"
 
@@ -137,7 +137,7 @@ def test_firms_vault_failure_falls_back_not_crash():
     set_persistence_for_secrets(FailingPersistence())
     try:
         env = dict(os.environ)
-        env.pop("GRACE2_FIRMS_MAP_KEY", None)
+        env.pop("TRID3NT_FIRMS_MAP_KEY", None)
         with patch.dict(os.environ, env, clear=True):
             assert _resolve_map_key(secret_ref=FakeRecord()) == "demo"
     finally:
@@ -150,7 +150,7 @@ def test_firms_cache_key_omits_raw_key():
 
     def _fake_read_through(*, metadata, params, ext, fetch_fn):  # noqa: ANN001
         captured["params"] = params
-        from grace2_agent.tools.cache import ReadThroughResult
+        from trid3nt_server.tools.cache import ReadThroughResult
 
         return ReadThroughResult(
             uri="gs://bucket/cache/dynamic-1h/firms_active_fire/x.fgb",
@@ -449,7 +449,7 @@ def test_signup_url_none_provider_round_trips_end_to_end():
         provider_id="ecmwf_cds",  # a real ProviderID Literal member
         label="Copernicus CDS (out-of-band)",
         signup_url=None,
-        secret_key_name="GRACE2_COPERNICUS_CDS_API_KEY",
+        secret_key_name="TRID3NT_COPERNICUS_CDS_API_KEY",
         default_message="Add your CDS key (no public signup link).",
     )
     payload = _build_credential_request_payload(
@@ -460,7 +460,7 @@ def test_signup_url_none_provider_round_trips_end_to_end():
     )
     assert payload is not None
     assert payload.signup_url is None
-    assert payload.secret_key_name == "GRACE2_COPERNICUS_CDS_API_KEY"
+    assert payload.secret_key_name == "TRID3NT_COPERNICUS_CDS_API_KEY"
 
 
 # --------------------------------------------------------------------------- #
@@ -635,7 +635,7 @@ def test_credential_request_envelope_never_carries_raw_key():
         # NEVER the resolved key value. (If a future edit interpolated the key
         # into this string, the assertion below would fail.)
         raise FirmsAuthError(
-            "FIRMS rejected the MAP_KEY. Set GRACE2_FIRMS_MAP_KEY to a valid "
+            "FIRMS rejected the MAP_KEY. Set TRID3NT_FIRMS_MAP_KEY to a valid "
             "key from https://firms.modaps.eosdis.nasa.gov/api/map_key/."
         )
 

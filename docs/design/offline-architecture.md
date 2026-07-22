@@ -12,16 +12,16 @@ seam. No AWS account, no cloud dependency for the core loop.
 
 | Seam | Cloud (today) | Existing local fallback | State |
 |---|---|---|---|
-| Persistence | DynamoDB (authored, not even default) | FileMCPClient -- JSON under ~/.grace2/dev_persistence, all 7 collections, Mongo-style operators | COMPLETE. The live cloud box actually runs on it |
+| Persistence | DynamoDB (authored, not even default) | FileMCPClient -- JSON under ~/.trid3nt/dev_persistence, all 7 collections, Mongo-style operators | COMPLETE. The live cloud box actually runs on it |
 | Auth | Cognito JWT + Hosted UI | AUTH_REQUIRED=false default; no VITE_COGNITO_* -> web runs anonymous-only, server mints ULID users (H.3) | COMPLETE for single-user local |
-| Web URLs | CloudFront/Vercel env-derived | No VITE_GRACE2_* -> ws://hostname:8765 + http://hostname:8766; wake overlay + cold paths null out cleanly | COMPLETE |
-| MODFLOW | AWS Batch | GRACE2_SOLVER_BACKEND=local-exec + GRACE2_MF6_BIN (USGS mf6 6.5.0 static binary, no runtime deps) | WORKS today |
-| SFINCS | AWS Batch | GRACE2_SOLVER_BACKEND=local-docker -> docker run deltares/sfincs-cpu:sfincs-v2.3.3 (public image) | WORKS today (needs docker) |
-| Telemetry/audit | DynamoDB via persistence | Graceful degrade to local JSONL (/tmp/grace2_tool_call_telemetry.jsonl) / FileMCPClient; never raises | COMPLETE |
+| Web URLs | CloudFront/Vercel env-derived | No VITE_TRID3NT_* -> ws://hostname:8765 + http://hostname:8766; wake overlay + cold paths null out cleanly | COMPLETE |
+| MODFLOW | AWS Batch | TRID3NT_SOLVER_BACKEND=local-exec + TRID3NT_MF6_BIN (USGS mf6 6.5.0 static binary, no runtime deps) | WORKS today |
+| SFINCS | AWS Batch | TRID3NT_SOLVER_BACKEND=local-docker -> docker run deltares/sfincs-cpu:sfincs-v2.3.3 (public image) | WORKS today (needs docker) |
+| Telemetry/audit | DynamoDB via persistence | Graceful degrade to local JSONL (/tmp/trid3nt_tool_call_telemetry.jsonl) / FileMCPClient; never raises | COMPLETE |
 | Data fetchers | ~38 tools | All public HTTPS (USGS/NOAA/OSM/Overpass) or anonymous public S3 (GOES, MRMS, HRSL). ZERO requester-pays, zero private-AWS-only sources | COMPLETE (need internet, not AWS) |
 | LLM | Bedrock (MODEL_PROVIDER=bedrock) | scripted/replay adapter only (CI); dormant Vertex path | GAP 1 |
 | Object storage | S3 runs+cache buckets (scheme hardcoded "s3") | file:// works for INPUT staging (manifests/decks) but NOT the COG output/publish path or cache | GAP 2 |
-| Tiles | TiTiler EC2 box | titiler.application==2.0.4 is pip-installable; publish_layer just needs GRACE2_TILE_SERVER_BASE=http://localhost:8080 | GAP 3 (trivial) |
+| Tiles | TiTiler EC2 box | titiler.application==2.0.4 is pip-installable; publish_layer just needs TRID3NT_TILE_SERVER_BASE=http://localhost:8080 | GAP 3 (trivial) |
 | SWMM/Landlab/OpenQuake local | AWS Batch | pip-only workers (manylinux wheels), but no LocalSolverSpec registered (only SFINCS has one) | GAP 4 (deferred past v1) |
 
 ## The four real gaps -> the v1 work
@@ -32,8 +32,8 @@ seam. No AWS account, no cloud dependency for the core loop.
   consume `genai_types.Content[]` + `FunctionDeclaration[]` + system prompt, yield the
   `StreamEvent` union (TextDelta / FunctionCall / UsageMetadata). Bedrock adapter is the
   reference translation (it already maps genai types -> another wire format).
-- Config: `MODEL_PROVIDER=openai`, `GRACE2_OPENAI_BASE_URL` (e.g. http://localhost:11434/v1
-  for Ollama), `GRACE2_OPENAI_API_KEY` (dummy for local), `GRACE2_OPENAI_MODEL`.
+- Config: `MODEL_PROVIDER=openai`, `TRID3NT_OPENAI_BASE_URL` (e.g. http://localhost:11434/v1
+  for Ollama), `TRID3NT_OPENAI_API_KEY` (dummy for local), `TRID3NT_OPENAI_MODEL`.
 - One provider covers: Ollama, vLLM, llama.cpp server, LM Studio, OpenAI, Groq,
   DeepSeek, OpenRouter. Streaming tool-calls required (all of the above support it).
 
@@ -49,7 +49,7 @@ seam. No AWS account, no cloud dependency for the core loop.
 
 ### GAP 3 -- local TiTiler
 - `pip install titiler.application==2.0.4` + one uvicorn (or the official docker image)
-  with the MinIO AWS_* env. Agent env: `GRACE2_TILE_SERVER_BASE=http://localhost:8080`.
+  with the MinIO AWS_* env. Agent env: `TRID3NT_TILE_SERVER_BASE=http://localhost:8080`.
   publish_layer emits full tile templates server-side, so the web needs nothing.
 
 ### GAP 4 -- LocalSolverSpec for the pip-only engines (POST-v1)
@@ -72,11 +72,11 @@ docker-compose: [minio, titiler, ollama?]   agent+web: host processes (dev-style
 ```
 
 Full `.env.local` (the entire cloud-to-local rewiring is ~10 env vars):
-`MODEL_PROVIDER=openai`, `GRACE2_OPENAI_BASE_URL`, `GRACE2_OPENAI_MODEL`,
+`MODEL_PROVIDER=openai`, `TRID3NT_OPENAI_BASE_URL`, `TRID3NT_OPENAI_MODEL`,
 `AWS_ENDPOINT_URL=http://localhost:9000` (+ dummy AWS creds for MinIO),
-`GRACE2_RUNS_BUCKET=trid3nt-runs`, `GRACE2_CACHE_BUCKET=trid3nt-cache`,
-`GRACE2_TILE_SERVER_BASE=http://localhost:8080`, `GRACE2_SOLVER_BACKEND=local-exec`
-(MODFLOW) / `local-docker` (SFINCS), `GRACE2_MF6_BIN=<path>`, `GRACE2_AGENT_HOST=0.0.0.0`.
+`TRID3NT_RUNS_BUCKET=trid3nt-runs`, `TRID3NT_CACHE_BUCKET=trid3nt-cache`,
+`TRID3NT_TILE_SERVER_BASE=http://localhost:8080`, `TRID3NT_SOLVER_BACKEND=local-exec`
+(MODFLOW) / `local-docker` (SFINCS), `TRID3NT_MF6_BIN=<path>`, `TRID3NT_AGENT_HOST=0.0.0.0`.
 
 ## Repo strategy: upstream seams + vendored snapshot
 

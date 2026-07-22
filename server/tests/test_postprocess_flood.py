@@ -181,7 +181,7 @@ HMAX_NORTH_HIGH = HMAX_SOUTH_HIGH[::-1, :].copy()  # row 0 = north = dry
 
 def test_y_ascending_gets_flipped(tmp_path: Path) -> None:
     """Y-ascending SFINCS data → guard flips rows; deep flood at south edge of COG."""
-    from grace2_agent.workflows.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.workflows.postprocess_flood import _extract_peak_depth_geotiff
     import rasterio
 
     nc = _make_sfincs_nc(
@@ -220,7 +220,7 @@ def test_y_ascending_gets_flipped(tmp_path: Path) -> None:
 
 def test_y_descending_is_idempotent(tmp_path: Path) -> None:
     """Y-descending SFINCS data (north at row 0) → guard is a no-op."""
-    from grace2_agent.workflows.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.workflows.postprocess_flood import _extract_peak_depth_geotiff
     import rasterio
 
     nc = _make_sfincs_nc(
@@ -255,7 +255,7 @@ def test_y_descending_is_idempotent(tmp_path: Path) -> None:
 
 def test_metrics_are_flip_invariant(tmp_path: Path) -> None:
     """max/mean/p95/flooded_cell_count are identical for ascending vs descending y."""
-    from grace2_agent.workflows.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.workflows.postprocess_flood import _extract_peak_depth_geotiff
 
     nc_asc = _make_sfincs_nc(
         tmp_path,
@@ -288,7 +288,7 @@ def test_metrics_are_flip_invariant(tmp_path: Path) -> None:
 
 def test_x_descending_gets_flipped(tmp_path: Path) -> None:
     """X-descending SFINCS data (east at col 0) → X-axis guard flips columns."""
-    from grace2_agent.workflows.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.workflows.postprocess_flood import _extract_peak_depth_geotiff
     import rasterio
 
     # x descending: col 0 = east, last col = west (realistic UTM coords)
@@ -356,7 +356,7 @@ _WEB_STEP_TOKEN_RE = re.compile(r"\b(?:step|frame|idx|index)\s*\+?(\d{1,4})\b", 
 def test_frame_names_match_web_parseFrameToken_step_pattern(tmp_path: Path) -> None:
     """Each frame LayerURI.name matches the web 'step N' token + yields strictly
     increasing distinct ints (the contract detectSequentialGroups requires)."""
-    from grace2_agent.workflows.postprocess_flood import _extract_depth_frames
+    from trid3nt_server.workflows.postprocess_flood import _extract_depth_frames
 
     nc = _make_sfincs_nc_timeseries(
         tmp_path, x_vals=X_VALS_ASC, y_vals=Y_VALS_DESC, n_steps=6
@@ -395,7 +395,7 @@ def test_per_frame_cogs_are_valid_and_capped(tmp_path: Path) -> None:
     correct CRS tag. (The cap was raised 24 -> 144 for fine coastal/wave cadence;
     this test drives ENOUGH raw steps to exceed whatever the cap is.)"""
     import rasterio
-    from grace2_agent.workflows.postprocess_flood import (
+    from trid3nt_server.workflows.postprocess_flood import (
         MAX_FLOOD_FRAMES,
         _extract_depth_frames,
     )
@@ -452,7 +452,7 @@ def test_per_frame_cogs_are_valid_and_capped(tmp_path: Path) -> None:
 def test_peak_metrics_are_peak_aggregates_not_a_single_frame(tmp_path: Path) -> None:
     """The returned peak_metrics are computed over the PEAK (max-over-time) field,
     NOT a single timestep — guards the FloodMetrics / habitat / Pelicun contract."""
-    from grace2_agent.workflows.postprocess_flood import _extract_depth_frames
+    from trid3nt_server.workflows.postprocess_flood import _extract_depth_frames
 
     nc = _make_sfincs_nc_timeseries(
         tmp_path, x_vals=X_VALS_ASC, y_vals=Y_VALS_DESC, n_steps=8
@@ -479,7 +479,7 @@ def test_no_time_dim_falls_back_to_single_peak_layer(tmp_path: Path) -> None:
     with the legacy depth_metrics. Backward-compat for habitat/Pelicun/honesty-floor."""
     from unittest.mock import patch
 
-    from grace2_agent.workflows.postprocess_flood import (
+    from trid3nt_server.workflows.postprocess_flood import (
         _extract_depth_frames,
         postprocess_flood,
     )
@@ -503,7 +503,7 @@ def test_no_time_dim_falls_back_to_single_peak_layer(tmp_path: Path) -> None:
         return f"gs://test-runs/{run_id}/{dest_filename}"
 
     with patch(
-        "grace2_agent.workflows.postprocess_flood._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.postprocess_flood._upload_cog_to_runs_bucket",
         side_effect=_fake_upload,
     ):
         layers, metrics = postprocess_flood(str(nc), run_id="run-xyz")
@@ -525,7 +525,7 @@ def test_postprocess_flood_emits_peak_plus_frames_with_distinct_uris(
     + N frame layers (role context, distinct URIs, 'Flood depth step N' names)."""
     from unittest.mock import patch
 
-    from grace2_agent.workflows.postprocess_flood import postprocess_flood
+    from trid3nt_server.workflows.postprocess_flood import postprocess_flood
 
     nc = _make_sfincs_nc_timeseries(
         tmp_path, x_vals=X_VALS_ASC, y_vals=Y_VALS_DESC, n_steps=5
@@ -535,7 +535,7 @@ def test_postprocess_flood_emits_peak_plus_frames_with_distinct_uris(
         return f"gs://test-runs/{run_id}/{dest_filename}"
 
     with patch(
-        "grace2_agent.workflows.postprocess_flood._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.postprocess_flood._upload_cog_to_runs_bucket",
         side_effect=_fake_upload,
     ):
         layers, metrics = postprocess_flood(str(nc), run_id="run-abc")
@@ -632,7 +632,7 @@ def test_multiblock_running_max_collapses_to_peak_and_emits_frames(
     """
     from unittest.mock import patch
 
-    from grace2_agent.workflows.postprocess_flood import (
+    from trid3nt_server.workflows.postprocess_flood import (
         _extract_depth_frames,
         _select_peak_depth,
         postprocess_flood,
@@ -666,7 +666,7 @@ def test_multiblock_running_max_collapses_to_peak_and_emits_frames(
         return f"s3://test-runs/{run_id}/{dest_filename}"
 
     with patch(
-        "grace2_agent.workflows.postprocess_flood._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.postprocess_flood._upload_cog_to_runs_bucket",
         side_effect=_fake_upload,
     ):
         layers, metrics = postprocess_flood(str(nc), run_id="run-fortmyers")

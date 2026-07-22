@@ -30,8 +30,8 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from grace2_agent.tools import publish_layer as pl
-from grace2_agent.tools.publish_layer import (
+from trid3nt_server.tools import publish_layer as pl
+from trid3nt_server.tools.publish_layer import (
     _band1_percentile_rescale,
     _is_rgba_or_multiband,
     _is_terrain_token_preset,
@@ -640,7 +640,7 @@ def test_nlcd_paletted_still_no_rescale_after_fix(
 
 @pytest.fixture()
 def _s3_titiler(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
 
 
 def test_publish_layer_s3_unknown_preset_stashes_nonempty_style(

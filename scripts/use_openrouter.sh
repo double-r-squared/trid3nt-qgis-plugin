@@ -46,10 +46,10 @@ set_kv() {
 [ -f "$ENV_FILE.bak" ] || cp "$ENV_FILE" "$ENV_FILE.bak"
 
 if [ "${1:-}" = "--local" ]; then
-  set_kv GRACE2_OPENAI_BASE_URL "$LOCAL_BASE"
-  set_kv GRACE2_OPENAI_API_KEY  "not-needed"
-  set_kv GRACE2_OPENAI_MODEL    "$LOCAL_MODEL"
-  set_kv GRACE2_OPENAI_NUM_CTX  "24576"
+  set_kv TRID3NT_OPENAI_BASE_URL "$LOCAL_BASE"
+  set_kv TRID3NT_OPENAI_API_KEY  "not-needed"
+  set_kv TRID3NT_OPENAI_MODEL    "$LOCAL_MODEL"
+  set_kv TRID3NT_OPENAI_NUM_CTX  "24576"
   echo "[use_openrouter] reverted to LOCAL ollama ($LOCAL_MODEL)"
 else
   KEY="${1:-}"
@@ -65,10 +65,10 @@ else
     *) echo "[use_openrouter] WARNING: key does not start with 'sk-or-' - continuing anyway" >&2 ;;
   esac
   set_kv MODEL_PROVIDER          "openai"
-  set_kv GRACE2_OPENAI_BASE_URL  "https://openrouter.ai/api/v1"
-  set_kv GRACE2_OPENAI_API_KEY   "$KEY"
-  set_kv GRACE2_OPENAI_MODEL     "$MODEL"
-  set_kv GRACE2_OPENAI_NUM_CTX   "$NUM_CTX"
+  set_kv TRID3NT_OPENAI_BASE_URL  "https://openrouter.ai/api/v1"
+  set_kv TRID3NT_OPENAI_API_KEY   "$KEY"
+  set_kv TRID3NT_OPENAI_MODEL     "$MODEL"
+  set_kv TRID3NT_OPENAI_NUM_CTX   "$NUM_CTX"
   echo "[use_openrouter] set OpenRouter: model=$MODEL num_ctx=$NUM_CTX key=${KEY:0:8}...(${#KEY} chars)"
 fi
 

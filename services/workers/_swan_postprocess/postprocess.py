@@ -1,6 +1,6 @@
 """Worker-side SWAN wave-field mat -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``grace2_agent.workflows.postprocess_swan``. Runs inside
+Byte-faithful port of ``trid3nt_server.workflows.postprocess_swan``. Runs inside
 the Batch worker AFTER ``swan.exe`` has written ``swan_out.mat``; rasterizes the
 Hs (significant wave height) field onto a regular EPSG:4326 COG and builds the
 typed ``publish_manifest.json`` dict. Handles stationary (single-frame) and
@@ -28,7 +28,7 @@ from typing import Any
 from services.workers._raster_postprocess import manifest as _manifest
 from services.workers._raster_postprocess.band_stats import compute_band_stats
 
-LOG = logging.getLogger("grace2.worker.swan_postprocess")
+LOG = logging.getLogger("trid3nt.worker.swan_postprocess")
 
 #: Worker-side calm-threshold (different from agent's 0.05).
 NODATA_WAVE_M: float = 0.001
@@ -47,7 +47,7 @@ _TP_PREFIXES: tuple[str, ...] = ("RTp", "RTpeak", "Tps", "Tp", "Period", "TPS", 
 _DIR_PREFIXES: tuple[str, ...] = ("Dir", "PkDir", "Pdir", "DIR", "Theta")
 
 #: Upper bound on emitted animation frames (mirrors agent frames.MAX_FLOOD_FRAMES).
-MAX_FRAMES: int = int(os.environ.get("GRACE2_MAX_FLOOD_FRAMES", "144"))
+MAX_FRAMES: int = int(os.environ.get("TRID3NT_MAX_FLOOD_FRAMES", "144"))
 
 _PEAK_COG: str = "swan_wave_height_peak.tif"
 _FRAME_COG_TMPL: str = "swan_wave_height_frame_{n:02d}.tif"

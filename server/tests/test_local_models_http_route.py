@@ -10,7 +10,7 @@ Covered here:
   - CLOUD posture: route ABSENT (404) unless MODEL_PROVIDER=openai;
   - 200 with the mapped model list, configured default moved first;
   - upstream (Ollama) unreachable -> honest 502, never a fabricated success;
-  - ``_ollama_tags_url`` derivation from GRACE2_OPENAI_BASE_URL.
+  - ``_ollama_tags_url`` derivation from TRID3NT_OPENAI_BASE_URL.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from grace2_agent import tool_catalog_http
+from trid3nt_server import tool_catalog_http
 
 
 class _FakeReader:
@@ -97,7 +97,7 @@ def test_route_absent_when_provider_bedrock(monkeypatch):
 
 def test_local_models_listed_with_default_first(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
-    monkeypatch.setenv("GRACE2_OPENAI_MODEL", "qwen3:8b-16k")
+    monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
 
     body = json.dumps(
         {
@@ -170,8 +170,8 @@ class _FakeHttpxClient:
 def test_fetch_local_models_maps_ollama_tags(monkeypatch):
     import httpx
 
-    monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
-    monkeypatch.setenv("GRACE2_OPENAI_MODEL", "qwen3:8b-16k")
+    monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
+    monkeypatch.setenv("TRID3NT_OPENAI_MODEL", "qwen3:8b-16k")
     _FakeHttpxClient.payload = {
         "models": [
             {"name": "llama3.2:3b", "size": 1},
@@ -195,8 +195,8 @@ def test_fetch_local_models_maps_ollama_tags(monkeypatch):
 def test_fetch_local_models_null_default_when_env_unset(monkeypatch):
     import httpx
 
-    monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
-    monkeypatch.delenv("GRACE2_OPENAI_MODEL", raising=False)
+    monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
+    monkeypatch.delenv("TRID3NT_OPENAI_MODEL", raising=False)
     _FakeHttpxClient.payload = {"models": [{"name": "llama3.2:3b"}]}
     monkeypatch.setattr(httpx, "Client", _FakeHttpxClient)
 
@@ -211,7 +211,7 @@ def test_fetch_local_models_null_default_when_env_unset(monkeypatch):
 
 
 def test_tags_url_strips_v1_suffix(monkeypatch):
-    monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
+    monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
     assert (
         tool_catalog_http._ollama_tags_url()
         == "http://127.0.0.1:11434/api/tags"
@@ -219,9 +219,9 @@ def test_tags_url_strips_v1_suffix(monkeypatch):
 
 
 def test_tags_url_trailing_slash_and_default(monkeypatch):
-    monkeypatch.setenv("GRACE2_OPENAI_BASE_URL", "http://box:11434/v1/")
+    monkeypatch.setenv("TRID3NT_OPENAI_BASE_URL", "http://box:11434/v1/")
     assert tool_catalog_http._ollama_tags_url() == "http://box:11434/api/tags"
-    monkeypatch.delenv("GRACE2_OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("TRID3NT_OPENAI_BASE_URL", raising=False)
     assert (
         tool_catalog_http._ollama_tags_url()
         == "http://127.0.0.1:11434/api/tags"

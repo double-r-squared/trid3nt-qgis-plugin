@@ -4,7 +4,7 @@ User-driven QGIS export (NATE 2026-07-06): the web's per-case "Export to
 QGIS" kebab item POSTs a case_id here; the route awaits the
 ``export_case_to_qgis`` tool and returns its result dict. A sibling GET
 serves the produced .qgz/.gpkg bytes, path-traversal guarded to the export
-root (GRACE2_EXPORT_DIR, default ~/trid3nt-exports).
+root (TRID3NT_EXPORT_DIR, default ~/trid3nt-exports).
 
 Exercises ``tool_catalog_http._handle_http`` dispatch:
   - POST happy path (monkeypatched export fn) -> 200 with the result dict;
@@ -22,8 +22,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from grace2_agent import tool_catalog_http
-from grace2_agent.tools.export_case_to_qgis import (
+from trid3nt_server import tool_catalog_http
+from trid3nt_server.tools.export_case_to_qgis import (
     CaseNotFoundError,
     NoExportableLayersError,
 )
@@ -199,7 +199,7 @@ def test_export_qgis_post_typed_tool_error_400(monkeypatch):
 
 def test_export_qgis_file_serves_qgz(tmp_path, monkeypatch):
     """An in-root .qgz is served as application/zip with its bytes intact."""
-    monkeypatch.setenv("GRACE2_EXPORT_DIR", str(tmp_path))
+    monkeypatch.setenv("TRID3NT_EXPORT_DIR", str(tmp_path))
     export_dir = tmp_path / "case-abc"
     export_dir.mkdir()
     qgz = export_dir / "project.qgz"
@@ -214,7 +214,7 @@ def test_export_qgis_file_serves_qgz(tmp_path, monkeypatch):
 
 def test_export_qgis_file_serves_gpkg(tmp_path, monkeypatch):
     """An in-root .gpkg is served with the GeoPackage media type."""
-    monkeypatch.setenv("GRACE2_EXPORT_DIR", str(tmp_path))
+    monkeypatch.setenv("TRID3NT_EXPORT_DIR", str(tmp_path))
     gpkg = tmp_path / "export.gpkg"
     gpkg.write_bytes(b"SQLite format 3\x00")
 
@@ -226,7 +226,7 @@ def test_export_qgis_file_serves_gpkg(tmp_path, monkeypatch):
 
 def test_export_qgis_file_traversal_403(tmp_path, monkeypatch):
     """A ../ escape that resolves outside the export root is a 403."""
-    monkeypatch.setenv("GRACE2_EXPORT_DIR", str(tmp_path / "exports"))
+    monkeypatch.setenv("TRID3NT_EXPORT_DIR", str(tmp_path / "exports"))
     (tmp_path / "exports").mkdir()
     # Lives OUTSIDE the root; reached via an in-root-looking ../ path.
     secret = tmp_path / "secret.qgz"
@@ -240,7 +240,7 @@ def test_export_qgis_file_traversal_403(tmp_path, monkeypatch):
 
 def test_export_qgis_file_outside_root_403(tmp_path, monkeypatch):
     """A plain absolute path outside the root is a 403 (no bytes leak)."""
-    monkeypatch.setenv("GRACE2_EXPORT_DIR", str(tmp_path))
+    monkeypatch.setenv("TRID3NT_EXPORT_DIR", str(tmp_path))
     elsewhere = tmp_path.parent / "elsewhere.qgz"
     elsewhere.write_bytes(b"leak")
 
@@ -250,7 +250,7 @@ def test_export_qgis_file_outside_root_403(tmp_path, monkeypatch):
 
 def test_export_qgis_file_disallowed_extension_403(tmp_path, monkeypatch):
     """Even in-root, only the .qgz/.gpkg artifacts are served."""
-    monkeypatch.setenv("GRACE2_EXPORT_DIR", str(tmp_path))
+    monkeypatch.setenv("TRID3NT_EXPORT_DIR", str(tmp_path))
     other = tmp_path / "notes.txt"
     other.write_text("private")
 
@@ -260,7 +260,7 @@ def test_export_qgis_file_disallowed_extension_403(tmp_path, monkeypatch):
 
 def test_export_qgis_file_missing_404(tmp_path, monkeypatch):
     """An in-root path that does not exist is a 404, not a 500."""
-    monkeypatch.setenv("GRACE2_EXPORT_DIR", str(tmp_path))
+    monkeypatch.setenv("TRID3NT_EXPORT_DIR", str(tmp_path))
     out = _drive(_get(f"/api/export-qgis/file?path={tmp_path}/gone/project.qgz"))
     assert b"404 Not Found" in out
 

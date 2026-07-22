@@ -27,9 +27,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import fetch_landsat_imagery as landsat_mod
-from grace2_agent.tools.fetch_landsat_imagery import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import fetch_landsat_imagery as landsat_mod
+from trid3nt_server.tools.fetch_landsat_imagery import (
     _METADATA,
     _STYLE_PRESET,
     LandsatBandComboError,
@@ -56,7 +56,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,
@@ -308,7 +308,7 @@ def test_band_combo_roundtrips_to_rgb_cog(combo, expect_role, expect_units) -> N
 def test_thermal_is_multiband_passthrough() -> None:
     """The 3-band RGB COG triggers publish_layer's RGBA/multiband passthrough
     (band count >= 3 -> rendered directly, no single-band rescale)."""
-    from grace2_agent.tools.publish_layer import _is_rgba_or_multiband
+    from trid3nt_server.tools.publish_layer import _is_rgba_or_multiband
 
     fake = _FakeStore()
     _run_combo("thermal", fake)

@@ -14,7 +14,7 @@ Usage::
     python services/agent/scripts/ws_client.py "Tell me a long story" --cancel-after 800
 
 Connects to ``ws://127.0.0.1:8765`` by default; override with
-``GRACE2_AGENT_URL`` (e.g. ``ws://localhost:8765``).
+``TRID3NT_AGENT_URL`` (e.g. ``ws://localhost:8765``).
 """
 
 from __future__ import annotations
@@ -26,12 +26,12 @@ import os
 import sys
 import time
 
-# Make ``grace2_contracts`` importable when run as a script from repo root
+# Make ``trid3nt_contracts`` importable when run as a script from repo root
 # without an editable install.
 import websockets
 
-from grace2_contracts import new_ulid
-from grace2_contracts.ws import (
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.ws import (
     CancelPayload,
     Envelope,
     SessionResumePayload,
@@ -45,7 +45,7 @@ def _serialize(message_type: str, session_id: str, payload) -> str:
 
 
 async def main(args) -> int:
-    url = os.environ.get("GRACE2_AGENT_URL", "ws://127.0.0.1:8765")
+    url = os.environ.get("TRID3NT_AGENT_URL", "ws://127.0.0.1:8765")
     session_id = new_ulid()
     print(f"# url={url}", file=sys.stderr)
     print(f"# session_id={session_id}", file=sys.stderr)

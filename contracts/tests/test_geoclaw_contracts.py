@@ -23,12 +23,12 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.geoclaw_contracts import (
+from trid3nt_contracts.geoclaw_contracts import (
     GEOCLAW_DEFAULT_FGMAX_ARRIVAL_TOL_M,
     GeoClawDepthLayerURI,
     GeoClawRunArgs,
 )
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
 
 # A small valid AOI bbox (lon-first EPSG:4326): Chattanooga-ish.

@@ -1,7 +1,7 @@
 """Tests for ``query_point_hazard`` (sample every case raster at a point).
 
 No network / no DynamoDB: persistence is a fake monkeypatched onto
-``grace2_agent.telemetry.get_persistence`` (the export_case_to_qgis seam) and
+``trid3nt_server.telemetry.get_persistence`` (the export_case_to_qgis seam) and
 the geocoder seam (``_geocode_place``) is stubbed. Layers are tiny local
 GeoTIFFs referenced from synthetic ``loaded_layer_summaries`` dicts.
 """
@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from grace2_agent.tools import query_point_hazard as mod
-from grace2_agent.tools.query_point_hazard import (
+from trid3nt_server.tools import query_point_hazard as mod
+from trid3nt_server.tools.query_point_hazard import (
     NoCaseBoundError,
     NoCaseLayersError,
     PointHazardInputError,
@@ -71,7 +71,7 @@ def _install_case(monkeypatch, layers, case_id="case-1", bbox=None, title="Test 
         bbox=bbox,
         loaded_layer_summaries=layers,
     )
-    import grace2_agent.telemetry as telemetry
+    import trid3nt_server.telemetry as telemetry
 
     monkeypatch.setattr(telemetry, "get_persistence", lambda: FakePersistence(case))
     return case
@@ -277,7 +277,7 @@ async def test_geocode_failure_typed_error(monkeypatch, depth_layer) -> None:
 
 
 def test_registered_in_tool_registry() -> None:
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("query_point_hazard")
     assert entry is not None

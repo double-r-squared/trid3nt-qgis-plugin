@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from grace2_agent.workflows.mesh_layer import (
+from trid3nt_server.workflows.mesh_layer import (
     make_sfincs_mesh_layer_uri,
     make_swmm_mesh_layer_uri,
     mesh_cells_to_feature_collection,
@@ -140,7 +140,7 @@ def test_make_layer_uri_uploads_to_s3_durable(monkeypatch) -> None:
     bucket and returns an s3:// uri (NOT a local /tmp path that the deck-cleanup
     deletes). The uri is re-readable by the emitter on every reconnect/re-emit.
     """
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.tools import solver as solver_mod
 
     build = _FakeBuild(
         transform=UTM_TRANSFORM,
@@ -150,12 +150,12 @@ def test_make_layer_uri_uploads_to_s3_durable(monkeypatch) -> None:
     )
     # Patch the deck reader at the seam used by swmm_mesh_to_geojson.
     monkeypatch.setattr(
-        "grace2_agent.workflows.swmm_mesh_builder._active_cells_from_deck",
+        "trid3nt_server.workflows.swmm_mesh_builder._active_cells_from_deck",
         lambda b: [(0, 0), (0, 1), (1, 0), (1, 1)],
     )
 
     fake_s3 = _FakeS3()
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
     solver_mod.set_s3_client(fake_s3)
     try:
         layer = make_swmm_mesh_layer_uri(build, run_id="run-abc")
@@ -189,13 +189,13 @@ def test_make_layer_uri_uploads_to_s3_durable(monkeypatch) -> None:
 
 def test_make_layer_uri_runs_bucket_override(monkeypatch) -> None:
     """An explicit runs_bucket arg overrides the solver default for the s3 key."""
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.tools import solver as solver_mod
 
     build = _FakeBuild(
         transform=UTM_TRANSFORM, crs=UTM_CRS, resolution_m=10.0, grid_shape=(2, 2)
     )
     monkeypatch.setattr(
-        "grace2_agent.workflows.swmm_mesh_builder._active_cells_from_deck",
+        "trid3nt_server.workflows.swmm_mesh_builder._active_cells_from_deck",
         lambda b: [(0, 0), (0, 1), (1, 0), (1, 1)],
     )
     fake_s3 = _FakeS3()
@@ -215,13 +215,13 @@ def test_make_layer_uri_runs_bucket_override(monkeypatch) -> None:
 def test_make_layer_uri_returns_none_on_upload_failure(monkeypatch) -> None:
     """BEST-EFFORT: an S3 put failure returns None (mesh simply absent) - it must
     NEVER raise / break the solve, and must NOT return a local /tmp fallback."""
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.tools import solver as solver_mod
 
     build = _FakeBuild(
         transform=UTM_TRANSFORM, crs=UTM_CRS, resolution_m=10.0, grid_shape=(2, 2)
     )
     monkeypatch.setattr(
-        "grace2_agent.workflows.swmm_mesh_builder._active_cells_from_deck",
+        "trid3nt_server.workflows.swmm_mesh_builder._active_cells_from_deck",
         lambda b: [(0, 0), (0, 1), (1, 0), (1, 1)],
     )
 
@@ -229,7 +229,7 @@ def test_make_layer_uri_returns_none_on_upload_failure(monkeypatch) -> None:
         def put_object(self, **kw):  # noqa: ANN003
             raise RuntimeError("S3 put boom (no creds / bad bucket)")
 
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
     solver_mod.set_s3_client(_BoomS3())
     try:
         layer = make_swmm_mesh_layer_uri(build, run_id="run-boom")
@@ -241,7 +241,7 @@ def test_make_layer_uri_returns_none_on_upload_failure(monkeypatch) -> None:
 
 def test_make_layer_uri_zero_features_returns_none(monkeypatch) -> None:
     """Zero active cells -> None, and NO S3 upload is attempted."""
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.tools import solver as solver_mod
 
     build = _FakeBuild(
         transform=UTM_TRANSFORM,
@@ -250,7 +250,7 @@ def test_make_layer_uri_zero_features_returns_none(monkeypatch) -> None:
         grid_shape=(2, 2),
     )
     monkeypatch.setattr(
-        "grace2_agent.workflows.swmm_mesh_builder._active_cells_from_deck",
+        "trid3nt_server.workflows.swmm_mesh_builder._active_cells_from_deck",
         lambda b: [],
     )
 

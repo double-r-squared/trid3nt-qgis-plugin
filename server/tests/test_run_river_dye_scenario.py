@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from grace2_contracts.telemac_contracts import (
+from trid3nt_contracts.telemac_contracts import (
     TELEMAC_DYE_STYLE_PRESET,
     TelemacDyeLayerURI,
 )
@@ -70,7 +70,7 @@ def _fake_peak(run_id: str, reach_name: str) -> TelemacDyeLayerURI:
 # (1) Tool registration + metadata.
 # ===========================================================================
 def test_run_telemac_registered_with_workflow_dispatch_metadata():
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("run_telemac")
     assert entry is not None
@@ -83,7 +83,7 @@ def test_run_telemac_registered_with_workflow_dispatch_metadata():
 # (2) Tool arg validation / coercion.
 # ===========================================================================
 def test_tool_rejects_invalid_bbox():
-    from grace2_agent.tools.run_telemac_tool import run_telemac
+    from trid3nt_server.tools.run_telemac_tool import run_telemac
 
     out = asyncio.run(run_telemac(bbox="not,a,bbox"))
     assert out["status"] == "error"
@@ -91,7 +91,7 @@ def test_tool_rejects_invalid_bbox():
 
 
 def test_tool_rejects_neither_location_nor_bbox():
-    from grace2_agent.tools.run_telemac_tool import run_telemac
+    from trid3nt_server.tools.run_telemac_tool import run_telemac
 
     out = asyncio.run(run_telemac())
     assert out["status"] == "error"
@@ -99,7 +99,7 @@ def test_tool_rejects_neither_location_nor_bbox():
 
 
 def test_tool_rejects_both_location_and_bbox():
-    from grace2_agent.tools.run_telemac_tool import run_telemac
+    from trid3nt_server.tools.run_telemac_tool import run_telemac
 
     out = asyncio.run(run_telemac(location="Twin Falls, Idaho", bbox=list(_AOI)))
     assert out["status"] == "error"
@@ -110,7 +110,7 @@ def test_tool_rejects_both_location_and_bbox():
 # (3) Composer input validation.
 # ===========================================================================
 def test_composer_requires_exactly_one_of_location_or_bbox():
-    from grace2_agent.workflows.model_river_dye_release_scenario import (
+    from trid3nt_server.workflows.model_river_dye_release_scenario import (
         TelemacDyeScenarioInputError,
         model_river_dye_release_scenario,
     )
@@ -199,8 +199,8 @@ def _install_composer_mocks(comp, solver_mod, captured: dict):
 def test_composer_geocode_dispatch_and_manifest_overrides():
     from unittest.mock import patch  # noqa: F401 (used via _install)
 
-    from grace2_agent.workflows import model_river_dye_release_scenario as comp
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.workflows import model_river_dye_release_scenario as comp
+    from trid3nt_server.tools import solver as solver_mod
 
     captured: dict = {}
     cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
@@ -252,8 +252,8 @@ def test_composer_geocode_dispatch_and_manifest_overrides():
 def test_composer_reuses_prefetched_river_geometry_uri():
     """When a river_geometry_uri is supplied the composer reuses it for the seed
     and does NOT call fetch_river_geometry (the live post-fetch routing path)."""
-    from grace2_agent.workflows import model_river_dye_release_scenario as comp
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.workflows import model_river_dye_release_scenario as comp
+    from trid3nt_server.tools import solver as solver_mod
 
     captured: dict = {}
     cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
@@ -276,8 +276,8 @@ def test_composer_reuses_prefetched_river_geometry_uri():
 def test_composer_falls_back_to_centroid_when_no_river_seed():
     """When river-seed extraction returns None the composer seeds the geocoded
     centroid (the worker NLDI-snaps it) -- honest degrade, never a dead-end."""
-    from grace2_agent.workflows import model_river_dye_release_scenario as comp
-    from grace2_agent.tools import solver as solver_mod
+    from trid3nt_server.workflows import model_river_dye_release_scenario as comp
+    from trid3nt_server.tools import solver as solver_mod
 
     captured: dict = {}
     cm_multi, cm_solver, cm_wait, cm_bind = _install_composer_mocks(
@@ -303,7 +303,7 @@ def test_composer_falls_back_to_centroid_when_no_river_seed():
 # (6) Tool happy path returns the layer.
 # ===========================================================================
 def test_tool_happy_path_returns_layer():
-    from grace2_agent.tools import run_telemac_tool as tool_mod
+    from trid3nt_server.tools import run_telemac_tool as tool_mod
 
     async def _fake_composer(**kwargs):
         assert kwargs["location"] == "Twin Falls, Idaho"
@@ -320,8 +320,8 @@ def test_tool_happy_path_returns_layer():
 
 
 def test_tool_maps_composer_error_to_typed_dict():
-    from grace2_agent.tools import run_telemac_tool as tool_mod
-    from grace2_agent.workflows.model_river_dye_release_scenario import (
+    from trid3nt_server.tools import run_telemac_tool as tool_mod
+    from trid3nt_server.workflows.model_river_dye_release_scenario import (
         TelemacDyeScenarioError,
     )
 

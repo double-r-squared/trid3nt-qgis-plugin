@@ -45,7 +45,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.landlab.chain")
+LOG = logging.getLogger("trid3nt.worker.landlab.chain")
 
 #: A cell whose probability-of-failure is at/above this is flagged "unstable"
 #: for the ``unstable_area_fraction`` narration scalar (Landlab tutorial uses

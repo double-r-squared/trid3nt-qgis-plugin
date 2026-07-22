@@ -32,8 +32,8 @@ from __future__ import annotations
 
 import yaml
 
-from grace2_agent.server import _maybe_default_solver_bbox_to_pinned_aoi
-from grace2_agent.workflows.sfincs_builder import (
+from trid3nt_server.server import _maybe_default_solver_bbox_to_pinned_aoi
+from trid3nt_server.workflows.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     WaterlevelForcing,

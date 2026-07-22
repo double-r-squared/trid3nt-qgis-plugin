@@ -28,18 +28,18 @@ import json
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.adapter import (
+from trid3nt_server import server
+from trid3nt_server.adapter import (
     FunctionCallEvent,
     GeminiSettings,
     TextDeltaEvent,
 )
-from grace2_agent import tools as agent_tools
-from grace2_agent.persistence import make_file_persistence
-from grace2_agent.tools import RegisteredTool
-from grace2_contracts.case import CaseCommandEnvelopePayload
-from grace2_contracts.common import new_ulid
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.persistence import make_file_persistence
+from trid3nt_server.tools import RegisteredTool
+from trid3nt_contracts.case import CaseCommandEnvelopePayload
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
 class FakeWS:
@@ -92,7 +92,7 @@ async def _drive_real_stream(ws, state, fake_stream):
     with a mocked ``stream_events_with_contents`` (``fake_stream``)."""
     from unittest.mock import patch
 
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     settings = GeminiSettings(
         model="m", project="p", location="us-central1", use_vertex=True
@@ -322,7 +322,7 @@ async def test_terminal_failure_card_skipped_without_active_case(
         state, error_code="LLM_UNAVAILABLE", message="boom", case_id=None
     )
 
-    chat_file = tmp_path / "grace2_dev" / "case_chat_messages.json"
+    chat_file = tmp_path / "trid3nt_dev" / "case_chat_messages.json"
     assert (not chat_file.exists()) or chat_file.read_text().strip() in ("{}", "")
 
 

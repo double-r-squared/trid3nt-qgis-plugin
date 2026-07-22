@@ -35,14 +35,14 @@ import pandas as pd
 import pytest
 from shapely.geometry import LineString, Point
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.compute_movement_trajectory import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.compute_movement_trajectory import (
     MovementTrajectoryError,
     _normalize_turn_angle,
     compute_movement_trajectory,
     estimate_payload_mb,
 )
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
 
 # ---------------------------------------------------------------------------

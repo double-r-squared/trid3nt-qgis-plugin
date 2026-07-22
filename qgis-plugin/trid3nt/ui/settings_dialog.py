@@ -182,7 +182,7 @@ class SettingsDialog(QDialog):
         form.addRow("Provider", self.provider_combo)
 
         # SECRET: password echo, mirrors token_edit; NEVER logged. This is the
-        # agent's GRACE2_OPENAI_API_KEY (OPENROUTER_API_KEY / OPENAI_API_KEY /
+        # agent's TRID3NT_OPENAI_API_KEY (OPENROUTER_API_KEY / OPENAI_API_KEY /
         # GROQ_API_KEY per preset) -- persisted here, applied on agent restart;
         # never sent over the WS (no per-message carrier, and a live key must
         # not leak onto the wire).
@@ -195,7 +195,7 @@ class SettingsDialog(QDialog):
 
         # EDITABLE combo pre-filled with the curated tool-capable shortlist for
         # the selected provider -- editable so the user can paste ANY model id.
-        # Empty text = the agent's env default (GRACE2_OPENAI_MODEL); a MODEL
+        # Empty text = the agent's env default (TRID3NT_OPENAI_MODEL); a MODEL
         # switch applies on the NEXT message with no restart.
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)

@@ -27,9 +27,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import fetch_modis_lst as modis_mod
-from grace2_agent.tools.fetch_modis_lst import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import fetch_modis_lst as modis_mod
+from trid3nt_server.tools.fetch_modis_lst import (
     _LST_SCALE,
     _KELVIN_C,
     _STYLE_PRESET,
@@ -58,7 +58,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,
@@ -293,7 +293,7 @@ def test_style_preset_avoids_kelvin_temperature_family() -> None:
     a deg-C-appropriate ramp (band-stats / a dedicated registry entry).
     """
     assert "temperature" not in _STYLE_PRESET.lower()
-    from grace2_agent.tools.publish_layer import _registry_style_params
+    from trid3nt_server.tools.publish_layer import _registry_style_params
 
     # Today there is no exact key -> None (falls through to band-stats viridis);
     # crucially it does NOT pick up the Kelvin 250,320 family rescale.

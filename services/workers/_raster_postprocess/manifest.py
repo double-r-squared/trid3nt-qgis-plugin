@@ -20,7 +20,7 @@ import json
 import logging
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.raster_postprocess.manifest")
+LOG = logging.getLogger("trid3nt.worker.raster_postprocess.manifest")
 
 #: Bumped whenever the manifest shape changes incompatibly. The agent reader
 #: gates on this exact value and falls back to the legacy on-box postprocess if

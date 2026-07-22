@@ -47,7 +47,7 @@ log = logging.getLogger("ws_smoke")
 # ---------------------------------------------------------------------------
 # Tiny ULID-ish generator (we just need unique IDs, not real ULIDs)
 # ---------------------------------------------------------------------------
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
 def new_id() -> str:
     return new_ulid()

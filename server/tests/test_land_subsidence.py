@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from grace2_agent.workflows.postprocess_modflow import (
+from trid3nt_server.workflows.postprocess_modflow import (
     CSUB_ZDISP_TEXT_TAG,
     _read_csub_zdisplacement,
     compute_subsidence_metrics,

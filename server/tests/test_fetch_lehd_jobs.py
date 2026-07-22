@@ -30,8 +30,8 @@ import tempfile
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_lehd_jobs import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_lehd_jobs import (
     FIPS_TO_ABBR,
     LODES_SEGMENTS,
     LehdJobsInputError,

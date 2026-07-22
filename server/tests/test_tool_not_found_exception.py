@@ -35,18 +35,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     GeminiSettings,
     summarize_tool_result,
     _classify_error,
 )
-from grace2_agent.server import (
+from trid3nt_server.server import (
     SessionState,
     ToolNotFoundError,
     _dispatch_tool_and_persist,
     _invoke_tool_via_emitter,
 )
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +250,7 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini():
     that I cannot do this." After seeing the error Gemini emits a text turn,
     and the loop terminates normally.
     """
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     # Turn 1: Gemini calls a tool that doesn't exist.
     turn1_chunk = _make_fake_chunk_with_function_call(

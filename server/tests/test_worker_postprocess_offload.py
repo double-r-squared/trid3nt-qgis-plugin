@@ -30,7 +30,7 @@ import inspect
 # 1. Each composer has the register-only branch in front of the on-box fallback.
 # --------------------------------------------------------------------------- #
 def test_geoclaw_composer_register_only_branch_and_fallback():
-    import grace2_agent.workflows.model_dambreak_geoclaw_scenario as m
+    import trid3nt_server.workflows.model_dambreak_geoclaw_scenario as m
 
     body = inspect.getsource(m.model_dambreak_geoclaw_scenario)
     # register-only trigger
@@ -43,7 +43,7 @@ def test_geoclaw_composer_register_only_branch_and_fallback():
 
 
 def test_openquake_composer_register_only_branch_and_fallback():
-    import grace2_agent.workflows.model_seismic_hazard_scenario as m
+    import trid3nt_server.workflows.model_seismic_hazard_scenario as m
 
     body = inspect.getsource(m.model_seismic_hazard_scenario)
     assert "read_publish_manifest" in body
@@ -55,7 +55,7 @@ def test_openquake_composer_register_only_branch_and_fallback():
 
 
 def test_swmm_composer_register_only_branch_and_fallback():
-    import grace2_agent.workflows.model_urban_flood_swmm as m
+    import trid3nt_server.workflows.model_urban_flood_swmm as m
 
     body = inspect.getsource(m.model_urban_flood_swmm)
     assert "read_publish_manifest" in body
@@ -67,7 +67,7 @@ def test_swmm_composer_register_only_branch_and_fallback():
 
 
 def test_landlab_composer_register_only_branch_and_fallback():
-    import grace2_agent.workflows.model_landslide_scenario as m
+    import trid3nt_server.workflows.model_landslide_scenario as m
 
     body = inspect.getsource(m.model_landslide_scenario)
     assert "read_publish_manifest" in body
@@ -86,8 +86,8 @@ def test_read_publish_manifest_absent_pointer_returns_none(monkeypatch):
     """A completion.json with no ``publish_manifest_uri`` (pre-rebuild worker /
     gate default-off) -> read_publish_manifest returns None -> composer falls
     through to the legacy on-box postprocess."""
-    import grace2_agent.workflows.register_published_manifest as rpm
-    import grace2_agent.tools.solver as solver
+    import trid3nt_server.workflows.register_published_manifest as rpm
+    import trid3nt_server.tools.solver as solver
 
     monkeypatch.setattr(solver, "_get_runs_bucket", lambda: "runs-bkt")
     monkeypatch.setattr(
@@ -101,7 +101,7 @@ def test_read_publish_manifest_absent_pointer_returns_none(monkeypatch):
 
 
 def test_read_publish_manifest_no_run_id_returns_none():
-    import grace2_agent.workflows.register_published_manifest as rpm
+    import trid3nt_server.workflows.register_published_manifest as rpm
 
     class _RR:
         run_id = None
@@ -114,7 +114,7 @@ def test_read_publish_manifest_no_run_id_returns_none():
 #    the shared schema gate (a geoclaw manifest never masquerades as swmm, etc).
 # --------------------------------------------------------------------------- #
 def test_manifest_engine_tag_round_trips_per_engine():
-    from grace2_contracts.publish_manifest import parse_publish_manifest
+    from trid3nt_contracts.publish_manifest import parse_publish_manifest
 
     import json
 

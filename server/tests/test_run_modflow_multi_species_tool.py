@@ -21,20 +21,20 @@ from typing import Any
 
 import pytest
 
-from grace2_contracts.modflow_contracts import (
+from trid3nt_contracts.modflow_contracts import (
     MODFLOWRunArgs,
     MultiSpeciesPlumeResult,
     PlumeLayerURI,
 )
 
-from grace2_agent.tools import run_modflow_multi_species_tool as tool
+from trid3nt_server.tools import run_modflow_multi_species_tool as tool
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _find_mf6() -> str | None:
-    env = os.environ.get("GRACE2_MF6_BIN")
+    env = os.environ.get("TRID3NT_MF6_BIN")
     if env and Path(env).exists():
         return env
     on_path = shutil.which("mf6")
@@ -166,10 +166,10 @@ async def test_build_staging_threads_species_and_real_run(
 ) -> None:
     """build_multi_species_staging writes a 2-GWT deck (the species ARE threaded),
     then the full local chain runs mf6 and returns two real plumes."""
-    monkeypatch.setenv("GRACE2_MODFLOW_LOCAL", "1")
-    monkeypatch.setenv("GRACE2_MF6_BIN", _MF6_BIN or "mf6")
+    monkeypatch.setenv("TRID3NT_MODFLOW_LOCAL", "1")
+    monkeypatch.setenv("TRID3NT_MF6_BIN", _MF6_BIN or "mf6")
     # Stub only COG write / upload / publish so we exercise the REAL deck + mf6 + UCN.
-    from grace2_agent.workflows import postprocess_modflow as pp
+    from trid3nt_server.workflows import postprocess_modflow as pp
 
     monkeypatch.setattr(pp, "_write_reprojected_cog", lambda *a, **k: tmp_path / "x.tif")
     monkeypatch.setattr(pp, "_cog_bbox_4326", lambda _p: (-81.9, 26.6, -81.8, 26.7))

@@ -29,9 +29,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import fetch_noaa_sst as sst_mod
-from grace2_agent.tools.fetch_noaa_sst import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import fetch_noaa_sst as sst_mod
+from trid3nt_server.tools.fetch_noaa_sst import (
     _METADATA,
     SSTInputError,
     SSTNoDataError,
@@ -95,7 +95,7 @@ def _synthetic_griddap_nc(
     import os
     import tempfile
 
-    fd, path = tempfile.mkstemp(suffix=".nc", prefix="grace2_sst_fixture_")
+    fd, path = tempfile.mkstemp(suffix=".nc", prefix="trid3nt_sst_fixture_")
     os.close(fd)
     try:
         ds.to_netcdf(path, engine="netcdf4")
@@ -119,7 +119,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,
@@ -410,7 +410,7 @@ def test_repeat_call_hits_cache_and_skips_fetch() -> None:
 
 
 def test_distinct_inputs_distinct_cache_keys() -> None:
-    from grace2_agent.tools.cache import compute_cache_key
+    from trid3nt_server.tools.cache import compute_cache_key
 
     def k(params):
         return compute_cache_key(

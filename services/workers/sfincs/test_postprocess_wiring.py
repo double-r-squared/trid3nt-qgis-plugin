@@ -83,7 +83,7 @@ def test_write_completion_carries_publish_manifest_uri(tmp_path: Path, monkeypat
             captured.update(kwargs)
 
     monkeypatch.setattr(ep, "_s3_client", lambda: _FakeS3())
-    monkeypatch.setenv("GRACE2_OBJECT_STORE", "s3")
+    monkeypatch.setenv("TRID3NT_OBJECT_STORE", "s3")
     monkeypatch.setattr(ep, "RUNS_BUCKET", "runs-b")
     ep._write_completion(
         run_id="RID", status="ok", exit_code=0,

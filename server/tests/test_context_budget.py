@@ -28,7 +28,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from google.genai import types as genai_types
 
-from grace2_agent.context_budget import (
+from trid3nt_server.context_budget import (
     CompactionResult,
     CONTEXT_WINDOW_ABORT_NOTE,
     ContextWindowExceededError,
@@ -143,25 +143,25 @@ class TestEstimator:
 
 class TestBudget:
     def test_defaults(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
-        monkeypatch.delenv("GRACE2_CONTEXT_SAFETY_TOKENS", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
+        monkeypatch.delenv("TRID3NT_CONTEXT_SAFETY_TOKENS", raising=False)
         assert reserve_output_tokens() == 4096
         assert safety_tokens() == 1024
         assert compute_budget_tokens(16384) == 16384 - 4096 - 1024
 
     def test_budget_floors_at_256_for_a_tiny_num_ctx(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
-        monkeypatch.delenv("GRACE2_CONTEXT_SAFETY_TOKENS", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
+        monkeypatch.delenv("TRID3NT_CONTEXT_SAFETY_TOKENS", raising=False)
         assert compute_budget_tokens(100) == 256
 
     def test_openai_max_output_tokens_default_and_override(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
         assert openai_max_output_tokens() == 4096
-        monkeypatch.setenv("GRACE2_OPENAI_MAX_TOKENS", "1024")
+        monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "1024")
         assert openai_max_output_tokens() == 1024
         # Garbage falls back to the safe default (same _env_int contract as
         # every other context-budget env knob).
-        monkeypatch.setenv("GRACE2_OPENAI_MAX_TOKENS", "not-a-number")
+        monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "not-a-number")
         assert openai_max_output_tokens() == 4096
 
     def test_reserve_output_tokens_is_coupled_to_max_output_tokens(self, monkeypatch):
@@ -169,22 +169,22 @@ class TestBudget:
         output reserve must be the SAME number as the max_tokens cap sent on
         the wire -- a single source of truth, not two independently
         configured knobs that can drift apart."""
-        monkeypatch.delenv("GRACE2_OPENAI_MAX_TOKENS", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_MAX_TOKENS", raising=False)
         assert reserve_output_tokens() == openai_max_output_tokens() == 4096
-        monkeypatch.setenv("GRACE2_OPENAI_MAX_TOKENS", "777")
+        monkeypatch.setenv("TRID3NT_OPENAI_MAX_TOKENS", "777")
         assert reserve_output_tokens() == openai_max_output_tokens() == 777
 
     def test_ratio_defaults_and_overrides(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_CONTEXT_PROACTIVE_RATIO", raising=False)
-        monkeypatch.delenv("GRACE2_CONTEXT_REACTIVE_RATIO", raising=False)
+        monkeypatch.delenv("TRID3NT_CONTEXT_PROACTIVE_RATIO", raising=False)
+        monkeypatch.delenv("TRID3NT_CONTEXT_REACTIVE_RATIO", raising=False)
         assert proactive_target_ratio() == 0.75
         assert reactive_target_ratio() == 0.60
-        monkeypatch.setenv("GRACE2_CONTEXT_PROACTIVE_RATIO", "0.5")
+        monkeypatch.setenv("TRID3NT_CONTEXT_PROACTIVE_RATIO", "0.5")
         assert proactive_target_ratio() == 0.5
         # Out-of-range / garbage falls back to the safe default.
-        monkeypatch.setenv("GRACE2_CONTEXT_PROACTIVE_RATIO", "5")
+        monkeypatch.setenv("TRID3NT_CONTEXT_PROACTIVE_RATIO", "5")
         assert proactive_target_ratio() == 0.75
-        monkeypatch.setenv("GRACE2_CONTEXT_PROACTIVE_RATIO", "not-a-number")
+        monkeypatch.setenv("TRID3NT_CONTEXT_PROACTIVE_RATIO", "not-a-number")
         assert proactive_target_ratio() == 0.75
 
 
@@ -389,7 +389,7 @@ class TestStillOverAfterStepABug:
         huge_note = case_state_note_content("s" * 50_000)
         current_question = user_content("small question")
         contents = [huge_note, current_question]
-        with caplog.at_level("WARNING", logger="grace2_agent.context_budget"):
+        with caplog.at_level("WARNING", logger="trid3nt_server.context_budget"):
             result = compact_contents(contents, budget_tokens=200, target_ratio=1.0)
         assert any(
             "protected content alone exceeds target" in r.message
@@ -477,16 +477,16 @@ class TestNumCtxDiscovery:
         assert num_ctx_from_suffix(None) is None
 
     def test_env_fallback_default_and_override(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_OPENAI_NUM_CTX", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_NUM_CTX", raising=False)
         assert num_ctx_env_fallback() == 16384
-        monkeypatch.setenv("GRACE2_OPENAI_NUM_CTX", "8192")
+        monkeypatch.setenv("TRID3NT_OPENAI_NUM_CTX", "8192")
         assert num_ctx_env_fallback() == 8192
-        monkeypatch.setenv("GRACE2_OPENAI_NUM_CTX", "garbage")
+        monkeypatch.setenv("TRID3NT_OPENAI_NUM_CTX", "garbage")
         assert num_ctx_env_fallback() == 16384
 
     @pytest.mark.asyncio
     async def test_discover_num_ctx_uses_api_show_when_reachable(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_OPENAI_NUM_CTX", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_NUM_CTX", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"parameters": "num_ctx    16384"}
@@ -506,7 +506,7 @@ class TestNumCtxDiscovery:
 
     @pytest.mark.asyncio
     async def test_discover_num_ctx_falls_back_to_suffix_on_404(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_OPENAI_NUM_CTX", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_NUM_CTX", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 404
         mock_client = MagicMock()
@@ -522,7 +522,7 @@ class TestNumCtxDiscovery:
     async def test_discover_num_ctx_falls_back_to_env_when_no_suffix_and_network_fails(
         self, monkeypatch
     ):
-        monkeypatch.setenv("GRACE2_OPENAI_NUM_CTX", "4096")
+        monkeypatch.setenv("TRID3NT_OPENAI_NUM_CTX", "4096")
         mock_client = MagicMock()
         mock_client.post = AsyncMock(side_effect=ConnectionError("refused"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -534,7 +534,7 @@ class TestNumCtxDiscovery:
 
     @pytest.mark.asyncio
     async def test_discover_num_ctx_caches_per_model_for_process_lifetime(self, monkeypatch):
-        monkeypatch.delenv("GRACE2_OPENAI_NUM_CTX", raising=False)
+        monkeypatch.delenv("TRID3NT_OPENAI_NUM_CTX", raising=False)
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"parameters": "num_ctx    16384"}

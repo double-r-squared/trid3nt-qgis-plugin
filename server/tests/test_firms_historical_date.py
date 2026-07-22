@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.tools.fetch_firms_active_fire import (
+from trid3nt_server.tools.fetch_firms_active_fire import (
     FirmsArgError,
     _build_firms_url,
     _validate_date,

@@ -27,20 +27,20 @@ from typing import Any
 
 import pytest
 
-from grace2_agent import server as server_mod
-from grace2_agent.adapter import build_layers_present_note
-from grace2_agent.persistence import Persistence
-from grace2_agent.pipeline_emitter import PipelineEmitter
-from grace2_agent.server import (
+from trid3nt_server import server as server_mod
+from trid3nt_server.adapter import build_layers_present_note
+from trid3nt_server.persistence import Persistence
+from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_server.server import (
     SessionState,
     _delete_case_loaded_layer,
     _handle_layer_delete,
     get_persistence,
     set_persistence,
 )
-from grace2_contracts.case import CaseSummary
-from grace2_contracts.common import new_ulid
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.case import CaseSummary
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.execution import LayerURI
 
 from .test_persistence import MockMCPClient
 

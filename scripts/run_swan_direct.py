@@ -46,15 +46,15 @@ MODE = "stationary"   # stationary solve is faster for a proof run
 # Sanity: local-docker backend + image + runs dir
 # ---------------------------------------------------------------------------
 
-backend = os.environ.get("GRACE2_SOLVER_BACKEND", "")
-image = os.environ.get("GRACE2_SWAN_IMAGE", "")
-runs_bucket = os.environ.get("GRACE2_RUNS_BUCKET", "")
+backend = os.environ.get("TRID3NT_SOLVER_BACKEND", "")
+image = os.environ.get("TRID3NT_SWAN_IMAGE", "")
+runs_bucket = os.environ.get("TRID3NT_RUNS_BUCKET", "")
 log.info(
     "backend=%s swan_image=%s runs_bucket=%s endpoint=%s",
     backend, image, runs_bucket, os.environ.get("AWS_ENDPOINT_URL"),
 )
 if backend != "local-docker":
-    log.warning("GRACE2_SOLVER_BACKEND is %r (expected local-docker)", backend)
+    log.warning("TRID3NT_SOLVER_BACKEND is %r (expected local-docker)", backend)
 
 # ---------------------------------------------------------------------------
 # Ensure MinIO buckets exist
@@ -69,7 +69,7 @@ s3 = boto3.client(
     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
     region_name=os.environ.get("AWS_REGION", "us-east-1"),
 )
-for b in {runs_bucket, os.environ.get("GRACE2_CACHE_BUCKET", "trid3nt-cache")}:
+for b in {runs_bucket, os.environ.get("TRID3NT_CACHE_BUCKET", "trid3nt-cache")}:
     if not b:
         continue
     try:
@@ -109,8 +109,8 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from grace2_agent.workflows.model_wave_scenario import model_wave_scenario
-    from grace2_contracts.swan_contracts import SwanRunArgs, SwanWaveBoundary
+    from trid3nt_server.workflows.model_wave_scenario import model_wave_scenario
+    from trid3nt_contracts.swan_contracts import SwanRunArgs, SwanWaveBoundary
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
     sys.exit(1)
@@ -190,7 +190,7 @@ summary = {
     "result": result_json,
     "new_run_prefixes": new_prefixes,
     "run_listings": run_listings,
-    "tile_server_base": os.environ.get("GRACE2_TILE_SERVER_BASE"),
+    "tile_server_base": os.environ.get("TRID3NT_TILE_SERVER_BASE"),
 }
 
 out_path = PROOF_DIR / "swan_direct_result.json"

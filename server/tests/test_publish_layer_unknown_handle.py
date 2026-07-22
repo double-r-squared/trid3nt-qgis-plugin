@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.tools.publish_layer import (
+from trid3nt_server.tools.publish_layer import (
     PublishLayerError,
     _looks_like_unresolved_handle,
     _unknown_handle_error,
     publish_layer,
 )
-from grace2_agent.uri_registry import (
+from trid3nt_server.uri_registry import (
     activate_registry,
     ambient_layer_handle_inventory,
     deactivate_registry,

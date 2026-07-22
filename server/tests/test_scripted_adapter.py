@@ -15,21 +15,21 @@ import json
 
 import pytest
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     UsageMetadataEvent,
     stream_events_with_contents,
 )
-from grace2_agent import scripted_adapter as sa
+from trid3nt_server import scripted_adapter as sa
 
 
 @pytest.fixture(autouse=True)
 def _clean_script_env(monkeypatch):
     """Each test starts with no override + no transcript env."""
     sa.clear_script()
-    monkeypatch.delenv("GRACE2_SCRIPTED_TRANSCRIPT_JSON", raising=False)
-    monkeypatch.delenv("GRACE2_SCRIPTED_TRANSCRIPT", raising=False)
+    monkeypatch.delenv("TRID3NT_SCRIPTED_TRANSCRIPT_JSON", raising=False)
+    monkeypatch.delenv("TRID3NT_SCRIPTED_TRANSCRIPT", raising=False)
     yield
     sa.clear_script()
 
@@ -66,23 +66,23 @@ def test_model_provider_unset_is_not_scripted(monkeypatch):
 # Transcript resolution precedence.
 # --------------------------------------------------------------------------- #
 def test_load_script_override_wins(monkeypatch):
-    monkeypatch.setenv("GRACE2_SCRIPTED_TRANSCRIPT_JSON", json.dumps([{"text": "env"}]))
+    monkeypatch.setenv("TRID3NT_SCRIPTED_TRANSCRIPT_JSON", json.dumps([{"text": "env"}]))
     sa.set_script([{"text": "override"}])
     assert sa.load_script() == [{"text": "override"}]
 
 
 def test_load_script_inline_json_list_and_object(monkeypatch):
-    monkeypatch.setenv("GRACE2_SCRIPTED_TRANSCRIPT_JSON", json.dumps([{"text": "a"}]))
+    monkeypatch.setenv("TRID3NT_SCRIPTED_TRANSCRIPT_JSON", json.dumps([{"text": "a"}]))
     assert sa.load_script() == [{"text": "a"}]
     # Object form {"turns": [...]} is also accepted.
-    monkeypatch.setenv("GRACE2_SCRIPTED_TRANSCRIPT_JSON", json.dumps({"turns": [{"text": "b"}]}))
+    monkeypatch.setenv("TRID3NT_SCRIPTED_TRANSCRIPT_JSON", json.dumps({"turns": [{"text": "b"}]}))
     assert sa.load_script() == [{"text": "b"}]
 
 
 def test_load_script_from_file(monkeypatch, tmp_path):
     p = tmp_path / "t.json"
     p.write_text(json.dumps({"turns": [{"text": "fromfile"}]}), encoding="utf-8")
-    monkeypatch.setenv("GRACE2_SCRIPTED_TRANSCRIPT", str(p))
+    monkeypatch.setenv("TRID3NT_SCRIPTED_TRANSCRIPT", str(p))
     assert sa.load_script() == [{"text": "fromfile"}]
 
 
@@ -91,7 +91,7 @@ def test_load_script_empty_when_nothing_configured():
 
 
 def test_load_script_bad_json_is_safe(monkeypatch):
-    monkeypatch.setenv("GRACE2_SCRIPTED_TRANSCRIPT_JSON", "{not json")
+    monkeypatch.setenv("TRID3NT_SCRIPTED_TRANSCRIPT_JSON", "{not json")
     assert sa.load_script() == []
 
 

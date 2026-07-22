@@ -38,20 +38,20 @@ make status    # health-check the services
 
 ### LLM endpoint (.env.local)
 
-`make setup` copies `.env.local (via make env)` to `.env.local`. Set the provider:
-- Local Ollama: `MODEL_PROVIDER=openai`, `GRACE2_OPENAI_BASE_URL=http://127.0.0.1:11434/v1`,
-  `GRACE2_OPENAI_MODEL=<your ollama model>`, `GRACE2_OPENAI_API_KEY=not-needed`.
-- OpenRouter / OpenAI / Groq: set `GRACE2_OPENAI_BASE_URL` + `GRACE2_OPENAI_MODEL` +
-  `GRACE2_OPENAI_API_KEY`. Helper: `scripts/use_openrouter.sh <KEY> [model]`.
+`make setup` writes a starter `.env.local` (via `make env`). Set the provider:
+- Local Ollama: `MODEL_PROVIDER=openai`, `TRID3NT_OPENAI_BASE_URL=http://127.0.0.1:11434/v1`,
+  `TRID3NT_OPENAI_MODEL=<your ollama model>`, `TRID3NT_OPENAI_API_KEY=not-needed`.
+- OpenRouter / OpenAI / Groq: set `TRID3NT_OPENAI_BASE_URL` + `TRID3NT_OPENAI_MODEL` +
+  `TRID3NT_OPENAI_API_KEY`. Helper: `scripts/use_openrouter.sh <KEY> [model]`.
 The model can also be switched live from the plugin's Settings (no restart).
 
 ### Engine backends (.env.local)
 
-- `GRACE2_MODFLOW_LOCAL=1` -- MODFLOW runs against the local `mf6` binary (`GRACE2_MF6_BIN`).
-- `GRACE2_SOLVER_BACKEND=local-docker` -- container solvers (SFINCS/TELEMAC/...) run via
-  local docker. Set `GRACE2_RUNS_DIR=<repo>/data/runs` (the host rundir mounted at `/data`).
+- `TRID3NT_MODFLOW_LOCAL=1` -- MODFLOW runs against the local `mf6` binary (`TRID3NT_MF6_BIN`).
+- `TRID3NT_SOLVER_BACKEND=local-docker` -- container solvers (SFINCS/TELEMAC/...) run via
+  local docker. Set `TRID3NT_RUNS_DIR=<repo>/data/runs` (the host rundir mounted at `/data`).
   Pull an engine image once, e.g. `sg docker -c 'docker pull deltares/sfincs-cpu:sfincs-v2.3.3'`.
-  These two are independent (MODFLOW checks `GRACE2_MODFLOW_LOCAL` first). Start the agent
+  These two are independent (MODFLOW checks `TRID3NT_MODFLOW_LOCAL` first). Start the agent
   inside the docker group so it can reach the socket: `sg docker -c 'make agent'`.
 
 ## Service URLs
@@ -70,7 +70,7 @@ The model can also be switched live from the plugin's Settings (no restart).
 qgis-plugin/trid3nt/   the QGIS plugin (net/ ui/ render/ case/ + plugin.py)
 qgis-plugin/tests/     plugin test harnesses + headless E2E drivers
 server/                the server (WS + tool dispatch + turn loop + persistence)
-contracts/             shared pydantic contracts (grace2-contracts package)
+contracts/             shared pydantic contracts (trid3nt-contracts package)
 services/workers/      engine workers (mf6, telemac, sfincs, ... docker or exec)
 scripts/               run + deploy scripts (start_*, install_plugin, build_*_image, ...)
 bin/ venvs/ data/ logs/ run/   gitignored runtime (binaries, venvs, storage, logs, pids)

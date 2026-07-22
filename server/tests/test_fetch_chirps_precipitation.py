@@ -24,10 +24,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.cache import ReadThroughResult
-import grace2_agent.tools.fetch_chirps_precipitation as mod
-from grace2_agent.tools.fetch_chirps_precipitation import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.cache import ReadThroughResult
+import trid3nt_server.tools.fetch_chirps_precipitation as mod
+from trid3nt_server.tools.fetch_chirps_precipitation import (
     CHIRPSEmptyError,
     CHIRPSInputError,
     CHIRPSNotAvailableError,

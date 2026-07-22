@@ -101,7 +101,7 @@ COPY --chown=root:root . /opt/trid3nt/services/workers/telemac/
 USER root
 
 ENV PYTHONUNBUFFERED=1 \
-    GRACE2_TELEMAC_DATA_DIR=/data \
+    TRID3NT_TELEMAC_DATA_DIR=/data \
     OMPI_ALLOW_RUN_AS_ROOT=1 \
     OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 # opentelemac launches the solver via ``mpirun --use-hwthread-cpus -np 1``;

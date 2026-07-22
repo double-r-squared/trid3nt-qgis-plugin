@@ -19,7 +19,7 @@ A single GPL-bearing AWS Batch worker that, in **one** Batch job:
 This collapses what used to be **two** Batch job-defs (a deck-builder + a solve
 shim, reached by the agent over an S3 + Batch-submit seam with two submits, two
 polls, and one S3 round-trip of the deck) into **one** job-def
-(`GRACE2_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE`): one submit, one poll, no round-trip.
+(`TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE`): one submit, one poll, no round-trip.
 
 ## Why one combined worker
 
@@ -55,7 +55,7 @@ is therefore `GPL-3.0-or-later AND MIT`.
   - `buildings.footprints_uri` + `buildings.mode`
     (`thin_dams` | `raise_subgrid` | `exclude`) + `buildings.raise_height_m`;
   - `rivers.lines_uri` (OSM waterway centerlines, buffered into refinement).
-- **Output** (all under `{scheme}://$GRACE2_RUNS_BUCKET/$GRACE2_RUN_ID/`):
+- **Output** (all under `{scheme}://$TRID3NT_RUNS_BUCKET/$TRID3NT_RUN_ID/`):
   - `sfincs_map.nc` — the load-bearing flood output;
   - `sfincs.stdout` / `sfincs.stderr` — the solve run logs;
   - `manifest.json` — audit artefact (the deck→solve manifest; no longer fed to a
@@ -147,9 +147,9 @@ SFINCS executable on the dev box); the real binary runs only in-container.
 ## Agent-side follow-up (OUT OF SCOPE for this worker job)
 
 This worker is self-contained, but the full collapse to one submit+poll requires
-the agent-side change in `server/src/grace2_agent/tools/solver.py` +
+the agent-side change in `server/src/trid3nt_server/tools/solver.py` +
 `model_flood_scenario.py`: add a `sfincs-quadtree` solver key resolving
-`GRACE2_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE`, point `submit_sfincs_deckbuild` at
+`TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE`, point `submit_sfincs_deckbuild` at
 it, and DELETE the subsequent `run_solver("sfincs", model_setup_uri=...)` call
 on the quadtree branch (the combined job already produced `sfincs_map.nc` under
 the same run_id; read it from `completion.json.output_uris`). That edit is NOT

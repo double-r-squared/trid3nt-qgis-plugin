@@ -1,12 +1,12 @@
 """Lessons loop v1 (track 4, local-roadmap-2026-07-06) -- unit coverage.
 
-Covers the four halves of ``grace2_agent.lessons`` plus the server envelope
+Covers the four halves of ``trid3nt_server.lessons`` plus the server envelope
 handler:
 
 - WRITE side: template distillation from a synthetic failed-then-corrected
   turn record (same-tool arg fix + tool-swap), the no-lesson negatives
   (transient retry, untyped failure, no correction), dedup hit-bump, the
-  GRACE2_LESSONS off-gate, and the <= 40-word clamp.
+  TRID3NT_LESSONS off-gate, and the <= 40-word clamp.
 - STORE: MAX_LESSONS cap with lowest-(hits, recency) eviction + JSONL
   persistence across a singleton reset.
 - READ side: relevant-lesson selection with the "Past corrections" header,
@@ -27,8 +27,8 @@ from typing import Any
 
 import pytest
 
-from grace2_agent import lessons
-from grace2_agent.lessons import (
+from trid3nt_server import lessons
+from trid3nt_server.lessons import (
     LessonStore,
     get_lesson_store,
     lessons_appendix,
@@ -48,8 +48,8 @@ from grace2_agent.lessons import (
 def lessons_env(tmp_path, monkeypatch):
     """Point the store at a tmp JSONL, arm the gate, isolate the singleton."""
     path = tmp_path / "lessons.jsonl"
-    monkeypatch.setenv("GRACE2_LESSONS_PATH", str(path))
-    monkeypatch.setenv("GRACE2_LESSONS", "on")
+    monkeypatch.setenv("TRID3NT_LESSONS_PATH", str(path))
+    monkeypatch.setenv("TRID3NT_LESSONS", "on")
     reset_lesson_store()
     yield path
     reset_lesson_store()
@@ -142,11 +142,11 @@ def test_no_lesson_without_correction_or_typed_code(lessons_env):
 
 
 def test_write_side_gated_off_by_default(lessons_env, monkeypatch):
-    monkeypatch.setenv("GRACE2_LESSONS", "off")
+    monkeypatch.setenv("TRID3NT_LESSONS", "off")
     assert not lessons_enabled()
     assert observe_turn(USER_TEXT, [FAILED_DEM, FIXED_DEM]) == 0
     assert len(get_lesson_store()) == 0
-    monkeypatch.delenv("GRACE2_LESSONS")
+    monkeypatch.delenv("TRID3NT_LESSONS")
     assert not lessons_enabled()  # unset == off (dark by default)
 
 
@@ -289,7 +289,7 @@ def test_read_side_location_boilerplate_does_not_qualify(lessons_env):
 
 def test_read_side_off_gate_returns_none(lessons_env, monkeypatch):
     observe_turn(USER_TEXT, [FAILED_DEM, FIXED_DEM])
-    monkeypatch.setenv("GRACE2_LESSONS", "off")
+    monkeypatch.setenv("TRID3NT_LESSONS", "off")
     assert lessons_appendix("terrain hillshade around Fort Myers") is None
 
 
@@ -350,8 +350,8 @@ class _MockWebSocket:
 
 
 def _run_handler(payload: Any) -> _MockWebSocket:
-    from grace2_agent.server import SessionState, _handle_lesson_add
-    from grace2_contracts.common import new_ulid
+    from trid3nt_server.server import SessionState, _handle_lesson_add
+    from trid3nt_contracts.common import new_ulid
 
     ws = _MockWebSocket()
     state = SessionState(session_id=new_ulid())

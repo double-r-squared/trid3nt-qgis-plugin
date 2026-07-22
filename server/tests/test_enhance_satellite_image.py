@@ -45,8 +45,8 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.enhance_satellite_image import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.enhance_satellite_image import (
     EnhanceSatelliteImageError,
     _box_blur,
     apply_rayleigh_correction,
@@ -242,7 +242,7 @@ def test_enhance_satellite_image_registered():
 
 
 def test_enhance_resolvable_param_in_allowlist():
-    from grace2_agent.uri_registry import RESOLVABLE_URI_PARAMS
+    from trid3nt_server.uri_registry import RESOLVABLE_URI_PARAMS
 
     # The public URI param must be server-resolvable so a layer handle is turned
     # into the real COG URI before dispatch.
@@ -328,7 +328,7 @@ def test_enhance_cache_hit_skips_fetch(tmp_path, monkeypatch_local_cache):
     src = str(tmp_path / "tc_cache.tif")
     _write_rgb_cog(src, _hazy_rgb(size=32))
 
-    import grace2_agent.tools.enhance_satellite_image as mod
+    import trid3nt_server.tools.enhance_satellite_image as mod
 
     calls = {"n": 0}
     real_run = mod._run_enhance
@@ -378,8 +378,8 @@ def monkeypatch_local_cache(monkeypatch, tmp_path):
     network) while still exercising the real _run_enhance compute path through
     the tool's public entrypoint.
     """
-    import grace2_agent.tools.enhance_satellite_image as mod
-    from grace2_contracts.tool_registry import AtomicToolMetadata
+    import trid3nt_server.tools.enhance_satellite_image as mod
+    from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
     store: dict[str, str] = {}
     counter = {"n": 0}

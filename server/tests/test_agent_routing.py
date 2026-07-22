@@ -21,8 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from grace2_agent import tools as agent_tools
-from grace2_agent.adapter import (
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.adapter import (
     FunctionCallEvent,
     SYSTEM_PROMPT,
     TextDeltaEvent,
@@ -40,7 +40,7 @@ def test_run_model_flood_scenario_in_registry():
     """run_model_flood_scenario must be registered (root cause B gate)."""
     # The workflow module is imported eagerly by main._import_tools_registry();
     # in tests we trigger the same import chain via the inflight job-0042 path.
-    from grace2_agent.workflows import model_flood_scenario  # noqa: F401
+    from trid3nt_server.workflows import model_flood_scenario  # noqa: F401
     assert "run_model_flood_scenario" in agent_tools.TOOL_REGISTRY, (
         "run_model_flood_scenario is NOT in TOOL_REGISTRY — "
         "Gemini will never see the flood workflow tool"
@@ -54,7 +54,7 @@ def test_run_model_flood_scenario_in_registry():
 
 def test_build_tool_declarations_includes_flood_workflow():
     """Tool declaration list must include run_model_flood_scenario."""
-    from grace2_agent.workflows import model_flood_scenario  # noqa: F401
+    from trid3nt_server.workflows import model_flood_scenario  # noqa: F401
 
     decls = build_tool_declarations(agent_tools.TOOL_REGISTRY)
     names = [d.name for d in decls]
@@ -174,8 +174,8 @@ def test_system_prompt_mentions_flood_routing():
 
 def test_run_model_flood_scenario_docstring_covers_user_intent():
     """Docstring must mention '100-year' to match the failing demo prompt."""
-    from grace2_agent.tools import TOOL_REGISTRY
-    from grace2_agent.workflows import model_flood_scenario  # noqa: F401
+    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.workflows import model_flood_scenario  # noqa: F401
 
     entry = TOOL_REGISTRY.get("run_model_flood_scenario")
     assert entry is not None

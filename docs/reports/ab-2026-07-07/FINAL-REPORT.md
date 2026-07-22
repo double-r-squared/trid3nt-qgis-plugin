@@ -62,7 +62,7 @@ key-gated tools whose credential error the model treats as failure
    measure.
 3. **Usable coverage 87% is the honest user-facing number.** Cold-prompt
    accuracy understates the product because real use is interactive.
-4. **Config going forward: qwen3:8b-16k + GRACE2_LESSONS=on (gated).**
+4. **Config going forward: qwen3:8b-16k + TRID3NT_LESSONS=on (gated).**
 
 ## Incidents worth remembering
 

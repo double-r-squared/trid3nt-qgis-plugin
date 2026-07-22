@@ -12,14 +12,14 @@ Purpose:
 
 What this test does:
   1. Imports every tool in TOOL_REGISTRY (via the same eager-import path that
-     ``grace2_agent.tools`` uses at startup, so no tool is missed).
+     ``trid3nt_server.tools`` uses at startup, so no tool is missed).
   2. For each tool, iterates 20 invented Gemini kwarg patterns drawn from the
      real-world set that caused failures (run_name, scenario_id, description,
      durationHours, rainfall_event, etc.) plus realistic valid minimal params
      for that tool's required parameters.
   3. Calls each (valid_params | invented_kwargs) combination through the
      normalizer path:
-       - If ``grace2_agent.tool_arg_normalizer.normalize_args`` is available
+       - If ``trid3nt_server.tool_arg_normalizer.normalize_args`` is available
          (job-0164 landed): use it, assert no TypeError on the normalised call.
        - Otherwise (job-0164 not yet merged): fall back to
          ``_inspect_strip_unknown`` which uses ``inspect.signature`` to filter
@@ -55,19 +55,19 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
+from trid3nt_server.tools import TOOL_REGISTRY
 
 # ---------------------------------------------------------------------------
 # Eager-import all workflow modules that add to TOOL_REGISTRY at import time.
 # Mirrors the startup-time import order; any module that calls @register_tool
 # at module level must appear here so the registry is fully populated.
 # ---------------------------------------------------------------------------
-import grace2_agent.workflows.model_flood_scenario  # noqa: F401 — side-effect import
-import grace2_agent.workflows.model_flood_habitat_scenario  # noqa: F401
-import grace2_agent.workflows.model_news_event_ingest  # noqa: F401
-import grace2_agent.workflows.pelicun_damage_with_buildings  # noqa: F401
-import grace2_agent.workflows.postprocess_flood  # noqa: F401
-import grace2_agent.workflows.sfincs_builder  # noqa: F401
+import trid3nt_server.workflows.model_flood_scenario  # noqa: F401 — side-effect import
+import trid3nt_server.workflows.model_flood_habitat_scenario  # noqa: F401
+import trid3nt_server.workflows.model_news_event_ingest  # noqa: F401
+import trid3nt_server.workflows.pelicun_damage_with_buildings  # noqa: F401
+import trid3nt_server.workflows.postprocess_flood  # noqa: F401
+import trid3nt_server.workflows.sfincs_builder  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ logger = logging.getLogger(__name__)
 def _get_normalizer():
     """Return a (tool_name, raw_args, fn) -> dict callable.
 
-    If ``grace2_agent.tool_arg_normalizer.normalize_args`` is available
+    If ``trid3nt_server.tool_arg_normalizer.normalize_args`` is available
     (job-0164 landed), return it directly.  Otherwise return
     ``_inspect_strip_unknown`` which uses inspect.signature to achieve the
     same effect.
@@ -89,7 +89,7 @@ def _get_normalizer():
         when the production normalizer is in use.
     """
     try:
-        from grace2_agent.tool_arg_normalizer import normalize_args  # type: ignore[import]
+        from trid3nt_server.tool_arg_normalizer import normalize_args  # type: ignore[import]
         return normalize_args, True
     except ImportError:
         return _inspect_strip_unknown, False
@@ -482,13 +482,13 @@ def test_tool_registry_count_ge_50() -> None:
     import-time failures before they mask coverage gaps.
 
     Failure Layer: AGENT — import error in a tool submodule (see the startup
-    ``@register_tool`` eager-import block in ``grace2_agent/tools/__init__.py``).
+    ``@register_tool`` eager-import block in ``trid3nt_server/tools/__init__.py``).
     """
     count = len(TOOL_REGISTRY)
     assert count >= 50, (
         f"[AGENT layer] Expected ≥50 tools in TOOL_REGISTRY, got {count}. "
         "A submodule import likely failed silently — check for ImportError at "
-        "the eager-import block in grace2_agent/tools/__init__.py."
+        "the eager-import block in trid3nt_server/tools/__init__.py."
     )
 
 
@@ -507,7 +507,7 @@ def test_normalizer_presence_logged() -> None:
     if is_real:
         logger.info(
             "OQ-0168-NORMALIZER-DEPENDENCY resolved: "
-            "grace2_agent.tool_arg_normalizer.normalize_args is in use (job-0164 merged)."
+            "trid3nt_server.tool_arg_normalizer.normalize_args is in use (job-0164 merged)."
         )
     else:
         logger.warning(

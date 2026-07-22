@@ -29,8 +29,8 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.compute_blended_composite import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.compute_blended_composite import (
     BlendedCompositeError,
     compute_blended_composite,
 )
@@ -237,7 +237,7 @@ def test_compute_blended_composite_registered():
     assert entry.metadata.ttl_class == "static-30d"
     assert entry.metadata.source_class == "blended"
     # Registered via the @register_tool decorator from the module's own import.
-    assert entry.module == "grace2_agent.tools.compute_blended_composite"
+    assert entry.module == "trid3nt_server.tools.compute_blended_composite"
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +247,7 @@ def test_compute_blended_composite_registered():
 
 def test_blend_resolvable_params_in_allowlist():
     """base/overlay layer URIs resolve through the session uri-registry."""
-    from grace2_agent.uri_registry import RESOLVABLE_URI_PARAMS
+    from trid3nt_server.uri_registry import RESOLVABLE_URI_PARAMS
 
     assert "base_layer_uri" in RESOLVABLE_URI_PARAMS
     assert "overlay_layer_uri" in RESOLVABLE_URI_PARAMS
@@ -496,7 +496,7 @@ def test_compute_blended_composite_cache_hit_skips_fetch(fake_storage):
 
         # Second identical call must hit the cache: _run_blend not invoked.
         with patch(
-            "grace2_agent.tools.compute_blended_composite._run_blend",
+            "trid3nt_server.tools.compute_blended_composite._run_blend",
             side_effect=AssertionError("_run_blend should not run on cache hit"),
         ):
             second = compute_blended_composite(

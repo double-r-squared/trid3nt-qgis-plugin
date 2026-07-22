@@ -21,7 +21,7 @@ import os
 
 import pytest
 
-from grace2_agent.tools.solver import (
+from trid3nt_server.tools.solver import (
     AWS_BATCH_COMPUTE_CLASS_SIZING,
     solve_progress_vcpus,
 )
@@ -47,9 +47,9 @@ from grace2_agent.tools.solver import (
 )
 def test_cloud_lane_tier_lookup(monkeypatch, backend_env, compute_class, expected):
     if backend_env is None:
-        monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+        monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
     else:
-        monkeypatch.setenv("GRACE2_SOLVER_BACKEND", backend_env)
+        monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend_env)
     assert solve_progress_vcpus(compute_class) == expected
 
 
@@ -57,9 +57,9 @@ def test_cloud_lane_tier_lookup(monkeypatch, backend_env, compute_class, expecte
 def test_cloud_lane_cloud_vcpus_passthrough(monkeypatch, backend_env):
     """The SFINCS autoscale-provenance path: caller-resolved count wins."""
     if backend_env is None:
-        monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+        monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
     else:
-        monkeypatch.setenv("GRACE2_SOLVER_BACKEND", backend_env)
+        monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend_env)
     assert solve_progress_vcpus(cloud_vcpus=8) == 8
     # Passthrough beats the tier lookup when both are supplied.
     assert solve_progress_vcpus("large", cloud_vcpus=8) == 8
@@ -76,21 +76,21 @@ def test_cloud_lane_cloud_vcpus_passthrough(monkeypatch, backend_env):
     "compute_class", [None, "small", "standard", "large", "xlarge", "no-such-tier"]
 )
 def test_local_lane_reports_host_cpu_count(monkeypatch, compute_class):
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     assert solve_progress_vcpus(compute_class) == os.cpu_count()
 
 
 def test_local_lane_ignores_cloud_vcpus(monkeypatch):
     """The autoscale provenance carries the perf model's CLOUD vCPU anchor --
     the local card must never show it."""
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     assert solve_progress_vcpus(cloud_vcpus=8) == os.cpu_count()
     assert solve_progress_vcpus("xlarge", cloud_vcpus=48) == os.cpu_count()
 
 
 def test_local_lane_none_when_cpu_count_indeterminate(monkeypatch):
     """os.cpu_count() can return None -- the card then omits the segment."""
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     monkeypatch.setattr(os, "cpu_count", lambda: None)
     assert solve_progress_vcpus("standard") is None
 
@@ -103,8 +103,8 @@ def test_local_lane_none_when_cpu_count_indeterminate(monkeypatch):
 def test_dispatch_sizing_table_untouched(monkeypatch):
     """The Batch resourceRequirements table is never mutated by the seam."""
     before = {k: dict(v) for k, v in AWS_BATCH_COMPUTE_CLASS_SIZING.items()}
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     solve_progress_vcpus("standard")
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "aws-batch")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "aws-batch")
     solve_progress_vcpus("standard", cloud_vcpus=8)
     assert AWS_BATCH_COMPUTE_CLASS_SIZING == before

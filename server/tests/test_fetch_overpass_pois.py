@@ -14,7 +14,7 @@ Coverage:
 - Upstream fallback: all mirrors 504 -> OverpassUpstreamError (retryable);
   a non-429 4xx short-circuits to OverpassInputError.
 - estimate_payload_mb scales with bbox area, never zero.
-- Live verification (``GRACE2_TEST_LIVE_OSM=1``): SF hospitals -> >=1 point,
+- Live verification (``TRID3NT_TEST_LIVE_OSM=1``): SF hospitals -> >=1 point,
   all inside bbox.
 """
 
@@ -29,8 +29,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_overpass_pois import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_overpass_pois import (
     OVERPASS_ENDPOINTS,
     OverpassInputError,
     OverpassNoFeaturesError,
@@ -50,7 +50,7 @@ _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 # San Francisco core bbox (min_lon, min_lat, max_lon, max_lat).
 _SF_BBOX = (-122.45, 37.74, -122.38, 37.80)
 
-_LIVE_OSM = os.environ.get("GRACE2_TEST_LIVE_OSM") == "1"
+_LIVE_OSM = os.environ.get("TRID3NT_TEST_LIVE_OSM") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake) -> Any:
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -112,7 +112,7 @@ def _payload(elements: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _fast_sleep(monkeypatch) -> None:
     monkeypatch.setattr(
-        "grace2_agent.tools.fetch_overpass_pois.time.sleep", lambda *_a, **_k: None
+        "trid3nt_server.tools.fetch_overpass_pois.time.sleep", lambda *_a, **_k: None
     )
 
 
@@ -317,8 +317,8 @@ def test_end_to_end_synthetic_features_and_cache_hit(monkeypatch):
             captured_url.append(url)
             return _Resp(_payload(elements))
 
-    with patch("grace2_agent.tools.fetch_overpass_pois.httpx.Client", _Client), patch(
-        "grace2_agent.tools.fetch_overpass_pois.read_through",
+    with patch("trid3nt_server.tools.fetch_overpass_pois.httpx.Client", _Client), patch(
+        "trid3nt_server.tools.fetch_overpass_pois.read_through",
         _make_read_through_injector(fake),
     ):
         layer = fetch_overpass_pois(bbox=_SF_BBOX, amenity="hospital")
@@ -379,8 +379,8 @@ def test_zero_features_raises_no_features_error(monkeypatch):
         def post(self, url, data=None):
             return _Resp()
 
-    with patch("grace2_agent.tools.fetch_overpass_pois.httpx.Client", _Client), patch(
-        "grace2_agent.tools.fetch_overpass_pois.read_through",
+    with patch("trid3nt_server.tools.fetch_overpass_pois.httpx.Client", _Client), patch(
+        "trid3nt_server.tools.fetch_overpass_pois.read_through",
         _make_read_through_injector(fake),
     ):
         with pytest.raises(OverpassNoFeaturesError) as ei:
@@ -413,8 +413,8 @@ def test_all_mirrors_504_raises_upstream_error(monkeypatch):
 
         post = staticmethod(_raise_504)
 
-    with patch("grace2_agent.tools.fetch_overpass_pois.httpx.Client", _Client):
-        from grace2_agent.tools.fetch_overpass_pois import _post_overpass
+    with patch("trid3nt_server.tools.fetch_overpass_pois.httpx.Client", _Client):
+        from trid3nt_server.tools.fetch_overpass_pois import _post_overpass
 
         with pytest.raises(OverpassUpstreamError) as ei:
             _post_overpass("[out:json];out;")
@@ -441,8 +441,8 @@ def test_non_429_4xx_short_circuits_to_input_error(monkeypatch):
 
         post = staticmethod(_raise_400)
 
-    with patch("grace2_agent.tools.fetch_overpass_pois.httpx.Client", _Client):
-        from grace2_agent.tools.fetch_overpass_pois import _post_overpass
+    with patch("trid3nt_server.tools.fetch_overpass_pois.httpx.Client", _Client):
+        from trid3nt_server.tools.fetch_overpass_pois import _post_overpass
 
         with pytest.raises(OverpassInputError):
             _post_overpass("[out:json];out;")
@@ -487,7 +487,7 @@ def test_error_subclassing():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_OSM, reason="set GRACE2_TEST_LIVE_OSM=1 to run live Overpass")
+@pytest.mark.skipif(not _LIVE_OSM, reason="set TRID3NT_TEST_LIVE_OSM=1 to run live Overpass")
 def test_live_sf_hospitals_inside_bbox():
     import geopandas as gpd  # noqa: PLC0415
 

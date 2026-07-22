@@ -14,7 +14,7 @@ Unit (no network):
 - ``_bbox_intersects_coverage`` reports CONUS in / Antarctic out.
 - ``_round_bbox_to_6dp`` quantizes correctly.
 
-Live (env-guarded by GRACE2_TEST_LIVE_HRSL=1):
+Live (env-guarded by TRID3NT_TEST_LIVE_HRSL=1):
 - Fort Myers bbox returns a CRS-tagged COG with population sum in a
   plausible range (~10⁵ persons; matches the manual probe of 380,701).
 - Geographic-correctness: written COG bounds fall inside the requested bbox;
@@ -31,8 +31,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_hrsl_population import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_hrsl_population import (
     HRSLBboxRequiredError,
     HRSLEmptyError,
     HRSLError,
@@ -56,7 +56,7 @@ _FORT_MYERS_BBOX = (-82.0, 26.5, -81.8, 26.7)
 # Antarctica bbox (south of -56°S — outside HRSL coverage).
 _ANTARCTICA_BBOX = (0.0, -80.0, 5.0, -75.0)
 
-_LIVE_HRSL = os.environ.get("GRACE2_TEST_LIVE_HRSL") == "1"
+_LIVE_HRSL = os.environ.get("TRID3NT_TEST_LIVE_HRSL") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -189,7 +189,7 @@ def test_antarctica_bbox_raises_empty_via_fetch():
     Calls the inner ``_fetch_hrsl_bytes`` directly to avoid the cache short-circuit
     that would otherwise call rasterio for an Antarctica bbox.
     """
-    from grace2_agent.tools.fetch_hrsl_population import _fetch_hrsl_bytes
+    from trid3nt_server.tools.fetch_hrsl_population import _fetch_hrsl_bytes
 
     with pytest.raises(HRSLEmptyError):
         _fetch_hrsl_bytes(bbox=_ANTARCTICA_BBOX)
@@ -241,10 +241,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return fake_bytes
 
     with patch(
-        "grace2_agent.tools.fetch_hrsl_population._fetch_hrsl_bytes",
+        "trid3nt_server.tools.fetch_hrsl_population._fetch_hrsl_bytes",
         side_effect=fake_inner,
     ), patch(
-        "grace2_agent.tools.fetch_hrsl_population.read_through",
+        "trid3nt_server.tools.fetch_hrsl_population.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_hrsl_population(bbox=_FORT_MYERS_BBOX)
@@ -267,10 +267,10 @@ def test_cache_hit_skips_fetch_fn():
         return fake_bytes
 
     with patch(
-        "grace2_agent.tools.fetch_hrsl_population._fetch_hrsl_bytes",
+        "trid3nt_server.tools.fetch_hrsl_population._fetch_hrsl_bytes",
         side_effect=fake_inner,
     ), patch(
-        "grace2_agent.tools.fetch_hrsl_population.read_through",
+        "trid3nt_server.tools.fetch_hrsl_population.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_hrsl_population(bbox=_FORT_MYERS_BBOX)
@@ -285,10 +285,10 @@ def test_layer_uri_shape_has_persons_units_and_raster_role():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_hrsl_population._fetch_hrsl_bytes",
+        "trid3nt_server.tools.fetch_hrsl_population._fetch_hrsl_bytes",
         return_value=_fake_cog_bytes("SHAPE"),
     ), patch(
-        "grace2_agent.tools.fetch_hrsl_population.read_through",
+        "trid3nt_server.tools.fetch_hrsl_population.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_hrsl_population(bbox=_FORT_MYERS_BBOX)
@@ -305,13 +305,13 @@ def test_layer_uri_shape_has_persons_units_and_raster_role():
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_HRSL=1 to run)
+# Live integration test (TRID3NT_TEST_LIVE_HRSL=1 to run)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_HRSL,
-    reason="Set GRACE2_TEST_LIVE_HRSL=1 to run live Meta HRSL download tests",
+    reason="Set TRID3NT_TEST_LIVE_HRSL=1 to run live Meta HRSL download tests",
 )
 def test_live_fort_myers_returns_population_cog():
     """LIVE: open global HRSL VRT, window-read Fort Myers bbox, verify physical sanity.
@@ -325,7 +325,7 @@ def test_live_fort_myers_returns_population_cog():
     """
     import numpy as np
     import rasterio
-    from grace2_agent.tools.fetch_hrsl_population import _fetch_hrsl_bytes
+    from trid3nt_server.tools.fetch_hrsl_population import _fetch_hrsl_bytes
 
     cog_bytes = _fetch_hrsl_bytes(bbox=_FORT_MYERS_BBOX)
     assert len(cog_bytes) > 0, "COG bytes should be non-empty"

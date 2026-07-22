@@ -21,9 +21,9 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_contracts.execution import LayerURI
-from grace2_agent.workflows.model_satellite_fire_animation import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_server.workflows.model_satellite_fire_animation import (
     GOES_PRODUCTS,
     SUPPORTED_PRODUCTS,
     VIIRS_PRODUCTS,
@@ -160,7 +160,7 @@ def test_review_gate_stops_without_fetching_frames():
             "fetch_goes_animation": _reg(_fake_goes),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ):
         result = _run(
@@ -220,16 +220,16 @@ def test_confirm_emits_postprocess_flood_frame_shape():
             "fetch_goes_animation": _reg(_fake_goes),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._publish_layers",
+        "trid3nt_server.workflows.model_satellite_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -265,7 +265,7 @@ def test_confirm_empty_run_is_not_ok_honesty_floor():
     """A confirmed run that produced NO imagery frames must NOT read status=ok."""
 
     def _fake_goes(*a, **k):
-        from grace2_agent.tools.fetch_goes_animation import GOESAnimEmptyError
+        from trid3nt_server.tools.fetch_goes_animation import GOESAnimEmptyError
 
         raise GOESAnimEmptyError("no frames")
 
@@ -280,16 +280,16 @@ def test_confirm_empty_run_is_not_ok_honesty_floor():
             "fetch_goes_animation": _reg(_fake_goes),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._publish_layers",
+        "trid3nt_server.workflows.model_satellite_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -365,16 +365,16 @@ def test_confirm_emits_each_published_frame_as_a_loaded_layer():
             "fetch_goes_animation": _reg(_fake_goes),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._publish_layers",
+        "trid3nt_server.workflows.model_satellite_fire_animation._publish_layers",
         _fake_publish,
     ):
         result = _run(
@@ -469,16 +469,16 @@ def test_default_goes_run_emits_one_blended_group():
             "fetch_goes_animation": _reg(_fake_single_goes),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._publish_layers",
+        "trid3nt_server.workflows.model_satellite_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -559,16 +559,16 @@ def test_single_goes_product_can_still_be_requested():
             "fetch_goes_animation": _reg(_fake_goes),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._publish_layers",
+        "trid3nt_server.workflows.model_satellite_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -624,16 +624,16 @@ def test_viirs_run_is_single_polar_product_unchanged():
             "fetch_viirs_day_fire": _reg(_fake_viirs),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._publish_layers",
+        "trid3nt_server.workflows.model_satellite_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -661,7 +661,7 @@ def test_default_goes_run_empty_is_not_ok_honesty_floor():
     too."""
 
     def _fake_blend(*a, **k):
-        from grace2_agent.tools.fetch_goes_animation import GOESAnimEmptyError
+        from trid3nt_server.tools.fetch_goes_animation import GOESAnimEmptyError
 
         raise GOESAnimEmptyError("no frames")
 
@@ -676,16 +676,16 @@ def test_default_goes_run_empty_is_not_ok_honesty_floor():
             "fetch_goes_blend_animation": _reg(_fake_blend),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
+        "trid3nt_server.workflows.model_satellite_fire_animation._safe_overlay_perimeters",
         _async_none,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._publish_layers",
+        "trid3nt_server.workflows.model_satellite_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -711,7 +711,7 @@ def test_default_goes_run_empty_is_not_ok_honesty_floor():
 
 
 def test_geocode_is_coarse_detects_state_snap():
-    from grace2_agent.workflows.model_satellite_fire_animation import (
+    from trid3nt_server.workflows.model_satellite_fire_animation import (
         _geocode_is_coarse,
     )
 
@@ -731,7 +731,7 @@ def test_geocode_is_coarse_detects_state_snap():
 
 
 def test_densest_hotspot_bbox_empty_is_none():
-    from grace2_agent.workflows.model_satellite_fire_animation import (
+    from trid3nt_server.workflows.model_satellite_fire_animation import (
         _densest_hotspot_bbox,
     )
 
@@ -740,7 +740,7 @@ def test_densest_hotspot_bbox_empty_is_none():
 
 def test_densest_hotspot_bbox_tight_around_densest_cluster():
     """The bbox snaps to the dense cluster, NOT to a far-flung outlier."""
-    from grace2_agent.workflows.model_satellite_fire_animation import (
+    from trid3nt_server.workflows.model_satellite_fire_animation import (
         _densest_hotspot_bbox,
     )
 
@@ -804,7 +804,7 @@ def test_coarse_geocode_localizes_from_firms_and_emits_aoi_pre_gate():
     """The Santa Rosa Island fix: a COARSE state-snap geocode + NO WFIGS incident
     -> the AOI is derived from FIRMS hot pixels, emitted (snap-to-AOI) BEFORE the
     review gate."""
-    from grace2_agent.tools.fetch_firms_active_fire import FirmsArgError  # noqa: F401
+    from trid3nt_server.tools.fetch_firms_active_fire import FirmsArgError  # noqa: F401
 
     # The fire's real FIRMS hot pixels (Channel Islands cluster).
     firms_points = [
@@ -818,7 +818,7 @@ def test_coarse_geocode_localizes_from_firms_and_emits_aoi_pre_gate():
 
     def _no_wfigs(name, state=None, *a, **k):
         # WFIGS does not carry this contained fire -> honest typed not-found.
-        from grace2_agent.tools.fetch_wfigs_incident import (
+        from trid3nt_server.tools.fetch_wfigs_incident import (
             WFIGSIncidentNotFoundError,
         )
 
@@ -849,10 +849,10 @@ def test_coarse_geocode_localizes_from_firms_and_emits_aoi_pre_gate():
             "fetch_viirs_day_fire": _reg(_fake_viirs),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._read_firms_points",
+        "trid3nt_server.workflows.model_satellite_fire_animation._read_firms_points",
         _fake_read_points,
     ):
         result = _run(
@@ -890,7 +890,7 @@ def test_wfigs_no_match_does_not_gate_falls_back_to_firms():
     (with even a coarse geocode), proving WFIGS is additive context, not a gate."""
 
     def _no_wfigs(name, state=None, *a, **k):
-        from grace2_agent.tools.fetch_wfigs_incident import (
+        from trid3nt_server.tools.fetch_wfigs_incident import (
             WFIGSIncidentNotFoundError,
         )
 
@@ -913,10 +913,10 @@ def test_wfigs_no_match_does_not_gate_falls_back_to_firms():
             "fetch_firms_active_fire": _reg(_fake_firms),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._read_firms_points",
+        "trid3nt_server.workflows.model_satellite_fire_animation._read_firms_points",
         _fake_read_points,
     ):
         result = _run(
@@ -941,7 +941,7 @@ def test_precise_geocode_is_used_without_firms_localization():
     firms_called = {"called": False}
 
     def _no_wfigs(name, state=None, *a, **k):
-        from grace2_agent.tools.fetch_wfigs_incident import (
+        from trid3nt_server.tools.fetch_wfigs_incident import (
             WFIGSIncidentNotFoundError,
         )
 
@@ -962,7 +962,7 @@ def test_precise_geocode_is_used_without_firms_localization():
             "fetch_firms_active_fire": _reg(_fake_firms),
         },
     ), patch(
-        "grace2_agent.workflows.model_satellite_fire_animation._peek_frame_count",
+        "trid3nt_server.workflows.model_satellite_fire_animation._peek_frame_count",
         _fake_peek,
     ):
         result = _run(
@@ -985,8 +985,8 @@ def test_precise_geocode_is_used_without_firms_localization():
 
 def _reg(fn):
     """Wrap a plain callable as a RegisteredTool for patch.dict(TOOL_REGISTRY)."""
-    from grace2_agent.tools import RegisteredTool
-    from grace2_contracts.tool_registry import AtomicToolMetadata
+    from trid3nt_server.tools import RegisteredTool
+    from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
     return RegisteredTool(
         metadata=AtomicToolMetadata(

@@ -104,8 +104,8 @@ WORKDIR /opt/grace2
 
 ENV PYTHONPATH=/opt/grace2 \
     PYTHONUNBUFFERED=1 \
-    GRACE2_OQ_SCRATCH=/opt/grace2/work \
-    GRACE2_OQ_BIN=oq \
+    TRID3NT_OQ_SCRATCH=/opt/grace2/work \
+    TRID3NT_OQ_BIN=oq \
     # OpenQuake runs out of an HDF5 datastore under $OQ_DATADIR; point it inside
     # the writable scratch tree so the read-only image layers stay clean.
     OQ_DATADIR=/opt/grace2/work/oqdata \
@@ -116,17 +116,17 @@ ENV PYTHONPATH=/opt/grace2 \
     OQ_DISTRIBUTE=no
 
 # Runtime config — overridable from the AWS Batch container env block.
-#   GRACE2_OBJECT_STORE  — s3 (AWS Batch) routes all object I/O through boto3.
-#   GRACE2_RUNS_BUCKET   — destination bucket (this image is the sanctioned
+#   TRID3NT_OBJECT_STORE  — s3 (AWS Batch) routes all object I/O through boto3.
+#   TRID3NT_RUNS_BUCKET   — destination bucket (this image is the sanctioned
 #                          writer of s3://...-runs/<run_id>/).
-#   GRACE2_RUN_ID        — the run ID under which outputs land; set per job by
+#   TRID3NT_RUN_ID        — the run ID under which outputs land; set per job by
 #                          the agent's submit_job containerOverrides.
-#   GRACE2_MANIFEST_URI  — s3:// URI of the JSON build_spec the entrypoint reads.
+#   TRID3NT_MANIFEST_URI  — s3:// URI of the JSON build_spec the entrypoint reads.
 #   AWS_REGION           — region for the boto3 S3 client.
-ENV GRACE2_OBJECT_STORE=s3 \
-    GRACE2_RUNS_BUCKET="" \
-    GRACE2_RUN_ID="" \
-    GRACE2_MANIFEST_URI="" \
+ENV TRID3NT_OBJECT_STORE=s3 \
+    TRID3NT_RUNS_BUCKET="" \
+    TRID3NT_RUN_ID="" \
+    TRID3NT_MANIFEST_URI="" \
     AWS_REGION=us-west-2
 
 # Build-time smoke (mirror of the SWMM/SFINCS/MODFLOW Dockerfile assert): the oq
@@ -138,7 +138,7 @@ RUN oq --version \
 
 # ENTRYPOINT runs this image as a one-shot solver job. CMD is empty so AWS Batch
 # containerOverrides command feeds straight through as argv to the module;
-# env-var fallbacks (GRACE2_RUN_ID, GRACE2_MANIFEST_URI) are parsed by the
+# env-var fallbacks (TRID3NT_RUN_ID, TRID3NT_MANIFEST_URI) are parsed by the
 # entrypoint if no CLI flags are passed (mirror of the SWMM/SFINCS pattern).
 ENTRYPOINT ["python3", "-m", "services.workers.openquake.entrypoint"]
 CMD []

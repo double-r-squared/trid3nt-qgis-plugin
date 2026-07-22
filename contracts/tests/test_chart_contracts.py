@@ -19,13 +19,13 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import ChartEmissionPayload, SessionChartRecord
-from grace2_contracts.chart_contracts import (
+from trid3nt_contracts import ChartEmissionPayload, SessionChartRecord
+from trid3nt_contracts.chart_contracts import (
     CHART_AGENT_TO_CLIENT_PAYLOADS,
     is_structurally_valid_vega_lite_spec,
 )
-from grace2_contracts.common import new_ulid
-from grace2_contracts import ws
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts import ws
 
 
 # --------------------------------------------------------------------------- #

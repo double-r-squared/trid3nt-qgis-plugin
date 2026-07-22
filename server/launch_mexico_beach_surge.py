@@ -61,18 +61,18 @@ OUTPUT_INTERVAL_MIN = 7.5
 
 
 async def main() -> int:
-    from grace2_agent.tools.data_fetch import (
+    from trid3nt_server.tools.data_fetch import (
         fetch_landcover,
         fetch_river_geometry,
     )
-    from grace2_agent.tools.fetch_topobathy import fetch_topobathy
-    from grace2_agent.tools.solver import run_solver, wait_for_completion
-    from grace2_agent.workflows.model_flood_scenario import (
+    from trid3nt_server.tools.fetch_topobathy import fetch_topobathy
+    from trid3nt_server.tools.solver import run_solver, wait_for_completion
+    from trid3nt_server.workflows.model_flood_scenario import (
         _build_surge_forcing_members,
         _resolve_surge_forcing_from_fetchers,
         _synthesize_parametric_surge_forcing,
     )
-    from grace2_agent.workflows.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs_builder import (
         BuildOptions,
         ForcingSpec,
         build_sfincs_model,
@@ -165,12 +165,12 @@ async def main() -> int:
     # deck dies there. The regular grace2-sfincs worker runs the plain SFINCS
     # binary on the HydroMT manifest (sfincs.bnd + sfincs.bzs, no snapwave) -> a
     # clean surge-only solve. run_solver picks the job-def from
-    # GRACE2_AWS_BATCH_JOB_DEF_SFINCS / GRACE2_AWS_BATCH_JOB_DEF.
+    # TRID3NT_AWS_BATCH_JOB_DEF_SFINCS / TRID3NT_AWS_BATCH_JOB_DEF.
     print("\n[4/5] run_solver('sfincs', manifest) -> submit to grace2-solvers...")
     handle = run_solver("sfincs", model_setup_uri=setup_uri, compute_class="standard")
     print(f"      SUBMITTED run_id={handle.run_id} "
           f"batch_jobId={handle.workflows_execution_id}")
-    print(f"      output will be at: s3://{os.environ.get('GRACE2_RUNS_BUCKET','?')}/"
+    print(f"      output will be at: s3://{os.environ.get('TRID3NT_RUNS_BUCKET','?')}/"
           f"{handle.run_id}/")
 
     # --- Step 5: wait for completion (Ctrl-C after the run_id is printed is OK) ---

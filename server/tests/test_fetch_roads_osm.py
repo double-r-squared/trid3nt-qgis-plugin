@@ -10,7 +10,7 @@ Coverage:
 - Cache miss vs cache hit (fake GCS).
 - Invalid bbox / unknown highway class → ``OSMInputError`` (non-retryable).
 - ``road_classes`` sorting collapses different orderings onto the same cache key.
-- Live verification (``GRACE2_TEST_LIVE_OSM=1``):
+- Live verification (``TRID3NT_TEST_LIVE_OSM=1``):
   Fort Myers small bbox → ≥1 LineString feature, all coords inside bbox.
 """
 
@@ -25,8 +25,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_roads_osm import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_roads_osm import (
     _DEFAULT_ROAD_CLASSES,
     _build_overpass_ql,
     _clip_record_to_bbox,
@@ -52,7 +52,7 @@ _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 # Fort Myers small bbox — covers a slice of I-75 + US-41 (Tamiami Trail).
 _FORT_MYERS_BBOX = (-82.0, 26.5, -81.8, 26.7)
 
-_LIVE_OSM = os.environ.get("GRACE2_TEST_LIVE_OSM") == "1"
+_LIVE_OSM = os.environ.get("TRID3NT_TEST_LIVE_OSM") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +100,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -149,7 +149,7 @@ def _mock_overpass_payload(ways: list[dict[str, Any]]) -> dict[str, Any]:
 def _fast_sleep(monkeypatch):
     """Make the 1-second polite delay no-op so tests run fast."""
     monkeypatch.setattr(
-        "grace2_agent.tools.fetch_roads_osm.time.sleep", lambda *_: None
+        "trid3nt_server.tools.fetch_roads_osm.time.sleep", lambda *_: None
     )
 
 
@@ -448,9 +448,9 @@ def test_50_way_response_yields_50_features(monkeypatch):
             return FakeResponse()
         def close(self): pass
 
-    with patch("grace2_agent.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "grace2_agent.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         result = fetch_roads_osm(bbox=_FORT_MYERS_BBOX, road_classes=["primary"])
@@ -505,9 +505,9 @@ def test_end_to_end_clips_spilling_roads_to_bbox(monkeypatch):
         def post(self, url, data=None): return FakeResponse()
         def close(self): pass
 
-    with patch("grace2_agent.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "grace2_agent.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         result = fetch_roads_osm(bbox=bbox, road_classes=["motorway", "primary"])
@@ -565,9 +565,9 @@ def test_empty_bbox_yields_zero_features(monkeypatch):
         def post(self, url, data=None): return FakeResponse()
         def close(self): pass
 
-    with patch("grace2_agent.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "grace2_agent.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         result = fetch_roads_osm(bbox=_FORT_MYERS_BBOX)
@@ -612,10 +612,10 @@ def test_504_maps_to_retryable_upstream_error(monkeypatch):
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_roads_osm.httpx.Client",
+        "trid3nt_server.tools.fetch_roads_osm.httpx.Client",
         _make_failing_client(504),
     ), patch(
-        "grace2_agent.tools.fetch_roads_osm.read_through",
+        "trid3nt_server.tools.fetch_roads_osm.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         try:
@@ -632,10 +632,10 @@ def test_400_maps_to_non_retryable_upstream_error(monkeypatch):
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_roads_osm.httpx.Client",
+        "trid3nt_server.tools.fetch_roads_osm.httpx.Client",
         _make_failing_client(400),
     ), patch(
-        "grace2_agent.tools.fetch_roads_osm.read_through",
+        "trid3nt_server.tools.fetch_roads_osm.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         try:
@@ -652,10 +652,10 @@ def test_429_maps_to_retryable_upstream_error(monkeypatch):
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_roads_osm.httpx.Client",
+        "trid3nt_server.tools.fetch_roads_osm.httpx.Client",
         _make_failing_client(429),
     ), patch(
-        "grace2_agent.tools.fetch_roads_osm.read_through",
+        "trid3nt_server.tools.fetch_roads_osm.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         try:
@@ -693,9 +693,9 @@ def test_cache_miss_then_hit(monkeypatch):
             return FakeResponse()
         def close(self): pass
 
-    with patch("grace2_agent.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "grace2_agent.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         r1 = fetch_roads_osm(bbox=_FORT_MYERS_BBOX, road_classes=["motorway"])
@@ -727,9 +727,9 @@ def test_cache_key_independent_of_class_ordering(monkeypatch):
             return FakeResponse()
         def close(self): pass
 
-    with patch("grace2_agent.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "grace2_agent.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         r1 = fetch_roads_osm(
@@ -767,9 +767,9 @@ def test_layer_uri_shape(monkeypatch):
         def post(self, url, data=None): return FakeResponse()
         def close(self): pass
 
-    with patch("grace2_agent.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "grace2_agent.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         result = fetch_roads_osm(
@@ -797,7 +797,7 @@ def test_round_bbox_to_6dp():
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_OSM=1 to run).
+# Live integration test (TRID3NT_TEST_LIVE_OSM=1 to run).
 #
 # Per the codified job-0086 lesson: a geometric tool's acceptance MUST verify
 # the output against the known geography — here, that returned roads actually
@@ -808,7 +808,7 @@ def test_round_bbox_to_6dp():
 
 @pytest.mark.skipif(
     not _LIVE_OSM,
-    reason="Set GRACE2_TEST_LIVE_OSM=1 to run live Overpass tests",
+    reason="Set TRID3NT_TEST_LIVE_OSM=1 to run live Overpass tests",
 )
 def test_live_fort_myers_returns_primary_and_motorway():
     """LIVE: small Fort Myers bbox returns ≥1 feature, all coords inside bbox,
@@ -816,7 +816,7 @@ def test_live_fort_myers_returns_primary_and_motorway():
     """
     import geopandas as gpd
 
-    from grace2_agent.tools.fetch_roads_osm import _fetch_osm_roads_bytes
+    from trid3nt_server.tools.fetch_roads_osm import _fetch_osm_roads_bytes
     bbox = _FORT_MYERS_BBOX
 
     fgb_bytes = _fetch_osm_roads_bytes(bbox, ("primary", "motorway"))

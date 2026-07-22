@@ -36,10 +36,10 @@ from rasterio.transform import from_bounds
 from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.hydrology_primitives import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.hydrology_primitives import (
     HydrologyAoiTooLargeError,
     HydrologyInputError,
     NoStreamsError,

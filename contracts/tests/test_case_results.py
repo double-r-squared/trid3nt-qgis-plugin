@@ -12,8 +12,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.case_results import CaseOneResult
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.case_results import CaseOneResult
+from trid3nt_contracts.execution import LayerURI
 
 
 def _mk_layer(label: str, layer_type: str = "raster") -> LayerURI:

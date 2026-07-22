@@ -18,7 +18,7 @@ In a single AWS Batch job this worker:
 
 This collapses the former two Batch job-defs (a separate GPL deck-builder + a
 separate MIT solve shim) into one job-def
-(``GRACE2_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE``): one submit, one poll, no deck
+(``TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE``): one submit, one poll, no deck
 round-trip.
 
 GPL boundary
@@ -26,7 +26,7 @@ GPL boundary
 ``cht_sfincs`` is GPL-3.0. It lives ONLY inside THIS worker's container image and
 is imported ONLY by ``entrypoint.py`` (lazily, inside ``build_deck`` + the
 refinement/obstacle helpers). The agent venv and ALL agent code
-(``server/src/grace2_agent/**``) NEVER import ``cht_sfincs`` — the agent
+(``server/src/trid3nt_server/**``) NEVER import ``cht_sfincs`` — the agent
 reaches this worker arms-length over the object-store + AWS-Batch-submit seam, so
 the GPL code stays fully isolated in its own image. The SFINCS solver binary is
 MIT-licensed (shipped by the base image); the combined image's license is

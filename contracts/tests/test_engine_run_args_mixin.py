@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import EngineRunArgsMixin, TemporalMode  # __init__ export
-from grace2_contracts.common import EngineRunArgsMixin as Mixin
-from grace2_contracts.output_quantities import (
+from trid3nt_contracts import EngineRunArgsMixin, TemporalMode  # __init__ export
+from trid3nt_contracts.common import EngineRunArgsMixin as Mixin
+from trid3nt_contracts.output_quantities import (
     OUTPUT_QUANTITIES,
     OUTPUT_REGISTRY_SCHEMA_VERSION,
     OutputQuantitySpec,

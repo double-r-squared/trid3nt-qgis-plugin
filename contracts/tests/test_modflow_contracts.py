@@ -16,7 +16,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import (
+from trid3nt_contracts import (
     ASRLayerURI,
     BudgetPartitionLayerURI,
     CaptureZoneLayerURI,
@@ -30,9 +30,9 @@ from grace2_contracts import (
     SaltwaterWedgeLayerURI,
     SpeciesSpec,
 )
-from grace2_contracts.execution import LayerURI
-from grace2_contracts.envelope import TemporalConfig
-from grace2_contracts.modflow_contracts import (
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.envelope import TemporalConfig
+from trid3nt_contracts.modflow_contracts import (
     DEFAULT_AQUIFER_K_MS,
     DEFAULT_AQUIFER_SS,
     DEFAULT_AQUIFER_SY,
@@ -808,7 +808,7 @@ def test_budget_partition_required_and_extra_forbidden() -> None:
 
 def test_new_modflow_output_quantities_registered() -> None:
     """drawdown / dewatering-rate / budget-partition are registered + default-on."""
-    from grace2_contracts.output_quantities import get_output_registry
+    from trid3nt_contracts.output_quantities import get_output_registry
 
     registry = get_output_registry("modflow")
     by_id = {spec.quantity_id: spec for spec in registry}
@@ -986,7 +986,7 @@ def test_wave2_layer_uris_require_their_added_scalar_and_forbid_extra() -> None:
 def test_wave2_modflow_output_quantities_registered() -> None:
     """mounding / recovery-efficiency / hydroperiod are registered + default-on,
     additive on top of the Wave-1 + headline quantities."""
-    from grace2_contracts.output_quantities import get_output_registry
+    from trid3nt_contracts.output_quantities import get_output_registry
 
     registry = get_output_registry("modflow")
     by_id = {spec.quantity_id: spec for spec in registry}
@@ -1394,8 +1394,8 @@ def test_capture_zone_forbids_extra_fields() -> None:
 
 
 def test_capture_zone_exported_from_package_top_level() -> None:
-    """CaptureZoneLayerURI is importable from the grace2_contracts top level."""
-    from grace2_contracts import CaptureZoneLayerURI as CZL  # noqa: F401
+    """CaptureZoneLayerURI is importable from the trid3nt_contracts top level."""
+    from trid3nt_contracts import CaptureZoneLayerURI as CZL  # noqa: F401
 
     assert CZL is CaptureZoneLayerURI
 
@@ -1622,7 +1622,7 @@ def test_saltwater_wedge_forbids_extra_fields() -> None:
 
 
 def test_saltwater_wedge_exported_from_package_top_level() -> None:
-    """SaltwaterWedgeLayerURI is importable from the grace2_contracts top level."""
-    from grace2_contracts import SaltwaterWedgeLayerURI as SWL  # noqa: F401
+    """SaltwaterWedgeLayerURI is importable from the trid3nt_contracts top level."""
+    from trid3nt_contracts import SaltwaterWedgeLayerURI as SWL  # noqa: F401
 
     assert SWL is SaltwaterWedgeLayerURI

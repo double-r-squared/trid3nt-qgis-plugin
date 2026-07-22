@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from grace2_agent.workflows import postprocess_swmm as ps
+from trid3nt_server.workflows import postprocess_swmm as ps
 
 
 # --------------------------------------------------------------------------- #
@@ -69,8 +69,8 @@ def test_scatter_link_attr_peak_magnitude_wins_on_collision() -> None:
 # advanced_physics OPTIONS merge
 # --------------------------------------------------------------------------- #
 def test_run_swmm_physics_invalid_raises_typed() -> None:
-    from grace2_contracts.swmm_contracts import SWMMRunArgs
-    from grace2_agent.workflows.run_swmm import (
+    from trid3nt_contracts.swmm_contracts import SWMMRunArgs
+    from trid3nt_server.workflows.run_swmm import (
         SWMMWorkflowError,
         build_and_stage_swmm_deck,
     )
@@ -95,7 +95,7 @@ def test_physics_options_merge_resolved_keys() -> None:
     Exercises the merge block directly with a fake SwmmInput-shaped dict so the
     test needs no DEM / swmm-api solve.
     """
-    from grace2_agent.workflows.physics_registry import validate_and_resolve_physics
+    from trid3nt_server.workflows.physics_registry import validate_and_resolve_physics
 
     resolved = validate_and_resolve_physics(
         "swmm",
@@ -166,11 +166,11 @@ def test_publish_swmm_quantities_emits_four_layers() -> None:
             "swmm.toolkit.shared_enum": fake_enum_mod,
         }),
         patch("pathlib.Path.exists", return_value=True),
-        patch("grace2_agent.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
+        patch("trid3nt_server.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
               return_value=Path("/tmp/fake.tif")),
-        patch("grace2_agent.workflows.publish_quantities.cog_io.cog_bbox_4326",
+        patch("trid3nt_server.workflows.publish_quantities.cog_io.cog_bbox_4326",
               return_value=(-1.0, 2.0, 3.0, 4.0)),
-        patch("grace2_agent.workflows.publish_quantities.cog_io.safe_unlink",
+        patch("trid3nt_server.workflows.publish_quantities.cog_io.safe_unlink",
               return_value=None),
         patch.object(ps, "_upload_cog_to_runs_bucket",
                      side_effect=lambda c, r, b=None, *, dest_filename: f"s3://runs/{r}/{dest_filename}"),
@@ -188,8 +188,8 @@ def test_publish_swmm_quantities_emits_four_layers() -> None:
 
 
 def test_swmm_step3_style_presets_resolve() -> None:
-    from grace2_agent.tools.publish_layer import _TITILER_STYLE_REGISTRY
-    from grace2_contracts.output_quantities import get_output_registry
+    from trid3nt_server.tools.publish_layer import _TITILER_STYLE_REGISTRY
+    from trid3nt_contracts.output_quantities import get_output_registry
 
     for spec in get_output_registry("swmm"):
         if spec.default_on:

@@ -19,8 +19,8 @@ import geopandas as gpd
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_nhd_waterbodies import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_nhd_waterbodies import (
     NHD_WATERBODY_URL_FALLBACK,
     NHD_WATERBODY_URL_PRIMARY,
     NHDWaterbodiesInputError,

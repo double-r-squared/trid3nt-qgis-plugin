@@ -4,7 +4,7 @@
 NOT the agent, NOT an LLM tool, NOT a direct P1 call. This writes a
 worker-contract manifest for the Snake River reach to MinIO, then invokes the
 solve through ``tools.solver.run_solver(solver='telemac_river_dye', ...)`` under
-GRACE2_SOLVER_BACKEND=local-docker -- i.e. the SAME dispatch path the agent uses
+TRID3NT_SOLVER_BACKEND=local-docker -- i.e. the SAME dispatch path the agent uses
 (LOCAL_SOLVER_SPEC_REGISTRY -> telemac_local_spec -> docker run
 trid3nt-local/telemac:latest -v <rundir>:/data). It then polls
 ``wait_for_completion`` and confirms:
@@ -15,10 +15,10 @@ trid3nt-local/telemac:latest -v <rundir>:/data). It then polls
 Env (MinIO), export before running:
   AWS_ENDPOINT_URL=http://100.92.163.46:9000
   AWS_ACCESS_KEY_ID=trid3nt  AWS_SECRET_ACCESS_KEY=trid3nt-local-dev
-  GRACE2_CACHE_BUCKET=trid3nt-cache  GRACE2_RUNS_BUCKET=trid3nt-runs
-  GRACE2_SOLVER_BACKEND=local-docker
-  GRACE2_TELEMAC_IMAGE=trid3nt-local/telemac:latest
-  GRACE2_RUNS_DIR=/home/nate/Documents/trid3nt-local/data/runs
+  TRID3NT_CACHE_BUCKET=trid3nt-cache  TRID3NT_RUNS_BUCKET=trid3nt-runs
+  TRID3NT_SOLVER_BACKEND=local-docker
+  TRID3NT_TELEMAC_IMAGE=trid3nt-local/telemac:latest
+  TRID3NT_RUNS_DIR=/home/nate/Documents/trid3nt-local/data/runs
 """
 from __future__ import annotations
 
@@ -31,8 +31,8 @@ import time
 import boto3
 
 # Register the telemac spec (imports run_telemac -> SOLVER/LOCAL registries).
-from grace2_agent.workflows import run_telemac as _rt  # noqa: F401
-from grace2_agent.tools.solver import run_solver, wait_for_completion
+from trid3nt_server.workflows import run_telemac as _rt  # noqa: F401
+from trid3nt_server.tools.solver import run_solver, wait_for_completion
 
 
 def _s3():
@@ -40,8 +40,8 @@ def _s3():
 
 
 def main() -> int:
-    cache_bucket = os.environ["GRACE2_CACHE_BUCKET"]
-    runs_bucket = os.environ["GRACE2_RUNS_BUCKET"]
+    cache_bucket = os.environ["TRID3NT_CACHE_BUCKET"]
+    runs_bucket = os.environ["TRID3NT_RUNS_BUCKET"]
     run_tag = f"telemac-proof-{int(time.time())}"
 
     # A SMALL Snake River reach (shorter than the P1 default 6 km so the proof

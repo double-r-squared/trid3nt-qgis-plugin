@@ -2,7 +2,7 @@
 
 Proves the FULL agent-side wire for the urban vector-draw flow:
 
-1. PURE PARSE (``grace2_agent.spatial_input``): a role-tagged drawn
+1. PURE PARSE (``trid3nt_server.spatial_input``): a role-tagged drawn
    ``FeatureCollection`` (aoi polygon + barrier polylines tagged wall/flap_gate
    + points) splits into engine-ready inputs — the clean ``barriers``
    FeatureCollection, the AOI bbox, the point list — and EVERY malformed shape
@@ -42,23 +42,23 @@ from typing import Any
 import numpy as np
 import pytest
 
-from grace2_agent import server
-from grace2_agent.server import (
+from trid3nt_server import server
+from trid3nt_server.server import (
     SessionState,
     _emit_spatial_input_and_wait,
     _resolve_pending_spatial_input,
     _spatial_response_to_result,
 )
-from grace2_agent.spatial_input import (
+from trid3nt_server.spatial_input import (
     ParsedSpatialInput,
     SpatialInputParseError,
     barriers_feature_collection,
     parse_spatial_input_features,
     split_features_by_role,
 )
-from grace2_contracts.common import new_ulid
-from grace2_contracts.swmm_contracts import SWMMRunArgs
-from grace2_contracts.ws import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.swmm_contracts import SWMMRunArgs
+from trid3nt_contracts.ws import (
     AGENT_TO_CLIENT_PAYLOADS,
     CLIENT_TO_AGENT_PAYLOADS,
     SpatialInputRequestPayload,
@@ -520,7 +520,7 @@ def test_emit_and_wait_timeout_returns_none():
 
 
 def test_request_spatial_input_tool_returns_sentinel():
-    from grace2_agent.tools.spatial_input_tool import (
+    from trid3nt_server.tools.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -537,7 +537,7 @@ def test_request_spatial_input_tool_returns_sentinel():
 
 
 def test_request_spatial_input_tool_rejects_bad_mode():
-    from grace2_agent.tools.spatial_input_tool import (
+    from trid3nt_server.tools.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -557,8 +557,8 @@ def test_request_spatial_input_tool_rejects_bad_mode():
 swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")
 
-from grace2_agent.workflows import swmm_mesh_builder as mb  # noqa: E402
-from grace2_agent.workflows.swmm_mesh_builder import build_swmm_mesh  # noqa: E402
+from trid3nt_server.workflows import swmm_mesh_builder as mb  # noqa: E402
+from trid3nt_server.workflows.swmm_mesh_builder import build_swmm_mesh  # noqa: E402
 
 _N = 20
 _CELL = 10.0

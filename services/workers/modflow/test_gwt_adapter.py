@@ -292,7 +292,7 @@ def test_write_false_builds_without_writing(tmp_path):
 # regional_water_budget) + the DECAY_SORBED bugfix.
 #
 # These extend the deck-SHAPE asserts AND add a REAL mf6-run test (env-gated on
-# GRACE2_MODFLOW_LOCAL=1 + GRACE2_MF6_BIN) that authors each archetype deck, runs
+# TRID3NT_MODFLOW_LOCAL=1 + TRID3NT_MF6_BIN) that authors each archetype deck, runs
 # mf6, and asserts CONVERGED + non-trivial physics output. The real-run test is
 # the gap-closer: the existing file-content asserts let the DECAY_SORBED bug ship
 # because nothing ran the binary.
@@ -322,9 +322,9 @@ PIT_FOOTPRINT = [
 
 def _mf6_bin() -> str | None:
     """Return the local mf6 binary path when the real-run gate is set, else None."""
-    if os.environ.get("GRACE2_MODFLOW_LOCAL") != "1":
+    if os.environ.get("TRID3NT_MODFLOW_LOCAL") != "1":
         return None
-    return os.environ.get("GRACE2_MF6_BIN") or "mf6"
+    return os.environ.get("TRID3NT_MF6_BIN") or "mf6"
 
 
 def _run_mf6(sim_dir: str, mf6: str) -> tuple[int, str]:
@@ -335,7 +335,7 @@ def _run_mf6(sim_dir: str, mf6: str) -> tuple[int, str]:
 
 requires_mf6 = pytest.mark.skipif(
     _mf6_bin() is None,
-    reason="real mf6 run gated on GRACE2_MODFLOW_LOCAL=1 + GRACE2_MF6_BIN",
+    reason="real mf6 run gated on TRID3NT_MODFLOW_LOCAL=1 + TRID3NT_MF6_BIN",
 )
 
 

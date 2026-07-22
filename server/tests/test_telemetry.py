@@ -1,4 +1,4 @@
-"""Unit tests for ``grace2_agent.telemetry`` (Wave 4.10 job B-tel).
+"""Unit tests for ``trid3nt_server.telemetry`` (Wave 4.10 job B-tel).
 
 Coverage:
     1. ``test_record_shape`` — ``emit_tool_call_event`` writes a JSONL line
@@ -11,7 +11,7 @@ Coverage:
        (not overwrite) so the log accumulates correctly.
     5. ``test_compute_args_hash_stable`` — same args → same digest; different
        args → different digest.
-    6. ``test_env_override_path`` — ``GRACE2_TELEMETRY_PATH`` is respected.
+    6. ``test_env_override_path`` — ``TRID3NT_TELEMETRY_PATH`` is respected.
     7. ``test_none_args_hash`` — ``compute_args_hash(None)`` returns a stable
        hex string rather than raising.
 """
@@ -28,7 +28,7 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.telemetry import compute_args_hash, emit_tool_call_event
+from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ async def _emit(path: str, **kwargs) -> None:
         cached_content_token_count=None,
     )
     defaults.update(kwargs)
-    with patch.dict(os.environ, {"GRACE2_TELEMETRY_PATH": path}):
+    with patch.dict(os.environ, {"TRID3NT_TELEMETRY_PATH": path}):
         await emit_tool_call_event(**defaults)
         # Drain the event loop: the fire-and-forget task uses ensure_future
         # (one yield to schedule) then the _write_line coroutine runs.
@@ -135,7 +135,7 @@ async def test_error_path_does_not_raise() -> None:
     """A write failure (bad path) does not propagate out of the coroutine."""
     bad_path = "/nonexistent_directory/telemetry_test.jsonl"
     # Should complete without raising.
-    with patch.dict(os.environ, {"GRACE2_TELEMETRY_PATH": bad_path}):
+    with patch.dict(os.environ, {"TRID3NT_TELEMETRY_PATH": bad_path}):
         # We call the raw function (not _emit) to avoid env-var shadowing.
         await emit_tool_call_event(
             session_id="S1",
@@ -201,7 +201,7 @@ def test_none_args_hash() -> None:
 
 @pytest.mark.asyncio
 async def test_env_override_path() -> None:
-    """``GRACE2_TELEMETRY_PATH`` env var routes the write to the specified file."""
+    """``TRID3NT_TELEMETRY_PATH`` env var routes the write to the specified file."""
     with tempfile.TemporaryDirectory() as tmpdir:
         custom_path = os.path.join(tmpdir, "custom_telemetry.jsonl")
         await _emit(custom_path, tool_name="geocode_location")
@@ -243,7 +243,7 @@ async def test_error_fields_populated() -> None:
 
 def test_build_shadow_selection_record_shape() -> None:
     """The shadow record carries the would-be set + the turn join key + mode."""
-    from grace2_agent.telemetry import (
+    from trid3nt_server.telemetry import (
         SHADOW_RECORD_TYPE,
         build_shadow_selection_record,
     )
@@ -274,12 +274,12 @@ def test_build_shadow_selection_record_shape() -> None:
 @pytest.mark.asyncio
 async def test_emit_shadow_selection_writes_jsonl() -> None:
     """emit_shadow_selection_event writes ONE shadow row to the JSONL sink."""
-    from grace2_agent.telemetry import emit_shadow_selection_event
+    from trid3nt_server.telemetry import emit_shadow_selection_event
 
     with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tf:
         path = tf.name
     try:
-        with patch.dict(os.environ, {"GRACE2_TELEMETRY_PATH": path}):
+        with patch.dict(os.environ, {"TRID3NT_TELEMETRY_PATH": path}):
             # No Persistence bound in this test env -> file path.
             emit_shadow_selection_event(
                 session_id="S1",
@@ -304,7 +304,7 @@ async def test_emit_shadow_selection_writes_jsonl() -> None:
 @pytest.mark.asyncio
 async def test_emit_shadow_selection_never_raises() -> None:
     """A forced build failure inside emit_shadow_selection_event is swallowed."""
-    from grace2_agent import telemetry as tel
+    from trid3nt_server import telemetry as tel
 
     with patch.object(
         tel, "build_shadow_selection_record", side_effect=RuntimeError("boom")

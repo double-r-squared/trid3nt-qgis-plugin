@@ -11,7 +11,7 @@ Coverage:
 - Returns ``LayerURI`` with expected shape.
 
 Tests that hit the real WDPA ArcGIS endpoint are gated by
-``GRACE2_TEST_LIVE_WDPA=1``. They verify the Everglades bbox returns the
+``TRID3NT_TEST_LIVE_WDPA=1``. They verify the Everglades bbox returns the
 Everglades National Park polygon — the FR-0086 codified geography-not-just-
 bytes lesson applies here (we check the polygon NAME, not just byte count).
 """
@@ -27,8 +27,8 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_wdpa_protected_areas import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_wdpa_protected_areas import (
     WDPABboxError,
     WDPADesignationError,
     WDPAError,
@@ -54,7 +54,7 @@ _EVERGLADES_BBOX = (-81.5, 25.0, -80.5, 26.5)
 # Open-water bbox far offshore (no WDPA polygons).
 _OCEAN_BBOX = (-30.0, 10.0, -25.0, 15.0)
 
-_LIVE_WDPA = os.environ.get("GRACE2_TEST_LIVE_WDPA") == "1"
+_LIVE_WDPA = os.environ.get("TRID3NT_TEST_LIVE_WDPA") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -331,10 +331,10 @@ def test_lowercase_designation_filter_matches_through_public_tool():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(
@@ -375,10 +375,10 @@ def test_abbreviation_filter_matches_through_public_tool():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(
@@ -428,10 +428,10 @@ def test_filter_matching_zero_of_many_raises_with_present_designations():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(WDPADesignationError) as exc:
@@ -462,10 +462,10 @@ def test_mocked_100_features_returns_100_polygons():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -510,10 +510,10 @@ def test_mocked_designation_filter_returns_subset():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(
@@ -546,10 +546,10 @@ def test_mocked_empty_bbox_returns_zero_features():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response([], exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(bbox=_OCEAN_BBOX)
@@ -591,10 +591,10 @@ def test_mocked_pagination_across_4000_features():
             raise AssertionError(f"unexpected offset={offset}")
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         side_effect=side_effect,
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -625,10 +625,10 @@ def test_cache_miss_then_hit_skips_fetch_fn():
         return _wdpa_response(features, exceeded=False)
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         side_effect=page_side_effect,
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -646,10 +646,10 @@ def test_designation_filter_changes_cache_key():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_all = fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -667,12 +667,12 @@ def test_upstream_error_envelope_raises_wdpa_upstream_error():
     error_payload = {"error": {"code": 500, "message": "internal error"}}
 
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         side_effect=lambda bbox, offset: (_ for _ in ()).throw(
             WDPAUpstreamError("WDPA query returned error envelope")
         ),
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(FakeStorageClient()),
     ):
         with pytest.raises(WDPAUpstreamError):
@@ -698,10 +698,10 @@ def test_layer_uri_shape():
     fake_gcs = FakeStorageClient()
     features = [_polygon_feature("Test Park", wdpaid=1)]
     with patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "grace2_agent.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -717,13 +717,13 @@ def test_layer_uri_shape():
 
 
 # ---------------------------------------------------------------------------
-# Live integration tests (GRACE2_TEST_LIVE_WDPA=1 to run).
+# Live integration tests (TRID3NT_TEST_LIVE_WDPA=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_WDPA,
-    reason="Set GRACE2_TEST_LIVE_WDPA=1 to run live WDPA download tests",
+    reason="Set TRID3NT_TEST_LIVE_WDPA=1 to run live WDPA download tests",
 )
 def test_live_everglades_returns_everglades_np():
     """LIVE: queries real WDPA and verifies Everglades National Park is in results.
@@ -732,7 +732,7 @@ def test_live_everglades_returns_everglades_np():
     geography (Everglades NP exists within the Everglades bbox).
     """
     import geopandas as gpd
-    from grace2_agent.tools.fetch_wdpa_protected_areas import (
+    from trid3nt_server.tools.fetch_wdpa_protected_areas import (
         _fetch_wdpa_bytes,
     )
 

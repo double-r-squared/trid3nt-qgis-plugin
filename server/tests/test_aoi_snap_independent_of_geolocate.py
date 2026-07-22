@@ -14,7 +14,7 @@ These tests pin the pure decision helper ``_aoi_zoom_to_bbox`` (the inline emit
 
 from __future__ import annotations
 
-from grace2_agent.server import _aoi_zoom_to_bbox
+from trid3nt_server.server import _aoi_zoom_to_bbox
 
 _BBOX = [-82.70, 27.70, -82.30, 28.10]
 _OTHER = [-100.0, 30.0, -99.0, 31.0]

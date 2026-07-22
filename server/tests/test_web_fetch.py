@@ -16,7 +16,7 @@ Coverage:
 - ``extract='json'`` Content-Type mismatch → ``WebFetchInputError``.
 - Bad ``timeout_s`` → ``WebFetchInputError``.
 
-Live test (``GRACE2_TEST_LIVE_WEB=1``): fetches ``https://www.weather.gov/`` in
+Live test (``TRID3NT_TEST_LIVE_WEB=1``): fetches ``https://www.weather.gov/`` in
 ``metadata`` mode and asserts the response carries a non-empty title.
 """
 
@@ -30,9 +30,9 @@ from typing import Any
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import web_fetch as web_fetch_mod
-from grace2_agent.tools.web_fetch import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import web_fetch as web_fetch_mod
+from trid3nt_server.tools.web_fetch import (
     WebFetchInputError,
     WebFetchUpstreamError,
     _canonicalize_url,
@@ -42,7 +42,7 @@ from grace2_agent.tools.web_fetch import (
 )
 
 
-_LIVE_WEB = os.environ.get("GRACE2_TEST_LIVE_WEB") == "1"
+_LIVE_WEB = os.environ.get("TRID3NT_TEST_LIVE_WEB") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ def fake_storage(monkeypatch: pytest.MonkeyPatch) -> FakeStorageClient:
     (keyed by object KEY), so the cache hit/miss/write assertions hold.
     """
     fake = FakeStorageClient()
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -501,7 +501,7 @@ def test_web_fetch_unknown_extract_mode_raises_input_error(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_WEB, reason="set GRACE2_TEST_LIVE_WEB=1 to run live network tests")
+@pytest.mark.skipif(not _LIVE_WEB, reason="set TRID3NT_TEST_LIVE_WEB=1 to run live network tests")
 def test_web_fetch_live_weather_gov_metadata() -> None:
     """Live fetch: ``https://www.weather.gov/`` in metadata mode.
 

@@ -12,7 +12,7 @@ Coverage (≥4 unit + 1 live per kickoff):
    (each with ds_mean in [0, 4]).
 4. test_each_damage_point_carries_ds_mean_in_0_4 — every feature in the
    mocked output FlatGeobuf has ds_mean property in [0, 4].
-5. test_live_fort_myers_buildings_pelicun (GRACE2_TEST_LIVE_PELICUN_V2=1) —
+5. test_live_fort_myers_buildings_pelicun (TRID3NT_TEST_LIVE_PELICUN_V2=1) —
    Fort Myers run produces a non-rectangular spatial distribution of damage
    points (geographic-correctness gate, codified lesson from job-0086).
 """
@@ -30,14 +30,14 @@ import pytest
 
 # Force the workflow module to register its atomic-tool wrapper before we
 # inspect TOOL_REGISTRY.
-import grace2_agent.workflows.pelicun_damage_with_buildings  # noqa: F401
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.workflows.pelicun_damage_with_buildings import (
+import trid3nt_server.workflows.pelicun_damage_with_buildings  # noqa: F401
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.workflows.pelicun_damage_with_buildings import (
     pelicun_damage_with_buildings,
     run_pelicun_with_buildings,
     PelicunWithBuildingsError,
 )
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
 
 # ---------------------------------------------------------------------------
@@ -148,11 +148,11 @@ async def test_composer_dispatches_building_density_then_pelicun_in_order() -> N
 
     with (
         patch(
-            "grace2_agent.workflows.pelicun_damage_with_buildings.TOOL_REGISTRY",
+            "trid3nt_server.workflows.pelicun_damage_with_buildings.TOOL_REGISTRY",
             mock_registry,
         ),
         patch(
-            "grace2_agent.workflows.pelicun_damage_with_buildings.density_cog_to_point_fgb",
+            "trid3nt_server.workflows.pelicun_damage_with_buildings.density_cog_to_point_fgb",
             side_effect=_fake_density_cog_to_point_fgb,
         ),
         # Suppress os.unlink for the fake path.
@@ -192,7 +192,7 @@ async def test_mocked_buildings_plus_flood_expected_damage_point_count() -> None
 
     from types import SimpleNamespace
     from unittest import mock as _mock
-    from grace2_agent.tools import run_pelicun_damage_assessment as _pelicun_mod
+    from trid3nt_server.tools import run_pelicun_damage_assessment as _pelicun_mod
 
     cell_size_m = 100.0
     min_lon, min_lat, max_lon, max_lat = _SMALL_BBOX
@@ -284,7 +284,7 @@ async def test_mocked_buildings_plus_flood_expected_damage_point_count() -> None
     try:
         with (
             patch(
-                "grace2_agent.workflows.pelicun_damage_with_buildings.TOOL_REGISTRY",
+                "trid3nt_server.workflows.pelicun_damage_with_buildings.TOOL_REGISTRY",
                 mock_registry,
             ),
             _mock.patch.object(_pelicun_mod, "read_through", _fake_pelicun_read_through),
@@ -345,8 +345,8 @@ def test_each_damage_point_carries_ds_mean_in_0_4() -> None:
 
     from types import SimpleNamespace
     from unittest import mock as _mock
-    from grace2_agent.tools import run_pelicun_damage_assessment as _pelicun_mod
-    from grace2_agent.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools import run_pelicun_damage_assessment as _pelicun_mod
+    from trid3nt_server.tools.run_pelicun_damage_assessment import (
         run_pelicun_damage_assessment,
     )
 
@@ -460,7 +460,7 @@ def test_each_damage_point_carries_ds_mean_in_0_4() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — live Fort Myers run (GRACE2_TEST_LIVE_PELICUN_V2=1).
+# Test 5 — live Fort Myers run (TRID3NT_TEST_LIVE_PELICUN_V2=1).
 #
 # Geographic-correctness gate (codified lesson from job-0086):
 # The damage points must show non-rectangular distribution — i.e. the
@@ -471,8 +471,8 @@ def test_each_damage_point_carries_ds_mean_in_0_4() -> None:
 
 
 @pytest.mark.skipif(
-    not os.environ.get("GRACE2_TEST_LIVE_PELICUN_V2"),
-    reason="set GRACE2_TEST_LIVE_PELICUN_V2=1 to run the live Fort Myers test",
+    not os.environ.get("TRID3NT_TEST_LIVE_PELICUN_V2"),
+    reason="set TRID3NT_TEST_LIVE_PELICUN_V2=1 to run the live Fort Myers test",
 )
 @pytest.mark.asyncio
 async def test_live_fort_myers_buildings_pelicun() -> None:

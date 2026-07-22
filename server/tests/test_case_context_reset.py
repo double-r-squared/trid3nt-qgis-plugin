@@ -13,8 +13,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from grace2_agent.server import SessionState, _emit_case_open
-from grace2_contracts import new_ulid
+from trid3nt_server.server import SessionState, _emit_case_open
+from trid3nt_contracts import new_ulid
 
 
 class _FakeWS:
@@ -59,7 +59,7 @@ def test_create_branch_source_clears_context() -> None:
     fails loudly)."""
     import inspect
 
-    import grace2_agent.server as server_mod
+    import trid3nt_server.server as server_mod
 
     src = inspect.getsource(server_mod._handle_case_command)
     create_idx = src.index('if command == "create"')

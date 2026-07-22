@@ -29,10 +29,10 @@ import json
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent.pipeline_emitter import PipelineEmitter
-from grace2_contracts.common import new_ulid
-from grace2_contracts.execution import LayerURI
+from trid3nt_server import server
+from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.execution import LayerURI
 
 
 class FakeWS:

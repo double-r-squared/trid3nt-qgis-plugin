@@ -17,8 +17,8 @@ Coverage:
 - Geographic-correctness gate (job-0086): linestring with any out-of-bbox vertex
   is dropped; points outside bbox are filtered.
 
-Live test (env-gated GRACE2_TEST_LIVE_MOVEBANK=1 + GRACE2_MOVEBANK_USER +
-GRACE2_MOVEBANK_PASSWORD):
+Live test (env-gated TRID3NT_TEST_LIVE_MOVEBANK=1 + TRID3NT_MOVEBANK_USER +
+TRID3NT_MOVEBANK_PASSWORD):
 - Public study 1259686571 (Sandhill Crane Bismarck-Hettinger-Mandan) → real
   tracks; evidence/movebank_live.txt.
 """
@@ -32,8 +32,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_movebank_tracks import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_movebank_tracks import (
     MovebankAuthError,
     MovebankInputError,
     MovebankLicenseError,
@@ -61,9 +61,9 @@ _ND_BBOX = (-101.5, 46.5, -99.5, 47.5)
 _LIVE_STUDY_ID = 1259686571
 
 # Live-test gates.
-_LIVE_MOVEBANK = os.environ.get("GRACE2_TEST_LIVE_MOVEBANK") == "1"
-_LIVE_USER = os.environ.get("GRACE2_MOVEBANK_USER")
-_LIVE_PASS = os.environ.get("GRACE2_MOVEBANK_PASSWORD")
+_LIVE_MOVEBANK = os.environ.get("TRID3NT_TEST_LIVE_MOVEBANK") == "1"
+_LIVE_USER = os.environ.get("TRID3NT_MOVEBANK_USER")
+_LIVE_PASS = os.environ.get("TRID3NT_MOVEBANK_PASSWORD")
 _HAS_LIVE_CREDS = bool(_LIVE_MOVEBANK and _LIVE_USER and _LIVE_PASS)
 
 
@@ -112,7 +112,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -227,8 +227,8 @@ def test_bad_geometry_type_raises_input_error():
 
 def test_missing_credentials_raises_input_error(monkeypatch):
     """No explicit creds, no secret_ref, no env vars → MovebankInputError."""
-    monkeypatch.delenv("GRACE2_MOVEBANK_USER", raising=False)
-    monkeypatch.delenv("GRACE2_MOVEBANK_PASSWORD", raising=False)
+    monkeypatch.delenv("TRID3NT_MOVEBANK_USER", raising=False)
+    monkeypatch.delenv("TRID3NT_MOVEBANK_PASSWORD", raising=False)
     with pytest.raises(MovebankInputError, match="credentials missing"):
         fetch_movebank_tracks(study_id=42)
 
@@ -282,24 +282,24 @@ def test_resolve_credentials_explicit_kwargs():
 
 
 def test_resolve_credentials_env_fallback(monkeypatch):
-    monkeypatch.setenv("GRACE2_MOVEBANK_USER", "env_user")
-    monkeypatch.setenv("GRACE2_MOVEBANK_PASSWORD", "env_pw")
+    monkeypatch.setenv("TRID3NT_MOVEBANK_USER", "env_user")
+    monkeypatch.setenv("TRID3NT_MOVEBANK_PASSWORD", "env_pw")
     user, pw = _resolve_credentials(None, None, None)
     assert user == "env_user"
     assert pw == "env_pw"
 
 
 def test_resolve_credentials_explicit_kwargs_override_env(monkeypatch):
-    monkeypatch.setenv("GRACE2_MOVEBANK_USER", "env_user")
-    monkeypatch.setenv("GRACE2_MOVEBANK_PASSWORD", "env_pw")
+    monkeypatch.setenv("TRID3NT_MOVEBANK_USER", "env_user")
+    monkeypatch.setenv("TRID3NT_MOVEBANK_PASSWORD", "env_pw")
     user, pw = _resolve_credentials("alice", "s3cret", None)
     assert user == "alice"
     assert pw == "s3cret"
 
 
 def test_resolve_credentials_missing_raises(monkeypatch):
-    monkeypatch.delenv("GRACE2_MOVEBANK_USER", raising=False)
-    monkeypatch.delenv("GRACE2_MOVEBANK_PASSWORD", raising=False)
+    monkeypatch.delenv("TRID3NT_MOVEBANK_USER", raising=False)
+    monkeypatch.delenv("TRID3NT_MOVEBANK_PASSWORD", raising=False)
     with pytest.raises(MovebankInputError, match="credentials missing"):
         _resolve_credentials(None, None, None)
 
@@ -646,10 +646,10 @@ def test_mocked_happy_path_linestring():
     )
 
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -704,10 +704,10 @@ def test_mocked_point_geometry_with_bbox_filter():
     )
 
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -750,10 +750,10 @@ def test_mocked_empty_study_returns_empty_flatgeobuf():
     )
 
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -785,10 +785,10 @@ def test_mocked_401_raises_auth_error():
     """A 401 from Movebank raises a non-retryable MovebankAuthError."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(401, text="Unauthorized")
@@ -807,10 +807,10 @@ def test_mocked_403_raises_license_error():
     """A 403 from Movebank raises a non-retryable MovebankLicenseError."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(403, text="License not accepted")
@@ -832,10 +832,10 @@ def test_mocked_html_license_page_raises_license_error():
         "</body></html>"
     )
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, html_body)
@@ -851,10 +851,10 @@ def test_mocked_5xx_raises_upstream_error_retryable():
     """A 503 from Movebank raises a retryable MovebankUpstreamError."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(503, text="Service Unavailable")
@@ -884,10 +884,10 @@ def test_cache_hit_skips_fetch_fn():
     )
 
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -915,10 +915,10 @@ def test_layer_uri_shape_fields():
         ]
     )
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -947,10 +947,10 @@ def test_request_includes_basic_auth():
     )
 
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "grace2_agent.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -974,7 +974,7 @@ def test_request_includes_basic_auth():
 
 @pytest.mark.skipif(
     not _HAS_LIVE_CREDS,
-    reason="GRACE2_TEST_LIVE_MOVEBANK=1 + GRACE2_MOVEBANK_USER + GRACE2_MOVEBANK_PASSWORD required",
+    reason="TRID3NT_TEST_LIVE_MOVEBANK=1 + TRID3NT_MOVEBANK_USER + TRID3NT_MOVEBANK_PASSWORD required",
 )
 def test_live_sandhill_crane_public_study(tmp_path):
     """LIVE: public study 1259686571 (Sandhill Crane Bismarck) → real tracks.
@@ -988,7 +988,7 @@ def test_live_sandhill_crane_public_study(tmp_path):
     """
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_movebank_tracks(

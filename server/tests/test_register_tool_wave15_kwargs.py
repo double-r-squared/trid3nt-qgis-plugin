@@ -24,12 +24,12 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.tools import (
+from trid3nt_server.tools import (
     TOOL_REGISTRY,
     clear_registry_for_tests,
     register_tool,
 )
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +37,7 @@ def _snapshot_and_restore_registry() -> None:
     """Snapshot the real registry, run the test, then restore.
 
     The real registry is populated at import time by every tool module
-    listed at the bottom of ``grace2_agent/tools/__init__.py``. Our tests
+    listed at the bottom of ``trid3nt_server/tools/__init__.py``. Our tests
     need a clean slate; we restore the snapshot at teardown so subsequent
     tests in the same pytest session still see the production tools.
     """

@@ -1,6 +1,6 @@
 """Worker-side Landlab field -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``grace2_agent.workflows.postprocess_landlab`` (probability
+Byte-faithful port of ``trid3nt_server.workflows.postprocess_landlab`` (probability
 and overland-flow paths). Runs inside the Batch worker AFTER the component chain
 writes ``landlab_field.tif`` to the scratch directory; rewrites it as an
 EPSG:4326 COG and builds the typed ``publish_manifest.json`` dict.
@@ -20,7 +20,7 @@ from typing import Any
 from services.workers._raster_postprocess import manifest as _manifest
 from services.workers._raster_postprocess.band_stats import compute_band_stats
 
-LOG = logging.getLogger("grace2.worker.landlab_postprocess")
+LOG = logging.getLogger("trid3nt.worker.landlab_postprocess")
 
 #: Worker-side wet-depth floor for the overland chain (agent uses 0.05).
 NODATA_DEPTH_M: float = 0.001
@@ -113,7 +113,7 @@ def _compute_landlab_metrics(
 def _warp_to_4326(src_path: Path, out_path: Path) -> None:
     """Reproject a projected-CRS field COG to EPSG:4326, writing a COG at out_path.
 
-    Uses rasterio.warp directly (no cog_io / grace2_agent imports).
+    Uses rasterio.warp directly (no cog_io / trid3nt_server imports).
     The src may be any rasterio-readable raster with an embedded CRS.
     Nearest-neighbour resampling preserves NaN boundaries.
     """

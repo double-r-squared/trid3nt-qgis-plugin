@@ -25,9 +25,9 @@ import asyncio
 
 import pytest
 
-import grace2_agent.server as server
-from grace2_agent.persistence import FileMCPClient, Persistence
-from grace2_agent.server import SessionState
+import trid3nt_server.server as server
+from trid3nt_server.persistence import FileMCPClient, Persistence
+from trid3nt_server.server import SessionState
 
 
 SID = "0" * 26

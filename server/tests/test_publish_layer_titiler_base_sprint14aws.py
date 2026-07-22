@@ -3,7 +3,7 @@
 The QGIS plugin is the ONLY client and loads COGs DIRECTLY via GDAL
 ``/vsicurl/`` (the same MinIO s3->http translation it already uses for
 FlatGeobuf vectors), so ``publish_layer`` no longer mints TiTiler XYZ tile
-TEMPLATES and no longer reads ``GRACE2_TILE_SERVER_BASE``. This suite (which
+TEMPLATES and no longer reads ``TRID3NT_TILE_SERVER_BASE``. This suite (which
 previously pinned the tile-base derivation) now pins the swapped contract:
 
   - a raster publish returns the raw ``s3://`` COG URI VERBATIM - no
@@ -31,8 +31,8 @@ from urllib.parse import quote
 
 import pytest
 
-from grace2_agent.tools import publish_layer as pl
-from grace2_agent.tools.publish_layer import (
+from trid3nt_server.tools import publish_layer as pl
+from trid3nt_server.tools.publish_layer import (
     PublishLayerError,
     pop_legend_for_uri,
     publish_layer,
@@ -56,7 +56,7 @@ LEGACY_TEMPLATE = (
 @pytest.fixture(autouse=True)
 def _s3_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force the AWS/s3 publish branch + a fail-open bytes read (no network)."""
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: None)
 
 
@@ -70,7 +70,7 @@ def test_raster_publish_returns_raw_s3_uri() -> None:
 
 def test_tile_server_base_env_is_dead(monkeypatch: pytest.MonkeyPatch) -> None:
     """Setting the legacy env var changes NOTHING (the env read is removed)."""
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://d123abc.cloudfront.net")
+    monkeypatch.setenv("TRID3NT_TILE_SERVER_BASE", "https://d123abc.cloudfront.net")
     out = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
     assert out == S3_URI
     assert "cloudfront" not in out
@@ -78,7 +78,7 @@ def test_tile_server_base_env_is_dead(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_unset_env_no_longer_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     """The old RASTER_PUBLISH_UNAVAILABLE gate is gone - unset env publishes."""
-    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
+    monkeypatch.delenv("TRID3NT_TILE_SERVER_BASE", raising=False)
     out = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
     assert out == S3_URI
 
@@ -107,7 +107,7 @@ def test_observe_registers_data_uri_without_display_face(
     separate wms/display face any more (the raw COG IS the envelope uri)."""
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
     publish_layer(layer_uri=S3_URI, layer_id="flood-demo")

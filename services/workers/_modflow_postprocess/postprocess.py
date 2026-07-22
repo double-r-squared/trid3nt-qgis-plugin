@@ -7,7 +7,7 @@ Spill/plume path (no archetype or archetype=None):
   ``run_plume_postprocess`` - reads the LOCAL ``gwt_model.ucn``,
   reprojects to a plume COG, computes metrics, writes publish_manifest.json.
 
-Archetype paths (GRACE2_MODFLOW_ARCHETYPE_OFFLOAD=1):
+Archetype paths (TRID3NT_MODFLOW_ARCHETYPE_OFFLOAD=1):
   ``run_drawdown_postprocess``            - sustainable_yield: head decline COG
   ``run_dewatering_postprocess``          - mine_dewatering: DRN CBC COG
   ``run_budget_partition_postprocess``    - regional_water_budget: head COG + metrics
@@ -16,12 +16,12 @@ Archetype paths (GRACE2_MODFLOW_ARCHETYPE_OFFLOAD=1):
   ``run_wetland_hydroperiod_postprocess`` - wetland_hydroperiod: seasonal range COG
 
 All paths:
-  * AGENT-IMPORT-FREE -- never imports ``grace2_agent.*``.
+  * AGENT-IMPORT-FREE -- never imports ``trid3nt_server.*``.
   * Returns ``ModflowPostprocessResult`` (status + manifest dict + COG paths).
   * Never raises for an expected-empty result -- returns status=error + typed code.
   * The manifest follows the shared ``_raster_postprocess.manifest`` schema.
 
-Ported from ``grace2_agent.workflows.postprocess_modflow`` (archetype branches):
+Ported from ``trid3nt_server.workflows.postprocess_modflow`` (archetype branches):
 same readers, same metric math, same honesty gates.  Worker operates on LOCAL
 scratch files only; no S3/GCS download logic needed here.
 """
@@ -36,7 +36,7 @@ from typing import Any
 
 from services.workers._raster_postprocess import manifest as _manifest
 
-LOG = logging.getLogger("grace2.worker.modflow_postprocess")
+LOG = logging.getLogger("trid3nt.worker.modflow_postprocess")
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -861,7 +861,7 @@ def run_plume_postprocess(
 #   5. Returns ModflowPostprocessResult.
 #   6. Implements the empty-result honesty gate (never fake-ok).
 #
-# Ported from ``grace2_agent.workflows.postprocess_modflow``:
+# Ported from ``trid3nt_server.workflows.postprocess_modflow``:
 #   postprocess_drawdown / postprocess_dewatering / postprocess_budget_partition /
 #   postprocess_mounding / postprocess_asr / postprocess_wetland_hydroperiod.
 # ---------------------------------------------------------------------------

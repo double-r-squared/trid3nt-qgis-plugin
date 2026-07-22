@@ -35,8 +35,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from grace2_contracts.execution import LayerURI
-from grace2_contracts.landlab_contracts import (
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.landlab_contracts import (
     LandlabRunArgs,
     LandlabSusceptibilityLayerURI,
 )
@@ -109,7 +109,7 @@ def test_susceptibility_layer_is_layeruri_with_scalars():
 # (2) build_spec arg-assembly — no IO.
 # ===========================================================================
 def test_build_landlab_build_spec_maps_args():
-    from grace2_agent.workflows.run_landlab import build_landlab_build_spec
+    from trid3nt_server.workflows.run_landlab import build_landlab_build_spec
 
     a = LandlabRunArgs(
         bbox=(-122.5, 45.4, -122.4, 45.5),
@@ -132,7 +132,7 @@ def test_build_landlab_build_spec_maps_args():
 # (3) stage_landlab_manifest — boto3 mocked.
 # ===========================================================================
 def test_stage_landlab_manifest_uploads_dem_and_manifest(tmp_path, monkeypatch):
-    from grace2_agent.workflows import run_landlab as RL
+    from trid3nt_server.workflows import run_landlab as RL
 
     # a tiny on-disk "DEM" file (stage only uploads bytes; no rasterio needed).
     dem = tmp_path / "dem.tif"
@@ -148,13 +148,13 @@ def test_stage_landlab_manifest_uploads_dem_and_manifest(tmp_path, monkeypatch):
     monkeypatch.setattr(RL, "_get_s3_client", lambda: _FakeS3(), raising=False)
     # _get_s3_client is imported lazily inside stage_landlab_manifest from
     # ..tools.solver; patch it there.
-    from grace2_agent.tools import solver as _solver
+    from trid3nt_server.tools import solver as _solver
 
     monkeypatch.setattr(_solver, "_get_s3_client", lambda: _FakeS3())
-    from grace2_agent.tools import cache as _cache
+    from trid3nt_server.tools import cache as _cache
 
     monkeypatch.setattr(_cache, "storage_scheme", lambda: "s3")
-    monkeypatch.setenv("GRACE2_CACHE_BUCKET", "test-cache-bucket")
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache-bucket")
 
     a = LandlabRunArgs(bbox=(-122.5, 45.4, -122.4, 45.5), analysis="landslide_probability")
     staging = RL.stage_landlab_manifest(a, dem_path=str(dem), run_id="run-stage")
@@ -177,8 +177,8 @@ def test_stage_landlab_manifest_uploads_dem_and_manifest(tmp_path, monkeypatch):
 
 
 def test_stage_landlab_manifest_typed_error_on_upload_failure(tmp_path, monkeypatch):
-    from grace2_agent.workflows import run_landlab as RL
-    from grace2_agent.workflows.run_landlab import LandlabWorkflowError
+    from trid3nt_server.workflows import run_landlab as RL
+    from trid3nt_server.workflows.run_landlab import LandlabWorkflowError
 
     dem = tmp_path / "dem.tif"
     dem.write_bytes(b"x")
@@ -187,12 +187,12 @@ def test_stage_landlab_manifest_typed_error_on_upload_failure(tmp_path, monkeypa
         def put_object(self, **kw):  # noqa: ANN003
             raise RuntimeError("s3 down")
 
-    from grace2_agent.tools import solver as _solver
-    from grace2_agent.tools import cache as _cache
+    from trid3nt_server.tools import solver as _solver
+    from trid3nt_server.tools import cache as _cache
 
     monkeypatch.setattr(_solver, "_get_s3_client", lambda: _BoomS3())
     monkeypatch.setattr(_cache, "storage_scheme", lambda: "s3")
-    monkeypatch.setenv("GRACE2_CACHE_BUCKET", "test-cache-bucket")
+    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "test-cache-bucket")
 
     a = LandlabRunArgs(bbox=(-122.5, 45.4, -122.4, 45.5))
     with pytest.raises(LandlabWorkflowError) as exc:
@@ -228,7 +228,7 @@ def _write_synthetic_field_cog(path: Path, *, values: np.ndarray) -> None:
 
 def test_compute_landlab_metrics_landslide():
     """Probability field: unstable fraction = cells >= 0.75; mean PoF over active."""
-    from grace2_agent.workflows.postprocess_landlab import compute_landlab_metrics
+    from trid3nt_server.workflows.postprocess_landlab import compute_landlab_metrics
 
     field = np.full((4, 4), np.nan)
     field[0, 0] = 0.9   # unstable
@@ -245,7 +245,7 @@ def test_compute_landlab_metrics_landslide():
 
 def test_compute_landlab_metrics_overland():
     """Depth field: unstable=wet fraction (>=0.05 m); min_fos carries peak depth."""
-    from grace2_agent.workflows.postprocess_landlab import compute_landlab_metrics
+    from trid3nt_server.workflows.postprocess_landlab import compute_landlab_metrics
 
     field = np.full((3, 3), np.nan)
     field[0, 0] = 0.10   # wet
@@ -260,7 +260,7 @@ def test_compute_landlab_metrics_overland():
 def test_postprocess_landlab_emits_4326_cog(tmp_path, monkeypatch):
     """A synthetic metric-CRS field COG reprojects to a VALID EPSG:4326 COG; the
     worker result block is preferred for the narration scalars."""
-    from grace2_agent.workflows import postprocess_landlab as PP
+    from trid3nt_server.workflows import postprocess_landlab as PP
 
     field = np.full((8, 8), 0.1, dtype="float32")
     field[3:5, 3:5] = 0.95  # a high-susceptibility patch
@@ -314,7 +314,7 @@ def test_postprocess_landlab_emits_4326_cog(tmp_path, monkeypatch):
 def test_postprocess_landlab_recomputes_when_result_absent(tmp_path, monkeypatch):
     """When the worker result block is absent, scalars are RECOMPUTED from the
     field (honest under-report, never invented)."""
-    from grace2_agent.workflows import postprocess_landlab as PP
+    from trid3nt_server.workflows import postprocess_landlab as PP
 
     field = np.full((4, 4), 0.1, dtype="float32")
     field[0, 0] = 0.9  # 1 unstable cell of 16
@@ -336,7 +336,7 @@ def test_postprocess_landlab_recomputes_when_result_absent(tmp_path, monkeypatch
 
 
 def test_postprocess_landlab_missing_cog_raises_typed(tmp_path):
-    from grace2_agent.workflows.postprocess_landlab import (
+    from trid3nt_server.workflows.postprocess_landlab import (
         PostprocessLandlabError,
         postprocess_landlab,
     )
@@ -355,9 +355,9 @@ def test_model_landslide_scenario_chain_mocked(tmp_path, monkeypatch):
     """The composer drives fetch -> stage -> run_solver -> wait -> download ->
     postprocess -> publish with ALL external calls mocked and returns a
     LandlabSusceptibilityLayerURI carrying the narration scalars."""
-    from grace2_agent.tools import solver as _solver
-    from grace2_agent.workflows import model_landslide_scenario as M
-    from grace2_agent.workflows.run_landlab import LandlabStaging
+    from trid3nt_server.tools import solver as _solver
+    from trid3nt_server.workflows import model_landslide_scenario as M
+    from trid3nt_server.workflows.run_landlab import LandlabStaging
 
     # A synthetic DEM so the DEM fetch is skipped (dem_path supplied).
     dem = tmp_path / "dem.tif"
@@ -421,7 +421,7 @@ def test_model_landslide_scenario_chain_mocked(tmp_path, monkeypatch):
 
     monkeypatch.setattr(M, "_download_batch_landlab_outputs", _fake_download)
     # postprocess upload stub.
-    from grace2_agent.workflows import postprocess_landlab as PP
+    from trid3nt_server.workflows import postprocess_landlab as PP
 
     monkeypatch.setattr(
         PP,
@@ -454,9 +454,9 @@ def test_model_landslide_scenario_chain_mocked(tmp_path, monkeypatch):
 
 def test_model_landslide_scenario_run_failure_raises_typed(tmp_path, monkeypatch):
     """A non-complete Batch solve surfaces a typed LANDLAB_RUN_FAILED."""
-    from grace2_agent.tools import solver as _solver
-    from grace2_agent.workflows import model_landslide_scenario as M
-    from grace2_agent.workflows.run_landlab import LandlabStaging, LandlabWorkflowError
+    from trid3nt_server.tools import solver as _solver
+    from trid3nt_server.workflows import model_landslide_scenario as M
+    from trid3nt_server.workflows.run_landlab import LandlabStaging, LandlabWorkflowError
 
     dem = tmp_path / "dem.tif"
     _write_synthetic_field_cog(dem, values=np.full((6, 6), 50.0, dtype="float32"))

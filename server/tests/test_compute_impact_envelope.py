@@ -49,11 +49,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.postprocess_pelicun import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.postprocess_pelicun import (
     PelicunPostprocessEmptyError,
 )
-from grace2_agent.workflows.compute_impact_envelope import (
+from trid3nt_server.workflows.compute_impact_envelope import (
     ComputeImpactEnvelopeError,
     ComputeImpactEnvelopeGeocodeError,
     ComputeImpactEnvelopeInputError,
@@ -236,11 +236,11 @@ async def test_chains_geocode_then_inventory_then_pelicun_then_postprocess() -> 
             },
         ),
         patch(
-            "grace2_agent.workflows.compute_impact_envelope.geocode_location",
+            "trid3nt_server.workflows.compute_impact_envelope.geocode_location",
             return_value=geocode_result,
         ) as geocode_mock,
         patch(
-            "grace2_agent.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -327,7 +327,7 @@ async def test_custom_fragility_set_threads_to_postprocess() -> None:
             },
         ),
         patch(
-            "grace2_agent.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -379,7 +379,7 @@ async def test_handles_postprocess_pelicun_error_propagates() -> None:
             },
         ),
         patch(
-            "grace2_agent.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -431,7 +431,7 @@ async def test_narrative_string_contains_count_and_dollar() -> None:
             },
         ),
         patch(
-            "grace2_agent.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -471,7 +471,7 @@ async def test_narrative_omits_population_when_ms_buildings() -> None:
     with (
         patch.dict(TOOL_REGISTRY, {"run_pelicun_with_buildings": fake_ms}),
         patch(
-            "grace2_agent.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -544,7 +544,7 @@ async def test_extra_kwargs_swallowed() -> None:
             },
         ),
         patch(
-            "grace2_agent.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -628,7 +628,7 @@ async def test_ms_buildings_path_routes_through_run_pelicun_with_buildings() -> 
     with (
         patch.dict(TOOL_REGISTRY, {"run_pelicun_with_buildings": fake_ms}),
         patch(
-            "grace2_agent.workflows.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.workflows.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):

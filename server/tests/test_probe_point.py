@@ -2,7 +2,7 @@
 core behind ``POST /api/probe-point``).
 
 No network / no DynamoDB: persistence is a fake monkeypatched onto
-``grace2_agent.telemetry.get_persistence`` (the SAME seam
+``trid3nt_server.telemetry.get_persistence`` (the SAME seam
 ``test_query_point_hazard.py`` uses, since ``probe_point_at`` reuses
 ``query_point_hazard.layers_from_case``). Layers are tiny local GeoTIFFs
 referenced from synthetic ``loaded_layer_summaries`` dicts -- real rasterio
@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from grace2_agent.tools.probe_point import (
+from trid3nt_server.tools.probe_point import (
     MAX_PROBE_LAYERS,
     ProbePointCaseNotFoundError,
     ProbePointInputError,
@@ -76,7 +76,7 @@ def _install_case(monkeypatch, layers, case_id="case-1", bbox=None, title="Test 
         bbox=bbox,
         loaded_layer_summaries=layers,
     )
-    import grace2_agent.telemetry as telemetry
+    import trid3nt_server.telemetry as telemetry
 
     monkeypatch.setattr(telemetry, "get_persistence", lambda: FakePersistence(case))
     return case
@@ -272,7 +272,7 @@ async def test_case_not_found_typed_error(monkeypatch, tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_persistence_unavailable_typed_error(monkeypatch) -> None:
-    import grace2_agent.telemetry as telemetry
+    import trid3nt_server.telemetry as telemetry
 
     monkeypatch.setattr(telemetry, "get_persistence", lambda: None)
     with pytest.raises(ProbePointCaseNotFoundError):

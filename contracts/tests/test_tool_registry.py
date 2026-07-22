@@ -16,7 +16,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.tool_registry import (
+from trid3nt_contracts.tool_registry import (
     TTL_CLASSES,
     AtomicToolMetadata,
 )

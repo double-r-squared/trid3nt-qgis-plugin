@@ -17,10 +17,10 @@ import json
 
 import pytest
 
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.tools import fetch_fault_sources as ffs
-from grace2_agent.tools.fetch_fault_sources import (
+from trid3nt_server.tools import fetch_fault_sources as ffs
+from trid3nt_server.tools.fetch_fault_sources import (
     FAULT_LINE_STYLE_PRESET,
     FaultSourcesInputError,
     FaultSourcesResult,
@@ -138,7 +138,7 @@ def _make_read_through_injector(store: dict):
     semantics against ``store`` and short-circuits ``live-no-cache`` exactly
     like the real shim, but never touches boto3.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -308,7 +308,7 @@ def test_fetch_fault_sources_rejects_unknown_catalog(_patch_upstream):
 # Registration (the tool is a registered @register_tool atomic tool)
 # ===========================================================================
 def test_fetch_fault_sources_is_registered():
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     assert "fetch_fault_sources" in TOOL_REGISTRY
     meta = TOOL_REGISTRY["fetch_fault_sources"].metadata

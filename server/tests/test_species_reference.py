@@ -11,7 +11,7 @@ on 2026-06-08 (see module docstring); the live cross-check is exercised in
 
 from __future__ import annotations
 
-from grace2_agent.tools._species_reference import (
+from trid3nt_server.tools._species_reference import (
     FLORIDA_DEMO_SPECIES,
     DemoSpeciesEntry,
 )

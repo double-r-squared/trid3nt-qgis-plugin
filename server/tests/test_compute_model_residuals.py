@@ -51,10 +51,10 @@ from rasterio.transform import from_bounds
 from rasterio.warp import transform_bounds
 from shapely.geometry import Point
 
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.compute_model_residuals import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.compute_model_residuals import (
     ModelResidualsLayerURI,
     ResidualsAllNodataError,
     ResidualsInputError,
@@ -389,7 +389,7 @@ def test_bbox_fetch_path(tmp_path, monkeypatch) -> None:
     with open(fgb_path, "rb") as f:
         fgb_bytes = f.read()
 
-    import grace2_agent.tools.fetch_usgs_groundwater_levels as gw_mod
+    import trid3nt_server.tools.fetch_usgs_groundwater_levels as gw_mod
 
     captured: dict = {}
 
@@ -427,8 +427,8 @@ def test_bad_model_uri_raises(tmp_path) -> None:
 def test_category_and_corpus() -> None:
     import yaml
 
-    from grace2_agent import categories
-    from grace2_agent.tools import discover_dataset as dd
+    from trid3nt_server import categories
+    from trid3nt_server.tools import discover_dataset as dd
 
     assert (
         categories.PRIMARY_CATEGORY["compute_model_residuals"]
@@ -447,7 +447,7 @@ def test_category_and_corpus() -> None:
 
 
 def test_uri_registry_resolvable_params() -> None:
-    from grace2_agent.uri_registry import RESOLVABLE_URI_PARAMS
+    from trid3nt_server.uri_registry import RESOLVABLE_URI_PARAMS
 
     assert "model_layer_uri" in RESOLVABLE_URI_PARAMS
     assert "observations_layer_uri" in RESOLVABLE_URI_PARAMS

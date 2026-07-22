@@ -13,8 +13,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from grace2_agent.tools import compute_exposure_summary as mod
-from grace2_agent.tools.compute_exposure_summary import (
+from trid3nt_server.tools import compute_exposure_summary as mod
+from trid3nt_server.tools.compute_exposure_summary import (
     ExposureEmptyFootprintError,
     ExposureInputError,
     compute_exposure_summary,
@@ -238,7 +238,7 @@ def test_nodata_cells_excluded_from_footprint(
 
 
 def test_registered_in_tool_registry() -> None:
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("compute_exposure_summary")
     assert entry is not None

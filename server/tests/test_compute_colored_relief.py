@@ -33,8 +33,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.compute_colored_relief import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.compute_colored_relief import (
     ColoredReliefError,
     _VALID_RAMPS,
     _write_ramp_file,
@@ -280,7 +280,7 @@ def test_each_ramp_produces_multi_band_output(ramp: str):
     out_path: str | None = None
     try:
         # Directly invoke _run_colored_relief with a local path.
-        from grace2_agent.tools.compute_colored_relief import _run_colored_relief
+        from trid3nt_server.tools.compute_colored_relief import _run_colored_relief
 
         cog_bytes = _run_colored_relief(dem_uri=dem_path, ramp=ramp)
         assert len(cog_bytes) > 0, f"ramp {ramp!r}: _run_colored_relief returned empty bytes"
@@ -325,8 +325,8 @@ def test_cache_hit_skips_fetch_fn():
     dem_uri = "gs://legacy-cloud-cache/cache/static-30d/dem/abc123.tif"
     ramp = "terrain"
 
-    from grace2_agent.tools.cache import cache_path, compute_cache_key, read_through as real_rt
-    from grace2_agent.tools.compute_colored_relief import _COMPUTE_COLORED_RELIEF_METADATA
+    from trid3nt_server.tools.cache import cache_path, compute_cache_key, read_through as real_rt
+    from trid3nt_server.tools.compute_colored_relief import _COMPUTE_COLORED_RELIEF_METADATA
 
     params = {"dem_uri": dem_uri, "ramp": ramp}
     key = compute_cache_key("colored_relief", params, "static-30d", now=_PINNED_NOW)
@@ -370,8 +370,8 @@ def test_cache_miss_writes_through():
         fetch_invoked["n"] += 1
         return fresh_bytes
 
-    from grace2_agent.tools.cache import read_through as real_read_through
-    from grace2_agent.tools.compute_colored_relief import _COMPUTE_COLORED_RELIEF_METADATA
+    from trid3nt_server.tools.cache import read_through as real_read_through
+    from trid3nt_server.tools.compute_colored_relief import _COMPUTE_COLORED_RELIEF_METADATA
 
     result = real_read_through(
         metadata=_COMPUTE_COLORED_RELIEF_METADATA,
@@ -417,13 +417,13 @@ def test_compute_colored_relief_returns_correct_layer_uri_shape():
     fake_result_bytes = _make_fake_cog_bytes()
 
     # Patch _run_colored_relief so gdaldem is not invoked.
-    with patch("grace2_agent.tools.compute_colored_relief._run_colored_relief",
+    with patch("trid3nt_server.tools.compute_colored_relief._run_colored_relief",
                return_value=fake_result_bytes), \
          patch("google.cloud.storage.Client", return_value=fake_gcs):
         # read_through will use fake_gcs because we injected it via the storage_client arg.
         # We need to intercept the read_through call to pass our fake GCS.
-        from grace2_agent.tools.cache import read_through as real_rt
-        from grace2_agent.tools.compute_colored_relief import _COMPUTE_COLORED_RELIEF_METADATA
+        from trid3nt_server.tools.cache import read_through as real_rt
+        from trid3nt_server.tools.compute_colored_relief import _COMPUTE_COLORED_RELIEF_METADATA
 
         params = {"dem_uri": dem_uri, "ramp": ramp}
 
@@ -439,7 +439,7 @@ def test_compute_colored_relief_returns_correct_layer_uri_shape():
             )
 
         with patch(
-            "grace2_agent.tools.compute_colored_relief.read_through",
+            "trid3nt_server.tools.compute_colored_relief.read_through",
             side_effect=patched_read_through,
         ):
             layer_uri = compute_colored_relief(dem_uri=dem_uri, ramp=ramp)
@@ -468,8 +468,8 @@ def test_layer_uri_name_contains_ramp_label(ramp: str):
     fake_gcs = FakeStorageClient()
     dem_uri = f"gs://legacy-cloud-cache/cache/dem/{ramp}_test.tif"
 
-    from grace2_agent.tools.cache import read_through as real_rt
-    from grace2_agent.tools.compute_colored_relief import _COMPUTE_COLORED_RELIEF_METADATA
+    from trid3nt_server.tools.cache import read_through as real_rt
+    from trid3nt_server.tools.compute_colored_relief import _COMPUTE_COLORED_RELIEF_METADATA
 
     def patched_read_through(metadata, params, ext, fetch_fn, **kw):
         return real_rt(
@@ -482,7 +482,7 @@ def test_layer_uri_name_contains_ramp_label(ramp: str):
         )
 
     with patch(
-        "grace2_agent.tools.compute_colored_relief.read_through",
+        "trid3nt_server.tools.compute_colored_relief.read_through",
         side_effect=patched_read_through,
     ):
         layer_uri = compute_colored_relief(dem_uri=dem_uri, ramp=ramp)

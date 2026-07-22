@@ -1,4 +1,4 @@
-"""Unit tests for ``grace2_agent.mode2_classifier`` (job-0101, sprint-12-mega Wave 1).
+"""Unit tests for ``trid3nt_server.mode2_classifier`` (job-0101, sprint-12-mega Wave 1).
 
 Coverage:
     - ``.com`` (non-Mode 2 TLD) → ``None``.
@@ -20,7 +20,7 @@ import json
 
 import pytest
 
-from grace2_agent.mode2_classifier import (
+from trid3nt_server.mode2_classifier import (
     MODE2_TLDS,
     Mode2Candidate,
     Mode2CandidateEnvelope,
@@ -144,7 +144,7 @@ def test_jsonl_audit_writer_removed() -> None:
     covered by ``test_mode2_audit_mcp.py``. A reappearing file writer
     here means the migration regressed.
     """
-    import grace2_agent.mode2_classifier as m2
+    import trid3nt_server.mode2_classifier as m2
 
     assert not hasattr(m2, "append_audit_log")
     assert not hasattr(m2, "default_audit_log_path")

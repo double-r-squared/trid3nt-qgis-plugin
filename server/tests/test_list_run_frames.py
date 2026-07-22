@@ -22,7 +22,7 @@ import json
 
 import pytest
 
-from grace2_agent.tools.list_run_frames import (
+from trid3nt_server.tools.list_run_frames import (
     ListRunFramesError,
     list_run_frames,
 )
@@ -58,7 +58,7 @@ def _patch_manifest(monkeypatch):
     manifest from an in-memory body (no network)."""
 
     def _install(manifest_text: str | None):
-        from grace2_agent.tools import solver
+        from trid3nt_server.tools import solver
 
         monkeypatch.setattr(solver, "_get_runs_bucket", lambda: "runs-bucket")
         if manifest_text is None:
@@ -152,7 +152,7 @@ def test_missing_run_id_raises() -> None:
 
 def test_list_run_frames_is_registered() -> None:
     """The tool is wired into the registry (import-time @register_tool)."""
-    import grace2_agent.tools as tools
+    import trid3nt_server.tools as tools
 
     assert "list_run_frames" in tools.TOOL_REGISTRY
 
@@ -160,8 +160,8 @@ def test_list_run_frames_is_registered() -> None:
 def test_frame_uris_feed_code_exec_multiframe_contract(_patch_manifest) -> None:
     """The frame_uris list is exactly a valid multi-frame layer_refs value for
     code_exec_request (the contract round-trips it)."""
-    from grace2_contracts import new_ulid
-    from grace2_contracts.sandbox_contracts import CodeExecRequestPayload
+    from trid3nt_contracts import new_ulid
+    from trid3nt_contracts.sandbox_contracts import CodeExecRequestPayload
 
     layers = [
         _frame_layer("flood-step", "Flood depth step 0", 0, "s3://b/f0.tif"),

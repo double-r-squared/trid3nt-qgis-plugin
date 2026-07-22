@@ -38,14 +38,14 @@ import json
 
 import pytest
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     CASE_MANIFESTS_PREFIX,
     CASE_VIEWS_BUCKET,
     Persistence,
     case_manifest_key,
 )
-from grace2_contracts.case import CaseManifest
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.case import CaseManifest
+from trid3nt_contracts.common import new_ulid
 
 # Reuse the snapshot test's seed helper + fake S3 capture so the manifest tests
 # exercise the SAME Case fixture the snapshot tests do (file-disjoint lane).
@@ -104,12 +104,12 @@ def test_manifest_has_right_shape() -> None:
 def test_manifest_asset_url_is_display_face() -> None:
     """A WMS display face routes to ``asset_url`` AND ``wms_url``; a plain
     s3:// data uri (no display face) falls back to ``asset_url`` only."""
-    from grace2_contracts.collections import ProjectLayerSummary
+    from trid3nt_contracts.collections import ProjectLayerSummary
 
     mock_p, case_id, _vid, _inline = _seed_case_with_vector_layer()
 
     # Build a Case whose layers carry an explicit display (wms_url) face.
-    from grace2_contracts.case import CaseSummary
+    from trid3nt_contracts.case import CaseSummary
     from datetime import datetime, timezone
 
     wms_layer = ProjectLayerSummary(

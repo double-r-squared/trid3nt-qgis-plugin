@@ -27,13 +27,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from grace2_agent.tools.chart_tools import is_chart_emission_result
-from grace2_agent.tools.compute_cross_section import (
+from trid3nt_server.tools.chart_tools import is_chart_emission_result
+from trid3nt_server.tools.compute_cross_section import (
     CrossSectionError,
     _resolve_line_coords,
     compute_cross_section,
 )
-from grace2_contracts.chart_contracts import (
+from trid3nt_contracts.chart_contracts import (
     ChartEmissionPayload,
     is_structurally_valid_vega_lite_spec,
 )
@@ -461,7 +461,7 @@ def test_registered_via_package_import_path():
     import sys
 
     code = (
-        "import grace2_agent.tools as t; "
+        "import trid3nt_server.tools as t; "
         "import sys; "
         "sys.exit(0 if 'compute_cross_section' in t.TOOL_REGISTRY else 1)"
     )
@@ -474,7 +474,7 @@ def test_registered_via_package_import_path():
 
 
 def test_registered_in_tool_registry():
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     assert "compute_cross_section" in TOOL_REGISTRY
     md = TOOL_REGISTRY["compute_cross_section"].metadata
@@ -487,7 +487,7 @@ def test_registered_in_tool_registry():
 
 
 def test_in_geographic_primitives_category():
-    from grace2_agent.categories import PRIMARY_CATEGORY, tools_for_category
+    from trid3nt_server.categories import PRIMARY_CATEGORY, tools_for_category
 
     assert PRIMARY_CATEGORY.get("compute_cross_section") == "geographic_primitives"
     assert "compute_cross_section" in tools_for_category("geographic_primitives")

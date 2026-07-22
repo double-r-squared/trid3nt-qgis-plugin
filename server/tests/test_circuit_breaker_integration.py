@@ -24,14 +24,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     GeminiSettings,
     MAX_TURN_ITERATIONS,
     summarize_tool_result,
 )
-from grace2_agent.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
-from grace2_agent.server import SessionState
-from grace2_contracts import new_ulid
+from trid3nt_server.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
+from trid3nt_server.server import SessionState
+from trid3nt_contracts import new_ulid
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(
     ``_invoke_tool_via_emitter`` runs.  The function_response Gemini gets on
     the 4th call must carry CIRCUIT_BREAKER_TRIPPED + retryable=False.
     """
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     invoke_call_count = {"n": 0}
 
@@ -279,7 +279,7 @@ async def test_arg_errors_through_server_do_not_trip_breaker():
     BLOCKED the corrected-args retry. After the fix the breaker stays closed
     and the corrected call's success path is reachable.
     """
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     class _ArgError(RuntimeError):
         error_code = "STORM_EVENTS_ARG_INVALID"
@@ -357,7 +357,7 @@ async def test_circuit_breaker_error_not_counted_as_additional_failure():
     call while the breaker is open, which is incorrect behaviour (the deadline
     is set once at trip time and should be fixed).
     """
-    from grace2_agent import server as agent_server
+    from trid3nt_server import server as agent_server
 
     # Manually trip the breaker with exactly threshold failures.
     state = SessionState(session_id=new_ulid())

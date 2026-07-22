@@ -31,8 +31,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from grace2_contracts import new_ulid
-from grace2_contracts.ws import PayloadConfirmationEnvelopePayload
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 
 
 # --------------------------------------------------------------------------- #
@@ -94,7 +94,7 @@ def test_suggest_matches_build_inline_autoscale(dem_path: str) -> None:
     """The standalone suggestion uses the EXACT same DEM read + active-cell count
     + autoscale arithmetic the build uses, so the suggested resolution + active
     estimate the card shows is what the build would compute."""
-    from grace2_agent.workflows import swmm_mesh_builder as mb
+    from trid3nt_server.workflows import swmm_mesh_builder as mb
 
     requested = 10.0
     # Reproduce build_swmm_mesh's inline prelude (~839-858) directly.
@@ -128,7 +128,7 @@ def test_suggest_empty_dem_raises(tmp_path: Path) -> None:
     from rasterio.crs import CRS
     from rasterio.transform import from_origin
 
-    from grace2_agent.workflows.swmm_mesh_builder import (
+    from trid3nt_server.workflows.swmm_mesh_builder import (
         SWMMMeshError,
         suggest_swmm_resolution,
     )
@@ -151,7 +151,7 @@ def test_suggest_empty_dem_raises(tmp_path: Path) -> None:
 # imports it from model_urban_flood_swmm inside the helper).
 # --------------------------------------------------------------------------- #
 def _patch_dem_fetch(monkeypatch, dem_path: str) -> None:
-    import grace2_agent.workflows.model_urban_flood_swmm as mu
+    import trid3nt_server.workflows.model_urban_flood_swmm as mu
 
     monkeypatch.setattr(
         mu, "_fetch_dem_for_urban", lambda bbox: (dem_path, "synthetic")
@@ -188,7 +188,7 @@ async def _drive_decision(server, decision: str, revised_args=None) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_gate_emits_granularity_block(monkeypatch, dem_path: str) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()
@@ -221,8 +221,8 @@ async def test_gate_emits_granularity_block(monkeypatch, dem_path: str) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_proceed_pins_suggested_resolution(monkeypatch, dem_path: str) -> None:
-    from grace2_agent import server
-    from grace2_agent.workflows.swmm_mesh_builder import suggest_swmm_resolution
+    from trid3nt_server import server
+    from trid3nt_server.workflows.swmm_mesh_builder import suggest_swmm_resolution
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()
@@ -245,8 +245,8 @@ async def test_proceed_pins_suggested_resolution(monkeypatch, dem_path: str) -> 
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_narrow_scope_finer_is_clamped(monkeypatch, dem_path: str) -> None:
-    from grace2_agent import server
-    from grace2_agent.workflows.swmm_mesh_builder import suggest_swmm_resolution
+    from trid3nt_server import server
+    from trid3nt_server.workflows.swmm_mesh_builder import suggest_swmm_resolution
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()
@@ -284,7 +284,7 @@ async def test_narrow_scope_finer_is_clamped(monkeypatch, dem_path: str) -> None
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_narrow_scope_coarser_honored(monkeypatch, dem_path: str) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()
@@ -310,7 +310,7 @@ async def test_narrow_scope_coarser_honored(monkeypatch, dem_path: str) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_cancel_fails_closed(monkeypatch, dem_path: str) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()
@@ -327,7 +327,7 @@ async def test_cancel_fails_closed(monkeypatch, dem_path: str) -> None:
 
 @pytest.mark.asyncio
 async def test_timeout_fails_closed(monkeypatch, dem_path: str) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _patch_dem_fetch(monkeypatch, dem_path)
     monkeypatch.setattr(server, "CODE_EXEC_CONFIRM_TIMEOUT_SECONDS", 0)
@@ -348,8 +348,8 @@ async def test_timeout_fails_closed(monkeypatch, dem_path: str) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_suggestion_exception_fails_open(monkeypatch) -> None:
-    from grace2_agent import server
-    import grace2_agent.workflows.model_urban_flood_swmm as mu
+    from trid3nt_server import server
+    import trid3nt_server.workflows.model_urban_flood_swmm as mu
 
     def _boom(bbox):
         raise RuntimeError("DEM fetch exploded")
@@ -375,7 +375,7 @@ async def test_suggestion_exception_fails_open(monkeypatch) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_flood_branch_unchanged_no_granularity(monkeypatch) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     params = {"location_query": "Fort Myers, Florida", "return_period_yr": 100}
@@ -398,7 +398,7 @@ async def test_flood_branch_unchanged_no_granularity(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_flood_narrow_scope_still_fails_closed(monkeypatch) -> None:
     """A narrow_scope reply to a NON-SWMM gate (no granularity) fails closed."""
-    from grace2_agent import server
+    from trid3nt_server import server
 
     ws, state = _FakeWS(), _FakeState()
     params = {"location_query": "Fort Myers, Florida"}
@@ -420,7 +420,7 @@ async def test_flood_narrow_scope_still_fails_closed(monkeypatch) -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_no_stuck_pending_on_cancelled(monkeypatch, dem_path: str) -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()
@@ -447,14 +447,14 @@ async def test_no_stuck_pending_on_cancelled(monkeypatch, dem_path: str) -> None
 # 10) Registration + clamp-helper unit checks.
 # --------------------------------------------------------------------------- #
 def test_swmm_tool_in_confirm_set() -> None:
-    from grace2_agent import server
+    from trid3nt_server import server
 
     assert "run_swmm_urban_flood" in server.SOLVER_CONFIRM_TOOLS
 
 
 def test_clamp_helper_honours_coarser_and_clamps_finer() -> None:
-    from grace2_agent import server
-    from grace2_agent.workflows.swmm_mesh_builder import SWMMAutoscaleResult
+    from trid3nt_server import server
+    from trid3nt_server.workflows.swmm_mesh_builder import SWMMAutoscaleResult
 
     auto = SWMMAutoscaleResult(
         resolution_m=20.0,
@@ -497,7 +497,7 @@ def test_clamp_helper_honours_coarser_and_clamps_finer() -> None:
 def _real_active_cells_at(dem_path: str, res_m: float, representation: str = "drop") -> int:
     """Build the deck at ``res_m`` and return the REAL active-cell count the
     build counts (the authoritative number the solve uses)."""
-    from grace2_agent.workflows.swmm_mesh_builder import build_swmm_mesh
+    from trid3nt_server.workflows.swmm_mesh_builder import build_swmm_mesh
 
     import tempfile
 
@@ -521,8 +521,8 @@ def test_old_area_model_clamp_would_overshoot_real_cap(dem_path: str) -> None:
     the gate must NOT use it as-is. If this assertion ever stops holding (e.g. the
     area model is taught the real grid), the real-cap test below still guards the
     invariant; this one just keeps the breach visible."""
-    from grace2_agent import server
-    from grace2_agent.workflows.swmm_mesh_builder import suggest_swmm_resolution
+    from trid3nt_server import server
+    from trid3nt_server.workflows.swmm_mesh_builder import suggest_swmm_resolution
 
     auto = suggest_swmm_resolution(dem_path, 10.0)
     # Drive the OLD area-model clamp directly with a 1 m (over-fine) override.
@@ -539,7 +539,7 @@ def test_old_area_model_clamp_would_overshoot_real_cap(dem_path: str) -> None:
 def test_real_cap_clamp_keeps_build_under_cap(dem_path: str) -> None:
     """The real-grid clamp's resolution yields a REAL build count AT or UNDER the
     cap on the same fully-active square AOI (the breach is closed)."""
-    from grace2_agent.workflows.swmm_mesh_builder import (
+    from trid3nt_server.workflows.swmm_mesh_builder import (
         clamp_swmm_resolution_to_real_cap,
         suggest_swmm_resolution,
     )
@@ -571,8 +571,8 @@ async def test_narrow_scope_override_real_build_under_cap(
     the invariant against the REAL build count, not the area model. It FAILS
     against the old area-model clamp (real ~289 > cap ~273) and PASSES after the
     real-grid clamp."""
-    from grace2_agent import server
-    from grace2_agent.workflows.swmm_mesh_builder import suggest_swmm_resolution
+    from trid3nt_server import server
+    from trid3nt_server.workflows.swmm_mesh_builder import suggest_swmm_resolution
 
     _patch_dem_fetch(monkeypatch, dem_path)
     ws, state = _FakeWS(), _FakeState()

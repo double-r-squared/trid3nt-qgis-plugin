@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from grace2_contracts import ws
-from grace2_contracts.export_schemas import export
+from trid3nt_contracts import ws
+from trid3nt_contracts.export_schemas import export
 
 
 def test_export_writes_one_file_per_top_level_contract(tmp_path: Path) -> None:

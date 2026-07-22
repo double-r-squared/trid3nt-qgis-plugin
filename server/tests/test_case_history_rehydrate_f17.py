@@ -25,24 +25,24 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     REHYDRATE_HISTORY_CAP,
     build_layers_present_note,
     rehydrate_history_from_case,
 )
-from grace2_agent.persistence import Persistence
-from grace2_agent.server import (
+from trid3nt_server.persistence import Persistence
+from trid3nt_server.server import (
     SessionState,
     _emit_case_open,
     get_persistence,
     set_persistence,
 )
-from grace2_contracts.case import (
+from trid3nt_contracts.case import (
     CaseChatMessage,
     CaseSummary,
     ToolCardRecord,
 )
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.common import new_ulid
 
 from .test_persistence import MockMCPClient
 from .test_server_case_handlers import MockWebSocket
@@ -422,7 +422,7 @@ def test_case_open_writes_case_view_snapshot(
     an async test and yield the loop a couple of times to let the detached tasks
     run before asserting.
     """
-    import grace2_agent.server as server
+    import trid3nt_server.server as server
 
     p = _persistence_bound
     case = _case_with_layers()
@@ -461,7 +461,7 @@ def test_case_open_snapshot_failure_does_not_break_open(
     """The snapshot write is best-effort: even if the persister raises (it
     should not - both swallow their own errors - but defend the contract), the
     open still completes and rehydrates chat history normally."""
-    import grace2_agent.server as server
+    import trid3nt_server.server as server
 
     p = _persistence_bound
     case = _case_with_layers()

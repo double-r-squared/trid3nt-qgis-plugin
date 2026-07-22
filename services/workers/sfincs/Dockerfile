@@ -93,31 +93,31 @@ WORKDIR /opt/grace2
 
 ENV PYTHONPATH=/opt/grace2 \
     PYTHONUNBUFFERED=1 \
-    GRACE2_SFINCS_BIN=/usr/local/bin/sfincs \
-    GRACE2_SFINCS_SCRATCH=/opt/grace2/work
+    TRID3NT_SFINCS_BIN=/usr/local/bin/sfincs \
+    TRID3NT_SFINCS_SCRATCH=/opt/grace2/work
 
 # Runtime config — overridable from the AWS Batch job-def containerOverrides.
-# GCP is decommissioned: the live object store is AWS S3 (GRACE2_OBJECT_STORE=s3,
+# GCP is decommissioned: the live object store is AWS S3 (TRID3NT_OBJECT_STORE=s3,
 # scheme-aware entrypoint). These baked defaults are INERT under AWS Batch (the
 # job-def overrides every value per submission) but are pinned to the AWS S3
 # names + scheme for honesty.
-#   GRACE2_OBJECT_STORE  — runs-bucket output scheme (s3 on AWS).
-#   GRACE2_CACHE_BUCKET  — source bucket (the cache shim populates this with
+#   TRID3NT_OBJECT_STORE  — runs-bucket output scheme (s3 on AWS).
+#   TRID3NT_CACHE_BUCKET  — source bucket (the cache shim populates this with
 #                          the per-tool fetches the workflow stages).
-#   GRACE2_RUNS_BUCKET   — destination bucket (this image is the only sanctioned
+#   TRID3NT_RUNS_BUCKET   — destination bucket (this image is the only sanctioned
 #                          writer of `s3://trid3nt-runs/<run_id>/`).
-#   GRACE2_RUN_ID        — the run ID under which outputs land (set per Batch job).
-#   GRACE2_MANIFEST_URI  — s3:// URI of the JSON setup manifest the entrypoint
+#   TRID3NT_RUN_ID        — the run ID under which outputs land (set per Batch job).
+#   TRID3NT_MANIFEST_URI  — s3:// URI of the JSON setup manifest the entrypoint
 #                          reads (lists input objects + bbox + scenario).
-#   GRACE2_BUILD_SPEC_URI — s3:// URI of the agent-composed BUILD job_spec; when
+#   TRID3NT_BUILD_SPEC_URI — s3:// URI of the agent-composed BUILD job_spec; when
 #                          set the worker runs hydromt build + solve + postprocess
 #                          (heavy-compute offload). Takes precedence over MANIFEST.
-ENV GRACE2_OBJECT_STORE=s3 \
-    GRACE2_CACHE_BUCKET=trid3nt-cache \
-    GRACE2_RUNS_BUCKET=trid3nt-runs \
-    GRACE2_RUN_ID="" \
-    GRACE2_MANIFEST_URI="" \
-    GRACE2_BUILD_SPEC_URI=""
+ENV TRID3NT_OBJECT_STORE=s3 \
+    TRID3NT_CACHE_BUCKET=trid3nt-cache \
+    TRID3NT_RUNS_BUCKET=trid3nt-runs \
+    TRID3NT_RUN_ID="" \
+    TRID3NT_MANIFEST_URI="" \
+    TRID3NT_BUILD_SPEC_URI=""
 
 # Build-time smoke: the SFINCS binary exists where we expect, and the
 # entrypoint module imports cleanly. Catches a base-image path shift or a
@@ -131,7 +131,7 @@ RUN test -x /usr/local/bin/sfincs \
 # ENTRYPOINT overrides the upstream sfincs default so this image runs as a
 # one-shot solver Job, not an interactive container. CMD is empty so Cloud
 # Run Job task args feed straight through as argv to the module. Env-var
-# fallbacks (GRACE2_RUN_ID, GRACE2_MANIFEST_URI) are parsed by the
+# fallbacks (TRID3NT_RUN_ID, TRID3NT_MANIFEST_URI) are parsed by the
 # entrypoint if no CLI flags are passed (mirror of the worker pattern).
 ENTRYPOINT ["python3", "-m", "services.workers.sfincs.entrypoint"]
 CMD []

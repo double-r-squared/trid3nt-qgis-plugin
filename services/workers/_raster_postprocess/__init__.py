@@ -15,7 +15,7 @@ Hard constraints honoured here (per the spike design
   * GPL-FREE — never imports ``cht_sfincs`` (GPL-3.0). Face coordinates are read
     STRAIGHT off the NetCDF (``mesh2d_face_x``/``_y`` or computed from the node
     coords + ``mesh2d_face_nodes`` connectivity).
-  * AGENT-IMPORT-FREE — never imports ``grace2_agent.*`` (no
+  * AGENT-IMPORT-FREE — never imports ``trid3nt_server.*`` (no
     ``..tools.solver._get_s3_client`` / ``..tools.cache.storage_scheme``). The
     upload helper takes a worker-local boto3 client / creds.
   * Pure + unit-testable — the modules below run against a synthetic NetCDF with

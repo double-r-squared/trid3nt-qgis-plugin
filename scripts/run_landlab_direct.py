@@ -4,7 +4,7 @@ Bypasses the LLM/agent chat layer -- calls the deterministic Landlab workflow
 (``model_landslide_scenario``) directly. The workflow runs the FULL local chain:
   fetch_dem (USGS 3DEP 1m -> 10m fallback)
   -> stage_landlab_manifest (DEM + build_spec -> MinIO)
-  -> run_solver('landlab') with GRACE2_SOLVER_BACKEND=local-docker
+  -> run_solver('landlab') with TRID3NT_SOLVER_BACKEND=local-docker
      (LocalSolverSpec: subprocess run_chain.py shim, exec_kind='exec')
   -> wait_for_completion (polls s3://<runs_bucket>/<run_id>/completion.json)
   -> postprocess_landlab -> publish_layer (TiTiler susceptibility COG)
@@ -41,14 +41,14 @@ N_MONTE_CARLO = 25  # small for speed
 # Sanity: local-docker backend
 # ---------------------------------------------------------------------------
 
-backend = os.environ.get("GRACE2_SOLVER_BACKEND", "")
-runs_bucket = os.environ.get("GRACE2_RUNS_BUCKET", "")
+backend = os.environ.get("TRID3NT_SOLVER_BACKEND", "")
+runs_bucket = os.environ.get("TRID3NT_RUNS_BUCKET", "")
 log.info(
     "backend=%s runs_bucket=%s endpoint=%s",
     backend, runs_bucket, os.environ.get("AWS_ENDPOINT_URL"),
 )
 if backend != "local-docker":
-    log.warning("GRACE2_SOLVER_BACKEND is %r (expected local-docker)", backend)
+    log.warning("TRID3NT_SOLVER_BACKEND is %r (expected local-docker)", backend)
 
 # ---------------------------------------------------------------------------
 # Ensure MinIO buckets exist
@@ -63,7 +63,7 @@ s3 = boto3.client(
     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
     region_name=os.environ.get("AWS_REGION", "us-east-1"),
 )
-for b in {runs_bucket, os.environ.get("GRACE2_CACHE_BUCKET", "trid3nt-cache")}:
+for b in {runs_bucket, os.environ.get("TRID3NT_CACHE_BUCKET", "trid3nt-cache")}:
     if not b:
         continue
     try:
@@ -103,8 +103,8 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from grace2_agent.workflows.model_landslide_scenario import model_landslide_scenario
-    from grace2_contracts.landlab_contracts import LandlabRunArgs
+    from trid3nt_server.workflows.model_landslide_scenario import model_landslide_scenario
+    from trid3nt_contracts.landlab_contracts import LandlabRunArgs
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
     sys.exit(1)
@@ -174,7 +174,7 @@ summary = {
     "result": result_json,
     "new_run_prefixes": new_prefixes,
     "run_listings": run_listings,
-    "tile_server_base": os.environ.get("GRACE2_TILE_SERVER_BASE"),
+    "tile_server_base": os.environ.get("TRID3NT_TILE_SERVER_BASE"),
 }
 
 out_path = PROOF_DIR / "landlab_direct_result.json"

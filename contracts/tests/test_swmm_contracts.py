@@ -19,10 +19,10 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import SWMMDepthLayerURI, SWMMRunArgs
-from grace2_contracts.execution import LayerURI
-from grace2_contracts.envelope import TemporalConfig
-from grace2_contracts.swmm_contracts import (
+from trid3nt_contracts import SWMMDepthLayerURI, SWMMRunArgs
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.envelope import TemporalConfig
+from trid3nt_contracts.swmm_contracts import (
     DEFAULT_MANNING_OVERLAND,
     DEFAULT_RAIN_INTERVAL_MIN,
     DEFAULT_RETURN_PERIOD_YR,

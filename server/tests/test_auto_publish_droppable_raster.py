@@ -36,12 +36,12 @@ import json
 
 import pytest
 
-from grace2_agent import server
-from grace2_agent import tools as agent_tools
-from grace2_agent.tools import RegisteredTool
-from grace2_contracts.common import new_ulid
-from grace2_contracts.execution import LayerURI
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_server import server
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.tools import RegisteredTool
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 
 class FakeWS:
@@ -257,7 +257,7 @@ async def test_auto_publish_false_intermediate_does_not_publish(
 
 def test_fetch_dem_metadata_opts_out_of_auto_publish() -> None:
     """The real fetch_dem (+ fetch_topobathy / fetch_3dep_extra) opt OUT."""
-    import grace2_agent.server  # noqa: F401 - ensures tool registration
+    import trid3nt_server.server  # noqa: F401 - ensures tool registration
 
     for name in ("fetch_dem", "fetch_topobathy", "fetch_3dep_extra"):
         entry = agent_tools.TOOL_REGISTRY.get(name)
@@ -266,7 +266,7 @@ def test_fetch_dem_metadata_opts_out_of_auto_publish() -> None:
 
 
 def test_terminal_raster_products_default_auto_publish_true() -> None:
-    import grace2_agent.server  # noqa: F401
+    import trid3nt_server.server  # noqa: F401
 
     for name in (
         "compute_hillshade",

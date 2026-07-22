@@ -1,6 +1,6 @@
 """Two-card sim observability (task-149) for the SWMM off-box (Batch) lane.
 
-The urban-flood composer's OUT-OF-PROCESS lane (``GRACE2_SWMM_LOCAL=0`` /
+The urban-flood composer's OUT-OF-PROCESS lane (``TRID3NT_SWMM_LOCAL=0`` /
 ``is_local_mode() -> False``) dispatches the staged deck through the generic
 solver seam (``run_solver`` -> ``wait_for_completion`` -> Batch output). task-149
 makes that lane mint TWO cards: a "Dispatch" tool card recording the submit (lands
@@ -20,13 +20,13 @@ import json
 from typing import Any
 
 import pytest
-from grace2_contracts import new_ulid
-from grace2_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 
-import grace2_agent.tools.solver as solver_mod
-from grace2_agent import pipeline_emitter as pe
-from grace2_agent.pipeline_emitter import PipelineEmitter
-from grace2_agent.workflows import model_urban_flood_swmm as M
+import trid3nt_server.tools.solver as solver_mod
+from trid3nt_server import pipeline_emitter as pe
+from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_server.workflows import model_urban_flood_swmm as M
 
 
 # --------------------------------------------------------------------------- #

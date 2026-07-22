@@ -27,11 +27,11 @@ from typing import Any
 
 import pytest
 
-from grace2_contracts.modflow_contracts import CaptureZoneLayerURI
+from trid3nt_contracts.modflow_contracts import CaptureZoneLayerURI
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.workflows import model_capture_zone_scenario as cz_mod
-from grace2_agent.workflows.model_capture_zone_scenario import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.workflows import model_capture_zone_scenario as cz_mod
+from trid3nt_server.workflows.model_capture_zone_scenario import (
     CAPTURE_ZONE_DEFAULT_TIERS,
     WELLHEAD_PROTECTION_DEFAULT_TIERS,
     CaptureZoneInputError,
@@ -121,7 +121,7 @@ async def test_composer_full_chain_capture_zone(monkeypatch: pytest.MonkeyPatch)
         captured["run_args"] = run_args
         return fake_layer
 
-    import grace2_agent.tools.run_modflow_archetype_tool as _tool
+    import trid3nt_server.tools.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -161,7 +161,7 @@ async def test_composer_full_chain_wellhead_protection(monkeypatch: pytest.Monke
         captured["run_args"] = run_args
         return fake_layer
 
-    import grace2_agent.tools.run_modflow_archetype_tool as _tool
+    import trid3nt_server.tools.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -189,7 +189,7 @@ async def test_composer_surfaces_run_error_dict(monkeypatch: pytest.MonkeyPatch)
             "error_message": "PRT backward tracking produced no pathlines",
         }
 
-    import grace2_agent.tools.run_modflow_archetype_tool as _tool
+    import trid3nt_server.tools.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _err_run)
 
@@ -248,7 +248,7 @@ async def test_whpa_wrapper_missing_well_returns_user_input_required() -> None:
 
 
 def test_capture_zone_registered_uncacheable() -> None:
-    import grace2_agent.tools  # noqa: F401 - fires registration side-effects
+    import trid3nt_server.tools  # noqa: F401 - fires registration side-effects
 
     entry = TOOL_REGISTRY.get("run_model_capture_zone_scenario")
     assert entry is not None, "run_model_capture_zone_scenario not in TOOL_REGISTRY"
@@ -258,7 +258,7 @@ def test_capture_zone_registered_uncacheable() -> None:
 
 
 def test_wellhead_protection_registered_uncacheable() -> None:
-    import grace2_agent.tools  # noqa: F401
+    import trid3nt_server.tools  # noqa: F401
 
     entry = TOOL_REGISTRY.get("run_model_wellhead_protection_scenario")
     assert entry is not None, "run_model_wellhead_protection_scenario not in TOOL_REGISTRY"

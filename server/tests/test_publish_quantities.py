@@ -19,15 +19,15 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_contracts.output_quantities import (
+from trid3nt_contracts.output_quantities import (
     OutputQuantitySpec,
     RasterField,
     ScalarField,
     TimeseriesField,
 )
-from grace2_agent.workflows import publish_quantities as pq
-from grace2_agent.workflows.cog_io import CogIoError
-from grace2_agent.workflows.publish_quantities import (
+from trid3nt_server.workflows import publish_quantities as pq
+from trid3nt_server.workflows.cog_io import CogIoError
+from trid3nt_server.workflows.publish_quantities import (
     QuantityExecError,
     build_quantities_manifest,
     publish_quantities,
@@ -45,15 +45,15 @@ def _patch_cog_io():
     """Patch cog_io write+bbox so no real rasterio is needed."""
     return (
         patch(
-            "grace2_agent.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
+            "trid3nt_server.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
             return_value=Path("/tmp/fake.tif"),
         ),
         patch(
-            "grace2_agent.workflows.publish_quantities.cog_io.cog_bbox_4326",
+            "trid3nt_server.workflows.publish_quantities.cog_io.cog_bbox_4326",
             return_value=(-1.0, 2.0, 3.0, 4.0),
         ),
         patch(
-            "grace2_agent.workflows.publish_quantities.cog_io.safe_unlink",
+            "trid3nt_server.workflows.publish_quantities.cog_io.safe_unlink",
             return_value=None,
         ),
     )
@@ -134,7 +134,7 @@ def test_raster_write_failure_raises_quantity_exec_error() -> None:
         reader=_reader, default_on=True,
     )
     with patch(
-        "grace2_agent.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
+        "trid3nt_server.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
         side_effect=CogIoError("WRITE", message="disk full"),
     ):
         with pytest.raises(QuantityExecError) as ei:
@@ -234,11 +234,11 @@ def test_timeseries_corrupt_frame_degrades_to_peak_only() -> None:
         return Path("/tmp/f.tif")
 
     with (
-        patch("grace2_agent.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
+        patch("trid3nt_server.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
               side_effect=_write),
-        patch("grace2_agent.workflows.publish_quantities.cog_io.cog_bbox_4326",
+        patch("trid3nt_server.workflows.publish_quantities.cog_io.cog_bbox_4326",
               return_value=None),
-        patch("grace2_agent.workflows.publish_quantities.cog_io.safe_unlink",
+        patch("trid3nt_server.workflows.publish_quantities.cog_io.safe_unlink",
               return_value=None),
     ):
         m = build_quantities_manifest("x", run_id="r", upload=_fake_upload, specs=[spec])
@@ -258,7 +258,7 @@ def test_timeseries_peak_failure_raises() -> None:
         default_on=True,
     )
     with patch(
-        "grace2_agent.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
+        "trid3nt_server.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
         side_effect=CogIoError("REPROJECT", message="warp failed"),
     ):
         with pytest.raises(QuantityExecError) as ei:

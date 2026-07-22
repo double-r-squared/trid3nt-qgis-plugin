@@ -23,11 +23,11 @@ consequence hooks (Invariant 9).
 
 ```
 server/
-├── pyproject.toml            grace2-agent package, console script `grace2-agent`
+├── pyproject.toml            trid3nt-server package, console script `trid3nt-server`
 ├── README.md                 (this file)
-├── src/grace2_agent/
+├── src/trid3nt_server/
 │   ├── __init__.py
-│   ├── main.py               entry point (`grace2-agent` → run())
+│   ├── main.py               entry point (`trid3nt-server` → run())
 │   ├── server.py             Appendix-A WebSocket server (asyncio + websockets)
 │   ├── bedrock_adapter.py    AWS Bedrock Converse loop (live provider) + cachePoint
 │   ├── adapter.py            StreamEvent union + provider-neutral genai-types helpers
@@ -53,26 +53,26 @@ make run-agent
 python server/scripts/ws_client.py "What is SFINCS?"
 ```
 
-`make run-agent` sources the venv at `.venv-agent/` and launches `grace2-agent`
-on port 8765 (override with `GRACE2_AGENT_PORT`).
+`make run-agent` sources the venv at `.venv-agent/` and launches `trid3nt-server`
+on port 8765 (override with `TRID3NT_AGENT_PORT`).
 
 ### Environment (live AWS shape)
 
 The agent reads its provider/storage/solver seams from the environment at call
 time, so the deployed systemd unit injects them without a code change. The live
-EC2 box (`grace2-agent.service`) sets:
+EC2 box (`trid3nt-server.service`) sets:
 
 ```ini
 MODEL_PROVIDER=bedrock                 # → bedrock_adapter; Vertex path is retired
 BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-6   # default; Haiku/Nova selectable in-chat
 AWS_REGION=us-west-2
-GRACE2_STORAGE_BACKEND=s3              # cache/staging on S3 (boto3 / s3fs)
-GRACE2_SOLVER_BACKEND=aws-batch       # heavy solves dispatch to AWS Batch (Spot, scale-to-zero)
-GRACE2_AWS_BATCH_QUEUE=grace2-solvers
-GRACE2_AWS_BATCH_JOB_DEF=grace2-sfincs
-GRACE2_CACHE_BUCKET=trid3nt-cache
-GRACE2_RUNS_BUCKET=trid3nt-runs
-# GRACE2_PERSISTENCE_BACKEND=dynamodb # opt-in; unset → file-backed (the demo default)
+TRID3NT_STORAGE_BACKEND=s3              # cache/staging on S3 (boto3 / s3fs)
+TRID3NT_SOLVER_BACKEND=aws-batch       # heavy solves dispatch to AWS Batch (Spot, scale-to-zero)
+TRID3NT_AWS_BATCH_QUEUE=grace2-solvers
+TRID3NT_AWS_BATCH_JOB_DEF=grace2-sfincs
+TRID3NT_CACHE_BUCKET=trid3nt-cache
+TRID3NT_RUNS_BUCKET=trid3nt-runs
+# TRID3NT_PERSISTENCE_BACKEND=dynamodb # opt-in; unset → file-backed (the demo default)
 ```
 
 Credentials come from the EC2 instance role (no static keys). Bedrock model
@@ -89,18 +89,18 @@ optional DynamoDB tables are all in account `226996537797` (us-west-2).
   job, and emits cancelled `pipeline-state` (Invariant 8) — within 30s.
 - Persistence (Cases/sessions/users/secrets-refs/audit) through the
   `Persistence` seam: file-backed by default, DynamoDB when
-  `GRACE2_PERSISTENCE_BACKEND=dynamodb`. (The GCP-era MongoDB MCP path is
+  `TRID3NT_PERSISTENCE_BACKEND=dynamodb`. (The GCP-era MongoDB MCP path is
   removed.)
 - Heavy/sandboxed compute runs externally: SFINCS + SWMM on AWS Batch (Spot,
   scale-to-zero), MODFLOW + the Python sandbox via local subprocess on the
   EC2 box (the AWS local-exec path). Tiles serve from TiTiler on the always-on
   tiles box.
-- Every wire message validated via `grace2_contracts` — no hand-rolled JSON.
+- Every wire message validated via `trid3nt_contracts` — no hand-rolled JSON.
 
 ## Deploy
 
-The agent runs as `grace2-agent.service` (systemd) on the agent EC2 box. Deploy
-is a code sync + `systemctl restart grace2-agent` over SSM (no Cloud Run, no
+The agent runs as `trid3nt-server.service` (systemd) on the agent EC2 box. Deploy
+is a code sync + `systemctl restart trid3nt-server` over SSM (no Cloud Run, no
 `gcloud`); deploys land continuously as work goes green. The agent box
 auto-stops when idle and wakes on the web "Wake up agent" overlay
 (`infra/aws-autostop/`). See `infra/aws-batch/RUNBOOK.md` for the Batch

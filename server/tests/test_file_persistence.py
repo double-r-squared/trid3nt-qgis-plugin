@@ -17,8 +17,8 @@ Coverage:
 - ``test_file_mcp_atomic_writes`` — interrupted write (a synthetic crash
   between tmp-write and rename) does not corrupt the on-disk store.
 - ``test_is_dev_persistence_enabled_defaults`` — default-on semantics:
-  no env vars set + no MCP wired → enabled; ``GRACE2_DEV_PERSISTENCE=0``
-  disables; ``GRACE2_MONGO_MCP_STDIO=1`` defers to real MCP.
+  no env vars set + no MCP wired → enabled; ``TRID3NT_DEV_PERSISTENCE=0``
+  disables; ``TRID3NT_MONGO_MCP_STDIO=1`` defers to real MCP.
 - ``test_init_persistence_from_env_engages_file_fallback`` — server-side
   wiring: ``init_persistence_from_env`` with no MCP env vars + a tmpdir
   override engages FilePersistence and binds the singleton.
@@ -34,7 +34,7 @@ from pathlib import Path
 
 import pytest
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     CASES_COLLECTION,
     CHAT_COLLECTION,
     DEFAULT_DATABASE,
@@ -45,8 +45,8 @@ from grace2_agent.persistence import (
     is_dev_persistence_enabled,
     make_file_persistence,
 )
-from grace2_contracts.case import CaseChatMessage, CaseSummary
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.case import CaseChatMessage, CaseSummary
+from trid3nt_contracts.common import new_ulid
 
 
 # --------------------------------------------------------------------------- #
@@ -247,40 +247,40 @@ def test_is_dev_persistence_enabled_default_on_when_mcp_unset(
 ) -> None:
     """No env vars + no MCP wired → enabled by default."""
     monkeypatch.delenv(DEV_PERSISTENCE_ENABLED_ENV, raising=False)
-    monkeypatch.delenv("GRACE2_MONGO_MCP_STDIO", raising=False)
-    monkeypatch.delenv("GRACE2_MONGO_MCP_URL", raising=False)
+    monkeypatch.delenv("TRID3NT_MONGO_MCP_STDIO", raising=False)
+    monkeypatch.delenv("TRID3NT_MONGO_MCP_URL", raising=False)
     assert is_dev_persistence_enabled() is True
 
 
 def test_is_dev_persistence_enabled_off_when_explicitly_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``GRACE2_DEV_PERSISTENCE=0`` disables even without MCP wired."""
+    """``TRID3NT_DEV_PERSISTENCE=0`` disables even without MCP wired."""
     monkeypatch.setenv(DEV_PERSISTENCE_ENABLED_ENV, "0")
-    monkeypatch.delenv("GRACE2_MONGO_MCP_STDIO", raising=False)
+    monkeypatch.delenv("TRID3NT_MONGO_MCP_STDIO", raising=False)
     assert is_dev_persistence_enabled() is False
 
 
 def test_is_dev_persistence_enabled_defers_to_real_mcp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``GRACE2_MONGO_MCP_STDIO=1`` → defer to real MCP (default off)."""
+    """``TRID3NT_MONGO_MCP_STDIO=1`` → defer to real MCP (default off)."""
     monkeypatch.delenv(DEV_PERSISTENCE_ENABLED_ENV, raising=False)
-    monkeypatch.setenv("GRACE2_MONGO_MCP_STDIO", "1")
+    monkeypatch.setenv("TRID3NT_MONGO_MCP_STDIO", "1")
     assert is_dev_persistence_enabled() is False
 
 
 def test_is_dev_persistence_enabled_explicit_wins_over_mcp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Explicit ``GRACE2_DEV_PERSISTENCE=1`` engages even if MCP is also set.
+    """Explicit ``TRID3NT_DEV_PERSISTENCE=1`` engages even if MCP is also set.
 
     The server-side init_persistence_from_env still prefers real MCP when
-    GRACE2_MONGO_MCP_STDIO=1 (because that branch returns first); this test
+    TRID3NT_MONGO_MCP_STDIO=1 (because that branch returns first); this test
     just locks the env-var precedence inside the helper itself.
     """
     monkeypatch.setenv(DEV_PERSISTENCE_ENABLED_ENV, "1")
-    monkeypatch.setenv("GRACE2_MONGO_MCP_STDIO", "1")
+    monkeypatch.setenv("TRID3NT_MONGO_MCP_STDIO", "1")
     assert is_dev_persistence_enabled() is True
 
 
@@ -300,8 +300,8 @@ def test_maybe_bind_dev_persistence_engages_file_fallback(
     to ``server.init_persistence_from_env`` preserves it (we exercise the
     preservation branch too).
     """
-    from grace2_agent.main import _maybe_bind_dev_persistence
-    from grace2_agent.server import (
+    from trid3nt_server.main import _maybe_bind_dev_persistence
+    from trid3nt_server.server import (
         get_persistence,
         init_persistence_from_env,
         set_persistence,
@@ -309,8 +309,8 @@ def test_maybe_bind_dev_persistence_engages_file_fallback(
 
     # Clear any prior binding from other tests.
     set_persistence(None)
-    monkeypatch.delenv("GRACE2_MONGO_MCP_STDIO", raising=False)
-    monkeypatch.delenv("GRACE2_MONGO_MCP_URL", raising=False)
+    monkeypatch.delenv("TRID3NT_MONGO_MCP_STDIO", raising=False)
+    monkeypatch.delenv("TRID3NT_MONGO_MCP_URL", raising=False)
     monkeypatch.delenv(DEV_PERSISTENCE_ENABLED_ENV, raising=False)
     monkeypatch.setenv(DEV_PERSISTENCE_DIR_ENV, str(tmp_path))
 
@@ -338,12 +338,12 @@ def test_maybe_bind_dev_persistence_engages_file_fallback(
 def test_maybe_bind_dev_persistence_respects_disable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``GRACE2_DEV_PERSISTENCE=0`` keeps the singleton unbound."""
-    from grace2_agent.main import _maybe_bind_dev_persistence
-    from grace2_agent.server import get_persistence, set_persistence
+    """``TRID3NT_DEV_PERSISTENCE=0`` keeps the singleton unbound."""
+    from trid3nt_server.main import _maybe_bind_dev_persistence
+    from trid3nt_server.server import get_persistence, set_persistence
 
     set_persistence(None)
-    monkeypatch.delenv("GRACE2_MONGO_MCP_STDIO", raising=False)
+    monkeypatch.delenv("TRID3NT_MONGO_MCP_STDIO", raising=False)
     monkeypatch.setenv(DEV_PERSISTENCE_ENABLED_ENV, "0")
     monkeypatch.setenv(DEV_PERSISTENCE_DIR_ENV, str(tmp_path))
 
@@ -357,7 +357,7 @@ def test_maybe_bind_dev_persistence_respects_disable(
 def test_make_file_persistence_default_dir(monkeypatch: pytest.MonkeyPatch) -> None:
     """``make_file_persistence()`` with override env-var lands files there."""
     home = Path(os.environ.get("HOME", "/tmp"))
-    # Avoid touching the real ~/.grace2 — use a tmpdir via env override.
+    # Avoid touching the real ~/.trid3nt — use a tmpdir via env override.
     import tempfile
 
     with tempfile.TemporaryDirectory() as td:
@@ -366,3 +366,65 @@ def test_make_file_persistence_default_dir(monkeypatch: pytest.MonkeyPatch) -> N
         case = _fresh_case()
         asyncio.run(p.upsert_case(case))
         assert (Path(td) / DEFAULT_DATABASE / f"{CASES_COLLECTION}.json").exists()
+
+
+# --------------------------------------------------------------------------- #
+# Layer-B rename migration (grace2_dev -> trid3nt_dev, ~/.grace2 -> ~/.trid3nt)
+# --------------------------------------------------------------------------- #
+
+
+def test_layer_b_migration_renames_legacy_db_dir(tmp_path: Path) -> None:
+    """A pre-rename store under <root>/grace2_dev is renamed once and stays readable."""
+    legacy = tmp_path / "grace2_dev"
+    legacy.mkdir()
+    case = _fresh_case()
+    doc = json.loads(case.model_dump_json())
+    doc["_id"] = case.case_id
+    (legacy / f"{CASES_COLLECTION}.json").write_text(
+        json.dumps({case.case_id: doc}), encoding="utf-8"
+    )
+
+    p = Persistence(FileMCPClient(base_dir=tmp_path))
+
+    assert not (tmp_path / "grace2_dev").exists()
+    new_dir = tmp_path / DEFAULT_DATABASE
+    assert new_dir.is_dir()
+    assert (new_dir / f"{CASES_COLLECTION}.json").exists()
+    fetched = asyncio.run(p.get_case(case.case_id))
+    assert fetched is not None
+    assert fetched.case_id == case.case_id
+    assert fetched.title == case.title
+
+
+def test_layer_b_migration_noop_when_new_dir_exists(tmp_path: Path) -> None:
+    """If trid3nt_dev already exists the legacy dir is left alone (no clobber)."""
+    legacy = tmp_path / "grace2_dev"
+    legacy.mkdir()
+    (legacy / "sentinel.json").write_text("{}", encoding="utf-8")
+    new_dir = tmp_path / DEFAULT_DATABASE
+    new_dir.mkdir()
+
+    FileMCPClient(base_dir=tmp_path)
+
+    assert (legacy / "sentinel.json").exists()
+    assert new_dir.is_dir()
+
+
+def test_layer_b_migration_renames_legacy_home_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no dir override, a legacy ~/.grace2 is renamed to ~/.trid3nt once."""
+    from trid3nt_server.persistence import _default_dev_persistence_dir
+
+    monkeypatch.delenv(DEV_PERSISTENCE_DIR_ENV, raising=False)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    legacy_home = tmp_path / ".grace2"
+    (legacy_home / "dev_persistence" / "trid3nt_dev").mkdir(parents=True)
+    marker = legacy_home / "dev_persistence" / "trid3nt_dev" / "cases.json"
+    marker.write_text("{}", encoding="utf-8")
+
+    resolved = _default_dev_persistence_dir()
+
+    assert resolved == tmp_path / ".trid3nt" / "dev_persistence"
+    assert not legacy_home.exists()
+    assert (resolved / "trid3nt_dev" / "cases.json").exists()

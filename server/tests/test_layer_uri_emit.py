@@ -23,9 +23,9 @@ from __future__ import annotations
 import logging
 
 import pytest
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.layer_uri_emit import (
+from trid3nt_server.layer_uri_emit import (
     SIGNED_URLS_ENV,
     emit_layer_uri,
     signed_urls_enabled,
@@ -159,7 +159,7 @@ def test_signed_urls_true_is_byte_identical_noop(
     out_absent = emit_layer_uri(layer)
 
     monkeypatch.setenv(SIGNED_URLS_ENV, "true")
-    with caplog.at_level(logging.WARNING, logger="grace2_agent.layer_uri_emit"):
+    with caplog.at_level(logging.WARNING, logger="trid3nt_server.layer_uri_emit"):
         out_true = emit_layer_uri(layer)
 
     # Identical object and identical serialized payload (byte-identical wire).
@@ -186,7 +186,7 @@ def test_signed_urls_true_still_drops_raster_gs(
 def test_warning_logged_on_drop(caplog: pytest.LogCaptureFixture) -> None:
     """The drop path logs a WARNING (so the audit/telemetry can see leaks were
     refused) — not silent."""
-    with caplog.at_level(logging.WARNING, logger="grace2_agent.layer_uri_emit"):
+    with caplog.at_level(logging.WARNING, logger="trid3nt_server.layer_uri_emit"):
         emit_layer_uri(_layer("raster", "gs://b/flood.tif", layer_id="flood_9"))
     msgs = "\n".join(r.getMessage() for r in caplog.records)
     assert "DROPPING" in msgs

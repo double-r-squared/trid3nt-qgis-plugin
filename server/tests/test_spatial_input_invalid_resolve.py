@@ -27,8 +27,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from grace2_agent import server
-from grace2_agent.server import (
+from trid3nt_server import server
+from trid3nt_server.server import (
     SessionState,
     SpatialInputInvalidResponseError,
     _emit_spatial_input_and_wait,
@@ -36,8 +36,8 @@ from grace2_agent.server import (
     _handle_request_spatial_input,
     _spatial_response_to_result,
 )
-from grace2_contracts.common import new_ulid
-from grace2_contracts.ws import (
+from trid3nt_contracts.common import new_ulid
+from trid3nt_contracts.ws import (
     SpatialInputRequestPayload,
     SpatialInputResponsePayload,
 )

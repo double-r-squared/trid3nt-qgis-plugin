@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.common import new_ulid
 
 
 @pytest.fixture()

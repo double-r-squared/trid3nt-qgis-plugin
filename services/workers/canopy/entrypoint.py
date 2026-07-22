@@ -20,7 +20,7 @@ inference + field names differ):
     Input (env or CLI):
         --run-id RUN_ID
             Run identifier. Outputs land under
-            <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/.
+            <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/.
         --manifest-uri s3://bucket/path/build_spec.json
             JSON build_spec. Schema (the agent stages this):
                 {
@@ -38,8 +38,8 @@ inference + field names differ):
             COG is uploaded to the runs bucket.
 
     Output:
-        <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/canopy_height.tif
-        <scheme>://${GRACE2_RUNS_BUCKET}/${RUN_ID}/completion.json
+        <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/canopy_height.tif
+        <scheme>://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/completion.json
             Terminal manifest. Schema mirrors the sibling workers; the
             stdout/stderr field names carry the ``canopy_`` prefix so the
             completion readers stay symmetric:
@@ -88,19 +88,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
-LOG = logging.getLogger("grace2.worker.canopy")
+LOG = logging.getLogger("trid3nt.worker.canopy")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s -- %(message)s",
 )
 
-SCRATCH = Path(os.environ.get("GRACE2_CANOPY_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_CANOPY_SCRATCH", "/opt/grace2/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
+RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
 #: Default model variant (the CPU-friendly quantized aerial-tuned Meta model).
 DEFAULT_MODEL_VARIANT = os.environ.get(
-    "GRACE2_CANOPY_MODEL_VARIANT", "compressed_SSLhuge_aerial"
+    "TRID3NT_CANOPY_MODEL_VARIANT", "compressed_SSLhuge_aerial"
 )
 
 #: The dir the baked Meta weights live in (geoai reads from here -- no runtime
@@ -139,8 +139,8 @@ def _split_object_uri(uri: str) -> tuple[str, str, str]:
 
 
 def _output_scheme() -> str:
-    """Runs-bucket output scheme -- ``s3`` or ``gs`` (env ``GRACE2_OBJECT_STORE``)."""
-    b = (os.environ.get("GRACE2_OBJECT_STORE") or "gcs").strip().lower()
+    """Runs-bucket output scheme -- ``s3`` or ``gs`` (env ``TRID3NT_OBJECT_STORE``)."""
+    b = (os.environ.get("TRID3NT_OBJECT_STORE") or "gcs").strip().lower()
     return "s3" if b in {"s3", "aws"} else "gs"
 
 
@@ -353,18 +353,18 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="grace2-canopy-entrypoint",
+        prog="trid3nt-canopy-entrypoint",
         description="Canopy-height ML-inference AWS Batch worker (FR-CE-1/2/3).",
     )
     p.add_argument(
         "--run-id",
-        default=os.environ.get("GRACE2_RUN_ID", "").strip(),
-        help="Run identifier (also $GRACE2_RUN_ID).",
+        default=os.environ.get("TRID3NT_RUN_ID", "").strip(),
+        help="Run identifier (also $TRID3NT_RUN_ID).",
     )
     p.add_argument(
         "--manifest-uri",
-        default=os.environ.get("GRACE2_MANIFEST_URI", "").strip(),
-        help="s3:// / gs:// URI of the build_spec (also $GRACE2_MANIFEST_URI).",
+        default=os.environ.get("TRID3NT_MANIFEST_URI", "").strip(),
+        help="s3:// / gs:// URI of the build_spec (also $TRID3NT_MANIFEST_URI).",
     )
     return p
 
@@ -419,10 +419,10 @@ def main(argv: list[str] | None = None) -> int:
     run_id = args.run_id
     manifest_uri = args.manifest_uri
     if not run_id:
-        LOG.error("run_id is required (pass --run-id or set $GRACE2_RUN_ID)")
+        LOG.error("run_id is required (pass --run-id or set $TRID3NT_RUN_ID)")
         return 2
     if not manifest_uri:
-        LOG.error("manifest_uri is required (pass --manifest-uri or set $GRACE2_MANIFEST_URI)")
+        LOG.error("manifest_uri is required (pass --manifest-uri or set $TRID3NT_MANIFEST_URI)")
         return 2
 
     LOG.info(

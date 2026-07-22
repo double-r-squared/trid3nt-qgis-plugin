@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.workflows import postprocess_modflow as pm
+from trid3nt_server.workflows import postprocess_modflow as pm
 
 _HAS_FLOPY = importlib.util.find_spec("flopy") is not None
 
@@ -33,7 +33,7 @@ def test_physics_off_is_default_conservative_tracer() -> None:
     """advanced_physics None/{} -> NO sorption, NO decay (byte-identical)."""
     import flopy
 
-    from grace2_agent.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.run_modflow import build_modflow_deck
 
     d = tempfile.mkdtemp()
     build_modflow_deck(
@@ -51,7 +51,7 @@ def test_physics_off_is_default_conservative_tracer() -> None:
 def test_physics_overrides_apply_sorption_decay_dispersivity() -> None:
     import flopy
 
-    from grace2_agent.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.run_modflow import build_modflow_deck
 
     d = tempfile.mkdtemp()
     build_modflow_deck(
@@ -81,7 +81,7 @@ def test_physics_overrides_apply_sorption_decay_dispersivity() -> None:
 def test_oc_saves_all_concentration_steps() -> None:
     import flopy
 
-    from grace2_agent.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.run_modflow import build_modflow_deck
 
     d = tempfile.mkdtemp()
     build_modflow_deck(
@@ -96,8 +96,8 @@ def test_oc_saves_all_concentration_steps() -> None:
 
 def test_physics_invalid_key_raises_typed_error() -> None:
     """An out-of-registry physics key surfaces MODFLOW_PHYSICS_INVALID."""
-    from grace2_contracts.modflow_contracts import MODFLOWRunArgs
-    from grace2_agent.workflows.run_modflow import (
+    from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
+    from trid3nt_server.workflows.run_modflow import (
         MODFLOWWorkflowError,
         build_and_stage_modflow_deck,
     )
@@ -140,11 +140,11 @@ def test_publish_modflow_quantities_emits_timeseries_and_head() -> None:
                      return_value=(conc_grids, conc_grids[-1])),
         patch.object(pm, "_read_head_grid", return_value=__import__("numpy").array(
             [[10.0, 11.0], [12.0, 13.0]])),
-        patch("grace2_agent.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
+        patch("trid3nt_server.workflows.publish_quantities.cog_io.write_cog_4326_from_grid",
               return_value=Path("/tmp/fake.tif")),
-        patch("grace2_agent.workflows.publish_quantities.cog_io.cog_bbox_4326",
+        patch("trid3nt_server.workflows.publish_quantities.cog_io.cog_bbox_4326",
               return_value=(-1.0, 2.0, 3.0, 4.0)),
-        patch("grace2_agent.workflows.publish_quantities.cog_io.safe_unlink",
+        patch("trid3nt_server.workflows.publish_quantities.cog_io.safe_unlink",
               return_value=None),
         patch.object(pm, "_upload_cog",
                      side_effect=lambda c, r, b, *, cog_filename: f"s3://runs/{r}/{cog_filename}"),
@@ -170,6 +170,6 @@ def test_publish_modflow_quantities_emits_timeseries_and_head() -> None:
 
 
 def test_modflow_step3_style_presets_resolve() -> None:
-    from grace2_agent.tools.publish_layer import _TITILER_STYLE_REGISTRY
+    from trid3nt_server.tools.publish_layer import _TITILER_STYLE_REGISTRY
 
     assert pm.HEAD_STYLE_PRESET in _TITILER_STYLE_REGISTRY

@@ -1,6 +1,6 @@
 """Worker-side OpenQuake hazard-map CSV -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``grace2_agent.workflows.postprocess_openquake`` (hazard
+Byte-faithful port of ``trid3nt_server.workflows.postprocess_openquake`` (hazard
 map rasterization path). Runs inside the Batch worker AFTER ``oq engine`` has
 exported its hazard-map CSV; rasterizes the site values onto an EPSG:4326 COG
 and builds the typed ``publish_manifest.json`` dict.
@@ -21,7 +21,7 @@ from typing import Any
 from services.workers._raster_postprocess import manifest as _manifest
 from services.workers._raster_postprocess.band_stats import compute_band_stats
 
-LOG = logging.getLogger("grace2.worker.openquake_postprocess")
+LOG = logging.getLogger("trid3nt.worker.openquake_postprocess")
 
 SEISMIC_HAZARD_STYLE_PRESET: str = "continuous_seismic_pga"
 

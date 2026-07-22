@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.adapter import summarize_tool_result
-from grace2_agent.categories import (
+from trid3nt_server.adapter import summarize_tool_result
+from trid3nt_server.categories import (
     AllowedToolSet,
     OutOfAllowedSetError,
     list_tools_in_category,
@@ -36,7 +36,7 @@ from grace2_agent.categories import (
 
 @pytest.fixture(scope="module", autouse=True)
 def _populate_registry() -> None:
-    from grace2_agent.main import _import_tools_registry
+    from trid3nt_server.main import _import_tools_registry
 
     _import_tools_registry()
 
@@ -142,7 +142,7 @@ def test_unknown_category_routes_to_typed_envelope() -> None:
     UnknownCategoryError propagates as a structured envelope so Gemini can
     retry with a valid id (after re-reading list_categories)."""
     # Simulate: Gemini called list_tools_in_category with a typo.
-    from grace2_agent.categories import (
+    from trid3nt_server.categories import (
         UnknownCategoryError,
         list_tools_in_category as _impl,
     )

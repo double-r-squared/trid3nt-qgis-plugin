@@ -42,9 +42,9 @@ import asyncio
 
 import pytest
 
-from grace2_agent import server as server_mod
-from grace2_agent.persistence import CASES_COLLECTION, Persistence
-from grace2_agent.server import (
+from trid3nt_server import server as server_mod
+from trid3nt_server.persistence import CASES_COLLECTION, Persistence
+from trid3nt_server.server import (
     SessionState,
     _auto_create_case_from_root,
     _maybe_autoname_case,
@@ -53,7 +53,7 @@ from grace2_agent.server import (
     get_persistence,
     set_persistence,
 )
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.common import new_ulid
 
 from .test_persistence import MockMCPClient, _fresh_case_summary
 from .test_server_case_handlers import MockWebSocket

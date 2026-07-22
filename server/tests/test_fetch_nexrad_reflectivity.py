@@ -14,7 +14,7 @@ Coverage (≥4 unit + 1 live, env-guarded):
   the LayerURI carries the EXACT bbox tuple AND the URL query string encodes
   the same four numbers in the documented (min_lon,min_lat,max_lon,max_lat)
   order — so a sign-flip / axis-swap bug surfaces immediately, not on-screen.
-- Live (env GRACE2_TEST_LIVE_NEXRAD=1): HEAD the n0r endpoint; expect 200 OK
+- Live (env TRID3NT_TEST_LIVE_NEXRAD=1): HEAD the n0r endpoint; expect 200 OK
   or a benign HTTP response (some WMS endpoints prefer GetCapabilities over
   HEAD; we accept <500 + body containing a WMS marker as proof-of-reach).
 """
@@ -26,8 +26,8 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_nexrad_reflectivity import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_nexrad_reflectivity import (
     NexradBboxError,
     NexradProductError,
     _build_wms_url,
@@ -38,7 +38,7 @@ from grace2_agent.tools.fetch_nexrad_reflectivity import (
 # Constants.
 # ---------------------------------------------------------------------------
 
-_LIVE_NEXRAD = os.environ.get("GRACE2_TEST_LIVE_NEXRAD") == "1"
+_LIVE_NEXRAD = os.environ.get("TRID3NT_TEST_LIVE_NEXRAD") == "1"
 
 # Fort Myers bbox — same convention used by sibling tools' tests. Algebraic
 # identity for the geographic-correctness gate: min_lon=-82, min_lat=26.
@@ -214,7 +214,7 @@ def test_build_wms_url_unknown_product_raises() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_NEXRAD, reason="GRACE2_TEST_LIVE_NEXRAD!=1")
+@pytest.mark.skipif(not _LIVE_NEXRAD, reason="TRID3NT_TEST_LIVE_NEXRAD!=1")
 def test_live_nexrad_endpoint_reachable() -> None:
     """HEAD/GET the n0r WMS endpoint and confirm it responds with a WMS body.
 

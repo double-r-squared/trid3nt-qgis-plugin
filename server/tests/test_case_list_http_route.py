@@ -9,7 +9,7 @@ dock can populate the dialog before a WS connection exists.
 Covered here:
   - route served UNCONDITIONALLY: the local build hardwires
     ``solver_backend()`` to ``local-docker``, so the local single-user seam
-    is always on and ``GRACE2_SOLVER_BACKEND`` no longer gates the route
+    is always on and ``TRID3NT_SOLVER_BACKEND`` no longer gates the route
     (unset or a stale cloud value both serve 200);
   - happy path: a fake Persistence with 2 cases -> 200 + newest-first
     ordering + the wire shape (case_id/title/updated_at/bbox);
@@ -22,9 +22,9 @@ from __future__ import annotations
 import asyncio
 import json
 
-from grace2_agent import server, tool_catalog_http
-from grace2_contracts.case import CaseSummary
-from grace2_contracts.common import new_ulid
+from trid3nt_server import server, tool_catalog_http
+from trid3nt_contracts.case import CaseSummary
+from trid3nt_contracts.common import new_ulid
 
 
 class _FakeReader:
@@ -106,7 +106,7 @@ class _FakePersistence:
 
 
 def test_route_served_when_backend_env_unset(monkeypatch):
-    monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+    monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
     case = _case(new_ulid(), "Env-unset case", "2026-07-09T00:00:00Z")
     fake = _FakePersistence([case])
     monkeypatch.setattr(server, "get_persistence", lambda: fake)
@@ -116,14 +116,14 @@ def test_route_served_when_backend_env_unset(monkeypatch):
     payload = _body(out)
     assert [c["case_id"] for c in payload["cases"]] == [case.case_id]
     # Scoped to the fixed local single user without any env arming.
-    from grace2_agent.auth_handshake import LOCAL_SINGLE_USER_ID
+    from trid3nt_server.auth_handshake import LOCAL_SINGLE_USER_ID
 
     assert fake.calls == [LOCAL_SINGLE_USER_ID]
 
 
 def test_route_served_even_when_env_claims_aws_batch(monkeypatch):
     """A stale cloud value in the env changes nothing: still served."""
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "aws-batch")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "aws-batch")
     case = _case(new_ulid(), "Stale-env case", "2026-07-09T00:00:00Z")
     fake = _FakePersistence([case])
     monkeypatch.setattr(server, "get_persistence", lambda: fake)
@@ -139,7 +139,7 @@ def test_route_served_even_when_env_claims_aws_batch(monkeypatch):
 
 
 def test_case_list_happy_path_newest_first(monkeypatch):
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     older = _case(new_ulid(), "Older case", "2026-07-01T00:00:00Z")
     newer = _case(
         new_ulid(),
@@ -162,13 +162,13 @@ def test_case_list_happy_path_newest_first(monkeypatch):
     assert payload["cases"][1]["bbox"] is None
     assert payload["cases"][0]["updated_at"].startswith("2026-07-08")
     # Scoped to the local single fixed user, not a per-client hint.
-    from grace2_agent.auth_handshake import LOCAL_SINGLE_USER_ID
+    from trid3nt_server.auth_handshake import LOCAL_SINGLE_USER_ID
 
     assert fake.calls == [LOCAL_SINGLE_USER_ID]
 
 
 def test_case_list_empty_is_ok(monkeypatch):
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     monkeypatch.setattr(server, "get_persistence", lambda: _FakePersistence([]))
     out = _dispatch()
     assert _status(out) == 200
@@ -181,7 +181,7 @@ def test_case_list_empty_is_ok(monkeypatch):
 
 
 def test_case_list_persistence_unbound_503(monkeypatch):
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     monkeypatch.setattr(server, "get_persistence", lambda: None)
     out = _dispatch()
     assert _status(out) == 503

@@ -25,12 +25,12 @@ from typing import Any
 
 import pytest
 
-from grace2_contracts.execution import LayerURI
-from grace2_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
-from grace2_contracts.payload_warning import PayloadWarningEnvelopePayload
+from trid3nt_contracts.execution import LayerURI
+from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
+from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
 
-from grace2_agent.tools import RegisteredTool, TOOL_REGISTRY
-from grace2_agent.workflows.model_contamination_affected_fields import (
+from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY
+from trid3nt_server.workflows.model_contamination_affected_fields import (
     AffectedFieldsResult,
     ContaminationAffectedFieldsConfirmationDeniedError,
     ContaminationAffectedFieldsGeocodeError,
@@ -364,7 +364,7 @@ def test_solver_error_dict_surfaces_as_typed_error(
     _install_fake_tool("run_modflow_job", _err_modflow, monkeypatch)
 
     async def _run() -> None:
-        from grace2_agent.workflows.model_contamination_affected_fields import (
+        from trid3nt_server.workflows.model_contamination_affected_fields import (
             ContaminationAffectedFieldsError,
         )
 
@@ -383,7 +383,7 @@ def test_solver_error_dict_surfaces_as_typed_error(
 
 
 def test_composer_registered_with_fr_dc6_metadata() -> None:
-    import grace2_agent.workflows  # noqa: F401 — fire registration
+    import trid3nt_server.workflows  # noqa: F401 — fire registration
 
     entry = TOOL_REGISTRY.get("run_model_contamination_affected_fields")
     assert entry is not None
@@ -393,7 +393,7 @@ def test_composer_registered_with_fr_dc6_metadata() -> None:
 
 
 def test_composer_in_categories() -> None:
-    from grace2_agent.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
+    from trid3nt_server.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
 
     assert (
         PRIMARY_CATEGORY["run_model_contamination_affected_fields"]
@@ -405,6 +405,6 @@ def test_composer_in_categories() -> None:
 
 
 def test_composer_in_solver_confirm_set() -> None:
-    from grace2_agent.server import SOLVER_CONFIRM_TOOLS
+    from trid3nt_server.server import SOLVER_CONFIRM_TOOLS
 
     assert "run_model_contamination_affected_fields" in SOLVER_CONFIRM_TOOLS

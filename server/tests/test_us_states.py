@@ -1,4 +1,4 @@
-"""Tests for ``grace2_agent.tools.us_states`` (job-0261).
+"""Tests for ``trid3nt_server.tools.us_states`` (job-0261).
 
 The state-name → NWS area-code mapping is the linchpin of the "weather
 alerts for Texas must not spill into surrounding states" fix: both NWS
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.tools.us_states import (
+from trid3nt_server.tools.us_states import (
     NWS_AREA_CODES,
     STATE_CODE_TO_NAME,
     STATE_NAME_TO_CODE,

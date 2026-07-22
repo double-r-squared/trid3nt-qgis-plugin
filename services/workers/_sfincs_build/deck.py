@@ -9,7 +9,7 @@ Batch worker, alongside the solve + the raster postprocess.
 The pure build functions below (dataclasses, Manning mapping loader + the OQ-4 §4
 NLCD validation gate, the adaptive-grid autoscale, the HydroMT YAML config
 generator + surge/physics emitters) are VENDORED VERBATIM from the agent's
-``server/src/grace2_agent/workflows/sfincs_builder.py`` — that module
+``server/src/trid3nt_server/workflows/sfincs_builder.py`` — that module
 remains the source of truth for the build contract (and the agent's legacy
 local-docker build). ``services/workers/`` is NOT on the agent import path
 (mirrors the ``_raster_postprocess`` split), so the worker keeps its own copy;
@@ -40,7 +40,7 @@ from typing import Any
 
 import yaml
 
-logger = logging.getLogger("grace2.worker.sfincs_build")
+logger = logging.getLogger("trid3nt.worker.sfincs_build")
 
 
 # --------------------------------------------------------------------------- #
@@ -986,13 +986,13 @@ def _env_float(name: str, default: float) -> float:
 
 
 def _env_resolution_ladder(default: tuple[float, ...]) -> tuple[float, ...]:
-    """Parse ``GRACE2_SFINCS_RES_LADDER`` (comma-separated metres) → sorted tuple.
+    """Parse ``TRID3NT_SFINCS_RES_LADDER`` (comma-separated metres) → sorted tuple.
 
     Falls back to ``default`` on any parse failure / empty value. The ladder is
     always returned sorted ascending + de-duplicated so the snap-up walk is
     monotone; a degenerate ladder (empty after parse) falls back to the default.
     """
-    raw = os.environ.get("GRACE2_SFINCS_RES_LADDER")
+    raw = os.environ.get("TRID3NT_SFINCS_RES_LADDER")
     if raw is None or not raw.strip():
         return default
     try:
@@ -1001,7 +1001,7 @@ def _env_resolution_ladder(default: tuple[float, ...]) -> tuple[float, ...]:
         )
     except (TypeError, ValueError):
         logger.warning(
-            "autoscale: env GRACE2_SFINCS_RES_LADDER=%r unparseable; using default %s",
+            "autoscale: env TRID3NT_SFINCS_RES_LADDER=%r unparseable; using default %s",
             raw,
             default,
         )
@@ -1011,15 +1011,15 @@ def _env_resolution_ladder(default: tuple[float, ...]) -> tuple[float, ...]:
 
 #: Wall-clock budget (seconds) we size the active-cell cap against. NATE's
 #: target is ~10 min/solve, configurable + MEASURE-then-tune. Env override:
-#: ``GRACE2_SFINCS_SOLVE_BUDGET_S``.
-SFINCS_SOLVE_BUDGET_S: float = _env_float("GRACE2_SFINCS_SOLVE_BUDGET_S", 600.0)
+#: ``TRID3NT_SFINCS_SOLVE_BUDGET_S``.
+SFINCS_SOLVE_BUDGET_S: float = _env_float("TRID3NT_SFINCS_SOLVE_BUDGET_S", 600.0)
 
 #: Fraction of the budget reserved for non-solve overhead (container pull,
 #: input staging, output upload, postprocess). The cap is sized against the
 #: REMAINING ``(1 - overhead) * budget`` so a 10-min wall budget leaves the
 #: solver ~6.5 min of CPU at the default 0.35. Env:
-#: ``GRACE2_SFINCS_OVERHEAD_FRACTION``.
-SFINCS_OVERHEAD_FRACTION: float = _env_float("GRACE2_SFINCS_OVERHEAD_FRACTION", 0.35)
+#: ``TRID3NT_SFINCS_OVERHEAD_FRACTION``.
+SFINCS_OVERHEAD_FRACTION: float = _env_float("TRID3NT_SFINCS_OVERHEAD_FRACTION", 0.35)
 
 #: Perf model T(N, vcpu) = PERF_A * N^PERF_P / (vcpu/8)^PERF_THREAD_EXP, fitted
 #: from LIVE anchors at 8 vCPU. The single Chehalis anchor (45k cells, 36 s)
@@ -1028,7 +1028,7 @@ SFINCS_OVERHEAD_FRACTION: float = _env_float("GRACE2_SFINCS_OVERHEAD_FRACTION", 
 #: real p is likely 1.7-2.0). We adopt p=1.61 as the conservative-but-not-
 #: reckless default (a HIGHER p would coarsen MORE aggressively; a lower p is
 #: the dangerous direction, so the floor is the safe choice to ship). Re-tune
-#: from logged solve-telemetry. Env: ``GRACE2_SFINCS_PERF_P`` etc.
+#: from logged solve-telemetry. Env: ``TRID3NT_SFINCS_PERF_P`` etc.
 #:
 #:   PERF_A solved from the Chehalis anchor: 36 = A * 45000^1.61
 #:     45000^1.61 = exp(1.61 * ln 45000) = exp(17.25) ≈ 3.10e7
@@ -1036,22 +1036,22 @@ SFINCS_OVERHEAD_FRACTION: float = _env_float("GRACE2_SFINCS_OVERHEAD_FRACTION", 
 #:   (An earlier comment mis-stated 45000^1.61 ≈ 1.585e7, which yielded an
 #:   inflated A=2.27e-6 — that over-predicted solve time ~2x and coarsened the
 #:   grid more aggressively than the anchor warrants. 1.16e-6 is anchor-exact.)
-SFINCS_PERF_P: float = _env_float("GRACE2_SFINCS_PERF_P", 1.61)
-SFINCS_PERF_A: float = _env_float("GRACE2_SFINCS_PERF_A", 1.16e-6)
+SFINCS_PERF_P: float = _env_float("TRID3NT_SFINCS_PERF_P", 1.61)
+SFINCS_PERF_A: float = _env_float("TRID3NT_SFINCS_PERF_A", 1.16e-6)
 
 #: Thread speedup exponent: speedup ≈ (vcpu / 8) ** THREAD_EXP (sub-linear —
-#: SFINCS does not scale perfectly with cores). Env: ``GRACE2_SFINCS_THREAD_EXP``.
-SFINCS_THREAD_EXP: float = _env_float("GRACE2_SFINCS_THREAD_EXP", 0.85)
+#: SFINCS does not scale perfectly with cores). Env: ``TRID3NT_SFINCS_THREAD_EXP``.
+SFINCS_THREAD_EXP: float = _env_float("TRID3NT_SFINCS_THREAD_EXP", 0.85)
 
 #: The reference vCPU count the anchors were measured at (the perf model
-#: normalises against this). Env: ``GRACE2_SFINCS_PERF_REF_VCPU``.
-SFINCS_PERF_REF_VCPU: float = _env_float("GRACE2_SFINCS_PERF_REF_VCPU", 8.0)
+#: normalises against this). Env: ``TRID3NT_SFINCS_PERF_REF_VCPU``.
+SFINCS_PERF_REF_VCPU: float = _env_float("TRID3NT_SFINCS_PERF_REF_VCPU", 8.0)
 
 #: Resolution ladder (metres) the autoscaler snaps UP through. 30 m is the
 #: NLCD-native NFR-P-4 baseline; 200 m is the coarsest rung we will ever solve
 #: at (a 200 m flood grid is coarse but still meaningful for a regional AOI,
 #: and is the floor against degenerate over-coarsening). Env:
-#: ``GRACE2_SFINCS_RES_LADDER`` (comma-separated).
+#: ``TRID3NT_SFINCS_RES_LADDER`` (comma-separated).
 SFINCS_RES_LADDER: tuple[float, ...] = _env_resolution_ladder((30.0, 50.0, 100.0, 200.0))
 
 #: Hard floor on the active-cell cap. A pathological budget/perf combination
@@ -1059,12 +1059,12 @@ SFINCS_RES_LADDER: tuple[float, ...] = _env_resolution_ladder((30.0, 50.0, 100.0
 #: a tiny AOI is never needlessly coarsened past the 30 m rung. (At 8 vCPU /
 #: 600 s / 0.35 overhead / p=1.61 the natural cap is ~250k cells, well above
 #: this floor — the floor only bites under hostile env overrides.)
-SFINCS_MIN_CELL_CAP: int = int(_env_float("GRACE2_SFINCS_MIN_CELL_CAP", 50_000))
+SFINCS_MIN_CELL_CAP: int = int(_env_float("TRID3NT_SFINCS_MIN_CELL_CAP", 50_000))
 
 #: compute_class → vCPU count used to size the cap on the CURRENT path. The
 #: deployed agent EC2 box is 8 vCPU; ``run_solver(compute_class=...)`` is a
 #: provenance tag today (the AWS Batch adapter below maps it to real
-#: resourceRequirements). Env: ``GRACE2_SFINCS_SOLVE_VCPUS`` overrides the
+#: resourceRequirements). Env: ``TRID3NT_SFINCS_SOLVE_VCPUS`` overrides the
 #: effective vCPU outright (so a bigger always-on box re-sizes the cap without
 #: a code change).
 SFINCS_COMPUTE_CLASS_VCPUS: dict[str, int] = {
@@ -1082,12 +1082,12 @@ SFINCS_DEFAULT_VCPUS: int = 8
 def resolve_solve_vcpus(compute_class: str = "medium") -> int:
     """Effective vCPU count the cap is sized against.
 
-    ``GRACE2_SFINCS_SOLVE_VCPUS`` (if set) wins outright — it lets a redeploy on
+    ``TRID3NT_SFINCS_SOLVE_VCPUS`` (if set) wins outright — it lets a redeploy on
     a bigger always-on box re-size the cap without a code change. Otherwise map
     the FR-CE-3 ``compute_class`` through ``SFINCS_COMPUTE_CLASS_VCPUS`` (default
     8 — the current EC2 box).
     """
-    env_v = os.environ.get("GRACE2_SFINCS_SOLVE_VCPUS")
+    env_v = os.environ.get("TRID3NT_SFINCS_SOLVE_VCPUS")
     if env_v and env_v.strip():
         try:
             v = int(float(env_v))
@@ -1095,7 +1095,7 @@ def resolve_solve_vcpus(compute_class: str = "medium") -> int:
                 return v
         except (TypeError, ValueError):
             logger.warning(
-                "autoscale: env GRACE2_SFINCS_SOLVE_VCPUS=%r invalid; ignoring", env_v
+                "autoscale: env TRID3NT_SFINCS_SOLVE_VCPUS=%r invalid; ignoring", env_v
             )
     return SFINCS_COMPUTE_CLASS_VCPUS.get(
         (compute_class or "").strip().lower(), SFINCS_DEFAULT_VCPUS

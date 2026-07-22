@@ -1,6 +1,6 @@
 """Round-trip + invariant tests for Case persistence envelopes (FR-MP-6).
 
-Every Case persistence type defined in ``grace2_contracts.case`` is exercised:
+Every Case persistence type defined in ``trid3nt_contracts.case`` is exercised:
 - A real instance is built, dumped via ``model_dump(mode="json")``, JSON-text
   round-tripped, parsed back, and re-dumped. Both passes must be byte-identical.
 - ULID format validation refuses malformed ids.
@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.case import (
+from trid3nt_contracts.case import (
     CaseChatMessage,
     CaseCommandEnvelopePayload,
     CaseListEnvelopePayload,
@@ -28,7 +28,7 @@ from grace2_contracts.case import (
     PersistedSubStepRecord,
     ToolCardRecord,
 )
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.common import new_ulid
 
 
 # --------------------------------------------------------------------------- #
@@ -403,15 +403,15 @@ def test_case_command_envelope_message_type_classvar() -> None:
 
 def test_module_exports_via_package_namespace() -> None:
     """Idempotent-append re-export from the package __init__ exposes case.*."""
-    import grace2_contracts
+    import trid3nt_contracts
 
-    assert grace2_contracts.case is not None
-    assert grace2_contracts.case.CaseSummary is CaseSummary
-    assert grace2_contracts.case.CaseChatMessage is CaseChatMessage
-    assert grace2_contracts.case.CaseSessionState is CaseSessionState
-    assert grace2_contracts.case.CaseListEnvelopePayload is CaseListEnvelopePayload
-    assert grace2_contracts.case.CaseOpenEnvelopePayload is CaseOpenEnvelopePayload
-    assert grace2_contracts.case.CaseCommandEnvelopePayload is CaseCommandEnvelopePayload
+    assert trid3nt_contracts.case is not None
+    assert trid3nt_contracts.case.CaseSummary is CaseSummary
+    assert trid3nt_contracts.case.CaseChatMessage is CaseChatMessage
+    assert trid3nt_contracts.case.CaseSessionState is CaseSessionState
+    assert trid3nt_contracts.case.CaseListEnvelopePayload is CaseListEnvelopePayload
+    assert trid3nt_contracts.case.CaseOpenEnvelopePayload is CaseOpenEnvelopePayload
+    assert trid3nt_contracts.case.CaseCommandEnvelopePayload is CaseCommandEnvelopePayload
 
 
 # --------------------------------------------------------------------------- #
@@ -769,7 +769,7 @@ def test_case_session_state_carries_interleaved_stream() -> None:
 
 
 def _fresh_manifest_layer() -> "CaseManifestLayer":
-    from grace2_contracts.case import CaseManifestLayer
+    from trid3nt_contracts.case import CaseManifestLayer
 
     return CaseManifestLayer(
         layer_id="01HX-flood-depth",
@@ -781,7 +781,7 @@ def _fresh_manifest_layer() -> "CaseManifestLayer":
 
 
 def test_case_manifest_layer_roundtrip() -> None:
-    from grace2_contracts.case import CaseManifestLayer
+    from trid3nt_contracts.case import CaseManifestLayer
 
     layer = CaseManifestLayer(
         layer_id="01HX-buildings",
@@ -801,7 +801,7 @@ def test_case_manifest_layer_roundtrip() -> None:
 
 
 def test_case_manifest_roundtrip() -> None:
-    from grace2_contracts.case import CaseManifest
+    from trid3nt_contracts.case import CaseManifest
 
     manifest = CaseManifest(
         case_id=new_ulid(),
@@ -821,7 +821,7 @@ def test_case_manifest_roundtrip() -> None:
 
 
 def test_case_manifest_minimal_defaults() -> None:
-    from grace2_contracts.case import CaseManifest
+    from trid3nt_contracts.case import CaseManifest
 
     manifest = CaseManifest(
         case_id=new_ulid(),
@@ -836,7 +836,7 @@ def test_case_manifest_minimal_defaults() -> None:
 
 def test_case_manifest_no_cost_field() -> None:
     """Invariant 9: no cost/spend/quota field anywhere on the manifest."""
-    from grace2_contracts.case import CaseManifest, CaseManifestLayer
+    from trid3nt_contracts.case import CaseManifest, CaseManifestLayer
 
     text = json.dumps(
         CaseManifest(
@@ -852,7 +852,7 @@ def test_case_manifest_no_cost_field() -> None:
 
 def test_case_manifest_layer_rejects_extra_field() -> None:
     """GraceModel extra='forbid' — a stray storage key never leaks in."""
-    from grace2_contracts.case import CaseManifestLayer
+    from trid3nt_contracts.case import CaseManifestLayer
 
     with pytest.raises(ValidationError):
         CaseManifestLayer(
@@ -866,7 +866,7 @@ def test_case_manifest_layer_rejects_extra_field() -> None:
 
 
 def test_case_manifest_layer_rejects_bad_layer_type() -> None:
-    from grace2_contracts.case import CaseManifestLayer
+    from trid3nt_contracts.case import CaseManifestLayer
 
     with pytest.raises(ValidationError):
         CaseManifestLayer(

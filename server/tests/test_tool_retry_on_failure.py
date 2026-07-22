@@ -46,7 +46,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     FunctionCallEvent,
     GeminiSettings,
     MAX_TURN_ITERATIONS,
@@ -54,7 +54,7 @@ from grace2_agent.adapter import (
     _classify_error,
     summarize_tool_result,
 )
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
 
 # ---------------------------------------------------------------------------
@@ -235,8 +235,8 @@ async def test_stream_gemini_reply_retry_after_recoverable_failure():
     dispatch succeeds, and the loop terminates with a narrative turn.
     This is the core kickoff scenario.
     """
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     # Turn 1: Gemini calls fetch_dem with a (made-up) bbox.
     # Turn 2: Gemini sees the upstream error + retryable=True; retries.
@@ -364,9 +364,9 @@ async def test_stream_gemini_reply_failed_retry_caps_at_max_iterations():
     The invariant this test guards: dispatches to the *actual tool* are
     bounded (the breaker caps them at threshold); the loop does not run forever.
     """
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_agent.circuit_breaker import ToolCircuitBreaker
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_server.circuit_breaker import ToolCircuitBreaker
 
     def _always_retry():
         i = 0

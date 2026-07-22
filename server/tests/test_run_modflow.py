@@ -27,11 +27,11 @@ from typing import Any
 
 import pytest
 
-from grace2_contracts import new_ulid
-from grace2_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
 
-from grace2_agent.workflows import run_modflow as rm
-from grace2_agent.workflows import postprocess_modflow as pp
+from trid3nt_server.workflows import run_modflow as rm
+from trid3nt_server.workflows import postprocess_modflow as pp
 
 
 # --------------------------------------------------------------------------- #
@@ -42,9 +42,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _find_mf6() -> str | None:
-    """Locate a runnable mf6 binary: $GRACE2_MF6_BIN, PATH, or the job-0220/0221
+    """Locate a runnable mf6 binary: $TRID3NT_MF6_BIN, PATH, or the job-0220/0221
     download evidence dirs. Returns None if none is found (the live test skips)."""
-    env = os.environ.get("GRACE2_MF6_BIN")
+    env = os.environ.get("TRID3NT_MF6_BIN")
     if env and Path(env).exists():
         return env
     on_path = shutil.which("mf6")
@@ -80,8 +80,8 @@ _SPILL_ARGS = MODFLOWRunArgs(
 def test_run_modflow_job_registered_uncacheable() -> None:
     """run_modflow_job is in TOOL_REGISTRY with FR-DC-6 workflow_dispatch shape."""
     # Importing the tools package (eager imports) registers the tool.
-    import grace2_agent.tools as tools_pkg
-    import grace2_agent.tools.run_modflow_tool  # noqa: F401 — fire @register_tool
+    import trid3nt_server.tools as tools_pkg
+    import trid3nt_server.tools.run_modflow_tool  # noqa: F401 — fire @register_tool
 
     entry = tools_pkg.TOOL_REGISTRY.get("run_modflow_job")
     assert entry is not None, "run_modflow_job not registered"
@@ -93,7 +93,7 @@ def test_run_modflow_job_registered_uncacheable() -> None:
 
 def test_run_modflow_job_in_hazard_modeling_category() -> None:
     """run_modflow_job is primary-categorised under hazard_modeling."""
-    from grace2_agent.categories import PRIMARY_CATEGORY, tools_for_category
+    from trid3nt_server.categories import PRIMARY_CATEGORY, tools_for_category
 
     assert PRIMARY_CATEGORY.get("run_modflow_job") == "hazard_modeling"
     assert "run_modflow_job" in tools_for_category("hazard_modeling")
@@ -202,11 +202,11 @@ def test_submit_modflow_run_dispatch_failure_is_typed(
 ) -> None:
     """A local-exec dispatch failure (no runs bucket → staging fails) surfaces
     MODFLOW_DISPATCH_FAILED — the typed contract the dispatch carries."""
-    # No GRACE2_RUNS_BUCKET → launch_local_solver raises SolverDispatchError,
+    # No TRID3NT_RUNS_BUCKET → launch_local_solver raises SolverDispatchError,
     # which submit_modflow_run wraps as MODFLOW_DISPATCH_FAILED.
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
-    monkeypatch.delenv("GRACE2_RUNS_BUCKET", raising=False)
-    from grace2_agent.tools import solver as _solver
+    monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
+    monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
+    from trid3nt_server.tools import solver as _solver
 
     monkeypatch.setattr(_solver, "_RUNS_BUCKET", None, raising=False)
     run_id = new_ulid()
@@ -282,16 +282,16 @@ def test_compute_plume_metrics_handles_nan_and_empty() -> None:
 )
 @pytest.mark.asyncio
 async def test_run_modflow_job_local_end_to_end(monkeypatch: Any) -> None:
-    """GRACE2_MODFLOW_LOCAL=1: MODFLOWRunArgs -> deck -> mf6 -> PlumeLayerURI.
+    """TRID3NT_MODFLOW_LOCAL=1: MODFLOWRunArgs -> deck -> mf6 -> PlumeLayerURI.
 
     The same chain as the live-evidence harness, exercised through the atomic
     tool. publish is skipped (no QGIS Server / GCS in tests) via the local
     ``file://`` URI guard in _dispatch_publish_layer.
     """
-    from grace2_agent.tools.run_modflow_tool import run_modflow_job
+    from trid3nt_server.tools.run_modflow_tool import run_modflow_job
 
-    monkeypatch.setenv("GRACE2_MODFLOW_LOCAL", "1")
-    monkeypatch.setenv("GRACE2_MF6_BIN", _MF6_BIN)  # type: ignore[arg-type]
+    monkeypatch.setenv("TRID3NT_MODFLOW_LOCAL", "1")
+    monkeypatch.setenv("TRID3NT_MF6_BIN", _MF6_BIN)  # type: ignore[arg-type]
 
     result = await run_modflow_job(
         spill_location_latlon=(26.64, -81.87),
@@ -351,7 +351,7 @@ def test_run_modflow_job_rejects_incomplete_params() -> None:
     """Missing required params surface a typed error dict (no exception)."""
     import asyncio
 
-    from grace2_agent.tools.run_modflow_tool import run_modflow_job
+    from trid3nt_server.tools.run_modflow_tool import run_modflow_job
 
     result = asyncio.run(run_modflow_job(contaminant="benzene"))
     assert isinstance(result, dict)
@@ -392,7 +392,7 @@ def test_run_modflow_job_coerces_string_latlon(
     """
     import asyncio
 
-    import grace2_agent.tools.run_modflow_tool as rmt
+    import trid3nt_server.tools.run_modflow_tool as rmt
 
     captured: dict[str, Any] = {}
 
@@ -432,7 +432,7 @@ def test_run_modflow_job_accepts_real_list_latlon(monkeypatch: Any) -> None:
     """A genuine 2-list still passes through coercion unchanged."""
     import asyncio
 
-    import grace2_agent.tools.run_modflow_tool as rmt
+    import trid3nt_server.tools.run_modflow_tool as rmt
 
     captured: dict[str, Any] = {}
 
@@ -472,7 +472,7 @@ def test_run_modflow_job_rejects_bad_latlon_typed(bad_latlon: Any) -> None:
     """A genuinely-bad latlon returns MODFLOW_PARAMS_INVALID (no exception)."""
     import asyncio
 
-    from grace2_agent.tools.run_modflow_tool import run_modflow_job
+    from trid3nt_server.tools.run_modflow_tool import run_modflow_job
 
     result = asyncio.run(
         run_modflow_job(

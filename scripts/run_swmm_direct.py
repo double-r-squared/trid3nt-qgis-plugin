@@ -40,14 +40,14 @@ TARGET_RESOLUTION_M = 20.0
 # Sanity: local-docker backend
 # ---------------------------------------------------------------------------
 
-backend = os.environ.get("GRACE2_SOLVER_BACKEND", "")
-runs_bucket = os.environ.get("GRACE2_RUNS_BUCKET", "")
+backend = os.environ.get("TRID3NT_SOLVER_BACKEND", "")
+runs_bucket = os.environ.get("TRID3NT_RUNS_BUCKET", "")
 log.info(
     "backend=%s runs_bucket=%s endpoint=%s",
     backend, runs_bucket, os.environ.get("AWS_ENDPOINT_URL"),
 )
-# SWMM uses in-process pyswmm regardless of GRACE2_SOLVER_BACKEND
-# (GRACE2_SWMM_LOCAL unset = local mode by default)
+# SWMM uses in-process pyswmm regardless of TRID3NT_SOLVER_BACKEND
+# (TRID3NT_SWMM_LOCAL unset = local mode by default)
 
 # ---------------------------------------------------------------------------
 # Ensure MinIO buckets exist
@@ -62,7 +62,7 @@ s3 = boto3.client(
     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
     region_name=os.environ.get("AWS_REGION", "us-east-1"),
 )
-for b in {runs_bucket, os.environ.get("GRACE2_CACHE_BUCKET", "trid3nt-cache")}:
+for b in {runs_bucket, os.environ.get("TRID3NT_CACHE_BUCKET", "trid3nt-cache")}:
     if not b:
         continue
     try:
@@ -102,8 +102,8 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from grace2_agent.workflows.model_urban_flood_swmm import model_urban_flood_swmm
-    from grace2_contracts.swmm_contracts import SWMMRunArgs
+    from trid3nt_server.workflows.model_urban_flood_swmm import model_urban_flood_swmm
+    from trid3nt_contracts.swmm_contracts import SWMMRunArgs
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
     sys.exit(1)
@@ -174,7 +174,7 @@ summary = {
     "result": result_json,
     "new_run_prefixes": new_prefixes,
     "run_listings": run_listings,
-    "tile_server_base": os.environ.get("GRACE2_TILE_SERVER_BASE"),
+    "tile_server_base": os.environ.get("TRID3NT_TILE_SERVER_BASE"),
 }
 
 out_path = PROOF_DIR / "swmm_direct_result.json"

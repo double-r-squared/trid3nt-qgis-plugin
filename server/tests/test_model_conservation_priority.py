@@ -25,15 +25,15 @@ import asyncio
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.workflows import model_conservation_priority as cp_mod
-from grace2_agent.workflows.model_conservation_priority import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.workflows import model_conservation_priority as cp_mod
+from trid3nt_server.workflows.model_conservation_priority import (
     ConservationPriorityInputError,
     ConservationPriorityResult,
     model_conservation_priority,
     run_model_conservation_priority,
 )
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts.execution import LayerURI
 
 
 _BBOX = (-80.05, 32.75, -79.95, 32.82)

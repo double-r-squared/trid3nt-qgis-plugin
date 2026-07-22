@@ -20,8 +20,8 @@ Coverage:
 - payload-MB estimator returns sensible numbers for the audit.md spec
   (0.5 MB / variable / day / 1° square).
 
-Live tests (env-gated ``GRACE2_TEST_LIVE_ERA5=1`` + a real CDS key via
-``~/.cdsapirc`` or ``GRACE2_COPERNICUS_CDS_API_KEY``):
+Live tests (env-gated ``TRID3NT_TEST_LIVE_ERA5=1`` + a real CDS key via
+``~/.cdsapirc`` or ``TRID3NT_COPERNICUS_CDS_API_KEY``):
 - Fort Myers 1° square × 1 day, total_precipitation. Evidence emitted
   to ``evidence/era5_live.txt`` per the kickoff.
 """
@@ -39,8 +39,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_era5_reanalysis import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_era5_reanalysis import (
     ERA5AuthError,
     ERA5EmptyError,
     ERA5InputError,
@@ -67,7 +67,7 @@ _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 # Fort Myers / Lee County, FL — small 1° square used by mocked + live tests.
 _FORT_MYERS_BBOX = (-82.0, 26.0, -81.0, 27.0)
 
-_LIVE_ERA5 = os.environ.get("GRACE2_TEST_LIVE_ERA5") == "1"
+_LIVE_ERA5 = os.environ.get("TRID3NT_TEST_LIVE_ERA5") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -363,7 +363,7 @@ def test_resolve_explicit_key_takes_priority():
     """Explicit api_key kwarg is returned verbatim regardless of other paths."""
     monkeypatch_env = os.environ.copy()
     try:
-        os.environ["GRACE2_COPERNICUS_CDS_API_KEY"] = "env-key"
+        os.environ["TRID3NT_COPERNICUS_CDS_API_KEY"] = "env-key"
         assert _resolve_api_key(api_key="explicit", secret_ref=None) == "explicit"
     finally:
         os.environ.clear()
@@ -374,7 +374,7 @@ def test_resolve_env_fallback_when_no_kwarg():
     """If no kwarg + no secret_ref, the env var wins."""
     monkeypatch_env = os.environ.copy()
     try:
-        os.environ["GRACE2_COPERNICUS_CDS_API_KEY"] = "env-key"
+        os.environ["TRID3NT_COPERNICUS_CDS_API_KEY"] = "env-key"
         assert _resolve_api_key(api_key=None, secret_ref=None) == "env-key"
     finally:
         os.environ.clear()
@@ -385,7 +385,7 @@ def test_resolve_returns_none_when_all_paths_miss():
     """None of the 4 paths → return None (cdsapi falls back to ~/.cdsapirc)."""
     monkeypatch_env = os.environ.copy()
     try:
-        os.environ.pop("GRACE2_COPERNICUS_CDS_API_KEY", None)
+        os.environ.pop("TRID3NT_COPERNICUS_CDS_API_KEY", None)
         assert _resolve_api_key(api_key=None, secret_ref=None) is None
     finally:
         os.environ.clear()
@@ -435,7 +435,7 @@ def test_mocked_happy_path_total_precipitation(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -476,7 +476,7 @@ def test_two_variables_produce_distinct_cache_keys(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_era5_reanalysis(
@@ -513,7 +513,7 @@ def test_cache_hit_skips_cdsapi(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_era5_reanalysis(
@@ -545,7 +545,7 @@ def test_cdsapi_failure_surfaces_as_upstream_error(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(ERA5UpstreamError) as exc_info:
@@ -574,7 +574,7 @@ def test_cdsapi_auth_error_surfaces_as_auth_error(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(ERA5AuthError) as exc_info:
@@ -719,7 +719,7 @@ def test_layer_uri_shape_fields(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -811,7 +811,7 @@ def test_wind_speed_issues_two_retrieves_and_writes_magnitude(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -882,7 +882,7 @@ def test_wind_speed_preserves_nan_nodata(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -931,7 +931,7 @@ def test_wind_speed_distinct_cache_key_from_components(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_speed = fetch_era5_reanalysis(
@@ -968,7 +968,7 @@ def test_component_variable_unchanged(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -991,7 +991,7 @@ def test_component_variable_unchanged(monkeypatch):
 
 @pytest.mark.skipif(
     not _LIVE_ERA5,
-    reason="GRACE2_TEST_LIVE_ERA5=1 not set (CDS API key required)",
+    reason="TRID3NT_TEST_LIVE_ERA5=1 not set (CDS API key required)",
 )
 def test_live_fort_myers_total_precipitation(tmp_path):
     """LIVE: fetch ERA5 total_precipitation over Fort Myers for one day (Hurricane Ian landfall).
@@ -1004,7 +1004,7 @@ def test_live_fort_myers_total_precipitation(tmp_path):
 
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(

@@ -23,19 +23,19 @@ Every registered tool was executed directly against the local stack (MinIO + loc
 
 | Tool | Env var | Where to get it |
 |------|---------|-----------------|
-| `fetch_airnow_air_quality` | `GRACE2_AIRNOW_API_KEY` | free key from docs.airnowapi.org; also accepted per-call as `api_key`/`secret_ref` |
-| `fetch_cama_flood_discharge` | `GRACE2_CAMA_FLOOD_BASE_URL` | upstream became registration-gated (U-Tokyo Google Form issues a password); point this at the credentialed mirror URL |
-| `fetch_ebird_observations` | `GRACE2_EBIRD_API_KEY` | free key from ebird.org/api/keygen |
-| `fetch_era5_reanalysis` | `GRACE2_COPERNICUS_CDS_API_KEY` | Copernicus CDS credentials (a `~/.cdsapirc` file also works via cdsapi) |
-| `fetch_iucn_red_list_range` | `GRACE2_IUCN_RED_LIST_API_KEY` | IUCN Red List API token (apiv3.iucnredlist.org) |
-| `fetch_openaq_measurements` | `GRACE2_OPENAQ_API_KEY` | free key from explore.openaq.org |
+| `fetch_airnow_air_quality` | `TRID3NT_AIRNOW_API_KEY` | free key from docs.airnowapi.org; also accepted per-call as `api_key`/`secret_ref` |
+| `fetch_cama_flood_discharge` | `TRID3NT_CAMA_FLOOD_BASE_URL` | upstream became registration-gated (U-Tokyo Google Form issues a password); point this at the credentialed mirror URL |
+| `fetch_ebird_observations` | `TRID3NT_EBIRD_API_KEY` | free key from ebird.org/api/keygen |
+| `fetch_era5_reanalysis` | `TRID3NT_COPERNICUS_CDS_API_KEY` | Copernicus CDS credentials (a `~/.cdsapirc` file also works via cdsapi) |
+| `fetch_iucn_red_list_range` | `TRID3NT_IUCN_RED_LIST_API_KEY` | IUCN Red List API token (apiv3.iucnredlist.org) |
+| `fetch_openaq_measurements` | `TRID3NT_OPENAQ_API_KEY` | free key from explore.openaq.org |
 
 Two more tools are key-gated but surface it as a sweep `FAIL` further downstream:
 
 | Tool | Env var | Detail |
 |------|---------|--------|
-| `fetch_firms_active_fire` | `GRACE2_FIRMS_MAP_KEY` | sweep FAIL: the literal 'demo' MAP_KEY fallback was rejected by FIRMS; get a free MAP_KEY from firms.modaps.eosdis.nasa.gov |
-| `fetch_gtsm_tide_surge` | `GRACE2_COPERNICUS_CDS_API_KEY` | sweep FAIL: CDS retrieve failed on missing Copernicus credentials (same CDS setup as fetch_era5_reanalysis) |
+| `fetch_firms_active_fire` | `TRID3NT_FIRMS_MAP_KEY` | sweep FAIL: the literal 'demo' MAP_KEY fallback was rejected by FIRMS; get a free MAP_KEY from firms.modaps.eosdis.nasa.gov |
+| `fetch_gtsm_tide_surge` | `TRID3NT_COPERNICUS_CDS_API_KEY` | sweep FAIL: CDS retrieve failed on missing Copernicus credentials (same CDS setup as fetch_era5_reanalysis) |
 
 ## Full matrix
 
@@ -81,7 +81,7 @@ Two more tools are key-gated but surface it as a sweep `FAIL` further downstream
 | `fetch_airnow_air_quality` | KEY | 0 | AirNowMissingKeyError: no AirNow API key available: pass api_key=..., secret_ref=..., or s |
 | `fetch_asos_metar` | PASS | 2 |  |
 | `fetch_buildings` | PASS | 7 |  |
-| `fetch_cama_flood_discharge` | KEY | 0 | upstream became REGISTRATION-GATED (U-Tokyo Google Form -> issued password); set GRACE2_CA |
+| `fetch_cama_flood_discharge` | KEY | 0 | upstream became REGISTRATION-GATED (U-Tokyo Google Form -> issued password); set TRID3NT_CA |
 | `fetch_cdc_svi` | PASS | 1 |  |
 | `fetch_census_acs` | PASS | 3 |  |
 | `fetch_chirps_precipitation` | PASS | 5 |  |
@@ -96,7 +96,7 @@ Two more tools are key-gated but surface it as a sweep `FAIL` further downstream
 | `fetch_fault_sources` | PASS | 1 |  |
 | `fetch_fema_nfhl_zones` | PASS | 4 |  |
 | `fetch_field_boundaries` | PASS | 34 |  |
-| `fetch_firms_active_fire` | FAIL | 1 | FirmsAuthError: FIRMS rejected the MAP_KEY. Set GRACE2_FIRMS_MAP_KEY to a valid key from h |
+| `fetch_firms_active_fire` | FAIL | 1 | FirmsAuthError: FIRMS rejected the MAP_KEY. Set TRID3NT_FIRMS_MAP_KEY to a valid key from h |
 | `fetch_gbif_occurrences` | SKIP-ARGS | 0 | required params not fabricatable: ['species_key'] |
 | `fetch_gcn250_curve_numbers` | PASS | 11 |  |
 | `fetch_ghsl_population` | PASS | 13 |  |

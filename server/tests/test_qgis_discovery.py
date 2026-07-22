@@ -13,15 +13,15 @@ Coverage:
 - The ``set_worker_submitter`` DI binding wires the qgis_process body so it
   no longer raises ``RuntimeError("worker submitter is not bound")``.
 - Registry presence: both tools appear in ``TOOL_REGISTRY`` after the
-  eager-import wiring in ``grace2_agent.main._import_tools_registry``.
+  eager-import wiring in ``trid3nt_server.main._import_tools_registry``.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY, passthroughs, qgis_discovery
-from grace2_agent.tools.qgis_discovery import (
+from trid3nt_server.tools import TOOL_REGISTRY, passthroughs, qgis_discovery
+from trid3nt_server.tools.qgis_discovery import (
     CURATED_ALLOWLIST,
     MAX_LIST_RESULTS,
     SOURCE_CLASS,
@@ -171,7 +171,7 @@ def fake_storage(monkeypatch: pytest.MonkeyPatch) -> _FakeStorageClient:
     implementation that mints ``s3://`` URIs and reads/writes ``fake._store``
     (keyed by object KEY), so the cache hit/miss/write assertions hold.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -416,7 +416,7 @@ def test_qgis_process_raises_runtime_error_when_no_backend(monkeypatch) -> None:
 
     job-0308 (Decision Q) rewired qgis_process OFF the old job-0032
     NotImplementedError stub and onto a stage-then-mount docker path
-    (``GRACE2_QGIS_DOCKER_IMAGE`` / the ``grace2-qgis`` image present on the
+    (``TRID3NT_QGIS_DOCKER_IMAGE`` / the ``grace2-qgis`` image present on the
     EC2 box) with a local-``qgis_process``-on-PATH dev fallback. When NO
     backend is reachable the body raises a RuntimeError telling the operator
     how to provide one. This pins that contract deterministically — we
@@ -430,14 +430,14 @@ def test_qgis_process_raises_runtime_error_when_no_backend(monkeypatch) -> None:
     OFF by default (it returns an honest "offloaded" result instead of running
     on the shared box). The no-backend RuntimeError contract still holds when
     an operator ENABLES on-box execution, so this test sets
-    ``GRACE2_QGIS_ONBOX_DOCKER=on`` to reach the backend-resolution path.
+    ``TRID3NT_QGIS_ONBOX_DOCKER=on`` to reach the backend-resolution path.
     """
     import shutil
 
-    from grace2_agent.tools.passthroughs import qgis_process
+    from trid3nt_server.tools.passthroughs import qgis_process
 
-    monkeypatch.setenv("GRACE2_QGIS_ONBOX_DOCKER", "on")
-    monkeypatch.delenv("GRACE2_QGIS_DOCKER_IMAGE", raising=False)
+    monkeypatch.setenv("TRID3NT_QGIS_ONBOX_DOCKER", "on")
+    monkeypatch.delenv("TRID3NT_QGIS_DOCKER_IMAGE", raising=False)
     monkeypatch.setattr(shutil, "which", lambda _name: None)
 
     with pytest.raises(RuntimeError, match="qgis_process unavailable"):
@@ -482,8 +482,8 @@ def test_curated_allowlist_module_constant_includes_grass_hydrology() -> None:
 
 
 def test_curated_allowlist_env_all_disables_curation(monkeypatch) -> None:
-    """``GRACE2_QGIS_ALLOWLIST=all`` -> empty-sets sentinel -> no filtering."""
-    monkeypatch.setenv("GRACE2_QGIS_ALLOWLIST", "all")
+    """``TRID3NT_QGIS_ALLOWLIST=all`` -> empty-sets sentinel -> no filtering."""
+    monkeypatch.setenv("TRID3NT_QGIS_ALLOWLIST", "all")
     prefixes, explicit = curated_allowlist()
     assert prefixes == frozenset()
     assert explicit == frozenset()
@@ -494,7 +494,7 @@ def test_curated_allowlist_env_all_disables_curation(monkeypatch) -> None:
 
 def test_curated_allowlist_env_custom_overrides(monkeypatch) -> None:
     """A custom comma list of <provider>:* wildcards + ids replaces the set."""
-    monkeypatch.setenv("GRACE2_QGIS_ALLOWLIST", "gdal:*, grass:r.sun")
+    monkeypatch.setenv("TRID3NT_QGIS_ALLOWLIST", "gdal:*, grass:r.sun")
     prefixes, explicit = curated_allowlist()
     assert prefixes == frozenset({"gdal"})
     assert explicit == frozenset({"grass:r.sun"})
@@ -511,7 +511,7 @@ def test_curated_allowlist_trailing_star_id_prefix(monkeypatch) -> None:
     ``:*`` (so not a provider wildcard) and is not a literal id (so not an exact
     match). It must now keep every algorithm whose id starts with the stem.
     """
-    monkeypatch.setenv("GRACE2_QGIS_ALLOWLIST", "gdal:aspect*")
+    monkeypatch.setenv("TRID3NT_QGIS_ALLOWLIST", "gdal:aspect*")
     prefixes, explicit = curated_allowlist()
     # Not a provider-prefix wildcard.
     assert prefixes == frozenset()
@@ -555,7 +555,7 @@ def test_curated_allowlist_trailing_star_mixed_with_exact_and_wildcard(
 ) -> None:
     """A trailing-* id-prefix coexists with exact ids and provider wildcards."""
     monkeypatch.setenv(
-        "GRACE2_QGIS_ALLOWLIST", "native:*, gdal:aspect*, grass:r.watershed"
+        "TRID3NT_QGIS_ALLOWLIST", "native:*, gdal:aspect*, grass:r.watershed"
     )
     prefixes, explicit = curated_allowlist()
     assert prefixes == frozenset({"native"})

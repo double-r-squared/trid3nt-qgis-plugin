@@ -1,5 +1,5 @@
 """Targeted tests for the SWMM run-output postprocessor (sprint-16 P3,
-``grace2_agent.workflows.postprocess_swmm``).
+``trid3nt_server.workflows.postprocess_swmm``).
 
 The SWMM analogue of ``test_postprocess_flood`` / ``test_postprocess_modflow``.
 SWMM emits NODE/LINK results, NOT a raster, so the postprocessor reads the
@@ -34,7 +34,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from grace2_agent.workflows.postprocess_swmm import (
+from trid3nt_server.workflows.postprocess_swmm import (
     MAX_FLOOD_FRAMES,
     NODATA_DEPTH_M,
     PostprocessSWMMError,
@@ -160,7 +160,7 @@ swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")
 rasterio = pytest.importorskip("rasterio")
 
-from grace2_agent.workflows.swmm_mesh_builder import (  # noqa: E402
+from trid3nt_server.workflows.swmm_mesh_builder import (  # noqa: E402
     build_swmm_mesh,
     run_swmm_deck,
 )
@@ -227,11 +227,11 @@ def test_postprocess_swmm_emits_peak_plus_frames(solved_run):
     """postprocess_swmm returns the EXACT postprocess_flood shape: layers[0] peak
     primary + layers[1:] contiguous 'Flood depth step N' context frames, all
     SWMMDepthLayerURI with the narration scalars set."""
-    from grace2_contracts.swmm_contracts import SWMMDepthLayerURI
+    from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI
 
     build, run = solved_run
     with patch(
-        "grace2_agent.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
         side_effect=_fake_upload,
     ):
         layers, metrics = postprocess_swmm(run, build, run_id="run-swmm")
@@ -289,7 +289,7 @@ def test_peak_cog_is_valid_4326(solved_run):
         return f"gs://test-runs/{run_id}/{dest_filename}"
 
     with patch(
-        "grace2_agent.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
+        "trid3nt_server.workflows.postprocess_swmm._upload_cog_to_runs_bucket",
         side_effect=_capture_upload,
     ):
         layers, _ = postprocess_swmm(run, build, run_id="run-cog")

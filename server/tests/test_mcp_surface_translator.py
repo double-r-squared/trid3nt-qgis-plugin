@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     MCPSurfaceTranslator,
     Persistence,
     _ejson_normalize,
@@ -236,7 +236,7 @@ def test_ejson_normalize_collapses_extended_types():
 
 
 def test_persistence_get_case_through_translator():
-    from grace2_contracts import new_ulid
+    from trid3nt_contracts import new_ulid
 
     case_id = new_ulid()
     case_doc = {
@@ -257,8 +257,8 @@ def test_persistence_get_case_through_translator():
 
 
 def test_persistence_upsert_case_through_translator():
-    from grace2_contracts import new_ulid, now_utc
-    from grace2_contracts.case import CaseSummary
+    from trid3nt_contracts import new_ulid, now_utc
+    from trid3nt_contracts.case import CaseSummary
 
     case_id = new_ulid()
     server = FakeRealServer()

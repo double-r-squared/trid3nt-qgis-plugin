@@ -21,11 +21,11 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
-from grace2_agent.persistence import Persistence
-from grace2_contracts.auth import AuthTokenEnvelope
-from grace2_contracts.common import new_ulid, now_utc
-from grace2_contracts.user import User
+from trid3nt_server.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
+from trid3nt_server.persistence import Persistence
+from trid3nt_contracts.auth import AuthTokenEnvelope
+from trid3nt_contracts.common import new_ulid, now_utc
+from trid3nt_contracts.user import User
 
 
 class FakeMCPClient:

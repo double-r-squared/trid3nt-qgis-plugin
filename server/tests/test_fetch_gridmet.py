@@ -13,7 +13,7 @@ Coverage:
 - Cache hit: second identical call returns the same URI without re-fetching.
 - DAP failure surfaces as ``GRIDMETUpstreamError`` (retryable).
 
-Live tests (env-gated ``GRACE2_TEST_LIVE_GRIDMET=1``):
+Live tests (env-gated ``TRID3NT_TEST_LIVE_GRIDMET=1``):
 - Riverside County, CA 1° square × 3 days, fm100. Real THREDDS DAP
   subset; evidence written to ``evidence/gridmet_live.txt``.
 """
@@ -30,8 +30,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_gridmet import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_gridmet import (
     GRIDMETEmptyError,
     GRIDMETInputError,
     GRIDMETNotAvailableError,
@@ -58,7 +58,7 @@ _RIVERSIDE_BBOX = (-117.5, 33.5, -116.5, 34.5)
 # Fort Myers, FL — small bbox to confirm CONUS-east also works.
 _FORT_MYERS_BBOX = (-82.0, 26.0, -81.0, 27.0)
 
-_LIVE_GRIDMET = os.environ.get("GRACE2_TEST_LIVE_GRIDMET") == "1"
+_LIVE_GRIDMET = os.environ.get("TRID3NT_TEST_LIVE_GRIDMET") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -156,7 +156,7 @@ def _build_synthetic_gridmet_dataset(variable: str, bbox, n_days: int = 3):
         ]
     )
     # Variable's "internal" long-name token from the production module.
-    from grace2_agent.tools.fetch_gridmet import _VARIABLES
+    from trid3nt_server.tools.fetch_gridmet import _VARIABLES
     long_name, units = _VARIABLES[variable]
 
     arr = np.zeros((len(days), len(lats), len(lons)), dtype=np.float32)
@@ -353,7 +353,7 @@ def test_mocked_happy_path_fm100(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "grace2_agent.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gridmet(
@@ -398,7 +398,7 @@ def test_two_variables_produce_distinct_cache_keys(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "grace2_agent.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_gridmet(
@@ -432,7 +432,7 @@ def test_cache_hit_skips_dap(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "grace2_agent.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_gridmet(
@@ -464,7 +464,7 @@ def test_dap_failure_surfaces_as_upstream_error(monkeypatch):
     monkeypatch.setattr(xr, "open_dataset", _fake_open)
 
     with patch(
-        "grace2_agent.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(GRIDMETUpstreamError) as exc_info:
@@ -492,7 +492,7 @@ def test_layer_uri_shape_fields(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "grace2_agent.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gridmet(
@@ -523,7 +523,7 @@ def test_extra_kwargs_absorbed(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "grace2_agent.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         # Call with extra invented kwargs — must not raise TypeError.
@@ -545,7 +545,7 @@ def test_extra_kwargs_absorbed(monkeypatch):
 
 @pytest.mark.skipif(
     not _LIVE_GRIDMET,
-    reason="GRACE2_TEST_LIVE_GRIDMET=1 not set",
+    reason="TRID3NT_TEST_LIVE_GRIDMET=1 not set",
 )
 def test_live_riverside_fm100(tmp_path):
     """LIVE: fetch gridMET fm100 over Riverside County for 3 days."""
@@ -553,7 +553,7 @@ def test_live_riverside_fm100(tmp_path):
 
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gridmet(

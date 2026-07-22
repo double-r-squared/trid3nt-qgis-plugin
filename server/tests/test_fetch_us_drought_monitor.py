@@ -18,7 +18,7 @@ Coverage:
 - LayerURI shape: ``layer_type="vector"``, ``role="primary"``,
   ``style_preset="us_drought_monitor"``, ``units="dm_class"``.
 
-Live test (gated by ``GRACE2_TEST_LIVE_USDM=1``):
+Live test (gated by ``TRID3NT_TEST_LIVE_USDM=1``):
     Real Esri Living Atlas USDM ArcGIS REST request for the drought-prone US
     Southwest (Arizona). Confirms >=1 feature; FlatGeobuf round-trips; ``dm``
     values are in [0, 4]; ``label`` present.
@@ -34,8 +34,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_us_drought_monitor import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_us_drought_monitor import (
     DM_LABELS,
     US_DROUGHT_MONITOREmptyError,
     US_DROUGHT_MONITORInputError,
@@ -62,7 +62,7 @@ from grace2_agent.tools.fetch_us_drought_monitor import (
 _AZ_BBOX: tuple[float, float, float, float] = (-114.0, 31.3, -109.0, 37.0)
 
 #: Live test gate.
-_LIVE_USDM = os.environ.get("GRACE2_TEST_LIVE_USDM") == "1"
+_LIVE_USDM = os.environ.get("TRID3NT_TEST_LIVE_USDM") == "1"
 
 #: Pinned time for cache-shim tests.
 _PINNED_NOW = datetime.datetime(2026, 6, 27, 12, 0, 0, tzinfo=datetime.timezone.utc)
@@ -116,7 +116,7 @@ def _make_usdm_response(dms: tuple[int, ...] = (0, 1, 2, 3)) -> dict[str, Any]:
 
 def _make_read_through_injector():
     """In-memory S3 read-through injector keyed by object KEY."""
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -329,7 +329,7 @@ def test_estimate_payload_mb_none_bbox():
 
 
 def _patch_client(mock_response):
-    return patch("grace2_agent.tools.fetch_us_drought_monitor.httpx.Client")
+    return patch("trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client")
 
 
 def test_fetch_features_ok_mocked():
@@ -339,7 +339,7 @@ def test_fetch_features_ok_mocked():
     mock_response.json.return_value = fake_resp
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -357,7 +357,7 @@ def test_fetch_features_empty_collection():
     mock_response.json.return_value = fake_resp
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -373,7 +373,7 @@ def test_fetch_features_http_404():
     mock_response.text = "Not found"
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -393,7 +393,7 @@ def test_fetch_features_arcgis_error_envelope():
     }
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -408,7 +408,7 @@ def test_fetch_features_non_json():
     mock_response.json.side_effect = ValueError("No JSON")
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -423,7 +423,7 @@ def test_fetch_features_not_feature_collection():
     mock_response.json.return_value = {"type": "Feature"}
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -436,7 +436,7 @@ def test_fetch_features_network_error():
     import httpx as _httpx
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -544,9 +544,9 @@ def test_cache_miss_then_hit():
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -580,9 +580,9 @@ def test_layer_uri_shape():
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -609,9 +609,9 @@ def test_layer_uri_shape_with_date():
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -650,9 +650,9 @@ def test_extra_kwargs_absorbed():
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -682,9 +682,9 @@ def test_empty_bbox_returns_empty_layer_not_error():
     mock_resp.json.return_value = empty_response
 
     with patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "grace2_agent.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -710,11 +710,11 @@ def test_dm_labels_cover_all_classes():
 
 
 # ---------------------------------------------------------------------------
-# Live smoke test (gated by GRACE2_TEST_LIVE_USDM=1).
+# Live smoke test (gated by TRID3NT_TEST_LIVE_USDM=1).
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE_USDM, reason="GRACE2_TEST_LIVE_USDM not set")
+@pytest.mark.skipif(not _LIVE_USDM, reason="TRID3NT_TEST_LIVE_USDM not set")
 def test_live_smoke_arizona():
     pytest.importorskip("geopandas")
     import geopandas as gpd

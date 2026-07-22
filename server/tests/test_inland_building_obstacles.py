@@ -40,19 +40,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from grace2_agent.workflows.model_flood_scenario import (
+from trid3nt_server.workflows.model_flood_scenario import (
     model_flood_scenario,
     run_model_flood_scenario,
 )
-from grace2_agent.workflows.sfincs_builder import (
+from trid3nt_server.workflows.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     ModelSetup,
     _generate_hydromt_yaml_config,
 )
-from grace2_contracts import new_ulid
-from grace2_contracts.envelope import AssessmentEnvelope
-from grace2_contracts.execution import ExecutionHandle, LayerURI, RunResult
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.envelope import AssessmentEnvelope
+from trid3nt_contracts.execution import ExecutionHandle, LayerURI, RunResult
 
 
 # Inland (NON-coastal) AOI — a high-and-dry city core, no shoreline.
@@ -128,7 +128,7 @@ async def test_wrapper_forwards_building_obstacles_to_workflow() -> None:
     """run_model_flood_scenario(building_obstacles=True) forwards into the call."""
     fake_envelope = _empty_envelope_stub()
     with patch(
-        "grace2_agent.workflows.model_flood_scenario.model_flood_scenario",
+        "trid3nt_server.workflows.model_flood_scenario.model_flood_scenario",
         new=AsyncMock(return_value=fake_envelope),
     ) as mock_wf:
         await run_model_flood_scenario(
@@ -152,7 +152,7 @@ async def test_wrapper_default_off_forwards_false() -> None:
     """Default (no building_obstacles kwarg) forwards building_obstacles=False."""
     fake_envelope = _empty_envelope_stub()
     with patch(
-        "grace2_agent.workflows.model_flood_scenario.model_flood_scenario",
+        "trid3nt_server.workflows.model_flood_scenario.model_flood_scenario",
         new=AsyncMock(return_value=fake_envelope),
     ) as mock_wf:
         await run_model_flood_scenario(bbox=_INLAND_BBOX)
@@ -167,7 +167,7 @@ async def test_wrapper_forwards_string_obstacle_uri() -> None:
     fake_envelope = _empty_envelope_stub()
     uri = "gs://my-bucket/prior_buildings.fgb"
     with patch(
-        "grace2_agent.workflows.model_flood_scenario.model_flood_scenario",
+        "trid3nt_server.workflows.model_flood_scenario.model_flood_scenario",
         new=AsyncMock(return_value=fake_envelope),
     ) as mock_wf:
         await run_model_flood_scenario(bbox=_INLAND_BBOX, building_obstacles=uri)
@@ -242,7 +242,7 @@ def _inland_chain_patches(build_sfincs_mock):  # noqa: ANN001, ANN201 — test h
     async def _wfc(_handle):  # noqa: ANN001
         return run_result_ok
 
-    mod = "grace2_agent.workflows.model_flood_scenario"
+    mod = "trid3nt_server.workflows.model_flood_scenario"
     return [
         patch(f"{mod}.fetch_dem", return_value=_mock_layer_uri("dem")),
         patch(f"{mod}.fetch_landcover", return_value=landcover_result),
@@ -281,7 +281,7 @@ async def test_inland_with_buildings_passes_uri_and_subgrid() -> None:
         # so patch it at its source module.
         stack.enter_context(
             patch(
-                "grace2_agent.tools.data_fetch.fetch_buildings",
+                "trid3nt_server.tools.data_fetch.fetch_buildings",
                 return_value=_buildings_layer(),
             )
         )
@@ -326,7 +326,7 @@ async def test_inland_default_off_no_buildings_no_subgrid() -> None:
             stack.enter_context(p)
         fb = stack.enter_context(
             patch(
-                "grace2_agent.tools.data_fetch.fetch_buildings",
+                "trid3nt_server.tools.data_fetch.fetch_buildings",
                 return_value=_buildings_layer(),
             )
         )
@@ -370,7 +370,7 @@ async def test_inland_buildings_fetch_failure_degrades_to_no_obstacles() -> None
             stack.enter_context(p)
         stack.enter_context(
             patch(
-                "grace2_agent.tools.data_fetch.fetch_buildings",
+                "trid3nt_server.tools.data_fetch.fetch_buildings",
                 side_effect=RuntimeError("Overpass 504 gateway timeout"),
             )
         )

@@ -19,7 +19,7 @@ import math
 
 import pytest
 
-from grace2_agent.tools.compute_overtopping import (
+from trid3nt_server.tools.compute_overtopping import (
     OvertoppingError,
     compute_overtopping,
 )
@@ -160,7 +160,7 @@ def test_extra_kwargs_ignored():
 
 
 def test_registered_in_tool_registry():
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     assert "compute_overtopping" in TOOL_REGISTRY
     md = TOOL_REGISTRY["compute_overtopping"].metadata
@@ -173,7 +173,7 @@ def test_registered_in_tool_registry():
 
 
 def test_in_coastal_category():
-    from grace2_agent.categories import PRIMARY_CATEGORY, tools_for_category
+    from trid3nt_server.categories import PRIMARY_CATEGORY, tools_for_category
 
     assert PRIMARY_CATEGORY.get("compute_overtopping") == "coastal"
     assert "compute_overtopping" in tools_for_category("coastal")
@@ -186,7 +186,7 @@ def test_has_corpus_entries():
     corpus_path = (
         Path(__file__).resolve().parents[1]
         / "src"
-        / "grace2_agent"
+        / "trid3nt_server"
         / "data"
         / "tool_query_corpus.yaml"
     )

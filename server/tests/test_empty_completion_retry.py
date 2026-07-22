@@ -31,12 +31,12 @@ from dataclasses import dataclass, field
 import pytest
 from unittest.mock import MagicMock, patch
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     FunctionCallEvent,
     GeminiSettings,
     TextDeltaEvent,
 )
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
 
 @dataclass
@@ -108,8 +108,8 @@ def _drive(provider: str, rounds, monkeypatch, dispatch_side_effect=None):
 
     Returns ``(user_texts_per_call, model_calls, dispatch_log, sock)``.
     """
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
 
     monkeypatch.setenv("MODEL_PROVIDER", provider)
 
@@ -148,7 +148,7 @@ def _drive(provider: str, rounds, monkeypatch, dispatch_side_effect=None):
 
 def _nudge_seen(user_texts_per_call) -> int:
     """Count how many rounds saw the empty-completion nudge in their contents."""
-    from grace2_agent.server import _EMPTY_COMPLETION_NUDGE
+    from trid3nt_server.server import _EMPTY_COMPLETION_NUDGE
 
     return sum(
         1 for snap in user_texts_per_call if _EMPTY_COMPLETION_NUDGE in snap
@@ -175,7 +175,7 @@ def test_empty_round_is_retried_then_tool_completes(monkeypatch):
 
     # The corrective nudge was appended to contents BEFORE the retried round 2:
     # round 1 (the empty round) saw NO nudge; round 2 (the retry) DID.
-    from grace2_agent.server import _EMPTY_COMPLETION_NUDGE
+    from trid3nt_server.server import _EMPTY_COMPLETION_NUDGE
 
     assert _nudge_seen(user_texts) >= 1, "nudge was not appended on retry"
     assert _EMPTY_COMPLETION_NUDGE not in user_texts[0]
@@ -186,7 +186,7 @@ def test_empty_round_is_retried_then_tool_completes(monkeypatch):
 # (b) CAP+1 consecutive empty rounds stop at the cap -- no infinite loop.
 # --------------------------------------------------------------------------- #
 def test_empty_rounds_stop_at_cap(monkeypatch):
-    from grace2_agent.server import _EMPTY_COMPLETION_RETRY_CAP
+    from trid3nt_server.server import _EMPTY_COMPLETION_RETRY_CAP
 
     # More empty rounds than the loop can ever consume: the cap must stop it.
     rounds = [_empty_round() for _ in range(_EMPTY_COMPLETION_RETRY_CAP + 5)]

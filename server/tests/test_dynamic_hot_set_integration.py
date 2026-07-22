@@ -1,10 +1,10 @@
 """Tests for dynamic hot-set integration with AllowedToolSet (Wave 4.11 M6).
 
 Coverage:
-1. ``test_env_flag_off_uses_static_hot_set`` — with GRACE2_DYNAMIC_HOT_SET
+1. ``test_env_flag_off_uses_static_hot_set`` — with TRID3NT_DYNAMIC_HOT_SET
    unset, ``as_frozenset_async`` returns the static HOT_SET_TOOLS baseline
    (no Mongo call).
-2. ``test_env_flag_on_uses_get_dynamic_hot_set`` — with GRACE2_DYNAMIC_HOT_SET=1,
+2. ``test_env_flag_on_uses_get_dynamic_hot_set`` — with TRID3NT_DYNAMIC_HOT_SET=1,
    ``as_frozenset_async`` calls ``get_dynamic_hot_set`` and returns a frozenset
    that includes the dynamic result tools.
 3. ``test_mongo_failure_falls_back_to_static`` — when ``get_dynamic_hot_set``
@@ -37,7 +37,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from grace2_agent.categories import AllowedToolSet, HOT_SET_TOOLS
+from trid3nt_server.categories import AllowedToolSet, HOT_SET_TOOLS
 
 
 # ---------------------------------------------------------------------------
@@ -67,8 +67,8 @@ _DYNAMIC_TOOL_NAMES: frozenset[str] = frozenset(
 
 @pytest.mark.asyncio
 async def test_env_flag_off_uses_static_hot_set(monkeypatch):
-    """Without GRACE2_DYNAMIC_HOT_SET=1, as_frozenset_async uses static HOT_SET_TOOLS."""
-    monkeypatch.delenv("GRACE2_DYNAMIC_HOT_SET", raising=False)
+    """Without TRID3NT_DYNAMIC_HOT_SET=1, as_frozenset_async uses static HOT_SET_TOOLS."""
+    monkeypatch.delenv("TRID3NT_DYNAMIC_HOT_SET", raising=False)
 
     allowed = AllowedToolSet()
     result = await allowed.as_frozenset_async()
@@ -85,8 +85,8 @@ async def test_env_flag_off_uses_static_hot_set(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_env_flag_on_uses_get_dynamic_hot_set(monkeypatch):
-    """With GRACE2_DYNAMIC_HOT_SET=1, as_frozenset_async calls get_dynamic_hot_set."""
-    monkeypatch.setenv("GRACE2_DYNAMIC_HOT_SET", "1")
+    """With TRID3NT_DYNAMIC_HOT_SET=1, as_frozenset_async calls get_dynamic_hot_set."""
+    monkeypatch.setenv("TRID3NT_DYNAMIC_HOT_SET", "1")
 
     call_log: list[dict] = []
 
@@ -97,7 +97,7 @@ async def test_env_flag_on_uses_get_dynamic_hot_set(monkeypatch):
     allowed = AllowedToolSet(user_id="user-abc")
 
     with patch(
-        "grace2_agent.tools.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discover_dataset.get_dynamic_hot_set",
         side_effect=_fake_get_dyn,
     ):
         result = await allowed.as_frozenset_async()
@@ -123,14 +123,14 @@ async def test_env_flag_on_uses_get_dynamic_hot_set(monkeypatch):
 @pytest.mark.asyncio
 async def test_mongo_failure_falls_back_to_static(monkeypatch):
     """get_dynamic_hot_set raising falls back to static HOT_SET_TOOLS cleanly."""
-    monkeypatch.setenv("GRACE2_DYNAMIC_HOT_SET", "1")
+    monkeypatch.setenv("TRID3NT_DYNAMIC_HOT_SET", "1")
 
     async def _failing_get_dyn(user_id=None, top_k=8):
         raise RuntimeError("Mongo unavailable — simulated failure")
 
     allowed = AllowedToolSet()
     with patch(
-        "grace2_agent.tools.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discover_dataset.get_dynamic_hot_set",
         side_effect=_failing_get_dyn,
     ):
         result = await allowed.as_frozenset_async()
@@ -149,7 +149,7 @@ async def test_mongo_failure_falls_back_to_static(monkeypatch):
 @pytest.mark.asyncio
 async def test_dynamic_hot_set_includes_meta_tools(monkeypatch):
     """Meta-tools are always present even if the dynamic hot set omits them."""
-    monkeypatch.setenv("GRACE2_DYNAMIC_HOT_SET", "1")
+    monkeypatch.setenv("TRID3NT_DYNAMIC_HOT_SET", "1")
 
     # Dynamic set that deliberately excludes meta-tools.
     _no_meta = frozenset({"fetch_dem", "fetch_nws_alerts_conus", "geocode_location"})
@@ -159,7 +159,7 @@ async def test_dynamic_hot_set_includes_meta_tools(monkeypatch):
 
     allowed = AllowedToolSet()
     with patch(
-        "grace2_agent.tools.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discover_dataset.get_dynamic_hot_set",
         side_effect=_fake_get_dyn,
     ):
         result = await allowed.as_frozenset_async()
@@ -178,7 +178,7 @@ async def test_dynamic_hot_set_includes_meta_tools(monkeypatch):
 @pytest.mark.asyncio
 async def test_dynamic_hot_set_cached_after_first_call(monkeypatch):
     """as_frozenset_async fetches once; synchronous as_frozenset reuses the cache."""
-    monkeypatch.setenv("GRACE2_DYNAMIC_HOT_SET", "1")
+    monkeypatch.setenv("TRID3NT_DYNAMIC_HOT_SET", "1")
 
     call_count = 0
 
@@ -189,7 +189,7 @@ async def test_dynamic_hot_set_cached_after_first_call(monkeypatch):
 
     allowed = AllowedToolSet()
     with patch(
-        "grace2_agent.tools.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discover_dataset.get_dynamic_hot_set",
         side_effect=_counting_get_dyn,
     ):
         # First async call — triggers Mongo fetch.
@@ -215,7 +215,7 @@ async def test_dynamic_hot_set_cached_after_first_call(monkeypatch):
 @pytest.mark.asyncio
 async def test_user_id_propagated_to_get_dynamic_hot_set(monkeypatch):
     """AllowedToolSet.user_id is forwarded to get_dynamic_hot_set(user_id=...)."""
-    monkeypatch.setenv("GRACE2_DYNAMIC_HOT_SET", "1")
+    monkeypatch.setenv("TRID3NT_DYNAMIC_HOT_SET", "1")
 
     received_user_ids: list[str | None] = []
 
@@ -225,7 +225,7 @@ async def test_user_id_propagated_to_get_dynamic_hot_set(monkeypatch):
 
     allowed = AllowedToolSet(user_id="user-xyz-789")
     with patch(
-        "grace2_agent.tools.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discover_dataset.get_dynamic_hot_set",
         side_effect=_recording_get_dyn,
     ):
         await allowed.as_frozenset_async()
@@ -243,7 +243,7 @@ def test_bind_auth_result_sets_user_id_on_allowed_set():
     """_bind_auth_result copies authenticated user_id into allowed_tool_set.user_id."""
     from unittest.mock import MagicMock
 
-    from grace2_agent.server import SessionState, _bind_auth_result
+    from trid3nt_server.server import SessionState, _bind_auth_result
 
     state = SessionState(session_id="test-session-001")
     assert state.allowed_tool_set.user_id is None
@@ -285,14 +285,14 @@ def test_synchronous_as_frozenset_returns_static_before_first_async_call():
 @pytest.mark.asyncio
 async def test_empty_dynamic_result_falls_back_to_static(monkeypatch):
     """An empty frozenset from get_dynamic_hot_set falls back to HOT_SET_TOOLS."""
-    monkeypatch.setenv("GRACE2_DYNAMIC_HOT_SET", "1")
+    monkeypatch.setenv("TRID3NT_DYNAMIC_HOT_SET", "1")
 
     async def _empty_get_dyn(user_id=None, top_k=8):
         return frozenset()  # simulates zero telemetry / cold-start
 
     allowed = AllowedToolSet()
     with patch(
-        "grace2_agent.tools.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discover_dataset.get_dynamic_hot_set",
         side_effect=_empty_get_dyn,
     ):
         result = await allowed.as_frozenset_async()

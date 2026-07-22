@@ -7,7 +7,7 @@ seam (boto3-shaped; no network, no moto) + temp files:
 1. run_pelicun_damage_assessment._download_uri_to_local — s3 staging to a
    temp file, the job-0253 last-two-segment path-mangle retry mirrored for
    s3, typed PelicunRuntimeError wrap, and the scheme-aware WMS reverse-map
-   (s3 under GRACE2_STORAGE_BACKEND=s3; gs byte-identical by default).
+   (s3 under TRID3NT_STORAGE_BACKEND=s3; gs byte-identical by default).
 2. run_pelicun_damage_assessment._fetch_pelicun_damage_bytes — end-to-end
    shaped: s3 hazard + asset URIs staged locally, was_remote flags proven by
    the finally-block unlink.
@@ -59,10 +59,10 @@ def _bind_fake_reader(monkeypatch, payload: bytes = b"S3-BYTES"):
     """Bind a fake over the shared cache.read_object_bytes_s3 seam.
 
     Every per-tool s3 branch imports the reader lazily from
-    ``grace2_agent.tools.cache`` at call time, so one setattr covers all
+    ``trid3nt_server.tools.cache`` at call time, so one setattr covers all
     modules. Returns the list of URIs requested.
     """
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     calls: list[str] = []
 
@@ -75,7 +75,7 @@ def _bind_fake_reader(monkeypatch, payload: bytes = b"S3-BYTES"):
 
 
 def _bind_failing_reader(monkeypatch, exc: Exception):
-    from grace2_agent.tools import cache as cache_mod
+    from trid3nt_server.tools import cache as cache_mod
 
     def fake_reader(uri: str) -> bytes:
         raise exc
@@ -89,7 +89,7 @@ def _bind_failing_reader(monkeypatch, exc: Exception):
 
 
 def test_pelicun_download_s3_stages_to_temp_file(monkeypatch):
-    from grace2_agent.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -107,8 +107,8 @@ def test_pelicun_download_s3_stages_to_temp_file(monkeypatch):
 
 def test_pelicun_download_s3_mangle_repair_retries_last_two_segments(monkeypatch):
     """LLM path-mangle guard (job-0253) mirrored for s3:// URIs."""
-    from grace2_agent.tools import cache as cache_mod
-    from grace2_agent.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools import cache as cache_mod
+    from trid3nt_server.tools.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -137,7 +137,7 @@ def test_pelicun_download_s3_mangle_repair_retries_last_two_segments(monkeypatch
 
 
 def test_pelicun_download_s3_failure_raises_typed_error(monkeypatch):
-    from grace2_agent.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.run_pelicun_damage_assessment import (
         PelicunRuntimeError,
         _download_uri_to_local,
     )
@@ -155,12 +155,12 @@ _WMS_URI = (
 
 
 def test_pelicun_wms_reverse_map_uses_s3_scheme_on_aws(monkeypatch):
-    from grace2_agent.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs")
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs")
     calls = _bind_fake_reader(monkeypatch, b"COG")
     path = _download_uri_to_local(_WMS_URI, ".tif")
     try:
@@ -182,7 +182,7 @@ def test_pelicun_wms_reverse_map_uses_s3_scheme_on_aws(monkeypatch):
 
 
 def test_pelicun_fetch_stages_s3_inputs_and_unlinks_after(monkeypatch):
-    from grace2_agent.tools import run_pelicun_damage_assessment as mod
+    from trid3nt_server.tools import run_pelicun_damage_assessment as mod
 
     _bind_fake_reader(monkeypatch, b"PAYLOAD")
 
@@ -228,7 +228,7 @@ def test_pelicun_fetch_stages_s3_inputs_and_unlinks_after(monkeypatch):
 
 
 def test_postprocess_pelicun_download_s3_stages_and_wraps_errors(monkeypatch):
-    from grace2_agent.tools.postprocess_pelicun import (
+    from trid3nt_server.tools.postprocess_pelicun import (
         PelicunPostprocessIOError,
         _download_uri_to_local,
     )
@@ -251,7 +251,7 @@ def test_postprocess_pelicun_download_s3_stages_and_wraps_errors(monkeypatch):
 def test_postprocess_pelicun_tool_unlinks_s3_staged_file(monkeypatch):
     import geopandas as gpd
 
-    from grace2_agent.tools import postprocess_pelicun as mod
+    from trid3nt_server.tools import postprocess_pelicun as mod
 
     _bind_fake_reader(monkeypatch, b"FGB-PAYLOAD")
 
@@ -300,7 +300,7 @@ def test_postprocess_pelicun_tool_unlinks_s3_staged_file(monkeypatch):
 
 
 def test_clip_vector_resolve_s3_returns_temp_path_tuple(monkeypatch):
-    from grace2_agent.tools.clip_vector_to_polygon import (
+    from trid3nt_server.tools.clip_vector_to_polygon import (
         _resolve_layer_to_local_path,
     )
 
@@ -322,7 +322,7 @@ def test_clip_vector_resolve_s3_returns_temp_path_tuple(monkeypatch):
 
 
 def test_clip_vector_resolve_s3_failure_raises_typed_error(monkeypatch):
-    from grace2_agent.tools.clip_vector_to_polygon import (
+    from trid3nt_server.tools.clip_vector_to_polygon import (
         ClipVectorError,
         _resolve_layer_to_local_path,
     )
@@ -354,7 +354,7 @@ def test_clip_vector_resolve_s3_failure_raises_typed_error(monkeypatch):
 
 
 def test_analytical_qa_download_and_materialize_s3(monkeypatch):
-    from grace2_agent.tools.analytical_qa import (
+    from trid3nt_server.tools.analytical_qa import (
         AnalyticalQAError,
         _download_uri_bytes,
         _materialize_uri,
@@ -378,7 +378,7 @@ def test_analytical_qa_download_and_materialize_s3(monkeypatch):
 
 
 def test_analytical_qa_materialize_local_path_passthrough_unchanged():
-    from grace2_agent.tools.analytical_qa import _materialize_uri
+    from trid3nt_server.tools.analytical_qa import _materialize_uri
 
     with tempfile.TemporaryDirectory() as tmpdir:
         assert _materialize_uri("/tmp/x.fgb", tmpdir, "v", None) == "/tmp/x.fgb"
@@ -390,7 +390,7 @@ def test_analytical_qa_materialize_local_path_passthrough_unchanged():
 
 
 def test_chart_tools_download_and_materialize_s3(monkeypatch):
-    from grace2_agent.tools.chart_tools import (
+    from trid3nt_server.tools.chart_tools import (
         ChartToolError,
         _download_uri_bytes,
         _materialize_uri,
@@ -428,8 +428,8 @@ def _tiny_tif_bytes(crs="EPSG:32613"):
 def test_clip_raster_to_bbox_get_source_crs_s3_stages_via_boto3(monkeypatch):
     # job-0293c: /vsis3/ creds don't resolve on the EC2 role in this env —
     # the s3 branch must stage bytes via the shared boto3 reader.
-    from grace2_agent.tools import cache as cache_mod
-    from grace2_agent.tools.clip_raster_to_bbox import _get_source_crs
+    from trid3nt_server.tools import cache as cache_mod
+    from trid3nt_server.tools.clip_raster_to_bbox import _get_source_crs
 
     calls: list[str] = []
     data = _tiny_tif_bytes()
@@ -445,8 +445,8 @@ def test_clip_raster_to_bbox_get_source_crs_s3_stages_via_boto3(monkeypatch):
 
 
 def test_clip_raster_to_polygon_get_source_crs_s3_stages_via_boto3(monkeypatch):
-    from grace2_agent.tools import cache as cache_mod
-    from grace2_agent.tools.clip_raster_to_polygon import _get_source_crs
+    from trid3nt_server.tools import cache as cache_mod
+    from trid3nt_server.tools.clip_raster_to_polygon import _get_source_crs
 
     calls: list[str] = []
     data = _tiny_tif_bytes()
@@ -458,8 +458,8 @@ def test_clip_raster_to_polygon_get_source_crs_s3_stages_via_boto3(monkeypatch):
 
 def test_extract_landcover_open_source_s3_stages_via_boto3(monkeypatch):
     import os
-    from grace2_agent.tools import cache as cache_mod
-    from grace2_agent.tools import extract_landcover_class as elc
+    from trid3nt_server.tools import cache as cache_mod
+    from trid3nt_server.tools import extract_landcover_class as elc
 
     calls: list[str] = []
     data = _tiny_tif_bytes()

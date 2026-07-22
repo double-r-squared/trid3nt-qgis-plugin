@@ -11,7 +11,7 @@ help:
 	@echo "TRID3NT Local -- bundled local server + QGIS plugin"
 	@echo ""
 	@echo "  make setup    one-time: create .env.local, fetch binaries, build the agent venv"
-	@echo "  (edit .env.local: set your LLM endpoint/key -- see .env.openrouter.example)"
+	@echo "  make env       write a starter .env.local (edit it: set your LLM key)"
 	@echo "  make up        start the local stack (minio + agent)"
 	@echo "  make plugin    install the QGIS plugin into your QGIS profile (then reload it)"
 	@echo "  make status    health-check the running services"
@@ -27,16 +27,16 @@ env:
 	printf '%s\n' \
 	  '# TRID3NT local env - fill in your LLM endpoint + key' \
 	  'MODEL_PROVIDER=openai' \
-	  'GRACE2_OPENAI_BASE_URL=https://openrouter.ai/api/v1' \
-	  'GRACE2_OPENAI_MODEL=anthropic/claude-3.5-haiku' \
-	  'GRACE2_OPENAI_API_KEY=sk-or-v1-REPLACE-ME' \
+	  'TRID3NT_OPENAI_BASE_URL=https://openrouter.ai/api/v1' \
+	  'TRID3NT_OPENAI_MODEL=anthropic/claude-3.5-haiku' \
+	  'TRID3NT_OPENAI_API_KEY=sk-or-v1-REPLACE-ME' \
 	  'AWS_ENDPOINT_URL=http://127.0.0.1:9000' \
 	  'AWS_ACCESS_KEY_ID=minioadmin' \
 	  'AWS_SECRET_ACCESS_KEY=minioadmin' \
 	  'AWS_DEFAULT_REGION=us-east-1' \
-	  'GRACE2_CACHE_BUCKET=trid3nt-cache' \
-	  'GRACE2_DEV_PERSISTENCE_DIR=$(REPO_ROOT)/data/persistence' \
-	  'GRACE2_CATALOG_YAML=$(REPO_ROOT)/public_data_source_catalog.yaml' \
+	  'TRID3NT_CACHE_BUCKET=trid3nt-cache' \
+	  'TRID3NT_DEV_PERSISTENCE_DIR=$(REPO_ROOT)/data/persistence' \
+	  'TRID3NT_CATALOG_YAML=$(REPO_ROOT)/public_data_source_catalog.yaml' \
 	  > $(REPO_ROOT)/.env.local; \
 	echo "wrote .env.local - edit it and set your API key"; fi
 

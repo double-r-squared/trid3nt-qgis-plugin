@@ -27,7 +27,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
 
 # ---------------------------------------------------------------------------
@@ -120,9 +120,9 @@ _SAMPLE_IMPACT_TOOL_RESULT: dict[str, Any] = {
 @pytest.mark.asyncio
 async def test_compute_impact_envelope_dispatch_emits_impact_envelope():
     """compute_impact_envelope with valid raw_envelope triggers extra WS send."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_agent.adapter import GeminiSettings
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_server.adapter import GeminiSettings
 
     # Turn 1: Gemini calls compute_impact_envelope.
     turn1_chunk = _make_fake_chunk_with_function_call(
@@ -200,9 +200,9 @@ async def test_compute_impact_envelope_dispatch_emits_impact_envelope():
 @pytest.mark.asyncio
 async def test_non_impact_tool_does_not_emit_impact_envelope():
     """Dispatching fetch_dem (or any non-impact tool) emits no impact-envelope."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_agent.adapter import GeminiSettings
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_server.adapter import GeminiSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "fetch_dem",
@@ -246,9 +246,9 @@ async def test_non_impact_tool_does_not_emit_impact_envelope():
 @pytest.mark.asyncio
 async def test_impact_envelope_emission_without_raw_envelope():
     """No impact-envelope when result lacks the raw_envelope key."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_agent.adapter import GeminiSettings
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_server.adapter import GeminiSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "compute_impact_envelope",
@@ -292,9 +292,9 @@ async def test_impact_envelope_emission_without_raw_envelope():
 @pytest.mark.asyncio
 async def test_impact_envelope_emission_raw_envelope_missing_n_structures_total():
     """No impact-envelope when raw_envelope lacks n_structures_total."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_agent.adapter import GeminiSettings
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_server.adapter import GeminiSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "compute_impact_envelope",
@@ -341,7 +341,7 @@ async def test_impact_envelope_emission_raw_envelope_missing_n_structures_total(
 @pytest.mark.asyncio
 async def test_maybe_emit_impact_envelope_helper_valid():
     """Direct call to _maybe_emit_impact_envelope sends one impact-envelope."""
-    from grace2_agent.server import SessionState, _maybe_emit_impact_envelope
+    from trid3nt_server.server import SessionState, _maybe_emit_impact_envelope
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
@@ -358,7 +358,7 @@ async def test_maybe_emit_impact_envelope_helper_valid():
 @pytest.mark.asyncio
 async def test_maybe_emit_impact_envelope_helper_wire_failure_swallowed():
     """_maybe_emit_impact_envelope swallows send exceptions (best-effort)."""
-    from grace2_agent.server import SessionState, _maybe_emit_impact_envelope
+    from trid3nt_server.server import SessionState, _maybe_emit_impact_envelope
 
     class _ErrorSocket:
         async def send(self, msg: str) -> None:

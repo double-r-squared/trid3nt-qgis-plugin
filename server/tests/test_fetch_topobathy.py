@@ -20,7 +20,7 @@ Plus registry-shape, typed-error-envelope, input-validation, and the
 tile-index intersect math.
 
 A SINGLE live smoke fetch of the CI bbox (-85.45, 29.92, -85.38, 29.98) is
-attempted but NOT required (gated by GRACE2_TEST_LIVE_TOPOBATHY=1) — the build
+attempted but NOT required (gated by TRID3NT_TEST_LIVE_TOPOBATHY=1) — the build
 does not block on a live pull.
 """
 
@@ -35,9 +35,9 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools import fetch_topobathy as ftb
-from grace2_agent.tools.fetch_topobathy import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools import fetch_topobathy as ftb
+from trid3nt_server.tools.fetch_topobathy import (
     ETOPO_GLOBAL_ROOT,
     TARGET_CRS,
     TopobathyDatumError,
@@ -60,7 +60,7 @@ from grace2_agent.tools.fetch_topobathy import (
 )
 
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_TOPOBATHY") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_TOPOBATHY") == "1"
 
 # SFINCS North Star demo + CI smoke bboxes.
 _DEMO_BBOX = (-85.75, 29.55, -85.25, 30.20)
@@ -129,7 +129,7 @@ def test_topobathy_registered_with_expected_metadata() -> None:
 
 
 def test_topobathy_in_coastal_category() -> None:
-    from grace2_agent.categories import PRIMARY_CATEGORY, tools_for_category
+    from trid3nt_server.categories import PRIMARY_CATEGORY, tools_for_category
 
     assert PRIMARY_CATEGORY.get("fetch_topobathy") == "coastal"
     assert "fetch_topobathy" in tools_for_category("coastal")
@@ -324,7 +324,7 @@ def test_datum_gate_absent_signal_defaults_to_navd88() -> None:
 def test_merge_cudem_wins_on_coast_and_output_contract() -> None:
     """CUDEM (listed last) wins in the overlap; 3DEP fills nodata; output is
     EPSG:32616 single-band float32 with positive-up land + NEGATIVE bathy."""
-    tmpdir = tempfile.mkdtemp(prefix="grace2_topobathy_test_")
+    tmpdir = tempfile.mkdtemp(prefix="trid3nt_topobathy_test_")
     land_path = os.path.join(tmpdir, "land.tif")
     cudem_path = os.path.join(tmpdir, "cudem.tif")
     try:
@@ -393,7 +393,7 @@ def test_merge_masks_unflagged_9999_sentinel_and_sets_nodata() -> None:
     Regression for the live Mexico-Beach bug: off-coverage offshore fill leaked
     as +9999 onto the SFINCS mesh. The merge defensively masks |z| >= 9000.
     """
-    tmpdir = tempfile.mkdtemp(prefix="grace2_topobathy_sentinel_")
+    tmpdir = tempfile.mkdtemp(prefix="trid3nt_topobathy_sentinel_")
     cudem_path = os.path.join(tmpdir, "cudem.tif")
     try:
         # CUDEM with a 9999 fill patch in the EAST half BUT ds.nodata left at a
@@ -560,7 +560,7 @@ def test_merge_mixed_crs_and_orientation_no_mergeerror() -> None:
     from rasterio.transform import Affine, from_origin
     from rasterio.warp import transform_bounds
 
-    tmpdir = tempfile.mkdtemp(prefix="grace2_topobathy_mixedcrs_")
+    tmpdir = tempfile.mkdtemp(prefix="trid3nt_topobathy_mixedcrs_")
     land_path = os.path.join(tmpdir, "land_5070.tif")
     cudem_path = os.path.join(tmpdir, "cudem_4269.tif")
     try:
@@ -689,12 +689,12 @@ def _patch_pipeline(
     monkeypatch.setattr(ftb, "_build_merged_topobathy", _merge_local)
     # read_through -> write bytes to a temp file + return a local file:// URI so
     # no GCS/S3 is touched and the LayerURI assertion (uri not None) holds.
-    from grace2_agent.tools.cache import ReadThroughResult
+    from trid3nt_server.tools.cache import ReadThroughResult
 
     def _fake_read_through(metadata, params, ext, fetch_fn, **_kw):  # type: ignore[no-untyped-def]
         data = fetch_fn()
         with tempfile.NamedTemporaryFile(
-            suffix=f".{ext}", delete=False, prefix="grace2_topobathy_cache_"
+            suffix=f".{ext}", delete=False, prefix="trid3nt_topobathy_cache_"
         ) as f:
             f.write(data)
             uri = f"gs://test-cache/cache/static-30d/topobathy/{os.path.basename(f.name)}"
@@ -877,7 +877,7 @@ def test_fetch_topobathy_manifest_unreachable_degrades(
     monkeypatch.setattr(ftb, "_select_etopo_tiles", lambda *_a, **_k: [])
     monkeypatch.setattr(ftb, "_assert_navd88", lambda *_a, **_k: 0.0)
     monkeypatch.setattr(ftb, "_fetch_3dep_land_to_file", lambda *_a, **_k: land_path)
-    from grace2_agent.tools.cache import ReadThroughResult
+    from trid3nt_server.tools.cache import ReadThroughResult
 
     def _fake_rt(metadata, params, ext, fetch_fn, **_kw):  # type: ignore[no-untyped-def]
         data = fetch_fn()
@@ -910,7 +910,7 @@ def test_fetch_topobathy_datum_mismatch_propagates(
         raise TopobathyDatumError("tile is MHW, no offset")
 
     monkeypatch.setattr(ftb, "_assert_navd88", _datum_raise)
-    from grace2_agent.tools.cache import ReadThroughResult
+    from trid3nt_server.tools.cache import ReadThroughResult
 
     monkeypatch.setattr(
         ftb, "read_through",
@@ -927,7 +927,7 @@ def test_fetch_topobathy_datum_mismatch_propagates(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_TOPOBATHY=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_TOPOBATHY=1 to run")
 def test_live_etopo_fallback_crescent_city_has_real_bathy() -> None:
     """LIVE: the Crescent City tsunami AOI finds 0 CUDEM tiles (Pacific coast)
     but the GLOBAL ETOPO 2022 fallback returns a tile with REAL below-waterline
@@ -954,7 +954,7 @@ def test_live_etopo_fallback_crescent_city_has_real_bathy() -> None:
     )
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_TOPOBATHY=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_TOPOBATHY=1 to run")
 def test_live_cudem_manifest_resolves() -> None:
     """The real CUDEM tile-index resolves and at least one tile intersects the
     CI smoke bbox — proves the endpoint is live without a full multi-GB merge."""
@@ -967,7 +967,7 @@ def test_live_cudem_manifest_resolves() -> None:
 _MEXICO_BEACH_BBOX = (-85.47, 29.89, -85.36, 29.98)
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_TOPOBATHY=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_TOPOBATHY=1 to run")
 def test_live_mexico_beach_merge_no_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     """LIVE end-to-end: pull the REAL NOAA NCEI CUDEM tiles + the REAL 3DEP land
     DEM for the Mexico-Beach demo AOI and run the FULL merge -> COG with the

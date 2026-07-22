@@ -10,7 +10,7 @@ Coverage:
 - _build_zarr_paths produces the expected outer/inner S3 paths.
 - _cycle_key matches the documented mirror layout.
 
-Live tests (env-gated ``GRACE2_TEST_LIVE_HRRR=1``):
+Live tests (env-gated ``TRID3NT_TEST_LIVE_HRRR=1``):
 - Live fetch of a small Fort Myers bbox via the real S3 mirror. Confirms
   the published cycle resolves, the slice clips inside the bbox, and the
   returned values are physically plausible (e.g. 2 m temp between 220 K
@@ -24,8 +24,8 @@ import os
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_hrrr_forecast import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_hrrr_forecast import (
     HRRRForecastEmptyError,
     HRRRForecastInputError,
     HRRRForecastUpstreamError,
@@ -50,7 +50,7 @@ _FORT_MYERS_BBOX = (-82.0, 26.4, -81.6, 26.8)
 # Non-CONUS bbox (Hawaii) — used to verify the CONUS gate.
 _HAWAII_BBOX = (-158.0, 21.0, -157.5, 21.5)
 
-_LIVE_HRRR = os.environ.get("GRACE2_TEST_LIVE_HRRR") == "1"
+_LIVE_HRRR = os.environ.get("TRID3NT_TEST_LIVE_HRRR") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -341,7 +341,7 @@ def test_wind_speed_fetches_both_components_and_writes_magnitude(monkeypatch):
     """variable='10m_wind_speed' opens BOTH UGRD+VGRD and writes sqrt(u^2+v^2)."""
     import numpy as np
 
-    from grace2_agent.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools import fetch_hrrr_forecast as mod
 
     u_vals = [[3.0, 0.0], [6.0, 5.0]]
     v_vals = [[4.0, 0.0], [8.0, 12.0]]
@@ -379,7 +379,7 @@ def test_wind_speed_preserves_nan_nodata(monkeypatch):
     """NaN in either wind component propagates as NaN in the magnitude band."""
     import numpy as np
 
-    from grace2_agent.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools import fetch_hrrr_forecast as mod
 
     u_vals = [[3.0, np.nan], [6.0, 0.0]]
     v_vals = [[4.0, 1.0], [np.nan, 0.0]]
@@ -411,7 +411,7 @@ def test_plain_component_unchanged_single_open(monkeypatch):
     """A plain component variable opens exactly ONE component and writes it verbatim."""
     import numpy as np
 
-    from grace2_agent.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools import fetch_hrrr_forecast as mod
 
     u_vals = [[3.0, 7.0], [6.0, 5.0]]
     requested: list[str] = []
@@ -437,8 +437,8 @@ def test_plain_component_unchanged_single_open(monkeypatch):
 
 def test_fetch_hrrr_wind_speed_layer_uri_preset_and_units(monkeypatch):
     """The full tool stamps style_preset='wind_speed' + units='m s-1' for wind speed."""
-    from grace2_agent.tools import fetch_hrrr_forecast as mod
-    from grace2_agent.tools.cache import ReadThroughResult
+    from trid3nt_server.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools.cache import ReadThroughResult
 
     captured: dict[str, bytes] = {}
 
@@ -470,8 +470,8 @@ def test_fetch_hrrr_wind_speed_layer_uri_preset_and_units(monkeypatch):
 
 def test_fetch_hrrr_component_layer_uri_preset_and_units(monkeypatch):
     """A plain component keeps its hrrr_<var> preset + m s-1 units (unchanged)."""
-    from grace2_agent.tools import fetch_hrrr_forecast as mod
-    from grace2_agent.tools.cache import ReadThroughResult
+    from trid3nt_server.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools.cache import ReadThroughResult
 
     import fsspec
 
@@ -501,7 +501,7 @@ def test_fetch_hrrr_component_layer_uri_preset_and_units(monkeypatch):
 
 @pytest.mark.skipif(
     not _LIVE_HRRR,
-    reason="set GRACE2_TEST_LIVE_HRRR=1 to enable the live HRRR-Zarr smoke",
+    reason="set TRID3NT_TEST_LIVE_HRRR=1 to enable the live HRRR-Zarr smoke",
 )
 def test_live_fetch_fort_myers_2m_temperature(tmp_path, monkeypatch):
     """Live smoke: fetch 2 m temperature over Fort Myers, confirm shape + sanity.
@@ -513,7 +513,7 @@ def test_live_fetch_fort_myers_2m_temperature(tmp_path, monkeypatch):
     """
     import tempfile
 
-    from grace2_agent.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools import fetch_hrrr_forecast as mod
 
     captured: dict[str, bytes] = {}
 
@@ -524,7 +524,7 @@ def test_live_fetch_fort_myers_2m_temperature(tmp_path, monkeypatch):
         # Write to a tmp file and return a file:// uri so the LayerURI is well-formed.
         out = tmp_path / "live.tif"
         out.write_bytes(data)
-        from grace2_agent.tools.cache import ReadThroughResult
+        from trid3nt_server.tools.cache import ReadThroughResult
 
         return ReadThroughResult(
             uri=f"file://{out}", data=data, hit=False

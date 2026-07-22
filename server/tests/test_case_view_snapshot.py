@@ -47,18 +47,18 @@ from datetime import datetime, timezone
 
 import pytest
 
-from grace2_agent.persistence import (
+from trid3nt_server.persistence import (
     CASE_VIEWS_BUCKET,
     CASE_VIEWS_PREFIX,
     Persistence,
     case_view_snapshot_key,
 )
-from grace2_contracts.case import (
+from trid3nt_contracts.case import (
     CaseOpenEnvelopePayload,
     CaseSummary,
 )
-from grace2_contracts.collections import ProjectLayerSummary
-from grace2_contracts.common import new_ulid
+from trid3nt_contracts.collections import ProjectLayerSummary
+from trid3nt_contracts.common import new_ulid
 
 # Reuse the in-memory MockMCPClient from the main persistence test suite (the
 # file/dynamo test backend equivalent — it implements the same MCP tool surface
@@ -237,7 +237,7 @@ def test_snapshot_without_inline_is_exact_case_open_payload() -> None:
 
 
 def test_snapshot_merges_density_tag_like_emit_session_state() -> None:
-    from grace2_agent.tools.vector_tiles import DensifyMeta
+    from trid3nt_server.tools.vector_tiles import DensifyMeta
 
     p, case_id, vector_layer_id, inline = _seed_case_with_vector_layer()
     fake = _FakeS3()
@@ -560,7 +560,7 @@ def test_cross_case_inline_skips_oversized_geojson() -> None:
     the ceiling; the writer must leave the vector URI-only rather than balloon
     the cold snapshot past the payload norm.
     """
-    import grace2_agent.persistence as persistence_mod
+    import trid3nt_server.persistence as persistence_mod
 
     with tempfile.TemporaryDirectory() as td:
         p, case_id, vector_layer_id, _g = _seed_case_with_local_vector_artifact(

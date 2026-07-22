@@ -31,14 +31,14 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.pipeline_emitter import (
+from trid3nt_server.pipeline_emitter import (
     PipelineEmitter,
     _CURRENT_EMITTER,
     _layer_identity_key,
 )
-from grace2_agent.workflows.model_flood_scenario import model_flood_scenario
-from grace2_contracts import new_ulid
-from grace2_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
+from trid3nt_server.workflows.model_flood_scenario import model_flood_scenario
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
 
 
 # --------------------------------------------------------------------------- #
@@ -203,19 +203,19 @@ async def test_frames_emitted_as_distinct_loaded_layers_via_emitter() -> None:
     token = _CURRENT_EMITTER.set(emitter)
     try:
         with (
-            patch("grace2_agent.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-            patch("grace2_agent.workflows.model_flood_scenario.fetch_landcover", return_value=landcover_result),
-            patch("grace2_agent.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-            patch("grace2_agent.workflows.model_flood_scenario.lookup_precip_return_period", return_value=precip_result),
-            patch("grace2_agent.workflows.model_flood_scenario.build_sfincs_model", return_value=model_setup),
-            patch("grace2_agent.workflows.model_flood_scenario.run_solver", return_value=handle),
-            patch("grace2_agent.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+            patch("trid3nt_server.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
+            patch("trid3nt_server.workflows.model_flood_scenario.fetch_landcover", return_value=landcover_result),
+            patch("trid3nt_server.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+            patch("trid3nt_server.workflows.model_flood_scenario.lookup_precip_return_period", return_value=precip_result),
+            patch("trid3nt_server.workflows.model_flood_scenario.build_sfincs_model", return_value=model_setup),
+            patch("trid3nt_server.workflows.model_flood_scenario.run_solver", return_value=handle),
+            patch("trid3nt_server.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
             patch(
-                "grace2_agent.workflows.model_flood_scenario.postprocess_flood",
+                "trid3nt_server.workflows.model_flood_scenario.postprocess_flood",
                 return_value=([peak_layer] + frame_layers, depth_metrics),
             ),
             patch(
-                "grace2_agent.workflows.model_flood_scenario.publish_layer",
+                "trid3nt_server.workflows.model_flood_scenario.publish_layer",
                 side_effect=_mock_publish_layer,
             ),
         ):
@@ -316,19 +316,19 @@ async def test_no_emitter_does_not_publish_frames() -> None:
     # Ensure NO emitter is bound (direct-call / smoke / test path).
     assert _CURRENT_EMITTER.get() is None
     with (
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_landcover", return_value=landcover_result),
-        patch("grace2_agent.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-        patch("grace2_agent.workflows.model_flood_scenario.lookup_precip_return_period", return_value=precip_result),
-        patch("grace2_agent.workflows.model_flood_scenario.build_sfincs_model", return_value=model_setup),
-        patch("grace2_agent.workflows.model_flood_scenario.run_solver", return_value=handle),
-        patch("grace2_agent.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_landcover", return_value=landcover_result),
+        patch("trid3nt_server.workflows.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        patch("trid3nt_server.workflows.model_flood_scenario.lookup_precip_return_period", return_value=precip_result),
+        patch("trid3nt_server.workflows.model_flood_scenario.build_sfincs_model", return_value=model_setup),
+        patch("trid3nt_server.workflows.model_flood_scenario.run_solver", return_value=handle),
+        patch("trid3nt_server.workflows.model_flood_scenario.wait_for_completion", side_effect=_wfc),
         patch(
-            "grace2_agent.workflows.model_flood_scenario.postprocess_flood",
+            "trid3nt_server.workflows.model_flood_scenario.postprocess_flood",
             return_value=([peak_layer] + frame_layers, depth_metrics),
         ),
         patch(
-            "grace2_agent.workflows.model_flood_scenario.publish_layer",
+            "trid3nt_server.workflows.model_flood_scenario.publish_layer",
             side_effect=_mock_publish_layer,
         ),
     ):

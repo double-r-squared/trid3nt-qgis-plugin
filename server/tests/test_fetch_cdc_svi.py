@@ -21,8 +21,8 @@ import tempfile
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_cdc_svi import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_cdc_svi import (
     CDC_SVIInputError,
     CDC_SVIUpstreamError,
     SVI_NULL_SENTINEL,

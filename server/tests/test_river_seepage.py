@@ -23,9 +23,9 @@ from pathlib import Path
 
 import pytest
 
-from grace2_contracts.modflow_contracts import PlumeLayerURI, SeepageLayerURI
+from trid3nt_contracts.modflow_contracts import PlumeLayerURI, SeepageLayerURI
 
-from grace2_agent.workflows import postprocess_modflow as pp
+from trid3nt_server.workflows import postprocess_modflow as pp
 
 
 # --------------------------------------------------------------------------- #
@@ -36,7 +36,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _find_mf6() -> str | None:
-    env = os.environ.get("GRACE2_MF6_BIN")
+    env = os.environ.get("TRID3NT_MF6_BIN")
     if env and Path(env).exists():
         return env
     on_path = shutil.which("mf6")
@@ -125,7 +125,7 @@ def test_postprocess_river_seepage_from_real_cbc(tmp_path, monkeypatch) -> None:
     import rasterio
 
     # Use the production re-export seam (handles the worker-dir sys.path).
-    from grace2_agent.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.run_modflow import build_modflow_deck
 
     lat0, lon0 = 26.64, -81.87
     poly = [(-81.878, lat0), (-81.872, lat0), (-81.866, lat0), (-81.862, lat0)]
@@ -194,8 +194,8 @@ async def test_composer_assembles_args_and_threads_result(monkeypatch) -> None:
     """``model_river_seepage_scenario`` geocodes -> fetches river -> calls the
     river-seepage tool with the assembled args, and threads the typed seepage
     result into the RiverSeepageResult — every tool mocked (no run_solver)."""
-    from grace2_agent.workflows import model_river_seepage_scenario as mod
-    from grace2_contracts.execution import LayerURI
+    from trid3nt_server.workflows import model_river_seepage_scenario as mod
+    from trid3nt_contracts.execution import LayerURI
 
     calls: dict[str, Any] = {}
 
@@ -272,7 +272,7 @@ async def test_composer_assembles_args_and_threads_result(monkeypatch) -> None:
 async def test_composer_errors_when_no_river_found(monkeypatch) -> None:
     """A fetch_river_geometry result without a URI -> a typed scenario error
     (no silent fall-through to a riverless run)."""
-    from grace2_agent.workflows import model_river_seepage_scenario as mod
+    from trid3nt_server.workflows import model_river_seepage_scenario as mod
 
     def _fake_geocode(location):
         return {"latitude": 26.64, "longitude": -81.87}
@@ -292,7 +292,7 @@ async def test_composer_errors_when_no_river_found(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_composer_requires_exactly_one_location_form() -> None:
-    from grace2_agent.workflows import model_river_seepage_scenario as mod
+    from trid3nt_server.workflows import model_river_seepage_scenario as mod
 
     with pytest.raises(mod.RiverSeepageScenarioInputError):
         await mod.model_river_seepage_scenario()  # neither

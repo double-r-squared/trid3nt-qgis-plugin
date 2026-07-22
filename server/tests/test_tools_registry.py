@@ -12,10 +12,10 @@ Coverage:
 from __future__ import annotations
 
 import pytest
-from grace2_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from grace2_agent import tools as agent_tools
-from grace2_agent.tools import (
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.tools import (
     RegisteredTool,
     ToolRegistrationError,
     get_registered_tools,
@@ -106,11 +106,11 @@ def test_get_registered_tools_returns_sorted_snapshot(empty_registry):
 
 
 def test_passthroughs_eager_import_registers_qgis():
-    """Importing ``grace2_agent.tools`` populates the ``qgis_process`` pass-through.
+    """Importing ``trid3nt_server.tools`` populates the ``qgis_process`` pass-through.
 
     This is the acceptance-criterion test: the running agent registers it
     with ADK on startup because its module-level ``@register_tool`` call
-    fires when ``grace2_agent.tools`` is imported. We exercise that by
+    fires when ``trid3nt_server.tools`` is imported. We exercise that by
     reading the live ``TOOL_REGISTRY`` after the package import.
 
     The dead ``mongo_query`` stub (MongoDB Atlas torn down) was removed; it

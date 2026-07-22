@@ -11,7 +11,7 @@ Coverage:
 - Network failure / 500 / error envelope / non-FeatureCollection → typed
   USACELeveeUpstreamError(retryable=True).
 - estimate_payload_mb returns numeric MB; shape sanity-tested.
-- Live (env GRACE2_TEST_LIVE_USACE_LEVEES=1): real NLD fetch over the New
+- Live (env TRID3NT_TEST_LIVE_USACE_LEVEES=1): real NLD fetch over the New
   Orleans bbox returns >=1 leveed_areas feature.
 """
 
@@ -25,8 +25,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_usace_levees import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_usace_levees import (
     CONUS_BBOX,
     LAYER_TO_FS_ID,
     USACELeveeError,
@@ -47,7 +47,7 @@ from grace2_agent.tools.fetch_usace_levees import (
 
 _PINNED_NOW = datetime(2026, 6, 9, 12, 0, 0, tzinfo=timezone.utc)
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_USACE_LEVEES") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_USACE_LEVEES") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -326,10 +326,10 @@ def test_synthetic_response_writes_fgb_with_polygons():
     fake_geojson = _sample_nld_response("leveed_areas", n=5)
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees._fetch_nld_geojson",
+        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_geojson",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_levees(
@@ -375,10 +375,10 @@ def test_system_routes_layer_writes_lines():
     fake_geojson = _sample_nld_response("system_routes", n=3)
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees._fetch_nld_geojson",
+        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_geojson",
         return_value=fake_geojson,
     ), patch(
-        "grace2_agent.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_levees(layer="system_routes")
@@ -413,10 +413,10 @@ def test_global_sweep_omits_geometry_param():
         return {"type": "FeatureCollection", "features": []}
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees._fetch_nld_page",
+        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_page",
         side_effect=fake_page,
     ), patch(
-        "grace2_agent.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r = fetch_usace_levees(bbox=None, layer="leveed_areas")
@@ -438,10 +438,10 @@ def test_bbox_narrowed_call_sends_geometry_param():
         return fake_geojson
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees._fetch_nld_page",
+        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_page",
         side_effect=fake_page,
     ), patch(
-        "grace2_agent.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_levees(
@@ -475,7 +475,7 @@ def test_pagination_walks_until_exhausted():
         }
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees._fetch_nld_page",
+        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_page",
         side_effect=fake_page,
     ):
         gj = _fetch_nld_geojson("leveed_areas", (-90.3, 29.7, -89.7, 30.2))
@@ -508,7 +508,7 @@ def test_500_raises_typed_upstream_error():
             return FakeResponse()
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_usace_levees.httpx.Client", FakeClient
     ):
         with pytest.raises(USACELeveeUpstreamError, match="500"):
             _fetch_nld_page(
@@ -532,7 +532,7 @@ def test_network_failure_wraps_to_upstream_error():
             raise httpx.ConnectError("simulated DNS failure")
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_usace_levees.httpx.Client", FakeClient
     ):
         with pytest.raises(USACELeveeUpstreamError, match="request failed"):
             _fetch_nld_page(
@@ -563,7 +563,7 @@ def test_arcgis_error_envelope_in_200_body_raises():
             return FakeResponse()
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_usace_levees.httpx.Client", FakeClient
     ):
         with pytest.raises(USACELeveeUpstreamError, match="error envelope"):
             _fetch_nld_page(
@@ -594,7 +594,7 @@ def test_non_feature_collection_raises():
             return FakeResponse()
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetch_usace_levees.httpx.Client", FakeClient
     ):
         with pytest.raises(USACELeveeUpstreamError, match="FeatureCollection"):
             _fetch_nld_page(
@@ -659,10 +659,10 @@ def test_cache_miss_invokes_fetch_then_hit_skips():
         return b"FAKE_LEVEES_FGB" + b"\x00" * 16
 
     with patch(
-        "grace2_agent.tools.fetch_usace_levees._fetch_nld_bytes",
+        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_usace_levees(bbox=(-90.3, 29.7, -89.7, 30.2))
@@ -677,7 +677,7 @@ def test_cache_miss_invokes_fetch_then_hit_skips():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE, reason="GRACE2_TEST_LIVE_USACE_LEVEES not set")
+@pytest.mark.skipif(not _LIVE, reason="TRID3NT_TEST_LIVE_USACE_LEVEES not set")
 def test_live_new_orleans_leveed_areas_returns_features():
     """Live: NOLA bbox over leveed_areas returns >=1 feature."""
     gj = _fetch_nld_geojson(

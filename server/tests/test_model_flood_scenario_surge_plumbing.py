@@ -17,14 +17,14 @@ from __future__ import annotations
 
 import asyncio
 
-import grace2_agent.workflows.model_flood_scenario as mfs
-import grace2_agent.workflows.sfincs_forcing_adapter as _sfa
-from grace2_agent.workflows.model_flood_scenario import (
+import trid3nt_server.workflows.model_flood_scenario as mfs
+import trid3nt_server.workflows.sfincs_forcing_adapter as _sfa
+from trid3nt_server.workflows.model_flood_scenario import (
     _build_surge_forcing_members,
     _resolve_building_obstacle_uri,
     _resolve_surge_forcing_from_fetchers,
 )
-from grace2_agent.workflows.sfincs_builder import (
+from trid3nt_server.workflows.sfincs_builder import (
     DischargeForcing,
     PressureForcing,
     WaterlevelForcing,
@@ -112,7 +112,7 @@ def test_resolve_building_obstacle_true_degrades_on_fetch_failure(monkeypatch) -
     Same degrade policy as river geometry (job-0307): a footprint-fetch failure
     must NOT kill the flood — the deck just omits obstacles.
     """
-    import grace2_agent.tools.data_fetch as data_fetch
+    import trid3nt_server.tools.data_fetch as data_fetch
 
     def _boom(*_a, **_k):
         raise RuntimeError("overpass down")
@@ -125,7 +125,7 @@ def test_resolve_building_obstacle_true_degrades_on_fetch_failure(monkeypatch) -
 
 def test_resolve_building_obstacle_true_records_source_on_success(monkeypatch) -> None:
     """A successful OSM footprint fetch returns its URI + records a DataSource."""
-    import grace2_agent.tools.data_fetch as data_fetch
+    import trid3nt_server.tools.data_fetch as data_fetch
 
     class _Layer:
         uri = "s3://cache/buildings.fgb"
@@ -250,7 +250,7 @@ def test_wrapper_surge_forcing_via_tool_registry(monkeypatch) -> None:
     the registered ``run_model_flood_scenario`` accepts + forwards
     ``surge_forcing`` (no TypeError; the kwarg is signature-accepted, not
     swallowed by ``**_extra_ignored``)."""
-    from grace2_agent.tools import TOOL_REGISTRY
+    from trid3nt_server.tools import TOOL_REGISTRY
 
     captured = _capture_internal_call(monkeypatch)
     entry = TOOL_REGISTRY["run_model_flood_scenario"]

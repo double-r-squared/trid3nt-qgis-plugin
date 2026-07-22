@@ -24,18 +24,18 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     _failed_modeled_envelope_error_code,
     summarize_tool_result,
 )
-from grace2_agent.tools.data_fetch import (
+from trid3nt_server.tools.data_fetch import (
     PrecipForcingUnavailableError,
     _ATLAS14_ARI_YEARS,
     _fetch_atlas2_precip_bytes,
     _parse_atlas14_csv,
 )
-from grace2_agent.workflows.model_flood_scenario import _build_failed_envelope
-from grace2_contracts import new_ulid
+from trid3nt_server.workflows.model_flood_scenario import _build_failed_envelope
+from trid3nt_contracts import new_ulid
 
 
 def _patch_read_through_passthrough(monkeypatch):
@@ -46,8 +46,8 @@ def _patch_read_through_passthrough(monkeypatch):
     that just runs ``fetch_fn`` and wraps the bytes in a ReadThroughResult.
     Exceptions from ``fetch_fn`` propagate unchanged (the real shim re-raises).
     """
-    import grace2_agent.tools.cache as cache_mod
-    import grace2_agent.tools.data_fetch as df
+    import trid3nt_server.tools.cache as cache_mod
+    import trid3nt_server.tools.data_fetch as df
 
     def _passthrough(*, metadata, params, ext, fetch_fn, **_kw):  # noqa: ANN001
         return cache_mod.ReadThroughResult(uri=None, data=fetch_fn(), hit=False)
@@ -438,7 +438,7 @@ def test_lookup_precip_falls_back_to_atlas2_for_toutle(monkeypatch):
     (the live Toutle behavior) and asserts lookup_precip_return_period returns a
     real depth tagged source="noaa-atlas2" instead of dying.
     """
-    import grace2_agent.tools.data_fetch as df
+    import trid3nt_server.tools.data_fetch as df
 
     def _fake_atlas14(lat, lon):  # noqa: ANN001 — test double
         raise df.UpstreamAPIError(
@@ -463,7 +463,7 @@ def test_lookup_precip_falls_back_to_atlas2_for_toutle(monkeypatch):
 def test_lookup_precip_raises_unavailable_when_both_atlases_miss(monkeypatch):
     """Both atlases miss (out-of-coverage point) -> typed, NOT-retryable error
     with the actionable observed-precip remediation in the message."""
-    import grace2_agent.tools.data_fetch as df
+    import trid3nt_server.tools.data_fetch as df
 
     def _fake_atlas14(lat, lon):  # noqa: ANN001
         raise df.UpstreamAPIError("not within a project area")
@@ -487,7 +487,7 @@ def test_lookup_precip_raises_unavailable_when_both_atlases_miss(monkeypatch):
 def test_lookup_precip_atlas14_path_unregressed(monkeypatch):
     """REGRESSION GUARD: an Atlas-14-covered point still uses Atlas 14 (the
     fallback try/except did not break the primary design-storm path)."""
-    import grace2_agent.tools.data_fetch as df
+    import trid3nt_server.tools.data_fetch as df
 
     # A minimal valid Atlas-14 CSV body for the 24-hr row across all 10 ARIs.
     depths = ",".join(str(round(2.0 + i * 0.5, 3)) for i in range(len(_ATLAS14_ARI_YEARS)))

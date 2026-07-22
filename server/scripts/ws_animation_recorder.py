@@ -22,7 +22,7 @@ Makes NO visual claim. Run to terminal with a generous timeout.
 
 Usage::
 
-    GRACE2_AGENT_URL=ws://54.185.114.233:8765 \
+    TRID3NT_AGENT_URL=ws://54.185.114.233:8765 \
       python services/agent/scripts/ws_animation_recorder.py \
       "model the flood from a 100-year storm in Fort Myers, FL" \
       --timeout 1800 --out /tmp/a1_ws_record.json
@@ -39,9 +39,9 @@ import time
 
 import websockets
 
-from grace2_contracts import new_ulid
-from grace2_contracts.payload_warning import PayloadConfirmationEnvelopePayload
-from grace2_contracts.ws import (
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
+from trid3nt_contracts.ws import (
     ClarificationResponsePayload,
     ConfirmResponsePayload,
     Envelope,
@@ -212,7 +212,7 @@ class Recorder:
 
 
 async def main(args) -> int:
-    url = os.environ.get("GRACE2_AGENT_URL", "ws://127.0.0.1:8765")
+    url = os.environ.get("TRID3NT_AGENT_URL", "ws://127.0.0.1:8765")
     session_id = new_ulid()
     started = time.monotonic()
     deadline = started + args.timeout

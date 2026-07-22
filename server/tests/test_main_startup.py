@@ -1,6 +1,6 @@
 """Verify the agent service startup picks up the tool registry.
 
-Acceptance criterion: ``python -m grace2_agent --startup-only`` imports the
+Acceptance criterion: ``python -m trid3nt_server --startup-only`` imports the
 tools package (populating ``TOOL_REGISTRY``) and exits without binding the
 WebSocket port. The test exercises the ``run([...])`` entry point directly.
 """
@@ -11,8 +11,8 @@ import logging
 
 import pytest
 
-from grace2_agent import tools as agent_tools
-from grace2_agent.main import (
+from trid3nt_server import tools as agent_tools
+from trid3nt_server.main import (
     _bind_worker_submitter,
     _import_tools_registry,
     run,
@@ -28,7 +28,7 @@ def test_import_tools_registry_populates_passthroughs():
 
 def test_run_startup_only_returns_zero_without_serving(caplog):
     """``run(['--startup-only'])`` returns 0 and logs the registered tools."""
-    caplog.set_level(logging.INFO, logger="grace2_agent.main")
+    caplog.set_level(logging.INFO, logger="trid3nt_server.main")
     rc = run(["--startup-only"])
     assert rc == 0
     # Startup log line includes the registered tool names.
@@ -44,8 +44,8 @@ def test_run_startup_only_returns_zero_without_serving(caplog):
 
 def test_bind_worker_submitter_logs_probe_ready(monkeypatch, caplog):
     """A healthy submitter (--version returncode 0) logs a READY line."""
-    import grace2_agent.main as main_mod
-    from grace2_agent.tools import passthroughs
+    import trid3nt_server.main as main_mod
+    from trid3nt_server.tools import passthroughs
 
     calls: list[tuple] = []
 
@@ -59,16 +59,16 @@ def test_bind_worker_submitter_logs_probe_ready(monkeypatch, caplog):
             "qgis_bin": "qgis_process",
         }
 
-    monkeypatch.delenv("GRACE2_SKIP_WORKER_SUBMITTER", raising=False)
+    monkeypatch.delenv("TRID3NT_SKIP_WORKER_SUBMITTER", raising=False)
     # QGIS infra configured -> probe runs SYNCHRONOUSLY (and logs inline).
-    monkeypatch.setenv("GRACE2_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
     monkeypatch.setattr(
         main_mod, "_default_qgis_process_submitter", lambda: _fake_submitter
     )
 
     saved = passthroughs._WORKER_SUBMITTER
     try:
-        caplog.set_level(logging.INFO, logger="grace2_agent.main")
+        caplog.set_level(logging.INFO, logger="trid3nt_server.main")
         _bind_worker_submitter()
     finally:
         passthroughs._WORKER_SUBMITTER = saved  # type: ignore[attr-defined]
@@ -82,8 +82,8 @@ def test_bind_worker_submitter_logs_probe_ready(monkeypatch, caplog):
 
 def test_bind_worker_submitter_logs_not_ready_on_bad_returncode(monkeypatch, caplog):
     """A submitter that returns non-zero logs NOT-READY (non-fatal)."""
-    import grace2_agent.main as main_mod
-    from grace2_agent.tools import passthroughs
+    import trid3nt_server.main as main_mod
+    from trid3nt_server.tools import passthroughs
 
     def _bad_submitter(args, timeout_s):
         return {
@@ -94,16 +94,16 @@ def test_bind_worker_submitter_logs_not_ready_on_bad_returncode(monkeypatch, cap
             "qgis_bin": "docker:grace2-qgis:ltr",
         }
 
-    monkeypatch.delenv("GRACE2_SKIP_WORKER_SUBMITTER", raising=False)
+    monkeypatch.delenv("TRID3NT_SKIP_WORKER_SUBMITTER", raising=False)
     # QGIS infra configured -> probe runs SYNCHRONOUSLY (and logs inline).
-    monkeypatch.setenv("GRACE2_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
     monkeypatch.setattr(
         main_mod, "_default_qgis_process_submitter", lambda: _bad_submitter
     )
 
     saved = passthroughs._WORKER_SUBMITTER
     try:
-        caplog.set_level(logging.WARNING, logger="grace2_agent.main")
+        caplog.set_level(logging.WARNING, logger="trid3nt_server.main")
         # Non-fatal: must not raise.
         _bind_worker_submitter()
     finally:
@@ -116,22 +116,22 @@ def test_bind_worker_submitter_logs_not_ready_on_bad_returncode(monkeypatch, cap
 def test_bind_worker_submitter_probe_exception_is_non_fatal(monkeypatch, caplog):
     """A submitter that RAISES during the probe logs NOT-READY but the binding
     still stands and startup is not aborted."""
-    import grace2_agent.main as main_mod
-    from grace2_agent.tools import passthroughs
+    import trid3nt_server.main as main_mod
+    from trid3nt_server.tools import passthroughs
 
     def _raising_submitter(args, timeout_s):
         raise RuntimeError("simulated probe blow-up")
 
-    monkeypatch.delenv("GRACE2_SKIP_WORKER_SUBMITTER", raising=False)
+    monkeypatch.delenv("TRID3NT_SKIP_WORKER_SUBMITTER", raising=False)
     # QGIS infra configured -> probe runs SYNCHRONOUSLY (and logs inline).
-    monkeypatch.setenv("GRACE2_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
     monkeypatch.setattr(
         main_mod, "_default_qgis_process_submitter", lambda: _raising_submitter
     )
 
     saved = passthroughs._WORKER_SUBMITTER
     try:
-        caplog.set_level(logging.WARNING, logger="grace2_agent.main")
+        caplog.set_level(logging.WARNING, logger="trid3nt_server.main")
         _bind_worker_submitter()  # must not raise
         # Binding succeeded despite the probe failing.
         assert passthroughs._WORKER_SUBMITTER is _raising_submitter
@@ -145,7 +145,7 @@ def test_bind_worker_submitter_probe_exception_is_non_fatal(monkeypatch, caplog)
 def test_bind_worker_submitter_probe_non_blocking_without_qgis_image(
     monkeypatch,
 ):
-    """P0 cold-start: with GRACE2_QGIS_DOCKER_IMAGE UNSET (the live box, no
+    """P0 cold-start: with TRID3NT_QGIS_DOCKER_IMAGE UNSET (the live box, no
     QGIS infra), the readiness probe must NOT block the WS port bind.
 
     The submitter is wired to BLOCK on an event so a synchronous probe would
@@ -156,8 +156,8 @@ def test_bind_worker_submitter_probe_non_blocking_without_qgis_image(
     import threading
     import time
 
-    import grace2_agent.main as main_mod
-    from grace2_agent.tools import passthroughs
+    import trid3nt_server.main as main_mod
+    from trid3nt_server.tools import passthroughs
 
     release = threading.Event()
     probe_started = threading.Event()
@@ -177,9 +177,9 @@ def test_bind_worker_submitter_probe_non_blocking_without_qgis_image(
             "qgis_bin": "qgis_process",
         }
 
-    monkeypatch.delenv("GRACE2_SKIP_WORKER_SUBMITTER", raising=False)
+    monkeypatch.delenv("TRID3NT_SKIP_WORKER_SUBMITTER", raising=False)
     # The live box (no QGIS infra) has this UNSET -> probe must be non-blocking.
-    monkeypatch.delenv("GRACE2_QGIS_DOCKER_IMAGE", raising=False)
+    monkeypatch.delenv("TRID3NT_QGIS_DOCKER_IMAGE", raising=False)
     monkeypatch.setattr(
         main_mod, "_default_qgis_process_submitter", lambda: _blocking_submitter
     )
@@ -193,7 +193,7 @@ def test_bind_worker_submitter_probe_non_blocking_without_qgis_image(
         # ceiling vs. the 5 s submitter block to stay non-flaky under load.
         assert elapsed < 2.0, (
             f"_bind_worker_submitter blocked {elapsed:.2f}s; the probe must "
-            "be off the hot path when GRACE2_QGIS_DOCKER_IMAGE is unset"
+            "be off the hot path when TRID3NT_QGIS_DOCKER_IMAGE is unset"
         )
         # The submitter binding still stands immediately (synchronous part).
         assert passthroughs._WORKER_SUBMITTER is _blocking_submitter
@@ -211,14 +211,14 @@ def test_bind_worker_submitter_probe_non_blocking_without_qgis_image(
 
 
 def test_bind_worker_submitter_skipped_by_env(monkeypatch):
-    """``GRACE2_SKIP_WORKER_SUBMITTER`` short-circuits binding + probe."""
-    import grace2_agent.main as main_mod
-    from grace2_agent.tools import passthroughs
+    """``TRID3NT_SKIP_WORKER_SUBMITTER`` short-circuits binding + probe."""
+    import trid3nt_server.main as main_mod
+    from trid3nt_server.tools import passthroughs
 
     def _should_not_run():
         raise AssertionError("submitter resolution must be skipped")
 
-    monkeypatch.setenv("GRACE2_SKIP_WORKER_SUBMITTER", "1")
+    monkeypatch.setenv("TRID3NT_SKIP_WORKER_SUBMITTER", "1")
     monkeypatch.setattr(
         main_mod, "_default_qgis_process_submitter", _should_not_run
     )

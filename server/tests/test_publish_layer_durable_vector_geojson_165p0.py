@@ -10,7 +10,7 @@ a GeoJSON FeatureCollection at a stable per-Case key in the DURABLE runs bucket
 (NOT the 30-day-TTL content-addressed cache bucket), and returns that asset URI.
 
 Frozen contract (engine tracks rebase onto this):
-  bucket : GRACE2_RUNS_BUCKET (solver._get_runs_bucket — the DURABLE runs bucket)
+  bucket : TRID3NT_RUNS_BUCKET (solver._get_runs_bucket — the DURABLE runs bucket)
   key    : ``case-data/<case_id>/<layer_id>.geojson``
   asset  : ``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.geojson`` (DISPLAY)
   faces  : observe_published_layer(layer_id, gcs_uri=<s3 .fgb DATA>,
@@ -29,7 +29,7 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import LineString, Point
 
-from grace2_agent.tools.publish_layer import (
+from trid3nt_server.tools.publish_layer import (
     DURABLE_CASE_DATA_PREFIX,
     _vector_uri_to_geojson_bytes,
     _write_durable_vector_geojson,
@@ -78,10 +78,10 @@ def _geojson_fc_bytes() -> bytes:
 @pytest.fixture()
 def _s3_titiler_no_wms(monkeypatch: pytest.MonkeyPatch) -> None:
     """s3 backend + a tile base, but NO QGIS WMS base (the live stack today)."""
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://cf.example.net")
-    monkeypatch.delenv("GRACE2_QGIS_WMS_BASE", raising=False)
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", _RUNS_BUCKET)
+    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("TRID3NT_TILE_SERVER_BASE", "https://cf.example.net")
+    monkeypatch.delenv("TRID3NT_QGIS_WMS_BASE", raising=False)
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", _RUNS_BUCKET)
 
 
 class _FakeS3:
@@ -193,12 +193,12 @@ def test_write_durable_vector_geojson_writes_to_runs_bucket(
 ) -> None:
     """Writes case-data/<case>/<layer>.geojson to the DURABLE runs bucket and
     returns the s3:// asset URI."""
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", _RUNS_BUCKET)
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", _RUNS_BUCKET)
     fgb = _fgb_bytes(tmp_path)
     fake = _FakeS3({(_RUNS_BUCKET, "runs/roads.fgb"): fgb})
     monkeypatch.setattr("boto3.client", lambda *a, **k: fake)
     # solver caches an override binding; ensure the env default is used.
-    monkeypatch.setattr("grace2_agent.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
 
     asset = _write_durable_vector_geojson(
         f"s3://{_RUNS_BUCKET}/runs/roads.fgb", "roads", "CASE9"
@@ -219,8 +219,8 @@ def test_write_durable_vector_geojson_not_cache_bucket(
 ) -> None:
     """The durable write targets the RUNS bucket — never the 30-day-TTL cache
     bucket (a published layer must outlive cache eviction)."""
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", _RUNS_BUCKET)
-    monkeypatch.setattr("grace2_agent.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", _RUNS_BUCKET)
+    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
     p = tmp_path / "pts.geojson"
     p.write_bytes(_geojson_fc_bytes())
     # Read from a LOCAL path; write through the fake.
@@ -237,8 +237,8 @@ def test_write_durable_vector_geojson_fail_open_on_write_error(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A put_object failure returns None (fail-open) — never raises."""
-    monkeypatch.setenv("GRACE2_RUNS_BUCKET", _RUNS_BUCKET)
-    monkeypatch.setattr("grace2_agent.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setenv("TRID3NT_RUNS_BUCKET", _RUNS_BUCKET)
+    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
     p = tmp_path / "pts.geojson"
     p.write_bytes(_geojson_fc_bytes())
 
@@ -272,7 +272,7 @@ def test_publish_vector_in_case_writes_durable_and_registers_both_faces(
 ) -> None:
     """An IN-CASE vector publish: durable GeoJSON written + asset URI returned +
     BOTH faces registered (.fgb DATA preserved; GeoJSON asset = DISPLAY)."""
-    monkeypatch.setattr("grace2_agent.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
     fgb = _fgb_bytes(tmp_path)
     data_uri = f"s3://{_RUNS_BUCKET}/runs/roads.fgb"
     fake = _FakeS3({(_RUNS_BUCKET, "runs/roads.fgb"): fgb})
@@ -280,7 +280,7 @@ def test_publish_vector_in_case_writes_durable_and_registers_both_faces(
 
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -311,7 +311,7 @@ def test_publish_vector_no_case_stays_benign_no_op(
     )
     calls: list = []
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -326,7 +326,7 @@ def test_publish_vector_in_case_fail_open_to_noop_on_write_error(
 ) -> None:
     """A durable-write failure in a Case falls OPEN to the benign no-op (no
     raise) and registers NOTHING (data-source-fallback norm)."""
-    monkeypatch.setattr("grace2_agent.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
     fgb = _fgb_bytes(tmp_path)
 
     class _BoomOnPut(_FakeS3):
@@ -337,7 +337,7 @@ def test_publish_vector_in_case_fail_open_to_noop_on_write_error(
     monkeypatch.setattr("boto3.client", lambda *a, **k: boom)
     calls: list = []
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 
@@ -356,7 +356,7 @@ def test_publish_vector_in_case_fail_open_to_noop_on_read_error(
     _s3_titiler_no_wms: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An unreadable source in a Case falls open to the benign no-op."""
-    monkeypatch.setattr("grace2_agent.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
 
     def _boom(*a, **k):
         raise RuntimeError("NoSuchKey")
@@ -372,12 +372,12 @@ def test_publish_vector_in_case_geojson_source(
     _s3_titiler_no_wms: None, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A .geojson source (e.g. SFINCS/SWMM mesh) is also materialized durably."""
-    monkeypatch.setattr("grace2_agent.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
     data_uri = f"s3://{_RUNS_BUCKET}/runs/mesh.geojson"
     fake = _FakeS3({(_RUNS_BUCKET, "runs/mesh.geojson"): _geojson_fc_bytes()})
     monkeypatch.setattr("boto3.client", lambda *a, **k: fake)
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: None,
     )
 
@@ -391,16 +391,16 @@ def test_publish_vector_in_case_geojson_source(
 def test_publish_vector_wms_branch_still_wins_when_env_set(
     _s3_titiler_no_wms: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """job-0308 compose-not-replace: when GRACE2_QGIS_WMS_BASE is set the WMS
+    """job-0308 compose-not-replace: when TRID3NT_QGIS_WMS_BASE is set the WMS
     branch still wins (no durable GeoJSON write attempted)."""
-    monkeypatch.setenv("GRACE2_QGIS_WMS_BASE", "https://cf.example.net/ogc/wms")
+    monkeypatch.setenv("TRID3NT_QGIS_WMS_BASE", "https://cf.example.net/ogc/wms")
     monkeypatch.setattr(
         "boto3.client",
         lambda *a, **k: pytest.fail("WMS branch must not write durable GeoJSON"),
     )
     calls: list = []
     monkeypatch.setattr(
-        "grace2_agent.tools.publish_layer.observe_published_layer",
+        "trid3nt_server.tools.publish_layer.observe_published_layer",
         lambda *a, **k: calls.append((a, k)),
     )
 

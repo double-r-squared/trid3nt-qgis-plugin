@@ -21,7 +21,7 @@ Coverage:
   success-shaped layer).
 - Payload estimator returns a positive float.
 
-Live test (gated by GRACE2_TEST_LIVE_USGS_VOLCANO=1): a real HANS request for a
+Live test (gated by TRID3NT_TEST_LIVE_USGS_VOLCANO=1): a real HANS request for a
 global US snapshot; confirms >=1 volcano with a valid alert level + coordinate.
 """
 
@@ -31,7 +31,7 @@ import os
 
 import pytest
 
-from grace2_agent.tools.fetch_usgs_volcano_alerts import (
+from trid3nt_server.tools.fetch_usgs_volcano_alerts import (
     ALERT_LEVELS,
     COLOR_CODES,
     VolcanoAlertsInputError,
@@ -50,7 +50,7 @@ from grace2_agent.tools.fetch_usgs_volcano_alerts import (
     estimate_payload_mb,
     fetch_usgs_volcano_alerts,
 )
-from grace2_agent.tools import fetch_usgs_volcano_alerts as _mod
+from trid3nt_server.tools import fetch_usgs_volcano_alerts as _mod
 
 
 # ---------------------------------------------------------------------------
@@ -397,8 +397,8 @@ def test_estimate_payload_mb_positive_and_small():
 
 
 @pytest.mark.skipif(
-    os.environ.get("GRACE2_TEST_LIVE_USGS_VOLCANO") != "1",
-    reason="set GRACE2_TEST_LIVE_USGS_VOLCANO=1 to hit the live USGS HANS API",
+    os.environ.get("TRID3NT_TEST_LIVE_USGS_VOLCANO") != "1",
+    reason="set TRID3NT_TEST_LIVE_USGS_VOLCANO=1 to hit the live USGS HANS API",
 )
 def test_live_global_snapshot_has_volcanoes():
     pytest.importorskip("geopandas")

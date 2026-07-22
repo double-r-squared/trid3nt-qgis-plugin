@@ -26,8 +26,8 @@ import httpx
 import pytest
 from shapely.geometry import Polygon
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_nwi_wetlands import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_nwi_wetlands import (
     NWIWetlandsInputError,
     NWIWetlandsUpstreamError,
     _esri_json_to_features,

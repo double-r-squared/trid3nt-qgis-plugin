@@ -50,9 +50,9 @@ demo contaminant is a conservative tracer.
 
 ### Input
 
-- `--run-id RUN_ID` (or `$GRACE2_RUN_ID`) — outputs land under
-  `gs://${GRACE2_RUNS_BUCKET}/${RUN_ID}/`.
-- `--manifest-uri gs://.../manifest.json` (or `$GRACE2_MANIFEST_URI`) — JSON
+- `--run-id RUN_ID` (or `$TRID3NT_RUN_ID`) — outputs land under
+  `gs://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/`.
+- `--manifest-uri gs://.../manifest.json` (or `$TRID3NT_MANIFEST_URI`) — JSON
   setup manifest:
 
   ```json
@@ -76,7 +76,7 @@ demo contaminant is a conservative tracer.
 
 ### Output
 
-`gs://${GRACE2_RUNS_BUCKET}/${RUN_ID}/`:
+`gs://${TRID3NT_RUNS_BUCKET}/${RUN_ID}/`:
 
 - every uploaded output file (heads `.hds`, concentration `.ucn`, list files)
 - `mf6.stdout`, `mf6.stderr`

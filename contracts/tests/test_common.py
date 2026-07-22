@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts.common import (
+from trid3nt_contracts.common import (
     BBox,
     GraceModel,
     TimeRange,

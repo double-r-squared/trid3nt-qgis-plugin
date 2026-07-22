@@ -455,7 +455,7 @@ class ProviderConfigRequestError(Exception):
 def post_provider_config(base_url: str, payload: dict, timeout: float = 5.0) -> dict:
     """``POST {base_url}/api/provider-config`` -- push the LIVE provider config
     to the agent so a provider/model/key switch applies on the NEXT message
-    with no agent restart (the agent's OpenAI adapter reads ``GRACE2_OPENAI_*``
+    with no agent restart (the agent's OpenAI adapter reads ``TRID3NT_OPENAI_*``
     from ``os.environ`` at call time). ``payload`` = ``{base_url, api_key,
     model, num_ctx}`` (any subset). Plain ``urllib`` (stdlib only, same posture
     as ``fetch_case_list``) -- no WebSocket involved.
@@ -1429,7 +1429,7 @@ class AgentClient:
             when truthy, ride ``model_id`` on the payload so the server's
             ``resolve_selected_model`` picks THIS model for the turn (any
             openai/OpenRouter model id passes verbatim). Empty = the agent's
-            env default (``GRACE2_OPENAI_MODEL``). Mirrors the ``show_thinking``
+            env default (``TRID3NT_OPENAI_MODEL``). Mirrors the ``show_thinking``
             add exactly: a LIVE per-turn switch, no agent restart. (Provider
             base_url/api_key are agent-process env, NOT sent here.)
         """

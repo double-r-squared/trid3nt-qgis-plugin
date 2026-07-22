@@ -31,7 +31,7 @@ Run:
         services/workers/modflow/spikes/test_riv_src_spike.py -q
 
 Binary resolution mirrors the production seam (``run_modflow._mf6_binary``):
-    1. ``$GRACE2_MF6_BIN`` if set,
+    1. ``$TRID3NT_MF6_BIN`` if set,
     2. ``mf6`` on PATH,
     3. a known local install (``~/AGRI-SENTINEL/.modflow/bin/mf6``),
     4. ``flopy.utils.get_modflow`` fetch into a temp dir.
@@ -102,7 +102,7 @@ def _known_local_mf6() -> str | None:
 
 def _resolve_mf6(fetch_dir: Path) -> str | None:
     """Return a runnable mf6 path, or None if none is available."""
-    env = (os.environ.get("GRACE2_MF6_BIN") or "").strip()
+    env = (os.environ.get("TRID3NT_MF6_BIN") or "").strip()
     if env and Path(env).is_file() and os.access(env, os.X_OK):
         return env
     on_path = shutil.which("mf6")

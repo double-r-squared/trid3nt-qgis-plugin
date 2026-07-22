@@ -19,8 +19,8 @@ Coverage:
   before clip.
 - payload-MB estimator matches the audit.md spec (1 MB/day/1° square).
 
-Live test (env-gated ``GRACE2_TEST_LIVE_CAMA=1`` + a mirror URL via
-``GRACE2_CAMA_FLOOD_BASE_URL``):
+Live test (env-gated ``TRID3NT_TEST_LIVE_CAMA=1`` + a mirror URL via
+``TRID3NT_CAMA_FLOOD_BASE_URL``):
 - Mississippi-basin bbox + recent date → real discharge raster.
 - Evidence emitted to ``evidence/cama_live.txt`` per the kickoff.
 
@@ -42,8 +42,8 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_cama_flood_discharge import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_cama_flood_discharge import (
     CaMaFloodEmptyError,
     CaMaFloodInputError,
     CaMaFloodUnreachableError,
@@ -71,8 +71,8 @@ _MISSISSIPPI_BBOX = (-92.0, 30.0, -89.0, 32.0)
 # Smaller 1° square inside the Mississippi basin for synthetic-data tests.
 _SMALL_BBOX = (-91.0, 31.0, -90.0, 32.0)
 
-_LIVE_CAMA = os.environ.get("GRACE2_TEST_LIVE_CAMA") == "1"
-_LIVE_BASE_URL = os.environ.get("GRACE2_CAMA_FLOOD_BASE_URL")
+_LIVE_CAMA = os.environ.get("TRID3NT_TEST_LIVE_CAMA") == "1"
+_LIVE_BASE_URL = os.environ.get("TRID3NT_CAMA_FLOOD_BASE_URL")
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -311,21 +311,21 @@ def test_candidate_filenames_known_year_version():
 
 
 def test_resolve_base_url_explicit_wins(monkeypatch):
-    monkeypatch.setenv("GRACE2_CAMA_FLOOD_BASE_URL", "https://env-mirror.example.com/cama/")
+    monkeypatch.setenv("TRID3NT_CAMA_FLOOD_BASE_URL", "https://env-mirror.example.com/cama/")
     url = _resolve_base_url("https://explicit-mirror.example.com/cama/")
     assert url.startswith("https://explicit-mirror.example.com/")
     assert url.endswith("/")
 
 
 def test_resolve_base_url_env_fallback(monkeypatch):
-    monkeypatch.setenv("GRACE2_CAMA_FLOOD_BASE_URL", "https://env-mirror.example.com/cama/")
+    monkeypatch.setenv("TRID3NT_CAMA_FLOOD_BASE_URL", "https://env-mirror.example.com/cama/")
     url = _resolve_base_url(None)
     assert "env-mirror.example.com" in url
     assert url.endswith("/")
 
 
 def test_resolve_base_url_legacy_default(monkeypatch):
-    monkeypatch.delenv("GRACE2_CAMA_FLOOD_BASE_URL", raising=False)
+    monkeypatch.delenv("TRID3NT_CAMA_FLOOD_BASE_URL", raising=False)
     url = _resolve_base_url(None)
     assert "hydro.iis.u-tokyo.ac.jp" in url
     assert url.endswith("/")
@@ -419,14 +419,14 @@ class _FakeStreamResponse:
 
 def _route_for(synthetic_nc_bytes: bytes, base_url: str, year: int) -> dict[str, bytes | str | None]:
     """Build a routing map where the FIRST candidate URL serves the netCDF."""
-    from grace2_agent.tools.fetch_cama_flood_discharge import _candidate_filenames
+    from trid3nt_server.tools.fetch_cama_flood_discharge import _candidate_filenames
     names = _candidate_filenames(year, "v4.0.1")
     return {base_url + names[0]: synthetic_nc_bytes}
 
 
 def _make_synthetic_nc_bytes(bbox: tuple[float, float, float, float], **kw) -> bytes:
     """Build a synthetic CaMa-Flood netCDF in-memory and return its bytes."""
-    fd, path = tempfile.mkstemp(suffix=".nc", prefix="grace2_cama_test_")
+    fd, path = tempfile.mkstemp(suffix=".nc", prefix="trid3nt_cama_test_")
     os.close(fd)
     try:
         _write_synthetic_cama_netcdf(path, bbox, **kw)
@@ -443,7 +443,7 @@ def test_mocked_happy_path_writes_cog(monkeypatch):
     """Fake HTTP serves a synthetic CaMa-Flood netCDF; tool writes a COG to GCS."""
     fake_gcs = FakeStorageClient()
     base_url = "https://mirror.example.com/cama/"
-    monkeypatch.setenv("GRACE2_CAMA_FLOOD_BASE_URL", base_url)
+    monkeypatch.setenv("TRID3NT_CAMA_FLOOD_BASE_URL", base_url)
 
     nc_bytes = _make_synthetic_nc_bytes(_SMALL_BBOX, n_days=2)
     routing = _route_for(nc_bytes, base_url, 2024)
@@ -452,10 +452,10 @@ def test_mocked_happy_path_writes_cog(monkeypatch):
         return _FakeHTTPClient(routing)
 
     with patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
         side_effect=fake_client_factory,
     ), patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(
@@ -482,16 +482,16 @@ def test_distinct_dates_produce_distinct_cache_keys(monkeypatch):
     """Two different date ranges should write to two different cache paths."""
     fake_gcs = FakeStorageClient()
     base_url = "https://mirror.example.com/cama/"
-    monkeypatch.setenv("GRACE2_CAMA_FLOOD_BASE_URL", base_url)
+    monkeypatch.setenv("TRID3NT_CAMA_FLOOD_BASE_URL", base_url)
 
     nc_bytes = _make_synthetic_nc_bytes(_SMALL_BBOX, n_days=2)
     routing = _route_for(nc_bytes, base_url, 2024)
 
     with patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_cama_flood_discharge(
@@ -513,7 +513,7 @@ def test_cache_hit_skips_http(monkeypatch):
     """Second call with identical params returns the cached URI without HTTP."""
     fake_gcs = FakeStorageClient()
     base_url = "https://mirror.example.com/cama/"
-    monkeypatch.setenv("GRACE2_CAMA_FLOOD_BASE_URL", base_url)
+    monkeypatch.setenv("TRID3NT_CAMA_FLOOD_BASE_URL", base_url)
 
     nc_bytes = _make_synthetic_nc_bytes(_SMALL_BBOX, n_days=1)
     routing = _route_for(nc_bytes, base_url, 2024)
@@ -525,10 +525,10 @@ def test_cache_hit_skips_http(monkeypatch):
         return _FakeHTTPClient(routing)
 
     with patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
         side_effect=factory,
     ), patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_cama_flood_discharge(
@@ -562,7 +562,7 @@ def test_html_migration_sentinel_surfaces_as_unreachable(monkeypatch):
     """
     fake_gcs = FakeStorageClient()
     base_url = "https://hydro.iis.u-tokyo.ac.jp/legacy/"
-    monkeypatch.setenv("GRACE2_CAMA_FLOOD_BASE_URL", base_url)
+    monkeypatch.setenv("TRID3NT_CAMA_FLOOD_BASE_URL", base_url)
 
     html_sentinel = (
         "<!DOCTYPE html><html><body>"
@@ -571,17 +571,17 @@ def test_html_migration_sentinel_surfaces_as_unreachable(monkeypatch):
     )
 
     # Every candidate URL returns the HTML sentinel.
-    from grace2_agent.tools.fetch_cama_flood_discharge import _candidate_filenames
+    from trid3nt_server.tools.fetch_cama_flood_discharge import _candidate_filenames
     names = _candidate_filenames(2024, "v4.0.1")
     routing: dict[str, bytes | str | None] = {
         base_url + n: html_sentinel for n in names
     }
 
     with patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(CaMaFloodUnreachableError) as exc_info:
@@ -607,7 +607,7 @@ def test_geographic_correctness_gate_lon_360_normalization(monkeypatch):
     """A netCDF on the 0..360 grid is correctly clipped to the -180..180 bbox."""
     fake_gcs = FakeStorageClient()
     base_url = "https://mirror.example.com/cama/"
-    monkeypatch.setenv("GRACE2_CAMA_FLOOD_BASE_URL", base_url)
+    monkeypatch.setenv("TRID3NT_CAMA_FLOOD_BASE_URL", base_url)
 
     # Synthetic netCDF on the 0..360 grid (CaMa-Flood "western hemisphere"
     # longitudes become 268..271 in 0-360 space for our Mississippi bbox).
@@ -615,10 +615,10 @@ def test_geographic_correctness_gate_lon_360_normalization(monkeypatch):
     routing = _route_for(nc_bytes, base_url, 2024)
 
     with patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(
@@ -653,16 +653,16 @@ def test_geographic_correctness_gate_lat_descending(monkeypatch):
     """A netCDF with latitude descending (north → south) gets sorted before clip."""
     fake_gcs = FakeStorageClient()
     base_url = "https://mirror.example.com/cama/"
-    monkeypatch.setenv("GRACE2_CAMA_FLOOD_BASE_URL", base_url)
+    monkeypatch.setenv("TRID3NT_CAMA_FLOOD_BASE_URL", base_url)
 
     nc_bytes = _make_synthetic_nc_bytes(_SMALL_BBOX, n_days=1, lat_descending=True)
     routing = _route_for(nc_bytes, base_url, 2024)
 
     with patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(
@@ -696,16 +696,16 @@ def test_layer_uri_shape_fields(monkeypatch):
     """The returned LayerURI carries the documented fields."""
     fake_gcs = FakeStorageClient()
     base_url = "https://mirror.example.com/cama/"
-    monkeypatch.setenv("GRACE2_CAMA_FLOOD_BASE_URL", base_url)
+    monkeypatch.setenv("TRID3NT_CAMA_FLOOD_BASE_URL", base_url)
 
     nc_bytes = _make_synthetic_nc_bytes(_SMALL_BBOX, n_days=1)
     routing = _route_for(nc_bytes, base_url, 2024)
 
     with patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(
@@ -730,7 +730,7 @@ def test_layer_uri_shape_fields(monkeypatch):
 @pytest.mark.skipif(
     not (_LIVE_CAMA and _LIVE_BASE_URL),
     reason=(
-        "GRACE2_TEST_LIVE_CAMA=1 not set OR no GRACE2_CAMA_FLOOD_BASE_URL mirror "
+        "TRID3NT_TEST_LIVE_CAMA=1 not set OR no TRID3NT_CAMA_FLOOD_BASE_URL mirror "
         "configured. The kickoff-named U.Tokyo Hydra URL returns an HTML "
         "migration page as of 2026-02-12 (OQ-0133-CAMA-DATA-SOURCE-MIGRATION); "
         "a mirror or Dropbox-link wire-up is required to exercise the live path."
@@ -739,14 +739,14 @@ def test_layer_uri_shape_fields(monkeypatch):
 def test_live_mississippi_basin_discharge(tmp_path):
     """LIVE: fetch CaMa-Flood discharge over the Mississippi basin for one day.
 
-    Requires a configured mirror via ``GRACE2_CAMA_FLOOD_BASE_URL``. Captures
+    Requires a configured mirror via ``TRID3NT_CAMA_FLOOD_BASE_URL``. Captures
     evidence to ``evidence/cama_live.txt`` per the kickoff.
     """
     import rasterio
 
     fake_gcs = FakeStorageClient()
     with patch(
-        "grace2_agent.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(

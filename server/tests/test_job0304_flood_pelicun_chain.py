@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import inspect
 
-from grace2_agent.tool_arg_normalizer import coerce_bbox_value, normalize_args
-from grace2_agent.uri_registry import SessionUriRegistry, _is_tile_template
+from trid3nt_server.tool_arg_normalizer import coerce_bbox_value, normalize_args
+from trid3nt_server.uri_registry import SessionUriRegistry, _is_tile_template
 
 
 # --- A. bbox string coercion ------------------------------------------------ #

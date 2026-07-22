@@ -17,8 +17,8 @@ import re
 
 import pytest
 
-from grace2_agent.workflows import frames
-from grace2_agent.workflows.frames import (
+from trid3nt_server.workflows import frames
+from trid3nt_server.workflows.frames import (
     MAX_FLOOD_FRAMES,
     EmittedFrame,
     emit_timeseries_layers,
@@ -56,7 +56,7 @@ def test_over_cap_subsamples_evenly_endpoints_kept(caplog) -> None:
 
     n = MAX_FLOOD_FRAMES * 3
     with caplog.at_level(
-        logging.INFO, logger="grace2_agent.workflows.postprocess_flood"
+        logging.INFO, logger="trid3nt_server.workflows.postprocess_flood"
     ):
         idx = select_frame_time_indices(n)
     assert len(idx) <= MAX_FLOOD_FRAMES

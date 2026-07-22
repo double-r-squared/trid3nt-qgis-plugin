@@ -32,12 +32,12 @@ import tempfile
 
 import pytest
 
-from grace2_agent.pipeline_emitter import PipelineEmitter
-from grace2_agent.tools.compute_layer_bounds import (
+from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_server.tools.compute_layer_bounds import (
     ComputeLayerBoundsError,
     compute_layer_bounds,
 )
-from grace2_contracts import new_ulid
+from trid3nt_contracts import new_ulid
 
 
 # --------------------------------------------------------------------------- #
@@ -49,7 +49,7 @@ def _write_geojson(features: list[dict], crs_name: str | None = None) -> str:
     fc: dict = {"type": "FeatureCollection", "features": features}
     if crs_name is not None:
         fc["crs"] = {"type": "name", "properties": {"name": crs_name}}
-    fd, path = tempfile.mkstemp(suffix=".geojson", prefix="grace2_test_bounds_")
+    fd, path = tempfile.mkstemp(suffix=".geojson", prefix="trid3nt_test_bounds_")
     with os.fdopen(fd, "w") as f:
         json.dump(fc, f)
     return path
@@ -166,7 +166,7 @@ async def test_reprojects_non_4326_vector_to_wgs84() -> None:
         geometry=[Point(-11722000.0, 4862000.0), Point(-11710000.0, 4875000.0)],
         crs="EPSG:3857",
     )
-    fd, path = tempfile.mkstemp(suffix=".fgb", prefix="grace2_test_bounds_3857_")
+    fd, path = tempfile.mkstemp(suffix=".fgb", prefix="trid3nt_test_bounds_3857_")
     os.close(fd)
     gdf.to_file(path, driver="FlatGeobuf")
     try:
@@ -198,7 +198,7 @@ async def test_returns_correct_bbox_for_known_raster() -> None:
     minx, miny, maxx, maxy = -105.3, 39.9, -105.1, 40.1
     width, height = 8, 8
     transform = from_bounds(minx, miny, maxx, maxy, width, height)
-    fd, path = tempfile.mkstemp(suffix=".tif", prefix="grace2_test_bounds_ras_")
+    fd, path = tempfile.mkstemp(suffix=".tif", prefix="trid3nt_test_bounds_ras_")
     os.close(fd)
     with rasterio.open(
         path,
@@ -270,8 +270,8 @@ async def test_unknown_uri_raises_typed_error() -> None:
 def test_resolve_titiler_template_recovers_s3_cog(monkeypatch) -> None:
     """_resolve_layer_to_local_path extracts the url= COG from a TiTiler
     template and routes it through the s3 branch."""
-    import grace2_agent.tools.cache as cache_mod
-    import grace2_agent.tools.compute_layer_bounds as clb
+    import trid3nt_server.tools.cache as cache_mod
+    import trid3nt_server.tools.compute_layer_bounds as clb
 
     real_cog = "s3://trid3nt-runs/01ABC/swmm_depth_frame_01.tif"
     captured: dict[str, str] = {}
@@ -302,7 +302,7 @@ def test_resolve_titiler_template_recovers_s3_cog(monkeypatch) -> None:
 def test_resolve_titiler_template_without_url_param_raises_typed_error() -> None:
     """A display URL with no recoverable s3 url= param still raises the typed
     UNKNOWN_LAYER_URI (honest, retryable) — it must not fail open silently."""
-    import grace2_agent.tools.compute_layer_bounds as clb
+    import trid3nt_server.tools.compute_layer_bounds as clb
 
     bad = "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/3/2/1.png"
     with pytest.raises(ComputeLayerBoundsError) as ei:
@@ -317,7 +317,7 @@ def test_resolve_titiler_template_without_url_param_raises_typed_error() -> None
 
 @pytest.mark.asyncio
 async def test_no_emitter_does_not_crash() -> None:
-    from grace2_agent.pipeline_emitter import current_emitter
+    from trid3nt_server.pipeline_emitter import current_emitter
 
     assert current_emitter() is None  # precondition
     pts = [_point_feature(-1.0, 1.0), _point_feature(1.0, 2.0)]
@@ -337,8 +337,8 @@ async def test_no_emitter_does_not_crash() -> None:
 
 
 def test_registered_and_in_hot_set() -> None:
-    import grace2_agent.categories as categories
-    import grace2_agent.tools as tools
+    import trid3nt_server.categories as categories
+    import trid3nt_server.tools as tools
 
     rt = tools.TOOL_REGISTRY.get("compute_layer_bounds")
     assert rt is not None, "compute_layer_bounds not in TOOL_REGISTRY"
@@ -356,7 +356,7 @@ def test_registered_and_in_hot_set() -> None:
 
 
 def test_adapter_steer_present() -> None:
-    from grace2_agent.adapter import SYSTEM_PROMPT
+    from trid3nt_server.adapter import SYSTEM_PROMPT
 
     prompt = SYSTEM_PROMPT.lower()
     assert "compute_layer_bounds" in SYSTEM_PROMPT

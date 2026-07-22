@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.runaway_guard import (
+from trid3nt_server.runaway_guard import (
     ABORT_LOOP_WATCHDOG,
     ABORT_STEP_CAP,
     ABORT_WALL_CLOCK,
@@ -50,24 +50,24 @@ def test_abort_messages_are_honest_and_distinct():
 
 
 def test_defaults_and_env_overrides(monkeypatch):
-    monkeypatch.delenv("GRACE2_MAX_AGENT_STEPS", raising=False)
-    monkeypatch.delenv("GRACE2_MAX_TURN_SECONDS", raising=False)
+    monkeypatch.delenv("TRID3NT_MAX_AGENT_STEPS", raising=False)
+    monkeypatch.delenv("TRID3NT_MAX_TURN_SECONDS", raising=False)
     assert max_agent_steps() == 30
     assert max_turn_seconds() == 420.0
     # Overrides take.
-    monkeypatch.setenv("GRACE2_MAX_AGENT_STEPS", "12")
-    monkeypatch.setenv("GRACE2_MAX_TURN_SECONDS", "900")
+    monkeypatch.setenv("TRID3NT_MAX_AGENT_STEPS", "12")
+    monkeypatch.setenv("TRID3NT_MAX_TURN_SECONDS", "900")
     assert max_agent_steps() == 12
     assert max_turn_seconds() == 900.0
     # Garbage / non-positive falls back to the safe default (never 0 / None).
-    monkeypatch.setenv("GRACE2_MAX_AGENT_STEPS", "not-a-number")
-    monkeypatch.setenv("GRACE2_MAX_TURN_SECONDS", "0")
+    monkeypatch.setenv("TRID3NT_MAX_AGENT_STEPS", "not-a-number")
+    monkeypatch.setenv("TRID3NT_MAX_TURN_SECONDS", "0")
     assert max_agent_steps() == 30
     assert max_turn_seconds() == 420.0
 
 
 def test_cheap_model_gets_tighter_step_cap(monkeypatch):
-    monkeypatch.delenv("GRACE2_MAX_AGENT_STEPS", raising=False)
+    monkeypatch.delenv("TRID3NT_MAX_AGENT_STEPS", raising=False)
     # Full-tier (Sonnet / default None) keeps the full cap.
     assert is_cheap_model("anthropic.claude-3-5-sonnet") is False
     assert step_cap_for_model("anthropic.claude-3-5-sonnet") == max_agent_steps()
@@ -152,7 +152,7 @@ def _abort_codes(sock: _FakeSocket) -> list[str]:
 
 
 def _settings():
-    from grace2_agent.server import GeminiSettings
+    from trid3nt_server.server import GeminiSettings
 
     return GeminiSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
@@ -167,9 +167,9 @@ async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch):
     mid-await -- e.g. a legitimate long Batch poll completes); the deadline is
     only re-checked at the TOP of round 2, where it fires. The session stays
     alive (a terminal frame is emitted) -- the loop is freed, not crashed."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_contracts import new_ulid
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_contracts import new_ulid
 
     def _infinite_calls():
         i = 0
@@ -215,9 +215,9 @@ async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch):
 
     With the cap TIGHTENED below MAX_TURN_ITERATIONS (the cheap-tier shape) the
     abort is the distinct AGENT_STEP_LIMIT_REACHED code."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_contracts import new_ulid
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_contracts import new_ulid
 
     def _varied_calls():
         i = 0
@@ -256,10 +256,10 @@ async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch):
 @pytest.mark.asyncio
 async def test_normal_turn_not_aborted_by_guards(monkeypatch):
     """A normal short turn (one tool, then narrate) is NOT touched by any guard."""
-    from grace2_agent import server as agent_server
-    from grace2_agent.server import SessionState
-    from grace2_agent.adapter import FunctionCallEvent, TextDeltaEvent
-    from grace2_contracts import new_ulid
+    from trid3nt_server import server as agent_server
+    from trid3nt_server.server import SessionState
+    from trid3nt_server.adapter import FunctionCallEvent, TextDeltaEvent
+    from trid3nt_contracts import new_ulid
 
     # Turn 1: one function call; turn 2: narrate + end.
     rounds = iter([

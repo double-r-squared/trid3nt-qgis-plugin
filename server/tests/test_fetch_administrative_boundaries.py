@@ -13,7 +13,7 @@ Coverage:
 - ``_round_bbox_to_6dp`` rounds to 6 decimal places.
 
 Tests that perform real network downloads are marked ``live`` and gated by the
-``GRACE2_TEST_LIVE_TIGER`` environment variable (set to "1" to enable). All
+``TRID3NT_TEST_LIVE_TIGER`` environment variable (set to "1" to enable). All
 other tests use patched network calls and/or fake GCS and run unconditionally.
 """
 
@@ -28,8 +28,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_administrative_boundaries import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_administrative_boundaries import (
     AdminBoundaryEmptyError,
     AdminBoundaryError,
     AdminBoundaryLevelError,
@@ -58,7 +58,7 @@ _FORT_MYERS_BBOX = (-82.3, 26.3, -81.6, 26.8)
 _FL_FIPS = "12"
 
 # Marker for live tests
-_LIVE_TIGER = os.environ.get("GRACE2_TEST_LIVE_TIGER") == "1"
+_LIVE_TIGER = os.environ.get("TRID3NT_TEST_LIVE_TIGER") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +312,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -351,10 +351,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return fake_bytes
 
     with patch(
-        "grace2_agent.tools.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
+        "trid3nt_server.tools.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
         side_effect=lambda level, bbox: fake_fetch(),
     ), patch(
-        "grace2_agent.tools.fetch_administrative_boundaries.read_through",
+        "trid3nt_server.tools.fetch_administrative_boundaries.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_administrative_boundaries(level="county", bbox=_FORT_MYERS_BBOX)
@@ -376,10 +376,10 @@ def test_cache_hit_skips_fetch_fn():
         return fake_bytes
 
     with patch(
-        "grace2_agent.tools.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
+        "trid3nt_server.tools.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
         side_effect=lambda level, bbox: fake_fetch(),
     ), patch(
-        "grace2_agent.tools.fetch_administrative_boundaries.read_through",
+        "trid3nt_server.tools.fetch_administrative_boundaries.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_administrative_boundaries(level="county", bbox=_FORT_MYERS_BBOX)
@@ -406,10 +406,10 @@ def test_layer_uri_shape(level: str, expected_label_fragment: str):
     fake_bytes = _fake_fgb_bytes(level.upper())
 
     with patch(
-        "grace2_agent.tools.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
+        "trid3nt_server.tools.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
         return_value=fake_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_administrative_boundaries.read_through",
+        "trid3nt_server.tools.fetch_administrative_boundaries.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_administrative_boundaries(level=level, bbox=_FORT_MYERS_BBOX)
@@ -426,13 +426,13 @@ def test_layer_uri_shape(level: str, expected_label_fragment: str):
 
 
 # ---------------------------------------------------------------------------
-# Live integration test (GRACE2_TEST_LIVE_TIGER=1 to run).
+# Live integration test (TRID3NT_TEST_LIVE_TIGER=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_TIGER,
-    reason="Set GRACE2_TEST_LIVE_TIGER=1 to run live Census TIGER download tests",
+    reason="Set TRID3NT_TEST_LIVE_TIGER=1 to run live Census TIGER download tests",
 )
 def test_live_county_fort_myers_returns_lee_county():
     """LIVE: downloads real TIGER 2024 county file and clips to Fort Myers bbox.
@@ -442,7 +442,7 @@ def test_live_county_fort_myers_returns_lee_county():
     """
     import geopandas as gpd
 
-    from grace2_agent.tools.fetch_administrative_boundaries import (
+    from trid3nt_server.tools.fetch_administrative_boundaries import (
         _fetch_admin_boundaries_bytes,
     )
 
@@ -471,7 +471,7 @@ def test_live_county_fort_myers_returns_lee_county():
 
 @pytest.mark.skipif(
     not _LIVE_TIGER,
-    reason="Set GRACE2_TEST_LIVE_TIGER=1 to run live Census TIGER download tests",
+    reason="Set TRID3NT_TEST_LIVE_TIGER=1 to run live Census TIGER download tests",
 )
 def test_live_place_fort_myers_returns_fort_myers_cdp():
     """LIVE: downloads real TIGER 2024 place file for FL and clips to Fort Myers bbox.
@@ -480,7 +480,7 @@ def test_live_place_fort_myers_returns_fort_myers_cdp():
     """
     import geopandas as gpd
 
-    from grace2_agent.tools.fetch_administrative_boundaries import (
+    from trid3nt_server.tools.fetch_administrative_boundaries import (
         _fetch_admin_boundaries_bytes,
     )
 
@@ -508,13 +508,13 @@ def test_live_place_fort_myers_returns_fort_myers_cdp():
 
 @pytest.mark.skipif(
     not _LIVE_TIGER,
-    reason="Set GRACE2_TEST_LIVE_TIGER=1 to run live Census TIGER download tests",
+    reason="Set TRID3NT_TEST_LIVE_TIGER=1 to run live Census TIGER download tests",
 )
 def test_live_state_returns_at_least_one_feature():
     """LIVE: bbox over a single state returns ≥1 feature (state level)."""
     import geopandas as gpd
 
-    from grace2_agent.tools.fetch_administrative_boundaries import (
+    from trid3nt_server.tools.fetch_administrative_boundaries import (
         _fetch_admin_boundaries_bytes,
     )
 

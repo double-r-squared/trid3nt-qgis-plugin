@@ -5,7 +5,7 @@ Covers:
     2. Threshold tripping: N failures trip the breaker.
     3. Cooldown expiry: breaker auto-closes after the window elapses.
     4. Success resets the consecutive-failure counter.
-    5. Env overrides: GRACE2_CIRCUIT_THRESHOLD + GRACE2_CIRCUIT_COOLDOWN_S.
+    5. Env overrides: TRID3NT_CIRCUIT_THRESHOLD + TRID3NT_CIRCUIT_COOLDOWN_S.
     6. CircuitBreakerError shape: error_code, retryable, message, cooldown_remaining.
     7. record_failure on an already-tripped breaker does not reset the clock.
     8. Multiple independent tools: tripping one does not affect another.
@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.circuit_breaker import (
+from trid3nt_server.circuit_breaker import (
     CircuitBreakerError,
     ToolCircuitBreaker,
     is_client_arg_error,
@@ -181,8 +181,8 @@ def test_success_on_clean_tool_is_noop():
 
 
 def test_env_override_threshold(monkeypatch):
-    """``GRACE2_CIRCUIT_THRESHOLD`` overrides the default threshold."""
-    monkeypatch.setenv("GRACE2_CIRCUIT_THRESHOLD", "2")
+    """``TRID3NT_CIRCUIT_THRESHOLD`` overrides the default threshold."""
+    monkeypatch.setenv("TRID3NT_CIRCUIT_THRESHOLD", "2")
     cb = ToolCircuitBreaker()
     assert cb.threshold == 2
     # With threshold=2, trip on 2nd failure.
@@ -193,29 +193,29 @@ def test_env_override_threshold(monkeypatch):
 
 
 def test_env_override_cooldown(monkeypatch):
-    """``GRACE2_CIRCUIT_COOLDOWN_S`` overrides the default cooldown."""
-    monkeypatch.setenv("GRACE2_CIRCUIT_COOLDOWN_S", "5.0")
+    """``TRID3NT_CIRCUIT_COOLDOWN_S`` overrides the default cooldown."""
+    monkeypatch.setenv("TRID3NT_CIRCUIT_COOLDOWN_S", "5.0")
     cb = ToolCircuitBreaker()
     assert cb.cooldown_s == 5.0
 
 
 def test_env_override_threshold_invalid_falls_back(monkeypatch):
-    """An invalid ``GRACE2_CIRCUIT_THRESHOLD`` falls back to the default."""
-    monkeypatch.setenv("GRACE2_CIRCUIT_THRESHOLD", "not_a_number")
+    """An invalid ``TRID3NT_CIRCUIT_THRESHOLD`` falls back to the default."""
+    monkeypatch.setenv("TRID3NT_CIRCUIT_THRESHOLD", "not_a_number")
     cb = ToolCircuitBreaker()
     assert cb.threshold == _DEFAULT_THRESHOLD
 
 
 def test_env_override_cooldown_invalid_falls_back(monkeypatch):
-    """An invalid ``GRACE2_CIRCUIT_COOLDOWN_S`` falls back to the default."""
-    monkeypatch.setenv("GRACE2_CIRCUIT_COOLDOWN_S", "bad")
+    """An invalid ``TRID3NT_CIRCUIT_COOLDOWN_S`` falls back to the default."""
+    monkeypatch.setenv("TRID3NT_CIRCUIT_COOLDOWN_S", "bad")
     cb = ToolCircuitBreaker()
     assert cb.cooldown_s == _DEFAULT_COOLDOWN_S
 
 
 def test_env_override_threshold_zero_falls_back(monkeypatch):
     """A threshold of 0 (< 1) is invalid and falls back to the default."""
-    monkeypatch.setenv("GRACE2_CIRCUIT_THRESHOLD", "0")
+    monkeypatch.setenv("TRID3NT_CIRCUIT_THRESHOLD", "0")
     cb = ToolCircuitBreaker()
     assert cb.threshold == _DEFAULT_THRESHOLD
 
@@ -244,7 +244,7 @@ def test_circuit_breaker_error_is_runtime_error():
 
 def test_circuit_breaker_error_harvested_by_summarize():
     """``summarize_tool_result`` harvests error_code + retryable from CircuitBreakerError."""
-    from grace2_agent.adapter import summarize_tool_result
+    from trid3nt_server.adapter import summarize_tool_result
 
     err = CircuitBreakerError("fetch_stac", 30.0)
     summary = summarize_tool_result("fetch_stac", None, error=err)

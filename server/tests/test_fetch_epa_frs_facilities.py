@@ -14,7 +14,7 @@ Coverage:
 - Honest-empty path: zero features -> a valid (header-only) FlatGeobuf, no raise.
 - Non-point / null-geom / non-finite features are dropped.
 - Mocked end-to-end: synthetic features -> FGB via the read-through cache shim.
-- Live (env GRACE2_TEST_LIVE_EPA_FRS=1): real EPA query over a Houston bbox
+- Live (env TRID3NT_TEST_LIVE_EPA_FRS=1): real EPA query over a Houston bbox
   returns >=1 regulated facility point.
 """
 
@@ -28,7 +28,7 @@ import pytest
 
 # Import the module directly (the central tools/__init__ union is owned by the
 # main session; this test does not depend on central registration).
-from grace2_agent.tools.fetch_epa_frs_facilities import (
+from trid3nt_server.tools.fetch_epa_frs_facilities import (
     EPA_NEPASSIST_BASE,
     FACILITY_PROGRAMS,
     FRS_UNION_PROGRAMS,
@@ -43,7 +43,7 @@ from grace2_agent.tools.fetch_epa_frs_facilities import (
     estimate_payload_mb,
 )
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_EPA_FRS") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_EPA_FRS") == "1"
 
 # Houston Ship Channel industrial bbox used across tests.
 _HOUSTON = (-95.30, 29.68, -95.05, 29.80)
@@ -320,7 +320,7 @@ def test_end_to_end_mocked(tmp_path, monkeypatch):
     Patches the per-layer fetcher to return synthetic features and the cache
     shim to a local-disk store, then asserts the LayerURI shape + FGB content.
     """
-    from grace2_agent.tools import fetch_epa_frs_facilities as mod
+    from trid3nt_server.tools import fetch_epa_frs_facilities as mod
 
     def fake_fetch_layer(program_key, bbox, **_kw):
         if program_key == "superfund":
@@ -363,7 +363,7 @@ def test_end_to_end_mocked(tmp_path, monkeypatch):
 
 
 def test_end_to_end_mocked_single_program(tmp_path, monkeypatch):
-    from grace2_agent.tools import fetch_epa_frs_facilities as mod
+    from trid3nt_server.tools import fetch_epa_frs_facilities as mod
 
     def fake_fetch_layer(program_key, bbox, **_kw):
         return [_superfund_record(-95.15, 29.72, "NPL1")]
@@ -393,7 +393,7 @@ def test_end_to_end_mocked_single_program(tmp_path, monkeypatch):
 def test_input_error_propagates_before_fetch():
     """An invalid program raises before any network call."""
     with pytest.raises(EpaFrsInputError):
-        from grace2_agent.tools import fetch_epa_frs_facilities as mod
+        from trid3nt_server.tools import fetch_epa_frs_facilities as mod
 
         mod.fetch_epa_frs_facilities(bbox=_HOUSTON, facility_program="not-a-program")
 
@@ -403,9 +403,9 @@ def test_input_error_propagates_before_fetch():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_EPA_FRS=1 to run live")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_EPA_FRS=1 to run live")
 def test_live_houston_returns_facilities():
-    from grace2_agent.tools.fetch_epa_frs_facilities import _fetch_frs_bytes
+    from trid3nt_server.tools.fetch_epa_frs_facilities import _fetch_frs_bytes
 
     data = _fetch_frs_bytes("tri", _HOUSTON)
     gdf = _read_fgb(data)

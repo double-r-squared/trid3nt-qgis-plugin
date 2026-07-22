@@ -30,16 +30,16 @@ from __future__ import annotations
 
 import pytest
 
-from grace2_contracts import new_ulid
-from grace2_contracts.execution import LayerURI
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.execution import LayerURI
 
-from grace2_agent.adapter import (
+from trid3nt_server.adapter import (
     _layer_uri_is_published,
     _published_scenario_tool_names,
     summarize_tool_result,
 )
-from grace2_agent.pipeline_emitter import PipelineEmitter, _layer_identity_key
-from grace2_agent.server import _resolve_publish_wrap_style_preset
+from trid3nt_server.pipeline_emitter import PipelineEmitter, _layer_identity_key
+from trid3nt_server.server import _resolve_publish_wrap_style_preset
 
 
 # --------------------------------------------------------------------------- #

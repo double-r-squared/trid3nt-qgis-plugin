@@ -15,7 +15,7 @@ Coverage:
 - Cache miss → fetch_fn invoked; cache hit → fetch_fn skipped.
 - LayerURI shape: layer_type="vector", role="context", units="mixed", uri gs://.
 - Payload estimate: estimate_payload_mb returns a positive float, scales with area.
-- Live (env GRACE2_TEST_LIVE_RAWS=1): real IEM API returns ≥1 RAWS observation
+- Live (env TRID3NT_TEST_LIVE_RAWS=1): real IEM API returns ≥1 RAWS observation
   for a CA Sierra Nevada bbox; FGB round-trips; coordinates in US envelope.
 """
 
@@ -29,8 +29,8 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_raws_weather import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_raws_weather import (
     RAWSWeatherEmptyError,
     RAWSWeatherInputError,
     RAWSWeatherUpstreamError,
@@ -48,7 +48,7 @@ from grace2_agent.tools.fetch_raws_weather import (
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 
 # Live test gate.
-_LIVE_RAWS = os.environ.get("GRACE2_TEST_LIVE_RAWS") == "1"
+_LIVE_RAWS = os.environ.get("TRID3NT_TEST_LIVE_RAWS") == "1"
 
 # Sierra Nevada / Caldor Fire area bbox — RAWS-dense western US fire belt.
 _SIERRA_BBOX = (-121.0, 38.5, -119.5, 39.5)
@@ -67,7 +67,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from grace2_agent.tools.cache import (
+    from trid3nt_server.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -382,7 +382,7 @@ def test_inverted_time_window_raises():
 
 def test_date_range_too_wide_raises():
     """Date range > _MAX_DATE_RANGE_DAYS (14) raises RAWSWeatherInputError."""
-    from grace2_agent.tools.fetch_raws_weather import _MAX_DATE_RANGE_DAYS
+    from trid3nt_server.tools.fetch_raws_weather import _MAX_DATE_RANGE_DAYS
     wide_start = "2024-06-01"
     wide_end = (
         date(2024, 6, 1) + timedelta(days=_MAX_DATE_RANGE_DAYS + 1)
@@ -421,10 +421,10 @@ def test_no_raws_stations_in_bbox_raises_empty_error():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "grace2_agent.tools.fetch_raws_weather._discover_raws_stations_in_bbox",
+        "trid3nt_server.tools.fetch_raws_weather._discover_raws_stations_in_bbox",
         return_value=[],
     ), patch(
-        "grace2_agent.tools.fetch_raws_weather.read_through",
+        "trid3nt_server.tools.fetch_raws_weather.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(RAWSWeatherEmptyError, match="No IEM-archived RAWS"):
@@ -449,10 +449,10 @@ def test_mocked_end_to_end_writes_fgb_to_cache():
         return _build_raws_fgb(fgb_rows)
 
     with patch(
-        "grace2_agent.tools.fetch_raws_weather._fetch_raws_bytes",
+        "trid3nt_server.tools.fetch_raws_weather._fetch_raws_bytes",
         side_effect=fake_fetch_bytes,
     ), patch(
-        "grace2_agent.tools.fetch_raws_weather.read_through",
+        "trid3nt_server.tools.fetch_raws_weather.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_raws_weather(
@@ -496,10 +496,10 @@ def test_layer_uri_shape():
     fgb_rows = _make_synthetic_fgb_rows(n_per_station=1)
 
     with patch(
-        "grace2_agent.tools.fetch_raws_weather._fetch_raws_bytes",
+        "trid3nt_server.tools.fetch_raws_weather._fetch_raws_bytes",
         side_effect=lambda bbox, sd, ed: _build_raws_fgb(fgb_rows),
     ), patch(
-        "grace2_agent.tools.fetch_raws_weather.read_through",
+        "trid3nt_server.tools.fetch_raws_weather.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_raws_weather(
@@ -532,10 +532,10 @@ def test_cache_miss_then_hit():
         return _build_raws_fgb(fgb_rows)
 
     with patch(
-        "grace2_agent.tools.fetch_raws_weather._fetch_raws_bytes",
+        "trid3nt_server.tools.fetch_raws_weather._fetch_raws_bytes",
         side_effect=counting_fetch,
     ), patch(
-        "grace2_agent.tools.fetch_raws_weather.read_through",
+        "trid3nt_server.tools.fetch_raws_weather.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_raws_weather(
@@ -555,10 +555,10 @@ def test_different_bbox_produces_different_cache_key():
     fgb_rows = _make_synthetic_fgb_rows(n_per_station=1)
 
     with patch(
-        "grace2_agent.tools.fetch_raws_weather._fetch_raws_bytes",
+        "trid3nt_server.tools.fetch_raws_weather._fetch_raws_bytes",
         side_effect=lambda bbox, sd, ed: _build_raws_fgb(fgb_rows),
     ), patch(
-        "grace2_agent.tools.fetch_raws_weather.read_through",
+        "trid3nt_server.tools.fetch_raws_weather.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_raws_weather(
@@ -609,7 +609,7 @@ def test_station_discovery_filters_non_raws():
 
     bbox = (-113.5, 36.5, -111.0, 38.5)
     with patch(
-        "grace2_agent.tools.fetch_raws_weather._http_get",
+        "trid3nt_server.tools.fetch_raws_weather._http_get",
         side_effect=mock_http_get,
     ):
         stations = _discover_raws_stations_in_bbox(bbox)
@@ -648,7 +648,7 @@ def test_station_discovery_filters_out_of_bbox():
     # Tight bbox that only includes INSIDE.
     bbox = (-112.5, 37.5, -111.5, 38.2)
     with patch(
-        "grace2_agent.tools.fetch_raws_weather._http_get",
+        "trid3nt_server.tools.fetch_raws_weather._http_get",
         side_effect=mock_http_get,
     ):
         stations = _discover_raws_stations_in_bbox(bbox)
@@ -695,13 +695,13 @@ def test_synthetic_obs_in_us_envelope():
 
 
 # ---------------------------------------------------------------------------
-# Live integration tests (GRACE2_TEST_LIVE_RAWS=1 to run).
+# Live integration tests (TRID3NT_TEST_LIVE_RAWS=1 to run).
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
     not _LIVE_RAWS,
-    reason="Set GRACE2_TEST_LIVE_RAWS=1 to run live IEM RAWS tests",
+    reason="Set TRID3NT_TEST_LIVE_RAWS=1 to run live IEM RAWS tests",
 )
 def test_live_utah_raws_returns_observations():
     """LIVE: real IEM API returns ≥1 RAWS observation for UT bbox.
@@ -711,7 +711,7 @@ def test_live_utah_raws_returns_observations():
     - FGB round-trips; ≥1 feature; all point coords in US envelope.
     - Required columns (station, utc_valid, tmpf, relh) present.
     """
-    from grace2_agent.tools.fetch_raws_weather import (
+    from trid3nt_server.tools.fetch_raws_weather import (
         _discover_raws_stations_in_bbox,
         _fetch_raws_obs_for_station_date,
         _build_raws_fgb,
@@ -803,7 +803,7 @@ def test_live_utah_raws_returns_observations():
 
 @pytest.mark.skipif(
     not _LIVE_RAWS,
-    reason="Set GRACE2_TEST_LIVE_RAWS=1 to run live IEM RAWS tests",
+    reason="Set TRID3NT_TEST_LIVE_RAWS=1 to run live IEM RAWS tests",
 )
 def test_live_full_tool_call_returns_layer_uri():
     """LIVE: full fetch_raws_weather call returns a valid LayerURI with gs:// uri.

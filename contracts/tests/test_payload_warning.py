@@ -20,8 +20,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from grace2_contracts import new_ulid
-from grace2_contracts.payload_warning import (
+from trid3nt_contracts import new_ulid
+from trid3nt_contracts.payload_warning import (
     HARD_CAP_MB_DEFAULT,
     WARNING_THRESHOLD_MB_DEFAULT,
     GranularitySuggestion,
@@ -29,7 +29,7 @@ from grace2_contracts.payload_warning import (
     PayloadWarningEnvelopePayload,
     TimeScaleSuggestion,
 )
-from grace2_contracts.ws import (
+from trid3nt_contracts.ws import (
     AGENT_TO_CLIENT_PAYLOADS,
     ALL_PAYLOADS,
     CLIENT_TO_AGENT_PAYLOADS,

@@ -22,9 +22,9 @@ from unittest.mock import patch
 
 import pytest
 
-from grace2_agent import bedrock_adapter as ba
-from grace2_agent.telemetry import compute_args_hash, emit_tool_call_event
-from grace2_agent.tool_catalog_http import _aggregate_records, _normalize_record
+from trid3nt_server import bedrock_adapter as ba
+from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
+from trid3nt_server.tool_catalog_http import _aggregate_records, _normalize_record
 
 # ---------------------------------------------------------------------------
 # Helpers shared across tests
@@ -179,7 +179,7 @@ async def _emit_with_model_id(path: str, model_id: str | None) -> None:
         latency_ms=42.0,
         model_id=model_id,
     )
-    with patch.dict(os.environ, {"GRACE2_TELEMETRY_PATH": path}):
+    with patch.dict(os.environ, {"TRID3NT_TELEMETRY_PATH": path}):
         await emit_tool_call_event(**args)
         await asyncio.sleep(0.1)  # drain fire-and-forget task
 
@@ -376,7 +376,7 @@ def test_resolve_openai_provider_bedrock_id_passes_through_to_adapter_guard(
     monkeypatch,
 ):
     """A stale Bedrock id is passed through here; openai_adapter.openai_model
-    ignores Bedrock-shaped ids (falls back to GRACE2_OPENAI_MODEL), so the
+    ignores Bedrock-shaped ids (falls back to TRID3NT_OPENAI_MODEL), so the
     guard lives at the adapter boundary, not in resolve."""
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     got, notice = ba.resolve_selected_model("us.anthropic.claude-sonnet-4-6")

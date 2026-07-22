@@ -13,7 +13,7 @@ Coverage:
   unknown directions, bad distances, missing seeds, etc.
 - ``estimate_payload_mb`` scales with bbox area / distance / direction
   and returns a positive float.
-- Live smoke tests (gated by env GRACE2_TEST_LIVE_PFDF_A11=1) for each:
+- Live smoke tests (gated by env TRID3NT_TEST_LIVE_PFDF_A11=1) for each:
   small Fort Myers bbox returns a non-empty COG / FlatGeobuf.
 """
 
@@ -24,21 +24,21 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.tools import TOOL_REGISTRY
-from grace2_agent.tools.fetch_3dep_extra import (
+from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.fetch_3dep_extra import (
     SUPPORTED_RESOLUTIONS,
     ThreeDEPExtraError,
     ThreeDEPExtraInputError,
     estimate_payload_mb as _est_3dep,
     fetch_3dep_extra,
 )
-from grace2_agent.tools.fetch_nhdplus_nldi_navigate import (
+from trid3nt_server.tools.fetch_nhdplus_nldi_navigate import (
     NHDPlusNLDIError,
     NHDPlusNLDIInputError,
     estimate_payload_mb as _est_nldi,
     fetch_nhdplus_nldi_navigate,
 )
-from grace2_agent.tools.fetch_statsgo_soils import (
+from trid3nt_server.tools.fetch_statsgo_soils import (
     STATSGOSoilsError,
     STATSGOSoilsInputError,
     estimate_payload_mb as _est_statsgo,
@@ -46,7 +46,7 @@ from grace2_agent.tools.fetch_statsgo_soils import (
 )
 
 
-_LIVE = os.environ.get("GRACE2_TEST_LIVE_PFDF_A11") == "1"
+_LIVE = os.environ.get("TRID3NT_TEST_LIVE_PFDF_A11") == "1"
 
 # Fort Myers / Caloosahatchee — same demo bbox used across the suite.
 _FORT_MYERS_BBOX = (-82.0, 26.4, -81.7, 26.7)
@@ -321,7 +321,7 @@ def test_3dep_absorbs_invented_kwargs() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_PFDF_A11=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
 def test_live_statsgo_fetch_kffact_fort_myers() -> None:
     """Real STATSGO KFFACT fetch over a small CONUS bbox returns a COG URI."""
     layer = fetch_statsgo_soils(bbox=_FORT_MYERS_BBOX, field="KFFACT")
@@ -332,7 +332,7 @@ def test_live_statsgo_fetch_kffact_fort_myers() -> None:
     assert "KFFACT" in layer.name
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_PFDF_A11=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
 def test_live_nldi_navigate_dm_from_caloosahatchee() -> None:
     """Real NLDI navigate DM from Fort Myers point returns a FlatGeobuf URI."""
     layer = fetch_nhdplus_nldi_navigate(
@@ -346,7 +346,7 @@ def test_live_nldi_navigate_dm_from_caloosahatchee() -> None:
     assert "NLDI" in layer.name
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_PFDF_A11=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
 def test_live_3dep_extra_one_arc_second_fort_myers() -> None:
     """Real 3DEP 1-arc-second fetch over Fort Myers returns a COG URI."""
     layer = fetch_3dep_extra(
@@ -366,7 +366,7 @@ def test_live_3dep_extra_one_arc_second_fort_myers() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_PFDF_A11=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
 def test_live_statsgo_direct_pfdf_call() -> None:
     """Direct pfdf.statsgo.read works for the same bbox — substrate health."""
     pfdf = pytest.importorskip("pfdf")
@@ -381,10 +381,10 @@ def test_live_statsgo_direct_pfdf_call() -> None:
     assert hasattr(raster, "save")
 
 
-@pytest.mark.skipif(not _LIVE, reason="set GRACE2_TEST_LIVE_PFDF_A11=1 to run")
+@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
 def test_live_nldi_snap_and_navigate_direct() -> None:
     """Direct NLDI HTTP smoke — confirms upstream is up."""
-    from grace2_agent.tools.fetch_nhdplus_nldi_navigate import (
+    from trid3nt_server.tools.fetch_nhdplus_nldi_navigate import (
         _navigate_flowlines,
         _snap_point_to_comid,
     )
