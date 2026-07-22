@@ -295,10 +295,9 @@ def _build_converse_kwargs(
 # timeout, ``converse_stream`` / EventStream iteration never returns and never
 # raises, so the producer thread is stuck forever, the consumer's
 # ``await queue.get()`` never completes, the turn task never finishes ->
-# ``inflight_turn_count()`` stays > 0 -> ``is_busy()`` is pinned True (the
-# auto-stop gate refuses to sleep) AND the loop is effectively wedged on that
-# turn, so NO model (even Sonnet) could respond and ``/api/health`` went
-# unresponsive behind the blocked loop.
+# ``inflight_turn_count()`` stays > 0 AND the loop is effectively wedged on
+# that turn, so NO model (even Sonnet) could respond while the loop stayed
+# blocked.
 #
 # THE FIX: attach a botocore ``Config`` with a bounded ``read_timeout`` /
 # ``connect_timeout`` so a hung call RAISES ``ReadTimeoutError`` /

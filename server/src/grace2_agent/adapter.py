@@ -1055,7 +1055,8 @@ def load_settings() -> GeminiSettings:
 
     Required env (job-0014 substrate):
     - ``GOOGLE_GENAI_USE_VERTEXAI=True``
-    - ``GOOGLE_CLOUD_PROJECT`` (default: ``grace-2-hazard-prod``)
+    - ``GOOGLE_CLOUD_PROJECT`` (no default -- the GCP project is gone;
+      this dormant Vertex path requires it set explicitly)
     - ``GOOGLE_CLOUD_LOCATION`` (default: ``us-central1``)
 
     Optional:
@@ -1063,7 +1064,7 @@ def load_settings() -> GeminiSettings:
     """
     return GeminiSettings(
         model=os.environ.get("GRACE2_GEMINI_MODEL", GEMINI_DEFAULT_MODEL),
-        project=os.environ.get("GOOGLE_CLOUD_PROJECT", "grace-2-hazard-prod"),
+        project=os.environ.get("GOOGLE_CLOUD_PROJECT", ""),
         location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
         use_vertex=os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "True").lower()
         in ("true", "1", "yes"),

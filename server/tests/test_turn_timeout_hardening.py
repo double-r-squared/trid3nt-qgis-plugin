@@ -8,10 +8,8 @@ iteration) never returned and never raised, so:
   * the ``stream_bedrock`` producer thread (run via ``run_in_executor``) was
     stuck forever, so the consumer's ``await queue.get()`` never completed,
   * the turn coroutine never finished, so its ``_SESSION_LIVE_TURNS`` entry's
-    task stayed not-done -> ``inflight_turn_count() > 0`` -> ``is_busy()`` was
-    pinned True (auto-stop refused to sleep) AND the loop was wedged on that
-    turn, so NO model (even Sonnet) could respond and ``/api/health`` went
-    unresponsive behind the blocked loop,
+    task stayed not-done -> ``inflight_turn_count() > 0`` AND the loop was
+    wedged on that turn, so NO model (even Sonnet) could respond,
   * selecting Haiku/Nova produced NOTHING on the wire -- a silent death.
 
 THE FIX (server/src/grace2_agent/bedrock_adapter.py):
@@ -24,12 +22,10 @@ THE FIX (server/src/grace2_agent/bedrock_adapter.py):
      queue, ``stream_bedrock`` re-raises it, and the server turn loop's
      ``except Exception`` handler surfaces an honest ``LLM_UNAVAILABLE`` error
      envelope AND lets the turn TERMINATE -> the live-turn task completes ->
-     ``inflight_turn_count`` drops -> ``is_busy`` clears.
+     ``inflight_turn_count`` drops.
 
 The bound is on the LLM Converse call ONLY. The minutes-long ``run_solver`` /
-``wait_for_completion`` solve path runs through a SEPARATE Batch client and is
-intentionally NOT bounded -- covered here by asserting the
-``_SOLVE_IN_FLIGHT`` marker is untouched by a model-call timeout.
+``wait_for_completion`` solve path is intentionally NOT bounded.
 
 Run:
     cd server && .venv/bin/python -m pytest \
@@ -304,16 +300,16 @@ def _make_raising_stream(exc: BaseException):
 
 @pytest.mark.asyncio
 async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
-    """A timed-out model turn TERMINATES + surfaces an error + clears busy.
+    """A timed-out model turn TERMINATES + surfaces an error + clears the turn.
 
     Reproduces the live-down shape:
       * the turn task is REGISTERED as a detached live turn (as the handler
         does when a socket drops mid-turn), so ``inflight_turn_count()`` would
-        pin ``is_busy()`` True if the turn never finished;
+        stay pinned if the turn never finished;
       * the model stream RAISES a ReadTimeoutError (the bounded-client outcome);
       * we assert (a) an LLM_UNAVAILABLE error envelope reached the wire, and
-        (b) AFTER the turn task completes, ``inflight_turn_count() == 0`` and
-        ``is_busy()`` is False -- the failed call did NOT wedge the loop."""
+        (b) AFTER the turn task completes, ``inflight_turn_count() == 0``
+        -- the failed call did NOT wedge the loop."""
     from grace2_agent import server as agent_server
     from grace2_agent.server import SessionState
     from grace2_contracts import new_ulid
@@ -326,15 +322,14 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
 
     raising = _make_raising_stream(_read_timeout_error())
 
-    # Sanity precondition: the box is idle before the turn.
+    # Sanity precondition: no live turn before this one.
     assert agent_server.inflight_turn_count() == 0
-    assert agent_server.is_busy() is False
 
     with patch.object(agent_server, "stream_events_with_contents", raising), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "build_client", return_value=None):
         # Launch the turn as a TASK and register it as a detached live turn --
-        # this is the exact path that pins is_busy if the turn never completes.
+        # this is the exact path that pins the registry if the turn never completes.
         task = asyncio.ensure_future(
             agent_server._stream_gemini_reply(
                 sock, state, settings, "switch to Nova and run it", "research"
@@ -343,9 +338,8 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
         agent_server._register_live_turn(
             state.session_id, "_test_turn", task, None
         )
-        # While running, the box reads busy (the detached turn is in flight).
+        # While running, the detached turn is in flight.
         assert agent_server.inflight_turn_count() >= 1
-        assert agent_server.is_busy() is True
 
         await task  # _stream_gemini_reply swallows the error internally
         # Let the task's done-callback (_drop) run so the registry empties.
@@ -364,15 +358,12 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
     ]
     assert llm_errors, f"no LLM_UNAVAILABLE error envelope on wire: {sock.sent}"
 
-    # (b) THE LOAD-BEARING ASSERT: the failed model call did NOT pin busy.
+    # (b) THE LOAD-BEARING ASSERT: the failed model call did NOT pin the turn.
     assert task.done()
     assert agent_server.inflight_turn_count() == 0, (
-        "detached turn entry NOT cleared after a failed model call -> "
-        "is_busy would stay pinned (the live-down wedge)"
+        "detached turn entry NOT cleared after a failed model call "
+        "(the live-down wedge)"
     )
-    assert agent_server.is_busy() is False
-    # The model bound never touched the SOLVE in-flight marker.
-    assert agent_server.solve_in_flight_count() == 0
 
 
 @pytest.mark.asyncio
@@ -413,19 +404,17 @@ async def test_normal_turn_path_unaffected(monkeypatch):
     assert "All set." in text
     # No error envelope on the happy path.
     assert not any('"error_code": "LLM_UNAVAILABLE"' in m for m in sock.sent)
-    # Busy cleared after a normal turn too.
+    # Turn registry cleared after a normal turn too.
     assert agent_server.inflight_turn_count() == 0
-    assert agent_server.is_busy() is False
 
 
 @pytest.mark.asyncio
 async def test_solve_tool_path_unaffected_by_model_bound(monkeypatch):
-    """A tool-bearing turn dispatches the tool + completes; solve marker intact.
+    """A tool-bearing turn dispatches the tool + completes cleanly.
 
-    Confirms the LLM read_timeout bound does NOT reach into the tool / solve
-    dispatch path: a turn that calls a tool then narrates runs to a clean,
-    busy-cleared terminal, and the ``_SOLVE_IN_FLIGHT`` gate (the minutes-long
-    solve signal) is never disturbed by the model-call bound."""
+    Confirms the LLM read_timeout bound does NOT reach into the tool
+    dispatch path: a turn that calls a tool then narrates runs to a clean
+    terminal with the live-turn registry cleared."""
     from grace2_agent import server as agent_server
     from grace2_agent.server import SessionState
     from grace2_agent.adapter import FunctionCallEvent
@@ -453,9 +442,6 @@ async def test_solve_tool_path_unaffected_by_model_bound(monkeypatch):
 
     async def _fake_invoke(_ws, _state, name, args):
         dispatched.append(name)
-        # While the tool body runs, the solve gate is whatever the tool sets;
-        # geocode is not a solver tool, so it must remain 0.
-        assert agent_server.solve_in_flight_count() == 0
         return {"name": "X", "bbox": [0, 0, 1, 1], "precision_class": "precise"}
 
     with patch.object(agent_server, "stream_events_with_contents", _fake_stream), \
@@ -474,7 +460,5 @@ async def test_solve_tool_path_unaffected_by_model_bound(monkeypatch):
         await asyncio.sleep(0)
 
     assert dispatched == ["geocode_location"]
-    # The tool turn ran to a clean terminal: busy + solve gate both clear.
+    # The tool turn ran to a clean terminal: the live-turn registry clears.
     assert agent_server.inflight_turn_count() == 0
-    assert agent_server.is_busy() is False
-    assert agent_server.solve_in_flight_count() == 0

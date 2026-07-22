@@ -102,7 +102,7 @@ __all__ = [
 ]
 
 #: Default runs bucket (matches the SFINCS substrate).
-RUNS_BUCKET_DEFAULT: str = "grace-2-hazard-prod-runs"
+RUNS_BUCKET_DEFAULT: str = "trid3nt-runs"
 
 #: QML style preset name for the plume concentration COG. The styles/ package
 #: authors the matching ``continuous_plume_concentration.qml``; surfaced as

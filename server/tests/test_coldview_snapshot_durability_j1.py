@@ -1,23 +1,19 @@
 """COLDVIEW DURABILITY (J1) - case-view snapshot write must not be raced by
-box-stop.
+daemon shutdown.
 
 Root cause (reports/design/coldview_layers_fix.md): opening a Case with the
-agent box asleep showed the case + chat but NO layers because the cold source
+daemon down showed the case + chat but NO layers because the cold source
 of truth -- ``s3://RUNS_BUCKET/case-views/{case_id}.json`` -- was STALE. The
 layer-publish snapshot REBUILD was a DETACHED fire-and-forget task added to
-``_BG_SNAPSHOT_TASKS`` and never drained, while the auto-stop gate
-(``is_busy()``) tracked only in-flight turns + solves and flipped false the
-instant the turn returned. So the idle Lambda could StopInstances AFTER the turn
-returned but BEFORE the detached S3 PUT landed, leaving the cold object at its
-prior (often empty) contents. Chat survived because it persists synchronously.
+``_BG_SNAPSHOT_TASKS`` and never drained, so the process could stop AFTER the
+turn returned but BEFORE the detached S3 PUT landed, leaving the cold object
+at its prior (often empty) contents. Chat survived because it persists
+synchronously.
 
 J1 fix (server.py only):
   1. The layer-publish site AWAITS ``_persist_case_view_snapshot`` +
      ``_persist_case_manifest`` inline (durable before the turn returns).
-  2. ``is_busy()`` counts any not-done task in ``_BG_SNAPSHOT_TASKS`` so the box
-     reads ``busy=true`` while a per-turn / turn-close snapshot PUT is still
-     outstanding.
-  3. ``_drain_bg_snapshot_tasks`` (called from ``run_server``'s shutdown
+  2. ``_drain_bg_snapshot_tasks`` (called from ``run_server``'s shutdown
      ``finally``) gathers outstanding writes with a bounded timeout so a
      graceful SIGTERM flushes them.
 
@@ -56,16 +52,12 @@ from .test_persistence import MockMCPClient
 
 @pytest.fixture(autouse=True)
 def _reset_liveness_and_tasks():
-    """Isolate the process-global liveness counters + snapshot-task set."""
-    server._ACTIVE_WS_CONNECTIONS.clear()
+    """Isolate the process-global live-turn registry + snapshot-task set."""
     server._SESSION_LIVE_TURNS.clear()
-    server._SOLVE_IN_FLIGHT = 0
     server._BG_SNAPSHOT_TASKS.clear()
     _saved_persistence = server.get_persistence()
     yield
-    server._ACTIVE_WS_CONNECTIONS.clear()
     server._SESSION_LIVE_TURNS.clear()
-    server._SOLVE_IN_FLIGHT = 0
     server._BG_SNAPSHOT_TASKS.clear()
     server.set_persistence(_saved_persistence)
 
@@ -236,13 +228,13 @@ def test_publish_site_awaits_snapshot_not_create_task() -> None:
 def test_turn_close_snapshot_stays_detached_and_is_drained() -> None:
     """The turn-close site (``_dispatch_gemini_and_persist``) MAY stay
     fire-and-forget -- it refreshes chat, not the layer set -- and is covered by
-    the busy-gate + shutdown drain rather than an inline await. This asserts the
+    the shutdown drain rather than an inline await. This asserts the
     detach is INTENTIONAL there (so a reviewer does not mistake it for the
     publish-site regression) while the drain helper exists to flush it."""
     src = Path(server.__file__).read_text(encoding="utf-8")
     tree = ast.parse(src)
     turn_close = _function_named(tree, "_dispatch_gemini_and_persist")
-    # The turn-close site detaches (acceptable: drained on shutdown + busy-gated).
+    # The turn-close site detaches (acceptable: drained on shutdown).
     assert _snapshot_create_task_calls(turn_close), (
         "expected the turn-close site to detach its chat-refresh snapshot "
         "(drained by _drain_bg_snapshot_tasks on shutdown)"
@@ -252,64 +244,7 @@ def test_turn_close_snapshot_stays_detached_and_is_drained() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 2. is_busy() is TRUE while a snapshot task is pending (autostop race closed).
-# --------------------------------------------------------------------------- #
-
-
-def test_is_busy_true_while_snapshot_task_pending() -> None:
-    """A not-done task in ``_BG_SNAPSHOT_TASKS`` pins the box busy so the idle
-    Lambda will not StopInstances mid-write; a done task does not."""
-
-    async def _run() -> None:
-        assert server.is_busy() is False  # idle at rest
-
-        gate = asyncio.Event()
-
-        async def _slow_snapshot() -> None:
-            await gate.wait()
-
-        t = asyncio.create_task(_slow_snapshot())
-        server._BG_SNAPSHOT_TASKS.add(t)
-        t.add_done_callback(server._BG_SNAPSHOT_TASKS.discard)
-
-        # A pending detached snapshot PUT keeps the box BUSY (and /api/health).
-        assert server.is_busy() is True
-        assert server.liveness_snapshot()["busy"] is True
-
-        # Let the write land; once done, the box is no longer pinned by it.
-        gate.set()
-        await t
-        # The done-callback discards it; even if the discard hasn't run yet,
-        # is_busy() filters done tasks, so the box reads idle.
-        assert server.is_busy() is False
-
-    asyncio.run(_run())
-
-
-def test_is_busy_busy_when_snapshot_pending_even_with_no_turn_or_solve() -> None:
-    """The snapshot term is an independent OR arm: zero turns + zero solves but a
-    pending snapshot still reads busy (the precise box-stop race)."""
-
-    async def _run() -> None:
-        assert server.inflight_turn_count() == 0
-        assert server.solve_in_flight_count() == 0
-        assert server.is_busy() is False
-
-        gate = asyncio.Event()
-        t = asyncio.create_task(gate.wait())
-        server._BG_SNAPSHOT_TASKS.add(t)
-        t.add_done_callback(server._BG_SNAPSHOT_TASKS.discard)
-
-        assert server.is_busy() is True
-        gate.set()
-        await t
-        assert server.is_busy() is False
-
-    asyncio.run(_run())
-
-
-# --------------------------------------------------------------------------- #
-# 3. The shutdown drain flushes pending snapshot tasks.
+# 2. The shutdown drain flushes pending snapshot tasks.
 # --------------------------------------------------------------------------- #
 
 
@@ -332,13 +267,13 @@ def test_shutdown_drain_flushes_pending_snapshot_tasks() -> None:
 
         # Before drain, the writes are still pending.
         assert landed == []
-        assert server.is_busy() is True
+        assert any(not t.done() for t in server._BG_SNAPSHOT_TASKS)
 
         await server._drain_bg_snapshot_tasks()
 
         # After drain, BOTH writes completed (flushed before shutdown).
         assert sorted(landed) == ["manifest", "snap"]
-        assert server.is_busy() is False
+        assert not any(not t.done() for t in server._BG_SNAPSHOT_TASKS)
 
     asyncio.run(_run())
 
@@ -371,7 +306,7 @@ def test_shutdown_drain_noop_when_nothing_pending() -> None:
     """No outstanding writes -> the drain is a clean no-op (no error)."""
     assert len(server._BG_SNAPSHOT_TASKS) == 0
     asyncio.run(server._drain_bg_snapshot_tasks())
-    assert server.is_busy() is False
+    assert len(server._BG_SNAPSHOT_TASKS) == 0
 
 
 def test_shutdown_drain_survives_a_failing_write() -> None:

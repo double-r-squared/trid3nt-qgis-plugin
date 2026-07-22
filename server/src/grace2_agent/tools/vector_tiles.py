@@ -480,7 +480,7 @@ def write_pmtiles_to_object_store(pmtiles_bytes: bytes, key: str) -> str:
     bucket = (
         os.environ.get("GRACE2_RUNS_BUCKET")
         or os.environ.get("GRACE2_CACHE_BUCKET")
-        or "grace-2-hazard-prod-runs"
+        or "trid3nt-runs"
     )
     s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-west-2"))
     s3.put_object(

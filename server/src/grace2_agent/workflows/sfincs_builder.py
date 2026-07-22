@@ -1123,9 +1123,9 @@ def _default_setup_uri(bbox: tuple[float, float, float, float]) -> str:
     enforced via a ULID; HydroMT-determinism would let us cache by content
     hash but the v0.1 smoke skips that.
     """
-    from ..tools.cache import storage_scheme
+    from ..tools.cache import CACHE_BUCKET, storage_scheme
 
-    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache")
+    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET") or CACHE_BUCKET
     setup_id = new_ulid()
     return (
         f"{storage_scheme()}://{cache_bucket}/cache/static-30d/sfincs_setup/"

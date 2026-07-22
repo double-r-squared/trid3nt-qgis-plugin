@@ -152,7 +152,7 @@ class ElmfireStaging:
 # --------------------------------------------------------------------------- #
 # FIRE-2 deck-builder import seam.
 #
-# ``services/workers/`` is NOT on the agent's import path (see qgis_proxy.py's
+# ``services/workers/`` is NOT on the agent's import path (a pattern the deleted cloud qgis proxy
 # note), so the deck builder is loaded by file path from the repo root —
 # the same repo-root discovery the Landlab local spec uses
 # (``Path(__file__).resolve().parents[4]``). Cached after first load.

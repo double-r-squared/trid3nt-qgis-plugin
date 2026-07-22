@@ -14,57 +14,30 @@ out-of-scope; the discovery loop is the substitute.
 
 Both tools are cacheable under the FR-DC-2 ``static-30d`` class with
 ``source_class="qgis_algorithms_catalog"``. The catalog rarely changes — only
-on a QGIS Server / worker image rebuild (~1× per quarter at most). When the
-worker image rotates, the lifecycle policy (job-0031) will evict the cache
-within 30 days and the next call re-fetches.
+on a QGIS install / container image rebuild (~1× per quarter at most). When
+the QGIS substrate rotates, the lifecycle policy (job-0031) will evict the
+cache within 30 days and the next call re-fetches.
 
-Worker substrate (Option B per kickoff Decisions)
--------------------------------------------------
-
-The kickoff frames two options:
-
-* **Option A** — extend the deployed PyQGIS worker (``grace-2-pyqgis-worker``
-  Cloud Run Job, image @sha256:fffd7e0f) to handle ``{command: "list_algorithms"}``
-  and ``{command: "describe_algorithm", algorithm_id: ...}`` payloads. This
-  touches the worker image; ``services/workers/**`` is FROZEN for this job.
-
-* **Option B** — wrap the existing worker substrate via a one-shot Python
-  script that runs ``qgis_process list`` / ``qgis_process help <alg>`` and
-  returns the result, without touching the worker image.
-
-The kickoff resolves to **Option B**. Implementation note: the deployed
-worker's container entrypoint is ``python3 -m services.workers.pyqgis`` with
-fixed argparse semantics (``--qgs-uri`` required), and the Cloud Run Jobs v2
-``RunJob.Overrides`` API supports overriding ``args`` but NOT ``command`` at
-exec time. Running ``qgis_process`` against the deployed Job therefore
-requires either (a) an ``UpdateJob`` mutation of ``template.containers[0]``
-(rejected at sandbox layer as mutating the deployed shared Job), or (b) a
-sibling Cloud Run Job with ``command=qgis_process`` (infra, FROZEN), or (c)
-a worker-side command-surface extension (worker code, FROZEN).
-
-**Option B′ (this job's pragmatic resolution):** the submitter wired into
-``set_worker_submitter(...)`` runs ``qgis_process`` as a subprocess. In the
-dev environment that's the local ``~/miniforge3/envs/grace2/bin/qgis_process``
-(QGIS 3.40.3-Bratislava per PROJECT_STATE.md / job-0022). In production this
-seam will route to the deployed worker substrate once the Cloud Run Jobs
-override surface is sorted — see Open Question OQ-34-WORKER-DISCOVERY-SUBSTRATE
-in this job's report. The catalog shape is stable across the QGIS 3.x line,
-so the substitution is materially equivalent for the M4 discovery loop.
+Substrate (local qgis_process)
+------------------------------
 
 The substrate seam is the ``_WORKER_SUBMITTER`` module variable in
-``passthroughs.py`` (job-0032's DI hook). This module imports the seam at
-call time so the submitter binding can be changed via
-``set_worker_submitter`` without touching this module.
+``passthroughs.py`` (job-0032's DI hook), bound at agent startup via
+``set_worker_submitter`` (see ``main._default_qgis_process_submitter``). The
+submitter runs ``qgis_process`` as a subprocess — a locally installed
+``qgis_process`` binary, or the ``GRACE2_QGIS_DOCKER_IMAGE`` docker container
+(the same substrate ``passthroughs.qgis_process`` executes algorithms on).
+This module imports the seam at call time so the submitter binding can be
+changed via ``set_worker_submitter`` without touching this module. The
+GCP-era Cloud Run PyQGIS worker substrate was removed with the cloud strip.
+The catalog shape is stable across the QGIS 3.x line.
 
-TTL choice (TENTATIVE per kickoff)
-----------------------------------
+TTL choice
+----------
 
 ``static-30d`` for both tools — the algorithm catalog changes only on a
-container image rebuild (FR-DC-2 boundary: "static-30d for upstream catalogs
-that change on a quarterly or longer rhythm"). Alternative ``semi-static-7d``
-would be over-fetching: the deployed worker image is digest-pinned in
-``infra/worker.tf`` and only rotates via an explicit ``tofu apply``. Surfaced
-as OQ-34-DISCOVERY-TTL-CLASS in the report.
+QGIS install / container image rebuild (FR-DC-2 boundary: "static-30d for
+upstream catalogs that change on a quarterly or longer rhythm").
 
 Return shapes (kickoff: dicts with documented keys, no new pydantic models)
 --------------------------------------------------------------------------
@@ -94,7 +67,7 @@ Invariants honored
 ------------------
 
 * **Invariant 1 (Determinism boundary):** algorithm enumeration is
-  deterministic at the catalog-version layer (a given worker image always
+  deterministic at the catalog-version layer (a given QGIS substrate always
   produces the same algorithm list). The ``static-30d`` cache amplifies that
   determinism across a 30-day window.
 * **Invariant 8 (Cancellation is first-class):** the subprocess invocation
@@ -145,7 +118,7 @@ SOURCE_CLASS = "qgis_algorithms_catalog"
 # ---------------------------------------------------------------------------
 # Curated allowlist (job-0308 Q-discovery lane).
 #
-# A bare ``qgis_process list`` on the deployed worker image surfaces ~695
+# A bare ``qgis_process list`` on the QGIS substrate surfaces ~695
 # algorithms across native QGIS + GDAL + GRASS + SAGA. Handing all 695 to the
 # LLM is illegible: most are niche transforms the agent never needs, and the
 # noise crowds out the high-value families. The curated allowlist trims the
@@ -289,7 +262,7 @@ def _apply_curated_allowlist(
     return [s for s in summaries if _keep(s["algorithm_id"])]
 
 #: Subprocess timeout for ``qgis_process list`` — typically completes in 2-3 s
-#: locally; deployed worker may take longer through Cloud Run Job cold-start.
+#: locally; a docker-container substrate may take longer on a cold pull.
 LIST_TIMEOUT_S = 120
 
 #: Subprocess timeout for ``qgis_process help <alg>`` — small, fast.
@@ -688,9 +661,9 @@ def _parse_outputs_block(lines: list[str]) -> list[QGISAlgorithmOutput]:
 @register_tool(
     _LIST_METADATA,
     # Annotations: readOnlyHint=True (queries QGIS Server capabilities; no
-    # state mutation), openWorldHint=False (calls intra-GCP QGIS Server WMS
-    # GetCapabilities; not an external public API), destructiveHint=False,
-    # idempotentHint=True (same capabilities response for same server state).
+    # state mutation), openWorldHint=False (local qgis_process substrate;
+    # not an external public API), destructiveHint=False,
+    # idempotentHint=True (same catalog for the same QGIS substrate).
 )
 def list_qgis_algorithms(
     category_filter: str | None = None,
@@ -713,7 +686,7 @@ def list_qgis_algorithms(
     ``hazard_catalog_search``).
 
     Curated default:
-        The deployed worker exposes ~695 algorithms across native QGIS + GDAL +
+        The QGIS substrate exposes ~695 algorithms across native QGIS + GDAL +
         GRASS + SAGA. By default this returns only a CURATED set of high-value
         families (native QGIS Processing core, the GDAL raster/vector toolbox,
         legacy ``qgis:*`` algorithms, the GRASS hydrology set
@@ -743,7 +716,7 @@ def list_qgis_algorithms(
 
     Caching:
         ``ttl_class="static-30d"``, ``source_class="qgis_algorithms_catalog"``.
-        The algorithm catalog only changes on a worker image rebuild
+        The algorithm catalog only changes on a QGIS substrate rebuild
         (~quarterly); a 30-day TTL is comfortable. Cache hits return the same
         bytes without re-invoking the worker. The curated allowlist is applied
         AFTER the cache read (a pure post-filter), so a single cached raw
@@ -825,7 +798,7 @@ def _filter_and_rank_summaries(
 @register_tool(
     _DESCRIBE_METADATA,
     # Annotations: readOnlyHint=True (queries QGIS Server algorithm details;
-    # no state mutation), openWorldHint=False (intra-GCP QGIS Server only),
+    # no state mutation), openWorldHint=False (local qgis_process substrate),
     # destructiveHint=False, idempotentHint=True (deterministic algorithm
     # description for same algorithm id on same server).
 )

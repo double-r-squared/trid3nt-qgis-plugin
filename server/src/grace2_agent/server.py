@@ -131,12 +131,6 @@ from .adapter import (
     summarize_tool_result,
     classify_result_usable,
 )
-from .auth import (
-    AUTH_CLOSE_CODE,
-    AUTH_FAILED_ERROR_CODE,
-    MIGRATION_ANON_UID,
-    auth_required,
-)
 from .auth_handshake import (
     AuthResult,
     authenticate_token,
@@ -431,9 +425,7 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # (Invariant 9 — a consequential long Batch run must be user-confirmed). It
     # dispatches an area-source PSHA over the whole bbox via run_solver
     # ('openquake'), so it is a solve like SFINCS/SWMM/MODFLOW, not a fetch — it
-    # belongs in SOLVER_CONFIRM_TOOLS so the gate fires AND the autostop
-    # solver-marker (_is_solver_dispatch -> _solve_started, which keys off this
-    # same set) arms (box stays busy mid-solve). The gate emits a simple
+    # belongs in SOLVER_CONFIRM_TOOLS so the gate fires. The gate emits a simple
     # proceed/cancel card (no granularity picker): the area source spans the
     # whole AOI, so no rupture/incident-area user input is needed for classical
     # PSHA (that is scenario mode, which is not built).
@@ -463,10 +455,8 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
 # NATE 2026-06-26: the #154 granularity gate widened to the two HEAVY raster
 # FETCHERS (DEM + topobathy) so the user controls fetch resolution before a big
 # download/merge — same confirm machinery, same GranularitySuggestion card. Kept
-# a SEPARATE set from SOLVER_CONFIRM_TOOLS on purpose: the autostop solver-marker
-# (_is_solver_dispatch -> _solve_started) keys off SOLVER_CONFIRM_TOOLS only, and
-# a fetch is NOT a solve — marking one would skew the in-flight solve count + the
-# auto-stop coupling. The gate-trigger below fires for the UNION; the solver-only
+# a SEPARATE set from SOLVER_CONFIRM_TOOLS on purpose: a fetch is NOT a solve.
+# The gate-trigger below fires for the UNION; the solver-only
 # confirmed/enable_autoscale injection stays guarded to SOLVER_CONFIRM_TOOLS.
 FETCH_CONFIRM_TOOLS: set[str] = {
     "fetch_dem",
@@ -1135,6 +1125,19 @@ async def init_persistence_from_env() -> Persistence | None:
     return None
 
 
+#: Synthetic owner UID assigned to every pre-Auth Case (a Case written
+#: before the Auth track carried no ``user_id`` field). The one-time
+#: idempotent startup migration (``persistence.migrate_preauth_cases``)
+#: stamps these orphan Cases with this constant so they belong to a single
+#: synthetic owner instead of leaking to every user via the old
+#: ``$exists:false`` backward-compat clause (now removed).
+#:
+#: Chosen as a fixed, non-ULID, obviously-synthetic sentinel so it is
+#: trivially greppable in logs / the persisted store and can never collide
+#: with a real ULID (26-char Crockford base32).
+MIGRATION_ANON_UID = "__preauth_migration_anon__"
+
+
 async def _run_preauth_case_migration() -> None:
     """One-time idempotent pre-Auth case migration (job-0252, OQ-0115).
 
@@ -1162,10 +1165,10 @@ async def _run_preauth_case_migration() -> None:
         logger.warning("pre-Auth case migration failed (continuing)", exc_info=True)
 
 
-#: COLDVIEW FRESHNESS BACKFILL: env toggle (default ON) for the box-wake sweep
-#: that re-materializes every live Case's cold snapshot+manifest. Set
+#: COLDVIEW FRESHNESS BACKFILL: env toggle (default ON) for the daemon-restart
+#: sweep that re-materializes every live Case's cold snapshot+manifest. Set
 #: GRACE2_COLDVIEW_BACKFILL=0 to disable (ops escape hatch). Bounded per-Case
-#: concurrency keeps the sweep from saturating the S3/Dynamo round-trips.
+#: concurrency keeps the sweep from saturating the S3/store round-trips.
 _COLDVIEW_BACKFILL_ENABLED: bool = (
     os.environ.get("GRACE2_COLDVIEW_BACKFILL", "1").strip().lower()
     not in ("0", "false", "no", "off")
@@ -1176,27 +1179,26 @@ _COLDVIEW_BACKFILL_CONCURRENCY: int = max(
 
 
 async def _run_coldview_backfill() -> None:
-    """Box-wake sweep: re-materialize the cold snapshot+manifest for EVERY Case.
+    """Daemon-restart sweep: re-materialize the cold snapshot+manifest per Case.
 
     CLOSES THE SNAPSHOT-FRESHNESS GAP. The case-view snapshot
     (``case-views/{id}.json``) and thin manifest (``case-manifests/{id}.json``)
-    are only ever (re)written while the agent box is UP — the 4 mutation
+    are only ever (re)written while the daemon is UP — the 4 mutation
     triggers (create / rename / layer-publish / turn-close) plus case-open. There
-    is NO box-off/wake-time materialization path, so a Case that gained layers
-    and was then left as the box auto-stopped (or whose newest snapshot predates
+    is NO daemon-down materialization path, so a Case that gained layers
+    and was then left as the daemon stopped (or whose newest snapshot predates
     its current layers) shows a STALE / empty cold face indefinitely: the exact
-    "can't see it until I connect" symptom. The box-off cold view fetches that
-    presigned snapshot and cannot paint until the agent wakes and the Case is
-    re-opened once.
+    "can't see it until I connect" symptom. The daemon-down cold view fetches
+    that presigned snapshot and cannot paint until the daemon restarts and the
+    Case is re-opened once.
 
-    This sweep runs ONCE at server startup (box-wake) and re-materializes the
+    This sweep runs ONCE at every daemon startup and re-materializes the
     snapshot AND manifest for every live Case — straight off the persisted
     ``projects`` doc, no live session / emitter needed (the writers re-source
     the full doc per Case; inline-vector side-tables only exist on the live
     emitter and are absent here, which is correct — a cold sweep carries the
     URI-only layers, and the next warm open/turn re-inlines vectors). After one
-    wake every existing Case has a CURRENT cold face; the live symptom is gone
-    for all 118 stale snapshots without a warm re-open.
+    restart every existing Case has a CURRENT cold face without a warm re-open.
 
     Best-effort by contract (same posture as ``_run_preauth_case_migration``):
     no Persistence binding short-circuits; the per-Case writers each swallow
@@ -1412,9 +1414,7 @@ def _set_session_active_case(session_id: str, case_id: str | None) -> None:
 #
 # Bounded like ``_SESSION_ACTIVE_CASE`` (one short string per browser session;
 # eviction past the cap only means a stale session re-mints on its next connect).
-# Scope discipline: ONLY anonymous ids are recorded here — a Cognito-verified
-# bind never writes this registry, so it can never down-bind an authed session
-# to an anon id (the authed path is unaffected).
+# Scope discipline: ONLY anonymous ids are recorded here.
 _SESSION_ANON_ID: dict[str, str] = {}
 _SESSION_ANON_ID_CAP = 4096
 
@@ -1458,9 +1458,8 @@ def _apply_session_anon_hint(
     Strictly additive / non-clobbering:
     - A client-supplied hint always wins (it is the durable, cross-refresh id) —
       we only fill when the hint is absent.
-    - A non-empty ``token`` is left untouched: a real (or attempted) Cognito
-      verification must run on the JWT, never be diverted to an anon id. This
-      keeps the authed path byte-identical.
+    - A non-empty ``token`` is left untouched: a presented token resolves via
+      ``authenticate_token``'s own fallback, never diverted to an anon id.
     - No registry entry → the envelope is returned unchanged.
     """
     recorded = _get_session_anon_id(session_id)
@@ -1637,502 +1636,6 @@ def _any_live_turn(session_id: str) -> "asyncio.Task | None":
         if not lt.task.done():
             return lt.task
     return None
-
-
-# ---------------------------------------------------------------------------
-# Solver-in-flight marker (autostop infra — agent-box auto-stop/wake).
-#
-# The always-on agent EC2 box (t3.large, i-0251879a278df797f) burns idle money.
-# A self-contained tofu root (``infra/aws-autostop/``) runs an idle-check Lambda
-# that polls ``GET /api/health`` and only StopInstances after N consecutive
-# checks return ``busy=false``. The SINGLE SOURCE OF TRUTH for the safety gate is
-# ``liveness_snapshot`` below; ``busy`` is the OR of the IN-FLIGHT-WORK signals so
-# the box is NEVER stopped while there is any live work (bulletproof by
-# construction -- any doubt keeps the box up). STAGE 3 (sleep-while-viewing): a
-# merely-open IDLE connection no longer counts as busy, so the box auto-stops
-# while a user just views a case; ``active_connection_count()`` is still REPORTED
-# (informational) but no longer GATES ``busy``. Of the signals below, #1 is now
-# informational-only; #2 (solve) and #3 (inflight turn) are what gate ``busy``:
-#
-#  1. ``active_connection_count()`` — live, attached WebSocket clients (the
-#     set-based registry defined alongside ``_make_handler`` further down; a
-#     client is registered on its first inbound frame, deregistered in the
-#     handler ``finally``).
-#  2. ``inflight_turn_count()``     — detached in-flight turns whose launching
-#     socket dropped (a long solve survives a reconnect via
-#     ``_SESSION_LIVE_TURNS``); the box is busy while any such turn runs even
-#     with zero sockets open.
-#  3. ``_SOLVE_IN_FLIGHT`` (HERE)   — the count of currently-executing SOLVER
-#     dispatches (the ``SOLVER_CONFIRM_TOOLS`` long-running composers — SFINCS /
-#     MODFLOW flood + groundwater solves, minutes-to-tens-of-minutes). A DIRECT
-#     solve signal, independent of connection/turn-detachment state: a solve
-#     running while the user STAYS connected is already covered by signal (1),
-#     but this guarantees the box reads busy the instant a solve starts and
-#     keeps reading busy through any transient gap before a dropped socket's
-#     detach bookkeeping registers the turn under (2). Incremented around the
-#     solver tool body in ``_invoke_tool_via_emitter`` and decremented in its
-#     ``finally`` so a crashed / stop-button-cancelled solve still releases the
-#     marker (NO leak).
-#
-# ``_SOLVE_IN_FLIGHT`` is a plain ``int`` mutated only on the single asyncio loop
-# (no thread sharing — see the ``tool_catalog_http`` module docstring), so no
-# lock is needed. ``active_connection_count`` / ``inflight_turn_count`` are
-# defined later in the module (alongside the connection registry); ``is_busy`` /
-# ``liveness_snapshot`` reference them by name, resolved at call time.
-# ---------------------------------------------------------------------------
-_SOLVE_IN_FLIGHT: int = 0
-
-#: job-186 STALE-BUSY AUTO-CLEAR: monotonic-clock timestamp of the most recent
-#: ``_solve_started`` (refreshed on each increment). ``solve_in_flight_count``
-#: auto-zeroes the marker if it has stood >`` _SOLVE_STALE_SECONDS`` without a
-#: clean release. ``_SOLVE_IN_FLIGHT`` is a bare int with NO task backing -- only
-#: the ``_invoke_tool_via_emitter`` finally decrements it, so a solve killed by a
-#: docker-kill / a hung await that never reaches the finally would strand it
-#: ``>0`` and pin the box FOREVER (the live wedge). The auto-clear is the safety
-#: net so a stranded marker can never block new cases/turns indefinitely.
-_SOLVE_STARTED_AT: float | None = None
-
-#: Default stale window for ``_SOLVE_IN_FLIGHT`` (seconds). A real Batch solve
-#: runs minutes (``wait_for_completion`` bounds itself at 1800s), so the window
-#: is set well ABOVE the longest legitimate solve so a healthy in-flight solve is
-#: NEVER falsely cleared; only a genuinely-stranded marker (no release for this
-#: long) is reaped. Env-overridable via ``GRACE2_SOLVE_STALE_SECONDS``.
-_SOLVE_STALE_SECONDS_DEFAULT: float = 2400.0
-
-
-def _solve_stale_seconds() -> float:
-    """Resolve the stale-busy window for ``_SOLVE_IN_FLIGHT`` (env-overridable)."""
-    raw = os.environ.get("GRACE2_SOLVE_STALE_SECONDS")
-    if raw is None:
-        return _SOLVE_STALE_SECONDS_DEFAULT
-    try:
-        val = float(str(raw).strip())
-    except (TypeError, ValueError):
-        return _SOLVE_STALE_SECONDS_DEFAULT
-    return val if val > 0 else _SOLVE_STALE_SECONDS_DEFAULT
-
-
-def _monotonic() -> float:
-    """Monotonic clock (does not jump on wall-clock change). Lazy import."""
-    import time as _time
-
-    return _time.monotonic()
-
-
-def _solve_started() -> None:
-    """Mark a solver dispatch as in flight (auto-stop safety gate)."""
-    global _SOLVE_IN_FLIGHT, _SOLVE_STARTED_AT
-    _SOLVE_IN_FLIGHT += 1
-    _SOLVE_STARTED_AT = _monotonic()
-
-
-def _solve_finished() -> None:
-    """Mark a solver dispatch as finished.
-
-    Clamped at zero — a defensive double-decrement can never drive the count
-    negative and trick the auto-stop gate into reading ``busy=false`` while a
-    solve is still running."""
-    global _SOLVE_IN_FLIGHT, _SOLVE_STARTED_AT
-    _SOLVE_IN_FLIGHT = max(0, _SOLVE_IN_FLIGHT - 1)
-    if _SOLVE_IN_FLIGHT == 0:
-        _SOLVE_STARTED_AT = None
-
-
-def _force_clear_solve_marker() -> int:
-    """Zero the solve in-flight marker (force-sleep / stale-busy reap).
-
-    Returns the count cleared. Used by the FORCE-SLEEP override and the
-    stale-busy auto-clear to break a stranded ``_SOLVE_IN_FLIGHT`` that no
-    ``finally`` will ever release (docker-kill / hung await)."""
-    global _SOLVE_IN_FLIGHT, _SOLVE_STARTED_AT
-    cleared = _SOLVE_IN_FLIGHT
-    _SOLVE_IN_FLIGHT = 0
-    _SOLVE_STARTED_AT = None
-    return cleared
-
-
-def solve_in_flight_count() -> int:
-    """Number of solver dispatches currently executing (auto-stop gate).
-
-    job-186 STALE-BUSY AUTO-CLEAR: if the marker has stood ``>0`` for longer than
-    ``_solve_stale_seconds()`` with no release, it is presumed STRANDED (the
-    decrementing ``finally`` never ran) and auto-zeroed here so a hung solve can
-    never pin the box / block new cases forever. The window sits well above the
-    longest legitimate solve so a healthy in-flight solve is never reaped."""
-    global _SOLVE_IN_FLIGHT, _SOLVE_STARTED_AT
-    if _SOLVE_IN_FLIGHT > 0 and _SOLVE_STARTED_AT is not None:
-        if _monotonic() - _SOLVE_STARTED_AT > _solve_stale_seconds():
-            logger.warning(
-                "stale-busy auto-clear: _SOLVE_IN_FLIGHT=%d stood > %.0fs "
-                "with no release -> presumed stranded, zeroing",
-                _SOLVE_IN_FLIGHT,
-                _solve_stale_seconds(),
-            )
-            _force_clear_solve_marker()
-    return _SOLVE_IN_FLIGHT
-
-
-def is_busy() -> bool:
-    """Conservative busy signal for the auto-stop safety gate.
-
-    STAGE 3 (sleep/wake): True only when REAL work is in flight -- a detached
-    in-flight turn OR an executing solver dispatch. A merely-open, IDLE viewer
-    connection no longer pins the box: a user who is just LOOKING at a painted
-    case (WS open, nothing running) lets the box auto-stop after the idle
-    Lambda's consecutive-idle streak elapses, and on return sees the cold case
-    + a Wake button (Stages 1+2). The auto-stop Lambda must NEVER stop the box
-    while this is True. Errs toward UP (busy) on any live work.
-
-    NOTE the connection term is INTENTIONALLY dropped: a long turn/solve
-    SURVIVES a socket drop via ``_SESSION_LIVE_TURNS`` / ``_SOLVE_IN_FLIGHT``,
-    so ``inflight_turn_count`` / ``solve_in_flight_count`` keep the box busy
-    through running work even with zero sockets attached -- the open-connection
-    count is no longer needed (and no longer used) to protect in-flight work.
-    ``inflight_turn_count`` is resolved at call time (defined later, alongside
-    the connection registry).
-
-    COLDVIEW DURABILITY (J1): a PENDING case-view snapshot / manifest PUT also
-    pins the box. The per-turn and turn-close sites still detach their snapshot
-    refresh into ``_BG_SNAPSHOT_TASKS`` (the publish site now awaits inline).
-    Counting an outstanding detached write as busy keeps ``/api/health``
-    ``busy=true`` until that S3 PUT lands, so the idle Lambda will NOT
-    StopInstances mid-write and strand ``case-views/{case_id}.json`` at its
-    prior (often empty) contents. ``done`` tasks awaiting their self-removing
-    callback are filtered so a just-finished write does not falsely pin the
-    box."""
-    return (
-        inflight_turn_count() > 0
-        or solve_in_flight_count() > 0
-        or any(not t.done() for t in _BG_SNAPSHOT_TASKS)
-    )
-
-
-def liveness_snapshot() -> dict[str, object]:
-    """Point-in-time liveness for ``GET /api/health`` (autostop gate reads this).
-
-    Returns the exact shape the idle Lambda's safety gate consumes::
-
-        {"ok": True, "active_connections": <int>, "busy": <bool>}
-
-    ``active_connections`` is the attached-client count, kept REPORTED for
-    observability (the idle Lambda logs it) but, as of STAGE 3, it NO LONGER
-    GATES ``busy``: an idle-but-open viewer does not pin the box. ``busy`` is
-    the conservative OR over detached turns, in-flight solves, AND any
-    outstanding case-view snapshot/manifest PUT (J1 coldview durability) -- so a
-    box mid-turn/solve OR mid-snapshot-write whose only socket dropped still
-    reads ``busy=true``, while a box whose only signal is an idle open tab reads
-    ``busy=false`` and may be stopped after the idle streak. Computed
-    synchronously on the asyncio loop -- no awaits, no locks (single-loop
-    invariant)."""
-    return {
-        "ok": True,
-        "active_connections": active_connection_count(),
-        "busy": is_busy(),
-    }
-
-
-# --------------------------------------------------------------------------- #
-# AGENT SELF-IDLE-EXIT (per-session Fargate belt-and-suspenders).
-#
-# The per-session Fargate agent tasks are meant to be stopped by the external
-# reaper Lambda once idle. But if the reaper is broken / disarmed (dry-run) /
-# blind to a task (an orphan whose route row vanished), the task runs forever and
-# vCPU quota is exhausted (the 2026-07-01 outage). This is the belt: the task
-# stops ITSELF after GRACE2_AGENT_IDLE_EXIT_SECONDS of genuine idle, so a task can
-# never outlive its usefulness even if the reaper never fires.
-#
-# GENUINE idle == NO client connected (active_connection_count() == 0) AND NO work
-# in flight (is_busy() False: no detached turn, no in-flight solve, no pending
-# coldview snapshot PUT). Requiring ZERO connections is STRICTER than the reaper's
-# Stage-3 rule (which ignores idle-open tabs) -- so an open viewer / a live
-# recording session is NEVER self-exited, only a truly-abandoned task is.
-#
-# DISABLED by default (0) so the always-on EC2 box (same image) is byte-for-byte
-# unchanged; the Fargate session task def sets GRACE2_AGENT_IDLE_EXIT_SECONDS.
-# --------------------------------------------------------------------------- #
-
-#: Default idle-exit window (seconds). 0 == disabled. The Fargate task def sets a
-#: real value (e.g. 1800 = 30 min); the box leaves it unset -> disabled.
-_IDLE_EXIT_SECONDS_DEFAULT = 0
-
-#: How often the idle-exit monitor samples liveness (seconds).
-_IDLE_EXIT_CHECK_INTERVAL_S = 30.0
-
-# --------------------------------------------------------------------------- #
-# ROUTE-ROW HEARTBEAT WRITER (Phase-1 scale-to-zero, design 2.3)
-#
-# Every GRACE2_ROUTE_HEARTBEAT_SECONDS the agent writes its own liveness state
-# into its DynamoDB route row (UpdateItem).  The reaper can then read these
-# fields instead of HTTP-probing :8766, eliminating the need for the reaper to
-# run inside the VPC (and thus killing the ~$29/mo ECS+Batch interface
-# endpoints).
-#
-# Fields written to grace2_session_routes(user_ulid, session_id):
-#   hb_last_seen      (N) epoch seconds of the last successful write
-#   hb_busy           (BOOL) is_busy() at that instant
-#   hb_active_connections (N) active_connection_count() at that instant
-#   hb_inflight_batch (N) solve_in_flight_count() -- gives a PER-SESSION Batch
-#                     guard so an unrelated user's solve no longer pins every
-#                     idle task (fixes the G3 global-pin defect).
-#
-# DISABLED BY DEFAULT: the feature is dormant unless GRACE2_ROUTE_HEARTBEAT_SECONDS
-# is set to a positive integer in the task definition's environment.  The
-# agent also needs GRACE2_ROUTE_USER_ULID + GRACE2_ROUTE_SESSION_ID (injected
-# by the broker's RunTask overrides) to know which DynamoDB row to update.
-# Without those env vars the writer silently no-ops (zero cloud impact on the
-# box or on any task definition that has not been updated).
-# --------------------------------------------------------------------------- #
-
-#: Cached DynamoDB client for the heartbeat writer.  Created lazily on the
-#: first enabled tick; None when the writer is disabled.
-_HB_DDB_CLIENT: "object | None" = None
-
-
-def _hb_interval_seconds() -> int:
-    """Resolve GRACE2_ROUTE_HEARTBEAT_SECONDS (default 0 = disabled)."""
-    raw = os.environ.get("GRACE2_ROUTE_HEARTBEAT_SECONDS")
-    if raw is None:
-        return 0
-    try:
-        return max(0, int(str(raw).strip()))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _hb_route_key() -> "tuple[str, str] | None":
-    """Return (user_ulid, session_id) from env, or None if either is missing."""
-    u = os.environ.get("GRACE2_ROUTE_USER_ULID", "").strip()
-    s = os.environ.get("GRACE2_ROUTE_SESSION_ID", "").strip()
-    if u and s:
-        return u, s
-    return None
-
-
-def _hb_write_once(
-    user_ulid: str,
-    session_id: str,
-    *,
-    busy: bool,
-    active_connections: int,
-    inflight_batch: int,
-    table: str,
-    region: str,
-) -> None:
-    """Synchronous DynamoDB UpdateItem for the heartbeat fields.
-
-    Called via asyncio.to_thread so it NEVER blocks the asyncio loop.
-    Best-effort: any exception is swallowed (heartbeat loss is not fatal --
-    the reaper's fail-safe direction is to keep the task up on stale data).
-    """
-    import time as _time
-
-    global _HB_DDB_CLIENT
-    try:
-        if _HB_DDB_CLIENT is None:
-            import boto3 as _boto3
-
-            _HB_DDB_CLIENT = _boto3.client(
-                "dynamodb",
-                region_name=region,
-            )
-        _HB_DDB_CLIENT.update_item(  # type: ignore[union-attr]
-            TableName=table,
-            Key={
-                "user_ulid": {"S": user_ulid},
-                "session_id": {"S": session_id},
-            },
-            UpdateExpression=(
-                "SET hb_last_seen = :ls, hb_busy = :b, "
-                "hb_active_connections = :ac, hb_inflight_batch = :ib"
-            ),
-            ExpressionAttributeValues={
-                ":ls": {"N": str(int(_time.time()))},
-                ":b": {"BOOL": busy},
-                ":ac": {"N": str(max(0, active_connections))},
-                ":ib": {"N": str(max(0, inflight_batch))},
-            },
-        )
-    except Exception:  # noqa: BLE001 -- heartbeat is best-effort
-        logger.debug("route-row heartbeat write failed (non-fatal)", exc_info=True)
-
-#: Hold a strong ref to the monitor task so it is not GC'd (create_task keeps only
-#: a weak reference).
-_IDLE_EXIT_TASK: "asyncio.Task | None" = None
-
-
-def _idle_exit_seconds() -> int:
-    """Resolve GRACE2_AGENT_IDLE_EXIT_SECONDS (default disabled). <=0 disables."""
-    raw = os.environ.get("GRACE2_AGENT_IDLE_EXIT_SECONDS")
-    if raw is None:
-        return _IDLE_EXIT_SECONDS_DEFAULT
-    try:
-        return int(str(raw).strip())
-    except (TypeError, ValueError):
-        return _IDLE_EXIT_SECONDS_DEFAULT
-
-
-def _idle_exit_decision(
-    *,
-    idle_exit_seconds: int,
-    busy: bool,
-    active_connections: int,
-    idle_since: float | None,
-    now: float,
-) -> tuple[bool, float | None]:
-    """Pure idle-exit gate. Returns ``(should_exit, new_idle_since)``.
-
-    ``idle_since`` is the monotonic timestamp when the current idle streak began
-    (None when not currently idle). The task exits ONLY after it has been
-    continuously idle -- NO client connected AND NO work in flight -- for the full
-    window. Any client attach or any in-flight work RESETS the clock (returns
-    ``idle_since=None``), so the task can never exit mid-solve or with a client
-    attached or with a background Batch job in flight (all fold into ``busy``)."""
-    if idle_exit_seconds <= 0:
-        return False, None  # disabled
-    is_idle = (not busy) and active_connections <= 0
-    if not is_idle:
-        return False, None  # real work or a client attached -> reset the clock
-    if idle_since is None:
-        return False, now  # idle streak starts now
-    if now - idle_since >= idle_exit_seconds:
-        return True, idle_since
-    return False, idle_since
-
-
-async def _run_idle_exit_monitor(
-    *, check_interval_s: float = _IDLE_EXIT_CHECK_INTERVAL_S
-) -> None:
-    """Background loop that self-stops a genuinely-idle session task AND writes
-    the route-row heartbeat (Phase-1 scale-to-zero, design 2.3).
-
-    No-op for the idle-exit gate when GRACE2_AGENT_IDLE_EXIT_SECONDS is unset /
-    <=0 (the box). On the Fargate session task it flushes any pending coldview
-    snapshot writes and then ``os._exit(0)`` so the container exits cleanly and
-    the Fargate task STOPS, releasing its vCPU. The gate
-    (``_idle_exit_decision``) guarantees this only fires with zero connections
-    and zero in-flight work.
-
-    HEARTBEAT: every ``hb_interval`` seconds (GRACE2_ROUTE_HEARTBEAT_SECONDS,
-    default disabled) writes liveness fields (hb_last_seen, hb_busy,
-    hb_active_connections, hb_inflight_batch) to the agent's own route row.
-    The write is off-loop (asyncio.to_thread) and best-effort (never raises).
-    The idle-exit gate is INDEPENDENT: either, both, or neither can be enabled.
-    """
-    secs = _idle_exit_seconds()
-    if secs <= 0:
-        logger.info("agent self-idle-exit disabled (GRACE2_AGENT_IDLE_EXIT_SECONDS unset/<=0)")
-    else:
-        logger.info(
-            "agent self-idle-exit armed: stop after %ds idle (no client, no in-flight work)",
-            secs,
-        )
-
-    # Heartbeat config -- resolved once at startup.
-    hb_interval = _hb_interval_seconds()
-    hb_key = _hb_route_key()
-    hb_table = os.environ.get("GRACE2_ROUTES_TABLE", "grace2_session_routes")
-    hb_region = os.environ.get("AWS_REGION", "us-west-2")
-    if hb_interval > 0 and hb_key:
-        logger.info(
-            "route-row heartbeat armed: user_ulid=%s session_id=%s table=%s interval=%ds",
-            hb_key[0],
-            hb_key[1],
-            hb_table,
-            hb_interval,
-        )
-    elif hb_interval > 0:
-        logger.warning(
-            "GRACE2_ROUTE_HEARTBEAT_SECONDS=%d but GRACE2_ROUTE_USER_ULID/SESSION_ID "
-            "are not set -- heartbeat disabled (no route key)",
-            hb_interval,
-        )
-        hb_interval = 0  # disable: can't write without a key
-
-    if secs <= 0 and hb_interval <= 0:
-        # Nothing to do -- return immediately so no asyncio.sleep runs.
-        return
-
-    idle_since: float | None = None
-    _hb_ticks_since_write: int = 0
-    # How many check_interval_s ticks make up one heartbeat interval.
-    _hb_ticks_per_write: int = max(1, round(hb_interval / check_interval_s)) if hb_interval > 0 else 0
-
-    while True:
-        await asyncio.sleep(check_interval_s)
-        try:
-            busy = is_busy()
-            conns = active_connection_count()
-            inflight = solve_in_flight_count()
-        except Exception:  # noqa: BLE001 -- the monitor must never crash the loop
-            logger.exception("idle-exit monitor sample failed; skipping this tick")
-            continue
-
-        # --- ROUTE-ROW HEARTBEAT ---
-        if hb_interval > 0 and hb_key is not None:
-            _hb_ticks_since_write += 1
-            if _hb_ticks_since_write >= _hb_ticks_per_write:
-                _hb_ticks_since_write = 0
-                # Phase-4 sizing evidence (blueprint 2.4): log peak/current RSS
-                # each heartbeat so CloudWatch Logs carries the live memory
-                # profile that gates the 8GB->4GB task-def shrink. ru_maxrss is
-                # KB on Linux; VmRSS is the instantaneous figure.
-                try:
-                    import resource as _resource
-
-                    _peak_mb = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss // 1024
-                    _cur_mb = 0
-                    with open("/proc/self/status", encoding="ascii") as _f:
-                        for _line in _f:
-                            if _line.startswith("VmRSS:"):
-                                _cur_mb = int(_line.split()[1]) // 1024
-                                break
-                    logger.info(
-                        "hb-rss peak_mb=%d cur_mb=%d busy=%s conns=%d",
-                        _peak_mb,
-                        _cur_mb,
-                        busy,
-                        conns,
-                    )
-                except Exception:  # noqa: BLE001 -- telemetry only
-                    pass
-                # Off-loop: boto3 is synchronous; never block the asyncio loop.
-                asyncio.ensure_future(
-                    asyncio.to_thread(
-                        _hb_write_once,
-                        hb_key[0],
-                        hb_key[1],
-                        busy=busy,
-                        active_connections=conns,
-                        inflight_batch=inflight,
-                        table=hb_table,
-                        region=hb_region,
-                    )
-                )
-
-        # --- IDLE-EXIT GATE ---
-        if secs <= 0:
-            continue  # heartbeat-only mode; skip the exit logic
-
-        should_exit, idle_since = _idle_exit_decision(
-            idle_exit_seconds=secs,
-            busy=busy,
-            active_connections=conns,
-            idle_since=idle_since,
-            now=_monotonic(),
-        )
-        if should_exit:
-            logger.warning(
-                "agent self-idle-exit: idle >= %ds (connections=%d busy=%s) -> "
-                "draining + stopping this session task",
-                secs,
-                conns,
-                busy,
-            )
-            try:
-                await _drain_bg_snapshot_tasks()
-            except Exception:  # noqa: BLE001 -- never block the exit on a drain error
-                logger.exception("idle-exit drain failed; exiting anyway")
-            os._exit(0)
 
 
 @dataclass
@@ -4664,49 +4167,11 @@ async def _replay_active_case_layers(state: SessionState) -> None:
 # --------------------------------------------------------------------------- #
 
 
-async def _reject_unauthenticated(
-    websocket: ServerConnection,
-    state: SessionState,
-    *,
-    reason: str,
-) -> None:
-    """Reject an unauthenticated connection under the ``AUTH_REQUIRED`` gate.
-
-    job-0252 (sprint-13.5 Decision #6): production REQUIRES sign-in. When the
-    gate is engaged and no valid Firebase ID token resolves, we must NOT fall
-    through to the anonymous path. Per SRS Appendix A.5 step 2 we emit an A.6
-    ``AUTH_FAILED`` error envelope and close the socket with code ``4401``.
-
-    Best-effort: a socket that is already closing may raise on send/close; we
-    swallow so the handler loop can terminate cleanly.
-    """
-    logger.info(
-        "AUTH_REQUIRED gate: rejecting unauthenticated connection "
-        "session=%s reason=%s (close %d)",
-        state.session_id,
-        reason,
-        AUTH_CLOSE_CODE,
-    )
-    try:
-        await _send_error(
-            websocket,
-            state.session_id,
-            AUTH_FAILED_ERROR_CODE,
-            f"authentication required: {reason}",
-        )
-    except Exception:  # noqa: BLE001 — socket may already be down
-        pass
-    try:
-        await websocket.close(code=AUTH_CLOSE_CODE, reason="unauthorized")
-    except Exception:  # noqa: BLE001 — close is best-effort
-        pass
-
-
 async def _handle_auth_token(
     websocket: ServerConnection,
     state: SessionState,
     payload_dict: dict,
-) -> bool:
+) -> None:
     """Process the client's ``auth-token`` envelope and emit ``auth-ack``.
 
     Per Appendix H.5 (job-0122 scope):
@@ -4717,12 +4182,6 @@ async def _handle_auth_token(
     3. Bind the resolved ``user_id`` + tier + anonymous-flag into the
        SessionState — every subsequent envelope is scoped to this user.
     4. Emit ``auth-ack`` so the client knows its session identity.
-
-    job-0252 (sprint-13.5): under the ``AUTH_REQUIRED`` gate, an unverified
-    token (or no token) resolves to an anonymous result — which we REJECT
-    instead of binding (remove-don't-shim from the prod path). Returns
-    ``True`` when the connection may proceed, ``False`` when the caller must
-    stop processing (the connection was rejected + closed).
     """
     tok: AuthTokenEnvelope | None
     try:
@@ -4735,8 +4194,7 @@ async def _handle_auth_token(
             f"auth-token validation failed: {ve.errors()[0]['msg']}",
         )
         # Even on validation failure we run the anonymous fallback so the
-        # connection is still usable (per H.3) — UNLESS the AUTH_REQUIRED
-        # gate is engaged, in which case the result is rejected below.
+        # connection is still usable (per H.3).
         tok = None
 
     # cases-vanish fix (belt-and-suspenders): if this connection presents NO
@@ -4748,18 +4206,8 @@ async def _handle_auth_token(
 
     result = await authenticate_token(tok, get_persistence())
 
-    # job-0252 AUTH_REQUIRED gate: when sign-in is mandatory, an anonymous
-    # result means verification did not produce a real Firebase identity —
-    # reject (A.5 close 4401 + A.6 AUTH_FAILED). No anonymous fallback on the
-    # required path. Dev (gate off) preserves the Wave 2 behavior verbatim.
-    if result.is_anonymous and auth_required():
-        await _reject_unauthenticated(
-            websocket, state, reason="no valid Firebase ID token"
-        )
-        return False
-
     # cases-vanish fix: record the anon identity so a sibling/reconnecting
-    # socket of the same session converges on it (no-op for the authed path).
+    # socket of the same session converges on it.
     if result.is_anonymous:
         _set_session_anon_id(state.session_id, result.user.user_id)
 
@@ -4768,14 +4216,12 @@ async def _handle_auth_token(
     ack = build_auth_ack(result)
     await websocket.send(_new_envelope("auth-ack", state.session_id, ack))
     logger.info(
-        "auth-ack session=%s user_id=%s anonymous=%s tier=%s firebase_uid=%s",
+        "auth-ack session=%s user_id=%s anonymous=%s tier=%s",
         state.session_id,
         result.user.user_id,
         result.is_anonymous,
         result.tier,
-        result.firebase_uid,
     )
-    return True
 
 
 def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
@@ -4920,7 +4366,7 @@ async def _reload_session_active_case(state: SessionState) -> None:
 async def _ensure_auth_handshake(
     websocket: ServerConnection,
     state: SessionState,
-) -> bool:
+) -> None:
     """Synchronous fallback: if the handshake hasn't run, run it as anonymous.
 
     Called when a non-``auth-token`` envelope arrives before the handshake
@@ -4928,23 +4374,9 @@ async def _ensure_auth_handshake(
     envelope raced ahead). Mirrors the 5-second timeout path from H.3 —
     instead of waiting 5 seconds we trip the anonymous fallback inline so
     the user is bound before their first real interaction.
-
-    job-0252 (sprint-13.5): under the ``AUTH_REQUIRED`` gate, a client that
-    speaks a non-``auth-token`` envelope first (i.e. never sent a valid
-    Firebase ID token) is REJECTED — there is no implicit anonymous bind on
-    the required path. Returns ``True`` when the connection may proceed,
-    ``False`` when the caller must stop (the connection was rejected +
-    closed).
     """
     if state.auth_handshake_complete:
-        return True
-    if auth_required():
-        await _reject_unauthenticated(
-            websocket,
-            state,
-            reason="auth-token envelope required before any other message",
-        )
-        return False
+        return
     # cases-vanish fix: this implicit-anonymous path never saw a client hint
     # (the connection skipped the auth-token envelope). If a sibling connection
     # of this session already bound an anon identity this process, reuse it so
@@ -4966,7 +4398,6 @@ async def _ensure_auth_handshake(
         state.session_id,
         result.user.user_id,
     )
-    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -10925,19 +10356,6 @@ async def _invoke_tool_via_emitter(
             return _restamp(await out)
         return _restamp(out)
 
-    # Autostop liveness: mark a REAL solver dispatch (a long-running SFINCS /
-    # MODFLOW composer, minutes-to-tens-of-minutes) as in flight so the idle
-    # Lambda's safety gate sees ``busy=true`` and NEVER stops the box mid-solve.
-    # A reuse short-circuit (``_ReuseEntry``) returns an already-produced layer
-    # synchronously — no solver runs — so it is NOT marked. The release is in
-    # the dispatch ``finally`` below (every exit path: success, error, cancel),
-    # so a crashed/cancelled solve still clears the marker (NO leak).
-    _is_solver_dispatch = (
-        tool_name in SOLVER_CONFIRM_TOOLS and not isinstance(entry, _ReuseEntry)
-    )
-    if _is_solver_dispatch:
-        _solve_started()
-
     try:
         # job VAULT-READ: dispatch with a credential-request retry. The first
         # attempt runs the tool; if it raises a missing/invalid-credential
@@ -10988,13 +10406,6 @@ async def _invoke_tool_via_emitter(
         _card_io_error = True
         raise
     finally:
-        # Autostop liveness: release the solver-in-flight marker on EVERY exit
-        # path (success, error, cancellation) so a crashed or stop-button-killed
-        # solve never leaves a phantom ``busy=true`` that keeps an idle box up
-        # forever. First statement in the finally so a raise in the cleanup
-        # below cannot skip it.
-        if _is_solver_dispatch:
-            _solve_finished()
         deactivate_registry(_uri_reg_token)
         state.emitter.close_pipeline()
         state.current_pipeline_id = None
@@ -11061,16 +10472,16 @@ async def _invoke_tool_via_emitter(
             # COLDVIEW DURABILITY (J1): AWAIT the snapshot + manifest writes here
             # instead of detaching them. A layer publish is exactly the mutation
             # whose cold-refresh must be DURABLE before the turn returns -- the
-            # prior fire-and-forget detach raced box-stop: the idle Lambda's
-            # is_busy() gate flips false the instant the turn returns, so the box
-            # could halt AFTER the turn returned but BEFORE the detached PUT
+            # prior fire-and-forget detach raced daemon shutdown: the process
+            # could stop AFTER the turn returned but BEFORE the detached PUT
             # landed, leaving case-views/{case_id}.json at its prior (empty)
-            # contents (the "box-off case open shows no layers" bug). We still
-            # keep the Dynamo round-trips + S3 PUT OFF the asyncio loop (the
-            # no-sync-blocking norm): the persist coroutines are already async
-            # and run blocking I/O via asyncio.to_thread internally, so awaiting
-            # them does not pin the loop. Both swallow their own errors (return
-            # False / never raise), so the await never breaks the dispatch.
+            # contents (the "daemon-down case open shows no layers" bug). We
+            # still keep the store round-trips + S3 PUT OFF the asyncio loop
+            # (the no-sync-blocking norm): the persist coroutines are already
+            # async and run blocking I/O via asyncio.to_thread internally, so
+            # awaiting them does not pin the loop. Both swallow their own errors
+            # (return False / never raise), so the await never breaks the
+            # dispatch.
             #
             # DURABILITY: the snapshot + manifest are the COLD-view faces of the
             # same just-persisted layer -- they take the SAME shield so a cancel
@@ -11081,8 +10492,9 @@ async def _invoke_tool_via_emitter(
                     _persist_case_view_snapshot(state, case_id=turn_case_id)
                 )
                 # #165 dual-write: persist the thin manifest ALONGSIDE the
-                # snapshot (same durability requirement -- a published layer must
-                # be cold-renderable from either index before the box can stop).
+                # snapshot (same durability requirement -- a published layer
+                # must be cold-renderable from either index before the daemon
+                # stops).
                 await _run_to_completion_shielded(
                     _persist_case_manifest(state, case_id=turn_case_id)
                 )
@@ -12832,65 +12244,6 @@ async def _handle_layer_delete(
 
 
 # --------------------------------------------------------------------------- #
-# Live WebSocket connection registry (agent-box auto-stop/wake infra)
-# --------------------------------------------------------------------------- #
-#
-# The always-on agent EC2 box (t3.large, i-0251879a278df797f) burns idle money
-# when no user is connected. The ``infra/aws-autostop`` tofu root runs an
-# idle-check Lambda that polls ``GET /api/health`` on a schedule and stops the
-# box ONLY after N consecutive checks where the box is NOT busy. This registry
-# is the authoritative live-connection signal that endpoint reads via
-# ``active_connection_count`` (and ``is_busy`` / ``liveness_snapshot`` above).
-#
-# A "live connection" is a WebSocket the handler is actively serving. We
-# register on handler ENTRY (the connection was accepted) and deregister in the
-# handler ``finally`` -- so the count tracks genuinely-attached sockets across
-# every exit path (normal close, crash, cancellation).
-#
-# ``inflight_turn_count`` is a SEPARATE busy signal: a long solver turn survives
-# a socket drop (``_SESSION_LIVE_TURNS``), so the box stays busy while such a
-# turn runs even with zero sockets open. ``is_busy`` ORs the connection count,
-# the in-flight-turn count, and the solver-dispatch count so the autostop Lambda
-# never stops a box doing real work.
-#
-# Thread-safety: the whole agent runs on ONE asyncio loop in ONE process, so a
-# plain set mutated from coroutine context needs no lock (no preemption between
-# the membership test and the mutation). Keyed by ``id(websocket)`` (stable for
-# the connection object's lifetime); the set de-dupes so a re-register is a
-# harmless no-op and a double-deregister cannot drive the count negative.
-
-_ACTIVE_WS_CONNECTIONS: "set[int]" = set()
-
-
-def _register_active_connection(websocket: "ServerConnection") -> None:
-    """Mark ``websocket`` as a live, attached client connection (handler entry).
-
-    Idempotent -- re-registering the same connection is a no-op (set semantics).
-    """
-    _ACTIVE_WS_CONNECTIONS.add(id(websocket))
-
-
-def _deregister_active_connection(websocket: "ServerConnection") -> None:
-    """Drop ``websocket`` from the live-connection set (handler ``finally``).
-
-    Idempotent -- ``discard`` never raises and never drives the count negative,
-    so a defensive double-call cannot trick the autostop gate into seeing the
-    box as idle while a socket is still open.
-    """
-    _ACTIVE_WS_CONNECTIONS.discard(id(websocket))
-
-
-def active_connection_count() -> int:
-    """Number of live, attached WebSocket client connections right now.
-
-    Read by ``is_busy`` / ``liveness_snapshot`` (and thus the ``/api/health``
-    endpoint) so the autostop idle-check Lambda can decide whether the box is
-    safe to stop. NEVER negative.
-    """
-    return len(_ACTIVE_WS_CONNECTIONS)
-
-
-# --------------------------------------------------------------------------- #
 # JOB B (session durability fix): per-session connection registry + eager reap
 # --------------------------------------------------------------------------- #
 #
@@ -12913,14 +12266,15 @@ def active_connection_count() -> int:
 # object identity and excluded before any close.
 #
 # Thread-safety: one asyncio loop, one process -> a plain dict/set mutated from
-# coroutine context needs no lock (see ``_ACTIVE_WS_CONNECTIONS`` note above).
+# coroutine context needs no lock (no preemption between the membership test
+# and the mutation).
 # Keyed by ``session_id``; the value-set is keyed by the connection object
 # (de-duped) so a re-register is a harmless no-op and an empty bucket is pruned
 # so the dict cannot grow unbounded across long-lived sessions.
 
 #: JOB B: application close code for a prior socket reaped because a newer
 #: connection of the SAME session resumed. 4xxx is the WebSocket spec's reserved
-#: application range; distinct from ``AUTH_CLOSE_CODE`` (4401). The client treats
+#: application range. The client treats
 #: this like any other close (its reconnect/backoff logic owns recovery), but
 #: the code makes "why did this socket die?" answerable from the journal.
 SESSION_SUPERSEDED_CLOSE_CODE = 4408
@@ -13031,12 +12385,11 @@ async def _reap_prior_session_connections(
 def inflight_turn_count() -> int:
     """Number of in-flight turns detached from a (possibly-dead) connection.
 
-    A long solver turn survives a socket drop (``_SESSION_LIVE_TURNS``); the box
-    is BUSY while any such turn is still running even if zero sockets are open.
-    ``is_busy`` ORs this with ``solve_in_flight_count`` so the autostop Lambda
-    treats the box as busy whenever a turn or solve is in flight. (Stage 3: a
-    merely-open IDLE connection no longer counts toward busy.) Counts only
-    not-yet-done tasks (a done task is awaiting its self-removing callback).
+    A long solver turn survives a socket drop (``_SESSION_LIVE_TURNS``); this
+    counts the turns still running even if zero sockets are open. Kept as the
+    observability probe over the live-turn registry (tests assert turn
+    lifecycle through it). Counts only not-yet-done tasks (a done task is
+    awaiting its self-removing callback).
     """
     total = 0
     for bucket in _SESSION_LIVE_TURNS.values():
@@ -13056,12 +12409,6 @@ def _make_handler(settings: GeminiSettings):
         # The session_id will be set on the first inbound envelope; we surface
         # an error if the client speaks before establishing one.
         state: SessionState | None = None
-
-        # agent-box autostop infra: this socket is now being served -- count it
-        # as a live connection so /api/health reports a non-zero count and the
-        # idle-check Lambda holds the box up. Deregistered in the finally below
-        # on EVERY exit path (normal close, crash, cancellation).
-        _register_active_connection(websocket)
 
         # WS-30s STORM FIX (primary): start the per-connection data heartbeat so
         # the web client's inbound-activity timer is reset on a fast server clock
@@ -13140,22 +12487,15 @@ def _make_handler(settings: GeminiSettings):
                     # fallback inline so the SessionState.authenticated_user_id
                     # is bound before any user-scoped action runs.
                     if msg_type == "auth-token":
-                        ok = await _handle_auth_token(
+                        await _handle_auth_token(
                             websocket, state, payload_dict
                         )
-                        # job-0252 AUTH_REQUIRED gate: a rejected handshake
-                        # has already closed the socket; stop the loop.
-                        if not ok:
-                            return
                         continue
                     # Implicit anonymous fallback when any other envelope
                     # arrives before the handshake — keeps the legacy
-                    # no-auth-token clients working. Under the AUTH_REQUIRED
-                    # gate this REJECTS instead (job-0252).
+                    # no-auth-token clients working.
                     if not state.auth_handshake_complete:
-                        ok = await _ensure_auth_handshake(websocket, state)
-                        if not ok:
-                            return
+                        await _ensure_auth_handshake(websocket, state)
 
                     if msg_type == "session-resume":
                         sr = SessionResumePayload.model_validate(payload_dict)
@@ -13652,15 +12992,6 @@ def _make_handler(settings: GeminiSettings):
         except Exception:
             logger.exception("connection handler crashed")
         finally:
-            # Autostop liveness: drop this connection from the live-connection
-            # registry on EVERY exit path (normal close, crash, cancellation) so
-            # the idle-check Lambda never sees a phantom-active count that keeps
-            # an idle box up forever. Runs FIRST in the finally so a raise in the
-            # detach bookkeeping below cannot skip it. A detached solve registered
-            # below still keeps the box busy via ``inflight_turn_count()`` /
-            # ``_SOLVE_IN_FLIGHT``, so dropping the connection count here does NOT
-            # expose the box to being stopped mid-solve.
-            _deregister_active_connection(websocket)
             # JOB B (WS connection accumulation): drop this socket from the
             # per-session connection registry on EVERY exit path so the eager
             # reaper never targets (or counts) a connection that is already gone,
@@ -13794,24 +13125,18 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # run matches nothing. Best-effort: a migration hiccup must not abort
     # server startup (the same posture as the Persistence init above).
     await _run_preauth_case_migration()
-    # COLDVIEW FRESHNESS BACKFILL (box-wake): re-materialize every live Case's
-    # cold snapshot+manifest so a box-off owned Case serves a CURRENT cold face
-    # without a warm re-open (closes the snapshot-freshness gap). Fire-and-forget
-    # so the sweep NEVER delays accepting the connection that woke the box; it is
-    # tracked in _BG_SNAPSHOT_TASKS so the graceful-shutdown drain awaits it and
-    # an unreferenced task is not GC'd mid-flight (same discipline as the
-    # per-turn snapshot writes). _run_coldview_backfill is self-guarding
-    # (no-Persistence / disabled / per-Case best-effort) and never raises.
+    # COLDVIEW FRESHNESS BACKFILL (daemon restart): re-materialize every live
+    # Case's cold snapshot+manifest so a daemon-down Case serves a CURRENT cold
+    # face without a warm re-open (closes the snapshot-freshness gap).
+    # Fire-and-forget so the sweep NEVER delays accepting the first connection
+    # after restart; it is tracked in _BG_SNAPSHOT_TASKS so the
+    # graceful-shutdown drain awaits it and an unreferenced task is not GC'd
+    # mid-flight (same discipline as the per-turn snapshot writes).
+    # _run_coldview_backfill is self-guarding (no-Persistence / disabled /
+    # per-Case best-effort) and never raises.
     _coldview_task = asyncio.create_task(_run_coldview_backfill())
     _BG_SNAPSHOT_TASKS.add(_coldview_task)
     _coldview_task.add_done_callback(_BG_SNAPSHOT_TASKS.discard)
-    # AGENT SELF-IDLE-EXIT (belt-and-suspenders): a per-session Fargate task stops
-    # ITSELF after GRACE2_AGENT_IDLE_EXIT_SECONDS of genuine idle (no client, no
-    # in-flight work) so it can never outlive its usefulness even if the reaper is
-    # broken/disarmed. No-op on the always-on box (env unset -> disabled). Hold a
-    # strong ref so the task is not GC'd.
-    global _IDLE_EXIT_TASK
-    _IDLE_EXIT_TASK = asyncio.create_task(_run_idle_exit_monitor())
 
     # TOOL-RETRIEVAL INDEX WARM-AT-STARTUP: when retrieval is enabled
     # (shadow/enforce), build the discover index off-loop NOW instead of
@@ -13904,14 +13229,8 @@ __all__ = [
     "get_persistence",
     "set_persistence",
     "init_persistence_from_env",
-    # Autostop liveness probe (agent-box auto-stop/wake infra). The
-    # ``/api/health`` endpoint serves ``liveness_snapshot``; the individual
-    # accessors are exported for tests + the idle-check Lambda contract.
-    "liveness_snapshot",
-    "active_connection_count",
+    # Live-turn registry probe (tests assert detached-turn lifecycle with it).
     "inflight_turn_count",
-    "solve_in_flight_count",
-    "is_busy",
     # job-0121: Case lifecycle handlers + chat persistence.
     "_emit_case_list",
     "_emit_case_open",

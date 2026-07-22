@@ -288,8 +288,9 @@ def set_mf6_binary(path: str | None) -> None:
 def _cache_bucket() -> str:
     if _CACHE_BUCKET is not None:
         return _CACHE_BUCKET
-    # GCP decommissioned: AWS S3 cache bucket default (prod overrides via env).
-    return os.environ.get("GRACE2_CACHE_BUCKET", "grace2-hazard-cache-226996537797")
+    from ..tools.cache import CACHE_BUCKET
+
+    return os.environ.get("GRACE2_CACHE_BUCKET") or CACHE_BUCKET
 
 
 def _runs_bucket() -> str:

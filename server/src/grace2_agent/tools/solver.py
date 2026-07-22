@@ -1,9 +1,11 @@
 """Solver dispatch atomic tools (job-0041, M5 Stage C).
 
 This module registers two atomic tools that drive the solver-execution
-substrate. GCP Cloud Workflows is decommissioned; dispatch is now an
-AWS Batch submit (default) or a local container / direct-binary run on the
-agent instance (``GRACE2_SOLVER_BACKEND=local-docker``). Together they
+substrate. GCP Cloud Workflows AND the AWS Batch arm are both
+decommissioned (local-only slim): dispatch is a local container run
+(``local-docker``) or a direct-binary run (``local-exec``) on this machine,
+selected per solver by its ``LocalSolverSpec`` exec spec --
+``solver_backend()`` unconditionally returns ``local-docker``. Together they
 implement the **FR-TA-2 solver-dispatch surface**:
 
     - ``run_solver(solver, model_setup_uri, compute_class="medium")
@@ -87,19 +89,18 @@ Run id generation: the agent service generates a ULID per ``run_solver``
 call. The same id is used to compose the runs-bucket completion path
 (``s3://<runs_bucket>/<run_id>/completion.json``).
 
-Solver backend seam (job-0291, sprint-14-aws)
----------------------------------------------
+Solver backend (local-only; batch decommissioned)
+-------------------------------------------------
 
-``GRACE2_SOLVER_BACKEND`` selects the dispatch substrate at call time. GCP
-Cloud Workflows is decommissioned; the default is ``aws-batch``:
+``local-docker`` is the ONLY backend (``solver_backend()`` is hardwired; the
+AWS Batch arm was removed and can be re-woven from git history without
+touching call sites):
 
-- ``aws-batch`` (default) — per-job autoscaled solve on an AWS Batch compute
-  env. ``run_solver`` mints a run_id and calls ``batch.submit_job``; the
-  worker container writes completion.json to ``s3://<runs_bucket>/<run_id>/``.
-- ``local-docker`` — the single-instance AWS EC2 path. The S3-IN → sfincs →
-  S3-OUT envelope lives INSIDE the agent (testable Python), and the
-  container is the PLAIN upstream ``deltares/sfincs-cpu`` binary image run
-  via ``docker run`` on the same instance:
+- ``local-docker`` — the S3-IN → sfincs → S3-OUT envelope lives INSIDE the
+  agent (testable Python); the object store is whatever ``AWS_ENDPOINT_URL``
+  points at (locally: MinIO). The container is the PLAIN upstream
+  ``deltares/sfincs-cpu`` binary image run via ``docker run`` on this
+  machine:
 
       run_solver: mint run_id → download the setup manifest from S3 (boto3)
         → stage every ``inputs[]`` object into ``$GRACE2_RUNS_DIR/<run_id>/``

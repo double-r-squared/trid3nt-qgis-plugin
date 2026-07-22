@@ -6,12 +6,14 @@ LOGIC (rasterio reads, frame-sequence grouping, honesty-floor null/error
 entries, the layer cap) is covered by ``test_probe_point.py``. Mirrors
 ``test_ingest_layer_http_route.py``:
 
-  - the route ABSENT (404) outside the local single-user seam;
+  - the route served UNCONDITIONALLY (the local build hardwires
+    ``solver_backend()`` to local-docker, so ``GRACE2_SOLVER_BACKEND`` no
+    longer gates it);
   - POST /api/probe-point happy path (monkeypatched core fn) -> 200;
   - POST /api/probe-point missing/invalid fields -> typed 400 (core never
     invoked);
   - POST /api/probe-point typed core errors -> honest 404/400;
-  - the existing /api/health path stays unaffected.
+  - the existing /api/tool-catalog path stays unaffected.
 """
 
 from __future__ import annotations
@@ -105,14 +107,28 @@ def _local_mode(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Route gating
+# Route availability: unconditional in the local build. ``solver_backend()``
+# is hardwired to local-docker, so the old outside-local-mode 404 branch
+# behind ``_probe_point_route_enabled`` is unreachable -- the env var no
+# longer gates the route.
 # ---------------------------------------------------------------------------
 
 
-def test_probe_point_route_absent_outside_local_mode(monkeypatch):
-    monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
-    out = _drive(_post("/api/probe-point", b"{}"))
-    assert _status(out) == 404
+def test_probe_point_route_served_regardless_of_backend_env(monkeypatch):
+    """Served with the env unset AND with a stale cloud value set.
+
+    ``b"{}"`` reaching the handler's field validation (typed 400 naming
+    ``case_id``) proves dispatch serves the route -- an absent route would
+    have 404ed before any body parsing.
+    """
+    for arm in ("unset", "aws-batch"):
+        if arm == "unset":
+            monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+        else:
+            monkeypatch.setenv("GRACE2_SOLVER_BACKEND", arm)
+        out = _drive(_post("/api/probe-point", b"{}"))
+        assert _status(out) == 400
+        assert "case_id" in _body_json(out)["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +238,6 @@ def test_probe_point_post_unexpected_error_500(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_probe_point_route_does_not_perturb_health():
-    out = _drive(_get("/api/health"))
+def test_probe_point_route_does_not_perturb_catalog():
+    out = _drive(_get("/api/tool-catalog"))
     assert _status(out) == 200
-    assert b'"ok":true' in out

@@ -50,10 +50,12 @@ Scoping rules:
   by ``session_id`` (the ``_SESSION_ACTIVE_CASE`` pattern from job-0259) so
   it survives WebSocket reconnects and is shared across the web client's
   sibling connections.
-* Strict rejection (branch 4) applies only to ``gs://`` URIs inside
-  platform-managed buckets (``grace-2-hazard-prod-*`` by default) -- objects
-  there are only ever produced by our tools, so an unregistered path is
-  either invented or stale. Foreign-bucket URIs (user-supplied data) pass
+* Strict rejection (branch 4) applies only to URIs inside
+  platform-managed buckets (the legacy ``grace2-hazard-*`` /
+  ``grace-2-hazard-prod-*`` prefixes by default -- kept so hallucinated or
+  stale legacy-cloud paths from old chat history are rejected, not silently
+  passed through). Objects there are only ever produced by our tools, so an
+  unregistered path is either invented or stale. Foreign-bucket URIs (user-supplied data) pass
   through untouched (fail-open).
 * Composer-internal publishes (``run_model_flood_scenario`` →
   ``publish_layer``) are captured via a ``ContextVar`` observation hook:
@@ -142,6 +144,9 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
 #: live one; the legacy GCP prefix (``grace-2-hazard-prod-``) is retained so
 #: any lingering gs:// reference is still recognized. Override via env
 #: ``GRACE2_MANAGED_BUCKET_PREFIXES`` (comma-separated).
+#: Legacy cloud bucket prefixes: nothing local mints these, so an unknown
+#: URI under them is always hallucinated/stale -> strict-reject (branch 4).
+#: Local MinIO buckets (trid3nt-*) intentionally fail open.
 _DEFAULT_MANAGED_BUCKET_PREFIXES = ("grace2-hazard-", "grace-2-hazard-prod-")
 
 #: Minimum shared basename-stem prefix (chars) for the hash-prefix fuzzy

@@ -655,7 +655,7 @@ def _download_uri_to_local(uri: str, suffix: str, storage_client: Any | None = N
 
         layers = parse_qs(urlparse(uri).query).get("LAYERS", [])
         runs_bucket = os.environ.get(
-            "GRACE2_RUNS_BUCKET", "grace-2-hazard-prod-runs"
+            "GRACE2_RUNS_BUCKET", "trid3nt-runs"
         )
         # GCP decommissioned: the reverse-mapped runs-bucket COG is always s3://.
         for layer_id in layers:

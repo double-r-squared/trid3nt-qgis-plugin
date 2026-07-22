@@ -225,11 +225,11 @@ def stage_canopy_build_spec(
     Raises ``CanopyHeightError('CANOPY_STAGING_FAILED')`` on upload failure (the
     Batch lane cannot dispatch without a reachable build_spec -- fail loudly).
     """
-    from .cache import storage_scheme
+    from .cache import CACHE_BUCKET, storage_scheme
     from .solver import _get_s3_client
 
     scheme = storage_scheme()  # "s3" on AWS
-    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache")
+    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET") or CACHE_BUCKET
     prefix = f"cache/static-30d/canopy_setup/{run_id}/"
     spec_key = f"{prefix}build_spec.json"
     spec_uri = f"{scheme}://{cache_bucket}/{spec_key}"

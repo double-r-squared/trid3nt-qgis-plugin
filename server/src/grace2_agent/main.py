@@ -172,12 +172,7 @@ def _default_qgis_process_submitter():
     tools and the ``qgis_process`` pass-through call this seam.
 
     The default submitter runs ``qgis_process`` as a local subprocess —
-    suitable for the dev environment and the M4 discovery loop. In
-    production this seam will route to the deployed ``grace-2-pyqgis-worker``
-    Cloud Run Job (image @sha256:fffd7e0f) once the Cloud Run Jobs v2
-    ``command``-override surface is resolved. The deployed worker has the
-    same ``qgis_process`` binary baked in; the catalog shape is stable
-    across the QGIS 3.x line, so the substitution is materially equivalent.
+    suitable for the local environment and the M4 discovery loop.
 
     Override via ``GRACE2_QGIS_PROCESS_BIN`` env var; defaults to
     ``qgis_process`` discovered on PATH (the ``grace2`` conda env per
@@ -334,11 +329,10 @@ def _bind_worker_submitter() -> None:
     try:
         submitter = _default_qgis_process_submitter()
     except RuntimeError as exc:
-        # Production agent containers will bind a Cloud Run Job submitter
-        # here instead of a local subprocess; the dev-env fallback failing is
-        # informational, not fatal — we let the agent service start so the
-        # other tools (data_fetch, passthroughs) keep working,
-        # and any actual QGIS discovery call surfaces the RuntimeError.
+        # A missing qgis_process is informational, not fatal — we let the
+        # agent service start so the other tools (data_fetch, passthroughs)
+        # keep working, and any actual QGIS discovery call surfaces the
+        # RuntimeError.
         logging.getLogger("grace2_agent.main").warning(
             "worker submitter not bound (qgis_process unavailable): %s", exc
         )
@@ -450,12 +444,6 @@ def run(argv: list[str] | None = None) -> int:
     # survives the regular MCP-not-provisioned branch. Production agents set
     # ``GRACE2_MONGO_MCP_STDIO=1`` and this is a no-op.
     _maybe_bind_dev_persistence()
-
-    # TRID3NT local-only build: cloud Cognito ID-token verification is removed.
-    # Every WS connect resolves to the single fixed local user (see
-    # ``auth_handshake._resolve_local_single_user``), so there is no token-
-    # verification init to run at startup. (Cloud auth is preserved in git
-    # history for a future re-weave.)
 
     if startup_only:
         logger.info("--startup-only: tool registry verified; exiting without serving")

@@ -4,7 +4,10 @@ This module owns the agent-side cache shim that mediates every external-API
 atomic-tool fetch (FR-CE-8). The shim is the SOLE writer of the ``cache/``
 prefix on the production cache bucket provisioned by job-0031:
 
-    gs://grace-2-hazard-prod-cache/cache/<ttl-class>/<source-class>/<hash>.<ext>
+    s3://<cache-bucket>/cache/<ttl-class>/<source-class>/<hash>.<ext>
+
+(the bucket is ``CACHE_BUCKET`` below, overridable via ``GRACE2_CACHE_BUCKET``
+-- locally that points at the MinIO ``trid3nt-cache`` bucket)
 
 Note the layout follows the LIVE substrate from job-0031, NOT the FR-DC-1
 literal (``cache/<source-class>/<hash>.<ext>``). job-0031 nested TTL class

@@ -668,24 +668,17 @@ def _record_flood_batch_solve_telemetry(
 
 
 def _default_runs_prefix(run_id: str) -> str:
-    """Scheme-aware fallback runs prefix when ``RunResult.output_uri`` is None.
+    """Fallback runs prefix when ``RunResult.output_uri`` is None.
 
-    job-0291 (sprint-14-aws): under ``GRACE2_STORAGE_BACKEND=s3`` the prefix
-    is ``s3://$GRACE2_RUNS_BUCKET/<run_id>/`` (no GCP-named default on AWS —
-    when the env is unset we keep the legacy gs:// literal so the failure
-    surfaces as the familiar RUN_OUTPUT_READ_FAILED rather than a silent
-    write to a wrong bucket). The default (gcs) branch is byte-identical to
-    the pre-job-0291 literal.
+    Mints the same ``s3://<runs_bucket>/<run_id>/`` shape the local-docker
+    solver writes outputs under (``GRACE2_RUNS_BUCKET``, default
+    ``trid3nt-runs`` -- the local MinIO runs bucket). GCP is gone: no
+    gs:// fabrication.
     """
     import os
 
-    from ..tools.cache import storage_scheme
-
-    if storage_scheme() == "s3":
-        bucket = (os.environ.get("GRACE2_RUNS_BUCKET") or "").strip()
-        if bucket:
-            return f"s3://{bucket}/{run_id}/"
-    return f"gs://grace-2-hazard-prod-runs/{run_id}/"
+    bucket = (os.environ.get("GRACE2_RUNS_BUCKET") or "").strip() or "trid3nt-runs"
+    return f"s3://{bucket}/{run_id}/"
 
 
 # --------------------------------------------------------------------------- #
@@ -1436,7 +1429,7 @@ def _compose_and_upload_deckbuild_spec(
         tstop = tstop or f"202601{end_day:02d} {end_hh:02d}0000"
 
     scheme = storage_scheme()
-    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache")
+    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET") or CACHE_BUCKET
     deck_id = new_ulid()
     base_prefix = f"cache/static-30d/sfincs_deck/{deck_id}/"
     deck_dir_uri = f"{scheme}://{cache_bucket}/{base_prefix}deck/"
@@ -1857,7 +1850,7 @@ def _compose_and_upload_flood_build_spec(
             "The SFINCS build offload requires an S3 storage backend so the Batch "
             "worker can read the job_spec (GRACE2_STORAGE_BACKEND=s3). Staying inert."
         )
-    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache")
+    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET") or CACHE_BUCKET
     spec_id = new_ulid()
     base_prefix = f"cache/static-30d/sfincs_build/{spec_id}/"
     job_spec_uri = f"{scheme}://{cache_bucket}/{base_prefix}sfincs_build_spec.json"

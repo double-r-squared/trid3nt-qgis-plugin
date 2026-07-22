@@ -14,7 +14,7 @@ Exercises ``tool_catalog_http._handle_http`` dispatch:
     application/geopackage+sqlite3) with Content-Disposition;
   - GET file ../ traversal escape -> 403; outside-root absolute path -> 403;
   - GET file for a missing in-root file -> 404;
-  - the existing /api/health path stays unaffected.
+  - the existing /api/tool-catalog path stays unaffected.
 """
 
 from __future__ import annotations
@@ -265,8 +265,7 @@ def test_export_qgis_file_missing_404(tmp_path, monkeypatch):
     assert b"404 Not Found" in out
 
 
-def test_export_qgis_routes_do_not_perturb_health():
-    """The new routes must not break the autostop liveness probe."""
-    out = _drive(_get("/api/health"))
+def test_export_qgis_routes_do_not_perturb_catalog():
+    """The new routes must not break the sibling tool-catalog route."""
+    out = _drive(_get("/api/tool-catalog"))
     assert b"200 OK" in out
-    assert b'"ok":true' in out

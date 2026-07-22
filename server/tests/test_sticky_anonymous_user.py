@@ -1,13 +1,17 @@
-"""Test sticky anonymous user_id reuse (job-0172 Part C).
+"""Test anonymous-hint handling under the LOCAL single-user build.
 
-The H.3 anonymous-fallback path used to mint a fresh ULID on every connect,
-so a browser refresh orphaned the user's Cases. The fix: the client persists
-its assigned ``user_id`` in localStorage and replays it via
-``AuthTokenEnvelope.anonymous_user_id``; the agent looks it up and re-binds
-the same User record when ``is_anonymous=True``.
+History: job-0172 Part C made the H.3 anonymous path sticky (the client
+replays its assigned ``user_id`` via ``AuthTokenEnvelope.anonymous_user_id``
+and the agent re-binds the same record). The TRID3NT local build then pinned
+``solver_backend()`` to ``local-docker``, so ``authenticate_token`` now takes
+the F1 single-user branch UNCONDITIONALLY: the ``anonymous_user_id`` hint is
+still accepted on the wire (clients keep their sticky logic unchanged), but
+EVERY connection resolves to the ONE fixed local user
+(``auth_handshake.LOCAL_SINGLE_USER_ID``). The per-hint reuse/verbatim
+provisioning branches below it are unreachable in this build.
 
-These tests exercise the agent-side logic in isolation (the web persistence
-is verified separately in the web test suite).
+These tests pin that resolution truth in isolation (the web persistence is
+verified separately in the web test suite).
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from grace2_agent.auth_handshake import authenticate_token
+from grace2_agent.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
 from grace2_agent.persistence import Persistence
 from grace2_contracts.auth import AuthTokenEnvelope
 from grace2_contracts.common import new_ulid, now_utc
@@ -59,34 +63,42 @@ class FakeMCPClient:
 
 @pytest.mark.asyncio
 async def test_anonymous_reuse_rebinds_same_user_on_reconnect() -> None:
-    """An ``anonymous_user_id`` hint re-binds the prior anonymous User."""
+    """A reconnect re-binds the SAME user record: the fixed local user."""
     client = FakeMCPClient()
     p = Persistence(client)
 
-    # First connect — no hint, no token → mint a fresh anonymous user.
+    # First connect -- no hint, no token -> the fixed local single user.
     first = await authenticate_token(AuthTokenEnvelope(token=""), p)
     assert first.is_anonymous
     assert first.user.is_anonymous is True
+    assert first.user.user_id == LOCAL_SINGLE_USER_ID
     assert first.user.user_id in client.users  # persisted
 
-    # Second connect with the hint — must re-bind the SAME user_id.
+    # Second connect replaying that id as the sticky hint -- same user_id.
     hint = first.user.user_id
     second = await authenticate_token(
         AuthTokenEnvelope(token="", anonymous_user_id=hint), p
     )
     assert second.is_anonymous
     assert second.user.user_id == hint
-    # Same User document — not a fresh ULID.
+    # Same User document -- never a fresh ULID in the local build.
     assert second.user.user_id == first.user.user_id
+    assert list(client.users.keys()) == [LOCAL_SINGLE_USER_ID]
 
 
 @pytest.mark.asyncio
 async def test_anonymous_reuse_rejects_non_anonymous_record() -> None:
-    """A hint pointing at a Firebase-verified User must NOT re-bind."""
+    """A hint replaying a non-anonymous record's id must NOT re-bind it.
+
+    In the local build this holds trivially: the hint is ignored and the
+    connection lands on the fixed local user, so a fished non-anonymous id
+    can never be hijacked via the hint path -- and the seeded record stays
+    byte-identical (never overwritten by the local-user upsert).
+    """
     client = FakeMCPClient()
     p = Persistence(client)
 
-    # Pre-seed a Firebase-verified User (is_anonymous=False).
+    # Pre-seed a non-anonymous User record (legacy IdP-sub carrier populated).
     verified_id = new_ulid()
     verified = User(
         user_id=verified_id,
@@ -95,26 +107,27 @@ async def test_anonymous_reuse_rejects_non_anonymous_record() -> None:
         is_anonymous=False,
     )
     await p.upsert_user(verified)
+    seeded_doc = dict(client.users[verified_id])
 
-    # Client replays that id as an anonymous hint — agent MUST reject the
-    # rebind (no JWT was presented) and mint a fresh anonymous user.
     result = await authenticate_token(
         AuthTokenEnvelope(token="", anonymous_user_id=verified_id), p
     )
     assert result.is_anonymous
+    assert result.user.user_id == LOCAL_SINGLE_USER_ID
     assert result.user.user_id != verified_id
     assert result.user.is_anonymous is True
+    # The seeded non-anonymous record is untouched.
+    assert client.users[verified_id] == seeded_doc
 
 
 @pytest.mark.asyncio
-async def test_anonymous_hint_for_unknown_id_is_provisioned_verbatim() -> None:
-    """cases-vanish fix: a presented id with no record provisions THAT id.
+async def test_anonymous_hint_for_unknown_id_lands_on_local_user() -> None:
+    """A presented id with no record is accepted on the wire but NOT honored.
 
-    Pre-fix this minted a fresh random ULID, forking the owner-scoped
-    case-list across the App + Chat sockets. The client now always replays one
-    stable client-owned ``anonymous_user_id``; the agent must honor it by
-    provisioning a User with THAT EXACT id so both sockets converge on one
-    identity.
+    F1 single-user truth: the hint that the sticky client replays is read
+    without error, yet resolution lands on ``LOCAL_SINGLE_USER_ID`` -- no
+    per-hint user is ever provisioned, so every device (desktop, phone, QGIS
+    plugin, test driver) shares the one local case list.
     """
     client = FakeMCPClient()
     p = Persistence(client)
@@ -124,37 +137,40 @@ async def test_anonymous_hint_for_unknown_id_is_provisioned_verbatim() -> None:
         AuthTokenEnvelope(token="", anonymous_user_id=fake_id), p
     )
     assert result.is_anonymous
-    # Provisioned VERBATIM — no fresh ULID minted.
-    assert result.user.user_id == fake_id
+    # Resolution lands on the fixed local user, never the presented id.
+    assert result.user.user_id == LOCAL_SINGLE_USER_ID
     assert result.user.is_anonymous is True
-    # And persisted under that exact id so a sibling/reconnect socket reuses it.
-    assert fake_id in client.users
-    assert client.users[fake_id]["is_anonymous"] is True
+    # No user record is minted for the hint; only the local user persists.
+    assert fake_id not in client.users
+    assert LOCAL_SINGLE_USER_ID in client.users
+    assert client.users[LOCAL_SINGLE_USER_ID]["is_anonymous"] is True
 
 
 @pytest.mark.asyncio
-async def test_anonymous_hint_claimed_verbatim_when_persistence_absent() -> None:
-    """No Persistence → claim the presented id VERBATIM (in-memory only).
+async def test_anonymous_hint_without_persistence_lands_on_local_user() -> None:
+    """No Persistence -> the hint is still ignored; local user in-memory.
 
-    cases-vanish fix: with no collection there is nothing to collide with, so
-    the presented client-owned id is claimed verbatim. This keeps this session's
-    sockets converged on one in-memory anonymous identity even on the M1
-    substrate / CI path. Pre-fix this minted a fresh ULID and ignored the hint.
+    Even with no collection to look up, the local build resolves to the fixed
+    ``LOCAL_SINGLE_USER_ID`` (provisioned in-memory only on this path), so the
+    session's sockets converge on one identity on the CI / no-persistence path
+    too -- never on the client-presented id.
     """
     hint = new_ulid()
     result = await authenticate_token(
         AuthTokenEnvelope(token="", anonymous_user_id=hint), persistence=None
     )
     assert result.is_anonymous
-    assert result.user.user_id == hint  # verbatim, not a fresh ULID
+    assert result.user.user_id == LOCAL_SINGLE_USER_ID
+    assert result.user.user_id != hint
     assert result.user.is_anonymous is True
 
 
 @pytest.mark.asyncio
-async def test_anonymous_no_hint_no_persistence_mints_fresh() -> None:
-    """No hint + no Persistence → fresh in-memory anonymous User (unchanged)."""
+async def test_anonymous_no_hint_no_persistence_lands_on_local_user() -> None:
+    """No hint + no Persistence -> the fixed local user, not a fresh mint."""
     result = await authenticate_token(
         AuthTokenEnvelope(token=""), persistence=None
     )
     assert result.is_anonymous
+    assert result.user.user_id == LOCAL_SINGLE_USER_ID
     assert result.user.is_anonymous is True

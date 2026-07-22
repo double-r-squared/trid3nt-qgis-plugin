@@ -323,7 +323,7 @@ def stage_swan_manifest(
             (the Batch lane cannot dispatch without a reachable manifest -- fail
             loudly, never a silent dead-end).
     """
-    from ..tools.cache import storage_scheme
+    from ..tools.cache import CACHE_BUCKET, storage_scheme
     from ..tools.solver import _get_s3_client
 
     rid = run_id or new_ulid()
@@ -347,7 +347,7 @@ def stage_swan_manifest(
     )
 
     scheme = storage_scheme()  # "s3" on AWS (GCP decommissioned)
-    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache")
+    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET") or CACHE_BUCKET
     prefix = f"cache/static-30d/swan_setup/{rid}/"
     manifest_key = f"{prefix}manifest.json"
     manifest_uri = f"{scheme}://{cache_bucket}/{manifest_key}"

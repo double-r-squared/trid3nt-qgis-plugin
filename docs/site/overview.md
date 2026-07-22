@@ -30,7 +30,6 @@ cloud-to-local rewiring is environment variables -- no fork of the agent code.
 | Persistence | DynamoDB (`trid3nt_*` tables) | FilePersistence -- JSON store on disk | `GRACE2_DEV_PERSISTENCE_DIR` |
 | Raster tiles | TiTiler EC2 (always-on) | TiTiler in a local venv on `:8080` | `GRACE2_TILE_SERVER_BASE` |
 | Solvers | AWS Batch (Spot, scale-to-zero) | Local subprocess / local docker per engine | `GRACE2_SOLVER_BACKEND`, per-engine gates |
-| Auth | Cognito JWT | Anonymous (server mints ULID users) | `AUTH_REQUIRED=false`, no Cognito env |
 
 Data fetchers need internet (USGS/NOAA/OSM/etc. are public HTTPS or anonymous public S3) but
 no cloud account. "Offline" means no-cloud-ACCOUNT, not air-gapped.

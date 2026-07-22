@@ -11,7 +11,7 @@ Exercises ``tool_catalog_http._handle_http`` dispatch for ``/api/building-detail
   - sidecar miss -> live Overpass fallback HIT -> 200;
   - both miss -> typed 404;
   - malformed input (bad osm_type / non-numeric osm_id) -> typed 400;
-  - the existing /api/tool-catalog + /api/health paths stay unaffected.
+  - the existing /api/tool-catalog path stays unaffected.
 """
 
 from __future__ import annotations
@@ -160,11 +160,10 @@ def test_building_detail_400_on_non_numeric_osm_id(monkeypatch):
     assert b"400 Bad Request" in out
 
 
-def test_building_detail_does_not_perturb_health(monkeypatch):
-    """The new route must not break the autostop liveness probe."""
-    reader = _FakeReader(_request("/api/health"))
+def test_building_detail_does_not_perturb_catalog(monkeypatch):
+    """The new route must not break the sibling tool-catalog route."""
+    reader = _FakeReader(_request("/api/tool-catalog"))
     writer = _FakeWriter()
     _run(tool_catalog_http._handle_http(reader, writer))
     out = bytes(writer.buffer)
     assert b"200 OK" in out
-    assert b'"ok":true' in out

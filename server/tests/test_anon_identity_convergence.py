@@ -1,26 +1,23 @@
-"""cases-vanish fix: dual-socket anon-identity convergence (task #163).
+"""Anon-identity convergence under the LOCAL single-user build.
 
-ROOT CAUSE: the web mounts TWO WebSocket connections per tab (App.tsx +
-Chat.tsx, one localStorage session_id). Each connection ran its OWN auth
-handshake; with no token + no hint, ``_provision_anonymous_user`` minted a
-FRESH random ULID PER CONNECTION. The two sockets then forked the owner-scoped
-``list_cases_for_user`` view, so Cases appeared to vanish on refresh.
+HISTORY (task #163): the web mounts TWO WebSocket connections per tab
+(App.tsx + Chat.tsx, one localStorage session_id); each ran its own auth
+handshake and, pre-fix, minted a fresh ULID per connection, forking the
+owner-scoped case list. The original fix was two layers: (1) honor the
+client-presented ``anonymous_user_id`` verbatim, (2) a session-scoped anon-id
+registry (``server._SESSION_ANON_ID``) to collapse the no-hint race.
 
-The fix is two layers:
+CURRENT TRUTH (F1, TRID3NT local build): ``solver_backend()`` is hardwired to
+``local-docker``, so ``authenticate_token`` resolves EVERY connection --
+hinted, no-hint, or token-bearing -- to the ONE fixed local user
+(``auth_handshake.LOCAL_SINGLE_USER_ID``). Convergence is therefore
+unconditional by construction; identity forks are unrepresentable via the
+handshake. The hints stay accepted on the wire (clients keep their sticky
+logic), and the session registry remains as live server plumbing that fills
+hints BEFORE resolution -- harmless, still tested below at its own seam.
 
-1. SERVER honors a client-presented ``anonymous_user_id`` VERBATIM — reused
-   when a record exists, PROVISIONED with that exact id when it does not (so the
-   web's always-replayed client-owned id deterministically resolves to ONE
-   user across both sockets). Covered here + in ``test_sticky_anonymous_user``.
-
-2. A belt-and-suspenders SESSION-SCOPED anon-id registry on the server
-   (``server._SESSION_ANON_ID``, mirroring ``_SESSION_ACTIVE_CASE``): when a
-   connection binds an anon user for a ``session_id``, it is recorded; a second
-   connection of the SAME ``session_id`` with NO usable hint reuses it instead
-   of minting fresh. This collapses the (now rare) no-hint first-connect window.
-
-These tests pin both layers + the case-list stability they guarantee, and prove
-the authed (Cognito) path is unaffected.
+These tests pin: resolution always lands on the local user, the registry
+helpers' contracts, and the case-list stability that resolution guarantees.
 """
 
 from __future__ import annotations
@@ -30,7 +27,7 @@ from typing import Any
 import pytest
 
 from grace2_agent import server
-from grace2_agent.auth_handshake import authenticate_token, set_verify_hook
+from grace2_agent.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
 from grace2_agent.persistence import Persistence
 from grace2_contracts.auth import AuthTokenEnvelope
 from grace2_contracts.case import CaseSummary
@@ -109,36 +106,44 @@ class FakeMCPClient:
 
 
 # --------------------------------------------------------------------------- #
-# Layer 1 — server honors the presented anon id (reuse + verbatim provision).
+# Layer 1 -- resolution: every presented anon id lands on the local user.
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_presented_id_reused_verbatim_when_record_exists() -> None:
-    """A presented id whose record exists re-binds it — no new ULID minted."""
+async def test_presented_id_accepted_but_resolution_lands_on_local_user() -> None:
+    """Sibling sockets presenting the same hint converge on the local user.
+
+    The hint rides the wire unchanged (no error), but both connections
+    resolve to ``LOCAL_SINGLE_USER_ID`` and exactly ONE user record exists.
+    """
     client = FakeMCPClient()
     p = Persistence(client)
 
-    # First connect provisions the client-owned id verbatim.
     cid = new_ulid()
     first = await authenticate_token(
         AuthTokenEnvelope(token="", anonymous_user_id=cid), p
     )
-    assert first.user.user_id == cid
+    assert first.user.user_id == LOCAL_SINGLE_USER_ID
 
-    # Second connect (sibling socket) presents the SAME id — reused verbatim.
+    # Second connect (sibling socket) presents the SAME id -- same resolution.
     second = await authenticate_token(
         AuthTokenEnvelope(token="", anonymous_user_id=cid), p
     )
-    assert second.user.user_id == cid
+    assert second.user.user_id == LOCAL_SINGLE_USER_ID
     assert second.is_anonymous is True
-    # Exactly one user record exists for that id.
-    assert list(client.users.keys()) == [cid]
+    # Exactly one user record exists: the fixed local user, never the hint.
+    assert list(client.users.keys()) == [LOCAL_SINGLE_USER_ID]
 
 
 @pytest.mark.asyncio
-async def test_unknown_presented_id_is_provisioned_with_that_id() -> None:
-    """A presented id with NO record provisions a user with THAT id."""
+async def test_unknown_presented_id_is_not_provisioned_verbatim() -> None:
+    """A presented id with NO record does NOT provision that id (F1).
+
+    Pre-F1 the cases-vanish fix claimed the id verbatim; the local build
+    instead collapses onto the fixed local user, so no per-client user
+    document is ever created.
+    """
     client = FakeMCPClient()
     p = Persistence(client)
 
@@ -146,10 +151,10 @@ async def test_unknown_presented_id_is_provisioned_with_that_id() -> None:
     res = await authenticate_token(
         AuthTokenEnvelope(token="", anonymous_user_id=cid), p
     )
-    assert res.user.user_id == cid  # verbatim, not a fresh ULID
+    assert res.user.user_id == LOCAL_SINGLE_USER_ID
     assert res.is_anonymous is True
-    assert cid in client.users
-    assert client.users[cid]["is_anonymous"] is True
+    assert cid not in client.users
+    assert client.users[LOCAL_SINGLE_USER_ID]["is_anonymous"] is True
 
 
 # --------------------------------------------------------------------------- #
@@ -218,12 +223,12 @@ def test_apply_session_anon_hint_never_clobbers_client_hint() -> None:
 
 
 def test_apply_session_anon_hint_leaves_token_path_untouched() -> None:
-    """A non-empty token (verify path) is never diverted to an anon id."""
+    """A non-empty token is never diverted to an anon id."""
     sid = "session-token"
     server._set_session_anon_id(sid, new_ulid())
     tok = AuthTokenEnvelope(token="a.real.jwt")
     out = server._apply_session_anon_hint(sid, tok)
-    assert out is tok  # unchanged object — authed path owns this connect
+    assert out is tok  # unchanged object — the token path owns this connect
     assert out.anonymous_user_id is None
 
 
@@ -265,17 +270,21 @@ async def test_two_no_hint_connections_converge_via_registry() -> None:
 
 
 @pytest.mark.asyncio
-async def test_case_list_stable_across_reconnect_for_same_client_id() -> None:
-    """A Case created under the converged anon id stays visible on reconnect."""
+async def test_case_list_stable_across_reconnect_any_client_id() -> None:
+    """A Case stays visible on reconnect EVEN with a different client id.
+
+    F1 strengthens the old guarantee: stability no longer depends on the
+    client replaying the same sticky id -- every connection resolves to the
+    one local user, so the owner-scoped list is identical regardless of hint.
+    """
     client = FakeMCPClient()
     p = Persistence(client)
-    cid = new_ulid()
 
-    # First connect provisions the client-owned id; a Case is created + owned.
+    # First connect (some client hint); a Case is created + owned.
     first = await authenticate_token(
-        AuthTokenEnvelope(token="", anonymous_user_id=cid), p
+        AuthTokenEnvelope(token="", anonymous_user_id=new_ulid()), p
     )
-    assert first.user.user_id == cid
+    assert first.user.user_id == LOCAL_SINGLE_USER_ID
     case = CaseSummary(
         case_id=new_ulid(),
         title="Refresh Test Case",
@@ -287,26 +296,34 @@ async def test_case_list_stable_across_reconnect_for_same_client_id() -> None:
     cases_before = await p.list_cases_for_user(first.user.user_id)
     assert [c.case_id for c in cases_before] == [case.case_id]
 
-    # Reconnect (refresh): same client id replayed -> same owner -> same list.
+    # Reconnect (refresh / other device): a DIFFERENT hint -> same owner ->
+    # same list.
     second = await authenticate_token(
-        AuthTokenEnvelope(token="", anonymous_user_id=cid), p
+        AuthTokenEnvelope(token="", anonymous_user_id=new_ulid()), p
     )
-    assert second.user.user_id == cid
+    assert second.user.user_id == LOCAL_SINGLE_USER_ID
     cases_after = await p.list_cases_for_user(second.user.user_id)
     assert [c.case_id for c in cases_after] == [case.case_id]
 
 
 @pytest.mark.asyncio
-async def test_case_list_would_fork_without_verbatim_provision() -> None:
-    """Control: two DIFFERENT anon ids do NOT see each other's Cases.
+async def test_no_hint_connections_cannot_fork_case_lists() -> None:
+    """Two no-hint connections resolve to ONE user; forking is impossible.
 
-    Pins that owner-scoping is intact (not weakened) — the fix works by
-    converging the IDENTITY, not by broadening the case-list query.
+    Replaces the pre-F1 control ("two DIFFERENT anon ids do not see each
+    other's Cases"): the handshake can no longer produce two distinct
+    identities at all, so the dual-socket fork that motivated task #163 is
+    structurally unrepresentable. A Case created via connection A is listed
+    for connection B because they ARE the same fixed local user.
     """
     client = FakeMCPClient()
     p = Persistence(client)
 
-    a = await authenticate_token(AuthTokenEnvelope(token=""), p)  # fresh ULID
+    a = await authenticate_token(AuthTokenEnvelope(token=""), p)
+    b = await authenticate_token(AuthTokenEnvelope(token=""), p)
+    assert a.user.user_id == b.user.user_id == LOCAL_SINGLE_USER_ID
+    assert list(client.users.keys()) == [LOCAL_SINGLE_USER_ID]
+
     case = CaseSummary(
         case_id=new_ulid(),
         title="A's Case",
@@ -314,49 +331,44 @@ async def test_case_list_would_fork_without_verbatim_provision() -> None:
         updated_at=now_utc(),
     )
     await p.upsert_case(case, owner_user_id=a.user.user_id)
-
-    b = await authenticate_token(AuthTokenEnvelope(token=""), p)  # different ULID
-    assert b.user.user_id != a.user.user_id
-    assert await p.list_cases_for_user(b.user.user_id) == []
-    assert [c.case_id for c in await p.list_cases_for_user(a.user.user_id)] == [
+    assert [c.case_id for c in await p.list_cases_for_user(b.user.user_id)] == [
         case.case_id
     ]
 
 
 # --------------------------------------------------------------------------- #
-# Authed (Cognito) path unaffected.
+# Token path: a presented token bypasses the hint fill and mints fresh.
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_authed_path_ignores_anon_registry_and_hint() -> None:
-    """A verified token resolves by firebase_uid; the anon hint is ignored."""
+async def test_token_path_ignores_anon_registry_and_hint() -> None:
+    """A non-empty token is ignored; resolution lands on the local user.
+
+    The local build has no token verifier: the registry never fills a hint
+    onto a token-bearing envelope (asserted at the server seam), and
+    ``authenticate_token`` resolves the connection to the fixed local user --
+    never the stray client hint, never the session-registry id.
+    """
     client = FakeMCPClient()
     p = Persistence(client)
-    sid = "session-authed"
-    # Seed a stale registry entry — it must NOT down-bind the authed connect.
+    sid = "session-token-path"
+    # Seed a stale registry entry -- it must NOT be filled onto a token connect.
     server._set_session_anon_id(sid, new_ulid())
 
-    set_verify_hook(
-        lambda _t: {"uid": "cognito-sub-001", "email": "u@example.com", "tier": "free"}
-    )
-    try:
-        # A non-empty token + a stray anon hint: the verify path must win.
-        tok = AuthTokenEnvelope(token="real.jwt", anonymous_user_id=new_ulid())
-        # The server fills hints only for the anon path; assert it leaves the
-        # token envelope untouched.
-        filled = server._apply_session_anon_hint(sid, tok)
-        assert filled is tok
-        res = await authenticate_token(filled, p)
-        assert res.is_anonymous is False
-        assert res.firebase_uid == "cognito-sub-001"
-        assert res.user.firebase_uid == "cognito-sub-001"
-        # The user was provisioned by firebase_uid, NOT the anon hint.
-        stored = list(client.users.values())
-        assert len(stored) == 1
-        assert stored[0]["firebase_uid"] == "cognito-sub-001"
-    finally:
-        set_verify_hook(None)
+    stray_hint = new_ulid()
+    tok = AuthTokenEnvelope(token="real.jwt", anonymous_user_id=stray_hint)
+    # The server fills hints only for the token-less path; assert it leaves
+    # the token envelope untouched.
+    filled = server._apply_session_anon_hint(sid, tok)
+    assert filled is tok
+    res = await authenticate_token(filled, p)
+    assert res.is_anonymous is True
+    assert res.firebase_uid is None
+    # The fixed local user -- neither the stray hint nor the registry id.
+    assert res.user.user_id == LOCAL_SINGLE_USER_ID
+    assert res.user.user_id != stray_hint
+    assert res.user.user_id != server._get_session_anon_id(sid)
 
 
 # --------------------------------------------------------------------------- #

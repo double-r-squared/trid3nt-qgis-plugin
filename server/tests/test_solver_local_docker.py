@@ -804,8 +804,10 @@ def test_composer_default_runs_prefix_scheme_aware(
 ) -> None:
     from grace2_agent.workflows.model_flood_scenario import _default_runs_prefix
 
+    # Local-only slim: the fallback always mints the honest s3:// shape the
+    # local-docker solver writes under -- never a fabricated gs:// URI.
     monkeypatch.delenv("GRACE2_STORAGE_BACKEND", raising=False)
-    assert _default_runs_prefix("R1") == "gs://grace-2-hazard-prod-runs/R1/"
-    monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    monkeypatch.delenv("GRACE2_RUNS_BUCKET", raising=False)
+    assert _default_runs_prefix("R1") == "s3://trid3nt-runs/R1/"
     monkeypatch.setenv("GRACE2_RUNS_BUCKET", "test-runs-bucket")
     assert _default_runs_prefix("R1") == "s3://test-runs-bucket/R1/"

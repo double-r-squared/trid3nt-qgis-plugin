@@ -81,7 +81,7 @@ UNSTABLE_PROBABILITY_THRESHOLD: float = 0.75
 OVERLAND_WET_DEPTH_M: float = 0.05
 
 #: Runs-bucket default (the gs:// fallback only; AWS uses GRACE2_RUNS_BUCKET).
-RUNS_BUCKET_DEFAULT: str = "grace-2-hazard-prod-runs"
+RUNS_BUCKET_DEFAULT: str = "trid3nt-runs"
 
 
 class PostprocessLandlabError(RuntimeError):

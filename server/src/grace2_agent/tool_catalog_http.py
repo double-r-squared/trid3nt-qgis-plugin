@@ -2493,25 +2493,6 @@ async def _handle_http(
         writer.close()
         return
 
-    # job-0255: streaming WMS proxy. Handled BEFORE the buffered
-    # ``_format_response`` paths because it writes a chunked/streamed response
-    # directly to ``writer`` (whole tiles are never buffered in agent memory —
-    # contract lens). Env-gated: when ``QGIS_PROXY_ENABLED`` is off (default),
-    # the route is treated as absent and falls through to the 404 below, so
-    # TODAY'S behavior is unchanged until job-0257 flips the flag in prod.
-    if proxy_path == "/qgis-proxy":
-        from .qgis_proxy import qgis_proxy_enabled
-
-        if not qgis_proxy_enabled():
-            # Route absent when disabled — 404 exactly like an unknown path.
-            writer.write(_format_response(404, b'{"error":"not found"}'))
-            await writer.drain()
-            writer.close()
-            return
-        await _handle_qgis_proxy(proxy_qs, writer)
-        # ``_handle_qgis_proxy`` owns draining + closing the writer.
-        return
-
     if path == "/api/tool-catalog":
         try:
             payload = build_catalog_payload()
@@ -2670,122 +2651,10 @@ async def _handle_http(
             writer.write(
                 _format_response(500, b'{"error":"export file serve failed"}')
             )
-    elif path == "/api/health":
-        # Autostop liveness probe (agent-box auto-stop/wake infra). The idle
-        # Lambda polls this and its safety gate reads ``busy`` to decide whether
-        # the always-on agent EC2 box may be stopped: it stops ONLY after N
-        # consecutive polls with busy == false (Stage 3: a merely-open IDLE
-        # connection no longer keeps the box up; ``active_connections`` is still
-        # reported for observability). ``busy`` comes from the in-flight turn +
-        # solver markers in ``server.py`` (same process, same asyncio loop), and
-        # the idle Lambda additionally ORs its own Batch DescribeJobs check.
-        # Best-effort: if the snapshot raises for any reason
-        # we fall back to a conservative busy=true so a transient glitch can
-        # never trick the gate into stopping a live box.
-        try:
-            from .server import liveness_snapshot
-
-            health = liveness_snapshot()
-        except Exception:  # noqa: BLE001 — never let the probe stop a live box
-            logger.exception("liveness snapshot failed; reporting busy=true")
-            health = {"ok": True, "active_connections": 1, "busy": True}
-        body = json.dumps(health, separators=(",", ":")).encode("utf-8")
-        writer.write(_format_response(200, body))
     else:
         writer.write(_format_response(404, b'{"error":"not found"}'))
     await writer.drain()
     writer.close()
-
-
-def _format_streaming_head(
-    status: int,
-    headers: dict[str, str],
-) -> bytes:
-    """Assemble the status line + headers for a STREAMED response (no body).
-
-    Unlike ``_format_response`` (which knows the full body and sets a
-    Content-Length), the proxy does not buffer the body — it relays chunks as
-    they arrive. We forward the upstream's filtered headers (which include the
-    upstream Content-Length / Content-Type for the tile), add permissive CORS
-    so the browser can fetch tiles cross-origin, and force ``Connection: close``
-    so the client knows the body ends at EOF even when the upstream omitted a
-    Content-Length.
-    """
-    reason = {
-        200: "OK",
-        204: "No Content",
-        206: "Partial Content",
-        301: "Moved Permanently",
-        302: "Found",
-        304: "Not Modified",
-        400: "Bad Request",
-        401: "Unauthorized",
-        403: "Forbidden",
-        404: "Not Found",
-        500: "Internal Server Error",
-        502: "Bad Gateway",
-        503: "Service Unavailable",
-    }.get(status, "OK")
-    out_headers: dict[str, str] = {}
-    # Upstream's relayable headers first (Content-Type/Length/Cache etc.).
-    out_headers.update(headers)
-    # CORS — WMS tiles are images, not credentialed data; permissive origin is
-    # the correct posture (matches the catalog endpoint above).
-    out_headers["Access-Control-Allow-Origin"] = "*"
-    out_headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-    out_headers["Access-Control-Allow-Headers"] = "Content-Type"
-    out_headers["Connection"] = "close"
-    head = (
-        _HTTP_VERSION
-        + b" "
-        + str(status).encode()
-        + b" "
-        + reason.encode()
-        + _CRLF
-    )
-    for k, v in out_headers.items():
-        head += f"{k}: {v}".encode() + _CRLF
-    return head + _CRLF
-
-
-async def _handle_qgis_proxy(
-    query_string: str,
-    writer: asyncio.StreamWriter,
-) -> None:
-    """Stream a QGIS Server WMS response to ``writer`` (job-0255).
-
-    Bridges the proxy module's ``stream_qgis_response`` to the raw asyncio
-    stream writer: writes the status line + filtered headers when the upstream
-    responds, then relays each body chunk as it arrives. Owns draining +
-    closing the writer in all paths (success, upstream-unreachable 502, error).
-    """
-    from .qgis_proxy import ProxyResult, stream_qgis_response
-
-    head_written = False
-
-    async def _write_head(result: "ProxyResult") -> None:
-        nonlocal head_written
-        writer.write(_format_streaming_head(result.status, result.headers))
-        await writer.drain()
-        head_written = True
-
-    async def _write_chunk(chunk: bytes) -> None:
-        writer.write(chunk)
-        await writer.drain()
-
-    try:
-        await stream_qgis_response(query_string, _write_head, _write_chunk)
-    except Exception:  # noqa: BLE001 — upstream unreachable / transport error
-        logger.warning("qgis-proxy: upstream relay failed", exc_info=True)
-        if not head_written:
-            # No bytes on the wire yet — we can still send an honest 502.
-            writer.write(_format_response(502, b'{"error":"qgis upstream unreachable"}'))
-    finally:
-        try:
-            await writer.drain()
-        except Exception:  # noqa: BLE001
-            pass
-        writer.close()
 
 
 async def serve_catalog_http(

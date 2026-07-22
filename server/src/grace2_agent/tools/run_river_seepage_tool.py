@@ -318,7 +318,7 @@ async def run_river_seepage_job(
                     ),
                 }
             run_outputs_uri = (
-                run_result.output_uri or f"gs://{_runs_prefix()}/{run_result.run_id}/"
+                run_result.output_uri or f"s3://{_runs_prefix()}/{run_result.run_id}/"
             )
 
         # --- Step 3a: postprocess the GWF cbc RIV budget -> seepage layer ---
@@ -400,4 +400,4 @@ def _runs_prefix() -> str:
     """Default runs bucket name for composing a fallback output prefix."""
     import os
 
-    return os.environ.get("GRACE2_RUNS_BUCKET", "grace-2-hazard-prod-runs")
+    return os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")

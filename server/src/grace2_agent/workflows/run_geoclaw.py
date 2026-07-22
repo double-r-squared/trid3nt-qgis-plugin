@@ -944,13 +944,11 @@ def reproject_dem_to_4326(dem_uri: str, *, run_id: str | None = None) -> str:
 
         # Re-stage the reprojected raster by the SAME scheme as the source.
         if dem_uri.startswith("s3://"):
-            from ..tools.cache import storage_scheme
+            from ..tools.cache import CACHE_BUCKET, storage_scheme
             from ..tools.solver import _get_s3_client
 
             scheme = storage_scheme()
-            cache_bucket = os.environ.get(
-                "GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache"
-            )
+            cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET") or CACHE_BUCKET
             rid = run_id or new_ulid()
             key = f"cache/static-30d/geoclaw_setup/{rid}/topo_4326.tif"
             new_uri = f"{scheme}://{cache_bucket}/{key}"
@@ -1048,7 +1046,7 @@ def stage_geoclaw_manifest(
             complete (the Batch lane cannot dispatch without a reachable
             manifest — fail loudly, never a silent dead-end).
     """
-    from ..tools.cache import storage_scheme
+    from ..tools.cache import CACHE_BUCKET, storage_scheme
     from ..tools.solver import _get_s3_client
 
     rid = run_id or new_ulid()
@@ -1086,7 +1084,7 @@ def stage_geoclaw_manifest(
     )
 
     scheme = storage_scheme()  # "s3" on AWS (GCP decommissioned)
-    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache")
+    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET") or CACHE_BUCKET
     prefix = f"cache/static-30d/geoclaw_setup/{rid}/"
     manifest_key = f"{prefix}manifest.json"
     manifest_uri = f"{scheme}://{cache_bucket}/{manifest_key}"

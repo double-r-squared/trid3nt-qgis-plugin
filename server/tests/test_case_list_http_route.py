@@ -7,13 +7,14 @@ route mirrors that envelope's data + user-scoping over plain HTTP so the
 dock can populate the dialog before a WS connection exists.
 
 Covered here:
-  - route ABSENT (404) outside the local single-user seam
-    (``GRACE2_SOLVER_BACKEND=local-docker``), matching the
-    ``/api/local-models`` cloud-posture precedent;
+  - route served UNCONDITIONALLY: the local build hardwires
+    ``solver_backend()`` to ``local-docker``, so the local single-user seam
+    is always on and ``GRACE2_SOLVER_BACKEND`` no longer gates the route
+    (unset or a stale cloud value both serve 200);
   - happy path: a fake Persistence with 2 cases -> 200 + newest-first
     ordering + the wire shape (case_id/title/updated_at/bbox);
   - Persistence unbound -> honest 503 {"error": "persistence unavailable"};
-  - the existing /api/health path stays unaffected.
+  - the existing /api/tool-catalog path stays unaffected.
 """
 
 from __future__ import annotations
@@ -98,20 +99,38 @@ class _FakePersistence:
 
 
 # ---------------------------------------------------------------------------
-# Route gating (cloud posture: 404 like any unknown path)
+# Route availability: unconditional in the local build. ``solver_backend()``
+# is hardwired to local-docker, so the old cloud-posture 404 branch behind
+# ``_case_list_route_enabled`` is unreachable -- the env var is dead here.
 # ---------------------------------------------------------------------------
 
 
-def test_route_absent_when_not_local_single_user_mode(monkeypatch):
+def test_route_served_when_backend_env_unset(monkeypatch):
     monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+    case = _case(new_ulid(), "Env-unset case", "2026-07-09T00:00:00Z")
+    fake = _FakePersistence([case])
+    monkeypatch.setattr(server, "get_persistence", lambda: fake)
+
     out = _dispatch()
-    assert _status(out) == 404
+    assert _status(out) == 200
+    payload = _body(out)
+    assert [c["case_id"] for c in payload["cases"]] == [case.case_id]
+    # Scoped to the fixed local single user without any env arming.
+    from grace2_agent.auth_handshake import LOCAL_SINGLE_USER_ID
+
+    assert fake.calls == [LOCAL_SINGLE_USER_ID]
 
 
-def test_route_absent_when_backend_aws_batch(monkeypatch):
+def test_route_served_even_when_env_claims_aws_batch(monkeypatch):
+    """A stale cloud value in the env changes nothing: still served."""
     monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "aws-batch")
+    case = _case(new_ulid(), "Stale-env case", "2026-07-09T00:00:00Z")
+    fake = _FakePersistence([case])
+    monkeypatch.setattr(server, "get_persistence", lambda: fake)
+
     out = _dispatch()
-    assert _status(out) == 404
+    assert _status(out) == 200
+    assert [c["case_id"] for c in _body(out)["cases"]] == [case.case_id]
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +193,6 @@ def test_case_list_persistence_unbound_503(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_case_list_route_does_not_perturb_health():
-    out = _dispatch("/api/health")
+def test_case_list_route_does_not_perturb_catalog():
+    out = _dispatch("/api/tool-catalog")
     assert _status(out) == 200
-    assert b'"ok":true' in out

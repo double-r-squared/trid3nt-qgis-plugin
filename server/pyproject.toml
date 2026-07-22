@@ -19,14 +19,15 @@ dependencies = [
     "boto3>=1.40,<2",
     # sprint-14-aws (job-0296): Cognito ID-token (JWKS/RS256) verification in
     # auth_handshake.cognito_verify. [crypto] pulls cryptography for RSAAlgorithm.
-    "PyJWT[crypto]>=2.8,<3",
     # GCP decommission: google-adk DROPPED (zero live callers — register_with_adk
     # was test-only and is now removed) and google-cloud-secret-manager DROPPED
     # (the vault is AWS SSM via secrets_handler; the GCP Secret Manager
     # default-client builder is gone). google-cloud-workflows / google-cloud-logging
     # also DROPPED: the cloud sandbox readback (Cloud Logging) and the gcp-workflows
-    # solver branch were removed; object I/O is AWS S3 via boto3. (google-cloud-storage
-    # is KEPT — it is part of the QGIS publish carve-out, see google-cloud-run below.)
+    # solver branch were removed; object I/O is AWS S3 via boto3. google-cloud-run +
+    # google-cloud-storage DROPPED with the GCP publish-path excision (the Cloud Run
+    # PyQGIS worker dispatch branch in publish_layer is gone; rasters publish via
+    # TiTiler off s3/MinIO).
     # google-genai is KEPT (carve-out): bedrock_adapter speaks the genai_types
     # Content/FunctionDeclaration contract that it converts to the Bedrock
     # Converse API — removing it breaks the live Bedrock path.
@@ -89,18 +90,6 @@ dependencies = [
     # only transitively (3.10.0) — undeclared deps are how the fsspec stale-
     # venv plume bug shipped (job-0235).
     "flopy>=3.9,<4",
-    # GCP decommission: KEPT (publish-path carve-out, until job-0308). publish_layer
-    # still lazy-imports ``google.cloud.run_v2.JobsClient`` to dispatch the legacy
-    # PyQGIS worker as a Cloud Run Job for the QGIS-Server WMS render path, which
-    # stays live until the AWS QGIS WMS cutover (job-0308). Drop then.
-    "google-cloud-run>=0.10",
-    # GCP decommission: KEPT (publish-path carve-out, until job-0308). publish_layer
-    # lazy-imports ``from google.cloud import storage`` to upload the project .qgs /
-    # read the GCS-hosted render artifacts for the SAME legacy QGIS-Server WMS path
-    # (the gs:// STORAGE SEAM in every other tool was collapsed to S3/boto3; only
-    # this carve-out keeps google-cloud-storage). Drop together with google-cloud-run
-    # when the AWS QGIS WMS cutover (job-0308) lands.
-    "google-cloud-storage>=2.18,<4",
     # Wave 4.10 job-A2: s3fs is the fsspec S3 backend for the NOAA Big Data
     # Program anonymous S3 mirrors consumed by fetch_hrrr_forecast (HRRR-Zarr
     # at s3://hrrrzarr/) and a planned fetch_hrrr_smoke. Wraps boto3 +

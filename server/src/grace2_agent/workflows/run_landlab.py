@@ -186,11 +186,11 @@ def stage_landlab_manifest(
             complete (the off-box lane cannot dispatch without a reachable
             manifest — fail loudly, never a silent dead-end).
     """
-    from ..tools.cache import storage_scheme
+    from ..tools.cache import CACHE_BUCKET, storage_scheme
     from ..tools.solver import _get_s3_client
 
     scheme = storage_scheme()  # "s3" on AWS (GCP decommissioned)
-    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache")
+    cache_bucket = os.environ.get("GRACE2_CACHE_BUCKET") or CACHE_BUCKET
     # Per-run prefix under the cache bucket's staged-deck source class (mirrors
     # the SWMM swmm_setup/ prefix). The run_id keys the staged objects.
     prefix = f"cache/static-30d/landlab_setup/{run_id}/"

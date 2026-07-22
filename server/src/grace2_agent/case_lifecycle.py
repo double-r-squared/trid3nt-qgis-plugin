@@ -37,9 +37,9 @@ Lazy-init contract:
 Bucket policy (TENTATIVE — see OQ-0121-QGS-CASE-BUCKET):
 
 The kickoff names ``gs://grace-2-qgis-projects/{case_id}.qgs`` but the
-actually-provisioned bucket in the live infra is ``grace-2-hazard-prod-qgs``
-(see ``infra/buckets.tf``). We use the live bucket name as the resolved
-default so end-to-end tests work against the existing infra; the env
+bucket provisioned by the (now-decommissioned) GCP infra no longer
+exists; the resolved default follows the local MinIO naming convention
+(``trid3nt-qgs``) and tests assert against the constant, not a literal; the env
 override ``GRACE2_CASE_QGS_BUCKET`` lets a future infra job split the
 buckets (one for the template, one for case-scoped copies) without code
 change. The TEMPLATE ``.qgs`` defaults to ``DEFAULT_PROJECT_QGS_URI`` from
@@ -82,13 +82,13 @@ logger = logging.getLogger("grace2_agent.case_lifecycle")
 # Constants & DI seams
 # --------------------------------------------------------------------------- #
 
-#: Default GCS bucket holding per-Case ``.qgs`` files. Kickoff named
-#: ``grace-2-qgis-projects`` but the live infra ships ``grace-2-hazard-prod-qgs``
-#: (``infra/buckets.tf``); we default to the live bucket so end-to-end
-#: rendering works against the actually-provisioned QGIS Server. A future
-#: infra job can split buckets via the env override below — see
-#: OQ-0121-QGS-CASE-BUCKET.
-DEFAULT_CASE_QGS_BUCKET: str = "grace-2-hazard-prod-qgs"
+#: Default bucket holding per-Case ``.qgs`` files. The GCP bucket this seam
+#: was built against no longer exists; locally the copy seam is DORMANT
+#: (nothing binds ``set_gcs_copy``, so ``ensure_case_qgs`` fail-fasts with
+#: ``GCS_COPY_UNBOUND`` before any copy happens). The default follows the
+#: local MinIO bucket naming convention; override via
+#: ``GRACE2_CASE_QGS_BUCKET``.
+DEFAULT_CASE_QGS_BUCKET: str = "trid3nt-qgs"
 
 
 # Pluggable GCS copy callable. Signature mirrors a minimal subset of

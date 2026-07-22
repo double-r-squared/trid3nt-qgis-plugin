@@ -66,7 +66,6 @@ The variables below are the complete shipped file, grouped by concern.
 |----------|---------------|--------------|
 | `GRACE2_AGENT_HOST` | `0.0.0.0` | Bind host for the WS (`:8765`) and HTTP (`:8766`) listeners. `0.0.0.0` makes the agent LAN-reachable; `start_agent.sh` defaults it if unset. Ports are overridable via `GRACE2_AGENT_PORT` (default 8765) and `GRACE2_AGENT_HTTP_PORT` (default 8766) -- not set in the shipped file. |
 | `GRACE2_DEV_PERSISTENCE_DIR` | `<repo>/data/persistence` | Directory for the FilePersistence JSON store (all collections: cases, layers, users, telemetry shadow...). Keeping it inside the repo keeps state out of `~/.grace2`. |
-| `AUTH_REQUIRED` | `false` | Disables the Cognito JWT gate; the server mints anonymous ULID users per connection. `start_agent.sh` also unsets the Cognito pool/client vars defensively. |
 
 ## Tool retrieval (small-model routing)
 

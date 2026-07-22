@@ -193,7 +193,7 @@ def build_multi_species_staging(
 
 def _runs_prefix() -> str:
     """Default runs bucket name for composing a fallback output prefix."""
-    return os.environ.get("GRACE2_RUNS_BUCKET", "grace-2-hazard-prod-runs")
+    return os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
 
 
 async def run_modflow_multi_species_job(
@@ -286,7 +286,7 @@ async def run_modflow_multi_species_job(
                     ),
                 }
             run_outputs_uri = (
-                run_result.output_uri or f"gs://{_runs_prefix()}/{run_result.run_id}/"
+                run_result.output_uri or f"s3://{_runs_prefix()}/{run_result.run_id}/"
             )
 
         # --- Step 3: postprocess N per-species UCN -> N PlumeLayerURI --------

@@ -44,8 +44,6 @@ set +a
 export GRACE2_AGENT_HOST="${GRACE2_AGENT_HOST:-0.0.0.0}"
 
 # Ensure no AWS Cognito pool is set (local = anonymous auth)
-unset GRACE2_COGNITO_USER_POOL_ID 2>/dev/null || true
-unset GRACE2_COGNITO_APP_CLIENT_ID 2>/dev/null || true
 
 # NATE 2026-07-12: no follow-up offers in replies - the user asks for what
 # they want next. Appended to the local model's system prompt (openai path).

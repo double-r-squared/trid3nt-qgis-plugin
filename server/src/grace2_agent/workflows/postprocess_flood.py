@@ -63,8 +63,8 @@ __all__ = [
 logger = logging.getLogger("grace2_agent.workflows.postprocess_flood")
 
 
-#: Default runs bucket — matches the job-0040 substrate (``grace-2-hazard-prod-runs``).
-RUNS_BUCKET_DEFAULT: str = "grace-2-hazard-prod-runs"
+#: Default runs bucket -- the local MinIO runs bucket (env override: GRACE2_RUNS_BUCKET).
+RUNS_BUCKET_DEFAULT: str = "trid3nt-runs"
 
 #: QML style preset name the workflow attaches to the postprocessed flood-depth COG.
 #: The styles/ package is FROZEN under this job; engine styles follow-up

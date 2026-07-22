@@ -6,7 +6,9 @@ LOGIC (geopandas/rasterio round trips, Persistence merge, AOI pin) is covered
 by ``test_import_user_layer.py``. Mirrors
 ``test_export_qgis_http_route.py`` / ``test_case_list_http_route.py``:
 
-  - both routes ABSENT (404) outside the local single-user seam;
+  - both routes served UNCONDITIONALLY (the local build hardwires
+    ``solver_backend()`` to local-docker, so ``GRACE2_SOLVER_BACKEND`` no
+    longer gates them);
   - POST /api/ingest-layer happy path (monkeypatched core fn) -> 200;
   - POST /api/ingest-layer missing/invalid fields -> typed 400 (core never
     invoked);
@@ -16,7 +18,7 @@ by ``test_import_user_layer.py``. Mirrors
   - POST /api/ingest-layer-file missing filename -> 400;
   - POST /api/ingest-layer-file oversized Content-Length -> 413 WITHOUT
     reading the body;
-  - the existing /api/health path stays unaffected.
+  - the existing /api/tool-catalog path stays unaffected.
 """
 
 from __future__ import annotations
@@ -123,20 +125,49 @@ def _local_mode(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Route gating
+# Route availability: unconditional in the local build. ``solver_backend()``
+# is hardwired to local-docker, so the old outside-local-mode 404 branch
+# behind ``_ingest_layer_route_enabled`` is unreachable -- the env var no
+# longer gates these routes.
 # ---------------------------------------------------------------------------
 
 
-def test_ingest_layer_route_absent_outside_local_mode(monkeypatch):
-    monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
-    out = _drive(_post("/api/ingest-layer", b"{}"))
-    assert _status(out) == 404
+def test_ingest_layer_route_served_regardless_of_backend_env(monkeypatch):
+    """Served with the env unset AND with a stale cloud value set.
+
+    ``b"{}"`` reaching the handler's field validation (typed 400 naming
+    ``case_id``) proves dispatch serves the route -- an absent route would
+    have 404ed before any body parsing.
+    """
+    for arm in ("unset", "aws-batch"):
+        if arm == "unset":
+            monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+        else:
+            monkeypatch.setenv("GRACE2_SOLVER_BACKEND", arm)
+        out = _drive(_post("/api/ingest-layer", b"{}"))
+        assert _status(out) == 400
+        assert "case_id" in _body_json(out)["error"]
 
 
-def test_ingest_layer_file_route_absent_outside_local_mode(monkeypatch):
-    monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
-    out = _drive(_post("/api/ingest-layer-file?filename=x.tif", b"data"))
-    assert _status(out) == 404
+def test_ingest_layer_file_route_served_regardless_of_backend_env(monkeypatch):
+    """The upload route is served (200 + {"s3_uri": ...}) without env arming."""
+
+    def _fake_upload(filename: str, data: bytes) -> str:
+        return f"s3://cache/user-uploads/01ULID/{filename}"
+
+    monkeypatch.setattr(
+        tool_catalog_http, "_upload_layer_file_fn", lambda: _fake_upload
+    )
+    for arm in ("unset", "aws-batch"):
+        if arm == "unset":
+            monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
+        else:
+            monkeypatch.setenv("GRACE2_SOLVER_BACKEND", arm)
+        out = _drive(_post("/api/ingest-layer-file?filename=x.tif", b"data"))
+        assert _status(out) == 200
+        assert _body_json(out) == {
+            "s3_uri": "s3://cache/user-uploads/01ULID/x.tif"
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -345,7 +376,6 @@ def test_ingest_layer_file_oversized_413_before_read(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_ingest_layer_routes_do_not_perturb_health():
-    out = _drive(_get("/api/health"))
+def test_ingest_layer_routes_do_not_perturb_catalog():
+    out = _drive(_get("/api/tool-catalog"))
     assert _status(out) == 200
-    assert b'"ok":true' in out
