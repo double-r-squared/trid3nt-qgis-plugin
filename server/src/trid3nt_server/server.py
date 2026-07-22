@@ -3094,8 +3094,8 @@ async def _stream_gemini_reply(
                     _retrieval_registry = _gated
                 else:
                     logger.info(
-                        "tool-gating: UNGATED (%d tools; topk=%d ranked=%d) "
-                        "turn=%s -- fail-open",
+                        "tool-gating: no-op (%d tools already visible via the "
+                        "retrieval-enforce layer; topk=%d ranked=%d) turn=%s",
                         len(_retrieval_registry),
                         _gate_k,
                         len(_gate_ranked),
