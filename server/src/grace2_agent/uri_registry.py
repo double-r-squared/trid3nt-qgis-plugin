@@ -264,7 +264,13 @@ def _looks_like_wms(value: str) -> bool:
 def _is_tile_template(value: str) -> bool:
     """A TiTiler / XYZ tile-template URL — a DISPLAY face, not a data URI.
 
-    The AWS backend publishes rasters as TiTiler tile templates
+    LEGACY GUARD (TiTiler exit, 2026-07): ``publish_layer`` now emits the raw
+    ``s3://`` COG URI and no longer mints tile templates, but OLD persisted
+    cases (and the register-only manifest path) still carry template URIs
+    that rehydrate through here — this guard MUST stay so those legacy
+    display faces keep routing/unwrapping correctly.
+
+    The AWS backend published rasters as TiTiler tile templates
     (``https://<cf>/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2F…``)
     rather than QGIS-Server WMS URLs. Like a WMS URL, the template is the
     renderable face — it carries ``{z}/{x}/{y}`` placeholders and cannot be

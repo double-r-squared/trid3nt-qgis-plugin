@@ -732,26 +732,29 @@ def test_dispatch_publish_layer_still_skips_file_uri(reset_seams) -> None:
     fake_publish.assert_not_called()
 
 
-def test_publish_layer_titiler_template_for_plume_preset(
+def test_publish_layer_raw_s3_for_plume_preset(
     reset_seams, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Under the AWS surface (storage=s3 + GRACE2_TILE_SERVER_BASE) the plume
-    preset maps to TiTiler render params (red ramp over the demo band)."""
-    from grace2_agent.tools.publish_layer import publish_layer
+    """TiTiler exit: the plume publish returns the raw s3:// COG uri and the
+    red-ramp render params (0-10 reds) ride the stashed LEGEND keyed by that
+    uri (the plugin renders from it)."""
+    from grace2_agent.tools import publish_layer as pl_mod
+    from grace2_agent.tools.publish_layer import pop_legend_for_uri, publish_layer
 
     monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://tiles.example")
-    template = publish_layer(
+    # No network: the fake key never resolves; the registry preset still pins
+    # the style (byte-identical resolver behavior).
+    monkeypatch.setattr(pl_mod, "_read_raster_bytes", lambda uri: None)
+    out = publish_layer(
         layer_uri="s3://test-runs-bucket/RUNX/plume_concentration_4326.tif",
         layer_id="plume-concentration-RUNX",
         style_preset="continuous_plume_concentration",
     )
-    assert template.startswith(
-        "https://tiles.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url="
-    )
-    assert "rescale=0,10" in template
-    assert "colormap_name=reds" in template
-    assert "s3%3A%2F%2Ftest-runs-bucket" in template
+    assert out == "s3://test-runs-bucket/RUNX/plume_concentration_4326.tif"
+    assert "/cog/tiles/" not in out
+    legend = pop_legend_for_uri(out)
+    assert legend is not None and legend.kind == "continuous"
+    assert (legend.colormap, legend.vmin, legend.vmax) == ("reds", 0.0, 10.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -773,15 +776,15 @@ async def test_run_modflow_job_local_backend_e2e(
     fake S3, manifest staged back down, fake mf6 emitting a REAL
     flopy-readable UCN, supervisor completion to S3, the shared
     wait_for_completion poll, real flopy concentration read + rasterio
-    UTM→EPSG:4326 COG reprojection, boto3 COG upload, and the TiTiler
-    template publish — yielding a typed PlumeLayerURI with non-zero metrics.
+    UTM→EPSG:4326 COG reprojection, boto3 COG upload, and the raw-s3 COG
+    publish (TiTiler exit) — yielding a typed PlumeLayerURI with non-zero
+    metrics.
     """
     from grace2_agent.tools.run_modflow_tool import run_modflow_job
     from grace2_contracts.modflow_contracts import PlumeLayerURI
 
     monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
     monkeypatch.setenv("GRACE2_CACHE_BUCKET", "deck-bucket")
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://tiles.example")
     s3 = FakeS3Client()
     set_s3_client(s3)
 
@@ -839,10 +842,14 @@ async def test_run_modflow_job_local_backend_e2e(
         f"{run_id}/plume_concentration_4326.tif",
     ) in s3.objects
 
-    # Published as a TiTiler XYZ template (the AWS rendering path) — the
-    # layer reaches the map, closing the job-0254 PlumeLayerURI gap on AWS.
-    assert result.uri.startswith(
-        "https://tiles.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url="
-    )
-    assert "rescale=0,10" in result.uri
-    assert "colormap_name=reds" in result.uri
+    # Published as the raw s3:// COG (TiTiler exit) — the layer envelope
+    # carries the COG uri the QGIS plugin opens directly via GDAL, and the
+    # red-ramp render params ride the stashed legend keyed by that uri.
+    from grace2_agent.tools.publish_layer import pop_legend_for_uri
+
+    assert result.uri.startswith("s3://test-runs-bucket/")
+    assert result.uri.endswith(".tif")
+    assert "/cog/tiles/" not in result.uri
+    legend = pop_legend_for_uri(result.uri)
+    assert legend is not None and legend.kind == "continuous"
+    assert (legend.colormap, legend.vmin, legend.vmax) == ("reds", 0.0, 10.0)

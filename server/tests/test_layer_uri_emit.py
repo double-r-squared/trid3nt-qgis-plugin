@@ -1,11 +1,16 @@
 """Unit tests for the single LayerURI emission seam (job-0254, Decision 11).
 
 Coverage:
-  * Guardrail pass/block matrix — the §1 leak fix promoted to an invariant:
-      - raster + raw gs://  → DROP (return None)   [the publish-failure leak]
-      - raster + http(s) WMS → PASS (identity)
-      - vector + gs:// (inline-GeoJSON path, job-0175) → PASS (identity)
-      - vector + http(s)    → PASS (identity)
+  * Guardrail pass/block matrix -- the §1 leak fix promoted to an invariant,
+    RELAXED for s3:// rasters by the TiTiler exit / QGIS-native swap (the
+    plugin reads raw s3:// COGs via /vsicurl/):
+      - raster + raw s3:// COG -> PASS (identity)  [the NEW publish shape]
+      - raster + http(s) WMS   -> PASS (identity)
+      - raster + raw gs://     -> DROP (return None) [no reachable face]
+      - raster + file://       -> DROP (return None) [plugin cannot reach]
+      - raster + empty uri     -> DROP (return None) [nothing to fetch]
+      - vector + gs:// / s3:// (inline-GeoJSON path, job-0175) -> PASS (identity)
+      - vector + http(s)       -> PASS (identity)
   * ``SIGNED_URLS`` dormant scaffold — default false; ``true`` logs a WARNING
     referencing Decision 11 and is otherwise byte-identical (no behavior change).
   * Byte-identity: a passed-through LayerURI is the SAME object (no copy / no
@@ -42,13 +47,35 @@ def _layer(layer_type: str, uri: str, layer_id: str = "L1") -> LayerURI:
 # --------------------------------------------------------------------------- #
 
 
+def test_raster_s3_cog_uri_passes_identity() -> None:
+    """THE NEW CONTRACT (TiTiler exit / QGIS-native swap): a raster carrying a
+    raw s3:// COG uri PASSES the seam unchanged -- publish_layer now returns the
+    raw s3:// COG and the QGIS plugin reads it via /vsicurl/. This reverses the
+    job-0290c browser-era s3 drop."""
+    layer = _layer("raster", "s3://bucket/runs/r1/flood_depth_peak.tif")
+    out = emit_layer_uri(layer)
+    assert out is layer  # identity -- no copy, no mutation
+    assert out.uri == "s3://bucket/runs/r1/flood_depth_peak.tif"
+
+
 def test_raster_gs_uri_is_dropped() -> None:
     """A renderable raster carrying a raw gs:// uri is dropped (return None).
 
-    This is exactly the publish-failure degraded path — MapLibre cannot fetch
-    gs://, so emitting it only paints a broken layer row."""
+    This is exactly the publish-failure degraded path -- no face on this stack
+    can fetch gs://, so emitting it only paints a broken layer row."""
     layer = _layer("raster", "gs://bucket/flood_depth_peak.tif")
     assert emit_layer_uri(layer) is None
+
+
+def test_raster_file_scheme_uri_is_dropped() -> None:
+    """A raster carrying a file:// uri is dropped -- a local path the plugin
+    cannot be assumed to reach is not a deliverable layer face."""
+    assert emit_layer_uri(_layer("raster", "file:///tmp/frame.tif")) is None
+
+
+def test_raster_empty_uri_is_dropped() -> None:
+    """A raster with an EMPTY uri is dropped -- nothing to fetch, never a row."""
+    assert emit_layer_uri(_layer("raster", "")) is None
 
 
 def test_raster_wms_http_url_passes_identity() -> None:
@@ -71,6 +98,13 @@ def test_vector_gs_uri_passes_untouched_job0175() -> None:
     out = emit_layer_uri(layer)
     assert out is layer
     assert out.uri == "gs://bucket/alerts.fgb"
+
+
+def test_vector_s3_uri_passes_untouched() -> None:
+    """A vector LayerURI carrying s3:// is the same inline-GeoJSON path -- the
+    emitter reads the uri server-side; the seam passes it untouched."""
+    layer = _layer("vector", "s3://bucket/runs/r1/alerts.fgb")
+    assert emit_layer_uri(layer) is layer
 
 
 def test_vector_https_uri_passes_identity() -> None:

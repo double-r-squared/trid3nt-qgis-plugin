@@ -51,19 +51,6 @@ export GRACE2_AGENT_HOST="${GRACE2_AGENT_HOST:-0.0.0.0}"
 # class: 0-event fetch -> fabricated publish_layer handle in the same turn).
 export GRACE2_OPENAI_EXTRA_SYSTEM="${GRACE2_OPENAI_EXTRA_SYSTEM:-Never end a reply with an offer, suggestion, or recommendation for a next step (no 'Would you like...', no 'I can also...'). State what was done or found, then stop. The user decides what happens next. Fetch and composer tools publish their own layers - only call publish_layer when you have a handle returned by a previous tool result, passed verbatim. If a fetch returns no data, say so and stop.}"
 
-# 2026-07-18: TiTiler owns nothing in the stack startup, so when it dies the
-# agent+MinIO come up fine and every raster layer silently renders blank
-# ("map says it's there but it's not"). Health-gate it here: probe, and if
-# down, start it via its own script. Non-fatal -- vector-only work is still
-# valid with TiTiler down, so warn instead of exiting.
-TILE_BASE="${GRACE2_TILE_SERVER_BASE:-http://127.0.0.1:8080}"
-if ! curl -sf -m 3 "$TILE_BASE/healthz" >/dev/null 2>&1; then
-  echo "[start_agent] TiTiler not responding at $TILE_BASE -- starting it..."
-  if ! bash "$REPO_ROOT/scripts/start_titiler.sh"; then
-    echo "[start_agent] WARNING: TiTiler failed to start; raster layers will not render" >&2
-  fi
-fi
-
 echo "[start_agent] starting agent (WS :8765, HTTP :8766)..."
 echo "[start_agent] MODEL_PROVIDER=$MODEL_PROVIDER GRACE2_OPENAI_MODEL=$GRACE2_OPENAI_MODEL"
 echo "[start_agent] logs -> $LOG_FILE"

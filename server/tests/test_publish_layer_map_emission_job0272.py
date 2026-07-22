@@ -8,8 +8,14 @@ envelope when a tool RETURNS a typed ``LayerURI``, and the atomic
 ``publish_layer`` returns a bare WMS URL string. Composer layers (floods,
 plumes) always rendered because composers return LayerURIs.
 
-The fix wraps the WMS string in a LayerURI at the ``_invoke_tool_via_emitter``
+The fix wraps the published uri in a LayerURI at the ``_invoke_tool_via_emitter``
 publish_layer tracking site, so the existing emission machinery announces it.
+
+TiTiler exit / QGIS-native swap (2026-07): ``publish_layer``'s raster SUCCESS
+shape is now the raw ``s3://`` COG uri (the plugin reads it via /vsicurl/), so
+the wrap-site must announce s3 returns exactly as it announced http(s) ones.
+The stub below returns the s3 shape, pinning the NEW contract positively; one
+test keeps the http(s) face (vector WMS / durable GeoJSON) covered.
 """
 
 from __future__ import annotations
@@ -33,20 +39,16 @@ class FakeWS:
         self.sent.append(text)
 
 
-WMS = (
-    "https://qgis.example.run.app/ogc/wms"
-    "?MAP=/mnt/qgs/grace2-sample.qgs&LAYERS=colored-relief-boulder"
-)
+S3_COG = "s3://bucket/cache/colored_relief_boulder.tif"
 
 
-@pytest.fixture(autouse=True)
-def _fake_publish_layer_tool():
-    """Shadow the real publish_layer with a stub returning a WMS string."""
+def _install_publish_stub(return_value: str):
+    """Shadow the real publish_layer with a stub returning ``return_value``."""
     name = "publish_layer"
     original = agent_tools.TOOL_REGISTRY.get(name)
 
     def _fn(layer_uri: str, layer_id: str, **_kw) -> str:
-        return WMS
+        return return_value
 
     meta = AtomicToolMetadata(
         name=name, ttl_class="live-no-cache", cacheable=False
@@ -54,17 +56,28 @@ def _fake_publish_layer_tool():
     agent_tools.TOOL_REGISTRY[name] = RegisteredTool(
         metadata=meta, fn=_fn, module=__name__
     )
+    return original
+
+
+def _restore_publish_stub(original) -> None:
+    if original is not None:
+        agent_tools.TOOL_REGISTRY["publish_layer"] = original
+    else:
+        agent_tools.TOOL_REGISTRY.pop("publish_layer", None)
+
+
+@pytest.fixture(autouse=True)
+def _fake_publish_layer_tool():
+    """Default stub: the raw s3:// COG return (the raster publish shape)."""
+    original = _install_publish_stub(S3_COG)
     try:
         yield
     finally:
-        if original is not None:
-            agent_tools.TOOL_REGISTRY[name] = original
-        else:
-            agent_tools.TOOL_REGISTRY.pop(name, None)
+        _restore_publish_stub(original)
 
 
 @pytest.mark.asyncio
-async def test_atomic_publish_announces_layer_via_session_state() -> None:
+async def test_atomic_publish_announces_s3_layer_via_session_state() -> None:
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
 
@@ -72,9 +85,9 @@ async def test_atomic_publish_announces_layer_via_session_state() -> None:
         ws,
         state,
         "publish_layer",
-        {"layer_uri": "gs://bucket/cache/x.tif", "layer_id": "colored-relief-boulder"},
+        {"layer_uri": S3_COG, "layer_id": "colored-relief-boulder"},
     )
-    assert result == WMS
+    assert result == S3_COG
 
     # The emitter accumulated the layer...
     loaded = state.emitter.loaded_layers
@@ -82,7 +95,8 @@ async def test_atomic_publish_announces_layer_via_session_state() -> None:
         f"publish_layer did not reach the emitter's loaded layers: {loaded}"
     )
     matching = next(l for l in loaded if l.layer_id == "colored-relief-boulder")
-    assert matching.uri == WMS  # the RENDERABLE WMS URL, not the gs:// input
+    # The raw s3:// COG IS the renderable envelope uri (plugin /vsicurl/).
+    assert matching.uri == S3_COG
 
     # ...and a session-state envelope carrying it went over the wire.
     session_states = [
@@ -102,6 +116,35 @@ async def test_atomic_publish_announces_layer_via_session_state() -> None:
 
 
 @pytest.mark.asyncio
+async def test_atomic_publish_http_face_still_announces() -> None:
+    """The http(s) publish face (vector WMS / durable GeoJSON) still emits --
+    widening the wrap-site gate to s3:// must not regress http returns."""
+    wms = (
+        "https://qgis.example.run.app/ogc/wms"
+        "?MAP=/mnt/qgs/grace2-sample.qgs&LAYERS=colored-relief-boulder"
+    )
+    original = _install_publish_stub(wms)
+    try:
+        ws = FakeWS()
+        state = server.SessionState(session_id=new_ulid())
+        result = await server._invoke_tool_via_emitter(
+            ws,
+            state,
+            "publish_layer",
+            {"layer_uri": S3_COG, "layer_id": "colored-relief-boulder"},
+        )
+        assert result == wms
+        matching = next(
+            l
+            for l in state.emitter.loaded_layers
+            if l.layer_id == "colored-relief-boulder"
+        )
+        assert matching.uri == wms
+    finally:
+        _restore_publish_stub(original)
+
+
+@pytest.mark.asyncio
 async def test_turn_layer_accumulator_still_tracks_layer_id() -> None:
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
@@ -109,7 +152,7 @@ async def test_turn_layer_accumulator_still_tracks_layer_id() -> None:
         ws,
         state,
         "publish_layer",
-        {"layer_uri": "gs://bucket/cache/x.tif", "layer_id": "relief-2"},
+        {"layer_uri": "s3://bucket/cache/x.tif", "layer_id": "relief-2"},
     )
     assert "relief-2" in state.current_turn_layer_ids
 
@@ -136,7 +179,7 @@ async def test_bare_ulid_layer_id_gets_a_readable_name_from_style_preset() -> No
         state,
         "publish_layer",
         {
-            "layer_uri": "gs://bucket/cache/hillshade/x.tif",
+            "layer_uri": "s3://bucket/cache/hillshade/x.tif",
             "layer_id": bare_ulid,
             "style_preset": "standard_hillshade",
         },
@@ -159,7 +202,7 @@ async def test_explicit_name_param_passes_through_untouched() -> None:
         state,
         "publish_layer",
         {
-            "layer_uri": "gs://bucket/cache/x.tif",
+            "layer_uri": "s3://bucket/cache/x.tif",
             "layer_id": "colored-relief-boulder",
             "name": "Boulder Colored Relief (2026 flyover)",
         },

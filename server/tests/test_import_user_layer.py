@@ -211,7 +211,9 @@ async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
 
     def _fake_publish_layer(*, layer_uri, layer_id, name=None, **_kw):
         calls.append({"layer_uri": layer_uri, "layer_id": layer_id, "name": name})
-        return f"https://tiles.example/cog/tiles/{{z}}/{{x}}/{{y}}.png?url={layer_uri}"
+        # TiTiler exit: publish_layer returns the raw s3:// COG uri verbatim
+        # (the plugin reads it via /vsicurl/) - no tile template.
+        return layer_uri
 
     monkeypatch.setattr(publish_layer_mod, "publish_layer", _fake_publish_layer)
 
@@ -235,7 +237,9 @@ async def test_ingest_raster_happy_path(monkeypatch, fake_persistence):
     summary = updated.loaded_layer_summaries[0]
     assert summary["layer_type"] == "raster"
     assert summary["role"] == "input"
-    assert summary["uri"].startswith("https://tiles.example/")
+    # NEW CONTRACT (TiTiler exit): the persisted uri is the raw s3:// COG the
+    # publish returned (plugin /vsicurl/), not an http tile template.
+    assert summary["uri"] == "s3://cache/user-uploads/x/dem.tif"
     assert list(updated.bbox) == pytest.approx([-122.5, 45.5, -122.4, 45.6])
 
 
@@ -252,7 +256,8 @@ async def test_ingest_raster_reprojects_non_4326_crs(monkeypatch, fake_persisten
     monkeypatch.setattr(
         publish_layer_mod,
         "publish_layer",
-        lambda *, layer_uri, layer_id, name=None, **_kw: "https://tiles.example/x",
+        # TiTiler exit: the raster publish echoes the raw s3:// COG uri.
+        lambda *, layer_uri, layer_id, name=None, **_kw: layer_uri,
     )
 
     result = await iul.ingest_user_layer(

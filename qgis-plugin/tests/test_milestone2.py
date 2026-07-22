@@ -680,17 +680,37 @@ class TestMaterializeExportStyles(unittest.TestCase):
         # exist so ``layers.py``'s module-level import succeeds (MDAL phase 1).
         core.QgsMeshDatasetIndex = type("QgsMeshDatasetIndex", (), {})
         core.QgsMeshLayer = type("QgsMeshLayer", (), {})
+        # QGIS-native raster rendering names (TiTiler->QGIS swap) -- not
+        # exercised by these tests; existence only so the module import
+        # succeeds. tests/test_raster_render.py exercises them for real.
+        core.QgsColorRampShader = type("QgsColorRampShader", (), {})
+        core.QgsPalettedRasterRenderer = type("QgsPalettedRasterRenderer", (), {})
+        core.QgsRasterShader = type("QgsRasterShader", (), {})
+        core.QgsSingleBandPseudoColorRenderer = type(
+            "QgsSingleBandPseudoColorRenderer", (), {}
+        )
+        core.QgsStyle = type("QgsStyle", (), {})
+        qtgui = types.ModuleType("qgis.PyQt.QtGui")
+        qtgui.QColor = type("QColor", (), {})
+        pyqt.QtGui = qtgui
         qgis_mod = types.ModuleType("qgis")
         qgis_mod.PyQt = pyqt
         qgis_mod.core = core
 
-        stub_keys = ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore", "qgis.core")
+        stub_keys = (
+            "qgis",
+            "qgis.PyQt",
+            "qgis.PyQt.QtCore",
+            "qgis.PyQt.QtGui",
+            "qgis.core",
+        )
         saved = {k: sys.modules.get(k) for k in stub_keys}
         sys.modules.update(
             {
                 "qgis": qgis_mod,
                 "qgis.PyQt": pyqt,
                 "qgis.PyQt.QtCore": qtcore,
+                "qgis.PyQt.QtGui": qtgui,
                 "qgis.core": core,
             }
         )
@@ -979,17 +999,37 @@ class TestMaterializeExportMesh(unittest.TestCase):
         core.QgsRectangle = type("QgsRectangle", (), {})
         core.QgsMeshDatasetIndex = _FakeMeshDatasetIndex
         core.QgsMeshLayer = _FakeMeshLayer
+        # QGIS-native raster rendering names (TiTiler->QGIS swap) -- not
+        # exercised by these tests; existence only so the module import
+        # succeeds. tests/test_raster_render.py exercises them for real.
+        core.QgsColorRampShader = type("QgsColorRampShader", (), {})
+        core.QgsPalettedRasterRenderer = type("QgsPalettedRasterRenderer", (), {})
+        core.QgsRasterShader = type("QgsRasterShader", (), {})
+        core.QgsSingleBandPseudoColorRenderer = type(
+            "QgsSingleBandPseudoColorRenderer", (), {}
+        )
+        core.QgsStyle = type("QgsStyle", (), {})
+        qtgui = types.ModuleType("qgis.PyQt.QtGui")
+        qtgui.QColor = type("QColor", (), {})
+        pyqt.QtGui = qtgui
         qgis_mod = types.ModuleType("qgis")
         qgis_mod.PyQt = pyqt
         qgis_mod.core = core
 
-        stub_keys = ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore", "qgis.core")
+        stub_keys = (
+            "qgis",
+            "qgis.PyQt",
+            "qgis.PyQt.QtCore",
+            "qgis.PyQt.QtGui",
+            "qgis.core",
+        )
         saved = {k: sys.modules.get(k) for k in stub_keys}
         sys.modules.update(
             {
                 "qgis": qgis_mod,
                 "qgis.PyQt": pyqt,
                 "qgis.PyQt.QtCore": qtcore,
+                "qgis.PyQt.QtGui": qtgui,
                 "qgis.core": core,
             }
         )
@@ -1310,17 +1350,37 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
         # exist so ``layers.py``'s module-level import succeeds (MDAL phase 1).
         core.QgsMeshDatasetIndex = type("QgsMeshDatasetIndex", (), {})
         core.QgsMeshLayer = type("QgsMeshLayer", (), {})
+        # QGIS-native raster rendering names (TiTiler->QGIS swap) -- not
+        # exercised by these tests; existence only so the module import
+        # succeeds. tests/test_raster_render.py exercises them for real.
+        core.QgsColorRampShader = type("QgsColorRampShader", (), {})
+        core.QgsPalettedRasterRenderer = type("QgsPalettedRasterRenderer", (), {})
+        core.QgsRasterShader = type("QgsRasterShader", (), {})
+        core.QgsSingleBandPseudoColorRenderer = type(
+            "QgsSingleBandPseudoColorRenderer", (), {}
+        )
+        core.QgsStyle = type("QgsStyle", (), {})
+        qtgui = types.ModuleType("qgis.PyQt.QtGui")
+        qtgui.QColor = type("QColor", (), {})
+        pyqt.QtGui = qtgui
         qgis_mod = types.ModuleType("qgis")
         qgis_mod.PyQt = pyqt
         qgis_mod.core = core
 
-        stub_keys = ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore", "qgis.core")
+        stub_keys = (
+            "qgis",
+            "qgis.PyQt",
+            "qgis.PyQt.QtCore",
+            "qgis.PyQt.QtGui",
+            "qgis.core",
+        )
         saved = {k: sys.modules.get(k) for k in stub_keys}
         sys.modules.update(
             {
                 "qgis": qgis_mod,
                 "qgis.PyQt": pyqt,
                 "qgis.PyQt.QtCore": qtcore,
+                "qgis.PyQt.QtGui": qtgui,
                 "qgis.core": core,
             }
         )

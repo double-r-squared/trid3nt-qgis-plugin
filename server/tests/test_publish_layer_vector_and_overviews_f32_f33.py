@@ -128,8 +128,8 @@ def test_benign_vector_noop_is_non_error_string() -> None:
 
 @pytest.fixture()
 def _s3_titiler(monkeypatch: pytest.MonkeyPatch) -> None:
+    # TiTiler exit: GRACE2_TILE_SERVER_BASE is dead; only the s3 branch matters.
     monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://cf.example.net")
 
 
 def test_publish_layer_vector_s3_returns_benign_no_template_no_register(
@@ -439,7 +439,7 @@ def test_ensure_overviews_fail_open_on_missing_path() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# F33 — s3 branch end-to-end (auto-translate then tile template)
+# F33 — s3 branch end-to-end (auto-translate then raw-s3 envelope; TiTiler exit)
 # --------------------------------------------------------------------------- #
 
 
@@ -447,7 +447,7 @@ def test_publish_layer_s3_auto_translates_no_overview_cog(
     _s3_titiler: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """s3 raster lacking overviews: publish_layer reads it, auto-translates to a
-    NEW overview COG, and bakes the NEW s3 URI into the tile template."""
+    NEW overview COG, and returns the NEW raw s3 URI as the envelope uri."""
     flat_bytes = _flat_geotiff_bytes()
     written: dict[str, bytes] = {}
 
@@ -456,7 +456,7 @@ def test_publish_layer_s3_auto_translates_no_overview_cog(
         # re-reads the (post-translate) overview URI to probe the band/palette.
         # Accept both: serve the flat bytes for the source, None for the new
         # overview URI (resolver degrades to a safe default — this test asserts
-        # the URL routing, not the style suffix).
+        # the URI routing, not the resolved style).
         if uri == "s3://bucket/runs/flat.tif":
             return flat_bytes
         return None
@@ -475,15 +475,13 @@ def test_publish_layer_s3_auto_translates_no_overview_cog(
         "grace2_agent.tools.publish_layer._write_overview_cog", _fake_write
     )
 
-    template = publish_layer(
+    out = publish_layer(
         layer_uri="s3://bucket/runs/flat.tif", layer_id="flood-demo"
     )
 
-    # The template must reference the AUTO-TRANSLATED (overview) COG, NOT the
-    # original no-overview source.
-    assert "overviews%2FNEWULID.tif" in template or "overviews/NEWULID.tif" in template
-    assert "runs%2Fflat.tif" not in template
-    assert template.startswith("https://cf.example.net/cog/tiles/")
+    # The envelope uri must be the AUTO-TRANSLATED (overview) COG, NOT the
+    # original no-overview source, and NOT a tile template.
+    assert out == "s3://bucket/runs/overviews/NEWULID.tif"
     assert written, "an overview COG should have been written"
 
 
@@ -505,13 +503,11 @@ def test_publish_layer_s3_overview_cog_published_unchanged(
         "grace2_agent.tools.publish_layer._write_overview_cog", _must_not_write
     )
 
-    from urllib.parse import quote
-
-    template = publish_layer(
+    out = publish_layer(
         layer_uri="s3://bucket/runs/good.tif", layer_id="flood-demo"
     )
-    # Original s3 URI is what rides in ?url=.
-    assert f"?url={quote('s3://bucket/runs/good.tif', safe='')}" in template
+    # Original s3 URI is returned verbatim as the envelope uri.
+    assert out == "s3://bucket/runs/good.tif"
 
 
 # --------------------------------------------------------------------------- #

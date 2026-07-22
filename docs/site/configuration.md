@@ -23,7 +23,7 @@ The variables below are the complete shipped file, grouped by concern.
 
 | Variable | Shipped value | What it does |
 |----------|---------------|--------------|
-| `AWS_ENDPOINT_URL` | `http://127.0.0.1:9000` | Redirects boto3's ENTIRE S3 surface (runs bucket, cache bucket, COG uploads, completion polling, publish path) to local MinIO -- full S3 parity with zero code change. TiTiler is started with the same env so it reads the same `s3://` URIs. |
+| `AWS_ENDPOINT_URL` | `http://127.0.0.1:9000` | Redirects boto3's ENTIRE S3 surface (runs bucket, cache bucket, COG uploads, completion polling, publish path) to local MinIO -- full S3 parity with zero code change. |
 | `AWS_ACCESS_KEY_ID` | `trid3nt` | MinIO root user (matches `scripts/start_minio.sh`). |
 | `AWS_SECRET_ACCESS_KEY` | `trid3nt-local-dev` | MinIO root password. Local dev only -- there is nothing sensitive behind it. |
 | `AWS_REGION` | `us-east-1` | Nominal region for boto3 client construction; MinIO does not care. |
@@ -40,12 +40,6 @@ The variables below are the complete shipped file, grouped by concern.
     unset there). If you add a new tool that reads a public bucket anonymously, build its client
     via `_public_s3` -- do not use a bare `boto3.client("s3")`. See
     [Troubleshooting](troubleshooting.md#minio-hijacks-public-noaa-buckets).
-
-## Tiles
-
-| Variable | Shipped value | What it does |
-|----------|---------------|--------------|
-| `GRACE2_TILE_SERVER_BASE` | `http://127.0.0.1:8080` | Base URL `publish_layer` embeds in the tile templates it emits to the client. Must point at the local TiTiler; if unset, publishing a raster fails with a typed error. |
 
 ## Solvers and engines
 

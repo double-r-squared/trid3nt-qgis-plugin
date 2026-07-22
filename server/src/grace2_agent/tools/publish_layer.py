@@ -1,15 +1,17 @@
-"""Atomic tool ``publish_layer`` - COG -> TiTiler tile-template bridge.
+"""Atomic tool ``publish_layer`` - raster publish bridge (raw ``s3://`` COG).
 
 This module registers one atomic tool that closes the produce->render loop:
 
     ``publish_layer(layer_uri, layer_id, style_preset, ...)``
-      -> ``str`` (a TiTiler XYZ tile TEMPLATE the MapLibre client can render)
+      -> ``str`` (the raster's raw ``s3://`` COG URI, ready for the envelope)
 
-**Live path (s3 + TiTiler; the only publish path)**
+**Live path (s3 + QGIS-native rendering; the only publish path)**
 
-Rasters live as COGs at ``s3://<bucket>/<key>`` on the object store
-(MinIO locally, S3 in the cloud). A raw ``s3://`` URI is not directly
-renderable in MapLibre; this tool mints the renderable display face:
+Rasters live as COGs at ``s3://<bucket>/<key>`` on the object store (MinIO
+locally). The QGIS plugin - the ONLY client - opens the COG DIRECTLY via
+GDAL ``/vsicurl/`` (the same s3->http translation it already uses for
+FlatGeobuf vectors) and applies its own renderer from the envelope's
+legend/style fields, so the publish emits the raw ``s3://`` URI itself:
 
 1. Guard against unresolved layer handles / placeholder URIs (typed,
    retryable errors that name the case's real handles).
@@ -18,16 +20,21 @@ renderable in MapLibre; this tool mints the renderable display face:
    OR - when ``GRACE2_QGIS_WMS_BASE`` is exported - a styled QGIS Server
    WMS GetMap face.
 3. Rasters: enforce COG overviews (F33; auto-translate when missing),
-   resolve TiTiler styling via ``_resolve_titiler_style_params`` (F51 -
-   THE render chokepoint: categorical/RGBA/terrain passthroughs, then the
-   typed preset registry, then band-stats percentile fallback, then a safe
-   default), mint the ``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}``
-   template, stash the data-driven legend, and register BOTH faces
-   (``s3://`` DATA uri + tile-template DISPLAY face) via
-   ``observe_published_layer``.
+   resolve styling via ``_resolve_titiler_style_params`` (F51 - THE render
+   chokepoint: categorical/RGBA/terrain passthroughs, then the typed preset
+   registry, then band-stats percentile fallback, then a safe default;
+   the resolver math is UNCHANGED - only its output destination moved from
+   a tile-URL query string into the stashed legend), stash the data-driven
+   legend keyed by the ``s3://`` uri the envelope will carry, and register
+   the layer via ``observe_published_layer``.
 
-The tile server base comes from ``GRACE2_TILE_SERVER_BASE`` (TiTiler,
-reading the COG straight off s3/MinIO). No worker round-trip, no ``.qgs``
+TiTiler EXIT (2026-07): the tool no longer mints
+``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}`` XYZ templates and no
+longer reads ``GRACE2_TILE_SERVER_BASE``. Old persisted cases still carry
+legacy tile-template URIs; a re-publish of one is UNWRAPPED to its embedded
+``url=`` s3 COG (the ``export_case_to_qgis._unwrap_tile_template`` trick)
+and flows through the normal raster path, and the plugin unwraps legacy
+templates it rehydrates on its own. No worker round-trip, no ``.qgs``
 mutation on the raster path.
 
 The GCP-era publish path (Cloud Run ``grace-2-pyqgis-worker`` Job dispatch,
@@ -65,7 +72,6 @@ __all__ = [
     "style_params_from_band_stats",
     "legend_for_published_layer",
     "pop_legend_for_uri",
-    "build_titiler_tile_url",
     "set_default_qgs_uri",
     "DEFAULT_PROJECT_QGS_URI",
 ]
@@ -98,8 +104,6 @@ class PublishLayerError(RuntimeError):
     with corrected args can succeed.
 
     Codes:
-    - ``RASTER_PUBLISH_UNAVAILABLE`` - ``GRACE2_TILE_SERVER_BASE`` unset; the
-      raster artifact exists but no tile server is configured to display it.
     - ``QGS_URI_PARSE_ERROR`` - malformed ``project_qgs_uri`` (vector-WMS seam).
     - ``UNKNOWN_LAYER_HANDLE`` (2026-07-13, retryable) - ``layer_uri`` is a
       bare placeholder token or fabricated scheme that no registry entry
@@ -825,8 +829,10 @@ def style_params_from_band_stats(
 # --------------------------------------------------------------------------- #
 
 #: Module-level side-table of the most-recent published-raster ``LegendKey``
-#: keyed by the layer's DISPLAY uri (the TiTiler tile TEMPLATE the atomic
-#: ``publish_layer`` returns). ``publish_layer`` returns a bare URL string, so the
+#: keyed by the layer's ENVELOPE uri - the raw ``s3://`` COG the atomic
+#: ``publish_layer`` returns (TiTiler exit; formerly the tile TEMPLATE; the
+#: register-only manifest seam now keys by the same raw ``cog_uri``, so both
+#: producers share one key shape). ``publish_layer`` returns a bare URI string, so the
 #: server wrap-site rebuilds a ``LayerURI`` from it WITHOUT a legend; the pipeline
 #: emitter's ``add_loaded_layer`` lifts the legend back out of this stash by
 #: ``layer.uri``. Mirrors ``_LAST_DENSITY_META_BY_URI`` exactly (module scope is
@@ -1015,7 +1021,9 @@ def _legend_label_for(style_preset: str | None) -> str | None:
 
 
 def _stash_legend_for_uri(display_uri: str, legend: "LegendKey | None") -> None:
-    """Record (or clear) the published layer's ``LegendKey`` keyed by display uri.
+    """Record (or clear) the published layer's ``LegendKey`` keyed by envelope uri
+    (the raw ``s3://`` COG - both the atomic publish and the register-only
+    manifest seam key by it).
 
     FIFO-bounded (mirrors ``_LAST_DENSITY_META_BY_URI``) so the always-on agent
     process cannot grow this side-table without limit. A ``None`` legend clears
@@ -1034,7 +1042,8 @@ def _stash_legend_for_uri(display_uri: str, legend: "LegendKey | None") -> None:
 
 
 def pop_legend_for_uri(display_uri: str) -> "LegendKey | None":
-    """Look up the stashed ``LegendKey`` for a published layer's display uri.
+    """Look up the stashed ``LegendKey`` for a published layer's envelope uri
+    (the raw ``s3://`` COG - atomic publish and register-only path alike).
 
     Non-destructive READ (a re-emit / replay of the SAME layer must resolve the
     same key). The pipeline emitter's ``add_loaded_layer`` calls this to lift the
@@ -1045,47 +1054,12 @@ def pop_legend_for_uri(display_uri: str) -> "LegendKey | None":
     return _LAST_LEGEND_BY_URI.get(display_uri)
 
 
-def build_titiler_tile_url(tile_base: str, cog_uri: str, style_params: str) -> str:
-    """Mint the TiTiler XYZ tile TEMPLATE for a bare COG key + resolved style.
-
-    Single seam shared by the on-box ``publish_layer`` s3 branch and the
-    register-only manifest path so the URL shape stays identical:
-    ``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=<cog>&rescale=..``
-
-    DATA-DRIVEN LEGEND (register-only twin): the SFINCS-offload manifest path
-    builds its ``LayerURI`` here without going through ``publish_layer``'s s3
-    branch, so this seam also stashes the continuous legend derived from the
-    SAME ``style_params`` it is baking into the URL (keyed by the returned
-    template). The range therefore equals the painted range by construction, and
-    the pipeline emitter lifts it onto the manifest layer by ``layer.uri``. Only
-    the continuous case is derivable from ``style_params`` alone; categorical /
-    RGBA register-only layers (empty ``style_params``) fall through to legacy
-    rendering (legend=None). Fail-open: never blocks the URL mint.
-    """
-    from urllib.parse import quote
-
-    template = (
-        f"{tile_base.rstrip('/')}/cog/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
-        f"?url={quote(cog_uri, safe='')}{style_params}"
-    )
-    try:
-        _vmin, _vmax, _cmap = _parse_style_params(style_params)
-        if _cmap is not None and _vmin is not None and _vmax is not None:
-            from grace2_contracts.execution import LegendKey
-
-            _stash_legend_for_uri(
-                template,
-                LegendKey(kind="continuous", colormap=_cmap, vmin=_vmin, vmax=_vmax),
-            )
-        else:
-            _stash_legend_for_uri(template, None)
-    except Exception as exc:  # noqa: BLE001 - legend never blocks the URL mint
-        logger.debug(
-            "build_titiler_tile_url legend stash skipped (%s: %s)",
-            type(exc).__name__,
-            exc,
-        )
-    return template
+# NOTE (TiTiler exit, 2026-07): ``build_titiler_tile_url`` - the legacy TiTiler
+# XYZ tile-TEMPLATE mint (``{base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png
+# ?url=<cog>&rescale=..``) - was DELETED once its last importer
+# (``workflows.register_published_manifest``) swapped to emitting the raw
+# ``s3://`` ``cog_uri`` and stashing its legend by that uri, exactly like the
+# atomic publish above. Do not reintroduce a tile-template mint here.
 
 
 # --------------------------------------------------------------------------- #
@@ -1708,8 +1682,8 @@ def _looks_like_unresolved_handle(layer_uri: str) -> bool:
     # 's3://.../earthquakes_layer.fgb' (the latter slipped past a scheme
     # allowlist and hit the F32 benign vector no-op, minting a success-shaped
     # "Layer published" for a fabricated URI). Tile-template braces
-    # ({z}/{x}/{y}) remain VALID input for the idempotent-republish branch,
-    # so braces are NOT placeholder markers.
+    # ({z}/{x}/{y}) remain VALID input for the legacy tile-template unwrap
+    # branch (old persisted cases), so braces are NOT placeholder markers.
     if "<" in v or ">" in v or "..." in v:
         return True
     if v.startswith("/vsi") or v.startswith("/") or v.startswith("\\"):
@@ -1948,13 +1922,15 @@ def publish_layer(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> str:
-    """Publish a COG raster layer to the map as a TiTiler tile layer.
+    """Publish a COG raster layer to the map.
 
-    Resolves the raster's TiTiler styling (rescale + colormap), enforces COG
-    overviews, and returns an XYZ tile TEMPLATE URL string the MapLibre client
-    can render immediately. Vectors are a benign no-op (they already render
-    inline via their producing fetch tool's GeoJSON). Not cacheable
-    (side-effect tool; registers layer faces + may write overview COGs).
+    Resolves the raster's styling (rescale + colormap -> the data-driven
+    legend), enforces COG overviews, registers the layer, and returns the
+    raster's ``s3://`` COG URI string - the client (QGIS plugin) loads the
+    COG directly via GDAL and renders it from the envelope's legend/style
+    fields. Vectors are a benign no-op (they already render inline via
+    their producing fetch tool's GeoJSON). Not cacheable (side-effect tool;
+    registers layer faces + may write overview COGs).
 
     When to use:
         - After ``postprocess_flood``, ``compute_hillshade``, ``compute_slope``,
@@ -1965,8 +1941,6 @@ def publish_layer(
           the COG is not visible until this tool runs.
 
     When NOT to use:
-        - Rendering ``s3://`` URIs directly in MapLibre (not supported; use this
-          tool to mint the tile template first).
         - Publishing vector layers (FlatGeobuf/GeoJSON already render inline
           via their producing fetch tool).
         - Caching or re-fetching data (this is a side-effect tool; the cache
@@ -2015,22 +1989,22 @@ def publish_layer(
             when it constructs the ``LayerURI`` the client renders.
 
     Returns:
-        TiTiler XYZ tile TEMPLATE URL string:
-        ``<tile-base>/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=<cog>&...``
-        This URL is suitable for direct use as a ``LayerURI.uri`` value so
-        the MapLibre client can render it without further processing.
+        The published raster's raw ``s3://`` COG URI string (the
+        overview-enforced COG when F33 auto-translated). Suitable for direct
+        use as a ``LayerURI.uri`` value - the QGIS plugin opens it via GDAL
+        ``/vsicurl/`` and styles it from the envelope legend.
 
     Raises:
-        PublishLayerError: on any failure (tile server unconfigured, unknown
-            layer handle, non-s3 raster URI). The ``error_code`` attribute
-            carries a SCREAMING_SNAKE_CASE code for the pipeline strip.
+        PublishLayerError: on any failure (unknown layer handle, non-s3
+            raster URI). The ``error_code`` attribute carries a
+            SCREAMING_SNAKE_CASE code for the pipeline strip.
 
     FR-DC-6: This tool is uncacheable-by-construction (a side-effect tool
     that registers per-Case layer state). The cache shim is NOT invoked.
 
     Invariant 4 (Rendering): this tool IS the publish bridge. The ``s3://``
-    COG becomes map-renderable only after this call mints its TiTiler tile
-    template.
+    COG reaches the map only after this call registers it and stashes its
+    render legend.
 
     Invariant 6 (Metadata-payload pattern): the published layer is surfaced
     to the client via the layer-load envelope (``observe_published_layer``);
@@ -2046,8 +2020,9 @@ def publish_layer(
         - ``clip_raster_to_polygon`` / ``clip_raster_to_bbox`` - clipped rasters
           passed to this tool for display-extent-scoped publication.
         Downstream (feeds):
-        - Web client MapLibre layer panel - the returned tile template is used
-          directly as a ``LayerURI.uri`` value for raster tile rendering.
+        - QGIS plugin layer panel - the returned ``s3://`` COG URI is used
+          directly as a ``LayerURI.uri`` value; the plugin loads it via GDAL
+          ``/vsicurl/`` and applies the envelope legend as its renderer.
         - ``run_model_flood_scenario`` / ``run_model_flood_habitat_scenario`` -
           call this as the final step of the workflow chain.
     """
@@ -2082,39 +2057,40 @@ def publish_layer(
     if name:
         logger.info("publish_layer: name=%r layer_id=%r", name, layer_id)
 
-    # sprint-14-aws (job-0290): rasters publish through TiTiler (a COG XYZ
-    # tile server reading s3:// directly). We return a ready XYZ tile TEMPLATE
-    # ({z}/{x}/{y}) - Map.tsx passes template URLs through untouched. The COG
-    # itself is the published artifact; no .qgs mutation, no worker round-trip.
-    # (The GCP QGIS-Server/PyQGIS-worker publish path was removed with the
-    # cloud strip; this is the only publish path.) When the tile server is not
-    # configured, fail FAST and HONESTLY (typed, terminal).
-    tile_base = os.environ.get("GRACE2_TILE_SERVER_BASE", "").rstrip("/")
-    if not tile_base:
-        raise PublishLayerError(
-            "RASTER_PUBLISH_UNAVAILABLE",
-            "Map tile publishing for raster layers is not configured on "
-            f"this AWS deployment (set GRACE2_TILE_SERVER_BASE). The raster "
-            f"artifact is stored at {layer_uri!r} and any computed metrics "
-            "remain valid - tell the user the numbers stand but the raster "
-            "overlay cannot be displayed yet. Do not retry.",
-            retryable=False,
-        )
-    # sprint-14-aws (job-0294c): IDEMPOTENT republish. A composer (e.g. the
-    # groundwater plume / flood postprocess) often publishes the layer
-    # itself, recording the layer handle -> the TiTiler tile TEMPLATE. When
-    # the LLM then calls publish_layer again on that handle, the server has
-    # already resolved it to the http(s) tile URL - that's "already
-    # published", NOT an error. Return it as-is so the emission wrap-site
-    # announces the layer to the map (live: groundwater plume showed metrics
-    # but a red Publishing-layer card + no overlay because this raised).
+    # TiTiler EXIT (2026-07): rasters publish as their raw s3:// COG URI -
+    # the QGIS plugin (the only client) opens the COG directly via GDAL
+    # /vsicurl/ and styles it from the envelope legend. No tile server, no
+    # GRACE2_TILE_SERVER_BASE, no XYZ template mint. The COG itself is the
+    # published artifact; no .qgs mutation, no worker round-trip.
+    #
+    # LEGACY republish (was the sprint-14-aws job-0294c IDEMPOTENT guard):
+    # old persisted cases (and pre-swap composer registrations) carry TiTiler
+    # tile-TEMPLATE display URLs. A re-publish of one is NOT an error - UNWRAP
+    # the embedded ``url=`` s3 COG (the same trick
+    # ``export_case_to_qgis._unwrap_tile_template`` uses) and flow it through
+    # the normal raster path below, so the envelope comes out in the NEW raw
+    # ``s3://`` shape with a fresh legend stash. A template with no
+    # recoverable COG is returned verbatim (degraded legacy behavior; the
+    # plugin unwraps templates it rehydrates on its own).
     if layer_uri.startswith(("http://", "https://")) and "/cog/tiles/" in layer_uri:
-        logger.info(
-            "publish_layer (titiler) idempotent - already-published tile "
-            "template layer_id=%s",
-            layer_id,
-        )
-        return layer_uri
+        from .export_case_to_qgis import _unwrap_tile_template
+
+        unwrapped = _unwrap_tile_template(layer_uri)
+        if unwrapped != layer_uri and unwrapped.startswith("s3://"):
+            logger.info(
+                "publish_layer: legacy tile-template input unwrapped to its "
+                "s3 COG layer_id=%s cog=%s",
+                layer_id,
+                unwrapped,
+            )
+            layer_uri = unwrapped
+        else:
+            logger.info(
+                "publish_layer: legacy tile-template input with no "
+                "recoverable s3 COG - returning verbatim layer_id=%s",
+                layer_id,
+            )
+            return layer_uri
     # F32 (2026-06-16): publish_layer is RASTER-ONLY (see module docstring)
     # but is repeatedly handed VECTOR artifacts (roads/rivers .fgb/.geojson)
     # that ALREADY rendered inline via their producing fetch tool's GeoJSON
@@ -2205,14 +2181,11 @@ def publish_layer(
     # minting the tile template. Fail-open (publishes as-is) on any error.
     layer_uri = _ensure_raster_has_overviews(layer_uri)
 
-    from urllib.parse import quote
-
-    # F51: Style -> TiTiler render params. TiTiler renders a single-band
-    # float32 COG as PER-TILE grayscale autoscale unless the request carries
-    # an explicit &rescale + &colormap_name, so style_params must NEVER be
-    # empty for a continuous raster (the pre-F51 2-entry if/elif left every
-    # non-flood/non-plume preset washed out). _resolve_titiler_style_params
-    # is the single resolution point:
+    # F51: Style -> render params. The resolver math is UNCHANGED (the render
+    # chokepoint + honesty floor); only where its output LANDS moved - the
+    # ``&rescale=..&colormap_name=..`` string no longer rides a tile-URL query
+    # (TiTiler exit), it feeds the stashed LEGEND the plugin renders from.
+    # _resolve_titiler_style_params is the single resolution point:
     #   - flood depths keep the blue ramp over 0-3 m; plume concentrations
     #     (job-0292b) keep the red ramp over 0-10 mg/L (byte-for-byte);
     #   - precip / temperature / wind / drought / fuel-moisture / satellite
@@ -2221,52 +2194,47 @@ def publish_layer(
     #     (viridis) read from the COG bytes already in hand, with a SAFE
     #     non-empty default if the stats read fails;
     #   - CATEGORICAL guard: a COG with an embedded GDAL color table (NLCD
-    #     land cover) gets NO rescale so TiTiler colorizes from the palette
-    #     (job-0324) - never washed out.
-    # _infer_style_preset (the family-aware default used on the GCS path) is
-    # applied here too for the auto/None case so the s3 early-return path
-    # gets the same default selection.
+    #     land cover) gets NO rescale so the palette colorizes it (job-0324)
+    #     - never washed out; the legend carries the palette classes.
+    # _infer_style_preset is applied here for the auto/None case so the
+    # raster path keeps the same default selection as before.
     effective_preset = style_preset
     if effective_preset is None or effective_preset == "auto":
         effective_preset = _infer_style_preset(layer_uri, layer_id)
     style_params = _resolve_titiler_style_params(effective_preset, layer_uri)
-    template = (
-        f"{tile_base}/cog/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
-        f"?url={quote(layer_uri, safe='')}{style_params}"
-    )
     # DATA-DRIVEN LEGEND: derive the render KEY from the SAME resolved
-    # style_params (so the legend range equals the painted-tile range by
-    # construction) and stash it keyed by the display uri (the tile template
-    # this call returns). publish_layer returns a bare URL string, so the
+    # style_params (so the legend range equals the painted range by
+    # construction) and stash it keyed by the ENVELOPE uri - the raw s3://
+    # COG this call returns. publish_layer returns a bare URI string, so the
     # server wrap-site rebuilds a LayerURI WITHOUT a legend; the pipeline
     # emitter's add_loaded_layer lifts the legend back out of the stash by
-    # layer.uri. Fail-open: a None legend just clears the stash entry and the
-    # web legacy style_preset path renders the layer exactly as before.
+    # layer.uri (which now equals this s3 uri). The legend carries the
+    # colormap NAME + vmin/vmax (continuous) or palette classes
+    # (categorical) - everything the plugin renderer needs alongside the
+    # envelope's style_preset field. Fail-open: a None legend just clears
+    # the stash entry and the plugin falls back to its style_preset/default
+    # rendering exactly as before.
     try:
         _legend = legend_for_published_layer(
             effective_preset, layer_uri, style_params
         )
-        _stash_legend_for_uri(template, _legend)
+        _stash_legend_for_uri(layer_uri, _legend)
     except Exception as exc:  # noqa: BLE001 - legend never blocks a publish
         logger.debug(
-            "publish_layer (titiler) legend build skipped (%s: %s)",
+            "publish_layer legend build skipped (%s: %s)",
             type(exc).__name__,
             exc,
         )
     logger.info(
-        "publish_layer (titiler) layer_id=%s uri=%s template=%s",
+        "publish_layer (raw-cog) layer_id=%s uri=%s style_params=%s",
         layer_id,
         layer_uri,
-        template,
+        style_params,
     )
-    # job-0304: register BOTH faces of the published layer in the session
-    # URI registry - the s3:// COG (consumable DATA uri) + the TiTiler tile
-    # TEMPLATE (display face). The GCS path does this at step 8 below, but
-    # the AWS branch returned EARLY (here) and never reached it, so the
-    # ``flood-depth-peak-<id>`` handle minted by run_model_flood_scenario
-    # had NO data URI registered. Downstream Pelicun then resolved the
-    # handle to nothing → "local path does not exist" (live 2026-06-16).
-    # ``observe_published_layer`` routes the template to the wms/display
-    # face (job-0304 ``_is_tile_template``) so it never displaces the COG.
-    observe_published_layer(layer_id, gcs_uri=layer_uri, wms_url=template)
-    return template
+    # job-0304: register the published layer in the session URI registry so
+    # the ``flood-depth-peak-<id>``-style handle resolves to a consumable
+    # DATA uri for downstream tools (Pelicun, zonal stats). With the TiTiler
+    # exit there is no separate display face: the raw s3:// COG IS both the
+    # data uri and the envelope uri the plugin renders.
+    observe_published_layer(layer_id, gcs_uri=layer_uri)
+    return layer_uri

@@ -25,8 +25,6 @@ GeoTIFF bytes built by rasterio — no Cloud Run / GCS / TiTiler network I/O.
 
 from __future__ import annotations
 
-from urllib.parse import quote
-
 import numpy as np
 import pytest
 import rasterio
@@ -635,108 +633,114 @@ def test_nlcd_paletted_still_no_rescale_after_fix(
 
 
 # --------------------------------------------------------------------------- #
-# s3 branch end-to-end — non-empty params reach the template
+# s3 branch end-to-end — the resolved style now rides the LEGEND stash keyed by
+# the returned raw s3:// uri (TiTiler exit: no tile template to bake it into).
 # --------------------------------------------------------------------------- #
 
 
 @pytest.fixture()
 def _s3_titiler(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://cf.example.net")
 
 
-def test_publish_layer_s3_unknown_preset_template_has_nonempty_style(
+def test_publish_layer_s3_unknown_preset_stashes_nonempty_style(
     _s3_titiler: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """End-to-end: an unknown continuous preset on the s3 branch bakes a
-    non-empty rescale+colormap into the tile template (never grayscale)."""
+    """End-to-end: an unknown continuous preset on the s3 branch resolves a
+    non-empty rescale+colormap (never grayscale) and stashes it as the legend
+    keyed by the returned raw s3 uri."""
     good = _continuous_geotiff_bytes(0.0, 25.0)
     # Already has overviews? Force overview-pass so the URI is unchanged, and
     # serve the same bytes for the style probe.
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: good)
     monkeypatch.setattr(MOD, "_raster_has_overviews", lambda b: True)
 
-    template = publish_layer(
+    out = publish_layer(
         layer_uri="s3://bucket/runs/windspeed.tif",
         layer_id="wind",
         style_preset="gridmet_vs_unknown",
     )
-    assert "&rescale=" in template
-    assert "&colormap_name=viridis" in template
-    assert template.startswith("https://cf.example.net/cog/tiles/")
-    encoded = quote("s3://bucket/runs/windspeed.tif", safe="")
-    assert f"?url={encoded}" in template
+    assert out == "s3://bucket/runs/windspeed.tif"
+    legend = pl.pop_legend_for_uri(out)
+    assert legend is not None and legend.kind == "continuous"
+    assert legend.colormap == "viridis"
+    assert legend.vmin is not None and legend.vmax is not None
+    assert legend.vmax > legend.vmin
+    assert 0.0 <= legend.vmin < legend.vmax <= 25.0  # real band-stats range
 
 
 def test_publish_layer_s3_temperature_preset_hits_registry(
     _s3_titiler: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """End-to-end: a temperature preset bakes the registry rdylbu_r band."""
+    """End-to-end: a temperature preset lands the registry rdylbu_r band in the
+    stashed legend (vmin/vmax = the pinned 250-320 K range)."""
     good = _continuous_geotiff_bytes(260.0, 310.0)
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: good)
     monkeypatch.setattr(MOD, "_raster_has_overviews", lambda b: True)
 
-    template = publish_layer(
+    out = publish_layer(
         layer_uri="s3://bucket/runs/t2m.tif",
         layer_id="temp",
         style_preset="hrrr_2m_temperature",
     )
-    assert template.endswith("&rescale=250,320&colormap_name=rdylbu_r")
+    assert out == "s3://bucket/runs/t2m.tif"
+    legend = pl.pop_legend_for_uri(out)
+    assert legend is not None and legend.kind == "continuous"
+    assert (legend.colormap, legend.vmin, legend.vmax) == ("rdylbu_r", 250.0, 320.0)
 
 
-def test_publish_layer_s3_paletted_template_has_no_rescale(
+def test_publish_layer_s3_paletted_gets_categorical_legend(
     _s3_titiler: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """End-to-end: a paletted NLCD COG bakes NO rescale into the template."""
+    """End-to-end: a paletted NLCD COG resolves NO rescale (palette wins) and the
+    stashed legend is the categorical key from the embedded GDAL table."""
     nlcd = _paletted_geotiff_bytes()
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: nlcd)
     monkeypatch.setattr(MOD, "_raster_has_overviews", lambda b: True)
 
-    template = publish_layer(
+    out = publish_layer(
         layer_uri="s3://bucket/runs/nlcd.tif",
         layer_id="landcover",
         style_preset="categorical_landcover",
     )
-    assert "&rescale=" not in template
-    assert "&colormap_name=" not in template
-    encoded = quote("s3://bucket/runs/nlcd.tif", safe="")
-    assert template.endswith(f"?url={encoded}")
+    assert out == "s3://bucket/runs/nlcd.tif"
+    legend = pl.pop_legend_for_uri(out)
+    assert legend is not None and legend.kind == "categorical"
+    assert {c.value for c in legend.classes} == {11, 21, 41, 81, 90}
 
 
-def test_publish_layer_s3_rgba_composite_template_has_no_rescale(
+def test_publish_layer_s3_rgba_composite_has_no_legend(
     _s3_titiler: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """End-to-end: NATE's baked landcover+hillshade RGBA composite bakes NO
-    rescale/colormap into the template (regression — was getting band-stats
-    viridis and corrupting the colors)."""
+    """End-to-end: NATE's baked landcover+hillshade RGBA composite resolves NO
+    rescale/colormap (regression — band-stats viridis corrupted the colors),
+    so no legend is stashed and the plugin renders the baked colors directly."""
     rgba = _rgba_geotiff_bytes(4)
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: rgba)
     monkeypatch.setattr(MOD, "_raster_has_overviews", lambda b: True)
 
-    template = publish_layer(
+    out = publish_layer(
         layer_uri="s3://bucket/runs/toutle-composite.tif",
         layer_id="composite",
         style_preset="continuous_dem",
     )
-    assert "&rescale=" not in template
-    assert "&colormap_name=" not in template
-    encoded = quote("s3://bucket/runs/toutle-composite.tif", safe="")
-    assert template.endswith(f"?url={encoded}")
+    assert out == "s3://bucket/runs/toutle-composite.tif"
+    assert pl.pop_legend_for_uri(out) is None
 
 
-def test_publish_layer_s3_hillshade_template_has_no_rescale(
+def test_publish_layer_s3_hillshade_has_no_legend(
     _s3_titiler: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """End-to-end: a single-band grayscale hillshade bakes NO rescale/colormap
-    (no viridis ramp on grayscale terrain)."""
+    """End-to-end: a single-band grayscale hillshade resolves NO rescale/colormap
+    (no viridis ramp on grayscale terrain) -> no stashed legend."""
     shade = _continuous_geotiff_bytes(0.0, 255.0)
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: shade)
     monkeypatch.setattr(MOD, "_raster_has_overviews", lambda b: True)
 
-    template = publish_layer(
+    out = publish_layer(
         layer_uri="s3://bucket/runs/hillshade.tif",
         layer_id="shade",
         style_preset="continuous_hillshade",
     )
-    assert "&rescale=" not in template
-    assert "&colormap_name=" not in template
+    assert out == "s3://bucket/runs/hillshade.tif"
+    assert pl.pop_legend_for_uri(out) is None

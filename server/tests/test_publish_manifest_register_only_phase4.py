@@ -4,10 +4,13 @@ Covers the worker -> agent ``publish_manifest.json`` register-only handoff:
 
 1. Typed contract parse + schema-version REJECT (the agent's typed reader mirror
    of the worker's plain-dict writer, gated on schema_version==1).
-2. ``register_manifest_layers`` builds the correct TiTiler tile URLs from the
-   bare ``cog_uri`` + the agent style registry, mints ``layer_id`` =
-   ``<stem>-<run_id>``, registers BOTH faces, honors the publish-or-honest-drop
-   ``GRACE2_TILE_SERVER_BASE`` gate, and surfaces the top-level metrics.
+2. ``register_manifest_layers`` (TiTiler exit / QGIS-native swap) emits the raw
+   ``s3://`` ``cog_uri`` AS the layer uri (the plugin reads it via /vsicurl/),
+   stashes the data-driven legend keyed by that ``cog_uri`` (resolved from the
+   agent style registry + ``band_stats``, NO COG read), mints ``layer_id`` =
+   ``<stem>-<run_id>``, registers the COG, and surfaces the top-level metrics.
+   No tile server is needed - the old ``GRACE2_TILE_SERVER_BASE``
+   publish-or-honest-drop gate is GONE (nothing drops).
 3. ``read_publish_manifest`` returns the typed manifest when present + parses to
    schema 1, and ``None`` (the on-box fallback trigger) when absent / unknown.
 4. ``model_flood_scenario``: the on-box ``postprocess_flood`` convert sits under
@@ -189,7 +192,7 @@ def test_parse_manifest_accepts_bytes_body():
 
 
 # --------------------------------------------------------------------------- #
-# 2. register_manifest_layers - TiTiler URL + registration + gate + metrics.
+# 2. register_manifest_layers - raw cog_uri emission + legend stash + registration.
 # --------------------------------------------------------------------------- #
 
 
@@ -203,10 +206,11 @@ def active_registry():
         deactivate_registry(token)
 
 
-def test_register_manifest_layers_builds_tile_urls_and_registers(
+def test_register_manifest_layers_emits_raw_cog_uri_and_registers(
     monkeypatch, active_registry
 ):
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", _TILE_BASE)
+    # No tile server anywhere: the TiTiler exit needs none.
+    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
     m = parse_publish_manifest(json.dumps(_depth_manifest_dict()))
     res = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
 
@@ -224,43 +228,58 @@ def test_register_manifest_layers_builds_tile_urls_and_registers(
     # The web grouping token (name) is carried verbatim - never renamed.
     assert peak.name == "Peak flood depth"
     assert frame.name == "Flood depth step 1"
-    # The tile URL is built from the BARE cog_uri + the flood-depth style preset.
-    assert peak.uri.startswith(
-        f"{_TILE_BASE}/cog/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png?url="
-    )
-    # continuous_flood_depth resolves to the pinned ylgnbu 0,3 ramp.
-    assert "rescale=0,3" in peak.uri
-    assert "colormap_name=ylgnbu" in peak.uri
-    # The bare COG key is URL-encoded into url=.
-    assert "flood_depth_peak.tif" in peak.uri
+    # NEW CONTRACT (TiTiler exit): the layer uri IS the raw s3:// COG - the
+    # plugin reads it via /vsicurl/; no tile template is minted.
+    assert peak.uri == "s3://runs/RUNRUNRUN/flood_depth_peak.tif"
+    assert frame.uri == "s3://runs/RUNRUNRUN/flood_depth_frame_01.tif"
     # roles preserved.
     assert peak.role == "primary"
     assert frame.role == "context"
 
-    # BOTH faces registered: the s3:// COG (data) + the tile template (display).
+    # The COG is registered as the consumable DATA uri (no separate display
+    # face anymore - the raw COG IS the envelope uri).
     rec = active_registry._records.get("flood-depth-peak-RUNRUNRUN")
     assert rec is not None
     assert rec.uri == "s3://runs/RUNRUNRUN/flood_depth_peak.tif"
-    assert rec.wms_url == peak.uri  # tile template routed to the display face
+
+    # DATA-DRIVEN LEGEND: stashed keyed by the cog_uri, carrying the SAME
+    # pinned continuous_flood_depth ramp the style registry resolves
+    # (ylgnbu over 0-3 m) - mirrors publish_layer's raw-cog exit.
+    legend = pl.pop_legend_for_uri(peak.uri)
+    assert legend is not None
+    assert legend.kind == "continuous"
+    assert legend.colormap == "ylgnbu"
+    assert legend.vmin == 0.0
+    assert legend.vmax == 3.0
 
 
-def test_register_manifest_layers_honest_drop_without_tile_server(
+def test_register_manifest_layers_needs_no_tile_server(
     monkeypatch, active_registry
 ):
-    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
+    """The old GRACE2_TILE_SERVER_BASE publish-or-honest-drop gate is GONE:
+    with AND without the env var the registration is identical (raw cog_uri),
+    and nothing is ever dropped for lack of a tile server."""
     m = parse_publish_manifest(json.dumps(_depth_manifest_dict()))
-    res = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
-    # Publish-or-honest-drop: no tile server -> every layer dropped, metrics stand.
-    assert res.layers == []
-    assert res.dropped_count == 2
-    assert res.tile_publish_available is False
-    assert res.metrics["max_depth_m"] == 2.41
+
+    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
+    res_without = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
+    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", _TILE_BASE)
+    res_with = rpm.register_manifest_layers(m, run_id="RUNRUNRUN")
+
+    for res in (res_without, res_with):
+        assert res.dropped_count == 0
+        assert res.tile_publish_available is True
+        assert [lyr.uri for lyr in res.layers] == [
+            "s3://runs/RUNRUNRUN/flood_depth_peak.tif",
+            "s3://runs/RUNRUNRUN/flood_depth_frame_01.tif",
+        ]
+        assert res.metrics["max_depth_m"] == 2.41
 
 
 def test_register_swan_wave_layers_carries_narration_scalars(
     monkeypatch, active_registry
 ):
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", _TILE_BASE)
+    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
     m = parse_publish_manifest(json.dumps(_wave_manifest_dict()))
     layers, top_metrics, dropped = rpm.register_swan_wave_layers(
         m, run_id="WAVEWAVE", mode="stationary"
@@ -276,7 +295,10 @@ def test_register_swan_wave_layers_carries_narration_scalars(
     assert peak.wave_area_km2 == 12.5
     assert peak.mode == "stationary"
     assert peak.layer_id == "swan-wave-height-peak-WAVEWAVE"
-    assert "colormap_name=gnbu" in peak.uri  # continuous_wave_height ramp
+    # Raw cog uri emission + the continuous_wave_height (gnbu) legend stash.
+    assert peak.uri == "s3://runs/WAVEWAVE/swan_wave_height_peak.tif"
+    legend = pl.pop_legend_for_uri(peak.uri)
+    assert legend is not None and legend.colormap == "gnbu"
 
 
 def test_style_params_from_band_stats_honors_rgba_and_generic_fallback():

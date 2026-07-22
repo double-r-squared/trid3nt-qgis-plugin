@@ -28,7 +28,7 @@ cloud-to-local rewiring is environment variables -- no fork of the agent code.
 | LLM | AWS Bedrock (Sonnet default) | Ollama `qwen3:8b-16k` (or any OpenAI-compatible endpoint) | `MODEL_PROVIDER=openai` + `openai_adapter.py` |
 | Object storage | S3 runs + cache buckets | MinIO on `:9000` (S3-compatible, zero code change) | `AWS_ENDPOINT_URL` |
 | Persistence | DynamoDB (`trid3nt_*` tables) | FilePersistence -- JSON store on disk | `GRACE2_DEV_PERSISTENCE_DIR` |
-| Raster tiles | TiTiler EC2 (always-on) | TiTiler in a local venv on `:8080` | `GRACE2_TILE_SERVER_BASE` |
+| Raster rendering | TiTiler EC2 (always-on) | none -- the QGIS plugin loads COGs directly from MinIO via GDAL `/vsicurl/` and styles them client-side | `publish_layer` emits raw `s3://` COG URIs |
 | Solvers | AWS Batch (Spot, scale-to-zero) | Local subprocess / local docker per engine | `GRACE2_SOLVER_BACKEND`, per-engine gates |
 
 Data fetchers need internet (USGS/NOAA/OSM/etc. are public HTTPS or anonymous public S3) but
@@ -59,10 +59,6 @@ graph TD
         MinIO["MinIO :9000 (console :9001)\ntrid3nt-runs + trid3nt-cache"]
     end
 
-    subgraph Tiles["Raster tiles"]
-        TiTiler["TiTiler :8080\n(venvs/titiler, uvicorn)"]
-    end
-
     subgraph Solvers["Local solvers"]
         MF6["MODFLOW 6\nbin/mf6 subprocess"]
         SFINCS["SFINCS\ndocker deltares/sfincs-cpu"]
@@ -73,13 +69,12 @@ graph TD
 
     SPA -- "ws://localhost:8765" --> WS
     SPA -- "http://localhost:8766" --> HTTP
-    SPA -- "tile URLs" --> TiTiler
+    SPA -- "COG reads (/vsicurl/)" --> MinIO
     WS --> Tools
     Tools -- "chat/completions (streaming tools)" --> Ollama
     Tools -.-> CloudAPI
     Tools --> FP
     Tools -- "COGs, decks, completion.json" --> MinIO
-    TiTiler -- "s3:// reads via AWS_ENDPOINT_URL" --> MinIO
     Tools --> MF6
     Tools --> SFINCS
     Tools --> SWMM
@@ -89,8 +84,9 @@ graph TD
 ```
 
 The flow is identical to the cloud build: prompt -> LLM tool selection -> fetch/compute tools ->
-solver dispatch -> COG outputs in the runs bucket -> `publish_layer` emits TiTiler tile templates ->
-map layers render. Only the substrate under each seam changes.
+solver dispatch -> COG outputs in the runs bucket -> `publish_layer` emits raw `s3://` COG URIs ->
+the QGIS plugin loads them via GDAL `/vsicurl/` and applies the envelope's legend/style client-side.
+Only the substrate under each seam changes.
 
 ---
 

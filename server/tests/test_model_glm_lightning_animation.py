@@ -314,13 +314,24 @@ class _RecordingEmitter:
 
 
 def test_confirm_emits_each_published_frame_as_a_loaded_layer(monkeypatch):
-    """NATE 2026-06-26: the render-blocker fix. Each baked + overlay frame whose
-    publish returned an http(s) tile URL must be EMITTED into session-state
-    loaded_layers via add_loaded_layer (the step the composer omitted -> frames
-    published but never rendered). The emitted LayerURI carries the PUBLISHED
-    http(s) uri, NOT the raw cache uri.
+    """NATE 2026-06-26: the render-blocker fix, re-pinned on the NEW s3 publish
+    shape (TiTiler exit / QGIS-native swap). Each baked + overlay frame whose
+    publish returned a renderable uri -- now the raw s3:// COG the plugin reads
+    via /vsicurl/ -- must be EMITTED into session-state loaded_layers via
+    add_loaded_layer. The emitted LayerURI carries the PUBLISHED s3:// uri.
     """
-    _wire_synthetic(monkeypatch)  # publish stub returns https://fake/<layer_id>
+    _wire_synthetic(monkeypatch)
+
+    class _Entry:
+        def __init__(self, fn):
+            self.fn = fn
+
+    # publish_layer returns the NEW raster success shape: the raw s3:// COG.
+    monkeypatch.setitem(
+        TOOL_REGISTRY,
+        "publish_layer",
+        _Entry(lambda uri, lid, preset=None: f"s3://fake-pub/{lid}.tif"),
+    )
     emitter = _RecordingEmitter()
 
     res = _run(model_glm_lightning_animation(
@@ -338,26 +349,44 @@ def test_confirm_emits_each_published_frame_as_a_loaded_layer(monkeypatch):
     assert n_published == 6
     # EVERY published frame is emitted into loaded_layers (the fix).
     assert len(emitter.loaded_layers) == n_published
-    # Each emitted frame carries the PUBLISHED http(s) tile uri -- NEVER a raw
-    # s3:// / file:// cache uri (those never render).
+    # Each emitted frame carries the PUBLISHED s3:// COG uri (the new shape).
     for lyr in emitter.loaded_layers:
-        assert lyr.uri.startswith(("http://", "https://")), lyr.uri
-        assert lyr.uri == f"https://fake/{lyr.layer_id}"
+        assert lyr.uri == f"s3://fake-pub/{lyr.layer_id}.tif"
     # Distinct frames (no dedup collapse): one emit per published layer_id.
     emitted_ids = [lyr.layer_id for lyr in emitter.loaded_layers]
     assert len(set(emitted_ids)) == len(emitted_ids)
 
 
+def test_confirm_emits_http_published_frames_too(monkeypatch):
+    """The http(s) publish face still emits -- widening the frame gate to s3://
+    must not regress http tile URLs (the _wire_synthetic default stub)."""
+    _wire_synthetic(monkeypatch)  # publish stub returns https://fake/<layer_id>
+    emitter = _RecordingEmitter()
+
+    res = _run(model_glm_lightning_animation(
+        bbox=_UT_BBOX,
+        start_utc="2025-07-05T18:00:00Z",
+        end_utc="2025-07-05T18:02:00Z",  # 2 frames
+        accumulation_window_s=60,
+        overlay_standalone_ged=False,
+        pipeline_emitter=emitter,  # type: ignore[arg-type]
+    ))
+    assert res["status"] == "ok"
+    assert len(emitter.loaded_layers) == res["n_frames"] == 2
+    for lyr in emitter.loaded_layers:
+        assert lyr.uri == f"https://fake/{lyr.layer_id}"
+
+
 def test_publish_failure_frame_is_skipped_not_emitted_raw(monkeypatch):
-    """HONESTY FLOOR: a frame whose publish returns a NON-http value (publish
-    failed) must NOT be emitted -- its raw cache uri would never render."""
+    """HONESTY FLOOR: a frame whose publish returns a NON-renderable value
+    (neither http(s) nor s3:// -- publish failed) must NOT be emitted."""
     _wire_synthetic(monkeypatch)
 
     class _Entry:
         def __init__(self, fn):
             self.fn = fn
 
-    # publish_layer returns a NON-http sentinel -> every frame fails the http
+    # publish_layer returns a non-renderable sentinel -> every frame fails the
     # gate -> nothing is emitted (but the run still succeeds + returns frames).
     monkeypatch.setitem(
         TOOL_REGISTRY,
@@ -376,7 +405,7 @@ def test_publish_failure_frame_is_skipped_not_emitted_raw(monkeypatch):
     ))
     assert res["status"] == "ok"
     assert res["n_frames"] == 2
-    # Non-http publish -> honest skip -> NO frames emitted (never a raw cache uri).
+    # Non-renderable publish -> honest skip -> NO frames emitted.
     assert emitter.loaded_layers == []
 
 

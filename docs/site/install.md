@@ -9,7 +9,7 @@ except Docker and Ollama.
 | Requirement | Why |
 |-------------|-----|
 | Linux x86_64 | binaries (mf6, MinIO) and docker images are linux-amd64 |
-| Python 3.12 | agent + TiTiler venvs (managed by `uv`) |
+| Python 3.12 | agent venv (managed by `uv`) |
 | [uv](https://astral.sh/uv) | venv + dependency management (`make venv` assumes `~/.local/bin/uv`) |
 | Docker | SFINCS, GeoClaw, and SWAN engines run in containers |
 | [Ollama](https://ollama.com) | local LLM serving (any OpenAI-compatible endpoint also works) |
@@ -40,13 +40,6 @@ Agent venv (installs the contracts + server packages editable):
 
 ```sh
 make venv              # uv venv venvs/agent + uv pip install -e contracts -e server
-```
-
-TiTiler venv:
-
-```sh
-uv venv --python 3.12 venvs/titiler
-uv pip install --python venvs/titiler/bin/python "titiler.application==2.0.4" uvicorn httpx
 ```
 
 ## 3. Web dependencies
@@ -108,14 +101,12 @@ Why the custom variant and the `/no_think` requirement:
 ## 7. Configure the environment
 
 `.env.local` at the repo root is the single configuration surface (loaded by
-`scripts/start_agent.sh`). The defaults point at Ollama on `:11434`, MinIO on `:9000`, TiTiler
-on `:8080`. See [Configuration](configuration.md) for every variable.
+`scripts/start_agent.sh`). The defaults point at Ollama on `:11434` and MinIO on `:9000`. See [Configuration](configuration.md) for every variable.
 
 ## 8. Start services
 
 ```sh
 make minio                                   # MinIO + bucket init (if not already up)
-make titiler                                 # TiTiler on :8080 backed by MinIO
 sg docker -c 'bash scripts/start_agent.sh'   # agent (WS :8765, HTTP :8766) -- inside the docker group
 ```
 
@@ -127,8 +118,8 @@ container-backed engines.
 Check and stop:
 
 ```sh
-make status    # minio (9000) / titiler (8080) / ollama (11434) health
-make stop      # stops minio, titiler, agent via pidfiles
+make status    # minio (9000) / agent (8766) / ollama (11434) health
+make stop      # stops minio and the agent via pidfiles
 ```
 
 ## Ports
@@ -138,13 +129,12 @@ make stop      # stops minio, titiler, agent via pidfiles
 | 8765 | Agent WebSocket | chat protocol (`GRACE2_AGENT_PORT`) |
 | 8766 | Agent HTTP | tool catalog + stats endpoints (`GRACE2_AGENT_HTTP_PORT`) |
 | 9000 | MinIO S3 API | `AWS_ENDPOINT_URL` target; console on 9001 |
-| 8080 | TiTiler | raster tiles; health at `/healthz` |
 | 11434 | Ollama | OpenAI-compatible endpoint at `/v1` |
 
 ## Data directories (gitignored)
 
 - `bin/` -- downloaded binaries (mf6, minio, mc)
-- `venvs/` -- Python virtual environments (agent, titiler)
+- `venvs/` -- Python virtual environments (agent)
 - `data/minio/` -- MinIO object storage
 - `data/persistence/` -- agent FilePersistence store (cases, layers)
 - `data/runs/` -- solver rundirs mounted into containers (`GRACE2_RUNS_DIR`)

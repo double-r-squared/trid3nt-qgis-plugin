@@ -49,22 +49,47 @@ STUB_CASE_ID = "01STUBCASEAAAAAAAAAAAAAAAA"
 #: An auth-token carrying this value is rejected AUTH_REQUIRED + close 1008.
 EXPIRED_TOKEN = "stub-expired-token"
 
-# A raster row exactly as the local agent publishes it: the display ``uri`` is
-# a ready TiTiler XYZ template (contains {z}/{x}/{y}) with style params.
+# A raster row exactly as the local agent publishes it POST TiTiler->QGIS
+# swap: ``uri`` is the raw s3 COG and the explicit ``legend`` (LegendKey:
+# colormap + vmin/vmax) drives the plugin's own QGIS-native renderer.
 RASTER_LAYER_ROW: dict[str, Any] = {
     "layer_id": "01STUBRASTERAAAAAAAAAAAAAA",
     "name": "DEM Asheville",
     "layer_type": "raster",
-    "uri": (
-        "http://127.0.0.1:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-        "?url=s3%3A%2F%2Ftrid3nt-runs%2Fdem%2Fasheville.tif"
-        "&rescale=600,2100&colormap_name=terrain"
-    ),
+    "uri": "s3://trid3nt-runs/dem/asheville.tif",
     "style_preset": "dem_hillshade",
     "visible": True,
     "role": "primary",
     "temporal": False,
     "opacity": 1.0,
+    "legend": {
+        "kind": "continuous",
+        "colormap": "viridis",
+        "vmin": 600.0,
+        "vmax": 2100.0,
+        "units": "m",
+        "label": "Elevation",
+    },
+}
+
+# A LEGACY raster row (old persisted cases, pre-swap): the ``uri`` is still a
+# TiTiler XYZ tile TEMPLATE whose percent-encoded ``url=`` param carries the
+# s3 COG and whose query string carries the styling. The plugin MUST keep
+# rendering these forever (unwrap -> same gdal path) -- back-compat coverage.
+LEGACY_RASTER_LAYER_ROW: dict[str, Any] = {
+    "layer_id": "01STUBLEGACYRASTERAAAAAAAA",
+    "name": "Flood depth (legacy)",
+    "layer_type": "raster",
+    "uri": (
+        "http://127.0.0.1:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
+        "?url=s3%3A%2F%2Ftrid3nt-runs%2Fflood%2Fdepth.tif"
+        "&rescale=0,3&colormap_name=ylgnbu"
+    ),
+    "style_preset": "continuous_flood_depth",
+    "visible": True,
+    "role": "primary",
+    "temporal": False,
+    "opacity": 0.8,
 }
 
 # A vector row with the additive inline_geojson merge (job-0175 shape).
@@ -426,6 +451,7 @@ class StubAgentServer:
                         "chat_history": [],
                         "loaded_layers": [
                             RASTER_LAYER_ROW,
+                            LEGACY_RASTER_LAYER_ROW,
                             VECTOR_LAYER_ROW,
                             S3_VECTOR_LAYER_ROW,
                         ],

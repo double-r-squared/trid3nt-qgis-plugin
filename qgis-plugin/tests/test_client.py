@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from trid3nt.net import trid3nt_client as tc  # noqa: E402
 from stub_server import (  # noqa: E402
+    LEGACY_RASTER_LAYER_ROW,
     RASTER_LAYER_ROW,
     S3_VECTOR_LAYER_ROW,
     STUB_CASE_ID,
@@ -106,17 +107,29 @@ class TestPureHelpers(unittest.TestCase):
         payload = {
             "loaded_layers": [
                 RASTER_LAYER_ROW,
+                LEGACY_RASTER_LAYER_ROW,
                 VECTOR_LAYER_ROW,
                 {"name": "no layer_id -> skipped"},
                 "not-a-dict",
             ]
         }
         events = tc.parse_layer_events(payload)
-        self.assertEqual(len(events), 2)
-        raster, vector = events
+        self.assertEqual(len(events), 3)
+        raster, legacy, vector = events
+        # NEW shape (TiTiler->QGIS swap): raw s3 COG uri + explicit legend;
+        # no XYZ template on the event.
         self.assertEqual(raster.layer_type, "raster")
-        self.assertEqual(raster.tile_template, RASTER_LAYER_ROW["uri"])
-        self.assertIn("{z}", raster.tile_template)
+        self.assertEqual(raster.uri, RASTER_LAYER_ROW["uri"])
+        self.assertTrue(raster.uri.startswith("s3://"))
+        self.assertIsNone(raster.tile_template)
+        self.assertEqual(raster.legend["colormap"], "viridis")
+        self.assertEqual(raster.legend["vmin"], 600.0)
+        # LEGACY shape (old persisted cases): the TiTiler template still
+        # parses as a raster event with the template intact for unwrapping.
+        self.assertEqual(legacy.layer_type, "raster")
+        self.assertEqual(legacy.tile_template, LEGACY_RASTER_LAYER_ROW["uri"])
+        self.assertIn("{z}", legacy.tile_template)
+        self.assertIn("/cog/tiles/", legacy.uri)
         self.assertEqual(vector.layer_type, "vector")
         self.assertIsNone(vector.tile_template)
         self.assertEqual(vector.inline_geojson["type"], "FeatureCollection")
@@ -238,13 +251,17 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertEqual(pipeline_events[0].data["steps"][0].tool_name, "fetch_elevation")
         self.assertEqual(pipeline_events[-1].data["steps"][0].state, "complete")
 
-        # Layer events: raster tile template + inline-geojson vector + s3-only
-        # vector. The inline pad is >64 KiB so this round trip also proves the
-        # 64-bit frame-length decode path.
+        # Layer events: raw-s3 COG raster + LEGACY tile-template raster +
+        # inline-geojson vector + s3-only vector. The inline pad is >64 KiB so
+        # this round trip also proves the 64-bit frame-length decode path.
         layer_events = [e for e in events if e.kind == "session-state"][-1].data["layers"]
         by_id = {le.layer_id: le for le in layer_events}
         raster = by_id[RASTER_LAYER_ROW["layer_id"]]
-        self.assertEqual(raster.tile_template, RASTER_LAYER_ROW["uri"])
+        self.assertEqual(raster.uri, RASTER_LAYER_ROW["uri"])
+        self.assertIsNone(raster.tile_template)
+        self.assertEqual(raster.legend["kind"], "continuous")
+        legacy = by_id[LEGACY_RASTER_LAYER_ROW["layer_id"]]
+        self.assertEqual(legacy.tile_template, LEGACY_RASTER_LAYER_ROW["uri"])
         vector = by_id[VECTOR_LAYER_ROW["layer_id"]]
         self.assertEqual(
             len(vector.inline_geojson["features"][0]["properties"]["pad"]), 70000

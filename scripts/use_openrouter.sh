@@ -73,6 +73,6 @@ else
 fi
 
 echo "[use_openrouter] restarting agent..."
-bash "$REPO_ROOT/scripts/start_agent.sh" 2>&1 | grep -E "PID=|MODEL_PROVIDER|TiTiler" || true
+bash "$REPO_ROOT/scripts/start_agent.sh" 2>&1 | grep -E "PID=|MODEL_PROVIDER" || true
 echo "[use_openrouter] done. Backup of the previous env is at $ENV_FILE.bak"
 echo "[use_openrouter] revert anytime with: $0 --local"

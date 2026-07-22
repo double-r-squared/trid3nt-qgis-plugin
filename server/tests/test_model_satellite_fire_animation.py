@@ -310,11 +310,12 @@ def test_confirm_empty_run_is_not_ok_honesty_floor():
 
 
 def test_confirm_emits_each_published_frame_as_a_loaded_layer():
-    """NATE 2026-06-26: the render-blocker fix. Each frame whose publish returned
-    an http(s) tile URL must be EMITTED into session-state loaded_layers via
-    add_loaded_layer (the step the composer omitted -> frames published but never
-    rendered). The emitted LayerURI carries the PUBLISHED http(s) uri, NOT the raw
-    s3:// COG uri; a frame whose publish failed (no http url) is honestly SKIPPED.
+    """NATE 2026-06-26: the render-blocker fix, re-pinned on the NEW s3 publish
+    shape (TiTiler exit / QGIS-native swap). Each frame whose publish returned a
+    renderable uri -- now the raw s3:// COG the plugin reads via /vsicurl/ --
+    must be EMITTED into session-state loaded_layers via add_loaded_layer. The
+    emitted LayerURI carries the PUBLISHED s3:// uri; a frame whose publish
+    failed (absent from the publish map) is honestly SKIPPED.
     """
     bbox = tuple(_INCIDENT["bbox"])
 
@@ -342,12 +343,12 @@ def test_confirm_emits_each_published_frame_as_a_loaded_layer():
     def _fake_peek(product, b, s, e):
         return len(frames)
 
-    # The first two frames publish to TiTiler (http url); the third FAILS to
-    # publish (absent from the map) -> it must be honestly skipped, never emitted
-    # with its raw s3:// uri.
+    # The first two frames publish (the NEW shape: publish_layer echoes the
+    # raw s3:// COG uri, post overview-ensure); the third FAILS to publish
+    # (absent from the map) -> it must be honestly skipped, never emitted.
     published_map = {
-        frames[0].layer_id: "https://tiles.example/wms?layer=" + frames[0].layer_id,
-        frames[1].layer_id: "https://tiles.example/wms?layer=" + frames[1].layer_id,
+        frames[0].layer_id: f"s3://fake-pub/{frames[0].layer_id}.tif",
+        frames[1].layer_id: f"s3://fake-pub/{frames[1].layer_id}.tif",
     }
 
     async def _fake_publish(layers, pipeline_emitter):
@@ -392,15 +393,13 @@ def test_confirm_emits_each_published_frame_as_a_loaded_layer():
 
     assert result["status"] == "ok"
     assert result["n_frames"] == 3
-    # Only the TWO frames that PUBLISHED (http url) are emitted; the publish-fail
-    # frame is honestly skipped (NOT emitted with its raw s3:// uri).
+    # Only the TWO frames that PUBLISHED are emitted; the publish-fail frame is
+    # honestly skipped (never emitted).
     assert len(emitter.loaded_layers) == 2
     emitted_ids = {lyr.layer_id for lyr in emitter.loaded_layers}
     assert emitted_ids == set(published_map)
-    # Every emitted frame carries an http(s) tile uri -- NEVER the raw s3:// COG.
+    # Every emitted frame carries the PUBLISHED s3:// COG uri (the new shape).
     for lyr in emitter.loaded_layers:
-        assert lyr.uri.startswith(("http://", "https://")), lyr.uri
-        assert not lyr.uri.startswith("s3://")
         assert lyr.uri == published_map[lyr.layer_id]
         # The other identity fields are copied through unchanged.
         assert lyr.style_preset == "goes_rgb_animation"

@@ -10678,12 +10678,20 @@ async def _invoke_tool_via_emitter(
             # Seattle + Boulder reliefs 2026-06-10). Wrap the WMS URL in a
             # LayerURI here so the existing emission/persistence machinery
             # announces the layer exactly as composer layers are announced.
-            if isinstance(result, str) and result.startswith("http"):
+            #
+            # TiTiler exit (QGIS-native swap): publish_layer now returns the
+            # raw s3:// COG uri for rasters (the plugin reads it via
+            # /vsicurl/), so s3:// joined http(s) as a SUCCESS shape here.
+            if isinstance(result, str) and result.startswith(
+                ("http://", "https://", "s3://")
+            ):
                 try:
-                    # job-0254: route through the single emission seam. The WMS
-                    # URL here is always http(s) (guarded above), so the seam
-                    # passes it through; the seam exists so this site can never
-                    # regress into emitting a renderable raw gs:// raster.
+                    # job-0254: route through the single emission seam. The
+                    # publish return here is http(s) (a WMS/durable-GeoJSON
+                    # face) or a raw s3:// COG (QGIS-native raster publish);
+                    # the seam passes both through and still exists so this
+                    # site can never regress into emitting an un-renderable
+                    # shape (gs://, file://, empty).
                     _resolved_style_preset = _resolve_publish_wrap_style_preset(
                         style_preset=params.get("style_preset"),
                         layer_uri=result,
@@ -10839,17 +10847,22 @@ async def _auto_publish_droppable_raster(
     separately calling ``publish_layer``, we call it server-side here -- off the
     asyncio loop (publish_layer is a synchronous tool that polls TiTiler /
     PyQGIS, so a bare call would stall the WS keepalive; the no-sync-blocking
-    norm) -- and feed the resulting http(s) tile URL through the SAME
+    norm) -- and feed the resulting published uri (an http(s) face, or the raw
+    ``s3://`` COG on the QGIS-native path) through the SAME
     ``emit_layer_uri`` -> ``add_loaded_layer`` -> persist machinery the
     publish_layer wrap-site uses (so dedup, z-index, snapshot, and manifest all
     behave identically; if the LLM ALSO publishes the same COG the rows MERGE by
     COG identity -- no double-add).
 
-    Honesty floor: on FAILURE (publish_layer raises, or returns a non-http value
-    such as the raw uri) we surface a typed ``LAYER_AUTO_PUBLISH_FAILED`` error
-    envelope -- a failed render is NEVER a silent green. The LLM-visible tool
-    result is left UNCHANGED so the existing retry-on-failure narration can act.
-    Best-effort: this never raises, so it cannot break the dispatch.
+    Honesty floor: on FAILURE (publish_layer raises, or returns a value that is
+    neither an http(s) URL nor an s3:// COG uri -- empty/None/error strings,
+    gs://, file://) we surface a typed ``LAYER_AUTO_PUBLISH_FAILED`` error
+    envelope -- a failed render is NEVER a silent green. TiTiler exit
+    (QGIS-native swap): the raw ``s3://`` COG uri is now publish_layer's
+    SUCCESS shape for rasters (the plugin reads it via /vsicurl/), so it is
+    accepted alongside http(s). The LLM-visible tool result is left UNCHANGED
+    so the existing retry-on-failure narration can act. Best-effort: this
+    never raises, so it cannot break the dispatch.
     """
     publish_entry = TOOL_REGISTRY.get("publish_layer")
     if publish_entry is None:  # pragma: no cover - publish_layer always present
@@ -10893,11 +10906,17 @@ async def _auto_publish_droppable_raster(
         )
         return
 
-    # Honesty floor: a non-http(s) return (e.g. the raw s3:// uri fell through)
-    # is NOT a renderable layer -- never add it + narrate success.
-    if not (isinstance(published_url, str) and published_url.startswith("http")):
+    # Honesty floor: publish_layer's SUCCESS shapes are an http(s) URL (a
+    # WMS/durable-GeoJSON face) or the raw s3:// COG uri (QGIS-native raster
+    # publish; the plugin reads it via /vsicurl/). Anything else -- empty/None,
+    # an error string, gs://, file:// -- is NOT a renderable layer: never add
+    # it + narrate success.
+    if not (
+        isinstance(published_url, str)
+        and published_url.startswith(("http://", "https://", "s3://"))
+    ):
         logger.warning(
-            "auto-publish: publish_layer returned a non-http value for "
+            "auto-publish: publish_layer returned a non-renderable value for "
             "layer_id=%s uri=%s -> %r; treating as render failure",
             layer.layer_id,
             layer.uri,
@@ -10907,14 +10926,18 @@ async def _auto_publish_droppable_raster(
             websocket,
             state,
             layer=layer,
-            reason="publish_layer did not return a renderable http(s) URL",
+            reason=(
+                "publish_layer did not return a renderable http(s) URL or "
+                "s3:// COG uri"
+            ),
         )
         return
 
-    # Success: route the http tile URL through the SINGLE emission seam (it passes
-    # http(s) through untouched) and the existing add_loaded_layer machinery. The
-    # published layer keeps the producing layer's id/name so the COG-identity
-    # dedup collapses a later LLM re-publish of the same COG into this same row.
+    # Success: route the published uri (http(s) face or raw s3:// COG) through
+    # the SINGLE emission seam (it passes both through untouched) and the
+    # existing add_loaded_layer machinery. The published layer keeps the
+    # producing layer's id/name so the COG-identity dedup collapses a later LLM
+    # re-publish of the same COG into this same row.
     try:
         _emit_layer = emit_layer_uri(
             LayerURI(
@@ -10928,7 +10951,7 @@ async def _auto_publish_droppable_raster(
                 bbox=layer.bbox,
             )
         )
-        if _emit_layer is None:  # pragma: no cover - http never drops
+        if _emit_layer is None:  # pragma: no cover - http/s3 never drops
             return
         await state.emitter.add_loaded_layer(_emit_layer)
         # Track the layer on the active turn so the closing CaseChatMessage

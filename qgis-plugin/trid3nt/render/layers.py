@@ -3,9 +3,24 @@
 The differentiator: every layer the agent publishes lands in the QGIS layer
 tree, grouped under "TRID3NT <case>".
 
-  raster  the local agent publishes a ready TiTiler XYZ tile TEMPLATE
-          (contains {z}/{x}/{y}) in ``uri`` -> QGIS XYZ raster layer
-          (``type=xyz&url=...``, wms provider).
+  raster  QGIS-NATIVE rendering (the TiTiler -> QGIS swap): the agent
+          publishes the raw ``s3://...tif`` COG uri; the plugin resolves it
+          through the local MinIO http form (``s3_to_http``, the exact
+          mechanism the FlatGeobuf vector path already uses) and loads it as
+          ``QgsRasterLayer("/vsicurl/" + http, name, "gdal")``, then applies
+          its OWN renderer from the event's ``legend`` (continuous ->
+          ``QgsSingleBandPseudoColorRenderer`` with a ``ramps``-table
+          gradient; categorical -> ``QgsPalettedRasterRenderer`` from the
+          COG's embedded GDAL color table). LEGACY persisted cases still
+          carry a TiTiler XYZ tile TEMPLATE (contains ``/cog/tiles/`` +
+          ``{z}/{x}/{y}``) in ``uri``: the plugin unwraps the percent-encoded
+          ``url=`` query param back to the s3 COG (the same trick the
+          server's ``export_case_to_qgis._unwrap_tile_template`` uses) and
+          recovers ``rescale``/``colormap_name`` from the query string for
+          styling, so old cases keep rendering with TiTiler gone. A plain
+          non-TiTiler XYZ template (no ``url=`` param) still lands on the
+          old wms/XYZ branch -- an unanticipated shape is never silently
+          dropped.
   vector  inline GeoJSON (the agent's additive ``inline_geojson`` merge) ->
           temp ``.geojson`` file -> ogr layer. An ``s3://`` uri without inline
           GeoJSON resolves through the local MinIO http form
@@ -50,22 +65,29 @@ import json
 import os
 import re
 import tempfile
+import urllib.parse
 from typing import List, Optional, Tuple
 
 from qgis.core import (
+    QgsColorRampShader,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsDateTimeRange,
     QgsMeshDatasetIndex,
     QgsMeshLayer,
+    QgsPalettedRasterRenderer,
     QgsProject,
     QgsRasterLayer,
+    QgsRasterShader,
     QgsRectangle,
+    QgsSingleBandPseudoColorRenderer,
+    QgsStyle,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QDateTime, Qt
+from qgis.PyQt.QtGui import QColor
 
-from . import temporal
+from . import ramps, temporal
 from ..plugin_settings import MODE_LOCAL, PluginSettings
 from ..net.trid3nt_client import LayerEvent, qgis_xyz_uri, s3_to_http
 
@@ -433,6 +455,266 @@ def _select_tracer_dataset_group(layer) -> bool:
     return False
 
 
+# -- QGIS-native raster rendering (the TiTiler -> QGIS swap) ----------------- #
+
+
+def _unwrap_legacy_template(
+    uri: Optional[str],
+) -> Tuple[Optional[str], Tuple[Optional[float], Optional[float], Optional[str]]]:
+    """A LEGACY TiTiler tile TEMPLATE -> ``(cog_uri, (vmin, vmax, colormap))``.
+
+    Old persisted cases carry TiTiler XYZ templates (``/cog/tiles/`` +
+    ``{z}/{x}/{y}``) whose percent-encoded ``url=`` query param IS the s3 COG
+    (the same trick the server's ``export_case_to_qgis._unwrap_tile_template``
+    uses); ``rescale=lo,hi`` + ``colormap_name=`` in the same query string are
+    the legacy styling to recover for the QGIS-native renderer. Returns
+    ``(None, (None, None, None))`` for anything that is not a TiTiler wrap
+    (raw s3 uris, plain non-TiTiler XYZ templates, junk) -- pure + defensive,
+    never raises.
+    """
+    none3: Tuple[Optional[float], Optional[float], Optional[str]] = (None, None, None)
+    if not uri or ("/cog/tiles/" not in uri and "{z}" not in uri):
+        return None, none3
+    try:
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(uri).query)
+    except ValueError:
+        return None, none3
+    cog = (query.get("url") or [None])[0]
+    if not cog:
+        return None, none3
+    if "%" in cog:  # double-encoded template (parse_qs decodes one level)
+        cog = urllib.parse.unquote(cog)
+    vmin: Optional[float] = None
+    vmax: Optional[float] = None
+    rescale = (query.get("rescale") or [None])[0]
+    if rescale and "," in rescale:
+        lo_s, hi_s = rescale.split(",", 1)
+        try:
+            vmin, vmax = float(lo_s), float(hi_s)
+        except ValueError:
+            vmin = vmax = None
+    cmap = (query.get("colormap_name") or [None])[0] or None
+    return cog, (vmin, vmax, cmap)
+
+
+def _color_ramp_items(
+    colormap, vmin: float, vmax: float
+) -> Tuple[list, Optional[str]]:
+    """Build ``QgsColorRampShader.ColorRampItem`` list for ``colormap``.
+
+    ``colormap`` is either a rio-tiler NAME (resolved against the installed
+    QGIS default-style gradient presets first -- ``ramps.QGIS_RAMP_SOURCES``
+    -- then the hardcoded ``ramps`` stop table) or the legend's EXPLICIT
+    stops (``[[t_0to1, "#rrggbb"], ...]``). Returns ``(items, note)`` where
+    ``note`` is an honest remark when the name was unknown and the viridis
+    default stood in -- rendering NEVER silently defaults to grey.
+    """
+    note: Optional[str] = None
+    stops: Optional[List[Tuple[float, str]]] = None
+    if isinstance(colormap, (list, tuple)):
+        parsed: List[Tuple[float, str]] = []
+        for entry in colormap:
+            try:
+                t, color = float(entry[0]), str(entry[1])
+            except (TypeError, ValueError, IndexError):
+                continue
+            parsed.append((min(1.0, max(0.0, t)), color))
+        stops = sorted(parsed) or None
+        if stops is None:
+            note = "legend stops unreadable -- viridis default applied"
+    elif isinstance(colormap, str) and colormap:
+        # Prefer the installed QGIS built-in gradient (smoother than 5 stops).
+        source = ramps.QGIS_RAMP_SOURCES.get(colormap.strip().lower())
+        if source is not None:
+            try:
+                ramp = QgsStyle.defaultStyle().colorRamp(source[0])
+                if ramp is not None:
+                    if source[1]:
+                        ramp.invert()
+                    span = vmax - vmin
+                    items = []
+                    for i in range(11):
+                        t = i / 10.0
+                        items.append(
+                            QgsColorRampShader.ColorRampItem(
+                                vmin + t * span,
+                                ramp.color(t),
+                                f"{vmin + t * span:g}",
+                            )
+                        )
+                    return items, None
+            except Exception:  # noqa: BLE001 -- style DB unavailable: stop table
+                pass
+        stops = ramps.resolve_stops(colormap)
+        if stops is None:
+            note = (
+                f"unknown colormap '{colormap}' -- viridis default applied"
+            )
+    else:
+        note = "no colormap on the legend -- viridis default applied"
+    if stops is None:
+        stops = ramps.resolve_stops(ramps.DEFAULT_COLORMAP) or []
+    span = vmax - vmin
+    items = [
+        QgsColorRampShader.ColorRampItem(
+            vmin + t * span, QColor(color), f"{vmin + t * span:g}"
+        )
+        for t, color in stops
+    ]
+    return items, note
+
+
+def _build_pseudocolor_renderer(layer, colormap, vmin: float, vmax: float):
+    """``(QgsSingleBandPseudoColorRenderer, note)`` -- Interpolated shader."""
+    items, note = _color_ramp_items(colormap, vmin, vmax)
+    shader_fn = QgsColorRampShader(vmin, vmax)
+    try:
+        shader_fn.setColorRampType(QgsColorRampShader.Interpolated)
+    except (AttributeError, TypeError):
+        pass  # newer-API enum relocation -- Interpolated is the default anyway
+    shader_fn.setColorRampItemList(items)
+    shader = QgsRasterShader()
+    shader.setRasterShaderFunction(shader_fn)
+    renderer = QgsSingleBandPseudoColorRenderer(layer.dataProvider(), 1, shader)
+    try:
+        renderer.setClassificationMin(vmin)
+        renderer.setClassificationMax(vmax)
+    except (AttributeError, TypeError):
+        pass
+    return renderer, note
+
+
+def _embedded_palette_classes(provider):
+    """Band-1 GDAL color-table -> paletted class data, or ``None``.
+
+    ``provider.colorTable(1)`` returns the COG's embedded palette (NLCD +
+    other categorical rasters);
+    ``QgsPalettedRasterRenderer.colorTableToClassData`` converts it to the
+    class list the renderer constructor takes. ``None`` (fall back to the
+    continuous path) when the table is absent/empty or the API probe fails.
+    """
+    try:
+        table = provider.colorTable(1)
+    except (AttributeError, TypeError):
+        return None
+    if not table:
+        return None
+    try:
+        classes = QgsPalettedRasterRenderer.colorTableToClassData(table)
+    except (AttributeError, TypeError):
+        return None
+    return classes or None
+
+
+def _categorical_fallback_stops(classes) -> Tuple[Optional[list], Optional[float], Optional[float]]:
+    """Legend ``classes`` (LegendClass dicts) -> explicit gradient stops.
+
+    For a categorical legend whose COG carries NO embedded color table
+    (e.g. the sediment-yield log-binned legend), the legend's own swatches
+    are the best colorization available: anchor each class at its numeric
+    ``value`` (or the ``value_min``/``value_max`` bin midpoint), normalize to
+    0..1 stops, and let the continuous path interpolate. Returns
+    ``(stops, vmin, vmax)`` or ``(None, None, None)`` when the classes carry
+    no numeric anchors.
+    """
+    anchored: List[Tuple[float, str]] = []
+    for cls in classes or []:
+        if not isinstance(cls, dict):
+            continue
+        color = cls.get("color")
+        if not isinstance(color, str) or not color:
+            continue
+        value = cls.get("value")
+        if not isinstance(value, (int, float)):
+            lo, hi = cls.get("value_min"), cls.get("value_max")
+            if isinstance(lo, (int, float)) and isinstance(hi, (int, float)):
+                value = (float(lo) + float(hi)) / 2.0
+            else:
+                continue
+        anchored.append((float(value), color))
+    if len(anchored) < 2:
+        return None, None, None
+    anchored.sort()
+    vmin, vmax = anchored[0][0], anchored[-1][0]
+    span = (vmax - vmin) or 1.0
+    return [((v - vmin) / span, c) for v, c in anchored], vmin, vmax
+
+
+def _apply_raster_renderer(
+    layer,
+    legend: Optional[dict],
+    legacy_style: Tuple[Optional[float], Optional[float], Optional[str]],
+) -> Optional[str]:
+    """Apply the QGIS-native renderer for a COG raster; returns a style note.
+
+    Style source of truth, in order (code DEFENSIVELY -- the agent is
+    simultaneously making colormap/vmin/vmax explicit on the legend):
+
+    1. the event's ``legend`` dict (``LegendKey``: kind/colormap/vmin/vmax/
+       classes) -- what ``publish_layer`` computes today;
+    2. the LEGACY tile-template query string's ``rescale``/``colormap_name``
+       (``legacy_style``) for old persisted cases without a legend;
+    3. nothing -> leave GDAL's default renderer (grayscale single-band or
+       native RGB multiband -- the CORRECT render for terrain/RGBA
+       passthrough layers, which by design carry no legend).
+
+    Categorical legends render via ``QgsPalettedRasterRenderer`` from the
+    COG's embedded GDAL color table; when the table is absent the legend's
+    own class swatches (then the legend colormap) drive the continuous path.
+    Never raises -- a styling failure is an honest note, never a lost layer.
+    """
+    legend = legend if isinstance(legend, dict) else None
+    legacy_vmin, legacy_vmax, legacy_cmap = legacy_style
+    try:
+        kind = (legend or {}).get("kind")
+        if kind == "categorical":
+            classes = _embedded_palette_classes(layer.dataProvider())
+            if classes:
+                layer.setRenderer(
+                    QgsPalettedRasterRenderer(layer.dataProvider(), 1, classes)
+                )
+                return f"categorical renderer (embedded color table, {len(classes)} classes)"
+            # No embedded table: the legend's own swatches, else its colormap.
+            stops, cls_vmin, cls_vmax = _categorical_fallback_stops(
+                (legend or {}).get("classes")
+            )
+            if stops is not None:
+                renderer, note = _build_pseudocolor_renderer(
+                    layer, stops, cls_vmin, cls_vmax
+                )
+                layer.setRenderer(renderer)
+                return note or "categorical legend rendered as gradient (no embedded color table)"
+            # fall through to the continuous path with the legend colormap
+        colormap = (legend or {}).get("colormap")
+        vmin = (legend or {}).get("vmin")
+        vmax = (legend or {}).get("vmax")
+        if colormap is None:
+            colormap = legacy_cmap
+        if not isinstance(vmin, (int, float)) or not isinstance(vmax, (int, float)):
+            vmin, vmax = legacy_vmin, legacy_vmax
+        if colormap is None and vmin is None:
+            # No styling info anywhere: terrain/RGBA passthrough by design --
+            # GDAL's default renderer (grayscale autoscale / native RGB) IS
+            # the correct render, exactly as TiTiler passed these through.
+            return None
+        if vmin is None or vmax is None or float(vmax) <= float(vmin):
+            note_range = " (no usable range on the legend -- 0..1 assumed)"
+            vmin, vmax = 0.0, 1.0
+        else:
+            note_range = ""
+            vmin, vmax = float(vmin), float(vmax)
+        renderer, note = _build_pseudocolor_renderer(layer, colormap, vmin, vmax)
+        layer.setRenderer(renderer)
+        if note_range:
+            return (note or "").rstrip() + note_range if note else f"styled{note_range}"
+        return note
+    except Exception as exc:  # noqa: BLE001 -- honest note, never a lost layer
+        return (
+            f"renderer application failed ({type(exc).__name__}: {exc}) "
+            "-- layer kept with default rendering"
+        )
+
+
 class LayerMaterializer:
     """Per-connection materializer: one group, one added-id set, one temp dir."""
 
@@ -574,26 +856,89 @@ class LayerMaterializer:
         return f"layer '{event.name}': type '{event.layer_type}' not supported yet -- skipped"
 
     def _add_raster(self, event: LayerEvent, frame_membership: dict) -> str:
-        template = event.tile_template
-        if not template:
+        """QGIS-native COG rendering (the TiTiler -> QGIS swap).
+
+        Accepts BOTH uri shapes: (a) the NEW raw ``s3://...tif`` COG uri ->
+        MinIO http form -> ``/vsicurl/`` gdal layer; (b) a LEGACY TiTiler
+        tile TEMPLATE -> unwrap the ``url=`` query param to the same s3 COG
+        (recovering ``rescale``/``colormap_name`` for styling). A plain
+        non-TiTiler XYZ template (no ``url=`` param -- e.g. an external tile
+        service) still lands on the old wms/XYZ branch rather than being
+        silently dropped. The renderer comes from the event's ``legend``
+        (``_apply_raster_renderer``), so the plugin needs no tile server.
+        """
+        cog_uri: Optional[str] = None
+        legacy_style: Tuple[Optional[float], Optional[float], Optional[str]] = (
+            None,
+            None,
+            None,
+        )
+        source_label = "COG via GDAL"
+        if (event.uri or "").startswith("s3://"):
+            cog_uri = event.uri
+        else:
+            cog_uri, legacy_style = _unwrap_legacy_template(event.uri)
+            if cog_uri is None and event.wms_url:
+                cog_uri, legacy_style = _unwrap_legacy_template(event.wms_url)
+            if cog_uri is not None:
+                source_label = "COG via GDAL, legacy tile template unwrapped"
+
+        if cog_uri is None:
+            # Neither a raw s3 COG nor a TiTiler wrap. A plain XYZ template
+            # keeps the legacy wms branch (never silently drop a shape).
+            template = event.tile_template
+            if template:
+                layer = QgsRasterLayer(qgis_xyz_uri(template), event.name, "wms")
+                if not layer.isValid():
+                    return f"raster '{event.name}': QGIS rejected the XYZ uri -- skipped"
+                return self._finish_raster_add(
+                    layer, event, frame_membership, "XYZ tiles, non-TiTiler template"
+                )
             return (
-                f"raster '{event.name}': no XYZ tile template on the event -- skipped "
-                "(WMS-only rasters land in a later milestone)"
+                f"raster '{event.name}': no s3 COG uri or tile template on the "
+                "event -- skipped"
             )
-        layer = QgsRasterLayer(qgis_xyz_uri(template), event.name, "wms")
+
+        if not cog_uri.startswith("s3://"):
+            return (
+                f"raster '{event.name}': tile template wraps a non-s3 uri "
+                f"({cog_uri}) -- skipped"
+            )
+        if self._settings is not None and self._settings.mode != MODE_LOCAL:
+            return (
+                f"raster '{event.name}': s3 uri in remote mode -- skipped "
+                "(no presigned fetch yet)"
+            )
+        endpoint = getattr(self._settings, "minio_endpoint", None) or "http://127.0.0.1:9000"
+        http = s3_to_http(cog_uri, endpoint)
+        if not http:
+            return f"raster '{event.name}': unparseable s3 uri ({cog_uri}) -- skipped"
+        layer = QgsRasterLayer(f"/vsicurl/{http}", event.name, "gdal")
         if not layer.isValid():
-            return f"raster '{event.name}': QGIS rejected the XYZ uri -- skipped"
+            return f"raster '{event.name}': COG did not load ({http}) -- skipped"
+        style_note = _apply_raster_renderer(layer, event.legend, legacy_style)
+        if style_note:
+            source_label += f"; {style_note}"
+        return self._finish_raster_add(layer, event, frame_membership, source_label)
+
+    def _finish_raster_add(
+        self, layer, event: LayerEvent, frame_membership: dict, source_label: str
+    ) -> str:
+        """Shared raster tail: track for temporal stamping + place in the
+        case group (ITEM C: a recognized frame-sequence member goes straight
+        into its found-or-created-or-renamed animation subgroup; everything
+        else stays flat under the case group)."""
         self._case_rasters.append(layer)
-        # ITEM C: a recognized frame-sequence member goes straight into its
-        # (found-or-created-or-renamed) animation subgroup; everything else
-        # stays flat under the case group.
         destination = None
         membership = frame_membership.get(event.name)
         if membership is not None:
             stem, count = membership
             destination = _ensure_animation_subgroup(self._ensure_group(), stem, count)
         return self._add_to_group(
-            layer, event, f"raster '{event.name}' added (XYZ tiles)", group=destination
+            layer,
+            event,
+            f"raster '{event.name}' added ({source_label})",
+            group=destination,
         )
 
     def _add_vector(self, event: LayerEvent) -> str:

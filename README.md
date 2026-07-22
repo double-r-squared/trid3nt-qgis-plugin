@@ -30,7 +30,7 @@ or an API key for OpenAI/OpenRouter/Groq/etc.
 ```sh
 make setup     # one-time: create .env.local, fetch binaries (mf6/minio/mc), build the agent venv
 #              then edit .env.local -- set your LLM endpoint + key (see .env.openrouter.example)
-make up        # start the local stack: minio (:9000) + titiler (:8080) + agent (:8765 WS / :8766 HTTP)
+make up        # start the local stack: minio (:9000) + agent (:8765 WS / :8766 HTTP)
 make plugin    # install the QGIS plugin into your QGIS profile
 #              then in QGIS: enable the TRID3NT plugin (or Plugin Reloader to reload)
 make status    # health-check the services
@@ -67,7 +67,6 @@ The model can also be switched live from the plugin's Settings (no restart).
 |----------------|------------------------------|--------------------------------|
 | Agent WS       | ws://localhost:8765          | plugin/web connect here        |
 | Agent HTTP     | http://localhost:8766        | tool catalog + telemetry       |
-| TiTiler        | http://localhost:8080        | raster tile server             |
 | MinIO API      | http://localhost:9000        | S3-compatible object storage   |
 | MinIO Console  | http://localhost:9001        | web UI (user: trid3nt)         |
 | Ollama         | http://localhost:11434       | optional local LLM             |

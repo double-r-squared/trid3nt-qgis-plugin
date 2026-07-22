@@ -3,11 +3,13 @@
 NATE's principle: when we fetch a map the gradient/key must MEAN something, not be
 a retroactive hardcoded guess. ``publish_layer`` now EMITS a ``LegendKey`` derived
 DIRECTLY from the resolved TiTiler ``style_params`` -- the SAME
-``&rescale=lo,hi&colormap_name=name`` it bakes into the tile URL -- so the legend
-range and the painted-raster range AGREE by construction. The key is stashed
-keyed by the returned tile-template (the display uri) so the pipeline emitter can
-lift it onto the ``ProjectLayerSummary`` (the atomic tool returns a bare URL
-string, not a typed ``LayerURI``).
+``&rescale=lo,hi&colormap_name=name`` it resolves for the raster -- so the legend
+range and the painted-raster range AGREE by construction. TiTiler exit: the key
+is stashed keyed by the returned raw ``s3://`` COG uri (the envelope uri) so the
+pipeline emitter can lift it onto the ``ProjectLayerSummary`` (the atomic tool
+returns a bare URI string, not a typed ``LayerURI``); the register-only manifest
+seam (``register_published_manifest``) stashes by the same raw ``cog_uri`` (its
+coverage lives in ``test_publish_manifest_register_only_phase4.py``).
 
 Coverage:
   (a) a CONTINUOUS raster publish carries a legend with the REAL vmin/vmax +
@@ -33,7 +35,6 @@ from grace2_agent.tools import publish_layer as pl
 from grace2_agent.tools.publish_layer import (
     _categorical_legend_from_colormap,
     _parse_style_params,
-    build_titiler_tile_url,
     legend_for_published_layer,
     pop_legend_for_uri,
     publish_layer,
@@ -241,65 +242,49 @@ def test_legend_fail_open_returns_none_on_unreadable_bytes() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_build_titiler_tile_url_stashes_continuous_legend() -> None:
-    """The register-only twin mints its URL through build_titiler_tile_url; that
-    seam stashes the continuous legend keyed by the returned template."""
-    template = build_titiler_tile_url(
-        "https://cf.example", "s3://b/q.tif", "&rescale=0,50&colormap_name=blues"
-    )
-    legend = pop_legend_for_uri(template)
-    assert legend is not None
-    assert (legend.kind, legend.colormap, legend.vmin, legend.vmax) == (
-        "continuous",
-        "blues",
-        0.0,
-        50.0,
-    )
-
-
-def test_build_titiler_tile_url_no_legend_for_empty_style() -> None:
-    """Empty style_params (categorical / RGBA register-only) -> no stashed legend
-    (the COG palette is not re-read in this lightweight seam)."""
-    template = build_titiler_tile_url("https://cf.example", "s3://b/nlcd.tif", "")
-    assert pop_legend_for_uri(template) is None
+# NOTE (TiTiler exit): ``build_titiler_tile_url`` - the legacy register-only
+# tile-template mint + its template-keyed legend stash - was DELETED once
+# ``register_published_manifest`` swapped to stashing by the raw ``cog_uri``.
+# That seam's legend coverage lives in
+# ``test_publish_manifest_register_only_phase4.py``.
 
 
 def _s3_titiler(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force the AWS s3 + TiTiler publish branch (storage_scheme == 's3')."""
+    """Force the AWS s3 publish branch (storage_scheme == 's3').
+
+    TiTiler exit: no GRACE2_TILE_SERVER_BASE - publish_layer emits the raw
+    s3:// COG uri and the legend stash is keyed by that uri.
+    """
     from grace2_agent.tools import cache as cache_mod
 
     monkeypatch.setattr(cache_mod, "storage_scheme", lambda: "s3")
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://cf.example")
 
 
-def test_publish_continuous_raster_stashes_legend_by_template(
+def test_publish_continuous_raster_stashes_legend_by_s3_uri(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """End-to-end: a continuous raster publish returns a tile template AND stashes
-    a continuous legend keyed by that template, with the REAL percentile range
-    that EQUALS the URL rescale (legend == render)."""
+    """End-to-end: a continuous raster publish returns the raw s3:// COG uri AND
+    stashes a continuous legend keyed by that uri, with the REAL percentile
+    range that EQUALS the resolved rescale (legend == render)."""
     _s3_titiler(monkeypatch)
-    monkeypatch.setattr(
-        MOD, "_read_raster_bytes", lambda uri: _continuous_geotiff_bytes(0.0, 40.0)
-    )
+    cog_bytes = _continuous_geotiff_bytes(0.0, 40.0)
+    monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: cog_bytes)
     # Don't rewrite/copy COGs in the test (overview check fails open to the uri).
     monkeypatch.setattr(MOD, "_ensure_raster_has_overviews", lambda uri: uri)
 
-    template = publish_layer(
+    out = publish_layer(
         layer_uri="s3://bucket/runs/somerun/x.tif",
         layer_id="layer-cont-1",
         style_preset="gridmet_vs_unknown",
     )
-    assert isinstance(template, str) and template.startswith("https://cf.example")
-    # The URL carries the percentile rescale...
-    assert "rescale=" in template and "colormap_name=" in template
-    # ...and the stashed legend uses the IDENTICAL range + colormap. The template
-    # query is ``...png?url=<cog>&rescale=lo,hi&colormap_name=name``; everything
-    # after the url= value is the style_params string the legend is derived from.
-    legend = pop_legend_for_uri(template)
+    # The envelope uri slot is the raw s3 COG (no tile template).
+    assert out == "s3://bucket/runs/somerun/x.tif"
+    # The stashed legend uses the IDENTICAL range + colormap the resolver
+    # computed (the rescale/colormap now ride ONLY the legend, not a URL).
+    legend = pop_legend_for_uri(out)
     assert legend is not None and legend.kind == "continuous"
-    query = template.split("?", 1)[1]
-    style_params = "&" + query.split("&", 1)[1]  # drop the leading url=<cog>
+    style_params = MOD._band1_percentile_rescale(cog_bytes)
+    assert style_params is not None
     url_lo, url_hi, url_cmap = _parse_style_params(style_params)
     assert legend.vmin == url_lo and legend.vmax == url_hi and legend.colormap == url_cmap
     assert legend.vmax > legend.vmin  # real, non-degenerate range
@@ -309,17 +294,19 @@ def test_publish_paletted_raster_stashes_categorical_legend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A paletted (NLCD) raster publishes with empty style_params (palette wins)
-    and stashes a categorical legend built from the embedded GDAL table."""
+    and stashes a categorical legend built from the embedded GDAL table, keyed
+    by the returned s3 uri."""
     _s3_titiler(monkeypatch)
     monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: _paletted_geotiff_bytes())
     monkeypatch.setattr(MOD, "_ensure_raster_has_overviews", lambda uri: uri)
 
-    template = publish_layer(
+    out = publish_layer(
         layer_uri="s3://bucket/runs/somerun/nlcd.tif",
         layer_id="layer-nlcd-1",
         style_preset="categorical_landcover",
     )
-    legend = pop_legend_for_uri(template)
+    assert out == "s3://bucket/runs/somerun/nlcd.tif"
+    legend = pop_legend_for_uri(out)
     assert legend is not None
     assert legend.kind == "categorical"
     assert {c.value for c in legend.classes} == {11, 21, 41, 81, 90}

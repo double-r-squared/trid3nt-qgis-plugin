@@ -5,7 +5,7 @@
     `docs/reports/tool-sweep-results.jsonl` (the 3-pass direct-execution tool sweep,
     latest entry 2026-07-06T17:35:00). Do not edit by hand -- re-run the generator.
 
-Every registered tool was executed directly against the local stack (MinIO + TiTiler + local solvers, ~3 km downtown-Tampa AOI, curated arguments; layer-consuming tools chained onto real fetched layers). **176 tools**: PASS 138 | KEY 6 | FAIL 18 | TIMEOUT 2 | SKIP-ARGS 12.
+Every registered tool was executed directly against the local stack (MinIO + local solvers, ~3 km downtown-Tampa AOI, curated arguments; layer-consuming tools chained onto real fetched layers). **176 tools**: PASS 138 | KEY 6 | FAIL 18 | TIMEOUT 2 | SKIP-ARGS 12.
 
 ## Status legend
 

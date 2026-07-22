@@ -9,18 +9,22 @@ overview-bearing COGs to deterministic keys, and writes a thin typed
 
 The agent then collapses to REGISTER-ONLY:
   1. Read ``completion.json.publish_manifest_uri`` (this module, ``read_publish_manifest``).
-  2. For each manifest layer: build the TiTiler tile URL from the bare
-     ``cog_uri`` + the agent-owned ``_TITILER_STYLE_REGISTRY`` (keyed on
-     ``style_preset``, using ``band_stats`` for the generic-fallback rescale -
-     NO COG download), mint ``layer_id = f"{layer_id_stem}-{run_id}"``, call
+  2. For each manifest layer: emit the bare ``cog_uri`` AS the layer uri
+     (TiTiler exit / QGIS-native swap - the plugin reads the raw ``s3://`` COG
+     via /vsicurl/, mirroring ``publish_layer``'s raw-cog return), resolve the
+     style params from the agent-owned registry + ``band_stats`` (NO COG
+     download) purely to STASH the data-driven legend keyed by that ``cog_uri``
+     (``_stash_legend_for_uri``; the pipeline emitter lifts it by ``layer.uri``),
+     mint ``layer_id = f"{layer_id_stem}-{run_id}"``, call
      ``observe_published_layer``, build a ``LayerURI``.
   3. SHORT-CIRCUIT the on-box heavy path: NO ``_resolve_run_output_to_local``,
      NO ``postprocess_flood``/``postprocess_waves``, NO
      ``_ensure_raster_has_overviews`` (``has_overviews`` is true).
 
-The agent-side publish-or-honest-drop gate is PRESERVED: if
-``GRACE2_TILE_SERVER_BASE`` is unset the raster cannot be displayed, so the layer
-is DROPPED (its bare ``s3://`` never renders) while the metrics still narrate.
+TiTiler exit: the former ``GRACE2_TILE_SERVER_BASE`` publish-or-honest-drop gate
+is GONE - no tile server is needed to display a raster anymore, so no manifest
+layer is dropped for lack of one (``dropped_count`` stays for the result shape
+but is always 0 on this path).
 
 FALLBACK (one-release safety): when the manifest is ABSENT or carries an UNKNOWN
 schema_version, ``read_publish_manifest`` returns ``None`` and the caller runs
@@ -32,7 +36,6 @@ images rebuild.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
 from grace2_contracts.execution import LayerURI
@@ -42,7 +45,11 @@ from grace2_contracts.publish_manifest import (
     parse_publish_manifest,
 )
 
-from ..tools.publish_layer import build_titiler_tile_url, style_params_from_band_stats
+from ..tools.publish_layer import (
+    _stash_legend_for_uri,
+    legend_for_published_layer,
+    style_params_from_band_stats,
+)
 from ..uri_registry import observe_published_layer
 
 __all__ = [
@@ -158,10 +165,12 @@ class ManifestRegisterResult:
     """The register-only outcome consumed by the workflow tails.
 
     ``layers`` parallels ``postprocess_flood``'s return: ``layers[0]`` is the
-    PEAK primary, ``layers[1:]`` are the frame/context layers, EXCLUDING any that
-    were honestly dropped (no tile server configured). ``metrics`` is the
-    manifest's top-level peak aggregates (the ``FloodMetrics`` source). The
-    DROPPED layers are tracked so the caller can narrate the publish failure.
+    PEAK primary, ``layers[1:]`` are the frame/context layers. ``metrics`` is
+    the manifest's top-level peak aggregates (the ``FloodMetrics`` source).
+    TiTiler exit: rasters emit as their raw ``s3://`` COG uri (plugin
+    /vsicurl/), so the no-tile-server drop path is gone -- ``dropped_count`` is
+    always 0 and ``tile_publish_available`` is always True (both kept for the
+    callers' result shape).
     """
 
     __slots__ = ("layers", "metrics", "dropped_count", "tile_publish_available")
@@ -180,42 +189,23 @@ class ManifestRegisterResult:
         self.tile_publish_available = tile_publish_available
 
 
-def _tile_server_base() -> str:
-    """Return the configured TiTiler base (trailing slash stripped), or ``""``.
-
-    Empty -> the publish-or-honest-drop gate fires (RASTER_PUBLISH_UNAVAILABLE
-    equivalent): the layer is dropped, metrics still narrate.
-    """
-    return os.environ.get("GRACE2_TILE_SERVER_BASE", "").rstrip("/")
-
-
 def _register_one_layer(
     entry: PublishManifestLayer,
     *,
     run_id: str,
-    tile_base: str,
     bbox: tuple[float, float, float, float] | None,
 ) -> RegisteredLayer:
-    """Resolve ONE manifest layer to a registered ``LayerURI`` (or a drop).
+    """Resolve ONE manifest layer to a registered ``LayerURI``.
 
-    Mirrors the on-box ``publish_layer`` s3 branch byte-for-byte in shape: resolve
-    style params (from band_stats, NO COG read), mint the tile template, register
-    BOTH faces via ``observe_published_layer``, return a ``LayerURI`` carrying the
-    template as ``uri``. When ``tile_base`` is empty the layer is DROPPED.
+    Mirrors the on-box ``publish_layer`` s3 branch byte-for-byte in shape
+    (TiTiler exit): resolve style params (from band_stats, NO COG read), stash
+    the data-driven LEGEND keyed by the raw ``cog_uri``, register the COG via
+    ``observe_published_layer``, return a ``LayerURI`` carrying the raw
+    ``cog_uri`` as ``uri`` (the plugin reads it via /vsicurl/).
     """
     stem = entry.layer_id_stem
     cog_uri = entry.cog_uri
     layer_id = f"{stem}-{run_id}"
-
-    if not tile_base:
-        # Publish-or-honest-drop gate: a bare s3:// COG never renders in
-        # MapLibre, so do NOT emit it. Metrics still narrate downstream.
-        logger.warning(
-            "register_published_manifest: GRACE2_TILE_SERVER_BASE unset - "
-            "DROPPING layer_id=%s (raster overlay unavailable; metrics stand)",
-            layer_id,
-        )
-        return RegisteredLayer(layer=None, dropped=True, cog_uri=cog_uri, stem=stem)
 
     bs = entry.band_stats
     style_params = style_params_from_band_stats(
@@ -226,14 +216,41 @@ def _register_one_layer(
         p98=bs.p98,
         layer_uri=cog_uri,
     )
-    template = build_titiler_tile_url(tile_base, cog_uri, style_params)
 
-    # Register BOTH faces (job-0304): the s3:// COG is the consumable DATA uri,
-    # the TiTiler tile TEMPLATE is the display face. A NO-OP outside an active
-    # dispatch ContextVar - which is exactly why registration stays agent-side
-    # (it cannot move to the worker; a missing registration breaks the
-    # flood->Pelicun URI-handle resolution).
-    observe_published_layer(layer_id, gcs_uri=cog_uri, wms_url=template)
+    # DATA-DRIVEN LEGEND (mirror of publish_layer's raw-cog exit): derive the
+    # render KEY from the SAME resolved style_params and stash it keyed by the
+    # ENVELOPE uri - the raw s3:// COG this layer emits. The pipeline emitter's
+    # add_loaded_layer lifts it back out by ``layer.uri``. ``raster_bytes=b""``
+    # pins the register-only fast-path contract: NO COG download here - an
+    # empty style_params (categorical/RGBA register-only layer) therefore
+    # stashes None and falls back to the plugin's style_preset/default
+    # rendering, exactly as the legacy template seam did. Fail-open: a legend
+    # failure never blocks registration.
+    try:
+        legend = None
+        if style_params:
+            legend = legend_for_published_layer(
+                entry.style_preset,
+                cog_uri,
+                style_params,
+                units=entry.units or None,
+                raster_bytes=b"",
+            )
+        _stash_legend_for_uri(cog_uri, legend)
+    except Exception as exc:  # noqa: BLE001 - legend never blocks a register
+        logger.debug(
+            "register_published_manifest legend stash skipped (%s: %s)",
+            type(exc).__name__,
+            exc,
+        )
+
+    # Register the published COG (job-0304): with the TiTiler exit there is no
+    # separate display face - the raw s3:// COG IS both the consumable DATA uri
+    # and the envelope uri the plugin renders (mirrors publish_layer). A NO-OP
+    # outside an active dispatch ContextVar - which is exactly why registration
+    # stays agent-side (it cannot move to the worker; a missing registration
+    # breaks the flood->Pelicun URI-handle resolution).
+    observe_published_layer(layer_id, gcs_uri=cog_uri)
 
     # Per-layer bbox: prefer the manifest entry's, else the workflow's AOI bbox.
     entry_bbox: tuple[float, float, float, float] | None = None
@@ -248,17 +265,17 @@ def _register_one_layer(
         layer_id=layer_id,
         name=entry.name,  # EXACT web grouping token - never rename.
         layer_type=entry.layer_type or "raster",
-        uri=template,
+        uri=cog_uri,
         style_preset=entry.style_preset,
         role=entry.role or "primary",  # type: ignore[arg-type]
         units=entry.units or None,
         bbox=entry_bbox or bbox,
     )
     logger.info(
-        "register_published_manifest: registered layer_id=%s name=%r template=%s",
+        "register_published_manifest: registered layer_id=%s name=%r cog_uri=%s",
         layer_id,
         entry.name,
-        template,
+        cog_uri,
     )
     return RegisteredLayer(layer=layer, dropped=False, cog_uri=cog_uri, stem=stem)
 
@@ -275,7 +292,8 @@ def register_swan_wave_layers(
     The SWAN standalone composer returns a typed ``WaveFieldLayerURI`` carrying
     the four narration scalars (``max_hs_m`` / ``mean_tp_s`` / ``mean_dir_deg`` /
     ``wave_area_km2``) that the manifest stores in each layer's ``metrics``. This
-    builds those typed rows over the register-only tile URLs (no COG conversion).
+    builds those typed rows over the register-only raw ``s3://`` COG uris
+    (TiTiler exit; no COG conversion).
 
     Returns ``(wave_layers, top_metrics, dropped_count)`` where ``wave_layers[0]``
     is the PEAK (role ``"primary"``). ``WaveFieldLayerURI`` is imported lazily so
@@ -283,13 +301,10 @@ def register_swan_wave_layers(
     """
     from grace2_contracts.swan_contracts import WaveFieldLayerURI
 
-    tile_base = _tile_server_base()
     wave_layers: list[Any] = []
     dropped = 0
     for entry in manifest.layers:
-        reg = _register_one_layer(
-            entry, run_id=run_id, tile_base=tile_base, bbox=bbox
-        )
+        reg = _register_one_layer(entry, run_id=run_id, bbox=bbox)
         if reg.dropped or reg.layer is None:
             dropped += 1
             continue
@@ -321,19 +336,17 @@ def register_manifest_layers(
     run_id: str,
     bbox: tuple[float, float, float, float] | None = None,
 ) -> ManifestRegisterResult:
-    """Register every manifest layer (TiTiler URL + observe), no COG conversion.
+    """Register every manifest layer (raw ``s3://`` COG uri + observe + legend
+    stash), no COG conversion.
 
-    Pure given the env tile-base + the active dispatch registry; runs on the loop
-    (it does NO heavy I/O - the worker already produced the COGs + band_stats).
-    Honors the publish-or-honest-drop gate per layer.
+    Pure given the active dispatch registry; runs on the loop (it does NO heavy
+    I/O - the worker already produced the COGs + band_stats). TiTiler exit: no
+    tile server is required to display, so no layer is dropped for lack of one.
     """
-    tile_base = _tile_server_base()
     layers: list[LayerURI] = []
     dropped = 0
     for entry in manifest.layers:
-        reg = _register_one_layer(
-            entry, run_id=run_id, tile_base=tile_base, bbox=bbox
-        )
+        reg = _register_one_layer(entry, run_id=run_id, bbox=bbox)
         if reg.dropped:
             dropped += 1
             continue
@@ -343,5 +356,5 @@ def register_manifest_layers(
         layers=layers,
         metrics=dict(manifest.metrics or {}),
         dropped_count=dropped,
-        tile_publish_available=bool(tile_base),
+        tile_publish_available=True,
     )

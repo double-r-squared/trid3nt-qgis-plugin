@@ -1,26 +1,28 @@
-"""publish_layer TiTiler tile-base derivation tests (sprint-14-aws CloudFront).
+"""publish_layer raw-s3 envelope pins (TiTiler exit; formerly tile-base tests).
 
-The AWS deployment publishes rasters as TiTiler XYZ tile TEMPLATES, baking the
-full tile URL into the layer handle using ``GRACE2_TILE_SERVER_BASE``. This
-suite pins that the SAME seam works for BOTH:
+The QGIS plugin is the ONLY client and loads COGs DIRECTLY via GDAL
+``/vsicurl/`` (the same MinIO s3->http translation it already uses for
+FlatGeobuf vectors), so ``publish_layer`` no longer mints TiTiler XYZ tile
+TEMPLATES and no longer reads ``GRACE2_TILE_SERVER_BASE``. This suite (which
+previously pinned the tile-base derivation) now pins the swapped contract:
 
-  - today's value  ``http://54.185.114.233:8080`` (IP:port origin), and
-  - the post-cutover value ``https://<cf-domain>`` (path-less https origin),
+  - a raster publish returns the raw ``s3://`` COG URI VERBATIM - no
+    ``/cog/tiles/`` path, no ``{z}/{x}/{y}`` placeholders, regardless of
+    whether the legacy env var is set (the env read is GONE);
+  - the data-driven LEGEND (colormap name + vmin/vmax) is stashed keyed by
+    the returned ``s3://`` uri, so the pipeline emitter's ``layer.uri``
+    lookup still matches the envelope uri;
+  - ``observe_published_layer`` registers the s3 COG as the DATA uri with
+    NO separate display face (the raw COG IS the envelope uri);
+  - LEGACY republish: an old persisted case's ``/cog/tiles/...?url=<cog>``
+    template handed back to publish_layer is UNWRAPPED to its embedded s3
+    COG (the ``export_case_to_qgis._unwrap_tile_template`` trick) and flows
+    through the normal raster path -> the NEW raw-s3 envelope shape; a
+    template with no recoverable COG is returned verbatim (degraded);
+  - a non-s3 raster URI still raises the typed LAYER_URI_NOT_FOUND error.
 
-so flipping the env to the CloudFront domain (an orchestrator deploy step, NOT
-done here) yields an https tile template with zero code change. Also pins:
-
-  - the ``/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=...`` path is appended
-    correctly for both (single ``/cog/`` join, no double slash), and the
-    ``s3://`` URI is percent-encoded into ``?url=``;
-  - the IDEMPOTENT republish guard (publish_layer.py) still short-circuits an
-    already-resolved ``https`` ``/cog/tiles/`` template (returns it verbatim);
-  - a trailing slash on the base is tolerated (``rstrip('/')``);
-  - UNSET base on an s3 deploy fails fast + honest (RASTER_PUBLISH_UNAVAILABLE),
-    proving the default stays OFF until the orchestrator sets the env.
-
-These exercise ONLY the ``storage_scheme()=='s3'`` branch, which is the first
-statement in ``publish_layer`` — no Cloud Run / GCS / TiTiler network I/O.
+No TiTiler / network I/O - ``_read_raster_bytes`` is patched to fail open so
+style resolution lands on the typed flood registry entry.
 """
 
 from __future__ import annotations
@@ -29,140 +31,126 @@ from urllib.parse import quote
 
 import pytest
 
-from grace2_agent.tools.publish_layer import PublishLayerError, publish_layer
+from grace2_agent.tools import publish_layer as pl
+from grace2_agent.tools.publish_layer import (
+    PublishLayerError,
+    pop_legend_for_uri,
+    publish_layer,
+)
 
-# A representative s3:// COG handle. quote(..., safe='') is what the tool uses,
-# so the expected ?url= value is computed the same way the implementation does.
+MOD = pl
+
+# A representative s3:// COG handle (flood-family so the F51 no-preset path
+# infers continuous_flood_depth and resolves the typed registry ramp).
 S3_URI = "s3://grace2-hazard-runs-226996537797/runs/ian/flood_depth_peak.tif"
 ENCODED = quote(S3_URI, safe="")
+
+# A legacy TiTiler tile TEMPLATE wrapping S3_URI (the shape old persisted
+# cases still carry in their envelopes / registries).
+LEGACY_TEMPLATE = (
+    "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
+    f"?url={ENCODED}&rescale=0,3&colormap_name=ylgnbu"
+)
 
 
 @pytest.fixture(autouse=True)
 def _s3_backend(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force the AWS/s3 publish branch for every test in this module."""
+    """Force the AWS/s3 publish branch + a fail-open bytes read (no network)."""
     monkeypatch.setenv("GRACE2_STORAGE_BACKEND", "s3")
+    monkeypatch.setattr(MOD, "_read_raster_bytes", lambda uri: None)
 
 
-# The S3_URI handle (``.../flood_depth_peak.tif``) infers the
-# ``continuous_flood_depth`` family in the F51 no-preset path, so the no-preset
-# template now carries the flood ramp suffix (style_params is NEVER empty for a
-# continuous raster). These base-derivation tests therefore assert on the
-# percent-encoded ``?url=`` PREFIX (the base-join contract) rather than an exact
-# tail. ``_read_raster_bytes`` for the fake S3_URI returns None here (the key
-# does not exist), so the palette probe + band-stats are skipped and the typed
-# flood registry entry is what resolves.
-_FLOOD_SUFFIX = "&rescale=0,3&colormap_name=ylgnbu"
+def test_raster_publish_returns_raw_s3_uri() -> None:
+    """The envelope uri slot gets the raw s3:// COG - no template mint."""
+    out = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
+    assert out == S3_URI
+    assert "/cog/tiles/" not in out
+    assert "{z}/{x}/{y}" not in out
 
 
-def test_http_ip_port_base_today(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Today's http IP:port base yields the legacy http tile template."""
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "http://54.185.114.233:8080")
-    template = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
-    assert template == (
-        f"http://54.185.114.233:8080/cog/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
-        f"?url={ENCODED}{_FLOOD_SUFFIX}"
-    )
-    # No double slash where the base meets the /cog/ path.
-    assert "8080//cog" not in template
-    assert template.startswith("http://")
-
-
-def test_https_cloudfront_base_after_cutover(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A path-less https CloudFront base yields an https tile template.
-
-    Domain is illustrative — NOT hardcoded into the tool; it comes purely from
-    the env the orchestrator sets at deploy time.
-    """
+def test_tile_server_base_env_is_dead(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Setting the legacy env var changes NOTHING (the env read is removed)."""
     monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://d123abc.cloudfront.net")
-    template = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
-    assert template == (
-        f"https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
-        f"?url={ENCODED}{_FLOOD_SUFFIX}"
-    )
-    assert template.startswith("https://")
-    assert "net//cog" not in template
-    # The percent-encoded s3 uri rides in ?url= so TiTiler reads the COG.
-    assert f"?url={ENCODED}" in template
+    out = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
+    assert out == S3_URI
+    assert "cloudfront" not in out
 
 
-def test_https_base_with_trailing_slash_is_tolerated(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A trailing slash on the base must not produce a double slash."""
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://d123abc.cloudfront.net/")
-    template = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
-    assert template == (
-        f"https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
-        f"?url={ENCODED}{_FLOOD_SUFFIX}"
-    )
-    assert "net//cog" not in template
+def test_unset_env_no_longer_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The old RASTER_PUBLISH_UNAVAILABLE gate is gone - unset env publishes."""
+    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
+    out = publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
+    assert out == S3_URI
 
 
-def test_flood_style_preset_appends_rescale_and_colormap(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """continuous_flood_depth adds the blue-ramp render params on the https base."""
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://d123abc.cloudfront.net")
-    template = publish_layer(
+def test_flood_legend_stashed_by_s3_uri() -> None:
+    """The flood ramp rides the LEGEND (keyed by the envelope s3 uri), not a
+    tile-URL query string: colormap NAME + vmin/vmax recoverable for the
+    plugin renderer."""
+    out = publish_layer(
         layer_uri=S3_URI,
         layer_id="flood-demo",
         style_preset="continuous_flood_depth",
     )
-    assert template.startswith(
-        "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-    )
-    assert template.endswith(f"?url={ENCODED}&rescale=0,3&colormap_name=ylgnbu")
+    legend = pop_legend_for_uri(out)
+    assert legend is not None
+    assert legend.kind == "continuous"
+    assert legend.colormap == "ylgnbu"
+    assert legend.vmin == 0.0
+    assert legend.vmax == 3.0
 
 
-def test_idempotent_guard_returns_https_template_verbatim(
+def test_observe_registers_data_uri_without_display_face(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An already-resolved https /cog/tiles/ template is returned unchanged.
-
-    The composer-published-then-LLM-republished path: layer_uri is ALREADY the
-    full https tile template. The guard must short-circuit (no re-encode, no
-    error) so the emission wrap-site announces the layer.
-    """
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://d123abc.cloudfront.net")
-    already = (
-        f"https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}.png"
-        f"?url={ENCODED}&rescale=0,3&colormap_name=ylgnbu"
+    """observe_published_layer records the s3 COG as the DATA uri; there is no
+    separate wms/display face any more (the raw COG IS the envelope uri)."""
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        "grace2_agent.tools.publish_layer.observe_published_layer",
+        lambda *a, **k: calls.append((a, k)),
     )
-    out = publish_layer(layer_uri=already, layer_id="flood-demo")
-    assert out == already
+    publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
+    assert len(calls) == 1
+    args, kwargs = calls[0]
+    assert args[0] == "flood-demo"
+    assert kwargs.get("gcs_uri") == S3_URI
+    assert kwargs.get("wms_url") is None
 
 
-def test_idempotent_guard_also_matches_http_template(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The guard matches BOTH http and https /cog/tiles/ templates (legacy)."""
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://d123abc.cloudfront.net")
-    already = (
+def test_legacy_template_input_unwraps_to_s3(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An old case's tile-template handle republishes as the NEW raw-s3 shape:
+    the embedded url= COG is unwrapped and flows through the raster path."""
+    out = publish_layer(layer_uri=LEGACY_TEMPLATE, layer_id="flood-demo")
+    assert out == S3_URI
+    # ...and the fresh legend is stashed under the NEW s3 envelope uri.
+    legend = pop_legend_for_uri(out)
+    assert legend is not None and legend.colormap == "ylgnbu"
+
+
+def test_legacy_http_template_also_unwraps() -> None:
+    """The unwrap matches http (IP:port origin) templates too."""
+    legacy_http = (
         "http://54.185.114.233:8080/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
         f"?url={ENCODED}"
     )
-    out = publish_layer(layer_uri=already, layer_id="flood-demo")
-    assert out == already
+    out = publish_layer(layer_uri=legacy_http, layer_id="flood-demo")
+    assert out == S3_URI
 
 
-def test_unset_base_on_s3_deploy_fails_fast(monkeypatch: pytest.MonkeyPatch) -> None:
-    """With the seam UNSET, the s3 publish path raises typed + terminal.
-
-    This is the OFF-by-default proof: nothing publishes an https template until
-    the orchestrator sets GRACE2_TILE_SERVER_BASE.
-    """
-    monkeypatch.delenv("GRACE2_TILE_SERVER_BASE", raising=False)
-    with pytest.raises(PublishLayerError) as exc:
-        publish_layer(layer_uri=S3_URI, layer_id="flood-demo")
-    assert exc.value.error_code == "RASTER_PUBLISH_UNAVAILABLE"
-    assert exc.value.retryable is False
+def test_legacy_template_without_cog_returns_verbatim() -> None:
+    """A template with NO recoverable url= COG is returned unchanged (degraded
+    legacy behavior - the plugin unwraps what it can on its side)."""
+    foreign = (
+        "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
+    )
+    out = publish_layer(layer_uri=foreign, layer_id="flood-demo")
+    assert out == foreign
 
 
-def test_non_s3_uri_on_s3_deploy_is_typed_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A non-s3:// handle on the s3 branch is a typed (retryable) error."""
-    monkeypatch.setenv("GRACE2_TILE_SERVER_BASE", "https://d123abc.cloudfront.net")
+def test_non_s3_uri_is_typed_error() -> None:
+    """A non-s3:// raster handle is still a typed (retryable) error."""
     with pytest.raises(PublishLayerError) as exc:
         publish_layer(layer_uri="gs://legacy/bucket/x.tif", layer_id="flood-demo")
     assert exc.value.error_code == "LAYER_URI_NOT_FOUND"
+    assert exc.value.retryable is True

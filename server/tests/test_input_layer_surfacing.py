@@ -92,15 +92,37 @@ async def test_publish_input_layer_forces_role_input_and_no_bbox():
 
 
 @pytest.mark.asyncio
-async def test_publish_input_layer_drops_raw_object_store_raster():
-    """A raster carrying a raw s3:// uri is DROPPED by the guardrail (MapLibre
-    cannot fetch it) -> not surfaced, returns False, NEVER raises."""
+async def test_publish_input_layer_surfaces_raw_s3_raster():
+    """NEW CONTRACT (TiTiler exit / QGIS-native swap): a raster carrying a raw
+    s3:// COG uri PASSES the guardrail (the plugin reads it via /vsicurl/) and
+    IS surfaced as an input row."""
     emitter = _emitter()
     layer = LayerURI(
         layer_id="dem-raw",
         name="DEM",
         layer_type="raster",
-        uri="s3://runs/r/dem.tif",  # raw object-store raster
+        uri="s3://runs/r/dem.tif",  # raw s3 COG - now renderable
+        style_preset="continuous_dem",
+        role="input",
+    )
+    ok = await publish_input_layer(emitter, layer)
+    assert ok is True
+    assert len(emitter._loaded_layers) == 1
+    assert emitter._loaded_layers[0].uri == "s3://runs/r/dem.tif"
+    assert emitter._loaded_layers[0].role == "input"
+
+
+@pytest.mark.asyncio
+async def test_publish_input_layer_drops_gs_raster():
+    """A raster carrying a raw gs:// uri is still DROPPED by the guardrail
+    (no face on this stack can fetch it) -> not surfaced, returns False,
+    NEVER raises."""
+    emitter = _emitter()
+    layer = LayerURI(
+        layer_id="dem-gs",
+        name="DEM",
+        layer_type="raster",
+        uri="gs://runs/r/dem.tif",  # genuinely un-renderable
         style_preset="continuous_dem",
         role="input",
     )

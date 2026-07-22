@@ -910,22 +910,24 @@ async def model_satellite_fire_animation(
 
     # NATE 2026-06-26: EMIT each published frame into session-state loaded_layers
     # (mirrors model_flood_scenario.py ~3774). _publish_layers returns
-    # {layer_id: http(s) tile url} for the frames it could publish; build a NEW
-    # LayerURI copy with uri=<published url> and add_loaded_layer it so the map
+    # {layer_id: published uri} for the frames it could publish; build a NEW
+    # LayerURI copy with uri=<published uri> and add_loaded_layer it so the map
     # actually renders the animation. HONESTY FLOOR: only emit frames whose
-    # publish returned an http(s) url -- a raw s3:// frame never renders, so it
+    # publish returned a renderable uri -- an http(s) tile url or, since the
+    # TiTiler exit / QGIS-native swap, the raw s3:// COG uri (the plugin reads
+    # it via /vsicurl/). Anything else (empty/error strings, gs://, file://)
     # is skipped (never added). When current_emitter() is None (direct/smoke/
-    # unit test without an emitter) emission is skipped; the {id: url} map is
+    # unit test without an emitter) emission is skipped; the {id: uri} map is
     # still returned for the summary.
     if pipeline_emitter is not None:
         for layer in all_layers + overlay_layers:
             published_url = published.get(layer.layer_id)
             if not (
                 isinstance(published_url, str)
-                and published_url.startswith(("http://", "https://"))
+                and published_url.startswith(("http://", "https://", "s3://"))
             ):
-                # Publish failed / returned a non-http value -> honest skip; do
-                # NOT emit the raw s3:// frame (it would never render).
+                # Publish failed / returned a non-renderable value -> honest
+                # skip; never emit a frame the plugin cannot fetch.
                 continue
             emit_layer = LayerURI(
                 layer_id=layer.layer_id,

@@ -176,7 +176,7 @@ def render(latest: dict[str, dict]) -> str:
     lines.append("")
     lines.append(
         f"Every registered tool was executed directly against the local stack "
-        f"(MinIO + TiTiler + local solvers, ~3 km downtown-Tampa AOI, curated arguments; "
+        f"(MinIO + local solvers, ~3 km downtown-Tampa AOI, curated arguments; "
         f"layer-consuming tools chained onto real fetched layers). "
         f"**{total} tools**: "
         + " | ".join(
