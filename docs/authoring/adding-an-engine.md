@@ -123,16 +123,15 @@ Engines run one of two ways, chosen per engine/archetype:
   engine backends are selected by env (`TRID3NT_MODFLOW_LOCAL=1`,
   `TRID3NT_SOLVER_BACKEND=local-docker`).
 
-- **AWS Batch worker image** -- heavy engines dispatch to a per-engine Batch
-  worker (e.g. `grace2-modflow`, `grace2-canopy`) via `run_solver`, on Spot,
-  scale-to-zero.
+- **Local docker worker image** -- containerized engines run via `run_solver`
+  on local docker (image resolved per engine: `TRID3NT_<ENGINE>_IMAGE` env or
+  the registered default).
 
-**Worker-image changes deploy OFF-BOX.** Build via CodeBuild
-(`grace2-worker-builder`) or the engine's `build_<engine>_image.sh` -- NOT on the
-agent box (its autostop kills long docker builds). After a build, verify the
-running image is `deployed == HEAD`; a commit + an env flip is NOT a deploy. Agent-
-side code (the composer, contract, postprocess, wiring) deploys with the normal
-agent deploy path (vendor-sync + restart locally; SSM file-swap on the cloud box).
+**Worker-image changes need a rebuild.** Build with the engine's
+`build_<engine>_image.sh` (or the documented `docker build` line in
+docs/site/install.md). A code commit alone does NOT update a built image -
+verify the running image matches your change. Server-side code (the composer,
+contract, postprocess, wiring) deploys by editing `server/` + `make agent`.
 
 ---
 
