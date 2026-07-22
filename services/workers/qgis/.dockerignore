@@ -1,0 +1,51 @@
+# Build-context .dockerignore for the grace2-qgis worker image.
+#
+# UNLIKE the sfincs/modflow/swmm worker images (which build from the REPO ROOT
+# and rely on the root /.dockerignore), this image builds with THIS directory as
+# its own build context -- see the Dockerfile header:
+#     docker build -t grace2-qgis:ltr services/workers/qgis
+# So the relevant hygiene boundary is local to services/workers/qgis/.
+#
+# The Dockerfile COPYs nothing from the context today (it only FROM + apt + a
+# qgis_process enable), so the upload is already tiny. This file keeps it that
+# way: it guarantees that any future scratch / cache / editor / OS cruft that
+# lands in this directory NEVER inflates the tarball sent to the daemon and
+# NEVER leaks into an image layer if a later revision adds a COPY. Conservative
+# by design -- it excludes only non-runtime cruft, so the built image stays
+# byte-identical to a build run in a clean checkout.
+
+# Version control + IDE
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Python build/test caches + venvs (this image installs no Python project)
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.tox
+**/*.egg-info
+**/.venv
+**/venv
+.coverage
+**/htmlcov
+
+# Local env + secrets (must never enter a layer)
+**/.env
+**/.env.*
+**/*.local
+
+# Local spike / scratch output
+**/_spike_out
+
+# Docs / notes that are not runtime artifacts
+**/*.md
+
+# OS cruft
+**/.DS_Store
+**/Thumbs.db

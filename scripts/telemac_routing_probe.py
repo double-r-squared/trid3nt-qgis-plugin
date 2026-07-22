@@ -51,7 +51,7 @@ os.environ.setdefault(
     "returns no data, say so and stop.",
 )
 
-AGENT_SRC = Path(__file__).resolve().parent.parent / "vendor" / "services" / "agent" / "src"
+AGENT_SRC = Path(__file__).resolve().parent.parent / "server" / "src"
 sys.path.insert(0, str(AGENT_SRC))
 
 import grace2_agent.main as _main  # noqa: E402

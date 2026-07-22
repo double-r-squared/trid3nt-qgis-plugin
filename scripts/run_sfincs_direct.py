@@ -14,7 +14,7 @@ staged deck mounted at /data; outputs land in MinIO under trid3nt-runs/<run_id>/
 Run:
   cd /home/nate/Documents/trid3nt-local
   sg docker -c 'env $(grep -v "^#" .env.local | xargs) \
-    PYTHONPATH=vendor/services/agent/src:vendor/packages/contracts/src \
+    PYTHONPATH=server/src:contracts/src \
     venvs/agent/bin/python scripts/run_sfincs_direct.py'
 """
 

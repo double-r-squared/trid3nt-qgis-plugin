@@ -34,7 +34,7 @@ The variables below are the complete shipped file, grouped by concern.
     `AWS_ENDPOINT_URL` is honored **globally** by boto3 (>= 1.28) and s3fs/aiobotocore -- including
     anonymous reads of PUBLIC AWS open-data buckets (GOES/GLM granules on `noaa-goesNN`, the
     HRRR zarr mirror). Without countermeasures those reads get silently redirected to MinIO and
-    fail with misleading "no data upstream" errors. The vendored agent carries
+    fail with misleading "no data upstream" errors. The agent carries
     `tools/_public_s3.py`, which pins UNSIGNED public-bucket clients to the real
     `https://s3.<region>.amazonaws.com` endpoint. Cloud behavior is unchanged (the env var is
     unset there). If you add a new tool that reads a public bucket anonymously, build its client
@@ -55,8 +55,8 @@ The variables below are the complete shipped file, grouped by concern.
 | `GRACE2_MODFLOW_LOCAL` | `1` | Gates MODFLOW's local-execution mode (run the `mf6` binary directly). **Independent of `GRACE2_SOLVER_BACKEND`** -- MODFLOW checks this first; forgetting it makes the MODFLOW tools try the cloud path (`/opt/grace2/runs` errors). |
 | `GRACE2_MF6_BIN` | `<repo>/bin/mf6` | Path to the MODFLOW 6.5.0 static binary installed by `scripts/fetch_binaries.sh`. |
 | `GRACE2_SFINCS_IMAGE` | `deltares/sfincs-cpu:sfincs-v2.3.3` | SFINCS container image. The code default is `:latest`, which is not what `docker pull` fetched -- pin the tag you pulled. |
-| `GRACE2_GEOCLAW_IMAGE` | `trid3nt-local/geoclaw:latest` | GeoClaw container image, built locally from `vendor/services/workers/geoclaw/Dockerfile` (compiled Clawpack 5.14 Fortran). |
-| `GRACE2_SWAN_IMAGE` | `trid3nt-local/swan:latest` | SWAN container image, built locally from `vendor/services/workers/swan/Dockerfile`. |
+| `GRACE2_GEOCLAW_IMAGE` | `trid3nt-local/geoclaw:latest` | GeoClaw container image, built locally from `services/workers/geoclaw/Dockerfile` (compiled Clawpack 5.14 Fortran). |
+| `GRACE2_SWAN_IMAGE` | `trid3nt-local/swan:latest` | SWAN container image, built locally from `services/workers/swan/Dockerfile`. |
 | `GRACE2_RUNS_DIR` | `<repo>/data/runs` | Host rundir root for local solves; mounted into engine containers at `/data`. The code default `/opt/grace2/runs` does not exist on a dev box -- set it. |
 | `GRACE2_OQ_BIN` | `<repo>/venvs/agent/bin/oq` | Path to the OpenQuake `oq` CLI (installed into the agent venv). First run needs a one-time `oq engine --upgrade-db`. |
 
@@ -86,7 +86,7 @@ The variables below are the complete shipped file, grouped by concern.
 
 | Variable | Shipped value | What it does |
 |----------|---------------|--------------|
-| `GRACE2_CATALOG_YAML` | `<repo>/vendor/public_data_source_catalog.yaml` | Path to the vetted public data-source catalog used by `catalog_search` / `catalog_fetch`. The YAML lives outside the synced agent subtree in the cloud repo, so it is vendored separately and pointed at explicitly; without this the catalog tools raise a typed not-found error. |
+| `GRACE2_CATALOG_YAML` | `<repo>/public_data_source_catalog.yaml` | Path to the vetted public data-source catalog used by `catalog_search` / `catalog_fetch`. Lives at the repo root; the tool also walks up from its own file to find it, so the env var is belt-and-suspenders. Without any of that the catalog tools raise a typed not-found error. |
 
 ## Not in the file, but related
 

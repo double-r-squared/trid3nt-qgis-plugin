@@ -1,0 +1,6 @@
+# Repo root is a docker build context only for images whose Dockerfile COPYs
+# services/workers/* (e.g. geoclaw). Exclude everything else, especially the
+# multi-GB gitignored runtime dirs.
+*
+!services/workers/
+services/workers/**/__pycache__/

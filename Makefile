@@ -4,7 +4,7 @@ SCRIPTS   := $(REPO_ROOT)/scripts
 RUN_DIR   := $(REPO_ROOT)/run
 LOG_DIR   := $(REPO_ROOT)/logs
 
-.PHONY: binaries minio titiler agent venv web status stop setup up down plugin env help
+.PHONY: binaries minio titiler agent venv status stop setup up down plugin env help
 
 # ---- orchestration (the clone -> run flow) ----------------------------------
 help:
@@ -14,7 +14,6 @@ help:
 	@echo "  (edit .env.local: set your LLM endpoint/key -- see .env.openrouter.example)"
 	@echo "  make up        start the local stack (minio + titiler + agent)"
 	@echo "  make plugin    install the QGIS plugin into your QGIS profile (then reload it)"
-	@echo "  make web       start the browser client on :5173 (optional; phone/laptop)"
 	@echo "  make status    health-check the running services"
 	@echo "  make down      stop everything"
 
@@ -31,9 +30,9 @@ env:
 	  echo "created .env.local from .env.openrouter.example -- SET your LLM endpoint + key"; \
 	fi
 
-# Start the backend stack the plugin/web talk to (minio must precede the agent).
+# Start the backend stack the plugin talks to (minio must precede the agent).
 up: minio titiler agent
-	@echo "stack up. Install the plugin (make plugin) + reload QGIS, or open the web client (make web)."
+	@echo "stack up. Install the plugin (make plugin) + reload QGIS."
 
 down: stop
 
@@ -59,20 +58,8 @@ agent:
 venv:
 	@~/.local/bin/uv venv --python 3.12 $(REPO_ROOT)/venvs/agent
 	@~/.local/bin/uv pip install --python $(REPO_ROOT)/venvs/agent/bin/python \
-	  -e $(REPO_ROOT)/vendor/packages/contracts \
-	  -e $(REPO_ROOT)/vendor/services/agent
-
-web:
-	@mkdir -p $(LOG_DIR) $(RUN_DIR)
-	@if [ -f $(RUN_DIR)/web.pid ] && kill -0 $$(cat $(RUN_DIR)/web.pid) 2>/dev/null; then \
-	  echo "web already running (pid $$(cat $(RUN_DIR)/web.pid))"; \
-	else \
-	  echo "starting vite dev server on :5173 ..."; \
-	  setsid nohup sh -c 'cd $(REPO_ROOT)/vendor/web && VITE_DEPLOYMENT=local node_modules/.bin/vite --port 5173 --host 0.0.0.0' \
-	    > $(LOG_DIR)/web.log 2>&1 & \
-	  echo $$! > $(RUN_DIR)/web.pid; \
-	  echo "web pid $$!  -- logs at $(LOG_DIR)/web.log"; \
-	fi
+	  -e $(REPO_ROOT)/contracts \
+	  -e $(REPO_ROOT)/server
 
 status:
 	@echo "=== TRID3NT Local service status ==="
@@ -112,11 +99,4 @@ stop:
 	  else echo "agent not running (stale pid $$PID)"; fi; \
 	  rm -f $(RUN_DIR)/agent.pid; \
 	else echo "no agent.pid found"; fi
-	@if [ -f $(RUN_DIR)/web.pid ]; then \
-	  PID=$$(cat $(RUN_DIR)/web.pid); \
-	  if kill -0 $$PID 2>/dev/null; then \
-	    echo "stopping web (pid $$PID)"; kill $$PID; \
-	  else echo "web not running (stale pid $$PID)"; fi; \
-	  rm -f $(RUN_DIR)/web.pid; \
-	else echo "no web.pid found"; fi
 	@echo "done"

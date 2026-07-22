@@ -43,7 +43,7 @@ STATUS_LEGEND = {
 }
 
 # KEY earmarks: which credential each KEY-status tool needs (env var names
-# verified against the vendored tool sources).
+# verified against the server tool sources).
 KEY_EARMARKS = {
     "fetch_airnow_air_quality": (
         "`GRACE2_AIRNOW_API_KEY`",

@@ -98,26 +98,12 @@ map layers render. Only the substrate under each seam changes.
 
 ---
 
-## Relationship to the cloud build (vendoring model)
+## Relationship to the other TRID3NT products
 
-TRID3NT Local does **not** fork the agent. It carries a **pinned snapshot** of the GRACE-2
-source under `vendor/`, produced by `scripts/sync_from_grace2.sh`:
-
-- The script rsyncs `services/agent`, the worker packages (`services/workers/modflow`, `sfincs`,
-  and the shared `_*` build/postprocess packages), `packages/contracts`, and `web/` from a local
-  GRACE-2 checkout into `vendor/`.
-- The source repo's HEAD is recorded in `vendor/UPSTREAM_COMMIT` -- the single provenance pin
-  for the entire snapshot.
-- New seams (the OpenAI adapter, local solver specs, the public-S3 endpoint pin) are implemented
-  **upstream in GRACE-2** as dormant, env-gated code with zero cloud impact, then pulled down by
-  a re-sync. One agent codebase, no drift.
-- The same script also pushes this documentation (`docs/site/`) the other way, into
-  `GRACE-2/docs-site/docs/local/`, so the cloud MkDocs site carries this section.
-
-Local-only patches made directly under `vendor/` (rare; e.g. during an e2e debugging session)
-are upstreamed to GRACE-2 and then re-synced, so the pin stays honest.
-
----
+This repo is the standalone QGIS product: plugin + server + engine workers,
+first-class, no upstream sync. The separate web and cloud products live in the
+GRACE-2 repo; until 2026-07-21 the server code here was a vendored copy synced
+from it (`scripts/sync_from_grace2.sh`, now removed). Edit `server/` directly.
 
 ## Section map
 

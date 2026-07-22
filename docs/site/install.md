@@ -37,10 +37,10 @@ Each binary is version-verified after download.
 
 ## 2. Python venvs
 
-Agent venv (installs the vendored contracts + agent packages editable):
+Agent venv (installs the contracts + server packages editable):
 
 ```sh
-make venv              # uv venv venvs/agent + uv pip install -e vendor/packages/contracts -e vendor/services/agent
+make venv              # uv venv venvs/agent + uv pip install -e contracts -e server
 ```
 
 TiTiler venv:
@@ -53,10 +53,8 @@ uv pip install --python venvs/titiler/bin/python "titiler.application==2.0.4" uv
 ## 3. Web dependencies
 
 ```sh
-cd vendor/web && npm install
 ```
 
-(`make web` runs `vendor/web/node_modules/.bin/vite` directly, so the install must happen once.)
 
 ## 4. Docker images
 
@@ -66,13 +64,13 @@ cd vendor/web && npm install
 sg docker -c 'docker pull deltares/sfincs-cpu:sfincs-v2.3.3'
 ```
 
-**GeoClaw and SWAN** -- built locally from the vendored worker Dockerfiles (both compile
+**GeoClaw and SWAN** -- built locally from the worker Dockerfiles (both compile
 Fortran solvers into the image; the build is one-time and cached):
 
 ```sh
-sg docker -c 'docker build -t trid3nt-local/geoclaw:latest -f vendor/services/workers/geoclaw/Dockerfile vendor/'
-sg docker -c 'docker build -t trid3nt-local/swan:latest vendor/services/workers/swan/'
-sg docker -c 'docker build -t trid3nt-local/telemac:latest vendor/services/workers/telemac/'  # or: bash scripts/build_telemac_image.sh
+sg docker -c 'docker build -t trid3nt-local/geoclaw:latest -f services/workers/geoclaw/Dockerfile .'
+sg docker -c 'docker build -t trid3nt-local/swan:latest services/workers/swan/'
+sg docker -c 'docker build -t trid3nt-local/telemac:latest services/workers/telemac/'  # or: bash scripts/build_telemac_image.sh
 ```
 
 These three image names are what `.env.local` points at (`GRACE2_SFINCS_IMAGE`,
