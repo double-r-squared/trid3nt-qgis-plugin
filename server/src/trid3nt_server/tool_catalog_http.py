@@ -1339,10 +1339,7 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
         import boto3
 
         from .tools.cache import CACHE_BUCKET, cache_path
-        from .tools.data_fetch import (
-            BUILDINGS_TAGS_SIDECAR_EXT,
-            _FETCH_BUILDINGS_METADATA,
-        )
+        from .tools.fetchers.socioeconomic.fetch_buildings import BUILDINGS_TAGS_SIDECAR_EXT, _FETCH_BUILDINGS_METADATA
     except Exception:  # noqa: BLE001 -- import wiring fault -> live fallback
         logger.warning("building-detail: sidecar import wiring failed", exc_info=True)
         return None
@@ -1470,7 +1467,7 @@ class _ExportQgisNotFound(Exception):
 def _export_qgis_fn():
     """Lazy-import seam for the export tool (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .tools.export_case_to_qgis import export_case_to_qgis
+    from .tools.meta.export_case_to_qgis import export_case_to_qgis
 
     return export_case_to_qgis
 
@@ -1729,14 +1726,14 @@ def _ingest_layer_route_enabled() -> bool:
 def _ingest_layer_fn():
     """Lazy-import seam for the ingest core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .tools.import_user_layer import ingest_user_layer
+    from .tools.meta.import_user_layer import ingest_user_layer
 
     return ingest_user_layer
 
 
 def _upload_layer_file_fn():
     """Lazy-import seam for the staging-upload helper (monkeypatchable)."""
-    from .tools.import_user_layer import upload_layer_file
+    from .tools.meta.import_user_layer import upload_layer_file
 
     return upload_layer_file
 
@@ -1825,7 +1822,7 @@ def _probe_point_route_enabled() -> bool:
 def _probe_point_fn():
     """Lazy-import seam for the probe core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .tools.probe_point import probe_point_at
+    from .tools.meta.probe_point import probe_point_at
 
     return probe_point_at
 
@@ -2192,7 +2189,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .tools.export_case_to_qgis import CaseNotFoundError, ExportCaseError
+        from .tools.meta.export_case_to_qgis import CaseNotFoundError, ExportCaseError
 
         try:
             body = await _handle_export_qgis_post(raw_body)
@@ -2243,7 +2240,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .tools.import_user_layer import MAX_INGEST_BYTES
+        from .tools.meta.import_user_layer import MAX_INGEST_BYTES
 
         if content_length <= 0:
             writer.write(
@@ -2269,7 +2266,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .tools.import_user_layer import ImportLayerError, ObjectTooLargeError
+        from .tools.meta.import_user_layer import ImportLayerError, ObjectTooLargeError
 
         try:
             filename = _parse_ingest_layer_filename(proxy_qs)
@@ -2342,7 +2339,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .tools.import_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
+        from .tools.meta.import_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
 
         try:
             body = await _handle_ingest_layer_post(raw_body)
@@ -2401,7 +2398,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .tools.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
+        from .tools.meta.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
 
         try:
             body = await _handle_probe_point_post(raw_body)

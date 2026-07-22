@@ -32,7 +32,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_storm_events_db import (
+from trid3nt_server.tools.fetchers.weather.fetch_storm_events_db import (
     StormEventsArgError,
     StormEventsEmptyError,
     StormEventsError,
@@ -323,10 +323,10 @@ def test_full_name_and_iso_share_cache_key():
         return fake_fgb
 
     with patch(
-        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "trid3nt_server.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -583,10 +583,10 @@ def test_cache_miss_invokes_fetch_and_writes():
         return fake_fgb
 
     with patch(
-        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "trid3nt_server.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_storm_events_db(
@@ -613,10 +613,10 @@ def test_cache_hit_skips_fetch():
         return fake_fgb
 
     with patch(
-        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "trid3nt_server.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -642,10 +642,10 @@ def test_event_types_order_does_not_split_cache():
         return fake_fgb
 
     with patch(
-        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "trid3nt_server.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -1012,10 +1012,10 @@ def test_bbox_splits_cache_key():
         return fake_fgb
 
     with patch(
-        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "trid3nt_server.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -1040,10 +1040,10 @@ def test_window_splits_cache_key_but_repeats_hit():
         return fake_fgb
 
     with patch(
-        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "trid3nt_server.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(
@@ -1076,10 +1076,10 @@ def test_no_window_no_bbox_is_backward_compatible_cache_key():
         return fake_fgb
 
     with patch(
-        "trid3nt_server.tools.fetch_storm_events_db._fetch_storm_events_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db._fetch_storm_events_bytes",
         side_effect=lambda *a, **k: fake_fetch(),
     ), patch(
-        "trid3nt_server.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_storm_events_db(year=2022, state="FL", event_types=["Hurricane"])
@@ -1107,7 +1107,7 @@ def test_live_fetch_2022_florida_hurricane(tmp_path):
     # for the live upstream test. The fetch path is fully real.
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_storm_events_db.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_storm_events_db.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_storm_events_db(

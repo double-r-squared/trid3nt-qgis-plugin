@@ -33,16 +33,18 @@ import pytest
 # universe of candidates (mirrors test_discover_dataset.py setup).
 from trid3nt_server.tools import (  # noqa: F401 — registration side-effect
     TOOL_REGISTRY,
-    catalog,
-    data_fetch,
-    discover_dataset as discover_module,
     publish_layer,
-    qgis_discovery,
-    solver,
 )
+from trid3nt_server.tools.discovery import (  # noqa: F401 — registration side-effect
+    catalog_fetch,
+    catalog_search,
+    qgis_discovery,
+)
+from trid3nt_server.tools.discovery import discover_dataset as discover_module
+from trid3nt_server.tools.simulation import solver  # noqa: F401 — registration side-effect
 from trid3nt_server.workflows import model_flood_scenario  # noqa: F401
 
-from trid3nt_server.tools.discover_dataset import (
+from trid3nt_server.tools.discovery.discover_dataset import (
     _build_cooccurrence_from_docs,
     _reset_cooccurrence_cache_for_tests,
     _reset_hot_set_cache_for_tests,
@@ -151,7 +153,7 @@ def test_co_occurrence_boost_when_mongo_bound() -> None:
 
     persistence = _make_mock_persistence(docs)
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=persistence,
     ):
         boosted_result = asyncio.run(
@@ -186,7 +188,7 @@ def test_co_occurrence_boost_when_mongo_bound() -> None:
 def test_falls_back_to_3_channel_when_mongo_unavailable() -> None:
     """No Persistence → discover_dataset returns 3-channel results, no crash."""
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=None,
     ):
         result = asyncio.run(discover_dataset("show me flood zones", top_k=5))
@@ -202,7 +204,7 @@ def test_falls_back_when_persistence_mcp_raises() -> None:
     persistence._mcp = MagicMock()
     persistence._mcp.call_tool = AsyncMock(side_effect=RuntimeError("conn refused"))
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=persistence,
     ):
         result = asyncio.run(discover_dataset("flood zones", top_k=3))
@@ -228,7 +230,7 @@ def test_index_refresh_within_5min_window() -> None:
     persistence = _make_mock_persistence(docs)
 
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=persistence,
     ):
         asyncio.run(discover_dataset("fetch_dem terrain", top_k=5))
@@ -252,7 +254,7 @@ def test_index_refresh_within_5min_window() -> None:
 
     # Past the window: simulate by manually setting the cache's built_at far
     # in the past, then verify a third call DOES refresh.
-    from trid3nt_server.tools import discover_dataset as discover_mod
+    from trid3nt_server.tools.discovery import discover_dataset as discover_mod
 
     with discover_mod._COOCCURRENCE_LOCK:
         cached = discover_mod._COOCCURRENCE_INDEX
@@ -261,7 +263,7 @@ def test_index_refresh_within_5min_window() -> None:
     cached.built_at -= 10 * 60
 
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=persistence,
     ):
         asyncio.run(discover_dataset("fetch_dem terrain", top_k=5))
@@ -309,7 +311,7 @@ def test_get_dynamic_hot_set_returns_top_k() -> None:
     persistence = _make_mock_persistence(docs)
 
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=persistence,
     ):
         hot_set = asyncio.run(get_dynamic_hot_set(top_k=3))
@@ -326,7 +328,7 @@ def test_get_dynamic_hot_set_filters_by_user_id() -> None:
     persistence = _make_mock_persistence(docs)
 
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=persistence,
     ):
         asyncio.run(get_dynamic_hot_set(user_id="01USR0000000000000000000XX", top_k=5))
@@ -347,7 +349,7 @@ def test_get_dynamic_hot_set_falls_back_to_static() -> None:
     from trid3nt_server.categories import HOT_SET_TOOLS as STATIC
 
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=None,
     ):
         result = asyncio.run(get_dynamic_hot_set())
@@ -363,7 +365,7 @@ def test_get_dynamic_hot_set_falls_back_when_mcp_raises() -> None:
     persistence._mcp.call_tool = AsyncMock(side_effect=RuntimeError("boom"))
 
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=persistence,
     ):
         result = asyncio.run(get_dynamic_hot_set())
@@ -376,7 +378,7 @@ def test_get_dynamic_hot_set_falls_back_when_no_telemetry_rows() -> None:
 
     persistence = _make_mock_persistence([])  # empty docs
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=persistence,
     ):
         result = asyncio.run(get_dynamic_hot_set())
@@ -401,7 +403,7 @@ def test_existing_unit_tests_still_pass_smoke() -> None:
 
     # Canonical routing answer (no Persistence; pure 3-channel path).
     with patch(
-        "trid3nt_server.tools.discover_dataset._get_persistence_safe",
+        "trid3nt_server.tools.discovery.discover_dataset._get_persistence_safe",
         return_value=None,
     ):
         out = asyncio.run(discover_dataset("show me flood zones", top_k=5))

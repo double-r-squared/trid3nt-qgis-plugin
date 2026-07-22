@@ -32,7 +32,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_ebird_observations import (
+from trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations import (
     EBirdAuthError,
     EBirdError,
     EBirdInputError,
@@ -553,10 +553,10 @@ def test_mocked_happy_path_single_tile():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, records)])
 
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_ebird_observations(
@@ -625,10 +625,10 @@ def test_mocked_multi_tile_dedup_across_tiles():
     mock_client = _MockHTTPClient(responses)
 
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_ebird_observations(
@@ -663,10 +663,10 @@ def test_mocked_empty_response_returns_empty_flatgeobuf():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, [])])
 
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_ebird_observations(
@@ -691,10 +691,10 @@ def test_missing_key_raises_pre_network():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, [])])
 
     with patch.dict(os.environ, {}, clear=True), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(EBirdMissingKeyError):
@@ -716,10 +716,10 @@ def test_mocked_401_raises_auth_error_not_retryable():
     )
 
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(EBirdAuthError) as exc_info:
@@ -740,10 +740,10 @@ def test_mocked_404_raises_input_error_bad_species():
     )
 
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(EBirdInputError) as exc_info:
@@ -763,10 +763,10 @@ def test_mocked_5xx_raises_upstream_error_retryable():
     )
 
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(EBirdUpstreamError) as exc_info:
@@ -791,10 +791,10 @@ def test_cache_hit_skips_fetch_fn():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, records)])
 
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         r1 = fetch_ebird_observations(
@@ -820,10 +820,10 @@ def test_layer_uri_shape_fields():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, records)])
 
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_ebird_observations(
@@ -853,10 +853,10 @@ def test_cache_key_omits_api_key():
     mock_client = _MockHTTPClient([_FakeHTTPResponse(200, records)])
 
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_ebird_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.httpx.Client",
         return_value=mock_client,
     ):
         r1 = fetch_ebird_observations(
@@ -896,7 +896,7 @@ def test_live_bewickwren_over_ca_bbox(tmp_path):
 
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_ebird_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_ebird_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_ebird_observations(

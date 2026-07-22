@@ -150,7 +150,7 @@ def _localize_to_dem_path(uri: str) -> str:
     if local.exists() and local.stat().st_size > 0:
         return str(local)
     tmp = local.with_suffix(local.suffix + ".part")
-    from ..tools.solver import _get_s3_client
+    from ..tools.simulation.solver import _get_s3_client
 
     bucket_name, _, obj_key = uri[len("s3://"):].partition("/")
     resp = _get_s3_client().get_object(Bucket=bucket_name, Key=obj_key)
@@ -168,8 +168,8 @@ def _fetch_dem_for_landslide(
     10 m fallback (the data-source fallback norm). Returns ``(local_dem_path,
     source_label)``; raises ``LandslideWorkflowError("LANDLAB_DEM_FETCH_FAILED")``
     only when BOTH fail."""
-    from ..tools.data_fetch import fetch_dem
-    from ..tools.fetch_3dep_extra import fetch_3dep_extra
+    from ..tools.fetchers.terrain.fetch_dem import fetch_dem
+    from ..tools.fetchers.terrain.fetch_3dep_extra import fetch_3dep_extra
 
     try:
         layer = fetch_3dep_extra(bbox, resolution="1 meter")
@@ -212,7 +212,7 @@ def _download_batch_landlab_outputs(
     'complete' run produced no downloadable field COG (a real failure, never a
     silent dead-end).
     """
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         _get_runs_bucket,
         _get_s3_client,
         _split_object_uri,
@@ -318,7 +318,7 @@ async def model_landslide_scenario(
         a fatal stage failure (the tool wrapper catches these and returns a typed
         error dict so the agent narrates honestly).
     """
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         EmitterBinding,
         new_ulid,
         run_solver,

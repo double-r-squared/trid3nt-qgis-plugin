@@ -17,7 +17,7 @@ import math
 
 import pytest
 
-from trid3nt_server.tools.compute_wave_nomograph import (
+from trid3nt_server.tools.processing.compute_wave_nomograph import (
     WaveNomographError,
     compute_wave_nomograph,
 )
@@ -183,7 +183,7 @@ def test_in_coastal_category():
 
 
 def test_has_corpus_entries():
-    import trid3nt_server.tools.discover_dataset as dd  # noqa: F401  (ensures module import path exists)
+    import trid3nt_server.tools.discovery.discover_dataset as dd  # noqa: F401  (ensures module import path exists)
     from pathlib import Path
     import yaml
 

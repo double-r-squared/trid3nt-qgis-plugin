@@ -196,7 +196,7 @@ async def model_regional_water_budget_scenario(
     # chart. Real solver terms (BudgetPartitionLayerURI.budget_partition_m3_day,
     # FLOW-JA-FACE already excluded upstream) - the builder emits nothing when
     # the partition is empty (the honesty floor).
-    from ..tools.chart_tools import build_budget_partition_chart
+    from ..tools.processing.charts_common import build_budget_partition_chart
 
     _budget_chart = build_budget_partition_chart(
         budget_partition_m3_day=dict(layer.budget_partition_m3_day),

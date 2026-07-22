@@ -39,7 +39,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_usgs_water_quality import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality import (
     WqpError,
     WqpInputError,
     WqpNoSitesError,
@@ -486,9 +486,9 @@ def test_happy_path_layer_uri_shape():
         return station_geojson
 
     with (
-        patch("trid3nt_server.tools.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
         patch(
-            "trid3nt_server.tools.fetch_usgs_water_quality.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -531,11 +531,11 @@ def test_no_sites_raises_no_sites_error():
 
     with (
         patch(
-            "trid3nt_server.tools.fetch_usgs_water_quality._http_get",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality._http_get",
             return_value=empty_stations,
         ),
         patch(
-            "trid3nt_server.tools.fetch_usgs_water_quality.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
         pytest.raises(WqpNoSitesError, match="No Water Quality Portal monitoring"),
@@ -563,9 +563,9 @@ def test_http_400_maps_to_input_error():
         raise WqpInputError("Water Quality Portal rejected the request (HTTP 400)")
 
     with (
-        patch("trid3nt_server.tools.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
         patch(
-            "trid3nt_server.tools.fetch_usgs_water_quality.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
         pytest.raises(WqpInputError, match="HTTP 400"),
@@ -614,9 +614,9 @@ def test_extra_kwargs_absorbed():
         return station_geojson
 
     with (
-        patch("trid3nt_server.tools.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality._http_get", side_effect=fake_http_get),
         patch(
-            "trid3nt_server.tools.fetch_usgs_water_quality.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -639,7 +639,7 @@ def test_extra_kwargs_absorbed():
     reason="Set TRID3NT_TEST_LIVE_WQP=1 to run live WQP tests",
 )
 def test_live_iowa_nitrate_returns_sites():
-    from trid3nt_server.tools.fetch_usgs_water_quality import _fetch_water_quality_bytes
+    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_water_quality import _fetch_water_quality_bytes
 
     fgb_bytes, extent = _fetch_water_quality_bytes(
         bbox=_IOWA_BBOX, characteristic="Nitrate"

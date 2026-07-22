@@ -45,7 +45,7 @@ from rasterio.io import MemoryFile
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_impervious_surface import (
+from trid3nt_server.tools.processing.compute_impervious_surface import (
     DEVELOPED_CLASS_TO_IMPERVIOUS,
     ImperviousSurfaceError,
     _compute_impervious_bytes,
@@ -646,7 +646,7 @@ def test_live_compute_impervious_against_fort_myers_landcover():
         developed classes);
       - mean impervious fraction is < 1.0 (sanity: not all-developed).
     """
-    from trid3nt_server.tools.data_fetch import fetch_landcover
+    from trid3nt_server.tools.fetchers.terrain.fetch_landcover import fetch_landcover
 
     # Small Fort Myers AOI (~few hundred km²).
     bbox = (-82.10, 26.55, -81.80, 26.80)

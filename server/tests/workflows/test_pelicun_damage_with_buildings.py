@@ -192,7 +192,7 @@ async def test_mocked_buildings_plus_flood_expected_damage_point_count() -> None
 
     from types import SimpleNamespace
     from unittest import mock as _mock
-    from trid3nt_server.tools import run_pelicun_damage_assessment as _pelicun_mod
+    from trid3nt_server.tools.simulation import run_pelicun_damage_assessment as _pelicun_mod
 
     cell_size_m = 100.0
     min_lon, min_lat, max_lon, max_lat = _SMALL_BBOX
@@ -345,8 +345,8 @@ def test_each_damage_point_carries_ds_mean_in_0_4() -> None:
 
     from types import SimpleNamespace
     from unittest import mock as _mock
-    from trid3nt_server.tools import run_pelicun_damage_assessment as _pelicun_mod
-    from trid3nt_server.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation import run_pelicun_damage_assessment as _pelicun_mod
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
         run_pelicun_damage_assessment,
     )
 

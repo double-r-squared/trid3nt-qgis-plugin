@@ -23,7 +23,7 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 
-import trid3nt_server.tools.solver as solver_mod
+import trid3nt_server.tools.simulation.solver as solver_mod
 from trid3nt_server import pipeline_emitter as pe
 from trid3nt_server.pipeline_emitter import PipelineEmitter
 from trid3nt_server.workflows import model_urban_flood_swmm as M
@@ -103,7 +103,7 @@ def _install_offbox_chain(monkeypatch, *, job_id: str, run_result: Any):
 
     handle = _FakeHandle(job_id)
     # run_solver + wait_for_completion are imported inside the composer from
-    # ..tools.solver, so patch them on the solver module namespace.
+    # ..tools.simulation.solver, so patch them on the solver module namespace.
     monkeypatch.setattr(solver_mod, "run_solver", lambda **k: handle)
 
     async def _fake_wait(h, *a, **k):  # noqa: ANN001

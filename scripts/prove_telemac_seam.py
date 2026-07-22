@@ -3,7 +3,7 @@
 
 NOT the agent, NOT an LLM tool, NOT a direct P1 call. This writes a
 worker-contract manifest for the Snake River reach to MinIO, then invokes the
-solve through ``tools.solver.run_solver(solver='telemac_river_dye', ...)`` under
+solve through ``tools.simulation.solver.run_solver(solver='telemac_river_dye', ...)`` under
 TRID3NT_SOLVER_BACKEND=local-docker -- i.e. the SAME dispatch path the agent uses
 (LOCAL_SOLVER_SPEC_REGISTRY -> telemac_local_spec -> docker run
 trid3nt-local/telemac:latest -v <rundir>:/data). It then polls
@@ -32,7 +32,7 @@ import boto3
 
 # Register the telemac spec (imports run_telemac -> SOLVER/LOCAL registries).
 from trid3nt_server.workflows import run_telemac as _rt  # noqa: F401
-from trid3nt_server.tools.solver import run_solver, wait_for_completion
+from trid3nt_server.tools.simulation.solver import run_solver, wait_for_completion
 
 
 def _s3():

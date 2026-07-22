@@ -333,7 +333,7 @@ def stage_swmm_manifest(staging: SWMMStaging) -> str:
     The out-of-process analogue of ``build_and_stage_modflow_deck``'s staging
     half / the SFINCS ``build_sfincs_model`` manifest write. Mirrors that path
     EXACTLY (no new client): uses the same ``cache.storage_scheme()`` scheme +
-    the same ``tools.solver._get_s3_client()`` boto3 client + the same
+    the same ``tools.simulation.solver._get_s3_client()`` boto3 client + the same
     ``TRID3NT_CACHE_BUCKET`` staging bucket the SFINCS deck uploads land in.
 
     Writes:
@@ -359,7 +359,7 @@ def stage_swmm_manifest(staging: SWMMStaging) -> str:
             manifest — fail loudly, never a silent dead-end).
     """
     from ..tools.cache import CACHE_BUCKET, storage_scheme
-    from ..tools.solver import _get_s3_client
+    from ..tools.simulation.solver import _get_s3_client
 
     scheme = storage_scheme()  # "s3" on AWS (GCP decommissioned)
     cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
@@ -529,7 +529,7 @@ def swmm_local_spec() -> Any:
     """
     import sys
 
-    from ..tools.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
+    from ..tools.simulation.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
 
     def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
         # python services/workers/swmm/run_inp.py <inp_filename...>. The .inp is
@@ -605,7 +605,7 @@ def register_swmm_solver() -> None:
     correct shim instead of the default SFINCS spec. Idempotent -- safe to call
     at import.
     """
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         LOCAL_EXEC_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
         register_local_solver_spec,

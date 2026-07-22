@@ -26,7 +26,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_nws_event import (
+from trid3nt_server.tools.fetchers.weather.fetch_nws_event import (
     NWSError,
     NWSInputError,
     NWSUpstreamError,
@@ -400,8 +400,8 @@ def test_user_agent_header_sent_on_request():
             captured_headers.update(headers or {})
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_nws_event.httpx.Client", FakeClient):
-        from trid3nt_server.tools.fetch_nws_event import _fetch_nws_geojson
+    with patch("trid3nt_server.tools.fetchers.weather.fetch_nws_event.httpx.Client", FakeClient):
+        from trid3nt_server.tools.fetchers.weather.fetch_nws_event import _fetch_nws_geojson
         _fetch_nws_geojson("https://api.weather.gov/alerts/active?area=FL")
 
     assert "User-Agent" in captured_headers, (
@@ -425,10 +425,10 @@ def test_fl_state_response_with_three_alerts_writes_fgb():
     fake_geojson = _sample_fl_geojson()
 
     with patch(
-        "trid3nt_server.tools.fetch_nws_event._fetch_nws_geojson",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event._fetch_nws_geojson",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_nws_event.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nws_event(area="FL")
@@ -518,8 +518,8 @@ def test_403_raises_typed_upstream_error_with_useragent_message():
         def get(self, url, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_nws_event.httpx.Client", FakeClient):
-        from trid3nt_server.tools.fetch_nws_event import _fetch_nws_geojson
+    with patch("trid3nt_server.tools.fetchers.weather.fetch_nws_event.httpx.Client", FakeClient):
+        from trid3nt_server.tools.fetchers.weather.fetch_nws_event import _fetch_nws_geojson
         with pytest.raises(NWSUpstreamError, match="403"):
             _fetch_nws_geojson("https://api.weather.gov/alerts/active?area=FL")
 
@@ -545,8 +545,8 @@ def test_network_failure_wraps_to_upstream_error():
         def get(self, url, headers=None):
             raise httpx.ConnectError("simulated DNS failure")
 
-    with patch("trid3nt_server.tools.fetch_nws_event.httpx.Client", FakeClient):
-        from trid3nt_server.tools.fetch_nws_event import _fetch_nws_geojson
+    with patch("trid3nt_server.tools.fetchers.weather.fetch_nws_event.httpx.Client", FakeClient):
+        from trid3nt_server.tools.fetchers.weather.fetch_nws_event import _fetch_nws_geojson
         with pytest.raises(NWSUpstreamError, match="request failed"):
             _fetch_nws_geojson("https://api.weather.gov/alerts/active?area=FL")
 
@@ -567,10 +567,10 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return fake_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_nws_event._fetch_nws_event_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event._fetch_nws_event_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_nws_event.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_nws_event(area="FL")
@@ -590,10 +590,10 @@ def test_cache_keys_differ_for_different_areas():
         return _fake_fgb_bytes(canon_area.get("value", "POINT"))
 
     with patch(
-        "trid3nt_server.tools.fetch_nws_event._fetch_nws_event_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event._fetch_nws_event_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_nws_event.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_fl = fetch_nws_event(area="FL")
@@ -612,10 +612,10 @@ def test_event_types_filter_changes_cache_key():
         return _fake_fgb_bytes("X")
 
     with patch(
-        "trid3nt_server.tools.fetch_nws_event._fetch_nws_event_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event._fetch_nws_event_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_nws_event.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_all = fetch_nws_event(area="FL")
@@ -636,10 +636,10 @@ def test_event_types_order_does_not_affect_cache_key():
         return _fake_fgb_bytes("X")
 
     with patch(
-        "trid3nt_server.tools.fetch_nws_event._fetch_nws_event_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event._fetch_nws_event_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_nws_event.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_nws_event(
@@ -661,10 +661,10 @@ def test_event_types_order_does_not_affect_cache_key():
 def test_layer_uri_shape_for_state_area():
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_nws_event._fetch_nws_event_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event._fetch_nws_event_bytes",
         return_value=_fake_fgb_bytes("FL"),
     ), patch(
-        "trid3nt_server.tools.fetch_nws_event.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nws_event(area="FL")
@@ -680,10 +680,10 @@ def test_layer_uri_shape_for_state_area():
 def test_layer_uri_shape_for_point_area():
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_nws_event._fetch_nws_event_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event._fetch_nws_event_bytes",
         return_value=_fake_fgb_bytes("POINT"),
     ), patch(
-        "trid3nt_server.tools.fetch_nws_event.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_nws_event.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nws_event(area=_FORT_MYERS_BBOX)
@@ -700,7 +700,7 @@ def test_layer_uri_shape_for_point_area():
 
 def test_geojson_to_fgb_empty_collection_is_valid():
     """An empty NWS FeatureCollection still produces valid FGB bytes (≥0 features)."""
-    from trid3nt_server.tools.fetch_nws_event import _geojson_to_fgb
+    from trid3nt_server.tools.fetchers.weather.fetch_nws_event import _geojson_to_fgb
 
     empty_geojson = {"type": "FeatureCollection", "features": []}
     fgb_bytes = _geojson_to_fgb(empty_geojson)
@@ -723,7 +723,7 @@ def test_geojson_to_fgb_empty_collection_is_valid():
 
 def test_geojson_to_fgb_preserves_properties():
     """Audit.md spec preserved-properties survive the GeoJSON → FGB round-trip."""
-    from trid3nt_server.tools.fetch_nws_event import _geojson_to_fgb
+    from trid3nt_server.tools.fetchers.weather.fetch_nws_event import _geojson_to_fgb
 
     geojson = _sample_fl_geojson()
     fgb_bytes = _geojson_to_fgb(geojson)
@@ -854,13 +854,13 @@ def test_live_hurricane_warning_filter():
     ],
 )
 def test_canonicalize_area_full_state_name(raw, code):
-    from trid3nt_server.tools.fetch_nws_event import _canonicalize_area
+    from trid3nt_server.tools.fetchers.weather.fetch_nws_event import _canonicalize_area
     assert _canonicalize_area(raw) == {"kind": "state", "value": code}
 
 
 def test_canonicalize_area_full_name_builds_area_param_url():
     """'Texas' canonicalizes to the same URL as 'TX' (?area=TX)."""
-    from trid3nt_server.tools.fetch_nws_event import (
+    from trid3nt_server.tools.fetchers.weather.fetch_nws_event import (
         _build_nws_url,
         _canonicalize_area,
     )
@@ -873,14 +873,14 @@ def test_canonicalize_area_full_name_builds_area_param_url():
 def test_canonicalize_area_city_still_rejected():
     """Cities are still not valid areas — typed input error, not a silent
     nationwide fallback."""
-    from trid3nt_server.tools.fetch_nws_event import NWSInputError, _canonicalize_area
+    from trid3nt_server.tools.fetchers.weather.fetch_nws_event import NWSInputError, _canonicalize_area
     with pytest.raises(NWSInputError, match="not a recognized"):
         _canonicalize_area("Houston")
 
 
 def test_bbox_fallback_unchanged_by_state_name_support():
     """job-0261 must not disturb the bbox→point path (non-state areas)."""
-    from trid3nt_server.tools.fetch_nws_event import _canonicalize_area
+    from trid3nt_server.tools.fetchers.weather.fetch_nws_event import _canonicalize_area
     canon = _canonicalize_area((-106.6, 25.8, -93.5, 36.5))  # Texas-ish bbox
     assert canon["kind"] == "point"
     assert canon["lat"] == pytest.approx((25.8 + 36.5) / 2, abs=1e-4)

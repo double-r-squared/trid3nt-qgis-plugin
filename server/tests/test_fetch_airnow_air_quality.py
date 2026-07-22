@@ -27,7 +27,7 @@ import geopandas as gpd
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_airnow_air_quality import (
+from trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality import (
     AQI_CATEGORY_NAMES,
     PRESERVED_PROPERTIES,
     VALID_PARAMETERS,
@@ -138,7 +138,7 @@ def test_tool_is_registered():
 
 
 def test_metadata_invariants():
-    from trid3nt_server.tools.fetch_airnow_air_quality import _METADATA
+    from trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality import _METADATA
 
     assert _METADATA.name == "fetch_airnow_air_quality"
     assert _METADATA.ttl_class == "dynamic-1h"

@@ -30,7 +30,7 @@ import rasterio
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_blended_composite import (
+from trid3nt_server.tools.processing.compute_blended_composite import (
     BlendedCompositeError,
     compute_blended_composite,
 )
@@ -237,7 +237,7 @@ def test_compute_blended_composite_registered():
     assert entry.metadata.ttl_class == "static-30d"
     assert entry.metadata.source_class == "blended"
     # Registered via the @register_tool decorator from the module's own import.
-    assert entry.module == "trid3nt_server.tools.compute_blended_composite"
+    assert entry.module == "trid3nt_server.tools.processing.compute_blended_composite"
 
 
 # ---------------------------------------------------------------------------
@@ -496,7 +496,7 @@ def test_compute_blended_composite_cache_hit_skips_fetch(fake_storage):
 
         # Second identical call must hit the cache: _run_blend not invoked.
         with patch(
-            "trid3nt_server.tools.compute_blended_composite._run_blend",
+            "trid3nt_server.tools.processing.compute_blended_composite._run_blend",
             side_effect=AssertionError("_run_blend should not run on cache hit"),
         ):
             second = compute_blended_composite(

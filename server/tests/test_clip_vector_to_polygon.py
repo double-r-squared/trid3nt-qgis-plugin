@@ -38,7 +38,7 @@ import pytest
 from shapely.geometry import LineString, Point, Polygon
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.clip_vector_to_polygon import (
+from trid3nt_server.tools.processing.clip_vector_to_polygon import (
     ClipVectorError,
     clip_vector_to_polygon,
 )
@@ -447,7 +447,7 @@ def test_cache_miss_writes_and_hit_skips_recompute():
         fake_sc = FakeStorageClient()
 
         call_count = [0]
-        from trid3nt_server.tools import clip_vector_to_polygon as cvp_mod
+        from trid3nt_server.tools.processing import clip_vector_to_polygon as cvp_mod
 
         original_clip = cvp_mod._clip_vector_locally
 
@@ -456,7 +456,7 @@ def test_cache_miss_writes_and_hit_skips_recompute():
             return original_clip(*args, **kwargs)
 
         with patch(
-            "trid3nt_server.tools.clip_vector_to_polygon._clip_vector_locally",
+            "trid3nt_server.tools.processing.clip_vector_to_polygon._clip_vector_locally",
             side_effect=_counting,
         ):
             result1 = clip_vector_to_polygon(
@@ -583,10 +583,10 @@ def test_live_clip_gbif_panther_to_florida():
     actual bbox (-87.6, 24.4, -80.0, 31.0). Input is a wider US-east-coast bbox;
     output count < input count; all output points are inside FL.
     """
-    from trid3nt_server.tools.fetch_administrative_boundaries import (
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries import (
         fetch_administrative_boundaries,
     )
-    from trid3nt_server.tools.fetch_gbif_occurrences import fetch_gbif_occurrences
+    from trid3nt_server.tools.fetchers.biodiversity.fetch_gbif_occurrences import fetch_gbif_occurrences
 
     # 1. Fetch TIGER state polygons covering FL+GA+AL (so we can filter to FL).
     states_uri = fetch_administrative_boundaries(

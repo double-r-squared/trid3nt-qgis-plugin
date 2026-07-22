@@ -25,20 +25,20 @@ from typing import Any
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_3dep_extra import (
+from trid3nt_server.tools.fetchers.terrain.fetch_3dep_extra import (
     SUPPORTED_RESOLUTIONS,
     ThreeDEPExtraError,
     ThreeDEPExtraInputError,
     estimate_payload_mb as _est_3dep,
     fetch_3dep_extra,
 )
-from trid3nt_server.tools.fetch_nhdplus_nldi_navigate import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate import (
     NHDPlusNLDIError,
     NHDPlusNLDIInputError,
     estimate_payload_mb as _est_nldi,
     fetch_nhdplus_nldi_navigate,
 )
-from trid3nt_server.tools.fetch_statsgo_soils import (
+from trid3nt_server.tools.fetchers.soil.fetch_statsgo_soils import (
     STATSGOSoilsError,
     STATSGOSoilsInputError,
     estimate_payload_mb as _est_statsgo,
@@ -384,7 +384,7 @@ def test_live_statsgo_direct_pfdf_call() -> None:
 @pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
 def test_live_nldi_snap_and_navigate_direct() -> None:
     """Direct NLDI HTTP smoke — confirms upstream is up."""
-    from trid3nt_server.tools.fetch_nhdplus_nldi_navigate import (
+    from trid3nt_server.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate import (
         _navigate_flowlines,
         _snap_point_to_comid,
     )

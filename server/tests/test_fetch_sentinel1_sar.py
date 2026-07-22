@@ -29,8 +29,8 @@ import pytest
 import rasterio
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import fetch_sentinel1_sar as s1_mod
-from trid3nt_server.tools.fetch_sentinel1_sar import (
+from trid3nt_server.tools.fetchers.imagery import fetch_sentinel1_sar as s1_mod
+from trid3nt_server.tools.fetchers.imagery.fetch_sentinel1_sar import (
     _METADATA,
     _NODATA,
     _STYLE_PRESET,

@@ -9,7 +9,7 @@ Hard constraint honored here: **NO real docker invocation on this machine**
 (the daemon is blocked). Every ``docker`` call resolves to a PATH-shim bash
 script that records its argv, emulates the container behaviors (ok / fail /
 hang), and supports ``docker kill`` against the run-mode shim's pidfile.
-All S3 I/O goes through the ``tools.solver.set_s3_client`` seam with a
+All S3 I/O goes through the ``tools.simulation.solver.set_s3_client`` seam with a
 dict-backed fake (boto3-shaped ``get_object``/``put_object``).
 
 Coverage maps to the kickoff §4 test list:
@@ -44,8 +44,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-import trid3nt_server.tools.solver as solver_mod
-from trid3nt_server.tools.solver import (
+import trid3nt_server.tools.simulation.solver as solver_mod
+from trid3nt_server.tools.simulation.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     SOLVER_BACKEND_LOCAL_DOCKER,
     SolverDispatchError,

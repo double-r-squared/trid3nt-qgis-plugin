@@ -190,7 +190,7 @@ def test_response_barrier_flow_has_no_line_keys():
 
 
 def test_surfaced_line_feeds_compute_terrain_profile():
-    from trid3nt_server.tools.compute_terrain_profile import _resolve_line_coords
+    from trid3nt_server.tools.processing.compute_terrain_profile import _resolve_line_coords
 
     resp = SpatialInputResponsePayload(
         request_id=new_ulid(),
@@ -217,7 +217,7 @@ def test_surfaced_line_feeds_compute_terrain_profile():
 
 
 def test_tool_rides_purpose_line_in_sentinel():
-    from trid3nt_server.tools.spatial_input_tool import (
+    from trid3nt_server.tools.meta.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -237,7 +237,7 @@ def test_tool_rides_purpose_line_in_sentinel():
 
 def test_tool_default_purpose_is_barrier():
     """NO-REGRESSION: omitting `purpose` defaults to "barrier" (the SWMM flow)."""
-    from trid3nt_server.tools.spatial_input_tool import request_spatial_input
+    from trid3nt_server.tools.meta.spatial_input_tool import request_spatial_input
 
     out = asyncio.run(
         request_spatial_input(mode="vector_draw", title="Draw", description="x")
@@ -246,7 +246,7 @@ def test_tool_default_purpose_is_barrier():
 
 
 def test_tool_rejects_bad_purpose():
-    from trid3nt_server.tools.spatial_input_tool import (
+    from trid3nt_server.tools.meta.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -268,7 +268,7 @@ def test_tool_rides_purpose_aoi_in_sentinel():
     (aoi was not in _VALID_PURPOSES).  The model then retried with purpose='barrier'
     which is semantically wrong for an AOI selection request.
     """
-    from trid3nt_server.tools.spatial_input_tool import (
+    from trid3nt_server.tools.meta.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -297,7 +297,7 @@ def test_tool_aoi_purpose_does_not_emit_barrier_sentinel():
     Regression guard: a model using purpose='aoi' must not accidentally produce
     the same wire payload as the SWMM barrier flow.
     """
-    from trid3nt_server.tools.spatial_input_tool import (
+    from trid3nt_server.tools.meta.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )

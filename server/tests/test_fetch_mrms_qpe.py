@@ -36,7 +36,7 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools.fetch_mrms_qpe import (
+from trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe import (
     _CONUS_BBOX,
     _METADATA,
     _NODATA,
@@ -304,10 +304,10 @@ def test_fetch_mrms_qpe_lowercase_24h_accepted(tmp_path):
         return synthetic_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
         side_effect=fake_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_mrms_qpe.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe.read_through",
         side_effect=_patched_read_through(fake_gcs),
     ):
         result = fetch_mrms_qpe(bbox=_FLORIDA_BBOX, accumulation="24h")
@@ -328,10 +328,10 @@ def test_fetch_mrms_qpe_default_is_24h(tmp_path):
         return synthetic_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
         side_effect=fake_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_mrms_qpe.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe.read_through",
         side_effect=_patched_read_through(fake_gcs),
     ):
         fetch_mrms_qpe(bbox=_FLORIDA_BBOX)  # no accumulation kwarg — uses default
@@ -551,10 +551,10 @@ def test_fetch_mrms_qpe_end_to_end_with_mocked_fetch_returns_layer_uri(tmp_path)
         return synthetic_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
         side_effect=fake_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_mrms_qpe.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe.read_through",
         side_effect=_patched_read_through(fake_gcs),
     ):
         result = fetch_mrms_qpe(bbox=_FLORIDA_BBOX, accumulation="24H")
@@ -584,10 +584,10 @@ def test_fetch_mrms_qpe_cache_hit_on_second_call(tmp_path):
         return synthetic_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
         side_effect=fake_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_mrms_qpe.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe.read_through",
         side_effect=_patched_read_through(fake_gcs),
     ):
         r1 = fetch_mrms_qpe(bbox=_FLORIDA_BBOX, accumulation="24H")
@@ -612,10 +612,10 @@ def test_fetch_mrms_qpe_global_query_with_bbox_none(tmp_path):
         return synthetic_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe._fetch_mrms_qpe_bytes",
         side_effect=fake_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_mrms_qpe.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe.read_through",
         side_effect=_patched_read_through(fake_gcs),
     ):
         result = fetch_mrms_qpe(bbox=None, accumulation="01H")
@@ -643,7 +643,7 @@ def test_live_fetch_24h_conus_writes_evidence_file(tmp_path):
     import json
     import numpy as np
     import rasterio
-    from trid3nt_server.tools.fetch_mrms_qpe import _fetch_mrms_qpe_bytes
+    from trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe import _fetch_mrms_qpe_bytes
 
     # Direct invocation of the bytes path — bypasses the cache shim so we
     # exercise the live S3 + grib2 + reproject pipeline end-to-end.
@@ -694,7 +694,7 @@ def test_live_fetch_24h_florida_clipped_intersects_florida(tmp_path):
     """LIVE: fetch real MRMS 24H QPE clipped to Florida; verify clipped bounds intersect FL."""
     import io as _io
     import rasterio
-    from trid3nt_server.tools.fetch_mrms_qpe import _fetch_mrms_qpe_bytes
+    from trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe import _fetch_mrms_qpe_bytes
 
     geotiff_bytes = _fetch_mrms_qpe_bytes(
         accumulation="24H",

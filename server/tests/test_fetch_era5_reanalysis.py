@@ -40,7 +40,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_era5_reanalysis import (
+from trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis import (
     ERA5AuthError,
     ERA5EmptyError,
     ERA5InputError,
@@ -435,7 +435,7 @@ def test_mocked_happy_path_total_precipitation(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -476,7 +476,7 @@ def test_two_variables_produce_distinct_cache_keys(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_era5_reanalysis(
@@ -513,7 +513,7 @@ def test_cache_hit_skips_cdsapi(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_era5_reanalysis(
@@ -545,7 +545,7 @@ def test_cdsapi_failure_surfaces_as_upstream_error(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(ERA5UpstreamError) as exc_info:
@@ -574,7 +574,7 @@ def test_cdsapi_auth_error_surfaces_as_auth_error(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(ERA5AuthError) as exc_info:
@@ -719,7 +719,7 @@ def test_layer_uri_shape_fields(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -811,7 +811,7 @@ def test_wind_speed_issues_two_retrieves_and_writes_magnitude(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -882,7 +882,7 @@ def test_wind_speed_preserves_nan_nodata(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -931,7 +931,7 @@ def test_wind_speed_distinct_cache_key_from_components(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_speed = fetch_era5_reanalysis(
@@ -968,7 +968,7 @@ def test_component_variable_unchanged(monkeypatch):
     _install_fake_cdsapi(monkeypatch, _retrieve)
 
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(
@@ -1004,7 +1004,7 @@ def test_live_fort_myers_total_precipitation(tmp_path):
 
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_era5_reanalysis.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_era5_reanalysis.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_era5_reanalysis(

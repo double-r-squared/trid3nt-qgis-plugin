@@ -68,11 +68,11 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from ..tools import register_tool
-from ..tools.clip_raster_to_polygon import clip_raster_to_polygon
-from ..tools.clip_vector_to_polygon import clip_vector_to_polygon
-from ..tools.compute_zonal_statistics import compute_zonal_statistics
-from ..tools.fetch_gbif_occurrences import fetch_gbif_occurrences
-from ..tools.fetch_wdpa_protected_areas import fetch_wdpa_protected_areas
+from ..tools.processing.clip_raster_to_polygon import clip_raster_to_polygon
+from ..tools.processing.clip_vector_to_polygon import clip_vector_to_polygon
+from ..tools.processing.compute_zonal_statistics import compute_zonal_statistics
+from ..tools.fetchers.biodiversity.fetch_gbif_occurrences import fetch_gbif_occurrences
+from ..tools.fetchers.biodiversity.fetch_wdpa_protected_areas import fetch_wdpa_protected_areas
 from .model_flood_scenario import model_flood_scenario
 
 __all__ = [

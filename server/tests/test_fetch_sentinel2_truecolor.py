@@ -32,8 +32,8 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools import fetch_sentinel2_truecolor as s2_mod
-from trid3nt_server.tools.fetch_sentinel2_truecolor import (
+from trid3nt_server.tools.fetchers.imagery import fetch_sentinel2_truecolor as s2_mod
+from trid3nt_server.tools.fetchers.imagery.fetch_sentinel2_truecolor import (
     S2TrueColorBboxError,
     S2TrueColorNoImageryError,
     _truecolor_from_bands,

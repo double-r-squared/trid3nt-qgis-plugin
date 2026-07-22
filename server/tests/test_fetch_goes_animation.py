@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools._satellite_slider import (
+from trid3nt_server.tools.fetchers.imagery._satellite_slider import (
     FIRE_BLEND_RED_FLOOR,
     SliderEmptyError,
     blend_geocolor_fire_temperature,
@@ -27,8 +27,8 @@ from trid3nt_server.tools._satellite_slider import (
     ts_int_to_datetime,
     ts_int_to_iso,
 )
-from trid3nt_server.tools.fetch_goes_satellite import GOESInputError
-from trid3nt_server.tools.fetch_goes_animation import (
+from trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite import GOESInputError
+from trid3nt_server.tools.fetchers.imagery.fetch_goes_animation import (
     GOESAnimBboxRequiredError,
     GOESAnimEmptyError,
     GOESAnimInputError,
@@ -178,7 +178,7 @@ class _FakeReadResultWithData:
 
 def _patch_slider_for_three_frames(monkeypatch, product_seen):
     """Stub the SLIDER substrate so fetch_goes_animation emits 3 deterministic frames."""
-    from trid3nt_server.tools import fetch_goes_animation as mod
+    from trid3nt_server.tools.fetchers.imagery import fetch_goes_animation as mod
 
     frame_ts = [
         _ts(2026, 6, 22, 18, 0),
@@ -482,7 +482,7 @@ def test_blend_fetcher_is_registered():
 def _patch_blend_slider(monkeypatch, blend_calls, *, empty=False):
     """Stub the SLIDER substrate so fetch_goes_blend_animation emits 3 blended
     frames deterministically (no network, no real raster)."""
-    from trid3nt_server.tools import fetch_goes_animation as mod
+    from trid3nt_server.tools.fetchers.imagery import fetch_goes_animation as mod
 
     frame_ts = [
         _ts(2026, 6, 22, 18, 0),
@@ -561,7 +561,7 @@ def test_blend_frame_cog_bytes_composites_both_products(monkeypatch):
     and returns a real blended RGB COG -- the true dual-product wiring, with only
     the SLIDER stitch + the S3 read_through stubbed."""
     import numpy as np
-    from trid3nt_server.tools import fetch_goes_animation as mod
+    from trid3nt_server.tools.fetchers.imagery import fetch_goes_animation as mod
 
     bbox = (-112.0, 39.0, -111.9, 39.08)
     products_fetched: list[str] = []
@@ -616,7 +616,7 @@ def test_blend_fetcher_unknown_satellite_raises():
 @pytest.mark.parametrize("token", ["blend", "blended", "combined", "GeoColor_Fire"])
 def test_band_blend_delegates_to_blend_impl(monkeypatch, token):
     """A blend band token routes fetch_goes_animation to the blended impl."""
-    from trid3nt_server.tools import fetch_goes_animation as mod
+    from trid3nt_server.tools.fetchers.imagery import fetch_goes_animation as mod
 
     sentinel = ["BLENDED"]
     seen = {}
@@ -643,7 +643,7 @@ def test_band_blend_delegates_to_blend_impl(monkeypatch, token):
 
 def test_deprecated_blend_alias_routes_through_impl(monkeypatch):
     """The deprecated fetch_goes_blend_animation still routes through the impl."""
-    from trid3nt_server.tools import fetch_goes_animation as mod
+    from trid3nt_server.tools.fetchers.imagery import fetch_goes_animation as mod
 
     sentinel = ["BLENDED"]
     monkeypatch.setattr(mod, "_blend_animation_impl", lambda bbox, **k: sentinel)
@@ -658,7 +658,7 @@ def test_deprecated_blend_alias_routes_through_impl(monkeypatch):
 
 def test_non_blend_band_does_not_delegate(monkeypatch):
     """geocolor / fire_temperature never hit the blend impl."""
-    from trid3nt_server.tools import fetch_goes_animation as mod
+    from trid3nt_server.tools.fetchers.imagery import fetch_goes_animation as mod
 
     seen = _patch_slider_for_three_frames(monkeypatch, [])
 

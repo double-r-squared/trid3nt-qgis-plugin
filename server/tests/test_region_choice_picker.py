@@ -458,7 +458,7 @@ def _make_tiger_county_fgb_bytes() -> bytes:
 def test_build_region_candidates_from_tiger_features():
     fgb = _make_tiger_county_fgb_bytes()
     with patch(
-        "trid3nt_server.tools.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
         return_value=fgb,
     ):
         candidates = _build_region_candidates(
@@ -477,7 +477,7 @@ def test_build_region_candidates_from_tiger_features():
 def test_build_region_candidates_degrades_to_empty_on_fetch_failure():
     """A TIGER fetch failure yields an EMPTY candidate set (honest degrade)."""
     with patch(
-        "trid3nt_server.tools.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
         side_effect=RuntimeError("TIGER download failed"),
     ):
         candidates = _build_region_candidates(

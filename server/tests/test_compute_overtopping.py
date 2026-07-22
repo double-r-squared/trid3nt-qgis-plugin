@@ -19,7 +19,7 @@ import math
 
 import pytest
 
-from trid3nt_server.tools.compute_overtopping import (
+from trid3nt_server.tools.processing.compute_overtopping import (
     OvertoppingError,
     compute_overtopping,
 )

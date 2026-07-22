@@ -14,10 +14,10 @@ import pytest
 from PIL import Image
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import _noaa_slr_raster as slr
-from trid3nt_server.tools import fetch_noaa_slr_confidence as confmod
-from trid3nt_server.tools import fetch_noaa_slr_marsh as marshmod
-from trid3nt_server.tools._noaa_slr_raster import (
+from trid3nt_server.tools.fetchers.ocean import _noaa_slr_raster as slr
+from trid3nt_server.tools.fetchers.ocean import fetch_noaa_slr_confidence as confmod
+from trid3nt_server.tools.fetchers.ocean import fetch_noaa_slr_marsh as marshmod
+from trid3nt_server.tools.fetchers.ocean._noaa_slr_raster import (
     NOAASLRRasterInputError,
     NOAASLRRasterUpstreamError,
     round_bbox,
@@ -96,7 +96,9 @@ def test_corpus():
 
     import yaml
 
-    p = pathlib.Path(slr.__file__).resolve().parents[1] / "data" / "tool_query_corpus.yaml"
+    from trid3nt_server.tools.discovery.discover_dataset import _default_corpus_path
+
+    p = pathlib.Path(_default_corpus_path())
     corpus = yaml.safe_load(p.read_text())
     for n in ("fetch_noaa_slr_confidence", "fetch_noaa_slr_marsh"):
         assert n in corpus and len(corpus[n]) >= 3

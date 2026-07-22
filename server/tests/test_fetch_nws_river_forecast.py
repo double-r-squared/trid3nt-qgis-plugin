@@ -34,7 +34,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.tools.fetch_nws_river_forecast import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast import (
     GAUGE_DETAIL_URL,
     GAUGES_URL,
     NwsRiverForecastBboxTooLargeError,
@@ -382,10 +382,10 @@ def _stub_read_through(*, metadata: Any, params: Any, ext: str, fetch_fn: Any) -
 def test_fetch_happy_path_layeruri_shape() -> None:
     pytest.importorskip("geopandas")
     with patch(
-        "trid3nt_server.tools.fetch_nws_river_forecast._http_get",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast._http_get",
         return_value=_GAUGES_BODY,
     ), patch(
-        "trid3nt_server.tools.fetch_nws_river_forecast.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast.read_through",
         _stub_read_through,
     ):
         uri = fetch_nws_river_forecast(bbox=(-92.0, 41.7, -91.4, 42.1))
@@ -410,7 +410,7 @@ def test_fetch_include_thresholds_enriches() -> None:
         return _GAUGES_BODY
 
     # Spy on _build_flatgeobuf to capture the enriched records.
-    import trid3nt_server.tools.fetch_nws_river_forecast as mod
+    import trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast as mod
 
     orig_build = mod._build_flatgeobuf
 
@@ -434,10 +434,10 @@ def test_fetch_include_thresholds_enriches() -> None:
 
 def test_fetch_honest_empty_raises_no_gauges() -> None:
     with patch(
-        "trid3nt_server.tools.fetch_nws_river_forecast._http_get",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast._http_get",
         return_value=_EMPTY_BODY,
     ), patch(
-        "trid3nt_server.tools.fetch_nws_river_forecast.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast.read_through",
         _stub_read_through,
     ):
         with pytest.raises(NwsRiverForecastNoGaugesError):
@@ -457,7 +457,7 @@ def test_live_nwps_cedar_rapids() -> None:
     pytest.importorskip("geopandas")
     recs = _parse_gauges_json(
         __import__(
-            "trid3nt_server.tools.fetch_nws_river_forecast", fromlist=["_http_get"]
+            "trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast", fromlist=["_http_get"]
         )._http_get(_build_gauges_url((-92.0, 41.7, -91.4, 42.1)))
     )
     assert len(recs) >= 1
@@ -532,7 +532,7 @@ _DETAIL_FULL_BODY_CIDI4 = json.dumps(
 
 
 def test_build_gauge_stageflow_url() -> None:
-    from trid3nt_server.tools.fetch_nws_river_forecast import (
+    from trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast import (
         _build_gauge_stageflow_url,
     )
 
@@ -543,7 +543,7 @@ def test_build_gauge_stageflow_url() -> None:
 
 
 def test_parse_stageflow_crest_and_series() -> None:
-    from trid3nt_server.tools.fetch_nws_river_forecast import _parse_stageflow
+    from trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast import _parse_stageflow
 
     out = _parse_stageflow(_STAGEFLOW_BODY_CIDI4)
     assert len(out["observed"]) == 3
@@ -555,7 +555,7 @@ def test_parse_stageflow_crest_and_series() -> None:
 
 
 def test_parse_stageflow_empty_and_malformed() -> None:
-    from trid3nt_server.tools.fetch_nws_river_forecast import _parse_stageflow
+    from trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast import _parse_stageflow
 
     for raw in (b"", b"not json", b"[1,2,3]"):
         out = _parse_stageflow(raw)
@@ -567,7 +567,7 @@ def test_parse_stageflow_empty_and_malformed() -> None:
 
 def test_fetch_include_series_enriches_crest_and_json() -> None:
     pytest.importorskip("geopandas")
-    import trid3nt_server.tools.fetch_nws_river_forecast as mod
+    import trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast as mod
 
     def _http_router(url: str, timeout: float = 60.0) -> bytes:
         if url.endswith("/stageflow"):
@@ -607,7 +607,7 @@ def test_fetch_include_series_enriches_crest_and_json() -> None:
 
 def test_fetch_gauge_id_single_gauge_mode() -> None:
     pytest.importorskip("geopandas")
-    import trid3nt_server.tools.fetch_nws_river_forecast as mod
+    import trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast as mod
 
     urls: list[str] = []
 
@@ -646,7 +646,7 @@ def test_fetch_gauge_id_single_gauge_mode() -> None:
 
 
 def test_fetch_gauge_id_unknown_raises_no_gauges() -> None:
-    import trid3nt_server.tools.fetch_nws_river_forecast as mod
+    import trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast as mod
 
     with patch.object(
         mod, "_http_get", return_value=b""  # the 404 path returns empty body
@@ -656,7 +656,7 @@ def test_fetch_gauge_id_unknown_raises_no_gauges() -> None:
 
 
 def test_fetch_gauge_id_invalid_lid_rejected() -> None:
-    import trid3nt_server.tools.fetch_nws_river_forecast as mod
+    import trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast as mod
 
     with pytest.raises(NwsRiverForecastInputError, match="gauge_id"):
         mod.fetch_nws_river_forecast(gauge_id="  ")
@@ -666,7 +666,7 @@ def test_fetch_gauge_id_invalid_lid_rejected() -> None:
 
 def test_default_call_cache_params_unchanged() -> None:
     """The pre-extension cache key must stay byte-identical for default calls."""
-    import trid3nt_server.tools.fetch_nws_river_forecast as mod
+    import trid3nt_server.tools.fetchers.hydrology.fetch_nws_river_forecast as mod
 
     seen: dict[str, Any] = {}
 

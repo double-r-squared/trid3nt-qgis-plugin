@@ -32,7 +32,7 @@ import tempfile
 
 import pytest
 
-from trid3nt_server.tools.fetch_usgs_earthquakes import (
+from trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes import (
     DEFAULT_WINDOW_DAYS,
     FDSN_RESULT_LIMIT,
     MAX_WINDOW_DAYS,
@@ -367,7 +367,7 @@ def test_build_flatgeobuf_roundtrips():
 
 
 def test_fetch_bytes_empty_raises_no_events(monkeypatch):
-    import trid3nt_server.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes as M
 
     monkeypatch.setattr(M, "_http_get", lambda url, timeout=90.0: (_empty_geojson(), 200))
     with pytest.raises(EarthquakesNoEventsError):
@@ -380,7 +380,7 @@ def test_fetch_bytes_empty_raises_no_events(monkeypatch):
 
 
 def test_fetch_bytes_204_raises_no_events(monkeypatch):
-    import trid3nt_server.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes as M
 
     monkeypatch.setattr(M, "_http_get", lambda url, timeout=90.0: (b"", 204))
     with pytest.raises(EarthquakesNoEventsError):
@@ -393,7 +393,7 @@ def test_fetch_bytes_204_raises_no_events(monkeypatch):
 
 
 def test_fetch_bytes_over_cap_raises_too_large(monkeypatch):
-    import trid3nt_server.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes as M
 
     body = _synthetic_geojson(n=2, count=FDSN_RESULT_LIMIT + 5)
     monkeypatch.setattr(M, "_http_get", lambda url, timeout=90.0: (body, 200))
@@ -407,7 +407,7 @@ def test_fetch_bytes_over_cap_raises_too_large(monkeypatch):
 
 
 def test_fetch_bytes_400_too_large_raises(monkeypatch):
-    import trid3nt_server.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes as M
 
     monkeypatch.setattr(
         M,
@@ -424,7 +424,7 @@ def test_fetch_bytes_400_too_large_raises(monkeypatch):
 
 
 def test_fetch_bytes_happy_path(monkeypatch):
-    import trid3nt_server.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes as M
 
     body = _synthetic_geojson(n=3, count=3)
     monkeypatch.setattr(M, "_http_get", lambda url, timeout=90.0: (body, 200))
@@ -517,7 +517,7 @@ def test_live_california_window():
 
 def test_public_tool_zero_events_raises_typed_no_data(monkeypatch):
     """PUBLIC tool surface: a faked 0-event FDSN body raises the typed error."""
-    import trid3nt_server.tools.fetch_usgs_earthquakes as M
+    import trid3nt_server.tools.fetchers.hazard.fetch_usgs_earthquakes as M
 
     monkeypatch.setattr(
         M, "_http_get", lambda url, timeout=90.0: (_empty_geojson(), 200)

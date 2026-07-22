@@ -37,7 +37,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_openaq_measurements import (
+from trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements import (
     DEFAULT_PARAMETERS,
     OpenAQAuthError,
     OpenAQInputError,
@@ -390,7 +390,7 @@ def test_resolve_api_key_via_persistence_secret_ref():
 def test_no_key_raises_before_any_network_call():
     """The full tool body raises OPENAQ_KEY_REQUIRED with NO HTTP attempted."""
     with patch.dict(os.environ, {}, clear=True), patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client"
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.httpx.Client"
     ) as mock_client:
         with pytest.raises(OpenAQMissingKeyError) as exc:
             fetch_openaq_measurements(bbox=_DELHI_BBOX)
@@ -587,10 +587,10 @@ def test_mocked_happy_path_two_call_fanout():
     mock_client = _MockHTTPClient([stations], latest_by_id)
 
     with patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=_MOCK_API_KEY)
@@ -634,10 +634,10 @@ def test_mocked_empty_bbox_yields_empty_layer_no_error():
     mock_client = _MockHTTPClient([[]], {})
 
     with patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         result = fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=_MOCK_API_KEY)
@@ -665,10 +665,10 @@ def test_401_on_locations_raises_auth_error():
         [[]], {}, status_override=401, error_text='{"detail":"Invalid credentials"}'
     )
     with patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(OpenAQAuthError) as exc:
@@ -682,10 +682,10 @@ def test_422_on_locations_raises_upstream_error():
         [[]], {}, status_override=422, error_text='{"detail":"bad bbox"}'
     )
     with patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(OpenAQUpstreamError):
@@ -696,10 +696,10 @@ def test_500_on_locations_raises_upstream_error():
     fake = _FakeStore()
     mock_client = _MockHTTPClient([[]], {}, status_override=503, error_text="oops")
     with patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client,
     ):
         with pytest.raises(OpenAQUpstreamError):
@@ -714,10 +714,10 @@ def test_cache_hit_skips_fetch_fn():
 
     mock_client_1 = _MockHTTPClient([stations], latest_by_id)
     with patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client_1,
     ):
         r1 = fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=_MOCK_API_KEY)
@@ -729,10 +729,10 @@ def test_cache_hit_skips_fetch_fn():
 
     mock_client_2 = _ExplodingClient([stations], latest_by_id)
     with patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.read_through",
         side_effect=_make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
+        "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.httpx.Client",
         return_value=mock_client_2,
     ):
         r2 = fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=_MOCK_API_KEY)
@@ -750,10 +750,10 @@ def test_cache_key_omits_api_key():
     for key in ("key-AAA", "key-BBB"):
         mock_client = _MockHTTPClient([stations], latest_by_id)
         with patch(
-            "trid3nt_server.tools.fetch_openaq_measurements.read_through",
+            "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.read_through",
             side_effect=_make_read_through_injector(fake),
         ), patch(
-            "trid3nt_server.tools.fetch_openaq_measurements.httpx.Client",
+            "trid3nt_server.tools.fetchers.weather.fetch_openaq_measurements.httpx.Client",
             return_value=mock_client,
         ):
             fetch_openaq_measurements(bbox=_DELHI_BBOX, api_key=key)

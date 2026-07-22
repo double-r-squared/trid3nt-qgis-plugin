@@ -25,7 +25,7 @@ import os
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_hrrr_forecast import (
+from trid3nt_server.tools.fetchers.weather.fetch_hrrr_forecast import (
     HRRRForecastEmptyError,
     HRRRForecastInputError,
     HRRRForecastUpstreamError,
@@ -341,7 +341,7 @@ def test_wind_speed_fetches_both_components_and_writes_magnitude(monkeypatch):
     """variable='10m_wind_speed' opens BOTH UGRD+VGRD and writes sqrt(u^2+v^2)."""
     import numpy as np
 
-    from trid3nt_server.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools.fetchers.weather import fetch_hrrr_forecast as mod
 
     u_vals = [[3.0, 0.0], [6.0, 5.0]]
     v_vals = [[4.0, 0.0], [8.0, 12.0]]
@@ -379,7 +379,7 @@ def test_wind_speed_preserves_nan_nodata(monkeypatch):
     """NaN in either wind component propagates as NaN in the magnitude band."""
     import numpy as np
 
-    from trid3nt_server.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools.fetchers.weather import fetch_hrrr_forecast as mod
 
     u_vals = [[3.0, np.nan], [6.0, 0.0]]
     v_vals = [[4.0, 1.0], [np.nan, 0.0]]
@@ -411,7 +411,7 @@ def test_plain_component_unchanged_single_open(monkeypatch):
     """A plain component variable opens exactly ONE component and writes it verbatim."""
     import numpy as np
 
-    from trid3nt_server.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools.fetchers.weather import fetch_hrrr_forecast as mod
 
     u_vals = [[3.0, 7.0], [6.0, 5.0]]
     requested: list[str] = []
@@ -437,7 +437,7 @@ def test_plain_component_unchanged_single_open(monkeypatch):
 
 def test_fetch_hrrr_wind_speed_layer_uri_preset_and_units(monkeypatch):
     """The full tool stamps style_preset='wind_speed' + units='m s-1' for wind speed."""
-    from trid3nt_server.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools.fetchers.weather import fetch_hrrr_forecast as mod
     from trid3nt_server.tools.cache import ReadThroughResult
 
     captured: dict[str, bytes] = {}
@@ -470,7 +470,7 @@ def test_fetch_hrrr_wind_speed_layer_uri_preset_and_units(monkeypatch):
 
 def test_fetch_hrrr_component_layer_uri_preset_and_units(monkeypatch):
     """A plain component keeps its hrrr_<var> preset + m s-1 units (unchanged)."""
-    from trid3nt_server.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools.fetchers.weather import fetch_hrrr_forecast as mod
     from trid3nt_server.tools.cache import ReadThroughResult
 
     import fsspec
@@ -513,7 +513,7 @@ def test_live_fetch_fort_myers_2m_temperature(tmp_path, monkeypatch):
     """
     import tempfile
 
-    from trid3nt_server.tools import fetch_hrrr_forecast as mod
+    from trid3nt_server.tools.fetchers.weather import fetch_hrrr_forecast as mod
 
     captured: dict[str, bytes] = {}
 

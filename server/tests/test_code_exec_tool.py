@@ -26,7 +26,7 @@ from trid3nt_contracts.payload_warning import PayloadConfirmationEnvelopePayload
 from trid3nt_contracts.sandbox_contracts import CodeExecResultPayload
 
 from trid3nt_server.sandbox_runner import run_sandbox_local
-from trid3nt_server.tools.code_exec_tool import (
+from trid3nt_server.tools.meta.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     CodeExecConfirmationRequired,
     build_code_exec_result_payload,

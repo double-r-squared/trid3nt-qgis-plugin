@@ -36,8 +36,8 @@ import rasterio
 from rasterio.transform import from_origin
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import fetch_topobathy as ftb
-from trid3nt_server.tools.fetch_topobathy import (
+from trid3nt_server.tools.fetchers.ocean import fetch_topobathy as ftb
+from trid3nt_server.tools.fetchers.ocean.fetch_topobathy import (
     ETOPO_GLOBAL_ROOT,
     TARGET_CRS,
     TopobathyDatumError,

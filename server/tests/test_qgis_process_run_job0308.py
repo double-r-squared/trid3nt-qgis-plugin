@@ -1,7 +1,7 @@
 """job-0308: qgis_process RUN — param translation (stage-then-mount) unit tests."""
 from unittest.mock import patch
 
-from trid3nt_server.tools.passthroughs import (
+from trid3nt_server.tools.meta.passthroughs import (
     QGIS_OFFLOADED_ERROR_CODE,
     _build_qgis_run_args,
     _qgis_onbox_docker_enabled,
@@ -69,7 +69,7 @@ def test_qgis_process_disabled_returns_honest_no_run(monkeypatch):
     monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
 
     with patch(
-        "trid3nt_server.tools.passthroughs._run_qgis_process_docker"
+        "trid3nt_server.tools.meta.passthroughs._run_qgis_process_docker"
     ) as run_docker, patch("subprocess.run") as subproc:
         result = qgis_process(
             algorithm="native:slope", params={"INPUT": "s3://b/dem.tif"}
@@ -94,7 +94,7 @@ def test_qgis_process_enabled_runs_docker_path(monkeypatch):
 
     sentinel = {"status": "succeeded", "tool": "qgis_process"}
     with patch(
-        "trid3nt_server.tools.passthroughs._run_qgis_process_docker",
+        "trid3nt_server.tools.meta.passthroughs._run_qgis_process_docker",
         return_value=sentinel,
     ) as run_docker:
         result = qgis_process(algorithm="native:slope", params={"INPUT": "x"})

@@ -201,6 +201,12 @@ dependencies = [
     # Dormant unless MODEL_PROVIDER=openai is selected; zero impact on the live
     # Bedrock path. AsyncOpenAI + streaming tool-call support requires >= 1.40.
     "openai>=1.40",
+    # DuckDB spatial-query fold (Phase B): the spatial_query tool runs
+    # read-only SQL over the Case's vector layers via DuckDB + its spatial
+    # extension (ST_Read). The spatial/httpfs extensions download on first
+    # INSTALL and are cached under ~/.duckdb/extensions afterwards; a cold
+    # offline box degrades with a typed EXTENSION_UNAVAILABLE error.
+    "duckdb>=1",
     # Consumed verbatim from contracts/ in this repo (editable install).
     "trid3nt-contracts>=0.1,<0.2",
 ]

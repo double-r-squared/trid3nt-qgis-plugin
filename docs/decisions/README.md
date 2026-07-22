@@ -20,3 +20,4 @@ lands; never rewrite history - supersede with a new note that links back.
 - [0014 - the LLM passes handles, never URIs (accepted, to implement)](0014-layer-handles-not-uris.md)
 - [0015 - server/wheels holds PyPI-absent deps](0015-vendored-wheel.md)
 - [0016 - server uses the src/ layout](0016-src-layout.md)
+- [0018 - auto and ask modes (accepted, picker to implement)](0018-auto-ask-modes.md)

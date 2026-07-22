@@ -27,8 +27,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.chart_tools import is_chart_emission_result
-from trid3nt_server.tools.compute_cross_section import (
+from trid3nt_server.tools.processing.charts_common import is_chart_emission_result
+from trid3nt_server.tools.processing.compute_cross_section import (
     CrossSectionError,
     _resolve_line_coords,
     compute_cross_section,
@@ -468,7 +468,7 @@ def test_registered_via_package_import_path():
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True)
     assert proc.returncode == 0, (
         "compute_cross_section must register via the tools package import "
-        "(tools/__init__.py must `from . import compute_cross_section`); "
+        "(tools/__init__.py must `from .processing import compute_cross_section`); "
         f"stderr={proc.stderr.decode()[-2000:]}"
     )
 

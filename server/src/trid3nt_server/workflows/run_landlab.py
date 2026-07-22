@@ -162,7 +162,7 @@ def stage_landlab_manifest(
 
     Mirrors ``run_swmm.stage_swmm_manifest`` EXACTLY (no new client): the same
     ``cache.storage_scheme()`` scheme + the same
-    ``tools.solver._get_s3_client()`` boto3 client + the same
+    ``tools.simulation.solver._get_s3_client()`` boto3 client + the same
     ``TRID3NT_CACHE_BUCKET`` staging bucket the SFINCS/SWMM decks upload land in.
 
     Writes:
@@ -187,7 +187,7 @@ def stage_landlab_manifest(
             manifest — fail loudly, never a silent dead-end).
     """
     from ..tools.cache import CACHE_BUCKET, storage_scheme
-    from ..tools.solver import _get_s3_client
+    from ..tools.simulation.solver import _get_s3_client
 
     scheme = storage_scheme()  # "s3" on AWS (GCP decommissioned)
     cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
@@ -287,7 +287,7 @@ def landlab_local_spec() -> Any:
     cloud Batch path (``run_solver(solver='landlab', model_setup_uri=s3://...)``)
     is unchanged.
     """
-    from ..tools.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
+    from ..tools.simulation.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
 
     repo_root = _TRID3NT_REPO_ROOT
     # Prepend the repo root to PYTHONPATH so the worker can import
@@ -330,13 +330,13 @@ def landlab_local_spec() -> Any:
 
 
 def register_landlab_solver() -> None:
-    """Register ``'landlab'`` local spec in ``tools.solver.LOCAL_SOLVER_SPEC_REGISTRY``.
+    """Register ``'landlab'`` local spec in ``tools.simulation.solver.LOCAL_SOLVER_SPEC_REGISTRY``.
 
     Mirrors ``run_swmm.register_swmm_solver``. Idempotent -- safe to call at
     module import. The factory is a zero-arg lambda wrapping ``landlab_local_spec``
     (deferred construction avoids any circular-import hazard at import time).
     """
-    from ..tools.solver import LOCAL_SOLVER_SPEC_REGISTRY, register_local_solver_spec
+    from ..tools.simulation.solver import LOCAL_SOLVER_SPEC_REGISTRY, register_local_solver_spec
 
     _ = LOCAL_SOLVER_SPEC_REGISTRY  # ensure the registry is initialised
     register_local_solver_spec(LANDLAB_SOLVER_NAME, landlab_local_spec)

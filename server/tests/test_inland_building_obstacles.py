@@ -281,7 +281,7 @@ async def test_inland_with_buildings_passes_uri_and_subgrid() -> None:
         # so patch it at its source module.
         stack.enter_context(
             patch(
-                "trid3nt_server.tools.data_fetch.fetch_buildings",
+                "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings",
                 return_value=_buildings_layer(),
             )
         )
@@ -326,7 +326,7 @@ async def test_inland_default_off_no_buildings_no_subgrid() -> None:
             stack.enter_context(p)
         fb = stack.enter_context(
             patch(
-                "trid3nt_server.tools.data_fetch.fetch_buildings",
+                "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings",
                 return_value=_buildings_layer(),
             )
         )
@@ -370,7 +370,7 @@ async def test_inland_buildings_fetch_failure_degrades_to_no_obstacles() -> None
             stack.enter_context(p)
         stack.enter_context(
             patch(
-                "trid3nt_server.tools.data_fetch.fetch_buildings",
+                "trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings",
                 side_effect=RuntimeError("Overpass 504 gateway timeout"),
             )
         )

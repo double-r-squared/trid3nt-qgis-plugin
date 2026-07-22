@@ -61,8 +61,8 @@ from typing import Any, Literal
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from ..tools import TOOL_REGISTRY, register_tool
-from ..tools.data_fetch import geocode_location
-from ..tools.postprocess_pelicun import (
+from ..tools.fetchers.socioeconomic.geocode_location import geocode_location
+from ..tools.simulation.postprocess_pelicun import (
     PelicunPostprocessError,
     postprocess_pelicun,
 )

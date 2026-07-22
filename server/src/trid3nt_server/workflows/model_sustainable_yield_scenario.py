@@ -460,7 +460,7 @@ async def _emit_head_decline_chart(
     builder: an absent / single-point series yields no chart. The x axis is in
     elapsed days when ``sim_years`` + ``n_periods`` give a per-step day count,
     else the bare timestep index."""
-    from ..tools.chart_tools import build_head_decline_chart
+    from ..tools.processing.charts_common import build_head_decline_chart
 
     series = getattr(layer, "head_decline_timeseries", None)
     if not series:
@@ -785,7 +785,7 @@ async def _run_archetype(
     validation lives INSIDE the substep so a non-typed result raises here,
     marking the child red (honesty floor) before the error re-raises.
     """
-    from ..tools.run_modflow_archetype_tool import run_modflow_archetype_job
+    from ..tools.simulation.run_modflow_archetype_tool import run_modflow_archetype_job
 
     async with substep(current_emitter(), "run_modflow_archetype_job"):
         result = await _maybe_emit(

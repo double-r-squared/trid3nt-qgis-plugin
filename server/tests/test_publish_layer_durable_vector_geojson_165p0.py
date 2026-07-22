@@ -198,7 +198,7 @@ def test_write_durable_vector_geojson_writes_to_runs_bucket(
     fake = _FakeS3({(_RUNS_BUCKET, "runs/roads.fgb"): fgb})
     monkeypatch.setattr("boto3.client", lambda *a, **k: fake)
     # solver caches an override binding; ensure the env default is used.
-    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.simulation.solver._RUNS_BUCKET", None, raising=False)
 
     asset = _write_durable_vector_geojson(
         f"s3://{_RUNS_BUCKET}/runs/roads.fgb", "roads", "CASE9"
@@ -220,7 +220,7 @@ def test_write_durable_vector_geojson_not_cache_bucket(
     """The durable write targets the RUNS bucket — never the 30-day-TTL cache
     bucket (a published layer must outlive cache eviction)."""
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", _RUNS_BUCKET)
-    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.simulation.solver._RUNS_BUCKET", None, raising=False)
     p = tmp_path / "pts.geojson"
     p.write_bytes(_geojson_fc_bytes())
     # Read from a LOCAL path; write through the fake.
@@ -238,7 +238,7 @@ def test_write_durable_vector_geojson_fail_open_on_write_error(
 ) -> None:
     """A put_object failure returns None (fail-open) — never raises."""
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", _RUNS_BUCKET)
-    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.simulation.solver._RUNS_BUCKET", None, raising=False)
     p = tmp_path / "pts.geojson"
     p.write_bytes(_geojson_fc_bytes())
 
@@ -272,7 +272,7 @@ def test_publish_vector_in_case_writes_durable_and_registers_both_faces(
 ) -> None:
     """An IN-CASE vector publish: durable GeoJSON written + asset URI returned +
     BOTH faces registered (.fgb DATA preserved; GeoJSON asset = DISPLAY)."""
-    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.simulation.solver._RUNS_BUCKET", None, raising=False)
     fgb = _fgb_bytes(tmp_path)
     data_uri = f"s3://{_RUNS_BUCKET}/runs/roads.fgb"
     fake = _FakeS3({(_RUNS_BUCKET, "runs/roads.fgb"): fgb})
@@ -326,7 +326,7 @@ def test_publish_vector_in_case_fail_open_to_noop_on_write_error(
 ) -> None:
     """A durable-write failure in a Case falls OPEN to the benign no-op (no
     raise) and registers NOTHING (data-source-fallback norm)."""
-    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.simulation.solver._RUNS_BUCKET", None, raising=False)
     fgb = _fgb_bytes(tmp_path)
 
     class _BoomOnPut(_FakeS3):
@@ -356,7 +356,7 @@ def test_publish_vector_in_case_fail_open_to_noop_on_read_error(
     _s3_titiler_no_wms: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An unreadable source in a Case falls open to the benign no-op."""
-    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.simulation.solver._RUNS_BUCKET", None, raising=False)
 
     def _boom(*a, **k):
         raise RuntimeError("NoSuchKey")
@@ -372,7 +372,7 @@ def test_publish_vector_in_case_geojson_source(
     _s3_titiler_no_wms: None, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A .geojson source (e.g. SFINCS/SWMM mesh) is also materialized durably."""
-    monkeypatch.setattr("trid3nt_server.tools.solver._RUNS_BUCKET", None, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.simulation.solver._RUNS_BUCKET", None, raising=False)
     data_uri = f"s3://{_RUNS_BUCKET}/runs/mesh.geojson"
     fake = _FakeS3({(_RUNS_BUCKET, "runs/mesh.geojson"): _geojson_fc_bytes()})
     monkeypatch.setattr("boto3.client", lambda *a, **k: fake)

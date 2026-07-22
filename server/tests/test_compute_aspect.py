@@ -41,7 +41,7 @@ import rasterio
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_aspect import (
+from trid3nt_server.tools.processing.compute_aspect import (
     AspectComputeError,
     _run_gdaldem_aspect,
     compute_aspect,
@@ -396,10 +396,10 @@ def test_compute_aspect_cache_miss_writes(fake_storage):
     fake_dem = _fake_dem_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_aspect._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_aspect._download_dem_bytes",
         return_value=fake_dem,
     ) as mock_download, patch(
-        "trid3nt_server.tools.compute_aspect._run_gdaldem_aspect",
+        "trid3nt_server.tools.processing.compute_aspect._run_gdaldem_aspect",
         side_effect=lambda inp, out, algo, zff: open(out, "wb").write(_make_fake_aspect_bytes()) or None,
     ) as mock_gdaldem, patch(
         "trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"
@@ -442,10 +442,10 @@ def test_compute_aspect_cache_hit_skips_fetch(fake_storage):
         gdaldem_called.append(args)
 
     with patch(
-        "trid3nt_server.tools.compute_aspect._run_gdaldem_aspect",
+        "trid3nt_server.tools.processing.compute_aspect._run_gdaldem_aspect",
         side_effect=_no_gdaldem,
     ), patch(
-        "trid3nt_server.tools.compute_aspect._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_aspect._download_dem_bytes",
         return_value=b"",
     ), patch(
         "trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"
@@ -468,10 +468,10 @@ def test_compute_aspect_returns_layer_uri_fields():
     fake_dem = _fake_dem_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_aspect._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_aspect._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_aspect._run_gdaldem_aspect",
+        "trid3nt_server.tools.processing.compute_aspect._run_gdaldem_aspect",
         side_effect=lambda inp, out, algo, zff: open(out, "wb").write(_make_fake_aspect_bytes()) or None,
     ):
         fake_sc = FakeStorageClient()
@@ -501,10 +501,10 @@ def test_compute_aspect_gdaldem_failure_raises_aspect_compute_error():
     fake_dem = _fake_dem_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_aspect._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_aspect._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_aspect._get_gdaldem_bin",
+        "trid3nt_server.tools.processing.compute_aspect._get_gdaldem_bin",
         return_value="/bin/false",  # always exits 1
     ):
         fake_sc = FakeStorageClient()
@@ -519,7 +519,7 @@ def test_compute_aspect_gdaldem_failure_raises_aspect_compute_error():
 def test_compute_aspect_dem_download_failure_raises_aspect_compute_error():
     """GCS download failure → AspectComputeError with error_code='DEM_DOWNLOAD_FAILED'."""
     with patch(
-        "trid3nt_server.tools.compute_aspect._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_aspect._download_dem_bytes",
         side_effect=AspectComputeError("DEM_DOWNLOAD_FAILED", "GCS download failed"),
     ):
         fake_sc = FakeStorageClient()

@@ -1381,8 +1381,8 @@ def test_build_sfincs_model_emits_manifest_json_with_input_list(
     )
 
     # Inject an in-memory S3 client (the boto3 put_object seam the deck upload
-    # uses via tools.solver._get_s3_client). Capture the manifest.json body.
-    from trid3nt_server.tools.solver import set_s3_client
+    # uses via tools.simulation.solver._get_s3_client). Capture the manifest.json body.
+    from trid3nt_server.tools.simulation.solver import set_s3_client
 
     uploaded_files: dict[str, Any] = {}
 

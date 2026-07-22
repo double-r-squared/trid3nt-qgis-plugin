@@ -32,7 +32,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_nifc_fire_perimeters import (
+from trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters import (
     CONUS_BBOX,
     NIFCFireError,
     NIFCFireInputError,
@@ -330,7 +330,7 @@ def test_user_agent_header_sent_on_request():
             captured_headers.update(headers or {})
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         _fetch_nifc_geojson(
             "https://services3.arcgis.com/.../FeatureServer/0/query",
             {"f": "geojson"},
@@ -354,10 +354,10 @@ def test_10_feature_conus_response_writes_fgb_with_10_polygons():
     fake_geojson = _sample_nifc_geojson(10)
 
     with patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nifc_fire_perimeters()
@@ -406,10 +406,10 @@ def test_bbox_filter_narrows_call_to_state_envelope():
         return fake_geojson
 
     with patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         ca_bbox = (-124.5, 32.5, -114.1, 42.0)
@@ -433,10 +433,10 @@ def test_bbox_cache_key_differs_from_global_call():
     fake_geojson = _sample_nifc_geojson(3)
 
     with patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_global = fetch_nifc_fire_perimeters()
@@ -453,10 +453,10 @@ def test_large_feature_count_handles_single_page():
     fake_geojson = _sample_nifc_geojson(75)
 
     with patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters._fetch_nifc_geojson",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nifc_fire_perimeters()
@@ -529,7 +529,7 @@ def test_500_raises_typed_upstream_error():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         with pytest.raises(NIFCFireUpstreamError, match="500"):
             _fetch_nifc_geojson(
                 "https://services3.arcgis.com/.../FeatureServer/0/query",
@@ -552,7 +552,7 @@ def test_network_failure_wraps_to_upstream_error():
         def get(self, url, params=None, headers=None):
             raise httpx.ConnectError("simulated DNS failure")
 
-    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         with pytest.raises(NIFCFireUpstreamError, match="request failed"):
             _fetch_nifc_geojson(
                 "https://services3.arcgis.com/.../FeatureServer/0/query",
@@ -582,7 +582,7 @@ def test_arcgis_error_envelope_in_200_body_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         with pytest.raises(NIFCFireUpstreamError, match="error envelope"):
             _fetch_nifc_geojson(
                 "https://services3.arcgis.com/.../FeatureServer/0/query",
@@ -612,7 +612,7 @@ def test_non_feature_collection_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.httpx.Client", FakeClient):
         with pytest.raises(NIFCFireUpstreamError, match="FeatureCollection"):
             _fetch_nifc_geojson(
                 "https://services3.arcgis.com/.../FeatureServer/0/query",
@@ -642,10 +642,10 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return fake_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters._fetch_nifc_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_nifc_fire_perimeters()
@@ -666,10 +666,10 @@ def test_layer_uri_shape_for_global_sweep():
     """Global / CONUS sweep produces a LayerURI tagged role=primary."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters._fetch_nifc_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters._fetch_nifc_bytes",
         return_value=_fake_fgb_bytes("CONUS"),
     ), patch(
-        "trid3nt_server.tools.fetch_nifc_fire_perimeters.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_nifc_fire_perimeters.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_nifc_fire_perimeters()

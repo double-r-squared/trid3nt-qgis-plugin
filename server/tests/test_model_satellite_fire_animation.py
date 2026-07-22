@@ -265,7 +265,7 @@ def test_confirm_empty_run_is_not_ok_honesty_floor():
     """A confirmed run that produced NO imagery frames must NOT read status=ok."""
 
     def _fake_goes(*a, **k):
-        from trid3nt_server.tools.fetch_goes_animation import GOESAnimEmptyError
+        from trid3nt_server.tools.fetchers.imagery.fetch_goes_animation import GOESAnimEmptyError
 
         raise GOESAnimEmptyError("no frames")
 
@@ -661,7 +661,7 @@ def test_default_goes_run_empty_is_not_ok_honesty_floor():
     too."""
 
     def _fake_blend(*a, **k):
-        from trid3nt_server.tools.fetch_goes_animation import GOESAnimEmptyError
+        from trid3nt_server.tools.fetchers.imagery.fetch_goes_animation import GOESAnimEmptyError
 
         raise GOESAnimEmptyError("no frames")
 
@@ -804,7 +804,7 @@ def test_coarse_geocode_localizes_from_firms_and_emits_aoi_pre_gate():
     """The Santa Rosa Island fix: a COARSE state-snap geocode + NO WFIGS incident
     -> the AOI is derived from FIRMS hot pixels, emitted (snap-to-AOI) BEFORE the
     review gate."""
-    from trid3nt_server.tools.fetch_firms_active_fire import FirmsArgError  # noqa: F401
+    from trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire import FirmsArgError  # noqa: F401
 
     # The fire's real FIRMS hot pixels (Channel Islands cluster).
     firms_points = [
@@ -818,7 +818,7 @@ def test_coarse_geocode_localizes_from_firms_and_emits_aoi_pre_gate():
 
     def _no_wfigs(name, state=None, *a, **k):
         # WFIGS does not carry this contained fire -> honest typed not-found.
-        from trid3nt_server.tools.fetch_wfigs_incident import (
+        from trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident import (
             WFIGSIncidentNotFoundError,
         )
 
@@ -890,7 +890,7 @@ def test_wfigs_no_match_does_not_gate_falls_back_to_firms():
     (with even a coarse geocode), proving WFIGS is additive context, not a gate."""
 
     def _no_wfigs(name, state=None, *a, **k):
-        from trid3nt_server.tools.fetch_wfigs_incident import (
+        from trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident import (
             WFIGSIncidentNotFoundError,
         )
 
@@ -941,7 +941,7 @@ def test_precise_geocode_is_used_without_firms_localization():
     firms_called = {"called": False}
 
     def _no_wfigs(name, state=None, *a, **k):
-        from trid3nt_server.tools.fetch_wfigs_incident import (
+        from trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident import (
             WFIGSIncidentNotFoundError,
         )
 

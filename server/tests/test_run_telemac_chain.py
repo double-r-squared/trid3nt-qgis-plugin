@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.solver import (
+from trid3nt_server.tools.simulation.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     LOCAL_SOLVER_SPEC_REGISTRY,
     SOLVER_WORKFLOW_REGISTRY,

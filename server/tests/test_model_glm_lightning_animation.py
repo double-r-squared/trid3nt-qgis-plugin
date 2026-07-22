@@ -164,7 +164,7 @@ def _wire_synthetic(monkeypatch, *, base_band_seen=None, news_guard=None):
     -- it must stay EMPTY (the DIRECT contract).
     """
     import trid3nt_server.tools.cache as cachemod
-    import trid3nt_server.tools.fetch_glm_lightning as glmmod
+    import trid3nt_server.tools.fetchers.weather.fetch_glm_lightning as glmmod
 
     base_dt = datetime(2025, 7, 5, 18, 0, tzinfo=timezone.utc)
 
@@ -464,7 +464,7 @@ def test_ir_base_band_threads_through(monkeypatch):
 # Honesty floor: no in-AOI lightning -> typed empty (NEVER a blank animation).
 # ---------------------------------------------------------------------------
 def test_no_lightning_anywhere_raises_typed_empty(monkeypatch):
-    import trid3nt_server.tools.fetch_glm_lightning as glmmod
+    import trid3nt_server.tools.fetchers.weather.fetch_glm_lightning as glmmod
 
     base_dt = datetime(2025, 7, 5, 18, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(
@@ -500,7 +500,7 @@ def test_no_lightning_anywhere_raises_typed_empty(monkeypatch):
 def test_empty_buckets_skipped_not_emitted_blank(monkeypatch):
     """A bucket with no lightning is skipped; the run proceeds with the rest."""
     _wire_synthetic(monkeypatch)
-    import trid3nt_server.tools.fetch_glm_lightning as glmmod
+    import trid3nt_server.tools.fetchers.weather.fetch_glm_lightning as glmmod
 
     real_list = glmmod._list_glm_keys_in_window
     calls = {"n": 0}

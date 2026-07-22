@@ -43,7 +43,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_cama_flood_discharge import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge import (
     CaMaFloodEmptyError,
     CaMaFloodInputError,
     CaMaFloodUnreachableError,
@@ -419,7 +419,7 @@ class _FakeStreamResponse:
 
 def _route_for(synthetic_nc_bytes: bytes, base_url: str, year: int) -> dict[str, bytes | str | None]:
     """Build a routing map where the FIRST candidate URL serves the netCDF."""
-    from trid3nt_server.tools.fetch_cama_flood_discharge import _candidate_filenames
+    from trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge import _candidate_filenames
     names = _candidate_filenames(year, "v4.0.1")
     return {base_url + names[0]: synthetic_nc_bytes}
 
@@ -452,10 +452,10 @@ def test_mocked_happy_path_writes_cog(monkeypatch):
         return _FakeHTTPClient(routing)
 
     with patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.httpx.Client",
         side_effect=fake_client_factory,
     ), patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(
@@ -488,10 +488,10 @@ def test_distinct_dates_produce_distinct_cache_keys(monkeypatch):
     routing = _route_for(nc_bytes, base_url, 2024)
 
     with patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_cama_flood_discharge(
@@ -525,10 +525,10 @@ def test_cache_hit_skips_http(monkeypatch):
         return _FakeHTTPClient(routing)
 
     with patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.httpx.Client",
         side_effect=factory,
     ), patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_cama_flood_discharge(
@@ -571,17 +571,17 @@ def test_html_migration_sentinel_surfaces_as_unreachable(monkeypatch):
     )
 
     # Every candidate URL returns the HTML sentinel.
-    from trid3nt_server.tools.fetch_cama_flood_discharge import _candidate_filenames
+    from trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge import _candidate_filenames
     names = _candidate_filenames(2024, "v4.0.1")
     routing: dict[str, bytes | str | None] = {
         base_url + n: html_sentinel for n in names
     }
 
     with patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(CaMaFloodUnreachableError) as exc_info:
@@ -615,10 +615,10 @@ def test_geographic_correctness_gate_lon_360_normalization(monkeypatch):
     routing = _route_for(nc_bytes, base_url, 2024)
 
     with patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(
@@ -659,10 +659,10 @@ def test_geographic_correctness_gate_lat_descending(monkeypatch):
     routing = _route_for(nc_bytes, base_url, 2024)
 
     with patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(
@@ -702,10 +702,10 @@ def test_layer_uri_shape_fields(monkeypatch):
     routing = _route_for(nc_bytes, base_url, 2024)
 
     with patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.httpx.Client",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.httpx.Client",
         side_effect=lambda *a, **kw: _FakeHTTPClient(routing),
     ), patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(
@@ -746,7 +746,7 @@ def test_live_mississippi_basin_discharge(tmp_path):
 
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_cama_flood_discharge.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_cama_flood_discharge.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_cama_flood_discharge(

@@ -24,7 +24,7 @@ import pytest
 
 # Import the module directly (the central tools/__init__ union is owned by the
 # main session; this test does not depend on central registration).
-from trid3nt_server.tools.fetch_hifld_critical_infrastructure import (
+from trid3nt_server.tools.fetchers.hazard.fetch_hifld_critical_infrastructure import (
     FACILITY_TYPES,
     HIFLDInfraInputError,
     HIFLDInfraUpstreamError,
@@ -223,7 +223,7 @@ def test_end_to_end_mocked_cache(tmp_path, monkeypatch):
     """Synthetic GeoJSON -> tool body -> FGB written via the (local) cache shim."""
     import geopandas as gpd
 
-    from trid3nt_server.tools import fetch_hifld_critical_infrastructure as mod
+    from trid3nt_server.tools.fetchers.hazard import fetch_hifld_critical_infrastructure as mod
 
     fake_geojson = {
         "type": "FeatureCollection",
@@ -264,7 +264,7 @@ def test_end_to_end_mocked_cache(tmp_path, monkeypatch):
 
 
 def test_upstream_http_error_is_typed():
-    from trid3nt_server.tools import fetch_hifld_critical_infrastructure as mod
+    from trid3nt_server.tools.fetchers.hazard import fetch_hifld_critical_infrastructure as mod
 
     class _Resp:
         status_code = 500
@@ -293,7 +293,7 @@ def test_upstream_http_error_is_typed():
 
 
 def test_error_envelope_is_typed():
-    from trid3nt_server.tools import fetch_hifld_critical_infrastructure as mod
+    from trid3nt_server.tools.fetchers.hazard import fetch_hifld_critical_infrastructure as mod
 
     class _Resp:
         status_code = 200
@@ -327,7 +327,7 @@ def test_error_envelope_is_typed():
 
 @pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_HIFLD=1 to run live")
 def test_live_houston_hospitals_returns_points():
-    from trid3nt_server.tools.fetch_hifld_critical_infrastructure import (
+    from trid3nt_server.tools.fetchers.hazard.fetch_hifld_critical_infrastructure import (
         _fetch_features_paginated,
     )
 

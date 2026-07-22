@@ -36,7 +36,7 @@ import pandas as pd  # noqa: E402
 from shapely.geometry import Point  # noqa: E402
 
 from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.tools.postprocess_pelicun import (  # noqa: E402
+from trid3nt_server.tools.simulation.postprocess_pelicun import (  # noqa: E402
     PelicunPostprocessEmptyError,
     PelicunPostprocessInputError,
     PelicunPostprocessSchemaError,
@@ -580,7 +580,7 @@ def test_postprocess_pelicun_s3_staging_branch(monkeypatch, tmp_path) -> None:
 def test_postprocess_pelicun_s3_download_failure_wraps_io_error(monkeypatch) -> None:
     """A boto3 reader failure on the s3:// branch surfaces as PelicunPostprocessIOError."""
     import trid3nt_server.tools.cache as cache_mod
-    from trid3nt_server.tools.postprocess_pelicun import PelicunPostprocessIOError
+    from trid3nt_server.tools.simulation.postprocess_pelicun import PelicunPostprocessIOError
 
     def _boom(uri: str) -> bytes:
         raise RuntimeError("no creds")
@@ -720,7 +720,7 @@ def test_smoke_synthetic_small_case_validates_envelope() -> None:
 def test_nonfinite_ds_mean_raises_schema_error() -> None:
     """A NaN ds_mean (malformed/foreign FGB) must fail honestly with a typed
     schema error, not an IndexError or a fabricated DS bin (Invariant 7)."""
-    from trid3nt_server.tools.postprocess_pelicun import PelicunPostprocessSchemaError
+    from trid3nt_server.tools.simulation.postprocess_pelicun import PelicunPostprocessSchemaError
 
     gdf = _make_gdf([_base_row(ds_mean=1.0), _base_row(ds_mean=float("nan"))])
     with pytest.raises(PelicunPostprocessSchemaError, match="non-finite"):

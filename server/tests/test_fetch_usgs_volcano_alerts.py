@@ -31,7 +31,7 @@ import os
 
 import pytest
 
-from trid3nt_server.tools.fetch_usgs_volcano_alerts import (
+from trid3nt_server.tools.fetchers.hazard.fetch_usgs_volcano_alerts import (
     ALERT_LEVELS,
     COLOR_CODES,
     VolcanoAlertsInputError,
@@ -50,7 +50,7 @@ from trid3nt_server.tools.fetch_usgs_volcano_alerts import (
     estimate_payload_mb,
     fetch_usgs_volcano_alerts,
 )
-from trid3nt_server.tools import fetch_usgs_volcano_alerts as _mod
+from trid3nt_server.tools.fetchers.hazard import fetch_usgs_volcano_alerts as _mod
 
 
 # ---------------------------------------------------------------------------

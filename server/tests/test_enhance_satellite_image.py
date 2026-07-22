@@ -46,7 +46,7 @@ import rasterio
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.enhance_satellite_image import (
+from trid3nt_server.tools.processing.enhance_satellite_image import (
     EnhanceSatelliteImageError,
     _box_blur,
     apply_rayleigh_correction,
@@ -328,7 +328,7 @@ def test_enhance_cache_hit_skips_fetch(tmp_path, monkeypatch_local_cache):
     src = str(tmp_path / "tc_cache.tif")
     _write_rgb_cog(src, _hazy_rgb(size=32))
 
-    import trid3nt_server.tools.enhance_satellite_image as mod
+    import trid3nt_server.tools.processing.enhance_satellite_image as mod
 
     calls = {"n": 0}
     real_run = mod._run_enhance
@@ -378,7 +378,7 @@ def monkeypatch_local_cache(monkeypatch, tmp_path):
     network) while still exercising the real _run_enhance compute path through
     the tool's public entrypoint.
     """
-    import trid3nt_server.tools.enhance_satellite_image as mod
+    import trid3nt_server.tools.processing.enhance_satellite_image as mod
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
     store: dict[str, str] = {}

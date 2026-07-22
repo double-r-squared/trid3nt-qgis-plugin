@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.extract_timeseries_at_point import (
+from trid3nt_server.tools.processing.extract_timeseries_at_point import (
     NoFrameSequenceError,
     TimeseriesInputError,
     detect_frame_sequences,

@@ -20,8 +20,12 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY, passthroughs, qgis_discovery
-from trid3nt_server.tools.qgis_discovery import (
+from trid3nt_server.tools import TOOL_REGISTRY
+
+from trid3nt_server.tools.meta import passthroughs
+
+from trid3nt_server.tools.discovery import qgis_discovery
+from trid3nt_server.tools.discovery.qgis_discovery import (
     CURATED_ALLOWLIST,
     MAX_LIST_RESULTS,
     SOURCE_CLASS,
@@ -434,7 +438,7 @@ def test_qgis_process_raises_runtime_error_when_no_backend(monkeypatch) -> None:
     """
     import shutil
 
-    from trid3nt_server.tools.passthroughs import qgis_process
+    from trid3nt_server.tools.meta.passthroughs import qgis_process
 
     monkeypatch.setenv("TRID3NT_QGIS_ONBOX_DOCKER", "on")
     monkeypatch.delenv("TRID3NT_QGIS_DOCKER_IMAGE", raising=False)

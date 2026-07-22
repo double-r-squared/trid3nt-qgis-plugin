@@ -121,6 +121,10 @@ fetch_hrsl_population:
   - "I need the highest-resolution open population dataset for Jakarta"
 
 fetch_buildings:
+  - "fetch buildings for the city"
+  - "get the buildings in this area"
+  - "fetch building footprints for Miami"
+  - "download buildings for this bbox"
   - "show me building footprints in Lee County, Florida"
   - "I need building polygons for damage assessment after the hurricane"
   - "fetch Microsoft building footprints for the Houston flooding area"
@@ -790,15 +794,6 @@ aggregate_claims_across_sources:
   - "extract the spill date, town, and chemical from these fetched articles and score the agreement"
   - "consolidate what the wire stories say about this incident into one set of claims with confidence"
   - "how many sources back the vinyl chloride figure versus the other numbers in these texts"
-aggregate_property_within_zone:
-  - "what is the total damage cost for the buildings inside the flood zone polygon"
-  - "sum the structure replacement value for everything within the county boundary"
-  - "average building value for the parcels whose centroid falls in this protected area"
-  - "total NSI structure exposure inside the FEMA flood zone"
-  - "add up the Pelicun damage for the features within this admin boundary"
-  - "max replacement cost among the structures inside the WDPA polygon"
-  - "aggregate the species occurrence counts that fall within these protected-area polygons"
-  - "give me the combined property value for the buildings clipped to this zone layer"
 code_exec_request:
   - "compute the 95th percentile flood depth over the city polygon from the actual pixels"
   - "cross-tabulate the damage by land-cover class for the layers on the map"
@@ -880,15 +875,6 @@ compute_terrain_profile:
   - "overlay the bare-earth DEM and the topo-bathy elevation along this section"
   - "sample the 3DEP elevation along this path and chart it"
   - "how does the ground rise and fall along this drawn line"
-count_features_above_threshold:
-  - "how many buildings have a damage ratio above 0.5"
-  - "count the structures where the ground elevation is below 2 meters"
-  - "how many features have a population density of at least 1000"
-  - "tally the number of critically damaged structures after the Pelicun run"
-  - "count how many parcels exceed a replacement value of 500000"
-  - "how many of these features are above the threshold on that attribute"
-  - "give me the count of structures with flood depth over 1 meter in this layer"
-  - "how many points have a value greater than or equal to this cutoff"
 cut_features_with_polygon:
   - "erase the lake polygon out of these land parcels but keep their attributes"
   - "punch a hole in these analysis polygons where the protected zone overlaps"
@@ -1204,15 +1190,38 @@ run_swmm_urban_flood:
   - "estimate the first-flush pollutant load to the drain from this neighborhood cloudburst"
   - "simulate stormwater suspended-solids and nutrient washoff to the outfall on this block"
   - "how many organisms of fecal coliform reach the outfall after N dry days of buildup here"
-summarize_layer_statistics:
-  - "what's the range of flood depths in this layer, min max and mean"
-  - "give me summary statistics for this raster layer"
+# DuckDB spatial-query fold (Phase B): spatial_query absorbs the phrasings of
+# the three retired analytical Q&A tools (summarize_layer_statistics /
+# count_features_above_threshold / aggregate_property_within_zone) plus the
+# SQL / spatial-join asks the fixed-shape trio could not express.
+spatial_query:
+  - "give me summary statistics for this layer, min max mean and sum"
   - "how many features are in this vector dataset"
-  - "show me a histogram of the values in this population layer"
-  - "what are the min, max, mean and sum for this DEM layer I just loaded"
   - "summarize the numeric attributes of this building footprint layer"
-  - "what's the average and peak value across this hazard raster"
-  - "break down the distribution of this layer into bins so I can see the spread"
+  - "how many buildings have a damage ratio above 0.5"
+  - "count the structures where the ground elevation is below 2 meters"
+  - "count how many parcels exceed a replacement value of 500000"
+  - "give me the count of structures with flood depth over 1 meter in this layer"
+  - "what is the total damage cost for the buildings inside the flood zone polygon"
+  - "sum the structure replacement value for everything within the county boundary"
+  - "average building value for the parcels whose centroid falls in this protected area"
+  - "add up the Pelicun damage for the features within this admin boundary"
+  - "spatial join the points to the zones and count the features per zone"
+  - "run a sql query over the layers on the map"
+  - "query the building layer with sql and group the damage by category"
+  # Natural analytical-verb x domain-noun phrasings (2026-07 close-out):
+  # statistics / summarize / count / how many / average / sum over
+  # buildings / parcels / features / layer / zones - the folded trio's
+  # bread-and-butter asks in everyday wording.
+  - "give me summary statistics for the building layer"
+  - "summarize the buildings layer, average and total value"
+  - "how many buildings have flood depth over 1 meter"
+  - "how many features in the parcels layer exceed the threshold"
+  - "count the buildings with water depth above 2 feet"
+  - "what is the average flood depth across the buildings in this layer"
+  - "sum the losses over the features in each zone"
+  - "aggregate the population attribute within each zone"
+  - "summary statistics of the flood layer attributes"
 
 # --- tool-retrieval STEP 7 follow-up: the 4 tools that register ONLY via the
 # full startup path (catalog + qgis_discovery), missed by the plain-import gap

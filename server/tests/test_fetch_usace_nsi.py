@@ -30,7 +30,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_usace_nsi import (
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi import (
     NSI_BBOX_MAX_SPAN_DEG,
     USACE_NSIError,
     USACE_NSIInputError,
@@ -303,7 +303,7 @@ def test_user_agent_header_sent_on_request():
             captured_headers.update(headers or {})
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_usace_nsi.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.httpx.Client", FakeClient):
         _fetch_nsi_geojson(
             "https://nsi.sec.usace.army.mil/nsiapi/structures",
             {"type": "FeatureCollection", "features": []},
@@ -327,10 +327,10 @@ def test_5_feature_response_writes_fgb_with_pelicun_columns():
     fake_geojson = _sample_nsi_geojson(5)
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_nsi._fetch_nsi_geojson",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi._fetch_nsi_geojson",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_nsi.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_nsi(bbox=_FORT_MYERS_BBOX)
@@ -431,7 +431,7 @@ def test_500_raises_typed_upstream_error():
         def post(self, url, params=None, json=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_usace_nsi.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.httpx.Client", FakeClient):
         with pytest.raises(USACE_NSIUpstreamError, match="500"):
             _fetch_nsi_geojson(
                 "https://nsi.sec.usace.army.mil/nsiapi/structures",
@@ -454,7 +454,7 @@ def test_network_failure_wraps_to_upstream_error():
         def post(self, url, params=None, json=None, headers=None):
             raise httpx.ConnectError("simulated DNS failure")
 
-    with patch("trid3nt_server.tools.fetch_usace_nsi.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.httpx.Client", FakeClient):
         with pytest.raises(USACE_NSIUpstreamError, match="request failed"):
             _fetch_nsi_geojson(
                 "https://nsi.sec.usace.army.mil/nsiapi/structures",
@@ -484,7 +484,7 @@ def test_non_feature_collection_raises():
         def post(self, url, params=None, json=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_usace_nsi.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.httpx.Client", FakeClient):
         with pytest.raises(USACE_NSIUpstreamError, match="error message"):
             _fetch_nsi_geojson(
                 "https://nsi.sec.usace.army.mil/nsiapi/structures",
@@ -515,10 +515,10 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return fake_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_nsi._fetch_nsi_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi._fetch_nsi_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_nsi.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_usace_nsi(bbox=_FORT_MYERS_BBOX)
@@ -569,10 +569,10 @@ def test_layer_uri_shape():
     """LayerURI is tagged role=primary, layer_type=vector, with NSI style."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_usace_nsi._fetch_nsi_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi._fetch_nsi_bytes",
         return_value=_fake_fgb_bytes("FTMYERS"),
     ), patch(
-        "trid3nt_server.tools.fetch_usace_nsi.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_nsi(bbox=_FORT_MYERS_BBOX)
@@ -595,10 +595,10 @@ def test_extra_kwargs_are_absorbed():
     """LLM-invented kwargs must not raise; **_extra_ignored absorbs them."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_usace_nsi._fetch_nsi_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi._fetch_nsi_bytes",
         return_value=_fake_fgb_bytes("FTMYERS"),
     ), patch(
-        "trid3nt_server.tools.fetch_usace_nsi.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         # Should NOT raise TypeError on the invented kwarg.

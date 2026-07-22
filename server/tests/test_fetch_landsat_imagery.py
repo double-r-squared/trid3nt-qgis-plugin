@@ -28,8 +28,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import fetch_landsat_imagery as landsat_mod
-from trid3nt_server.tools.fetch_landsat_imagery import (
+from trid3nt_server.tools.fetchers.imagery import fetch_landsat_imagery as landsat_mod
+from trid3nt_server.tools.fetchers.imagery.fetch_landsat_imagery import (
     _METADATA,
     _STYLE_PRESET,
     LandsatBandComboError,

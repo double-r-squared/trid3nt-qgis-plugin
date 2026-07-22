@@ -38,7 +38,7 @@ import rasterio
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_slope import (
+from trid3nt_server.tools.processing.compute_slope import (
     SlopeComputeError,
     _run_gdaldem_slope,
     compute_slope,
@@ -245,10 +245,10 @@ def test_compute_slope_cache_miss_writes(fake_s3):
     # Pre-seed the DEM bytes as the download return value by patching
     # _download_dem_bytes. The cache write routes through the boto3 S3 double.
     with patch(
-        "trid3nt_server.tools.compute_slope._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_slope._download_dem_bytes",
         return_value=fake_dem,
     ) as mock_download, patch(
-        "trid3nt_server.tools.compute_slope._run_gdaldem_slope",
+        "trid3nt_server.tools.processing.compute_slope._run_gdaldem_slope",
         side_effect=lambda inp, out, unit, algo: open(out, "wb").write(_make_fake_slope_bytes()) or None,
     ) as mock_gdaldem, patch(
         "trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"
@@ -292,10 +292,10 @@ def test_compute_slope_cache_hit_skips_fetch(fake_s3):
         gdaldem_called.append(args)
 
     with patch(
-        "trid3nt_server.tools.compute_slope._run_gdaldem_slope",
+        "trid3nt_server.tools.processing.compute_slope._run_gdaldem_slope",
         side_effect=_no_gdaldem,
     ), patch(
-        "trid3nt_server.tools.compute_slope._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_slope._download_dem_bytes",
         return_value=b"",
     ), patch(
         "trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"
@@ -319,10 +319,10 @@ def test_compute_slope_returns_layer_uri_fields(fake_s3):
     fake_dem = _fake_dem_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_slope._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_slope._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_slope._run_gdaldem_slope",
+        "trid3nt_server.tools.processing.compute_slope._run_gdaldem_slope",
         side_effect=lambda inp, out, unit, algo: open(out, "wb").write(_make_fake_slope_bytes()) or None,
     ):
         result = compute_slope(
@@ -352,10 +352,10 @@ def test_compute_slope_gdaldem_failure_raises_slope_compute_error(fake_s3):
     fake_dem = _fake_dem_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_slope._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_slope._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_slope._get_gdaldem_bin",
+        "trid3nt_server.tools.processing.compute_slope._get_gdaldem_bin",
         return_value="/bin/false",  # always exits 1
     ):
         with pytest.raises(SlopeComputeError) as exc_info:
@@ -369,7 +369,7 @@ def test_compute_slope_gdaldem_failure_raises_slope_compute_error(fake_s3):
 def test_compute_slope_dem_download_failure_raises_slope_compute_error(fake_s3):
     """DEM download failure → SlopeComputeError with error_code='DEM_DOWNLOAD_FAILED'."""
     with patch(
-        "trid3nt_server.tools.compute_slope._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_slope._download_dem_bytes",
         side_effect=SlopeComputeError("DEM_DOWNLOAD_FAILED", "S3 download failed"),
     ):
         with pytest.raises(SlopeComputeError) as exc_info:

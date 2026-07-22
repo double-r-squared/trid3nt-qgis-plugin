@@ -26,7 +26,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_roads_osm import (
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm import (
     _DEFAULT_ROAD_CLASSES,
     _build_overpass_ql,
     _clip_record_to_bbox,
@@ -149,7 +149,7 @@ def _mock_overpass_payload(ways: list[dict[str, Any]]) -> dict[str, Any]:
 def _fast_sleep(monkeypatch):
     """Make the 1-second polite delay no-op so tests run fast."""
     monkeypatch.setattr(
-        "trid3nt_server.tools.fetch_roads_osm.time.sleep", lambda *_: None
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.time.sleep", lambda *_: None
     )
 
 
@@ -448,9 +448,9 @@ def test_50_way_response_yields_50_features(monkeypatch):
             return FakeResponse()
         def close(self): pass
 
-    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "trid3nt_server.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         result = fetch_roads_osm(bbox=_FORT_MYERS_BBOX, road_classes=["primary"])
@@ -505,9 +505,9 @@ def test_end_to_end_clips_spilling_roads_to_bbox(monkeypatch):
         def post(self, url, data=None): return FakeResponse()
         def close(self): pass
 
-    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "trid3nt_server.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         result = fetch_roads_osm(bbox=bbox, road_classes=["motorway", "primary"])
@@ -565,9 +565,9 @@ def test_empty_bbox_yields_zero_features(monkeypatch):
         def post(self, url, data=None): return FakeResponse()
         def close(self): pass
 
-    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "trid3nt_server.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         result = fetch_roads_osm(bbox=_FORT_MYERS_BBOX)
@@ -612,10 +612,10 @@ def test_504_maps_to_retryable_upstream_error(monkeypatch):
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_roads_osm.httpx.Client",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.httpx.Client",
         _make_failing_client(504),
     ), patch(
-        "trid3nt_server.tools.fetch_roads_osm.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         try:
@@ -632,10 +632,10 @@ def test_400_maps_to_non_retryable_upstream_error(monkeypatch):
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_roads_osm.httpx.Client",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.httpx.Client",
         _make_failing_client(400),
     ), patch(
-        "trid3nt_server.tools.fetch_roads_osm.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         try:
@@ -652,10 +652,10 @@ def test_429_maps_to_retryable_upstream_error(monkeypatch):
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_roads_osm.httpx.Client",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.httpx.Client",
         _make_failing_client(429),
     ), patch(
-        "trid3nt_server.tools.fetch_roads_osm.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         try:
@@ -693,9 +693,9 @@ def test_cache_miss_then_hit(monkeypatch):
             return FakeResponse()
         def close(self): pass
 
-    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "trid3nt_server.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         r1 = fetch_roads_osm(bbox=_FORT_MYERS_BBOX, road_classes=["motorway"])
@@ -727,9 +727,9 @@ def test_cache_key_independent_of_class_ordering(monkeypatch):
             return FakeResponse()
         def close(self): pass
 
-    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "trid3nt_server.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         r1 = fetch_roads_osm(
@@ -767,9 +767,9 @@ def test_layer_uri_shape(monkeypatch):
         def post(self, url, data=None): return FakeResponse()
         def close(self): pass
 
-    with patch("trid3nt_server.tools.fetch_roads_osm.httpx.Client", FakeClient), \
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.httpx.Client", FakeClient), \
          patch(
-             "trid3nt_server.tools.fetch_roads_osm.read_through",
+             "trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm.read_through",
              side_effect=_make_read_through_injector(fake_gcs),
          ):
         result = fetch_roads_osm(
@@ -816,7 +816,7 @@ def test_live_fort_myers_returns_primary_and_motorway():
     """
     import geopandas as gpd
 
-    from trid3nt_server.tools.fetch_roads_osm import _fetch_osm_roads_bytes
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_roads_osm import _fetch_osm_roads_bytes
     bbox = _FORT_MYERS_BBOX
 
     fgb_bytes = _fetch_osm_roads_bytes(bbox, ("primary", "motorway"))

@@ -49,7 +49,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_iucn_red_list_range import (
+from trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range import (
     IUCNAuthError,
     IUCNInputError,
     IUCNUpstreamError,
@@ -285,7 +285,7 @@ def test_no_credentials_raises_auth_error_before_network_call(monkeypatch):
     # raise BEFORE we get there.
     sentinel = RuntimeError("read_through should not be invoked")
     with patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range.read_through",
         side_effect=sentinel,
     ):
         with pytest.raises(IUCNAuthError) as excinfo:
@@ -398,7 +398,7 @@ def test_secret_ref_resolves_via_module_persistence_seam():
     """When no ``persistence=`` kwarg is passed, the module-level seam (bound
     by the agent at startup) resolves the vault key — the path the server's
     ``_inject_secret_ref`` exercises (it injects secret_ref alone)."""
-    import trid3nt_server.tools.fetch_iucn_red_list_range as iucn_mod
+    import trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range as iucn_mod
 
     good = SecretRecord(
         secret_id=new_ulid(),
@@ -441,10 +441,10 @@ def test_mocked_happy_path_emits_one_feature_flatgeobuf(monkeypatch):
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         return_value=_iucn_species_payload(),
     ), patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_iucn_red_list_range(
@@ -492,10 +492,10 @@ def test_mocked_empty_result_returns_data_deficient_sentinel(monkeypatch):
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         return_value=_iucn_species_payload(empty=True, name="Nonexistent fakeus"),
     ), patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_iucn_red_list_range(
@@ -547,7 +547,7 @@ def test_mocked_token_invalid_body_raises_auth_error(monkeypatch):
             follow_redirects=True,
         )
 
-    from trid3nt_server.tools import fetch_iucn_red_list_range as mod
+    from trid3nt_server.tools.fetchers.biodiversity import fetch_iucn_red_list_range as mod
 
     real_fetch = mod._fetch_iucn_species_payload
 
@@ -556,10 +556,10 @@ def test_mocked_token_invalid_body_raises_auth_error(monkeypatch):
             return real_fetch(species_name, region, api_key, client=c)
 
     with patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         side_effect=patched_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(IUCNAuthError):
@@ -581,7 +581,7 @@ def test_mocked_5xx_raises_upstream_error(monkeypatch):
 
     transport = httpx.MockTransport(_mock_handler)
 
-    from trid3nt_server.tools import fetch_iucn_red_list_range as mod
+    from trid3nt_server.tools.fetchers.biodiversity import fetch_iucn_red_list_range as mod
 
     real_fetch = mod._fetch_iucn_species_payload
 
@@ -590,10 +590,10 @@ def test_mocked_5xx_raises_upstream_error(monkeypatch):
             return real_fetch(species_name, region, api_key, client=c)
 
     with patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         side_effect=patched_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(IUCNUpstreamError):
@@ -615,10 +615,10 @@ def test_cache_hit_skips_fetch(monkeypatch):
         return _iucn_species_payload(name=species_name, category="VU")
 
     with patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         side_effect=_counting_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_iucn_red_list_range(
@@ -640,10 +640,10 @@ def test_cache_key_does_not_include_api_key(monkeypatch):
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range._fetch_iucn_species_payload",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range._fetch_iucn_species_payload",
         return_value=_iucn_species_payload(),
     ), patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_iucn_red_list_range(species_name="Puma concolor", api_key="k1")
@@ -680,7 +680,7 @@ def test_live_puma_concolor_returns_known_category():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_iucn_red_list_range.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_iucn_red_list_range.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_iucn_red_list_range(species_name="Puma concolor")

@@ -27,8 +27,8 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools import compute_ndvi as ndvi_mod
-from trid3nt_server.tools.compute_ndvi import (
+from trid3nt_server.tools.processing import compute_ndvi as ndvi_mod
+from trid3nt_server.tools.processing.compute_ndvi import (
     _METADATA,
     _STYLE_PRESET,
     NDVIBboxError,

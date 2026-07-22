@@ -32,7 +32,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_noaa_coops_tides import (
+from trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides import (
     COOPSTidesEmptyError,
     COOPSTidesInputError,
     COOPSTidesUpstreamError,
@@ -279,7 +279,7 @@ def test_discover_stations_in_bbox_filters_correctly():
     catalog_json = json.dumps({"stations": catalog}).encode("utf-8")
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides._http_get",
         return_value=catalog_json,
     ):
         result = _discover_stations_in_bbox(_FORT_MYERS_BBOX)
@@ -298,7 +298,7 @@ def test_discover_stations_empty_bbox():
     ]}).encode("utf-8")
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides._http_get",
         return_value=catalog_json,
     ), pytest.raises(COOPSTidesEmptyError):
         _discover_stations_in_bbox(_FORT_MYERS_BBOX)
@@ -309,7 +309,7 @@ def test_discover_stations_upstream_error():
     from unittest.mock import MagicMock
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides._http_get",
         side_effect=COOPSTidesUpstreamError("network timeout"),
     ), pytest.raises(COOPSTidesUpstreamError):
         _discover_stations_in_bbox(_FORT_MYERS_BBOX)
@@ -456,11 +456,11 @@ def test_fetch_tool_cache_miss_then_hit():
 
     with (
         patch(
-            "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
+            "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides._http_get",
             side_effect=fake_http_get,
         ),
         patch(
-            "trid3nt_server.tools.fetch_noaa_coops_tides.read_through",
+            "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides.read_through",
             side_effect=injector,
         ),
     ):
@@ -514,11 +514,11 @@ def test_layer_uri_shape():
 
     with (
         patch(
-            "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
+            "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides._http_get",
             side_effect=fake_http_get,
         ),
         patch(
-            "trid3nt_server.tools.fetch_noaa_coops_tides.read_through",
+            "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides.read_through",
             side_effect=injector,
         ),
     ):
@@ -565,11 +565,11 @@ def test_extra_kwargs_absorbed():
 
     with (
         patch(
-            "trid3nt_server.tools.fetch_noaa_coops_tides._http_get",
+            "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides._http_get",
             side_effect=fake_http_get,
         ),
         patch(
-            "trid3nt_server.tools.fetch_noaa_coops_tides.read_through",
+            "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides.read_through",
             side_effect=injector,
         ),
     ):
@@ -605,7 +605,7 @@ def test_live_fetch_fort_myers_ian_date():
     """Live: fetch Fort Myers + Naples Bay water_level for Hurricane Ian day."""
     import geopandas as gpd
 
-    from trid3nt_server.tools.fetch_noaa_coops_tides import _fetch_coops_tides_bytes
+    from trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides import _fetch_coops_tides_bytes
 
     bbox = (-82.5, 25.5, -81.0, 27.5)
     d0 = date(2022, 9, 28)

@@ -20,7 +20,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.aggregate_claims_across_sources import (
+from trid3nt_server.tools.processing.aggregate_claims_across_sources import (
     ClaimAggInputError,
     SUPPORTED_TARGETS,
     _confidence_for_n_sources,

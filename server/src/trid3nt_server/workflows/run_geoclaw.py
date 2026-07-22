@@ -526,7 +526,7 @@ def _dem_uri_to_local(dem_uri: str) -> tuple[str, bool]:
     if "://" not in dem_uri:
         return dem_uri, False
     if dem_uri.startswith("s3://"):
-        from ..tools.solver import _get_s3_client, _split_object_uri
+        from ..tools.simulation.solver import _get_s3_client, _split_object_uri
 
         _scheme, bucket, key = _split_object_uri(dem_uri)
         s3 = _get_s3_client()
@@ -945,7 +945,7 @@ def reproject_dem_to_4326(dem_uri: str, *, run_id: str | None = None) -> str:
         # Re-stage the reprojected raster by the SAME scheme as the source.
         if dem_uri.startswith("s3://"):
             from ..tools.cache import CACHE_BUCKET, storage_scheme
-            from ..tools.solver import _get_s3_client
+            from ..tools.simulation.solver import _get_s3_client
 
             scheme = storage_scheme()
             cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
@@ -1016,7 +1016,7 @@ def stage_geoclaw_manifest(
 
     The GeoClaw analogue of ``stage_swmm_manifest``. Mirrors that path EXACTLY
     (no new client): the same ``cache.storage_scheme()`` scheme + the same
-    ``tools.solver._get_s3_client()`` boto3 client + the same
+    ``tools.simulation.solver._get_s3_client()`` boto3 client + the same
     ``TRID3NT_CACHE_BUCKET`` staging bucket the SWMM/SFINCS decks upload to.
 
     The worker downloads the topo DEM (and optional dtopo / surge) listed in
@@ -1047,7 +1047,7 @@ def stage_geoclaw_manifest(
             manifest — fail loudly, never a silent dead-end).
     """
     from ..tools.cache import CACHE_BUCKET, storage_scheme
-    from ..tools.solver import _get_s3_client
+    from ..tools.simulation.solver import _get_s3_client
 
     rid = run_id or new_ulid()
     bbox = tuple(run_args.bbox)
@@ -1138,7 +1138,7 @@ def stage_geoclaw_manifest(
 # GeoClaw solver registration (mirrors register_swmm_solver).
 # --------------------------------------------------------------------------- #
 def register_geoclaw_solver() -> None:
-    """Register ``'geoclaw'`` in ``tools.solver.SOLVER_WORKFLOW_REGISTRY``.
+    """Register ``'geoclaw'`` in ``tools.simulation.solver.SOLVER_WORKFLOW_REGISTRY``.
 
     Mirrors ``register_swmm_solver``. ``run_solver`` only requires the KEY to be
     present to dispatch (the local-docker backend seam routes to
@@ -1148,7 +1148,7 @@ def register_geoclaw_solver() -> None:
     presence-gate only; the local sentinel is used since the AWS Batch arm was
     removed.)
     """
-    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from ..tools.simulation.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(GEOCLAW_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
 
@@ -1178,7 +1178,7 @@ def geoclaw_local_spec() -> "Any":
     """Build the GeoClaw LocalSolverSpec for the local-docker backend."""
     import os
     from pathlib import Path
-    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from ..tools.simulation.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_GEOCLAW_IMAGE") or DEFAULT_GEOCLAW_IMAGE
     aws_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
@@ -1245,7 +1245,7 @@ def geoclaw_local_spec() -> "Any":
 
 def register_geoclaw_local_spec() -> None:
     """Register the GeoClaw LocalSolverSpec factory for the local-docker backend."""
-    from ..tools.solver import register_local_solver_spec
+    from ..tools.simulation.solver import register_local_solver_spec
     register_local_solver_spec(GEOCLAW_SOLVER_NAME, geoclaw_local_spec)
 
 

@@ -207,8 +207,8 @@ from .spatial_input import (
     parse_spatial_input_features,
 )
 from .tools import TOOL_REGISTRY
-from .tools.chart_tools import is_chart_emission_result
-from .tools.code_exec_tool import (
+from .tools.processing.charts_common import is_chart_emission_result
+from .tools.meta.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     is_code_exec_result,
 )
@@ -265,7 +265,7 @@ def _tool_retrieval_k() -> int:
     """Resolve TRID3NT_TOOL_RETRIEVAL_K (default 25); fall back to the default on
     any parse error. Read per-call so a test can override via the env without a
     module reload."""
-    from .tools.tool_retrieval import DEFAULT_K
+    from .tools.discovery.tool_retrieval import DEFAULT_K
 
     raw = os.environ.get("TRID3NT_TOOL_RETRIEVAL_K")
     if raw is None:
@@ -1145,11 +1145,11 @@ def set_persistence(p: Persistence | None) -> None:
 # per-Case ``secret_ref`` (vault -> env). Movebank is intentionally absent: it
 # builds its own MCP-less Persistence inline for credential resolution.
 _SECRET_SEAM_TOOL_MODULES: tuple[str, ...] = (
-    "fetch_firms_active_fire",
-    "fetch_ebird_observations",
-    "fetch_era5_reanalysis",
-    "fetch_gtsm_tide_surge",
-    "fetch_iucn_red_list_range",
+    "fetchers.hazard.fetch_firms_active_fire",
+    "fetchers.biodiversity.fetch_ebird_observations",
+    "fetchers.climate.fetch_era5_reanalysis",
+    "fetchers.ocean.fetch_gtsm_tide_surge",
+    "fetchers.biodiversity.fetch_iucn_red_list_range",
 )
 
 
@@ -2607,7 +2607,7 @@ async def _stream_gemini_reply(
     _retrieval_mode = _tool_retrieval_mode()
     if _retrieval_mode in ("shadow", "enforce"):
         try:
-            from .tools.tool_retrieval import retrieve_visible_tools
+            from .tools.discovery.tool_retrieval import retrieve_visible_tools
 
             _retrieval_k = _tool_retrieval_k()
             _visible = retrieve_visible_tools(
@@ -7012,7 +7012,7 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
     )
     from trid3nt_contracts.swmm_contracts import SWMMRunArgs
     from .tool_arg_normalizer import coerce_bbox_value
-    from .tools.solver import (
+    from .tools.simulation.solver import (
         AWS_BATCH_COMPUTE_CLASS_SIZING,
         select_compute_class,
     )
@@ -7120,12 +7120,12 @@ def _local_compute_lane() -> bool:
 
     Local-cloud fingerprint seam (NATE 2026-07-08): the canonical deployment
     signal is the solver dispatch backend -- ``TRID3NT_SOLVER_BACKEND=
-    local-docker`` (``tools.solver.solver_backend()``), which the local build
+    local-docker`` (``tools.simulation.solver.solver_backend()``), which the local build
     pins and the cloud stack never sets. Used ONLY to localize user-visible
     confirm-card wording (compute labels / "cloud solve" prose); it never
     changes dispatch. Cloud wording stays byte-identical when this is False.
     """
-    from .tools.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
+    from .tools.simulation.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
 
     return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 
@@ -7232,7 +7232,7 @@ async def _build_fetch_resolution_envelope(
     from types import SimpleNamespace
 
     from .tool_arg_normalizer import coerce_bbox_value
-    from .tools._pc_stac import bbox_pixel_dims
+    from .tools.fetchers.imagery._pc_stac import bbox_pixel_dims
 
     coerced = coerce_bbox_value(params.get("bbox"))
     if coerced is None or len(coerced) != 4:
@@ -8953,7 +8953,7 @@ def _build_region_candidates(
         import geopandas as gpd  # type: ignore[import-not-found]
         from io import BytesIO
 
-        from .tools.fetch_administrative_boundaries import (
+        from .tools.fetchers.socioeconomic.fetch_administrative_boundaries import (
             _fetch_admin_boundaries_bytes,
         )
     except ImportError:
@@ -9040,7 +9040,7 @@ def _build_region_choice_request_payload(
     Returns ``None`` when the state cannot be resolved or the result is not a
     valid state-snap shape — the caller then leaves the state bbox unchanged.
     """
-    from .tools.us_states import resolve_state_code, state_display_name
+    from .tools.fetchers.us_states import resolve_state_code, state_display_name
 
     bbox = geocode_result.get("bbox")
     if not (isinstance(bbox, (list, tuple)) and len(bbox) == 4):
@@ -13425,7 +13425,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     if _tool_retrieval_mode() != "off":
         async def _warm_discover_index() -> None:
             try:
-                from .tools import discover_dataset as _dd_warm
+                from .tools.discovery import discover_dataset as _dd_warm
                 await asyncio.to_thread(_dd_warm._get_index)
                 logger.info("tool_retrieval: discover index warmed at startup")
             except Exception:  # noqa: BLE001 -- warm is best-effort

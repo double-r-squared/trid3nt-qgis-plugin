@@ -36,13 +36,7 @@ from trid3nt_server.pipeline_emitter import (
     PipelineEmitter,
     emit_chart_payloads,
 )
-from trid3nt_server.tools.chart_tools import (
-    build_budget_partition_chart,
-    build_hazard_curve_chart,
-    build_head_decline_chart,
-    build_uhs_chart,
-    is_chart_emission_result,
-)
+from trid3nt_server.tools.processing.charts_common import build_budget_partition_chart, build_hazard_curve_chart, build_head_decline_chart, build_uhs_chart, is_chart_emission_result
 
 
 # --------------------------------------------------------------------------- #
@@ -345,7 +339,7 @@ async def test_emit_chart_payloads_emits_each_via_current_emitter() -> None:
 
 def _patch_archetype_run(monkeypatch: Any, layer: Any) -> None:
     """Stub the archetype run-tool the MODFLOW composers dispatch to (no solver)."""
-    import trid3nt_server.tools.run_modflow_archetype_tool as run_tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as run_tool
 
     async def _fake_run(run_args, *, compute_class="standard"):  # noqa: ANN001
         return layer

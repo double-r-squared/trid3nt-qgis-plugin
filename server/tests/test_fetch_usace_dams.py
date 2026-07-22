@@ -31,7 +31,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_usace_dams import (
+from trid3nt_server.tools.fetchers.hazard.fetch_usace_dams import (
     CONUS_BBOX,
     PRESERVED_PROPERTIES,
     USACEDAMSError,
@@ -391,7 +391,7 @@ def test_user_agent_header_sent_on_request():
             captured_headers.update(headers or {})
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.httpx.Client", FakeClient):
         _fetch_nid_geojson_page(
             "https://services2.arcgis.com/.../FeatureServer/0/query",
             {"f": "geojson"},
@@ -415,10 +415,10 @@ def test_synthetic_response_writes_fgb_with_correct_count():
     fake_geojson = _sample_nid_geojson(5)
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_all_features",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_all_features",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_dams(bbox=(-125.0, 25.0, -65.0, 50.0))
@@ -462,10 +462,10 @@ def test_bbox_vs_global_cache_keys_differ():
     fake_geojson = _sample_nid_geojson(2)
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_all_features",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_all_features",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_global = fetch_usace_dams()
@@ -493,7 +493,7 @@ def test_pagination_loop_stops_on_short_page():
         return {"type": "FeatureCollection", "features": short_page_features}
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=fake_page,
     ):
         out = _fetch_nid_all_features(bbox=None)
@@ -513,7 +513,7 @@ def test_pagination_loop_respects_max_features_cap():
         return {"type": "FeatureCollection", "features": list(full_page)}
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=fake_page,
     ):
         out = _fetch_nid_all_features(bbox=None, max_features=4500)
@@ -548,10 +548,10 @@ def test_extra_kwargs_absorbed_by_signature():
     fake_gcs = FakeStorageClient()
     fake_geojson = _sample_nid_geojson(2)
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_all_features",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_all_features",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         # These kwargs are not declared but must be absorbed.
@@ -591,7 +591,7 @@ def test_500_raises_typed_upstream_error():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSUpstreamError, match="500"):
             _fetch_nid_geojson_page(
                 "https://services2.arcgis.com/.../FeatureServer/0/query",
@@ -614,7 +614,7 @@ def test_network_failure_wraps_to_upstream_error():
         def get(self, url, params=None, headers=None):
             raise httpx.ConnectError("simulated DNS failure")
 
-    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSUpstreamError, match="request failed"):
             _fetch_nid_geojson_page(
                 "https://services2.arcgis.com/.../FeatureServer/0/query",
@@ -644,7 +644,7 @@ def test_arcgis_error_envelope_in_200_body_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSUpstreamError, match="error envelope"):
             _fetch_nid_geojson_page(
                 "https://services2.arcgis.com/.../FeatureServer/0/query",
@@ -674,7 +674,7 @@ def test_non_feature_collection_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSUpstreamError, match="FeatureCollection"):
             _fetch_nid_geojson_page(
                 "https://services2.arcgis.com/.../FeatureServer/0/query",
@@ -705,10 +705,10 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return fake_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_usace_dams(bbox=(-82.5, 26.0, -81.0, 27.0))
@@ -729,10 +729,10 @@ def test_layer_uri_shape_for_global_sweep():
     """Global sweep produces a LayerURI tagged role=primary, layer_type=vector."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_bytes",
         return_value=_fake_fgb_bytes("GLOBAL"),
     ), patch(
-        "trid3nt_server.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_dams()
@@ -884,7 +884,7 @@ def test_live_fort_myers_bbox_returns_dams():
 # degradation. (Appended; do not interleave with the original block.)
 # ===========================================================================
 
-from trid3nt_server.tools.fetch_usace_dams import (  # noqa: E402
+from trid3nt_server.tools.fetchers.hazard.fetch_usace_dams import (  # noqa: E402
     USACEDAMSAuthError,
     _NID_AUTHORITATIVE_BASE,
     _NID_BASE,
@@ -1053,7 +1053,7 @@ def _token_envelope_client(code: int):
 
 def test_esri_499_token_required_raises_auth_error():
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams.httpx.Client",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.httpx.Client",
         _token_envelope_client(499),
     ):
         with pytest.raises(USACEDAMSAuthError):
@@ -1062,7 +1062,7 @@ def test_esri_499_token_required_raises_auth_error():
 
 def test_esri_498_invalid_token_raises_auth_error():
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams.httpx.Client",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.httpx.Client",
         _token_envelope_client(498),
     ):
         with pytest.raises(USACEDAMSAuthError):
@@ -1090,7 +1090,7 @@ def test_http_401_from_authoritative_raises_auth_error():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_usace_dams.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.httpx.Client", FakeClient):
         with pytest.raises(USACEDAMSAuthError):
             _fetch_nid_geojson_page(_NID_AUTHORITATIVE_BASE, {"f": "json"})
 
@@ -1121,7 +1121,7 @@ def test_fetch_bytes_no_token_uses_mirror_only():
         return {"type": "FeatureCollection", "features": []}
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=recording_page,
     ):
         _fetch_nid_bytes(None, where="1=1", token=None)
@@ -1144,7 +1144,7 @@ def test_fetch_bytes_token_attempts_authoritative_then_degrades_to_mirror():
         return {"type": "FeatureCollection", "features": []}
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=page,
     ):
         _fetch_nid_bytes(None, where="1=1", token="some-token")
@@ -1164,7 +1164,7 @@ def test_fetch_bytes_token_auth_rejection_does_not_degrade():
         return {"type": "FeatureCollection", "features": []}
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=page,
     ):
         with pytest.raises(USACEDAMSAuthError):
@@ -1185,7 +1185,7 @@ def test_empty_filtered_result_serializes_valid_empty_fgb():
     import geopandas as gpd  # noqa: PLC0415
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_geojson_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_geojson_page",
         side_effect=lambda url, params: {"type": "FeatureCollection", "features": []},
     ):
         fgb = _fetch_nid_bytes(
@@ -1213,10 +1213,10 @@ def test_filters_distinguish_layer_id_and_cache_key():
     """Different hazard/state filters produce distinct layer ids + cache keys."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_bytes",
         side_effect=lambda *a, **k: _geojson_to_fgb(_sample_nid_geojson(2)),
     ), patch(
-        "trid3nt_server.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         l_all = fetch_usace_dams(bbox=(-115.4, 35.8, -114.3, 36.5))
@@ -1265,7 +1265,7 @@ def test_live_state_and_hazard_filter_applies():
 # (DAM_HEIGHT >= {value}, feet). Appended; do not interleave.
 # ===========================================================================
 
-from trid3nt_server.tools.fetch_usace_dams import (  # noqa: E402
+from trid3nt_server.tools.fetchers.hazard.fetch_usace_dams import (  # noqa: E402
     _validate_min_height,
 )
 
@@ -1316,10 +1316,10 @@ def test_min_height_threads_into_where_and_distinguishes_cache_key():
         return _geojson_to_fgb(_sample_nid_geojson(2))
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams._fetch_nid_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams._fetch_nid_bytes",
         side_effect=_capture_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_dams.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         l_all = fetch_usace_dams(bbox=(-115.4, 35.8, -114.3, 36.5))
@@ -1338,7 +1338,7 @@ def test_min_height_threads_into_where_and_distinguishes_cache_key():
 
 def test_min_height_invalid_raises_before_any_fetch():
     with patch(
-        "trid3nt_server.tools.fetch_usace_dams.read_through"
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_dams.read_through"
     ) as mock_rt:
         with pytest.raises(USACEDAMSInputError):
             fetch_usace_dams(

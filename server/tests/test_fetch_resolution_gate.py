@@ -515,7 +515,7 @@ def test_fetch_landcover_state_scale_no_hard_fail(monkeypatch) -> None:
     The hard-fail that was at > 10 000 km^2 is replaced by auto-coarsening;
     only continent-scale bboxes (> 5 000 000 km^2) still hard-fail.
     """
-    from trid3nt_server.tools import data_fetch
+    from trid3nt_server.tools.fetchers.terrain import fetch_landcover as data_fetch
 
     # Stub the WCS fetch so we don't hit the network.
     def _fake_nlcd_bytes(bbox, vintage_year, resolution_m=30):
@@ -545,7 +545,7 @@ def test_fetch_landcover_state_scale_no_hard_fail(monkeypatch) -> None:
 # --------------------------------------------------------------------------- #
 def test_fetch_landcover_small_bbox_native_metadata(monkeypatch) -> None:
     """Small bbox at 30 m: result carries native metadata, downsampled=False."""
-    from trid3nt_server.tools import data_fetch
+    from trid3nt_server.tools.fetchers.terrain import fetch_landcover as data_fetch
 
     def _fake_nlcd_bytes(bbox, vintage_year, resolution_m=30):
         return b"\x49\x49\x2a\x00" + b"\x00" * 256
@@ -574,7 +574,10 @@ def test_fetch_landcover_small_bbox_native_metadata(monkeypatch) -> None:
 def test_fetch_landcover_continent_scale_hard_fail() -> None:
     """A continent-scale bbox (> 5 000 000 km^2) must still raise BboxInvalidError."""
     import pytest
-    from trid3nt_server.tools.data_fetch import BboxInvalidError, fetch_landcover
+    from trid3nt_server.tools.fetchers._fetch_common import BboxInvalidError
+    from trid3nt_server.tools.fetchers.terrain.fetch_landcover import fetch_landcover
+
+    # Whole-CONUS bbox is ~8 000 000 km^2
 
     # Whole-CONUS bbox is ~8 000 000 km^2
     whole_conus = [-125.0, 24.0, -66.0, 50.0]
@@ -590,7 +593,7 @@ def test_fetch_landcover_bypass_enforces_pixel_budget(monkeypatch) -> None:
     """A direct state-scale call with resolution_m=30 (finer than the MRLC
     4000 px/axis budget allows) must be coarsened by the TOOL, and
     effective_resolution_m must describe the delivered grid, not the request."""
-    from trid3nt_server.tools import data_fetch
+    from trid3nt_server.tools.fetchers.terrain import fetch_landcover as data_fetch
 
     def _fake_nlcd_bytes(bbox, vintage_year, resolution_m=30):
         return b"\x49\x49\x2a\x00" + b"\x00" * 256

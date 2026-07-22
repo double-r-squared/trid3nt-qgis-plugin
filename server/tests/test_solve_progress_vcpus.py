@@ -1,4 +1,4 @@
-"""Tests for ``tools.solver.solve_progress_vcpus`` (fingerprint audit A6).
+"""Tests for ``tools.simulation.solver.solve_progress_vcpus`` (fingerprint audit A6).
 
 The single deployment-aware seam the workflow live solve-progress call sites
 use instead of reading ``AWS_BATCH_COMPUTE_CLASS_SIZING`` directly:
@@ -21,7 +21,7 @@ import os
 
 import pytest
 
-from trid3nt_server.tools.solver import (
+from trid3nt_server.tools.simulation.solver import (
     AWS_BATCH_COMPUTE_CLASS_SIZING,
     solve_progress_vcpus,
 )

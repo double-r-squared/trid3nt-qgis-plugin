@@ -26,7 +26,7 @@ import pytest
 from shapely.geometry import Polygon
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.cut_features_with_polygon import (
+from trid3nt_server.tools.processing.cut_features_with_polygon import (
     CutFeaturesError,
     cut_features_with_polygon,
 )

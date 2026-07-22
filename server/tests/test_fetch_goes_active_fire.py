@@ -19,16 +19,16 @@ from datetime import datetime, timezone
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import fetch_goes_active_fire as afmod
-from trid3nt_server.tools import fetch_goes_archive_animation as archmod
-from trid3nt_server.tools.fetch_goes_active_fire import fetch_goes_active_fire
-from trid3nt_server.tools.fetch_goes_archive_animation import (
+from trid3nt_server.tools.fetchers.imagery import fetch_goes_active_fire as afmod
+from trid3nt_server.tools.fetchers.imagery import fetch_goes_archive_animation as archmod
+from trid3nt_server.tools.fetchers.imagery.fetch_goes_active_fire import fetch_goes_active_fire
+from trid3nt_server.tools.fetchers.imagery.fetch_goes_archive_animation import (
     FIRE_BT_C07_MIN_K,
     FIRE_BT_DIFF_MIN_K,
     GOESArchiveEmptyError,
     GOESArchiveInputError,
 )
-from trid3nt_server.tools.fetch_goes_satellite import GOESInputError
+from trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite import GOESInputError
 
 _UT_BBOX = (-114.05, 37.0, -109.04, 42.0)
 
@@ -70,11 +70,9 @@ def test_tool_in_query_corpus():
 
     import yaml
 
-    corpus_path = (
-        pathlib.Path(archmod.__file__).resolve().parents[1]
-        / "data"
-        / "tool_query_corpus.yaml"
-    )
+    from trid3nt_server.tools.discovery.discover_dataset import _default_corpus_path
+
+    corpus_path = pathlib.Path(_default_corpus_path())
     corpus = yaml.safe_load(corpus_path.read_text())
     assert "fetch_goes_active_fire" in corpus
     assert len(corpus["fetch_goes_active_fire"]) >= 3
@@ -84,7 +82,7 @@ def test_tool_in_query_corpus():
 
 
 def test_bbox_none_raises():
-    from trid3nt_server.tools.fetch_goes_archive_animation import (
+    from trid3nt_server.tools.fetchers.imagery.fetch_goes_archive_animation import (
         GOESArchiveBboxRequiredError,
     )
 

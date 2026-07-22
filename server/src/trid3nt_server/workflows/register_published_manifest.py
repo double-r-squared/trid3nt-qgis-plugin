@@ -83,7 +83,7 @@ def read_publish_manifest(run_result: Any) -> PublishManifest | None:
     if not run_id:
         return None
     try:
-        from ..tools.solver import (
+        from ..tools.simulation.solver import (
             _get_runs_bucket,
             _read_object_bytes,
             _try_get_completion_s3,

@@ -23,7 +23,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_wfigs_incident import (
+from trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident import (
     WFIGS_INCIDENT_BASE,
     WFIGS_INCIDENT_YTD_BASE,
     WFIGSIncidentInputError,
@@ -200,8 +200,8 @@ def test_name_resolution_returns_point_bbox_discovery():
         def get(self, url, params=None, headers=None):
             return _FakeResp(_IRON_RESPONSE)
 
-    with patch("trid3nt_server.tools.fetch_wfigs_incident.httpx.Client", _FakeClient), patch(
-        "trid3nt_server.tools.fetch_wfigs_incident.read_through", _identity_read_through
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident.httpx.Client", _FakeClient), patch(
+        "trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident.read_through", _identity_read_through
     ):
         result = fetch_wfigs_incident("Iron", state="UT")
 
@@ -232,8 +232,8 @@ def test_empty_match_raises_not_found():
         def get(self, url, params=None, headers=None):
             return _FakeResp({"features": []})
 
-    with patch("trid3nt_server.tools.fetch_wfigs_incident.httpx.Client", _FakeClient), patch(
-        "trid3nt_server.tools.fetch_wfigs_incident.read_through", _identity_read_through
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident.httpx.Client", _FakeClient), patch(
+        "trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident.read_through", _identity_read_through
     ):
         with pytest.raises(WFIGSIncidentNotFoundError):
             fetch_wfigs_incident("Nonexistent Fire")
@@ -332,9 +332,9 @@ def test_contained_fire_resolves_via_yeartodate_when_current_empty():
             return _FakeResp(_SANTA_ROSA_YTD_RESPONSE)
 
     with patch(
-        "trid3nt_server.tools.fetch_wfigs_incident.httpx.Client", _FakeClient
+        "trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident.httpx.Client", _FakeClient
     ), patch(
-        "trid3nt_server.tools.fetch_wfigs_incident.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident.read_through",
         _identity_read_through,
     ):
         result = fetch_wfigs_incident("Santa Rosa Island", state="CA")
@@ -367,9 +367,9 @@ def test_not_found_only_after_both_feeds_miss():
             return _FakeResp({"features": []})
 
     with patch(
-        "trid3nt_server.tools.fetch_wfigs_incident.httpx.Client", _FakeClient
+        "trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident.httpx.Client", _FakeClient
     ), patch(
-        "trid3nt_server.tools.fetch_wfigs_incident.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_wfigs_incident.read_through",
         _identity_read_through,
     ):
         with pytest.raises(WFIGSIncidentNotFoundError):

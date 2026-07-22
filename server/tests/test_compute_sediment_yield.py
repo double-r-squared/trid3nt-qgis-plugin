@@ -43,7 +43,7 @@ from rasterio.transform import from_bounds
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_sediment_yield import (
+from trid3nt_server.tools.processing.compute_sediment_yield import (
     C_BY_IO_LULC_CLASS,
     SEDIMENT_YIELD_LOG_CLASSES,
     SedimentYieldAoiTooLargeError,
@@ -200,7 +200,7 @@ def test_k_fallback_constant_with_note(
     out_dir.mkdir()
 
     # No k_uri + STATSGO down -> documented constant 0.2 fallback with a note.
-    import trid3nt_server.tools.fetch_statsgo_soils as statsgo_mod
+    import trid3nt_server.tools.fetchers.soil.fetch_statsgo_soils as statsgo_mod
 
     def _boom(**_kw):
         raise RuntimeError("STATSGO offline (test)")

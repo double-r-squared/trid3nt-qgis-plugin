@@ -28,7 +28,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.tools.fetch_topobathy import (
+from trid3nt_server.tools.fetchers.ocean.fetch_topobathy import (
     TopobathyResult,
     TopobathyUpstreamError,
 )
@@ -282,11 +282,11 @@ def _patched_chain(
         # test - stub both so the ladder degrades to the parametric
         # design-storm surge (rung 3, key-free and fully offline).
         patch(
-            "trid3nt_server.tools.fetch_noaa_coops_tides.fetch_noaa_coops_tides",
+            "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_tides.fetch_noaa_coops_tides",
             side_effect=RuntimeError("offline test - no live CO-OPS"),
         ),
         patch(
-            "trid3nt_server.tools.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge",
+            "trid3nt_server.tools.fetchers.ocean.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge",
             side_effect=RuntimeError("offline test - no live GTSM"),
         ),
     )

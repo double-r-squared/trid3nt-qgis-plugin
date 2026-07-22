@@ -277,7 +277,7 @@ async def _emit_multi_species_chart(plumes: list[PlumeLayerURI]) -> None:
     ``max_concentration_mgl`` + ``plume_area_km2`` (Invariant 1: never fabricated).
     Emits nothing when every plume is empty (the honesty floor).
     """
-    from ..tools.chart_tools import build_chart_payload
+    from ..tools.processing.charts_common import build_chart_payload
 
     rows: list[dict[str, Any]] = []
     for p in plumes:
@@ -417,7 +417,7 @@ async def model_multi_species_scenario(
         ) from exc
 
     # --- run the N-species solver inside a substep + validate the typed result -
-    from ..tools.run_modflow_multi_species_tool import run_modflow_multi_species_job
+    from ..tools.simulation.run_modflow_multi_species_tool import run_modflow_multi_species_job
 
     async with substep(current_emitter(), "run_modflow_multi_species_job"):
         result = await _maybe_emit(

@@ -34,8 +34,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import fetch_jrc_global_surface_water as gsw_mod
-from trid3nt_server.tools.fetch_jrc_global_surface_water import (
+from trid3nt_server.tools.fetchers.hydrology import fetch_jrc_global_surface_water as gsw_mod
+from trid3nt_server.tools.fetchers.hydrology.fetch_jrc_global_surface_water import (
     JrcSurfaceWaterBandError,
     JrcSurfaceWaterBboxError,
     JrcSurfaceWaterNoCoverageError,

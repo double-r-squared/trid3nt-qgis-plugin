@@ -26,7 +26,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_climate_normals import (
+from trid3nt_server.tools.fetchers.climate.fetch_climate_normals import (
     ClimateNormalsEmptyError,
     ClimateNormalsInputError,
     ClimateNormalsUpstreamError,
@@ -39,7 +39,7 @@ from trid3nt_server.tools.fetch_climate_normals import (
     fetch_climate_normals,
 )
 
-_MOD = "trid3nt_server.tools.fetch_climate_normals"
+_MOD = "trid3nt_server.tools.fetchers.climate.fetch_climate_normals"
 
 _PINNED_NOW = datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc)
 

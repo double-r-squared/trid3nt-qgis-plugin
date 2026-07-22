@@ -33,7 +33,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_movebank_tracks import (
+from trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks import (
     MovebankAuthError,
     MovebankInputError,
     MovebankLicenseError,
@@ -646,10 +646,10 @@ def test_mocked_happy_path_linestring():
     )
 
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -704,10 +704,10 @@ def test_mocked_point_geometry_with_bbox_filter():
     )
 
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -750,10 +750,10 @@ def test_mocked_empty_study_returns_empty_flatgeobuf():
     )
 
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -785,10 +785,10 @@ def test_mocked_401_raises_auth_error():
     """A 401 from Movebank raises a non-retryable MovebankAuthError."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(401, text="Unauthorized")
@@ -807,10 +807,10 @@ def test_mocked_403_raises_license_error():
     """A 403 from Movebank raises a non-retryable MovebankLicenseError."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(403, text="License not accepted")
@@ -832,10 +832,10 @@ def test_mocked_html_license_page_raises_license_error():
         "</body></html>"
     )
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, html_body)
@@ -851,10 +851,10 @@ def test_mocked_5xx_raises_upstream_error_retryable():
     """A 503 from Movebank raises a retryable MovebankUpstreamError."""
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(503, text="Service Unavailable")
@@ -884,10 +884,10 @@ def test_cache_hit_skips_fetch_fn():
     )
 
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -915,10 +915,10 @@ def test_layer_uri_shape_fields():
         ]
     )
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -947,10 +947,10 @@ def test_request_includes_basic_auth():
     )
 
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.httpx.Client"
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client.get.return_value = _FakeHTTPResponse(200, csv_body)
@@ -988,7 +988,7 @@ def test_live_sandhill_crane_public_study(tmp_path):
     """
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_movebank_tracks.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_movebank_tracks.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_movebank_tracks(

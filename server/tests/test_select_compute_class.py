@@ -29,7 +29,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.tools.solver import (
+from trid3nt_server.tools.simulation.solver import (
     AWS_BATCH_COMPUTE_CLASS_SIZING,
     COMPUTE_CLASS_FALLBACK,
     COMPUTE_CLASS_LARGE_MAX_ELEMENTS,
@@ -416,9 +416,9 @@ async def test_swmm_workflow_passes_computed_class_on_out_of_process_lane(
         ),
         patch.object(mod, "_cleanup_deck_dir", return_value=None),
         patch.object(mod, "postprocess_swmm", return_value=([peak], {})),
-        patch("trid3nt_server.tools.solver.run_solver", side_effect=_fake_run_solver),
+        patch("trid3nt_server.tools.simulation.solver.run_solver", side_effect=_fake_run_solver),
         patch(
-            "trid3nt_server.tools.solver.wait_for_completion", side_effect=_fake_wait
+            "trid3nt_server.tools.simulation.solver.wait_for_completion", side_effect=_fake_wait
         ),
     ):
         result = await mod.model_urban_flood_swmm(

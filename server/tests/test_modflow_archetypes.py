@@ -146,7 +146,7 @@ def test_compute_budget_partition_signs_exclude_and_drop() -> None:
 
 def _patch_archetype_run(monkeypatch: Any, captured: dict[str, Any], layer: Any) -> None:
     """Patch the archetype run-tool the composers dispatch to (no solver)."""
-    import trid3nt_server.tools.run_modflow_archetype_tool as run_tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as run_tool
 
     async def _fake_run(run_args, *, compute_class="standard"):  # noqa: ANN001
         captured["run_args"] = run_args
@@ -333,7 +333,7 @@ async def test_regional_water_budget_assembles_args_and_threads_result(monkeypat
 async def test_archetype_run_tool_empty_result_is_honest_error(monkeypatch) -> None:
     """The shared run-tool refuses to read a zero-drawdown result as success
     (the honesty floor: a 'modeled' layer with an empty deliverable is an error)."""
-    import trid3nt_server.tools.run_modflow_archetype_tool as run_tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as run_tool
     from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
 
     # Stub the whole solver chain so the postprocess returns a ZERO drawdown.

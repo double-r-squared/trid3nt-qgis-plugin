@@ -126,7 +126,7 @@ def _download_elmfire_outputs(run_id: str) -> tuple[str, bool]:
     Raises ``ElmfireWorkflowError("ELMFIRE_OUTPUT_MISSING")`` when a
     'complete' run yields no downloadable raster (never a silent dead-end).
     """
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         DEFAULT_LOCAL_RUNS_DIR,
         _get_runs_bucket,
         _get_s3_client,
@@ -367,7 +367,7 @@ async def model_fire_spread_scenario(
             )
 
         # --- Vertical auto-scaling from the deck cell count. -----------------
-        from ..tools.solver import (
+        from ..tools.simulation.solver import (
             select_compute_class,
             solve_progress_vcpus,
         )
@@ -386,7 +386,7 @@ async def model_fire_spread_scenario(
         _vcpus = solve_progress_vcpus(effective_compute_class)
 
         # --- Step 4: dispatch via the generic run_solver seam. ----------------
-        from ..tools.solver import (
+        from ..tools.simulation.solver import (
             EmitterBinding,
             run_solver,
             set_emitter_binding,

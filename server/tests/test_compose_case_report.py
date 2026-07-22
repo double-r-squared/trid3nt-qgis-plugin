@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import compute_exposure_summary as exposure_mod
-from trid3nt_server.tools.compose_case_report import (
+from trid3nt_server.tools.processing import compute_exposure_summary as exposure_mod
+from trid3nt_server.tools.meta.compose_case_report import (
     CaseReportInputError,
     CaseReportNotFoundError,
     compose_case_report,

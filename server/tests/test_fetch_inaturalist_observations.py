@@ -33,7 +33,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_inaturalist_observations import (
+from trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations import (
     INatError,
     INatInputError,
     INatUpstreamError,
@@ -392,10 +392,10 @@ def test_happy_path_200_records_writes_fgb_with_points_inside_bbox():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page1))
 
     with patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -452,10 +452,10 @@ def test_pagination_walks_until_total_results_exhausted():
         return c
 
     with patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -486,10 +486,10 @@ def test_max_records_caps_fetch():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page))
 
     with patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_inaturalist_observations(
@@ -520,10 +520,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page))
 
     with patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -546,10 +546,10 @@ def test_cache_hit_skips_fetch_fn():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page))
 
     with patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -582,10 +582,10 @@ def test_cache_key_collapses_name_and_resolved_id():
         return _FakeHttpxClient(next_response)
 
     with patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_name = fetch_inaturalist_observations(
@@ -611,10 +611,10 @@ def test_quality_grade_changes_cache_path():
         return _FakeHttpxClient(lambda: _fake_httpx_response(page))
 
     with patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_research = fetch_inaturalist_observations(
@@ -649,10 +649,10 @@ def test_observations_http_error_surfaces_upstream_error():
         return _FakeHttpxClient(make_bad_response)
 
     with patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.httpx.Client",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.httpx.Client",
         side_effect=make_client,
     ), patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), pytest.raises(INatUpstreamError):
         fetch_inaturalist_observations(taxon_id=43616, bbox=bbox)
@@ -673,7 +673,7 @@ def test_live_alligator_everglades_returns_geographically_valid_points():
     bbox = _EVERGLADES_BBOX
 
     with patch(
-        "trid3nt_server.tools.fetch_inaturalist_observations.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_inaturalist_observations.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_inaturalist_observations(

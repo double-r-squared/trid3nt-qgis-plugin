@@ -28,8 +28,8 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools import fetch_mobi as mobi_mod
-from trid3nt_server.tools.fetch_mobi import (
+from trid3nt_server.tools.fetchers.biodiversity import fetch_mobi as mobi_mod
+from trid3nt_server.tools.fetchers.biodiversity.fetch_mobi import (
     MOBI_LAYERS,
     MoBIBboxError,
     MoBIEmptyError,

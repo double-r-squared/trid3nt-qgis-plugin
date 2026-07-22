@@ -117,7 +117,7 @@ class MARInputError(MARScenarioError):
 
 async def _emit_mounding_chart(layer: MoundingLayerURI) -> None:
     """Side-emit the MAR mounding summary chart (best-effort, no-op safe)."""
-    from ..tools.chart_tools import build_chart_payload
+    from ..tools.processing.charts_common import build_chart_payload
 
     rows: list[dict[str, Any]] = []
     peak = getattr(layer, "max_mounding_m", None)

@@ -23,7 +23,7 @@ import asyncio
 import json
 
 from trid3nt_server import tool_catalog_http
-from trid3nt_server.tools.export_case_to_qgis import (
+from trid3nt_server.tools.meta.export_case_to_qgis import (
     CaseNotFoundError,
     NoExportableLayersError,
 )

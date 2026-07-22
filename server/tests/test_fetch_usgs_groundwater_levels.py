@@ -38,7 +38,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_usgs_groundwater_levels import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels import (
     GW_PARAMETER_CODES,
     USPS_TO_FIPS,
     GwInputError,
@@ -406,10 +406,10 @@ def test_happy_path_builds_layer_and_valid_fgb():
         raise AssertionError(f"unexpected URL: {url}")
 
     with patch(
-        "trid3nt_server.tools.fetch_usgs_groundwater_levels._http_get",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels._http_get",
         side_effect=fake_http_get,
     ), patch(
-        "trid3nt_server.tools.fetch_usgs_groundwater_levels.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels.read_through",
         side_effect=_make_read_through_injector(store),
     ):
         res = fetch_usgs_groundwater_levels(bbox=_KS_BBOX)
@@ -445,10 +445,10 @@ def test_honest_empty_raises_no_wells():
         return _meas_fc([])
 
     with patch(
-        "trid3nt_server.tools.fetch_usgs_groundwater_levels._http_get",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels._http_get",
         side_effect=fake_http_get,
     ), patch(
-        "trid3nt_server.tools.fetch_usgs_groundwater_levels.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels.read_through",
         side_effect=_make_read_through_injector({}),
     ):
         with pytest.raises(GwNoWellsError):
@@ -467,10 +467,10 @@ def test_location_enrichment_failure_does_not_abort():
 
     store: dict[str, bytes] = {}
     with patch(
-        "trid3nt_server.tools.fetch_usgs_groundwater_levels._http_get",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels._http_get",
         side_effect=fake_http_get,
     ), patch(
-        "trid3nt_server.tools.fetch_usgs_groundwater_levels.read_through",
+        "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels.read_through",
         side_effect=_make_read_through_injector(store),
     ):
         res = fetch_usgs_groundwater_levels(bbox=_KS_BBOX)

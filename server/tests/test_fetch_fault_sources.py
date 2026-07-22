@@ -19,8 +19,8 @@ import pytest
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.tools import fetch_fault_sources as ffs
-from trid3nt_server.tools.fetch_fault_sources import (
+from trid3nt_server.tools.fetchers.hazard import fetch_fault_sources as ffs
+from trid3nt_server.tools.fetchers.hazard.fetch_fault_sources import (
     FAULT_LINE_STYLE_PRESET,
     FaultSourcesInputError,
     FaultSourcesResult,

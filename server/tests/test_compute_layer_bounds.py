@@ -33,7 +33,7 @@ import tempfile
 import pytest
 
 from trid3nt_server.pipeline_emitter import PipelineEmitter
-from trid3nt_server.tools.compute_layer_bounds import (
+from trid3nt_server.tools.processing.compute_layer_bounds import (
     ComputeLayerBoundsError,
     compute_layer_bounds,
 )
@@ -271,7 +271,7 @@ def test_resolve_titiler_template_recovers_s3_cog(monkeypatch) -> None:
     """_resolve_layer_to_local_path extracts the url= COG from a TiTiler
     template and routes it through the s3 branch."""
     import trid3nt_server.tools.cache as cache_mod
-    import trid3nt_server.tools.compute_layer_bounds as clb
+    import trid3nt_server.tools.processing.compute_layer_bounds as clb
 
     real_cog = "s3://trid3nt-runs/01ABC/swmm_depth_frame_01.tif"
     captured: dict[str, str] = {}
@@ -302,7 +302,7 @@ def test_resolve_titiler_template_recovers_s3_cog(monkeypatch) -> None:
 def test_resolve_titiler_template_without_url_param_raises_typed_error() -> None:
     """A display URL with no recoverable s3 url= param still raises the typed
     UNKNOWN_LAYER_URI (honest, retryable) — it must not fail open silently."""
-    import trid3nt_server.tools.compute_layer_bounds as clb
+    import trid3nt_server.tools.processing.compute_layer_bounds as clb
 
     bad = "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/3/2/1.png"
     with pytest.raises(ComputeLayerBoundsError) as ei:

@@ -130,7 +130,7 @@ def _fetch_bathy_for_swan(
     when the result carries no bathymetry (the data-source fallback norm: primary
     -> honest typed error, never a silent all-dry dead-end).
     """
-    from ..tools.fetch_topobathy import fetch_topobathy
+    from ..tools.fetchers.ocean.fetch_topobathy import fetch_topobathy
 
     def _attr(layer: Any, name: str) -> Any:
         if isinstance(layer, dict):
@@ -269,7 +269,7 @@ async def model_wave_scenario(
         )
 
     # --- Auto vertical scaling from the mesh cell count ---------------------
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         select_compute_class,
         solve_progress_vcpus,
     )
@@ -284,7 +284,7 @@ async def model_wave_scenario(
     _vcpus = solve_progress_vcpus(effective_compute_class)
 
     # --- Step 3: dispatch to AWS Batch (the generic run_solver seam) --------
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,
@@ -638,7 +638,7 @@ def _download_batch_swan_outputs(run_id: str) -> str:
             no downloadable swan_out.mat (a 'complete' solve with no wave output is
             a real failure -- never a silent dead-end).
     """
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         _get_runs_bucket,
         _get_s3_client,
         _split_object_uri,

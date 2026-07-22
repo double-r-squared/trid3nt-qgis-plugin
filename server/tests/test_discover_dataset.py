@@ -33,16 +33,18 @@ import pytest
 # Force the full tool + workflow surface to register before the index builds.
 from trid3nt_server.tools import (  # noqa: F401 — registration side-effect
     TOOL_REGISTRY,
-    catalog,
-    data_fetch,
-    discover_dataset as discover_module,
     publish_layer,
-    qgis_discovery,
-    solver,
 )
+from trid3nt_server.tools.discovery import (  # noqa: F401 — registration side-effect
+    catalog_fetch,
+    catalog_search,
+    qgis_discovery,
+)
+from trid3nt_server.tools.discovery import discover_dataset as discover_module
+from trid3nt_server.tools.simulation import solver  # noqa: F401 — registration side-effect
 from trid3nt_server.workflows import model_flood_scenario  # noqa: F401 — registration side-effect
 
-from trid3nt_server.tools.discover_dataset import (
+from trid3nt_server.tools.discovery.discover_dataset import (
     _close_vocab_matches,
     _default_corpus_path,
     _expand_query_tokens,

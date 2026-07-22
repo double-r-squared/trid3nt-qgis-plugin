@@ -15,7 +15,7 @@ LOCAL seam:
 
   1. **VOLUME-MOUNT build_argv (SFINCS-canonical), not GeoClaw's
      ``--network host`` self-S3-I/O.** The tested local-docker envelope
-     (``tools.solver.launch_local_solver`` + ``_supervise_local_run``, proven in
+     (``tools.simulation.solver.launch_local_solver`` + ``_supervise_local_run``, proven in
      ``test_solver_local_docker.py``) stages the manifest into
      ``<rundir>/manifest.json``, bind-mounts the rundir at ``/data``, and the
      AGENT-SIDE supervisor uploads the mounted outputs + writes
@@ -95,14 +95,14 @@ _COMPLETION_METRIC_KEYS: tuple[str, ...] = (
 # Solver registration (mirrors register_geoclaw_solver / register_swan_solver).
 # --------------------------------------------------------------------------- #
 def register_telemac_solver() -> None:
-    """Register ``'telemac_river_dye'`` in ``tools.solver.SOLVER_WORKFLOW_REGISTRY``.
+    """Register ``'telemac_river_dye'`` in ``tools.simulation.solver.SOLVER_WORKFLOW_REGISTRY``.
 
     The registry value is consumed purely as a PRESENCE GATE by ``run_solver``;
     the live routing comes from the backend sentinel. TELEMAC is local-docker
     only (the engine lives in the worker image, never the agent venv), so it maps
     to the local-docker workflow-name sentinel. Idempotent ``setdefault``.
     """
-    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from ..tools.simulation.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(TELEMAC_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
 
@@ -164,7 +164,7 @@ def _classify_exit(
 def telemac_local_spec() -> "Any":
     """Build the TELEMAC river-dye ``LocalSolverSpec`` for the local-docker backend."""
     import os
-    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from ..tools.simulation.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_TELEMAC_IMAGE") or DEFAULT_TELEMAC_IMAGE
 
@@ -204,7 +204,7 @@ def telemac_local_spec() -> "Any":
 
 def register_telemac_local_spec() -> None:
     """Register the TELEMAC LocalSolverSpec factory for the local-docker backend."""
-    from ..tools.solver import register_local_solver_spec
+    from ..tools.simulation.solver import register_local_solver_spec
 
     register_local_solver_spec(TELEMAC_SOLVER_NAME, telemac_local_spec)
 

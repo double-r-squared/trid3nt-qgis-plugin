@@ -40,8 +40,8 @@ from trid3nt_server.tools import (
     RegisteredTool,
     clear_registry_for_tests,
 )
-from trid3nt_server.tools import fetch_firms_active_fire as firms_mod
-from trid3nt_server.tools.fetch_firms_active_fire import (
+from trid3nt_server.tools.fetchers.hazard import fetch_firms_active_fire as firms_mod
+from trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire import (
     FirmsArgError,
     FirmsAuthError,
     FirmsMissingKeyError,

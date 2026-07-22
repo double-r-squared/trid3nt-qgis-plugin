@@ -31,7 +31,7 @@ import rasterio
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.analyze_affected_fields import (
+from trid3nt_server.tools.processing.analyze_affected_fields import (
     DEFAULT_THRESHOLD_MGL,
     AffectedFieldsInputError,
     analyze_affected_fields,

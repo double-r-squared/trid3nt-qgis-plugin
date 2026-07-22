@@ -14,11 +14,11 @@ things for the groundwater-contamination ("spill") engine:
 
   2. **Solver submit** (``submit_modflow_run``). GCP Cloud Workflows is
      decommissioned. Two gated lanes: the GENERIC AWS Batch seam (the shared
-     ``tools.solver.run_solver(solver='modflow', ...)`` per-job autoscaled
+     ``tools.simulation.solver.run_solver(solver='modflow', ...)`` per-job autoscaled
      submit) when ``is_batch_mode()`` (``TRID3NT_SOLVER_BACKEND=aws-batch`` + a
      resolvable ``TRID3NT_AWS_BATCH_JOB_DEF_MODFLOW``); otherwise - the DEFAULT,
      inert-until-flipped fallback - the shared local-exec solver backend
-     (``tools.solver.launch_local_solver``) with the MODFLOW local-exec spec
+     (``tools.simulation.solver.launch_local_solver``) with the MODFLOW local-exec spec
      (the ``mf6`` binary on the box). Either way returns the schema-owned
      ``ExecutionHandle`` whose ``workflow_name`` pins the backend
      (``aws-batch`` / ``local-exec``) for ``wait_for_completion`` (the
@@ -75,11 +75,11 @@ through the solver module's shared local machinery instead of Cloud Workflows:
   * ``build_and_stage_modflow_deck`` becomes scheme-aware: under
     ``TRID3NT_STORAGE_BACKEND=s3`` the deck + manifest upload to
     ``s3://$TRID3NT_CACHE_BUCKET/modflow/<run_id>/`` via **boto3** (the
-    job-0289 s3fs-anonymous lesson; shared ``tools.solver`` S3 client seam).
+    job-0289 s3fs-anonymous lesson; shared ``tools.simulation.solver`` S3 client seam).
     The manifest keeps the LEGACY ``gs_uri`` field NAME with ``s3://`` VALUES
     - staging resolves by scheme (job-0291 convention). The default ``gs://``
     fsspec path is byte-identical.
-  * ``submit_modflow_run`` dispatches to ``tools.solver.launch_local_solver``
+  * ``submit_modflow_run`` dispatches to ``tools.simulation.solver.launch_local_solver``
     with a MODFLOW ``LocalSolverSpec``: stage the deck back down from S3 into
     ``$TRID3NT_RUNS_DIR/<run_id>/``, launch the **mf6 binary directly**
     (``exec_kind="exec"`` - no public MODFLOW image exists; the instance
@@ -153,7 +153,7 @@ MODFLOW_WORKFLOW_NAME: str = "run_modflow"
 
 #: The registry key + ``ExecutionHandle.solver`` tag for the groundwater engine.
 #: Mirrors ``run_swmm.SWMM_SOLVER_NAME`` - its PRESENCE in
-#: ``tools.solver.SOLVER_WORKFLOW_REGISTRY`` is what gates ``run_solver(
+#: ``tools.simulation.solver.SOLVER_WORKFLOW_REGISTRY`` is what gates ``run_solver(
 #: solver='modflow', ...)`` dispatch (an absent key raises
 #: ``SolverNotRegisteredError``). Registered at import via
 #: ``register_modflow_solver()`` exactly like SWMM.
@@ -322,7 +322,7 @@ def is_local_mode() -> bool:
 
 
 def register_modflow_solver() -> None:
-    """Register ``'modflow'`` in ``tools.solver.SOLVER_WORKFLOW_REGISTRY``.
+    """Register ``'modflow'`` in ``tools.simulation.solver.SOLVER_WORKFLOW_REGISTRY``.
 
     Mirrors ``run_swmm.register_swmm_solver`` (and the SFINCS registration): the
     registry maps the solver name to a workflow/dispatch sentinel; ``run_solver``
@@ -333,7 +333,7 @@ def register_modflow_solver() -> None:
     - the value is only a default tag; the per-call handle pins the real backend.
     Idempotent (``setdefault``) - safe to call at import.
     """
-    from ..tools.solver import LOCAL_EXEC_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from ..tools.simulation.solver import LOCAL_EXEC_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(MODFLOW_SOLVER_NAME, LOCAL_EXEC_WORKFLOW_NAME)
 
@@ -874,7 +874,7 @@ def build_and_stage_modflow_deck(
             # credentials lesson) through the solver module's shared S3
             # client seam, mirroring sfincs_builder's deck upload.
             try:
-                from ..tools.solver import _get_s3_client
+                from ..tools.simulation.solver import _get_s3_client
 
                 s3 = _get_s3_client()
                 bucket, _, base_key = (
@@ -1118,7 +1118,7 @@ def compose_and_upload_modflow_build_spec(
     }
     payload = json.dumps(job_spec, indent=2).encode("utf-8")
     try:
-        from ..tools.solver import _get_s3_client
+        from ..tools.simulation.solver import _get_s3_client
 
         s3 = _get_s3_client()
         s3_bucket, _, key = job_spec_uri[len("s3://"):].partition("/")
@@ -1420,7 +1420,7 @@ def _modflow_local_spec(staging: DeckStaging) -> Any:
     and supplies the entrypoint-schema ``converged`` + ``model_crs``
     completion fields.
     """
-    from ..tools.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
+    from ..tools.simulation.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
 
     def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
         return [_mf6_binary(), *args]
@@ -1470,7 +1470,7 @@ def submit_modflow_run(
 
       * **GENERIC AWS Batch seam** (``is_batch_mode()`` - ``TRID3NT_SOLVER_BACKEND``
         ``aws-batch`` + a resolvable ``TRID3NT_AWS_BATCH_JOB_DEF_MODFLOW``). Routes
-        through the SHARED ``tools.solver.run_solver(solver='modflow',
+        through the SHARED ``tools.simulation.solver.run_solver(solver='modflow',
         model_setup_uri=staging.manifest_uri, compute_class=...)`` - the same
         per-job autoscaled Batch submit SFINCS/SWMM use. The Batch container runs
         the SAME ``services/workers/modflow/entrypoint.py`` (now scheme-aware)
@@ -1481,7 +1481,7 @@ def submit_modflow_run(
 
       * **Local-exec fallback** (DEFAULT until the Batch env is flipped). Runs the
         ``mf6`` binary directly via the local-exec supervisor
-        (``tools.solver.launch_local_solver`` with the MODFLOW local-exec spec):
+        (``tools.simulation.solver.launch_local_solver`` with the MODFLOW local-exec spec):
         the staged deck is downloaded from S3 into ``$TRID3NT_RUNS_DIR/<run_id>/``,
         ``mf6`` runs detached, and the supervisor writes the
         MODFLOW-entrypoint-schema completion.json. The returned handle's
@@ -1494,7 +1494,7 @@ def submit_modflow_run(
         MODFLOWWorkflowError("MODFLOW_DISPATCH_FAILED"): the dispatch (Batch
             submit or local-backend staging/launch) failed.
     """
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         SolverDispatchError,
         launch_local_solver,
     )

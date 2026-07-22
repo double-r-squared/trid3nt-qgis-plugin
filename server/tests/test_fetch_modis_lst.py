@@ -28,8 +28,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import fetch_modis_lst as modis_mod
-from trid3nt_server.tools.fetch_modis_lst import (
+from trid3nt_server.tools.fetchers.climate import fetch_modis_lst as modis_mod
+from trid3nt_server.tools.fetchers.climate.fetch_modis_lst import (
     _LST_SCALE,
     _KELVIN_C,
     _STYLE_PRESET,

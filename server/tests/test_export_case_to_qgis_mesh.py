@@ -29,8 +29,8 @@ import pytest
 pytest.importorskip("xarray")
 pytest.importorskip("pyproj")
 
-from trid3nt_server.tools import export_case_to_qgis as export_mod
-from trid3nt_server.tools.export_case_to_qgis import export_case_to_qgis
+from trid3nt_server.tools.meta import export_case_to_qgis as export_mod
+from trid3nt_server.tools.meta.export_case_to_qgis import export_case_to_qgis
 
 pytestmark = pytest.mark.asyncio
 

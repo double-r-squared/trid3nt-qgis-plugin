@@ -29,7 +29,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_firms_active_fire import (
+from trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire import (
     FirmsArgError,
     FirmsAuthError,
     FirmsUpstreamError,
@@ -328,7 +328,7 @@ def test_invalid_map_key_response_raises_auth_error():
     fail this way). The auth-error path must fire BEFORE the HTTP-status
     guard so the user gets the actionable "set TRID3NT_FIRMS_MAP_KEY" message.
     """
-    from trid3nt_server.tools.fetch_firms_active_fire import _fetch_firms_csv
+    from trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire import _fetch_firms_csv
 
     # HTTP 400 + invalid-key body (the actual live behavior).
     mock_resp = MagicMock()
@@ -336,7 +336,7 @@ def test_invalid_map_key_response_raises_auth_error():
     mock_resp.text = "Invalid MAP_KEY.\nInvalid day range. Expects [1..5]."
 
     with patch(
-        "trid3nt_server.tools.fetch_firms_active_fire.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire.requests.get",
         return_value=mock_resp,
     ):
         with pytest.raises(FirmsAuthError, match="MAP_KEY"):
@@ -353,7 +353,7 @@ def test_invalid_map_key_response_raises_auth_error():
     mock_resp_200.status_code = 200
     mock_resp_200.text = "Invalid MAP_KEY."
     with patch(
-        "trid3nt_server.tools.fetch_firms_active_fire.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire.requests.get",
         return_value=mock_resp_200,
     ):
         with pytest.raises(FirmsAuthError, match="MAP_KEY"):
@@ -394,10 +394,10 @@ def test_cache_miss_invokes_fetch_and_writes():
         return fake_fgb
 
     with patch(
-        "trid3nt_server.tools.fetch_firms_active_fire._fetch_firms_active_fire_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire._fetch_firms_active_fire_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_firms_active_fire.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_firms_active_fire(
@@ -428,10 +428,10 @@ def test_cache_hit_skips_fetch():
         return fake_fgb
 
     with patch(
-        "trid3nt_server.tools.fetch_firms_active_fire._fetch_firms_active_fire_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire._fetch_firms_active_fire_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_firms_active_fire.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_firms_active_fire(
@@ -477,7 +477,7 @@ def test_live_fetch_california_last_5d(tmp_path):
     if has_real_key:
         # Real-key mode: assert FGB-with-geography correctness.
         with patch(
-            "trid3nt_server.tools.fetch_firms_active_fire.read_through",
+            "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ):
             result = fetch_firms_active_fire(
@@ -518,7 +518,7 @@ def test_live_fetch_california_last_5d(tmp_path):
         # No-key mode: verify the auth-detection branch fires end-to-end
         # against the real FIRMS endpoint (no mocking).
         with patch(
-            "trid3nt_server.tools.fetch_firms_active_fire.read_through",
+            "trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ):
             with pytest.raises(FirmsAuthError, match="MAP_KEY"):

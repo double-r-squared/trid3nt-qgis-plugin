@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import pytest
 
-import trid3nt_server.tools.discover_dataset as dd
+import trid3nt_server.tools.discovery.discover_dataset as dd
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import tool_retrieval as trmod
-from trid3nt_server.tools.tool_retrieval import (
+from trid3nt_server.tools.discovery import tool_retrieval as trmod
+from trid3nt_server.tools.discovery.tool_retrieval import (
     DEFAULT_K,
     MAX_K,
     retrieve_visible_tools,
@@ -54,7 +54,9 @@ def test_step0_hot_set_floor_extended():
         "compute_zonal_statistics",
         "generate_histogram",
         "generate_time_series",
-        "summarize_layer_statistics",
+        # DuckDB spatial-query fold (Phase B): spatial_query holds the
+        # layer-analysis floor slot summarize_layer_statistics held.
+        "spatial_query",
     ):
         assert name in HOT_SET_TOOLS, f"{name} must be in the STEP-0 HOT_SET floor"
 
@@ -247,9 +249,9 @@ def _load_corpus():
 
     import yaml
 
-    path = (
-        pathlib.Path(dd.__file__).resolve().parents[1] / "data" / "tool_query_corpus.yaml"
-    )
+    # Resolve through the module's own seam so the test never hardcodes the
+    # package depth (tools/discovery/ post-reorg).
+    path = pathlib.Path(dd._default_corpus_path())
     return yaml.safe_load(path.read_text())
 
 

@@ -27,8 +27,8 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools import fetch_naip as naip_mod
-from trid3nt_server.tools.fetch_naip import (
+from trid3nt_server.tools.fetchers.imagery import fetch_naip as naip_mod
+from trid3nt_server.tools.fetchers.imagery.fetch_naip import (
     NAIPBboxError,
     NAIPNoCoverageError,
     fetch_naip,

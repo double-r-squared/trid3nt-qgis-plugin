@@ -492,7 +492,7 @@ def _sediment_yield_log_style_params() -> str:
     import json as _json
     from urllib.parse import quote
 
-    from .compute_sediment_yield import SEDIMENT_YIELD_LOG_CLASSES, hex_to_rgba
+    from .processing.compute_sediment_yield import SEDIMENT_YIELD_LOG_CLASSES, hex_to_rgba
 
     intervals = [
         [[lo, hi], hex_to_rgba(color)]
@@ -1255,7 +1255,7 @@ def _write_durable_vector_geojson(
     try:
         import boto3
 
-        from .solver import _get_runs_bucket
+        from .simulation.solver import _get_runs_bucket
 
         bucket = _get_runs_bucket()
         key = durable_vector_geojson_key(case_id, layer_id)
@@ -1398,7 +1398,7 @@ def _build_cog_with_overviews(raster_bytes: bytes) -> bytes | None:
             in_tmp = in_f.name
             in_f.write(raster_bytes)
         try:
-            from .compute_hillshade import _get_gdaldem_bin, _translate_to_cog
+            from .processing.compute_hillshade import _get_gdaldem_bin, _translate_to_cog
 
             gdaldem_bin = _get_gdaldem_bin()  # raises if unavailable
             cog_bytes = _translate_to_cog(in_tmp, gdaldem_bin)
@@ -2073,7 +2073,7 @@ def publish_layer(
     # recoverable COG is returned verbatim (degraded legacy behavior; the
     # plugin unwraps templates it rehydrates on its own).
     if layer_uri.startswith(("http://", "https://")) and "/cog/tiles/" in layer_uri:
-        from .export_case_to_qgis import _unwrap_tile_template
+        from .meta.export_case_to_qgis import _unwrap_tile_template
 
         unwrapped = _unwrap_tile_template(layer_uri)
         if unwrapped != layer_uri and unwrapped.startswith("s3://"):

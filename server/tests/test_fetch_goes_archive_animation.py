@@ -28,9 +28,9 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import fetch_goes_archive_animation as mod
-from trid3nt_server.tools.fetch_goes_satellite import GOESInputError
-from trid3nt_server.tools.fetch_goes_archive_animation import (
+from trid3nt_server.tools.fetchers.imagery import fetch_goes_archive_animation as mod
+from trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite import GOESInputError
+from trid3nt_server.tools.fetchers.imagery.fetch_goes_archive_animation import (
     FIRE_TEMP_BLUE_REFL_MAX,
     FIRE_TEMP_GREEN_REFL_MAX,
     FIRE_TEMP_RED_KELVIN_RANGE,
@@ -298,7 +298,7 @@ def test_cf_scaling_applied_in_reproject(monkeypatch, tmp_path):
     DN stay inside the ABI valid_range [0, 4095] (a DN above 4095 is masked to NaN
     as out-of-range, so test inputs must respect that).
     """
-    import trid3nt_server.tools.fetch_goes_archive_animation as m
+    import trid3nt_server.tools.fetchers.imagery.fetch_goes_archive_animation as m
 
     # Fake netCDF4: a Dataset whose variables carry scale_factor/add_offset.
     class _FakeVar:
@@ -442,7 +442,7 @@ def test_warm_c07_dn_above_4095_unpacks_to_plausible_kelvin_and_reads_red(
     import sys
     import types
 
-    import trid3nt_server.tools.fetch_goes_archive_animation as m
+    import trid3nt_server.tools.fetchers.imagery.fetch_goes_archive_animation as m
 
     # Real C07 CF params (from a live noaa-goes18 MCMIPC granule): scale
     # 0.01309618, offset 197.31, 14-bit valid_range [0, 16383], _FillValue -1.
@@ -1116,7 +1116,7 @@ def _install_fake_nc_rasterio(monkeypatch, dn_by_var, cf_by_var):
     import sys
     import types
 
-    import trid3nt_server.tools.fetch_goes_archive_animation as m
+    import trid3nt_server.tools.fetchers.imagery.fetch_goes_archive_animation as m
 
     class _FakeVar:
         def __init__(self, scale, offset, fill, valid_range):

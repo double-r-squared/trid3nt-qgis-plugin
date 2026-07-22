@@ -187,7 +187,7 @@ def _localize_to_dem_path(uri: str) -> str:
     if local.exists() and local.stat().st_size > 0:
         return str(local)
     tmp = local.with_suffix(local.suffix + ".part")
-    from ..tools.solver import _get_s3_client
+    from ..tools.simulation.solver import _get_s3_client
 
     bucket_name, _, obj_key = uri[len("s3://"):].partition("/")
     resp = _get_s3_client().get_object(Bucket=bucket_name, Key=obj_key)
@@ -208,8 +208,8 @@ def _fetch_dem_for_urban(
     Returns ``(local_dem_path, source_label)``. Raises
     ``UrbanFloodWorkflowError("SWMM_DEM_FETCH_FAILED")`` only when BOTH fail.
     """
-    from ..tools.data_fetch import fetch_dem
-    from ..tools.fetch_3dep_extra import fetch_3dep_extra
+    from ..tools.fetchers.terrain.fetch_dem import fetch_dem
+    from ..tools.fetchers.terrain.fetch_3dep_extra import fetch_3dep_extra
 
     # Primary: 1 m LiDAR (building-scale resolution the screenshot path wants).
     try:
@@ -238,7 +238,7 @@ def _fetch_buildings_for_urban(
     per memory project_building_footprints_source). Returns the GeoJSON
     FeatureCollection dict, or ``None`` on failure (footprints are an enhancement,
     not a hard gate - the mesh still builds without obstructions)."""
-    from ..tools.data_fetch import fetch_buildings
+    from ..tools.fetchers.socioeconomic.fetch_buildings import fetch_buildings
 
     try:
         layer = fetch_buildings(bbox, source="osm")
@@ -282,7 +282,7 @@ def make_buildings_input_layer_uri(
         return None
 
     try:
-        from ..tools.solver import _get_runs_bucket, _get_s3_client
+        from ..tools.simulation.solver import _get_runs_bucket, _get_s3_client
 
         bucket = runs_bucket or _get_runs_bucket()
         key = f"{run_id}/buildings_input.geojson"
@@ -325,7 +325,7 @@ def _atlas14_total_depth_mm(
     Returns the total storm depth in mm, or ``None`` on lookup failure (the
     builder then uses its sane hyetograph default - never a silent dead-end).
     """
-    from ..tools.data_fetch import lookup_precip_return_period
+    from ..tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period
 
     lat, lon = _bbox_centroid_latlon(bbox)
     try:
@@ -610,7 +610,7 @@ async def model_urban_flood_swmm(
         # default. A big urban AOI grabs more compute (up to the new xlarge
         # 48-vCPU tier); a small one stays cheap. select_compute_class never
         # raises - a zero/absent count falls back to the caller's compute_class.
-        from ..tools.solver import select_compute_class
+        from ..tools.simulation.solver import select_compute_class
 
         n_active = int(getattr(staging.build, "n_active_cells", 0) or 0)
         if n_active > 0:
@@ -649,7 +649,7 @@ async def model_urban_flood_swmm(
         # Deployment-aware CPU count (fingerprint audit A6): local-docker
         # reports the HOST cpu count (the web renders it with "CPU" wording);
         # aws-batch keeps the tier lookup byte-identical.
-        from ..tools.solver import solve_progress_vcpus
+        from ..tools.simulation.solver import solve_progress_vcpus
 
         _swmm_vcpus = solve_progress_vcpus(effective_compute_class)
         if not is_local_mode():
@@ -661,7 +661,7 @@ async def model_urban_flood_swmm(
             # (services/workers/swmm/entrypoint.py) solves the deck and writes
             # completion.json + the .out/.rpt to s3://<runs_bucket>/<run_id>/; we
             # download the .out/.rpt and postprocess from the BATCH output.
-            from ..tools.solver import (
+            from ..tools.simulation.solver import (
                 EmitterBinding,
                 run_solver,
                 set_emitter_binding,
@@ -1419,7 +1419,7 @@ async def _publish_and_emit_wq(
 
     # Emit the outfall pollutograph chart (best-effort; None when < 2 points).
     try:
-        from ..tools.chart_tools import build_pollutograph_chart
+        from ..tools.processing.charts_common import build_pollutograph_chart
 
         units_by = {
             n: str(m.get("pollutant_units", "")) for n, m in (metrics or {}).items()
@@ -1497,7 +1497,7 @@ def _download_batch_swmm_outputs(run_result: Any, run_id: str) -> tuple[Any, str
             produce a downloadable ``.out`` (a 'complete' solve with no output is
             a real failure - never a silent dead-end).
     """
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         _get_runs_bucket,
         _get_s3_client,
         _split_object_uri,

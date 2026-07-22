@@ -54,7 +54,7 @@ from shapely.geometry import Point
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_model_residuals import (
+from trid3nt_server.tools.processing.compute_model_residuals import (
     ModelResidualsLayerURI,
     ResidualsAllNodataError,
     ResidualsInputError,
@@ -389,7 +389,7 @@ def test_bbox_fetch_path(tmp_path, monkeypatch) -> None:
     with open(fgb_path, "rb") as f:
         fgb_bytes = f.read()
 
-    import trid3nt_server.tools.fetch_usgs_groundwater_levels as gw_mod
+    import trid3nt_server.tools.fetchers.hydrology.fetch_usgs_groundwater_levels as gw_mod
 
     captured: dict = {}
 
@@ -428,7 +428,7 @@ def test_category_and_corpus() -> None:
     import yaml
 
     from trid3nt_server import categories
-    from trid3nt_server.tools import discover_dataset as dd
+    from trid3nt_server.tools.discovery import discover_dataset as dd
 
     assert (
         categories.PRIMARY_CATEGORY["compute_model_residuals"]
@@ -437,11 +437,7 @@ def test_category_and_corpus() -> None:
     assert "hazard_modeling" in categories.SECONDARY_CATEGORIES.get(
         "compute_model_residuals", ()
     )
-    corpus_path = (
-        pathlib.Path(dd.__file__).resolve().parents[1]
-        / "data"
-        / "tool_query_corpus.yaml"
-    )
+    corpus_path = pathlib.Path(dd._default_corpus_path())
     corpus = yaml.safe_load(corpus_path.read_text())
     assert len(corpus.get("compute_model_residuals", [])) >= 5
 

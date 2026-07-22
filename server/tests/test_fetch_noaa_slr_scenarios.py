@@ -40,7 +40,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_noaa_slr_scenarios import (
+from trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios import (
     NOAA_SLR_SCENARIOSEmptyError,
     NOAA_SLR_SCENARIOSInputError,
     NOAA_SLR_SCENARIOSUpstreamError,
@@ -436,7 +436,7 @@ def test_fetch_features_ok_mocked():
     mock_response.json.return_value = fake_resp
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -457,7 +457,7 @@ def test_fetch_features_empty_collection():
     mock_response.json.return_value = fake_resp
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -475,7 +475,7 @@ def test_fetch_features_http_404():
     mock_response.text = "Not found"
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -497,7 +497,7 @@ def test_fetch_features_arcgis_error_envelope():
     }
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -514,7 +514,7 @@ def test_fetch_features_non_json():
     mock_response.json.side_effect = ValueError("No JSON")
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -531,7 +531,7 @@ def test_fetch_features_not_feature_collection():
     mock_response.json.return_value = {"type": "Feature"}  # wrong type
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -546,7 +546,7 @@ def test_fetch_features_network_error():
     import httpx as _httpx
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -644,9 +644,9 @@ def test_cache_miss_then_hit(monkeypatch):
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls, patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.read_through",
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -688,9 +688,9 @@ def test_layer_uri_shape(monkeypatch):
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls, patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.read_through",
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -745,9 +745,9 @@ def test_extra_kwargs_absorbed():
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.httpx.Client"
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.httpx.Client"
     ) as mock_client_cls, patch(
-        "trid3nt_server.tools.fetch_noaa_slr_scenarios.read_through",
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_scenarios.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()

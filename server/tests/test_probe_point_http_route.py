@@ -24,7 +24,7 @@ import json
 import pytest
 
 from trid3nt_server import tool_catalog_http
-from trid3nt_server.tools.probe_point import (
+from trid3nt_server.tools.meta.probe_point import (
     ProbePointCaseNotFoundError,
     ProbePointInputError,
 )

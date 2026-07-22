@@ -31,8 +31,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import digitize_water_body as wb_mod
-from trid3nt_server.tools.digitize_water_body import (
+from trid3nt_server.tools.processing import digitize_water_body as wb_mod
+from trid3nt_server.tools.processing.digitize_water_body import (
     _METADATA,
     _STYLE_PRESET,
     WaterBodyBboxError,

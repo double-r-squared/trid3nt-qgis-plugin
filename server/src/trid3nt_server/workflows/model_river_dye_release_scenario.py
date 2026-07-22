@@ -531,7 +531,7 @@ def _river_seed_from_geometry(river_uri: str) -> tuple[float, float] | None:
     ANY failure (the composer then falls back to the geocoded centroid, which the
     worker NLDI-snaps regardless)."""
     try:
-        from ..tools.solver import _get_s3_client, _split_object_uri
+        from ..tools.simulation.solver import _get_s3_client, _split_object_uri
 
         local_fgb: str | None = None
         if river_uri.startswith("s3://") or river_uri.startswith("gs://"):
@@ -586,7 +586,7 @@ def _stage_manifest(
     ``mesh_only=True`` (BK-3b approve-mesh gate) flags the worker's fast
     mesh-preview mode: build the mesh, write ``river.slf`` + the EPSG:4326
     ``mesh_preview.geojson`` wireframe + gate-stat metrics, skip the solve."""
-    from ..tools.solver import _get_s3_client
+    from ..tools.simulation.solver import _get_s3_client
 
     cache_bucket = (os.environ.get("TRID3NT_CACHE_BUCKET") or "").strip()
     if not cache_bucket:
@@ -635,7 +635,7 @@ def _download_telemac_result(run_id: str) -> tuple[str, int]:
     """Download ``r2d_river.slf`` + read ``utm_epsg`` from ``telemac_metrics.json``
     for a completed run. Returns ``(local_slf_path, utm_epsg)``. Raises
     ``TelemacDyeScenarioError`` when the SELAFIN result is missing."""
-    from ..tools.solver import _get_runs_bucket, _get_s3_client
+    from ..tools.simulation.solver import _get_runs_bucket, _get_s3_client
 
     runs_bucket = _get_runs_bucket()
     s3 = _get_s3_client()
@@ -678,7 +678,7 @@ def _download_telemac_gaia(run_id: str) -> tuple[str | None, dict[str, Any]]:
     ``telemac_metrics.json`` for a GAIA sediment run. Returns
     ``(local_gaia_path_or_None, worker_metrics)``. Fail-open: a missing gaia SLF
     returns ``(None, metrics)`` so the concentration COG still publishes."""
-    from ..tools.solver import _get_runs_bucket, _get_s3_client
+    from ..tools.simulation.solver import _get_runs_bucket, _get_s3_client
 
     runs_bucket = _get_runs_bucket()
     s3 = _get_s3_client()
@@ -1002,7 +1002,7 @@ async def model_river_dye_release_scenario(
     )
 
     # --- Stage 4: dispatch to the solver (generic run_solver seam) ------------ #
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,
@@ -1196,7 +1196,7 @@ async def model_river_dye_release_scenario(
             from trid3nt_contracts.execution import LayerURI  # noqa: WPS433
 
             from ..layer_uri_emit import publish_input_layer  # noqa: WPS433
-            from ..tools.solver import _get_runs_bucket  # noqa: WPS433
+            from ..tools.simulation.solver import _get_runs_bucket  # noqa: WPS433
 
             slick_layer = LayerURI(
                 layer_id=f"telemac-oil-slick-{batch_run_id}",
@@ -1351,7 +1351,7 @@ async def preview_telemac_mesh(
     """
     from ..layer_uri_emit import publish_input_layer
     from ..tool_arg_normalizer import coerce_bbox_value
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         _get_runs_bucket,
         _get_s3_client,
         run_solver,
@@ -1599,7 +1599,7 @@ async def _maybe_emit_chart(emitter: Any, metrics: dict[str, Any], location_name
     peak_t = metrics.get("dye_peak_time_s")
     if cmax is None or peak_t is None:
         return
-    from ..tools.chart_tools import build_chart_payload  # type: ignore
+    from ..tools.processing.charts_common import build_chart_payload  # type: ignore
 
     vega_lite_spec = {
         "mark": {"type": "line", "point": True},

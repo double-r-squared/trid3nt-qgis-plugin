@@ -29,7 +29,7 @@ import tempfile
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_epa_ejscreen import (
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_epa_ejscreen import (
     EJSCREEN_INDICATORS,
     EPA_EJScreenInputError,
     _build_query_params,

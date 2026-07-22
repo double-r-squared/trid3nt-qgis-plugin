@@ -315,8 +315,8 @@ async def _read_slider_timestamps(product: str, satellite: str, sector: str) -> 
     product, or the honesty floor, still applies).
     """
     try:
-        from ..tools._satellite_slider import fetch_slider_timestamps
-        from ..tools.fetch_goes_animation import _band_to_slider_product
+        from ..tools.fetchers.imagery._satellite_slider import fetch_slider_timestamps
+        from ..tools.fetchers.imagery.fetch_goes_animation import _band_to_slider_product
 
         slug = _band_to_slider_product(product)
         return await asyncio.to_thread(

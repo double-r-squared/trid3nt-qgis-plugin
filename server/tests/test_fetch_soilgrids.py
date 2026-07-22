@@ -24,7 +24,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_soilgrids import (
+from trid3nt_server.tools.fetchers.soil.fetch_soilgrids import (
     estimate_payload_mb,
     fetch_soilgrids,
     SoilGridsBboxRequiredError,
@@ -371,7 +371,7 @@ def test_end_to_end_returns_layeruri(tmp_path):
     src_bytes = _synth_soilgrids_tif_bytes(raw_value=300)
     patched_open, _ = _patched_open_factory(src_bytes, tmp_path)
 
-    with patch("trid3nt_server.tools.fetch_soilgrids.read_through", side_effect=injector), \
+    with patch("trid3nt_server.tools.fetchers.soil.fetch_soilgrids.read_through", side_effect=injector), \
          patch("rasterio.open", side_effect=patched_open):
         layer = fetch_soilgrids(
             bbox=(-93.85, 41.85, -93.45, 42.15),

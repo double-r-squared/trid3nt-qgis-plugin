@@ -43,7 +43,7 @@ _WEB_STEP_TOKEN_RE = re.compile(r"\b(?:step|frame|idx|index)\s*\+?(\d{1,4})\b", 
 
 def test_swmm_registered_in_solver_workflow_registry():
     """'swmm' is a first-class entry in SOLVER_WORKFLOW_REGISTRY (mirrors sfincs)."""
-    from trid3nt_server.tools.solver import (
+    from trid3nt_server.tools.simulation.solver import (
         LOCAL_EXEC_WORKFLOW_NAME,
         SOLVER_WORKFLOW_REGISTRY,
     )
@@ -70,7 +70,7 @@ def test_run_swmm_urban_flood_registered_and_typed_error():
     import asyncio
 
     import trid3nt_server.tools as T
-    from trid3nt_server.tools.run_swmm_tool import run_swmm_urban_flood
+    from trid3nt_server.tools.simulation.run_swmm_tool import run_swmm_urban_flood
 
     assert "run_swmm_urban_flood" in T.TOOL_REGISTRY
 
@@ -93,7 +93,7 @@ def test_run_swmm_urban_flood_obstacles_alias_does_not_trip_params_invalid(monke
     run_args without running the heavy solver chain."""
     import asyncio
 
-    from trid3nt_server.tools import run_swmm_tool as RT
+    from trid3nt_server.tools.simulation import run_swmm_tool as RT
 
     captured: dict = {}
 
@@ -126,7 +126,7 @@ def test_run_swmm_urban_flood_bogus_building_representation_is_params_invalid(mo
     composer is never reached."""
     import asyncio
 
-    from trid3nt_server.tools import run_swmm_tool as RT
+    from trid3nt_server.tools.simulation import run_swmm_tool as RT
 
     reached = {"composer": False}
 
@@ -159,7 +159,7 @@ def test_stage_swmm_manifest_uploads_inp_and_manifest(tmp_path, monkeypatch):
     """
     import json as _json
 
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
     from trid3nt_server.workflows.run_swmm import SWMMStaging, stage_swmm_manifest
 
     # A real on-disk .inp the helper reads + uploads.
@@ -387,7 +387,7 @@ def _install_mesh_upload_s3(monkeypatch) -> "_MeshUploadS3":
 
     Uses monkeypatch.setattr on the solver module global so the bound client +
     runs bucket are auto-restored at test teardown (no global leak)."""
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
 
     fake = _MeshUploadS3()
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "test-runs-bucket")
@@ -622,7 +622,7 @@ def test_tool_wrapper_drives_full_chain(synthetic_inputs, monkeypatch):
         lambda bbox, rp, dur: 120.0,
     )
 
-    from trid3nt_server.tools.run_swmm_tool import run_swmm_urban_flood
+    from trid3nt_server.tools.simulation.run_swmm_tool import run_swmm_urban_flood
 
     out = asyncio.run(
         run_swmm_urban_flood(
@@ -662,7 +662,7 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
     """
     import asyncio
 
-    from trid3nt_server.tools import solver as _solver
+    from trid3nt_server.tools.simulation import solver as _solver
     from trid3nt_server.workflows import model_urban_flood_swmm as M
     from trid3nt_server.workflows.run_swmm import run_swmm_local
 

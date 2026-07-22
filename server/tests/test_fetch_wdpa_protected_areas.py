@@ -28,7 +28,7 @@ from typing import Any
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_wdpa_protected_areas import (
+from trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas import (
     WDPABboxError,
     WDPADesignationError,
     WDPAError,
@@ -331,10 +331,10 @@ def test_lowercase_designation_filter_matches_through_public_tool():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(
@@ -375,10 +375,10 @@ def test_abbreviation_filter_matches_through_public_tool():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(
@@ -428,10 +428,10 @@ def test_filter_matching_zero_of_many_raises_with_present_designations():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(WDPADesignationError) as exc:
@@ -462,10 +462,10 @@ def test_mocked_100_features_returns_100_polygons():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -510,10 +510,10 @@ def test_mocked_designation_filter_returns_subset():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(
@@ -546,10 +546,10 @@ def test_mocked_empty_bbox_returns_zero_features():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response([], exceeded=False),
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(bbox=_OCEAN_BBOX)
@@ -591,10 +591,10 @@ def test_mocked_pagination_across_4000_features():
             raise AssertionError(f"unexpected offset={offset}")
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         side_effect=side_effect,
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -625,10 +625,10 @@ def test_cache_miss_then_hit_skips_fetch_fn():
         return _wdpa_response(features, exceeded=False)
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         side_effect=page_side_effect,
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -646,10 +646,10 @@ def test_designation_filter_changes_cache_key():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_all = fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -667,12 +667,12 @@ def test_upstream_error_envelope_raises_wdpa_upstream_error():
     error_payload = {"error": {"code": 500, "message": "internal error"}}
 
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         side_effect=lambda bbox, offset: (_ for _ in ()).throw(
             WDPAUpstreamError("WDPA query returned error envelope")
         ),
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(FakeStorageClient()),
     ):
         with pytest.raises(WDPAUpstreamError):
@@ -698,10 +698,10 @@ def test_layer_uri_shape():
     fake_gcs = FakeStorageClient()
     features = [_polygon_feature("Test Park", wdpaid=1)]
     with patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas._wdpa_query_one_page",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas._wdpa_query_one_page",
         return_value=_wdpa_response(features, exceeded=False),
     ), patch(
-        "trid3nt_server.tools.fetch_wdpa_protected_areas.read_through",
+        "trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_wdpa_protected_areas(bbox=_EVERGLADES_BBOX)
@@ -732,7 +732,7 @@ def test_live_everglades_returns_everglades_np():
     geography (Everglades NP exists within the Everglades bbox).
     """
     import geopandas as gpd
-    from trid3nt_server.tools.fetch_wdpa_protected_areas import (
+    from trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas import (
         _fetch_wdpa_bytes,
     )
 

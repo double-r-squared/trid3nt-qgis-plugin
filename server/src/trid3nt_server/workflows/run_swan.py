@@ -298,7 +298,7 @@ def stage_swan_manifest(
 
     The SWAN analogue of ``stage_geoclaw_manifest``. Mirrors that path EXACTLY (no
     new client): the same ``cache.storage_scheme()`` scheme + the same
-    ``tools.solver._get_s3_client()`` boto3 client + the same
+    ``tools.simulation.solver._get_s3_client()`` boto3 client + the same
     ``TRID3NT_CACHE_BUCKET`` staging bucket the SFINCS/GeoClaw decks upload to.
 
     The worker downloads the bathy DEM (and optional wind grid) listed in
@@ -324,7 +324,7 @@ def stage_swan_manifest(
             loudly, never a silent dead-end).
     """
     from ..tools.cache import CACHE_BUCKET, storage_scheme
-    from ..tools.solver import _get_s3_client
+    from ..tools.simulation.solver import _get_s3_client
 
     rid = run_id or new_ulid()
     bbox = tuple(run_args.bbox)
@@ -399,7 +399,7 @@ def stage_swan_manifest(
 # SWAN solver registration (mirrors register_geoclaw_solver).
 # --------------------------------------------------------------------------- #
 def register_swan_solver() -> None:
-    """Register ``'swan'`` in ``tools.solver.SOLVER_WORKFLOW_REGISTRY``.
+    """Register ``'swan'`` in ``tools.simulation.solver.SOLVER_WORKFLOW_REGISTRY``.
 
     Mirrors ``register_geoclaw_solver``. SWAN is Batch-only (the GPL Fortran lives
     in the worker image, never in the agent venv). ``run_solver`` only requires
@@ -410,7 +410,7 @@ def register_swan_solver() -> None:
     and this ``setdefault`` is a no-op. (The registry value is a presence-gate
     only; the local sentinel is used since the AWS Batch arm was removed.)
     """
-    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from ..tools.simulation.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(SWAN_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
 
@@ -432,7 +432,7 @@ def swan_local_spec() -> "Any":
     """Build the SWAN LocalSolverSpec for the local-docker backend."""
     import os
     from pathlib import Path
-    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from ..tools.simulation.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_SWAN_IMAGE") or DEFAULT_SWAN_IMAGE
     aws_endpoint = os.environ.get("AWS_ENDPOINT_URL", "")
@@ -499,7 +499,7 @@ def swan_local_spec() -> "Any":
 
 def register_swan_local_spec() -> None:
     """Register the SWAN LocalSolverSpec factory for the local-docker backend."""
-    from ..tools.solver import register_local_solver_spec
+    from ..tools.simulation.solver import register_local_solver_spec
     register_local_solver_spec(SWAN_SOLVER_NAME, swan_local_spec)
 
 

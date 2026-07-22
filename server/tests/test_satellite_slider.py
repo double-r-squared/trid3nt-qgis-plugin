@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.tools import _satellite_slider as ss
+from trid3nt_server.tools.fetchers.imagery import _satellite_slider as ss
 
 
 def test_ts_round_trip():

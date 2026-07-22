@@ -32,7 +32,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.run_pelicun_damage_assessment import (
+from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
     PelicunDamageError,
     PelicunFragilityDataError,
     PelicunInputError,
@@ -327,7 +327,7 @@ def test_geographic_correctness_higher_depth_higher_damage(tmp_path) -> None:
     east_ds_mean > west_ds_mean. A sampling-pixel-swap bug would fail this
     assertion even if the FlatGeobuf round-trips bytes correctly.
     """
-    from trid3nt_server.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
         _assess_assets,
     )
 
@@ -397,7 +397,7 @@ def test_geographic_correctness_higher_depth_higher_damage(tmp_path) -> None:
 
 def test_component_types_filter_restricts_assets(tmp_path) -> None:
     """``component_types=['COM1']`` filters out RES1 assets."""
-    from trid3nt_server.tools.run_pelicun_damage_assessment import _assess_assets
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import _assess_assets
 
     bbox = (-82.0, 26.0, -81.0, 27.0)
     raster_path = str(tmp_path / "hazard.tif")
@@ -430,7 +430,7 @@ def test_deterministic_output_byte_identical_across_runs(tmp_path) -> None:
     Verifies the per-asset RNG seeding is fully deterministic — required for
     the cache-key invariant.
     """
-    from trid3nt_server.tools.run_pelicun_damage_assessment import _assess_assets
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import _assess_assets
 
     bbox = (-82.0, 26.0, -81.0, 27.0)
     raster_path = str(tmp_path / "hazard.tif")
@@ -468,7 +468,7 @@ def test_deterministic_output_byte_identical_across_runs(tmp_path) -> None:
 
 def test_no_assets_in_hazard_raises_typed_error(tmp_path) -> None:
     """Asset outside hazard footprint → ``PelicunNoAssetsError``."""
-    from trid3nt_server.tools.run_pelicun_damage_assessment import _assess_assets
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import _assess_assets
 
     raster_path = str(tmp_path / "hazard.tif")
     _write_synthetic_flood_cog(
@@ -507,7 +507,7 @@ def test_registered_tool_returns_layer_uri_with_correct_shape(tmp_path) -> None:
     The shim is patched to skip GCS and just call the fetch_fn (which writes
     bytes to a local tmp file we point ``uri`` at).
     """
-    from trid3nt_server.tools import run_pelicun_damage_assessment as mod
+    from trid3nt_server.tools.simulation import run_pelicun_damage_assessment as mod
 
     bbox = (-82.0, 26.0, -81.0, 27.0)
     raster_path = str(tmp_path / "hazard.tif")
@@ -569,7 +569,7 @@ def test_registered_tool_returns_layer_uri_with_correct_shape(tmp_path) -> None:
 def test_damage_state_legend_is_graduated_ds_mean_choropleth() -> None:
     """The ``ds_mean`` legend KEY: a 5-bucket green->red HAZUS damage ramp driven
     by the real feature property, with a canonical 0..4 damage-state scale."""
-    from trid3nt_server.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
         _build_damage_state_legend,
     )
 
@@ -600,7 +600,7 @@ def test_fragility_set_eq_2020_raises_not_wired_yet() -> None:
     The Wave 1 contract reserved the slot; v0.1 only wires flood. We surface
     the deferral as a clear input-shape error rather than a runtime crash.
     """
-    from trid3nt_server.tools import run_pelicun_damage_assessment as mod
+    from trid3nt_server.tools.simulation import run_pelicun_damage_assessment as mod
 
     def fake_read_through(metadata, params, ext, fetch_fn, **kw):
         return fetch_fn()  # triggers the inner raise
@@ -642,7 +642,7 @@ def test_live_pelicun_fort_myers_e2e(tmp_path) -> None:
     consensus damage state is strictly positive (Fort Myers proper sits well
     within the Ian flood footprint).
     """
-    from trid3nt_server.tools.fetch_administrative_boundaries import (
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries import (
         fetch_administrative_boundaries,
     )
 
@@ -668,7 +668,7 @@ def test_live_pelicun_fort_myers_e2e(tmp_path) -> None:
 
     # Read the output FGB back and assert non-zero damage at Fort Myers.
     import geopandas as gpd
-    from trid3nt_server.tools.run_pelicun_damage_assessment import _download_uri_to_local
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import _download_uri_to_local
 
     local_fgb = _download_uri_to_local(result.uri, ".fgb")
     gdf = gpd.read_file(local_fgb, engine="pyogrio")
@@ -692,8 +692,8 @@ def test_download_repairs_llm_mangled_prefix(monkeypatch, tmp_path):
     GCP is decommissioned: the repair now runs on the boto3 S3 read path
     (``read_object_bytes_s3``); the gs:// download branch is gone.
     """
-    import trid3nt_server.tools.run_pelicun_damage_assessment as mod
-    from trid3nt_server.tools.run_pelicun_damage_assessment import (
+    import trid3nt_server.tools.simulation.run_pelicun_damage_assessment as mod
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 

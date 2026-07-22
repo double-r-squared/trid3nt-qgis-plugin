@@ -187,7 +187,7 @@ def test_upload_s3_uses_content_type_when_set(tmp_path: Path) -> None:
     fake_client = MagicMock()
     with (
         patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
-        patch("trid3nt_server.tools.solver._get_s3_client", return_value=fake_client),
+        patch("trid3nt_server.tools.simulation.solver._get_s3_client", return_value=fake_client),
     ):
         uri = cog_io.upload_cog(
             cog, "run1", "bkt", dest_filename="d.tif", content_type="image/tiff"
@@ -204,7 +204,7 @@ def test_upload_s3_omits_content_type_when_none(tmp_path: Path) -> None:
     fake_client = MagicMock()
     with (
         patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
-        patch("trid3nt_server.tools.solver._get_s3_client", return_value=fake_client),
+        patch("trid3nt_server.tools.simulation.solver._get_s3_client", return_value=fake_client),
     ):
         cog_io.upload_cog(
             cog, "run1", "bkt", dest_filename="d.tif", content_type=None
@@ -234,7 +234,7 @@ def test_upload_s3_put_failure_raises_upload(tmp_path: Path) -> None:
     fake_client.put_object.side_effect = RuntimeError("boom")
     with (
         patch("trid3nt_server.tools.cache.storage_scheme", return_value="s3"),
-        patch("trid3nt_server.tools.solver._get_s3_client", return_value=fake_client),
+        patch("trid3nt_server.tools.simulation.solver._get_s3_client", return_value=fake_client),
     ):
         with pytest.raises(CogIoError) as ei:
             cog_io.upload_cog(cog, "r", "bkt", dest_filename="d.tif")

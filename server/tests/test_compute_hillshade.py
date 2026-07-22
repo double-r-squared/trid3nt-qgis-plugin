@@ -42,7 +42,7 @@ import rasterio
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_hillshade import (
+from trid3nt_server.tools.processing.compute_hillshade import (
     HillshadeComputeError,
     _run_gdaldem_hillshade,
     compute_hillshade,
@@ -283,7 +283,7 @@ def test_compute_hillshade_standard_preset():
 @_SKIP_GDALDEM
 def test_compute_hillshade_swiss_double_preset():
     """Swiss double: two gdaldem passes run and produce a non-zero blended output."""
-    from trid3nt_server.tools.compute_hillshade import _multiply_blend_hillshades
+    from trid3nt_server.tools.processing.compute_hillshade import _multiply_blend_hillshades
 
     with tempfile.TemporaryDirectory() as tmpdir:
         dem_path = os.path.join(tmpdir, "dem.tif")
@@ -380,10 +380,10 @@ def test_compute_hillshade_cache_miss_writes(fake_storage):
     fake_hs = _make_fake_hillshade_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_hillshade._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_hillshade._download_dem_bytes",
         return_value=fake_dem,
     ) as mock_download, patch(
-        "trid3nt_server.tools.compute_hillshade._run_gdaldem_hillshade",
+        "trid3nt_server.tools.processing.compute_hillshade._run_gdaldem_hillshade",
         side_effect=lambda inp, out, **kw: open(out, "wb").write(fake_hs) or None,
     ) as mock_gdaldem, patch(
         "trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"
@@ -428,10 +428,10 @@ def test_compute_hillshade_cache_hit_skips_fetch(fake_storage):
         gdaldem_called.append(args)
 
     with patch(
-        "trid3nt_server.tools.compute_hillshade._run_gdaldem_hillshade",
+        "trid3nt_server.tools.processing.compute_hillshade._run_gdaldem_hillshade",
         side_effect=_no_gdaldem,
     ), patch(
-        "trid3nt_server.tools.compute_hillshade._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_hillshade._download_dem_bytes",
         return_value=b"",
     ), patch(
         "trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"
@@ -454,10 +454,10 @@ def test_compute_hillshade_returns_layer_uri_fields():
     fake_hs = _make_fake_hillshade_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_hillshade._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_hillshade._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_hillshade._run_gdaldem_hillshade",
+        "trid3nt_server.tools.processing.compute_hillshade._run_gdaldem_hillshade",
         side_effect=lambda inp, out, **kw: open(out, "wb").write(fake_hs) or None,
     ):
         fake_sc = FakeStorageClient()
@@ -485,10 +485,10 @@ def test_compute_hillshade_gdaldem_failure_raises_error():
     fake_dem = _fake_dem_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_hillshade._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_hillshade._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_hillshade._get_gdaldem_bin",
+        "trid3nt_server.tools.processing.compute_hillshade._get_gdaldem_bin",
         return_value="/bin/false",  # always exits 1
     ):
         fake_sc = FakeStorageClient()
@@ -504,7 +504,7 @@ def test_compute_hillshade_gdaldem_failure_raises_error():
 def test_compute_hillshade_dem_download_failure_raises_error():
     """GCS download failure → HillshadeComputeError with error_code='DEM_DOWNLOAD_FAILED'."""
     with patch(
-        "trid3nt_server.tools.compute_hillshade._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_hillshade._download_dem_bytes",
         side_effect=HillshadeComputeError("DEM_DOWNLOAD_FAILED", "GCS download failed"),
     ):
         fake_sc = FakeStorageClient()
@@ -593,13 +593,13 @@ def test_compute_hillshade_swiss_double_calls_gdaldem_twice(fake_storage):
         open(out, "wb").write(fake_hs)
 
     with patch(
-        "trid3nt_server.tools.compute_hillshade._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_hillshade._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_hillshade._run_gdaldem_hillshade",
+        "trid3nt_server.tools.processing.compute_hillshade._run_gdaldem_hillshade",
         side_effect=_fake_gdaldem,
     ), patch(
-        "trid3nt_server.tools.compute_hillshade._multiply_blend_hillshades",
+        "trid3nt_server.tools.processing.compute_hillshade._multiply_blend_hillshades",
         side_effect=lambda a, b, out: open(out, "wb").write(fake_hs) or None,
     ):
         fake_sc = FakeStorageClient()
@@ -631,7 +631,7 @@ def test_compute_hillshade_swiss_double_calls_gdaldem_twice(fake_storage):
 
 def test_ensure_output_crs_stamps_degraded_output():
     """A CRS-less gdaldem output gets the DEM's CRS stamped in place."""
-    from trid3nt_server.tools.compute_hillshade import _ensure_output_crs_matches_dem
+    from trid3nt_server.tools.processing.compute_hillshade import _ensure_output_crs_matches_dem
 
     with tempfile.TemporaryDirectory() as tmpdir:
         dem_path = os.path.join(tmpdir, "dem.tif")
@@ -664,7 +664,7 @@ def test_ensure_output_crs_stamps_degraded_output():
 
 def test_ensure_output_crs_noop_when_already_correct():
     """When gdaldem preserved the CRS, the stamp is a no-op (no rewrite)."""
-    from trid3nt_server.tools.compute_hillshade import _ensure_output_crs_matches_dem
+    from trid3nt_server.tools.processing.compute_hillshade import _ensure_output_crs_matches_dem
 
     with tempfile.TemporaryDirectory() as tmpdir:
         dem_path = os.path.join(tmpdir, "dem.tif")
@@ -686,7 +686,7 @@ def test_fetch_fn_output_preserves_dem_crs_without_proj_env():
     This is the live failure mode: the demo-session cache artifacts read back
     as LOCAL_CS["NAD83 / Conus Albers"] with epsg=None.
     """
-    from trid3nt_server.tools.compute_hillshade import _make_fetch_fn
+    from trid3nt_server.tools.processing.compute_hillshade import _make_fetch_fn
 
     # Strip PROJ vars so the subprocess depends entirely on the job-0257
     # env-wiring (or the post-hoc stamp as fallback).
@@ -734,8 +734,8 @@ def test_fetch_fn_output_preserves_dem_crs_without_proj_env():
 @_SKIP_GDALDEM
 def test_copernicus_fallback_dem_flows_through_hillshade():
     """A GLO-30-shaped DEM COG (the 3DEP-fallback artifact) hillshades fine."""
-    from trid3nt_server.tools.compute_hillshade import _make_fetch_fn
-    from trid3nt_server.tools.fetch_copernicus_dem import _write_dem_cog
+    from trid3nt_server.tools.processing.compute_hillshade import _make_fetch_fn
+    from trid3nt_server.tools.fetchers.terrain.fetch_copernicus_dem import _write_dem_cog
 
     # A small synthetic elevation grid over a Berkeley-ish bbox, produced by
     # the SAME writer the fallback path uses (float32, EPSG:4326, nodata).

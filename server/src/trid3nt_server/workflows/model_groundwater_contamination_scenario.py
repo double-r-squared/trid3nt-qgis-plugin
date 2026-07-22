@@ -417,7 +417,7 @@ def _extract_contaminant(text: str) -> str | None:
         elif pattern in lowered:
             return normalized
     # Fall back to the aggregator's bag (covers the non-solvent contaminants).
-    from ..tools.aggregate_claims_across_sources import _extract_contaminants
+    from ..tools.processing.aggregate_claims_across_sources import _extract_contaminants
 
     hits = _extract_contaminants(text)
     if hits:
@@ -563,7 +563,7 @@ def extract_spill_parameters(
         ParameterExtractionError: a REQUIRED field (contaminant / scale /
             duration / geocodable location) could not be derived.
     """
-    from ..tools.aggregate_claims_across_sources import (
+    from ..tools.processing.aggregate_claims_across_sources import (
         _extract_locations,
         _extract_scale,
     )

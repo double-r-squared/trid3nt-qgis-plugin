@@ -28,7 +28,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_field_boundaries import (
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries import (
     FTW_DATASETS,
     FieldsInputError,
     FieldsNoCoverageError,
@@ -262,10 +262,10 @@ def test_coverage_returns_vector_layer_with_polygons():
     fake = FakeStorageClient()
     gdf = _fields_gdf(3)
     with patch(
-        "trid3nt_server.tools.fetch_field_boundaries.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries.read_through",
         _make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries._read_fields_gdf",
         return_value=gdf,
     ) as mock_read:
         layer = fetch_field_boundaries(_IOWA_BBOX)
@@ -294,10 +294,10 @@ def test_coverage_returns_vector_layer_with_polygons():
 def test_empty_aoi_returns_valid_zero_feature_layer():
     fake = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_field_boundaries.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries.read_through",
         _make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries._read_fields_gdf",
         return_value=_empty_gdf(),
     ):
         layer = fetch_field_boundaries(_IOWA_BBOX)
@@ -314,7 +314,7 @@ def test_empty_aoi_returns_valid_zero_feature_layer():
 def test_no_coverage_bbox_raises_before_any_read():
     # An ocean bbox must raise FieldsNoCoverageError and never invoke the source.
     with patch(
-        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf"
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries._read_fields_gdf"
     ) as mock_read:
         with pytest.raises(FieldsNoCoverageError):
             fetch_field_boundaries(_OCEAN_BBOX)
@@ -325,10 +325,10 @@ def test_cache_hit_skips_second_source_read():
     fake = FakeStorageClient()
     gdf = _fields_gdf(2)
     with patch(
-        "trid3nt_server.tools.fetch_field_boundaries.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries.read_through",
         _make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries._read_fields_gdf",
         return_value=gdf,
     ) as mock_read:
         layer1 = fetch_field_boundaries(_IOWA_BBOX)
@@ -345,10 +345,10 @@ def test_cache_key_differs_by_dataset_and_bbox():
     gdf = _fields_gdf(1)
     other_bbox = (-90.0, 41.0, -89.9, 41.1)
     with patch(
-        "trid3nt_server.tools.fetch_field_boundaries.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries.read_through",
         _make_read_through_injector(fake),
     ), patch(
-        "trid3nt_server.tools.fetch_field_boundaries._read_fields_gdf",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries._read_fields_gdf",
         return_value=gdf,
     ):
         l1 = fetch_field_boundaries(_IOWA_BBOX)
@@ -365,7 +365,7 @@ def test_cache_key_differs_by_dataset_and_bbox():
 
 @pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_FIELDS=1 to run")
 def test_live_us_usda_iowa_returns_fields():
-    from trid3nt_server.tools.fetch_field_boundaries import _read_fields_gdf, _select_dataset
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_field_boundaries import _read_fields_gdf, _select_dataset
 
     ds = _select_dataset(_IOWA_BBOX, None)
     gdf = _read_fields_gdf(ds, _IOWA_BBOX)

@@ -202,11 +202,11 @@ def _is_local_single_user_mode() -> bool:
 
     The canonical is-local seam (same one ``secrets_handler`` and
     ``server._local_compute_lane`` use): ``TRID3NT_SOLVER_BACKEND=local-docker``
-    -> ``tools.solver.solver_backend()`` returns ``local-docker``. The TRID3NT
+    -> ``tools.simulation.solver.solver_backend()`` returns ``local-docker``. The TRID3NT
     local build pins it. Read at call time so a test env injection takes
     effect without re-import.
     """
-    from .tools.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
+    from .tools.simulation.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
 
     return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 

@@ -27,7 +27,7 @@ from trid3nt_contracts.modflow_contracts import (
     PlumeLayerURI,
 )
 
-from trid3nt_server.tools import run_modflow_multi_species_tool as tool
+from trid3nt_server.tools.simulation import run_modflow_multi_species_tool as tool
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]

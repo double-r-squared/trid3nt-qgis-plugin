@@ -34,7 +34,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_noaa_coops_currents import (
+from trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents import (
     COOPSCurrentsEmptyError,
     COOPSCurrentsInputError,
     COOPSCurrentsUpstreamError,
@@ -222,7 +222,7 @@ def test_discover_stations_in_bbox_filters_correctly():
         {"id": "n05010", "name": "NY Harbor", "lat": "40.70", "lng": "-74.02"},  # out
     ]
     with patch(
-        "trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents._http_get",
         return_value=_make_station_catalog(catalog),
     ):
         result = _discover_stations_in_bbox(_SF_BAY_BBOX)
@@ -238,7 +238,7 @@ def test_discover_stations_empty_bbox():
         {"id": "bh0101", "name": "Boston", "lat": "42.35", "lng": "-71.05"},
     ])
     with patch(
-        "trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents._http_get",
         return_value=catalog,
     ), pytest.raises(COOPSCurrentsEmptyError):
         _discover_stations_in_bbox(_SF_BAY_BBOX)
@@ -246,7 +246,7 @@ def test_discover_stations_empty_bbox():
 
 def test_discover_stations_upstream_error():
     with patch(
-        "trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
+        "trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents._http_get",
         side_effect=COOPSCurrentsUpstreamError("network timeout"),
     ), pytest.raises(COOPSCurrentsUpstreamError):
         _discover_stations_in_bbox(_SF_BAY_BBOX)
@@ -451,9 +451,9 @@ def test_fetch_tool_cache_miss_then_hit():
 
     injector = _make_read_through_injector(fake_gcs)
     with (
-        patch("trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
+        patch("trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents._http_get",
               side_effect=fake_http_get),
-        patch("trid3nt_server.tools.fetch_noaa_coops_currents.read_through",
+        patch("trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents.read_through",
               side_effect=injector),
     ):
         r1 = fetch_noaa_coops_currents(bbox=_SF_BAY_BBOX, product="currents")
@@ -489,9 +489,9 @@ def test_layer_uri_shape():
 
     injector = _make_read_through_injector(FakeStorageClient())
     with (
-        patch("trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
+        patch("trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents._http_get",
               side_effect=fake_http_get),
-        patch("trid3nt_server.tools.fetch_noaa_coops_currents.read_through",
+        patch("trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents.read_through",
               side_effect=injector),
     ):
         result = fetch_noaa_coops_currents(bbox=_SF_BAY_BBOX, product="currents")
@@ -530,9 +530,9 @@ def test_extra_kwargs_absorbed():
 
     injector = _make_read_through_injector(FakeStorageClient())
     with (
-        patch("trid3nt_server.tools.fetch_noaa_coops_currents._http_get",
+        patch("trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents._http_get",
               side_effect=fake_http_get),
-        patch("trid3nt_server.tools.fetch_noaa_coops_currents.read_through",
+        patch("trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents.read_through",
               side_effect=injector),
     ):
         result = fetch_noaa_coops_currents(
@@ -567,7 +567,7 @@ def test_live_fetch_sf_bay(product):
 
     import geopandas as gpd
 
-    from trid3nt_server.tools.fetch_noaa_coops_currents import (
+    from trid3nt_server.tools.fetchers.ocean.fetch_noaa_coops_currents import (
         _fetch_coops_currents_bytes,
     )
 

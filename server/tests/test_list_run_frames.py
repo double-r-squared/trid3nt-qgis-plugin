@@ -22,7 +22,7 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.list_run_frames import (
+from trid3nt_server.tools.meta.list_run_frames import (
     ListRunFramesError,
     list_run_frames,
 )
@@ -58,7 +58,7 @@ def _patch_manifest(monkeypatch):
     manifest from an in-memory body (no network)."""
 
     def _install(manifest_text: str | None):
-        from trid3nt_server.tools import solver
+        from trid3nt_server.tools.simulation import solver
 
         monkeypatch.setattr(solver, "_get_runs_bucket", lambda: "runs-bucket")
         if manifest_text is None:

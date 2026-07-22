@@ -29,8 +29,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.chart_tools import is_chart_emission_result
-from trid3nt_server.tools.compute_terrain_profile import (
+from trid3nt_server.tools.processing.charts_common import is_chart_emission_result
+from trid3nt_server.tools.processing.compute_terrain_profile import (
     TerrainProfileError,
     _resolve_line_coords,
     compute_terrain_profile,

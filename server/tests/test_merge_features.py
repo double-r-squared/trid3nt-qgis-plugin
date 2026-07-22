@@ -25,7 +25,7 @@ import pytest
 from shapely.geometry import Polygon
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.merge_features import MergeFeaturesError, merge_features
+from trid3nt_server.tools.processing.merge_features import MergeFeaturesError, merge_features
 
 
 # ---------------------------------------------------------------------------

@@ -32,7 +32,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_gcn250_curve_numbers import (
+from trid3nt_server.tools.fetchers.soil.fetch_gcn250_curve_numbers import (
     GCN250BboxRequiredError,
     GCN250EmptyError,
     GCN250InputError,
@@ -445,10 +445,10 @@ def test_cache_miss_invokes_fetch_and_writes():
         return fake_tif
 
     with patch(
-        "trid3nt_server.tools.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
+        "trid3nt_server.tools.fetchers.soil.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetchers.soil.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gcn250_curve_numbers(
@@ -478,10 +478,10 @@ def test_cache_hit_skips_fetch():
         return b"II*\x00" + b"\x00" * 64 + b"_FAKE_GCN250_CACHED"
 
     with patch(
-        "trid3nt_server.tools.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
+        "trid3nt_server.tools.fetchers.soil.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetchers.soil.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_gcn250_curve_numbers(
@@ -505,10 +505,10 @@ def test_different_amc_gives_different_cache_key():
         return b"II*\x00" + b"\x00" * 64 + bytes([fetch_count["n"]])
 
     with patch(
-        "trid3nt_server.tools.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
+        "trid3nt_server.tools.fetchers.soil.fetch_gcn250_curve_numbers._fetch_gcn250_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetchers.soil.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         dry_result = fetch_gcn250_curve_numbers(
@@ -558,7 +558,7 @@ def test_live_fetch_fort_myers_florida(tmp_path):
     bbox = (-81.95, 26.55, -81.55, 26.85)
 
     with patch(
-        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetchers.soil.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result_avg = fetch_gcn250_curve_numbers(
@@ -599,7 +599,7 @@ def test_live_fetch_fort_myers_florida(tmp_path):
     # AMC-I vs AMC-III sanity at the same bbox: wet should be > dry.
     fake_gcs2 = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_gcn250_curve_numbers.read_through",
+        "trid3nt_server.tools.fetchers.soil.fetch_gcn250_curve_numbers.read_through",
         side_effect=_make_read_through_injector(fake_gcs2),
     ):
         fetch_gcn250_curve_numbers(bbox=bbox, antecedent_moisture="dry")

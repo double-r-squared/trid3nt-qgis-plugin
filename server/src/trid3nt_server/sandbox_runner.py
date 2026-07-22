@@ -213,7 +213,7 @@ def _stage_one_uri(uri: str, staged_dir: str, label: str, idx: int | None = None
     """Download ONE ``s3://`` URI to a local file under ``staged_dir``; return the path.
 
     Reuses the shared boto3 reader (``cache.read_object_bytes_s3``) — the same
-    instance-role-correct S3 path ``analytical_qa._materialize_uri`` uses — so the
+    instance-role-correct S3 path ``charts_common._materialize_uri`` uses — so the
     agent process (which HAS creds + network) materializes the bytes the jailed,
     network-denied executor will open as a LOCAL file. A non-``s3://`` value is
     returned unchanged (it never needed staging)."""

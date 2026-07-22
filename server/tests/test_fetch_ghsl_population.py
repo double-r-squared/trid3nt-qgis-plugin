@@ -33,7 +33,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_ghsl_population import (
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population import (
     GHSLPopBboxRequiredError,
     GHSLPopEmptyError,
     GHSLPopInputError,
@@ -161,7 +161,7 @@ def test_deep_south_ocean_raises_empty_via_fetch():
 
     Calls ``_fetch_ghsl_pop_bytes`` directly to bypass the cache short-circuit.
     """
-    from trid3nt_server.tools.fetch_ghsl_population import _fetch_ghsl_pop_bytes
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population import _fetch_ghsl_pop_bytes
 
     with pytest.raises(GHSLPopEmptyError):
         _fetch_ghsl_pop_bytes(bbox=_DEEP_SOUTH_OCEAN_BBOX)
@@ -258,10 +258,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return _fake_cog_bytes("MISS")
 
     with patch(
-        "trid3nt_server.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population._fetch_ghsl_pop_bytes",
         side_effect=fake_inner,
     ), patch(
-        "trid3nt_server.tools.fetch_ghsl_population.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population.read_through",
         side_effect=_make_read_through_injector(fake),
     ):
         result = fetch_ghsl_population(bbox=_LAGOS_BBOX)
@@ -281,10 +281,10 @@ def test_cache_hit_skips_fetch_fn():
         return _fake_cog_bytes("HIT")
 
     with patch(
-        "trid3nt_server.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population._fetch_ghsl_pop_bytes",
         side_effect=fake_inner,
     ), patch(
-        "trid3nt_server.tools.fetch_ghsl_population.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population.read_through",
         side_effect=_make_read_through_injector(fake),
     ):
         r1 = fetch_ghsl_population(bbox=_LAGOS_BBOX)
@@ -297,10 +297,10 @@ def test_cache_hit_skips_fetch_fn():
 def test_layer_uri_shape_has_persons_units_and_raster_role():
     fake = _FakeStore()
     with patch(
-        "trid3nt_server.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population._fetch_ghsl_pop_bytes",
         return_value=_fake_cog_bytes("SHAPE"),
     ), patch(
-        "trid3nt_server.tools.fetch_ghsl_population.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population.read_through",
         side_effect=_make_read_through_injector(fake),
     ):
         result = fetch_ghsl_population(bbox=_LAGOS_BBOX)
@@ -321,10 +321,10 @@ def test_empty_fetch_propagates():
         raise GHSLPopEmptyError("synthetic empty")
 
     with patch(
-        "trid3nt_server.tools.fetch_ghsl_population._fetch_ghsl_pop_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population._fetch_ghsl_pop_bytes",
         side_effect=boom,
     ), patch(
-        "trid3nt_server.tools.fetch_ghsl_population.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population.read_through",
         side_effect=_make_read_through_injector(fake),
     ):
         with pytest.raises(GHSLPopEmptyError):
@@ -345,7 +345,7 @@ def test_synthetic_single_tile_cog_roundtrip(tmp_path):
     rasterio = pytest.importorskip("rasterio")
     from rasterio.transform import from_bounds as transform_from_bounds
 
-    import trid3nt_server.tools.fetch_ghsl_population as mod
+    import trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population as mod
 
     # Synthetic 10-deg tile matching the R9_C19 footprint (Lagos). Use enough
     # pixels that the small Lagos window (0.6x0.4 deg) covers multiple cells.
@@ -404,7 +404,7 @@ def test_live_lagos_population_sum_plausible():
     import numpy as np
     import rasterio
 
-    from trid3nt_server.tools.fetch_ghsl_population import _fetch_ghsl_pop_bytes
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_ghsl_population import _fetch_ghsl_pop_bytes
 
     cog = _fetch_ghsl_pop_bytes(bbox=_round_bbox(_LAGOS_BBOX))
     import io

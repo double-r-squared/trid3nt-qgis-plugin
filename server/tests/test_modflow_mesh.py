@@ -268,7 +268,7 @@ def test_emit_uploads_mesh_with_head_and_concentration(
 ) -> None:
     monkeypatch.setattr(mesh_mod, "_grid_georegistration_from_deck", lambda deck_dir: dict(_GEO))
     fake = _FakeS3Client()
-    monkeypatch.setattr("trid3nt_server.tools.solver._get_s3_client", lambda: fake, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.simulation.solver._get_s3_client", lambda: fake, raising=False)
     monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 
@@ -304,7 +304,7 @@ def test_emit_head_only_when_no_ucn(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
     monkeypatch.setattr(mesh_mod, "_grid_georegistration_from_deck", lambda deck_dir: dict(_GEO))
     fake = _FakeS3Client()
-    monkeypatch.setattr("trid3nt_server.tools.solver._get_s3_client", lambda: fake, raising=False)
+    monkeypatch.setattr("trid3nt_server.tools.simulation.solver._get_s3_client", lambda: fake, raising=False)
     monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
     monkeypatch.setenv("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 

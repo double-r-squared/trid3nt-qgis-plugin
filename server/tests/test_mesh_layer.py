@@ -140,7 +140,7 @@ def test_make_layer_uri_uploads_to_s3_durable(monkeypatch) -> None:
     bucket and returns an s3:// uri (NOT a local /tmp path that the deck-cleanup
     deletes). The uri is re-readable by the emitter on every reconnect/re-emit.
     """
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
 
     build = _FakeBuild(
         transform=UTM_TRANSFORM,
@@ -189,7 +189,7 @@ def test_make_layer_uri_uploads_to_s3_durable(monkeypatch) -> None:
 
 def test_make_layer_uri_runs_bucket_override(monkeypatch) -> None:
     """An explicit runs_bucket arg overrides the solver default for the s3 key."""
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
 
     build = _FakeBuild(
         transform=UTM_TRANSFORM, crs=UTM_CRS, resolution_m=10.0, grid_shape=(2, 2)
@@ -215,7 +215,7 @@ def test_make_layer_uri_runs_bucket_override(monkeypatch) -> None:
 def test_make_layer_uri_returns_none_on_upload_failure(monkeypatch) -> None:
     """BEST-EFFORT: an S3 put failure returns None (mesh simply absent) - it must
     NEVER raise / break the solve, and must NOT return a local /tmp fallback."""
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
 
     build = _FakeBuild(
         transform=UTM_TRANSFORM, crs=UTM_CRS, resolution_m=10.0, grid_shape=(2, 2)
@@ -241,7 +241,7 @@ def test_make_layer_uri_returns_none_on_upload_failure(monkeypatch) -> None:
 
 def test_make_layer_uri_zero_features_returns_none(monkeypatch) -> None:
     """Zero active cells -> None, and NO S3 upload is attempted."""
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
 
     build = _FakeBuild(
         transform=UTM_TRANSFORM,

@@ -97,7 +97,7 @@ def _fake_geocode(query: str, **_: Any) -> dict[str, Any]:
 def _install_fake_tool(name: str, fn: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     existing = TOOL_REGISTRY.get(name)
     if existing is None:
-        from trid3nt_server.tools.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
+        from trid3nt_server.tools.simulation.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
 
         metadata = _RUN_MODFLOW_JOB_METADATA
     else:
@@ -366,7 +366,7 @@ async def test_composer_full_chain_two_plumes(
             ]
         )
 
-    import trid3nt_server.tools.run_modflow_multi_species_tool as tool
+    import trid3nt_server.tools.simulation.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _fake_run)
 
@@ -400,7 +400,7 @@ async def test_composer_surfaces_run_error_dict(
             "error_message": "no non-trivial plume for any species",
         }
 
-    import trid3nt_server.tools.run_modflow_multi_species_tool as tool
+    import trid3nt_server.tools.simulation.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _err_run)
 

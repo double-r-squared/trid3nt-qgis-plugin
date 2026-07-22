@@ -509,9 +509,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # (AOI + tagged flood walls / flap gates, or a point/bbox pick). The drawn
     # barriers feed run_swmm_urban_flood; cross-cutting view/input action.
     "request_spatial_input": "geographic_primitives",
-    "summarize_layer_statistics": "geographic_primitives",
-    "count_features_above_threshold": "geographic_primitives",
-    "aggregate_property_within_zone": "geographic_primitives",
+    # DuckDB spatial-query fold (Phase B): ONE read-only SQL surface replaces
+    # the three job-0224 analytical Q&A tools (summarize_layer_statistics /
+    # count_features_above_threshold / aggregate_property_within_zone) - same
+    # lane, same conversational-analysis surface.
+    "spatial_query": "geographic_primitives",
     # job-0230 (sprint-13 Stage 2): chart-generation tools - visual companions
     # to the analytical Q&A tools above (conversational data-analysis layer).
     "generate_histogram": "geographic_primitives",
@@ -846,7 +848,10 @@ HOT_SET_TOOLS: frozenset[str] = frozenset(
         "compute_zonal_statistics",
         "generate_histogram",
         "generate_time_series",
-        "summarize_layer_statistics",
+        # DuckDB spatial-query fold (Phase B): spatial_query IS the layer-
+        # analysis floor slot summarize_layer_statistics held (the folded SQL
+        # surface answers the same "question about a layer" asks and more).
+        "spatial_query",
     }
 )
 
@@ -1041,7 +1046,7 @@ class AllowedToolSet:
             return self.as_frozenset()
 
         try:
-            from .tools.discover_dataset import get_dynamic_hot_set as _get_dyn
+            from .tools.discovery.discover_dataset import get_dynamic_hot_set as _get_dyn
 
             dynamic = await _get_dyn(user_id=self.user_id, top_k=8)
             # Merge with the static set so tools the user has never called

@@ -33,7 +33,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_fema_nfhl_zones import (
+from trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones import (
     FEMA_NFHL_ZONESError,
     FEMA_NFHL_ZONESInputError,
     FEMA_NFHL_ZONESUpstreamError,
@@ -365,7 +365,7 @@ def test_user_agent_header_sent_on_request():
             captured_headers.update(headers or {})
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
         _nfhl_query_one_page(_FORT_MYERS_BBOX, last_object_id=0, sfha_only=False)
 
     assert "User-Agent" in captured_headers
@@ -384,10 +384,10 @@ def test_5_feature_response_writes_fgb_with_5_polygons():
     fake_geojson = _sample_nfhl_geojson(5)
 
     with patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones._nfhl_query_one_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones._nfhl_query_one_page",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_fema_nfhl_zones(bbox=_FORT_MYERS_BBOX)
@@ -439,10 +439,10 @@ def test_sfha_only_passes_through_to_where_clause():
         return _sample_nfhl_geojson(2)
 
     with patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones._nfhl_query_one_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones._nfhl_query_one_page",
         side_effect=fake_page,
     ), patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_fema_nfhl_zones(bbox=_FORT_MYERS_BBOX, sfha_only=True)
@@ -459,10 +459,10 @@ def test_zone_filter_applied_client_side():
     fake_geojson = _sample_nfhl_geojson(7)  # has AE, VE, X, AH, AO, A, D
 
     with patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones._nfhl_query_one_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones._nfhl_query_one_page",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_fema_nfhl_zones(bbox=_FORT_MYERS_BBOX, zone_filter=["VE"])
@@ -489,10 +489,10 @@ def test_cache_key_differs_with_sfha_only():
     fake_geojson = _sample_nfhl_geojson(3)
 
     with patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones._nfhl_query_one_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones._nfhl_query_one_page",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_fema_nfhl_zones(bbox=_FORT_MYERS_BBOX, sfha_only=False)
@@ -512,10 +512,10 @@ def test_pagination_stops_on_short_page():
         return fake_geojson
 
     with patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones._nfhl_query_one_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones._nfhl_query_one_page",
         side_effect=fake_page,
     ), patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_fema_nfhl_zones(bbox=_FORT_MYERS_BBOX)
@@ -526,7 +526,7 @@ def test_pagination_stops_on_short_page():
 def test_pagination_advances_objectid_cursor():
     """When the first page returns _PAGE_SIZE features, second page is fetched
     with the watermark OBJECTID advancing past the highest seen."""
-    from trid3nt_server.tools.fetch_fema_nfhl_zones import _PAGE_SIZE
+    from trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones import _PAGE_SIZE
 
     fake_gcs = FakeStorageClient()
     # First page = full size (forces another request). Synth OBJECTIDs 1..PAGE_SIZE.
@@ -553,10 +553,10 @@ def test_pagination_advances_objectid_cursor():
         return pages[idx]
 
     with patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones._nfhl_query_one_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones._nfhl_query_one_page",
         side_effect=fake_page,
     ), patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         fetch_fema_nfhl_zones(bbox=_FORT_MYERS_BBOX)
@@ -623,7 +623,7 @@ def test_500_raises_typed_upstream_error():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
         with pytest.raises(FEMA_NFHL_ZONESUpstreamError, match="500"):
             _nfhl_query_one_page(_FORT_MYERS_BBOX, last_object_id=0, sfha_only=False)
 
@@ -643,7 +643,7 @@ def test_network_failure_wraps_to_upstream_error():
         def get(self, url, params=None, headers=None):
             raise httpx.ConnectError("simulated DNS failure")
 
-    with patch("trid3nt_server.tools.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
         with pytest.raises(FEMA_NFHL_ZONESUpstreamError, match="request failed"):
             _nfhl_query_one_page(_FORT_MYERS_BBOX, last_object_id=0, sfha_only=False)
 
@@ -670,7 +670,7 @@ def test_arcgis_error_envelope_in_200_body_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
         with pytest.raises(FEMA_NFHL_ZONESUpstreamError, match="error envelope"):
             _nfhl_query_one_page(_FORT_MYERS_BBOX, last_object_id=0, sfha_only=False)
 
@@ -697,7 +697,7 @@ def test_non_feature_collection_raises():
         def get(self, url, params=None, headers=None):
             return FakeResponse()
 
-    with patch("trid3nt_server.tools.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
+    with patch("trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.httpx.Client", FakeClient):
         with pytest.raises(FEMA_NFHL_ZONESUpstreamError, match="FeatureCollection"):
             _nfhl_query_one_page(_FORT_MYERS_BBOX, last_object_id=0, sfha_only=False)
 
@@ -771,10 +771,10 @@ def test_cache_miss_invokes_fetch_then_hit_skips():
         return _fake_fgb_bytes("CACHE")
 
     with patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones._fetch_nfhl_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones._fetch_nfhl_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_fema_nfhl_zones.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_fema_nfhl_zones.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_fema_nfhl_zones(bbox=_FORT_MYERS_BBOX)

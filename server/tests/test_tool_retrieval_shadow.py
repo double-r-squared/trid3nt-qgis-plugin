@@ -185,7 +185,7 @@ async def test_unknown_mode_is_treated_as_off(monkeypatch):
 async def test_shadow_mode_logs_set_but_sends_full_registry(monkeypatch):
     from trid3nt_server import server as agent_server
     from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.tools.tool_retrieval as tr
+    import trid3nt_server.tools.discovery.tool_retrieval as tr
 
     fake_visible = {"geocode_location", "fetch_dem", "list_categories"}
     shadow_calls: list = []
@@ -214,7 +214,7 @@ async def test_shadow_mode_logs_set_but_sends_full_registry(monkeypatch):
 async def test_shadow_fail_open_on_retrieval_error(monkeypatch):
     from trid3nt_server import server as agent_server
     from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.tools.tool_retrieval as tr
+    import trid3nt_server.tools.discovery.tool_retrieval as tr
 
     def _boom(*_a, **_k):
         raise RuntimeError("index exploded")
@@ -232,7 +232,7 @@ async def test_shadow_fail_open_on_retrieval_error(monkeypatch):
 async def test_enforce_fail_open_on_empty_result(monkeypatch):
     from trid3nt_server import server as agent_server
     from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.tools.tool_retrieval as tr
+    import trid3nt_server.tools.discovery.tool_retrieval as tr
 
     # An empty would-be set must FAIL-OPEN (never empty / core-only catalog).
     with patch.object(tr, "retrieve_visible_tools", return_value=set()), \
@@ -251,7 +251,7 @@ async def test_enforce_subsets_registry_and_keeps_core_floor(monkeypatch):
     from trid3nt_server import server as agent_server
     from trid3nt_server.categories import HOT_SET_TOOLS
     from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.tools.tool_retrieval as tr
+    import trid3nt_server.tools.discovery.tool_retrieval as tr
 
     # Pick a small real subset of registered tools that includes the core floor.
     floor = {t for t in HOT_SET_TOOLS if t in TOOL_REGISTRY}
@@ -282,7 +282,7 @@ async def test_enforce_allowed_set_is_monotonic_across_turns(monkeypatch):
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
     from trid3nt_server.tools import TOOL_REGISTRY
-    import trid3nt_server.tools.tool_retrieval as tr
+    import trid3nt_server.tools.discovery.tool_retrieval as tr
 
     state = SessionState(session_id=new_ulid())
 

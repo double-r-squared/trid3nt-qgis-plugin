@@ -22,15 +22,12 @@ from typing import Any
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import catalog as catalog_mod
-from trid3nt_server.tools import ogc_adapter as ogc_mod
-from trid3nt_server.tools.catalog import (
-    CatalogNotFoundError,
-    catalog_fetch,
-    catalog_search,
-    load_catalog,
-)
-from trid3nt_server.tools.ogc_adapter import (
+from trid3nt_server.tools.discovery import catalog_common as catalog_mod
+from trid3nt_server.tools.discovery import ogc_adapter as ogc_mod
+from trid3nt_server.tools.discovery.catalog_common import CatalogNotFoundError, load_catalog
+from trid3nt_server.tools.discovery.catalog_fetch import catalog_fetch
+from trid3nt_server.tools.discovery.catalog_search import catalog_search
+from trid3nt_server.tools.discovery.ogc_adapter import (
     OGCAdapterError,
     OGCResponse,
     fetch_ogc_layer,
@@ -121,7 +118,13 @@ def fake_storage_patched(monkeypatch):
         fake.store[path] = data
         return ReadThroughResult(uri=uri, data=data, hit=False)
 
-    monkeypatch.setattr(catalog_mod, "read_through", _patched)
+    # ``read_through`` is bound per-module at import time, so patch it in BOTH
+    # split tool modules (catalog_common itself never calls it).
+    from trid3nt_server.tools.discovery import catalog_fetch as _cf_mod
+    from trid3nt_server.tools.discovery import catalog_search as _cs_mod
+
+    monkeypatch.setattr(_cs_mod, "read_through", _patched)
+    monkeypatch.setattr(_cf_mod, "read_through", _patched)
     return fake
 
 
@@ -374,7 +377,9 @@ def test_catalog_fetch_tier3_https_dispatch(fake_storage_patched, monkeypatch):
             content_type="text/plain",
         )
 
-    monkeypatch.setattr(catalog_mod, "_tier3_https_fetch",
+    from trid3nt_server.tools.discovery import catalog_fetch as _cf_mod
+
+    monkeypatch.setattr(_cf_mod, "_tier3_https_fetch",
                         lambda entry, params: (
                             b"HURDAT2_FAKE_TEXT_DATA_BYTES" + b"\x00" * 256,
                             "csv",
@@ -733,7 +738,7 @@ def test_fetch_landcover_routes_through_generic_ogc_adapter(monkeypatch):
     a future refactor can't accidentally fork the WCS implementation
     without this test catching it.
     """
-    from trid3nt_server.tools import data_fetch
+    from trid3nt_server.tools.fetchers.terrain import fetch_landcover as data_fetch
 
     captured: dict = {}
 

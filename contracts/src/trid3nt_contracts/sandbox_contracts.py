@@ -5,7 +5,7 @@ _analysis_layer``) lets the agent run **user-confirmed ad-hoc Python** over
 layers already on the map — "compute the 95th-percentile depth", "cross-tabulate
 damage by land-cover class" — in the egress-denied Cloud Run Job sandbox
 (``infra/python-sandbox/``, job-0232). The agent's ``code_exec_request`` atomic
-tool (``trid3nt_server.tools.code_exec_tool``) drives two wire messages, both
+tool (``trid3nt_server.tools.meta.code_exec_tool``) drives two wire messages, both
 **agent -> client** (Appendix A.4 amendment):
 
 1. ``code-exec-request`` (:class:`CodeExecRequestPayload`) — emitted BEFORE the

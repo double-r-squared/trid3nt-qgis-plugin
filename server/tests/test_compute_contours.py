@@ -35,7 +35,7 @@ import rasterio
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_contours import (
+from trid3nt_server.tools.processing.compute_contours import (
     ContourComputeError,
     _derive_interval_m,
     _snap_to_nice_interval,
@@ -288,7 +288,7 @@ def test_run_gdal_contour_invocation_args():
         return _Completed()
 
     with patch(
-        "trid3nt_server.tools.compute_contours._get_gdal_contour_bin",
+        "trid3nt_server.tools.processing.compute_contours._get_gdal_contour_bin",
         return_value="/usr/bin/gdal_contour",
     ), patch("subprocess.run", side_effect=_fake_run):
         _run_gdal_contour("/tmp/in.tif", "/tmp/out.fgb", interval_m=20.0)
@@ -320,10 +320,10 @@ def test_compute_contours_layer_uri_shape(fake_storage):
             f.write(fake_fgb)
 
     with patch(
-        "trid3nt_server.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_contours._run_gdal_contour",
+        "trid3nt_server.tools.processing.compute_contours._run_gdal_contour",
         side_effect=_fake_gdal_contour,
     ), patch("trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
@@ -351,10 +351,10 @@ def test_compute_contours_explicit_interval_in_name(fake_storage):
     fake_fgb = _fake_contour_fgb_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_contours._run_gdal_contour",
+        "trid3nt_server.tools.processing.compute_contours._run_gdal_contour",
         side_effect=lambda inp, out, interval_m: open(out, "wb").write(fake_fgb) or None,
     ), patch("trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
@@ -376,10 +376,10 @@ def test_compute_contours_binary_missing_raises(fake_storage):
     fake_dem = _fake_dem_bytes()
 
     with patch(
-        "trid3nt_server.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_contours._get_gdal_contour_bin",
+        "trid3nt_server.tools.processing.compute_contours._get_gdal_contour_bin",
         side_effect=ContourComputeError(
             "GDAL_CONTOUR_UNAVAILABLE", "gdal_contour binary not found"
         ),
@@ -428,10 +428,10 @@ def test_compute_contours_cache_hit_skips_fetch(fake_storage):
         contour_called.append(args)
 
     with patch(
-        "trid3nt_server.tools.compute_contours._run_gdal_contour",
+        "trid3nt_server.tools.processing.compute_contours._run_gdal_contour",
         side_effect=_no_contour,
     ), patch(
-        "trid3nt_server.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_contours._download_dem_bytes",
         return_value=b"",
     ), patch("trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(
@@ -472,13 +472,13 @@ def test_compute_contours_bbox_fetches_dem(fake_storage):
         )
 
     with patch(
-        "trid3nt_server.tools.data_fetch.fetch_dem",
+        "trid3nt_server.tools.fetchers.terrain.fetch_dem.fetch_dem",
         side_effect=_fake_fetch_dem,
     ), patch(
-        "trid3nt_server.tools.compute_contours._download_dem_bytes",
+        "trid3nt_server.tools.processing.compute_contours._download_dem_bytes",
         return_value=fake_dem,
     ), patch(
-        "trid3nt_server.tools.compute_contours._run_gdal_contour",
+        "trid3nt_server.tools.processing.compute_contours._run_gdal_contour",
         side_effect=lambda inp, out, interval_m: open(out, "wb").write(fake_fgb) or None,
     ), patch("trid3nt_server.tools.cache.CACHE_BUCKET", "test-bucket"):
         result = compute_contours(

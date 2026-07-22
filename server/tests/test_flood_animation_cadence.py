@@ -165,7 +165,7 @@ def test_coastal_deck_dtout_reflects_interval(
 
 def test_quadtree_deckbuild_output_dt_reflects_interval(monkeypatch) -> None:
     """The quadtree+SnapWave deck-build output_dt follows the fine cadence too."""
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
     from trid3nt_server.workflows.model_flood_scenario import (
         _compose_and_upload_deckbuild_spec,
     )

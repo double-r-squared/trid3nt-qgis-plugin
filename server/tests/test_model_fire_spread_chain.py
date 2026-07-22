@@ -154,7 +154,7 @@ def test_build_elmfire_deck_spec_maps_args():
 # (3) Solver registration + local docker spec.
 # ===========================================================================
 def test_elmfire_registered_in_solver_registries():
-    from trid3nt_server.tools.solver import (
+    from trid3nt_server.tools.simulation.solver import (
         LOCAL_SOLVER_SPEC_REGISTRY,
         SOLVER_WORKFLOW_REGISTRY,
     )
@@ -215,7 +215,7 @@ def test_tool_typed_error_on_missing_bbox():
     test env - any non-params error proves validation passed)."""
     import asyncio
 
-    from trid3nt_server.tools.model_fire_spread import model_fire_spread
+    from trid3nt_server.tools.simulation.model_fire_spread import model_fire_spread
 
     out = asyncio.run(
         model_fire_spread(
@@ -233,7 +233,7 @@ def test_tool_typed_error_on_missing_bbox():
 
 
 def test_tool_typed_error_on_missing_ignition():
-    from trid3nt_server.tools.model_fire_spread import model_fire_spread
+    from trid3nt_server.tools.simulation.model_fire_spread import model_fire_spread
 
     out = asyncio.run(model_fire_spread(bbox=list(_AOI), ignition_lonlat=None))
     assert out["status"] == "error"
@@ -248,7 +248,7 @@ def test_tool_typed_error_on_missing_ignition():
 
 
 def test_tool_typed_error_on_bad_preset():
-    from trid3nt_server.tools.model_fire_spread import model_fire_spread
+    from trid3nt_server.tools.simulation.model_fire_spread import model_fire_spread
 
     out = asyncio.run(
         model_fire_spread(
@@ -525,7 +525,7 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
     """Fetches mocked (synthetic rasters), docker/solver mocked, synthetic
     solver outputs -> REAL deck build + REAL postprocess -> the primary
     FireSpreadLayerURI + frames + aux COGs as LayerURIs. No AWS, no docker."""
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
     from trid3nt_server.workflows import model_fire_spread_scenario as comp
     from trid3nt_server.workflows import postprocess_elmfire as pe
     from trid3nt_server.workflows.run_elmfire import load_deck_builder
@@ -805,7 +805,7 @@ class TestArgShapeCoercion:
         test env) - the only forbidden outcomes are the params errors."""
         import asyncio
 
-        from trid3nt_server.tools.model_fire_spread import model_fire_spread
+        from trid3nt_server.tools.simulation.model_fire_spread import model_fire_spread
 
         result = asyncio.run(
             model_fire_spread(

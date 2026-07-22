@@ -33,9 +33,9 @@ from unittest.mock import patch
 
 import pytest
 
-import trid3nt_server.tools.fetch_storm_tracks as mod
+import trid3nt_server.tools.fetchers.weather.fetch_storm_tracks as mod
 from trid3nt_server.tools import get_registered_tools
-from trid3nt_server.tools.fetch_storm_tracks import (
+from trid3nt_server.tools.fetchers.weather.fetch_storm_tracks import (
     IBTRACS_CSV_BASE,
     NHC_CURRENT_STORMS_URL,
     StormTracksError,

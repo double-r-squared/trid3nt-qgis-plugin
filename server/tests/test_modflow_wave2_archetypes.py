@@ -157,7 +157,7 @@ def test_compute_recovery_efficiency_basic_and_clamp() -> None:
 
 def _patch_archetype_run(monkeypatch: Any, captured: dict[str, Any], layer: Any) -> None:
     """Patch the archetype run-tool the composers dispatch to (no solver)."""
-    import trid3nt_server.tools.run_modflow_archetype_tool as run_tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as run_tool
 
     async def _fake_run(run_args, *, compute_class="standard"):  # noqa: ANN001
         captured["run_args"] = run_args
@@ -445,7 +445,7 @@ async def test_wetland_no_footprint_is_user_input_required() -> None:
 @pytest.mark.asyncio
 async def test_archetype_run_tool_empty_mounding_is_honest_error(monkeypatch) -> None:
     """The shared run-tool refuses to read a zero-mounding result as success."""
-    import trid3nt_server.tools.run_modflow_archetype_tool as run_tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as run_tool
     from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
 
     class _Staging:

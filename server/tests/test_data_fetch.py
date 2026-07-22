@@ -30,19 +30,39 @@ from datetime import datetime, timezone
 from typing import Any
 
 import pytest
+import requests
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import data_fetch
-from trid3nt_server.tools.data_fetch import (
+from trid3nt_server.tools.fetchers.terrain import fetch_dem as dem_mod
+from trid3nt_server.tools.fetchers.socioeconomic import fetch_buildings as bld_mod
+from trid3nt_server.tools.fetchers.socioeconomic import fetch_population as pop_mod
+from trid3nt_server.tools.fetchers.socioeconomic import geocode_location as geo_mod
+from trid3nt_server.tools.fetchers.terrain import fetch_landcover as lc_mod
+from trid3nt_server.tools.fetchers.hydrology import fetch_river_geometry as riv_mod
+from trid3nt_server.tools.fetchers.climate import lookup_precip_return_period as pfd_mod
+from trid3nt_server.tools.fetchers._fetch_common import (
     BboxInvalidError,
-    GeocodeNoMatchError,
     UpstreamAPIError,
-    fetch_buildings,
-    fetch_dem,
-    fetch_population,
-    geocode_location,
     round_bbox_to_resolution,
 )
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings import fetch_buildings
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_population import fetch_population
+from trid3nt_server.tools.fetchers.socioeconomic.geocode_location import (
+    GeocodeNoMatchError,
+    geocode_location,
+)
+from trid3nt_server.tools.fetchers.terrain.fetch_dem import fetch_dem
+
+
+
+#: Every data_fetch descendant module; ``read_through`` is bound per-module at
+#: import time, so cache-shim patches must hit all of them.
+_ALL_FETCH_MODS = (dem_mod, bld_mod, pop_mod, geo_mod, lc_mod, riv_mod, pfd_mod)
+
+
+def _setattr_all_fetch(monkeypatch, name, value):
+    for _m in _ALL_FETCH_MODS:
+        monkeypatch.setattr(_m, name, value)
 
 
 # Fort Myers, FL — small bbox for live + mocked path testing.
@@ -157,7 +177,7 @@ def test_registry_contains_job_0039_subset_after_eager_import():
 
     Inside the test process, the eager-import surface is whatever the test
     module triggers — ``tools/__init__.py`` (passthroughs, FROZEN) + the
-    explicit ``import trid3nt_server.tools.data_fetch`` at the top of this
+    explicit fetcher-module imports at the top of this
     test file (which fires this job's three new ``@register_tool``
     decorators alongside the M4 four). Parallel sprint-07 imports
     (``qgis_discovery`` from job-0034, ``solver`` from job-0041) are
@@ -237,7 +257,7 @@ def test_fetch_dem_happy_path_writes_through_cache(monkeypatch):
     """A miss invokes the mocked py3dep fetcher, writes COG bytes, returns LayerURI."""
     fake_storage = FakeStorageClient()
     monkeypatch.setattr(
-        data_fetch, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
+        dem_mod, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
     )
 
     # Run via read_through directly with the storage_client injected — the
@@ -253,7 +273,7 @@ def test_fetch_dem_happy_path_writes_through_cache(monkeypatch):
         kwargs.setdefault("now", PINNED_NOW)
         return original_read_through(*args, **kwargs)
 
-    monkeypatch.setattr(data_fetch, "read_through", patched_read_through)
+    _setattr_all_fetch(monkeypatch, "read_through", patched_read_through)
 
     layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
     assert layer.layer_type == "raster"
@@ -311,11 +331,9 @@ def _install_fake_dem_fetch(monkeypatch, fake_storage) -> None:
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
+        dem_mod, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -395,10 +413,8 @@ def test_fetch_dem_upstream_failure_reraises(monkeypatch):
     def boom(_bbox, _res):
         raise UpstreamAPIError("py3dep is unreachable")
 
-    monkeypatch.setattr(data_fetch, "_fetch_3dep_dem_bytes", boom)
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", boom)
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -441,9 +457,7 @@ def _fake_copernicus_layer(bbox):
 def _patch_dem_read_through(monkeypatch, fake_storage):
     from trid3nt_server.tools import cache as cache_mod
 
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -454,7 +468,7 @@ def test_fetch_dem_service_down_falls_back_to_copernicus(monkeypatch):
     """(a) 3DEP service-unavailable -> Copernicus fallback + honest labeling."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -464,7 +478,7 @@ def test_fetch_dem_service_down_falls_back_to_copernicus(monkeypatch):
             "py3dep.get_dem failed: Service is currently not available"
         )
 
-    monkeypatch.setattr(data_fetch, "_fetch_3dep_dem_bytes", boom)
+    monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", boom)
     with patch.object(
         cop_mod, "_copernicus_dem_impl", side_effect=_fake_copernicus_layer
     ) as spy:
@@ -488,7 +502,7 @@ def test_fetch_dem_hang_times_out_within_budget_then_falls_back(monkeypatch):
     import time as _time
     from unittest.mock import patch
 
-    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -498,7 +512,7 @@ def test_fetch_dem_hang_times_out_within_budget_then_falls_back(monkeypatch):
         _time.sleep(8.0)  # simulates the live 3DEP grind
         return b"TOO_LATE"
 
-    monkeypatch.setattr(data_fetch, "_fetch_3dep_dem_bytes", hang)
+    monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", hang)
     start = _time.monotonic()
     with patch.object(
         cop_mod, "_copernicus_dem_impl", side_effect=_fake_copernicus_layer
@@ -515,15 +529,15 @@ def test_fetch_dem_hang_times_out_within_budget_then_falls_back(monkeypatch):
 
 def test_fetch_dem_timeout_error_is_typed_service_failure():
     """DemPrimaryTimeoutError is an UpstreamAPIError (feeds the ladder)."""
-    assert issubclass(data_fetch.DemPrimaryTimeoutError, UpstreamAPIError)
-    assert data_fetch.DemPrimaryTimeoutError.error_code == "DEM_PRIMARY_TIMEOUT"
+    assert issubclass(dem_mod.DemPrimaryTimeoutError, UpstreamAPIError)
+    assert dem_mod.DemPrimaryTimeoutError.error_code == "DEM_PRIMARY_TIMEOUT"
 
 
 def test_fetch_dem_both_sources_fail_raises_typed_error_naming_both(monkeypatch):
     """(c) 3DEP AND Copernicus fail -> one UpstreamAPIError naming both."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -531,7 +545,7 @@ def test_fetch_dem_both_sources_fail_raises_typed_error_naming_both(monkeypatch)
     def boom(_bbox, _res):
         raise UpstreamAPIError("3DEP: Service is currently not available")
 
-    monkeypatch.setattr(data_fetch, "_fetch_3dep_dem_bytes", boom)
+    monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", boom)
     with patch.object(
         cop_mod,
         "_copernicus_dem_impl",
@@ -550,7 +564,7 @@ def test_fetch_dem_pinned_3dep_no_fallback_suggests_copernicus(monkeypatch):
     """(d) explicit source='3dep' never falls back; error suggests copernicus."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -558,7 +572,7 @@ def test_fetch_dem_pinned_3dep_no_fallback_suggests_copernicus(monkeypatch):
     def boom(_bbox, _res):
         raise UpstreamAPIError("3DEP: Service is currently not available")
 
-    monkeypatch.setattr(data_fetch, "_fetch_3dep_dem_bytes", boom)
+    monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", boom)
     with patch.object(cop_mod, "_copernicus_dem_impl") as spy:
         with pytest.raises(UpstreamAPIError) as exc_info:
             fetch_dem(FORT_MYERS_BBOX, resolution_m=10, source="3dep")
@@ -575,12 +589,12 @@ def test_fetch_dem_healthy_3dep_path_unchanged_no_fallback_note(monkeypatch):
     """(e) a healthy 3DEP fetch is unchanged: 3DEP name, no fallback_note."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
     monkeypatch.setattr(
-        data_fetch, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
+        dem_mod, "_fetch_3dep_dem_bytes", lambda bbox, res: b"FAKE_COG_BYTES"
     )
     with patch.object(cop_mod, "_copernicus_dem_impl") as spy:
         layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
@@ -594,8 +608,8 @@ def test_fetch_dem_partial_coverage_propagates_not_ladder(monkeypatch):
     """DemPartialCoverageError is a DATA signal: no cross-source ladder."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools import fetch_copernicus_dem as cop_mod
-    from trid3nt_server.tools.data_fetch import DemPartialCoverageError
+    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain.fetch_dem import DemPartialCoverageError
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -603,7 +617,7 @@ def test_fetch_dem_partial_coverage_propagates_not_ladder(monkeypatch):
     def clipped(_bbox, _res):
         raise DemPartialCoverageError("south edge short")
 
-    monkeypatch.setattr(data_fetch, "_fetch_3dep_dem_bytes", clipped)
+    monkeypatch.setattr(dem_mod, "_fetch_3dep_dem_bytes", clipped)
     with patch.object(cop_mod, "_copernicus_dem_impl") as spy:
         with pytest.raises(DemPartialCoverageError):
             fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
@@ -655,7 +669,7 @@ def test_fetch_3dep_full_coverage_passes(monkeypatch):
     monkeypatch.setattr(
         py3dep, "get_dem", lambda bbox, resolution: _fake_dem_dataarray(full)
     )
-    data = data_fetch._fetch_3dep_dem_bytes(req, 10)
+    data = dem_mod._fetch_3dep_dem_bytes(req, 10)
     assert isinstance(data, (bytes, bytearray)) and len(data) > 0
 
 
@@ -670,28 +684,28 @@ def test_fetch_3dep_south_edge_short_raises_partial_coverage(monkeypatch):
     monkeypatch.setattr(
         py3dep, "get_dem", lambda bbox, resolution: _fake_dem_dataarray(short_south)
     )
-    with pytest.raises(data_fetch.DemPartialCoverageError) as exc:
-        data_fetch._fetch_3dep_dem_bytes(req, 10)
+    with pytest.raises(dem_mod.DemPartialCoverageError) as exc:
+        dem_mod._fetch_3dep_dem_bytes(req, 10)
     assert exc.value.error_code == "DEM_PARTIAL_COVERAGE"
 
 
 def test_dem_partial_coverage_is_upstream_subclass():
     """DemPartialCoverageError subclasses UpstreamAPIError so the urban workflow's
     1m->10m fallback (except Exception) still fires on a partial 1m tile."""
-    assert issubclass(data_fetch.DemPartialCoverageError, UpstreamAPIError)
+    assert issubclass(dem_mod.DemPartialCoverageError, UpstreamAPIError)
 
 
 def test_bbox_covers_flags_material_shortfall():
     """_bbox_covers: full coverage True; any material edge shortfall False;
     a sub-tolerance shortfall still True (no false partial-coverage flag)."""
     req = (-97.755, 30.26, -97.725, 30.285)
-    tol = data_fetch._DEM_COVERAGE_TOL_DEG
-    assert data_fetch._bbox_covers((-97.76, 30.25, -97.72, 30.29), req) is True
+    tol = dem_mod._DEM_COVERAGE_TOL_DEG
+    assert dem_mod._bbox_covers((-97.76, 30.25, -97.72, 30.29), req) is True
     # South-edge clip well past tolerance -> partial.
-    assert data_fetch._bbox_covers((-97.755, 30.27, -97.725, 30.285), req) is False
+    assert dem_mod._bbox_covers((-97.755, 30.27, -97.725, 30.285), req) is False
     # Sub-tolerance clip -> still covers (absorb a half-cell edge snap).
     assert (
-        data_fetch._bbox_covers(
+        dem_mod._bbox_covers(
             (-97.755, 30.26 + tol * 0.4, -97.725, 30.285), req
         )
         is True
@@ -704,12 +718,10 @@ def test_bbox_covers_flags_material_shortfall():
 
 
 def _patch_read_through(monkeypatch, fake_storage):
-    """Route ``data_fetch.read_through`` through a FakeStorageClient + pinned now."""
+    """Route every fetcher module's ``read_through`` through a FakeStorageClient + pinned now."""
     from trid3nt_server.tools import cache as cache_mod
 
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -720,7 +732,7 @@ def test_fetch_buildings_happy_path_msft(monkeypatch):
     """Explicit source='msft' tries MS first; mocked bytes write through cache."""
     fake_storage = FakeStorageClient()
     monkeypatch.setattr(
-        data_fetch, "_fetch_msft_buildings_bytes", lambda bbox: b"FAKE_FGB_BYTES"
+        bld_mod, "_fetch_msft_buildings_bytes", lambda bbox: b"FAKE_FGB_BYTES"
     )
     _patch_read_through(monkeypatch, fake_storage)
 
@@ -746,8 +758,8 @@ def test_fetch_buildings_default_source_is_osm(monkeypatch):
     def boom_msft(bbox):  # pragma: no cover — must not be reached on default
         raise AssertionError("msft must not be called when default source is osm")
 
-    monkeypatch.setattr(data_fetch, "_fetch_osm_buildings_bytes", fake_osm)
-    monkeypatch.setattr(data_fetch, "_fetch_msft_buildings_bytes", boom_msft)
+    monkeypatch.setattr(bld_mod, "_fetch_osm_buildings_bytes", fake_osm)
+    monkeypatch.setattr(bld_mod, "_fetch_msft_buildings_bytes", boom_msft)
     _patch_read_through(monkeypatch, fake_storage)
 
     layer = fetch_buildings(FORT_MYERS_BBOX)
@@ -761,7 +773,7 @@ def test_fetch_buildings_osm_happy_path(monkeypatch):
     """Explicit source='osm' invokes the OSM Overpass fetcher."""
     fake_storage = FakeStorageClient()
     monkeypatch.setattr(
-        data_fetch,
+        bld_mod,
         "_fetch_osm_buildings_bytes",
         lambda bbox, on_tags=None: b"FAKE_OSM_FGB",
     )
@@ -782,9 +794,9 @@ def test_fetch_buildings_falls_back_to_msft_when_osm_fails(monkeypatch):
     def osm_boom(bbox, on_tags=None):
         raise UpstreamAPIError("Overpass unreachable")
 
-    monkeypatch.setattr(data_fetch, "_fetch_osm_buildings_bytes", osm_boom)
+    monkeypatch.setattr(bld_mod, "_fetch_osm_buildings_bytes", osm_boom)
     monkeypatch.setattr(
-        data_fetch, "_fetch_msft_buildings_bytes", lambda bbox: b"FAKE_MSFT_FGB"
+        bld_mod, "_fetch_msft_buildings_bytes", lambda bbox: b"FAKE_MSFT_FGB"
     )
     _patch_read_through(monkeypatch, fake_storage)
 
@@ -802,9 +814,9 @@ def test_fetch_buildings_falls_back_to_osm_when_msft_fails(monkeypatch):
     def msft_boom(bbox):
         raise UpstreamAPIError("abfs:// asset cannot be downloaded")
 
-    monkeypatch.setattr(data_fetch, "_fetch_msft_buildings_bytes", msft_boom)
+    monkeypatch.setattr(bld_mod, "_fetch_msft_buildings_bytes", msft_boom)
     monkeypatch.setattr(
-        data_fetch,
+        bld_mod,
         "_fetch_osm_buildings_bytes",
         lambda bbox, on_tags=None: b"FAKE_OSM_FGB",
     )
@@ -826,8 +838,8 @@ def test_fetch_buildings_both_sources_fail_raises_honest_error(monkeypatch):
     def msft_boom(bbox):
         raise UpstreamAPIError("STAC asset is abfs:// only")
 
-    monkeypatch.setattr(data_fetch, "_fetch_osm_buildings_bytes", osm_boom)
-    monkeypatch.setattr(data_fetch, "_fetch_msft_buildings_bytes", msft_boom)
+    monkeypatch.setattr(bld_mod, "_fetch_osm_buildings_bytes", osm_boom)
+    monkeypatch.setattr(bld_mod, "_fetch_msft_buildings_bytes", msft_boom)
     _patch_read_through(monkeypatch, fake_storage)
 
     with pytest.raises(UpstreamAPIError) as excinfo:
@@ -846,7 +858,7 @@ def test_fetch_buildings_rejects_unknown_source():
 
 def test_build_overpass_buildings_ql_selects_ways_and_relations():
     """The Overpass QL selects building ways AND relations with (s,w,n,e) corners."""
-    ql = data_fetch._build_overpass_buildings_ql(FORT_MYERS_BBOX)
+    ql = bld_mod._build_overpass_buildings_ql(FORT_MYERS_BBOX)
     assert 'way["building"]' in ql
     assert 'relation["building"]' in ql
     assert "out geom;" in ql
@@ -914,7 +926,7 @@ def test_extract_building_features_assembles_polygons_and_relations():
             },
         ]
     }
-    features, tags_by_fid = data_fetch._extract_building_features(payload)
+    features, tags_by_fid = bld_mod._extract_building_features(payload)
     assert len(features) == 2
     geom_types = {g.geom_type for g, _a in features}
     assert geom_types <= {"Polygon", "MultiPolygon"}
@@ -937,10 +949,10 @@ def test_fetch_osm_buildings_bytes_empty_raises_upstream(monkeypatch):
     """No building elements -> honest UpstreamAPIError (no silent dead-end)."""
     pytest.importorskip("geopandas")
     monkeypatch.setattr(
-        data_fetch, "_post_overpass_buildings", lambda ql: {"elements": []}
+        bld_mod, "_post_overpass_buildings", lambda ql: {"elements": []}
     )
     with pytest.raises(UpstreamAPIError):
-        data_fetch._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
+        bld_mod._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
 
 
 def test_fetch_osm_buildings_bytes_writes_flatgeobuf(monkeypatch):
@@ -964,9 +976,9 @@ def test_fetch_osm_buildings_bytes_writes_flatgeobuf(monkeypatch):
         ]
     }
     monkeypatch.setattr(
-        data_fetch, "_post_overpass_buildings", lambda ql: payload
+        bld_mod, "_post_overpass_buildings", lambda ql: payload
     )
-    raw = data_fetch._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
+    raw = bld_mod._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
     assert isinstance(raw, bytes) and len(raw) > 0
     # Round-trip the FlatGeobuf to confirm a building polygon survived.
     import io as _io
@@ -1004,10 +1016,10 @@ def test_fetch_osm_buildings_bytes_emits_slim_columns_and_tags_sidecar(monkeypat
         ]
     }
     monkeypatch.setattr(
-        data_fetch, "_post_overpass_buildings", lambda ql: payload
+        bld_mod, "_post_overpass_buildings", lambda ql: payload
     )
     captured: list[dict] = []
-    raw = data_fetch._fetch_osm_buildings_bytes(
+    raw = bld_mod._fetch_osm_buildings_bytes(
         FORT_MYERS_BBOX, on_tags=lambda m: captured.append(m)
     )
 
@@ -1049,9 +1061,9 @@ def test_fetch_buildings_osm_writes_tags_sidecar(monkeypatch):
     def fake_sidecar(bbox, source, tags_by_fid):
         sidecar_writes.append((source, tags_by_fid))
 
-    monkeypatch.setattr(data_fetch, "_fetch_osm_buildings_bytes", fake_osm)
+    monkeypatch.setattr(bld_mod, "_fetch_osm_buildings_bytes", fake_osm)
     monkeypatch.setattr(
-        data_fetch, "_write_buildings_tags_sidecar", fake_sidecar
+        bld_mod, "_write_buildings_tags_sidecar", fake_sidecar
     )
     _patch_read_through(monkeypatch, fake_storage)
 
@@ -1065,9 +1077,9 @@ def test_fetch_buildings_osm_writes_tags_sidecar(monkeypatch):
 
 def test_buildings_cache_uri_sidecar_is_sibling_of_fgb():
     """The .tags.json sidecar URI shares the SAME <key> as the .fgb."""
-    fgb = data_fetch.buildings_cache_uri(FORT_MYERS_BBOX, "osm", "fgb")
-    tags = data_fetch.buildings_cache_uri(
-        FORT_MYERS_BBOX, "osm", data_fetch.BUILDINGS_TAGS_SIDECAR_EXT
+    fgb = bld_mod.buildings_cache_uri(FORT_MYERS_BBOX, "osm", "fgb")
+    tags = bld_mod.buildings_cache_uri(
+        FORT_MYERS_BBOX, "osm", bld_mod.BUILDINGS_TAGS_SIDECAR_EXT
     )
     assert fgb.endswith(".fgb")
     assert tags.endswith(".tags.json")
@@ -1110,8 +1122,8 @@ def test_fetch_osm_buildings_retains_edge_straddling_footprint(monkeypatch):
              "geometry": left_straddle},
         ]
     }
-    monkeypatch.setattr(data_fetch, "_post_overpass_buildings", lambda ql: payload)
-    raw = data_fetch._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
+    monkeypatch.setattr(bld_mod, "_post_overpass_buildings", lambda ql: payload)
+    raw = bld_mod._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
 
     import io as _io
 
@@ -1139,9 +1151,9 @@ def test_fetch_osm_buildings_excludes_fully_outside_footprint(monkeypatch):
              "geometry": outside},
         ]
     }
-    monkeypatch.setattr(data_fetch, "_post_overpass_buildings", lambda ql: payload)
+    monkeypatch.setattr(bld_mod, "_post_overpass_buildings", lambda ql: payload)
     with pytest.raises(UpstreamAPIError):
-        data_fetch._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
+        bld_mod._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
 
 
 def test_fetch_osm_buildings_symmetric_edge_coverage(monkeypatch):
@@ -1171,8 +1183,8 @@ def test_fetch_osm_buildings_symmetric_edge_coverage(monkeypatch):
          "geometry": _square_geometry(mid_lon - d, max_lat - d, mid_lon + d, max_lat + d)},
     ]
     payload = {"elements": elements}
-    monkeypatch.setattr(data_fetch, "_post_overpass_buildings", lambda ql: payload)
-    raw = data_fetch._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
+    monkeypatch.setattr(bld_mod, "_post_overpass_buildings", lambda ql: payload)
+    raw = bld_mod._fetch_osm_buildings_bytes(FORT_MYERS_BBOX)
 
     import io as _io
 
@@ -1198,7 +1210,7 @@ def test_fetch_population_acs_opt_in_routes_to_acs_branch(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        pop_mod,
         "_fetch_acs_population_bytes",
         lambda bbox, dataset: b'{"type":"FeatureCollection","features":[]}',
     )
@@ -1209,11 +1221,9 @@ def test_fetch_population_acs_opt_in_routes_to_acs_branch(monkeypatch):
         )
 
     monkeypatch.setattr(
-        data_fetch, "_fetch_worldpop_population_bytes", _worldpop_should_not_be_called
+        pop_mod, "_fetch_worldpop_population_bytes", _worldpop_should_not_be_called
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -1245,7 +1255,7 @@ def test_fetch_population_default_routes_to_worldpop_not_acs(monkeypatch):
         return b"FAKE_WORLDPOP_COG_BYTES"
 
     monkeypatch.setattr(
-        data_fetch, "_fetch_worldpop_population_bytes", _capturing_worldpop
+        pop_mod, "_fetch_worldpop_population_bytes", _capturing_worldpop
     )
     # Guard: ACS branch must not be touched on the default path.
     def _acs_should_not_be_called(_bbox, _dataset):  # pragma: no cover
@@ -1256,11 +1266,9 @@ def test_fetch_population_default_routes_to_worldpop_not_acs(monkeypatch):
         )
 
     monkeypatch.setattr(
-        data_fetch, "_fetch_acs_population_bytes", _acs_should_not_be_called
+        pop_mod, "_fetch_acs_population_bytes", _acs_should_not_be_called
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -1283,13 +1291,11 @@ def test_fetch_population_worldpop_writes_tif_cog_to_cache(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        pop_mod,
         "_fetch_worldpop_population_bytes",
         lambda bbox, dataset, target_resolution_m=1000: b"FAKE_WORLDPOP_COG_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -1323,7 +1329,7 @@ def test_fetch_population_rejects_unknown_dataset():
 
 def test_worldpop_url_for_100m_returns_unadj_native_url():
     """resolution_m<=100 -> base Global_2000_2020 tree + _UNadj suffix (NO _1km)."""
-    url = data_fetch._worldpop_url_for("USA", 2020, resolution_m=100)
+    url = pop_mod._worldpop_url_for("USA", 2020, resolution_m=100)
     assert "Global_2000_2020/" in url
     assert "Global_2000_2020_1km" not in url
     assert url.endswith("usa_ppp_2020_UNadj.tif"), url
@@ -1332,8 +1338,8 @@ def test_worldpop_url_for_100m_returns_unadj_native_url():
 
 def test_worldpop_url_for_default_returns_1km_url():
     """The 1km default URL is byte-identical to the prior fixed behavior."""
-    default_url = data_fetch._worldpop_url_for("USA", 2020)
-    explicit_1km = data_fetch._worldpop_url_for("USA", 2020, resolution_m=1000)
+    default_url = pop_mod._worldpop_url_for("USA", 2020)
+    explicit_1km = pop_mod._worldpop_url_for("USA", 2020, resolution_m=1000)
     assert default_url == explicit_1km
     assert default_url == (
         "https://data.worldpop.org/GIS/Population/Global_2000_2020_1km/2020/"
@@ -1352,7 +1358,7 @@ def test_worldpop_url_for_default_returns_1km_url():
 @pytest.mark.parametrize("year", [2000, 2005, 2010, 2015, 2020])
 def test_worldpop_year_from_dataset_accepts_in_range_vintages(year):
     """Every vintage in [2000,2020] parses to the exact int year."""
-    assert data_fetch._worldpop_year_from_dataset(f"worldpop_{year}") == year
+    assert pop_mod._worldpop_year_from_dataset(f"worldpop_{year}") == year
 
 
 @pytest.mark.parametrize(
@@ -1369,7 +1375,7 @@ def test_worldpop_year_from_dataset_rejects_out_of_range_year(year):
     """
     dataset = f"worldpop_{year}"
     with pytest.raises(UpstreamAPIError) as excinfo:
-        data_fetch._worldpop_year_from_dataset(dataset)
+        pop_mod._worldpop_year_from_dataset(dataset)
     msg = str(excinfo.value)
     assert dataset in msg, msg
     assert str(year) in msg, msg
@@ -1379,14 +1385,14 @@ def test_worldpop_year_from_dataset_rejects_out_of_range_year(year):
 def test_worldpop_year_from_dataset_rejects_non_numeric_suffix():
     """A non-numeric vintage suffix fails with the 'worldpop_YYYY' guidance."""
     with pytest.raises(UpstreamAPIError) as excinfo:
-        data_fetch._worldpop_year_from_dataset("worldpop_latest")
+        pop_mod._worldpop_year_from_dataset("worldpop_latest")
     assert "worldpop_YYYY" in str(excinfo.value)
 
 
 def test_worldpop_year_from_dataset_rejects_non_worldpop_prefix():
     """A dataset that is not a worldpop_ token is rejected before parsing."""
     with pytest.raises(UpstreamAPIError) as excinfo:
-        data_fetch._worldpop_year_from_dataset("acs_2022")
+        pop_mod._worldpop_year_from_dataset("acs_2022")
     assert "WorldPop branch" in str(excinfo.value)
 
 
@@ -1401,18 +1407,18 @@ def test_fetch_worldpop_population_bytes_rejects_2024_before_network(monkeypatch
     def _no_network(*_a, **_kw):  # pragma: no cover - must not be reached
         raise AssertionError("requests.get must NOT be called for an out-of-range year")
 
-    monkeypatch.setattr(data_fetch.requests, "get", _no_network)
+    monkeypatch.setattr(requests, "get", _no_network)
 
     with pytest.raises(UpstreamAPIError) as excinfo:
-        data_fetch._fetch_worldpop_population_bytes(FORT_MYERS_BBOX, "worldpop_2024")
+        pop_mod._fetch_worldpop_population_bytes(FORT_MYERS_BBOX, "worldpop_2024")
     assert "2024" in str(excinfo.value)
     assert "[2000,2020]" in str(excinfo.value)
 
 
 def test_worldpop_url_built_only_for_validated_year_matches_real_format():
     """A validated in-range year composes the EXACT published bucket path."""
-    year = data_fetch._worldpop_year_from_dataset("worldpop_2020")
-    url = data_fetch._worldpop_url_for("USA", year)
+    year = pop_mod._worldpop_year_from_dataset("worldpop_2020")
+    url = pop_mod._worldpop_url_for("USA", year)
     assert url == (
         "https://data.worldpop.org/GIS/Population/Global_2000_2020_1km/2020/"
         "USA/usa_ppp_2020_1km_Aggregated.tif"
@@ -1423,9 +1429,7 @@ def _patch_population_cache(monkeypatch, fake_storage):
     """Route fetch_population's read_through through a fake storage client."""
     from trid3nt_server.tools import cache as cache_mod
 
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -1441,7 +1445,7 @@ def test_fetch_population_cache_key_includes_target_resolution_m(monkeypatch):
         return f"FAKE_WORLDPOP_{target_resolution_m}".encode()
 
     monkeypatch.setattr(
-        data_fetch, "_fetch_worldpop_population_bytes", _capturing_worldpop
+        pop_mod, "_fetch_worldpop_population_bytes", _capturing_worldpop
     )
 
     fake_storage = FakeStorageClient()
@@ -1481,13 +1485,11 @@ def test_geocode_location_happy_path(monkeypatch):
         "place_id": 67890,
     }
     monkeypatch.setattr(
-        data_fetch,
+        geo_mod,
         "_fetch_nominatim_geocode_bytes",
         lambda query: _json.dumps(fake_payload).encode("utf-8"),
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -1520,9 +1522,7 @@ def _bind_geocode_cache(monkeypatch):
     fake_storage = FakeStorageClient()
     from trid3nt_server.tools import cache as cache_mod
 
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -1569,7 +1569,7 @@ def _bind_geocode_cache(monkeypatch):
     ],
 )
 def test_extract_us_state_detects(query, expected):
-    assert data_fetch._extract_us_state(query) == expected
+    assert geo_mod._extract_us_state(query) == expected
 
 
 @pytest.mark.parametrize(
@@ -1605,7 +1605,7 @@ def test_extract_us_state_detects(query, expected):
     ],
 )
 def test_extract_us_state_rejects(query):
-    assert data_fetch._extract_us_state(query) is None
+    assert geo_mod._extract_us_state(query) is None
 
 
 def test_extract_us_state_abbreviation_word_boundary_guard():
@@ -1613,12 +1613,12 @@ def test_extract_us_state_abbreviation_word_boundary_guard():
 
     But the SAME letters in the comma idiom ('Bloomington, IN') ARE.
     """
-    assert data_fetch._extract_us_state("flooding in the valley") is None
-    assert data_fetch._extract_us_state("Bloomington, IN") == "Indiana"
-    assert data_fetch._extract_us_state("Portland, OR") == "Oregon"
+    assert geo_mod._extract_us_state("flooding in the valley") is None
+    assert geo_mod._extract_us_state("Bloomington, IN") == "Indiana"
+    assert geo_mod._extract_us_state("Portland, OR") == "Oregon"
     # Non-string input never raises.
-    assert data_fetch._extract_us_state(None) is None  # type: ignore[arg-type]
-    assert data_fetch._extract_us_state(42) is None  # type: ignore[arg-type]
+    assert geo_mod._extract_us_state(None) is None  # type: ignore[arg-type]
+    assert geo_mod._extract_us_state(42) is None  # type: ignore[arg-type]
 
 
 # --- offline backstop table plausibility -----------------------------------
@@ -1637,7 +1637,7 @@ def test_extract_us_state_abbreviation_word_boundary_guard():
     ],
 )
 def test_us_state_bbox_table_plausible(state, lon_lo, lon_hi, lat_lo, lat_hi):
-    bbox = data_fetch._US_STATE_BBOX[state]
+    bbox = geo_mod._US_STATE_BBOX[state]
     min_lon, min_lat, max_lon, max_lat = bbox
     # Canonical ordering.
     assert min_lon < max_lon and min_lat < max_lat
@@ -1649,10 +1649,10 @@ def test_us_state_bbox_table_plausible(state, lon_lo, lon_hi, lat_lo, lat_hi):
 
 
 def test_us_state_bbox_table_has_50_states_plus_dc():
-    assert len(data_fetch._US_STATE_BBOX) == 51
-    assert "District of Columbia" in data_fetch._US_STATE_BBOX
+    assert len(geo_mod._US_STATE_BBOX) == 51
+    assert "District of Columbia" in geo_mod._US_STATE_BBOX
     # Every row is a valid WGS84 ordered bbox.
-    for name, bbox in data_fetch._US_STATE_BBOX.items():
+    for name, bbox in geo_mod._US_STATE_BBOX.items():
         min_lon, min_lat, max_lon, max_lat = bbox
         assert -180.0 <= min_lon < max_lon <= 180.0, name
         assert -90.0 <= min_lat < max_lat <= 90.0, name
@@ -1677,7 +1677,7 @@ def test_geocode_precise_in_state_query_not_snapped(monkeypatch):
         "place_id": 67890,
     }
     monkeypatch.setattr(
-        data_fetch,
+        geo_mod,
         "_fetch_nominatim_geocode_bytes",
         lambda query: _json.dumps(precise).encode("utf-8"),
     )
@@ -1705,7 +1705,7 @@ def test_geocode_precise_county_query_not_snapped(monkeypatch):
         "place_id": 333,
     }
     monkeypatch.setattr(
-        data_fetch,
+        geo_mod,
         "_fetch_nominatim_geocode_bytes",
         lambda query: _json.dumps(precise).encode("utf-8"),
     )
@@ -1737,7 +1737,7 @@ def test_geocode_south_florida_wrong_state_snaps_to_florida(monkeypatch):
         "place_id": 111,
     }
     monkeypatch.setattr(
-        data_fetch,
+        geo_mod,
         "_fetch_nominatim_geocode_bytes",
         lambda query: _json.dumps(wrong).encode("utf-8"),
     )
@@ -1745,16 +1745,16 @@ def test_geocode_south_florida_wrong_state_snaps_to_florida(monkeypatch):
     # Force the offline-table path (no live state lookup) for a deterministic
     # bbox assertion.
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: (_ for _ in ()).throw(
-            data_fetch.requests.RequestException("offline")
+            requests.RequestException("offline")
         ),
     )
 
     result = geocode_location("south Florida")
     assert result["source"] == "state-bbox-fallback"
-    assert result["bbox"] == data_fetch._US_STATE_BBOX["Florida"]
+    assert result["bbox"] == geo_mod._US_STATE_BBOX["Florida"]
     assert result["state_bbox_source"] == "offline-state-table"
     # Honest narration note present and truthful.
     assert "fallback_reason" in result
@@ -1768,7 +1768,7 @@ def test_geocode_south_florida_wrong_state_snaps_to_florida(monkeypatch):
         assert key in result
     assert result["osm_id"] is None
     # Centroid is inside the Florida bbox.
-    fl = data_fetch._US_STATE_BBOX["Florida"]
+    fl = geo_mod._US_STATE_BBOX["Florida"]
     assert fl[0] <= result["longitude"] <= fl[2]
     assert fl[1] <= result["latitude"] <= fl[3]
 
@@ -1797,17 +1797,17 @@ def test_geocode_capitalized_south_florida_snaps_to_florida_centroid(monkeypatch
         "place_id": 5353,
     }
     monkeypatch.setattr(
-        data_fetch,
+        geo_mod,
         "_fetch_nominatim_geocode_bytes",
         lambda query: _json.dumps(kansas_hit).encode("utf-8"),
     )
     _bind_geocode_cache(monkeypatch)
     # Force the offline-table path so the bbox/centroid are deterministic.
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: (_ for _ in ()).throw(
-            data_fetch.requests.RequestException("offline")
+            requests.RequestException("offline")
         ),
     )
 
@@ -1823,7 +1823,7 @@ def test_geocode_capitalized_south_florida_snaps_to_florida_centroid(monkeypatch
     min_lon, min_lat, max_lon, max_lat = result["bbox"]
     cx = 0.5 * (min_lon + max_lon)
     cy = 0.5 * (min_lat + max_lat)
-    fl = data_fetch._US_STATE_BBOX["Florida"]
+    fl = geo_mod._US_STATE_BBOX["Florida"]
     assert fl[0] <= cx <= fl[2]
     assert fl[1] <= cy <= fl[3]
     # And the reported centroid lat/lon (used to snap the map) is also in FL.
@@ -1842,13 +1842,13 @@ def test_geocode_bare_dangerous_word_does_not_snap_to_state(monkeypatch):
     def _boom(query):
         raise GeocodeNoMatchError(f"Could not locate {query!r}.")
 
-    monkeypatch.setattr(data_fetch, "_fetch_nominatim_geocode_bytes", _boom)
+    monkeypatch.setattr(geo_mod, "_fetch_nominatim_geocode_bytes", _boom)
     _bind_geocode_cache(monkeypatch)
 
     # No state is detected for these bare dangerous words, so the failure is
     # NOT swallowed by a state-snap.
-    assert data_fetch._extract_us_state("in") is None
-    assert data_fetch._extract_us_state("or") is None
+    assert geo_mod._extract_us_state("in") is None
+    assert geo_mod._extract_us_state("or") is None
     for q in ("in", "or"):
         with pytest.raises(GeocodeNoMatchError):
             geocode_location(q)
@@ -1870,7 +1870,7 @@ def test_geocode_wrong_state_prefers_live_osm_state_boundary(monkeypatch):
         "place_id": 111,
     }
     monkeypatch.setattr(
-        data_fetch,
+        geo_mod,
         "_fetch_nominatim_geocode_bytes",
         lambda query: _json.dumps(wrong).encode("utf-8"),
     )
@@ -1899,7 +1899,7 @@ def test_geocode_wrong_state_prefers_live_osm_state_boundary(monkeypatch):
         captured["params"] = params
         return _FakeStateResp()
 
-    monkeypatch.setattr(data_fetch.requests, "get", _fake_get)
+    monkeypatch.setattr(requests, "get", _fake_get)
 
     result = geocode_location("south Florida")
     assert result["source"] == "state-bbox-fallback"
@@ -1924,20 +1924,20 @@ def test_geocode_no_result_with_state_detected_snaps(monkeypatch):
     def _boom(query):
         raise GeocodeNoMatchError(f"Could not locate {query!r}.")
 
-    monkeypatch.setattr(data_fetch, "_fetch_nominatim_geocode_bytes", _boom)
+    monkeypatch.setattr(geo_mod, "_fetch_nominatim_geocode_bytes", _boom)
     _bind_geocode_cache(monkeypatch)
     # Offline path for deterministic bbox.
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: (_ for _ in ()).throw(
-            data_fetch.requests.RequestException("offline")
+            requests.RequestException("offline")
         ),
     )
 
     result = geocode_location("protected areas in south Florida")
     assert result["source"] == "state-bbox-fallback"
-    assert result["bbox"] == data_fetch._US_STATE_BBOX["Florida"]
+    assert result["bbox"] == geo_mod._US_STATE_BBOX["Florida"]
     assert "Florida" in result["fallback_reason"]
 
 
@@ -1950,7 +1950,7 @@ def test_geocode_no_result_no_state_still_raises(monkeypatch):
     def _boom(query):
         raise GeocodeNoMatchError(f"Could not locate {query!r}.")
 
-    monkeypatch.setattr(data_fetch, "_fetch_nominatim_geocode_bytes", _boom)
+    monkeypatch.setattr(geo_mod, "_fetch_nominatim_geocode_bytes", _boom)
     _bind_geocode_cache(monkeypatch)
 
     with pytest.raises(GeocodeNoMatchError):
@@ -1984,7 +1984,7 @@ def test_geocode_empty_body_raises_typed_no_match(monkeypatch):
     is locked end-to-end through ``geocode_location``.
     """
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: _FakeGeocodeResp([]),
     )
@@ -1992,7 +1992,7 @@ def test_geocode_empty_body_raises_typed_no_match(monkeypatch):
 
     # "Atlantis" has no detectable US state, so the no-match error propagates
     # instead of being swallowed by a state-snap.
-    assert data_fetch._extract_us_state("Atlantis") is None
+    assert geo_mod._extract_us_state("Atlantis") is None
     with pytest.raises(GeocodeNoMatchError) as excinfo:
         geocode_location("Atlantis")
     assert excinfo.value.error_code == "GEOCODE_NO_MATCH"
@@ -2013,13 +2013,13 @@ def test_geocode_malformed_boundingbox_raises_typed_no_match(monkeypatch):
         }
     ]
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: _FakeGeocodeResp(malformed),
     )
     _bind_geocode_cache(monkeypatch)
 
-    assert data_fetch._extract_us_state("Atlantis") is None
+    assert geo_mod._extract_us_state("Atlantis") is None
     with pytest.raises(GeocodeNoMatchError) as excinfo:
         geocode_location("Atlantis")
     assert excinfo.value.error_code == "GEOCODE_NO_MATCH"
@@ -2031,15 +2031,15 @@ def test_geocode_malformed_boundingbox_raises_typed_no_match(monkeypatch):
 
 def test_resolve_state_bbox_falls_back_to_table(monkeypatch):
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: (_ for _ in ()).throw(
-            data_fetch.requests.RequestException("down")
+            requests.RequestException("down")
         ),
     )
-    bbox, lat, lon, source = data_fetch._resolve_state_bbox("Texas")
+    bbox, lat, lon, source = geo_mod._resolve_state_bbox("Texas")
     assert source == "offline-state-table"
-    assert bbox == data_fetch._US_STATE_BBOX["Texas"]
+    assert bbox == geo_mod._US_STATE_BBOX["Texas"]
     # Centroid inside the bbox.
     assert bbox[0] <= lon <= bbox[2]
     assert bbox[1] <= lat <= bbox[3]
@@ -2082,13 +2082,13 @@ def test_geocode_open10_downtown_tampa_live_captured_regression(monkeypatch):
         }
     ]
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: _FakeGeocodeResp(tampa_tram_stop),
     )
     _bind_geocode_cache(monkeypatch)
 
-    assert data_fetch._extract_us_state("downtown Tampa") is None
+    assert geo_mod._extract_us_state("downtown Tampa") is None
 
     result = geocode_location("downtown Tampa")
 
@@ -2133,7 +2133,7 @@ def test_geocode_open10_building_first_place_class_wins(monkeypatch):
         },
     ]
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: _FakeGeocodeResp(candidates),
     )
@@ -2163,7 +2163,7 @@ def test_geocode_open10_building_only_floor_expansion(monkeypatch):
         },
     ]
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: _FakeGeocodeResp(candidates),
     )
@@ -2213,7 +2213,7 @@ def test_geocode_open10_genuine_poi_query_unchanged(monkeypatch):
         },
     ]
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: _FakeGeocodeResp(candidates),
     )
@@ -2254,7 +2254,7 @@ def test_geocode_open10_street_address_query_unchanged(monkeypatch):
         },
     ]
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: _FakeGeocodeResp(candidates),
     )
@@ -2285,7 +2285,7 @@ def test_geocode_open10_big_city_bbox_untouched(monkeypatch):
         }
     ]
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: _FakeGeocodeResp(candidates),
     )
@@ -2312,7 +2312,7 @@ def test_geocode_open10_big_city_bbox_untouched(monkeypatch):
     ],
 )
 def test_is_place_class(candidate, expected):
-    assert data_fetch._is_place_class(candidate) is expected
+    assert geo_mod._is_place_class(candidate) is expected
 
 
 @pytest.mark.parametrize(
@@ -2326,17 +2326,17 @@ def test_is_place_class(candidate, expected):
     ],
 )
 def test_looks_like_poi_query(query, expected):
-    assert data_fetch._looks_like_poi_query(query) is expected
+    assert geo_mod._looks_like_poi_query(query) is expected
 
 
 def test_bbox_long_axis_km_and_square_km_bbox_roundtrip():
     # A ~0.0001 deg bbox (like the live Tampa tram-stop) is well under 1 km.
-    long_axis = data_fetch._bbox_long_axis_km(
+    long_axis = geo_mod._bbox_long_axis_km(
         -82.4568388, 27.9452287, -82.4567388, 27.9453287, 27.9452787
     )
     assert long_axis < 0.02  # ~11 m, in km
 
-    west, south, east, north = data_fetch._square_km_bbox(
+    west, south, east, north = geo_mod._square_km_bbox(
         27.9452787, -82.4567888, 2.0
     )
     height_km = abs(north - south) * 111.32
@@ -2353,10 +2353,14 @@ def test_bbox_long_axis_km_and_square_km_bbox_roundtrip():
 # ---------------------------------------------------------------------------
 
 
-from trid3nt_server.tools.data_fetch import (  # noqa: E402 — after main test surface
-    fetch_landcover,
-    fetch_river_geometry,
+from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import (  # noqa: E402 — after main test surface
     lookup_precip_return_period,
+)
+from trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry import (  # noqa: E402 — after main test surface
+    fetch_river_geometry,
+)
+from trid3nt_server.tools.fetchers.terrain.fetch_landcover import (  # noqa: E402 — after main test surface
+    fetch_landcover,
 )
 
 
@@ -2398,13 +2402,11 @@ def test_fetch_landcover_returns_nlcd_vintage_year_sidecar(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        lc_mod,
         "_fetch_nlcd_landcover_bytes",
         lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -2436,13 +2438,11 @@ def test_fetch_landcover_routes_through_read_through_writes_cache(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        lc_mod,
         "_fetch_nlcd_landcover_bytes",
         lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -2470,13 +2470,11 @@ def test_fetch_landcover_quantizes_bbox_to_30m_nlcd_grid(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        lc_mod,
         "_fetch_nlcd_landcover_bytes",
         lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -2514,13 +2512,11 @@ def test_fetch_landcover_bare_nlcd_alias_resolves_to_default_vintage(monkeypatch
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        lc_mod,
         "_fetch_nlcd_landcover_bytes",
         lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -2528,7 +2524,7 @@ def test_fetch_landcover_bare_nlcd_alias_resolves_to_default_vintage(monkeypatch
 
     result = fetch_landcover(FORT_MYERS_BBOX, dataset="nlcd")
     assert result["nlcd_vintage_year"] == 2021
-    assert result["dataset"] == data_fetch._DEFAULT_NLCD_DATASET
+    assert result["dataset"] == lc_mod._DEFAULT_NLCD_DATASET
 
 
 def test_fetch_landcover_trailing_underscore_nlcd_alias_resolves_to_default_vintage(
@@ -2539,13 +2535,11 @@ def test_fetch_landcover_trailing_underscore_nlcd_alias_resolves_to_default_vint
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        lc_mod,
         "_fetch_nlcd_landcover_bytes",
         lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -2553,7 +2547,7 @@ def test_fetch_landcover_trailing_underscore_nlcd_alias_resolves_to_default_vint
 
     result = fetch_landcover(FORT_MYERS_BBOX, dataset="nlcd_")
     assert result["nlcd_vintage_year"] == 2021
-    assert result["dataset"] == data_fetch._DEFAULT_NLCD_DATASET
+    assert result["dataset"] == lc_mod._DEFAULT_NLCD_DATASET
 
 
 def test_fetch_landcover_unknown_vintage_year_still_errors(monkeypatch):
@@ -2568,9 +2562,7 @@ def test_fetch_landcover_unknown_vintage_year_still_errors(monkeypatch):
     fake_storage = FakeStorageClient()
     from trid3nt_server.tools import cache as cache_mod
 
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -2584,9 +2576,7 @@ def test_fetch_landcover_esa_worldcover_not_implemented(monkeypatch):
     fake_storage = FakeStorageClient()
     from trid3nt_server.tools import cache as cache_mod
 
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -2624,16 +2614,16 @@ def test_fetch_landcover_uses_wcs_not_wms_after_hotfix():
     """
     # Inspect the WCS coverage table — the symbol is the substrate hook the
     # hotfix introduced; reverting it would remove the alias.
-    assert hasattr(data_fetch, "_MRLC_WCS_URL")
-    assert hasattr(data_fetch, "_NLCD_WCS_COVERAGE_BY_YEAR")
-    assert data_fetch._MRLC_WCS_URL.endswith("/wcs")
+    assert hasattr(lc_mod, "_MRLC_WCS_URL")
+    assert hasattr(lc_mod, "_NLCD_WCS_COVERAGE_BY_YEAR")
+    assert lc_mod._MRLC_WCS_URL.endswith("/wcs")
     # 2021 (the default) and 2019 (the second-most-recent discrete vintage)
     # are both in the WCS catalog.
-    assert 2021 in data_fetch._NLCD_WCS_COVERAGE_BY_YEAR
-    assert 2019 in data_fetch._NLCD_WCS_COVERAGE_BY_YEAR
+    assert 2021 in lc_mod._NLCD_WCS_COVERAGE_BY_YEAR
+    assert 2019 in lc_mod._NLCD_WCS_COVERAGE_BY_YEAR
     # The coverage IDs use the qualified ``mrlc_display:`` workspace prefix
     # WCS expects (per the 2026-06-07 live probe).
-    assert data_fetch._NLCD_WCS_COVERAGE_BY_YEAR[2021].startswith(
+    assert lc_mod._NLCD_WCS_COVERAGE_BY_YEAR[2021].startswith(
         "mrlc_display:NLCD_2021_Land_Cover_L48"
     )
 
@@ -2650,13 +2640,11 @@ def test_fetch_landcover_cache_key_source_is_mrlc_wcs(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        lc_mod,
         "_fetch_nlcd_landcover_bytes",
         lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES_WCS",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -2691,10 +2679,10 @@ def test_landcover_cache_version_salt_present_and_folded_into_params():
     It must live ONLY in the landcover params dict (not in the shared
     ``compute_cache_key`` salt) so no other tool's cache key changes.
     """
-    assert hasattr(data_fetch, "_LANDCOVER_CACHE_VERSION")
+    assert hasattr(lc_mod, "_LANDCOVER_CACHE_VERSION")
     # v2 = post-job-0324 palette-preserving COGs (v1 was the stale palette-less
     # generation). Any bump > 1 forces a clean regenerate.
-    assert data_fetch._LANDCOVER_CACHE_VERSION >= 2
+    assert lc_mod._LANDCOVER_CACHE_VERSION >= 2
 
 
 def test_landcover_cache_key_changed_after_palette_fix():
@@ -2709,7 +2697,7 @@ def test_landcover_cache_key_changed_after_palette_fix():
     """
     from trid3nt_server.tools.cache import compute_cache_key
 
-    quantized = data_fetch._round_bbox_to_30m_nlcd(FORT_MYERS_BBOX)
+    quantized = lc_mod._round_bbox_to_30m_nlcd(FORT_MYERS_BBOX)
 
     # OLD (pre-fix) params — what the tool wrote before the salt was added.
     old_params = {
@@ -2722,11 +2710,11 @@ def test_landcover_cache_key_changed_after_palette_fix():
         "bbox": list(quantized),
         "dataset": "nlcd_2021",
         "source": "mrlc-wcs",
-        "cache_version": data_fetch._LANDCOVER_CACHE_VERSION,
+        "cache_version": lc_mod._LANDCOVER_CACHE_VERSION,
     }
 
-    source_id = data_fetch._FETCH_LANDCOVER_METADATA.source_class
-    ttl_class = data_fetch._FETCH_LANDCOVER_METADATA.ttl_class
+    source_id = lc_mod._FETCH_LANDCOVER_METADATA.source_class
+    ttl_class = lc_mod._FETCH_LANDCOVER_METADATA.ttl_class
     old_key = compute_cache_key(source_id, old_params, ttl_class, now=PINNED_NOW)
     new_key = compute_cache_key(source_id, new_params, ttl_class, now=PINNED_NOW)
 
@@ -2751,13 +2739,11 @@ def test_fetch_landcover_writes_cache_at_new_salted_key(monkeypatch):
 
     fake_storage = FakeStorageClient()
     monkeypatch.setattr(
-        data_fetch,
+        lc_mod,
         "_fetch_nlcd_landcover_bytes",
         lambda bbox, year, resolution_m=30: b"FAKE_NLCD_GEOTIFF_BYTES_PALETTE_PRESERVED",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -2765,7 +2751,7 @@ def test_fetch_landcover_writes_cache_at_new_salted_key(monkeypatch):
 
     fetch_landcover(FORT_MYERS_BBOX, dataset="nlcd_2021")
 
-    quantized = data_fetch._round_bbox_to_30m_nlcd(FORT_MYERS_BBOX)
+    quantized = lc_mod._round_bbox_to_30m_nlcd(FORT_MYERS_BBOX)
     new_params = {
         "bbox": list(quantized),
         "dataset": "nlcd_2021",
@@ -2773,7 +2759,7 @@ def test_fetch_landcover_writes_cache_at_new_salted_key(monkeypatch):
         # Auto-coarsen feature: params now carry the effective resolution
         # (30 m native for a small bbox like Fort Myers).
         "resolution_m": 30,
-        "cache_version": data_fetch._LANDCOVER_CACHE_VERSION,
+        "cache_version": lc_mod._LANDCOVER_CACHE_VERSION,
     }
     expected_key = compute_cache_key(
         "landcover", new_params, "static-30d", now=PINNED_NOW
@@ -2821,8 +2807,8 @@ def test_fetch_nlcd_landcover_bytes_issues_wcs_1_0_0_getcoverage(monkeypatch):
         captured["timeout"] = timeout
         return _FakeResp()
 
-    monkeypatch.setattr(data_fetch.requests, "get", _capture_get)
-    out = data_fetch._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
+    monkeypatch.setattr(requests, "get", _capture_get)
+    out = lc_mod._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
     assert isinstance(out, bytes) and len(out) > 4
     # URL is the WCS endpoint, not WMS.
     assert captured["url"].endswith("/wcs"), captured["url"]
@@ -2862,12 +2848,12 @@ def test_fetch_nlcd_landcover_bytes_surfaces_geoserver_exception(monkeypatch):
             return None
 
     monkeypatch.setattr(
-        data_fetch.requests,
+        requests,
         "get",
         lambda *a, **kw: _FakeXMLResp(),
     )
     with pytest.raises(UpstreamAPIError):
-        data_fetch._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
+        lc_mod._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
 
 
 # ---------------------------------------------------------------------------
@@ -2922,18 +2908,18 @@ def test_landcover_bytes_to_cog_adds_overviews_and_clips_bbox():
     """The new COG helper emits overviews AND clips to the EXACT requested bbox."""
     import rasterio
 
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     # Flat raster that OVERHANGS the bbox so the clip has something to trim.
     flat = _make_flat_nlcd_geotiff_bytes(quantized, pad=True)
 
     # Sanity: the flat input has NO overviews.
-    assert not data_fetch._has_overviews(flat)
+    assert not lc_mod._has_overviews(flat)
 
-    cog = data_fetch._landcover_bytes_to_cog(flat, quantized)
+    cog = lc_mod._landcover_bytes_to_cog(flat, quantized)
     assert isinstance(cog, bytes) and len(cog) > 0
 
     # (1) Overviews present (the TiTiler zoomed-out-tile fix).
-    assert data_fetch._has_overviews(cog), "COG output must carry internal overviews"
+    assert lc_mod._has_overviews(cog), "COG output must carry internal overviews"
 
     # (2) Output extent clipped to the requested bbox (~1 px tolerance at 30 m).
     import tempfile
@@ -2963,23 +2949,23 @@ def test_fetch_nlcd_landcover_bytes_output_has_overviews(monkeypatch):
     then asserts the fetcher's returned bytes (what gets cached) carry
     overviews — the F33/F39 spotty-render root-cause fix.
     """
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     flat = _make_flat_nlcd_geotiff_bytes(quantized)
-    assert not data_fetch._has_overviews(flat)
+    assert not lc_mod._has_overviews(flat)
 
     class _FakeOGCResp:
         content = flat
         content_type = "image/tiff"
 
-    import trid3nt_server.tools.ogc_adapter as ogc_mod
+    import trid3nt_server.tools.discovery.ogc_adapter as ogc_mod
 
     monkeypatch.setattr(
         ogc_mod, "fetch_ogc_layer", lambda *a, **kw: _FakeOGCResp()
     )
 
-    out = data_fetch._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
+    out = lc_mod._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
     assert isinstance(out, bytes) and len(out) > 0
-    assert data_fetch._has_overviews(out), (
+    assert lc_mod._has_overviews(out), (
         "cached NLCD bytes must be a COG with overviews (TiTiler zoom fix)"
     )
 
@@ -3092,11 +3078,11 @@ def test_fix_nlcd_background_transparency_folds_zero_into_declared_nodata():
     import rasterio
     import tempfile
 
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     raw = _make_paletted_nlcd_geotiff_bytes_with_background(quantized, nodata=255)
     assert _colormap_of_bytes(raw)[0] == (0, 0, 0, 255)  # sanity: bug present
 
-    fixed = data_fetch._fix_nlcd_background_transparency(raw)
+    fixed = lc_mod._fix_nlcd_background_transparency(raw)
 
     with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
         f.write(fixed)
@@ -3122,10 +3108,10 @@ def test_fix_nlcd_background_transparency_promotes_zero_when_no_nodata_declared(
     import rasterio
     import tempfile
 
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     raw = _make_paletted_nlcd_geotiff_bytes_with_background(quantized, nodata=None)
 
-    fixed = data_fetch._fix_nlcd_background_transparency(raw)
+    fixed = lc_mod._fix_nlcd_background_transparency(raw)
 
     with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
         f.write(fixed)
@@ -3142,20 +3128,20 @@ def test_fix_nlcd_background_transparency_promotes_zero_when_no_nodata_declared(
 
 def test_fix_nlcd_background_transparency_noop_when_no_background_pixels():
     """No class-0 pixels present -- nothing to fix, bytes pass through unchanged."""
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     raw = _make_paletted_nlcd_geotiff_bytes(quantized)  # no 0-valued pixels
 
-    fixed = data_fetch._fix_nlcd_background_transparency(raw)
+    fixed = lc_mod._fix_nlcd_background_transparency(raw)
     assert fixed == raw
 
 
 def test_fix_nlcd_background_transparency_noop_without_colormap():
     """A continuous (non-paletted) raster is NEVER given a fabricated colormap."""
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     flat = _make_flat_nlcd_geotiff_bytes(quantized)
     assert _colormap_of_bytes(flat) is None  # sanity: no table to begin with
 
-    fixed = data_fetch._fix_nlcd_background_transparency(flat)
+    fixed = lc_mod._fix_nlcd_background_transparency(flat)
     assert fixed == flat
     assert _colormap_of_bytes(fixed) is None, "must NOT fabricate a colormap"
 
@@ -3169,7 +3155,7 @@ def test_fetch_nlcd_landcover_bytes_fixes_background_transparency_end_to_end(
     import rasterio
     import tempfile
 
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     raw = _make_paletted_nlcd_geotiff_bytes_with_background(
         quantized, width=64, height=64, nodata=255
     )
@@ -3184,9 +3170,9 @@ def test_fetch_nlcd_landcover_bytes_fixes_background_transparency_end_to_end(
             return None
 
     monkeypatch.setattr(
-        data_fetch.requests, "get", lambda *a, **kw: _FakeResp()
+        requests, "get", lambda *a, **kw: _FakeResp()
     )
-    out = data_fetch._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
+    out = lc_mod._fetch_nlcd_landcover_bytes(FORT_MYERS_BBOX, 2021)
 
     with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
         f.write(out)
@@ -3307,11 +3293,11 @@ def _assert_colormap_round_trip_equal(src_bytes, out_bytes):
 
 def test_clip_raster_bytes_preserves_colormap():
     """``_clip_raster_bytes_to_bbox`` carries the embedded color table forward."""
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     paletted = _make_paletted_nlcd_geotiff_bytes(quantized, pad=True)
     assert _colormap_of_bytes(paletted) is not None  # sanity: source has one
 
-    clipped = data_fetch._clip_raster_bytes_to_bbox(paletted, quantized)
+    clipped = lc_mod._clip_raster_bytes_to_bbox(paletted, quantized)
     _assert_colormap_round_trip_equal(paletted, clipped)
     # Band marked palette so TiTiler treats pixels as indices.
     assert _colorinterp0_of_bytes(clipped) == "palette"
@@ -3319,16 +3305,16 @@ def test_clip_raster_bytes_preserves_colormap():
 
 def test_rasterio_translate_to_cog_preserves_colormap_and_overviews():
     """``_rasterio_translate_to_cog`` keeps the colormap AND builds overviews."""
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     paletted = _make_paletted_nlcd_geotiff_bytes(quantized)
-    assert not data_fetch._has_overviews(paletted)
+    assert not lc_mod._has_overviews(paletted)
 
-    cog = data_fetch._rasterio_translate_to_cog(paletted)
+    cog = lc_mod._rasterio_translate_to_cog(paletted)
     assert isinstance(cog, bytes) and len(cog) > 0
     # Colormap preserved (vs the source's round-tripped table).
     _assert_colormap_round_trip_equal(paletted, cog)
     # Overviews still present (the F33 fix must not regress either).
-    assert data_fetch._has_overviews(cog), "COG translate must keep overviews"
+    assert lc_mod._has_overviews(cog), "COG translate must keep overviews"
 
 
 def test_landcover_bytes_to_cog_preserves_colormap_overviews_and_clip():
@@ -3336,17 +3322,17 @@ def test_landcover_bytes_to_cog_preserves_colormap_overviews_and_clip():
     import rasterio
     import tempfile
 
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     paletted = _make_paletted_nlcd_geotiff_bytes(quantized, pad=True)
 
-    cog = data_fetch._landcover_bytes_to_cog(paletted, quantized)
+    cog = lc_mod._landcover_bytes_to_cog(paletted, quantized)
     assert isinstance(cog, bytes) and len(cog) > 0
 
     # (1) Colormap preserved end-to-end.
     _assert_colormap_round_trip_equal(paletted, cog)
 
     # (2) Overviews present.
-    assert data_fetch._has_overviews(cog)
+    assert lc_mod._has_overviews(cog)
 
     # (3) Clipped to the requested bbox (~2 px slack at 30 m).
     with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as f:
@@ -3366,11 +3352,11 @@ def test_landcover_bytes_to_cog_preserves_colormap_overviews_and_clip():
 
 def test_clip_raster_bytes_no_colormap_passes_through_unchanged():
     """A continuous raster (NO color table) is NOT given a fabricated colormap."""
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     flat = _make_flat_nlcd_geotiff_bytes(quantized, pad=True)
     assert _colormap_of_bytes(flat) is None  # sanity: no table to begin with
 
-    clipped = data_fetch._clip_raster_bytes_to_bbox(flat, quantized)
+    clipped = lc_mod._clip_raster_bytes_to_bbox(flat, quantized)
     assert _colormap_of_bytes(clipped) is None, "must NOT fabricate a colormap"
     # colorinterp must remain gray (not flipped to palette).
     assert _colorinterp0_of_bytes(clipped) != "palette"
@@ -3378,13 +3364,13 @@ def test_clip_raster_bytes_no_colormap_passes_through_unchanged():
 
 def test_rasterio_translate_to_cog_no_colormap_passes_through_unchanged():
     """COG translate of a non-paletted raster: overviews built, NO colormap added."""
-    quantized = data_fetch.round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
+    quantized = round_bbox_to_resolution(FORT_MYERS_BBOX, 30)
     flat = _make_flat_nlcd_geotiff_bytes(quantized)
 
-    cog = data_fetch._rasterio_translate_to_cog(flat)
+    cog = lc_mod._rasterio_translate_to_cog(flat)
     assert isinstance(cog, bytes) and len(cog) > 0
     assert _colormap_of_bytes(cog) is None, "must NOT fabricate a colormap on DEM-like"
-    assert data_fetch._has_overviews(cog), "overviews still build for non-paletted"
+    assert lc_mod._has_overviews(cog), "overviews still build for non-paletted"
 
 
 # ---------------------------------------------------------------------------
@@ -3419,13 +3405,11 @@ def test_fetch_river_geometry_happy_path_returns_layer_uri(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        riv_mod,
         "_fetch_osm_waterway_geometry_bytes",
         lambda bbox, *a, **kw: b"FAKE_FLATGEOBUF_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -3458,13 +3442,11 @@ def test_fetch_river_geometry_cache_key_distinct_per_bbox(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        riv_mod,
         "_fetch_osm_waterway_geometry_bytes",
         lambda bbox, *a, **kw: b"FAKE_FLATGEOBUF_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -3494,13 +3476,11 @@ def test_fetch_river_geometry_works_outside_huc4_envelope_via_osm(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        riv_mod,
         "_fetch_osm_waterway_geometry_bytes",
         lambda bbox, *a, **kw: b"FAKE_FLATGEOBUF_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -3508,7 +3488,7 @@ def test_fetch_river_geometry_works_outside_huc4_envelope_via_osm(monkeypatch):
 
     # Kansas — a CONUS bbox not in any v0.1 HUC4 envelope (the old failure case).
     kansas_bbox = (-97.4, 37.6, -97.2, 37.8)
-    assert data_fetch._huc4_for_bbox(kansas_bbox) is None
+    assert riv_mod._huc4_for_bbox(kansas_bbox) is None
     layer = fetch_river_geometry(kansas_bbox)
     assert layer.layer_type == "vector"
     assert layer.uri.endswith(".fgb")
@@ -3603,10 +3583,10 @@ def test_fetch_river_geometry_osm_returns_bbox_filling_geometry(monkeypatch):
 
         return _Resp()
 
-    monkeypatch.setattr(data_fetch.requests, "post", _fake_post)
+    monkeypatch.setattr(requests, "post", _fake_post)
 
-    quantized = data_fetch.round_bbox_to_resolution(KANSAS_BBOX, 10)
-    fgb_bytes = data_fetch._fetch_osm_waterway_geometry_bytes(quantized)
+    quantized = round_bbox_to_resolution(KANSAS_BBOX, 10)
+    fgb_bytes = riv_mod._fetch_osm_waterway_geometry_bytes(quantized)
     assert isinstance(fgb_bytes, bytes) and len(fgb_bytes) > 0
 
     # The Overpass QL targets waterways, not highways, and uses (s,w,n,e).
@@ -3654,11 +3634,9 @@ def test_fetch_river_geometry_falls_back_to_nhdplus_when_osm_fails(monkeypatch):
         calls.append(("nhd", huc4))
         return b"FAKE_NHDPLUS_FLATGEOBUF"
 
-    monkeypatch.setattr(data_fetch, "_fetch_osm_waterway_geometry_bytes", _osm_boom)
-    monkeypatch.setattr(data_fetch, "_fetch_nhdplushr_geometry_bytes", _nhd_ok)
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    monkeypatch.setattr(riv_mod, "_fetch_osm_waterway_geometry_bytes", _osm_boom)
+    monkeypatch.setattr(riv_mod, "_fetch_nhdplushr_geometry_bytes", _nhd_ok)
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -3687,11 +3665,9 @@ def test_fetch_river_geometry_typed_error_when_all_sources_fail(monkeypatch):
     def _nhd_boom(bbox, huc4):
         raise UpstreamAPIError("simulated NHDPlus 404")
 
-    monkeypatch.setattr(data_fetch, "_fetch_osm_waterway_geometry_bytes", _osm_boom)
-    monkeypatch.setattr(data_fetch, "_fetch_nhdplushr_geometry_bytes", _nhd_boom)
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    monkeypatch.setattr(riv_mod, "_fetch_osm_waterway_geometry_bytes", _osm_boom)
+    monkeypatch.setattr(riv_mod, "_fetch_nhdplushr_geometry_bytes", _nhd_boom)
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -3706,12 +3682,12 @@ def test_fetch_river_geometry_osm_only_when_no_huc4_and_osm_fails(monkeypatch):
     def _osm_boom(bbox, *a, **kw):
         raise UpstreamAPIError("simulated Overpass outage")
 
-    monkeypatch.setattr(data_fetch, "_fetch_osm_waterway_geometry_bytes", _osm_boom)
+    monkeypatch.setattr(riv_mod, "_fetch_osm_waterway_geometry_bytes", _osm_boom)
     # Kansas is outside every HUC4 envelope, so there is no NHDPlus fallback.
-    assert data_fetch._huc4_for_bbox(KANSAS_BBOX) is None
+    assert riv_mod._huc4_for_bbox(KANSAS_BBOX) is None
     with pytest.raises(UpstreamAPIError):
-        data_fetch._fetch_river_geometry_bytes(
-            data_fetch.round_bbox_to_resolution(KANSAS_BBOX, 10), None
+        riv_mod._fetch_river_geometry_bytes(
+            round_bbox_to_resolution(KANSAS_BBOX, 10), None
         )
 
 
@@ -3733,26 +3709,26 @@ IMPERIAL_VALLEY_BBOX = (-115.58, 32.78, -115.52, 32.84)
 def test_resolve_waterway_classes_default_and_aliases():
     """waterway_type resolver: None -> default; aliases + tokens normalize."""
     # None / empty / whitespace -> the default river/stream/canal tuple.
-    assert data_fetch._resolve_waterway_classes(None) == ("river", "stream", "canal")
-    assert data_fetch._resolve_waterway_classes("") == ("river", "stream", "canal")
-    assert data_fetch._resolve_waterway_classes("   ") == ("river", "stream", "canal")
+    assert riv_mod._resolve_waterway_classes(None) == ("river", "stream", "canal")
+    assert riv_mod._resolve_waterway_classes("") == ("river", "stream", "canal")
+    assert riv_mod._resolve_waterway_classes("   ") == ("river", "stream", "canal")
     # Convenience aliases.
-    assert data_fetch._resolve_waterway_classes("all") == (
+    assert riv_mod._resolve_waterway_classes("all") == (
         "river",
         "stream",
         "canal",
         "ditch",
         "drain",
     )
-    assert data_fetch._resolve_waterway_classes("drainage") == ("ditch", "drain")
-    assert data_fetch._resolve_waterway_classes("ditches") == ("ditch", "drain")
+    assert riv_mod._resolve_waterway_classes("drainage") == ("ditch", "drain")
+    assert riv_mod._resolve_waterway_classes("ditches") == ("ditch", "drain")
     # Single value, case/space-insensitive.
-    assert data_fetch._resolve_waterway_classes("  Ditch ") == ("ditch",)
+    assert riv_mod._resolve_waterway_classes("  Ditch ") == ("ditch",)
     # Comma- and plus-joined strings.
-    assert data_fetch._resolve_waterway_classes("ditch,drain") == ("ditch", "drain")
-    assert data_fetch._resolve_waterway_classes("river+ditch") == ("river", "ditch")
+    assert riv_mod._resolve_waterway_classes("ditch,drain") == ("ditch", "drain")
+    assert riv_mod._resolve_waterway_classes("river+ditch") == ("river", "ditch")
     # List form, with order-preserving de-duplication.
-    assert data_fetch._resolve_waterway_classes(
+    assert riv_mod._resolve_waterway_classes(
         ["ditch", "drain", "ditch"]
     ) == ("ditch", "drain")
 
@@ -3764,31 +3740,31 @@ def test_resolve_waterway_classes_rejects_unknown_tokens():
     arbitrary text into the Overpass ``~"^(...)$"`` regex.
     """
     with pytest.raises(BboxInvalidError):
-        data_fetch._resolve_waterway_classes("sewer")
+        riv_mod._resolve_waterway_classes("sewer")
     with pytest.raises(BboxInvalidError):
-        data_fetch._resolve_waterway_classes("river,sewer")
+        riv_mod._resolve_waterway_classes("river,sewer")
     with pytest.raises(BboxInvalidError):
-        data_fetch._resolve_waterway_classes(["ditch", 5])  # type: ignore[list-item]
+        riv_mod._resolve_waterway_classes(["ditch", 5])  # type: ignore[list-item]
     with pytest.raises(BboxInvalidError):
-        data_fetch._resolve_waterway_classes(42)  # type: ignore[arg-type]
+        riv_mod._resolve_waterway_classes(42)  # type: ignore[arg-type]
 
 
 def test_build_overpass_waterway_ql_threads_selected_classes():
     """The resolved classes flow into the Overpass QL regex alternation."""
     bbox = IMPERIAL_VALLEY_BBOX
-    ql_default = data_fetch._build_overpass_waterway_ql(
-        bbox, data_fetch._WATERWAY_CLASSES
+    ql_default = riv_mod._build_overpass_waterway_ql(
+        bbox, riv_mod._WATERWAY_CLASSES
     )
     assert 'waterway"~"^(river|stream|canal)$"' in ql_default
     assert "ditch" not in ql_default
 
-    ql_drainage = data_fetch._build_overpass_waterway_ql(
-        bbox, data_fetch._resolve_waterway_classes("drainage")
+    ql_drainage = riv_mod._build_overpass_waterway_ql(
+        bbox, riv_mod._resolve_waterway_classes("drainage")
     )
     assert 'waterway"~"^(ditch|drain)$"' in ql_drainage
 
-    ql_all = data_fetch._build_overpass_waterway_ql(
-        bbox, data_fetch._resolve_waterway_classes("all")
+    ql_all = riv_mod._build_overpass_waterway_ql(
+        bbox, riv_mod._resolve_waterway_classes("all")
     )
     assert "ditch|drain" in ql_all and "river|stream|canal" in ql_all
 
@@ -3843,11 +3819,11 @@ def test_fetch_osm_waterway_threads_ditch_classes_into_query(monkeypatch):
 
         return _Resp()
 
-    monkeypatch.setattr(data_fetch.requests, "post", _fake_post)
+    monkeypatch.setattr(requests, "post", _fake_post)
 
-    quantized = data_fetch.round_bbox_to_resolution(IMPERIAL_VALLEY_BBOX, 10)
-    classes = data_fetch._resolve_waterway_classes("drainage")
-    fgb_bytes = data_fetch._fetch_osm_waterway_geometry_bytes(quantized, classes)
+    quantized = round_bbox_to_resolution(IMPERIAL_VALLEY_BBOX, 10)
+    classes = riv_mod._resolve_waterway_classes("drainage")
+    fgb_bytes = riv_mod._fetch_osm_waterway_geometry_bytes(quantized, classes)
     assert isinstance(fgb_bytes, bytes) and len(fgb_bytes) > 0
 
     # The widened classes reached the Overpass QL regex (NOT the default set).
@@ -3882,14 +3858,12 @@ def test_fetch_river_geometry_waterway_type_distinct_cache_key(monkeypatch):
 
     seen_classes = []
 
-    def _fake_osm(bbox, waterway_classes=data_fetch._WATERWAY_CLASSES):
+    def _fake_osm(bbox, waterway_classes=riv_mod._WATERWAY_CLASSES):
         seen_classes.append(tuple(waterway_classes))
         return b"FAKE_FLATGEOBUF_BYTES"
 
-    monkeypatch.setattr(data_fetch, "_fetch_osm_waterway_geometry_bytes", _fake_osm)
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    monkeypatch.setattr(riv_mod, "_fetch_osm_waterway_geometry_bytes", _fake_osm)
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -3923,13 +3897,11 @@ def test_fetch_river_geometry_default_cache_key_unchanged_by_upgrade(monkeypatch
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        riv_mod,
         "_fetch_osm_waterway_geometry_bytes",
         lambda bbox, *a, **kw: b"FAKE_FLATGEOBUF_BYTES",
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -4010,13 +3982,11 @@ def test_lookup_precip_return_period_happy_path_returns_structured_dict(monkeypa
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        pfd_mod,
         "_fetch_atlas14_pfds_bytes",
         lambda lat, lon: _ATLAS14_FORT_MYERS_FIXTURE,
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -4050,10 +4020,8 @@ def test_lookup_precip_return_period_quantizes_location_to_atlas14_grid(monkeypa
         fetch_calls.append((lat, lon))
         return _ATLAS14_FORT_MYERS_FIXTURE
 
-    monkeypatch.setattr(data_fetch, "_fetch_atlas14_pfds_bytes", _capturing_fetch)
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    monkeypatch.setattr(pfd_mod, "_fetch_atlas14_pfds_bytes", _capturing_fetch)
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),
@@ -4093,13 +4061,11 @@ def test_lookup_precip_return_period_writes_csv_through_cache(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
 
     monkeypatch.setattr(
-        data_fetch,
+        pfd_mod,
         "_fetch_atlas14_pfds_bytes",
         lambda lat, lon: _ATLAS14_FORT_MYERS_FIXTURE,
     )
-    monkeypatch.setattr(
-        data_fetch,
-        "read_through",
+    _setattr_all_fetch(monkeypatch, "read_through",
         lambda *a, **kw: cache_mod.read_through(
             *a, storage_client=fake_storage, now=PINNED_NOW, **kw
         ),

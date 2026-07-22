@@ -134,7 +134,7 @@ def test_build_spec_respects_explicit_boundary_and_wind():
 # (3) Solver registration + bridge tool registered.
 # ===========================================================================
 def test_swan_registered_in_solver_workflow_registry():
-    from trid3nt_server.tools.solver import SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.tools.simulation.solver import SOLVER_WORKFLOW_REGISTRY
     from trid3nt_server.workflows.run_swan import (
         SWAN_SOLVER_NAME,
         register_swan_solver,
@@ -154,7 +154,7 @@ def test_run_swan_waves_registered_in_tool_registry():
 def test_run_swan_waves_typed_error_on_missing_bbox():
     import asyncio
 
-    from trid3nt_server.tools.run_swan_tool import run_swan_waves
+    from trid3nt_server.tools.simulation.run_swan_tool import run_swan_waves
 
     out = asyncio.run(run_swan_waves(bbox=None))
     assert isinstance(out, dict)
@@ -188,7 +188,7 @@ def test_fetch_bathy_rejects_land_only_dem():
         fallback_warning = "no CUDEM coverage; degraded to 3DEP land-only"
 
     with patch(
-        "trid3nt_server.tools.fetch_topobathy.fetch_topobathy",
+        "trid3nt_server.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy",
         lambda b: _LandOnlyLayer(),
     ):
         with pytest.raises(SwanComposerError) as ei:
@@ -208,7 +208,7 @@ def test_fetch_bathy_accepts_real_bathymetry():
         fallback_warning = None
 
     with patch(
-        "trid3nt_server.tools.fetch_topobathy.fetch_topobathy",
+        "trid3nt_server.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy",
         lambda b: _SeamlessLayer(),
     ):
         uri = _fetch_bathy_for_swan(bbox)
@@ -227,7 +227,7 @@ def test_fetch_bathy_typed_error_when_topobathy_fails():
         raise RuntimeError("CUDEM host unreachable")
 
     with patch(
-        "trid3nt_server.tools.fetch_topobathy.fetch_topobathy", _boom
+        "trid3nt_server.tools.fetchers.ocean.fetch_topobathy.fetch_topobathy", _boom
     ):
         with pytest.raises(SwanComposerError) as ei:
             _fetch_bathy_for_swan(bbox)
@@ -556,9 +556,9 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
         return raw_peak.model_copy(update={"uri": "https://tiles/peak.png"})
 
     # The composer imports run_solver / wait_for_completion / EmitterBinding /
-    # set_emitter_binding INSIDE the function (from ..tools.solver import ...), so
+    # set_emitter_binding INSIDE the function (from ..tools.simulation.solver import ...), so
     # they must be patched at the SOURCE module, not on the composer module.
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
 
     with patch.object(comp, "_fetch_bathy_for_swan", lambda b: "s3://cache/topo.tif"), \
          patch.object(comp, "stage_swan_manifest", _fake_stage), \
@@ -643,7 +643,7 @@ def test_build_swan_build_spec_applies_inward_coercion():
 def test_normalize_boundary_side_words_and_phrases():
     """Words / phrases the LLM emits must coerce to a single cardinal so the
     strict Literal["N","S","E","W"] contract does not fail the first attempt."""
-    from trid3nt_server.tools.run_swan_tool import _normalize_boundary_side
+    from trid3nt_server.tools.simulation.run_swan_tool import _normalize_boundary_side
 
     assert _normalize_boundary_side("S") == "S"
     assert _normalize_boundary_side("south") == "S"
@@ -663,7 +663,7 @@ def test_normalize_boundary_side_words_and_phrases():
 def test_normalized_side_builds_a_valid_boundary():
     """The normalized side feeds the strict SwanWaveBoundary contract cleanly --
     a multi-char input ('from the south') no longer trips validation."""
-    from trid3nt_server.tools.run_swan_tool import _normalize_boundary_side
+    from trid3nt_server.tools.simulation.run_swan_tool import _normalize_boundary_side
 
     side = _normalize_boundary_side("from the south")
     assert side == "S"

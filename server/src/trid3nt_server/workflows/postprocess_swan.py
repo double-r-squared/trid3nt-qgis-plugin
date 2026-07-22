@@ -466,7 +466,7 @@ def _upload_cog_to_runs_bucket(
             )
         dest = f"s3://{bucket}/{run_id}/{dest_filename}"
         try:
-            from ..tools.solver import _get_s3_client
+            from ..tools.simulation.solver import _get_s3_client
 
             with local_cog.open("rb") as fh:
                 _get_s3_client().put_object(

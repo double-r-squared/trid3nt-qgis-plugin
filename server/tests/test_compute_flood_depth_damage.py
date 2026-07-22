@@ -39,7 +39,7 @@ from rasterio.warp import transform_bounds
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_flood_depth_damage import (
+from trid3nt_server.tools.processing.compute_flood_depth_damage import (
     DEPTH_DAMAGE_CURVE_FT,
     FloodDamageInputError,
     FloodDamageNoStructuresError,
@@ -263,7 +263,7 @@ def test_no_structures_raises(depth_and_assets, tmp_path) -> None:
 
 def test_nsi_fetch_used_when_no_assets(depth_and_assets, tmp_path, monkeypatch) -> None:
     raster, assets = depth_and_assets
-    import trid3nt_server.tools.fetch_usace_nsi as nsi_mod
+    import trid3nt_server.tools.fetchers.socioeconomic.fetch_usace_nsi as nsi_mod
 
     captured: dict = {}
 
@@ -309,16 +309,12 @@ def test_category_and_corpus() -> None:
     import yaml
 
     from trid3nt_server import categories
-    from trid3nt_server.tools import discover_dataset as dd
+    from trid3nt_server.tools.discovery import discover_dataset as dd
 
     assert (
         categories.PRIMARY_CATEGORY["compute_flood_depth_damage"]
         == "damage_assessment"
     )
-    corpus_path = (
-        pathlib.Path(dd.__file__).resolve().parents[1]
-        / "data"
-        / "tool_query_corpus.yaml"
-    )
+    corpus_path = pathlib.Path(dd._default_corpus_path())
     corpus = yaml.safe_load(corpus_path.read_text())
     assert len(corpus.get("compute_flood_depth_damage", [])) >= 5

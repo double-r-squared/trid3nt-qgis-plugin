@@ -24,7 +24,7 @@ import pytest
 from shapely.geometry import Point, Polygon
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fill_gaps import FillGapsError, fill_gaps
+from trid3nt_server.tools.processing.fill_gaps import FillGapsError, fill_gaps
 
 
 # ---------------------------------------------------------------------------

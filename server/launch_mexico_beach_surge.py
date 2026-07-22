@@ -61,12 +61,12 @@ OUTPUT_INTERVAL_MIN = 7.5
 
 
 async def main() -> int:
-    from trid3nt_server.tools.data_fetch import (
-        fetch_landcover,
+    from trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry import (
         fetch_river_geometry,
     )
-    from trid3nt_server.tools.fetch_topobathy import fetch_topobathy
-    from trid3nt_server.tools.solver import run_solver, wait_for_completion
+    from trid3nt_server.tools.fetchers.ocean.fetch_topobathy import fetch_topobathy
+    from trid3nt_server.tools.fetchers.terrain.fetch_landcover import fetch_landcover
+    from trid3nt_server.tools.simulation.solver import run_solver, wait_for_completion
     from trid3nt_server.workflows.model_flood_scenario import (
         _build_surge_forcing_members,
         _resolve_surge_forcing_from_fetchers,

@@ -289,7 +289,7 @@ def _grayscale_visible_base(
 
     import numpy as np
 
-    from ..tools.fetch_goes_archive_animation import (
+    from ..tools.fetchers.imagery.fetch_goes_archive_animation import (
         _SATELLITE_BUCKETS,
         _list_archive_keys_in_window,
         _warp_band_to_physical,
@@ -309,7 +309,7 @@ def _grayscale_visible_base(
     bucket = _SATELLITE_BUCKETS[satellite]
     url = f"https://{bucket}.s3.amazonaws.com/{key}"
 
-    from ..tools.fetch_goes_satellite import _download_to_tempfile
+    from ..tools.fetchers.imagery.fetch_goes_satellite import _download_to_tempfile
 
     nc_path = _download_to_tempfile(url)
     try:
@@ -363,8 +363,8 @@ def _bake_glm_frame_cog_bytes(
     """
     import numpy as np
 
-    from ..tools import fetch_glm_lightning as glmmod
-    from ..tools.fetch_goes_archive_animation import (
+    from ..tools.fetchers.weather import fetch_glm_lightning as glmmod
+    from ..tools.fetchers.imagery.fetch_goes_archive_animation import (
         _bake_fire_over_base,
         _grid_for_bbox,
         rgb_array_to_cog_bytes,
@@ -425,7 +425,7 @@ def _emit_baked_frame(
 ) -> tuple[LayerURI, dict[str, Any]]:
     """Cache-resolve one baked frame and wrap it as a raster ``LayerURI`` + stats."""
     from ..tools.cache import read_through
-    from ..tools.fetch_glm_lightning import _METADATA as _GLM_METADATA
+    from ..tools.fetchers.weather.fetch_glm_lightning import _METADATA as _GLM_METADATA
 
     ts_tag = b_start.strftime("%Y%m%d%H%M%S")
     captured: dict[str, Any] = {}
@@ -592,7 +592,7 @@ async def model_glm_lightning_animation(
     frame_stats: list[dict[str, Any]] = []
     n_empty = 0
     last_err: Exception | None = None
-    from ..tools import fetch_glm_lightning as glmmod
+    from ..tools.fetchers.weather import fetch_glm_lightning as glmmod
 
     for frame_no, (b_start, b_end) in enumerate(buckets, start=1):
         iso = _iso_z(b_start)

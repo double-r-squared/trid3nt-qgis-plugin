@@ -328,7 +328,7 @@ class _RR:
 
 
 def _patch_solver(monkeypatch, *, completion, manifest_bytes=None):
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "runs")
     monkeypatch.setattr(

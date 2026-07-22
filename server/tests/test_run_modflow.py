@@ -81,7 +81,7 @@ def test_run_modflow_job_registered_uncacheable() -> None:
     """run_modflow_job is in TOOL_REGISTRY with FR-DC-6 workflow_dispatch shape."""
     # Importing the tools package (eager imports) registers the tool.
     import trid3nt_server.tools as tools_pkg
-    import trid3nt_server.tools.run_modflow_tool  # noqa: F401 — fire @register_tool
+    import trid3nt_server.tools.simulation.run_modflow_tool  # noqa: F401 — fire @register_tool
 
     entry = tools_pkg.TOOL_REGISTRY.get("run_modflow_job")
     assert entry is not None, "run_modflow_job not registered"
@@ -191,7 +191,7 @@ def test_deck_namefile_package_refs_rewritten_to_subdir(tmp_path: Path) -> None:
 #
 # The GCP Cloud Workflows submit path (a fake ``executions_v1.ExecutionsClient``
 # via ``rm.set_workflows_client``) is removed with the backend. ``submit_modflow
-# _run`` now unconditionally routes through ``tools.solver.launch_local_solver``
+# _run`` now unconditionally routes through ``tools.simulation.solver.launch_local_solver``
 # (local-exec). The happy-path local-exec submit is covered end-to-end in
 # test_modflow_local_backend.py (with a fake S3 client + mf6 shim); here we keep
 # the typed-error contract guard.
@@ -206,7 +206,7 @@ def test_submit_modflow_run_dispatch_failure_is_typed(
     # which submit_modflow_run wraps as MODFLOW_DISPATCH_FAILED.
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
-    from trid3nt_server.tools import solver as _solver
+    from trid3nt_server.tools.simulation import solver as _solver
 
     monkeypatch.setattr(_solver, "_RUNS_BUCKET", None, raising=False)
     run_id = new_ulid()
@@ -288,7 +288,7 @@ async def test_run_modflow_job_local_end_to_end(monkeypatch: Any) -> None:
     tool. publish is skipped (no QGIS Server / GCS in tests) via the local
     ``file://`` URI guard in _dispatch_publish_layer.
     """
-    from trid3nt_server.tools.run_modflow_tool import run_modflow_job
+    from trid3nt_server.tools.simulation.run_modflow_tool import run_modflow_job
 
     monkeypatch.setenv("TRID3NT_MODFLOW_LOCAL", "1")
     monkeypatch.setenv("TRID3NT_MF6_BIN", _MF6_BIN)  # type: ignore[arg-type]
@@ -351,7 +351,7 @@ def test_run_modflow_job_rejects_incomplete_params() -> None:
     """Missing required params surface a typed error dict (no exception)."""
     import asyncio
 
-    from trid3nt_server.tools.run_modflow_tool import run_modflow_job
+    from trid3nt_server.tools.simulation.run_modflow_tool import run_modflow_job
 
     result = asyncio.run(run_modflow_job(contaminant="benzene"))
     assert isinstance(result, dict)
@@ -392,7 +392,7 @@ def test_run_modflow_job_coerces_string_latlon(
     """
     import asyncio
 
-    import trid3nt_server.tools.run_modflow_tool as rmt
+    import trid3nt_server.tools.simulation.run_modflow_tool as rmt
 
     captured: dict[str, Any] = {}
 
@@ -432,7 +432,7 @@ def test_run_modflow_job_accepts_real_list_latlon(monkeypatch: Any) -> None:
     """A genuine 2-list still passes through coercion unchanged."""
     import asyncio
 
-    import trid3nt_server.tools.run_modflow_tool as rmt
+    import trid3nt_server.tools.simulation.run_modflow_tool as rmt
 
     captured: dict[str, Any] = {}
 
@@ -472,7 +472,7 @@ def test_run_modflow_job_rejects_bad_latlon_typed(bad_latlon: Any) -> None:
     """A genuinely-bad latlon returns MODFLOW_PARAMS_INVALID (no exception)."""
     import asyncio
 
-    from trid3nt_server.tools.run_modflow_tool import run_modflow_job
+    from trid3nt_server.tools.simulation.run_modflow_tool import run_modflow_job
 
     result = asyncio.run(
         run_modflow_job(

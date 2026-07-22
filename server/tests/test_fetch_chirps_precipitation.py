@@ -26,8 +26,8 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.cache import ReadThroughResult
-import trid3nt_server.tools.fetch_chirps_precipitation as mod
-from trid3nt_server.tools.fetch_chirps_precipitation import (
+import trid3nt_server.tools.fetchers.climate.fetch_chirps_precipitation as mod
+from trid3nt_server.tools.fetchers.climate.fetch_chirps_precipitation import (
     CHIRPSEmptyError,
     CHIRPSInputError,
     CHIRPSNotAvailableError,

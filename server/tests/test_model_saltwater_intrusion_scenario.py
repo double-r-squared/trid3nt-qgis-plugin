@@ -134,7 +134,7 @@ async def test_composer_full_chain(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["run_args"] = run_args
         return fake_layer
 
-    import trid3nt_server.tools.run_modflow_archetype_tool as _tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -176,7 +176,7 @@ async def test_composer_assembles_correct_run_args(
         captured["run_args"] = run_args
         return fake_layer
 
-    import trid3nt_server.tools.run_modflow_archetype_tool as _tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -205,7 +205,7 @@ async def test_composer_emits_chart_payload(monkeypatch: pytest.MonkeyPatch) -> 
     async def _fake_run(run_args: Any, **_kw: Any) -> SaltwaterWedgeLayerURI:
         return fake_layer
 
-    import trid3nt_server.tools.run_modflow_archetype_tool as _tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -239,7 +239,7 @@ async def test_composer_no_chart_emit_when_none(
     async def _fake_run(run_args: Any, **_kw: Any) -> SaltwaterWedgeLayerURI:
         return fake_layer
 
-    import trid3nt_server.tools.run_modflow_archetype_tool as _tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -277,7 +277,7 @@ async def test_composer_surfaces_run_error_dict(
             "error_message": "BUY variable-density solve failed",
         }
 
-    import trid3nt_server.tools.run_modflow_archetype_tool as _tool
+    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _err_run)
 

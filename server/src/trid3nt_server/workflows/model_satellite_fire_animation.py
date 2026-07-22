@@ -286,21 +286,21 @@ def _peek_frame_count(
     """
     try:
         if _is_polar_product(product):
-            from ..tools.fetch_viirs_day_fire import (
+            from ..tools.fetchers.imagery.fetch_viirs_day_fire import (
                 DAY_FIRE_PRODUCT_SLUG,
                 _build_pass_list,
             )
-            from ..tools._satellite_slider import fetch_slider_timestamps
+            from ..tools.fetchers.imagery._satellite_slider import fetch_slider_timestamps
 
             all_ts = fetch_slider_timestamps("jpss", "conus", DAY_FIRE_PRODUCT_SLUG)
             center_lon = (bbox[0] + bbox[2]) / 2.0
             return len(_build_pass_list(all_ts, start, end, center_lon, day_only=True))
         else:
-            from ..tools.fetch_goes_animation import (
+            from ..tools.fetchers.imagery.fetch_goes_animation import (
                 _band_to_slider_product,
                 _build_frame_list,
             )
-            from ..tools._satellite_slider import fetch_slider_timestamps
+            from ..tools.fetchers.imagery._satellite_slider import fetch_slider_timestamps
 
             slug = _band_to_slider_product(product)
             all_ts = fetch_slider_timestamps("goes-18", "conus", slug)

@@ -2,7 +2,7 @@
 
 MODFLOW routed through the job-0291 ``TRID3NT_SOLVER_BACKEND=local-docker``
 seam, as an **image-less local-exec** spec over the shared
-``tools.solver.launch_local_solver`` machinery: stage the deck from S3
+``tools.simulation.solver.launch_local_solver`` machinery: stage the deck from S3
 (boto3), run the ``mf6`` binary detached (no public MODFLOW image exists —
 the instance carries the SHA-pinned USGS 6.5.0 static binary the GCP
 Dockerfile installs), supervisor uploads outputs + the EXACT
@@ -12,7 +12,7 @@ Dockerfile installs), supervisor uploads outputs + the EXACT
 Hard constraints honored here (kickoff): **NO docker / NO real mf6 on this
 machine** — the ``mf6`` binary is a PATH-shim bash script (behaviors
 ok / diverge / fail / hang via a state file), and ALL S3 I/O goes through the
-``tools.solver.set_s3_client`` seam with a dict-backed boto3-shaped fake.
+``tools.simulation.solver.set_s3_client`` seam with a dict-backed boto3-shaped fake.
 NO Gemini/Vertex/Bedrock anywhere.
 
 Coverage maps to the kickoff §4 test list (mirrors job-0291's
@@ -58,10 +58,10 @@ import numpy as np
 import pytest
 from botocore.exceptions import ClientError
 
-import trid3nt_server.tools.solver as solver_mod
+import trid3nt_server.tools.simulation.solver as solver_mod
 import trid3nt_server.workflows.postprocess_modflow as pp
 import trid3nt_server.workflows.run_modflow as rm
-from trid3nt_server.tools.solver import (
+from trid3nt_server.tools.simulation.solver import (
     LOCAL_EXEC_WORKFLOW_NAME,
     set_emitter_binding,
     set_runs_bucket,
@@ -780,7 +780,7 @@ async def test_run_modflow_job_local_backend_e2e(
     publish (TiTiler exit) — yielding a typed PlumeLayerURI with non-zero
     metrics.
     """
-    from trid3nt_server.tools.run_modflow_tool import run_modflow_job
+    from trid3nt_server.tools.simulation.run_modflow_tool import run_modflow_job
     from trid3nt_contracts.modflow_contracts import PlumeLayerURI
 
     monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")

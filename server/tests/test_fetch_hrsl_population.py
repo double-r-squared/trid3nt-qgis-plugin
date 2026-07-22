@@ -32,7 +32,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_hrsl_population import (
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population import (
     HRSLBboxRequiredError,
     HRSLEmptyError,
     HRSLError,
@@ -189,7 +189,7 @@ def test_antarctica_bbox_raises_empty_via_fetch():
     Calls the inner ``_fetch_hrsl_bytes`` directly to avoid the cache short-circuit
     that would otherwise call rasterio for an Antarctica bbox.
     """
-    from trid3nt_server.tools.fetch_hrsl_population import _fetch_hrsl_bytes
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population import _fetch_hrsl_bytes
 
     with pytest.raises(HRSLEmptyError):
         _fetch_hrsl_bytes(bbox=_ANTARCTICA_BBOX)
@@ -241,10 +241,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return fake_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_hrsl_population._fetch_hrsl_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population._fetch_hrsl_bytes",
         side_effect=fake_inner,
     ), patch(
-        "trid3nt_server.tools.fetch_hrsl_population.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_hrsl_population(bbox=_FORT_MYERS_BBOX)
@@ -267,10 +267,10 @@ def test_cache_hit_skips_fetch_fn():
         return fake_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_hrsl_population._fetch_hrsl_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population._fetch_hrsl_bytes",
         side_effect=fake_inner,
     ), patch(
-        "trid3nt_server.tools.fetch_hrsl_population.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_hrsl_population(bbox=_FORT_MYERS_BBOX)
@@ -285,10 +285,10 @@ def test_layer_uri_shape_has_persons_units_and_raster_role():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_hrsl_population._fetch_hrsl_bytes",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population._fetch_hrsl_bytes",
         return_value=_fake_cog_bytes("SHAPE"),
     ), patch(
-        "trid3nt_server.tools.fetch_hrsl_population.read_through",
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_hrsl_population(bbox=_FORT_MYERS_BBOX)
@@ -325,7 +325,7 @@ def test_live_fort_myers_returns_population_cog():
     """
     import numpy as np
     import rasterio
-    from trid3nt_server.tools.fetch_hrsl_population import _fetch_hrsl_bytes
+    from trid3nt_server.tools.fetchers.socioeconomic.fetch_hrsl_population import _fetch_hrsl_bytes
 
     cog_bytes = _fetch_hrsl_bytes(bbox=_FORT_MYERS_BBOX)
     assert len(cog_bytes) > 0, "COG bytes should be non-empty"

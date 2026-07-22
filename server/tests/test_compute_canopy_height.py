@@ -19,8 +19,8 @@ from typing import Any
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import compute_canopy_height as cch
-from trid3nt_server.tools.compute_canopy_height import (
+from trid3nt_server.tools.processing import compute_canopy_height as cch
+from trid3nt_server.tools.processing.compute_canopy_height import (
     assemble_canopy_build_spec,
     compute_canopy_height,
     estimate_canopy_tiles,
@@ -42,7 +42,7 @@ def test_compute_canopy_height_registered():
 
 
 def test_canopy_registered_in_solver_workflow_registry():
-    from trid3nt_server.tools.solver import SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.tools.simulation.solver import SOLVER_WORKFLOW_REGISTRY
 
     assert "canopy" in SOLVER_WORKFLOW_REGISTRY
 
@@ -113,7 +113,7 @@ class _FakeS3:
 
 
 def test_stage_canopy_build_spec_uploads_to_cache(monkeypatch):
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
 
     fake = _FakeS3()
     solver_mod.set_s3_client(fake)
@@ -201,8 +201,8 @@ def _patch_chain(monkeypatch, *, captured: dict, naip_uri="s3://cache/naip-rgb.t
     """Patch the chain seams at their SOURCE modules (the tool imports them
     inside the function body, so patch the source, not the tool module)."""
     from trid3nt_server.tools import publish_layer as publish_mod
-    from trid3nt_server.tools import solver as solver_mod
-    from trid3nt_server.tools import fetch_naip as naip_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
+    from trid3nt_server.tools.fetchers.imagery import fetch_naip as naip_mod
 
     rr = run_result if run_result is not None else _FakeRunResult()
 

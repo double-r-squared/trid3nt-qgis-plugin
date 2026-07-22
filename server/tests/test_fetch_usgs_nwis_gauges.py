@@ -34,7 +34,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_usgs_nwis_gauges import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import (
     NwisBboxTooLargeError,
     NwisGaugesError,
     NwisInputError,
@@ -471,9 +471,9 @@ def test_whole_state_bbox_with_state_code_succeeds():
         return iv_json
 
     with (
-        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
         patch(
-            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -503,9 +503,9 @@ def test_iv_happy_path_layer_uri_shape():
     ])
 
     with (
-        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", return_value=iv_json),
+        patch("trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges._http_get", return_value=iv_json),
         patch(
-            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -566,9 +566,9 @@ def test_iv_empty_falls_back_to_site_service():
         return empty_iv  # IV returns nothing
 
     with (
-        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
         patch(
-            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -611,9 +611,9 @@ def test_both_empty_raises_no_stations_error():
         return _make_iv_json([])  # no IV sites
 
     with (
-        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
         patch(
-            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
         pytest.raises(NwisNoStationsError, match="No active USGS NWIS gauge"),
@@ -666,9 +666,9 @@ def test_extra_kwargs_absorbed():
         _ts("13206000", "BOISE R", 43.62, -116.20, "00060", "1234"),
     ])
     with (
-        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", return_value=iv_json),
+        patch("trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges._http_get", return_value=iv_json),
         patch(
-            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -807,9 +807,9 @@ def test_window_mode_layer_uri_carries_hydrograph(monkeypatch):
         return iv_window
 
     with (
-        patch("trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
+        patch("trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges._http_get", side_effect=fake_http_get),
         patch(
-            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
     ):
@@ -851,11 +851,11 @@ def test_window_mode_no_stations_raises(monkeypatch):
 
     with (
         patch(
-            "trid3nt_server.tools.fetch_usgs_nwis_gauges._http_get",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges._http_get",
             return_value=_make_iv_json([]),
         ),
         patch(
-            "trid3nt_server.tools.fetch_usgs_nwis_gauges.read_through",
+            "trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges.read_through",
             side_effect=_make_read_through_injector(fake_gcs),
         ),
         pytest.raises(NwisNoStationsError, match="window"),
@@ -874,7 +874,7 @@ def test_window_mode_no_stations_raises(monkeypatch):
     reason="Set TRID3NT_TEST_LIVE_NWIS=1 to run live USGS NWIS tests",
 )
 def test_live_boise_iv_returns_gauges():
-    from trid3nt_server.tools.fetch_usgs_nwis_gauges import _fetch_usgs_nwis_gauges_bytes
+    from trid3nt_server.tools.fetchers.hydrology.fetch_usgs_nwis_gauges import _fetch_usgs_nwis_gauges_bytes
 
     fgb_bytes, extent = _fetch_usgs_nwis_gauges_bytes(
         state_code=None, bbox=_BOISE_BBOX

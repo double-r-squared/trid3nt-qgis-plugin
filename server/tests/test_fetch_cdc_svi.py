@@ -22,7 +22,7 @@ import tempfile
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_cdc_svi import (
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_cdc_svi import (
     CDC_SVIInputError,
     CDC_SVIUpstreamError,
     SVI_NULL_SENTINEL,

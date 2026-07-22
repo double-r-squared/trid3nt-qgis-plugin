@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.probe_point import (
+from trid3nt_server.tools.meta.probe_point import (
     MAX_PROBE_LAYERS,
     ProbePointCaseNotFoundError,
     ProbePointInputError,

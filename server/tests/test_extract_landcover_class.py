@@ -39,7 +39,7 @@ import rasterio
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.extract_landcover_class import (
+from trid3nt_server.tools.processing.extract_landcover_class import (
     LandcoverClassError,
     extract_landcover_class,
 )
@@ -405,7 +405,7 @@ def test_cache_miss_hit_skips_recompute():
         call_count = [0]
 
         # Wrap the inner extractor to count invocations.
-        from trid3nt_server.tools import extract_landcover_class as mod
+        from trid3nt_server.tools.processing import extract_landcover_class as mod
 
         real_extract = mod._extract_mask_bytes
 

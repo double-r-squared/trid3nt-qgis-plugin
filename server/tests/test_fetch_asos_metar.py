@@ -27,7 +27,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_asos_metar import (
+from trid3nt_server.tools.fetchers.weather.fetch_asos_metar import (
     ASASMETAREmptyError,
     ASASMETARInputError,
     ASASMETARUpstreamError,
@@ -347,10 +347,10 @@ def test_no_stations_in_bbox_raises_empty_error():
 
     # Patch _discover_stations_in_bbox to return empty list.
     with patch(
-        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar._discover_stations_in_bbox",
         return_value=[],
     ), patch(
-        "trid3nt_server.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(ASASMETAREmptyError, match="No IEM ASOS stations"):
@@ -378,13 +378,13 @@ def test_mocked_end_to_end_writes_fgb_to_cache():
         return csv_bytes
 
     with patch(
-        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar._discover_stations_in_bbox",
         side_effect=fake_discover,
     ), patch(
-        "trid3nt_server.tools.fetch_asos_metar._fetch_asos_csv_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar._fetch_asos_csv_bytes",
         side_effect=fake_fetch_csv,
     ), patch(
-        "trid3nt_server.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_asos_metar(
@@ -428,13 +428,13 @@ def test_layer_uri_shape():
     csv_bytes = _synthetic_asos_csv(n_obs_per_station=1)
 
     with patch(
-        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar._discover_stations_in_bbox",
         return_value=_SYNTHETIC_STATIONS,
     ), patch(
-        "trid3nt_server.tools.fetch_asos_metar._fetch_asos_csv_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar._fetch_asos_csv_bytes",
         return_value=csv_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_asos_metar(
@@ -467,13 +467,13 @@ def test_cache_miss_invokes_fetch_fn_then_hit_skips():
         return _SYNTHETIC_STATIONS
 
     with patch(
-        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar._discover_stations_in_bbox",
         side_effect=counting_discover,
     ), patch(
-        "trid3nt_server.tools.fetch_asos_metar._fetch_asos_csv_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar._fetch_asos_csv_bytes",
         return_value=csv_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_asos_metar(
@@ -502,13 +502,13 @@ def test_different_bbox_produces_different_cache_key():
         return _SYNTHETIC_STATIONS
 
     with patch(
-        "trid3nt_server.tools.fetch_asos_metar._discover_stations_in_bbox",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar._discover_stations_in_bbox",
         side_effect=noop_discover,
     ), patch(
-        "trid3nt_server.tools.fetch_asos_metar._fetch_asos_csv_bytes",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar._fetch_asos_csv_bytes",
         return_value=csv_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_asos_metar.read_through",
+        "trid3nt_server.tools.fetchers.weather.fetch_asos_metar.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_asos_metar(
@@ -581,7 +581,7 @@ def test_live_fort_myers_asos_returns_observations():
     - All point coordinates are within the US lon/lat envelope.
     - Required columns (station, valid, tmpf) present.
     """
-    from trid3nt_server.tools.fetch_asos_metar import (
+    from trid3nt_server.tools.fetchers.weather.fetch_asos_metar import (
         _discover_stations_in_bbox,
         _fetch_asos_csv_bytes,
         _parse_csv_to_fgb,

@@ -31,7 +31,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_gridmet import (
+from trid3nt_server.tools.fetchers.climate.fetch_gridmet import (
     GRIDMETEmptyError,
     GRIDMETInputError,
     GRIDMETNotAvailableError,
@@ -156,7 +156,7 @@ def _build_synthetic_gridmet_dataset(variable: str, bbox, n_days: int = 3):
         ]
     )
     # Variable's "internal" long-name token from the production module.
-    from trid3nt_server.tools.fetch_gridmet import _VARIABLES
+    from trid3nt_server.tools.fetchers.climate.fetch_gridmet import _VARIABLES
     long_name, units = _VARIABLES[variable]
 
     arr = np.zeros((len(days), len(lats), len(lons)), dtype=np.float32)
@@ -353,7 +353,7 @@ def test_mocked_happy_path_fm100(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "trid3nt_server.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gridmet(
@@ -398,7 +398,7 @@ def test_two_variables_produce_distinct_cache_keys(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "trid3nt_server.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_gridmet(
@@ -432,7 +432,7 @@ def test_cache_hit_skips_dap(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "trid3nt_server.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_gridmet(
@@ -464,7 +464,7 @@ def test_dap_failure_surfaces_as_upstream_error(monkeypatch):
     monkeypatch.setattr(xr, "open_dataset", _fake_open)
 
     with patch(
-        "trid3nt_server.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         with pytest.raises(GRIDMETUpstreamError) as exc_info:
@@ -492,7 +492,7 @@ def test_layer_uri_shape_fields(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "trid3nt_server.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gridmet(
@@ -523,7 +523,7 @@ def test_extra_kwargs_absorbed(monkeypatch):
     _install_fake_xr_open(monkeypatch, _factory)
 
     with patch(
-        "trid3nt_server.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         # Call with extra invented kwargs — must not raise TypeError.
@@ -553,7 +553,7 @@ def test_live_riverside_fm100(tmp_path):
 
     fake_gcs = FakeStorageClient()
     with patch(
-        "trid3nt_server.tools.fetch_gridmet.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_gridmet.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_gridmet(

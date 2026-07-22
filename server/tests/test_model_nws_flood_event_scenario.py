@@ -629,7 +629,7 @@ async def test_no_alerts_at_all_degrades_quiet() -> None:
 
 @pytest.mark.asyncio
 async def test_nws_fetch_failure_degrades() -> None:
-    from trid3nt_server.tools.fetch_nws_alerts_conus import NWSConusUpstreamError
+    from trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus import NWSConusUpstreamError
 
     geojson_calls = {"count": 0}
 
@@ -660,7 +660,7 @@ async def test_nws_fetch_failure_degrades() -> None:
 
 @pytest.mark.asyncio
 async def test_mrms_failure_degrades_with_selected_warning() -> None:
-    from trid3nt_server.tools.fetch_mrms_qpe import MRMSQPEUpstreamError
+    from trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe import MRMSQPEUpstreamError
 
     features = [_feature("Flood Warning", severity="Severe", alert_id="picked")]
 

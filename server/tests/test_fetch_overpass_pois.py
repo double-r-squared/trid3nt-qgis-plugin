@@ -30,7 +30,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_overpass_pois import (
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois import (
     OVERPASS_ENDPOINTS,
     OverpassInputError,
     OverpassNoFeaturesError,
@@ -112,7 +112,7 @@ def _payload(elements: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _fast_sleep(monkeypatch) -> None:
     monkeypatch.setattr(
-        "trid3nt_server.tools.fetch_overpass_pois.time.sleep", lambda *_a, **_k: None
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.time.sleep", lambda *_a, **_k: None
     )
 
 
@@ -317,8 +317,8 @@ def test_end_to_end_synthetic_features_and_cache_hit(monkeypatch):
             captured_url.append(url)
             return _Resp(_payload(elements))
 
-    with patch("trid3nt_server.tools.fetch_overpass_pois.httpx.Client", _Client), patch(
-        "trid3nt_server.tools.fetch_overpass_pois.read_through",
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.httpx.Client", _Client), patch(
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.read_through",
         _make_read_through_injector(fake),
     ):
         layer = fetch_overpass_pois(bbox=_SF_BBOX, amenity="hospital")
@@ -379,8 +379,8 @@ def test_zero_features_raises_no_features_error(monkeypatch):
         def post(self, url, data=None):
             return _Resp()
 
-    with patch("trid3nt_server.tools.fetch_overpass_pois.httpx.Client", _Client), patch(
-        "trid3nt_server.tools.fetch_overpass_pois.read_through",
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.httpx.Client", _Client), patch(
+        "trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.read_through",
         _make_read_through_injector(fake),
     ):
         with pytest.raises(OverpassNoFeaturesError) as ei:
@@ -413,8 +413,8 @@ def test_all_mirrors_504_raises_upstream_error(monkeypatch):
 
         post = staticmethod(_raise_504)
 
-    with patch("trid3nt_server.tools.fetch_overpass_pois.httpx.Client", _Client):
-        from trid3nt_server.tools.fetch_overpass_pois import _post_overpass
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.httpx.Client", _Client):
+        from trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois import _post_overpass
 
         with pytest.raises(OverpassUpstreamError) as ei:
             _post_overpass("[out:json];out;")
@@ -441,8 +441,8 @@ def test_non_429_4xx_short_circuits_to_input_error(monkeypatch):
 
         post = staticmethod(_raise_400)
 
-    with patch("trid3nt_server.tools.fetch_overpass_pois.httpx.Client", _Client):
-        from trid3nt_server.tools.fetch_overpass_pois import _post_overpass
+    with patch("trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois.httpx.Client", _Client):
+        from trid3nt_server.tools.fetchers.socioeconomic.fetch_overpass_pois import _post_overpass
 
         with pytest.raises(OverpassInputError):
             _post_overpass("[out:json];out;")

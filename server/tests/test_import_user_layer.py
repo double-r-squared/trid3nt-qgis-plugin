@@ -27,7 +27,7 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.tools import import_user_layer as iul
+from trid3nt_server.tools.meta import import_user_layer as iul
 from trid3nt_contracts.case import CaseSummary
 from trid3nt_contracts.common import new_ulid
 

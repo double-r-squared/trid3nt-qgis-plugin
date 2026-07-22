@@ -13,8 +13,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import compute_exposure_summary as mod
-from trid3nt_server.tools.compute_exposure_summary import (
+from trid3nt_server.tools.processing import compute_exposure_summary as mod
+from trid3nt_server.tools.processing.compute_exposure_summary import (
     ExposureEmptyFootprintError,
     ExposureInputError,
     compute_exposure_summary,

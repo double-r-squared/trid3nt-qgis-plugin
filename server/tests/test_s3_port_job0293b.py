@@ -18,10 +18,10 @@ seam (boto3-shaped; no network, no moto) + temp files:
 5. clip_vector_to_polygon._resolve_layer_to_local_path — (path, is_temp)
    tuple shape for s3 + typed ClipVectorError wrap.
 6. extract_landcover_class._open_source — /vsis3/ path for s3 URIs.
-7. analytical_qa._download_uri_bytes/_materialize_uri — bytes + tmpdir
-   materialization for s3 + typed AnalyticalQAError wrap.
-8. chart_tools._download_uri_bytes/_materialize_uri — same pair with
-   ChartToolError(retryable=True).
+7. (retired) analytical_qa — folded into spatial_query (Phase B); its
+   duplicate helper pair is covered by the canonical charts_common pair in 8.
+8. chart_tools._download_uri_bytes/_materialize_uri — bytes + tmpdir
+   materialization for s3 with ChartToolError(retryable=True).
 
 gs:// behaviour is asserted unchanged where the port touched adjacent code
 (the WMS reverse-map default-scheme test drives the gs branch with a fake
@@ -89,7 +89,7 @@ def _bind_failing_reader(monkeypatch, exc: Exception):
 
 
 def test_pelicun_download_s3_stages_to_temp_file(monkeypatch):
-    from trid3nt_server.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -108,7 +108,7 @@ def test_pelicun_download_s3_stages_to_temp_file(monkeypatch):
 def test_pelicun_download_s3_mangle_repair_retries_last_two_segments(monkeypatch):
     """LLM path-mangle guard (job-0253) mirrored for s3:// URIs."""
     from trid3nt_server.tools import cache as cache_mod
-    from trid3nt_server.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -137,7 +137,7 @@ def test_pelicun_download_s3_mangle_repair_retries_last_two_segments(monkeypatch
 
 
 def test_pelicun_download_s3_failure_raises_typed_error(monkeypatch):
-    from trid3nt_server.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
         PelicunRuntimeError,
         _download_uri_to_local,
     )
@@ -155,7 +155,7 @@ _WMS_URI = (
 
 
 def test_pelicun_wms_reverse_map_uses_s3_scheme_on_aws(monkeypatch):
-    from trid3nt_server.tools.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -182,7 +182,7 @@ def test_pelicun_wms_reverse_map_uses_s3_scheme_on_aws(monkeypatch):
 
 
 def test_pelicun_fetch_stages_s3_inputs_and_unlinks_after(monkeypatch):
-    from trid3nt_server.tools import run_pelicun_damage_assessment as mod
+    from trid3nt_server.tools.simulation import run_pelicun_damage_assessment as mod
 
     _bind_fake_reader(monkeypatch, b"PAYLOAD")
 
@@ -228,7 +228,7 @@ def test_pelicun_fetch_stages_s3_inputs_and_unlinks_after(monkeypatch):
 
 
 def test_postprocess_pelicun_download_s3_stages_and_wraps_errors(monkeypatch):
-    from trid3nt_server.tools.postprocess_pelicun import (
+    from trid3nt_server.tools.simulation.postprocess_pelicun import (
         PelicunPostprocessIOError,
         _download_uri_to_local,
     )
@@ -251,7 +251,7 @@ def test_postprocess_pelicun_download_s3_stages_and_wraps_errors(monkeypatch):
 def test_postprocess_pelicun_tool_unlinks_s3_staged_file(monkeypatch):
     import geopandas as gpd
 
-    from trid3nt_server.tools import postprocess_pelicun as mod
+    from trid3nt_server.tools.simulation import postprocess_pelicun as mod
 
     _bind_fake_reader(monkeypatch, b"FGB-PAYLOAD")
 
@@ -300,7 +300,7 @@ def test_postprocess_pelicun_tool_unlinks_s3_staged_file(monkeypatch):
 
 
 def test_clip_vector_resolve_s3_returns_temp_path_tuple(monkeypatch):
-    from trid3nt_server.tools.clip_vector_to_polygon import (
+    from trid3nt_server.tools.processing.clip_vector_to_polygon import (
         _resolve_layer_to_local_path,
     )
 
@@ -322,7 +322,7 @@ def test_clip_vector_resolve_s3_returns_temp_path_tuple(monkeypatch):
 
 
 def test_clip_vector_resolve_s3_failure_raises_typed_error(monkeypatch):
-    from trid3nt_server.tools.clip_vector_to_polygon import (
+    from trid3nt_server.tools.processing.clip_vector_to_polygon import (
         ClipVectorError,
         _resolve_layer_to_local_path,
     )
@@ -349,39 +349,11 @@ def test_clip_vector_resolve_s3_failure_raises_typed_error(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 7. analytical_qa
+# 7. analytical_qa — RETIRED by the Phase-B DuckDB spatial-query fold. Its
+# _download_uri_bytes/_materialize_uri helpers were duplicates of the
+# charts_common pair (where _summarize_raster/_summarize_vector relocated);
+# section 8 below covers the surviving canonical helpers.
 # ---------------------------------------------------------------------------
-
-
-def test_analytical_qa_download_and_materialize_s3(monkeypatch):
-    from trid3nt_server.tools.analytical_qa import (
-        AnalyticalQAError,
-        _download_uri_bytes,
-        _materialize_uri,
-    )
-
-    calls = _bind_fake_reader(monkeypatch, b"LAYER-BYTES")
-    assert _download_uri_bytes("s3://bkt/layer.fgb", None) == b"LAYER-BYTES"
-    assert calls == ["s3://bkt/layer.fgb"]
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        local = _materialize_uri("s3://bkt/layer.fgb", tmpdir, "value", None)
-        assert local.startswith(tmpdir)
-        assert local.endswith("value_layer.fgb")
-        with open(local, "rb") as f:
-            assert f.read() == b"LAYER-BYTES"
-
-    _bind_failing_reader(monkeypatch, RuntimeError("AccessDenied"))
-    with pytest.raises(AnalyticalQAError, match="S3 download failed") as ei:
-        _download_uri_bytes("s3://bkt/layer.fgb", None)
-    assert ei.value.error_code == "DOWNLOAD_FAILED"
-
-
-def test_analytical_qa_materialize_local_path_passthrough_unchanged():
-    from trid3nt_server.tools.analytical_qa import _materialize_uri
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        assert _materialize_uri("/tmp/x.fgb", tmpdir, "v", None) == "/tmp/x.fgb"
 
 
 # ---------------------------------------------------------------------------
@@ -390,11 +362,7 @@ def test_analytical_qa_materialize_local_path_passthrough_unchanged():
 
 
 def test_chart_tools_download_and_materialize_s3(monkeypatch):
-    from trid3nt_server.tools.chart_tools import (
-        ChartToolError,
-        _download_uri_bytes,
-        _materialize_uri,
-    )
+    from trid3nt_server.tools.processing.charts_common import ChartToolError, _download_uri_bytes, _materialize_uri
 
     calls = _bind_fake_reader(monkeypatch, b"CHART-BYTES")
     assert _download_uri_bytes("s3://bkt/damage.fgb", None) == b"CHART-BYTES"
@@ -429,7 +397,7 @@ def test_clip_raster_to_bbox_get_source_crs_s3_stages_via_boto3(monkeypatch):
     # job-0293c: /vsis3/ creds don't resolve on the EC2 role in this env —
     # the s3 branch must stage bytes via the shared boto3 reader.
     from trid3nt_server.tools import cache as cache_mod
-    from trid3nt_server.tools.clip_raster_to_bbox import _get_source_crs
+    from trid3nt_server.tools.processing.clip_raster_to_bbox import _get_source_crs
 
     calls: list[str] = []
     data = _tiny_tif_bytes()
@@ -446,7 +414,7 @@ def test_clip_raster_to_bbox_get_source_crs_s3_stages_via_boto3(monkeypatch):
 
 def test_clip_raster_to_polygon_get_source_crs_s3_stages_via_boto3(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
-    from trid3nt_server.tools.clip_raster_to_polygon import _get_source_crs
+    from trid3nt_server.tools.processing.clip_raster_to_polygon import _get_source_crs
 
     calls: list[str] = []
     data = _tiny_tif_bytes()
@@ -459,7 +427,7 @@ def test_clip_raster_to_polygon_get_source_crs_s3_stages_via_boto3(monkeypatch):
 def test_extract_landcover_open_source_s3_stages_via_boto3(monkeypatch):
     import os
     from trid3nt_server.tools import cache as cache_mod
-    from trid3nt_server.tools import extract_landcover_class as elc
+    from trid3nt_server.tools.processing import extract_landcover_class as elc
 
     calls: list[str] = []
     data = _tiny_tif_bytes()

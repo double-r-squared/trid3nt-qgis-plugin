@@ -27,7 +27,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_nexrad_reflectivity import (
+from trid3nt_server.tools.fetchers.weather.fetch_nexrad_reflectivity import (
     NexradBboxError,
     NexradProductError,
     _build_wms_url,

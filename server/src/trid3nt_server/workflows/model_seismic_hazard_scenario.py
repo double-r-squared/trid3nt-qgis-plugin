@@ -239,7 +239,7 @@ def resolve_fault_sources(
     Only the caller's malformed bbox would surface upstream (already validated by
     ``OpenQuakeRunArgs``), so in practice this always returns cleanly.
     """
-    from ..tools.fetch_fault_sources import (
+    from ..tools.fetchers.hazard.fetch_fault_sources import (
         FaultSourcesError,
         fetch_fault_sources,
     )
@@ -394,7 +394,7 @@ def make_fault_sources_layer_uri(
     # boto3 instance-role + bucket convention the mesh layer + every run artifact
     # uses). A put failure -> the input is simply absent, never breaks the solve.
     try:
-        from ..tools.solver import _get_runs_bucket, _get_s3_client
+        from ..tools.simulation.solver import _get_runs_bucket, _get_s3_client
 
         bucket = runs_bucket or _get_runs_bucket()
         key = f"{run_id}/fault_sources.geojson"
@@ -458,7 +458,7 @@ def stage_openquake_build_spec(
         OpenQuakeWorkflowError("OQ_STAGING_FAILED"): the upload could not complete.
     """
     from ..tools.cache import CACHE_BUCKET, storage_scheme
-    from ..tools.solver import _get_s3_client
+    from ..tools.simulation.solver import _get_s3_client
 
     scheme = storage_scheme()  # "s3" on AWS
     cache_bucket = os.environ.get("TRID3NT_CACHE_BUCKET") or CACHE_BUCKET
@@ -519,7 +519,7 @@ def _download_batch_hazard_csv(run_result: Any, run_id: str) -> str:
         OpenQuakeWorkflowError("OQ_BATCH_OUTPUT_MISSING"): the completed run did
             not produce a downloadable hazard-map CSV.
     """
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         _get_runs_bucket,
         _get_s3_client,
         _split_object_uri,
@@ -596,7 +596,7 @@ def _download_batch_curve_csvs(
     was not exported / not readable (no chart for it). NEVER raises: a curve
     download wobble must not fail the hazard run (the map layer already landed)."""
     try:
-        from ..tools.solver import (
+        from ..tools.simulation.solver import (
             _get_runs_bucket,
             _get_s3_client,
             _split_object_uri,
@@ -644,7 +644,7 @@ async def _emit_oq_curve_charts(
     builds Vega-Lite line charts via ``chart_tools``, and emits them through the
     live pipeline emitter. Each builder returns None (emits nothing) when its
     series is absent - so a classical-only run (no UHS) emits only the curve."""
-    from ..tools.chart_tools import build_hazard_curve_chart, build_uhs_chart
+    from ..tools.processing.charts_common import build_hazard_curve_chart, build_uhs_chart
 
     curve_text, uhs_text = await asyncio.to_thread(
         _download_batch_curve_csvs, run_id
@@ -706,7 +706,7 @@ async def model_seismic_hazard_scenario(
     Raises:
         OpenQuakeWorkflowError: any staging / dispatch / postprocess step failed.
     """
-    from ..tools.solver import run_solver, wait_for_completion
+    from ..tools.simulation.solver import run_solver, wait_for_completion
 
     run_id = new_ulid()
     logger.info(
@@ -975,7 +975,7 @@ def openquake_local_spec() -> Any:
     This spec is the SUBPROCESS RUNNER for the offline / local build. The
     cloud Batch path is unchanged.
     """
-    from ..tools.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
+    from ..tools.simulation.solver import LOCAL_EXEC_WORKFLOW_NAME, LocalSolverSpec
 
     repo_root = _TRID3NT_REPO_ROOT_OQ
     # Prepend the repo root to PYTHONPATH so the shim can import
@@ -1015,13 +1015,13 @@ def openquake_local_spec() -> Any:
 
 
 def register_openquake_solver() -> None:
-    """Register ``'openquake'`` local spec in ``tools.solver.LOCAL_SOLVER_SPEC_REGISTRY``.
+    """Register ``'openquake'`` local spec in ``tools.simulation.solver.LOCAL_SOLVER_SPEC_REGISTRY``.
 
     Mirrors ``run_swmm.register_swmm_solver``. Idempotent -- safe to call at
     import. The factory (``openquake_local_spec``) is only called at dispatch
     time to avoid any circular-import hazard.
     """
-    from ..tools.solver import register_local_solver_spec
+    from ..tools.simulation.solver import register_local_solver_spec
 
     register_local_solver_spec(OPENQUAKE_SOLVER_NAME, openquake_local_spec)
 

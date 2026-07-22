@@ -145,7 +145,7 @@ def current_turn_case() -> str | None:
 # map-command verbs (zoom-to bbox immediately after geocode resolves, BEFORE
 # the long SFINCS solve) — invariant 8's "responsive design" complement.
 #
-# Why a ContextVar, not a module-level binding (cf. ``tools.solver._EMITTER_BINDING``):
+# Why a ContextVar, not a module-level binding (cf. ``tools.simulation.solver._EMITTER_BINDING``):
 # multiple sessions may be servicing tool calls concurrently in the same
 # process; a ContextVar is per-task and never leaks across asyncio tasks.
 # The solver-side binding is module-level because it was scoped to a single
@@ -214,7 +214,7 @@ async def emit_chart_payloads(payloads: Any) -> None:
     chart (task-198):
 
         from trid3nt_server.pipeline_emitter import emit_chart_payloads
-        from trid3nt_server.tools.chart_tools import build_budget_partition_chart
+        from trid3nt_server.tools.processing.charts_common import build_budget_partition_chart
         chart = build_budget_partition_chart(budget_partition_m3_day=part)
         await emit_chart_payloads(chart)
 

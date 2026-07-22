@@ -45,7 +45,7 @@ def test_run_startup_only_returns_zero_without_serving(caplog):
 def test_bind_worker_submitter_logs_probe_ready(monkeypatch, caplog):
     """A healthy submitter (--version returncode 0) logs a READY line."""
     import trid3nt_server.main as main_mod
-    from trid3nt_server.tools import passthroughs
+    from trid3nt_server.tools.meta import passthroughs
 
     calls: list[tuple] = []
 
@@ -83,7 +83,7 @@ def test_bind_worker_submitter_logs_probe_ready(monkeypatch, caplog):
 def test_bind_worker_submitter_logs_not_ready_on_bad_returncode(monkeypatch, caplog):
     """A submitter that returns non-zero logs NOT-READY (non-fatal)."""
     import trid3nt_server.main as main_mod
-    from trid3nt_server.tools import passthroughs
+    from trid3nt_server.tools.meta import passthroughs
 
     def _bad_submitter(args, timeout_s):
         return {
@@ -117,7 +117,7 @@ def test_bind_worker_submitter_probe_exception_is_non_fatal(monkeypatch, caplog)
     """A submitter that RAISES during the probe logs NOT-READY but the binding
     still stands and startup is not aborted."""
     import trid3nt_server.main as main_mod
-    from trid3nt_server.tools import passthroughs
+    from trid3nt_server.tools.meta import passthroughs
 
     def _raising_submitter(args, timeout_s):
         raise RuntimeError("simulated probe blow-up")
@@ -157,7 +157,7 @@ def test_bind_worker_submitter_probe_non_blocking_without_qgis_image(
     import time
 
     import trid3nt_server.main as main_mod
-    from trid3nt_server.tools import passthroughs
+    from trid3nt_server.tools.meta import passthroughs
 
     release = threading.Event()
     probe_started = threading.Event()
@@ -213,7 +213,7 @@ def test_bind_worker_submitter_probe_non_blocking_without_qgis_image(
 def test_bind_worker_submitter_skipped_by_env(monkeypatch):
     """``TRID3NT_SKIP_WORKER_SUBMITTER`` short-circuits binding + probe."""
     import trid3nt_server.main as main_mod
-    from trid3nt_server.tools import passthroughs
+    from trid3nt_server.tools.meta import passthroughs
 
     def _should_not_run():
         raise AssertionError("submitter resolution must be skipped")

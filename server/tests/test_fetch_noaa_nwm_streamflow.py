@@ -25,7 +25,7 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools.fetch_noaa_nwm_streamflow import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow import (
     _CONUS_BBOX,
     _METADATA,
     _parse_valid_time,
@@ -264,7 +264,7 @@ def test_live_fetch_fort_myers_returns_streamflow():
     netCDF + NLDI fetch path.
     """
     from unittest.mock import patch
-    from trid3nt_server.tools.fetch_noaa_nwm_streamflow import (
+    from trid3nt_server.tools.fetchers.hydrology.fetch_noaa_nwm_streamflow import (
         _fetch_nwm_streamflow_bytes,
     )
 

@@ -112,7 +112,7 @@ def test_resolve_building_obstacle_true_degrades_on_fetch_failure(monkeypatch) -
     Same degrade policy as river geometry (job-0307): a footprint-fetch failure
     must NOT kill the flood — the deck just omits obstacles.
     """
-    import trid3nt_server.tools.data_fetch as data_fetch
+    import trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings as data_fetch
 
     def _boom(*_a, **_k):
         raise RuntimeError("overpass down")
@@ -125,7 +125,7 @@ def test_resolve_building_obstacle_true_degrades_on_fetch_failure(monkeypatch) -
 
 def test_resolve_building_obstacle_true_records_source_on_success(monkeypatch) -> None:
     """A successful OSM footprint fetch returns its URI + records a DataSource."""
-    import trid3nt_server.tools.data_fetch as data_fetch
+    import trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings as data_fetch
 
     class _Layer:
         uri = "s3://cache/buildings.fgb"

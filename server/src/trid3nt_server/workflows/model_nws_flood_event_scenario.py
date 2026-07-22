@@ -68,8 +68,8 @@ from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from ..tools import register_tool
-from ..tools.fetch_mrms_qpe import fetch_mrms_qpe
-from ..tools.fetch_nws_alerts_conus import (
+from ..tools.fetchers.weather.fetch_mrms_qpe import fetch_mrms_qpe
+from ..tools.fetchers.weather.fetch_nws_alerts_conus import (
     _fetch_nws_conus_geojson,
     _filter_features_by_event_types,
     fetch_nws_alerts_conus,

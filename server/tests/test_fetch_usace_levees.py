@@ -26,7 +26,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_usace_levees import (
+from trid3nt_server.tools.fetchers.hazard.fetch_usace_levees import (
     CONUS_BBOX,
     LAYER_TO_FS_ID,
     USACELeveeError,
@@ -326,10 +326,10 @@ def test_synthetic_response_writes_fgb_with_polygons():
     fake_geojson = _sample_nld_response("leveed_areas", n=5)
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_geojson",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees._fetch_nld_geojson",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_levees(
@@ -375,10 +375,10 @@ def test_system_routes_layer_writes_lines():
     fake_geojson = _sample_nld_response("system_routes", n=3)
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_geojson",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees._fetch_nld_geojson",
         return_value=fake_geojson,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_levees(layer="system_routes")
@@ -413,10 +413,10 @@ def test_global_sweep_omits_geometry_param():
         return {"type": "FeatureCollection", "features": []}
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees._fetch_nld_page",
         side_effect=fake_page,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r = fetch_usace_levees(bbox=None, layer="leveed_areas")
@@ -438,10 +438,10 @@ def test_bbox_narrowed_call_sends_geometry_param():
         return fake_geojson
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees._fetch_nld_page",
         side_effect=fake_page,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_usace_levees(
@@ -475,7 +475,7 @@ def test_pagination_walks_until_exhausted():
         }
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_page",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees._fetch_nld_page",
         side_effect=fake_page,
     ):
         gj = _fetch_nld_geojson("leveed_areas", (-90.3, 29.7, -89.7, 30.2))
@@ -508,7 +508,7 @@ def test_500_raises_typed_upstream_error():
             return FakeResponse()
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees.httpx.Client", FakeClient
     ):
         with pytest.raises(USACELeveeUpstreamError, match="500"):
             _fetch_nld_page(
@@ -532,7 +532,7 @@ def test_network_failure_wraps_to_upstream_error():
             raise httpx.ConnectError("simulated DNS failure")
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees.httpx.Client", FakeClient
     ):
         with pytest.raises(USACELeveeUpstreamError, match="request failed"):
             _fetch_nld_page(
@@ -563,7 +563,7 @@ def test_arcgis_error_envelope_in_200_body_raises():
             return FakeResponse()
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees.httpx.Client", FakeClient
     ):
         with pytest.raises(USACELeveeUpstreamError, match="error envelope"):
             _fetch_nld_page(
@@ -594,7 +594,7 @@ def test_non_feature_collection_raises():
             return FakeResponse()
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees.httpx.Client", FakeClient
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees.httpx.Client", FakeClient
     ):
         with pytest.raises(USACELeveeUpstreamError, match="FeatureCollection"):
             _fetch_nld_page(
@@ -659,10 +659,10 @@ def test_cache_miss_invokes_fetch_then_hit_skips():
         return b"FAKE_LEVEES_FGB" + b"\x00" * 16
 
     with patch(
-        "trid3nt_server.tools.fetch_usace_levees._fetch_nld_bytes",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees._fetch_nld_bytes",
         side_effect=patched_fetch_bytes,
     ), patch(
-        "trid3nt_server.tools.fetch_usace_levees.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usace_levees.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_usace_levees(bbox=(-90.3, 29.7, -89.7, 30.2))

@@ -217,7 +217,7 @@ async def test_model_seismic_hazard_scenario_mocked_dispatch(monkeypatch):
     # (no network). The synthetic-fallback path is the default here; the
     # real-fault wiring has its own dedicated suite
     # (test_seismic_real_fault_wiring.py).
-    import trid3nt_server.tools.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources as ff
 
     monkeypatch.setattr(
         ff,
@@ -254,8 +254,8 @@ async def test_model_seismic_hazard_scenario_mocked_dispatch(monkeypatch):
         return _Handle()
 
     # run_solver / wait_for_completion are imported INSIDE the composer from
-    # ..tools.solver; patch them at that module so the import resolves to stubs.
-    import trid3nt_server.tools.solver as solver_mod
+    # ..tools.simulation.solver; patch them at that module so the import resolves to stubs.
+    import trid3nt_server.tools.simulation.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "run_solver", _fake_run_solver, raising=False)
     monkeypatch.setattr(solver_mod, "wait_for_completion", _fake_wait, raising=False)

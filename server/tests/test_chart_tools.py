@@ -28,16 +28,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.chart_tools import (
-    ChartToolError,
-    _MAX_ROWS,
-    build_chart_payload,
-    generate_choropleth_legend,
-    generate_damage_distribution,
-    generate_histogram,
-    generate_time_series,
-    is_chart_emission_result,
-)
+from trid3nt_server.tools.processing.charts_common import ChartToolError, _MAX_ROWS, build_chart_payload, is_chart_emission_result
+from trid3nt_server.tools.processing.generate_choropleth_legend import generate_choropleth_legend
+from trid3nt_server.tools.processing.generate_damage_distribution import generate_damage_distribution
+from trid3nt_server.tools.processing.generate_histogram import generate_histogram
+from trid3nt_server.tools.processing.generate_time_series import generate_time_series
 from trid3nt_contracts.chart_contracts import (
     ChartEmissionPayload,
     is_structurally_valid_vega_lite_spec,
@@ -209,7 +204,7 @@ class TestGenerateHistogram:
 
     def test_raster_sampling_cap_path(self, tmp_path, monkeypatch):
         """Large raster path: cap the sample, still produce 10 bins."""
-        import trid3nt_server.tools.chart_tools as ct
+        import trid3nt_server.tools.processing.charts_common as ct
 
         # Shrink the cap so a small raster exercises the sampling branch.
         monkeypatch.setattr(ct, "_RASTER_SAMPLE_CAP", 50)
@@ -473,8 +468,10 @@ class TestSummarizeChartEmission:
     def test_ordinary_dict_preserved(self):
         from trid3nt_server.adapter import summarize_tool_result
 
-        ordinary = {"layer_type": "raster", "count": 9, "mean": 5.0}
-        summary = summarize_tool_result("summarize_layer_statistics", ordinary)
+        # spatial_query (the Phase-B analytical fold) returns an ordinary
+        # data dict - it must pass through summarize_tool_result unstripped.
+        ordinary = {"columns": ["count"], "rows": [[9]], "row_count": 1, "count": 9}
+        summary = summarize_tool_result("spatial_query", ordinary)
         assert summary["status"] == "ok"
         # Ordinary results keep their content (coerced summary).
         assert summary["result"]["count"] == 9
@@ -623,32 +620,25 @@ class TestEmitChart:
 def test_dispatch_detection_signal(tmp_path):
     """The server dispatch loop uses is_chart_emission_result as its trigger.
 
-    Confirm a chart tool's result trips it while an ordinary tool result (the
-    analytical_qa summary dict) does not — this is the exact branch condition
-    in _stream_gemini_reply.
+    Confirm a chart tool's result trips it while an ordinary tool result (a
+    spatial_query rows dict - the Phase-B fold of the analytical_qa surface)
+    does not — this is the exact branch condition in _stream_gemini_reply.
     """
-    from trid3nt_server.tools.analytical_qa import summarize_layer_statistics
-    from trid3nt_server.tools import cache as cache_module
+    from trid3nt_server.tools.processing.spatial_query import spatial_query
 
-    # Bypass GCS cache for the analytical tool.
-    class _FakeResult:
-        def __init__(self, data):
-            self.data = data
-            self.cache_hit = False
+    arr = np.arange(16, dtype=np.float32).reshape(4, 4)
+    path = _make_raster(tmp_path, arr)
+    records = [{"x": 0.1 * i, "y": 0.1 * i, "v": float(i)} for i in range(4)]
+    vec_path = _make_geojson_points(tmp_path, records)
 
-    orig = cache_module.read_through
-    cache_module.read_through = lambda *, metadata, params, ext, fetch_fn, bucket, storage_client, source_id, **_kw: _FakeResult(fetch_fn())
-    try:
-        arr = np.arange(16, dtype=np.float32).reshape(4, 4)
-        path = _make_raster(tmp_path, arr)
+    chart = generate_histogram(layer_uri=path)
+    stats = spatial_query(
+        sql="SELECT count(*) AS n, avg(v) AS mean FROM pts",
+        layer_refs={"pts": vec_path},
+    )
 
-        chart = generate_histogram(layer_uri=path)
-        stats = summarize_layer_statistics(layer_uri=path)
-
-        assert is_chart_emission_result(chart) is True
-        assert is_chart_emission_result(stats) is False
-    finally:
-        cache_module.read_through = orig
+    assert is_chart_emission_result(chart) is True
+    assert is_chart_emission_result(stats) is False
 
 
 # ---------------------------------------------------------------------------

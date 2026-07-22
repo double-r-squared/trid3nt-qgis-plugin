@@ -241,7 +241,9 @@ def test_hot_set_has_seventeen_tools() -> None:
     + the tool-retrieval STEP 0 floor (NATE 2026-06-23): publish_layer (survives
     today ONLY via validate_function_call's auto-widen — a latent gap once the
     catalog is trimmed) + the core analysis surface compute_zonal_statistics /
-    generate_histogram / generate_time_series / summarize_layer_statistics."""
+    generate_histogram / generate_time_series / spatial_query (the DuckDB
+    spatial-query fold's SQL surface, holding the floor slot the folded
+    summarize_layer_statistics held)."""
     assert len(HOT_SET_TOOLS) == 17
 
 
@@ -272,12 +274,13 @@ def test_hot_set_contains_required_anchors() -> None:
         "code_exec_request",
         "compute_layer_bounds",
         "request_spatial_input",
-        # tool-retrieval STEP 0 floor (NATE 2026-06-23).
+        # tool-retrieval STEP 0 floor (NATE 2026-06-23; spatial_query holds
+        # the slot summarize_layer_statistics held before the Phase-B fold).
         "publish_layer",
         "compute_zonal_statistics",
         "generate_histogram",
         "generate_time_series",
-        "summarize_layer_statistics",
+        "spatial_query",
     }
     assert required == HOT_SET_TOOLS
 

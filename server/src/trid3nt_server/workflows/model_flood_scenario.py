@@ -90,16 +90,14 @@ from ..pipeline_emitter import (
     substep,
 )
 from ..tools import register_tool
-from ..tools.data_fetch import (
-    fetch_dem,
-    fetch_landcover,
-    fetch_river_geometry,
-    geocode_location,
-    lookup_precip_return_period,
-)
-from ..tools.fetch_topobathy import TopobathyError, fetch_topobathy
+from ..tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period
+from ..tools.fetchers.hydrology.fetch_river_geometry import fetch_river_geometry
+from ..tools.fetchers.socioeconomic.geocode_location import geocode_location
+from ..tools.fetchers.terrain.fetch_dem import fetch_dem
+from ..tools.fetchers.terrain.fetch_landcover import fetch_landcover
+from ..tools.fetchers.ocean.fetch_topobathy import TopobathyError, fetch_topobathy
 from ..tools.publish_layer import PublishLayerError, publish_layer
-from ..tools.solver import (
+from ..tools.simulation.solver import (
     run_solver,
     select_compute_class,
     wait_for_completion,
@@ -748,7 +746,7 @@ def _upload_local_forcing_files_to_s3(
     if not surge_forcing:
         return surge_forcing
 
-    from ..tools.solver import SolverDispatchError as _DeckBuildError
+    from ..tools.simulation.solver import SolverDispatchError as _DeckBuildError
 
     s3 = None  # lazy: only create the client if there is a local file to upload
     out: dict[str, Any] = {}
@@ -773,7 +771,7 @@ def _upload_local_forcing_files_to_s3(
             s3_uri = f"{scheme}://{cache_bucket}/{s3_key}"
             try:
                 if s3 is None:
-                    from ..tools.solver import _get_s3_client
+                    from ..tools.simulation.solver import _get_s3_client
 
                     s3 = _get_s3_client()
                 with open(local_path, "rb") as fh:
@@ -1328,7 +1326,7 @@ def _compose_and_upload_deckbuild_spec(
     import math
 
     from ..tools.cache import storage_scheme
-    from ..tools.solver import SolverDispatchError as _DeckBuildError
+    from ..tools.simulation.solver import SolverDispatchError as _DeckBuildError
 
     params = getattr(model_setup, "parameters", {}) or {}
     if not isinstance(params, dict):
@@ -1605,7 +1603,7 @@ def _compose_and_upload_deckbuild_spec(
             f"{build_spec_uri!r} — staying inert."
         )
     try:
-        from ..tools.solver import _get_s3_client
+        from ..tools.simulation.solver import _get_s3_client
 
         s3 = _get_s3_client()
         s3_bucket, _, key = build_spec_uri[len("s3://"):].partition("/")
@@ -1753,7 +1751,7 @@ def _stage_local_forcing_files_full(
     pressure grids + infiltration rasters). Already-remote (s3:///gs://) and
     non-file fields pass through. Raises ``DeckBuildError`` on a missing local file
     / upload failure (honest typed failure)."""
-    from ..tools.solver import SolverDispatchError as _DeckBuildError
+    from ..tools.simulation.solver import SolverDispatchError as _DeckBuildError
 
     s3 = None
     out: dict[str, Any] = {}
@@ -1777,7 +1775,7 @@ def _stage_local_forcing_files_full(
             s3_uri = f"{scheme}://{cache_bucket}/{s3_key}"
             try:
                 if s3 is None:
-                    from ..tools.solver import _get_s3_client
+                    from ..tools.simulation.solver import _get_s3_client
 
                     s3 = _get_s3_client()
                 with open(local_path, "rb") as fh:
@@ -1825,7 +1823,7 @@ def _compose_and_upload_flood_build_spec(
     forcing upload, spec upload).
     """
     from ..tools.cache import storage_scheme
-    from ..tools.solver import SolverDispatchError as _DeckBuildError
+    from ..tools.simulation.solver import SolverDispatchError as _DeckBuildError
 
     # --- PRE-SUBMIT NLCD validation gate (Invariant 7; light landcover read) ---
     mapping = load_manning_mapping()
@@ -1878,7 +1876,7 @@ def _compose_and_upload_flood_build_spec(
     }
     payload = json.dumps(job_spec, indent=2).encode("utf-8")
     try:
-        from ..tools.solver import _get_s3_client
+        from ..tools.simulation.solver import _get_s3_client
 
         s3 = _get_s3_client()
         s3_bucket, _, key = job_spec_uri[len("s3://"):].partition("/")
@@ -2556,7 +2554,7 @@ def _autowire_coastal_surge_forcing(
 
     # --- 1) PRIMARY: NOAA CO-OPS tides (key-free, CONUS) -------------------- #
     try:
-        from ..tools.fetch_noaa_coops_tides import fetch_noaa_coops_tides
+        from ..tools.fetchers.ocean.fetch_noaa_coops_tides import fetch_noaa_coops_tides
 
         layer = fetch_noaa_coops_tides(
             bbox, start_date=start_date, end_date=end_date, product="water_level"
@@ -2588,7 +2586,7 @@ def _autowire_coastal_surge_forcing(
 
     # --- 2) FALLBACK: GTSM tide+surge (global, needs a CDS key) ------------- #
     try:
-        from ..tools.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge
+        from ..tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge
 
         layer = fetch_gtsm_tide_surge(
             bbox, start_date=start_date, end_date=end_date
@@ -2735,7 +2733,7 @@ def _resolve_spiderweb_forcing(
     """
     import os as _os
 
-    from ..tools.fetch_storm_tracks import fetch_storm_tracks
+    from ..tools.fetchers.weather.fetch_storm_tracks import fetch_storm_tracks
     from .sfincs_builder import _stage_gcs_local
     from . import sfincs_spiderweb as _spw
 
@@ -2837,7 +2835,7 @@ def _resolve_building_obstacle_uri(
         return building_obstacles
     # building_obstacles is True → fetch OSM footprints (best-effort).
     try:
-        from ..tools.data_fetch import fetch_buildings  # local: keep top imports lean
+        from ..tools.fetchers.socioeconomic.fetch_buildings import fetch_buildings  # local: keep top imports lean
 
         layer = fetch_buildings(bbox, source="osm")
         uri = getattr(layer, "uri", None)
@@ -2911,7 +2909,7 @@ def _autowire_river_discharge_forcing(
 
     # --- 1) PRIMARY: NOAA NWM streamflow (key-free, CONUS) ------------------ #
     try:
-        from ..tools.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow
+        from ..tools.fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow
 
         layer = fetch_noaa_nwm_streamflow(bbox)
         uri = getattr(layer, "uri", None)
@@ -2949,7 +2947,7 @@ def _autowire_river_discharge_forcing(
     try:
         import math as _math
 
-        from ..tools.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges
+        from ..tools.fetchers.hydrology.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges
 
         period_days = max(1, int(_math.ceil(win_hr / 24.0)))
         layer = fetch_usgs_nwis_gauges(bbox=bbox, period=f"P{period_days}D")
@@ -3019,7 +3017,7 @@ def _resolve_infiltration_uri(
         return infiltration
     # infiltration is True -> fetch the GCN250 CN raster (best-effort).
     try:
-        from ..tools.fetch_gcn250_curve_numbers import fetch_gcn250_curve_numbers
+        from ..tools.fetchers.soil.fetch_gcn250_curve_numbers import fetch_gcn250_curve_numbers
 
         layer = fetch_gcn250_curve_numbers(bbox, antecedent_moisture="average")
         uri = getattr(layer, "uri", None)
@@ -3223,7 +3221,7 @@ def _resolve_quadtree_rivers_uri(
     ``None`` when nothing was fetched.
     """
     try:
-        from ..tools.data_fetch import fetch_river_geometry
+        from ..tools.fetchers.hydrology.fetch_river_geometry import fetch_river_geometry
 
         layer = fetch_river_geometry(bbox, source="nhdplus_hr")
         uri = getattr(layer, "uri", None)
@@ -4637,7 +4635,7 @@ async def model_flood_scenario(
         # ephemeral SFINCS Batch worker has NO inbound WS; status flows agent-side
         # over the EXISTING WS via the poller. Best-effort: emitter None / emit
         # failure -> no cards, solve proceeds unchanged.
-        from ..tools.solver import EmitterBinding, set_emitter_binding
+        from ..tools.simulation.solver import EmitterBinding, set_emitter_binding
 
         _sim_step_id = await mint_dispatch_and_sim_cards(
             emitter=emitter,
@@ -4664,7 +4662,7 @@ async def model_flood_scenario(
         # reports the HOST cpu count (never the perf model's cloud vCPU
         # anchor); aws-batch keeps the autoscale-provenance value
         # byte-identical.
-        from ..tools.solver import solve_progress_vcpus
+        from ..tools.simulation.solver import solve_progress_vcpus
 
         _progress_task = asyncio.ensure_future(
             _drive_live_solve_progress(

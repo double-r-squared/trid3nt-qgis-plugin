@@ -42,7 +42,7 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools.fetch_usfs_canopy_fuels import (
+from trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels import (
     _LANDFIRE_YEAR,
     _LAYER_LABEL,
     _LAYER_SERVICE,
@@ -325,7 +325,7 @@ def test_round_bbox_to_6dp() -> None:
 
 def test_bbox_to_pixel_size_clamps_min() -> None:
     """A tiny bbox clamps to _PX_MIN on both axes."""
-    from trid3nt_server.tools.fetch_usfs_canopy_fuels import _PX_MIN
+    from trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels import _PX_MIN
 
     w, h = _bbox_to_pixel_size((-117.0, 32.5, -116.9999, 32.5001))
     assert w == _PX_MIN
@@ -334,7 +334,7 @@ def test_bbox_to_pixel_size_clamps_min() -> None:
 
 def test_bbox_to_pixel_size_clamps_max() -> None:
     """A very large bbox clamps to _PX_MAX on both axes."""
-    from trid3nt_server.tools.fetch_usfs_canopy_fuels import _PX_MAX
+    from trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels import _PX_MAX
 
     w, h = _bbox_to_pixel_size((-120.0, 30.0, -110.0, 40.0))  # 10x10 deg
     assert w == _PX_MAX
@@ -367,7 +367,7 @@ def test_estimate_payload_mb_small_bbox() -> None:
 
 def test_estimate_payload_mb_large_bbox() -> None:
     """A 10x10 deg bbox yields the upper clip of 50 MB."""
-    from trid3nt_server.tools.fetch_usfs_canopy_fuels import _PAYLOAD_MAX_MB
+    from trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels import _PAYLOAD_MAX_MB
 
     est = estimate_payload_mb(bbox=[-120.0, 25.0, -110.0, 35.0])
     # 10 x 10 = 100 sq deg → 50 MB → clipped.
@@ -376,14 +376,14 @@ def test_estimate_payload_mb_large_bbox() -> None:
 
 def test_estimate_payload_mb_missing_bbox() -> None:
     """Missing bbox falls back to the upper clip."""
-    from trid3nt_server.tools.fetch_usfs_canopy_fuels import _PAYLOAD_MAX_MB
+    from trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels import _PAYLOAD_MAX_MB
 
     assert estimate_payload_mb() == _PAYLOAD_MAX_MB
 
 
 def test_estimate_payload_mb_malformed_bbox() -> None:
     """Malformed bbox (wrong arity) falls back to the upper clip."""
-    from trid3nt_server.tools.fetch_usfs_canopy_fuels import _PAYLOAD_MAX_MB
+    from trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels import _PAYLOAD_MAX_MB
 
     assert estimate_payload_mb(bbox=[1.0, 2.0]) == _PAYLOAD_MAX_MB
 
@@ -442,13 +442,13 @@ def test_mocked_tiff_fetch_writes_to_cache() -> None:
     tiff = _fake_tiff_bytes()
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.requests.get",
         return_value=_make_response(tiff),
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels._is_all_nodata",
         return_value=False,
     ):
         layer_uri = fetch_usfs_canopy_fuels(bbox=_SAN_DIEGO_BBOX, layer="cbh")
@@ -477,13 +477,13 @@ def test_mocked_tiff_fetch_cbd_units() -> None:
     tiff = _fake_tiff_bytes(value=12)  # 12 → 0.12 kg/m³
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.requests.get",
         return_value=_make_response(tiff),
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels._is_all_nodata",
         return_value=False,
     ):
         layer_uri = fetch_usfs_canopy_fuels(bbox=_SAN_DIEGO_BBOX, layer="cbd")
@@ -500,10 +500,10 @@ def test_mocked_json_error_raises_upstream() -> None:
     json_body = b'{"error":{"code":400,"message":"Invalid bbox"}}'
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.requests.get",
         return_value=_make_response(json_body, content_type="application/json"),
     ):
         with pytest.raises(USFSCanopyFuelsUpstreamError, match="JSON error"):
@@ -517,10 +517,10 @@ def test_mocked_html_response_raises_upstream() -> None:
     html_body = b"<!DOCTYPE html><html><body>404</body></html>"
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.requests.get",
         return_value=_make_response(html_body, content_type="text/html"),
     ):
         with pytest.raises(USFSCanopyFuelsUpstreamError, match="not a TIFF"):
@@ -533,10 +533,10 @@ def test_mocked_http_500_raises_upstream() -> None:
     patched_rt = _make_read_through_injector(fake_gcs)
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.requests.get",
         return_value=_make_response(b"server error", status_code=500),
     ):
         with pytest.raises(USFSCanopyFuelsUpstreamError, match="HTTP 500"):
@@ -555,13 +555,13 @@ def test_cache_hit_does_not_refetch() -> None:
         return _make_response(tiff)
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.requests.get",
         side_effect=counted_get,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels._is_all_nodata",
         return_value=False,
     ):
         u1 = fetch_usfs_canopy_fuels(bbox=_SAN_DIEGO_BBOX, layer="cbh")
@@ -589,13 +589,13 @@ def test_url_encodes_requested_bbox_and_layer() -> None:
         return _make_response(_fake_tiff_bytes())
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.requests.get",
         side_effect=capture_get,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels._is_all_nodata",
         return_value=False,
     ):
         fetch_usfs_canopy_fuels(bbox=_SAN_DIEGO_BBOX, layer="cbh")
@@ -618,13 +618,13 @@ def test_extra_kwargs_are_ignored() -> None:
     tiff = _fake_tiff_bytes()
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.requests.get",
         return_value=_make_response(tiff),
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels._is_all_nodata",
         return_value=False,
     ):
         # Should not raise even with invented kwargs.
@@ -643,13 +643,13 @@ def test_cbh_and_cbd_produce_different_uris() -> None:
     tiff = _fake_tiff_bytes()
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.requests.get",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.requests.get",
         return_value=_make_response(tiff),
     ), patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels._is_all_nodata",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels._is_all_nodata",
         return_value=False,
     ):
         u_cbh = fetch_usfs_canopy_fuels(bbox=_SAN_DIEGO_BBOX, layer="cbh")
@@ -680,7 +680,7 @@ def test_live_san_diego_cbh_returns_real_raster() -> None:
     patched_rt = _make_read_through_injector(fake_gcs)
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ):
         layer_uri = fetch_usfs_canopy_fuels(bbox=_SAN_DIEGO_BBOX, layer="cbh")
@@ -753,7 +753,7 @@ def test_live_cbh_vs_cbd_different_uris() -> None:
     patched_rt = _make_read_through_injector(fake_gcs)
 
     with patch(
-        "trid3nt_server.tools.fetch_usfs_canopy_fuels.read_through",
+        "trid3nt_server.tools.fetchers.hazard.fetch_usfs_canopy_fuels.read_through",
         side_effect=patched_rt,
     ):
         u_cbh = fetch_usfs_canopy_fuels(bbox=_SAN_DIEGO_BBOX, layer="cbh")

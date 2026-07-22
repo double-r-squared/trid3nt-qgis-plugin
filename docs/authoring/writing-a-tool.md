@@ -15,7 +15,7 @@ render its output on the map, and pass the mandatory acceptance checks.
 Two files are your templates. Read them next to this guide:
 
 - Canonical real example (a self-contained raster fetcher):
-  `server/src/trid3nt_server/tools/fetch_noaa_slr_confidence.py`
+  `server/src/trid3nt_server/tools/fetchers/ocean/fetch_noaa_slr_confidence.py`
 - Copy-me starter (a trivial, dependency-free compute):
   `server/src/trid3nt_server/tools/_example_tool_template.py`
 
@@ -26,7 +26,14 @@ Everything below cites real code. Line numbers drift; grep the symbol.
 ## The seven seams a new tool touches
 
 1. The tool **function** + its **metadata** (`AtomicToolMetadata`) in a new
-   module under `server/src/trid3nt_server/tools/`.
+   module under `server/src/trid3nt_server/tools/<subpackage>/` -- pick the
+   folder by what the tool IS: `fetchers/<domain>/` (one file per fetch tool,
+   filed by the phenomenon measured: weather / hydrology / ocean / terrain /
+   imagery / climate / biodiversity / socioeconomic / hazard / soil),
+   `processing/` (compute_* / clip_* / extract_* / charts, flat),
+   `simulation/` (run_* engine bridges, model_* engines, the solver seam),
+   `discovery/` (catalog + retrieval), or `meta/` (utilities).
+   `publish_layer.py` and `cache.py` deliberately stay at `tools/` root.
 2. The **`@register_tool`** decorator (registers it in `TOOL_REGISTRY`).
 3. An **eager import** in `server/src/trid3nt_server/tools/__init__.py`
    (so the decorator actually fires at startup).
@@ -201,8 +208,11 @@ import block near the bottom of
 `server/src/trid3nt_server/tools/__init__.py`:
 
 ```python
-from . import fetch_noaa_slr_confidence  # noqa: E402,F401 - registers fetch_noaa_slr_confidence (...)
+from .fetchers.ocean import fetch_noaa_slr_confidence  # noqa: E402,F401
 ```
+
+The block is grouped by subpackage and sorted; add your line to the group
+matching your module's folder.
 
 This is what puts your tool in `TOOL_REGISTRY` at startup. Omit it and the tool
 silently never exists.
@@ -244,7 +254,7 @@ acceptance.**
 
 The per-turn tool list is trimmed for token cost: instead of showing the LLM all
 ~190 tools every turn, `retrieve_visible_tools`
-(`server/src/trid3nt_server/tools/tool_retrieval.py`) composes the visible
+(`server/src/trid3nt_server/tools/discovery/tool_retrieval.py`) composes the visible
 set as:
 
 ```

@@ -72,91 +72,98 @@ def _import_tools_registry() -> int:
     """
     from . import tools  # noqa: F401 — side-effect: registers atomic tools
     # job-0033: register the 4 data-fetch atomic tools (FROZEN __init__.py).
-    from .tools import data_fetch  # noqa: F401
+    from .tools.fetchers.climate import lookup_precip_return_period  # noqa: F401
+    from .tools.fetchers.hydrology import fetch_river_geometry  # noqa: F401
+    from .tools.fetchers.socioeconomic import fetch_buildings  # noqa: F401
+    from .tools.fetchers.socioeconomic import fetch_population  # noqa: F401
+    from .tools.fetchers.socioeconomic import geocode_location  # noqa: F401
+    from .tools.fetchers.terrain import fetch_dem  # noqa: F401
+    from .tools.fetchers.terrain import fetch_landcover  # noqa: F401
     # job-0034: register the 2 QGIS discovery atomic tools.
-    from .tools import qgis_discovery  # noqa: F401
+    from .tools.discovery import qgis_discovery  # noqa: F401
     # job-0041: register run_solver + wait_for_completion (M5 substrate).
-    from .tools import solver  # noqa: F401
+    from .tools.simulation import solver  # noqa: F401
     # job-0042: register run_model_flood_scenario (M5 capstone workflow wrapper).
     from .workflows import model_flood_scenario  # noqa: F401
     # job-0047: register catalog_search + catalog_fetch (Mode 1 substrate).
-    from .tools import catalog  # noqa: F401
+    from .tools.discovery import catalog_fetch  # noqa: F401
+    from .tools.discovery import catalog_search  # noqa: F401
     # job-0062: register publish_layer (COG → QGIS Server WMS bridge; side-effect tool).
     from .tools import publish_layer  # noqa: F401
     # job-0080: register compute_colored_relief (gdaldem color-relief; 4 ramp presets).
-    from .tools import compute_colored_relief  # noqa: F401
+    from .tools.processing import compute_colored_relief  # noqa: F401
     # job-0081: register compute_slope (gdaldem slope; degrees + percent units; Horn + ZevenbergenThorne).
-    from .tools import compute_slope  # noqa: F401
+    from .tools.processing import compute_slope  # noqa: F401
     # job-0082: register compute_aspect (gdaldem aspect; Horn + ZevenbergenThorne; zero_for_flat flag).
-    from .tools import compute_aspect  # noqa: F401
+    from .tools.processing import compute_aspect  # noqa: F401
     # job-0083: register compute_zonal_statistics (hazard-analysis primitive; raster + vector zone).
-    from .tools import compute_zonal_statistics  # noqa: F401
+    from .tools.processing import compute_zonal_statistics  # noqa: F401
     # job-0085: register clip_raster_to_bbox (gdal_translate / gdalwarp bbox clip; gs:// or local).
-    from .tools import clip_raster_to_bbox  # noqa: F401
+    from .tools.processing import clip_raster_to_bbox  # noqa: F401
     # job-0106: register clip_raster_to_polygon (rasterio.mask; arbitrary polygon clip; gs:// or local).
-    from .tools import clip_raster_to_polygon  # noqa: F401
+    from .tools.processing import clip_raster_to_polygon  # noqa: F401
     # job-0084: register fetch_administrative_boundaries (TIGER/Line 2024; state/county/place/zcta).
-    from .tools import fetch_administrative_boundaries  # noqa: F401
+    from .tools.fetchers.socioeconomic import fetch_administrative_boundaries  # noqa: F401
     # job-0079: register compute_hillshade (gdaldem hillshade; 5 style presets; swiss_double multiply-blend).
-    from .tools import compute_hillshade  # noqa: F401
+    from .tools.processing import compute_hillshade  # noqa: F401
     # job-0089: register fetch_wdpa_protected_areas (WDPA ArcGIS REST; designation_filter; FlatGeobuf).
-    from .tools import fetch_wdpa_protected_areas  # noqa: F401
+    from .tools.fetchers.biodiversity import fetch_wdpa_protected_areas  # noqa: F401
     # job-0092: register web_fetch (generic web-page ingest with 4 extraction modes).
-    from .tools import web_fetch  # noqa: F401
+    from .tools.meta import web_fetch  # noqa: F401
     # job-0088: register fetch_inaturalist_observations (iNat API v1; vetted citizen-science points).
-    from .tools import fetch_inaturalist_observations  # noqa: F401
+    from .tools.fetchers.biodiversity import fetch_inaturalist_observations  # noqa: F401
     # job-0087: register fetch_gbif_occurrences (GBIF Tier-1 species occurrence point fetcher).
-    from .tools import fetch_gbif_occurrences  # noqa: F401
+    from .tools.fetchers.biodiversity import fetch_gbif_occurrences  # noqa: F401
     # job-0091: register fetch_storm_events_db (NOAA Storm Events DB Tier-1 fetcher).
-    from .tools import fetch_storm_events_db  # noqa: F401
+    from .tools.fetchers.weather import fetch_storm_events_db  # noqa: F401
     # job-0090: register fetch_nws_event (NWS active alerts/events; dynamic-1h Tier-1 fetcher).
-    from .tools import fetch_nws_event  # noqa: F401
+    from .tools.fetchers.weather import fetch_nws_event  # noqa: F401
     # job-0105: register fetch_nws_alerts_conus (CONUS-wide companion to fetch_nws_event).
-    from .tools import fetch_nws_alerts_conus  # noqa: F401
+    from .tools.fetchers.weather import fetch_nws_alerts_conus  # noqa: F401
     # job-0093: register aggregate_claims_across_sources (cross-source FR-HEP claim aggregator).
-    from .tools import aggregate_claims_across_sources  # noqa: F401
+    from .tools.processing import aggregate_claims_across_sources  # noqa: F401
     # job-0095: register compute_impervious_surface (NLCD impervious-fraction raster).
-    from .tools import compute_impervious_surface  # noqa: F401
+    from .tools.processing import compute_impervious_surface  # noqa: F401
     # job-0094: register extract_landcover_class (NLCD binary-mask extractor for zone_input).
-    from .tools import extract_landcover_class  # noqa: F401
+    from .tools.processing import extract_landcover_class  # noqa: F401
     # job-0096: register compute_building_density (MS Global ML Building Footprints density raster).
-    from .tools import compute_building_density  # noqa: F401
+    from .tools.processing import compute_building_density  # noqa: F401
     # job-0097: register fetch_roads_osm (OSM Overpass road LineStrings; major+arterial default).
-    from .tools import fetch_roads_osm  # noqa: F401
+    from .tools.fetchers.socioeconomic import fetch_roads_osm  # noqa: F401
     # job-0098: register run_pelicun_damage_assessment (Wave 1 stub; Wave 2 composer is job-0106).
-    from .tools import run_pelicun_damage_assessment  # noqa: F401
+    from .tools.simulation import run_pelicun_damage_assessment  # noqa: F401
     # job-0102: register fetch_nexrad_reflectivity (Iowa Mesonet NEXRAD WMS passthrough).
-    from .tools import fetch_nexrad_reflectivity  # noqa: F401
+    from .tools.fetchers.weather import fetch_nexrad_reflectivity  # noqa: F401
     # job-0107: register clip_vector_to_polygon (vector clip-to-polygon utility).
-    from .tools import clip_vector_to_polygon  # noqa: F401
+    from .tools.processing import clip_vector_to_polygon  # noqa: F401
     # job-0104: register fetch_goes_satellite (GOES-16/17/18/19 satellite imagery via NOAA Big-Data S3).
-    from .tools import fetch_goes_satellite  # noqa: F401
+    from .tools.fetchers.imagery import fetch_goes_satellite  # noqa: F401
     # job-0103: register fetch_mrms_qpe (NOAA MRMS gauge-corrected QPE precipitation; SFINCS Harvey reference).
-    from .tools import fetch_mrms_qpe  # noqa: F401
+    from .tools.fetchers.weather import fetch_mrms_qpe  # noqa: F401
     # job-0112: register fetch_hrsl_population (Meta + CIESIN HRSL persons/cell via global VRT; Wave 1.5).
-    from .tools import fetch_hrsl_population  # noqa: F401
+    from .tools.fetchers.socioeconomic import fetch_hrsl_population  # noqa: F401
     # job-0108: register fetch_firms_active_fire (NASA FIRMS VIIRS/MODIS active-fire detections; Wave 1.5).
-    from .tools import fetch_firms_active_fire  # noqa: F401
+    from .tools.fetchers.hazard import fetch_firms_active_fire  # noqa: F401
     # job-0111: register fetch_landfire_fuels (LANDFIRE LF2022 fuels & canopy rasters; Wave 1.5).
-    from .tools import fetch_landfire_fuels  # noqa: F401
+    from .tools.fetchers.hazard import fetch_landfire_fuels  # noqa: F401
     # job-0113: register fetch_gcn250_curve_numbers (GCN250 global SCS curve numbers; Wave 1.5).
-    from .tools import fetch_gcn250_curve_numbers  # noqa: F401
+    from .tools.fetchers.soil import fetch_gcn250_curve_numbers  # noqa: F401
     # job-0109: register fetch_mtbs_burn_severity (MTBS historic burn-severity polygons; CONUS+AK+HI 1984-).
-    from .tools import fetch_mtbs_burn_severity  # noqa: F401
+    from .tools.fetchers.hazard import fetch_mtbs_burn_severity  # noqa: F401
     # job-0110: register fetch_nifc_fire_perimeters (NIFC current wildfire perimeters; Wave 1.5).
-    from .tools import fetch_nifc_fire_perimeters  # noqa: F401
+    from .tools.fetchers.hazard import fetch_nifc_fire_perimeters  # noqa: F401
     # job-0128: register fetch_ebird_observations (Cornell Lab eBird Tier-2 recent sightings; per-Case secret_ref).
-    from .tools import fetch_ebird_observations  # noqa: F401
+    from .tools.fetchers.biodiversity import fetch_ebird_observations  # noqa: F401
     # job-0129: register fetch_iucn_red_list_range (IUCN Red List Tier-2 species range info fetcher; per-Case secret_ref).
-    from .tools import fetch_iucn_red_list_range  # noqa: F401
+    from .tools.fetchers.biodiversity import fetch_iucn_red_list_range  # noqa: F401
     # job-0130: register fetch_movebank_tracks (Movebank Tier-2 animal-tracking trajectories; per-Case secret_ref).
-    from .tools import fetch_movebank_tracks  # noqa: F401
+    from .tools.fetchers.biodiversity import fetch_movebank_tracks  # noqa: F401
     # job-0131: register fetch_era5_reanalysis (Copernicus ERA5 reanalysis Tier-2 fetcher; compound-flood global substrate).
-    from .tools import fetch_era5_reanalysis  # noqa: F401
+    from .tools.fetchers.climate import fetch_era5_reanalysis  # noqa: F401
     # job-0132: register fetch_gtsm_tide_surge (GTSM v3.0 Tier-2 coastal water-level via CDS; compound-flood coastal boundary).
-    from .tools import fetch_gtsm_tide_surge  # noqa: F401
+    from .tools.fetchers.ocean import fetch_gtsm_tide_surge  # noqa: F401
     # job-0133: register fetch_cama_flood_discharge (CaMa-Flood global river discharge Tier-2 fetcher; compound-flood fluvial forcing).
-    from .tools import fetch_cama_flood_discharge  # noqa: F401
+    from .tools.fetchers.hydrology import fetch_cama_flood_discharge  # noqa: F401
 
     return len(tools.TOOL_REGISTRY)
 
@@ -337,7 +344,7 @@ def _bind_worker_submitter() -> None:
             "worker submitter not bound (qgis_process unavailable): %s", exc
         )
         return
-    from .tools.passthroughs import set_worker_submitter
+    from .tools.meta.passthroughs import set_worker_submitter
 
     set_worker_submitter(submitter)
 

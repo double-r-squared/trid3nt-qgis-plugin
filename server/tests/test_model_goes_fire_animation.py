@@ -479,7 +479,7 @@ def test_available_but_all_frames_empty_raises_honesty_floor():
     )
 
     def _fake_blend(*a, **k):
-        from trid3nt_server.tools.fetch_goes_animation import GOESAnimEmptyError
+        from trid3nt_server.tools.fetchers.imagery.fetch_goes_animation import GOESAnimEmptyError
 
         raise GOESAnimEmptyError("every frame empty over AOI")
 

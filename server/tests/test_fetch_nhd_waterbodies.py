@@ -20,7 +20,7 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_nhd_waterbodies import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_nhd_waterbodies import (
     NHD_WATERBODY_URL_FALLBACK,
     NHD_WATERBODY_URL_PRIMARY,
     NHDWaterbodiesInputError,

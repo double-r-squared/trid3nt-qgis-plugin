@@ -30,8 +30,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import fetch_noaa_sst as sst_mod
-from trid3nt_server.tools.fetch_noaa_sst import (
+from trid3nt_server.tools.fetchers.ocean import fetch_noaa_sst as sst_mod
+from trid3nt_server.tools.fetchers.ocean.fetch_noaa_sst import (
     _METADATA,
     SSTInputError,
     SSTNoDataError,

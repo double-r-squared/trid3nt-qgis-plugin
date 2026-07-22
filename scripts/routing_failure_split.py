@@ -43,7 +43,7 @@ def main() -> None:
                 pass
     except ImportError:
         pass
-    from trid3nt_server.tools.tool_retrieval import retrieve_visible_tools
+    from trid3nt_server.tools.discovery.tool_retrieval import retrieve_visible_tools
 
     k = int(os.environ.get("TRID3NT_TOOL_RETRIEVAL_K", "8"))
 

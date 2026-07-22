@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import query_point_hazard as mod
-from trid3nt_server.tools.query_point_hazard import (
+from trid3nt_server.tools.processing import query_point_hazard as mod
+from trid3nt_server.tools.processing.query_point_hazard import (
     NoCaseBoundError,
     NoCaseLayersError,
     PointHazardInputError,

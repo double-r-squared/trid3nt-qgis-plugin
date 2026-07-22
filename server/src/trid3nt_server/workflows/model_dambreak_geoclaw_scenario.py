@@ -142,8 +142,8 @@ def _fetch_topo_for_geoclaw(
     Returns the DEM cache/runs ``s3://`` URI (staged BY REFERENCE - the worker
     downloads it directly). Raises ``GeoClawComposerError`` only when BOTH fail.
     """
-    from ..tools.data_fetch import fetch_dem
-    from ..tools.fetch_topobathy import fetch_topobathy
+    from ..tools.fetchers.terrain.fetch_dem import fetch_dem
+    from ..tools.fetchers.ocean.fetch_topobathy import fetch_topobathy
 
     try:
         layer = fetch_topobathy(bbox, force_bathy_base=force_bathy_base)
@@ -198,7 +198,7 @@ def _fetch_fine_nearshore_for_geoclaw(
     nothing. Best-effort: any fetch failure returns ``None`` (the run proceeds on
     the primary topo, exactly as before this fix).
     """
-    from ..tools.fetch_topobathy import fetch_topobathy
+    from ..tools.fetchers.ocean.fetch_topobathy import fetch_topobathy
 
     try:
         layer = fetch_topobathy(
@@ -569,7 +569,7 @@ async def model_dambreak_geoclaw_scenario(
         pass
 
     # --- Auto vertical scaling from the base grid cell count ----------------
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         select_compute_class,
         solve_progress_vcpus,
     )
@@ -589,7 +589,7 @@ async def model_dambreak_geoclaw_scenario(
     _vcpus = solve_progress_vcpus(effective_compute_class)
 
     # --- Step 3: dispatch to AWS Batch (the generic run_solver seam) --------
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         EmitterBinding,
         run_solver,
         set_emitter_binding,
@@ -1023,7 +1023,7 @@ def _download_batch_geoclaw_outputs(run_id: str) -> str:
             produced no downloadable fort.q (a 'complete' solve with no output is
             a real failure - never a silent dead-end).
     """
-    from ..tools.solver import (
+    from ..tools.simulation.solver import (
         _get_runs_bucket,
         _get_s3_client,
         _split_object_uri,

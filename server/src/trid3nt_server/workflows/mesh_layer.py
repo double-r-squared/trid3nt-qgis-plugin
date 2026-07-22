@@ -273,7 +273,7 @@ def make_swmm_mesh_layer_uri(
     # mesh rides the EXACT same boto3 instance-role + bucket convention as every
     # other run artifact (postprocess COGs, completion.json, the SFINCS mesh).
     try:
-        from ..tools.solver import _get_runs_bucket, _get_s3_client
+        from ..tools.simulation.solver import _get_runs_bucket, _get_s3_client
 
         bucket = runs_bucket or _get_runs_bucket()
         key = f"{run_id}/mesh.geojson"

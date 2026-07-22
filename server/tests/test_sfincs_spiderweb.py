@@ -344,7 +344,7 @@ def test_pure_pluvial_deck_emits_no_spiderweb_keys():
 
 
 def test_fetch_storm_tracks_radii_parse_blank_tolerant():
-    from trid3nt_server.tools.fetch_storm_tracks import _parse_ibtracs_csv
+    from trid3nt_server.tools.fetchers.weather.fetch_storm_tracks import _parse_ibtracs_csv
 
     header = (
         "SID,SEASON,BASIN,NAME,ISO_TIME,LAT,LON,NATURE,USA_WIND,USA_PRES,"

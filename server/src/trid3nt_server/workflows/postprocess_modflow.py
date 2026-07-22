@@ -823,7 +823,7 @@ def _resolve_ucn_path(run_outputs_uri: str) -> Path:
     local-mode live-evidence path always passes a local dir.
     """
     if run_outputs_uri.startswith("s3://"):
-        from ..tools.solver import _get_s3_client
+        from ..tools.simulation.solver import _get_s3_client
 
         tmpdir = Path(tempfile.mkdtemp(prefix="modflow-output-"))
         local_target = tmpdir / GWT_UCN_FILENAME
@@ -1525,7 +1525,7 @@ def _resolve_gwf_cbc_path(run_outputs_uri: str) -> Path:
     fsspec seams the UCN resolver uses.
     """
     if run_outputs_uri.startswith("s3://"):
-        from ..tools.solver import _get_s3_client
+        from ..tools.simulation.solver import _get_s3_client
 
         tmpdir = Path(tempfile.mkdtemp(prefix="modflow-cbc-"))
         local_target = tmpdir / GWF_CBC_FILENAME
@@ -1737,7 +1737,7 @@ def _resolve_gwf_hds_path(run_outputs_uri: str) -> Path:
     the head file cannot be located / fetched.
     """
     if run_outputs_uri.startswith("s3://"):
-        from ..tools.solver import _get_s3_client
+        from ..tools.simulation.solver import _get_s3_client
 
         tmpdir = Path(tempfile.mkdtemp(prefix="modflow-hds-"))
         local_target = tmpdir / GWF_HDS_FILENAME
@@ -2636,7 +2636,7 @@ def postprocess_subsidence(
     # Stash the subsidence-vs-time chart (composer emits it; private attr so the
     # Pydantic model ignores it).
     try:
-        from ..tools.chart_tools import build_subsidence_timeseries_chart
+        from ..tools.processing.charts_common import build_subsidence_timeseries_chart
 
         chart = build_subsidence_timeseries_chart(
             days=list(metrics["days"]),
@@ -4063,10 +4063,7 @@ def postprocess_stream_reaches(
 
     # --- Step 5: build + stash the two charts (composer emits them) ---------- #
     try:
-        from ..tools.chart_tools import (
-            build_depletion_timeseries_chart,
-            build_reach_profile_chart,
-        )
+        from ..tools.processing.charts_common import build_depletion_timeseries_chart, build_reach_profile_chart
 
         dep_chart = build_depletion_timeseries_chart(
             days=metrics["days"],
@@ -4671,7 +4668,7 @@ def postprocess_saltwater_intrusion(
     # a Pydantic field) so the composer can emit it without a second UCN read.
     chart_payload: dict[str, Any] | None = None
     try:
-        from ..tools.chart_tools import build_saltwater_wedge_chart
+        from ..tools.processing.charts_common import build_saltwater_wedge_chart
 
         chart_payload = build_saltwater_wedge_chart(
             salinity_grid=salinity_2d,

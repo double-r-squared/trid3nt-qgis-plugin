@@ -35,8 +35,8 @@ import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools import fetch_esri_landcover_10m as lc_mod
-from trid3nt_server.tools.fetch_esri_landcover_10m import (
+from trid3nt_server.tools.fetchers.terrain import fetch_esri_landcover_10m as lc_mod
+from trid3nt_server.tools.fetchers.terrain.fetch_esri_landcover_10m import (
     EsriLandcoverBboxError,
     EsriLandcoverNoCoverageError,
     EsriLandcoverYearError,
@@ -381,7 +381,7 @@ def test_distinct_year_distinct_cache_key() -> None:
 
 def test_tile_grid_small_bbox_single_tile() -> None:
     """A bbox within the tile cap produces exactly one tile equal to the input."""
-    from trid3nt_server.tools.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
+    from trid3nt_server.tools.fetchers.terrain.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
 
     # _BBOX is 0.2 * 0.2 = 0.04 deg^2, well under 0.5 cap.
     tiles = _plan_tile_grid(_BBOX, tile_deg2=_TILE_DEG2)
@@ -400,7 +400,7 @@ def test_tile_grid_klickitat_county_no_raise() -> None:
     assert area > 0.5, "test setup: bbox must exceed the old 0.5 cap"
     assert area < 8.0, "test setup: bbox must be within new 8.0 ceiling"
 
-    from trid3nt_server.tools.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
+    from trid3nt_server.tools.fetchers.terrain.fetch_esri_landcover_10m import _plan_tile_grid, _TILE_DEG2
 
     tiles = _plan_tile_grid(bbox, tile_deg2=_TILE_DEG2)
     assert len(tiles) > 1, "bbox above tile cap must produce multiple sub-tiles"
@@ -414,7 +414,7 @@ def test_tile_grid_klickitat_county_no_raise() -> None:
 
 def test_tile_grid_coverage_and_no_gaps() -> None:
     """The union area of all sub-tiles equals the total bbox area (no gaps)."""
-    from trid3nt_server.tools.fetch_esri_landcover_10m import _plan_tile_grid
+    from trid3nt_server.tools.fetchers.terrain.fetch_esri_landcover_10m import _plan_tile_grid
 
     # A ~3 deg^2 bbox (6 tiles expected at 0.5 cap).
     bbox = (-121.5, 45.0, -119.5, 46.5)

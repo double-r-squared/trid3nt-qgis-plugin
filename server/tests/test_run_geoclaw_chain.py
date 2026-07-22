@@ -513,7 +513,7 @@ def test_reproject_dem_to_4326_degrades_on_unreachable_uri():
 # (3) Solver registration + bridge tool registered.
 # ===========================================================================
 def test_geoclaw_registered_in_solver_workflow_registry():
-    from trid3nt_server.tools.solver import SOLVER_WORKFLOW_REGISTRY
+    from trid3nt_server.tools.simulation.solver import SOLVER_WORKFLOW_REGISTRY
     from trid3nt_server.workflows.run_geoclaw import (
         GEOCLAW_SOLVER_NAME,
         register_geoclaw_solver,
@@ -526,7 +526,7 @@ def test_geoclaw_registered_in_solver_workflow_registry():
 def test_run_geoclaw_inundation_typed_error_on_missing_bbox():
     import asyncio
 
-    from trid3nt_server.tools.run_geoclaw_tool import run_geoclaw_inundation
+    from trid3nt_server.tools.simulation.run_geoclaw_tool import run_geoclaw_inundation
 
     out = asyncio.run(run_geoclaw_inundation(bbox=None))
     assert isinstance(out, dict)
@@ -1282,9 +1282,9 @@ def test_composer_arg_assembly_and_dispatch(tmp_path: Path):
         return raw_peak.model_copy(update={"uri": "https://tiles/peak.png"})
 
     # The composer imports run_solver / wait_for_completion / EmitterBinding /
-    # set_emitter_binding INSIDE the function (from ..tools.solver import ...), so
+    # set_emitter_binding INSIDE the function (from ..tools.simulation.solver import ...), so
     # they must be patched at the SOURCE module, not on the composer module.
-    from trid3nt_server.tools import solver as solver_mod
+    from trid3nt_server.tools.simulation import solver as solver_mod
 
     with patch.object(comp, "_fetch_topo_for_geoclaw", lambda b, **k: "s3://cache/topo.tif"), \
          patch.object(comp, "stage_geoclaw_manifest", _fake_stage), \

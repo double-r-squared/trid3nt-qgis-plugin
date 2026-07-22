@@ -26,9 +26,9 @@ from unittest.mock import patch
 
 import pytest
 
-import trid3nt_server.tools.compute_building_density as cbd
+import trid3nt_server.tools.processing.compute_building_density as cbd
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.compute_building_density import (
+from trid3nt_server.tools.processing.compute_building_density import (
     BuildingDensityInputError,
     BuildingDensityUpstreamError,
     _build_density_grid,
@@ -377,10 +377,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return b"fake-cog-bytes"
 
     with patch(
-        "trid3nt_server.tools.compute_building_density._fetch_building_density_bytes",
+        "trid3nt_server.tools.processing.compute_building_density._fetch_building_density_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.compute_building_density.read_through",
+        "trid3nt_server.tools.processing.compute_building_density.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = compute_building_density(
@@ -408,10 +408,10 @@ def test_cache_hit_skips_fetch_fn():
         return b"fake-cog-bytes"
 
     with patch(
-        "trid3nt_server.tools.compute_building_density._fetch_building_density_bytes",
+        "trid3nt_server.tools.processing.compute_building_density._fetch_building_density_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.compute_building_density.read_through",
+        "trid3nt_server.tools.processing.compute_building_density.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = compute_building_density(bbox=_FORT_MYERS_BBOX, cell_size_m=100.0)
@@ -429,10 +429,10 @@ def test_cache_key_differentiates_cell_size():
         return b"fake-cog-bytes-" + str(cell_size_m).encode()
 
     with patch(
-        "trid3nt_server.tools.compute_building_density._fetch_building_density_bytes",
+        "trid3nt_server.tools.processing.compute_building_density._fetch_building_density_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.compute_building_density.read_through",
+        "trid3nt_server.tools.processing.compute_building_density.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r100 = compute_building_density(bbox=_FORT_MYERS_BBOX, cell_size_m=100.0)

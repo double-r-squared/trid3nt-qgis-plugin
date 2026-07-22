@@ -9,7 +9,7 @@ FR-CE-8, FR-TA-2, Decision O). It owns:
 - **The cache shim** (`cache.py`) — `compute_cache_key`, `cache_path`,
   `read_through`, `is_cacheable`, `ttl_bucket_vintage`. Mediates every
   external-API atomic-tool fetch per FR-DC-3.
-- **Pass-through tools** (`passthroughs.py`) — `qgis_process`,
+- **Pass-through tools** (`meta/passthroughs.py`) — `qgis_process`,
   `cacheable=False` + `ttl_class="live-no-cache"` per FR-DC-6. (A `mongo_query`
   pass-through formerly lived here; it was removed when MongoDB Atlas was torn
   down for DynamoDB, 2026-06-16.)
@@ -129,3 +129,19 @@ s3://trid3nt-cache/cache/<ttl-class>/<source-class>/<hash>.<ext>
 Note: the live substrate nests TTL class above source class, NOT the
 FR-DC-1 literal (`cache/<source-class>/<hash>.<ext>`). job-0031's
 `OQ-INFRA-31-FR-DC-1` proposes the matching SRS amendment for v0.3.16.
+
+## Layout (tools/ reorg, 2026-07)
+
+- `fetchers/<domain>/` — one file per fetch tool, filed by the phenomenon
+  measured: `weather/`, `hydrology/`, `ocean/`, `terrain/`, `imagery/`,
+  `climate/`, `biodiversity/`, `socioeconomic/`, `hazard/`, `soil/`.
+  Shared helpers at `fetchers/` root: `_fetch_common.py` (typed fetch errors +
+  bbox helpers), `_public_s3.py`, `us_states.py`.
+- `processing/` — compute_* / clip_* / extract_* / vector edits / charts (flat).
+- `simulation/` — run_* engine bridges, model_* engines, `solver.py`.
+- `discovery/` — `catalog_search`/`catalog_fetch` (+ `catalog_common`),
+  `discover_dataset`, `tool_retrieval`, `qgis_discovery`, `ogc_adapter`.
+- `meta/` — `web_fetch`, `code_exec_tool`, `passthroughs`, case utilities.
+- Root keeps the load-bearing seams: `__init__.py` (registry), `cache.py`,
+  `publish_layer.py`, `vector_tiles.py` (pipeline_emitter's densify/PMTiles
+  seam), `_example_tool_template.py`.

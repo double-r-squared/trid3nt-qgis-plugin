@@ -31,7 +31,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_goes_satellite import (
+from trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite import (
     GOESBboxRequiredError,
     GOESEmptyError,
     GOESError,
@@ -414,10 +414,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return _fake_cog_bytes("MISS")
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_goes_satellite(bbox=_FL_BBOX, band="visible")
@@ -440,10 +440,10 @@ def test_cache_hit_skips_inner_fetch():
         return _fake_cog_bytes("HIT")
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_goes_satellite(bbox=_FL_BBOX, band="visible")
@@ -461,10 +461,10 @@ def test_different_bands_produce_different_cache_keys():
         return _fake_cog_bytes(f"BAND_{band}")
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_vis = fetch_goes_satellite(bbox=_FL_BBOX, band="visible")
@@ -482,10 +482,10 @@ def test_different_satellites_produce_different_cache_keys():
         return _fake_cog_bytes(f"SAT_{satellite}")
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_16 = fetch_goes_satellite(bbox=_FL_BBOX, satellite="goes-16")
@@ -506,10 +506,10 @@ def test_forgiving_satellite_spelling_routes_to_same_layer():
         return _fake_cog_bytes(f"SAT_{satellite}")
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         canonical = fetch_goes_satellite(bbox=_FL_BBOX, satellite="goes-18")
@@ -536,10 +536,10 @@ def test_default_satellite_is_current_operational_east():
         return _fake_cog_bytes(f"SAT_{satellite}")
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_default = fetch_goes_satellite(bbox=_FL_BBOX)
@@ -560,10 +560,10 @@ def test_different_bboxes_produce_different_cache_keys():
         return _fake_cog_bytes(f"BBOX_{bbox[0]}")
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         side_effect=fake_fetch,
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r_fl = fetch_goes_satellite(bbox=(-82.0, 26.0, -80.0, 28.0))
@@ -582,10 +582,10 @@ def test_layer_uri_shape_for_visible_band():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         return_value=_fake_cog_bytes("SHAPE_VIS"),
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_goes_satellite(bbox=_FL_BBOX, band="visible")
@@ -602,10 +602,10 @@ def test_layer_uri_shape_for_ir_window_band():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         return_value=_fake_cog_bytes("SHAPE_IR"),
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_goes_satellite(bbox=_FL_BBOX, band="ir_window")
@@ -620,10 +620,10 @@ def test_layer_uri_shape_for_water_vapor_band():
     fake_gcs = FakeStorageClient()
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         return_value=_fake_cog_bytes("SHAPE_WV"),
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_goes_satellite(bbox=_FL_BBOX, band="water_vapor")
@@ -644,10 +644,10 @@ def test_ocean_bbox_still_returns_raster():
     gulf_bbox = (-90.0, 25.0, -86.0, 27.0)  # open Gulf of Mexico
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite._fetch_goes_bytes",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._fetch_goes_bytes",
         return_value=_fake_cog_bytes("OCEAN"),
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_goes_satellite(bbox=gulf_bbox, band="visible")
@@ -690,7 +690,7 @@ def test_live_florida_fetch_produces_valid_cog():
 
     # Wrap _list_recent_keys to inject the known-good ``now``; everything else
     # (download, reproject, COG write, cache write) runs unchanged.
-    from trid3nt_server.tools import fetch_goes_satellite as gtool
+    from trid3nt_server.tools.fetchers.imagery import fetch_goes_satellite as gtool
 
     real_list = gtool._list_recent_keys
 
@@ -703,10 +703,10 @@ def test_live_florida_fetch_produces_valid_cog():
         )
 
     with patch(
-        "trid3nt_server.tools.fetch_goes_satellite.read_through",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ), patch(
-        "trid3nt_server.tools.fetch_goes_satellite._list_recent_keys",
+        "trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite._list_recent_keys",
         side_effect=list_with_pinned_now,
     ):
         result = fetch_goes_satellite(bbox=_FL_BBOX, band="visible", satellite="goes-16")

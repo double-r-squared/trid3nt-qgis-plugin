@@ -114,7 +114,7 @@ async def _emit_asr_chart(layer: ASRLayerURI) -> None:
     (real solver output  -  the well head over the inject/recover cycle). The
     builder emits nothing for an absent / single-point series (the honesty floor).
     """
-    from ..tools.chart_tools import build_head_series_chart
+    from ..tools.processing.charts_common import build_head_series_chart
 
     series = getattr(layer, "head_timeseries", None)
     if not series:

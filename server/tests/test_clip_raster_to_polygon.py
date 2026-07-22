@@ -34,7 +34,7 @@ from rasterio.crs import CRS
 from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.clip_raster_to_polygon import (
+from trid3nt_server.tools.processing.clip_raster_to_polygon import (
     ClipRasterPolygonError,
     clip_raster_to_polygon,
 )
@@ -454,7 +454,7 @@ def test_cache_miss_then_hit_skips_mask(tmp_path):
     fake_sc = FakeStorageClient()
     mask_call_count = [0]
     original_mask = __import__(
-        "trid3nt_server.tools.clip_raster_to_polygon", fromlist=["_mask_and_write"]
+        "trid3nt_server.tools.processing.clip_raster_to_polygon", fromlist=["_mask_and_write"]
     )._mask_and_write
 
     def _counting_mask(*args, **kwargs):
@@ -462,7 +462,7 @@ def test_cache_miss_then_hit_skips_mask(tmp_path):
         return original_mask(*args, **kwargs)
 
     with patch(
-        "trid3nt_server.tools.clip_raster_to_polygon._mask_and_write",
+        "trid3nt_server.tools.processing.clip_raster_to_polygon._mask_and_write",
         side_effect=_counting_mask,
     ):
         r1 = clip_raster_to_polygon(
@@ -519,7 +519,7 @@ def test_empty_filter_raises_typed_error(tmp_path):
 
 def test_unknown_raster_uri_raises_typed_error():
     """Non-gs:// non-file raster URI raises UNKNOWN_RASTER_URI."""
-    from trid3nt_server.tools.clip_raster_to_polygon import _get_source_crs
+    from trid3nt_server.tools.processing.clip_raster_to_polygon import _get_source_crs
 
     with pytest.raises(ClipRasterPolygonError) as exc_info:
         _get_source_crs("/nonexistent/path/missing.tif")

@@ -35,7 +35,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetch_us_drought_monitor import (
+from trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor import (
     DM_LABELS,
     US_DROUGHT_MONITOREmptyError,
     US_DROUGHT_MONITORInputError,
@@ -329,7 +329,7 @@ def test_estimate_payload_mb_none_bbox():
 
 
 def _patch_client(mock_response):
-    return patch("trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client")
+    return patch("trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client")
 
 
 def test_fetch_features_ok_mocked():
@@ -339,7 +339,7 @@ def test_fetch_features_ok_mocked():
     mock_response.json.return_value = fake_resp
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -357,7 +357,7 @@ def test_fetch_features_empty_collection():
     mock_response.json.return_value = fake_resp
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -373,7 +373,7 @@ def test_fetch_features_http_404():
     mock_response.text = "Not found"
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -393,7 +393,7 @@ def test_fetch_features_arcgis_error_envelope():
     }
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -408,7 +408,7 @@ def test_fetch_features_non_json():
     mock_response.json.side_effect = ValueError("No JSON")
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -423,7 +423,7 @@ def test_fetch_features_not_feature_collection():
     mock_response.json.return_value = {"type": "Feature"}
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -436,7 +436,7 @@ def test_fetch_features_network_error():
     import httpx as _httpx
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
@@ -544,9 +544,9 @@ def test_cache_miss_then_hit():
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -580,9 +580,9 @@ def test_layer_uri_shape():
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -609,9 +609,9 @@ def test_layer_uri_shape_with_date():
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -650,9 +650,9 @@ def test_extra_kwargs_absorbed():
     mock_resp.json.return_value = fake_response
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()
@@ -682,9 +682,9 @@ def test_empty_bbox_returns_empty_layer_not_error():
     mock_resp.json.return_value = empty_response
 
     with patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.httpx.Client"
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.httpx.Client"
     ) as mock_client_cls, patch(
-        "trid3nt_server.tools.fetch_us_drought_monitor.read_through",
+        "trid3nt_server.tools.fetchers.climate.fetch_us_drought_monitor.read_through",
         side_effect=patched_rt,
     ):
         mock_client = MagicMock()

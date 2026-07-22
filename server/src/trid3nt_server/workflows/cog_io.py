@@ -471,7 +471,7 @@ def upload_cog(
             )
         dest = f"s3://{bucket}/{run_id}/{dest_filename}"
         try:
-            from ..tools.solver import _get_s3_client
+            from ..tools.simulation.solver import _get_s3_client
 
             kwargs: dict[str, Any] = {
                 "Bucket": bucket,

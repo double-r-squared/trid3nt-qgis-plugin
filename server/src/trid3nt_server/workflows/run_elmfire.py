@@ -249,10 +249,10 @@ def fetch_elmfire_inputs(
     wrapping the failing fetcher's error with the raster name — the honest
     data-source norm (primary -> typed error; no silent constant substitute).
     """
-    from ..tools.compute_aspect import compute_aspect
-    from ..tools.compute_slope import compute_slope
-    from ..tools.data_fetch import fetch_dem
-    from ..tools.fetch_landfire_fuels import fetch_landfire_fuels
+    from ..tools.processing.compute_aspect import compute_aspect
+    from ..tools.processing.compute_slope import compute_slope
+    from ..tools.fetchers.terrain.fetch_dem import fetch_dem
+    from ..tools.fetchers.hazard.fetch_landfire_fuels import fetch_landfire_fuels
 
     inputs: dict[str, str] = {}
 
@@ -532,7 +532,7 @@ def elmfire_local_spec() -> Any:
     cancel seam (``docker kill <run_id>``). DOCKER_HOST is threaded through
     ``env_overrides`` (rootless-docker aware — see ``_resolve_docker_host``).
     """
-    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
+    from ..tools.simulation.solver import LOCAL_DOCKER_WORKFLOW_NAME, LocalSolverSpec
 
     image = os.environ.get("TRID3NT_ELMFIRE_IMAGE") or DEFAULT_ELMFIRE_IMAGE
     binary = os.environ.get("TRID3NT_ELMFIRE_BINARY") or DEFAULT_ELMFIRE_BINARY
@@ -583,7 +583,7 @@ def register_elmfire_solver() -> None:
     is a presence-gate only; the local sentinel is used since the AWS Batch arm
     was removed.)
     """
-    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from ..tools.simulation.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(
         ELMFIRE_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME
@@ -592,7 +592,7 @@ def register_elmfire_solver() -> None:
 
 def register_elmfire_local_spec() -> None:
     """Register the ELMFIRE LocalSolverSpec factory (local-docker backend)."""
-    from ..tools.solver import register_local_solver_spec
+    from ..tools.simulation.solver import register_local_solver_spec
 
     register_local_solver_spec(ELMFIRE_SOLVER_NAME, elmfire_local_spec)
 

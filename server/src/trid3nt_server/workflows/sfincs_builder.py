@@ -829,7 +829,7 @@ def _stage_gcs_local(uri: str) -> str:
 
     GCP is decommissioned (job-0291 / GCP-teardown): ``s3://`` URIs stage via
     **boto3** through the solver module's shared S3 client seam
-    (``tools.solver._get_s3_client`` — boto3 NOT s3fs, the job-0289
+    (``tools.simulation.solver._get_s3_client`` — boto3 NOT s3fs, the job-0289
     instance-role lesson). Local paths pass through unchanged. Downloads are
     content-keyed under a process-stable cache dir and reused across builds in
     the same host.
@@ -850,7 +850,7 @@ def _stage_gcs_local(uri: str) -> str:
         return str(local)
 
     tmp = local.with_suffix(local.suffix + ".part")
-    from ..tools.solver import _get_s3_client
+    from ..tools.simulation.solver import _get_s3_client
 
     bucket_name, _, obj_key = uri[len("s3://"):].partition("/")
     resp = _get_s3_client().get_object(Bucket=bucket_name, Key=obj_key)
@@ -2782,7 +2782,7 @@ def build_sfincs_model(
         final_setup_uri = manifest_uri
         try:
             if manifest_uri.startswith("s3://"):
-                from ..tools.solver import _get_s3_client
+                from ..tools.simulation.solver import _get_s3_client
 
                 s3 = _get_s3_client()
                 s3_bucket, _, manifest_key = (
