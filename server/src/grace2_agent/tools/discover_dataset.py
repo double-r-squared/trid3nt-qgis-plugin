@@ -45,6 +45,8 @@ the rest of the catalog is hidden.
 
 from __future__ import annotations
 
+import difflib
+import functools
 import hashlib
 import logging
 import math
@@ -66,6 +68,8 @@ __all__ = [
     "_reset_index_for_tests",
     "_build_index",
     "_tokenize",
+    "_close_vocab_matches",
+    "_expand_query_tokens",
     "_reciprocal_rank_fusion",
     "DiscoverDatasetError",
     "get_dynamic_hot_set",
@@ -158,8 +162,12 @@ class _DiscoverIndex:
     - ``descriptions``: list of short description snippets (returned to the LLM).
     - ``synthetic_queries``: list of per-tool synthetic-query lists.
     - ``corpus_tokens``: list of token lists (parallel to ``tool_names``).
-    - ``bm25``: rank_bm25.BM25Okapi instance, or None when rank_bm25 isn't
-      importable (tests fall back to dense-only or zero-score paths).
+    - ``vocabulary``: frozenset of every token in ``corpus_tokens`` (tool
+      names + docstrings + corpus queries). Used by the typo query-expansion
+      helpers; stable for the lifetime of one index build.
+    - ``bm25``: a ``_TypoTolerantBM25`` proxy over a rank_bm25.BM25Okapi
+      instance, or None when rank_bm25 isn't importable (tests fall back to
+      dense-only or zero-score paths).
     - ``dense_matrix``: optional numpy ndarray (N × d) of L2-normalized
       per-tool dense vectors. ``None`` when no dense backend is available.
     - ``dense_encode_fn``: callable ``(list[str]) -> np.ndarray`` used to
@@ -179,6 +187,7 @@ class _DiscoverIndex:
         dense_matrix: Any,
         dense_encode_fn: Any,
         backend_name: str | None,
+        vocabulary: frozenset[str] = frozenset(),
     ) -> None:
         self.tool_names = tool_names
         self.descriptions = descriptions
@@ -188,6 +197,7 @@ class _DiscoverIndex:
         self.dense_matrix = dense_matrix
         self.dense_encode_fn = dense_encode_fn
         self.backend_name = backend_name
+        self.vocabulary = vocabulary
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +218,123 @@ def _tokenize(text: str) -> list[str]:
     if not isinstance(text, str):
         return []
     return [tok.lower() for tok in _TOKEN_RE.findall(text)]
+
+
+# ---------------------------------------------------------------------------
+# Typo query expansion (model-free, stdlib difflib, deterministic).
+#
+# Motivating live failure: "can you show me a gradinet relief ..." (typo for
+# "gradient") missed compute_colored_relief because the BM25 channel is
+# exact-token and the hashed dense fallback hashes the same exact tokens.
+# Fix: at QUERY time only, out-of-vocabulary tokens get up to 2 close
+# vocabulary matches APPENDED to the token list (expansion, never
+# replacement). Lives entirely inside retrieval scoring -- the LLM always
+# sees the raw prompt unchanged.
+#
+# Seam: the wrappers below are installed on the built index's ``bm25`` and
+# (hashed-backend) ``dense_encode_fn`` slots, so EVERY consumer of the cached
+# index (discover_dataset's inline ranking AND tool_retrieval's
+# retrieve_visible_tools) inherits the expansion without code changes.
+# ---------------------------------------------------------------------------
+
+#: Minimum token length eligible for fuzzy correction (short tokens are too
+#: ambiguous -- "teh" could be anything).
+_TYPO_MIN_TOKEN_LEN = 4
+#: Maximum vocabulary matches appended per out-of-vocab token.
+_TYPO_MAX_MATCHES = 2
+#: difflib.SequenceMatcher ratio cutoff (inclusive).
+_TYPO_CUTOFF = 0.8
+
+
+@functools.lru_cache(maxsize=4096)
+def _close_vocab_matches(token: str, vocabulary: frozenset) -> tuple[str, ...]:
+    """Fuzzy vocabulary corrections for ONE query token (cached).
+
+    Returns ``()`` (no expansion) when the token is: already in the
+    vocabulary, shorter than ``_TYPO_MIN_TOKEN_LEN`` chars, or purely
+    numeric. Otherwise returns up to ``_TYPO_MAX_MATCHES`` close vocabulary
+    matches via ``difflib.get_close_matches`` (cutoff ``_TYPO_CUTOFF``),
+    most similar first. The vocabulary is sorted before matching so the
+    result is deterministic regardless of set iteration order.
+
+    Cache keying: the vocabulary frozenset itself is part of the lru_cache
+    key (frozensets hash by content, and CPython caches the hash), so an
+    index rebuild with a changed corpus keys fresh entries automatically
+    while a rebuild with identical content correctly reuses them.
+    """
+    if len(token) < _TYPO_MIN_TOKEN_LEN:
+        return ()
+    if token.isdigit():
+        return ()
+    if token in vocabulary:
+        return ()
+    return tuple(
+        difflib.get_close_matches(
+            token, sorted(vocabulary), n=_TYPO_MAX_MATCHES, cutoff=_TYPO_CUTOFF
+        )
+    )
+
+
+def _expand_query_tokens(
+    tokens: list[str], vocabulary: frozenset
+) -> list[str]:
+    """Return ``tokens`` with fuzzy corrections APPENDED (never replaced).
+
+    The original tokens keep their order and multiplicity at the head of the
+    result; each distinct correction is appended at most once and only when
+    it is not already present. With an empty vocabulary the input is
+    returned unchanged (no expansion possible).
+    """
+    if not vocabulary:
+        return list(tokens)
+    expanded = list(tokens)
+    seen = set(expanded)
+    for tok in tokens:
+        for match in _close_vocab_matches(tok, vocabulary):
+            if match not in seen:
+                expanded.append(match)
+                seen.add(match)
+    return expanded
+
+
+class _TypoTolerantBM25:
+    """Proxy over ``BM25Okapi`` that typo-expands query tokens in get_scores.
+
+    Installed on ``_DiscoverIndex.bm25`` at build time. Corpus documents are
+    tokenized and fed to the wrapped BM25 BEFORE this proxy exists, so only
+    QUERIES are ever expanded. All other attribute access is delegated.
+    """
+
+    def __init__(self, bm25: Any, vocabulary: frozenset) -> None:
+        self._bm25 = bm25
+        self._vocabulary = vocabulary
+
+    def get_scores(self, query_tokens: list[str]) -> Any:
+        return self._bm25.get_scores(
+            _expand_query_tokens(list(query_tokens), self._vocabulary)
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._bm25, name)
+
+
+def _wrap_hashed_encode_with_expansion(encode_fn: Any, vocabulary: frozenset) -> Any:
+    """Query-side typo expansion for the HASHED dense fallback only.
+
+    The hashed backend is purely lexical (token hash counts), so it is as
+    typo-blind as BM25; expanding the token list before hashing applies the
+    same fix. Installed as ``dense_encode_fn`` AFTER the index matrix is
+    built from the raw documents. Real embedding backends
+    (sentence-transformers / Vertex) keep the raw text unchanged -- they are
+    subword-tolerant and must not be fed a synthetic token join.
+    """
+
+    def _encode_expanded(texts: list[str]) -> Any:
+        return encode_fn(
+            [" ".join(_expand_query_tokens(_tokenize(t), vocabulary)) for t in texts]
+        )
+
+    return _encode_expanded
 
 
 def _short_description(docstring: str | None) -> str:
@@ -432,13 +559,23 @@ def _build_index(
         documents.append(body)
         corpus_tokens.append(_tokenize(body))
 
+    # Vocabulary for typo query expansion: every token the index already
+    # produced from tool names, docstrings, and corpus queries (reused, not
+    # re-derived). Frozen per build; the lru_cache on _close_vocab_matches
+    # keys on this object so a rebuild with new content invalidates cleanly.
+    vocabulary: frozenset[str] = frozenset(
+        tok for toks in corpus_tokens for tok in toks
+    )
+
     # BM25 (optional — degrades gracefully when rank_bm25 is absent).
     bm25 = None
     try:
         from rank_bm25 import BM25Okapi  # type: ignore[import-not-found]
 
         if corpus_tokens:
-            bm25 = BM25Okapi(corpus_tokens)
+            # Typo-expansion proxy: expands QUERY tokens only (the corpus
+            # is already tokenized and inside the wrapped BM25Okapi).
+            bm25 = _TypoTolerantBM25(BM25Okapi(corpus_tokens), vocabulary)
     except Exception as exc:  # noqa: BLE001 — non-fatal
         logger.warning("rank_bm25 unavailable; BM25 path disabled (%s)", exc)
         bm25 = None
@@ -453,6 +590,13 @@ def _build_index(
         try:
             dense_matrix = encode_fn(documents)
             dense_encode_fn = encode_fn
+            if backend_name == "hashed":
+                # Typo-expand queries for the lexical hashed fallback ONLY.
+                # The matrix above was built from the RAW documents; real
+                # embedding backends keep the raw query text unchanged.
+                dense_encode_fn = _wrap_hashed_encode_with_expansion(
+                    encode_fn, vocabulary
+                )
         except Exception as exc:  # noqa: BLE001 — non-fatal
             logger.warning(
                 "dense backend %r failed at index-build time (%s); disabling dense path",
@@ -479,6 +623,7 @@ def _build_index(
         dense_matrix=dense_matrix,
         dense_encode_fn=dense_encode_fn,
         backend_name=backend_name,
+        vocabulary=vocabulary,
     )
 
 
@@ -498,6 +643,9 @@ def _reset_index_for_tests() -> None:
     global _INDEX
     with _INDEX_LOCK:
         _INDEX = None
+    # Content-keyed, so stale entries can never be WRONG after a rebuild;
+    # clearing just keeps test memory/isolation tidy.
+    _close_vocab_matches.cache_clear()
 
 
 # ---------------------------------------------------------------------------

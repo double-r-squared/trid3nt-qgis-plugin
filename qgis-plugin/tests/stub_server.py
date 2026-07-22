@@ -185,6 +185,26 @@ PAYLOAD_WARNING_HARDCAP_ROW: dict[str, Any] = dict(
     options=["cancel", "narrow_scope"],
 )
 
+STUB_CODE_EXEC_ID = "01STUBCODEEXECAAAAAAAAAAAA"
+
+# A code-exec-request payload field-for-field the CodeExecRequestPayload
+# contract (contracts .../sandbox_contracts.py). The confirmation reply rides
+# the EXISTING tool-payload-confirmation envelope with warning_id ==
+# code_exec_id (the server's shared confirm-gate seam, _gate_on_code_exec --
+# no new client verb). Live-feedback 2026-07-21: this envelope previously had
+# ZERO plugin handling, so the agent blocked on the gate forever.
+CODE_EXEC_REQUEST_ROW: dict[str, Any] = {
+    "envelope_type": "code-exec-request",
+    "code_exec_id": STUB_CODE_EXEC_ID,
+    "python_code": (
+        "import numpy as np\n"
+        "depth = layer_handles['depth'].read(1)\n"
+        "result = float(np.percentile(depth[depth > 0], 95))\n"
+    ),
+    "layer_refs": {"depth": "s3://trid3nt-runs/flood/depth.tif"},
+    "rationale": "Compute the 95th-percentile flood depth over the AOI.",
+}
+
 # case-list rows (CaseSummary subset the plugin's case picker consumes).
 CASE_LIST_ROWS: list[dict[str, Any]] = [
     {
@@ -376,6 +396,16 @@ class StubAgentServer:
                     # (1006 is reserved/unsendable; 1011 = server error.)
                     await ws.close(code=1011, reason="stub drop")
                     return
+                if "run-code" in text:
+                    # Code-exec HARD confirm gate (live-feedback 2026-07-21):
+                    # the agent emits the request and BLOCKS until the matching
+                    # confirmation (warning_id == code_exec_id) arrives --
+                    # handled in the tool-payload-confirmation branch below.
+                    self._pending_gate_case = case_id
+                    await send(
+                        "code-exec-request", CODE_EXEC_REQUEST_ROW, case_id=case_id
+                    )
+                    continue
                 if "simulate" in text:
                     # Gate the "solve" behind a payload warning; the turn
                     # continues only on the matching confirmation (handled in
@@ -465,7 +495,25 @@ class StubAgentServer:
                 self.confirmations.append(payload)
                 gate_case = getattr(self, "_pending_gate_case", None)
                 decision = payload.get("decision")
-                if decision == "cancel":
+                if payload.get("warning_id") == STUB_CODE_EXEC_ID:
+                    # The code-exec confirm reply (warning_id == code_exec_id;
+                    # the live server FAIL-CLOSES anything != "proceed").
+                    if decision == "proceed":
+                        await send(
+                            "agent-message-chunk",
+                            {
+                                "message_id": "m-code",
+                                "delta": "Code executed.",
+                                "done": True,
+                            },
+                            case_id=gate_case,
+                        )
+                        await send("turn-complete", {}, case_id=gate_case)
+                    else:
+                        await send(
+                            "turn-complete", {"cancelled": True}, case_id=gate_case
+                        )
+                elif decision == "cancel":
                     await send(
                         "turn-complete", {"cancelled": True}, case_id=gate_case
                     )

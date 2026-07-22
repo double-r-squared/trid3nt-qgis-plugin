@@ -103,6 +103,37 @@ class TestDockUiBatch(unittest.TestCase):
             out,
         )
 
+    def test_code_exec_approval_card(self):
+        """Live-feedback 2026-07-21: the code-exec-request confirm gate
+        renders an inline approval card (collapsed verbatim code preview,
+        Run=proceed / Deny=cancel over tool-payload-confirmation, lock +
+        one-line chip) instead of being silently dropped."""
+        self.assertIn("[code-exec] approval card", self._stdout())
+
+    def test_no_tool_turn_mints_no_card(self):
+        """F3 (live-feedback 2026-07-21): a turn with zero tool events must
+        leave zero tool cards (the empty stale 'Tools' shell is gone)."""
+        self.assertIn("[F3] no-tool turn minted zero tool cards", self._stdout())
+
+    def test_error_notes_wrap_and_fold(self):
+        """F7 (live-feedback 2026-07-22): error/note lines wrap like every
+        other chat text (a long unbroken presigned URL never forces the dock
+        wider -- break-anywhere inside long tokens, sizeHint bounded by the
+        chat container) and CONSECUTIVE error notes fold into one collapsed
+        inline "ERRORS (N)" toggle row (charts-collapse affordance, red
+        accent), expanding in place; a single error (N==1) stays a plain
+        wrapped red line; persisted-history replay folds the same way."""
+        self.assertIn("[F7] error notes", self._stdout())
+
+    def test_tool_card_state_border(self):
+        """F4 (live-feedback 2026-07-21): the tool-card border tracks the
+        aggregate state -- neutral running, green success, red failure."""
+        self.assertIn(
+            "[F4] tool-card border: neutral running -> green success -> "
+            "red failure",
+            self._stdout(),
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

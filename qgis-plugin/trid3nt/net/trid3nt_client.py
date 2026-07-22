@@ -1183,6 +1183,11 @@ class AgentEvent:
       turn-complete   raw payload
       case-open       raw payload
       payload-warning raw payload (the dock renders the gate card; see gate.py)
+      code-exec-request raw payload (the code-exec HARD confirm gate,
+                      contracts sandbox_contracts.py -- the dock renders the
+                      approval card; the reply rides the EXISTING
+                      tool-payload-confirmation with warning_id ==
+                      code_exec_id. Live-feedback 2026-07-21)
       case-list       {"cases": [CaseInfo, ...], "payload": <raw>}
       chart           raw ChartEmissionPayload (live chart-emission frame;
                       the dock's Charts panel renders it -- 2026-07-13)
@@ -1547,6 +1552,16 @@ class AgentClient:
             return AgentEvent("case-open", payload)
         if etype == "tool-payload-warning":
             return AgentEvent("payload-warning", payload)
+        if etype == "code-exec-request":
+            # Code-exec approval gate (live-feedback 2026-07-21): the agent
+            # emits this BEFORE running sandbox Python and BLOCKS on its
+            # confirm seam until a ``tool-payload-confirmation`` whose
+            # ``warning_id == code_exec_id`` arrives (contracts
+            # sandbox_contracts.py / server._gate_on_code_exec). Previously
+            # fell through to "raw" and was dropped by the dock -- the agent
+            # then waited forever and the turn "just stopped". The dock now
+            # renders the approval card (ui/cards.CodeExecCard).
+            return AgentEvent("code-exec-request", payload)
         if etype == "chart-emission":
             # OpenQuake result parity (live-feedback 2026-07-13): a live
             # mid-turn chart (ChartEmissionPayload -- Vega-Lite spec + title

@@ -78,6 +78,7 @@ from qgis.core import QgsMapLayer
 
 from . import charts, gate
 from .cards import (
+    CodeExecCard,
     GateCard,
     SimCard,
     _AssistantEntry,
@@ -588,13 +589,20 @@ class Trid3ntDock(QDockWidget):
             content = row.get("content")
             # E2: a persisted terminal-error row (defensive -- a future server
             # role="error", or an agent row flagged is_error) replays as a
-            # wrapped inline error line, same place it appeared live.
+            # wrapped inline error line, same place it appeared live. F7:
+            # CONSECUTIVE persisted error rows fold into one collapsed
+            # "ERRORS (N)" row exactly like live arrival (they funnel through
+            # the same add_note path on the same pending entry).
             if role == "error" or row.get("is_error"):
                 if isinstance(content, str) and content:
                     self._note(content, error=True)
                 continue
             if not isinstance(content, str) or not content:
                 continue
+            # F7: a conversational row ends any open consecutive-error run --
+            # persisted errors separated by chat must not glue into one fold.
+            if self._pending is not None:
+                self._pending.break_error_run()
             if role == "user":
                 self._add_user_bubble(content)
             elif role == "agent":
@@ -1780,6 +1788,11 @@ class Trid3ntDock(QDockWidget):
                 self._tool_args_by_step[sid] = _short_args_summary(raw)
         elif kind == "payload-warning":
             self._show_gate_card(data)
+        elif kind == "code-exec-request":
+            # Live-feedback 2026-07-21: the code-exec HARD confirm gate. The
+            # agent blocks until the reply lands, so this envelope must never
+            # be dropped again (it previously fell through as kind="raw").
+            self._show_code_exec_card(data)
         elif kind == "case-open":
             self._on_case_open_event(data)
         elif kind == "case-list":
@@ -1988,6 +2001,40 @@ class Trid3ntDock(QDockWidget):
             self.bridge.confirm_payload(warning_id, decision, revised_args)
         except Exception as exc:  # noqa: BLE001
             self._note(f"confirmation send failed: {exc}", error=True)
+
+    # -- code-exec approval card (live-feedback 2026-07-21) --------------------- #
+
+    def _show_code_exec_card(self, payload: dict) -> None:
+        """Render the ``code-exec-request`` HARD confirm gate as an inline
+        approval card (contracts ``sandbox_contracts.py``): the agent does not
+        run the sandbox until the user's decision rides back on the EXISTING
+        ``tool-payload-confirmation`` envelope with ``warning_id ==
+        code_exec_id``. Mirrors ``_show_gate_card``'s malformed-envelope
+        honesty and the BUG-4/N5 close-out discipline (post-decision
+        narration lands in a fresh entry BELOW the card)."""
+        request = gate.parse_code_exec_request(payload)
+        if request is None:
+            self._note(
+                "Received a malformed code-exec-request (no code_exec_id / "
+                "python_code) -- cannot approve it; the agent's confirm gate "
+                "will time out server-side.",
+                error=True,
+            )
+            return
+        card = CodeExecCard(request, self._on_code_exec_decision)
+        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        self._close_pending_for_card()
+        self._scroll_to_bottom()
+
+    def _on_code_exec_decision(self, code_exec_id: str, decision: str) -> None:
+        """Send the code-exec confirmation: the reply reuses the payload-warning
+        confirmation envelope (``warning_id == code_exec_id`` -- the server's
+        shared confirm seam, no new outbound verb) with ``revised_args`` always
+        None (contract cross-rule for proceed/cancel)."""
+        try:
+            self.bridge.confirm_payload(code_exec_id, decision, None)
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"code-exec confirmation send failed: {exc}", error=True)
 
     # -- sending ------------------------------------------------------------- #
 

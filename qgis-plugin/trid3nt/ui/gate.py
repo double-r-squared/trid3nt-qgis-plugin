@@ -37,12 +37,16 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 __all__ = [
+    "CodeExecRequest",
     "GateDecision",
     "PayloadWarning",
+    "code_exec_layer_lines",
     "estimate_cells",
     "estimate_eta_seconds",
     "estimate_frames",
+    "parse_code_exec_request",
     "parse_payload_warning",
+    "resolve_code_exec_decision",
     "resolve_gate_decision",
     "summary_lines",
 ]
@@ -285,6 +289,86 @@ def resolve_gate_decision(
             "offered. Pick a coarser resolution (narrow scope) or cancel.",
         )
     return GateDecision("proceed", None)
+
+
+# --------------------------------------------------------------------------- #
+# Code-exec approval gate (live-feedback 2026-07-21: the agent's
+# ``code-exec-request`` confirm gate had ZERO plugin handling, so the agent
+# blocked on its confirmation future forever -- "it just stopped")
+# --------------------------------------------------------------------------- #
+#
+# Contract source of truth (mirrored EXACTLY, not paraphrased):
+#
+# * ``contracts/src/grace2_contracts/sandbox_contracts.py``
+#   (``CodeExecRequestPayload``): fields ``code_exec_id`` (ULID; doubles as
+#   the confirmation correlation key), ``python_code`` (the EXACT code,
+#   verbatim, never a paraphrase), ``layer_refs`` (``{var: uri}`` OR
+#   ``{var: [uri, ...]}`` for an ordered frame set), ``rationale`` (optional
+#   one-line caption).
+# * The decision rides back on the EXISTING ``tool-payload-confirmation``
+#   envelope with ``warning_id == code_exec_id`` (the server's shared
+#   ``pending_payload_warnings`` confirm seam -- ``server.py``
+#   ``_gate_on_code_exec``). ``decision="proceed"`` runs the sandbox; the
+#   server FAIL-CLOSES everything else (``cancel`` AND ``narrow_scope``
+#   alike -- you don't "narrow" a code snippet), so the card only ever
+#   offers Run (proceed) / Deny (cancel), and ``revised_args`` is always
+#   None (contract cross-rule: proceed/cancel forbid revised_args).
+
+
+@dataclass
+class CodeExecRequest:
+    """Parsed ``code-exec-request`` payload (defensive; raw kept)."""
+
+    code_exec_id: str
+    python_code: str
+    layer_refs: dict = field(default_factory=dict)
+    rationale: str = ""
+    raw: dict = field(default_factory=dict)
+
+
+def parse_code_exec_request(payload: dict) -> Optional[CodeExecRequest]:
+    """Parse a raw ``code-exec-request`` payload dict; None when the envelope
+    is unusable -- no ``code_exec_id`` (nothing to confirm against) or no
+    ``python_code`` (approving unseen code is exactly what this hard confirm
+    gate exists to prevent)."""
+    if not isinstance(payload, dict):
+        return None
+    code_exec_id = payload.get("code_exec_id")
+    if not isinstance(code_exec_id, str) or not code_exec_id:
+        return None
+    python_code = payload.get("python_code")
+    if not isinstance(python_code, str) or not python_code.strip():
+        return None
+    layer_refs = payload.get("layer_refs")
+    rationale = payload.get("rationale")
+    return CodeExecRequest(
+        code_exec_id=code_exec_id,
+        python_code=python_code,
+        layer_refs=layer_refs if isinstance(layer_refs, dict) else {},
+        rationale=rationale if isinstance(rationale, str) else "",
+        raw=payload,
+    )
+
+
+def resolve_code_exec_decision(approve: bool) -> GateDecision:
+    """Map the card's Run / Deny click to the confirmation envelope:
+    Run -> ("proceed", None), Deny -> ("cancel", None). ``revised_args`` is
+    ALWAYS None -- the contract cross-rule forbids it on proceed/cancel, and
+    ``narrow_scope`` is never offered (the server fail-closes it)."""
+    return GateDecision("proceed" if approve else "cancel", None)
+
+
+def code_exec_layer_lines(request: CodeExecRequest) -> list:
+    """One honest line per layer the sandbox will receive ("var: uri"; a
+    multi-frame LIST value reads "var: N frames") -- so the user sees which
+    of their layers the code can touch before approving."""
+    lines = []
+    for var, ref in (request.layer_refs or {}).items():
+        if isinstance(ref, list):
+            lines.append(f"{var}: {len(ref)} frames")
+        else:
+            lines.append(f"{var}: {ref}")
+    return lines
 
 
 # --------------------------------------------------------------------------- #

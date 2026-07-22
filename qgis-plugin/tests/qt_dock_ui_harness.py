@@ -169,9 +169,12 @@ layer_entry.add_layer_notes(
 )
 pump()
 # Only the ONE failure note surfaces; the two successful notes are dropped.
+# (F7: a single error note now lives inside an _ErrorFold widget -- N==1
+# renders as the plain visible red line, so the check reads the inner label.)
 assert layer_entry.notes_area.count() == 1, "expected only the error note to surface"
-err_lbl = layer_entry.notes_area.itemAt(0).widget()
-assert "failed" in err_lbl.text() and err_lbl.isVisible(), "error note not visible"
+err_holder = layer_entry.notes_area.itemAt(0).widget()
+err_lbls = [l for l in err_holder.findChildren(QLabel) if "failed" in l.text()]
+assert err_lbls and err_lbls[0].isVisible(), "error note not visible"
 layer_entry.add_layer_notes(["Added vector layer 'Rivers'"])  # success -> dropped
 assert layer_entry.notes_area.count() == 1, "a successful note leaked into chat"
 print("[T8] Layers toggle removed: successes dropped, failures still visible")
@@ -556,6 +559,388 @@ assert 0 <= i_pre < i_card < i_post, (
     f"sim card out of order: pre={i_pre} card={i_card} post={i_post}"
 )
 print("[N5] sim card lands inline: pre-entry -> card -> post-entry")
+
+# ---- 8. Code-exec approval card (live-feedback 2026-07-21) ------------------ #
+# The agent's code-exec-request envelope previously had ZERO handling (the
+# agent blocked on its confirm gate forever). The dock must render the
+# approval card inline, close out the streaming entry (BUG-4/N5 discipline),
+# show the rationale + a COLLAPSED read-only verbatim code preview, and send
+# the tool-payload-confirmation reply (warning_id == code_exec_id,
+# revised_args None) on Run/Deny -- then fold to a one-line state chip.
+
+from trid3nt.ui.cards import CodeExecCard, _ToolCard  # noqa: E402
+
+sent_confirms = []
+dock.bridge.confirm_payload = (
+    lambda wid, dec, rev=None: sent_confirms.append((wid, dec, rev))
+)
+
+CODE_REQ = {
+    "envelope_type": "code-exec-request",
+    "code_exec_id": "01HARNESSCODEEXECAAAAAAAAA",
+    "python_code": "result = 1 + 1\n",
+    "layer_refs": {
+        "depth": "s3://bucket/depth.tif",
+        "frames": ["s3://a.tif", "s3://b.tif"],
+    },
+    "rationale": "Compute a sum over the depth layer.",
+}
+dock._add_user_bubble("what is the p95 depth?")
+ce_pre = _AssistantEntry(dock.messages_layout)
+dock._pending = ce_pre
+ce_pre.append_delta("I will compute that with a short script.")
+dock._on_event("code-exec-request", CODE_REQ)
+pump()
+assert dock._pending is None, "code-exec card did not close out the pending entry"
+ce_cards = dock.messages_host.findChildren(CodeExecCard)
+assert len(ce_cards) == 1, f"expected 1 code-exec card, got {len(ce_cards)}"
+ce_card = ce_cards[0]
+# Ordering: pre-entry -> card -> post-decision entry (BUG-4/N5 flow).
+ce_post = dock._ensure_pending()
+ce_post.append_delta("Waiting for your approval.")
+pump()
+i_pre = dock.messages_layout.indexOf(ce_pre.container)
+i_card = dock.messages_layout.indexOf(ce_card)
+i_post = dock.messages_layout.indexOf(ce_post.container)
+assert 0 <= i_pre < i_card < i_post, (
+    f"code-exec card out of order: pre={i_pre} card={i_card} post={i_post}"
+)
+# Collapsed read-only verbatim preview: hidden until toggled, never editable.
+assert not ce_card.code_view.isVisible(), "code preview must start collapsed"
+assert ce_card.code_view.isReadOnly(), "code preview must be read-only"
+assert ce_card.code_view.toPlainText() == CODE_REQ["python_code"], (
+    "code preview is not the verbatim python_code"
+)
+ce_card.code_toggle.click()
+pump()
+assert ce_card.code_view.isVisible(), "show-code toggle did not expand the preview"
+assert ce_card.code_toggle.text() == "hide code", "toggle label did not flip"
+# Rationale + layer lines render in the body.
+from qgis.PyQt.QtWidgets import QLabel as _QLabel  # noqa: E402
+
+ce_texts = [l.text() for l in ce_card.findChildren(_QLabel)]
+assert any("Compute a sum" in t for t in ce_texts), "rationale missing from card"
+assert any("depth: s3://bucket/depth.tif" in t for t in ce_texts), (
+    "layer line missing from card"
+)
+assert any("frames: 2 frames" in t for t in ce_texts), (
+    "multi-frame layer line missing from card"
+)
+# Run -> ONE confirmation (proceed, revised None), locked + folded to a chip.
+ce_card.run_btn.click()
+pump()
+assert sent_confirms == [("01HARNESSCODEEXECAAAAAAAAA", "proceed", None)], (
+    f"unexpected confirmation send: {sent_confirms!r}"
+)
+assert not ce_card.run_btn.isEnabled() and not ce_card.deny_btn.isEnabled(), (
+    "buttons not disabled after the decision"
+)
+assert ce_card._summary_container.isVisible(), "answered card did not fold"
+assert not ce_card._body.isVisible(), "answered card body still expanded"
+assert "approved" in ce_card.summary_lbl.text().lower(), (
+    f"summary chip wrong: {ce_card.summary_lbl.text()!r}"
+)
+ce_card._run()  # locked: answered exactly once, never a double send
+assert len(sent_confirms) == 1, "locked card re-sent a confirmation"
+# Deny path on a second card.
+dock._on_event(
+    "code-exec-request", dict(CODE_REQ, code_exec_id="01HARNESSCODEEXECBBBBBBBBB")
+)
+pump()
+deny_card = [
+    c for c in dock.messages_host.findChildren(CodeExecCard) if c is not ce_card
+][0]
+deny_card.deny_btn.click()
+pump()
+assert sent_confirms[-1] == ("01HARNESSCODEEXECBBBBBBBBB", "cancel", None), (
+    f"deny did not send cancel: {sent_confirms[-1]!r}"
+)
+assert "denied" in deny_card.summary_lbl.text().lower(), "deny chip wrong"
+# Malformed envelope: an honest error note, never a card / crash.
+n_ce_cards = len(dock.messages_host.findChildren(CodeExecCard))
+dock._on_event("code-exec-request", {"python_code": ""})
+pump()
+assert len(dock.messages_host.findChildren(CodeExecCard)) == n_ce_cards, (
+    "malformed code-exec-request minted a card"
+)
+dock._on_event("turn-complete", {})
+print("[code-exec] approval card: inline order, collapsed verbatim preview, "
+      "Run=proceed / Deny=cancel via tool-payload-confirmation, lock + chip")
+
+# ---- 9. F3: a no-tool turn mints ZERO tool cards ---------------------------- #
+# Live-feedback 2026-07-21 ("empty stale tool card"): a pipeline frame whose
+# steps are ALL filtered (LLM bookkeeping) used to lazily mint an empty
+# "Tools" shell. A turn with zero tool events must leave zero tool cards.
+
+n_toolcards_before = len(dock.messages_host.findChildren(_ToolCard))
+dock._add_user_bubble("just answer in prose")
+f3_entry = dock._ensure_pending()
+dock._on_event(
+    "pipeline",
+    {
+        "pipeline_id": "p-f3",
+        "steps": [
+            PipelineStep(
+                step_id="s-llm",
+                name="llm_generation",
+                tool_name="llm_generation",
+                state="running",
+            )
+        ],
+    },
+)
+dock._on_event("chunk", {"delta": "No tools needed for this one."})
+dock._on_event(
+    "pipeline",
+    {
+        "pipeline_id": "p-f3",
+        "steps": [
+            PipelineStep(
+                step_id="s-llm",
+                name="llm_generation",
+                tool_name="llm_generation",
+                state="complete",
+            )
+        ],
+    },
+)
+dock._on_event("turn-complete", {})
+pump()
+assert f3_entry._tool_card is None, "no-tool turn minted a tool card shell"
+assert (
+    len(dock.messages_host.findChildren(_ToolCard)) == n_toolcards_before
+), "a stale empty tool card appeared on a no-tool turn"
+# A REAL tool step still mints the card (the guard must not over-filter).
+f3b_entry = dock._ensure_pending()
+dock._on_event(
+    "pipeline",
+    {
+        "pipeline_id": "p-f3b",
+        "steps": [
+            PipelineStep(
+                step_id="s-real",
+                name="fetch_elevation",
+                tool_name="fetch_elevation",
+                state="running",
+            )
+        ],
+    },
+)
+pump()
+assert f3b_entry._tool_card is not None, "a real tool step no longer mints a card"
+dock._on_event("turn-complete", {})
+print("[F3] no-tool turn minted zero tool cards; real tool step still mints")
+
+# ---- 10. F4: tool-card border tracks the aggregate state -------------------- #
+# Neutral (palette mid) while running, GREEN once every tool completed,
+# RED when any failed/cancelled -- same palette as the row text colors.
+
+f4_entry = _AssistantEntry(dock.messages_layout)
+f4_entry.render_tool_card(
+    [{"label": "fetch_dem", "state": "running", "nested": False}], []
+)
+pump()
+f4_card = f4_entry._tool_card
+assert f4_card is not None, "F4 card not minted"
+assert "palette(mid)" in f4_card.styleSheet(), (
+    f"running card lost the neutral border: {f4_card.styleSheet()!r}"
+)
+f4_entry.render_tool_card(
+    [
+        {"label": "fetch_dem", "state": "complete", "nested": False},
+        {"label": "zonal_stats", "state": "complete", "nested": False},
+    ],
+    [],
+)
+pump()
+assert "#3fb950" in f4_card.styleSheet(), (
+    f"all-complete card border not green: {f4_card.styleSheet()!r}"
+)
+f4_entry.render_tool_card(
+    [
+        {"label": "fetch_dem", "state": "complete", "nested": False},
+        {"label": "zonal_stats", "state": "failed", "nested": False},
+    ],
+    [],
+)
+pump()
+assert "#f85149" in f4_card.styleSheet(), (
+    f"failed card border not red: {f4_card.styleSheet()!r}"
+)
+print("[F4] tool-card border: neutral running -> green success -> red failure")
+
+# ---- 11. F7: error notes wrap with the view + consecutive errors fold ------- #
+# Live-feedback 2026-07-22: red error lines (the case-open rehydrate "MinIO
+# fetch failed (http://...) -- skipped" notes) rendered statically sized --
+# the unbroken presigned URL reported an unbreakable label width (measured
+# sizeHint 400px pre-fix) that dragged the dock wider than its minimum. Fix
+# (1): break-anywhere opportunities inside long unbroken tokens, so the line
+# wraps and reflows with the view. Fix (2): consecutive error notes fold into
+# ONE collapsed "ERRORS (N)" toggle row, expanding in place; a single error
+# (N==1) stays a plain wrapped red line with no toggle chrome.
+
+from trid3nt.ui.cards import _ErrorFold  # noqa: E402
+
+URL_NOTE = (
+    "vector 'Rivers & Streams': MinIO fetch failed "
+    "(http://127.0.0.1:9000/grace2-cases/case-0123456789abcdef/layers/"
+    "rivers-and-streams.fgb?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-"
+    "Credential=minioadmin%2F20260722&X-Amz-Signature="
+    "0123456789abcdef0123456789abcdef0123456789abcdef) -- skipped"
+)
+
+# (b) WRAPPING on the bare 320px message stack (the floating dock's header
+# row forces a ~620px minimum offscreen -- same trick as the markdown sweep):
+# the error line must reflow inside the narrow view and must NOT report a
+# preferred width past the chat container (zero horizontal growth vs a plain
+# text bubble; pre-fix the note label's sizeHint was 400px > the 320px view
+# and the host sizeHint ballooned 145 -> 444px).
+fhost = QWidget()
+flay = QVBoxLayout(fhost)
+flay.setContentsMargins(2, 2, 2, 2)
+flay.setSpacing(4)
+flay.addStretch(1)
+fscroll = QScrollArea()
+fscroll.setWidgetResizable(True)
+fscroll.setWidget(fhost)
+fscroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+fscroll.resize(320, 700)
+fscroll.show()
+wrap_entry = _AssistantEntry(flay)
+wrap_entry.append_delta("Baseline bubble text that wraps like any chat text.")
+pump(20)
+host_w_before = fhost.width()
+wrap_entry.add_note(URL_NOTE, error=True)
+pump(20)
+view_w = fscroll.viewport().width()
+single_fold = wrap_entry.notes_area.itemAt(0).widget()
+assert isinstance(single_fold, _ErrorFold), (
+    f"error note did not build an _ErrorFold: {type(single_fold).__name__}"
+)
+err_lbl = single_fold._body.findChildren(QLabel)[0]
+print(
+    f"[F7] narrow(320px view): error row sizeHint={single_fold.sizeHint().width()}px "
+    f"label sizeHint={err_lbl.sizeHint().width()}px label {err_lbl.width()}px wide "
+    f"x {err_lbl.height()}px tall, host sizeHint={fhost.sizeHint().width()}px"
+)
+assert single_fold.sizeHint().width() <= view_w, (
+    f"error row prefers {single_fold.sizeHint().width()}px -- wider than the "
+    f"{view_w}px chat container (would drag the dock wide)"
+)
+assert err_lbl.sizeHint().width() <= view_w, (
+    f"error label prefers {err_lbl.sizeHint().width()}px > the {view_w}px view"
+)
+assert fhost.sizeHint().width() <= view_w, (
+    f"host sizeHint grew past the container: {fhost.sizeHint().width()}px "
+    f"(pre-fix ballooned to 444px)"
+)
+assert fhost.width() == host_w_before, (
+    f"error note widened the chat stack: {host_w_before} -> {fhost.width()}"
+)
+assert err_lbl.width() <= view_w, "error label painted past the view"
+# The unbroken-URL line actually WRAPPED (multi-line, not one clipped line).
+assert err_lbl.height() >= 3 * err_lbl.fontMetrics().lineSpacing(), (
+    f"URL note did not wrap: {err_lbl.height()}px tall at "
+    f"{err_lbl.fontMetrics().lineSpacing()}px/line"
+)
+
+# (c) N==1 decision: a single error stays a plain wrapped red line -- the
+# body is visible immediately and NO toggle chrome shows.
+assert not single_fold.toggle.isVisible(), "N==1 must not show the ERRORS toggle"
+assert single_fold._body.isVisible(), "single error line must be visible"
+assert "#f85149" in err_lbl.styleSheet(), "error line lost the red accent"
+
+# (a) FOLDING: N consecutive error notes -> ONE collapsed "ERRORS (N)" row,
+# expanding in place to all N wrapped lines (charts-toggle affordance).
+f7_entry = _AssistantEntry(dock.messages_layout)
+for i in range(4):
+    f7_entry.add_note(
+        URL_NOTE.replace("Rivers & Streams", f"Layer {i}"), error=True
+    )
+pump()
+assert f7_entry.notes_area.count() == 1, (
+    f"4 consecutive errors left {f7_entry.notes_area.count()} note widgets -- "
+    "expected ONE fold row"
+)
+fold = f7_entry.notes_area.itemAt(0).widget()
+assert isinstance(fold, _ErrorFold), "consecutive errors did not fold"
+assert fold.count == 4 and fold.toggle.text() == "ERRORS (4)", (
+    f"fold header wrong: count={fold.count} text={fold.toggle.text()!r}"
+)
+assert fold.toggle.isVisible(), "ERRORS (N) toggle not visible for N=4"
+assert "#f85149" in fold.toggle.styleSheet(), "fold toggle lost the red accent"
+assert not fold._body.isVisible(), "fold must start COLLAPSED"
+fold.toggle.click()  # expand in place
+pump()
+assert fold._body.isVisible(), "expand did not reveal the error lines"
+fold_lbls = fold._body.findChildren(QLabel)
+assert len(fold_lbls) == 4, f"expected 4 error lines in the fold, got {len(fold_lbls)}"
+assert all(l.isVisible() for l in fold_lbls), "expanded fold hid some lines"
+# A user-expanded fold stays expanded as the run continues; count updates.
+f7_entry.add_note(URL_NOTE.replace("Rivers & Streams", "Layer 4"), error=True)
+pump()
+assert fold.count == 5 and fold.toggle.text() == "ERRORS (5)", "count did not update"
+assert fold._body.isVisible(), "a new error collapsed a user-expanded fold"
+# A STATUS note breaks the run: the next error starts a fresh fold (N==1 ->
+# plain line again), inline below, in scroll order.
+f7_entry.add_note("Case 'Harness' active")
+f7_entry.add_note("raster 'DEM': COG fetch failed -- skipped", error=True)
+pump()
+assert f7_entry.notes_area.count() == 3, (
+    f"expected fold + status + fresh fold, got {f7_entry.notes_area.count()}"
+)
+second_fold = f7_entry.notes_area.itemAt(2).widget()
+assert isinstance(second_fold, _ErrorFold) and second_fold.count == 1, (
+    "status note did not break the consecutive-error run"
+)
+assert not second_fold.toggle.isVisible(), "fresh N==1 fold grew toggle chrome"
+
+# Persisted-history rendering (case reopen): consecutive role="error" rows
+# fold exactly like live arrival -- same add_note path, same fold.
+dock._on_event("turn-complete", {})
+dock._replay_chat_history(
+    [
+        {"role": "error", "content": URL_NOTE},
+        {"role": "error",
+         "content": "vector 'Roads': MinIO fetch failed -- skipped"},
+    ]
+)
+pump()
+replay_entry = dock._pending
+assert replay_entry is not None, "replayed errors minted no entry"
+assert replay_entry.notes_area.count() == 1, "replayed errors did not fold"
+replay_fold = replay_entry.notes_area.itemAt(0).widget()
+assert isinstance(replay_fold, _ErrorFold) and replay_fold.count == 2, (
+    "replayed consecutive errors not in ONE fold"
+)
+assert not replay_fold._body.isVisible(), "replayed fold must start collapsed"
+assert replay_fold.toggle.text() == "ERRORS (2)", "replayed fold header wrong"
+# Errors SEPARATED by conversation must not glue into one fold on replay.
+dock._on_event("turn-complete", {})
+dock._replay_chat_history(
+    [
+        {"role": "error", "content": "raster 'DEM': fetch failed -- skipped"},
+        {"role": "agent", "content": "The rest of the case loaded fine."},
+        {"role": "error", "content": "vector 'Roads': fetch failed -- skipped"},
+    ]
+)
+pump()
+sep_entry = dock._pending
+assert sep_entry is not None and sep_entry.notes_area.count() == 2, (
+    "conversation-separated errors should land in TWO folds"
+)
+sep_folds = [
+    sep_entry.notes_area.itemAt(i).widget()
+    for i in range(sep_entry.notes_area.count())
+]
+assert all(isinstance(f, _ErrorFold) and f.count == 1 for f in sep_folds), (
+    "an agent row between errors did not break the fold run"
+)
+dock._on_event("turn-complete", {})
+print(
+    "[F7] error notes: wrap with the view (no width growth) + consecutive "
+    "errors fold to ERRORS (N), N==1 stays a plain line, replay folds too"
+)
 
 # ---- proof screenshots (layout proof, not pixel parity with live QGIS) ----- #
 

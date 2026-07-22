@@ -140,6 +140,100 @@ async def test_server_gate_cancel_blocks_dispatch() -> None:
     # An error envelope was emitted explaining the decline.
     err = next(e for e in ws.sent if e.get("type") == "error")
     assert err["payload"]["error_code"] == "USER_INPUT_CANCELLED"
+    # Registry cleaned up on the deny path -- nothing leaks.
+    assert not server._PENDING_CONFIRMATIONS
+    # The call site resolves a deny as the typed, non-retryable cancel error
+    # (the adapter harvests error_code/retryable into the function_response).
+    exc = server.CodeExecConfirmationCancelledError("01TESTCXID")
+    assert exc.error_code == "CODE_EXEC_CANCELLED"
+    assert exc.retryable is False
+
+
+# --------------------------------------------------------------------------- #
+# Approval timeout (live-feedback 2026-07-22): unanswered card -> typed error,
+# turn completes, registry cleaned up. The QGIS plugin had no handler for the
+# code-exec-request envelope, so the F6 24h local gate wait hung the turn.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_server_gate_timeout_raises_typed_and_cleans_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No confirmation within GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S -> the gate
+    raises ``CodeExecApprovalTimeoutError`` (typed, non-retryable) instead of
+    parking forever, emits a contract-valid CONFIRMATION_TIMEOUT ws error, and
+    pops the pending-confirmation registry entry."""
+    from grace2_agent import server
+
+    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "0.2")
+    ws = _FakeWS()
+    state = _FakeState()
+    params = {"python_code": "result = 1 + 1", "layer_refs": {}}
+
+    with pytest.raises(server.CodeExecApprovalTimeoutError) as excinfo:
+        await server._gate_on_code_exec(ws, state, params)  # type: ignore[arg-type]
+
+    exc = excinfo.value
+    # Typed function-response surface: the adapter harvests these attrs.
+    assert exc.error_code == "CODE_EXEC_APPROVAL_TIMEOUT"
+    assert exc.retryable is False
+    assert "not answered" in str(exc)
+    # The request card WAS emitted before the wait.
+    assert any(e.get("type") == "code-exec-request" for e in ws.sent)
+    # WS surface: error_code is the closed A.6 ErrorCode Literal, so the wire
+    # code stays the contract-valid CONFIRMATION_TIMEOUT.
+    err = next(e for e in ws.sent if e.get("type") == "error")
+    assert err["payload"]["error_code"] == "CONFIRMATION_TIMEOUT"
+    assert "not answered" in err["payload"]["message"]
+    # Registry cleaned up on timeout -- nothing leaks.
+    assert not server._PENDING_CONFIRMATIONS
+
+
+@pytest.mark.asyncio
+async def test_server_gate_cleanup_on_task_cancel() -> None:
+    """Cancelling the gate task (session close / turn cancel) pops the pending
+    registry entry via the finally -- no leaked futures."""
+    from grace2_agent import server
+
+    ws = _FakeWS()
+    state = _FakeState()
+    params = {"python_code": "result = 1 + 1", "layer_refs": {}}
+
+    task = asyncio.create_task(
+        server._gate_on_code_exec(ws, state, params)  # type: ignore[arg-type]
+    )
+    # Wait for the gate to register its pending future.
+    for _ in range(200):
+        if server._PENDING_CONFIRMATIONS:
+            break
+        await asyncio.sleep(0.005)
+    assert server._PENDING_CONFIRMATIONS
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not server._PENDING_CONFIRMATIONS
+
+
+def test_approval_timeout_env_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default 180s; env override honored; malformed / non-positive -> default."""
+    from grace2_agent import server
+
+    monkeypatch.delenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", raising=False)
+    assert server._code_exec_approval_timeout_s() == 180.0
+
+    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "42.5")
+    assert server._code_exec_approval_timeout_s() == 42.5
+
+    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "abc")
+    assert server._code_exec_approval_timeout_s() == 180.0
+
+    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "0")
+    assert server._code_exec_approval_timeout_s() == 180.0
+
+    monkeypatch.setenv("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S", "-5")
+    assert server._code_exec_approval_timeout_s() == 180.0
 
 
 # --------------------------------------------------------------------------- #

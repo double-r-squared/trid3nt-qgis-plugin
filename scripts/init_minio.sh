@@ -24,3 +24,10 @@ echo "[init_minio] current buckets:"
 "$MC" ls "$ALIAS/"
 
 echo "[init_minio] done"
+
+# The QGIS plugin reads layer bytes via unauthenticated /vsicurl/ HTTP - every
+# bucket it renders from must allow anonymous download (live-feedback 2026-07-22:
+# trid3nt-cache was private -> 403 on case-open rehydrate of fetched-input layers).
+for _b in trid3nt-runs trid3nt-cache; do
+  "$MC" anonymous set download "local/$_b" >/dev/null 2>&1 || true
+done

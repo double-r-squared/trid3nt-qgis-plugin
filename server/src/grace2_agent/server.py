@@ -283,9 +283,45 @@ def _tool_retrieval_mode() -> str:
 # Running arbitrary Python is a deliberate user decision; the gate gets the same
 # 300s read-decision TTL as the payload-warning gate. On expiry the gate fails
 # closed (CONFIRMATION_TIMEOUT) and the sandbox does not run.
+# NOTE (live-feedback 2026-07-22): the code-exec gate itself no longer waits on
+# this constant -- see ``_code_exec_approval_timeout_s`` below. It is retained
+# because the credential / region-choice / solver-confirm gates borrow it as
+# their default wait window.
 CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
     os.environ.get("GRACE2_CODE_EXEC_CONFIRM_TIMEOUT", "300")
 )
+
+# Live-feedback fix (2026-07-22): honest timeout on unanswered code-exec
+# approvals. The QGIS plugin (the only client of this local build) had ZERO
+# handling for the ``code-exec-request`` card, and the F6 local-lane gate wait
+# (``_gate_wait_timeout`` -> 24h) meant the parked tool call effectively never
+# resolved -- the turn hung ("it just stopped") with an empty tool card. The
+# code-exec gate therefore gets its OWN bounded approval window that applies in
+# EVERY lane (it deliberately bypasses the F6 24h local override): when no
+# confirmation envelope answers the card in time, the gate raises the typed
+# ``CodeExecApprovalTimeoutError`` so the LLM receives a structured
+# function_response, narrates honestly, and the TURN COMPLETES. Read LIVE (not
+# an import-time snapshot) so tests / runtime flips are honored.
+CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S: float = 180.0
+
+
+def _code_exec_approval_timeout_s() -> float:
+    """Effective approval-wait window (seconds) for the code-exec confirm gate.
+
+    Env override ``GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S``; default 180s.
+    Malformed / non-positive values fall back to the default (never an
+    unbounded or zero wait).
+    """
+    raw = os.environ.get("GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S")
+    if raw is None:
+        return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
+    if value <= 0:
+        return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -372,6 +408,37 @@ class CodeExecConfirmationCancelledError(RuntimeError):
             "(user chose 'cancel' or gate timed out); the sandbox did not run"
         )
         self.code_exec_id = code_exec_id
+
+
+class CodeExecApprovalTimeoutError(RuntimeError):
+    """Raised when the ``code-exec-request`` approval card was never answered
+    (live-feedback fix 2026-07-22).
+
+    Distinct from :class:`CodeExecConfirmationCancelledError` (an explicit user
+    decision): here NOBODY answered the card within the approval window --
+    the client may not render it at all (the incident: the QGIS plugin had no
+    handler for the envelope, so the parked tool call waited forever).
+
+    ``retryable=False``: re-issuing the identical snippet would just park on
+    another unanswered card; the LLM should narrate that the approval card was
+    not answered and let the user decide how to proceed. ``summarize_tool_result``
+    harvests ``error_code`` + ``retryable`` so this reaches the LLM as a
+    structured function_response and the turn completes.
+    """
+
+    error_code: str = "CODE_EXEC_APPROVAL_TIMEOUT"
+    retryable: bool = False
+
+    def __init__(self, code_exec_id: str, timeout_s: float) -> None:
+        super().__init__(
+            f"code_exec_request {code_exec_id!r} approval card was not answered "
+            f"within {timeout_s:.0f}s (no confirmation arrived from the user "
+            "interface); the sandbox did not run. Tell the user their approval "
+            "was required but never received, and do not re-issue the identical "
+            "snippet unless they ask to retry."
+        )
+        self.code_exec_id = code_exec_id
+        self.timeout_s = timeout_s
 
 
 class SolverConfirmationCancelledError(RuntimeError):
@@ -6638,9 +6705,19 @@ async def _gate_on_code_exec(
 
     - ``(True, params + {confirmed: True, code_exec_id})`` — user approved
       (``decision="proceed"``). The tool body runs the sandbox.
-    - ``(False, params)`` — user chose ``cancel`` / gate timed out. The caller
-      raises :class:`CodeExecConfirmationCancelledError` so Gemini sees a typed,
+    - ``(False, params)`` -- user chose ``cancel``. The caller raises
+      :class:`CodeExecConfirmationCancelledError` so Gemini sees a typed,
       non-retryable error and narrates the decline honestly.
+
+    Raises :class:`CodeExecApprovalTimeoutError` when NO confirmation answers
+    the card within ``_code_exec_approval_timeout_s()`` (default 180s, env
+    ``GRACE2_CODE_EXEC_APPROVAL_TIMEOUT_S``). This wait deliberately bypasses
+    the F6 24h local-lane ``_gate_wait_timeout`` override: an unanswerable card
+    (live incident 2026-07-22 -- the QGIS plugin had no handler for the
+    envelope) must resolve the parked tool call with a typed error so the turn
+    completes instead of hanging. The pending-confirmation registry entry is
+    popped in the ``finally`` below on EVERY exit -- approve, deny, timeout,
+    and task cancellation (session close / turn cancel) -- so nothing leaks.
 
     ``narrow_scope`` is NOT offered for code-exec (you don't "narrow" a code
     snippet — you cancel and the agent rewrites it); a ``narrow_scope`` reply is
@@ -6676,25 +6753,38 @@ async def _gate_on_code_exec(
         len(request_payload.layer_refs),
     )
 
+    approval_timeout_s = _code_exec_approval_timeout_s()
     try:
         decision_payload: PayloadConfirmationEnvelopePayload = await asyncio.wait_for(
-            fut, timeout=_gate_wait_timeout(CODE_EXEC_CONFIRM_TIMEOUT_SECONDS)
+            fut, timeout=approval_timeout_s
         )
     except asyncio.TimeoutError:
         logger.warning(
-            "code-exec confirm gate timeout session=%s code_exec_id=%s",
+            "code-exec confirm gate timeout session=%s code_exec_id=%s "
+            "waited=%.0fs (approval card never answered)",
             state.session_id,
             code_exec_id,
+            approval_timeout_s,
         )
+        # WS envelope: ``error_code`` is the closed A.6 ``ErrorCode`` Literal
+        # (contracts are read-only), so the wire code stays the contract-valid
+        # CONFIRMATION_TIMEOUT; the DISTINCT typed code below
+        # (CODE_EXEC_APPROVAL_TIMEOUT) rides the function_response surface,
+        # which is free-form.
         await _send_error(
             websocket,
             state.session_id,
             "CONFIRMATION_TIMEOUT",
-            f"code_exec_request {code_exec_id!r} confirm gate timed out; "
-            "the sandbox did not run",
+            f"code_exec_request {code_exec_id!r} approval card was not answered "
+            f"within {approval_timeout_s:.0f}s; the sandbox did not run",
         )
-        return False, params
+        # Typed resolution of the parked tool call: propagates to the tool
+        # dispatch except-handler -> summarize_tool_result(error=...) -> a
+        # structured function_response the LLM narrates -- the turn COMPLETES.
+        raise CodeExecApprovalTimeoutError(code_exec_id, approval_timeout_s)
     finally:
+        # Runs on approve, deny, timeout, AND CancelledError (session close /
+        # turn cancel) -- the registry never leaks a dead future.
         _pop_pending_confirmation(code_exec_id)
 
     logger.info(

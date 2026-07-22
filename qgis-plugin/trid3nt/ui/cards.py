@@ -5,6 +5,7 @@ stays in ``dock.py`` and imports these. Behavior identical -- this is a move.
 """
 from __future__ import annotations
 
+import re
 from typing import Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import Qt, QTimer
@@ -102,10 +103,21 @@ _TREE_CONNECTOR_STYLE = (
 # resizable dock gives it), and the font is a notch LARGER than the old 8pt
 # pills (9pt here). A subtle border, no loud fill (theme-neutral -- reads over a
 # light or dark QGIS window alike, matching the gate/sim card discipline).
-_TOOLCARD_FRAME_STYLE = (
-    "QFrame#toolcard { border: 1px solid palette(mid); border-radius: 8px; "
-    "background-color: rgba(128, 128, 128, 6%); }"
-)
+def _toolcard_frame_style(border_color: Optional[str] = None) -> str:
+    """F4 (live-feedback 2026-07-21): the parent tool-card BORDER tracks the
+    aggregate tool state -- GREEN once every inner tool completed
+    successfully, RED when any failed/cancelled, the neutral palette(mid)
+    while anything still runs (or the card is empty). Same chrome otherwise
+    (radius + the subtle low-alpha fill); the colors are the exact
+    ``_CHIP_STATE_COLORS`` palette the rows already use."""
+    color = border_color or "palette(mid)"
+    return (
+        f"QFrame#toolcard {{ border: 1px solid {color}; border-radius: 8px; "
+        "background-color: rgba(128, 128, 128, 6%); }"
+    )
+
+
+_TOOLCARD_FRAME_STYLE = _toolcard_frame_style()
 # The chevron + "Tools (N)" header line at the top of the card (T3).
 _TOOLCARD_HEADER_STYLE = (
     "color: palette(text); font-size: 9pt; border: none; text-align: left;"
@@ -151,6 +163,25 @@ def _is_running_state(state: Optional[str]) -> bool:
     values -- pending / running / unknown all animate; complete/failed/
     cancelled show the terminal glyph."""
     return (state or "").lower() not in _TERMINAL_STATES
+
+# Code-exec approval card chrome (live-feedback 2026-07-21: the agent's
+# ``code-exec-request`` confirm gate had ZERO plugin handling -- the agent
+# blocked forever and the turn "just stopped"). Blue -- the accent the tool
+# tree already uses -- with the same N6/STYLE-1 discipline as the gate/sim
+# cards: a subtle low-alpha fill scoped to the FRAME id (never cascading onto
+# child labels), theme-neutral over light and dark QGIS windows alike.
+_CODE_CARD_STYLE = (
+    "QFrame#codeexeccard { border: 1px solid #58a6ff; border-radius: 8px; "
+    "background-color: rgba(88, 166, 255, 7%); }"
+)
+_CODE_TITLE_STYLE = "color: #58a6ff; font-weight: bold; border: none;"
+# The collapsed read-only code preview: monospace over the theme Base color
+# (palette-derived -- no hardcoded hex that assumes one theme).
+_CODE_PREVIEW_STYLE = (
+    "font-family: monospace; font-size: 8pt; "
+    "background-color: palette(base); border: 1px solid palette(mid); "
+    "border-radius: 2px;"
+)
 
 # Item R4 (live-feedback 2026-07-18): simulation-card chrome -- purple, the
 # color the web reserves for sim progress affordances; the collapse pattern
@@ -406,6 +437,110 @@ def _is_error_note(note: str) -> bool:
     )
 
 
+# F7 (live-feedback 2026-07-22): chat NOTE text (status + error lines) rides
+# plain-text QLabels, and plain-text word-wrap breaks at whitespace ONLY -- so
+# one long unbroken token (the MinIO presigned URL inside a rehydrate failure
+# note) reported an unbreakable preferred/minimum width (measured: label
+# sizeHint 400px at a 320px view; the message host's sizeHint ballooned
+# 145 -> 444px, which is what dragged the DOCK wider than its usual minimum).
+# Fix: seed invisible break OPPORTUNITIES -- a zero-width space every
+# ``_BREAK_CHUNK`` chars inside any longer unbroken run -- so the Qt line
+# breaker can wrap ANYWHERE inside such tokens (measured post-fix: sizeHint
+# 175px, host 193px, the URL wraps over 7 lines at 320px). Display-only
+# munging of note text; the full text stays readable (no elide -- an error URL
+# must stay diagnosable), matching the E1 wrap-never-force-width discipline
+# the other chat text already follows.
+_ZWSP = "\u200b"  # zero-width space: an invisible line-break opportunity
+_BREAK_CHUNK = 24
+_UNBROKEN_RUN = re.compile(r"\S{%d,}" % (_BREAK_CHUNK + 1))
+
+
+def _breakable_display_text(text: str) -> str:
+    """Note text -> the same text with zero-width break opportunities seeded
+    into every unbroken run longer than ``_BREAK_CHUNK`` chars."""
+
+    def _chunk(match: "re.Match[str]") -> str:
+        token = match.group(0)
+        return _ZWSP.join(
+            token[i:i + _BREAK_CHUNK]
+            for i in range(0, len(token), _BREAK_CHUNK)
+        )
+
+    return _UNBROKEN_RUN.sub(_chunk, text)
+
+
+# F7: the folded-errors toggle keeps the exact charts/thinking collapse
+# affordance chrome (_THINKING_TOGGLE_STYLE) but in the error red, so the
+# collapsed row still reads as errors at a glance.
+_ERROR_FOLD_TOGGLE_STYLE = (
+    "color: #f85149; font-size: 8pt; border: none; text-align: left;"
+)
+
+
+class _ErrorFold(QWidget):
+    """F7 (live-feedback 2026-07-22): ONE run of consecutive error notes.
+
+    Consecutive red error lines (e.g. the per-layer "MinIO fetch failed ...
+    -- skipped" notes a case-open rehydrate emits) collapse into a single
+    inline "ERRORS (N)" toggle row, collapsed by default, expanding IN PLACE
+    to the wrapped lines -- the exact ChartsPanel collapse affordance (a flat
+    checkable QPushButton header toggling a body widget, charts.py), kept in
+    the error red. The fold lives INLINE in the notes area, in chat scroll
+    order -- never moved to a panel.
+
+    N == 1 renders as the plain wrapped red line with NO toggle chrome
+    (today's look -- one error does not need a fold); the toggle appears,
+    collapsed, from the second consecutive error onward. Once the user
+    expands the fold, later errors in the same run keep it expanded (the
+    count in the header updates either way).
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        self.toggle = QPushButton("ERRORS (1)")
+        self.toggle.setFlat(True)
+        self.toggle.setCheckable(True)
+        self.toggle.setChecked(False)  # collapsed by default
+        self.toggle.setStyleSheet(_ERROR_FOLD_TOGGLE_STYLE)
+        self.toggle.clicked.connect(self._apply)
+        self.toggle.setVisible(False)  # hidden while N == 1 (plain-line look)
+        lay.addWidget(self.toggle)
+
+        self._body = QWidget()
+        self._body_lay = QVBoxLayout(self._body)
+        self._body_lay.setContentsMargins(0, 0, 0, 0)
+        self._body_lay.setSpacing(0)
+        lay.addWidget(self._body)
+
+        self.count = 0
+
+    def _apply(self) -> None:
+        self._body.setVisible(self.toggle.isChecked())
+
+    def add_error(self, text: str) -> None:
+        """Append one error line to the run: a wrapped red label (the F7
+        break-anywhere text + the E1 min-width cap, so a long URL reflows
+        with the dock instead of forcing its width)."""
+        lbl = _WrapLabel(_breakable_display_text(text))
+        lbl.setTextFormat(Qt.PlainText)
+        lbl.setStyleSheet(_ERROR_LINE_STYLE)
+        lbl.setMinimumWidth(1)  # E1: wrap, never a horizontal scrollbar
+        self._body_lay.addWidget(lbl)
+        self.count += 1
+        if self.count == 1:
+            # A single error stays a plain wrapped line -- no toggle chrome.
+            self._body.setVisible(True)
+        else:
+            self.toggle.setText(f"ERRORS ({self.count})")
+            self.toggle.setVisible(True)
+            # Collapsed by default; a user-expanded fold stays expanded.
+            self._body.setVisible(self.toggle.isChecked())
+
+
 class _ToolCard(QFrame):
     """T1..T7/T9 (NATE 2026-07-20): ONE parent tool card -- a full-width QFrame
     that CONTAINS the inner tool calls, replacing the old flat chip pills.
@@ -526,6 +661,7 @@ class _ToolCard(QFrame):
         once on replay (all-terminal rows -> immediate auto-collapse)."""
         self._clear_body()
         any_running = False
+        any_failed = False
         n_tools = 0
         for row in inner_rows:
             label = str(row.get("label") or "")
@@ -537,6 +673,12 @@ class _ToolCard(QFrame):
             running = _is_running_state(state)
             if running:
                 any_running = True
+            # F4: a failed/cancelled row (or a replayed error row) taints the
+            # whole card's aggregate state -> red border below.
+            if (state or "").lower() in ("failed", "cancelled") or bool(
+                row.get("is_error")
+            ):
+                any_failed = True
 
             row_w = QWidget()
             rl = QHBoxLayout(row_w)
@@ -610,6 +752,17 @@ class _ToolCard(QFrame):
             self._body_lay.addWidget(meta)
 
         self._title.setText(f"Tools ({n_tools})" if n_tools else "Tools")
+
+        # F4 (live-feedback 2026-07-21): the card BORDER carries the aggregate
+        # outcome -- red the moment any tool failed/cancelled, green once
+        # every tool is terminal-and-successful, neutral while running.
+        if any_failed:
+            border = _CHIP_STATE_COLORS["failed"]
+        elif n_tools and not any_running:
+            border = _CHIP_STATE_COLORS["complete"]
+        else:
+            border = None
+        self.setStyleSheet(_toolcard_frame_style(border))
 
         # T5: run the spinner only while a row is live.
         if any_running and not self._spinner_timer.isActive():
@@ -704,6 +857,10 @@ class _AssistantEntry:
         self.notes_area = QVBoxLayout()
         self.notes_area.setSpacing(0)
         lay.addLayout(self.notes_area)
+        # F7: the OPEN run of consecutive error notes (one _ErrorFold widget);
+        # a non-error note (or an explicit break_error_run) ends the run so
+        # the next error starts a fresh fold.
+        self._error_fold: Optional[_ErrorFold] = None
 
         # Insert above the terminal stretch.
         parent_layout.insertWidget(parent_layout.count() - 1, self.container)
@@ -823,6 +980,17 @@ class _AssistantEntry:
         ``{"label","state","nested","result","is_error"}`` dicts the pipeline
         handler assembles; ``meta_lines`` is the bottom metadata block (T7)."""
         if self._tool_card is None:
+            # F3 (live-feedback 2026-07-21, "empty stale tool card"): NEVER
+            # mint the card shell for a frame with no tool content. A turn
+            # whose pipeline frames carry only LLM bookkeeping steps (all
+            # filtered by the dock's _LLM_STEP_NAMES / compute / compaction
+            # routing) used to lazily create an empty "Tools" card that then
+            # sat stale in the transcript. The shell is created only when an
+            # actual tool row (or at least a metadata line) exists to show;
+            # once minted, later frames -- empty or not -- update it as before.
+            has_rows = any(str(r.get("label") or "") for r in inner_rows)
+            if not has_rows and not any(m for m in meta_lines):
+                return
             self._tool_card = _ToolCard()
             self.pipeline_area.addWidget(self._tool_card)
         self._tool_card.set_content(inner_rows, meta_lines)
@@ -836,15 +1004,35 @@ class _AssistantEntry:
             self._tool_card = None
 
     def add_note(self, text: str, error: bool = False) -> None:
-        lbl = _WrapLabel(text)
-        lbl.setTextFormat(Qt.PlainText)
-        lbl.setStyleSheet(_ERROR_LINE_STYLE if error else _STATUS_LINE_STYLE)
+        # F7 (live-feedback 2026-07-22): consecutive ERROR notes fold into one
+        # collapsed "ERRORS (N)" toggle row (single errors stay a plain
+        # wrapped line -- _ErrorFold docstring). The fold sits inline in the
+        # notes area, in chat scroll order; a non-error note breaks the run.
+        if error:
+            if self._error_fold is None:
+                self._error_fold = _ErrorFold()
+                self.notes_area.addWidget(self._error_fold)
+            self._error_fold.add_error(text)
+            return
+        self._error_fold = None  # a status line ends the consecutive-error run
         # E1 (NATE 2026-07-20): an error/status line WRAPS with the resizable
         # chat panel and never pins the scroll host wide -- cap the minimum
         # width so even a long unbroken token reflows instead of forcing a
-        # horizontal scrollbar.
+        # horizontal scrollbar. F7 adds break-anywhere opportunities inside
+        # long unbroken tokens so the label's own sizeHint stays narrow too
+        # (the wide PREFERRED width was what dragged the dock wider).
+        lbl = _WrapLabel(_breakable_display_text(text))
+        lbl.setTextFormat(Qt.PlainText)
+        lbl.setStyleSheet(_STATUS_LINE_STYLE)
         lbl.setMinimumWidth(1)
         self.notes_area.addWidget(lbl)
+
+    def break_error_run(self) -> None:
+        """F7: end the current consecutive-error run WITHOUT adding a note --
+        the replay path calls this when a conversational row (user/agent
+        bubble) lands between persisted error rows, so errors separated by
+        chat never fold into one ERRORS (N) row."""
+        self._error_fold = None
 
     def add_layer_notes(self, notes: List[str]) -> None:
         """T8 (NATE 2026-07-20): the collapsed "Layers (N)" toggle is gone -- a
@@ -1201,6 +1389,176 @@ class GateCard(QFrame):
     def _toggle_details(self, checked: bool) -> None:
         self._body.setVisible(checked)
         self.details_toggle.setText("hide details" if checked else "show details")
+
+
+class CodeExecCard(QFrame):
+    """Inline approval card for one ``code-exec-request`` (live-feedback
+    2026-07-21: previously the envelope was silently dropped, the agent's
+    confirm gate blocked forever and the turn "just stopped").
+
+    Running arbitrary Python is a consequential action, so this is a HARD
+    confirm gate (contracts ``sandbox_contracts.py``): the card shows the
+    agent's ``rationale``, the layers the sandbox will receive, and a
+    COLLAPSED read-only monospace preview of the EXACT ``python_code``
+    (verbatim -- the user confirms what they are approving, never a
+    paraphrase), with Run / Deny buttons. The decision maps through the pure
+    ``gate.resolve_code_exec_decision`` (Run -> "proceed", Deny -> "cancel",
+    ``revised_args`` always None) and rides back on the EXISTING
+    ``tool-payload-confirmation`` envelope with ``warning_id ==
+    code_exec_id`` -- ``on_decide(code_exec_id, decision)`` is the dock's
+    send hook. Once answered the card locks (answered exactly once) and
+    folds to a one-line state chip -- the exact GateCard collapse pattern.
+
+    Keyboard-safe: the preview is read-only + click-to-focus (it never
+    steals tab/enter from the composer), and the buttons are plain
+    QPushButtons in a dock (no dialog auto-default that ENTER could fire).
+    """
+
+    def __init__(self, request: gate.CodeExecRequest, on_decide, parent=None):
+        super().__init__(parent)
+        self._request = request
+        self._on_decide = on_decide
+        self._decided: Optional[str] = None
+        self.setObjectName("codeexeccard")  # STYLE-1: scope the fill to the frame
+        self.setStyleSheet(_CODE_CARD_STYLE)
+        self.setFrameShape(QFrame.StyledPanel)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(3)
+
+        # Collapsed one-line summary (hidden until answered) + "show details"
+        # re-expand -- the GateCard affordance verbatim.
+        summary_row = QHBoxLayout()
+        self.summary_lbl = QLabel("")
+        self.summary_lbl.setWordWrap(True)
+        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setStyleSheet(_CODE_TITLE_STYLE)
+        summary_row.addWidget(self.summary_lbl, 1)
+        self.details_toggle = QPushButton("show details")
+        self.details_toggle.setFlat(True)
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.details_toggle.clicked.connect(self._toggle_details)
+        summary_row.addWidget(self.details_toggle)
+        self._summary_container = QWidget()
+        self._summary_container.setLayout(summary_row)
+        self._summary_container.setVisible(False)
+        outer.addWidget(self._summary_container)
+
+        # Full card content -- visible until answered, then folded behind the
+        # summary line (re-expandable read-only; buttons stay disabled).
+        self._body = QWidget()
+        lay = QVBoxLayout(self._body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(3)
+        outer.addWidget(self._body)
+
+        title_lbl = QLabel("Run Python code?")
+        title_lbl.setStyleSheet(_CODE_TITLE_STYLE)
+        lay.addWidget(title_lbl)
+
+        if request.rationale:
+            rationale_lbl = QLabel(request.rationale)
+            rationale_lbl.setWordWrap(True)
+            rationale_lbl.setTextFormat(Qt.PlainText)
+            rationale_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            lay.addWidget(rationale_lbl)
+
+        # Which of the user's layers the code can touch (contract intent).
+        for line in gate.code_exec_layer_lines(request):
+            layer_lbl = QLabel(line)
+            layer_lbl.setWordWrap(True)
+            layer_lbl.setTextFormat(Qt.PlainText)
+            layer_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            lay.addWidget(layer_lbl)
+
+        # Collapsed monospace preview of the EXACT code -- expandable,
+        # read-only (verbatim, never a paraphrase).
+        self.code_toggle = QPushButton("show code")
+        self.code_toggle.setFlat(True)
+        self.code_toggle.setCheckable(True)
+        self.code_toggle.setChecked(False)
+        self.code_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.code_toggle.clicked.connect(self._toggle_code)
+        lay.addWidget(self.code_toggle)
+        self.code_view = QPlainTextEdit()
+        self.code_view.setPlainText(request.python_code)
+        self.code_view.setReadOnly(True)
+        self.code_view.setStyleSheet(_CODE_PREVIEW_STYLE)
+        # E1 discipline: the preview scrolls INSIDE its own box -- it never
+        # pins the chat host wide or tall (long snippets get scrollbars).
+        self.code_view.setLineWrapMode(QPlainTextEdit.NoWrap)
+        self.code_view.setMinimumWidth(1)
+        self.code_view.setMaximumHeight(180)
+        self.code_view.setFocusPolicy(Qt.ClickFocus)
+        self.code_view.setVisible(False)
+        lay.addWidget(self.code_view)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        self.run_btn = QPushButton("Run")
+        self.run_btn.clicked.connect(self._run)
+        btn_row.addWidget(self.run_btn)
+        self.deny_btn = QPushButton("Deny")
+        self.deny_btn.clicked.connect(self._deny)
+        btn_row.addWidget(self.deny_btn)
+        lay.addLayout(btn_row)
+
+        self.result_lbl = QLabel("")
+        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl.setVisible(False)
+        lay.addWidget(self.result_lbl)
+
+    # -- toggles ---------------------------------------------------------- #
+
+    def _toggle_code(self) -> None:
+        checked = self.code_toggle.isChecked()
+        self.code_view.setVisible(checked)
+        self.code_toggle.setText("hide code" if checked else "show code")
+
+    def _toggle_details(self, checked: bool) -> None:
+        self._body.setVisible(checked)
+        self.details_toggle.setText("hide details" if checked else "show details")
+
+    # -- actions ---------------------------------------------------------- #
+
+    def _run(self) -> None:
+        self._commit(gate.resolve_code_exec_decision(True))
+
+    def _deny(self) -> None:
+        self._commit(gate.resolve_code_exec_decision(False))
+
+    def _commit(self, decision: gate.GateDecision) -> None:
+        if self._decided is not None:
+            return  # locked -- a gate is answered exactly once
+        self._decided = decision.decision
+        self._on_decide(self._request.code_exec_id, decision.decision)
+        for widget in (self.run_btn, self.deny_btn):
+            widget.setEnabled(False)
+        self.result_lbl.setText(
+            "Approved -- running the code."
+            if decision.decision == "proceed"
+            else "Denied -- the code will not run."
+        )
+        self.result_lbl.setVisible(True)
+        self._collapse()
+
+    # -- collapse (the GateCard affordance) -------------------------------- #
+
+    def _collapse(self) -> None:
+        """Fold to a single one-line state chip once answered; the body stays
+        intact underneath (buttons already disabled) so "show details" can
+        re-expand a read-only view."""
+        self.summary_lbl.setText(
+            "Code run: approved"
+            if self._decided == "proceed"
+            else "Code run: denied"
+        )
+        self._summary_container.setVisible(True)
+        self._body.setVisible(False)
+        self.details_toggle.setChecked(False)
+        self.details_toggle.setText("show details")
 
 
 class SimCard(QFrame):

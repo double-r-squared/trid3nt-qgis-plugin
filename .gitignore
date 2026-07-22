@@ -9,7 +9,7 @@ dist/
 bin/
 third_party/
 venvs/
-data/
+/data/
 logs/
 run/
 runs/
