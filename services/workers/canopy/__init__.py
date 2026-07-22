@@ -1,4 +1,4 @@
-"""GRACE-2 canopy-height ML-inference AWS Batch worker package.
+"""Canopy-height ML-inference AWS Batch worker package.
 
 The CLOUD LANE for the canopy-height tool (``compute_canopy_height``): a
 containerized one-shot Batch job that downloads a staged sub-metre RGB COG +

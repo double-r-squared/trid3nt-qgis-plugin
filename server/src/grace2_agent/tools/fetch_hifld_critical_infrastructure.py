@@ -203,7 +203,7 @@ FACILITY_ALIASES: dict[str, str] = {
     "power": "power_plants",
 }
 
-# User-Agent — identify GRACE-2 clearly to the ESRI cluster.
+# User-Agent — identify this client clearly to the ESRI cluster.
 _USER_AGENT = (
     "grace-2/0.1 (Hazard Modeling Agent; "
     "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"

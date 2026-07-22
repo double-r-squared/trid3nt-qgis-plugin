@@ -7,7 +7,7 @@ evidence script (`reports/inflight/job-0221-engine-20260609/evidence/`), which
 runs the pinned `mf6` 6.5.0 binary and asserts plume physics.
 
 Run:
-    services/agent/.venv/bin/python -m pytest \
+    venvs/agent/bin/python -m pytest \
         services/workers/modflow/test_gwt_adapter.py -v
 """
 

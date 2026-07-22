@@ -41,7 +41,7 @@ def _depth_layer(**overrides: object) -> GeoClawDepthLayerURI:
         layer_id="run-01HX-depth",
         name="GeoClaw inundation depth (m)",
         layer_type="raster",
-        uri="s3://grace-2/runs/01HX/depth.cog.tif",
+        uri="s3://trid3nt/runs/01HX/depth.cog.tif",
         style_preset="continuous_flood_depth",
         max_depth_m=2.4,
         flooded_area_km2=0.61,

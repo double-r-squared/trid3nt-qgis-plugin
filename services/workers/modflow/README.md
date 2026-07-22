@@ -1,4 +1,4 @@
-# GRACE-2 MODFLOW 6 solver worker
+# MODFLOW 6 solver worker
 
 Sprint-13 / MOD-1 / job-0220 / FR-CE-1/2/3. The MODFLOW-6 analogue of
 `services/workers/sfincs/` — a containerized `mf6` 6.5.0 solver that runs as a

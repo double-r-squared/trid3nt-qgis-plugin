@@ -8,7 +8,7 @@ swapped for the in-memory S3 injector.
 
 Run:
     services/agent/.venv/bin/python -m pytest \
-        services/agent/tests/test_fetch_fault_sources.py -v
+        server/tests/test_fetch_fault_sources.py -v
 """
 
 from __future__ import annotations

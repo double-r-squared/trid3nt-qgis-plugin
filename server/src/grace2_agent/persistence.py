@@ -177,7 +177,7 @@ class MCPClientProtocol(Protocol):
 def _ejson_normalize(value: Any) -> Any:
     """Collapse the EJSON extended-type wrappers we can encounter.
 
-    GRACE-2 documents store string ULIDs and ISO-8601 strings, so most
+    Our documents store string ULIDs and ISO-8601 strings, so most
     round-trips are plain JSON. Mongo may still emit ``{"$date": ...}`` /
     ``{"$oid": ...}`` / ``{"$numberLong": ...}`` for fields written by
     other paths — collapse them to their plain value so Pydantic
@@ -258,7 +258,7 @@ class MCPSurfaceTranslator:
       server DEFAULTS TO limit=10 — unbounded logical reads like chat
       history would silently truncate) → ``{"documents": [...]}``
     - ``insert-one`` → ``insert-many`` with ``documents=[doc]``
-    - ``update-one`` → ``update-many`` (every GRACE-2 update filters on a
+    - ``update-one`` → ``update-many`` (every update in this codebase filters on a
       unique key, so the semantics coincide)
 
     Any other tool name passes through untouched.

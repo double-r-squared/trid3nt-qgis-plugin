@@ -13,7 +13,7 @@ This module is the plugin's CONNECTION LAYER. Hard rules:
     platform and keeps the plugin zip pure-python (QGIS plugin repository
     no-binaries rule).
 
-Protocol (mirrors ``web/src/ws.ts`` (GRACE-2 repo) + ``scripts/tool_routing_bench.py``):
+Protocol (mirrors the web client's ``ws.ts`` (separate repo) + ``scripts/tool_routing_bench.py``):
 
   envelope   {"type", "id" (ULID), "ts" (ISO-8601 Z), "session_id",
               "case_id", "payload"}

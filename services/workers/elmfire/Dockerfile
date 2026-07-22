@@ -1,4 +1,4 @@
-# GRACE-2 ELMFIRE wildfire-spread AWS Batch worker image (FIRE-4).
+# ELMFIRE wildfire-spread AWS Batch worker image (FIRE-4).
 #
 # Successor of the FIRE-1 dev image (trid3nt/elmfire:dev, proven against
 # tutorial 01 + verification case 01 - reports/inflight/fire-1-container-proof.md).
@@ -7,7 +7,7 @@
 #   1. REPO-ROOT BUILD CONTEXT (CodeBuild parity). The FIRE-1 dev image built
 #      FROM the vendor elmfire checkout as context; the shared
 #      grace2-worker-builder CodeBuild flow builds every worker with the
-#      GRACE-2 repo root as context (docker build --file
+#      repo root as context (docker build --file
 #      services/workers/<w>/Dockerfile .). So the ELMFIRE source is now
 #      FETCHED at build time: the pinned release tarball
 #      (2025.0526 == commit 23a4cbd27fc84b4b194fed48a8d933f7e7c7fdeb, the

@@ -937,7 +937,7 @@ async def model_seismic_hazard_scenario(
 # package that exposes a stable in-process API. For the offline / local build we
 # run the worker entrypoint as a subprocess: ``sys.executable -m
 # services.workers.openquake.entrypoint --run-id <id> --manifest-uri <uri>``
-# with the GRACE-2 repo root on PYTHONPATH. The worker renders the deck via
+# with the repo root on PYTHONPATH. The worker renders the deck via
 # ``job_ini.render_openquake_deck``, runs ``oq engine --run job.ini``, and writes
 # completion.json + uploads output CSVs.
 #
@@ -965,7 +965,7 @@ def openquake_local_spec() -> Any:
     rundir, renders the OpenQuake deck, and drives ``oq engine --run job.ini``.
     The SUPERVISOR (not the shim) writes completion.json and uploads output.
 
-    The GRACE-2 repo root is prepended to PYTHONPATH so the shim's
+    The repo root is prepended to PYTHONPATH so the shim's
     ``from services.workers.*`` imports resolve.
 
     The ``oq`` CLI binary must be on PATH (installed via ``openquake.engine``

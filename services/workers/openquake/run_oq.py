@@ -86,13 +86,13 @@ def run_oq(build_spec_path: str) -> int:
     cwd = spec_path.parent
 
     # Import the deck renderer (must be on PYTHONPATH; the LocalSolverSpec
-    # env_overrides prepends the GRACE-2 repo root).
+    # env_overrides prepends the repo root).
     try:
         from services.workers.openquake.job_ini import render_openquake_deck  # type: ignore[import]
     except ImportError as exc:
         sys.stderr.write(
             f"run_oq.py: could not import openquake worker modules -- "
-            f"is PYTHONPATH set to the GRACE-2 repo root? ({exc})\n"
+            f"is PYTHONPATH set to the repo root? ({exc})\n"
         )
         return 2
 
@@ -137,7 +137,7 @@ def run_oq(build_spec_path: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="grace2-openquake-run-oq",
-        description="GRACE-2 OpenQuake runner (local subprocess shim).",
+        description="OpenQuake runner (local subprocess shim).",
     )
     parser.add_argument(
         "--manifest",

@@ -3,7 +3,7 @@
 Proves the FULL plugin-side flow -- POST /api/probe-point -> dock note-block
 formatting -- by driving the REAL, unmodified ``probe.py``
 (``post_probe_point`` / ``format_probe_result``) against a STUB HTTP server
-that mirrors the agent route's real contract (services/agent
+that mirrors the agent route's real contract (the server's
 ``tool_catalog_http.py`` + ``tools/probe_point.py``):
 
     POST /api/probe-point {"case_id","lon","lat"}

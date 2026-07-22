@@ -1,4 +1,4 @@
-# GRACE-2 Landlab solver AWS Batch worker (sprint-17 — NEW engine / FR-CE-1).
+# Landlab solver AWS Batch worker (sprint-17 — NEW engine / FR-CE-1).
 #
 # Builds the runtime image for the Landlab AWS Batch job — the scale-to-zero
 # CLOUD LANE for the Landlab surface-process engine (landslide susceptibility /
@@ -61,7 +61,7 @@ FROM python:3.12-slim-bookworm AS runtime
 
 LABEL org.opencontainers.image.title="grace-2-landlab-solver" \
       org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 Landlab (CSDMS) solver runtime (AWS Batch). Reads a build_spec + DEM COG from s3://...-cache/, builds a RasterModelGrid + runs a documented component chain (LandslideProbability / OverlandFlow), writes a field COG + completion manifest to s3://...-runs/<run_id>/." \
+      org.opencontainers.image.description="Landlab (CSDMS) solver runtime (AWS Batch). Reads a build_spec + DEM COG from s3://...-cache/, builds a RasterModelGrid + runs a documented component chain (LandslideProbability / OverlandFlow), writes a field COG + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="MIT"
 
 # ca-certificates so boto3's HTTPS calls to S3 verify; rasterio's bundled GDAL

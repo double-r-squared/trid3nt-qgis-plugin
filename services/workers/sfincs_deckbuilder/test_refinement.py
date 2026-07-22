@@ -13,7 +13,7 @@ split so there is a real 0 m contour, a slope ramp, and synthetic
 GeoDataFrames for buildings and rivers.  NO cht_sfincs / boto3 required.
 
 Run with the agent venv:
-    services/agent/.venv/bin/python -m pytest \
+    venvs/agent/bin/python -m pytest \
         services/workers/sfincs_deckbuilder/test_refinement.py -q
 """
 

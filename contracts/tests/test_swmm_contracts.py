@@ -340,7 +340,7 @@ def _depth_layer(**overrides: object) -> SWMMDepthLayerURI:
         layer_id="run-01HX-depth",
         name="Urban flood depth (m)",
         layer_type="raster",
-        uri="gs://grace-2/runs/01HX/depth.cog.tif",
+        uri="gs://trid3nt/runs/01HX/depth.cog.tif",
         style_preset="flood_depth",
         max_depth_m=1.85,
         flooded_area_km2=0.42,
@@ -402,7 +402,7 @@ def test_depth_layer_requires_the_added_scalars() -> None:
             layer_id="run-01HX-depth",
             name="depth",
             layer_type="raster",
-            uri="gs://grace-2/runs/01HX/depth.cog.tif",
+            uri="gs://trid3nt/runs/01HX/depth.cog.tif",
             style_preset="flood_depth",
             # missing the three scalars
         )

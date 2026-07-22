@@ -70,7 +70,7 @@ MINIO_ENDPOINT = os.environ.get("TRID3NT_MINIO_ENDPOINT", "http://100.92.163.46:
 
 # Independently verified against the real agent-side export_case_to_qgis
 # code path + the real MinIO object (see the session's evidence -- run
-# directly via the agent's .venv against services/agent's updated
+# directly via the agent's .venv against the server's updated
 # tools/export_case_to_qgis.py, NOT through the (unrestarted) live agent
 # process): s3_uri, crs_authid, and name are the EXACT values the live
 # route will return once the box is restarted/redeployed with this change.

@@ -16,7 +16,7 @@ stays oil and a bare 'dye' stays a conservative tracer. Both period-stripped
 variants ("e coli"/"ecoli", from the run_telemac alnum sanitize) and the raw
 ("e. coli") route to decay so classify matches on either path.
 
-The function lives in the agent package (canonical GRACE-2 tree); we shim the
+The function lives in the agent package (the in-repo server tree); we shim the
 agent + contracts src onto sys.path so this imports the tree being edited, NOT a
 vendored copy. If the agent deps are unavailable on the runner, the module is
 skipped rather than failing the worker suite.
@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 # Shim the canonical agent + contracts src to the FRONT so classify_substance
-# resolves to the tree under edit (parents[4] == the GRACE-2 repo root).
+# resolves to the tree under edit (parents[4] == the repo root).
 _ROOT = Path(__file__).resolve().parents[4]
 for _p in (_ROOT / "services" / "agent" / "src",
            _ROOT / "packages" / "contracts" / "src"):

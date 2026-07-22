@@ -1,4 +1,4 @@
-# GRACE-2 COMBINED SFINCS coastal quadtree worker (BUILD + SOLVE in one image).
+# COMBINED SFINCS coastal quadtree worker (BUILD + SOLVE in one image).
 #
 # Fuses the two former one-shot Batch workers into a single image + a single
 # job-definition (GRACE2_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE):
@@ -12,7 +12,7 @@
 # GPL ISOLATION — load-bearing:
 #   `cht_sfincs` is GPL-3.0 and lives ONLY in THIS image, imported ONLY by
 #   `entrypoint.py` (lazily, inside build_deck + the refinement/obstacle helpers).
-#   The GRACE-2 agent venv and all agent code NEVER import `cht_sfincs`; the agent
+#   The agent venv and all agent code NEVER import `cht_sfincs`; the agent
 #   reaches this worker arms-length over the object-store + AWS-Batch-submit seam.
 #   The SFINCS solver binary itself is MIT-licensed (Deltares ships it in the
 #   sfincs-cpu base). The combined image carries BOTH — the GPL cht venv overlaid
@@ -56,7 +56,7 @@ FROM deltares/sfincs-cpu:sfincs-v2.3.3@sha256:46b5fc9e324d3d9a0d0a7728390e3413bb
 
 LABEL org.opencontainers.image.title="grace-2-sfincs-quadtree" \
       org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 COMBINED SFINCS quadtree+SnapWave BUILD+SOLVE worker (AWS Batch, one job). Reads a build-spec JSON, authors a refined quadtree deck via cht_sfincs (GPL-3.0, image-only) with auto-refinement + cell-budget cap + building obstacles, then runs /usr/local/bin/sfincs (MIT) in-process on the local deck and writes sfincs_map.nc + a union completion.json to the object store." \
+      org.opencontainers.image.description="COMBINED SFINCS quadtree+SnapWave BUILD+SOLVE worker (AWS Batch, one job). Reads a build-spec JSON, authors a refined quadtree deck via cht_sfincs (GPL-3.0, image-only) with auto-refinement + cell-budget cap + building obstacles, then runs /usr/local/bin/sfincs (MIT) in-process on the local deck and writes sfincs_map.nc + a union completion.json to the object store." \
       org.opencontainers.image.licenses="GPL-3.0-or-later AND MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive \

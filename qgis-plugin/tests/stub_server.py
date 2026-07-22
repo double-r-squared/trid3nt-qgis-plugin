@@ -111,7 +111,7 @@ STUB_WARNING_ID = "01STUBWARNINGAAAAAAAAAAAAA"
 
 # A tool-payload-warning payload with the #154 granularity + time_scale
 # enrichments -- field-for-field the PayloadWarningEnvelopePayload contract
-# (packages/contracts .../payload_warning.py).
+# (contracts .../payload_warning.py).
 PAYLOAD_WARNING_ROW: dict[str, Any] = {
     "envelope_type": "tool-payload-warning",
     "warning_id": STUB_WARNING_ID,

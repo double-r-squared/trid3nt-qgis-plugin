@@ -16,7 +16,7 @@ Covers:
   * the 10 m m/s -> 20 ft mph wind-units helper (design doc units trap).
 
 Run:
-    services/agent/.venv/bin/python -m pytest services/workers/elmfire/tests/
+    venvs/agent/bin/python -m pytest services/workers/elmfire/tests/
 """
 
 from __future__ import annotations

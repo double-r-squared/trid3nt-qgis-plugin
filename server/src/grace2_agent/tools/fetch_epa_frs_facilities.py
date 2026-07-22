@@ -241,7 +241,7 @@ PROGRAM_ALIASES: dict[str, str] = {
     "acres": "brownfields",
 }
 
-# User-Agent — identify GRACE-2 clearly to the EPA ESRI cluster.
+# User-Agent — identify this client clearly to the EPA ESRI cluster.
 _USER_AGENT = (
     "grace-2/0.1 (Hazard Modeling Agent; "
     "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"

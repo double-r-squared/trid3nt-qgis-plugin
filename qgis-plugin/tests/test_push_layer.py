@@ -5,7 +5,7 @@ No QGIS required (pure request-builder/parser tests, mirroring
 ``test_milestone3.py``'s ``TestRemoteDownload`` pattern): a small
 ``http.server.BaseHTTPRequestHandler`` stub mirrors the agent's real
 ``/api/ingest-layer-file`` + ``/api/ingest-layer`` route semantics
-(services/agent ``tool_catalog_http.py``), and the tests drive
+(the server's ``tool_catalog_http.py``), and the tests drive
 ``push_layer.upload_layer_bytes`` / ``post_ingest_layer`` /
 ``push_exported_file`` / ``format_push_note`` against it. The ONE
 QGIS-touching function (``export_active_layer_to_tempfile``) is intentionally

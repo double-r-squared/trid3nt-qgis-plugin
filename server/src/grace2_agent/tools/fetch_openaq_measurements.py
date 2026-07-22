@@ -26,7 +26,7 @@ cross-reference ``sensorsId`` against the station's ``sensors`` array to attach
 thus ONE (station, parameter) latest measurement.
 
 bbox format (verified): OpenAQ v3 uses a comma-delimited
-``min_lon,min_lat,max_lon,max_lat`` WGS84 envelope — IDENTICAL to GRACE-2's
+``min_lon,min_lat,max_lon,max_lat`` WGS84 envelope — IDENTICAL to this repo's
 ``(west, south, east, north)`` convention, so no axis flip is needed. An
 out-of-range bbox returns HTTP 422; an unauthenticated request returns HTTP
 401 with ``{"message":"Unauthorized. A valid API key must be provided in the

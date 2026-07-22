@@ -411,7 +411,7 @@ def render_swn_command_file(spec: SwanBuildSpec) -> str:
 
     lines: list[str] = []
     lines.append("$ -------------------------------------------------------------")
-    lines.append("$ GRACE-2 SWAN nearshore wave-field deck (auto-generated).")
+    lines.append("$ SWAN nearshore wave-field deck (auto-generated).")
     lines.append("$ Do NOT hand-edit -- regenerate from the build_spec.")
     lines.append(f"$ mode={spec.mode} bbox={spec.bbox}")
     lines.append("$ -------------------------------------------------------------")

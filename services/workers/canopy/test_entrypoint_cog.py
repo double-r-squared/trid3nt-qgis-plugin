@@ -1,4 +1,4 @@
-# GRACE-2 canopy worker -- COG-write + honesty-gate + helper tests.
+# Canopy worker -- COG-write + honesty-gate + helper tests.
 #
 # Cover for the inference-FREE parts of the canopy worker: the single-band
 # float32 metres COG writer (georeferencing copied from the input RGB), the

@@ -24,7 +24,7 @@ def test_model_setup_roundtrip() -> None:
     ms = ModelSetup(
         setup_id=new_ulid(),
         solver="sfincs",
-        setup_uri="gs://grace-2/setups/01HX/",
+        setup_uri="gs://trid3nt/setups/01HX/",
         grid_resolution_m=10.0,
         bbox=(-82.5, 26.4, -81.7, 26.9),
         parameters={"manning": 0.04},
@@ -44,7 +44,7 @@ def test_execution_handle_pins_workflows_execution_id_invariant_8() -> None:
         run_id=new_ulid(),
         solver="sfincs",
         compute_class="standard",
-        workflows_execution_id="projects/grace-2/locations/us-central1/workflows/sfincs-run/executions/01HX",
+        workflows_execution_id="projects/trid3nt/locations/us-central1/workflows/sfincs-run/executions/01HX",
         workflow_name="sfincs-run",
         workflow_location="us-central1",
         submitted_at="2026-06-05T12:00:00Z",
@@ -79,7 +79,7 @@ def test_layer_uri_maps_field_for_field_onto_load_layer_args() -> None:
         layer_id="run-01HX-flood-depth",
         name="Flood depth (m)",
         layer_type="raster",
-        uri="gs://grace-2/runs/01HX/depth.cog.tif",
+        uri="gs://trid3nt/runs/01HX/depth.cog.tif",
         style_preset="flood_depth_blue",
         temporal=TemporalConfig(
             start="2022-09-28T00:00:00Z",
@@ -168,7 +168,7 @@ def test_layer_uri_carries_legend_and_round_trips() -> None:
         layer_id="run-01HX-flood-depth",
         name="Flood depth (m)",
         layer_type="raster",
-        uri="s3://grace-2/runs/01HX/depth.cog.tif",
+        uri="s3://trid3nt/runs/01HX/depth.cog.tif",
         style_preset="flood_depth_blue",
         role="primary",
         units="meters",
@@ -196,7 +196,7 @@ def test_layer_uri_legend_is_optional_backward_compat() -> None:
         layer_id="legacy",
         name="Legacy raster",
         layer_type="raster",
-        uri="s3://grace-2/runs/legacy/depth.cog.tif",
+        uri="s3://trid3nt/runs/legacy/depth.cog.tif",
         style_preset="flood_depth_blue",
     )
     assert layer.legend is None
@@ -213,7 +213,7 @@ def test_result_layer_mirrors_legend_and_round_trips() -> None:
         layer_id="run-01HX-damage",
         name="Damage state",
         layer_type="vector",
-        uri="s3://grace-2/runs/01HX/damage.fgb",
+        uri="s3://trid3nt/runs/01HX/damage.fgb",
         style_preset="pelicun_damage_state",
         role="primary",
         legend=LegendKey(

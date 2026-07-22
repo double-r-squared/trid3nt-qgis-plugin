@@ -126,7 +126,7 @@ class AtomicToolMetadata(GraceModel):
     # --- Wave 1.5 additions (job-0114-schema-20260608) --- #
     #
     # Both fields default to safe / opt-out values so the ~30 existing
-    # ``AtomicToolMetadata(...)`` call sites in services/agent/src/
+    # ``AtomicToolMetadata(...)`` call sites in server/src/
     # grace2_agent/tools/*.py keep working untouched. New tools and
     # follow-ups opt in by passing the keyword.
 
@@ -178,7 +178,7 @@ class AtomicToolMetadata(GraceModel):
         default=False,
         description=(
             "MCP annotation: openWorldHint. True when the tool issues calls to "
-            "external APIs or public data endpoints outside the GRACE-2 GCP "
+            "external APIs or public data endpoints outside the GCP "
             "project boundary. Defaults to False — compute, clip, and intra-GCP "
             "tools opt out. All fetch_* tools and web_fetch are True; "
             "catalog_search/catalog_fetch are True because they ultimately hit "

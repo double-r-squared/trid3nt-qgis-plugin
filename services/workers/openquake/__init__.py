@@ -1,4 +1,4 @@
-"""GRACE-2 OpenQuake Engine PSHA AWS Batch worker package (sprint-17).
+"""OpenQuake Engine PSHA AWS Batch worker package (sprint-17).
 
 A thin shim around the OpenQuake Engine CLI (``oq engine --run job.ini``). The
 worker contract is solver-agnostic (mirrors the SWMM/SFINCS/MODFLOW workers): it

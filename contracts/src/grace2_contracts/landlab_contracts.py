@@ -5,7 +5,7 @@ library: you build a ``RasterModelGrid`` over a DEM and SNAP TOGETHER documented
 ``Component`` objects (the CSDMS-BMI snap-together pattern) — infinite-slope
 landslide stability, overland flow, hillslope diffusion, stream power, etc. The
 sprint-17 Landlab North Star is a landslide-susceptibility / factor-of-safety
-hazard layer: a hazard CLASS GRACE-2 does not yet have.
+hazard layer: a hazard CLASS the system does not yet have.
 
 Two shapes back the Landlab demo path (AOI -> DEM COG -> RasterModelGrid ->
 component chain -> susceptibility/FoS field -> COG):

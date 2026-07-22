@@ -2,7 +2,7 @@
 
 Per the spike design (``reports/design/worker_side_postprocess_spike.md`` section
 6.1): the manifest schema lives here as a PLAIN dict authored by the worker (NOT
-in ``packages/contracts``, which the worker CodeBuild context does not ship). A
+in ``contracts``, which the worker CodeBuild context does not ship). A
 typed Pydantic mirror gated on the SAME ``schema_version`` lives agent-side and
 is consumed only by the agent reader in the NEXT phase. Two definitions, one
 schema_version gate.

@@ -151,7 +151,7 @@ def render_source_model_xml(
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <nrml xmlns:gml="http://www.opengis.net/gml"
       xmlns="http://openquake.org/xmlns/nrml/0.4">
-    <sourceModel name="GRACE-2 demo area source">
+    <sourceModel name="demo area source">
         <areaSource id="{source_id}"
                     name="AOI area source"
                     tectonicRegion="{tectonic_region}">
@@ -481,7 +481,7 @@ def render_job_ini(
     site_grid_spacing_km: float,
     max_distance_km: float,
     imls: tuple[float, ...] = _DEFAULT_IMLS_G,
-    description: str = "GRACE-2 classical PSHA",
+    description: str = "classical PSHA",
     source_model_logic_tree_filename: str = "source_model_logic_tree.xml",
     gmpe_logic_tree_filename: str = "gmpe_logic_tree.xml",
     # --- advanced-physics overrides (levers STEP 3; ADDITIVE, default-match) - #

@@ -1,4 +1,4 @@
-"""Shared primitives for every GRACE-2 contract.
+"""Shared primitives for every contract in this package.
 
 This module holds the cross-cutting building blocks every other contract module
 depends on: the canonical pydantic base configuration, the ULID id helpers, the
@@ -121,7 +121,7 @@ BBox = Annotated[tuple[float, float, float, float], AfterValidator(_validate_bbo
 
 
 class GraceModel(BaseModel):
-    """Canonical base for every GRACE-2 contract model.
+    """Canonical base for every contract model.
 
     - ``extra="forbid"``: unknown fields are a defect, not silently dropped.
       Forward-compatible growth happens through open ``Literal`` enums and

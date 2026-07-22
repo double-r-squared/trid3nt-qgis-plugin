@@ -29,7 +29,7 @@ and live-no-cache classed).
 
 OQ-0102-METADATA-FIELDS: the Wave 1.5 kickoff sketches new
 ``AtomicToolMetadata`` fields (``supports_global_query``, ``estimate_payload_mb``)
-that the current ``packages/contracts`` model does not yet expose. Engine job
+that the current ``contracts`` model does not yet expose. Engine job
 scope cannot land schema fields; surfacing as OQ for an upstream schema
 amendment. The tool meanwhile documents the intended values in this docstring
 so a follow-up registration update is mechanical.

@@ -1,6 +1,6 @@
 """User identity envelope (Auth/Users track stub, sprint-12-mega Wave 1.5).
 
-A User document represents an authenticated GRACE-2 account. The shape lives
+A User document represents an authenticated account. The shape lives
 here so the agent's persistence layer (job-0115) has a typed contract to
 ``upsert_user`` / ``get_user_by_firebase_uid`` against ahead of the formal
 Auth/Users track (the 4-job schema/agent/web/infra sprint that lands Firebase
@@ -47,7 +47,7 @@ __all__ = [
 
 
 class User(GraceModel):
-    """An authenticated GRACE-2 user.
+    """An authenticated user.
 
     Fields:
 

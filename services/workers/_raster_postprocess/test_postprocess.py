@@ -3,8 +3,8 @@
 # Cover the GPL-free NetCDF -> COG substrate with SYNTHETIC NetCDFs (no Batch, no
 # S3, no cht): regular-grid + quadtree extraction, the parallel + serial frame
 # encode, the empty-field honesty gate, band_stats precompute, and the manifest
-# round-trip. rasterio/xarray/scipy ship in the agent test venv (run pytest from
-# services/agent), so these run there; they skip cleanly where a dep is absent.
+# round-trip. rasterio/xarray/scipy ship in the agent venv
+# (venvs/agent), so these run there; they skip cleanly where a dep is absent.
 
 from __future__ import annotations
 

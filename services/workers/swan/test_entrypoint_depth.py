@@ -1,4 +1,4 @@
-# GRACE-2 SWAN worker -- bathy depth_fn sampling tests.
+# SWAN worker -- bathy depth_fn sampling tests.
 #
 # Regression cover for the live 2026-06-23 Mexico Beach "invisible wave raster"
 # bug: a staged fetch_topobathy DEM in a PROJECTED CRS (CUDEM tiles arrive in

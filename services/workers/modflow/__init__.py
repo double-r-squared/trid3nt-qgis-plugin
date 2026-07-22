@@ -1,4 +1,4 @@
-"""GRACE-2 MODFLOW 6 solver Cloud Run Job — Case 2 groundwater substrate.
+"""MODFLOW 6 solver Cloud Run Job — Case 2 groundwater substrate.
 
 Sprint-13 / MOD-1 / job-0220 / FR-CE-1/2/3. The MODFLOW-6 analogue of the
 SFINCS solver worker (services/workers/sfincs/). Reads a JSON setup manifest

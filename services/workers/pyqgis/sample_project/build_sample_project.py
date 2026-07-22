@@ -69,7 +69,7 @@ def main(output_path: Path) -> int:
         project = QgsProject.instance()
         project.clear()
         project.setCrs(TARGET_CRS)
-        project.setTitle("GRACE-2 M2 sample (CONUS basemap)")
+        project.setTitle("M2 sample (CONUS basemap)")
 
         xyz_uri = build_xyz_uri(OSM_TILE_TEMPLATE)
         layer = QgsRasterLayer(xyz_uri, LAYER_NAME, "wms")
@@ -102,7 +102,7 @@ def main(output_path: Path) -> int:
         # Advertise WMS-served CRSes so clients can request EPSG:4326 directly.
         project.writeEntry("WMSCrsList", "/", ["EPSG:4326", "EPSG:3857"])
         # Make the layer queryable / published.
-        project.writeEntry("WMSServiceTitle", "/", "GRACE-2 sample WMS")
+        project.writeEntry("WMSServiceTitle", "/", "sample WMS")
         project.writeEntry(
             "WMSServiceAbstract",
             "/",

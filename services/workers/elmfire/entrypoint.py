@@ -266,7 +266,7 @@ def _expand_outputs(patterns: list[str], cwd: Path) -> list[Path]:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="grace2-elmfire-entrypoint",
-        description="GRACE-2 ELMFIRE AWS Batch worker entrypoint (FR-CE-1/2/3).",
+        description="ELMFIRE AWS Batch worker entrypoint (FR-CE-1/2/3).",
     )
     p.add_argument(
         "--run-id",

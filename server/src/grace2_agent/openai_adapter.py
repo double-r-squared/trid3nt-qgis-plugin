@@ -843,7 +843,7 @@ async def stream_openai(
     model: str | None = None,
     show_thinking: bool = False,
 ) -> AsyncIterator[StreamEvent]:
-    """Stream one OpenAI-compatible turn, yielding the GRACE ``StreamEvent`` union.
+    """Stream one OpenAI-compatible turn, yielding the ``StreamEvent`` union.
 
     Mirrors ``bedrock_adapter.stream_bedrock``: one call == one model round.
     The dispatch loop in ``server.py`` appends function_call + function_response

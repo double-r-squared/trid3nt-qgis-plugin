@@ -1,4 +1,4 @@
-# GRACE-2 SWAN (Simulating WAves Nearshore) wave solver AWS Batch worker (Phase 1).
+# SWAN (Simulating WAves Nearshore) wave solver AWS Batch worker (Phase 1).
 #
 # FILE-ONLY SCAFFOLD (NOT built / pushed in Phase 1). This authors the runtime
 # image for the SWAN AWS Batch job -- the scale-to-zero CLOUD LANE for the SWAN
@@ -17,9 +17,9 @@
 # SWMM multi-stage venv-copy): SWAN ships a Fortran source tarball that builds
 # headless on Linux with `make config` (needs Perl) then `make ser` or `make omp`
 # producing the `swan.exe` binary + the `swanrun` launcher. The shared-memory
-# OpenMP build (`make omp`) maps 1:1 onto GRACE-2's single-node Batch sizing ladder
+# OpenMP build (`make omp`) maps 1:1 onto the single-node Batch sizing ladder
 # (AWS_BATCH_COMPUTE_CLASS_SIZING -> OMP_NUM_THREADS); NO multinode/MPI is needed
-# for the regional AOIs GRACE-2 targets (and SOLVER_BATCH_JOBDEF_REGISTRY has no
+# for the regional AOIs this system targets (and SOLVER_BATCH_JOBDEF_REGISTRY has no
 # MPI/nodeProperties path). We compile swan.exe at BUILD time (unlike GeoClaw,
 # which compiles per-deck at run time) so the image carries a ready binary and the
 # per-solve cost is just the wave solve, not a compile.
@@ -42,7 +42,7 @@ FROM public.ecr.aws/docker/library/debian:bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.title="grace-2-swan-solver" \
       org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 SWAN spectral nearshore wave solver runtime (AWS Batch). Reads a build_spec + bathy DEM from s3://...-cache/, authors a .swn command file, runs headless swanrun, writes the gridded wave-field output + completion manifest to s3://...-runs/<run_id>/." \
+      org.opencontainers.image.description="SWAN spectral nearshore wave solver runtime (AWS Batch). Reads a build_spec + bathy DEM from s3://...-cache/, authors a .swn command file, runs headless swanrun, writes the gridded wave-field output + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="GPL-3.0-or-later"
 
 ENV VENV=/opt/grace2/.venv \

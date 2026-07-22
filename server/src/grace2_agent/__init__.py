@@ -1,4 +1,4 @@
-"""GRACE-2 agent service (Bedrock / OpenAI-OpenRouter on EC2).
+"""Agent service (Bedrock / OpenAI-OpenRouter on EC2).
 
 Live stack (post GCP->AWS migration; offline-pivot cleanup):
 - Appendix-A WebSocket core (session-resume, user-message, cancel, error).

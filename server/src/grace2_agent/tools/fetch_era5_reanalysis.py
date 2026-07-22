@@ -795,7 +795,7 @@ def _da_to_cog_bytes(da: Any, variable: str) -> bytes:
 
     Per audit.md, the kickoff returns "GeoTIFF" — we write COG which is a
     GeoTIFF profile (and the canonical raster output across the rest of the
-    GRACE-2 atomic-tool set: HRSL, MTBS, LANDFIRE, NLCD).
+    atomic-tool set: HRSL, MTBS, LANDFIRE, NLCD).
     """
     import numpy as np
 

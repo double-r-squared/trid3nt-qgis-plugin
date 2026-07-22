@@ -1,4 +1,4 @@
-"""GRACE-2 COMBINED SFINCS coastal quadtree worker (BUILD + SOLVE, GPL-isolated).
+"""COMBINED SFINCS coastal quadtree worker (BUILD + SOLVE, GPL-isolated).
 
 > Repurposed from the deck-builder-only worker into the COMBINED build+solve
 > worker. The package keeps its historical ``sfincs_deckbuilder`` name (wired
@@ -25,8 +25,8 @@ GPL boundary
 ------------
 ``cht_sfincs`` is GPL-3.0. It lives ONLY inside THIS worker's container image and
 is imported ONLY by ``entrypoint.py`` (lazily, inside ``build_deck`` + the
-refinement/obstacle helpers). The GRACE-2 agent venv and ALL agent code
-(``services/agent/src/grace2_agent/**``) NEVER import ``cht_sfincs`` — the agent
+refinement/obstacle helpers). The agent venv and ALL agent code
+(``server/src/grace2_agent/**``) NEVER import ``cht_sfincs`` — the agent
 reaches this worker arms-length over the object-store + AWS-Batch-submit seam, so
 the GPL code stays fully isolated in its own image. The SFINCS solver binary is
 MIT-licensed (shipped by the base image); the combined image's license is

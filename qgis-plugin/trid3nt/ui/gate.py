@@ -17,7 +17,7 @@ Contract source of truth (mirrored EXACTLY, not paraphrased):
     ``revised_args`` (REQUIRED dict for ``narrow_scope``; MUST be None for
     ``proceed`` / ``cancel`` -- the agent's validator rejects violations).
 
-* ``ResolutionPickerCard.tsx`` (web client - GRACE-2 repo) decision rules:
+* ``ResolutionPickerCard.tsx`` (web client, separate repo) decision rules:
   - chosen rung == suggested  -> decision "proceed",      revised None
   - chosen rung != suggested  -> decision "narrow_scope", revised
                                  {granularity.resolution_param: chosen}

@@ -9,7 +9,7 @@ mf6 run + non-zero RIV leakage budget is proven by
 ``spikes/test_riv_src_spike.py`` (Phase 0 GO) and the job evidence.
 
 Run:
-    services/agent/.venv/bin/python -m pytest \
+    venvs/agent/bin/python -m pytest \
         services/workers/modflow/test_gwt_adapter_river_seepage.py -v
 """
 

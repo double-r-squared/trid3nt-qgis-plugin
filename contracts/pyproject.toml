@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "grace2-contracts"
 version = "0.1.0"
-description = "GRACE-2 shared contracts: WebSocket protocol, AssessmentEnvelope, EventMetadata/ClaimSet, MongoDB collection schemas, CatalogEntry, and solver-execution shapes (SRS v0.3 Appendices A-D)."
+description = "Shared contracts: WebSocket protocol, AssessmentEnvelope, EventMetadata/ClaimSet, MongoDB collection schemas, CatalogEntry, and solver-execution shapes (SRS v0.3 Appendices A-D)."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "GRACE-2 schema specialist" }]
+authors = [{ name = "schema specialist" }]
 dependencies = [
     "pydantic>=2,<3",
     "python-ulid>=2,<4",

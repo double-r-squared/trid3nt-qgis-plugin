@@ -788,7 +788,7 @@ class LocalSolverSpec:
     env_overrides: dict[str, str] | None = None
     """Optional environment variable overrides merged into the subprocess env.
 
-    Used by pip-only engine specs (landlab, openquake) to prepend the GRACE-2
+    Used by pip-only engine specs (landlab, openquake) to prepend the
     repo root to PYTHONPATH so ``services.workers.*`` imports resolve in the
     subprocess. ``None`` (the default) means the subprocess inherits the parent
     env unchanged (SFINCS docker + MODFLOW mf6 binary paths both work without
@@ -1158,7 +1158,7 @@ def launch_local_solver(
     logger.info("local-%s exec: %s", spec.exec_kind, " ".join(cmd))
     # Build the subprocess environment: start from the current process env and
     # merge any spec-level overrides (e.g. PYTHONPATH for pip-only workers that
-    # use ``services.workers.*`` imports from the GRACE-2 repo root).
+    # use ``services.workers.*`` imports from the repo root).
     proc_env: dict[str, str] | None = None
     if spec.env_overrides:
         import copy as _copy

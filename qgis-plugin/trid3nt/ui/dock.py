@@ -1225,7 +1225,7 @@ class Trid3ntDock(QDockWidget):
         """Fetch ``GET /api/case-list`` off the UI thread and feed the
         result into ``dlg`` (item b/c). Local-mode only in practice (the
         route is 404 outside the local single-user seam -- see
-        ``services/agent`` ``tool_catalog_http.py``); remote mode simply
+        the server's ``tool_catalog_http.py``); remote mode simply
         gets an honest failure note, which is fine since remote already has
         its own Connect-first flow."""
         dlg.info_lbl.setText("Loading cases ...")

@@ -77,7 +77,7 @@ def _payload(**overrides: object) -> ChartEmissionPayload:
         vega_lite_spec=_histogram_spec_with_schema(),
         title="Structure damage distribution",
         caption="Most structures sustained 25-50% damage.",
-        source_layer_uri="gs://grace-2/runs/01HX/damage.fgb",
+        source_layer_uri="gs://trid3nt/runs/01HX/damage.fgb",
         created_turn_id="turn-01HX",
     )
     base.update(overrides)

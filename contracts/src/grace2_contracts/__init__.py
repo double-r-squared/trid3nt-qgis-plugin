@@ -1,4 +1,4 @@
-"""GRACE-2 shared contracts (SRS v0.3 Appendices A-D + FR-PHC-2 + solver shapes).
+"""Shared contracts (SRS v0.3 Appendices A-D + FR-PHC-2 + solver shapes).
 
 Single source of truth for every type that crosses a specialist boundary:
 - ``ws``: WebSocket protocol - envelope + every message type (Appendix A).

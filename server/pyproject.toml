@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "grace2-agent"
 version = "0.1.0"
-description = "GRACE-2 agent service: AWS Bedrock Converse agent loop, Appendix-A WebSocket server, S3/DynamoDB persistence, AWS Batch solver dispatch."
+description = "Agent service: AWS Bedrock Converse agent loop, Appendix-A WebSocket server, S3/DynamoDB persistence, AWS Batch solver dispatch."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "GRACE-2 agent specialist" }]
+authors = [{ name = "Nate Almanza" }]
 
 # Pin upper bounds loosely; ADK + genai SDK evolve fast — verify with `pip show`.
 dependencies = [
@@ -160,7 +160,7 @@ dependencies = [
     # in environments that need it — production Cloud Run container must
     # bake the wheel from the GitLab clone during image build (mirrors how
     # hydromt-sfincs is pulled).
-    "pfdf>=3.0.4",  # VENDORED wheel in services/agent/vendor/ (USGS GitLab began 403ing git clones 2026-07-06; installs use --find-links)
+    "pfdf>=3.0.4",  # VENDORED wheel in server/vendor/ (USGS GitLab began 403ing git clones 2026-07-06; installs use --find-links)
     # Wave 4.10 job-B7: rank_bm25 backs the BM25 channel of discover_dataset's
     # hybrid lexical+dense retrieval over the audited tool-docstring corpus +
     # tool_query_corpus.yaml synthetic queries. Pure-Python (numpy dep only),
@@ -212,14 +212,14 @@ dependencies = [
     # Dormant unless MODEL_PROVIDER=openai is selected; zero impact on the live
     # Bedrock path. AsyncOpenAI + streaming tool-call support requires >= 1.40.
     "openai>=1.40",
-    # Consumed verbatim from packages/contracts/ (editable install via make run-agent).
+    # Consumed verbatim from contracts/ in this repo (editable install).
     "grace2-contracts>=0.1,<0.2",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 # local-engines: pip-only solver runtimes for the TRID3NT offline / local build.
-# Install with: pip install -e "services/agent[local-engines]"
+# Install with: pip install -e "server[local-engines]"
 # pyswmm + swmm-api are ALSO in core deps (always-on on the box); the extras pin
 # here are for the offline venv where the full agent is NOT installed.
 local-engines = [

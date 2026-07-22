@@ -1,4 +1,4 @@
-# services/agent/ — Agent service (Bedrock + WebSocket)
+# server/ - Agent service (Bedrock + WebSocket)
 
 **Owner:** `agent` specialist. **Container/deploy:** `infra` (EC2 + systemd; AWS Batch for heavy solves).
 
@@ -10,7 +10,7 @@ default; Haiku 4.5 / Nova selectable), streams replies, propagates cancellation,
 and enforces the determinism boundary (Invariant 1) and confirmation-before-
 consequence hooks (Invariant 9).
 
-> **Provider note.** GRACE began on Vertex AI / Gemini (`adapter.py`). The
+> **Provider note.** This service began on Vertex AI / Gemini (`adapter.py`). The
 > AWS migration moved the live LLM path to Amazon Bedrock via
 > `bedrock_adapter.py` (`MODEL_PROVIDER=bedrock`). The agent contract is still
 > expressed in `google.genai.types` shapes — `bedrock_adapter` converts them
@@ -22,7 +22,7 @@ consequence hooks (Invariant 9).
 ## Layout
 
 ```
-services/agent/
+server/
 ├── pyproject.toml            grace2-agent package, console script `grace2-agent`
 ├── README.md                 (this file)
 ├── src/grace2_agent/
@@ -50,7 +50,7 @@ services/agent/
 # from repo root, requires the project's virtualenv (.venv-agent/)
 make run-agent
 # then in another shell:
-python services/agent/scripts/ws_client.py "What is SFINCS?"
+python server/scripts/ws_client.py "What is SFINCS?"
 ```
 
 `make run-agent` sources the venv at `.venv-agent/` and launches `grace2-agent`

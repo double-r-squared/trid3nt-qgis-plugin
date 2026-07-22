@@ -11,7 +11,7 @@ risk (a wrong sign narrates depletion backwards while passing structural checks)
   * depletion = sum(pumped GWF) - sum(baseline GWF); POSITIVE = capture.
 
 Run:
-    <agent-venv>/bin/python -m pytest services/agent/tests/test_stream_depletion.py -q
+    <agent-venv>/bin/python -m pytest server/tests/test_stream_depletion.py -q
 """
 
 from __future__ import annotations

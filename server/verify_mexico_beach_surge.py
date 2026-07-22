@@ -1,4 +1,4 @@
-"""Deterministic Mexico Beach SURGE inundation acceptance for GRACE-2.
+"""Deterministic Mexico Beach SURGE inundation acceptance harness.
 
 PROVES the SFINCS *surge* North Star: a strong synthetic storm-surge water-level
 boundary driven onto the REAL CUDEM+3DEP NAVD88 topobathy at Mexico Beach FL

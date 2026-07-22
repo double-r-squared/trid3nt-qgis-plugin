@@ -465,7 +465,7 @@ def build_modflow_ugrid_mesh_netcdf(
                 # the theory that the reader's OWN convention string round-
                 # trips most reliably.
                 "Conventions": "CF-1.6 UGRID-1.0",
-                "title": "MODFLOW 6 groundwater mesh (GRACE-2/TRID3NT)",
+                "title": "MODFLOW 6 groundwater mesh (TRID3NT)",
                 "source": "grace2_agent.workflows.modflow_mesh",
             },
         )

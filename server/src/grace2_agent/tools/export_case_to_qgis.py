@@ -657,7 +657,7 @@ def _build_qgs_xml(
             "projectname": project_name,
             "version": "3.28.0-Firenze",
             "saveUser": "grace2",
-            "saveUserFull": "GRACE-2 export_case_to_qgis",
+            "saveUserFull": "TRID3NT export_case_to_qgis",
         },
     )
     ET.SubElement(root, "homePath", {"path": ""})

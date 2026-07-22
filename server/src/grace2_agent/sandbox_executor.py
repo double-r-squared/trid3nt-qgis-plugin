@@ -1,4 +1,4 @@
-"""GRACE-2 Python sandbox executor harness (sprint-13 Stage 2 / job-0232).
+"""Python sandbox executor harness (sprint-13 Stage 2 / job-0232).
 
 This module is the entrypoint baked into the ``grace-2-python-sandbox`` Cloud Run
 Job image. It receives a job payload — a ``python_code`` string plus a

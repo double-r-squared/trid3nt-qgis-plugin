@@ -1,4 +1,4 @@
-# GRACE-2 agent -- scripted (replay) adapter tests.
+# Scripted (replay) adapter tests for the agent.
 #
 # The scripted adapter is the zero-cost deterministic LLM stand-in
 # (MODEL_PROVIDER=scripted): it replays a canned transcript of tool calls so the

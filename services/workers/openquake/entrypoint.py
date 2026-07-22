@@ -317,7 +317,7 @@ def resolve_hazard_map_csv(output_uris: list[str]) -> str | None:
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="grace2-openquake-entrypoint",
-        description="GRACE-2 OpenQuake PSHA AWS Batch worker entrypoint (FR-CE-1/2/3).",
+        description="OpenQuake PSHA AWS Batch worker entrypoint (FR-CE-1/2/3).",
     )
     p.add_argument(
         "--run-id",

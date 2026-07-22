@@ -51,7 +51,7 @@ Scoping rules:
   it survives WebSocket reconnects and is shared across the web client's
   sibling connections.
 * Strict rejection (branch 4) applies only to ``gs://`` URIs inside
-  GRACE-managed buckets (``grace-2-hazard-prod-*`` by default) — objects
+  platform-managed buckets (``grace-2-hazard-prod-*`` by default) -- objects
   there are only ever produced by our tools, so an unregistered path is
   either invented or stale. Foreign-bucket URIs (user-supplied data) pass
   through untouched (fail-open).
@@ -135,7 +135,7 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
     }
 )
 
-#: Bucket-name prefixes we treat as GRACE-managed: unknown URIs inside these
+#: Bucket-name prefixes we treat as platform-managed: unknown URIs inside these
 #: buckets with no plausible registered match are REJECTED (branch 4) because
 #: nothing writes there except our own tools. GCP is decommissioned, so the
 #: AWS prefix (``grace2-hazard-``, matching the S3 cache/runs buckets) is the

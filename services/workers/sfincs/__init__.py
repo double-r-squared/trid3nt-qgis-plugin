@@ -1,4 +1,4 @@
-"""GRACE-2 SFINCS solver Cloud Run Job — FR-CE-1/2/3 substrate (sprint-07 / M5).
+"""SFINCS solver Cloud Run Job — FR-CE-1/2/3 substrate (sprint-07 / M5).
 
 Thin entrypoint that wraps the Deltares SFINCS executable for invocation as
 a Cloud Run Job. Reads a JSON setup manifest from GCS, fetches the input

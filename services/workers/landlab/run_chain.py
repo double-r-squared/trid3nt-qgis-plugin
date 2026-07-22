@@ -93,7 +93,7 @@ def run_chain(manifest_path: str) -> int:
     except ImportError as exc:
         sys.stderr.write(
             f"run_chain.py: could not import landlab worker modules -- "
-            f"is PYTHONPATH set to the GRACE-2 repo root? ({exc})\n"
+            f"is PYTHONPATH set to the repo root? ({exc})\n"
         )
         return 2
 
@@ -141,7 +141,7 @@ def run_chain(manifest_path: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="grace2-landlab-run-chain",
-        description="GRACE-2 Landlab chain runner (local subprocess shim).",
+        description="Landlab chain runner (local subprocess shim).",
     )
     parser.add_argument(
         "--manifest",

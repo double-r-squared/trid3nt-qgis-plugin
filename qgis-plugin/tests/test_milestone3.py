@@ -3,7 +3,7 @@ refresh + debounce, selection-bbox AOI math, token-expiry classification.
 
 No QGIS required (Qt widgets excluded, as in milestones 1-2). The WS stub
 needs ``websockets`` (trid3nt-local agent venv); the export-file stub mirrors
-the agent's real /api/export-qgis[/file] route semantics (services/agent
+the agent's real /api/export-qgis[/file] route semantics (the server's
 ``tool_catalog_http.py``): file serving is .qgz/.gpkg-only, export-root
 guarded (403), missing file (404), Content-Disposition attachment on 200.
 """
@@ -177,7 +177,7 @@ class TestWsUrlToHttpBase(unittest.TestCase):
 
 class _CaseListStub(http.server.BaseHTTPRequestHandler):
     """Mirrors the agent's real ``GET /api/case-list`` route in miniature
-    (services/agent ``tool_catalog_http.py``): 200 ``{"cases": [...]}`` on
+    (the server's ``tool_catalog_http.py``): 200 ``{"cases": [...]}`` on
     success, or a configurable status + ``{"error": ...}`` body."""
 
     status: int = 200

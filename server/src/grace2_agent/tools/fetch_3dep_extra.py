@@ -23,7 +23,7 @@ agent can:
       still fits 3DEP's CONUS+ tiles.
 
 The pfdf reader handles TNM tile discovery, mosaicing, and CRS
-reconciliation; we wrap it as an atomic GRACE-2 tool with the standard
+reconciliation; we wrap it as an atomic tool with the standard
 cache + LayerURI + error-envelope surface.
 
 API surface (verified live 2026-06-09 against pfdf 3.0.4):
@@ -398,7 +398,7 @@ def fetch_3dep_extra(
         resolutions — 1 arc-second (~30 m), 1/9 arc-second (~3 m), 1 m,
         2 arc-second (~60 m, AK only), or 5 m (AK only) — through pfdf's
         ``tnm.dem.read`` wrapper, mosaics intersecting tiles, and saves
-        a single-band Cloud-Optimized GeoTIFF to the GRACE-2 cache.
+        a single-band Cloud-Optimized GeoTIFF to the shared cache.
 
     When to use:
         - User asks for elevation at a resolution that ``fetch_dem`` does

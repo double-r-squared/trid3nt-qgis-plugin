@@ -133,7 +133,7 @@ __all__ = [
 # Case 2 result envelope
 # --------------------------------------------------------------------------- #
 #
-# Kept LOCAL to the agent (not in ``packages/contracts``) because the Case 2
+# Kept LOCAL to the agent (not in ``contracts``) because the Case 2
 # composer result is an agent-side composition headline, the schema package is
 # concurrently edited by other Stage 2 jobs (shared-file warning), and the
 # contract scope for this job is agent-only. If a future job needs this shape on

@@ -30,7 +30,7 @@ from grace2_agent.tool_catalog_http import _aggregate_records, _normalize_record
 # Helpers shared across tests
 # ---------------------------------------------------------------------------
 
-_SYS = "You are GRACE. " * 60  # large static system prompt
+_SYS = "You are TRID3NT. " * 60  # large static system prompt
 
 _BEDROCK_TOOL = {"toolSpec": {"name": "fetch_dem", "inputSchema": {"json": {}}}}
 

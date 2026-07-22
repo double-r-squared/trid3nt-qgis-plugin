@@ -178,7 +178,7 @@ LOCAL_VAULT_FILENAME: Final[str] = "secrets_vault.json"
 #: records may carry a bare resource name (no scheme); both are tolerated.
 GCP_SM_VAULT_SCHEME: Final[str] = "gcp-sm://"
 
-#: SSM parameter-name root for GRACE-2 per-user/per-provider secrets. The EC2
+#: SSM parameter-name root for per-user/per-provider secrets. The EC2
 #: instance-role IAM policy is scoped to ``arn:aws:ssm:<region>:<acct>:parameter
 #: /grace2/secrets/*`` so this prefix is load-bearing for least-privilege.
 AWS_SSM_PARAM_PREFIX: Final[str] = "/grace2/secrets"

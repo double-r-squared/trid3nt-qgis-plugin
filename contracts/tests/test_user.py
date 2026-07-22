@@ -1,7 +1,7 @@
 """Round-trip + invariant tests for the ``User`` schema (job-0115).
 
 The User contract is the Wave 1.5 Auth/Users-track stub the agent persistence
-layer (``services/agent/.../persistence.py``) needs ahead of the full Firebase
+layer (``server/.../persistence.py``) needs ahead of the full Firebase
 Auth wiring (4-job schema/agent/web/infra sprint).
 
 Coverage:

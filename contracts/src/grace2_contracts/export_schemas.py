@@ -1,10 +1,10 @@
-"""Generate JSON Schema files for every GRACE-2 contract.
+"""Generate JSON Schema files for every contract.
 
 Run via the ``grace2-export-schemas`` console script or:
 
     python -m grace2_contracts.export_schemas [OUTPUT_DIR]
 
-Default OUTPUT_DIR is ``packages/contracts/schemas`` (resolved relative to this
+Default OUTPUT_DIR is ``contracts/schemas`` (resolved relative to this
 package's repo location). Each top-level contract model is written to
 ``<name>.json``. Regeneration is idempotent: re-running produces byte-identical
 files for an unchanged contract set, so a CI drift check can ``git diff`` them.
@@ -65,8 +65,8 @@ def _ws_message_exports() -> list[tuple[str, type[BaseModel]]]:
 
 
 def default_output_dir() -> Path:
-    """``packages/contracts/schemas`` relative to this file."""
-    # this file: packages/contracts/src/grace2_contracts/export_schemas.py
+    """``contracts/schemas`` relative to this file."""
+    # this file: contracts/src/grace2_contracts/export_schemas.py
     return Path(__file__).resolve().parents[2] / "schemas"
 
 

@@ -387,7 +387,7 @@ def fetch_statsgo_soils(
         wrapper. KFFACT is the soil K-factor (erodibility / hydrologic-
         soil-group proxy); THICK is the soil thickness in centimeters.
         Output is a 30-meter Cloud-Optimized GeoTIFF clipped to the
-        requested bbox and rewritten through the GRACE-2 cache.
+        requested bbox and rewritten through the shared cache.
 
     When to use:
         - User asks for soil erodibility, soil hydrologic-group / runoff

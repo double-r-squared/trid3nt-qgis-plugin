@@ -14,7 +14,7 @@ every raster layer loaded on the current case at that point. Deterministic
            ], "truncated", "computed_at"}
        | 4xx {"error": "<honest msg>"}
 
-The server (``services/agent/.../tools/probe_point.py``) already groups
+The server (``server/src/.../tools/probe_point.py``) already groups
 animation-frame sequences into ONE ``series`` entry (the same stem/token
 classifier ``extract_timeseries_at_point`` and the web LayerPanel scrubber
 use) -- this module has no grouping logic of its own, only request-building,

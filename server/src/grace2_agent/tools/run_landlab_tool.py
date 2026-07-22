@@ -2,7 +2,7 @@
 (sprint-17 — NEW engine).
 
 The LLM-facing exposure of the Landlab (CSDMS, MIT) surface-process engine: a
-hazard CLASS GRACE-2 lacks (landslide susceptibility / factor-of-safety + rainfall
+hazard CLASS previously absent here (landslide susceptibility / factor-of-safety + rainfall
 overland flow). ``run_landlab_susceptibility(...)`` takes the ``LandlabRunArgs``
 forcing/structure fields, runs the deterministic fetch -> stage -> Batch-solve ->
 postprocess chain (``workflows/model_landslide_scenario.py``), and returns a

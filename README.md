@@ -14,8 +14,8 @@ one clone = a working end-to-end setup.
 
 The server (`server/`), contracts (`contracts/`) and engine workers
 (`services/workers/`) are first-class code in THIS repo - there is no upstream
-sync. (History note: they were vendored from the GRACE-2 monorepo until
-2026-07-21; GRACE-2 remains the home of the separate web + cloud products.)
+sync. (History note: they were vendored from an upstream monorepo until
+2026-07-21; the separate web + cloud products remain there.)
 To extend the harness (write a tool / add an engine), see
 `docs/authoring/writing-a-tool.md` and `docs/authoring/adding-an-engine.md`.
 

@@ -236,7 +236,7 @@ def _plume(**overrides: object) -> PlumeLayerURI:
         layer_id="run-01HX-plume",
         name="Benzene plume (mg/L)",
         layer_type="raster",
-        uri="gs://grace-2/runs/01HX/plume.cog.tif",
+        uri="gs://trid3nt/runs/01HX/plume.cog.tif",
         style_preset="plume_concentration",
         max_concentration_mgl=12.5,
         plume_area_km2=3.2,
@@ -328,7 +328,7 @@ def test_plume_layer_uri_requires_the_added_scalars() -> None:
             layer_id="run-01HX-plume",
             name="Plume",
             layer_type="raster",
-            uri="gs://grace-2/runs/01HX/plume.cog.tif",
+            uri="gs://trid3nt/runs/01HX/plume.cog.tif",
             style_preset="plume_concentration",
             # missing max_concentration_mgl + plume_area_km2
         )
@@ -679,7 +679,7 @@ def _drawdown(**overrides: object) -> DrawdownLayerURI:
         layer_id="run-01HX-drawdown",
         name="Pumping drawdown (m)",
         layer_type="raster",
-        uri="s3://grace-2/runs/01HX/drawdown.cog.tif",
+        uri="s3://trid3nt/runs/01HX/drawdown.cog.tif",
         style_preset="continuous_drawdown_m",
         max_drawdown_m=4.2,
     )
@@ -720,7 +720,7 @@ def _dewater(**overrides: object) -> DewaterLayerURI:
         layer_id="run-01HX-dewater",
         name="Mine dewatering rate (m^3/day)",
         layer_type="raster",
-        uri="s3://grace-2/runs/01HX/dewater.cog.tif",
+        uri="s3://trid3nt/runs/01HX/dewater.cog.tif",
         style_preset="continuous_dewatering_rate",
         dewatering_rate_m3_day=18500.0,
         drain_cell_count=42,
@@ -758,7 +758,7 @@ def _budget(**overrides: object) -> BudgetPartitionLayerURI:
         layer_id="run-01HX-budget",
         name="Regional water budget partition",
         layer_type="vector",
-        uri="s3://grace-2/runs/01HX/budget.fgb",
+        uri="s3://trid3nt/runs/01HX/budget.fgb",
         style_preset="continuous_head_m",
         budget_partition_m3_day={
             "upgradient_chd_in": 1200.0,
@@ -792,7 +792,7 @@ def test_budget_partition_required_and_extra_forbidden() -> None:
             layer_id="run-01HX-budget",
             name="Budget",
             layer_type="vector",
-            uri="s3://grace-2/runs/01HX/budget.fgb",
+            uri="s3://trid3nt/runs/01HX/budget.fgb",
             style_preset="continuous_head_m",
             # missing budget_partition_m3_day
         )
@@ -830,7 +830,7 @@ def _mounding(**overrides: object) -> MoundingLayerURI:
         layer_id="run-01HX-mounding",
         name="Recharge mounding (m)",
         layer_type="raster",
-        uri="s3://grace-2/runs/01HX/mounding.cog.tif",
+        uri="s3://trid3nt/runs/01HX/mounding.cog.tif",
         style_preset="continuous_mounding_m",
         max_mounding_m=3.4,
     )
@@ -872,7 +872,7 @@ def _asr(**overrides: object) -> ASRLayerURI:
         layer_id="run-01HX-asr",
         name="ASR well head (m)",
         layer_type="raster",
-        uri="s3://grace-2/runs/01HX/asr.cog.tif",
+        uri="s3://trid3nt/runs/01HX/asr.cog.tif",
         style_preset="continuous_head_m",
     )
     base.update(overrides)
@@ -919,7 +919,7 @@ def _hydroperiod(**overrides: object) -> HydroperiodLayerURI:
         layer_id="run-01HX-hydroperiod",
         name="Wetland hydroperiod (m)",
         layer_type="raster",
-        uri="s3://grace-2/runs/01HX/hydroperiod.cog.tif",
+        uri="s3://trid3nt/runs/01HX/hydroperiod.cog.tif",
         style_preset="continuous_hydroperiod_m",
         seasonal_head_range_m=1.2,
     )
@@ -962,7 +962,7 @@ def test_wave2_layer_uris_require_their_added_scalar_and_forbid_extra() -> None:
             layer_id="run-01HX-mounding",
             name="Mounding",
             layer_type="raster",
-            uri="s3://grace-2/runs/01HX/mounding.cog.tif",
+            uri="s3://trid3nt/runs/01HX/mounding.cog.tif",
             style_preset="continuous_mounding_m",
             # missing max_mounding_m
         )
@@ -971,7 +971,7 @@ def test_wave2_layer_uris_require_their_added_scalar_and_forbid_extra() -> None:
             layer_id="run-01HX-hydroperiod",
             name="Hydroperiod",
             layer_type="raster",
-            uri="s3://grace-2/runs/01HX/hydroperiod.cog.tif",
+            uri="s3://trid3nt/runs/01HX/hydroperiod.cog.tif",
             style_preset="continuous_hydroperiod_m",
             # missing seasonal_head_range_m
         )
@@ -1270,7 +1270,7 @@ def _capture_zone(**overrides: object) -> CaptureZoneLayerURI:
         layer_id="run-01HX-capture-zone",
         name="Capture zone - 1/5/10-year isochrones",
         layer_type="vector",
-        uri="s3://grace-2/runs/01HX/capture_zone.fgb",
+        uri="s3://trid3nt/runs/01HX/capture_zone.fgb",
         style_preset="capture_zone",
         capture_zone_area_km2=1.4,
         travel_time_years=[1.0, 5.0, 10.0],
@@ -1365,7 +1365,7 @@ def test_capture_zone_requires_all_added_scalars() -> None:
             layer_id="run-01HX-capture-zone",
             name="Capture zone",
             layer_type="vector",
-            uri="s3://grace-2/runs/01HX/capture_zone.fgb",
+            uri="s3://trid3nt/runs/01HX/capture_zone.fgb",
             style_preset="capture_zone",
             travel_time_years=[1.0, 5.0],
             isochrone_areas_km2={"1": 0.05, "5": 0.35},
@@ -1378,7 +1378,7 @@ def test_capture_zone_requires_all_added_scalars() -> None:
             layer_id="run-01HX-capture-zone",
             name="Capture zone",
             layer_type="vector",
-            uri="s3://grace-2/runs/01HX/capture_zone.fgb",
+            uri="s3://trid3nt/runs/01HX/capture_zone.fgb",
             style_preset="capture_zone",
             capture_zone_area_km2=1.4,
             isochrone_areas_km2={"1": 0.05, "5": 0.35},
@@ -1498,7 +1498,7 @@ def _saltwater_wedge(**overrides: object) -> SaltwaterWedgeLayerURI:
         layer_id="run-01HX-saltwater-wedge",
         name="Saltwater wedge transect (Henry demo)",
         layer_type="vector",
-        uri="s3://grace-2/runs/01HX/saltwater_wedge.fgb",
+        uri="s3://trid3nt/runs/01HX/saltwater_wedge.fgb",
         style_preset="saltwater_intrusion",
         intrusion_length_m=850.0,
         toe_distance_m=850.0,
@@ -1593,7 +1593,7 @@ def test_saltwater_wedge_requires_all_added_fields() -> None:
             layer_id="run-01HX-saltwater-wedge",
             name="Saltwater wedge",
             layer_type="vector",
-            uri="s3://grace-2/runs/01HX/saltwater_wedge.fgb",
+            uri="s3://trid3nt/runs/01HX/saltwater_wedge.fgb",
             style_preset="saltwater_intrusion",
             toe_distance_m=850.0,
             seaward_salinity_ppt=35.0,
@@ -1606,7 +1606,7 @@ def test_saltwater_wedge_requires_all_added_fields() -> None:
             layer_id="run-01HX-saltwater-wedge",
             name="Saltwater wedge",
             layer_type="vector",
-            uri="s3://grace-2/runs/01HX/saltwater_wedge.fgb",
+            uri="s3://trid3nt/runs/01HX/saltwater_wedge.fgb",
             style_preset="saltwater_intrusion",
             intrusion_length_m=850.0,
             toe_distance_m=850.0,

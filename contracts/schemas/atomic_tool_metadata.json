@@ -26,7 +26,7 @@
     },
     "open_world_hint": {
       "default": false,
-      "description": "MCP annotation: openWorldHint. True when the tool issues calls to external APIs or public data endpoints outside the GRACE-2 GCP project boundary. Defaults to False \u2014 compute, clip, and intra-GCP tools opt out. All fetch_* tools and web_fetch are True; catalog_search/catalog_fetch are True because they ultimately hit Tier-2/3 external endpoints.",
+      "description": "MCP annotation: openWorldHint. True when the tool issues calls to external APIs or public data endpoints outside the GCP project boundary. Defaults to False \u2014 compute, clip, and intra-GCP tools opt out. All fetch_* tools and web_fetch are True; catalog_search/catalog_fetch are True because they ultimately hit Tier-2/3 external endpoints.",
       "title": "Open World Hint",
       "type": "boolean"
     },

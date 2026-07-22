@@ -22,7 +22,7 @@ precedent. The hard constraint is the DEPLOY BOUNDARY:
     services/workers/ - because the agent must import it at runtime and
     services/workers/ is not on the agent's import path").
   - the WORKER images ship ``services/workers/**`` (their CodeBuild context) and
-    do NOT ship ``packages/contracts``.
+    do NOT ship ``contracts``.
 
 So NO single existing location is on BOTH import paths. The manifest precedent
 resolves this with TWO definitions gated on ONE ``schema_version``. We follow it:

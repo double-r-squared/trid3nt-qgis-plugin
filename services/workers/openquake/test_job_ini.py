@@ -7,7 +7,7 @@ unit-testable without the solver in the loop). The end-to-end ``oq engine``
 solve is the worker container's job.
 
 Run:
-    services/agent/.venv/bin/python -m pytest \
+    venvs/agent/bin/python -m pytest \
         services/workers/openquake/test_job_ini.py -v
 """
 

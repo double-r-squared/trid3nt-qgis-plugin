@@ -1,4 +1,4 @@
-# GRACE-2 MODFLOW 6 solver worker (sprint-13 / MOD-1 / FR-CE-1 / job-0220).
+# MODFLOW 6 solver worker (sprint-13 / MOD-1 / FR-CE-1 / job-0220).
 #
 # Builds the runtime image for the MODFLOW 6 Cloud Run Job. Unlike the SFINCS
 # worker (a thin layer over the upstream Deltares image), MODFLOW 6 has no
@@ -39,7 +39,7 @@ FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="grace-2-modflow-solver" \
       org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 MODFLOW 6 (mf6 6.5.0) solver runtime (Cloud Run Job). Reads a FloPy-generated GWF+GWT deck from gs://grace-2-hazard-prod-cache/, runs mf6, writes heads/concentration outputs + completion manifest to gs://grace-2-hazard-prod-runs/<run_id>/." \
+      org.opencontainers.image.description="MODFLOW 6 (mf6 6.5.0) solver runtime (Cloud Run Job). Reads a FloPy-generated GWF+GWT deck from gs://grace-2-hazard-prod-cache/, runs mf6, writes heads/concentration outputs + completion manifest to gs://grace-2-hazard-prod-runs/<run_id>/." \
       org.opencontainers.image.licenses="MIT"
 
 # MODFLOW 6.5.0 Linux release pin (design doc § 1). The zip ships statically

@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the GRACE-2 contracts test suite.
+"""Shared pytest fixtures for the contracts test suite.
 
 The fixtures are intentionally minimal: they build realistic instances of each
 top-level contract model that test modules round-trip through JSON. The single

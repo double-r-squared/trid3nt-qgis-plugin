@@ -188,7 +188,7 @@ class FieldDataset:
 #: Verified FTW/fiboa datasets. Ordered most-specific-first within a region so
 #: the bbox→dataset match picks the best fit.
 FTW_DATASETS: tuple[FieldDataset, ...] = (
-    # CONUS — USDA Crop Sequence Boundaries (the GRACE-2 headline coverage).
+    # CONUS — USDA Crop Sequence Boundaries (the headline coverage).
     # GeoParquet 1.1.0, 648 row groups, 16.2M parcels, NAD83/Albers (projected).
     FieldDataset(
         key="us_usda_cropland",

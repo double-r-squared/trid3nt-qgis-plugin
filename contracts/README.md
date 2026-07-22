@@ -1,6 +1,6 @@
 # grace2-contracts
 
-Shared contracts for GRACE-2 — the WebSocket protocol, the `AssessmentEnvelope`,
+Shared contracts for this system — the WebSocket protocol, the `AssessmentEnvelope`,
 `EventMetadata` + `ClaimSet`/`NumericClaim`, the five MongoDB collection schemas,
 `CatalogEntry`, and the solver-execution shapes
 (`ModelSetup`/`RunResult`/`ExecutionHandle`/`LayerURI`).
@@ -30,7 +30,7 @@ report rather than being edited in place).
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e packages/contracts
+pip install -e contracts
 pip install pytest  # for tests
 ```
 
@@ -40,7 +40,7 @@ The package targets Python `>= 3.11`. Pydantic `>= 2, < 3`; `python-ulid`
 ## Run the round-trip tests
 
 ```bash
-pytest packages/contracts/tests -v
+pytest contracts/tests -v
 ```
 
 Every WebSocket message type (Appendix A.3, A.4, A.4b), the
@@ -56,11 +56,11 @@ rejection, and the discriminated-union dispatcher invariant on `EventMetadata`.
 ## Regenerate JSON Schemas
 
 ```bash
-# Default output: packages/contracts/schemas/
+# Default output: contracts/schemas/
 grace2-export-schemas
 
 # Or to a custom directory
-grace2-export-schemas packages/contracts/schemas
+grace2-export-schemas contracts/schemas
 ```
 
 Output is sorted and `\n`-terminated so re-runs against an unchanged contract

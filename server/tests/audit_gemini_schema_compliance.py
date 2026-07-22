@@ -272,7 +272,7 @@ def print_report(
     n_fail = len({v.tool_name for v in violations})
 
     print("=" * 72)
-    print("GRACE-2 Gemini Schema Compliance Audit (B11 / Wave 4.10)")
+    print("Gemini Schema Compliance Audit (B11 / Wave 4.10)")
     print("=" * 72)
     print(f"Total tools in registry:                 {total}")
     print(f"  Fully compliant (machine-readable schema): "

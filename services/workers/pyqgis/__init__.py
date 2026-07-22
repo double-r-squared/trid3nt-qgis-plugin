@@ -1,4 +1,4 @@
-"""GRACE-2 PyQGIS worker package — mutates ``.qgs`` projects in GCS.
+"""PyQGIS worker package — mutates ``.qgs`` projects in GCS.
 
 This package implements the canonical FR-QS-6 round-trip pattern (SRS v0.3
 Decision C, Invariant 4 "PyQGIS-worker is the only ``.qgs`` writer"):

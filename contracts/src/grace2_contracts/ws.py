@@ -1262,7 +1262,7 @@ from .secrets import (  # noqa: E402 — module-level imports below the dict lit
 # sprint-12-mega Wave 2 (job-0127): tool payload-warning envelopes. The
 # warning is agent->client (gate emission); the confirmation is client->agent
 # (user decision). See payload_warning.py for the contract; see
-# services/agent/src/grace2_agent/server.py for the dispatcher gate.
+# server/src/grace2_agent/server.py for the dispatcher gate.
 from .payload_warning import (  # noqa: E402
     PayloadConfirmationEnvelopePayload,
     PayloadWarningEnvelopePayload,
@@ -1327,7 +1327,7 @@ AGENT_TO_CLIENT_PAYLOADS.update(SANDBOX_AGENT_TO_CLIENT_PAYLOADS)
 # offer narrower sub-regions); the reply is client->agent
 # (``region-choice-provided``: the user's pick). MIRRORS the credential-request
 # seam in secrets.py. See region_choice.py for the contracts; the agent
-# pause/resume seam lives in services/agent/src/grace2_agent/server.py.
+# pause/resume seam lives in server/src/grace2_agent/server.py.
 from .region_choice import (  # noqa: E402
     REGION_CHOICE_AGENT_TO_CLIENT_PAYLOADS,
     REGION_CHOICE_CLIENT_TO_AGENT_PAYLOADS,

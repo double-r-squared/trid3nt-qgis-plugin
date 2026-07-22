@@ -13,7 +13,7 @@ captures every JSON-serialized envelope. Demonstrates two seams:
    shape both times.
 
 Run with:
-    .venv-agent/bin/python services/agent/tests/smoke_zoom_to_emission_job_0160.py
+    .venv-agent/bin/python server/tests/smoke_zoom_to_emission_job_0160.py
 """
 
 from __future__ import annotations

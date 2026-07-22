@@ -1,4 +1,4 @@
-# GRACE-2 SFINCS solver worker (sprint-07 / M5 / FR-CE-1 / job-0040).
+# SFINCS solver worker (sprint-07 / M5 / FR-CE-1 / job-0040).
 #
 # Builds the runtime image for the SFINCS Cloud Run Job. Thin layer over the
 # upstream Deltares `deltares/sfincs-cpu` image — we add Python + google-cloud-
@@ -33,7 +33,7 @@ FROM deltares/sfincs-cpu:sfincs-v2.3.3@sha256:46b5fc9e324d3d9a0d0a7728390e3413bb
 
 LABEL org.opencontainers.image.title="grace-2-sfincs-solver" \
       org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 SFINCS solver runtime (Cloud Run Job). Reads model setup from gs://grace-2-hazard-prod-cache/, runs SFINCS, writes outputs + completion manifest to gs://grace-2-hazard-prod-runs/<run_id>/." \
+      org.opencontainers.image.description="SFINCS solver runtime (Cloud Run Job). Reads model setup from gs://grace-2-hazard-prod-cache/, runs SFINCS, writes outputs + completion manifest to gs://grace-2-hazard-prod-runs/<run_id>/." \
       org.opencontainers.image.licenses="MIT"
 
 # Install Python 3 + google-cloud-storage SDK. The upstream image is

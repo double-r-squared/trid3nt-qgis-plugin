@@ -2,7 +2,7 @@
 
 The worker writes the manifest as a PLAIN dict (see
 ``services/workers/_raster_postprocess/manifest.py``) because the CodeBuild
-worker context does not ship ``packages/contracts``. This module is the AGENT's
+worker context does not ship ``contracts``. This module is the AGENT's
 typed READER of that dict - two definitions, ONE ``schema_version`` gate. The
 SFINCS raster postprocess offload (Phase 4) lifts the heavy NetCDF/.mat -> COG
 conversion into the Batch worker; the worker now writes display-ready

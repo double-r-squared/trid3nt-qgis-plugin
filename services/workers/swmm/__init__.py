@@ -1,4 +1,4 @@
-"""GRACE-2 SWMM solver AWS Batch worker — FR-CE-1/2/3 substrate (sprint-16 P7).
+"""SWMM solver AWS Batch worker — FR-CE-1/2/3 substrate (sprint-16 P7).
 
 The CLOUD LANE for the urban PySWMM engine: a thin container entrypoint that
 wraps pyswmm for invocation as an AWS Batch job, so SWMM scales beyond the

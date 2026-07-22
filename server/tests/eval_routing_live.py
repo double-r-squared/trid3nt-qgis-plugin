@@ -2,7 +2,7 @@
 
 Purpose
 -------
-Measure the *routing correctness* of the GRACE-2 agent (Gemini-2.5-pro through
+Measure the *routing correctness* of the agent (Gemini-2.5-pro through
 the FunctionTool registry) against a small, hand-picked anchor set of
 prompts. Each anchor asserts (a) the first tool the model should dispatch and
 (b) the set of tools that must appear in the observed chain.
@@ -29,9 +29,9 @@ Pre-conditions for running
 
 Invoke
 ------
-    .venv-agent/bin/python services/agent/tests/eval_routing_live.py
+    .venv-agent/bin/python server/tests/eval_routing_live.py
     # Re-run a single anchor (Stage 4 Bayesian-adaptive selection):
-    .venv-agent/bin/python services/agent/tests/eval_routing_live.py --anchor A4_composite_workflow
+    .venv-agent/bin/python server/tests/eval_routing_live.py --anchor A4_composite_workflow
 
 Outputs
 -------

@@ -14,7 +14,7 @@ iteration) never returned and never raised, so:
     unresponsive behind the blocked loop,
   * selecting Haiku/Nova produced NOTHING on the wire -- a silent death.
 
-THE FIX (services/agent/src/grace2_agent/bedrock_adapter.py):
+THE FIX (server/src/grace2_agent/bedrock_adapter.py):
 
   1. the ``bedrock-runtime`` client now carries a botocore ``Config`` with a
      bounded ``read_timeout`` / ``connect_timeout`` + a small retry policy, so a
@@ -32,7 +32,7 @@ intentionally NOT bounded -- covered here by asserting the
 ``_SOLVE_IN_FLIGHT`` marker is untouched by a model-call timeout.
 
 Run:
-    cd services/agent && .venv/bin/python -m pytest \
+    cd server && .venv/bin/python -m pytest \
         tests/test_turn_timeout_hardening.py -q
 """
 

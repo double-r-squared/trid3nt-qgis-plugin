@@ -13,7 +13,7 @@ import pytest
 from grace2_agent import bedrock_adapter as ba
 
 
-_SYS = "You are GRACE, a hazard-modeling agent. " * 50  # large static system prompt
+_SYS = "You are TRID3NT, a hazard-modeling agent. " * 50  # large static system prompt
 
 # A converted Bedrock tool spec (what tool_declarations_to_bedrock_tools returns).
 _BEDROCK_TOOL = {"toolSpec": {"name": "fetch_dem", "inputSchema": {"json": {}}}}

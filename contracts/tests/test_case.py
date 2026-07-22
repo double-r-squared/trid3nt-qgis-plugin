@@ -57,7 +57,7 @@ def _fresh_case_summary() -> CaseSummary:
         bbox=(-82.5, 26.4, -81.7, 26.9),
         primary_hazard="flood",
         layer_summary=["run-01HX-flood-depth", "run-01HX-pop"],
-        qgs_project_uri="gs://grace-2/cases/01HX/01HX.qgs",
+        qgs_project_uri="gs://trid3nt/cases/01HX/01HX.qgs",
     )
 
 
@@ -237,7 +237,7 @@ def test_case_session_state_roundtrip() -> None:
                 "layer_id": "run-01HX-flood-depth",
                 "name": "Flood depth",
                 "layer_type": "raster",
-                "uri": "gs://grace-2/runs/01HX/depth.cog.tif",
+                "uri": "gs://trid3nt/runs/01HX/depth.cog.tif",
                 "style_preset": "flood_depth_blue",
                 "visible": True,
                 "role": "primary",

@@ -2283,7 +2283,7 @@ def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="grace2-sfincs-quadtree",
         description=(
-            "GRACE-2 combined SFINCS quadtree+SnapWave BUILD+SOLVE worker "
+            "Combined SFINCS quadtree+SnapWave BUILD+SOLVE worker "
             "(AWS Batch, one job)."
         ),
     )

@@ -36,7 +36,7 @@ def _modeled_flood_envelope() -> AssessmentEnvelope:
             forcing_type="storm_surge",
             source="NHC ATCF, Hurricane Ian",
             parameters={"storm_id": "AL092022", "intensity_scaling": 1.0},
-            inputs_uri="gs://grace-2/forcing/ian_atcf.csv",
+            inputs_uri="gs://trid3nt/forcing/ian_atcf.csv",
         ),
         catalog_entries=None,
         layers=[
@@ -44,7 +44,7 @@ def _modeled_flood_envelope() -> AssessmentEnvelope:
                 layer_id="run-01HX-flood-depth",
                 name="Flood depth (m)",
                 layer_type="raster",
-                uri="gs://grace-2/runs/01HX/depth.cog.tif",
+                uri="gs://trid3nt/runs/01HX/depth.cog.tif",
                 style_preset="flood_depth_blue",
                 temporal=TemporalConfig(
                     start="2022-09-28T00:00:00Z",
@@ -195,7 +195,7 @@ def test_result_layer_aligns_with_load_layer_args() -> None:
         layer_id="run-01HX-flood-depth",
         name="Flood depth (m)",
         layer_type="raster",
-        uri="gs://grace-2/runs/01HX/depth.cog.tif",
+        uri="gs://trid3nt/runs/01HX/depth.cog.tif",
         style_preset="flood_depth_blue",
         temporal=TemporalConfig(
             start="2022-09-28T00:00:00Z",

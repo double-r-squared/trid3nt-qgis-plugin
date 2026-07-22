@@ -9,7 +9,7 @@ Batch worker, alongside the solve + the raster postprocess.
 The pure build functions below (dataclasses, Manning mapping loader + the OQ-4 §4
 NLCD validation gate, the adaptive-grid autoscale, the HydroMT YAML config
 generator + surge/physics emitters) are VENDORED VERBATIM from the agent's
-``services/agent/src/grace2_agent/workflows/sfincs_builder.py`` — that module
+``server/src/grace2_agent/workflows/sfincs_builder.py`` — that module
 remains the source of truth for the build contract (and the agent's legacy
 local-docker build). ``services/workers/`` is NOT on the agent import path
 (mirrors the ``_raster_postprocess`` split), so the worker keeps its own copy;

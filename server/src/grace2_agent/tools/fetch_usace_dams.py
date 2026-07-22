@@ -295,7 +295,7 @@ PRESERVED_PROPERTIES: tuple[str, ...] = (
     "DATA_UPDATED",
 )
 
-# User-Agent — ESRI tracks unauthenticated clients; identify GRACE-2 clearly
+# User-Agent — ESRI tracks unauthenticated clients; identify this client clearly
 # so the NID team can attribute traffic.
 _USER_AGENT = (
     "grace-2/0.1 (Hazard Modeling Agent; "

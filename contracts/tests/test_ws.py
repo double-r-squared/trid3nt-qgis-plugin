@@ -393,7 +393,7 @@ def test_tool_call_complete_metrics_carried_as_dict(session_id: str) -> None:
     payload = ws.ToolCallCompletePayload(
         call_id=new_ulid(),
         result_summary="Peak depth 3.2 m over 18 km^2",
-        result_uri="gs://grace-2/runs/01HX/result.cog.tif",
+        result_uri="gs://trid3nt/runs/01HX/result.cog.tif",
         metrics={"flooded_area_km2": 18.4, "max_depth_m": 3.2},
     )
     dumped = _roundtrip_idempotent(_wrap(payload, session_id))
@@ -847,6 +847,7 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
         "disambiguation-response": lambda: ws.DisambiguationResponsePayload(request_id=new_ulid(), cancelled=True),
         "clarification-response": lambda: ws.ClarificationResponsePayload(request_id=new_ulid(), cancelled=True),
         "agent-message-chunk": lambda: ws.AgentMessageChunkPayload(message_id=new_ulid(), delta="x"),
+            "agent-thinking-chunk": lambda: ws.AgentThinkingChunkPayload(message_id=new_ulid(), delta="x"),
         "tool-call-start": lambda: ws.ToolCallStartPayload(
             call_id=new_ulid(), step_id=new_ulid(), tool_name="t", tool_category="workflow"
         ),

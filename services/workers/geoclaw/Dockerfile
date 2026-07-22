@@ -1,4 +1,4 @@
-# GRACE-2 GeoClaw (Clawpack) solver AWS Batch worker (sprint-17 / FR-CE-1).
+# GeoClaw (Clawpack) solver AWS Batch worker (sprint-17 / FR-CE-1).
 #
 # Builds the runtime image for the GeoClaw AWS Batch job -- the scale-to-zero
 # CLOUD LANE for the GeoClaw shallow-water inundation engine (tsunami / dam-break
@@ -46,7 +46,7 @@ FROM python:3.11-slim-bookworm AS runtime
 
 LABEL org.opencontainers.image.title="grace-2-geoclaw-solver" \
       org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 GeoClaw (Clawpack) shallow-water inundation solver runtime (AWS Batch). Reads a build_spec + topo DEM from s3://...-cache/, authors a setrun.py, runs the headless Clawpack solver, writes fort.q frames + completion manifest to s3://...-runs/<run_id>/." \
+      org.opencontainers.image.description="GeoClaw (Clawpack) shallow-water inundation solver runtime (AWS Batch). Reads a build_spec + topo DEM from s3://...-cache/, authors a setrun.py, runs the headless Clawpack solver, writes fort.q frames + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="BSD-3-Clause"
 
 ENV VENV=/opt/grace2/.venv \

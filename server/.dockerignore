@@ -1,9 +1,9 @@
-# .dockerignore for the GRACE-2 agent image (services/agent/Dockerfile).
+# .dockerignore for the agent image (server/Dockerfile).
 #
 # The build context is the repo ROOT (the CodeBuild buildspec sets it so the
 # COPY paths are repo-root-relative, matching the worker images). This file is
-# read when the build context root is services/agent/ -- it keeps the agent
-# subtree lean. The codebuild buildspec also tars only services/agent into the
+# read when the build context root is server/ -- it keeps the agent
+# subtree lean. The codebuild buildspec also tars only server/ into the
 # context, so most of these are belt-and-suspenders.
 #
 # Container-hygiene norm (feedback_container_image_hygiene): minimize the context

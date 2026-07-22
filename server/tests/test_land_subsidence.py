@@ -9,7 +9,7 @@ passes every structural test): subsidence is POSITIVE-DOWN (the z-displacement
 grid is positive at the pumped cell).
 
 Run:
-    <agent-venv>/bin/python -m pytest services/agent/tests/test_land_subsidence.py -q
+    <agent-venv>/bin/python -m pytest server/tests/test_land_subsidence.py -q
 """
 
 from __future__ import annotations

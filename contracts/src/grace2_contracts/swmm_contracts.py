@@ -30,7 +30,7 @@ Design notes
 - ``infiltration_method`` selects SCS-CN vs Green-Ampt on the PERVIOUS fraction
   (cross-check improvement). ``"none"`` is the fully-impervious spike default.
 - The Atlas-14 NESTED (alternating-block) hyetograph is built by
-  ``services/agent/src/grace2_agent/workflows/swmm_hyetograph.py`` from
+  ``server/src/grace2_agent/workflows/swmm_hyetograph.py`` from
   ``total_rain_depth_mm`` + ``storm_duration_hr`` + ``rain_interval_min``. It is
   NOT flat and NOT SCS-Type-II — these args parameterize the nested builder.
 - ``SWMMDepthLayerURI`` is a structured numeric carrier (invariant 1 / Decision

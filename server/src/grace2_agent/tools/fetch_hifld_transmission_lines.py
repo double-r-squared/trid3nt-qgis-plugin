@@ -190,7 +190,7 @@ INFRA_LABEL = "Electric Power Transmission Line"
 #: Self-describing infra_type column value.
 INFRA_TYPE = "transmission_line"
 
-# User-Agent — identify GRACE-2 clearly to the ESRI cluster.
+# User-Agent — identify this client clearly to the ESRI cluster.
 _USER_AGENT = (
     "grace-2/0.1 (Hazard Modeling Agent; "
     "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"

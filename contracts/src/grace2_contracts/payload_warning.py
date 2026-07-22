@@ -38,9 +38,9 @@ user must pick ``cancel`` or ``narrow_scope`` (the agent enforces this
 on receipt).
 
 See memory: ``feedback_large_payload_chat_warning``. See
-``packages/contracts/src/grace2_contracts/tool_registry.py`` for the
+``contracts/src/grace2_contracts/tool_registry.py`` for the
 ``AtomicToolMetadata.payload_mb_estimator_name`` field. See
-``services/agent/src/grace2_agent/server.py`` for the dispatcher gate.
+``server/src/grace2_agent/server.py`` for the dispatcher gate.
 """
 
 from __future__ import annotations

@@ -37,7 +37,7 @@ from trid3nt.net import trid3nt_client as tc  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # Recording stub: POST /api/provider-config + GET /api/local-models, in
-# miniature (mirrors services/agent tool_catalog_http.py).
+# miniature (mirrors the server's tool_catalog_http.py).
 # --------------------------------------------------------------------------- #
 
 

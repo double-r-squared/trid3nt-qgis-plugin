@@ -3,7 +3,7 @@
 CaMa-Flood (Yamazaki Lab, U.Tokyo) is a global river-routing + discharge model
 research-validated as the canonical fluvial-forcing substrate for compound
 flood modeling (Eilander et al. 2023; the SFINCS-CaMa-Flood compound-flood
-literature). v0.1 of GRACE-2 lands CaMa-Flood as a Tier-2 substrate fetcher
+literature). v0.1 lands CaMa-Flood as a Tier-2 substrate fetcher
 for the Wave-2 demo: a downstream composer (``model_compound_flood_global``,
 deferred) will consume the LayerURI as the fluvial-boundary forcing for a
 SFINCS run outside the US gauge network.
@@ -49,7 +49,7 @@ current distribution model is:
 
 This is a structural deviation from the kickoff's "no auth required"
 assumption. The tool is implemented with a forward-compatible auth-path
-seam so the production wire-up can later target either (a) a GRACE-2
+seam so the production wire-up can later target either (a) a project
 mirror bucket populated out-of-band from the Dropbox download, or (b) a
 direct Dropbox-shared-link fetch with the password supplied via the
 per-Case secret_ref path (mirroring the Wave-2 ERA5 / Movebank pattern).
@@ -59,7 +59,7 @@ AGENTS.md "live E2E required" rule.
 
 Source resolution priority (kickoff-extended for migration reality):
 
-  1. Explicit ``base_url`` kwarg — full override (e.g. a GRACE-2 mirror).
+  1. Explicit ``base_url`` kwarg — full override (e.g. a project mirror).
   2. ``GRACE2_CAMA_FLOOD_BASE_URL`` env var.
   3. The kickoff-named legacy URL (left in place as the documented
      default; will return the migration HTML page and the tool reports
@@ -634,7 +634,7 @@ def _netcdf_to_cog_bytes(
         # rows as-they-are, so an ascending-latitude DataArray would produce
         # a south-up COG (rasterio's BoundingBox.bottom > top). We re-sort
         # descending here so the written COG is north-up — the convention
-        # QGIS Server, MapLibre, and the rest of the GRACE-2 raster pipeline
+        # QGIS Server, MapLibre, and the rest of the raster pipeline
         # expect (job-0086 codified lesson: geographic correctness).
         if "latitude" in da.dims and len(da["latitude"]) > 1:
             lat_vals = da["latitude"].values

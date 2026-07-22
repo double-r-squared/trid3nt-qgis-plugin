@@ -14,7 +14,7 @@ NOT a unit test — this is the live, end-to-end transcript evidence the
 ``agent.md`` Definition-of-Done requires.
 
 Usage:
-    .venv-agent/bin/python services/agent/tests/live_evidence_job_0169.py
+    .venv-agent/bin/python server/tests/live_evidence_job_0169.py
 """
 
 from __future__ import annotations

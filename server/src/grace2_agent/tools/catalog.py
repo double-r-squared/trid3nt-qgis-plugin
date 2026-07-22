@@ -84,7 +84,7 @@ def _default_catalog_yaml_path() -> Path:
     env_path = os.environ.get("GRACE2_CATALOG_YAML")
     if env_path:
         return Path(env_path).expanduser().resolve()
-    # services/agent/src/grace2_agent/tools/catalog.py → repo root is 5 levels up.
+    # server/src/grace2_agent/tools/catalog.py -> repo root is 4 levels up.
     here = Path(__file__).resolve()
     for parent in [here, *here.parents]:
         candidate = parent / "public_data_source_catalog.yaml"
@@ -678,7 +678,7 @@ def _tier4_region_fetch(
 @register_tool(
     _CATALOG_FETCH_METADATA,
     # Annotations: readOnlyHint=True (dispatches to external API but does not
-    # mutate GRACE-2 state; writes to read-through cache only),
+    # mutate server state; writes to read-through cache only),
     # openWorldHint=True (Tier-2 OGC services, Tier-3 HTTPS external endpoints),
     # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
     open_world_hint=True,

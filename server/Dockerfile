@@ -1,4 +1,4 @@
-# GRACE-2 agent image -- the EXISTING grace2_agent WS server, containerized
+# Agent image -- the EXISTING grace2_agent WS server, containerized
 # BYTE-IDENTICAL for the Fargate-per-session isolation foundation
 # (reports/design/agent_isolation_spike.md, verdict HYBRID_FARGATE_NOW).
 #
@@ -111,9 +111,8 @@ RUN find /opt/venv -depth -type d -name '__pycache__' -exec rm -rf {} + \
 # --------------------------------------------------------------------------- #
 FROM public.ecr.aws/docker/library/python:3.11-slim-bookworm AS runtime
 
-LABEL org.opencontainers.image.title="grace-2-agent" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 agent WS server (grace2_agent), containerized byte-identical for Fargate-per-session isolation. One container = one session. WS :8765, /api/health :8766. Runs grace2-agent (main:run -> server.run_server)." \
+LABEL org.opencontainers.image.title="trid3nt-agent" \
+      org.opencontainers.image.description="Agent WS server (grace2_agent), containerized byte-identical for Fargate-per-session isolation. One container = one session. WS :8765, /api/health :8766. Runs grace2-agent (main:run -> server.run_server)." \
       org.opencontainers.image.licenses="proprietary"
 
 ENV DEBIAN_FRONTEND=noninteractive \

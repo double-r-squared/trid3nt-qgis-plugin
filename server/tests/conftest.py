@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the GRACE-2 agent-service test suite.
+"""Shared pytest fixtures for the agent-service test suite.
 
 The agent-service tests are import-light: every test that needs the tool
 registry imports ``grace2_agent.tools`` directly. The registry is a

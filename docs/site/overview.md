@@ -6,14 +6,14 @@ catalog, same engines -- running entirely on one machine. No AWS account, no clo
 for the core loop. The LLM is pluggable: a local model served by Ollama (or vLLM, llama.cpp,
 LM Studio) or any cloud OpenAI-compatible API, through one provider seam.
 
-Repo: `trid3nt-local` (separate from the GRACE-2 cloud repo; publishable standalone).
+Repo: `trid3nt-local` (standalone, publishable; the web + cloud products live in a separate repo).
 
 ---
 
 !!! note "Where this section is edited"
     The canonical source for these pages is `trid3nt-local/docs/site/`. They are copied into
-    the GRACE-2 docs site (`docs-site/docs/local/`) by the docs-sync step in
-    and rebuild -- do not edit the copies under `GRACE-2/docs-site/docs/local/` directly.
+    the cloud repo's docs site (`docs-site/docs/local/`) by its docs-sync step
+    and rebuild -- do not edit those copies directly.
     The tool-support page is generated -- see [Tool Support Matrix](tool-support.md).
 
 ---
@@ -98,8 +98,9 @@ map layers render. Only the substrate under each seam changes.
 ## Relationship to the other TRID3NT products
 
 This repo is the standalone QGIS product: plugin + server + engine workers,
-first-class, no upstream sync. The separate web and cloud products live in the
-GRACE-2 repo; until 2026-07-21 the server code here was a vendored copy synced
+first-class, no upstream sync. The separate web and cloud products live in
+their own upstream repo; until 2026-07-21 the server code here was a vendored
+copy synced from it.
 
 ## Section map
 

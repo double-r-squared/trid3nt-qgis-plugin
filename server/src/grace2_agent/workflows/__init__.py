@@ -2,7 +2,7 @@
 
 Per the SRS two-layer tool architecture (Decision G + FR-TA-1, §2.3 Engine
 catalog), workflows are **orchestrator-style Python functions** that compose
-the engine's atomic tools (defined under ``services/agent/src/grace2_agent/
+the engine's atomic tools (defined under ``server/src/grace2_agent/
 tools/``) into deterministic chains.
 
 Workflows are **not atomic tools** — they don't use ``@register_tool`` and they

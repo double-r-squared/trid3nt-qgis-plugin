@@ -60,7 +60,7 @@ bbox or push reflectance outside [0, 1.5].
 
 OQ-0104-CONTRACT-SUPPORTS-GLOBAL-QUERY: the kickoff asks for
 ``supports_global_query=False`` on the AtomicToolMetadata, but the
-``packages/contracts`` model has not yet been amended to carry that field.
+``contracts`` model has not yet been amended to carry that field.
 The metadata constructed here uses the existing 4-field shape. Surfaced as
 an OQ for the upcoming schema/Appendix D amendment that adds the field.
 """
@@ -299,7 +299,7 @@ _USER_AGENT = (
 # AtomicToolMetadata — registered once at import time.
 #
 # NOTE: kickoff specifies ``supports_global_query=False`` but the contract
-# model in packages/contracts/tool_registry.py does not yet carry that
+# model in contracts/tool_registry.py does not yet carry that
 # field. The 4 existing fields (name, ttl_class, source_class, cacheable)
 # are what AtomicToolMetadata accepts today. Surfaced as
 # OQ-0104-CONTRACT-SUPPORTS-GLOBAL-QUERY for the schema specialist; the

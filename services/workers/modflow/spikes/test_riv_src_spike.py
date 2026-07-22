@@ -27,9 +27,8 @@ full streamflow-routing network the v0.1 seepage demo does not need).
 Determinism: pure deterministic FloPy + a subprocess mf6 run. No LLM, no AWS.
 
 Run:
-    cd services/agent && \
-        .venv/bin/python -m pytest \
-        ../../services/workers/modflow/spikes/test_riv_src_spike.py -q
+    venvs/agent/bin/python -m pytest \
+        services/workers/modflow/spikes/test_riv_src_spike.py -q
 
 Binary resolution mirrors the production seam (``run_modflow._mf6_binary``):
     1. ``$GRACE2_MF6_BIN`` if set,

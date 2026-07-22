@@ -1,9 +1,9 @@
-# GRACE-2 OpenQuake Engine PSHA solver AWS Batch worker (sprint-17).
+# OpenQuake Engine PSHA solver AWS Batch worker (sprint-17).
 #
 # Builds the runtime image for the OpenQuake probabilistic-seismic-hazard (PSHA)
 # AWS Batch job — a NEW engine (the multi-hazard workbench's seismic driver,
 # pairing with the existing Pelicun impact path). Unlike SFINCS (a thin layer
-# over the upstream Deltares image) there is no GRACE-2-pinned OpenQuake base, so
+# over the upstream Deltares image) there is no locally-pinned OpenQuake base, so
 # we build from python:slim and pip-install openquake-engine (AGPL, pip/Docker/
 # CLI). The `oq` CLI is the headless entrypoint (`oq engine --run job.ini`); we
 # do NOT modify the engine.
@@ -73,7 +73,7 @@ FROM public.ecr.aws/docker/library/python:3.11-slim-bookworm AS runtime
 
 LABEL org.opencontainers.image.title="grace-2-openquake-solver" \
       org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 OpenQuake Engine PSHA solver runtime (AWS Batch). Reads a build_spec from s3://...-cache/, templates a classical-PSHA job.ini + logic trees, runs oq engine --run job.ini headless, writes hazard exports + completion manifest to s3://...-runs/<run_id>/." \
+      org.opencontainers.image.description="OpenQuake Engine PSHA solver runtime (AWS Batch). Reads a build_spec from s3://...-cache/, templates a classical-PSHA job.ini + logic trees, runs oq engine --run job.ini headless, writes hazard exports + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="AGPL-3.0"
 
 # ca-certificates so boto3's HTTPS calls to S3 verify; libgeos-c1v5 +

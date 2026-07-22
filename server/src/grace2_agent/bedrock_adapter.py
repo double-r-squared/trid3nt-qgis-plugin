@@ -1,6 +1,6 @@
 """Bedrock Converse adapter (sprint-14-aws job-0286) — the agent's AWS brain.
 
-GRACE was built on Vertex AI / Gemini via ``adapter.py``. The AWS migration
+This service was built on Vertex AI / Gemini via ``adapter.py``. The AWS migration
 swaps the model provider to **Amazon Bedrock** (Claude Sonnet 4.6 by default)
 WITHOUT touching the multi-turn loop, the 57-tool catalog, the envelope
 emission, or the web client. The seam is deliberately narrow:
@@ -828,7 +828,7 @@ async def stream_bedrock(
     system_prompt: str | None = None,
     model: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
-    """Stream one Bedrock Converse turn, yielding the GRACE ``StreamEvent`` union.
+    """Stream one Bedrock Converse turn, yielding the ``StreamEvent`` union.
 
     Mirrors ``adapter.stream_events_with_contents``: one call == one model
     round. The dispatch loop in ``server.py`` appends function_call +

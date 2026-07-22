@@ -38,7 +38,7 @@ write one completion.
 
 `cht_sfincs` is **GPL-3.0**. It lives ONLY in this image and is imported ONLY by
 `entrypoint.py` (lazily, inside `build_deck` + the refinement/obstacle helpers).
-The GRACE-2 **agent venv and all agent code never import `cht_sfincs`** — the
+The **agent venv and all agent code never import `cht_sfincs`** — the
 agent reaches this worker arms-length over the object-store + AWS-Batch-submit
 seam (same pattern as before). The SFINCS solver binary is MIT-licensed and is
 brought in by the `deltares/sfincs-cpu` base image; the combined image's license
@@ -147,7 +147,7 @@ SFINCS executable on the dev box); the real binary runs only in-container.
 ## Agent-side follow-up (OUT OF SCOPE for this worker job)
 
 This worker is self-contained, but the full collapse to one submit+poll requires
-the agent-side change in `services/agent/src/grace2_agent/tools/solver.py` +
+the agent-side change in `server/src/grace2_agent/tools/solver.py` +
 `model_flood_scenario.py`: add a `sfincs-quadtree` solver key resolving
 `GRACE2_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE`, point `submit_sfincs_deckbuild` at
 it, and DELETE the subsequent `run_solver("sfincs", model_setup_uri=...)` call

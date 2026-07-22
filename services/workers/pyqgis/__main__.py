@@ -60,7 +60,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m services.workers.pyqgis",
         description=(
-            "GRACE-2 PyQGIS worker — read a .qgs from GCS, append a layer, "
+            "PyQGIS worker — read a .qgs from GCS, append a layer, "
             "write back, publish completion to Pub/Sub."
         ),
     )

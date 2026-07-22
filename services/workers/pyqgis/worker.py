@@ -1,4 +1,4 @@
-"""GRACE-2 PyQGIS worker — canonical FR-QS-6 round-trip.
+"""PyQGIS worker — canonical FR-QS-6 round-trip.
 
 Implements the worker side of the SRS v0.3 §FR-QS-6 pattern: read a ``.qgs``
 from GCS, mutate it via PyQGIS (append a styled layer, apply a QML preset),

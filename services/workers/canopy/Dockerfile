@@ -1,4 +1,4 @@
-# GRACE-2 canopy-height ML-inference AWS Batch worker.
+# Canopy-height ML-inference AWS Batch worker.
 #
 # FILE-ONLY SCAFFOLD (NOT built / pushed here). This authors the runtime image
 # for the canopy-height tool's CLOUD LANE -- the scale-to-zero CPU AWS Batch
@@ -116,7 +116,7 @@ FROM public.ecr.aws/docker/library/python:3.11-slim-bookworm AS runtime
 
 LABEL org.opencontainers.image.title="grace-2-canopy-solver" \
       org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 canopy-height ML-inference worker (AWS Batch, CPU). Reads a build_spec + sub-metre RGB COG from s3://...-cache/, runs Meta HighResCanopyHeight (geoai) on CPU, writes a canopy-height-in-metres COG + completion manifest to s3://...-runs/<run_id>/." \
+      org.opencontainers.image.description="Canopy-height ML-inference worker (AWS Batch, CPU). Reads a build_spec + sub-metre RGB COG from s3://...-cache/, runs Meta HighResCanopyHeight (geoai) on CPU, writes a canopy-height-in-metres COG + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="Apache-2.0"
 
 # ca-certificates so boto3 HTTPS verifies; libgeos-c1v5 + libspatialindex6

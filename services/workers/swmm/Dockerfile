@@ -1,4 +1,4 @@
-# GRACE-2 SWMM solver AWS Batch worker (sprint-16 / P7 / FR-CE-1).
+# SWMM solver AWS Batch worker (sprint-16 / P7 / FR-CE-1).
 #
 # Builds the runtime image for the SWMM AWS Batch job — the CLOUD LANE for the
 # urban PySWMM engine (the dev primary path runs pyswmm IN-PROCESS in the agent
@@ -62,7 +62,7 @@ FROM python:3.11-slim-bookworm AS runtime
 
 LABEL org.opencontainers.image.title="grace-2-swmm-solver" \
       org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="GRACE-2 SWMM (pyswmm) solver runtime (AWS Batch). Reads a quasi-2D SWMM deck from s3://...-cache/, runs pyswmm headless, writes outputs + completion manifest to s3://...-runs/<run_id>/." \
+      org.opencontainers.image.description="SWMM (pyswmm) solver runtime (AWS Batch). Reads a quasi-2D SWMM deck from s3://...-cache/, runs pyswmm headless, writes outputs + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="MIT"
 
 # ca-certificates so boto3's HTTPS calls to S3 verify (the slim base ships none).

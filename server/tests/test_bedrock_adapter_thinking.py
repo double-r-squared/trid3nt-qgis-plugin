@@ -21,7 +21,7 @@ before/after is preserved.  Unit-level coverage of the stripper state machine
 is included so tag-split edge cases are pinned independently of the stream.
 
 Run:
-    python -m pytest services/agent/tests/test_bedrock_adapter_thinking.py -q
+    python -m pytest server/tests/test_bedrock_adapter_thinking.py -q
 """
 
 from __future__ import annotations

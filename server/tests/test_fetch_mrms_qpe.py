@@ -632,7 +632,7 @@ def test_fetch_mrms_qpe_global_query_with_bbox_none(tmp_path):
 #
 # Hits the real noaa-mrms-pds S3 bucket. Run with:
 #   GRACE2_TEST_LIVE_MRMS=1 GRACE2_SKIP_WORKER_SUBMITTER=1 .venv-agent/bin/pytest \
-#       services/agent/tests/test_fetch_mrms_qpe.py::test_live_fetch -s
+#       server/tests/test_fetch_mrms_qpe.py::test_live_fetch -s
 # ---------------------------------------------------------------------------
 
 

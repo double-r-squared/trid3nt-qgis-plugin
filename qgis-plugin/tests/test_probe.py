@@ -3,7 +3,7 @@ half: request builder, response parser, and the dock note-block formatter.
 
 No QGIS required (mirrors ``test_push_layer.py``'s pattern): a small
 ``http.server.BaseHTTPRequestHandler`` stub mirrors the agent's real
-``POST /api/probe-point`` route semantics (services/agent
+``POST /api/probe-point`` route semantics (the server's
 ``tool_catalog_http.py`` + ``tools/probe_point.py``), and the tests drive
 ``probe.post_probe_point`` / ``probe.format_probe_result`` against it. The
 ONE PyQGIS-touching piece (the ``QgsMapToolEmitPoint`` install/restore) is

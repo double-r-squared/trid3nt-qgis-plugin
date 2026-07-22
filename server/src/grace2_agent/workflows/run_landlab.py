@@ -250,7 +250,7 @@ def stage_landlab_manifest(
 # exec_kind="exec": there is no public Landlab container image. The worker
 # entrypoint (services/workers/landlab/entrypoint.py) runs as a subprocess
 # in the current venv's Python via ``sys.executable -m
-# services.workers.landlab.entrypoint``, with the GRACE-2 repo root on
+# services.workers.landlab.entrypoint``, with the repo root on
 # PYTHONPATH so the worker's ``from services.workers.*`` imports resolve.
 #
 # The worker reads a file:// manifest URI (GRACE2_OBJECT_STORE=file) from the
@@ -279,7 +279,7 @@ def landlab_local_spec() -> Any:
     the entrypoint as ``sys.executable -m services.workers.landlab.entrypoint
     --run-id <id> --manifest-uri <uri>`` in a subprocess.
 
-    The GRACE-2 repo root is prepended to PYTHONPATH so the worker's
+    The repo root is prepended to PYTHONPATH so the worker's
     ``from services.workers.*`` imports resolve in the current venv (no
     editable install of the worker package is required).
 

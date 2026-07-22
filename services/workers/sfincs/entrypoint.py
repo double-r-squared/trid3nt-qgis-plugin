@@ -303,7 +303,7 @@ def run_raster_postprocess(
 def _build_argv_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="grace2-sfincs-entrypoint",
-        description="GRACE-2 SFINCS Cloud Run Job entrypoint (FR-CE-1/2/3).",
+        description="SFINCS Cloud Run Job entrypoint (FR-CE-1/2/3).",
     )
     p.add_argument(
         "--run-id",

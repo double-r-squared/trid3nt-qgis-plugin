@@ -8,7 +8,7 @@ Controller plays them like the web scrubber.
 
 The token patterns and grouping rules are a port of the web LayerPanel's
 ``parseFrameToken`` / ``detectSequentialGroups`` via the agent's tested
-Python port (``services/agent .../tools/extract_timeseries_at_point.py`` --
+Python port (``server/src/.../tools/extract_timeseries_at_point.py`` --
 keep the three in lockstep; the web side is the user-visible grouping this
 module must agree with). One adaptation for the plugin: underscores are
 normalized to spaces before matching, because exported GeoTIFF layer names

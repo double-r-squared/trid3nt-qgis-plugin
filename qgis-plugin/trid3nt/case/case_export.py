@@ -28,7 +28,7 @@ so the artifacts are downloaded through ``GET /api/export-qgis/file?path=<abs>``
 into a local temp dir first (``localize_remote_export``). That route serves
 ONLY ``.qgz``/``.gpkg`` under the agent's export root (Content-Disposition
 attachment; 400 missing param / 403 wrong type or outside root / 404 missing
--- see services/agent ``tool_catalog_http.py`` + its route tests). GeoTIFF
+-- see the server's ``tool_catalog_http.py`` + its route tests). GeoTIFF
 rasters are therefore NOT downloadable remotely: they become an honest
 skipped note, never a silent gap (the raster is still viewable through its
 published tile layer). The HTTP API base is derived from the WS URL
