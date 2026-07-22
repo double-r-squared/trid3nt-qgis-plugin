@@ -13,9 +13,9 @@ Milestone 3 additions on top of milestone 2:
   * CASE-LIST REFRESH: no list-cases verb exists; refresh = one debounced
     session-resume round trip (the web's own keepalive -- documented tradeoff
     in trid3nt_client.request_case_list_refresh).
-  * SELECTED-POLYGON AOI: opt-in toggle; the active layer's selection bbox
-    (v1: bbox, not the exact ring) overrides the canvas extent on case-create
-    and the per-message context line.
+  * SELECTED-POLYGON AOI: retired by A2 (NATE 2026-07-20) -- the AOI model is
+    explicit-only (the drawn Set-AOI rectangle / rehydrated case bbox); the
+    selection + canvas toggles are gone.
   * TOKEN UX: Settings explains where a token comes from (?st= carrier); an
     auth-classified failure STOPS the reconnect ladder and paints an honest
     "token expired -- paste a fresh one" status instead of silently looping.
@@ -29,12 +29,13 @@ Milestone 2 chat surface on top of milestone 1's plain-text bubbles:
     ``tool-payload-confirmation``. Sims never start without a click here
     (user-controlled granularity, standing directive). Decision rules live in
     the pure ``gate`` module (tested without Qt).
-  * CANVAS AOI: "Use map canvas as area of interest" toggle (default ON) --
-    the case is created with the canvas extent as ``args.bbox`` (#170
-    AOI-first) and every outgoing message carries the CURRENT extent as an
-    in-text context line (see ``aoi`` module docstring for why the wire
-    contract forbids a per-message field). >2 deg/side extents are honestly
-    dropped with a status note.
+  * AOI ON THE WIRE (ADR 0017 mechanism 2, 2026-07-22): every outgoing
+    user-message carries the drawn/persisted case AOI as the STRUCTURED
+    ``aoi_bbox`` payload field ([min_lon, min_lat, max_lon, max_lat],
+    EPSG:4326) -- the legacy bracketed in-text context line is gone; the
+    chat text ships clean. >2 deg/side extents are honestly dropped
+    (``_aoi_for_send`` guard). The persistent Case bbox still rides
+    ``case-command set-bbox`` unchanged.
   * RECONNECT: the bridge's capped-jitter ladder drives the status dot
     (connecting amber / connected green / lost red); queued sends flush on
     resume.
@@ -79,6 +80,7 @@ from qgis.core import QgsMapLayer
 from . import charts, gate
 from .cards import (
     CodeExecCard,
+    CredentialCard,
     GateCard,
     SimCard,
     _AssistantEntry,
@@ -731,7 +733,8 @@ class Trid3ntDock(QDockWidget):
 
         Milestone 3 item 4 (v1): the bbox OF the selection, not the exact
         ring -- the agent's structured AOI carriers (``args.bbox`` on
-        case-create + the in-text line) are 4-number boxes. None when there
+        case-create/set-bbox + the per-message ``aoi_bbox`` payload field)
+        are 4-number boxes. None when there
         is no active vector layer, no selected features, or a degenerate
         rect (a single point selection has no area -- honest None).
         """
@@ -1793,6 +1796,12 @@ class Trid3ntDock(QDockWidget):
             # agent blocks until the reply lands, so this envelope must never
             # be dropped again (it previously fell through as kind="raw").
             self._show_code_exec_card(data)
+        elif kind == "credential-request":
+            # LANE K (NATE 2026-07-22): the JIT API-key prompt for a paused
+            # keyed tool (AirNow/FIRMS/...). Same gap the code-exec card
+            # closed: previously fell through as kind="raw" and was dropped,
+            # so the agent's pause waited out its TTL and failed.
+            self._show_credential_card(data)
         elif kind == "case-open":
             self._on_case_open_event(data)
         elif kind == "case-list":
@@ -2036,6 +2045,50 @@ class Trid3ntDock(QDockWidget):
         except Exception as exc:  # noqa: BLE001
             self._note(f"code-exec confirmation send failed: {exc}", error=True)
 
+    # -- credential-request key-entry card (LANE K, 2026-07-22) ----------------- #
+
+    def _show_credential_card(self, payload: dict) -> None:
+        """Render the ``credential-request`` JIT key prompt as an inline
+        key-entry card (contracts ``secrets.py``): a keyed tool hit a
+        missing/invalid key, the agent paused it and asked for the credential
+        by name. Mirrors ``_show_gate_card``'s malformed-envelope honesty and
+        the BUG-4/N5 close-out discipline (post-decision narration lands in a
+        fresh entry BELOW the card)."""
+        request = gate.parse_credential_request(payload)
+        if request is None:
+            self._note(
+                "Received a malformed credential-request (no request_id / "
+                "provider_id) -- cannot answer it; the agent's key prompt "
+                "will time out server-side.",
+                error=True,
+            )
+            return
+        card = CredentialCard(request, self._on_credential_decision)
+        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        self._close_pending_for_card()
+        self._scroll_to_bottom()
+
+    def _on_credential_decision(
+        self, request_id: str, provider_id: str, key_value: Optional[str]
+    ) -> None:
+        """Send the credential reply. ``key_value`` set -> Submit: the raw key
+        rides the EXISTING ``secret-add`` envelope (the ONLY transport that
+        ever carries it -- Decision F; the server vault-writes it 0600) and
+        THEN ``credential-provided`` ``provided=True`` resumes the paused
+        tool. ``key_value`` None -> Skip: ``credential-provided``
+        ``provided=False`` alone (no secret saved; the server re-raises the
+        tool's original typed error and the agent narrates honestly).
+        The key is never logged and never appears in an error note."""
+        try:
+            if key_value is None:
+                self.bridge.decline_credential(request_id)
+            else:
+                self.bridge.submit_credential(request_id, provider_id, key_value)
+        except Exception as exc:  # noqa: BLE001
+            # exc carries transport state, never the key (the send serializes
+            # before any failure surface we format here).
+            self._note(f"credential reply send failed: {exc}", error=True)
+
     # -- sending ------------------------------------------------------------- #
 
     def _send(self) -> None:
@@ -2056,16 +2109,13 @@ class Trid3ntDock(QDockWidget):
             self._pending.finalize_markdown()
         self._pending = _AssistantEntry(self.messages_layout)
         self._scroll_to_bottom()
-        bbox, source = self._aoi_for_send()
-        # O1 (NATE 2026-07-20): no per-send AOI note anymore -- the bbox still
-        # rides the wire text (below), but the transcript note fires only WHEN
-        # the user sets/changes the AOI (``_on_aoi_extent_chosen``), never as a
-        # standing restated readout.
-        wire_text = (
-            aoi.attach_aoi_to_text(text, bbox, source=source or "canvas")
-            if bbox
-            else text
-        )
+        bbox, _source = self._aoi_for_send()
+        # Structured AOI (ADR 0017 mechanism 2, 2026-07-22): the AOI rides the
+        # ``aoi_bbox`` payload field now -- the bracketed in-text prose line
+        # ("[QGIS map canvas AOI ...]") is GONE; the chat text goes out CLEAN.
+        # O1 (NATE 2026-07-20) still holds: no per-send AOI note -- the
+        # transcript note fires only WHEN the user sets/changes the AOI
+        # (``_on_aoi_extent_chosen``), never as a standing restated readout.
         try:
             # F9: pass show_thinking so the server enables reasoning-channel
             # forwarding for this turn (local mode only; remote ignores the field).
@@ -2074,9 +2124,10 @@ class Trid3ntDock(QDockWidget):
             # live on the next message with no agent restart -- mirrors the
             # show_thinking add. Provider base_url/key stay agent-process env.
             self.bridge.send_chat(
-                wire_text,
+                text,
                 show_thinking=self.settings.show_thinking,
                 model_id=self.settings.model_id,
+                aoi_bbox=bbox,
             )
         except Exception as exc:  # noqa: BLE001
             self._pending.add_note(f"send failed: {exc}", error=True)

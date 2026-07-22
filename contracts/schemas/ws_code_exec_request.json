@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "``code-exec-request`` (Appendix A.4 amendment, job-0233, sprint-13).\n\nAgent -> client, emitted BEFORE the sandbox runs. The client renders a\nconfirm card; the user approves/denies via a ``tool-payload-confirmation``\nwhose ``warning_id`` equals this payload's ``code_exec_id`` (the agent\nmatches the reply to the paused dispatch via that key).\n\nFields:\n\n- ``envelope_type`` \u2014 discriminator, literal ``\"code-exec-request\"``.\n- ``code_exec_id`` \u2014 ULID for this code-exec dispatch. Doubles as the\n  confirmation correlation key (the ``tool-payload-confirmation.warning_id``\n  the client echoes back) AND the join key to the matching\n  ``code-exec-result``. The client keys the confirm card + result card on it.\n- ``python_code`` \u2014 the EXACT Python the agent wants to run, verbatim. Shown\n  to the user so they confirm what they're approving (never a paraphrase).\n  Non-empty. Capped at 64 KiB \u2014 a code-exec snippet is small; a megabyte of\n  \"code\" is a red flag the contract rejects at the boundary.\n- ``layer_refs`` \u2014 ``{var_name: layer_uri}`` the sandbox will pre-open as\n  rasterio/geopandas handles (or hand back as a URI string). Shown so the\n  user sees which of their layers the code can touch. Default empty.\n- ``rationale`` \u2014 optional one-line, human-readable reason the agent is\n  running this code (\"computing the 95th-percentile flood depth over the\n  city polygon\"). Capped at 512 chars to keep it a caption, not a narrative.\n\nInvariant 9 (No cost theater): no cost / quota field. The consequential\naction here is *running code*, gated by user confirmation, not a billed run.",
+  "description": "``code-exec-request`` (Appendix A.4 amendment, job-0233, sprint-13).\n\nAgent -> client, emitted BEFORE the sandbox runs. The client renders a\nconfirm card; the user approves/denies via a ``tool-payload-confirmation``\nwhose ``warning_id`` equals this payload's ``code_exec_id`` (the agent\nmatches the reply to the paused dispatch via that key).\n\nFields:\n\n- ``envelope_type`` \u2014 discriminator, literal ``\"code-exec-request\"``.\n- ``code_exec_id`` \u2014 ULID for this code-exec dispatch. Doubles as the\n  confirmation correlation key (the ``tool-payload-confirmation.warning_id``\n  the client echoes back) AND the join key to the matching\n  ``code-exec-result``. The client keys the confirm card + result card on it.\n- ``python_code`` \u2014 the EXACT Python the agent wants to run, verbatim. Shown\n  to the user so they confirm what they're approving (never a paraphrase).\n  Non-empty. Capped at 64 KiB \u2014 a code-exec snippet is small; a megabyte of\n  \"code\" is a red flag the contract rejects at the boundary.\n- ``layer_refs`` \u2014 ``{var_name: layer_uri}`` the sandbox will pre-open as\n  rasterio/geopandas handles (or hand back as a URI string). Shown so the\n  user sees which of their layers the code can touch. Default empty.\n\n  ADDITIVE multi-frame extension (sandbox-staging): a value may ALSO be a\n  LIST of URIs \u2014 an ordered set of animation-frame COGs (e.g. the per-step\n  flood-depth or GLM lightning frames for ``list_run_frames``). When the\n  value is a list the sandbox pre-opens it as an ORDERED LIST of handles\n  (``layer_handles[var] = [rasterio.open(p) for p in paths]``) so a snippet\n  can iterate frames (a gaussian glow over a flash sequence, a first/peak/\n  last panel). The single-string form is unchanged and byte-identical; this\n  is the substrate that makes per-frame visualizations just snippets, not\n  per-viz tools. The agent pre-fetches every URI (single or list) to a local\n  file and rewrites the refs to LOCAL paths before the jailed (network-denied)\n  executor opens them.\n- ``rationale`` \u2014 optional one-line, human-readable reason the agent is\n  running this code (\"computing the 95th-percentile flood depth over the\n  city polygon\"). Capped at 512 chars to keep it a caption, not a narrative.\n\nInvariant 9 (No cost theater): no cost / quota field. The consequential\naction here is *running code*, gated by user confirmation, not a billed run.",
   "properties": {
     "code_exec_id": {
       "title": "Code Exec Id",
@@ -14,7 +14,17 @@
     },
     "layer_refs": {
       "additionalProperties": {
-        "type": "string"
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        ]
       },
       "title": "Layer Refs",
       "type": "object"

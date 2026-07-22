@@ -246,15 +246,17 @@ class TestAoi(unittest.TestCase):
         tall = (-82.0, 30.0, -81.0, 36.0)  # 6 deg lat
         self.assertFalse(aoi.bbox_within_guard(tall))
 
-    def test_attach_and_status_text(self):
+    def test_format_bbox_and_status_text(self):
         bbox = (-82.62, 35.55, -82.50, 35.64)
-        attached = aoi.attach_aoi_to_text("Fetch a DEM here", bbox)
-        self.assertTrue(attached.startswith("Fetch a DEM here\n\n["))
-        # the exact structured shape survives verbatim in the context line
-        self.assertIn(
-            "bbox = [-82.620000, 35.550000, -82.500000, 35.640000]", attached
+        # ADR 0017 (2026-07-22): the in-text AOI prose injector
+        # (attach_aoi_to_text) is GONE -- the AOI rides the structured
+        # ``aoi_bbox`` user-message field (see test_client). format_bbox
+        # remains: it renders the one-time "Case AOI set to ..." note.
+        self.assertFalse(hasattr(aoi, "attach_aoi_to_text"))
+        self.assertEqual(
+            aoi.format_bbox(bbox),
+            "[-82.620000, 35.550000, -82.500000, 35.640000]",
         )
-        self.assertIn("EPSG:4326", attached)
         # status line formats
         self.assertEqual(
             aoi.aoi_status_text(bbox, True), "AOI: canvas 0.12 x 0.09 deg"

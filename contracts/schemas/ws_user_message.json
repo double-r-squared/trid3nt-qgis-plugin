@@ -2,6 +2,21 @@
   "additionalProperties": false,
   "description": "``user-message`` (A.3): user-submitted text input.",
   "properties": {
+    "aoi_bbox": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Aoi Bbox"
+    },
     "case_id": {
       "anyOf": [
         {
@@ -34,6 +49,18 @@
       ],
       "title": "Research Mode",
       "type": "string"
+    },
+    "show_thinking": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Show Thinking"
     },
     "text": {
       "title": "Text",

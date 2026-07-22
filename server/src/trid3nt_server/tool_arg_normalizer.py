@@ -52,6 +52,7 @@ from typing import Any
 logger = logging.getLogger("trid3nt_server.tool_arg_normalizer")
 
 __all__ = [
+    "autofill_missing_bbox",
     "coerce_bbox_value",
     "coerce_latlon",
     "normalize_args",
@@ -693,6 +694,106 @@ def _accepted_params(fn: Callable[..., Any]) -> tuple[set[str], bool]:
             continue
         accepted.add(name)
     return accepted, accepts_var_keyword
+
+
+# --------------------------------------------------------------------------- #
+# ADR 0017 (structured AOI slice) — dispatch-time bbox auto-fill
+# --------------------------------------------------------------------------- #
+
+#: Param names treated as "bbox-like" for the ADR 0017 auto-fill. Only
+#: REQUIRED (no-default) signature params auto-fill — an optional bbox means
+#: the tool has its own semantics for "absent" and the server must not guess.
+_BBOX_AUTOFILL_PARAMS: frozenset[str] = frozenset({"bbox", "aoi_bbox"})
+
+
+def _valid_aoi(candidate: Any) -> list[float] | None:
+    """Coerce + sanity-check an AOI candidate to a finite, ordered bbox."""
+    import math
+
+    if candidate is None:
+        return None
+    coerced = coerce_bbox_value(candidate)
+    if coerced is None:
+        return None
+    if not all(math.isfinite(v) for v in coerced):
+        return None
+    if not (coerced[0] < coerced[2] and coerced[1] < coerced[3]):
+        return None
+    return coerced
+
+
+def autofill_missing_bbox(
+    tool_name: str,
+    params: dict[str, Any],
+    fn: Callable[..., Any],
+    *,
+    active_aoi: Any = None,
+    case_bbox: Any = None,
+) -> dict[str, Any]:
+    """Fill a REQUIRED bbox-like param the model OMITTED (ADR 0017 slice 2).
+
+    The canvas AOI is a structured field: the client stamps ``aoi_bbox`` on
+    the user-message payload, the server stores it as the session's active
+    AOI, and here — at the dispatch seam — a tool call whose signature
+    REQUIRES ``bbox`` / ``aoi_bbox`` but arrived without it gets the value
+    injected. Precedence (first valid wins):
+
+        explicit model arg  >  active canvas AOI  >  Case bbox
+
+    Hard rules:
+      * NEVER overrides an explicit arg — a present, non-None value is left
+        exactly as the model sent it (the existing pinned-AOI snap owns that
+        case downstream).
+      * Only REQUIRED params fill (no default in the signature); an optional
+        bbox param's absence is the tool's own documented behavior.
+      * Candidates are validated (4 finite numbers, min < max both axes);
+        an invalid candidate falls through to the next source.
+      * Pure function: returns a fresh dict when it fires, the original
+        otherwise; never raises.
+
+    One log line fires per filled param (the ADR 0017 observability
+    contract) naming the source that won.
+    """
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return params
+    out: dict[str, Any] | None = None
+    for name, p in sig.parameters.items():
+        if name not in _BBOX_AUTOFILL_PARAMS:
+            continue
+        if p.kind in (
+            inspect.Parameter.VAR_KEYWORD,
+            inspect.Parameter.VAR_POSITIONAL,
+        ):
+            continue
+        if p.default is not inspect.Parameter.empty:
+            continue  # optional — the tool's own default owns absence
+        if params.get(name) is not None:
+            continue  # explicit arg wins; never override
+        filled: list[float] | None = None
+        source: str | None = None
+        for candidate, label in (
+            (active_aoi, "active-aoi"),
+            (case_bbox, "case-bbox"),
+        ):
+            filled = _valid_aoi(candidate)
+            if filled is not None:
+                source = label
+                break
+        if filled is None:
+            continue
+        if out is None:
+            out = dict(params)
+        out[name] = filled
+        logger.info(
+            "aoi-autofill[%s]: %s <- %s %s (model omitted it)",
+            tool_name,
+            name,
+            source,
+            filled,
+        )
+    return out if out is not None else params
 
 
 # --------------------------------------------------------------------------- #

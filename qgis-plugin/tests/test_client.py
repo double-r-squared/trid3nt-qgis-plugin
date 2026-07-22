@@ -365,6 +365,50 @@ class TestCaseAndChat(StubServerTestCase):
         self.assertNotIn("model_id", sent[0]["payload"],
                          "model_id must be absent when the picker is empty")
 
+    # ADR 0017 mechanism 2 (structured AOI, 2026-07-22). ----------------------
+
+    def test_send_chat_carries_structured_aoi_bbox_and_clean_text(self):
+        """send_chat(aoi_bbox=...) rides the STRUCTURED ``aoi_bbox`` payload
+        field ([min_lon, min_lat, max_lon, max_lat], EPSG:4326) and the text
+        goes out CLEAN -- no legacy "[QGIS map canvas AOI ...]" prose line.
+        The stub validates the payload the way the live extra=forbid server
+        would; a normal turn-complete proves the field was ACCEPTED."""
+        client = self._connect()
+        client.connect()
+        client.create_case("structured aoi test")
+        bbox = [-82.62, 35.55, -82.5, 35.64]
+        client.send_chat("Fetch a DEM here", aoi_bbox=bbox)
+        events = self._collect_until_turn_complete(client)
+        self.assertEqual(events[-1].kind, "turn-complete")
+        sent = [e for e in self.server.received if e["type"] == "user-message"]
+        self.assertEqual(len(sent), 1)
+        payload = sent[0]["payload"]
+        self.assertEqual(payload["aoi_bbox"], bbox)
+        # The message text is EXACTLY the user's prose -- no bracket line.
+        self.assertEqual(payload["text"], "Fetch a DEM here")
+        self.assertNotIn("QGIS map canvas AOI", payload["text"])
+        self.assertNotIn("bbox =", payload["text"])
+        # Stub-side contract gate saw a legal payload + recorded the bbox.
+        self.assertEqual(self.server.protocol_violations, [])
+        self.assertEqual(self.server.user_message_aoi_bboxes, [bbox])
+
+    def test_send_chat_without_aoi_omits_key(self):
+        """No AOI -> the ``aoi_bbox`` key is OMITTED entirely (mirrors the
+        show_thinking / model_id convention): a plain message stays
+        byte-identical to the pre-field payload, so it keeps working against
+        a one-deploy-behind extra=forbid server."""
+        client = self._connect()
+        client.connect()
+        client.create_case("no aoi test")
+        client.send_chat("plain message, no AOI")
+        events = self._collect_until_turn_complete(client)
+        self.assertEqual(events[-1].kind, "turn-complete")
+        sent = [e for e in self.server.received if e["type"] == "user-message"]
+        self.assertEqual(len(sent), 1)
+        self.assertNotIn("aoi_bbox", sent[0]["payload"])
+        self.assertEqual(self.server.protocol_violations, [])
+        self.assertEqual(self.server.user_message_aoi_bboxes, [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

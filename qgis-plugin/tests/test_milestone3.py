@@ -1225,7 +1225,7 @@ class TestSelectionAoi(unittest.TestCase):
         self.assertEqual((chosen, source), (wide_sel, "selection"))
         self.assertFalse(aoi.bbox_within_guard(chosen))
 
-    def test_selection_status_and_context_line(self):
+    def test_selection_status_text(self):
         sel = (-82.62, 35.55, -82.50, 35.64)
         self.assertEqual(
             aoi.aoi_status_text(sel, True, source="selection"),
@@ -1235,17 +1235,10 @@ class TestSelectionAoi(unittest.TestCase):
         status = aoi.aoi_status_text(wide, True, source="selection")
         self.assertIn("selection", status)
         self.assertIn("too large", status)
-        # the per-message context line names the selection origin honestly
-        attached = aoi.attach_aoi_to_text("Run a flood sim", sel, source="selection")
-        self.assertIn("selected-feature AOI", attached)
-        self.assertIn("bbox of the selection", attached)
-        self.assertIn(
-            "bbox = [-82.620000, 35.550000, -82.500000, 35.640000]", attached
-        )
-        # default stays byte-identical to the milestone 2 canvas wording
-        canvas_attached = aoi.attach_aoi_to_text("Run a flood sim", sel)
-        self.assertIn("QGIS map canvas AOI", canvas_attached)
-        self.assertNotIn("selected-feature", canvas_attached)
+        # ADR 0017 (2026-07-22): the per-message in-text context line is GONE
+        # -- the AOI rides the structured ``aoi_bbox`` user-message payload
+        # field for every source (see test_client structured-AOI tests).
+        self.assertFalse(hasattr(aoi, "attach_aoi_to_text"))
 
     def test_selection_bbox_transform_reuses_extent_math(self):
         # a 3857 selection rect (what boundingBoxOfSelected returns for a

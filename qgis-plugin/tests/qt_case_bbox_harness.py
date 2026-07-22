@@ -24,6 +24,12 @@ Checks:
   4. _clear_messages (case switch) clears _case_bbox.
   5. disconnect_agent clears _case_bbox.
   6. a case-open WITHOUT a bbox leaves _case_bbox None (no stale box).
+  7. (ADR 0017 structured AOI, 2026-07-22) _send with NO case bbox rides
+     aoi_bbox=None on send_chat and the text goes out clean.
+  8. _send with a drawn/rehydrated case bbox rides it STRUCTURED as
+     send_chat(aoi_bbox=[...]) -- the message text stays EXACTLY the user's
+     prose (no "[QGIS map canvas AOI ...]" bracket line) -- and the set-time
+     AOI affordance (the rubber-band overlay) is still up after the send.
 
 Exits 0 and prints CASE-BBOX-OK; raises (nonzero) on any failed check.
 """
@@ -68,6 +74,12 @@ class RecBridge:
 
     def select_case(self, case_id) -> None:
         self.calls.append(("select", case_id, None))
+
+    def send_chat(
+        self, text, show_thinking=False, model_id="", aoi_bbox=None
+    ) -> None:
+        # ADR 0017: record the STRUCTURED per-message AOI exactly as sent.
+        self.calls.append(("chat", text, aoi_bbox))
 
     def stop(self) -> None:
         self.calls.append(("stop", None, None))
@@ -196,6 +208,46 @@ dock._on_case_open_event(
 )
 if dock._case_bbox is not None:
     _fail(f"bbox-less case-open left a bbox: {dock._case_bbox}")
+
+# ---- 7. _send with NO AOI: aoi_bbox=None + clean text (ADR 0017) ----------- #
+# C4 is open with no bbox -- the outgoing send_chat must carry aoi_bbox=None
+# and the text must be exactly what the user typed.
+
+rec.calls.clear()
+dock.input_edit.setPlainText("plain message, no AOI")
+dock._send()
+chats = [c for c in rec.calls if c[0] == "chat"]
+if len(chats) != 1:
+    _fail(f"_send (no AOI) did not issue exactly one send_chat: {rec.calls!r}")
+_verb, sent_text, sent_aoi = chats[-1]
+if sent_text != "plain message, no AOI":
+    _fail(f"no-AOI outgoing text not clean: {sent_text!r}")
+if sent_aoi is not None:
+    _fail(f"no-AOI send must ride aoi_bbox=None, got {sent_aoi!r}")
+
+# ---- 8. _send rides the case bbox STRUCTURED + clean text (ADR 0017) ------- #
+# A case-open with a bbox (the rehydrated drawn AOI), then a send: the bbox
+# rides send_chat(aoi_bbox=[...]) -- NOT a bracketed prose line appended to
+# the text -- and the set-time affordance (overlay) is still up afterwards.
+
+dock._aoi_rubber = None  # force a fresh overlay build on the case-open render
+dock._on_case_open_event(
+    {"session_state": {"case": {
+        "case_id": "C5", "title": "Send Case", "bbox": list(open_bbox)}}}
+)
+rec.calls.clear()
+dock.input_edit.setPlainText("Fetch a DEM here")
+dock._send()
+chats = [c for c in rec.calls if c[0] == "chat"]
+if len(chats) != 1:
+    _fail(f"_send (AOI) did not issue exactly one send_chat: {rec.calls!r}")
+_verb, sent_text, sent_aoi = chats[-1]
+if sent_text != "Fetch a DEM here":
+    _fail(f"legacy AOI prose leaked into the text: {sent_text!r}")
+if sent_aoi is None or not _approx(tuple(sent_aoi), open_bbox, tol=1e-9):
+    _fail(f"aoi_bbox missing/wrong on send_chat: {sent_aoi!r} != {open_bbox}")
+if dock._aoi_rubber is None:
+    _fail("AOI affordance (rubber-band overlay) gone after the send")
 
 print("CASE-BBOX-OK")
 qgs.exitQgis()

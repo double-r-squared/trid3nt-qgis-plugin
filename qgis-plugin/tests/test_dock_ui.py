@@ -110,6 +110,23 @@ class TestDockUiBatch(unittest.TestCase):
         one-line chip) instead of being silently dropped."""
         self.assertIn("[code-exec] approval card", self._stdout())
 
+    def test_credential_key_entry_card(self):
+        """LANE K (NATE 2026-07-22): the credential-request JIT key prompt
+        renders an inline key-entry card (masked password field,
+        Submit=secret-add+credential-provided through the bridge,
+        Skip=decline, field cleared, lock + provider-named chip) instead of
+        being silently dropped -- and the raw key literal never appears in
+        ANY output the harness subprocess produced (stdout or stderr; the
+        harness also asserts captured log records and rendered labels)."""
+        out = self._stdout()
+        self.assertIn("[credential] key-entry card", out)
+        # The harness's test key -- must never leak into any log output this
+        # test captures from the subprocess.
+        self.assertNotIn("harness-firms-key-f00ba4c0ffee", out)
+        self.assertNotIn(
+            "harness-firms-key-f00ba4c0ffee", self._proc.stderr or ""
+        )
+
     def test_no_tool_turn_mints_no_card(self):
         """F3 (live-feedback 2026-07-21): a turn with zero tool events must
         leave zero tool cards (the empty stale 'Tools' shell is gone)."""

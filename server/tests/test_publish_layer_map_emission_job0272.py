@@ -42,6 +42,19 @@ class FakeWS:
 S3_COG = "s3://bucket/cache/colored_relief_boulder.tif"
 
 
+def _register_produced(state, layer_id: str, uri: str) -> None:
+    """ADR 0014: pre-register the COG as its producing tool would have.
+
+    In the real fetch->compute->publish chain the compute tool's result
+    registers the COG in the session URI registry BEFORE the LLM calls
+    publish_layer on it; dispatch now TYPED-REJECTS unregistered
+    object-store URIs (URI_HANDLE_UNRESOLVED), so these focused wrap-site
+    tests must mirror that producing step."""
+    server.get_uri_registry(state.session_id).record(
+        layer_id, uri=uri, tool_name="compute_colored_relief"
+    )
+
+
 def _install_publish_stub(return_value: str):
     """Shadow the real publish_layer with a stub returning ``return_value``."""
     name = "publish_layer"
@@ -81,6 +94,7 @@ async def test_atomic_publish_announces_s3_layer_via_session_state() -> None:
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
 
+    _register_produced(state, "colored-relief-src", S3_COG)
     result = await server._invoke_tool_via_emitter(
         ws,
         state,
@@ -127,6 +141,7 @@ async def test_atomic_publish_http_face_still_announces() -> None:
     try:
         ws = FakeWS()
         state = server.SessionState(session_id=new_ulid())
+        _register_produced(state, "colored-relief-src", S3_COG)
         result = await server._invoke_tool_via_emitter(
             ws,
             state,
@@ -148,6 +163,7 @@ async def test_atomic_publish_http_face_still_announces() -> None:
 async def test_turn_layer_accumulator_still_tracks_layer_id() -> None:
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
+    _register_produced(state, "relief-2-src", "s3://bucket/cache/x.tif")
     await server._invoke_tool_via_emitter(
         ws,
         state,
@@ -173,6 +189,7 @@ async def test_bare_ulid_layer_id_gets_a_readable_name_from_style_preset() -> No
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
     bare_ulid = new_ulid()
+    _register_produced(state, "hillshade-src", "s3://bucket/cache/hillshade/x.tif")
 
     await server._invoke_tool_via_emitter(
         ws,
@@ -196,6 +213,7 @@ async def test_explicit_name_param_passes_through_untouched() -> None:
     verbatim — the derivation only kicks in when nothing usable was given."""
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
+    _register_produced(state, "relief-src", "s3://bucket/cache/x.tif")
 
     await server._invoke_tool_via_emitter(
         ws,

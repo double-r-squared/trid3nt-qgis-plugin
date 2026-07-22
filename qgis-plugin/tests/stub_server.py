@@ -30,6 +30,17 @@ Milestone 3 additions:
   live agent rejects a dead token: an ``error`` envelope with
   ``error_code=AUTH_REQUIRED`` then a 1008 (policy violation) close.
 
+Structured-AOI additions (ADR 0017 mechanism 2, 2026-07-22):
+
+* every ``user-message`` payload is validated the way the live server's
+  ``UserMessagePayload`` (``extra="forbid"``) would: unknown keys or a
+  malformed ``aoi_bbox`` (anything but a 4-number EPSG:4326
+  ``[min_lon, min_lat, max_lon, max_lat]`` list, or null) get an ``error``
+  envelope with ``error_code=TOOL_PARAMS_INVALID`` and NO turn-complete --
+  a contract regression fails LOUDLY offline instead of 400ing live.
+  Violations are recorded on ``protocol_violations``; each present
+  ``aoi_bbox`` value is recorded on ``user_message_aoi_bboxes``.
+
 Requires the ``websockets`` package (present in the trid3nt-local agent venv).
 The plugin itself never imports this -- test-only.
 """
@@ -45,6 +56,38 @@ import websockets
 
 STUB_USER_ID = "01STUBUSERAAAAAAAAAAAAAAAA"
 STUB_CASE_ID = "01STUBCASEAAAAAAAAAAAAAAAA"
+
+#: The exact ``UserMessagePayload`` field surface (contracts ws.py). The live
+#: server is ``extra="forbid"`` -- any other key is a 400 there, so the stub
+#: rejects it too (ADR 0017 structured-AOI landing).
+USER_MESSAGE_ALLOWED_KEYS = frozenset(
+    {"text", "research_mode", "model_id", "case_id", "show_thinking", "aoi_bbox"}
+)
+
+
+def _aoi_bbox_problem(value: Any) -> Optional[str]:
+    """Why ``value`` is not a contract-legal ``aoi_bbox`` (None = it is legal).
+
+    Mirrors the ``UserMessagePayload._validate_aoi_bbox`` rules: null, or a
+    list of exactly 4 finite numbers in EPSG:4326
+    ``[min_lon, min_lat, max_lon, max_lat]`` order.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        return f"aoi_bbox must be a list or null, got {type(value).__name__}"
+    if len(value) != 4:
+        return f"aoi_bbox must have exactly 4 elements, got {len(value)}"
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value):
+        return f"aoi_bbox elements must all be numbers: {value!r}"
+    min_lon, min_lat, max_lon, max_lat = (float(v) for v in value)
+    if not (-180.0 <= min_lon <= 180.0 and -180.0 <= max_lon <= 180.0):
+        return f"aoi_bbox longitudes out of range [-180, 180]: {value!r}"
+    if not (-90.0 <= min_lat <= 90.0 and -90.0 <= max_lat <= 90.0):
+        return f"aoi_bbox latitudes out of range [-90, 90]: {value!r}"
+    if min_lon > max_lon or min_lat > max_lat:
+        return f"aoi_bbox min > max (order is [min_lon, min_lat, max_lon, max_lat]): {value!r}"
+    return None
 
 #: An auth-token carrying this value is rejected AUTH_REQUIRED + close 1008.
 EXPIRED_TOKEN = "stub-expired-token"
@@ -205,6 +248,31 @@ CODE_EXEC_REQUEST_ROW: dict[str, Any] = {
     "rationale": "Compute the 95th-percentile flood depth over the AOI.",
 }
 
+STUB_CREDENTIAL_REQUEST_ID = "01STUBCREDREQAAAAAAAAAAAAA"
+
+# A credential-request payload field-for-field the
+# CredentialRequestEnvelopePayload contract (contracts .../secrets.py). The
+# reply is TWO envelopes in Decision-F order: secret-add (the ONLY transport
+# for the raw key; the live server vault-writes it 0600 and answers with a
+# refreshed secrets-list) THEN credential-provided (request_id echo +
+# provided=True) -- or credential-provided provided=False alone on Skip (the
+# live server then re-raises the tool's original typed error). LANE K
+# 2026-07-22: this envelope previously had ZERO plugin handling (the exact
+# code-exec gap), so the agent's paused keyed tool waited out its TTL.
+CREDENTIAL_REQUEST_ROW: dict[str, Any] = {
+    "envelope_type": "credential-request",
+    "request_id": STUB_CREDENTIAL_REQUEST_ID,
+    "provider_id": "firms",
+    "provider_label": "NASA FIRMS",
+    "signup_url": "https://firms.modaps.eosdis.nasa.gov/api/map_key/",
+    "secret_key_name": "FIRMS_MAP_KEY",
+    "message": (
+        "I need a NASA FIRMS map key to fetch the active-fire detections "
+        "for this Case."
+    ),
+    "tool_name": "fetch_active_fires",
+}
+
 # case-list rows (CaseSummary subset the plugin's case picker consumes).
 CASE_LIST_ROWS: list[dict[str, Any]] = [
     {
@@ -239,7 +307,15 @@ class StubAgentServer:
         self.connection_count = 0
         self.resume_case_ids: list[Optional[str]] = []  # session-resume payloads
         self.confirmations: list[dict] = []  # tool-payload-confirmation payloads
+        self.secret_adds: list[dict] = []  # secret-add payloads (LANE K)
+        self.credential_replies: list[dict] = []  # credential-provided payloads
         self.selects: list[Optional[str]] = []  # case-command select case_ids
+        #: ADR 0017 structured AOI: every ``aoi_bbox`` value PRESENT on a
+        #: user-message payload (omitted keys are not recorded).
+        self.user_message_aoi_bboxes: list = []
+        #: user-message contract violations (unknown key / malformed
+        #: aoi_bbox) -- tests assert this stays empty.
+        self.protocol_violations: list[str] = []
         #: When set, a BARE session-resume (payload case_id None) answers with
         #: THIS case_id stamped on the session-state envelope -- the real
         #: server's persisted ``last_active_case_id`` rebind (startup case
@@ -389,7 +465,31 @@ class StubAgentServer:
                         )
             elif etype == "user-message":
                 case_id = env.get("case_id")
-                text = str((env.get("payload") or {}).get("text") or "")
+                payload = env.get("payload") or {}
+                # ADR 0017 structured-AOI contract gate: mimic the live
+                # server's extra="forbid" UserMessagePayload validation so a
+                # plugin regression fails LOUDLY offline (error envelope, NO
+                # turn-complete) instead of 400ing against the live agent.
+                unknown_keys = sorted(set(payload) - USER_MESSAGE_ALLOWED_KEYS)
+                problem: Optional[str] = None
+                if unknown_keys:
+                    problem = (
+                        "user-message payload carries unknown key(s) "
+                        f"{unknown_keys} (live server is extra=forbid)"
+                    )
+                elif "aoi_bbox" in payload:
+                    problem = _aoi_bbox_problem(payload["aoi_bbox"])
+                if problem is not None:
+                    self.protocol_violations.append(problem)
+                    await send(
+                        "error",
+                        {"error_code": "TOOL_PARAMS_INVALID", "message": problem},
+                        case_id=case_id,
+                    )
+                    continue
+                if "aoi_bbox" in payload:
+                    self.user_message_aoi_bboxes.append(payload["aoi_bbox"])
+                text = str(payload.get("text") or "")
                 if "drop-connection" in text:
                     # Simulate a transport loss mid-turn: close server-side,
                     # NO turn-complete. The serve loop keeps accepting.
@@ -404,6 +504,20 @@ class StubAgentServer:
                     self._pending_gate_case = case_id
                     await send(
                         "code-exec-request", CODE_EXEC_REQUEST_ROW, case_id=case_id
+                    )
+                    continue
+                if "need-key" in text:
+                    # Credential-request pause (LANE K): a keyed tool hit a
+                    # missing key; the agent pauses the tool and BLOCKS until
+                    # the credential-provided reply arrives -- handled in the
+                    # credential-provided branch below. (The live server's
+                    # 300s gate TTL is not simulated; the pause is indefinite
+                    # within a test run.)
+                    self._pending_gate_case = case_id
+                    await send(
+                        "credential-request",
+                        CREDENTIAL_REQUEST_ROW,
+                        case_id=case_id,
                     )
                     continue
                 if "simulate" in text:
@@ -531,5 +645,68 @@ class StubAgentServer:
                     )
                     await send("turn-complete", {}, case_id=gate_case)
 
+            elif etype == "secret-add":
+                # LANE K (contract SecretAddEnvelopePayload): the ONLY
+                # envelope that ever carries the raw key (Decision F). The
+                # live server vault-writes key_value and answers with a
+                # refreshed secrets-list whose SecretRecord rows carry
+                # vault_ref, NEVER the raw value -- mirrored here so a
+                # client that echoed the key back would fail the round trip.
+                payload = env.get("payload") or {}
+                self.secret_adds.append(payload)
+                await send(
+                    "secrets-list",
+                    {
+                        "secrets": [
+                            {
+                                "schema_version": "v1",
+                                "secret_id": "01STUBSECRETRECAAAAAAAAAAA",
+                                "provider": payload.get("provider"),
+                                "case_id": payload.get("case_id"),
+                                "vault_ref": "file-vault://stub/secret",
+                                "label": payload.get("label"),
+                                "added_at": "2026-07-22T00:00:00Z",
+                                "last_used_at": None,
+                                "is_active": True,
+                            }
+                        ]
+                    },
+                    case_id=env.get("case_id"),
+                )
+            elif etype == "credential-provided":
+                # LANE K (contract CredentialProvidedEnvelopePayload): the
+                # retry signal that resolves the agent's paused-tool future.
+                # provided=True -> the live server re-resolves the freshly
+                # vault-written key and retries the tool ONCE; provided=False
+                # -> it re-raises the original typed error and the agent
+                # narrates honestly. NO key material rides here.
+                payload = env.get("payload") or {}
+                self.credential_replies.append(payload)
+                gate_case = getattr(self, "_pending_gate_case", None)
+                if payload.get("provided"):
+                    await send(
+                        "agent-message-chunk",
+                        {
+                            "message_id": "m-cred",
+                            "delta": "Key accepted -- fire detections fetched.",
+                            "done": True,
+                        },
+                        case_id=gate_case,
+                    )
+                    await send("turn-complete", {}, case_id=gate_case)
+                else:
+                    await send(
+                        "agent-message-chunk",
+                        {
+                            "message_id": "m-cred",
+                            "delta": (
+                                "No key provided -- the FIRMS fetch failed "
+                                "with its original auth error."
+                            ),
+                            "done": True,
+                        },
+                        case_id=gate_case,
+                    )
+                    await send("turn-complete", {}, case_id=gate_case)
             elif etype == "cancel":
                 await send("turn-complete", {"cancelled": True}, case_id=env.get("case_id"))

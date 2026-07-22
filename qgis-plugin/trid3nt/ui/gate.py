@@ -38,9 +38,12 @@ from typing import Any, Optional
 
 __all__ = [
     "CodeExecRequest",
+    "CredentialRequest",
     "GateDecision",
     "PayloadWarning",
     "code_exec_layer_lines",
+    "credential_note_lines",
+    "parse_credential_request",
     "estimate_cells",
     "estimate_eta_seconds",
     "estimate_frames",
@@ -368,6 +371,98 @@ def code_exec_layer_lines(request: CodeExecRequest) -> list:
             lines.append(f"{var}: {len(ref)} frames")
         else:
             lines.append(f"{var}: {ref}")
+    return lines
+
+
+# --------------------------------------------------------------------------- #
+# Credential-request key-entry card (LANE K, NATE directive 2026-07-22)
+# --------------------------------------------------------------------------- #
+#
+# Contract source of truth (mirrored EXACTLY, not paraphrased):
+# ``contracts/src/trid3nt_contracts/secrets.py``:
+#
+# * inbound ``credential-request`` (CredentialRequestEnvelopePayload):
+#   ``request_id`` / ``provider_id`` / ``provider_label`` / ``signup_url``
+#   (None = no self-serve signup; NEVER a fabricated URL) /
+#   ``secret_key_name`` / ``message`` / ``tool_name``.
+# * the reply is TWO envelopes, in order, per the contract's Decision F
+#   split (raw key isolated to the secret-add transport):
+#     1. ``secret-add``  {provider, case_id, key_value}  -- the ONLY envelope
+#        that ever carries the raw key; the server vault-writes it (file
+#        vault, 0600) and answers with a refreshed ``secrets-list``.
+#     2. ``credential-provided``  {request_id, secret_id, provided} -- the
+#        retry signal that resolves the agent's paused-tool future. Skip /
+#        decline is ``provided=False`` with NO preceding secret-add (the
+#        server then re-raises the original typed error and the agent
+#        narrates honestly -- data-source fallback norm).
+#   The client sends ``secret_id=None``: the field is Optional in the
+#   contract and the server's resume path re-resolves the vault record
+#   itself (``_resolve_active_secret_ref``); this synchronous client never
+#   blocks the UI thread waiting for the secrets-list to learn the ULID.
+
+
+@dataclass
+class CredentialRequest:
+    """Parsed ``credential-request`` payload (defensive; raw kept)."""
+
+    request_id: str
+    provider_id: str
+    provider_label: str = ""
+    secret_key_name: str = ""
+    message: str = ""
+    tool_name: str = ""
+    signup_url: Optional[str] = None
+    raw: dict = field(default_factory=dict)
+
+    @property
+    def display_label(self) -> str:
+        """The human name for chips/titles -- the server's ``provider_label``
+        verbatim (the client never hardcodes a provider->label table),
+        falling back to the provider_id for a defensively-parsed envelope."""
+        return self.provider_label or self.provider_id
+
+
+def parse_credential_request(payload: dict) -> Optional[CredentialRequest]:
+    """Parse a raw ``credential-request`` payload dict; None when the envelope
+    is unusable -- no ``request_id`` (nothing to correlate the reply against)
+    or no ``provider_id`` (nothing to scope the secret-add under; a key saved
+    to the wrong scope is one the paused tool's retry can never re-resolve)."""
+    if not isinstance(payload, dict):
+        return None
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str) or not request_id:
+        return None
+    provider_id = payload.get("provider_id")
+    if not isinstance(provider_id, str) or not provider_id:
+        return None
+    label = payload.get("provider_label")
+    key_name = payload.get("secret_key_name")
+    message = payload.get("message")
+    tool_name = payload.get("tool_name")
+    signup_url = payload.get("signup_url")
+    return CredentialRequest(
+        request_id=request_id,
+        provider_id=provider_id,
+        provider_label=label if isinstance(label, str) else "",
+        secret_key_name=key_name if isinstance(key_name, str) else "",
+        message=message if isinstance(message, str) else "",
+        tool_name=tool_name if isinstance(tool_name, str) else "",
+        signup_url=(
+            signup_url if isinstance(signup_url, str) and signup_url else None
+        ),
+        raw=payload,
+    )
+
+
+def credential_note_lines(request: CredentialRequest) -> list:
+    """The card's muted metadata lines -- every value is a structured envelope
+    field, never re-derived from prose (Invariant 1). The raw key value never
+    appears here (it does not exist yet; the field is client-side only)."""
+    lines = []
+    if request.secret_key_name:
+        lines.append(f"Key name: {request.secret_key_name}")
+    if request.tool_name:
+        lines.append(f"Waiting tool: {request.tool_name}")
     return lines
 
 

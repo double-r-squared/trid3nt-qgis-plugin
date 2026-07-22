@@ -183,7 +183,11 @@ from .telemetry import (
     emit_shadow_selection_event,
     emit_tool_call_event,
 )
-from .tool_arg_normalizer import normalize_args
+from .tool_arg_normalizer import (
+    autofill_missing_bbox,
+    coerce_bbox_value,
+    normalize_args,
+)
 from .uri_registry import (
     activate_registry,
     deactivate_registry,
@@ -1771,6 +1775,14 @@ class SessionState:
     # re-fetched, starving the sim/fetch reuse short-circuits of an AOI anchor).
     # ``None`` is legitimate (no active Case, or a Case with no recorded bbox).
     case_bbox: Any = None
+    # ADR 0017 (Lane S): the session's ACTIVE canvas AOI — the structured
+    # ``aoi_bbox`` ([min_lon, min_lat, max_lon, max_lat], EPSG:4326) the
+    # client stamps on the user-message payload. Set/cleared by
+    # ``_set_active_aoi_from_payload`` (a message that carries the key sets or
+    # clears; an absent key — older client — leaves it untouched). Read by the
+    # dispatch-time bbox auto-fill: explicit arg > active AOI > case bbox.
+    # ``None`` = no drawn AOI.
+    active_aoi_bbox: list[float] | None = None
     # job-0121: per-turn layer + map-command emission accumulators. Reset at
     # the start of every dispatch (Gemini stream or /invoke tool). The
     # CaseChatMessage write at turn close reads from these so a Case replay
@@ -3337,13 +3349,30 @@ async def _stream_gemini_reply(
                 summary = summarize_tool_result(
                     call.name, result, error=dispatch_error
                 )
-                # job-0263: surface the layer handles this dispatch registered
-                # so Gemini passes HANDLES (layer_id) — never raw gs:// paths —
-                # into downstream *_uri params. The server resolves handles to
-                # the exact URIs it recorded (uri_registry.py).
-                _new_handles = get_uri_registry(state.session_id).drain_announcements()
+                _uri_reg = get_uri_registry(state.session_id)
+                # ADR 0014 EMIT SEAM: the LLM-facing function_response shows
+                # SHORT layer handles (L<n>) wherever a registered layer URI
+                # (data COG or its WMS/tile display face) would appear — the
+                # single biggest hallucination surface (~30 tokens per raw
+                # URI echo). ONLY this LLM surface changes: the plugin-bound
+                # wire envelopes (session-state / layer emissions, built from
+                # the LayerURI objects at emit_layer_uri/add_loaded_layer)
+                # keep carrying the REAL uri the plugin renders from. The
+                # rewrite never raises (falls back to the unrewritten
+                # summary inside rewrite_result_for_llm).
+                summary = _uri_reg.rewrite_result_for_llm(summary)
+                # job-0263 + ADR 0014: surface the layer handles this dispatch
+                # registered so Gemini passes HANDLES — never raw storage
+                # paths — into downstream *_uri params. The announcement maps
+                # ``{layer_id: L<n>}`` (name -> short handle); the server
+                # resolves either form to the exact URIs it recorded
+                # (uri_registry.py).
+                _new_handles = _uri_reg.drain_announcements()
                 if _new_handles and dispatch_error is None:
-                    summary["layer_handles"] = _new_handles
+                    summary["layer_handles"] = {
+                        _layer_id: (_uri_reg.short_for_uri(_uri) or _layer_id)
+                        for _layer_id, _uri in _new_handles.items()
+                    }
                     # job-0270: the note must make the publish step explicit —
                     # a computed/fetched layer is invisible until publish_layer
                     # adds it to the QGIS project (live finding: Gemini ended
@@ -3353,10 +3382,12 @@ async def _stream_gemini_reply(
                         "publish_layer(layer_uri=<handle>, "
                         "layer_id=<descriptive-id>) has run for it — if the "
                         "user asked to see this layer, call publish_layer "
-                        "with the handle before finishing. Pass these handle "
-                        "strings (layer_id) for any *_uri tool parameter — "
-                        "the server resolves them to exact storage URIs. Do "
-                        "NOT construct or echo gs:// paths."
+                        "with the handle before finishing. Pass the short "
+                        "handle (the L<n> value above) or the layer name "
+                        "(the key) for any *_uri tool parameter — the server "
+                        "resolves handles to the exact stored URIs. Do "
+                        "NOT construct or echo gs:// paths, s3:// paths, or "
+                        "any other storage URI."
                     )
                 # CRISP-END (NATE 2026-06-29): a top-level run-a-model composer
                 # just delivered its artifact -- stamp a one-time wrap-up
@@ -4211,8 +4242,9 @@ async def _replay_active_case_layers(state: SessionState) -> None:
         # F32: REPLACE (not additive-seed) — same rationale as the case-switch
         # call sites, kept consistent here so a bare reconnect never leaves
         # stale/evicted records lingering across repeated resumes.
-        get_uri_registry(state.session_id).replace_from_layers(
-            session_state.loaded_layers
+        # ADR 0014: also restores the Case's persisted L<n> short-handle map.
+        await _seed_registry_for_case(
+            state, case_id, session_state.loaded_layers
         )
         logger.info(
             "session-resume replayed active-case layers session=%s case=%s "
@@ -4692,8 +4724,9 @@ async def _sync_case_context(
         # additive seed would leak the previous Case's handles/URIs into this
         # Case's resolution (a stale Case-A layer_id could satisfy a Case-B
         # tool call, or out-rank the correct Case-B URI in a fuzzy match).
-        get_uri_registry(state.session_id).replace_from_layers(
-            session_state.loaded_layers
+        # ADR 0014: also restores the Case's persisted L<n> short-handle map.
+        await _seed_registry_for_case(
+            state, current, session_state.loaded_layers
         )
         # F17 (ux-batch-1 J8): rehydrate this connection's LLM context from the
         # SAME persisted per-Case store. The ``state.chat_history = []`` above
@@ -4826,8 +4859,9 @@ async def _emit_case_open(
         # which is FALSE (the Case has the layer; only this connection's
         # registry didn't). REPLACE (not additive) so a Case switch on this
         # connection never leaks a prior Case's handles (F32 part 2).
-        get_uri_registry(state.session_id).replace_from_layers(
-            session_state.loaded_layers
+        # ADR 0014: also restores the Case's persisted L<n> short-handle map.
+        await _seed_registry_for_case(
+            state, case_id, session_state.loaded_layers
         )
         # sprint-14-aws (job-0290d): persisted VECTOR layers carry no inline
         # GeoJSON (the side-table is in-memory only), so the case-open payload
@@ -10094,6 +10128,22 @@ async def _invoke_tool_via_emitter(
     # gate AND the reuse guard so both see canonicalized (_yr/_hr) param names.
     params = normalize_args(tool_name, params, entry.fn)
 
+    # ADR 0017 (Lane S slice): bbox AUTO-FILL. A tool whose signature REQUIRES
+    # a bbox-like param ('bbox' / 'aoi_bbox') that the model OMITTED gets it
+    # injected here — precedence: explicit arg > active canvas AOI (the
+    # structured user-message ``aoi_bbox``) > Case bbox. Explicit model args
+    # are NEVER overridden (the pinned-AOI snap below owns the provided-bbox
+    # case). Runs AFTER normalize_args so bbox aliases have landed on the
+    # canonical name, and BEFORE the reuse guards / AOI snaps so they all see
+    # the filled value. Logs one line when it fires.
+    params = autofill_missing_bbox(
+        tool_name,
+        params,
+        entry.fn,
+        active_aoi=state.active_aoi_bbox,
+        case_bbox=_turn_case_bbox(state),
+    )
+
     # job LANE-C (#159 follow-up #2): default a bbox-taking FETCH to the pinned
     # Case AOI. After a solve pins the domain (see the post-result pin below), the
     # LLM still free-hands a fresh (usually narrower) bbox for every follow-up
@@ -10641,9 +10691,16 @@ async def _invoke_tool_via_emitter(
             )
 
     # job-0263: register every URI the result carries (LayerURI layer_id↔uri
-    # pairs + bare gs:// strings) so the NEXT tool call can resolve handles /
-    # detect mangles. Best-effort — registration never breaks the dispatch.
+    # pairs + bare object-store strings) so the NEXT tool call can resolve
+    # handles / detect mangles. Best-effort — registration never breaks the
+    # dispatch.
     uri_registry.register_tool_result(tool_name, result)
+
+    # ADR 0014: persist the freshly-minted short-handle map (L<n> -> uri) WITH
+    # the Case so a reconnect / Case reopen resolves the SAME handles the LLM
+    # already saw. No-op when nothing new was minted; best-effort (never
+    # breaks the dispatch).
+    await _persist_case_layer_handles(state, case_id=turn_case_id)
 
     # job AGENT-AOI-RESIDUAL (#159): a composer's LayerURI carries the FINAL
     # (peak, floored - Wave 1) AOI bbox, and ``emit_tool_call``'s LayerURI gate
@@ -11110,6 +11167,99 @@ async def _emit_auto_publish_failure(
             layer.layer_id,
             exc_info=True,
         )
+
+
+async def _persist_case_layer_handles(
+    state: SessionState, *, case_id: str | None
+) -> None:
+    """ADR 0014: persist the session registry's short-handle map to the Case.
+
+    Writes the ``{L<n>: uri}`` map as a storage-only ``layer_handles`` field
+    on the cases doc (see ``Persistence.set_case_layer_handles``) so a
+    reconnect / Case reopen (``_seed_registry_for_case``) restores the exact
+    handles the LLM has already been shown. Skips when nothing new was
+    minted since the last write (``shorts_dirty``). Best-effort: any failure
+    is logged and swallowed — the dispatch is never broken, and the registry
+    stays dirty so the next dispatch retries the write.
+    """
+    if not case_id:
+        return
+    reg = get_uri_registry(state.session_id)
+    if not reg.shorts_dirty:
+        return
+    p = get_persistence()
+    if p is None:
+        return
+    try:
+        await p.set_case_layer_handles(case_id, reg.export_short_handles())
+        reg.mark_shorts_persisted()
+    except Exception:  # noqa: BLE001 — best-effort, never break the dispatch
+        logger.exception(
+            "case layer-handle persist failed case=%s", case_id
+        )
+
+
+async def _seed_registry_for_case(
+    state: SessionState, case_id: str | None, loaded_layers: Any
+) -> None:
+    """ADR 0014: reset the URI registry to a Case AND restore its handle map.
+
+    The single reseed path for every case-open / case-switch / resume call
+    site: replace-not-merge from the Case's persisted ``loaded_layers`` (the
+    F32 contract), importing the Case's persisted ``{L<n>: uri}`` map FIRST
+    so already-announced short handles keep their numbers and fresh layers
+    mint past the persisted maximum. Best-effort on the persistence read —
+    a hiccup degrades to fresh minting (stale L<n> references then reject
+    typed with the current inventory, which is honest and retryable).
+    """
+    reg = get_uri_registry(state.session_id)
+    persisted: dict[str, str] | None = None
+    p = get_persistence()
+    if p is not None and case_id:
+        try:
+            persisted = await p.get_case_layer_handles(case_id)
+        except Exception:  # noqa: BLE001 — degrade to fresh minting
+            logger.warning(
+                "case layer-handle map read failed case=%s (fresh mint)",
+                case_id,
+                exc_info=True,
+            )
+    reg.replace_from_layers(loaded_layers, short_handles=persisted)
+
+
+def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
+    """ADR 0017 (Lane S): bind/clear the session's active canvas AOI.
+
+    Called when a ``user-message`` payload CARRIES the ``aoi_bbox`` key (the
+    interface contract with the client lane: ``[min_lon, min_lat, max_lon,
+    max_lat]`` EPSG:4326, ``None`` when no AOI is drawn). A valid bbox sets
+    the active AOI; an explicit ``None`` clears it; a malformed value is
+    logged and IGNORED (never blocks the turn, never clobbers a good AOI
+    with garbage).
+    """
+    if raw is None:
+        if state.active_aoi_bbox is not None:
+            logger.info(
+                "active-aoi cleared session=%s", state.session_id
+            )
+        state.active_aoi_bbox = None
+        return
+    coerced = coerce_bbox_value(raw)
+    if (
+        coerced is None
+        or not all(math.isfinite(v) for v in coerced)
+        or not (coerced[0] < coerced[2] and coerced[1] < coerced[3])
+    ):
+        logger.warning(
+            "active-aoi ignoring malformed aoi_bbox=%r session=%s",
+            raw,
+            state.session_id,
+        )
+        return
+    state.active_aoi_bbox = coerced
+    logger.info(
+        "active-aoi set session=%s bbox=%s", state.session_id, coerced
+    )
 
 
 async def _persist_case_loaded_layers(
@@ -12618,6 +12768,18 @@ def _make_handler(settings: GeminiSettings):
 
                     elif msg_type == "user-message":
                         um = UserMessagePayload.model_validate(payload_dict)
+                        # ADR 0017 (Lane S): structured canvas AOI. Read the
+                        # optional ``aoi_bbox`` DEFENSIVELY off the raw
+                        # payload dict — the UserMessagePayload contract field
+                        # lands in the client lane; this seam works the moment
+                        # the field arrives and is a no-op for clients that
+                        # never send it. Key-present semantics: a bbox SETS
+                        # the active AOI, an explicit null CLEARS it, an
+                        # absent key (older client) leaves the prior AOI.
+                        if "aoi_bbox" in payload_dict:
+                            _set_active_aoi_from_payload(
+                                state, payload_dict.get("aoi_bbox")
+                            )
                         # FR-FR-3 (job-0048): check the turn cap BEFORE
                         # dispatching. Increment first so "26th turn" fires
                         # on turn_count == MAX_TURNS_PER_SESSION + 1 (i.e.

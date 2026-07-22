@@ -31,6 +31,7 @@ from .common import (
     GraceModel,
     ULIDStr,
     UTCDatetime,
+    _validate_bbox,  # shared EPSG:4326 ordering rules for aoi_bbox (ADR 0017)
     new_ulid,
     now_utc,
 )
@@ -214,6 +215,33 @@ class UserMessagePayload(GraceModel):
     # behavior: thinking suppressed per TRID3NT_OPENAI_EXTRA_SYSTEM. Ignored by
     # the Bedrock path.
     show_thinking: bool | None = None
+    # Structured per-message AOI (ADR 0017 mechanism 2, 2026-07-22): the
+    # client's current AOI as ``[min_lon, min_lat, max_lon, max_lat]``
+    # (EPSG:4326) -- replacing the bracketed in-text prose line the QGIS dock
+    # used to append to ``text`` ("[QGIS map canvas AOI (EPSG:4326): bbox =
+    # ...]"). ``None`` / absent (older client, web client, or no AOI set)
+    # preserves the prior behavior exactly: the server infers location from
+    # the message text. Element order + EPSG:4326 ordering rules mirror every
+    # other bbox carrier (``common.BBox``, case-create/set-bbox ``args.bbox``);
+    # kept a plain 4-float list (not ``BBox``) so consumers read the
+    # wire-identical shape. This is the PER-TURN AOI; the persistent Case bbox
+    # still rides ``case-command`` unchanged.
+    aoi_bbox: list[float] | None = None
+
+    @field_validator("aoi_bbox")
+    @classmethod
+    def _validate_aoi_bbox(cls, value: list[float] | None) -> list[float] | None:
+        """Exactly 4 floats in ``common.BBox`` EPSG:4326 order, or None."""
+        if value is None:
+            return None
+        if len(value) != 4:
+            raise ValueError(
+                "aoi_bbox must be [min_lon, min_lat, max_lon, max_lat] "
+                f"(exactly 4 floats), got {len(value)} elements: {value!r}"
+            )
+        min_lon, min_lat, max_lon, max_lat = value
+        _validate_bbox((min_lon, min_lat, max_lon, max_lat))
+        return [float(v) for v in value]
 
 
 class CancelPayload(GraceModel):

@@ -105,36 +105,58 @@ def test_system_prompt_carries_admin_clipping_example() -> None:
 
 
 # ---------------------------------------------------------------------------
-# job-0270 — Publish-to-map discipline
+# ADR-0014 Stage 1 — compact layer-handle block replaces the job-0263
+# handle-indirection, job-0270 publish-discipline, and full-AOI-extent prose.
+# The harness now enforces these structurally: short handles (L1, L2, ...),
+# typed rejection of unknown URIs, auto-publish/emit seams, and bbox
+# auto-fill from the active AOI / case bbox.
 # ---------------------------------------------------------------------------
 
 
-def test_system_prompt_has_publish_discipline_section() -> None:
-    """Prompt must carry the job-0270 publish-to-map instruction — the live
-    finding: Gemini computed a colored relief for Boulder, never called
-    publish_layer, and the user saw nothing on the map."""
-    assert "Publish-to-map discipline" in SYSTEM_PROMPT
-
-
-def test_system_prompt_says_layers_invisible_until_published() -> None:
-    """The load-bearing sentence: storage is not the map."""
-    assert "NOT pixels on the user's map" in SYSTEM_PROMPT
-    assert "publish_layer(layer_uri=<handle>" in SYSTEM_PROMPT
-
-
-def test_system_prompt_forbids_claiming_display_without_wms_url() -> None:
-    """The anti-fabrication half: never narrate a layer as displayed unless
-    publish_layer returned a WMS URL this turn."""
+def test_system_prompt_has_compact_layer_handle_block() -> None:
+    """The compact replacement block states the handle contract positively."""
     flat = " ".join(SYSTEM_PROMPT.split())
-    assert (
-        "NEVER claim a layer is displayed, shown, or \"added to the map\" "
-        "unless publish_layer returned a WMS URL THIS turn" in flat
-    )
+    assert "short handles (L1, L2, ...)" in flat
+    assert "pass the handle exactly as it appeared in a prior tool result" in flat
+    assert "never retype or construct a URI" in flat
+
+
+def test_system_prompt_says_layers_reach_map_automatically() -> None:
+    """Map delivery is automatic — the prompt no longer begs for publish calls."""
+    flat = " ".join(SYSTEM_PROMPT.split())
+    assert "reach the user's map automatically" in flat
+
+
+def test_system_prompt_says_omitted_bbox_autofills() -> None:
+    """Omitted bbox args auto-fill from the active map extent / case area."""
+    flat = " ".join(SYSTEM_PROMPT.split())
+    assert "If you omit a bbox argument, it is auto-filled" in flat
+    assert "active map extent or the case area" in flat
+
+
+def test_system_prompt_removed_blocks_stay_removed() -> None:
+    """Regression lock: the four ADR-0014 Stage-1 cuts must not creep back.
+    The harness enforces these structurally; re-adding the prose re-spends
+    ~1.6k tokens per turn for no behavior change."""
+    flat = " ".join(SYSTEM_PROMPT.split())
+    for phrase in (
+        "Layer-handle indirection",          # job-0263 block
+        "URI_HANDLE_UNRESOLVED",
+        "layer_handles",
+        "Publish-to-map discipline",          # job-0270 block
+        "NOT pixels on the user's map",
+        "publish_layer(layer_uri=<handle>",
+        "Full-AOI extent for every overlay",  # full-AOI publish paragraph
+        "It NEVER means shrink the area or the bbox",
+        "ELEVATION colors",                   # trailing colored-relief note
+    ):
+        assert phrase not in flat, (
+            f"removed-block phrase {phrase!r} reappeared — ADR-0014 Stage-1 cut regressed"
+        )
 
 
 def test_system_prompt_keeps_always_narrate_section() -> None:
-    """The job-0270 insertion sits directly above the always-narrate clause —
-    guard that the A1 section header survived the splice."""
+    """Guard that the A1 always-narrate section header survived the splice."""
     assert "Always-narrate after tools complete" in SYSTEM_PROMPT
 
 
@@ -182,30 +204,6 @@ def test_system_prompt_says_vectors_already_on_map() -> None:
     """The reason half: vectors are shown by their producing fetch tool, so
     publish_layer is a duplicate / error for them."""
     assert "ALREADY shown on the map" in SYSTEM_PROMPT
-
-
-# ---------------------------------------------------------------------------
-# Full-AOI extent — never shrink the area/bbox
-# ---------------------------------------------------------------------------
-
-
-def test_system_prompt_has_full_aoi_extent_section() -> None:
-    """Prompt must carry the full-AOI-bbox-for-every-overlay guidance."""
-    assert "Full-AOI extent for every overlay" in SYSTEM_PROMPT
-
-
-def test_system_prompt_says_overlays_use_full_case_bbox() -> None:
-    """Every area/overlay layer uses the SAME Case AOI bbox."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "use the FULL Case AOI bounding box" in flat
-    assert "the SAME bbox as the rest of the Case" in flat
-
-
-def test_system_prompt_dont_fetch_all_never_means_shrink_bbox() -> None:
-    """The load-bearing disambiguation: 'you don't need to fetch all' means
-    fetch fewer layers, NEVER shrink the area/bbox."""
-    flat = " ".join(SYSTEM_PROMPT.split())
-    assert "It NEVER means shrink the area or the bbox" in flat
 
 
 # ---------------------------------------------------------------------------
@@ -286,12 +284,11 @@ def test_system_prompt_says_pass_landcover_as_blend_base() -> None:
 
 
 def test_system_prompt_forbids_colored_relief_as_landcover_base() -> None:
-    """The anti-substitution half: colored_relief is elevation colors, NOT
-    land-cover classes — do not use it as the base for shaded land cover."""
+    """The anti-substitution half: do not use compute_colored_relief as the
+    base for shaded land cover. (The trailing elevation-colors rationale was
+    cut in ADR-0014 Stage 1 — the prohibition sentence itself remains.)"""
     flat = " ".join(SYSTEM_PROMPT.split())
-    assert "compute_colored_relief" in flat
-    assert "ELEVATION colors" in flat or "elevation colors" in flat.lower()
-    assert "land-cover classes" in flat or "land-cover class" in flat
+    assert "NOT substitute compute_colored_relief as the base" in flat
 
 
 # ---------------------------------------------------------------------------

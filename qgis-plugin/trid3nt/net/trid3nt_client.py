@@ -22,7 +22,7 @@ Protocol (mirrors the web client's ``ws.ts`` (separate repo) + ``scripts/tool_ro
   case       send ``case-command`` {command: "create", args: {title}} ->
              drain until ``case-open``; case_id at
              payload.session_state.case.case_id
-  chat       send ``user-message`` {text, case_id}; the reply streams as
+  chat       send ``user-message`` {text, case_id, aoi_bbox?}; the reply streams as
              ``agent-message-chunk`` / ``pipeline-state`` / ``session-state``
              (layers ride on ``loaded_layers``) and terminates with
              ``turn-complete``.
@@ -1188,6 +1188,12 @@ class AgentEvent:
                       approval card; the reply rides the EXISTING
                       tool-payload-confirmation with warning_id ==
                       code_exec_id. Live-feedback 2026-07-21)
+      credential-request raw payload (the JIT API-key prompt for a paused
+                      keyed tool, contracts secrets.py -- the dock renders
+                      the key-entry card; the reply is secret-add (raw key,
+                      Decision F) THEN credential-provided, or
+                      credential-provided provided=False on Skip. LANE K,
+                      2026-07-22)
       case-list       {"cases": [CaseInfo, ...], "payload": <raw>}
       chart           raw ChartEmissionPayload (live chart-emission frame;
                       the dock's Charts panel renders it -- 2026-07-13)
@@ -1416,11 +1422,16 @@ class AgentClient:
         return True
 
     def send_chat(
-        self, text: str, show_thinking: bool = False, model_id: str = ""
+        self,
+        text: str,
+        show_thinking: bool = False,
+        model_id: str = "",
+        aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
     ) -> None:
         """Send a user chat message.
 
-        :param text: The message text.
+        :param text: The message text -- CLEAN user prose. The AOI never rides
+            inside it anymore (see ``aoi_bbox``).
         :param show_thinking: F9 (live-feedback 2026-07-09) - when True, ride
             ``show_thinking=True`` on the payload so the local model's reasoning
             channel is forwarded as ``agent-thinking-chunk`` envelopes. Only
@@ -1432,12 +1443,21 @@ class AgentClient:
             env default (``TRID3NT_OPENAI_MODEL``). Mirrors the ``show_thinking``
             add exactly: a LIVE per-turn switch, no agent restart. (Provider
             base_url/api_key are agent-process env, NOT sent here.)
+        :param aoi_bbox: Structured per-message AOI (ADR 0017 mechanism 2,
+            2026-07-22) - ``[min_lon, min_lat, max_lon, max_lat]`` (EPSG:4326).
+            Rides the ``UserMessagePayload.aoi_bbox`` contract field, replacing
+            the legacy bracketed in-text prose line ("[QGIS map canvas AOI
+            ...]"). ``None`` = no AOI this turn; the key is then OMITTED so a
+            plain message stays byte-identical to the pre-field payload
+            (mirrors the ``show_thinking`` / ``model_id`` omit convention).
         """
         payload: dict = {"text": text, "case_id": self.case_id}
         if show_thinking:
             payload["show_thinking"] = True
         if model_id:
             payload["model_id"] = model_id
+        if aoi_bbox is not None:
+            payload["aoi_bbox"] = [float(v) for v in aoi_bbox]
         self._send(
             "user-message",
             payload,
@@ -1470,6 +1490,56 @@ class AgentClient:
         self._send(
             "tool-payload-confirmation",
             {"warning_id": warning_id, "decision": decision, "revised_args": revised},
+            queue_if_closed=True,
+        )
+
+    def submit_credential(
+        self, request_id: str, provider_id: str, key_value: str
+    ) -> None:
+        """Answer a ``credential-request`` with the user's key (LANE K).
+
+        Contract (``contracts .../secrets.py``, Decision F): the raw key rides
+        ONLY the ``secret-add`` envelope -- the server vault-writes it (file
+        vault, 0600) on receipt -- and the ``credential-provided`` retry
+        signal that follows carries NO key material, just the echoed
+        ``request_id`` + ``provided=True``. Order matters and is safe on one
+        socket: the server consumes envelopes sequentially per connection, so
+        the vault write completes before the paused tool's future resolves
+        and the retry re-resolves the freshly-saved key.
+
+        ``secret_id`` is sent as None (contract-Optional): the server's
+        resume path re-resolves the vault record itself
+        (``_resolve_active_secret_ref``); this synchronous client never
+        blocks waiting for the ``secrets-list`` reply to learn the ULID.
+
+        KEY HYGIENE: ``key_value`` is serialized straight onto the wire and
+        never logged, stored on ``self``, or echoed back by the server.
+        """
+        self._send(
+            "secret-add",
+            {
+                "provider": provider_id,
+                "case_id": self.case_id,
+                "key_value": key_value,
+            },
+            queue_if_closed=True,
+        )
+        self._send(
+            "credential-provided",
+            {"request_id": request_id, "secret_id": None, "provided": True},
+            queue_if_closed=True,
+        )
+
+    def decline_credential(self, request_id: str) -> None:
+        """Decline a ``credential-request`` (the card's Skip): the contract's
+        real negative path -- ``credential-provided`` with ``provided=False``
+        and NO preceding ``secret-add``. The server resolves the paused
+        tool's future, re-raises the original typed auth error, and the agent
+        narrates honestly (data-source fallback norm; never a silent
+        dead-end)."""
+        self._send(
+            "credential-provided",
+            {"request_id": request_id, "secret_id": None, "provided": False},
             queue_if_closed=True,
         )
 
@@ -1562,6 +1632,18 @@ class AgentClient:
             # then waited forever and the turn "just stopped". The dock now
             # renders the approval card (ui/cards.CodeExecCard).
             return AgentEvent("code-exec-request", payload)
+        if etype == "credential-request":
+            # Credential-request key-entry card (LANE K, 2026-07-22): a keyed
+            # tool (AirNow, FIRMS, ...) hit a missing/invalid key; the agent
+            # paused the tool and asks for the credential by name (contracts
+            # secrets.CredentialRequestEnvelopePayload -- request_id /
+            # provider_id / provider_label / signup_url / secret_key_name /
+            # message / tool_name). Previously fell through to "raw" and was
+            # dropped by the dock (the exact code-exec gap) -- the pause then
+            # waited out its server-side TTL and the tool failed. The dock now
+            # renders the key-entry card (ui/cards.CredentialCard); the reply
+            # goes out via submit_credential / decline_credential below.
+            return AgentEvent("credential-request", payload)
         if etype == "chart-emission":
             # OpenQuake result parity (live-feedback 2026-07-13): a live
             # mid-turn chart (ChartEmissionPayload -- Vega-Lite spec + title

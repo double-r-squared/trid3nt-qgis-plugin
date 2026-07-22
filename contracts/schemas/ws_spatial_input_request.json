@@ -83,6 +83,16 @@
       "title": "Mode",
       "type": "string"
     },
+    "purpose": {
+      "default": "barrier",
+      "enum": [
+        "barrier",
+        "line",
+        "aoi"
+      ],
+      "title": "Purpose",
+      "type": "string"
+    },
     "reference_layers": {
       "items": {
         "$ref": "#/$defs/ReferenceLayer"

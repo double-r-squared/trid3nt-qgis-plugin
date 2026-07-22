@@ -1,34 +1,27 @@
-"""Canvas-extent AOI helpers -- PURE PYTHON (no PyQGIS / PyQt imports).
+"""AOI helpers -- PURE PYTHON (no PyQGIS / PyQt imports).
 
-Milestone 2 item 2: when the dock's "Use map canvas as area of interest"
-toggle is ON, every outgoing user-message carries the current canvas extent
-(transformed to EPSG:4326) as the AOI.
+CRS math + guard logic for the dock's explicit AOI (the drawn Set-AOI
+rectangle / rehydrated case bbox, A2 NATE 2026-07-20).
 
-How the AOI actually rides the wire (studied against the live protocol,
-NOT invented):
+How the AOI rides the wire (ADR 0017 mechanism 2, 2026-07-22):
 
-* The ONLY structured client->server AOI carrier in the protocol is the
-  Case bbox: ``case-command create`` accepts ``args.bbox =
-  [lon_min, lat_min, lon_max, lat_max]`` (EPSG:4326) -- the web's #170
-  "AOI-first" path (the web client's useCases.ts createCase, separate repo). The agent
-  seeds ``CaseSummary.bbox`` + ``state.case_bbox`` from it, and
-  ``_turn_case_bbox`` (server.py) anchors every turn's tool
-  dispatch on that value. We mirror the exact field name (``bbox``) and
-  element order (``[lon_min, lat_min, lon_max, lat_max]``).
+* The PERSISTENT Case bbox carrier is unchanged: ``case-command create`` /
+  ``set-bbox`` accept ``args.bbox = [lon_min, lat_min, lon_max, lat_max]``
+  (EPSG:4326) -- the web's #170 "AOI-first" path. The agent seeds
+  ``CaseSummary.bbox`` + ``state.case_bbox`` from it, and ``_turn_case_bbox``
+  (server.py) anchors every turn's tool dispatch on that value.
 
-* There is NO per-message bbox field: ``UserMessagePayload`` is
-  ``extra="forbid"`` (contracts common.GraceModel), so an added field would
-  be REJECTED by the live agent, not silently dropped. The web never sends
-  one either (ws.ts sendUserMessage carries only text / research_mode /
-  model_id / case_id). For the CURRENT canvas extent on each turn we
-  therefore append an explicit bracketed context line to the message TEXT
-  (the LLM is the consumer of an AOI-in-prompt; the agent's own server-side
-  "[Case state]" notes use the same in-text convention). The line spells out
-  the same ``bbox = [lon_min, lat_min, lon_max, lat_max]`` shape so the
-  numbers survive verbatim into tool args.
+* The PER-MESSAGE AOI is now a STRUCTURED payload field:
+  ``UserMessagePayload.aoi_bbox = [min_lon, min_lat, max_lon, max_lat]``
+  (EPSG:4326, ``None``/omitted when no AOI is set) -- contracts ws.py. This
+  REPLACED the legacy bracketed in-text context line ("[QGIS map canvas AOI
+  (EPSG:4326): bbox = ...]") that used to be appended to the message text;
+  the chat text now ships CLEAN and the numbers can never be re-typed wrong
+  by the LLM (the 0014/0017 hallucination-surface argument). The element
+  order mirrors the Case bbox carrier exactly.
 
 Guard (honest-clamp culture): an extent wider than ``AOI_MAX_DEG`` per side
-is NOT attached -- a whole-country canvas is not a usable simulation AOI, and
+is NOT attached -- a whole-country box is not a usable simulation AOI, and
 silently sending it would invite a giant fetch. The dock notes why instead.
 """
 
@@ -39,7 +32,6 @@ from typing import Optional, Tuple
 
 __all__ = [
     "AOI_MAX_DEG",
-    "attach_aoi_to_text",
     "aoi_status_text",
     "bbox_span_deg",
     "bbox_within_guard",
@@ -128,12 +120,12 @@ def choose_aoi(
 
     Milestone 3 item 4 (selected-polygon AOI): when the selection toggle is
     ON and an actual selection resolved, the SELECTION bbox wins (v1: the
-    bbox of the selection, not the exact ring -- the agent's only structured
-    AOI carrier is ``args.bbox`` / the in-text bbox line, both 4-number
-    boxes; ``UserMessagePayload`` is extra=forbid so no ring field exists).
-    Otherwise the canvas extent (when resolved) is used. ``source`` is
-    ``"selection"`` / ``"canvas"`` / None -- the status line and the in-text
-    context line both name it so the user always knows WHICH extent went out.
+    bbox of the selection, not the exact ring -- the agent's structured AOI
+    carriers, ``args.bbox`` on case-create/set-bbox and the per-message
+    ``aoi_bbox`` payload field, are both 4-number boxes; no ring field
+    exists). Otherwise the canvas extent (when resolved) is used. ``source``
+    is ``"selection"`` / ``"canvas"`` / None -- the status line names it so
+    the user always knows WHICH extent went out.
 
     The 2-deg guard is deliberately NOT applied here: a too-large selection
     must surface as "selection ... too large", not silently fall back to the
@@ -150,33 +142,6 @@ def format_bbox(bbox: Tuple[float, float, float, float], precision: int = 6) -> 
     """``[lon_min, lat_min, lon_max, lat_max]`` with fixed precision -- the
     exact element order the agent's ``args.bbox`` / ``_coerce_bbox4`` expect."""
     return "[" + ", ".join(f"{v:.{precision}f}" for v in bbox) + "]"
-
-
-def attach_aoi_to_text(
-    text: str,
-    bbox: Tuple[float, float, float, float],
-    source: str = "canvas",
-) -> str:
-    """Append the AOI context line to an outgoing user-message.
-
-    See the module docstring: the wire contract forbids a per-message bbox
-    FIELD, so the per-turn carrier is an explicit in-text context line using
-    the same ``bbox = [lon_min, lat_min, lon_max, lat_max]`` shape the
-    structured Case AOI uses. ``source`` names the origin ("canvas" default;
-    "selection" for the milestone 3 selected-polygon AOI, which is honestly
-    labelled a bbox OF the selection, not the exact ring).
-    """
-    origin = (
-        "QGIS selected-feature AOI (bbox of the selection, EPSG:4326)"
-        if source == "selection"
-        else "QGIS map canvas AOI (EPSG:4326)"
-    )
-    return (
-        f"{text}\n\n"
-        f"[{origin}: bbox = {format_bbox(bbox)}. "
-        "Use this extent as the area of interest unless the message names a "
-        "different location.]"
-    )
 
 
 def aoi_status_text(

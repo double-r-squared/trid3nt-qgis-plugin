@@ -667,6 +667,169 @@ dock._on_event("turn-complete", {})
 print("[code-exec] approval card: inline order, collapsed verbatim preview, "
       "Run=proceed / Deny=cancel via tool-payload-confirmation, lock + chip")
 
+# ---- 8b. Credential-request key-entry card (LANE K, 2026-07-22) ------------- #
+# The agent's credential-request envelope previously had ZERO handling (the
+# paused keyed tool waited out its server-side TTL -- the exact code-exec
+# gap). The dock must render the key-entry card inline (BUG-4/N5 close-out +
+# ordering), MASK the input (password echo), send the Decision-F reply pair
+# through the bridge hooks on Submit (raw key -> secret-add path only), clear
+# the field immediately, lock + fold to a provider-named chip -- and the raw
+# key must never appear in any log record this harness captures nor in any
+# rendered label text. (test_dock_ui additionally asserts the key literal is
+# absent from this subprocess's entire stdout/stderr.)
+
+import logging as _cred_logging  # noqa: E402
+
+from qgis.PyQt.QtWidgets import QLineEdit as _QLineEdit  # noqa: E402
+
+from trid3nt.ui.cards import CredentialCard  # noqa: E402
+
+SECRET_KEY_VALUE = "harness-firms-key-f00ba4c0ffee"
+
+
+class _CredLogCapture(_cred_logging.Handler):
+    def __init__(self):
+        super().__init__(level=_cred_logging.DEBUG)
+        self.lines = []
+
+    def emit(self, record):
+        try:
+            self.lines.append(record.getMessage())
+        except Exception:  # noqa: BLE001 -- capture is best-effort
+            self.lines.append(str(record.msg))
+
+
+_cred_capture = _CredLogCapture()
+_cred_root = _cred_logging.getLogger()
+_cred_prev_level = _cred_root.level
+_cred_root.addHandler(_cred_capture)
+_cred_root.setLevel(_cred_logging.DEBUG)
+
+sent_creds = []
+dock.bridge.submit_credential = (
+    lambda rid, pid, key: sent_creds.append(("submit", rid, pid, key))
+)
+dock.bridge.decline_credential = (
+    lambda rid: sent_creds.append(("decline", rid))
+)
+
+CRED_REQ = {
+    "envelope_type": "credential-request",
+    "request_id": "01HARNESSCREDREQAAAAAAAAAA",
+    "provider_id": "firms",
+    "provider_label": "NASA FIRMS",
+    "signup_url": "https://firms.modaps.eosdis.nasa.gov/api/map_key/",
+    "secret_key_name": "FIRMS_MAP_KEY",
+    "message": "I need a NASA FIRMS map key to fetch the active-fire data.",
+    "tool_name": "fetch_active_fires",
+}
+dock._add_user_bubble("show me the active fires near Asheville")
+cred_pre = _AssistantEntry(dock.messages_layout)
+dock._pending = cred_pre
+cred_pre.append_delta("Fetching FIRMS detections.")
+dock._on_event("credential-request", CRED_REQ)
+pump()
+assert dock._pending is None, "credential card did not close out the pending entry"
+cred_cards = dock.messages_host.findChildren(CredentialCard)
+assert len(cred_cards) == 1, f"expected 1 credential card, got {len(cred_cards)}"
+cred_card = cred_cards[0]
+# Ordering: pre-entry -> card -> post-decision entry (BUG-4/N5 flow).
+cred_post = dock._ensure_pending()
+cred_post.append_delta("Waiting for your key.")
+pump()
+i_pre = dock.messages_layout.indexOf(cred_pre.container)
+i_card = dock.messages_layout.indexOf(cred_card)
+i_post = dock.messages_layout.indexOf(cred_post.container)
+assert 0 <= i_pre < i_card < i_post, (
+    f"credential card out of order: pre={i_pre} card={i_card} post={i_post}"
+)
+# The key field is MASKED (password echo) and starts empty + enabled.
+assert cred_card.key_edit.echoMode() == _QLineEdit.Password, (
+    "key field is not password-masked"
+)
+assert cred_card.key_edit.text() == "" and cred_card.key_edit.isEnabled()
+# Server-sourced prompt text renders: message, key name, waiting tool, and
+# the provider's REAL signup link (the client never fabricates a URL).
+cred_texts = [l.text() for l in cred_card.findChildren(_QLabel)]
+assert any("NASA FIRMS map key" in t for t in cred_texts), "message missing"
+assert any("Key name: FIRMS_MAP_KEY" in t for t in cred_texts), (
+    "key-name note missing"
+)
+assert any("Waiting tool: fetch_active_fires" in t for t in cred_texts), (
+    "waiting-tool note missing"
+)
+assert any("firms.modaps.eosdis.nasa.gov" in t for t in cred_texts), (
+    "signup link missing"
+)
+# An EMPTY Submit consumes no decision (must not decline on the user's
+# behalf); the card stays live.
+cred_card.submit_btn.click()
+pump()
+assert sent_creds == [], "empty submit sent a decision"
+assert cred_card._decided is None and cred_card.submit_btn.isEnabled()
+# Type a key + Submit -> ONE submit through the bridge hook, field CLEARED
+# immediately, controls locked, folded to a provider-named chip.
+cred_card.key_edit.setText(SECRET_KEY_VALUE)
+cred_card.submit_btn.click()
+pump()
+assert sent_creds == [
+    ("submit", "01HARNESSCREDREQAAAAAAAAAA", "firms", SECRET_KEY_VALUE)
+], "submit did not reach the bridge hook exactly once"
+assert cred_card.key_edit.text() == "", "key field not cleared after submit"
+assert not cred_card.submit_btn.isEnabled() and not cred_card.skip_btn.isEnabled(), (
+    "buttons not disabled after the decision"
+)
+assert not cred_card.key_edit.isEnabled(), "key field not disabled after submit"
+assert cred_card._summary_container.isVisible(), "answered card did not fold"
+assert not cred_card._body.isVisible(), "answered card body still expanded"
+assert cred_card.summary_lbl.text() == "Key provided for NASA FIRMS", (
+    "provided chip names the wrong thing"
+)
+cred_card._submit()  # locked: answered exactly once, never a double send
+assert len(sent_creds) == 1, "locked card re-sent a credential"
+# KEY HYGIENE: the key never appears in ANY rendered label text in the dock.
+assert all(
+    SECRET_KEY_VALUE not in (l.text() or "") for l in dock.findChildren(_QLabel)
+), "raw key leaked into rendered label text"
+# Skip path on a second card: decline only, even with text typed in the field.
+dock._on_event(
+    "credential-request",
+    dict(CRED_REQ, request_id="01HARNESSCREDREQBBBBBBBBBB"),
+)
+pump()
+skip_card = [
+    c for c in dock.messages_host.findChildren(CredentialCard)
+    if c is not cred_card
+][0]
+skip_card.key_edit.setText("typed-then-abandoned")
+skip_card.skip_btn.click()
+pump()
+assert sent_creds[-1] == ("decline", "01HARNESSCREDREQBBBBBBBBBB"), (
+    "skip did not send a decline"
+)
+assert skip_card.key_edit.text() == "", "skip did not clear the typed field"
+assert skip_card.summary_lbl.text() == "Key skipped for NASA FIRMS", (
+    "skipped chip names the wrong thing"
+)
+# Malformed envelope: an honest error note, never a card / crash.
+n_cred_cards = len(dock.messages_host.findChildren(CredentialCard))
+dock._on_event("credential-request", {"provider_id": "firms"})
+pump()
+assert len(dock.messages_host.findChildren(CredentialCard)) == n_cred_cards, (
+    "malformed credential-request minted a card"
+)
+dock._on_event("turn-complete", {})
+# LOG HYGIENE: no log record captured during the whole section carries the
+# raw key (the card/dock/bridge path never logs it).
+_cred_root.removeHandler(_cred_capture)
+_cred_root.setLevel(_cred_prev_level)
+assert all(SECRET_KEY_VALUE not in line for line in _cred_capture.lines), (
+    "raw key leaked into a captured log record"
+)
+print("[credential] key-entry card: inline order, masked input, "
+      "Submit=secret-add+credential-provided via bridge, Skip=decline, "
+      "field cleared, lock + chip, no key in logs or labels")
+
 # ---- 9. F3: a no-tool turn mints ZERO tool cards ---------------------------- #
 # Live-feedback 2026-07-21 ("empty stale tool card"): a pipeline frame whose
 # steps are ALL filtered (LLM bookkeeping) used to lazily mint an empty

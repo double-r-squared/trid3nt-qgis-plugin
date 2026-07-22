@@ -18,7 +18,8 @@
         "DISAMBIGUATION_TIMEOUT",
         "CLARIFICATION_TIMEOUT",
         "USER_INPUT_CANCELLED",
-        "CANCELLED"
+        "CANCELLED",
+        "CONTEXT_WINDOW_EXCEEDED"
       ],
       "title": "Error Code",
       "type": "string"

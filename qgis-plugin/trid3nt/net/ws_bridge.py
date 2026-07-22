@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import time
 import traceback
-from typing import Optional
+from typing import Optional, Tuple
 
 from qgis.PyQt.QtCore import QObject, QThread, pyqtSignal
 
@@ -243,11 +243,18 @@ class AgentWorker(QObject):
     # -- while disconnected they buffer in the client's bounded queue) ------ #
 
     def send_chat(
-        self, text: str, show_thinking: bool = False, model_id: str = ""
+        self,
+        text: str,
+        show_thinking: bool = False,
+        model_id: str = "",
+        aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
     ) -> None:
         if self.client is not None:
             self.client.send_chat(
-                text, show_thinking=show_thinking, model_id=model_id
+                text,
+                show_thinking=show_thinking,
+                model_id=model_id,
+                aoi_bbox=aoi_bbox,
             )
 
     def cancel(self) -> None:
@@ -280,6 +287,18 @@ class AgentWorker(QObject):
     ) -> None:
         if self.client is not None:
             self.client.confirm_payload(warning_id, decision, revised_args)
+
+    def submit_credential(
+        self, request_id: str, provider_id: str, key_value: str
+    ) -> None:
+        # LANE K: the raw key passes straight through to the client's
+        # secret-add + credential-provided pair -- never logged, never stored.
+        if self.client is not None:
+            self.client.submit_credential(request_id, provider_id, key_value)
+
+    def decline_credential(self, request_id: str) -> None:
+        if self.client is not None:
+            self.client.decline_credential(request_id)
 
 
 class AgentBridge(QObject):
@@ -354,11 +373,18 @@ class AgentBridge(QObject):
     # -- outbound ------------------------------------------------------------ #
 
     def send_chat(
-        self, text: str, show_thinking: bool = False, model_id: str = ""
+        self,
+        text: str,
+        show_thinking: bool = False,
+        model_id: str = "",
+        aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
     ) -> None:
         if self._worker is not None:
             self._worker.send_chat(
-                text, show_thinking=show_thinking, model_id=model_id
+                text,
+                show_thinking=show_thinking,
+                model_id=model_id,
+                aoi_bbox=aoi_bbox,
             )
 
     def cancel(self) -> None:
@@ -391,3 +417,16 @@ class AgentBridge(QObject):
     ) -> None:
         if self._worker is not None:
             self._worker.confirm_payload(warning_id, decision, revised_args)
+
+    def submit_credential(
+        self, request_id: str, provider_id: str, key_value: str
+    ) -> None:
+        # LANE K: pass-through to the worker's client (mutex-guarded socket
+        # write; buffers while disconnected like every user-intent verb).
+        # The key is never logged or stored on the bridge.
+        if self._worker is not None:
+            self._worker.submit_credential(request_id, provider_id, key_value)
+
+    def decline_credential(self, request_id: str) -> None:
+        if self._worker is not None:
+            self._worker.decline_credential(request_id)

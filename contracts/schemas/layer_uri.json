@@ -1,5 +1,189 @@
 {
   "$defs": {
+    "LegendClass": {
+      "additionalProperties": false,
+      "description": "One class swatch in a CATEGORICAL ``LegendKey`` (NLCD class, drought\nD0-D4, Pelicun damage state, etc.).\n\nA class addresses the data it colors in one of two ways; populate exactly\none form per class:\n\n- ``value`` -- a single discrete value the swatch matches (the GDAL color\n  table entry, the NLCD class code, the ``\"D2\"`` drought label). May be a\n  number or a string.\n- ``value_min`` / ``value_max`` -- a half-open / closed numeric bin the\n  swatch covers (graduated buckets, e.g. damage-state mean ``0.5..1.5``).\n\n``color`` is an ``#rrggbb`` hex string; ``label`` is the human-readable\nswatch caption the frontend renders verbatim.",
+      "properties": {
+        "color": {
+          "title": "Color",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "value_max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Max"
+        },
+        "value_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Min"
+        }
+      },
+      "required": [
+        "color",
+        "label"
+      ],
+      "title": "LegendClass",
+      "type": "object"
+    },
+    "LegendKey": {
+      "additionalProperties": false,
+      "description": "The DATA-DRIVEN render key for a layer -- the colormap/legend the\nfrontend draws and the raster/vector colors are driven by.\n\nThe principle (NATE): the gradient/key comes FROM THE DATA at fetch time,\nso it MEANS something rather than being a retroactive hardcoded guess. The\nproducer (``publish_layer``) emits a ``LegendKey`` from values it already\ncomputed; the frontend renders ANY key generically, so a new tool that\nemits a ``LegendKey`` needs ZERO web changes.\n\nTwo split of responsibility for the range:\n\n- The colormap CHOICE stays the semantic per-variable decision (drought\n  ramps tan->dark-red, temperature ``rdylbu``, seismic PGA ``reds``, ...).\n- The RANGE (``vmin`` / ``vmax``) is the REAL data range by default -- the\n  p2/p98 percentile read ``publish_layer`` already computes -- UNLESS a\n  variable has a canonical fixed scale (seismic PGA 0-1, temperature K),\n  which a tool/preset may pin. The legend and the raster render MUST agree\n  on the same range, so the legacy hardcoded ``\"0,3\"``-style guesses are\n  retired as the source of truth (kept only as the canonical-fixed-scale\n  override or the no-data fallback).\n\nAdditive + optional everywhere (``legend=None`` => legacy ``style_preset``\nrendering: the existing preset + URL-rescale + preset-fallback path stays\nas the fallback, so legacy layers render exactly as before).\n\nFields:\n\n``kind``\n    ``\"continuous\"`` for rasters + graduated vectors (a ramp over a numeric\n    range); ``\"categorical\"`` for discrete classes (NLCD, drought, damage\n    states).\n``colormap`` (continuous)\n    Either a named ramp the frontend resolves to stops (e.g. ``\"reds\"`` /\n    ``\"viridis\"``) OR explicit stops as ``[[stop_0to1, \"#rrggbb\"], ...]``\n    (each stop a float in ``[0, 1]``). ``None`` for purely categorical\n    keys that carry ``classes`` instead.\n``vmin`` / ``vmax`` (continuous)\n    The REAL data range the colormap spans (the percentile read by\n    default; a canonical fixed scale when a variable pins one). ``None``\n    when unknown / not applicable.\n``classes`` (categorical)\n    The ordered list of ``LegendClass`` swatches. ``None`` for continuous\n    keys.\n``value_field``\n    For VECTOR layers: the GeoJSON feature property the color is driven by\n    (e.g. ``\"ds_mean\"`` on a Pelicun choropleth). ``None`` for rasters\n    (the raster band IS the value).\n``units``\n    The data units the legend annotates (e.g. ``\"meters\"``, ``\"mg/L\"``).\n    ``None`` for unitless / categorical.\n``label``\n    Optional human-readable legend title (e.g. ``\"Flood depth\"``).",
+      "properties": {
+        "classes": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/LegendClass"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Classes"
+        },
+        "colormap": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Colormap"
+        },
+        "kind": {
+          "enum": [
+            "continuous",
+            "categorical"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Units"
+        },
+        "value_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Field"
+        },
+        "vmax": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vmax"
+        },
+        "vmin": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vmin"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "LegendKey",
+      "type": "object"
+    },
     "TemporalConfig": {
       "additionalProperties": false,
       "description": "WMS-T temporal config for a time-varying layer.",
@@ -30,7 +214,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Returned by ``postprocess_flood`` (one per output layer).\n\nAligned field-for-field with ``map-command load-layer`` args and with\n``ResultLayer`` so postprocess output maps onto the visualization seam with\nno translation. ``uri`` is a COG (raster) or FlatGeobuf/GeoParquet (vector).\n\n``bbox`` is optional (job-0068): when present the pipeline emitter emits a\n``map-command(zoom-to)`` after ``add_loaded_layer`` so the client camera\nflies to the layer's geographic extent. Format: ``(min_lon, min_lat,\nmax_lon, max_lat)`` in EPSG:4326.",
+  "description": "Returned by ``postprocess_flood`` (one per output layer).\n\nAligned field-for-field with ``map-command load-layer`` args and with\n``ResultLayer`` so postprocess output maps onto the visualization seam with\nno translation. ``uri`` is a COG (raster) or FlatGeobuf/GeoParquet (vector).\n\n``bbox`` is optional (job-0068): when present the pipeline emitter emits a\n``map-command(zoom-to)`` after ``add_loaded_layer`` so the client camera\nflies to the layer's geographic extent. Format: ``(min_lon, min_lat,\nmax_lon, max_lat)`` in EPSG:4326.\n\n``legend`` is the DATA-DRIVEN render key (see ``LegendKey``): the colormap\nis the semantic per-variable choice, the range is the REAL data range the\nproducer already computed. Additive + optional -- ``legend=None`` means\nlegacy ``style_preset`` rendering (the existing preset + URL-rescale +\npreset-fallback path), so layers without a legend render exactly as before.",
   "properties": {
     "bbox": {
       "anyOf": [
@@ -60,6 +244,18 @@
       "default": null,
       "title": "Bbox"
     },
+    "fallback_note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fallback Note"
+    },
     "layer_id": {
       "title": "Layer Id",
       "type": "string"
@@ -71,6 +267,17 @@
       ],
       "title": "Layer Type",
       "type": "string"
+    },
+    "legend": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LegendKey"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "name": {
       "title": "Name",

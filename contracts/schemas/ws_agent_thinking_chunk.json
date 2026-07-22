@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "``agent-thinking-chunk``: a streamed reasoning-channel token group.\n\nLocal-build feature (NATE live-feedback 2026-07-08): the OpenAI-compatible\nadapter surfaces the model's reasoning deltas (e.g. Ollama qwen3\n``delta.reasoning``) and the server forwards them live so the web can\nrender a greyed, collapsible \"thinking\" block inside the SAME bubble as\nthe eventual answer. ``message_id`` is shared with the segment's\n``agent-message-chunk`` frames; a ``delta=\"\" done=True`` frame closes the\nthinking stream for that bubble. Shape mirrors AgentMessageChunkPayload.",
+  "properties": {
+    "delta": {
+      "title": "Delta",
+      "type": "string"
+    },
+    "done": {
+      "default": false,
+      "title": "Done",
+      "type": "boolean"
+    },
+    "message_id": {
+      "title": "Message Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "message_id",
+    "delta"
+  ],
+  "title": "AgentThinkingChunkPayload",
+  "type": "object"
+}

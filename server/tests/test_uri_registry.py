@@ -6,9 +6,9 @@ suite covers, per the kickoff:
 1. registration on tool results (LayerURI models, dicts, bare gs:// strings,
    WMS URLs, composer observation hook);
 2. all four resolution branches (exact pass / handle substitution / fuzzy
-   mangle-match + WARNING / fail-open pass-through for unknown storage URIs,
-   with the typed URI_HANDLE_UNRESOLVED error reserved for display-face URLs
-   that carry no recoverable data URI);
+   mangle-match + WARNING / ADR-0014 typed URI_HANDLE_UNRESOLVED reject for
+   unknown object-store URIs and display-face URLs, with non-object-store
+   strings — external http(s) links, local paths — still failing open);
 3. cross-session isolation;
 4. the FIVE historical incident shapes, each replayed with the REAL logged
    values from the Stage 3 / demo evidence:
@@ -237,16 +237,19 @@ class TestResolutionBranches:
         assert out["assets_uri"] == REAL_NSI_FGB
         assert any("resolved" in r.message for r in caplog.records)
 
-    def test_branch4_unknown_storage_uri_fails_open(self) -> None:
-        """The legacy managed-bucket strict-reject died with the cloud
-        decommission: an unknown storage URI with no plausible match now
-        passes through untouched and fails downstream with the consuming
-        tool's own typed fetch error."""
+    def test_branch4_unknown_storage_uri_rejects_typed(self) -> None:
+        """ADR 0014: an unknown object-store URI where a layer is expected is
+        a TYPED reject carrying the handle inventory — never a pass-through
+        (the hallucinated path could only 404 downstream, or read the wrong
+        object). Verbatim REGISTERED URIs still pass (branch 1 dual-accept)."""
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
         invented = "gs://legacy-cloud-cache/cache/static-30d/totally/made_up.tif"
-        out = reg.resolve_params("t", {"layer_uri": invented})
-        assert out["layer_uri"] == invented
+        with pytest.raises(UriResolutionError) as exc_info:
+            reg.resolve_params("t", {"layer_uri": invented})
+        assert exc_info.value.error_code == "URI_HANDLE_UNRESOLVED"
+        assert exc_info.value.retryable is True
+        assert NSI_LAYER_ID in str(exc_info.value)  # inventory hint present
 
     def test_branch4_empty_registry_message_says_run_producer_first(self) -> None:
         """The typed error (now raised only for display-face URLs with no
@@ -259,11 +262,19 @@ class TestResolutionBranches:
             )
         assert "producing tool" in str(exc_info.value)
 
-    def test_foreign_bucket_unknown_uri_fails_open(self) -> None:
+    def test_foreign_bucket_unknown_uri_rejects_typed(self) -> None:
+        """ADR 0014: a foreign object-store path the session never produced
+        rejects typed too — external data reaches the agent as http(s) links
+        or registered layers, never as a bare invented gs://s3 path."""
         reg = make_registry()
         foreign = "gs://some-user-bucket/their/data.tif"
-        out = reg.resolve_params("t", {"raster_uri": foreign})
-        assert out["raster_uri"] == foreign
+        with pytest.raises(UriResolutionError):
+            reg.resolve_params("t", {"raster_uri": foreign})
+        # Non-object-store strings (external http(s) sources, local paths)
+        # still fail open — user-supplied sources are never blocked.
+        external = "https://example.com/public/cog.tif"
+        out = reg.resolve_params("t", {"raster_uri": external})
+        assert out["raster_uri"] == external
 
     def test_non_uri_params_and_non_strings_untouched(self) -> None:
         reg = make_registry()
@@ -273,16 +284,18 @@ class TestResolutionBranches:
     def test_ambiguous_hash_prefix_refuses_to_guess(self) -> None:
         reg = make_registry()
         # Two cache keys sharing the same 14-char prefix — substitution would
-        # be a coin flip; with the managed-bucket strict-reject gone, the
-        # honest answer is to pass the value through UNCHANGED (never guess;
-        # the consuming tool's own 404 follows).
+        # be a coin flip; the registry never guesses. ADR 0014: the honest
+        # answer is the TYPED reject listing both real handles so the model
+        # re-picks (a pass-through could only 404 downstream).
         a = f"{HILLSHADE_CACHE_DIR}/090a4ff8d9a083aaaaaaaaaaaaaaaaaa.tif"
         b = f"{HILLSHADE_CACHE_DIR}/090a4ff8d9a083bbbbbbbbbbbbbbbbbb.tif"
         reg.record("hillshade-a", uri=a)
         reg.record("hillshade-b", uri=b)
         mangled = f"{HILLSHADE_CACHE_DIR}/090a4ff8d9a083cccccccccccccccccc.tif"
-        out = reg.resolve_params("publish_layer", {"layer_uri": mangled})
-        assert out["layer_uri"] == mangled
+        with pytest.raises(UriResolutionError) as exc_info:
+            reg.resolve_params("publish_layer", {"layer_uri": mangled})
+        msg = str(exc_info.value)
+        assert "hillshade-a" in msg and "hillshade-b" in msg
 
     def test_handle_with_only_wms_face_raises_instead_of_handing_display_url(
         self,
@@ -377,12 +390,12 @@ class TestSessionIsolation:
         reg_b = get_uri_registry("session-B")
         reg_a.record(NSI_LAYER_ID, uri=REAL_NSI_FGB)
         # Session B never produced the layer: session A's mapping must NOT
-        # leak — the mangled URI passes through UNSUBSTITUTED (storage URIs
-        # fail open now that the legacy strict-reject is gone).
-        out_b = reg_b.resolve_params(
-            "t", {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253}
-        )
-        assert out_b["assets_uri"] == MANGLED_NSI_LAYERID_BASENAME_0253
+        # leak — session B REJECTS the mangled object-store URI typed
+        # (ADR 0014) instead of substituting session A's real URI.
+        with pytest.raises(UriResolutionError):
+            reg_b.resolve_params(
+                "t", {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253}
+            )
         # And the same registry object comes back for the same session id
         # (reconnect-survival: the store is keyed by session_id).
         assert get_uri_registry("session-A") is reg_a
@@ -541,10 +554,10 @@ class TestHistoricalIncidents:
         )
         assert out["assets_uri"] == REAL_NSI_FGB
 
-    def test_i5_invented_hash_ambiguous_dir_passes_through(self) -> None:
+    def test_i5_invented_hash_ambiguous_dir_rejects_typed(self) -> None:
         """Two NSI fetches in the dir -> same-dir match is ambiguous -> the
-        registry refuses to guess and passes the value through unchanged
-        (fail open; the consuming tool's own fetch error follows)."""
+        registry refuses to guess and (ADR 0014) rejects TYPED, listing both
+        real handles so the model re-picks instead of eating a 404."""
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
         reg.record(
@@ -555,11 +568,13 @@ class TestHistoricalIncidents:
             ),
             tool_name="fetch_usace_nsi",
         )
-        out = reg.resolve_params(
-            "run_pelicun_damage_assessment",
-            {"assets_uri": MANGLED_NSI_INVENTED_HASH_0255},
-        )
-        assert out["assets_uri"] == MANGLED_NSI_INVENTED_HASH_0255
+        with pytest.raises(UriResolutionError) as exc_info:
+            reg.resolve_params(
+                "run_pelicun_damage_assessment",
+                {"assets_uri": MANGLED_NSI_INVENTED_HASH_0255},
+            )
+        msg = str(exc_info.value)
+        assert NSI_LAYER_ID in msg and "usace-nsi-tampa" in msg
 
 
 # --------------------------------------------------------------------------- #
@@ -774,16 +789,18 @@ class TestPlaceholderResolution:
     def test_uri_shaped_values_are_never_placeholder_resolved(self) -> None:
         reg = self._registry_with_dem()
         # Observed live: a hallucinated FOREIGN gs:// path. It is uri-shaped,
-        # so the placeholder path must not touch it - the existing foreign-
-        # bucket fail-open passes it through unchanged.
+        # so the placeholder branch must not touch it — and under ADR 0014 an
+        # unknown object-store URI is a TYPED reject (never a silent
+        # substitution, never a pass-through 404).
         hallucinated = "gs://3dep-cache/continuous-dem-10m.tif"
-        out = reg.resolve_params("publish_layer", {"layer_uri": hallucinated})
-        assert out["layer_uri"] == hallucinated
-        # Even an s3:// path that NAMES the producing tool stays untouched
-        # (auto-substituting uri-shaped values could mask real cross-case refs).
+        with pytest.raises(UriResolutionError):
+            reg.resolve_params("publish_layer", {"layer_uri": hallucinated})
+        # Even an s3:// path that NAMES the producing tool must not be
+        # placeholder-substituted — it rejects typed like any other unknown
+        # object-store path (substituting could mask real cross-case refs).
         s3_foreign = "s3://some-users-bucket/fetch_dem/dem.tif"
-        out = reg.resolve_params("publish_layer", {"layer_uri": s3_foreign})
-        assert out["layer_uri"] == s3_foreign
+        with pytest.raises(UriResolutionError):
+            reg.resolve_params("publish_layer", {"layer_uri": s3_foreign})
 
     def test_unknown_tool_name_does_not_resolve(self) -> None:
         reg = self._registry_with_dem()

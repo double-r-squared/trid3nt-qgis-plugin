@@ -503,6 +503,65 @@ class Persistence:
         )
         return case
 
+    # ------------------------------------------------------------------ #
+    # ADR 0014: per-Case short layer-handle map (storage-only field)
+    # ------------------------------------------------------------------ #
+
+    async def set_case_layer_handles(
+        self, case_id: str, handles: dict[str, str]
+    ) -> None:
+        """Persist a Case's ``{L<n>: uri}`` short-handle map (ADR 0014).
+
+        Storage-only ``layer_handles`` field on the cases doc — the
+        ``last_active_case_id`` pattern: ``CaseSummary`` deliberately does
+        NOT carry it (``_doc_to_case_summary`` drops unknown keys), so the
+        wire contract stays narrow while the storage doc accretes. The
+        ``upsert_case`` full-body ``$set`` never removes it (named-field
+        semantics). ``upsert=False``: a deleted / never-created Case is not
+        resurrected by this side-channel — the write is simply a no-op.
+        Callers treat this as best-effort (wrap + log, never raise).
+        """
+        await self._mcp.call_tool(
+            "update-one",
+            {
+                "database": self._db,
+                "collection": CASES_COLLECTION,
+                "filter": {"_id": case_id},
+                "update": {"$set": {"layer_handles": dict(handles)}},
+                "upsert": False,
+            },
+        )
+
+    async def get_case_layer_handles(
+        self, case_id: str
+    ) -> dict[str, str] | None:
+        """Read back the persisted ``{L<n>: uri}`` map (ADR 0014).
+
+        Tolerant: a missing Case / absent field / malformed shape yields
+        ``None`` and the registry degrades to fresh minting. Only
+        str->str entries survive the shape filter.
+        """
+        raw = await self._mcp.call_tool(
+            "find-one",
+            {
+                "database": self._db,
+                "collection": CASES_COLLECTION,
+                "filter": {"_id": case_id},
+            },
+        )
+        doc = _unwrap_mcp_result(raw)
+        if not isinstance(doc, dict):
+            return None
+        value = doc.get("layer_handles")
+        if not isinstance(value, dict):
+            return None
+        out = {
+            k: v
+            for k, v in value.items()
+            if isinstance(k, str) and k and isinstance(v, str) and v
+        }
+        return out or None
+
     async def migrate_preauth_cases(self, anon_uid: str) -> int:
         """One-time, idempotent: stamp pre-Auth Cases with ``anon_uid``.
 
