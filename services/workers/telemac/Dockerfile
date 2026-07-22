@@ -25,9 +25,7 @@
 # All versions are the EXACT set the P1 pipeline proved on a real Snake River
 # dye solve (a version skew here is an IaC-visible, deliberate bump).
 #
-# Build context = THE WORKER DIR ITSELF (mirrors the ``swan`` build line in
-# docs/site/install.md: ``docker build -t trid3nt-local/swan:latest
-# vendor/services/workers/swan/``), NOT the 588 MB vendor/ tree -- the
+# Build context = THE WORKER DIR ITSELF, not the repo root -- the
 # container-hygiene rule (a .dockerignore trims tests/pyc). So the COPY path is
 # ``.`` relative to this dir:
 #   docker build -t trid3nt-local/telemac:latest services/workers/telemac/

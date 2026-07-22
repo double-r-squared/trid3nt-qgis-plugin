@@ -120,16 +120,6 @@ def _is_local_mode() -> bool:
     return True
 
 
-def _repo_root() -> Path:
-    """Walk up from this file to the repo root (the dir containing ``infra/``)."""
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "infra" / "python-sandbox" / "executor.py").exists():
-            return parent
-    # Fallback: three levels up from server/src/grace2_agent/sandbox_runner.py
-    return here.parents[3]
-
-
 def _executor_path() -> Path:
     override = os.environ.get("GRACE2_SANDBOX_EXECUTOR", "").strip()
     if override:

@@ -68,7 +68,7 @@ Fortran solvers into the image; the build is one-time and cached):
 
 ```sh
 sg docker -c 'docker build -t trid3nt-local/geoclaw:latest -f services/workers/geoclaw/Dockerfile .'
-sg docker -c 'docker build -t trid3nt-local/swan:latest services/workers/swan/'
+sg docker -c 'docker build -t trid3nt-local/swan:latest -f services/workers/swan/Dockerfile .'
 sg docker -c 'docker build -t trid3nt-local/telemac:latest services/workers/telemac/'  # or: bash scripts/build_telemac_image.sh
 ```
 

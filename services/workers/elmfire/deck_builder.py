@@ -44,7 +44,7 @@ No input is ever silently defaulted to a constant raster.
 NAMELIST
 ========
 ``render_namelist`` mirrors the EXACT key set of
-``vendor/elmfire/tutorials/01-constant-wind/elmfire.data.in`` — the deck the
+``third_party/elmfire/tutorials/01-constant-wind/elmfire.data.in`` — the deck the
 FIRE-1 container proof ran — with only the values templated (&INPUTS,
 &OUTPUTS, &COMPUTATIONAL_DOMAIN, &TIME_CONTROL, &SIMULATOR, &MISCELLANEOUS).
 
@@ -567,7 +567,7 @@ def render_namelist(
     """Render ``elmfire.data`` with the tutorial-01 key set (FIRE-1 proven).
 
     Every key below appears in
-    ``vendor/elmfire/tutorials/01-constant-wind/elmfire.data.in`` — the deck
+    ``third_party/elmfire/tutorials/01-constant-wind/elmfire.data.in`` — the deck
     the proven container consumed; only the values are templated. Paths are
     relative to the case dir (``cd <deck_dir> && elmfire_<VER>
     ./inputs/elmfire.data``), mirroring ``01-run.sh``.

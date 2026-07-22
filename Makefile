@@ -58,6 +58,7 @@ agent:
 venv:
 	@~/.local/bin/uv venv --python 3.12 $(REPO_ROOT)/venvs/agent
 	@~/.local/bin/uv pip install --python $(REPO_ROOT)/venvs/agent/bin/python \
+	  --find-links $(REPO_ROOT)/server/vendor \
 	  -e $(REPO_ROOT)/contracts \
 	  -e $(REPO_ROOT)/server
 

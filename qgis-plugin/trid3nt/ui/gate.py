@@ -7,7 +7,7 @@ that is NOT a widget, so the contract behaviour is unit-testable without QGIS.
 
 Contract source of truth (mirrored EXACTLY, not paraphrased):
 
-* ``packages/contracts/src/grace2_contracts/payload_warning.py``
+* ``contracts/src/grace2_contracts/payload_warning.py``
   - warning payload fields: ``warning_id``, ``tool_name``, ``tool_args``,
     ``estimated_mb``, ``threshold_mb``, ``recommendation``,
     ``alternative_args``, ``options`` (non-empty subset of
@@ -17,7 +17,7 @@ Contract source of truth (mirrored EXACTLY, not paraphrased):
     ``revised_args`` (REQUIRED dict for ``narrow_scope``; MUST be None for
     ``proceed`` / ``cancel`` -- the agent's validator rejects violations).
 
-* ``vendor/web/src/components/ResolutionPickerCard.tsx`` decision rules:
+* ``ResolutionPickerCard.tsx`` (web client - GRACE-2 repo) decision rules:
   - chosen rung == suggested  -> decision "proceed",      revised None
   - chosen rung != suggested  -> decision "narrow_scope", revised
                                  {granularity.resolution_param: chosen}
