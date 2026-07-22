@@ -1,0 +1,243 @@
+{
+  "_comment": "DRAFT - NATE reviews these inputs before ANY run. Retrieval-probe phrasings, VAGUE register (intent only, no named source): the 12 categories + spatial_query analytical phrasings + 2 typo'd variants. Model-free probe: graded on acceptable membership in the retrieval top-k (default 5); execution is present for schema uniformity and ignored by the probe.",
+  "defaults": {
+    "always_allowed": ["geocode_location", "publish_layer", "compute_layer_bounds"]
+  },
+  "records": [
+    {
+      "id": "rp-vag-01-hazard_modeling",
+      "category": "hazard_modeling",
+      "register": "vague",
+      "prompt": "what would flooding look like here after a big storm",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["run_model_flood_scenario", "run_swmm_urban_flood"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-02-weather_atmosphere",
+      "category": "weather_atmosphere",
+      "register": "vague",
+      "prompt": "is there dangerous weather on the way",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_nws_event", "fetch_nws_alerts_conus"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-03-hydrology",
+      "category": "hydrology",
+      "register": "vague",
+      "prompt": "how high are the rivers running right now",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_usgs_nwis_gauges",
+          "fetch_noaa_nwm_streamflow",
+          "fetch_nws_river_forecast"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-04-terrain_elevation",
+      "category": "terrain_elevation",
+      "register": "vague",
+      "prompt": "show me the shape of the terrain",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_dem",
+          "fetch_3dep_extra",
+          "compute_hillshade",
+          "compute_colored_relief"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-05-land_cover_development",
+      "category": "land_cover_development",
+      "register": "vague",
+      "prompt": "how built up is this area",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_landcover",
+          "compute_impervious_surface",
+          "compute_building_density",
+          "fetch_buildings"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-06-conservation_ecology",
+      "category": "conservation_ecology",
+      "register": "vague",
+      "prompt": "what wildlife lives around here",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_gbif_occurrences",
+          "fetch_inaturalist_observations",
+          "fetch_ebird_observations"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-07-fire",
+      "category": "fire",
+      "register": "vague",
+      "prompt": "is anything burning nearby",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_firms_active_fire",
+          "fetch_nifc_fire_perimeters",
+          "fetch_wfigs_incident",
+          "fetch_goes_active_fire"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-08-coastal",
+      "category": "coastal",
+      "register": "vague",
+      "prompt": "how high does the tide get here",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_noaa_coops_tides", "fetch_gtsm_tide_surge"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-09-damage_assessment",
+      "category": "damage_assessment",
+      "register": "vague",
+      "prompt": "how much damage would a flood do to the buildings here",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "run_pelicun_damage_assessment",
+          "run_pelicun_with_buildings",
+          "compute_flood_depth_damage",
+          "compute_impact_envelope"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-10-flood_infrastructure",
+      "category": "flood_infrastructure",
+      "register": "vague",
+      "prompt": "which areas are officially flood prone",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_fema_nfhl_zones"], "no_tool": false }
+    },
+    {
+      "id": "rp-vag-11-geographic_primitives",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "where exactly is this town on the map",
+      "execution": "run",
+      "expected": { "acceptable": ["geocode_location"], "no_tool": false }
+    },
+    {
+      "id": "rp-vag-12-news_events",
+      "category": "news_events",
+      "register": "vague",
+      "prompt": "what disasters have hit this county before",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_storm_events_db", "fetch_openfema_disasters"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-13-weather-precip",
+      "category": "weather_atmosphere",
+      "register": "vague",
+      "prompt": "how much rain fell over the last day",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_mrms_qpe", "fetch_chirps_precipitation"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-14-coastal-slr",
+      "category": "coastal",
+      "register": "vague",
+      "prompt": "how much higher will the sea be in fifty years",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_noaa_slr_scenarios"], "no_tool": false }
+    },
+    {
+      "id": "rp-vag-15-spatial_query-stats",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "give me some quick stats on that layer",
+      "execution": "run",
+      "expected": { "acceptable": ["spatial_query"], "no_tool": false }
+    },
+    {
+      "id": "rp-vag-16-spatial_query-count",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "how many of those features are above the threshold",
+      "execution": "run",
+      "expected": { "acceptable": ["spatial_query"], "no_tool": false }
+    },
+    {
+      "id": "rp-vag-17-spatial_query-zonal",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "whats the typical value inside that zone",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["spatial_query", "compute_zonal_statistics"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-18-spatial_query-overlap",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "which of these polygons overlap the flooded part",
+      "execution": "run",
+      "expected": { "acceptable": ["spatial_query"], "no_tool": false }
+    },
+    {
+      "id": "rp-vag-19-typo-flood",
+      "category": "flood_infrastructure",
+      "register": "vague",
+      "prompt": "whta areas here tend to floood",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_fema_nfhl_zones", "run_model_flood_scenario"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-20-typo-builtup",
+      "category": "land_cover_development",
+      "register": "vague",
+      "prompt": "how bult up is this aera",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_landcover",
+          "compute_impervious_surface",
+          "compute_building_density",
+          "fetch_buildings"
+        ],
+        "no_tool": false
+      }
+    }
+  ]
+}

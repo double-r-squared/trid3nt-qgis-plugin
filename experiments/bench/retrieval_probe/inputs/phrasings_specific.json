@@ -1,0 +1,180 @@
+{
+  "_comment": "DRAFT - NATE reviews these inputs before ANY run. Retrieval-probe phrasings, SPECIFIC register (named source/place): the 12 categories + spatial_query analytical phrasings + 2 typo'd variants. Model-free probe: graded on acceptable membership in the retrieval top-k (default 5); execution is present for schema uniformity and ignored by the probe.",
+  "defaults": {
+    "always_allowed": ["geocode_location", "publish_layer", "compute_layer_bounds"]
+  },
+  "records": [
+    {
+      "id": "rp-spec-01-hazard_modeling",
+      "category": "hazard_modeling",
+      "register": "specific",
+      "prompt": "run a SFINCS coastal flood simulation for Mexico Beach, Florida",
+      "execution": "run",
+      "expected": { "acceptable": ["run_model_flood_scenario"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-02-weather_atmosphere",
+      "category": "weather_atmosphere",
+      "register": "specific",
+      "prompt": "NWS weather alerts for Tennessee",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_nws_event"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-03-hydrology",
+      "category": "hydrology",
+      "register": "specific",
+      "prompt": "USGS NWIS stream gauge stations with observed discharge",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_usgs_nwis_gauges"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-04-terrain_elevation",
+      "category": "terrain_elevation",
+      "register": "specific",
+      "prompt": "3DEP digital elevation model for Asheville, North Carolina",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_dem", "fetch_3dep_extra"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-05-land_cover_development",
+      "category": "land_cover_development",
+      "register": "specific",
+      "prompt": "NLCD land cover classification for Sacramento",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_landcover"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-06-conservation_ecology",
+      "category": "conservation_ecology",
+      "register": "specific",
+      "prompt": "GBIF species occurrence records for the Everglades",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_gbif_occurrences"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-07-fire",
+      "category": "fire",
+      "register": "specific",
+      "prompt": "NASA FIRMS active fire detections for Los Angeles County",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_firms_active_fire"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-08-coastal",
+      "category": "coastal",
+      "register": "specific",
+      "prompt": "NOAA CO-OPS tide gauge observations for Pensacola",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_noaa_coops_tides"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-09-damage_assessment",
+      "category": "damage_assessment",
+      "register": "specific",
+      "prompt": "Pelicun flood damage assessment with fragility curves",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["run_pelicun_damage_assessment", "run_pelicun_with_buildings"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-spec-10-flood_infrastructure",
+      "category": "flood_infrastructure",
+      "register": "specific",
+      "prompt": "FEMA NFHL regulatory flood zones for Tampa",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_fema_nfhl_zones"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-11-geographic_primitives",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "geocode the city of Chattanooga, Tennessee",
+      "execution": "run",
+      "expected": { "acceptable": ["geocode_location"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-12-news_events",
+      "category": "news_events",
+      "register": "specific",
+      "prompt": "NOAA Storm Events Database records for Hamilton County",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_storm_events_db"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-13-hydrology-nwm",
+      "category": "hydrology",
+      "register": "specific",
+      "prompt": "NOAA National Water Model modeled streamflow",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_noaa_nwm_streamflow"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-14-coastal-slr",
+      "category": "coastal",
+      "register": "specific",
+      "prompt": "NOAA sea level rise inundation scenarios",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_noaa_slr_scenarios"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-15-spatial_query-stats",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "summary statistics of the building layer",
+      "execution": "run",
+      "expected": { "acceptable": ["spatial_query"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-16-spatial_query-count",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "count buildings where flood depth is above one meter",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["spatial_query", "compute_zonal_statistics"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-spec-17-spatial_query-zonal",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "average elevation inside the city boundary polygon",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["spatial_query", "compute_zonal_statistics"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-spec-18-spatial_query-aggregate",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "total population within the inundation footprint",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["spatial_query", "compute_zonal_statistics", "compute_impact_envelope"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-spec-19-typo-nfhl",
+      "category": "flood_infrastructure",
+      "register": "specific",
+      "prompt": "fetch FEMA flod zoens for Tampa",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_fema_nfhl_zones"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-20-typo-nlcd",
+      "category": "land_cover_development",
+      "register": "specific",
+      "prompt": "NLCD land covr for Sacremento",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_landcover"], "no_tool": false }
+    }
+  ]
+}

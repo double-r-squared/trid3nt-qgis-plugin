@@ -1,0 +1,156 @@
+{
+  "_comment": "DRAFT - NATE reviews these inputs before ANY run. One chain per category (categories.py, 12 categories), SPECIFIC register (named source/place) + 1 no_tool record. Solver/simulation-category records are execution=block_at_invocation.",
+  "defaults": {
+    "always_allowed": ["geocode_location", "publish_layer", "compute_layer_bounds"]
+  },
+  "records": [
+    {
+      "id": "rs-spec-01-hazard_modeling",
+      "category": "hazard_modeling",
+      "register": "specific",
+      "prompt": "Run a SFINCS pluvial flood simulation for Peoria, Illinois with a 50-year storm at coarse resolution.",
+      "execution": "block_at_invocation",
+      "expected": {
+        "acceptable": ["run_model_flood_scenario"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-02-weather_atmosphere",
+      "category": "weather_atmosphere",
+      "register": "specific",
+      "prompt": "Fetch the current NWS weather alerts for Tennessee.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_nws_event"],
+        "forbidden": ["fetch_nws_alerts_conus"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-03-hydrology",
+      "category": "hydrology",
+      "register": "specific",
+      "prompt": "Fetch USGS NWIS stream gauge stations for Missoula, Montana.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_usgs_nwis_gauges"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-04-terrain_elevation",
+      "category": "terrain_elevation",
+      "register": "specific",
+      "prompt": "Fetch a USGS 3DEP digital elevation model for Asheville, North Carolina.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_dem", "fetch_3dep_extra"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-05-land_cover_development",
+      "category": "land_cover_development",
+      "register": "specific",
+      "prompt": "Fetch NLCD land cover for Sacramento, California.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_landcover"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-06-conservation_ecology",
+      "category": "conservation_ecology",
+      "register": "specific",
+      "prompt": "Fetch GBIF species occurrence records for Everglades National Park, Florida.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_gbif_occurrences"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-07-fire",
+      "category": "fire",
+      "register": "specific",
+      "prompt": "Fetch NASA FIRMS active fire detections for Los Angeles County, California.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_firms_active_fire"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-08-coastal",
+      "category": "coastal",
+      "register": "specific",
+      "prompt": "Fetch NOAA CO-OPS tide observations for Pensacola, Florida.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_noaa_coops_tides"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-09-damage_assessment",
+      "category": "damage_assessment",
+      "register": "specific",
+      "prompt": "Run a Pelicun flood damage assessment for Fort Myers, Florida.",
+      "execution": "block_at_invocation",
+      "expected": {
+        "acceptable": [
+          "run_pelicun_damage_assessment",
+          "run_pelicun_with_buildings",
+          "fetch_usace_nsi"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-10-flood_infrastructure",
+      "category": "flood_infrastructure",
+      "register": "specific",
+      "prompt": "Fetch FEMA NFHL flood zones for Tampa, Florida.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_fema_nfhl_zones"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-11-geographic_primitives",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "Geocode Chattanooga, Tennessee and report its bounding box.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["geocode_location"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-12-news_events",
+      "category": "news_events",
+      "register": "specific",
+      "prompt": "Fetch NOAA Storm Events Database records for Hamilton County, Tennessee for 2020.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_storm_events_db"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-13-no_tool",
+      "category": "no_tool",
+      "register": "specific",
+      "prompt": "Write me a haiku about rivers.",
+      "execution": "run",
+      "expected": {
+        "acceptable": [],
+        "no_tool": true
+      }
+    }
+  ]
+}

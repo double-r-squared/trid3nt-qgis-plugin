@@ -1,0 +1,196 @@
+{
+  "_comment": "DRAFT - NATE reviews these inputs before ANY run. One chain per category (categories.py, 12 categories), VAGUE register (intent only, no named source) + 1 no_tool record. Solver/simulation-category records are execution=block_at_invocation.",
+  "defaults": {
+    "always_allowed": ["geocode_location", "publish_layer", "compute_layer_bounds"]
+  },
+  "records": [
+    {
+      "id": "rs-vag-01-hazard_modeling",
+      "category": "hazard_modeling",
+      "register": "vague",
+      "prompt": "If a really big storm stalled over Peoria, Illinois, which parts of town would end up under water?",
+      "execution": "block_at_invocation",
+      "expected": {
+        "acceptable": ["run_model_flood_scenario", "run_swmm_urban_flood"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-02-weather_atmosphere",
+      "category": "weather_atmosphere",
+      "register": "vague",
+      "prompt": "Is any dangerous weather headed for Chattanooga right now?",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_nws_event",
+          "fetch_nws_alerts_conus",
+          "fetch_nexrad_reflectivity",
+          "fetch_hrrr_forecast"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-03-hydrology",
+      "category": "hydrology",
+      "register": "vague",
+      "prompt": "How high are the rivers running around Missoula these days?",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_usgs_nwis_gauges",
+          "fetch_noaa_nwm_streamflow",
+          "fetch_nws_river_forecast"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-04-terrain_elevation",
+      "category": "terrain_elevation",
+      "register": "vague",
+      "prompt": "Show me what the terrain looks like around Asheville.",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_dem",
+          "fetch_3dep_extra",
+          "compute_hillshade",
+          "compute_colored_relief"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-05-land_cover_development",
+      "category": "land_cover_development",
+      "register": "vague",
+      "prompt": "How built-up is Sacramento compared to the land around it?",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_landcover",
+          "compute_impervious_surface",
+          "fetch_buildings",
+          "compute_building_density",
+          "fetch_esri_landcover_10m"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-06-conservation_ecology",
+      "category": "conservation_ecology",
+      "register": "vague",
+      "prompt": "What wildlife has been spotted around the Everglades lately?",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_gbif_occurrences",
+          "fetch_inaturalist_observations",
+          "fetch_ebird_observations"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-07-fire",
+      "category": "fire",
+      "register": "vague",
+      "prompt": "Is anything burning near Los Angeles right now?",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_firms_active_fire",
+          "fetch_nifc_fire_perimeters",
+          "fetch_wfigs_incident",
+          "fetch_goes_active_fire",
+          "fetch_viirs_day_fire"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-08-coastal",
+      "category": "coastal",
+      "register": "vague",
+      "prompt": "How high is the water getting along the Pensacola shoreline?",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge",
+          "fetch_noaa_slr_scenarios"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-09-damage_assessment",
+      "category": "damage_assessment",
+      "register": "vague",
+      "prompt": "If the water came up six feet in Fort Myers, how bad would the building damage be?",
+      "execution": "block_at_invocation",
+      "expected": {
+        "acceptable": [
+          "run_pelicun_damage_assessment",
+          "run_pelicun_with_buildings",
+          "compute_flood_depth_damage",
+          "compute_impact_envelope",
+          "fetch_usace_nsi",
+          "run_model_flood_scenario"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-10-flood_infrastructure",
+      "category": "flood_infrastructure",
+      "register": "vague",
+      "prompt": "Which neighborhoods around Tampa are officially considered flood-prone?",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_fema_nfhl_zones"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-11-geographic_primitives",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "Where exactly is Chattanooga and how big an area does the city cover?",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["geocode_location", "fetch_administrative_boundaries"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-12-news_events",
+      "category": "news_events",
+      "register": "vague",
+      "prompt": "What big storms have hit the Chattanooga area over the last few years?",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_storm_events_db",
+          "fetch_nws_event",
+          "fetch_openfema_disasters"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-13-no_tool",
+      "category": "no_tool",
+      "register": "vague",
+      "prompt": "Explain the difference between a 100-year flood and a 500-year flood.",
+      "execution": "run",
+      "expected": {
+        "acceptable": [],
+        "no_tool": true
+      }
+    }
+  ]
+}
