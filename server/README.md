@@ -50,7 +50,7 @@ server/
 # from repo root, requires the project's virtualenv (.venv-agent/)
 make run-agent
 # then in another shell:
-python server/scripts/ws_client.py "What is SFINCS?"
+python scripts/ws_smoke.py   # WS chat smoke against the running daemon
 ```
 
 `make run-agent` sources the venv at `.venv-agent/` and launches `trid3nt-server`
