@@ -210,8 +210,8 @@ _HTTP_TIMEOUT_S = 60.0
 #: User-Agent — FEMA's terms of use ask for identifying agents on automated
 #: clients hitting hazards.fema.gov.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: Canonical FEMA flood-zone designations accepted by ``zone_filter``.
@@ -732,7 +732,7 @@ def fetch_fema_nfhl_zones(
 
     Returns:
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/fema_nfhl/<key>.fgb``.
+        ``s3://trid3nt-cache/cache/static-30d/fema_nfhl/<key>.fgb``.
         ``layer_type="vector"``, ``role="primary"``, ``units=None``,
         ``style_preset="fema_nfhl_zones"`` (downstream QML preset colors AE/A
         deep blue, VE coastal-high-hazard red, X minimal-hazard pale,

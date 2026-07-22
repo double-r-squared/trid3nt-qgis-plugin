@@ -31,9 +31,9 @@
 
 FROM deltares/sfincs-cpu:sfincs-v2.3.3@sha256:46b5fc9e324d3d9a0d0a7728390e3413bb1ce57ef74c4201a3003d21ef1efb71
 
-LABEL org.opencontainers.image.title="grace-2-sfincs-solver" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="SFINCS solver runtime (Cloud Run Job). Reads model setup from gs://grace-2-hazard-prod-cache/, runs SFINCS, writes outputs + completion manifest to gs://grace-2-hazard-prod-runs/<run_id>/." \
+LABEL org.opencontainers.image.title="trid3nt-sfincs-solver" \
+      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
+      org.opencontainers.image.description="SFINCS solver runtime (Cloud Run Job). Reads model setup from s3://trid3nt-cache/, runs SFINCS, writes outputs + completion manifest to s3://trid3nt-runs/<run_id>/." \
       org.opencontainers.image.licenses="MIT"
 
 # Install Python 3 + google-cloud-storage SDK. The upstream image is
@@ -105,7 +105,7 @@ ENV PYTHONPATH=/opt/grace2 \
 #   GRACE2_CACHE_BUCKET  — source bucket (the cache shim populates this with
 #                          the per-tool fetches the workflow stages).
 #   GRACE2_RUNS_BUCKET   — destination bucket (this image is the only sanctioned
-#                          writer of `s3://grace2-hazard-runs-226996537797/<run_id>/`).
+#                          writer of `s3://trid3nt-runs/<run_id>/`).
 #   GRACE2_RUN_ID        — the run ID under which outputs land (set per Batch job).
 #   GRACE2_MANIFEST_URI  — s3:// URI of the JSON setup manifest the entrypoint
 #                          reads (lists input objects + bbox + scenario).
@@ -113,8 +113,8 @@ ENV PYTHONPATH=/opt/grace2 \
 #                          set the worker runs hydromt build + solve + postprocess
 #                          (heavy-compute offload). Takes precedence over MANIFEST.
 ENV GRACE2_OBJECT_STORE=s3 \
-    GRACE2_CACHE_BUCKET=grace2-hazard-cache-226996537797 \
-    GRACE2_RUNS_BUCKET=grace2-hazard-runs-226996537797 \
+    GRACE2_CACHE_BUCKET=trid3nt-cache \
+    GRACE2_RUNS_BUCKET=trid3nt-runs \
     GRACE2_RUN_ID="" \
     GRACE2_MANIFEST_URI="" \
     GRACE2_BUILD_SPEC_URI=""

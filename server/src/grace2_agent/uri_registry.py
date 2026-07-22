@@ -5,8 +5,8 @@ user's Tampa demo run. Gemini is structurally bad at echoing long opaque
 URIs between turns — five distinct live incidents proved it:
 
 1. **runs/ prefix mangle** (job-0253, agent_restart_0253.log:475): the real
-   COG ``gs://grace-2-hazard-prod-runs/01KTS5W9GTE7A7WPC3BNBE10EQ/
-   flood_depth_peak.tif`` came back as ``gs://grace-2-hazard-prod-runs/
+   COG ``s3://trid3nt-runs/01KTS5W9GTE7A7WPC3BNBE10EQ/
+   flood_depth_peak.tif`` came back as ``s3://trid3nt-runs/
    runs/01KTS5W9.../flood_depth_peak.tif`` (doubled path segment) → 404.
 2. **layer_id-as-basename invention** (same call): ``assets_uri`` was
    ``gs://…/usace_nsi/usace-nsi--81.9126-26.5476--81.7511-26.6892.fgb`` —
@@ -40,23 +40,24 @@ lowered the rate. THIS module removes the failure mode architecturally:
   3. unknown but *close* to a registered URI (same basename, ≥12-char hash
      prefix, layer_id-as-basename, or unique same-directory candidate)
      → substitute + WARNING (the mangle classes above);
-  4. unknown with no plausible match    → typed retryable error
-     (``URI_HANDLE_UNRESOLVED``) that TELLS Gemini which handles exist, so
-     it self-corrects instead of inventing again.
+  4. unknown with no plausible match    → storage URIs FAIL OPEN (pass
+     through; the consuming tool's own typed fetch error surfaces the
+     problem), while display-only faces (WMS / tile-template URLs with no
+     recoverable data URI) raise a typed retryable error
+     (``URI_HANDLE_UNRESOLVED``) that TELLS the model which handles exist,
+     so it self-corrects instead of inventing again.
 
 Scoping rules:
 
 * The registry is **session-scoped** and lives in a module-level store keyed
   by ``session_id`` (the ``_SESSION_ACTIVE_CASE`` pattern from job-0259) so
-  it survives WebSocket reconnects and is shared across the web client's
+  it survives WebSocket reconnects and is shared across the client's
   sibling connections.
-* Strict rejection (branch 4) applies only to URIs inside
-  platform-managed buckets (the legacy ``grace2-hazard-*`` /
-  ``grace-2-hazard-prod-*`` prefixes by default -- kept so hallucinated or
-  stale legacy-cloud paths from old chat history are rejected, not silently
-  passed through). Objects there are only ever produced by our tools, so an
-  unregistered path is either invented or stale. Foreign-bucket URIs (user-supplied data) pass
-  through untouched (fail-open).
+* Unknown storage URIs pass through untouched (fail-open): user-supplied
+  data must never be blocked, and a stale or invented path fails downstream
+  with the consuming tool's own honest typed error. (The legacy-cloud-era
+  managed-bucket strict-reject died with the cloud decommission -- nothing
+  local mints the old bucket names anymore.)
 * Composer-internal publishes (``run_model_flood_scenario`` →
   ``publish_layer``) are captured via a ``ContextVar`` observation hook:
   ``publish_layer`` calls :func:`observe_published_layer` with the
@@ -137,18 +138,6 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
     }
 )
 
-#: Bucket-name prefixes we treat as platform-managed: unknown URIs inside these
-#: buckets with no plausible registered match are REJECTED (branch 4) because
-#: nothing writes there except our own tools. GCP is decommissioned, so the
-#: AWS prefix (``grace2-hazard-``, matching the S3 cache/runs buckets) is the
-#: live one; the legacy GCP prefix (``grace-2-hazard-prod-``) is retained so
-#: any lingering gs:// reference is still recognized. Override via env
-#: ``GRACE2_MANAGED_BUCKET_PREFIXES`` (comma-separated).
-#: Legacy cloud bucket prefixes: nothing local mints these, so an unknown
-#: URI under them is always hallucinated/stale -> strict-reject (branch 4).
-#: Local MinIO buckets (trid3nt-*) intentionally fail open.
-_DEFAULT_MANAGED_BUCKET_PREFIXES = ("grace2-hazard-", "grace-2-hazard-prod-")
-
 #: Minimum shared basename-stem prefix (chars) for the hash-prefix fuzzy
 #: branch. The job-0257 evidence shows ~14 hex chars survive before the tail
 #: hallucination starts; 12 keeps headroom while staying collision-safe for
@@ -178,13 +167,6 @@ _DEM_CONSUMING_TOOLS: frozenset[str] = frozenset(
         "compute_terrain_profile",
     }
 )
-
-
-def _managed_bucket_prefixes() -> tuple[str, ...]:
-    raw = os.environ.get("GRACE2_MANAGED_BUCKET_PREFIXES", "")
-    if raw.strip():
-        return tuple(p.strip() for p in raw.split(",") if p.strip())
-    return _DEFAULT_MANAGED_BUCKET_PREFIXES
 
 
 # --------------------------------------------------------------------------- #
@@ -346,13 +328,6 @@ def _common_prefix_len(a: str, b: str) -> int:
     while i < n and a[i] == b[i]:
         i += 1
     return i
-
-
-def _in_managed_bucket(uri: str) -> bool:
-    if not _is_gs(uri):
-        return False
-    bucket = _path_segments(uri)[0] if _path_segments(uri) else ""
-    return any(bucket.startswith(p) for p in _managed_bucket_prefixes())
 
 
 @dataclass
@@ -674,12 +649,13 @@ class SessionUriRegistry:
         if substituted is not None:
             return substituted
 
-        # Branch 4 — unknown + no match. Reject inside managed buckets;
-        # fail-open for foreign buckets (user-supplied data we never saw).
-        if _in_managed_bucket(v):
-            raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
+        # Branch 4 — unknown + no match: FAIL OPEN. The legacy-cloud-era
+        # managed-bucket strict-reject died with the cloud decommission;
+        # nothing local mints gs:// paths, so a stale or invented storage URI
+        # now surfaces as the consuming tool's own typed fetch error instead
+        # of a registry raise.
         logger.info(
-            "uri_registry[%s]: passing through unknown foreign-bucket uri %s.%s=%r",
+            "uri_registry[%s]: passing through unknown uri %s.%s=%r",
             self.session_id,
             tool_name,
             param_name,

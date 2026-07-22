@@ -37,7 +37,7 @@ from grace2_agent.tools.publish_layer import (
     publish_layer,
 )
 
-_RUNS_BUCKET = "grace2-hazard-runs-226996537797"
+_RUNS_BUCKET = "trid3nt-runs"
 
 
 # --------------------------------------------------------------------------- #

@@ -179,8 +179,8 @@ TIGER_COUNTY_URL = (
 
 #: User-Agent (a descriptive UA is courteous to the federal endpoints).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP timeout (seconds). County-geometry fetches for a large state can be slow.

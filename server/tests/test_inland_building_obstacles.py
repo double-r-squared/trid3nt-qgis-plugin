@@ -97,9 +97,9 @@ def _make_handle(run_id: str) -> ExecutionHandle:
         compute_class="standard",
         workflows_execution_id=(
             "projects/test/locations/us-central1/workflows/"
-            "grace-2-sfincs-orchestrator/executions/test-exec"
+            "model_flood_scenario/executions/test-exec"
         ),
-        workflow_name="grace-2-sfincs-orchestrator",
+        workflow_name="model_flood_scenario",
         workflow_location="us-central1",
         submitted_at=datetime.now(timezone.utc),
     )

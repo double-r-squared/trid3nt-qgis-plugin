@@ -463,7 +463,7 @@ async def test_sfincs_surfaces_dem_landcover_river_as_inputs(monkeypatch):
         run_id = _rid
         handle_id = handle.handle_id
         status = "complete"
-        output_uri = f"s3://grace2-hazard-runs/{_rid}/"
+        output_uri = f"s3://trid3nt-runs/{_rid}/"
         started_at = datetime.now(timezone.utc)
         completed_at = datetime.now(timezone.utc)
         duration_seconds = 1.0
@@ -601,7 +601,7 @@ def ExecutionHandle_helper(run_id: str) -> ExecutionHandle:
         solver="sfincs",
         compute_class="standard",
         workflows_execution_id="projects/t/locations/us/workflows/w/executions/e",
-        workflow_name="grace-2-sfincs-orchestrator",
+        workflow_name="model_flood_scenario",
         workflow_location="us-central1",
         submitted_at=datetime.now(timezone.utc),
     )

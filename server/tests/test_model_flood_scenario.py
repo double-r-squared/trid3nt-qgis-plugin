@@ -179,9 +179,9 @@ def _make_handle(run_id: str | None = None) -> ExecutionHandle:
         compute_class="standard",
         workflows_execution_id=(
             "projects/test/locations/us-central1/workflows/"
-            "grace-2-sfincs-orchestrator/executions/test-exec"
+            "model_flood_scenario/executions/test-exec"
         ),
-        workflow_name="grace-2-sfincs-orchestrator",
+        workflow_name="model_flood_scenario",
         workflow_location="us-central1",
         submitted_at=datetime.now(timezone.utc),
     )
@@ -240,7 +240,7 @@ async def test_workflow_happy_path_returns_flood_envelope() -> None:
         run_id=run_id,
         handle_id=handle.handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
@@ -249,7 +249,7 @@ async def test_workflow_happy_path_returns_flood_envelope() -> None:
         layer_id=f"flood-depth-peak-{run_id}",
         name="Flood Depth (peak)",
         layer_type="raster",
-        uri=f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif",
+        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
         style_preset="continuous_flood_depth",
         role="primary",
         units="meters",
@@ -1376,7 +1376,7 @@ def test_build_sfincs_model_emits_manifest_json_with_input_list(
     # Use a fixed setup URI so we can assert the gs_uri prefix in the manifest.
     # GCP is decommissioned: the manifest lands on S3 via boto3.
     fixed_manifest_uri = (
-        "s3://grace2-hazard-cache/cache/static-30d/sfincs_setup/"
+        "s3://trid3nt-cache/cache/static-30d/sfincs_setup/"
         "TESTID01/manifest.json"
     )
 
@@ -1481,7 +1481,7 @@ def test_build_sfincs_model_emits_manifest_json_with_input_list(
     # "deck" directory as a child of deck_base_uri, so files land at
     # deck_base_uri/deck/<relative>.
     expected_prefix = (
-        "s3://grace2-hazard-cache/cache/static-30d/sfincs_setup/TESTID01/deck/"
+        "s3://trid3nt-cache/cache/static-30d/sfincs_setup/TESTID01/deck/"
     )
     for entry in inputs:
         assert entry["gs_uri"].startswith(expected_prefix), (
@@ -1620,7 +1620,7 @@ def test_build_sfincs_model_setup_uri_points_at_manifest_file(
         BuildOptions(
             grid_resolution_m=30.0,
             simulation_hours=24.0,
-            output_setup_uri="gs://grace-2-hazard-prod-cache/cache/custom-run/test-setup/",
+            output_setup_uri="gs://legacy-cloud-cache/cache/custom-run/test-setup/",
         )
     )
     assert setup_dir_override.setup_uri.endswith("/manifest.json"), (
@@ -1628,7 +1628,7 @@ def test_build_sfincs_model_setup_uri_points_at_manifest_file(
         f"got {setup_dir_override.setup_uri!r}."
     )
     assert setup_dir_override.setup_uri == (
-        "gs://grace-2-hazard-prod-cache/cache/custom-run/test-setup/manifest.json"
+        "gs://legacy-cloud-cache/cache/custom-run/test-setup/manifest.json"
     ), (
         f"Directory override did not normalise correctly; "
         f"got {setup_dir_override.setup_uri!r}"
@@ -1640,12 +1640,12 @@ def test_build_sfincs_model_setup_uri_points_at_manifest_file(
             grid_resolution_m=30.0,
             simulation_hours=24.0,
             output_setup_uri=(
-                "gs://grace-2-hazard-prod-cache/cache/custom-run/test-setup/manifest.json"
+                "gs://legacy-cloud-cache/cache/custom-run/test-setup/manifest.json"
             ),
         )
     )
     assert setup_manifest_override.setup_uri == (
-        "gs://grace-2-hazard-prod-cache/cache/custom-run/test-setup/manifest.json"
+        "gs://legacy-cloud-cache/cache/custom-run/test-setup/manifest.json"
     ), (
         f"Manifest override was mutated unexpectedly; "
         f"got {setup_manifest_override.setup_uri!r}"
@@ -1801,7 +1801,7 @@ async def test_run_model_flood_scenario_returns_layer_uri() -> None:
         run_id=run_id,
         handle_id=handle.handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
@@ -1810,7 +1810,7 @@ async def test_run_model_flood_scenario_returns_layer_uri() -> None:
         layer_id=f"flood-depth-peak-{run_id}",
         name="Flood Depth (peak)",
         layer_type="raster",
-        uri=f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif",
+        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
         style_preset="continuous_flood_depth",
         role="primary",
         units="meters",
@@ -1848,7 +1848,7 @@ async def test_run_model_flood_scenario_returns_layer_uri() -> None:
             "grace2_agent.workflows.model_flood_scenario.publish_layer",
             return_value=(
                 "https://d125yfbyjrpbre.cloudfront.net/cog/tiles/WebMercatorQuad/"
-                "{z}/{x}/{y}.png?url=s3://grace2-hazard-runs/"
+                "{z}/{x}/{y}.png?url=s3://trid3nt-runs/"
                 + run_id
                 + "/flood_depth_peak.tif&rescale=0,3"
             ),
@@ -1946,12 +1946,12 @@ async def test_run_model_flood_scenario_triggers_loaded_layers_emit() -> None:
         run_id=run_id,
         handle_id=handle.handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
     )
-    expected_cog_uri = f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif"
+    expected_cog_uri = f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif"
     flood_layer = LayerURI(
         layer_id=f"flood-depth-peak-{run_id}",
         name="Flood Depth (peak)",
@@ -2012,7 +2012,7 @@ async def test_run_model_flood_scenario_triggers_loaded_layers_emit() -> None:
             "grace2_agent.workflows.model_flood_scenario.publish_layer",
             return_value=(
                 "https://d125yfbyjrpbre.cloudfront.net/cog/tiles/WebMercatorQuad/"
-                "{z}/{x}/{y}.png?url=s3://grace2-hazard-runs/flood_depth_peak.tif&rescale=0,3"
+                "{z}/{x}/{y}.png?url=s3://trid3nt-runs/flood_depth_peak.tif&rescale=0,3"
             ),
         ),
     ):
@@ -2321,7 +2321,7 @@ async def test_model_flood_scenario_calls_publish_layer_after_postprocess() -> N
         run_id=run_id,
         handle_id=handle.handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
@@ -2330,7 +2330,7 @@ async def test_model_flood_scenario_calls_publish_layer_after_postprocess() -> N
         layer_id=f"flood-depth-peak-{run_id}",
         name="Flood Depth (peak)",
         layer_type="raster",
-        uri=f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif",
+        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
         style_preset="continuous_flood_depth",
         role="primary",
         units="meters",
@@ -2388,7 +2388,7 @@ async def test_model_flood_scenario_calls_publish_layer_after_postprocess() -> N
         f"called {len(publish_layer_calls)} time(s)"
     )
     call = publish_layer_calls[0]
-    assert call["layer_uri"] == f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif"
+    assert call["layer_uri"] == f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif"
     assert call["layer_id"] == f"flood-depth-peak-{run_id}"
     assert call["style_preset"] == "continuous_flood_depth"
 
@@ -2442,7 +2442,7 @@ async def test_model_flood_scenario_layer_uri_carries_wms_url() -> None:
         run_id=run_id,
         handle_id=handle.handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
@@ -2451,7 +2451,7 @@ async def test_model_flood_scenario_layer_uri_carries_wms_url() -> None:
         layer_id=f"flood-depth-peak-{run_id}",
         name="Flood Depth (peak)",
         layer_type="raster",
-        uri=f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif",
+        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
         style_preset="continuous_flood_depth",
         role="primary",
         units="meters",
@@ -2461,7 +2461,7 @@ async def test_model_flood_scenario_layer_uri_carries_wms_url() -> None:
         "flooded_cell_count": 12_345, "crs": "EPSG:32617", "units": "meters",
     }
     expected_wms_url = (
-        "https://grace-2-qgis-server.example.com/ogc/wms"
+        "https://legacy-qgis-server.example.com/ogc/wms"
         "?MAP=/mnt/qgs/grace2-sample.qgs"
         f"&LAYERS=flood-depth-peak-{run_id}"
     )
@@ -2561,12 +2561,12 @@ async def test_model_flood_scenario_publish_layer_failure_drops_layer() -> None:
         run_id=run_id,
         handle_id=handle.handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
     )
-    cog_uri = f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif"
+    cog_uri = f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif"
     flood_layer = LayerURI(
         layer_id=f"flood-depth-peak-{run_id}",
         name="Flood Depth (peak)",
@@ -2667,11 +2667,11 @@ async def test_wrapper_publish_failure_returns_truthful_dict_not_layer_uri() -> 
     )
     run_result_ok = RunResult(
         run_id=run_id, handle_id=handle.handle_id, status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc), duration_seconds=120.0,
     )
-    cog_uri = f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif"
+    cog_uri = f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif"
     flood_layer = LayerURI(
         layer_id=f"flood-depth-peak-{run_id}", name="Flood Depth (peak)",
         layer_type="raster", uri=cog_uri,
@@ -2769,7 +2769,7 @@ async def test_run_model_flood_scenario_wrapper_uri_is_wms_url() -> None:
         run_id=run_id,
         handle_id=handle.handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
@@ -2778,7 +2778,7 @@ async def test_run_model_flood_scenario_wrapper_uri_is_wms_url() -> None:
         layer_id=f"flood-depth-peak-{run_id}",
         name="Flood Depth (peak)",
         layer_type="raster",
-        uri=f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif",
+        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
         style_preset="continuous_flood_depth",
         role="primary",
         units="meters",
@@ -2788,7 +2788,7 @@ async def test_run_model_flood_scenario_wrapper_uri_is_wms_url() -> None:
         "flooded_cell_count": 12_345, "crs": "EPSG:32617", "units": "meters",
     }
     expected_wms_url = (
-        "https://grace-2-qgis-server-425352658356.us-central1.run.app/ogc/wms"
+        "https://legacy-qgis-server.example.com/ogc/wms"
         "?MAP=/mnt/qgs/grace2-sample.qgs"
         f"&LAYERS=flood-depth-peak-{run_id}"
     )
@@ -3252,8 +3252,8 @@ def test_to_vsigs_rewrites_gs_uri_to_vsigs_path() -> None:
     from grace2_agent.workflows.sfincs_builder import _to_vsigs
 
     # The headline rewrite (s3 → /vsis3/).
-    assert _to_vsigs("s3://grace2-hazard-cache/cache/static-30d/landcover/x.tif") == (
-        "/vsis3/grace2-hazard-cache/cache/static-30d/landcover/x.tif"
+    assert _to_vsigs("s3://trid3nt-cache/cache/static-30d/landcover/x.tif") == (
+        "/vsis3/trid3nt-cache/cache/static-30d/landcover/x.tif"
     )
 
     # Idempotence — calling twice does not double-prefix.

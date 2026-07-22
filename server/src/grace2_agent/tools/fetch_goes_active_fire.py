@@ -78,7 +78,7 @@ logger = logging.getLogger("grace2_agent.tools.fetch_goes_active_fire")
 MAX_ACTIVE_FIRE_FRAMES = 24
 
 #: Style preset for the transparent RGBA hotspot overlay (matches the archive
-#: animation's hotspot band so the web client composites the alpha identically).
+#: animation's hotspot band so the client composites the alpha identically).
 _HOTSPOT_STYLE_PRESET = "goes_fire_hotspots_rgba"
 
 #: Product label / id slug for the LayerURI.

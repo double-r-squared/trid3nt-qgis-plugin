@@ -26,3 +26,4 @@ docs/proof/
 .nutshell-server.log
 .env.local.bak
 *.egg-info/
+.vscode/

@@ -290,8 +290,8 @@ _VALID_TIME_ROUND_MINUTES = 15
 
 # User-Agent per NOAA Big-Data Program courtesy convention.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 
@@ -837,7 +837,7 @@ def fetch_goes_satellite(
       normalized internally; an unrecognized token raises a typed input error.
 
     **Returns:** A ``LayerURI`` pointing at a float32 COG in the cache bucket
-    (``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/goes_satellite/<key>.tif``).
+    (``s3://trid3nt-cache/cache/dynamic-1h/goes_satellite/<key>.tif``).
     ``layer_type="raster"``, ``role="context"``. ``units="reflectance"`` for
     visible, ``"K"`` for IR/WV. EPSG:4326, ~0.02 degree (~2 km) resolution.
 

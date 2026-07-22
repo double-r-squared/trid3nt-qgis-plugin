@@ -224,7 +224,7 @@ class ToolCardRecord(GraceModel):
     on ``PipelineStepSummary`` (the agent copies them from the emitter's
     terminal step, falling back to a wall-clock measure around the dispatch).
     ``label`` is the human-facing step name the live card showed (the registry
-    display name); the web client MAY override it with its own humanizer keyed
+    display name); the client MAY override it with its own humanizer keyed
     on ``tool_name``.
 
     C1 (the IO-rehydration fix): the live chat tool-card expander (input args +

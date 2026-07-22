@@ -215,8 +215,8 @@ _PELICUN_REPLACEMENT_VALUE_COL = "replacement_value"
 # User-Agent — NSI's API is unauthenticated but identifying clients is polite
 # (and useful when USACE asks who's hammering their cluster).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # Request timeout. NSI for a 1-degree bbox typically returns in a few seconds;
@@ -597,7 +597,7 @@ def fetch_usace_nsi(
     Returns:
         A ``LayerURI`` pointing at a FlatGeobuf of NSI Point features (one
         per structure) at
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/usace_nsi/<key>.fgb``.
+        ``s3://trid3nt-cache/cache/static-30d/usace_nsi/<key>.fgb``.
         ``layer_type="vector"``, ``role="primary"``, ``units=None``,
         ``style_preset="usace_nsi"``. Each feature carries:
 

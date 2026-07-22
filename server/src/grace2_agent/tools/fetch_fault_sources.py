@@ -160,8 +160,8 @@ GEM_GAF_URL = (
 
 #: Polite User-Agent (matches sibling tools).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: The download is ~10.6 MB across the public CDN; allow a generous timeout.

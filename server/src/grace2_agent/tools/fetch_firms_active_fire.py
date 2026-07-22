@@ -174,8 +174,8 @@ _DAYS_MAX = 10
 
 #: User-Agent per NASA Earthdata good-neighbour conventions.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: Request timeout — FIRMS responds fast (<5s for small bbox) but we leave

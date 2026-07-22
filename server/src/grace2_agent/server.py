@@ -720,7 +720,7 @@ def _is_terminal_composer(tool_name: str) -> bool:
 #
 # The Stage 3 re-verify (job-0242) proved the per-connection seam structurally
 # broken on the live path: ``pending_payload_warnings`` lived on the
-# per-CONNECTION ``SessionState``, but the web client opens MULTIPLE WebSocket
+# per-CONNECTION ``SessionState``, but the client opens MULTIPLE WebSocket
 # connections per browser session (React StrictMode double-mount + reconnect —
 # four "connection open" events observed in one session). A gate registered on
 # connection A could never be resolved by the Proceed click arriving on
@@ -1322,7 +1322,7 @@ async def _run_coldview_backfill() -> None:
     )
 
 
-# job-0259: session-scoped active-Case registry. The web client mounts TWO
+# job-0259: session-scoped active-Case registry. The client mounts TWO
 # WebSocket connections per tab (Chat.tsx + App.tsx, both bound to the same
 # localStorage session_id — web/src/ws.ts job-0159 hub). The server builds a
 # fresh ``SessionState`` PER CONNECTION, so any Case context stored on the
@@ -1395,7 +1395,7 @@ async def _drain_bg_snapshot_tasks(
 _CASE_SYNC_NEVER = "__case-context-never-synced__"
 
 #: job-0269: stream key for turns dispatched with no active Case (mirrors the
-#: web client's ROOT_STREAM_KEY in Chat.tsx).
+#: client's ROOT_STREAM_KEY in Chat.tsx).
 _ROOT_STREAM_KEY = "__root__"
 
 #: job-0269: per-task narration-list registry. ``_stream_gemini_reply``
@@ -1551,7 +1551,7 @@ def _apply_session_anon_hint(
 # ROOT CAUSE this fixes: a SFINCS solve (``run_model_flood_scenario`` ->
 # ``wait_for_completion``, minutes long) was launched detached on the launching
 # connection and stored ONLY in that connection's ``SessionState.inflight_tasks``.
-# The web client opens MULTIPLE sockets per session (StrictMode double-mount +
+# The client opens MULTIPLE sockets per session (StrictMode double-mount +
 # reconnect); when the launching socket closed, the handler ``finally`` iterated
 # ``inflight_tasks`` and ``.cancel()``-ed EVERY not-done task — docker-killing the
 # solve ~7s in. By keying the running task here by ``session_id`` the task
@@ -1744,7 +1744,7 @@ class SessionState:
     # job-0259: ``active_case_id`` is now a PROPERTY backed by the module-level
     # ``_SESSION_ACTIVE_CASE`` registry (keyed by ``session_id``), NOT a
     # per-connection dataclass field. Root cause of the "Case layers not
-    # rehydrating" bug: the web client mounts TWO GraceWs sockets per tab
+    # rehydrating" bug: the client mounts TWO GraceWs sockets per tab
     # (Chat.tsx carries ``user-message``; App.tsx carries ``case-command`` —
     # see web/src/ws.ts job-0159 hub comment). With a per-connection field,
     # ``case-command(select)`` set the case on App's connection while every
@@ -1994,7 +1994,7 @@ async def _send_error(
 # WS-30s STORM FIX (server data heartbeat): the browser ``WebSocket`` API
 # handles server PROTOCOL-level PING control-frames transparently and NEVER
 # surfaces them to ``onmessage``, so the server's ``ping_interval=20`` pings do
-# NOT reset the web client's inbound-frame timer (ws.ts ``noteInboundActivity``
+# NOT reset the client's inbound-frame timer (ws.ts ``noteInboundActivity``
 # fires only on a DATA frame). Between turns the ONLY data frame the client sees
 # is its own keepalive's ``session-state`` reply; if that reply is slow or stalls
 # (a reconnect re-runs the active-case layer replay + vector densify), the
@@ -2022,7 +2022,7 @@ async def _heartbeat_loop(
     """Send a lightweight ``heartbeat`` DATA frame every interval until cancelled.
 
     WS-30s STORM FIX (primary): the server PING control-frames never reach the
-    browser ``onmessage`` handler, so they cannot keep the web client's
+    browser ``onmessage`` handler, so they cannot keep the client's
     inbound-activity / pong-deadline timer alive. This per-connection task sends a
     tiny ``heartbeat`` envelope on a server clock (every
     ``HEARTBEAT_INTERVAL_SECONDS``) so the client always sees a fresh DATA frame
@@ -3156,7 +3156,7 @@ async def _stream_gemini_reply(
                     # whenever ``compute_impact_envelope`` returns a result that
                     # carries a valid ImpactEnvelope (key signal: ``raw_envelope``
                     # dict with ``n_structures_total`` inside).  Fires IN ADDITION
-                    # to the standard ``function_response`` — the web client gets
+                    # to the standard ``function_response`` — the client gets
                     # both: function_response for Gemini-loop replay,
                     # impact-envelope for ImpactPanel state.
                     if (
@@ -3243,7 +3243,7 @@ async def _stream_gemini_reply(
                     # ChartEmissionPayload-shaped dict (key signal:
                     # ``envelope_type == "chart-emission"`` + a dict
                     # ``vega_lite_spec``). Fires IN ADDITION to the standard
-                    # ``function_response`` — the web client gets both: the full
+                    # ``function_response`` — the client gets both: the full
                     # Vega-Lite spec on the chart-emission envelope (for
                     # vega-embed rendering + the stacked gallery), and a COMPACT
                     # data summary on the function_response (the spec is stripped
@@ -3257,7 +3257,7 @@ async def _stream_gemini_reply(
                     # carrying the full code-exec-result payload (key signal:
                     # ``_code_exec_result`` with ``envelope_type ==
                     # "code-exec-result"``). Fires IN ADDITION to the standard
-                    # function_response — the web client gets the full result
+                    # function_response — the client gets the full result
                     # card via the envelope, and Gemini gets the COMPACT summary
                     # (the full payload is stripped by ``summarize_tool_result``).
                     if is_code_exec_result(result):
@@ -4010,7 +4010,7 @@ async def _handle_session_resume(
     # JOB C (active-case flap): a keepalive resume is any resume AFTER the first
     # one on THIS connection. Capture the keepalive verdict BEFORE flipping the
     # per-connection latch so the rebind gate below sees the genuine first/later
-    # distinction. The web client's 25s proof-of-life ping and a genuine fresh
+    # distinction. The client's 25s proof-of-life ping and a genuine fresh
     # reconnect are indistinguishable by the envelope alone, but a fresh
     # ``SessionState`` is built per connection, so the FIRST resume here is the
     # real fresh-socket resume and every later one is a keepalive ping.
@@ -4474,7 +4474,7 @@ async def _ensure_auth_handshake(
 #: OPEN-8 (case-list emission storm): the last-emitted case-list content
 #: digest PER SESSION (not per connection — ``SessionState`` is a fresh
 #: per-connection object, and a session can legitimately carry more than one
-#: live socket, e.g. the web client's dual-GraceWs tab or a QGIS dock
+#: live socket, e.g. the client's dual-GraceWs tab or a QGIS dock
 #: reconnect racing its own stale socket's teardown). A ``session-resume``
 #: keepalive ping — the client's ~25s proof-of-life, or one of several
 #: concurrent sockets independently resuming — was re-serializing +
@@ -4630,7 +4630,7 @@ async def _sync_case_context(
     job-0259: ``active_case_id`` is session-scoped (see ``_SESSION_ACTIVE_CASE``)
     but ``chat_history`` (the Gemini context) and the emitter's
     ``loaded_layers`` accumulator are per-connection. When a ``case-command``
-    was handled on a SIBLING connection (the web client's App.tsx socket) —
+    was handled on a SIBLING connection (the client's App.tsx socket) —
     or when this is a fresh reconnect — this connection never ran the
     ``_emit_case_open`` resets. Called at the top of every ``user-message``
     dispatch: if the connection's context was last synced to a different
@@ -5463,7 +5463,7 @@ async def _emit_auto_case_open(
     rehydration payload carries it: Chat.tsx's case-open handler is
     replace-not-reconcile (it flushes the local message buffer and re-renders
     from ``session_state.chat_history``), so emitting before the persist
-    would blank the just-typed message bubble. The web client's ws.ts hub
+    would blank the just-typed message bubble. The client's ws.ts hub
     fans ``case-open`` out to App.tsx's socket (SESSION_SCOPED_TYPES), where
     ``useCases.onCaseOpen`` sets ``activeCaseId`` and the left rail flips
     from the Cases root into the Case view.
@@ -5556,7 +5556,7 @@ async def _prepare_user_turn(
     3. ``_persist_chat_turn`` — the user turn lands in the (possibly brand
        new) active Case. Best-effort; no Case / no Persistence = no-op.
     4. For an auto-created Case: emit ``case-open`` + ``case-list`` so the
-       web client switches from the Cases root into the Case view (after the
+       client switches from the Cases root into the Case view (after the
        persist — see ``_emit_auto_case_open``).
 
     Returns the parsed ``/invoke`` directive (``(tool_name, params)``) or
@@ -7791,7 +7791,7 @@ async def _gate_on_solver_confirm(
     """Parameter-confirmation gate for solver composers (job-0241) — fail-closed.
 
     Mirrors :func:`_gate_on_code_exec`: build the confirm card, emit it as a
-    ``tool-payload-warning`` (the inline card the web client already renders),
+    ``tool-payload-warning`` (the inline card the client already renders),
     block on the ``pending_payload_warnings`` future seam (``warning_id`` is
     the correlation key the ``tool-payload-confirmation`` reply carries), and
     inject ``confirmed=True`` only after an explicit ``proceed``.
@@ -11341,7 +11341,7 @@ async def _maybe_emit_impact_envelope(
     ``n_structures_total`` present at the top level).
 
     The envelope is emitted IN ADDITION to the standard ``function_response``
-    so the web client gets both:
+    so the client gets both:
 
     - ``function_response`` → Gemini-loop replay (Gemini reads the summary).
     - ``impact-envelope``   → ImpactPanel state update (P4 UI surface).
@@ -11395,7 +11395,7 @@ async def _maybe_emit_code_exec_result(
 
     - ``code-exec-result`` → the FULL result payload (status + stdout/stderr
       tails + the structured result descriptor + truncated flag + duration) for
-      the web client to render the result card. The function_response Gemini
+      the client to render the result card. The function_response Gemini
       reads is the COMPACT summary (the full payload is stripped by
       ``adapter.summarize_tool_result`` via the ``_code_exec_result`` key) so
       narration sources the structured ``result``, not the raw logs.
@@ -11455,7 +11455,7 @@ async def _maybe_emit_chart(
     (``is_chart_emission_result(result)`` is True). Fires IN ADDITION to the
     standard ``function_response``:
 
-    - ``chart-emission`` → the FULL Vega-Lite spec for the web client to render
+    - ``chart-emission`` → the FULL Vega-Lite spec for the client to render
       via vega-embed (inline stacked preview + gallery). The function_response
       Gemini reads is a COMPACT summary with the spec stripped
       (``adapter.summarize_tool_result``) so narration sources the numbers, not
@@ -12524,7 +12524,7 @@ def _make_handler(settings: GeminiSettings):
         state: SessionState | None = None
 
         # WS-30s STORM FIX (primary): start the per-connection data heartbeat so
-        # the web client's inbound-activity timer is reset on a fast server clock
+        # the client's inbound-activity timer is reset on a fast server clock
         # (every HEARTBEAT_INTERVAL_SECONDS), independent of the possibly-slow
         # session-resume reply. Cancelled in the finally below on EVERY exit path.
         # The session_id is bound on the first inbound envelope; the heartbeat
@@ -13139,7 +13139,7 @@ def _make_handler(settings: GeminiSettings):
             # since Fort Myers": this finally used to ``.cancel()`` EVERY not-done
             # task on ``state.inflight_tasks`` — including a detached
             # ``run_model_flood_scenario`` -> ``wait_for_completion`` (minutes
-            # long). The web client opens MULTIPLE sockets per session (StrictMode
+            # long). The client opens MULTIPLE sockets per session (StrictMode
             # double-mount + reconnect), so a transient socket swap detonated this
             # and docker-killed the solve ~7s in.
             #

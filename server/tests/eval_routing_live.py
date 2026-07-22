@@ -61,6 +61,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import pathlib
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -622,7 +623,7 @@ def _git_head() -> str:
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
-            cwd="/home/nate/Documents/GRACE-2",
+            cwd=str(pathlib.Path(__file__).resolve().parents[2]),
             stderr=subprocess.DEVNULL,
         )
         return out.decode().strip()

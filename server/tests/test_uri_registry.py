@@ -6,7 +6,9 @@ suite covers, per the kickoff:
 1. registration on tool results (LayerURI models, dicts, bare gs:// strings,
    WMS URLs, composer observation hook);
 2. all four resolution branches (exact pass / handle substitution / fuzzy
-   mangle-match + WARNING / typed URI_HANDLE_UNRESOLVED error);
+   mangle-match + WARNING / fail-open pass-through for unknown storage URIs,
+   with the typed URI_HANDLE_UNRESOLVED error reserved for display-face URLs
+   that carry no recoverable data URI);
 3. cross-session isolation;
 4. the FIVE historical incident shapes, each replayed with the REAL logged
    values from the Stage 3 / demo evidence:
@@ -43,23 +45,25 @@ from grace2_agent.uri_registry import (
 from grace2_contracts.execution import LayerURI
 
 # --------------------------------------------------------------------------- #
-# Real logged values (verbatim from the evidence files)
+# Real logged values from the evidence files. Bucket/host names were
+# neutralized (legacy-cloud-*, legacy-qgis-server) after the legacy-cloud
+# decommission; path shapes, ULIDs and hash basenames are verbatim.
 # --------------------------------------------------------------------------- #
 
 # job-0253 (Fort Myers flood -> Pelicun, session 01KTS5T50ET0FZZ1TWRMGCQTBA)
 REAL_FLOOD_COG_0253 = (
-    "gs://grace-2-hazard-prod-runs/01KTS5W9GTE7A7WPC3BNBE10EQ/flood_depth_peak.tif"
+    "gs://legacy-cloud-runs/01KTS5W9GTE7A7WPC3BNBE10EQ/flood_depth_peak.tif"
 )
 MANGLED_RUNS_PREFIX_0253 = (
-    "gs://grace-2-hazard-prod-runs/runs/01KTS5W9GTE7A7WPC3BNBE10EQ/flood_depth_peak.tif"
+    "gs://legacy-cloud-runs/runs/01KTS5W9GTE7A7WPC3BNBE10EQ/flood_depth_peak.tif"
 )
 REAL_NSI_FGB = (
-    "gs://grace-2-hazard-prod-cache/cache/static-30d/usace_nsi/"
+    "gs://legacy-cloud-cache/cache/static-30d/usace_nsi/"
     "852a6cc379b18c865bf9d99ec1acaa35.fgb"
 )
 NSI_LAYER_ID = "usace-nsi--81.9126-26.5476--81.7511-26.6892"
 MANGLED_NSI_LAYERID_BASENAME_0253 = (
-    "gs://grace-2-hazard-prod-cache/cache/static-30d/usace_nsi/"
+    "gs://legacy-cloud-cache/cache/static-30d/usace_nsi/"
     f"{NSI_LAYER_ID}.fgb"
 )
 
@@ -69,19 +73,19 @@ HILLSHADE_MANGLED_CHICAGO_1 = "090a4ff8d9a083b28499252309d12999.tif"
 HILLSHADE_MANGLED_CHICAGO_2 = "090a4ff8d9a08321a43a7a9437b0e51c.tif"
 HILLSHADE_REAL_SEATTLE = "4007d642cb157d11f5db275a50286ae5.tif"
 HILLSHADE_MANGLED_SEATTLE = "4007d642cb157d22b1113a4b912a2ee3.tif"
-HILLSHADE_CACHE_DIR = "gs://grace-2-hazard-prod-cache/cache/static-30d/compute_hillshade"
+HILLSHADE_CACHE_DIR = "gs://legacy-cloud-cache/cache/static-30d/compute_hillshade"
 
 # job-0255 (Fort Myers round 10, session 01KTS7QFMKWMKWG8V54D8GMH89)
 REAL_FLOOD_COG_0255 = (
-    "gs://grace-2-hazard-prod-runs/01KTS8H8RJT6311A2V4BKX6H8A/flood_depth_peak.tif"
+    "gs://legacy-cloud-runs/01KTS8H8RJT6311A2V4BKX6H8A/flood_depth_peak.tif"
 )
 FLOOD_LAYER_ID_0255 = "flood-depth-peak-01KTS8H8RJT6311A2V4BKX6H8A"
 WMS_URL_0255 = (
-    "https://grace-2-qgis-server-425352658356.us-central1.run.app/ogc/wms"
+    "https://legacy-qgis-server.example.com/ogc/wms"
     "?MAP=/mnt/qgs/grace2-sample.qgs&LAYERS=flood-depth-peak-01KTS8H8RJT6311A2V4BKX6H8A"
 )
 MANGLED_NSI_INVENTED_HASH_0255 = (
-    "gs://grace-2-hazard-prod-cache/cache/static-30d/usace_nsi/20240516140505.fgb"
+    "gs://legacy-cloud-cache/cache/static-30d/usace_nsi/20240516140505.fgb"
 )
 
 
@@ -164,13 +168,13 @@ class TestRegistration:
         reg = make_registry()
         reg.record(
             "flood-x",
-            uri="/vsigs/grace-2-hazard-prod-runs/01ABC/flood_depth_peak.tif",
+            uri="/vsigs/legacy-cloud-runs/01ABC/flood_depth_peak.tif",
         )
         assert (
             reg.resolve_params("t", {"hazard_raster_uri": "flood-x"})[
                 "hazard_raster_uri"
             ]
-            == "gs://grace-2-hazard-prod-runs/01ABC/flood_depth_peak.tif"
+            == "gs://legacy-cloud-runs/01ABC/flood_depth_peak.tif"
         )
 
     def test_observation_hook_requires_active_context(self) -> None:
@@ -233,24 +237,25 @@ class TestResolutionBranches:
         assert out["assets_uri"] == REAL_NSI_FGB
         assert any("resolved" in r.message for r in caplog.records)
 
-    def test_branch4_unknown_managed_bucket_raises_typed_error(self) -> None:
+    def test_branch4_unknown_storage_uri_fails_open(self) -> None:
+        """The legacy managed-bucket strict-reject died with the cloud
+        decommission: an unknown storage URI with no plausible match now
+        passes through untouched and fails downstream with the consuming
+        tool's own typed fetch error."""
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
-        invented = "gs://grace-2-hazard-prod-cache/cache/static-30d/totally/made_up.tif"
-        with pytest.raises(UriResolutionError) as exc_info:
-            reg.resolve_params("t", {"layer_uri": invented})
-        err = exc_info.value
-        assert err.error_code == "URI_HANDLE_UNRESOLVED"
-        assert err.retryable is True
-        # The message TELLS Gemini which handles exist so it self-corrects.
-        assert NSI_LAYER_ID in str(err)
+        invented = "gs://legacy-cloud-cache/cache/static-30d/totally/made_up.tif"
+        out = reg.resolve_params("t", {"layer_uri": invented})
+        assert out["layer_uri"] == invented
 
     def test_branch4_empty_registry_message_says_run_producer_first(self) -> None:
+        """The typed error (now raised only for display-face URLs with no
+        recoverable data URI) still tells the model to run a producer first."""
         reg = make_registry()
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
                 "run_pelicun_damage_assessment",
-                {"hazard_raster_uri": "gs://grace-2-hazard-prod-cache/cache/x.tif"},
+                {"hazard_raster_uri": "https://tiles.example.com/wms?LAYERS=never-produced"},
             )
         assert "producing tool" in str(exc_info.value)
 
@@ -268,16 +273,16 @@ class TestResolutionBranches:
     def test_ambiguous_hash_prefix_refuses_to_guess(self) -> None:
         reg = make_registry()
         # Two cache keys sharing the same 14-char prefix — substitution would
-        # be a coin flip; branch 4 (error + inventory) is the honest answer.
+        # be a coin flip; with the managed-bucket strict-reject gone, the
+        # honest answer is to pass the value through UNCHANGED (never guess;
+        # the consuming tool's own 404 follows).
         a = f"{HILLSHADE_CACHE_DIR}/090a4ff8d9a083aaaaaaaaaaaaaaaaaa.tif"
         b = f"{HILLSHADE_CACHE_DIR}/090a4ff8d9a083bbbbbbbbbbbbbbbbbb.tif"
         reg.record("hillshade-a", uri=a)
         reg.record("hillshade-b", uri=b)
-        with pytest.raises(UriResolutionError):
-            reg.resolve_params(
-                "publish_layer",
-                {"layer_uri": f"{HILLSHADE_CACHE_DIR}/090a4ff8d9a083cccccccccccccccccc.tif"},
-            )
+        mangled = f"{HILLSHADE_CACHE_DIR}/090a4ff8d9a083cccccccccccccccccc.tif"
+        out = reg.resolve_params("publish_layer", {"layer_uri": mangled})
+        assert out["layer_uri"] == mangled
 
     def test_handle_with_only_wms_face_raises_instead_of_handing_display_url(
         self,
@@ -300,12 +305,12 @@ class TestResolutionBranches:
 # A SWMM depth-frame COG + its TiTiler display template (the `url=` param is the
 # COG, URL-encoded, exactly as publish_layer.py:1763 builds it).
 SWMM_FRAME_COG = (
-    "s3://grace2-hazard-runs/01KVHKWETM1QMXH059QZGXP4V6/swmm_depth_frame_01.tif"
+    "s3://trid3nt-runs/01KVHKWETM1QMXH059QZGXP4V6/swmm_depth_frame_01.tif"
 )
 SWMM_FRAME_LAYER_ID = "swmm-depth-frame-01-01KVHKWETM1QMXH059QZGXP4V6"
 SWMM_FRAME_TILE_TEMPLATE = (
     "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-    "?url=s3%3A%2F%2Fgrace2-hazard-runs%2F01KVHKWETM1QMXH059QZGXP4V6"
+    "?url=s3%3A%2F%2Ftrid3nt-runs%2F01KVHKWETM1QMXH059QZGXP4V6"
     "%2Fswmm_depth_frame_01.tif&rescale=0%2C2&colormap_name=blues"
 )
 
@@ -371,9 +376,13 @@ class TestSessionIsolation:
         reg_a = get_uri_registry("session-A")
         reg_b = get_uri_registry("session-B")
         reg_a.record(NSI_LAYER_ID, uri=REAL_NSI_FGB)
-        # Session B never produced the layer: handle unresolved -> typed error.
-        with pytest.raises(UriResolutionError):
-            reg_b.resolve_params("t", {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253})
+        # Session B never produced the layer: session A's mapping must NOT
+        # leak — the mangled URI passes through UNSUBSTITUTED (storage URIs
+        # fail open now that the legacy strict-reject is gone).
+        out_b = reg_b.resolve_params(
+            "t", {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253}
+        )
+        assert out_b["assets_uri"] == MANGLED_NSI_LAYERID_BASENAME_0253
         # And the same registry object comes back for the same session id
         # (reconnect-survival: the store is keyed by session_id).
         assert get_uri_registry("session-A") is reg_a
@@ -532,25 +541,25 @@ class TestHistoricalIncidents:
         )
         assert out["assets_uri"] == REAL_NSI_FGB
 
-    def test_i5_invented_hash_ambiguous_dir_errors_with_handles(self) -> None:
-        """Two NSI fetches in the dir -> same-dir match is ambiguous -> error."""
+    def test_i5_invented_hash_ambiguous_dir_passes_through(self) -> None:
+        """Two NSI fetches in the dir -> same-dir match is ambiguous -> the
+        registry refuses to guess and passes the value through unchanged
+        (fail open; the consuming tool's own fetch error follows)."""
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
         reg.record(
             "usace-nsi-tampa",
             uri=(
-                "gs://grace-2-hazard-prod-cache/cache/static-30d/usace_nsi/"
+                "gs://legacy-cloud-cache/cache/static-30d/usace_nsi/"
                 "ffffffffffffffffffffffffffffffff.fgb"
             ),
             tool_name="fetch_usace_nsi",
         )
-        with pytest.raises(UriResolutionError) as exc_info:
-            reg.resolve_params(
-                "run_pelicun_damage_assessment",
-                {"assets_uri": MANGLED_NSI_INVENTED_HASH_0255},
-            )
-        msg = str(exc_info.value)
-        assert NSI_LAYER_ID in msg and "usace-nsi-tampa" in msg
+        out = reg.resolve_params(
+            "run_pelicun_damage_assessment",
+            {"assets_uri": MANGLED_NSI_INVENTED_HASH_0255},
+        )
+        assert out["assets_uri"] == MANGLED_NSI_INVENTED_HASH_0255
 
 
 # --------------------------------------------------------------------------- #
@@ -633,7 +642,8 @@ def test_invoke_seam_registers_then_resolves(_dummy_uri_tool) -> None:
 
 
 def test_invoke_seam_unresolved_raises_typed_error(_dummy_uri_tool) -> None:
-    """Branch 4 propagates as a typed retryable error the loop summarizes."""
+    """The remaining branch-4 raise (display-face URL, no recoverable data
+    URI) propagates as a typed retryable error the loop summarizes."""
     from grace2_agent.adapter import summarize_tool_result
     from grace2_agent.server import SessionState, _invoke_tool_via_emitter
 
@@ -649,6 +659,8 @@ def test_invoke_seam_unresolved_raises_typed_error(_dummy_uri_tool) -> None:
         assert isinstance(produced, LayerURI)
         minted_handle = produced.layer_id
         assert minted_handle != NSI_LAYER_ID  # the mint actually replaced the id
+        # A display-face URL whose LAYERS= handle was never produced is the
+        # remaining branch-4 raise (storage URIs fail open post-decommission).
         with pytest.raises(UriResolutionError) as exc_info:
             await _invoke_tool_via_emitter(
                 ws,
@@ -656,7 +668,7 @@ def test_invoke_seam_unresolved_raises_typed_error(_dummy_uri_tool) -> None:
                 "consume_layer_t",
                 {
                     "assets_uri": (
-                        "gs://grace-2-hazard-prod-cache/cache/static-30d/x/invented.fgb"
+                        "https://tiles.example.com/wms?LAYERS=layer-never-produced"
                     )
                 },
             )
@@ -690,11 +702,11 @@ def test_resolvable_param_allowlist_excludes_server_owned_params() -> None:
 
 DEM_LAYER_ID = "dem-3dep-10m--122.51-47.49--122.30-47.62"
 DEM_COG = (
-    "s3://grace2-hazard-cache/cache/static-30d/fetch_dem/"
+    "s3://trid3nt-cache/cache/static-30d/fetch_dem/"
     "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d.tif"
 )
 DEM_COG_2 = (
-    "s3://grace2-hazard-cache/cache/static-30d/fetch_dem/"
+    "s3://trid3nt-cache/cache/static-30d/fetch_dem/"
     "ffeeddccbbaa99887766554433221100.tif"
 )
 
@@ -793,7 +805,7 @@ class TestPlaceholderResolution:
                 layer_id="nlcd-2021",
                 name="NLCD 2021",
                 layer_type="raster",
-                uri="s3://grace2-hazard-cache/cache/static-30d/fetch_landcover/aa.tif",
+                uri="s3://trid3nt-cache/cache/static-30d/fetch_landcover/aa.tif",
                 style_preset="",
             ),
         )
@@ -803,7 +815,7 @@ class TestPlaceholderResolution:
 
     def test_nested_tool_name_prefers_longest_match(self) -> None:
         reg = self._registry_with_dem()
-        hires = "s3://grace2-hazard-cache/cache/static-30d/fetch_dem_hires/bb.tif"
+        hires = "s3://trid3nt-cache/cache/static-30d/fetch_dem_hires/bb.tif"
         reg.register_tool_result(
             "fetch_dem_hires",
             LayerURI(
@@ -917,6 +929,8 @@ class TestDemHintInventoryText:
     wider (10, was 5) handle-listing cap."""
 
     def test_dem_consuming_tool_gets_fetch_dem_hint(self) -> None:
+        # The hint fires on the remaining branch-4 raise (a display-face URL
+        # whose LAYERS= handle was never produced; storage URIs fail open).
         reg = make_registry("sess-dem-hint")
         for tool in (
             "compute_hillshade",
@@ -926,7 +940,10 @@ class TestDemHintInventoryText:
             "compute_terrain_profile",
         ):
             with pytest.raises(UriResolutionError) as exc_info:
-                reg.resolve_params(tool, {"dem_uri": "gs://grace2-hazard-cache/x.tif"})
+                reg.resolve_params(
+                    tool,
+                    {"dem_uri": "https://tiles.example.com/wms?LAYERS=never-produced"},
+                )
             msg = str(exc_info.value)
             assert "fetch_dem" in msg
             assert "run_model_flood_scenario" not in msg
@@ -936,7 +953,7 @@ class TestDemHintInventoryText:
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
                 "run_pelicun_damage_assessment",
-                {"hazard_raster_uri": "gs://grace2-hazard-cache/x.tif"},
+                {"hazard_raster_uri": "https://tiles.example.com/wms?LAYERS=never-produced"},
             )
         msg = str(exc_info.value)
         assert "run_model_flood_scenario" in msg
@@ -946,12 +963,13 @@ class TestDemHintInventoryText:
         for i in range(12):
             reg.record(
                 f"layer-{i:02d}",
-                uri=f"gs://grace2-hazard-cache/layer-{i:02d}.tif",
+                uri=f"s3://trid3nt-cache/layer-{i:02d}.tif",
                 tool_name="t",
             )
         with pytest.raises(UriResolutionError) as exc_info:
             reg.resolve_params(
-                "t", {"assets_uri": "gs://grace2-hazard-cache/does-not-exist.tif"}
+                "t",
+                {"assets_uri": "https://tiles.example.com/wms?LAYERS=does-not-exist"},
             )
         msg = str(exc_info.value)
         listed = sum(1 for i in range(12) if f"layer-{i:02d}" in msg)

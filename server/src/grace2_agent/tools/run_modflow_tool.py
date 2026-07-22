@@ -15,7 +15,7 @@ never touches the cache shim).
 Two execution paths, selected by ``GRACE2_MODFLOW_LOCAL``:
 
   * **Cloud (default).** Stage the deck to the cache bucket, submit a
-    ``grace-2-modflow-orchestrator`` Cloud Workflows execution
+    legacy Cloud Workflows execution
     (``submit_modflow_run``), poll it with the SFINCS-shared
     ``wait_for_completion`` (tools/solver.py — its ``ExecutionHandle`` cancel
     seam is solver-agnostic), then postprocess the run's UCN output. Confirmation

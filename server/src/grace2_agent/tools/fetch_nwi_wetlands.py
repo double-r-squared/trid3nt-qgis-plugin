@@ -145,7 +145,7 @@ NWI_WETLANDS_URL = (
 _NWI_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0 Safari/537.36 grace-2/0.1 (Hazard Modeling Agent; agent@grace-2.dev)"
+        "Chrome/120.0 Safari/537.36 trid3nt/0.1 (Hazard Modeling Agent; agent@trid3nt.dev)"
     ),
     "Accept": "application/json, text/plain, */*",
     "Referer": "https://www.fws.gov/program/national-wetlands-inventory",

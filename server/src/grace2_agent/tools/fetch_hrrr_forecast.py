@@ -830,7 +830,7 @@ def fetch_hrrr_forecast(
 
     Returns:
         A ``LayerURI`` pointing at a COG in the cache bucket
-        ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/hrrr/<key>.tif``
+        ``s3://trid3nt-cache/cache/dynamic-1h/hrrr/<key>.tif``
         carrying the requested variable's forecast slice, EPSG:4326,
         float32, NaN nodata. ``layer_type="raster"``, ``role="primary"``,
         ``units`` per the variable (``"K"``, ``"m s-1"``, ``"kg m-2"``).

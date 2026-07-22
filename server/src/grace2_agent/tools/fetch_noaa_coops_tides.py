@@ -190,8 +190,8 @@ COOPS_DATA_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
 #: User-Agent per NOAA usage policy.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP timeouts (seconds).
@@ -800,7 +800,7 @@ def fetch_noaa_coops_tides(
 
     **Returns:**
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/noaa_coops_tides/<key>.fgb``
+        ``s3://trid3nt-cache/cache/dynamic-1h/noaa_coops_tides/<key>.fgb``
         Each feature is a Point at the station location (EPSG:4326) with
         attributes: ``station_id`` (7-digit CO-OPS ID), ``station_name``,
         ``lon``, ``lat``, ``product``, ``datum`` (always "MLLW"),

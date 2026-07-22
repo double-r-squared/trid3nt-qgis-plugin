@@ -37,7 +37,7 @@ and flows through the normal raster path, and the plugin unwraps legacy
 templates it rehydrates on its own. No worker round-trip, no ``.qgs``
 mutation on the raster path.
 
-The GCP-era publish path (Cloud Run ``grace-2-pyqgis-worker`` Job dispatch,
+The GCP-era publish path (the legacy cloud QGIS-worker dispatch,
 ``gs://``/``/vsigs/`` staging, GCS ``.qgs`` verification) was removed with
 the cloud strip - ``cache.storage_scheme()`` is pinned to ``"s3"``.
 
@@ -86,7 +86,7 @@ logger = logging.getLogger("grace2_agent.tools.publish_layer")
 #: Default canonical project .qgs URI (heritage default; consumed only by the
 #: ``GRACE2_QGIS_WMS_BASE`` vector-WMS seam and ``case_lifecycle``'s template
 #: resolution - override via ``GRACE2_CASE_QGS_TEMPLATE`` / ``set_default_qgs_uri``).
-DEFAULT_PROJECT_QGS_URI: str = "gs://grace-2-hazard-prod-qgs/grace2-sample.qgs"
+DEFAULT_PROJECT_QGS_URI: str = "s3://trid3nt-qgs/sample.qgs"
 
 
 # --------------------------------------------------------------------------- #
@@ -155,8 +155,8 @@ def _parse_qgs_key(qgs_uri: str) -> str:
     must accept the s3:// form or the branch fails.
 
     Examples:
-        ``gs://grace-2-hazard-prod-qgs/grace2-sample.qgs`` -> ``grace2-sample.qgs``
-        ``s3://grace-2-hazard-prod-qgs/grace2-sample.qgs`` -> ``grace2-sample.qgs``
+        ``s3://trid3nt-qgs/sample.qgs`` -> ``sample.qgs``
+        ``gs://legacy-cloud-qgs/sample.qgs`` -> ``sample.qgs``
 
     Raises:
         PublishLayerError: if the URI is not a gs:// or s3:// URI, or has no

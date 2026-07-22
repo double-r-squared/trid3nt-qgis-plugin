@@ -1087,7 +1087,7 @@ def fetch_era5_reanalysis(
     - ``secret_ref`` (Any | None): per-Case ``SecretRecord`` for production.
 
     **Returns:** A ``LayerURI`` pointing at a float32 COG in the cache bucket
-    (``gs://grace-2-hazard-prod-cache/cache/static-30d/era5/<key>.tif``)
+    (``s3://trid3nt-cache/cache/static-30d/era5/<key>.tif``)
     carrying the time-mean of the requested variable, clipped to bbox.
     ``layer_type="raster"``, ``role="primary"``. Units: ``"m s-1"`` for
     wind, ``"K"`` for temperature, ``"m"`` for precipitation / runoff /

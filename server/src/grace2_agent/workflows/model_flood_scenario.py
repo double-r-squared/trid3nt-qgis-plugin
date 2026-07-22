@@ -584,7 +584,7 @@ def _emit_flood_solve_telemetry(
     vCPU) off ``model_setup.parameters`` and the wall-clock from the
     ``RunResult`` (``duration_seconds``), and folds in the backend
     (``handle.workflow_name`` — ``local-docker`` / ``local-exec`` /
-    ``grace-2-sfincs-orchestrator``) + aoi_km2. Best-effort; returns the record
+    ``model_flood_scenario``) + aoi_km2. Best-effort; returns the record
     (or ``None`` on any failure) so the caller's try/except stays simple.
     """
     from ..telemetry import emit_solve_telemetry

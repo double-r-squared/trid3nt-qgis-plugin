@@ -171,8 +171,8 @@ _MAX_TILES_HARD_CAP = 200
 
 # User-Agent per eBird usage guidelines.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # Default ``days_back`` per audit.md.
@@ -856,7 +856,7 @@ def fetch_ebird_observations(
 
     Returns:
         A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/ebird/<key>.fgb``
+        ``s3://trid3nt-cache/cache/dynamic-1h/ebird/<key>.fgb``
         containing the observation points clipped to the requested bbox.
         ``layer_type="vector"``, ``role="context"``, ``units=None``.
 

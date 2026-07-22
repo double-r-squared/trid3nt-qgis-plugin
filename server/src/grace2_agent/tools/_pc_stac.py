@@ -49,8 +49,8 @@ PC_SAS_TOKEN_URL = "https://planetarycomputer.microsoft.com/api/sas/v1/token"
 
 #: User-Agent per PC + general good-citizen guidance.
 USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP timeout for the SAS sign call (fast metadata round-trip).

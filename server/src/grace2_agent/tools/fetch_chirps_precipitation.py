@@ -138,8 +138,8 @@ _CHIRPS_FIRST_YEAR = 1981
 
 #: HTTP settings.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 _DOWNLOAD_TIMEOUT = 180.0
 

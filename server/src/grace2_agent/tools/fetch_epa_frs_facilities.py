@@ -243,8 +243,8 @@ PROGRAM_ALIASES: dict[str, str] = {
 
 # User-Agent — identify this client clearly to the EPA ESRI cluster.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # Server-enforced max page size on these MapServer layers.

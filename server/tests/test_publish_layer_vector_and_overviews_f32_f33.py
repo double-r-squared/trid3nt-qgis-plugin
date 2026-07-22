@@ -276,8 +276,8 @@ def test_publish_layer_vector_s3_env_set_returns_vector_wms_url(
 def test_parse_qgs_key_accepts_s3() -> None:
     """An s3:// .qgs URI resolves to the same key as the gs:// form."""
     assert (
-        _parse_qgs_key("s3://grace-2-hazard-prod-qgs/grace2-sample.qgs")
-        == "grace2-sample.qgs"
+        _parse_qgs_key("s3://trid3nt-qgs/sample.qgs")
+        == "sample.qgs"
     )
     assert (
         _parse_qgs_key("s3://bucket/nested/dir/project.qgs")
@@ -288,8 +288,8 @@ def test_parse_qgs_key_accepts_s3() -> None:
 def test_parse_qgs_key_accepts_gs_unchanged() -> None:
     """The gs:// path is byte-identical to before (no regression)."""
     assert (
-        _parse_qgs_key("gs://grace-2-hazard-prod-qgs/grace2-sample.qgs")
-        == "grace2-sample.qgs"
+        _parse_qgs_key("gs://legacy-cloud-qgs/sample.qgs")
+        == "sample.qgs"
     )
 
 
@@ -323,7 +323,7 @@ def test_publish_layer_vector_s3_env_set_with_s3_qgs_uri(
     result = publish_layer(
         layer_uri="s3://bucket/roads.fgb",
         layer_id="roads",
-        project_qgs_uri="s3://grace-2-hazard-prod-qgs/grace2-sample.qgs",
+        project_qgs_uri="s3://trid3nt-qgs/sample.qgs",
     )
 
     # Did NOT raise (s3 .qgs key resolved) and is a real WMS URL.
@@ -331,7 +331,7 @@ def test_publish_layer_vector_s3_env_set_with_s3_qgs_uri(
     assert "SERVICE=WMS" in result
     assert "REQUEST=GetMap" in result
     # The s3 .qgs key rode into the MAP= mount param.
-    assert "grace2-sample.qgs" in result
+    assert "sample.qgs" in result
 
 
 def test_publish_layer_vector_s3_env_set_trailing_slash_base(

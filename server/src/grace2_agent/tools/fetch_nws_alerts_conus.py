@@ -801,7 +801,7 @@ def fetch_nws_alerts_conus(
 
     **Returns:**
     A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-    ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/nws_alerts_conus/<key>.fgb``
+    ``s3://trid3nt-cache/cache/dynamic-1h/nws_alerts_conus/<key>.fgb``
     containing the alert polygons. Properties: ``event``, ``headline``,
     ``description``, ``severity``, ``urgency``, ``certainty``, ``effective``,
     ``onset``, ``ends``, ``expires``, ``senderName``, ``areaDesc``,

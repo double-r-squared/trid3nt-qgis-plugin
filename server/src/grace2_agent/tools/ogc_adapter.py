@@ -85,8 +85,8 @@ ServiceType = Literal["WMS", "WMTS", "WCS", "WFS", "ARCGIS_REST"]
 # pass their own descriptive one when policy requires (Nominatim, etc.). The
 # default is fine for federal-public OGC endpoints.
 DEFAULT_USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent OGC adapter; "
-    "https://github.com/double-r-squared/GRACE-2)"
+    "trid3nt/0.1 (Hazard Modeling Agent OGC adapter; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin)"
 )
 
 

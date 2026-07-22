@@ -168,8 +168,8 @@ _DEFAULT_BBOX_PAD_DEG = 0.25
 
 #: User-Agent -- NIFC asks automated clients to identify themselves.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 _HTTP_TIMEOUT_S = 30.0

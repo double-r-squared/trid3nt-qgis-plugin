@@ -3,7 +3,7 @@
 Thin entrypoint that wraps the Deltares SFINCS executable for invocation as
 a Cloud Run Job. Reads a JSON setup manifest from GCS, fetches the input
 files declared in the manifest, runs SFINCS in a scratch directory, uploads
-outputs back to `gs://grace-2-hazard-prod-runs/<run_id>/`, and writes a
+outputs back to `s3://trid3nt-runs/<run_id>/`, and writes a
 terminal completion manifest the agent's `wait_for_completion` (job-0041)
 polls for.
 

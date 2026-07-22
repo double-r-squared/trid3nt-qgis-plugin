@@ -1,7 +1,7 @@
 """Atomic tool ``request_spatial_input`` — FR-AS-10 / FR-WC-16 urban vector-draw.
 
 The LLM-facing surface that PAUSES the turn and asks the user to DRAW on the map
-(a terra-draw surface in the web client): an area of interest, structural flood
+(a terra-draw surface in the client): an area of interest, structural flood
 WALLS (red, water is dammed) and FLAP GATES (green, one-way drains), or a simple
 point / bbox pick. The drawn geometry comes back as a role-tagged GeoJSON
 ``FeatureCollection``; the agent splits it by role and the ``role=="barrier"``

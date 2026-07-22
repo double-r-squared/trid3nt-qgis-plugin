@@ -201,8 +201,8 @@ class DemPrimaryTimeoutError(UpstreamAPIError):
 # application + a contact. We bake the project name + repo URL; override the
 # contact email via env var ``GRACE2_NOMINATIM_USER_AGENT`` for ops.
 _DEFAULT_USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 
@@ -685,7 +685,7 @@ def fetch_dem(
 
     **Returns:**
     A ``LayerURI`` pointing at a Cloud-Optimized GeoTIFF in the cache bucket
-    (``gs://grace-2-hazard-prod-cache/cache/static-30d/dem/<key>.tif``).
+    (``s3://trid3nt-cache/cache/static-30d/dem/<key>.tif``).
     CRS: EPSG:5070 (py3dep default); units: meters above NAVD88.
     Fields consumed downstream: ``uri`` → by ``build_sfincs_model`` and QGIS
     Server WMS; ``style_preset="continuous_dem"`` → map rendering. When the
@@ -1511,7 +1511,7 @@ def fetch_buildings(
     Returns:
         A ``LayerURI`` (``layer_type="vector"``) pointing at a FlatGeobuf in
         the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/buildings/<key>.fgb``.
+        ``s3://trid3nt-cache/cache/static-30d/buildings/<key>.fgb``.
         The ``name`` and ``layer_id`` reflect the source actually used.
 
     FR-CE-8: The fetch is routed through ``read_through`` so identical
@@ -2069,9 +2069,9 @@ def fetch_population(
     Returns:
         A ``LayerURI`` pointing at a Cloud-Optimized GeoTIFF (WorldPop branch)
         or a GeoJSON FeatureCollection (ACS branch) in the cache bucket.
-        - WorldPop: ``gs://grace-2-hazard-prod-cache/cache/static-30d/population/<key>.tif``
+        - WorldPop: ``s3://trid3nt-cache/cache/static-30d/population/<key>.tif``
           (100m raster, units = people per 100m cell).
-        - ACS: ``gs://grace-2-hazard-prod-cache/cache/static-30d/population/<key>.json``
+        - ACS: ``s3://trid3nt-cache/cache/static-30d/population/<key>.json``
           (tract-level FeatureCollection; geometry enrichment is a follow-up).
 
     FR-CE-8: The fetch is routed through ``read_through`` so identical
@@ -3742,7 +3742,7 @@ def fetch_landcover(
     **Returns:**
     A dict with keys:
     - ``layer`` (LayerURI): COG at
-      ``gs://grace-2-hazard-prod-cache/cache/static-30d/landcover/<key>.tif``;
+      ``s3://trid3nt-cache/cache/static-30d/landcover/<key>.tif``;
       ``style_preset="categorical_landcover"``, ``units="nlcd_class_code"``.
     - ``nlcd_vintage_year`` (int): vintage year consumed by
       ``build_sfincs_model`` to validate the Manning's mapping CSV.
@@ -4635,7 +4635,7 @@ def fetch_river_geometry(
 
     **Returns:**
     A ``LayerURI`` pointing at a FlatGeobuf of river/stream LineStrings in the
-    cache bucket (``gs://grace-2-hazard-prod-cache/cache/static-30d/river_geometry/<key>.fgb``).
+    cache bucket (``s3://trid3nt-cache/cache/static-30d/river_geometry/<key>.fgb``).
     ``layer_type="vector"``, ``role="input"``. The FlatGeobuf renders inline
     on the map via the Wave 4.9 GeoJSON path (``add_loaded_layer``) — it is
     NOT published through ``publish_layer`` (that path is raster-only).

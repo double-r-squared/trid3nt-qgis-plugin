@@ -23,12 +23,22 @@ setup: env binaries venv
 
 # Create .env.local from the template on first run (never clobber an existing one).
 env:
-	@if [ -f $(REPO_ROOT)/.env.local ]; then \
-	  echo ".env.local already exists -- leaving it untouched"; \
-	else \
-	  cp $(REPO_ROOT)/.env.openrouter.example $(REPO_ROOT)/.env.local; \
-	  echo "created .env.local from .env.openrouter.example -- SET your LLM endpoint + key"; \
-	fi
+	@if [ -f $(REPO_ROOT)/.env.local ]; then echo ".env.local exists - not clobbering"; else \
+	printf '%s\n' \
+	  '# TRID3NT local env - fill in your LLM endpoint + key' \
+	  'MODEL_PROVIDER=openai' \
+	  'GRACE2_OPENAI_BASE_URL=https://openrouter.ai/api/v1' \
+	  'GRACE2_OPENAI_MODEL=anthropic/claude-3.5-haiku' \
+	  'GRACE2_OPENAI_API_KEY=sk-or-v1-REPLACE-ME' \
+	  'AWS_ENDPOINT_URL=http://127.0.0.1:9000' \
+	  'AWS_ACCESS_KEY_ID=minioadmin' \
+	  'AWS_SECRET_ACCESS_KEY=minioadmin' \
+	  'AWS_DEFAULT_REGION=us-east-1' \
+	  'GRACE2_CACHE_BUCKET=trid3nt-cache' \
+	  'GRACE2_DEV_PERSISTENCE_DIR=$(REPO_ROOT)/data/persistence' \
+	  'GRACE2_CATALOG_YAML=$(REPO_ROOT)/public_data_source_catalog.yaml' \
+	  > $(REPO_ROOT)/.env.local; \
+	echo "wrote .env.local - edit it and set your API key"; fi
 
 # Start the backend stack the plugin talks to (minio must precede the agent).
 up: minio agent
@@ -54,7 +64,7 @@ agent:
 venv:
 	@~/.local/bin/uv venv --python 3.12 $(REPO_ROOT)/venvs/agent
 	@~/.local/bin/uv pip install --python $(REPO_ROOT)/venvs/agent/bin/python \
-	  --find-links $(REPO_ROOT)/server/vendor \
+	  --find-links $(REPO_ROOT)/server/wheels \
 	  -e $(REPO_ROOT)/contracts \
 	  -e $(REPO_ROOT)/server
 

@@ -61,9 +61,9 @@ def test_tile_template_detected():
 def test_flood_handle_resolves_to_cog_not_template():
     reg = SessionUriRegistry(session_id="s1")
     handle = "flood-depth-peak-01TEST"
-    cog = "s3://grace2-hazard-runs-x/01TEST/flood_depth_peak.tif"
+    cog = "s3://trid3nt-runs-x/01TEST/flood_depth_peak.tif"
     tpl = ("https://cf/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url="
-           "s3%3A%2F%2Fgrace2-hazard-runs-x%2F01TEST%2Fflood_depth_peak.tif&rescale=0,3")
+           "s3%3A%2F%2Ftrid3nt-runs-x%2F01TEST%2Fflood_depth_peak.tif&rescale=0,3")
     # publish_layer registers both faces (s3 data + tile template display)
     reg.record(handle, uri=cog, wms_url=tpl)
     # then the emitted LayerURI (uri=template) is walked by register_tool_result

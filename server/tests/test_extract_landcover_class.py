@@ -562,14 +562,18 @@ def test_live_fortmyers_water_mask(tmp_path):
     that would mirror or rotate the mask relative to its source.
     """
     # Inject a fake GCS so the cache shim's write is in-memory; the read path is
-    # fully real (reads the live cached NLCD via /vsigs/).
+    # fully real (stages the live cached NLCD via the tool's own s3 reader).
     nlcd_uri = (
-        "gs://grace-2-hazard-prod-cache/cache/static-30d/landcover/"
+        "s3://trid3nt-cache/cache/static-30d/landcover/"
         "7dac3520db9a0f6092a434be438d02d9.tif"
     )
 
     # Source counts: read class-11 pixel count directly from the NLCD COG.
-    with rasterio.open("/vsigs/" + nlcd_uri[len("gs://"):]) as src:
+    from rasterio.io import MemoryFile
+
+    from grace2_agent.tools.cache import read_object_bytes_s3
+
+    with MemoryFile(read_object_bytes_s3(nlcd_uri)) as _mf, _mf.open() as src:
         src_arr = src.read(1)
         src_water_count = int(np.sum(src_arr == 11))
         src_developed_count = int(

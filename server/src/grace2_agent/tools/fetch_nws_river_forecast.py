@@ -181,8 +181,8 @@ GAUGE_DETAIL_URL = "https://api.water.noaa.gov/nwps/v1/gauges/"
 
 #: User-Agent per NOAA usage guidance (a descriptive UA is recommended).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP timeout (seconds).

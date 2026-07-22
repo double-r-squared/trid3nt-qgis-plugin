@@ -7,7 +7,7 @@ from GCS, fetches the FloPy-generated input deck declared in the manifest
 package files, preserving the `gwf/` and `gwt/` subdirectory layout), runs
 the pinned `mf6` 6.5.0 binary in a scratch directory, parses the simulation
 list file for convergence, uploads outputs back to
-`gs://grace-2-hazard-prod-runs/<run_id>/`, and writes a terminal
+`s3://trid3nt-runs/<run_id>/`, and writes a terminal
 `completion.json` the agent's wait-for-completion polls for.
 
 This is INFRA-OWNED scaffolding. The deck-construction semantics

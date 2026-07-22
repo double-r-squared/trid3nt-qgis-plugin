@@ -70,8 +70,8 @@ GRACE2_STORAGE_BACKEND=s3              # cache/staging on S3 (boto3 / s3fs)
 GRACE2_SOLVER_BACKEND=aws-batch       # heavy solves dispatch to AWS Batch (Spot, scale-to-zero)
 GRACE2_AWS_BATCH_QUEUE=grace2-solvers
 GRACE2_AWS_BATCH_JOB_DEF=grace2-sfincs
-GRACE2_CACHE_BUCKET=grace2-hazard-cache-226996537797
-GRACE2_RUNS_BUCKET=grace2-hazard-runs-226996537797
+GRACE2_CACHE_BUCKET=trid3nt-cache
+GRACE2_RUNS_BUCKET=trid3nt-runs
 # GRACE2_PERSISTENCE_BACKEND=dynamodb # opt-in; unset → file-backed (the demo default)
 ```
 

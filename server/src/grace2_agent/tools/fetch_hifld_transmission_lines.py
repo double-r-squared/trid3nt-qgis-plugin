@@ -192,8 +192,8 @@ INFRA_TYPE = "transmission_line"
 
 # User-Agent — identify this client clearly to the ESRI cluster.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # Server-enforced max page size on this FeatureService.

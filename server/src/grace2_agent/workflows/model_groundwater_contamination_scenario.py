@@ -34,7 +34,7 @@ Chain:
     2. CONFIRMATION BEFORE CONSEQUENCE (Invariant 9)
        - The composer emits a ``tool-payload-warning`` envelope (reusing the
          existing user-pause pattern — the only confirmation-gate envelope the
-         web client already renders inline in chat) carrying the derived params
+         client already renders inline in chat) carrying the derived params
          + the demo-aquifer caveat, and BLOCKS until the user confirms.
        - A MODFLOW run is a "consequence" (a solver execution, FR-AS-8 /
          Invariant 9). The submission happens ONLY after the user confirms.

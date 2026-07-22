@@ -121,9 +121,9 @@ def _make_handle(run_id: str | None = None) -> ExecutionHandle:
         compute_class="standard",
         workflows_execution_id=(
             "projects/test/locations/us-central1/workflows/"
-            "grace-2-sfincs-orchestrator/executions/test-exec"
+            "model_flood_scenario/executions/test-exec"
         ),
-        workflow_name="grace-2-sfincs-orchestrator",
+        workflow_name="model_flood_scenario",
         workflow_location="us-central1",
         submitted_at=datetime.now(timezone.utc),
     )
@@ -134,7 +134,7 @@ def _run_result_ok(run_id: str, handle_id: str) -> RunResult:
         run_id=run_id,
         handle_id=handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
@@ -148,7 +148,7 @@ def _flood_layer(run_id: str) -> LayerURI:
         layer_id=f"flood-depth-peak-{run_id}",
         name="Peak flood depth",
         layer_type="raster",
-        uri=f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif",
+        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
         style_preset=FLOOD_DEPTH_STYLE_PRESET,
         role="primary",
         units="meters",
@@ -208,7 +208,7 @@ def test_postprocess_flood_layer_is_styled_and_single() -> None:
     """postprocess_flood returns exactly ONE primary layer with the canonical
     white->blue->green preset and a clear human name — never a styleless COG."""
     run_id = new_ulid()
-    cog_uri = f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif"
+    cog_uri = f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif"
 
     with (
         patch(
@@ -231,7 +231,7 @@ def test_postprocess_flood_layer_is_styled_and_single() -> None:
         patch("pathlib.Path.unlink", return_value=None),
     ):
         layers, _metrics = postprocess_flood(
-            f"gs://grace-2-hazard-prod-runs/{run_id}/", run_id=run_id
+            f"s3://trid3nt-runs/{run_id}/", run_id=run_id
         )
 
     # Exactly one layer, and it is the styled peak-depth layer.

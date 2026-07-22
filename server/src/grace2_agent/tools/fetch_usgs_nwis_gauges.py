@@ -205,8 +205,8 @@ _PARAMETER_CD = f"{_PARAM_DISCHARGE},{_PARAM_GAGE_HEIGHT}"
 
 #: User-Agent per USGS usage guidance (a descriptive UA is recommended).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP timeout (seconds).
@@ -1132,7 +1132,7 @@ def fetch_usgs_nwis_gauges(
 
     Returns:
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/usgs_nwis_gauges/<key>.fgb``
+        ``s3://trid3nt-cache/cache/dynamic-1h/usgs_nwis_gauges/<key>.fgb``
         - ``layer_type="vector"``, ``role="primary"``,
           ``style_preset="usgs_gauges"``, ``units="mixed (cfs / ft)"``.
         - Geometry: Point at each gauge station's coordinates, EPSG:4326.

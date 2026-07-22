@@ -129,8 +129,8 @@ _IEM_OBHISTORY_URL = (
 )
 
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # HTTP timeouts (seconds).
@@ -758,7 +758,7 @@ def fetch_raws_weather(
     **Returns:**
 
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/raws_weather/<key>.fgb``
+        ``s3://trid3nt-cache/cache/dynamic-1h/raws_weather/<key>.fgb``
         - ``layer_type="vector"``, ``role="context"``, ``units="mixed"``
           (temperature in °F, wind in knots, RH in %, solar in W/m²,
           precip in inches — standard RAWS/NFDRS units).

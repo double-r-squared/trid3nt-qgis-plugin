@@ -747,7 +747,7 @@ def test_live_florida_fetch_produces_valid_cog():
             )
 
             # Save the evidence file path for the report.
-            evidence_dir = "/home/nate/Documents/GRACE-2/reports/inflight/job-0104-engine-20260608"
+            evidence_dir = str(__import__("pathlib").Path(__file__).resolve().parents[2] / "run" / "evidence" / "job-0104-engine-20260608")
             evidence_path = os.path.join(evidence_dir, "evidence", "goes_live.txt")
             os.makedirs(os.path.dirname(evidence_path), exist_ok=True)
             with open(evidence_path, "w") as f:

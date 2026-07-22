@@ -52,7 +52,7 @@ _SMALL_BBOX = (-81.9, 26.5, -81.88, 26.52)
 
 # The job-0086 Y-flip-fixed flood COG — used for live verification.
 _FORT_MYERS_FLOOD_COG = (
-    "gs://grace-2-hazard-prod-runs/01KTJX71NKGDMXB9TN0DV75JWK/flood_depth_peak_0086.tif"
+    "s3://trid3nt-runs/01KTJX71NKGDMXB9TN0DV75JWK/flood_depth_peak_0086.tif"
 )
 
 
@@ -483,9 +483,10 @@ async def test_live_fort_myers_buildings_pelicun() -> None:
     except ImportError as exc:
         pytest.skip(f"geospatial dependencies not installed: {exc}")
 
-    evidence_dir = (
-        "/home/nate/Documents/GRACE-2/"
-        "reports/inflight/job-0147-engine-20260608/evidence"
+    evidence_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "..", "..", "..", "docs", "reports", "evidence",
+        "job-0147-engine-20260608",
     )
     os.makedirs(evidence_dir, exist_ok=True)
 

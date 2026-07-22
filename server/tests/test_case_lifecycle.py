@@ -115,7 +115,8 @@ def test_ensure_case_qgs_lazy_init_copies_template(_bind_copier: _MockCopier) ->
     # Copy was invoked exactly once
     assert len(_bind_copier.calls) == 1
     template_uri, target_uri = _bind_copier.calls[0]
-    assert template_uri.startswith("gs://")
+    # The copier receives the canonical template (the live s3 default).
+    assert template_uri == "s3://trid3nt-qgs/sample.qgs"
     assert target_uri == expected
 
     # Persistence shows the URI now stored
@@ -144,7 +145,7 @@ def test_ensure_case_qgs_returns_persisted_uri_on_no_copy() -> None:
     mock = MockMCPClient()
     persistence = Persistence(mock)
     case = _fresh_case_summary()
-    pre_set = "gs://grace-2-hazard-prod-qgs/already-init.qgs"
+    pre_set = "s3://trid3nt-qgs/already-init.qgs"
     case = case.model_copy(update={"qgs_project_uri": pre_set})
     asyncio.run(persistence.upsert_case(case))
 

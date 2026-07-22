@@ -96,8 +96,8 @@ RUN uv pip install --no-cache /build/contracts
 COPY server/pyproject.toml /build/server/pyproject.toml
 COPY server/README.md /build/server/README.md
 COPY server/src /build/server/src
-COPY server/vendor /build/server/vendor
-RUN uv pip install --no-cache --find-links /build/server/vendor /build/server
+COPY server/wheels /build/server/wheels
+RUN uv pip install --no-cache --find-links /build/server/wheels /build/server
 
 # Prune byte-compiled caches only (NOT package tests/ -- numpy/scipy import some
 # at runtime; same rationale as the sfincs worker). Hygiene saving on the heavy
@@ -169,8 +169,8 @@ ENV GRACE2_AGENT_HOST=0.0.0.0 \
     GRACE2_PERSISTENCE_BACKEND=dynamodb \
     GRACE2_DYNAMO_TABLE_PREFIX=grace2_ \
     GRACE2_STORAGE_BACKEND=s3 \
-    GRACE2_CACHE_BUCKET=grace2-hazard-cache-226996537797 \
-    GRACE2_RUNS_BUCKET=grace2-hazard-runs-226996537797 \
+    GRACE2_CACHE_BUCKET=trid3nt-cache \
+    GRACE2_RUNS_BUCKET=trid3nt-runs \
     GRACE2_COGNITO_USER_POOL_ID=us-west-2_mIpKrr727 \
     GRACE2_COGNITO_CLIENT_ID=43ovkrtt97oh6gsnl006aecera
 

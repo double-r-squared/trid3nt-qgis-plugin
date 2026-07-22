@@ -4,7 +4,7 @@ The "draw-a-line, see-a-profile" capability (cross-section / transect / long
 profile). Given a polyline and one or more height/depth rasters already in the
 Case, it samples each raster at N evenly-spaced stations along the line and
 returns the resulting (distance, value) series as a **Vega-Lite v5 line chart**
-the web client renders inline (the same chart-emission chat-card path as
+the client renders inline (the same chart-emission chat-card path as
 ``generate_time_series``). x = cumulative geodesic distance along the line in
 metres; y = elevation or depth in the raster's native units; one coloured line
 per sampled layer (DESIGN CALL B = multi-layer overlay).

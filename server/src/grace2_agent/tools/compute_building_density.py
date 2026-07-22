@@ -114,8 +114,8 @@ _MS_QUADKEY_ZOOM = 9
 #: User-Agent — Microsoft hosts on Azure Storage which doesn't strictly enforce
 #: a UA, but be polite.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 _VALID_SOURCES = frozenset({"ms_footprints"})
@@ -506,7 +506,7 @@ def _build_density_grid(
     The choice of EPSG:3857 over a local UTM is deliberate (audit.md):
     Microsoft data ships in lon/lat covering a global grid, and emitting the
     density in Web Mercator (the same projection QGIS Server WMS serves under
-    EPSG:3857) lets the QGIS Server / web client display the layer without
+    EPSG:3857) lets the QGIS Server / client display the layer without
     reprojection. The metric is "buildings per (cell_size_m × cell_size_m)
     cell on the Web Mercator grid" — at temperate US latitudes (~28-45°N) the
     Web Mercator scale distortion is ~1.13-1.41x, so the cell footprint on
@@ -754,7 +754,7 @@ def compute_building_density(
 
     **Returns:** A ``LayerURI`` pointing at a float32, LZW-compressed,
     tiled GeoTIFF in the cache bucket
-    (``gs://grace-2-hazard-prod-cache/cache/static-30d/building_density/<key>.tif``).
+    (``s3://trid3nt-cache/cache/static-30d/building_density/<key>.tif``).
     ``layer_type="raster"``, ``role="context"``, ``units=None`` (semantic
     is ``"buildings_per_cell"`` encoded in the GeoTIFF ``units`` tag).
     Output CRS: EPSG:3857.

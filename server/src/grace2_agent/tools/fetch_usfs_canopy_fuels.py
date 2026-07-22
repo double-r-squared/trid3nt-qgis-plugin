@@ -188,8 +188,8 @@ _LAYER_STYLE_PRESET: dict[str, str] = {
 
 #: User-Agent per USGS / ESRI ImageServer guidelines.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP download timeout (seconds). Allow a generous window for large-ish bboxes.
@@ -518,7 +518,7 @@ def fetch_usfs_canopy_fuels(
 
     Returns:
         ``LayerURI`` pointing at a GeoTIFF in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/usfs_canopy_fuels/<key>.tif``
+        ``s3://trid3nt-cache/cache/static-30d/usfs_canopy_fuels/<key>.tif``
         The raster is ``layer_type="raster"``, ``role="primary"``, with
         ``units`` set to ``"m * 10"`` for CBH or ``"kg/m^3 * 100"`` for CBD.
         Downstream fire-spread models consume the raw S16 pixel values;

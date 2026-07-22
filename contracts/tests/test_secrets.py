@@ -69,7 +69,7 @@ def _record(provider: str = "ebird", case_id: str | None = None) -> SecretRecord
         provider=provider,  # type: ignore[arg-type]
         case_id=case_id if case_id is not None else new_ulid(),
         vault_ref=(
-            "gcp-sm://projects/grace-2-hazard-prod/secrets/"
+            "gcp-sm://projects/legacy-cloud-project/secrets/"
             "case-eb-01k-ebird-key/versions/latest"
         ),
         label="personal eBird key",

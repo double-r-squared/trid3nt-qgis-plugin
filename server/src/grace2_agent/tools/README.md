@@ -43,7 +43,7 @@ def fetch_dem(bbox: tuple[float, float, float, float]) -> str:
         ext="tif",
         fetch_fn=lambda: _download_3dep_tile(bbox),
     )
-    return result.uri  # gs://grace-2-hazard-prod-cache/cache/static-30d/dem/<hash>.tif
+    return result.uri  # s3://trid3nt-cache/cache/static-30d/dem/<hash>.tif
 ```
 
 The `@register_tool` decorator:
@@ -123,7 +123,7 @@ key = sha256(source_id || canonical_params_json || ttl_bucket_vintage)[:32]
 ## Bucket layout (per job-0031 live substrate)
 
 ```
-gs://grace-2-hazard-prod-cache/cache/<ttl-class>/<source-class>/<hash>.<ext>
+s3://trid3nt-cache/cache/<ttl-class>/<source-class>/<hash>.<ext>
 ```
 
 Note: the live substrate nests TTL class above source class, NOT the

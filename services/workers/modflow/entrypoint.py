@@ -113,8 +113,8 @@ logging.basicConfig(
 
 MF6_BIN = os.environ.get("GRACE2_MF6_BIN", "/usr/local/bin/mf6")
 SCRATCH = Path(os.environ.get("GRACE2_MF6_SCRATCH", "/opt/grace2/work"))
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "grace-2-hazard-prod")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "grace-2-hazard-prod-runs")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
+RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
 
 # MODFLOW 6.4+ list-file string emitted when the outer solver loop exhausts
 # its iteration budget without meeting the dvclose tolerance. Pinned to the
@@ -583,7 +583,7 @@ def main(argv: list[str] | None = None) -> int:
 
     build_mode = bool(build_spec_uri)
     LOG.info(
-        "grace-2-modflow-solver starting — project=%s run_id=%s mode=%s src=%s "
+        "trid3nt-modflow-solver starting — project=%s run_id=%s mode=%s src=%s "
         "object_store=%s",
         GCP_PROJECT,
         run_id,

@@ -6,7 +6,7 @@ A.7 replace-not-reconcile). Also owns the session-scoped ``loaded_layers``
 accumulator and re-emits ``session-state`` whenever a tool returns a
 ``LayerURI``.
 
-Closes **OQ-T-28-SIM-WS-BOUNDARY** (sprint-05 job-0028): the M3 web client
+Closes **OQ-T-28-SIM-WS-BOUNDARY** (sprint-05 job-0028): the M3 client
 PipelineStrip + cancel button can now be driven by the real agent path
 instead of the ``window.__grace2Inject*`` dev seam.
 
@@ -115,7 +115,7 @@ __all__ = [
 # _dispatch_tool_and_persist) bind the turn's pinned Case into this
 # ContextVar at task entry. EVERY envelope constructed inside the turn —
 # server._new_envelope AND PipelineEmitter._send — reads it and stamps
-# ``Envelope.case_id`` (proposed A.1 amendment), so the web client routes
+# ``Envelope.case_id`` (proposed A.1 amendment), so the client routes
 # live streaming envelopes to the OWNING Case's stream even when the user
 # has switched Cases and a concurrent turn re-pointed submit-time routing.
 # A ContextVar is per-task: concurrent turns (job-0269) cannot cross-tag.
@@ -1690,7 +1690,7 @@ class PipelineEmitter:
 
         Every OTHER step type fixes its label at ``add_step`` /
         ``add_compute_step`` mint time and never needs this — the running vs.
-        complete phrasing difference the web client shows is driven by
+        complete phrasing difference the client shows is driven by
         ``PipelineCard.humanizeStepName`` keying off the (unchanging)
         ``name``, not by the server renaming anything. The compaction card
         (Part A) is the first whose terminal label depends on data only
@@ -2098,7 +2098,7 @@ class PipelineEmitter:
         The composer-side complement of the tool-result chart path
         (``server._maybe_emit_chart``): a composer that built a chart-emission
         payload (via ``chart_tools.build_*_chart`` -> ``build_chart_payload``)
-        calls this to (1) send the FULL Vega-Lite spec to the web client and
+        calls this to (1) send the FULL Vega-Lite spec to the client and
         (2) persist a ``SessionChartRecord`` so the chart replays on Case
         rehydration - byte-identical wire + persistence to the tool path.
 

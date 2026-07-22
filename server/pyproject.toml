@@ -149,7 +149,7 @@ dependencies = [
     # in environments that need it — production Cloud Run container must
     # bake the wheel from the GitLab clone during image build (mirrors how
     # hydromt-sfincs is pulled).
-    "pfdf>=3.0.4",  # VENDORED wheel in server/vendor/ (USGS GitLab began 403ing git clones 2026-07-06; installs use --find-links)
+    "pfdf>=3.0.4",  # VENDORED wheel in server/wheels/ (USGS GitLab began 403ing git clones 2026-07-06; installs use --find-links)
     # Wave 4.10 job-B7: rank_bm25 backs the BM25 channel of discover_dataset's
     # hybrid lexical+dense retrieval over the audited tool-docstring corpus +
     # tool_query_corpus.yaml synthetic queries. Pure-Python (numpy dep only),

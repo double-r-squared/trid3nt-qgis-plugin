@@ -298,8 +298,8 @@ PRESERVED_PROPERTIES: tuple[str, ...] = (
 # User-Agent — ESRI tracks unauthenticated clients; identify this client clearly
 # so the NID team can attribute traffic.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # Request timeout. NID's ArcGIS cluster usually responds <2s for a state-sized
@@ -1203,7 +1203,7 @@ def fetch_usace_dams(
 
     Returns:
         A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/usace_nid_dams/<key>.fgb``
+        ``s3://trid3nt-cache/cache/static-30d/usace_nid_dams/<key>.fgb``
         containing point geometries (``Point`` in EPSG:4326) and the
         canonical NID attribute schema — ``NIDID``, ``NAME``, ``STATE``,
         ``DAM_HEIGHT``, ``NID_STORAGE``, ``HAZARD_POTENTIAL``,

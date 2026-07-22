@@ -14,7 +14,7 @@ rule). Typical composition::
 
 The result is a clipped GeoTIFF stored under the FR-DC-3 cache shim at::
 
-    gs://grace-2-hazard-prod-cache/cache/static-30d/clip_raster_polygon/<key>.tif
+    s3://trid3nt-cache/cache/static-30d/clip_raster_polygon/<key>.tif
 
 **Implementation flow (cache miss):**
 
@@ -515,7 +515,7 @@ def clip_raster_to_polygon(
     Returns:
         A ``LayerURI`` pointing at a masked GeoTIFF in the cache bucket::
 
-            gs://grace-2-hazard-prod-cache/cache/static-30d/clip_raster_polygon/<key>.tif
+            s3://trid3nt-cache/cache/static-30d/clip_raster_polygon/<key>.tif
 
         Output CRS matches the source raster's CRS. Output extent is the
         polygon's bounding box (``crop=True`` in ``rasterio.mask.mask``).

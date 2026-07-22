@@ -273,7 +273,7 @@ def test_resolve_titiler_template_recovers_s3_cog(monkeypatch) -> None:
     import grace2_agent.tools.cache as cache_mod
     import grace2_agent.tools.compute_layer_bounds as clb
 
-    real_cog = "s3://grace2-hazard-runs/01ABC/swmm_depth_frame_01.tif"
+    real_cog = "s3://trid3nt-runs/01ABC/swmm_depth_frame_01.tif"
     captured: dict[str, str] = {}
 
     def _fake_read(uri: str) -> bytes:  # stands in for read_object_bytes_s3
@@ -286,7 +286,7 @@ def test_resolve_titiler_template_recovers_s3_cog(monkeypatch) -> None:
 
     template = (
         "https://d123abc.cloudfront.net/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
-        "?url=s3%3A%2F%2Fgrace2-hazard-runs%2F01ABC%2Fswmm_depth_frame_01.tif"
+        "?url=s3%3A%2F%2Ftrid3nt-runs%2F01ABC%2Fswmm_depth_frame_01.tif"
         "&rescale=0%2C2&colormap_name=blues"
     )
     path, is_temp = clb._resolve_layer_to_local_path(template)

@@ -77,7 +77,7 @@ DEFAULT_DATABASE = os.environ.get("GRACE2_MONGO_DB", "grace2_dev")
 # has S3 write creds to it (GRACE2_RUNS_BUCKET / the EC2 instance role). Mirror
 # the resolution used in ``tools/solver.py`` so a single env var moves both.
 CASE_VIEWS_BUCKET = os.environ.get(
-    "GRACE2_RUNS_BUCKET", "grace2-hazard-runs-226996537797"
+    "GRACE2_RUNS_BUCKET", "trid3nt-runs"
 )
 #: Object-key prefix for materialized case-view snapshots (PRIVATE objects).
 CASE_VIEWS_PREFIX = "case-views"

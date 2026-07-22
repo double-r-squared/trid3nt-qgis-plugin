@@ -1,6 +1,6 @@
 """Python sandbox executor harness (sprint-13 Stage 2 / job-0232).
 
-This module is the entrypoint baked into the ``grace-2-python-sandbox`` Cloud Run
+This module is the entrypoint baked into the legacy cloud-sandbox
 Job image. It receives a job payload — a ``python_code`` string plus a
 ``layer_refs`` mapping (LayerURI -> ``gs://`` path) — runs the user code under a
 60-second wallclock cap with bounded output capture, auto-converts a final
@@ -510,7 +510,7 @@ def _convert_figure(fig: Any) -> dict[str, Any]:
     If ``grace2_contracts.chart_contracts`` is importable we emit a
     ChartEmissionPayload-shaped dict (soft import per kickoff — job-0223 finalizes
     that schema concurrently; drift is reconciled by job-0233). The PNG is a
-    fallback the web client can render directly when a Vega-Lite spec isn't
+    fallback the client can render directly when a Vega-Lite spec isn't
     available (a raw matplotlib figure has no Vega-Lite spec — it's a rasterized
     image, so the "chart payload" here is the PNG-fallback path the kickoff
     names, not a true Vega-Lite spec).

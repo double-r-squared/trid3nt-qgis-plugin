@@ -161,7 +161,7 @@ class Mode2Candidate:
 
     Fields:
         candidate_id: ULID identifying this candidate emission. Unique per
-            ``classify_for_mode2`` call so the web modal can correlate user
+            ``classify_for_mode2`` call so the client UI can correlate user
             response → originating fetch.
         url: the final URL after redirects (the ``web_fetch`` result's ``url``).
         domain: the host of ``url`` (lowercased).
@@ -174,7 +174,7 @@ class Mode2Candidate:
         detected_patterns: stable-ordered list of pattern names detected in the
             body / metadata.
         title: the ``<title>`` extracted by ``web_fetch`` (if any).
-        suggested_tool_kind: hint for the web modal's pre-filled "tool type"
+        suggested_tool_kind: hint for the client UI's pre-filled "tool type"
             radio — ``"endpoint"`` if the page exposes an OpenAPI spec,
             ``"fetcher"`` if it offers downloadable structured data, else
             ``"reference"``.
@@ -201,7 +201,7 @@ class Mode2CandidateEnvelope:
 
     Light by design — no ``request_id``/``ttl_seconds``/``probe_findings``
     (the heavier ``offer-catalog-addition`` envelope carries those for the full
-    review flow). The web client opens a passive "candidate detected" indicator;
+    review flow). The client opens a passive "candidate detected" indicator;
     user opt-in to the full review fires the heavier flow.
 
     Serialized via ``to_wire_dict`` because ``packages/contracts/`` is FROZEN
@@ -319,7 +319,7 @@ def _suggested_kind(
 def _snippet_for(body: str, patterns: list[str]) -> str | None:
     """Return a ≤ 280-char excerpt around the first pattern hit, or None.
 
-    Useful in the web modal so the user sees "here's the thing we matched"
+    Useful in the client UI so the user sees "here's the thing we matched"
     without re-fetching the page. We deliberately keep this short — the modal
     has a "see source" link for the full content.
     """

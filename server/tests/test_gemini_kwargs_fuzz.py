@@ -146,11 +146,11 @@ def _inspect_strip_unknown(
 
 # A sample EPSG:4326 bbox used as a stand-in for required bbox params.
 _SAMPLE_BBOX = (-81.95, 26.55, -81.75, 26.75)  # Fort Myers, FL
-_SAMPLE_DEM_URI = "gs://grace-2-hazard-prod-cog/cache/static-30d/dem/sample.tif"
-_SAMPLE_LANDCOVER_URI = "gs://grace-2-hazard-prod-cog/cache/static-30d/landcover/sample.tif"
-_SAMPLE_RASTER_URI = "gs://grace-2-hazard-prod-cog/cache/static-30d/raster/sample.tif"
-_SAMPLE_VECTOR_URI = "gs://grace-2-hazard-prod-fgb/cache/static-30d/vector/sample.fgb"
-_SAMPLE_GCS_URI = "gs://grace-2-hazard-prod-cog/cache/static-30d/sample.tif"
+_SAMPLE_DEM_URI = "s3://trid3nt-cache/cache/static-30d/dem/sample.tif"
+_SAMPLE_LANDCOVER_URI = "s3://trid3nt-cache/cache/static-30d/landcover/sample.tif"
+_SAMPLE_RASTER_URI = "s3://trid3nt-cache/cache/static-30d/raster/sample.tif"
+_SAMPLE_VECTOR_URI = "s3://trid3nt-cache/cache/static-30d/vector/sample.fgb"
+_SAMPLE_GCS_URI = "gs://legacy-cloud-cog/cache/static-30d/sample.tif"
 
 # Map tool_name → minimal kwargs that satisfy all required parameters.
 # These are plausible real-world values, NOT magic that would make the tool
@@ -268,7 +268,7 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
     },
     "run_solver": {
         "solver": "sfincs",
-        "model_setup_uri": "gs://grace-2-hazard-prod-cog/runs/test/setup/",
+        "model_setup_uri": "s3://trid3nt-runs/test/setup/",
     },
     "wait_for_completion": {
         "handle": {

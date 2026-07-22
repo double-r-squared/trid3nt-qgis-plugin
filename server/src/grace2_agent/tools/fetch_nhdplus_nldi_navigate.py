@@ -142,8 +142,8 @@ _HTTP_TIMEOUT_S = 60.0
 
 #: User-Agent per USGS usage guidance.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: Hard cap on number of flowlines returned to keep the FlatGeobuf
@@ -489,7 +489,7 @@ def fetch_nhdplus_nldi_navigate(
 
     Returns:
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/nhdplus_nldi/<key>.fgb``.
+        ``s3://trid3nt-cache/cache/static-30d/nhdplus_nldi/<key>.fgb``.
         ``layer_type="vector"``, ``role="context"``,
         ``style_preset="nhdplus_flowlines"``, ``units=None``. Geometry
         is LineString in EPSG:4326. Single property per feature:

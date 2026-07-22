@@ -16,7 +16,7 @@ This is the MODFLOW analogue of ``postprocess_flood`` (job-0042). Differences:
     object - not from a CRS variable inside the output file. MF6 binary output
     carries NO CRS; the deck's ``model_crs`` is authoritative.
   * The output is reprojected to EPSG:4326 so the plume COG aligns with the
-    web client's MapLibre basemap exactly like every other published raster.
+    client's MapLibre basemap exactly like every other published raster.
 
 Determinism boundary (Invariant 1 / Decision H / FR-AS-7): ``PlumeLayerURI``
 carries ``max_concentration_mgl`` + ``plume_area_km2`` as typed numbers the

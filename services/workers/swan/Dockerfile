@@ -40,8 +40,8 @@
 # CodeBuild -- mirrors the openquake worker's public.ecr.aws/docker/library base.
 FROM public.ecr.aws/docker/library/debian:bookworm-slim AS runtime
 
-LABEL org.opencontainers.image.title="grace-2-swan-solver" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
+LABEL org.opencontainers.image.title="trid3nt-swan-solver" \
+      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
       org.opencontainers.image.description="SWAN spectral nearshore wave solver runtime (AWS Batch). Reads a build_spec + bathy DEM from s3://...-cache/, authors a .swn command file, runs headless swanrun, writes the gridded wave-field output + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="GPL-3.0-or-later"
 

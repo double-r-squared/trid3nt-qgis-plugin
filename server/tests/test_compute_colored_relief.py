@@ -322,7 +322,7 @@ def test_cache_hit_skips_fetch_fn():
     would use internally, so a pre-seeded entry at that path produces a HIT.
     """
     fake_gcs = FakeStorageClient()
-    dem_uri = "gs://grace-2-hazard-prod-cache/cache/static-30d/dem/abc123.tif"
+    dem_uri = "gs://legacy-cloud-cache/cache/static-30d/dem/abc123.tif"
     ramp = "terrain"
 
     from grace2_agent.tools.cache import cache_path, compute_cache_key, read_through as real_rt
@@ -359,7 +359,7 @@ def test_cache_hit_skips_fetch_fn():
 def test_cache_miss_writes_through():
     """On cache miss, fetch_fn is invoked and result is written to the store."""
     fake_gcs = FakeStorageClient()
-    dem_uri = "gs://grace-2-hazard-prod-cache/cache/static-30d/dem/xyz999.tif"
+    dem_uri = "gs://legacy-cloud-cache/cache/static-30d/dem/xyz999.tif"
     ramp = "viridis"
 
     params = {"dem_uri": dem_uri, "ramp": ramp}
@@ -411,7 +411,7 @@ def test_cache_miss_writes_through():
 def test_compute_colored_relief_returns_correct_layer_uri_shape():
     """compute_colored_relief returns a LayerURI with the expected field values."""
     fake_gcs = FakeStorageClient()
-    dem_uri = "gs://grace-2-hazard-prod-cache/cache/static-30d/dem/shape_test.tif"
+    dem_uri = "gs://legacy-cloud-cache/cache/static-30d/dem/shape_test.tif"
     ramp = "grayscale"
 
     fake_result_bytes = _make_fake_cog_bytes()
@@ -466,7 +466,7 @@ def test_compute_colored_relief_raises_on_unknown_ramp():
 def test_layer_uri_name_contains_ramp_label(ramp: str):
     """LayerURI.name identifies the ramp preset used."""
     fake_gcs = FakeStorageClient()
-    dem_uri = f"gs://grace-2-hazard-prod-cache/cache/dem/{ramp}_test.tif"
+    dem_uri = f"gs://legacy-cloud-cache/cache/dem/{ramp}_test.tif"
 
     from grace2_agent.tools.cache import read_through as real_rt
     from grace2_agent.tools.compute_colored_relief import _COMPUTE_COLORED_RELIEF_METADATA

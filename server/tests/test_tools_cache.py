@@ -230,7 +230,7 @@ def _cacheable_md() -> AtomicToolMetadata:
     )
 
 
-_CACHE_BUCKET = "grace2-hazard-cache-226996537797"
+_CACHE_BUCKET = "trid3nt-cache"
 
 
 def test_read_through_hit_returns_bytes_and_skips_fetch_fn(fake_s3):

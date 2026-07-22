@@ -180,8 +180,8 @@ _LATEST_WINDOW_DAYS = 10
 
 #: Descriptive User-Agent (NRCS, like most federal services, prefers one).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP timeout (seconds). The stations catalog is a few thousand objects.
@@ -722,7 +722,7 @@ def fetch_snotel_snow(
 
     Returns:
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``s3://grace2-hazard-cache-226996537797/cache/dynamic-1h/snotel_snow/<key>.fgb``
+        ``s3://trid3nt-cache/cache/dynamic-1h/snotel_snow/<key>.fgb``
         - ``layer_type="vector"``, ``role="primary"``,
           ``style_preset="snotel_snow"``, ``units="in (SWE / snow depth)"``.
         - Geometry: Point at each station's coordinates, EPSG:4326.

@@ -50,8 +50,8 @@ from grace2_agent.tools.run_pelicun_damage_assessment import (
 # Constants used across cases.
 # ---------------------------------------------------------------------------
 
-_VALID_HAZARD_URI = "gs://grace-2-runs/example-run/flood_depth.tif"
-_VALID_ASSETS_URI = "gs://grace-2-cache/places/fort-myers-place-polys.fgb"
+_VALID_HAZARD_URI = "s3://trid3nt-runs/example-run/flood_depth.tif"
+_VALID_ASSETS_URI = "s3://trid3nt-cache/places/fort-myers-place-polys.fgb"
 
 
 # ---------------------------------------------------------------------------
@@ -623,7 +623,7 @@ def test_fragility_set_eq_2020_raises_not_wired_yet() -> None:
 # Gated on ``GRACE2_TEST_LIVE_PELICUN=1`` so CI runs the synthetic tests only.
 # When invoked locally with the env var set + ADC credentials, drives the
 # kickoff's acceptance scenario:
-#     hazard: gs://grace-2-hazard-prod-runs/01KTJX71NKGDMXB9TN0DV75JWK/flood_depth_peak_0086.tif
+#     hazard: s3://trid3nt-runs/01KTJX71NKGDMXB9TN0DV75JWK/flood_depth_peak_0086.tif
 #     assets: fetch_administrative_boundaries(level='place', bbox=fort_myers_bbox)
 # Writes the output FGB + summary stats to the job's evidence directory.
 # ---------------------------------------------------------------------------
@@ -648,7 +648,7 @@ def test_live_pelicun_fort_myers_e2e(tmp_path) -> None:
 
     fort_myers_bbox = (-82.0, 26.55, -81.7, 26.75)
     hazard_uri = (
-        "gs://grace-2-hazard-prod-runs/01KTJX71NKGDMXB9TN0DV75JWK/"
+        "s3://trid3nt-runs/01KTJX71NKGDMXB9TN0DV75JWK/"
         "flood_depth_peak_0086.tif"
     )
 

@@ -160,8 +160,8 @@ _VALID_ROAD_CLASSES: frozenset[str] = frozenset({
 
 #: Polite User-Agent (matches sibling tools).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 
@@ -673,7 +673,7 @@ def fetch_roads_osm(
       ``["residential"]`` for local streets.
 
     **Returns:** A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
-    (``gs://grace-2-hazard-prod-cache/cache/static-30d/osm_roads/<key>.fgb``).
+    (``s3://trid3nt-cache/cache/static-30d/osm_roads/<key>.fgb``).
     ``layer_type="vector"``, ``role="context"``, ``units=None``. Properties
     per feature: ``osm_id`` (int), ``name`` (str | None), ``highway``
     (str), ``lanes`` (str | None), ``maxspeed`` (str | None).

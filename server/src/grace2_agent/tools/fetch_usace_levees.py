@@ -216,8 +216,8 @@ _LAYER_PROPERTIES: dict[str, tuple[str, ...]] = {
 # User-Agent — USACE / Esri Hosted FeatureServices throttle anonymous clients;
 # identifying the agent helps if NLD ops needs to contact us about heavy use.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # Request timeout — Esri-hosted FeatureServer queries are usually fast, but a
@@ -664,7 +664,7 @@ def fetch_usace_levees(
 
     Returns:
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/usace_nld/<key>.fgb``.
+        ``s3://trid3nt-cache/cache/static-30d/usace_nld/<key>.fgb``.
         ``layer_type="vector"``, ``role="context"``, ``units=None``.
         Properties preserved per ``_LAYER_PROPERTIES[layer]``: at minimum
         ``SYSTEM_ID``, ``SYSTEM_NAME``, ``STATES``, ``COUNTIES``,

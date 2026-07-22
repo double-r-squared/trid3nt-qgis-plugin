@@ -269,7 +269,7 @@ PROGRESS_TERMINAL: int = 100
 #: because the static literal below is evaluated FIRST its ``setdefault`` is a
 #: no-op, so the sprint-17 composer-name value here wins.
 SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {
-    "sfincs": "grace-2-sfincs-orchestrator",
+    "sfincs": "model_flood_scenario",
     # sprint-17 NEW engines (parallel lanes) — orchestrator-wired per the lane
     # handoff. GeoClaw's value supersedes its own import-time ``setdefault``
     # (static literal wins).
@@ -642,7 +642,7 @@ def _get_runs_bucket() -> str:
     sets ``GRACE2_RUNS_BUCKET`` explicitly via systemd (see aws-batch RUNBOOK)."""
     if _RUNS_BUCKET is not None:
         return _RUNS_BUCKET
-    return os.environ.get("GRACE2_RUNS_BUCKET", "grace2-hazard-runs-226996537797")
+    return os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
 
 
 def _get_local_runs_bucket() -> str:
@@ -650,7 +650,7 @@ def _get_local_runs_bucket() -> str:
 
     ``set_runs_bucket`` override wins (test seam); otherwise
     ``GRACE2_RUNS_BUCKET`` must be set explicitly (on AWS the orchestrator
-    provisions e.g. ``grace2-hazard-runs-226996537797``). A silent fallback
+    provisions e.g. ``trid3nt-runs``). A silent fallback
     to the GCP-named default would make every local run upload to a bucket
     that does not exist on AWS — fail loudly instead.
     """

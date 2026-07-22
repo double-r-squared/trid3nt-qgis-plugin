@@ -119,8 +119,8 @@ _IEM_NETWORK_GEOJSON = (
 # User-Agent required by IEM (best practice; IEM is generally tolerant but
 # a descriptive UA is recommended for their rate-limiting logic).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # HTTP timeouts (seconds).
@@ -758,7 +758,7 @@ def fetch_asos_metar(
 
     Returns:
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/asos_metar/<key>.fgb``
+        ``s3://trid3nt-cache/cache/dynamic-1h/asos_metar/<key>.fgb``
         - ``layer_type="vector"``, ``role="context"``, ``units="mixed"``
           (temperature in °F, wind in knots, pressure in inHg/hPa,
           visibility in miles — standard ASOS/METAR units).

@@ -200,8 +200,8 @@ _TIMEOUT_S = 30.0
 # User-Agent per IUCN API courtesy guidelines (their docs ask for a
 # contact-bearing UA).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # Env var fallback for the API key. Matches the kickoff verbatim.
@@ -804,7 +804,7 @@ def fetch_iucn_red_list_range(
 
     Returns:
         A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/iucn_red_list/<key>.fgb``
+        ``s3://trid3nt-cache/cache/static-30d/iucn_red_list/<key>.fgb``
         carrying the species assessment. ``layer_type="vector"``,
         ``role="context"``, ``units=None``. The single feature carries the
         ``is_placeholder_geometry=True`` property; downstream consumers

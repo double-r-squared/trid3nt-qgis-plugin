@@ -39,7 +39,7 @@ _EXPORTS: list[tuple[str, type[BaseModel]]] = [
     ("catalog_audit_log_document", collections.CatalogAuditLogDocument),
     # Appendix D.6 PipelineStepSummary — exported standalone so the
     # extended field surface (progress_percent / error_code / error_message)
-    # is independently inspectable by the web client mirror + agent emitter
+    # is independently inspectable by the client mirror + agent emitter
     # (job-0030, sprint-06 M4 pre-flight; closes job-0026 OQ-W-26).
     ("pipeline_step_summary", collections.PipelineStepSummary),
     # FR-PHC-2

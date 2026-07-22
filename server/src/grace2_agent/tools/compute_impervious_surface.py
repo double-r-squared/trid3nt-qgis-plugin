@@ -31,7 +31,7 @@ deterministic function of the input URI so it does not need to enter the key.
 
 Cache layout:
 
-    ``gs://grace-2-hazard-prod-cache/cache/static-30d/impervious/<key>.tif``
+    ``s3://trid3nt-cache/cache/static-30d/impervious/<key>.tif``
 
 **Cross-cutting invariants:**
 
@@ -498,7 +498,7 @@ def compute_impervious_surface(
 
     Returns:
         A ``LayerURI`` pointing at a Float32 GeoTIFF in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/impervious/<key>.tif``.
+        ``s3://trid3nt-cache/cache/static-30d/impervious/<key>.tif``.
         Single-band, values in [0.0, 1.0] (NaN nodata), same CRS and grid as
         the input. ``layer_type="raster"``, ``role="context"``, ``units=None``
         (the values are dimensionless fractions).

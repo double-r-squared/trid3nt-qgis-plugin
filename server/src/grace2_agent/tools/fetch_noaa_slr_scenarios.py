@@ -60,7 +60,7 @@ overlay intersections.
 
 **Returns:**
     ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-    ``gs://grace-2-hazard-prod-cache/cache/static-30d/noaa_slr_scenarios/<key>.fgb``
+    ``s3://trid3nt-cache/cache/static-30d/noaa_slr_scenarios/<key>.fgb``
     Each feature is a Polygon in EPSG:4326. Properties:
     ``slr_ft`` (float, scenario level), ``scenario_label`` (str, e.g.
     "1.0 ft SLR"), ``dissolve`` (int, always 1 — source layer is fully
@@ -241,8 +241,8 @@ _HTTP_TIMEOUT_S = 45.0
 
 #: User-Agent per NOAA usage policy.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: Payload estimation heuristic: MB per scenario per square degree (coastal).

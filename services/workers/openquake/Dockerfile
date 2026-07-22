@@ -71,8 +71,8 @@ RUN python3 -m venv "$VENV" \
 # --------------------------------------------------------------------------- #
 FROM public.ecr.aws/docker/library/python:3.11-slim-bookworm AS runtime
 
-LABEL org.opencontainers.image.title="grace-2-openquake-solver" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
+LABEL org.opencontainers.image.title="trid3nt-openquake-solver" \
+      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
       org.opencontainers.image.description="OpenQuake Engine PSHA solver runtime (AWS Batch). Reads a build_spec from s3://...-cache/, templates a classical-PSHA job.ini + logic trees, runs oq engine --run job.ini headless, writes hazard exports + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="AGPL-3.0"
 

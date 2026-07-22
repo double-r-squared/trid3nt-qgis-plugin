@@ -59,8 +59,8 @@ RUN python3 -m venv "$VENV" \
 # --------------------------------------------------------------------------- #
 FROM python:3.12-slim-bookworm AS runtime
 
-LABEL org.opencontainers.image.title="grace-2-landlab-solver" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
+LABEL org.opencontainers.image.title="trid3nt-landlab-solver" \
+      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
       org.opencontainers.image.description="Landlab (CSDMS) solver runtime (AWS Batch). Reads a build_spec + DEM COG from s3://...-cache/, builds a RasterModelGrid + runs a documented component chain (LandslideProbability / OverlandFlow), writes a field COG + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="MIT"
 

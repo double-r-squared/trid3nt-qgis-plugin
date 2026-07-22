@@ -231,7 +231,7 @@ def test_live_nexrad_endpoint_reachable() -> None:
     cap_url = f"{base_url}?SERVICE=WMS&REQUEST=GetCapabilities"
     req = urllib.request.Request(
         cap_url,
-        headers={"User-Agent": "grace-2/0.1 (live test fetch_nexrad_reflectivity)"},
+        headers={"User-Agent": "trid3nt/0.1 (live test fetch_nexrad_reflectivity)"},
     )
     with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 — trusted URL
         status = resp.status

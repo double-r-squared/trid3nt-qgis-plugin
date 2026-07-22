@@ -44,8 +44,8 @@
 
 FROM python:3.11-slim-bookworm AS runtime
 
-LABEL org.opencontainers.image.title="grace-2-geoclaw-solver" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
+LABEL org.opencontainers.image.title="trid3nt-geoclaw-solver" \
+      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
       org.opencontainers.image.description="GeoClaw (Clawpack) shallow-water inundation solver runtime (AWS Batch). Reads a build_spec + topo DEM from s3://...-cache/, authors a setrun.py, runs the headless Clawpack solver, writes fort.q frames + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="BSD-3-Clause"
 

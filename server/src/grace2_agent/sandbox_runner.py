@@ -6,7 +6,7 @@ mode:
 
 * **Local-subprocess execution.** Runs the ``executor.py`` harness in a child
   ``python`` subprocess on this machine — no docker daemon, no cloud control
-  plane needed. The legacy GCP cloud path (a ``grace-2-python-sandbox`` Cloud Run
+  plane needed. The legacy GCP cloud path (a legacy cloud-sandbox
   Job staging its payload to GCS + a Cloud Logging result readback, OQ-SANDBOX-3
   option (b)) was removed in the GCP decommission; the EC2 stack has no Cloud Run
   / Cloud Logging, so the local-subprocess path is the only executor.

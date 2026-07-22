@@ -8,7 +8,7 @@ by wrapping GDAL's ``gdaldem slope`` command:
 The result is a single-band GeoTIFF (units: degrees or percent rise/run) in the
 same CRS and grid as the input DEM, stored under the FR-DC-3 cache shim at:
 
-    ``gs://grace-2-hazard-prod-cache/cache/static-30d/slope/<key>.tif``
+    ``s3://trid3nt-cache/cache/static-30d/slope/<key>.tif``
 
 **Cache key** is derived from ``(dem_uri, output_unit, algorithm)`` — all three
 parameters materially affect the output pixels, so all three participate in
@@ -309,7 +309,7 @@ def compute_slope(
 
     Returns:
         A ``LayerURI`` pointing at a slope GeoTIFF in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/slope/<key>.tif``.
+        ``s3://trid3nt-cache/cache/static-30d/slope/<key>.tif``.
         The output is a single-band Float32 GeoTIFF in the same CRS and grid
         as the input DEM. Units are degrees (0–90) or percent (0+).
 

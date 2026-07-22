@@ -8,7 +8,7 @@ layers into a single composite Cloud-Optimized GeoTIFF**:
 
 WHY THIS EXISTS
 ---------------
-MapLibre GL (the web client's renderer) **cannot multiply-blend two raster
+MapLibre GL (the client's renderer) **cannot multiply-blend two raster
 layers on the client**. There is no client-side "multiply blend mode" for
 raster sources. So when a user wants a *shaded land cover* (land-cover RGB ×
 hillshade grayscale) or a *shaded relief* (colored relief × hillshade), the
@@ -518,7 +518,7 @@ def compute_blended_composite(
         hillshade — is broadcast to R=G=B grayscale, the historical behavior.)
 
     CRITICAL — NEVER tell the user to set a client-side blend / multiply /
-    opacity blend mode on the map. MapLibre GL (the web client's renderer)
+    opacity blend mode on the map. MapLibre GL (the client's renderer)
     CANNOT multiply-blend two raster layers in the browser. The ONLY way to
     deliver a multiply-blended / shaded / draped composite is to bake it into
     one raster with THIS tool and publish that single layer. If a user asks to
@@ -579,7 +579,7 @@ def compute_blended_composite(
     Returns:
         A ``LayerURI`` (layer_type="raster") pointing at an RGBA COG in the
         cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/blended/<key>.tif``.
+        ``s3://trid3nt-cache/cache/static-30d/blended/<key>.tif``.
         The output shares the BASE's CRS + grid and is clipped to the overlap
         extent (the base is the canvas; base pixels uncovered by the overlay
         keep the base color). Pass the returned handle to ``publish_layer`` to

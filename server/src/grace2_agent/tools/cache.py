@@ -68,7 +68,7 @@ logger = logging.getLogger("grace2_agent.tools.cache")
 
 #: Production cache bucket name (AWS S3). Override via env var
 #: ``GRACE2_CACHE_BUCKET`` for non-prod runs.
-CACHE_BUCKET = "grace2-hazard-cache-226996537797"
+CACHE_BUCKET = "trid3nt-cache"
 
 #: Truncation length for the sha256 hex digest. 32 hex chars = 128 bits of
 #: collision resistance — birthday-bound probability of collision after 2^64

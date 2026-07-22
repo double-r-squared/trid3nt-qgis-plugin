@@ -42,7 +42,7 @@ MOD = pl
 
 # A representative s3:// COG handle (flood-family so the F51 no-preset path
 # infers continuous_flood_depth and resolves the typed registry ramp).
-S3_URI = "s3://grace2-hazard-runs-226996537797/runs/ian/flood_depth_peak.tif"
+S3_URI = "s3://trid3nt-runs/runs/ian/flood_depth_peak.tif"
 ENCODED = quote(S3_URI, safe="")
 
 # A legacy TiTiler tile TEMPLATE wrapping S3_URI (the shape old persisted

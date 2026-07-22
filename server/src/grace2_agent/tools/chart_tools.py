@@ -1,7 +1,7 @@
 """Chart-generation atomic tools (job-0230, sprint-13 Stage 2).
 
 Four tools that turn an already-fetched layer into a **Vega-Lite v5 chart**
-the web client can render inline (stacked preview) and in a full-viewport
+the client can render inline (stacked preview) and in a full-viewport
 gallery.  They are the agent-facing producers behind the conversational data
 analysis layer (memory ``project_conversational_data_analysis_layer``):
 
@@ -53,7 +53,7 @@ Caching: ``ttl_class="dynamic-1h"``, ``source_class="chart_tools"``,
 with a non-``live-no-cache`` class).  In practice these tools do **not** route
 their result through the GCS cache shim (same as ``postprocess_pelicun``,
 which is ``cacheable=True`` but returns its envelope in-process): each call
-mints a fresh ``chart_id`` ULID so the web client can key + de-dupe charts in
+mints a fresh ``chart_id`` ULID so the client can key + de-dupe charts in
 the gallery, and caching the payload would re-use a stale ``chart_id``.  The
 expensive part (the layer read) is already cached upstream by the fetchers
 that produced the layer.

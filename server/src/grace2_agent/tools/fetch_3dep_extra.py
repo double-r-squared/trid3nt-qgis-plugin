@@ -449,7 +449,7 @@ def fetch_3dep_extra(
 
     Returns:
         ``LayerURI`` pointing at a single-band COG in the cache bucket
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/3dep_extra/<key>.tif``.
+        ``s3://trid3nt-cache/cache/static-30d/3dep_extra/<key>.tif``.
         ``layer_type="raster"``, ``role="input"``,
         ``style_preset="continuous_dem"``, ``units="meters"`` (NAVD88 or
         local vertical datum depending on the resolution path; for v0.1

@@ -190,8 +190,8 @@ _MAX_WINDOW_PIXELS = 20_000 * 20_000
 
 # User-Agent — courtesy convention for Figshare / AWS Open Data.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 
@@ -547,7 +547,7 @@ def fetch_gcn250_curve_numbers(
       CN raised ~10-15).
 
     **Returns:** A ``LayerURI`` pointing at a GeoTIFF in the cache bucket
-    (``gs://grace-2-hazard-prod-cache/cache/static-30d/gcn250_curve_numbers/<key>.tif``).
+    (``s3://trid3nt-cache/cache/static-30d/gcn250_curve_numbers/<key>.tif``).
     ``layer_type="raster"``, ``role="primary"``, ``units="curve_number"``.
     EPSG:4326, int16 (0-100), nodata = 255, ~250 m pixel size. Downstream
     SFINCS workflows should reproject to a metric CRS before ingestion.

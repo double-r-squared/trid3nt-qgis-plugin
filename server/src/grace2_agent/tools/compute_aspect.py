@@ -9,7 +9,7 @@ The result is a single-band GeoTIFF (compass direction 0–360°; 0=N, 90=E,
 180=S, 270=W) in the same CRS and grid as the input DEM, stored under the
 FR-DC-3 cache shim at:
 
-    ``gs://grace-2-hazard-prod-cache/cache/static-30d/aspect/<key>.tif``
+    ``s3://trid3nt-cache/cache/static-30d/aspect/<key>.tif``
 
 **Cache key** is derived from ``(dem_uri, algorithm, zero_for_flat)`` — all
 three parameters materially affect the output pixels, so all three participate
@@ -312,7 +312,7 @@ def compute_aspect(
 
     Returns:
         A ``LayerURI`` pointing at an aspect GeoTIFF in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/aspect/<key>.tif``.
+        ``s3://trid3nt-cache/cache/static-30d/aspect/<key>.tif``.
         The output is a single-band Float32 GeoTIFF in the same CRS and grid
         as the input DEM. Values are compass degrees 0–360.
 

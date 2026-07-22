@@ -55,7 +55,7 @@ def _gcs_client() -> Any:
         from google.cloud import storage  # type: ignore
 
         _GCS_CLIENT = storage.Client(
-            project=os.environ.get("GCP_PROJECT", "grace-2-hazard-prod")
+            project=os.environ.get("GCP_PROJECT", "legacy-cloud-project")
         )
     return _GCS_CLIENT
 

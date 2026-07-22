@@ -145,10 +145,11 @@ __all__ = [
 # Constants / configuration
 # --------------------------------------------------------------------------- #
 
-#: Cloud Workflows orchestrator name (infra/modflow.tf). The agent submits a
-#: ``{run_id, manifest_uri}`` execution against it; cancellation propagates to
-#: the running Cloud Run Job (Invariant 8).
-MODFLOW_WORKFLOW_NAME: str = "grace-2-modflow-orchestrator"
+#: Workflow presence label (formerly the GCP Cloud Workflows orchestrator
+#: name; the cloud submit path is decommissioned - this is now only the
+#: exported identity tag for the MODFLOW workflow, mirroring
+#: ``model_flood_scenario``'s rename).
+MODFLOW_WORKFLOW_NAME: str = "run_modflow"
 
 #: The registry key + ``ExecutionHandle.solver`` tag for the groundwater engine.
 #: Mirrors ``run_swmm.SWMM_SOLVER_NAME`` - its PRESENCE in
@@ -297,7 +298,7 @@ def _runs_bucket() -> str:
     if _RUNS_BUCKET is not None:
         return _RUNS_BUCKET
     # GCP decommissioned: AWS S3 runs bucket default (prod overrides via env).
-    return os.environ.get("GRACE2_RUNS_BUCKET", "grace2-hazard-runs-226996537797")
+    return os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
 
 
 def _mf6_binary() -> str:

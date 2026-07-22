@@ -74,8 +74,8 @@ logging.basicConfig(
 )
 
 SCRATCH = Path(os.environ.get("GRACE2_GEOCLAW_SCRATCH", "/opt/grace2/work"))
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "grace-2-hazard-prod")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "grace-2-hazard-prod-runs")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
+RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
 
 
 def _utc_now() -> str:
@@ -654,7 +654,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     LOG.info(
-        "grace-2-geoclaw-solver starting - project=%s run_id=%s manifest=%s "
+        "trid3nt-geoclaw-solver starting - project=%s run_id=%s manifest=%s "
         "object_store=%s",
         GCP_PROJECT,
         run_id,

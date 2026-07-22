@@ -423,7 +423,7 @@ def web_fetch(
             }
 
     Caching: the result is cached in GCS at
-    ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/web_fetch/<hash>.json``
+    ``s3://trid3nt-cache/cache/dynamic-1h/web_fetch/<hash>.json``
     with the 1-hour TTL window as the only freshness boundary. The cache key
     inputs are ``(canonicalized url, extract, user_agent)``.
 

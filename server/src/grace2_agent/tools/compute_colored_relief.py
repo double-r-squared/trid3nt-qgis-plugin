@@ -484,7 +484,7 @@ def compute_colored_relief(
     Returns:
         A ``LayerURI`` pointing at a 3- or 4-band Cloud-Optimized GeoTIFF in
         the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/colored_relief/<key>.tif``.
+        ``s3://trid3nt-cache/cache/static-30d/colored_relief/<key>.tif``.
         The output shares the DEM's CRS and spatial extent; the units are RGB
         colour channels (0-255 per band), not elevation metres.
 

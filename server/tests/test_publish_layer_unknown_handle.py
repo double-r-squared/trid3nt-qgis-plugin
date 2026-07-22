@@ -75,7 +75,7 @@ def test_unresolved_handle_shapes(value: str) -> None:
     "value",
     [
         "s3://trid3nt-cache/cache/dynamic-1h/usgs/ab12.fgb",
-        "gs://grace-2-hazard-prod-runs/run-abc/flood_depth_peak.tif",
+        "gs://legacy-cloud-runs/run-abc/flood_depth_peak.tif",
         "http://127.0.0.1:8083/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2Fb%2Fk.tif",
         "https://example.com/wms?service=WMS&LAYERS=x",
         "file:///tmp/x.tif",
@@ -165,7 +165,7 @@ def test_minted_uri_handles_excluded_from_inventory() -> None:
     reg = get_uri_registry("sess-minted")
     reg.record(
         "uri:aa.tif",
-        uri="gs://grace-2-hazard-prod-runs/x/aa.tif",
+        uri="gs://legacy-cloud-runs/x/aa.tif",
         tool_name="fetch_dem",
     )
     token = activate_registry(reg)

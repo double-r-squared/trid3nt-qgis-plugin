@@ -210,8 +210,8 @@ _LAYER_STYLE_PRESET: dict[str, str] = {
 
 #: User-Agent per USGS / ESRI ImageServer guidelines.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP timeouts (seconds). ImageServer responses are quick (small TIFFs)
@@ -546,7 +546,7 @@ def fetch_landfire_fuels(
       ``"ch"`` (canopy height, m x 10 scaled int).
 
     **Returns:** A ``LayerURI`` pointing at a GeoTIFF in the cache bucket
-    (``gs://grace-2-hazard-prod-cache/cache/static-30d/landfire_fuels/<key>.tif``).
+    (``s3://trid3nt-cache/cache/static-30d/landfire_fuels/<key>.tif``).
     ``layer_type="raster"``, ``role="primary"``. ``units`` is populated for
     continuous canopy layers (``"m * 10"`` / ``"kg/m^3 * 100"``), ``None``
     for categorical fuel-model layers. EPSG:4326, 30 m native resolution,

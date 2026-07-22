@@ -59,9 +59,9 @@ def _make_handle(run_id: str) -> ExecutionHandle:
         compute_class="standard",
         workflows_execution_id=(
             "projects/test/locations/us-central1/workflows/"
-            "grace-2-sfincs-orchestrator/executions/test-exec"
+            "model_flood_scenario/executions/test-exec"
         ),
-        workflow_name="grace-2-sfincs-orchestrator",
+        workflow_name="model_flood_scenario",
         workflow_location="us-central1",
         submitted_at=datetime.now(timezone.utc),
     )
@@ -114,7 +114,7 @@ def _build_mocks(run_id: str):
         run_id=run_id,
         handle_id=handle.handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
@@ -124,7 +124,7 @@ def _build_mocks(run_id: str):
         layer_id=f"flood-depth-peak-{run_id}",
         name="Peak flood depth",
         layer_type="raster",
-        uri=f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif",
+        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
         style_preset="continuous_flood_depth",
         role="primary",
         units="meters",
@@ -134,7 +134,7 @@ def _build_mocks(run_id: str):
             layer_id=f"flood-depth-frame-{i:02d}-{run_id}",
             name=f"Flood depth step {i}",
             layer_type="raster",
-            uri=f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_frame_{i:02d}.tif",
+            uri=f"s3://trid3nt-runs/{run_id}/flood_depth_frame_{i:02d}.tif",
             style_preset="continuous_flood_depth",
             role="context",
             units="meters",

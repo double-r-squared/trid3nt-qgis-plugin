@@ -7,7 +7,7 @@ optionally reprojecting the output:
 
 The result is a clipped GeoTIFF stored under the FR-DC-3 cache shim at:
 
-    ``gs://grace-2-hazard-prod-cache/cache/static-30d/clip_raster/<key>.tif``
+    ``s3://trid3nt-cache/cache/static-30d/clip_raster/<key>.tif``
 
 **Path selection** (via rasterio CRS comparison):
 
@@ -505,7 +505,7 @@ def clip_raster_to_bbox(
 
     Returns:
         A ``LayerURI`` pointing at a clipped GeoTIFF in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/clip_raster/<key>.tif``.
+        ``s3://trid3nt-cache/cache/static-30d/clip_raster/<key>.tif``.
 
     LLM guidance:
         - bbox_crs default "EPSG:4326" matches user-facing lat/lon inputs;

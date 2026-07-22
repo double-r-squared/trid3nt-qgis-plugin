@@ -125,8 +125,8 @@ _ACCESS_URL = _NCEI_BASE + "/access/{sid}.csv"
 
 # Descriptive User-Agent (NCEI best practice; helps their rate-limit logic).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # HTTP timeouts (seconds).

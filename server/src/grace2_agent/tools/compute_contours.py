@@ -12,7 +12,7 @@ ships the parsed FeatureCollection to the client and the web vector renderer
 paints it as a line layer (``style_preset="contours"``). The artifact is stored
 under the FR-DC-3 cache shim at:
 
-    ``gs://grace-2-hazard-prod-cache/cache/static-30d/contours/<key>.fgb``
+    ``s3://trid3nt-cache/cache/static-30d/contours/<key>.fgb``
 
 **Sibling of ``compute_hillshade`` / ``compute_slope``.** Like every terrain
 ``compute_*`` tool, ``gdal_contour`` ships with GDAL (already on the box — the

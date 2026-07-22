@@ -1,9 +1,8 @@
 """
 THROWAWAY P0 GO/NO-GO SPIKE — PySWMM quasi-2D urban-flood engine.
 
-NOT agent-wired. Run from the scratch venv:
-    /home/nate/Documents/GRACE-2/.venv-swmm-spike/bin/python \
-        /home/nate/Documents/GRACE-2/services/workers/swmm/spike_quasi2d.py
+NOT agent-wired. Run from the scratch venv (repo root):
+    .venv-swmm-spike/bin/python services/workers/swmm/spike_quasi2d.py
 
 De-risks three engine-killing questions BEFORE any agent integration:
   1. Does pyswmm run a quasi-2D overland grid headless without crashing, with
@@ -84,7 +83,7 @@ from pyswmm import Simulation, Nodes
 # ---------------------------------------------------------------------------
 # Configuration (deterministic, no data fetch)
 # ---------------------------------------------------------------------------
-WORK = Path("/home/nate/Documents/GRACE-2/services/workers/swmm/_spike_out")
+WORK = Path(__file__).resolve().parent / "_spike_out"
 WORK.mkdir(parents=True, exist_ok=True)
 
 N = 20  # grid is N x N cells

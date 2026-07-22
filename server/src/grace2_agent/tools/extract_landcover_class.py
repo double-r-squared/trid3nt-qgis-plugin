@@ -10,7 +10,7 @@ requested NLCD class codes are 1, other valid pixels are 0, and nodata pixels
 are preserved as 255. The output is LZW-compressed and is stored under the
 FR-DC-3 cache shim at:
 
-    ``gs://grace-2-hazard-prod-cache/cache/static-30d/landcover_class/<key>.tif``
+    ``s3://trid3nt-cache/cache/static-30d/landcover_class/<key>.tif``
 
 **Typical use cases:**
 
@@ -496,7 +496,7 @@ def extract_landcover_class(
     Returns:
         A ``LayerURI`` pointing at the binary-mask GeoTIFF in the cache
         bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/landcover_class/<key>.tif``
+        ``s3://trid3nt-cache/cache/static-30d/landcover_class/<key>.tif``
         - ``layer_type="raster"``
         - ``role="context"`` (mask is contextual, not a primary hazard layer)
         - ``style_preset="categorical_landcover"`` for client rendering

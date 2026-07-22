@@ -17,7 +17,7 @@ This module defines the **two envelopes** the auth handshake uses:
   or anonymous-fallback provisioning (job-0122 scope).
 
 Both shapes carry small, forward-looking surfaces — the H.4 ``tier`` claim is
-included on the ack so the web client can drive tier-gated UI without a second
+included on the ack so the client can drive tier-gated UI without a second
 round-trip. The H.5 ``token-refresh`` envelope is deferred to a follow-up job
 when token-refresh wiring lands.
 
@@ -116,7 +116,7 @@ class AuthTokenEnvelope(GraceModel):
     #: has no Firebase token AND this field carries a ULID, the agent looks
     #: up the matching ``UserDocument`` and re-binds the existing anonymous
     #: User if (a) the User exists and (b) ``user.is_anonymous`` is True.
-    #: Otherwise the agent mints a fresh anonymous User. The web client
+    #: Otherwise the agent mints a fresh anonymous User. The client
     #: persists this id in localStorage on first connect and replays it on
     #: every reconnect, so a browser refresh re-binds the same User and the
     #: user's Cases stay visible across reloads.

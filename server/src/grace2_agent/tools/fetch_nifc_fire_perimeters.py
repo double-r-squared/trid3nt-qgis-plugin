@@ -164,8 +164,8 @@ _PRESERVED_PROPERTIES: tuple[str, ...] = (
 # User-Agent — NIFC's terms of use ask for identifying agents on automated
 # clients.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # Request timeout. NIFC's cluster is usually fast but the CONUS sweep on

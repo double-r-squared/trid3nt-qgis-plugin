@@ -694,7 +694,7 @@ def fetch_gridmet(
 
     Returns:
       ``LayerURI`` pointing at a COG in the cache bucket
-      (``gs://grace-2-hazard-prod-cache/cache/static-30d/gridmet/<key>.tif``).
+      (``s3://trid3nt-cache/cache/static-30d/gridmet/<key>.tif``).
       Single-band float32 EPSG:4326 raster, time-mean across the date
       window, clipped to bbox. ``layer_type="raster"``, ``role="primary"``,
       ``units`` per variable.

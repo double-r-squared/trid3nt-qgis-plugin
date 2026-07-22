@@ -258,7 +258,7 @@ def test_fetch_dem_happy_path_writes_through_cache(monkeypatch):
     layer = fetch_dem(FORT_MYERS_BBOX, resolution_m=10)
     assert layer.layer_type == "raster"
     assert layer.style_preset == "continuous_dem"
-    assert layer.uri.startswith("s3://grace2-hazard-cache-226996537797/cache/static-30d/dem/")
+    assert layer.uri.startswith("s3://trid3nt-cache/cache/static-30d/dem/")
     assert layer.uri.endswith(".tif")
     assert layer.units == "meters"
     # LANE-C (#159 follow-up #4): the returned layer declares the requested
@@ -729,7 +729,7 @@ def test_fetch_buildings_happy_path_msft(monkeypatch):
     assert layer.style_preset == "affected_buildings"
     assert layer.name == "Buildings (MSFT)"
     assert layer.uri.startswith(
-        "s3://grace2-hazard-cache-226996537797/cache/static-30d/buildings/"
+        "s3://trid3nt-cache/cache/static-30d/buildings/"
     )
     assert layer.uri.endswith(".fgb")
 
@@ -1223,7 +1223,7 @@ def test_fetch_population_acs_opt_in_routes_to_acs_branch(monkeypatch):
     assert layer.layer_type == "vector"
     assert layer.units == "people"
     assert layer.uri.startswith(
-        "s3://grace2-hazard-cache-226996537797/cache/static-30d/population/"
+        "s3://trid3nt-cache/cache/static-30d/population/"
     )
     assert layer.uri.endswith(".json")
 
@@ -1272,7 +1272,7 @@ def test_fetch_population_default_routes_to_worldpop_not_acs(monkeypatch):
     assert layer.layer_type == "raster"  # WorldPop is a raster COG, not a GeoJSON FC
     assert layer.units == "people"
     assert layer.uri.startswith(
-        "s3://grace2-hazard-cache-226996537797/cache/static-30d/population/"
+        "s3://trid3nt-cache/cache/static-30d/population/"
     )
     assert layer.uri.endswith(".tif")
 
@@ -2425,7 +2425,7 @@ def test_fetch_landcover_returns_nlcd_vintage_year_sidecar(monkeypatch):
     assert layer.style_preset == "categorical_landcover"
     assert layer.units == "nlcd_class_code"
     assert layer.uri.startswith(
-        "s3://grace2-hazard-cache-226996537797/cache/static-30d/landcover/"
+        "s3://trid3nt-cache/cache/static-30d/landcover/"
     )
     assert layer.uri.endswith(".tif")
 
@@ -3434,7 +3434,7 @@ def test_fetch_river_geometry_happy_path_returns_layer_uri(monkeypatch):
     layer = fetch_river_geometry(FORT_MYERS_BBOX)
     assert layer.layer_type == "vector"
     assert layer.uri.startswith(
-        "s3://grace2-hazard-cache-226996537797/cache/static-30d/river_geometry/"
+        "s3://trid3nt-cache/cache/static-30d/river_geometry/"
     )
     assert layer.uri.endswith(".fgb")
     # Provider-agnostic layer_id; renders inline (NOT published via publish_layer).

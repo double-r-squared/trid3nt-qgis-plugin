@@ -470,7 +470,7 @@ def clip_vector_to_polygon(
 
     Returns:
         A ``LayerURI`` pointing at a clipped FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/clip_vector_polygon/<key>.fgb``.
+        ``s3://trid3nt-cache/cache/static-30d/clip_vector_polygon/<key>.fgb``.
         ``layer_type="vector"``, ``role="context"``.
 
     LLM guidance:

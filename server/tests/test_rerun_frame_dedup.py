@@ -38,7 +38,7 @@ def _frame_layer(frame_no: int, run_id: str, *, engine: str = "swmm") -> LayerUR
     a per-run COG behind a TiTiler display template (the live wire shape)."""
     prefix = "swmm-depth-frame" if engine == "swmm" else "flood-depth-frame"
     fname = "swmm_depth_frame" if engine == "swmm" else "flood_depth_frame"
-    cog = f"s3://grace2-hazard-runs/{run_id}/{fname}_{frame_no:02d}.tif"
+    cog = f"s3://trid3nt-runs/{run_id}/{fname}_{frame_no:02d}.tif"
     return LayerURI(
         layer_id=f"{prefix}-{frame_no:02d}-{run_id}",
         name=f"Flood depth step {frame_no}",
@@ -53,7 +53,7 @@ def _frame_layer(frame_no: int, run_id: str, *, engine: str = "swmm") -> LayerUR
 
 
 def _peak_layer(run_id: str) -> LayerURI:
-    cog = f"s3://grace2-hazard-runs/{run_id}/swmm_depth_peak.tif"
+    cog = f"s3://trid3nt-runs/{run_id}/swmm_depth_peak.tif"
     return LayerURI(
         layer_id=f"swmm-depth-peak-{run_id}",
         name="Peak flood depth",
@@ -171,7 +171,7 @@ async def test_non_frame_layers_keep_cog_identity_dedup() -> None:
     """The pre-existing COG-identity dedup (job duplicate-flood-layer) still
     collapses two display URLs of the SAME peak COG to one row."""
     emitter = PipelineEmitter(session_id=new_ulid(), sink=_Sink())
-    cog = "s3://grace2-hazard-runs/RUN/swmm_depth_peak.tif"
+    cog = "s3://trid3nt-runs/RUN/swmm_depth_peak.tif"
     a = LayerURI(
         layer_id="peak-a",
         name="Peak flood depth",

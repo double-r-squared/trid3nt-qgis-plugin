@@ -151,7 +151,7 @@ async def run() -> None:
     state = SessionState(session_id=new_ulid())
     settings = GeminiSettings(
         model="gemini-2.5-pro",
-        project="grace-2-hazard-prod",
+        project="legacy-cloud-project",
         location="us-central1",
         use_vertex=True,
     )

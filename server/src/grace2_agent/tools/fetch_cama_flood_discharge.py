@@ -175,8 +175,8 @@ _ALLOWED_VERSIONS: frozenset[str] = frozenset(
 
 # User-Agent.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # CaMa-Flood discharge native units (per CaMa-Flood model output).
@@ -854,7 +854,7 @@ def fetch_cama_flood_discharge(
 
     **Returns:**
 
-    ``LayerURI`` pointing at ``gs://grace-2-hazard-prod-cache/cache/static-30d/cama_flood/<key>.tif``.
+    ``LayerURI`` pointing at ``s3://trid3nt-cache/cache/static-30d/cama_flood/<key>.tif``.
     COG, float32, EPSG:4326, nodata=NaN, units m^3/s. Single band:
     time-mean discharge across the date range. GeoTIFF tags: ``units``,
     ``source="CaMa-Flood_v4"``, ``version``, ``variable="discharge"``.

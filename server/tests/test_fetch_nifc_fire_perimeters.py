@@ -340,7 +340,7 @@ def test_user_agent_header_sent_on_request():
         f"User-Agent header missing! Captured: {captured_headers}"
     )
     ua = captured_headers["User-Agent"]
-    assert "grace-2" in ua, f"User-Agent should identify grace-2: {ua!r}"
+    assert "trid3nt" in ua, f"User-Agent should identify trid3nt: {ua!r}"
 
 
 # ---------------------------------------------------------------------------

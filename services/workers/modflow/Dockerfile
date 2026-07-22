@@ -37,9 +37,9 @@
 
 FROM python:3.11-slim
 
-LABEL org.opencontainers.image.title="grace-2-modflow-solver" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
-      org.opencontainers.image.description="MODFLOW 6 (mf6 6.5.0) solver runtime (Cloud Run Job). Reads a FloPy-generated GWF+GWT deck from gs://grace-2-hazard-prod-cache/, runs mf6, writes heads/concentration outputs + completion manifest to gs://grace-2-hazard-prod-runs/<run_id>/." \
+LABEL org.opencontainers.image.title="trid3nt-modflow-solver" \
+      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
+      org.opencontainers.image.description="MODFLOW 6 (mf6 6.5.0) solver runtime (Cloud Run Job). Reads a FloPy-generated GWF+GWT deck from s3://trid3nt-cache/, runs mf6, writes heads/concentration outputs + completion manifest to s3://trid3nt-runs/<run_id>/." \
       org.opencontainers.image.licenses="MIT"
 
 # MODFLOW 6.5.0 Linux release pin (design doc § 1). The zip ships statically
@@ -147,8 +147,8 @@ ENV PYTHONPATH=/opt/grace2 \
 #   GRACE2_RUNS_BUCKET   — destination bucket for outputs (<run_id>/completion.json).
 #   GRACE2_RUN_ID        — the run ID under which outputs land (set per run).
 #   GRACE2_MANIFEST_URI  — URI of the JSON setup manifest the entrypoint reads.
-ENV GRACE2_CACHE_BUCKET=grace2-hazard-cache-226996537797 \
-    GRACE2_RUNS_BUCKET=grace2-hazard-runs-226996537797 \
+ENV GRACE2_CACHE_BUCKET=trid3nt-cache \
+    GRACE2_RUNS_BUCKET=trid3nt-runs \
     GRACE2_RUN_ID="" \
     GRACE2_MANIFEST_URI=""
 

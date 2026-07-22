@@ -188,7 +188,7 @@ def _fresh_secret_record() -> SecretRecord:
         provider="ebird",
         case_id=new_ulid(),
         vault_ref=(
-            "gcp-sm://projects/grace-2-hazard-dev/secrets/case-x-ebird/versions/latest"
+            "gcp-sm://projects/legacy-cloud-project/secrets/case-x-ebird/versions/latest"
         ),
         label="personal eBird key",
         added_at=datetime(2026, 6, 8, 12, 0, 0, tzinfo=timezone.utc),

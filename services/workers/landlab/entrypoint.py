@@ -95,8 +95,8 @@ logging.basicConfig(
 )
 
 SCRATCH = Path(os.environ.get("GRACE2_LANDLAB_SCRATCH", "/opt/grace2/work"))
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "grace-2-hazard-prod")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "grace-2-hazard-prod-runs")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
+RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
 
 #: The default produced field COG filename (the postprocess/composer reads this
 #: + any glob matches from completion.json output_uris).
@@ -492,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     LOG.info(
-        "grace-2-landlab-solver starting — project=%s run_id=%s manifest=%s "
+        "trid3nt-landlab-solver starting — project=%s run_id=%s manifest=%s "
         "object_store=%s",
         GCP_PROJECT,
         run_id,

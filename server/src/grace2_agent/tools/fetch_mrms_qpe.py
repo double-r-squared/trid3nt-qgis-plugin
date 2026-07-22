@@ -206,8 +206,8 @@ _NODATA = -9999.0
 
 #: User-Agent per AWS Open Data + NOAA usage guidelines.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP timeouts (seconds).
@@ -772,7 +772,7 @@ def fetch_mrms_qpe(
     **Returns:**
 
     ``LayerURI`` pointing at
-    ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/mrms_qpe/<key>.tif``.
+    ``s3://trid3nt-cache/cache/dynamic-1h/mrms_qpe/<key>.tif``.
     GeoTIFF: float32, EPSG:4326, deflate-compressed, tiled 256×256,
     nodata=−9999. Band 1 description ``"precipitation_mm"``; GeoTIFF tags
     ``units="mm"``, ``valid_time``, ``source="NOAA MRMS MultiSensor QPE Pass2"``.

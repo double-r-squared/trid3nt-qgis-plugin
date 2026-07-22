@@ -54,8 +54,8 @@
 
 FROM deltares/sfincs-cpu:sfincs-v2.3.3@sha256:46b5fc9e324d3d9a0d0a7728390e3413bb1ce57ef74c4201a3003d21ef1efb71
 
-LABEL org.opencontainers.image.title="grace-2-sfincs-quadtree" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
+LABEL org.opencontainers.image.title="trid3nt-sfincs-quadtree" \
+      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
       org.opencontainers.image.description="COMBINED SFINCS quadtree+SnapWave BUILD+SOLVE worker (AWS Batch, one job). Reads a build-spec JSON, authors a refined quadtree deck via cht_sfincs (GPL-3.0, image-only) with auto-refinement + cell-budget cap + building obstacles, then runs /usr/local/bin/sfincs (MIT) in-process on the local deck and writes sfincs_map.nc + a union completion.json to the object store." \
       org.opencontainers.image.licenses="GPL-3.0-or-later AND MIT"
 
@@ -123,7 +123,7 @@ ENV PYTHONPATH=/opt/grace2 \
     PYTHONUNBUFFERED=1 \
     GRACE2_DECK_SCRATCH=/opt/grace2/work \
     GRACE2_SFINCS_BIN=/usr/local/bin/sfincs \
-    GCP_PROJECT=grace-2-hazard-prod
+    GCP_PROJECT=legacy-cloud-project
 
 # Runtime config — overridable from the AWS Batch job-def containerOverrides.
 # GCP is decommissioned: the live object store is AWS S3 (GRACE2_OBJECT_STORE=s3,
@@ -131,8 +131,8 @@ ENV PYTHONPATH=/opt/grace2 \
 # job-def overrides every value per submission) but are pinned to the AWS S3
 # names + scheme for honesty.
 ENV GRACE2_OBJECT_STORE=s3 \
-    GRACE2_CACHE_BUCKET=grace2-hazard-cache-226996537797 \
-    GRACE2_RUNS_BUCKET=grace2-hazard-runs-226996537797 \
+    GRACE2_CACHE_BUCKET=trid3nt-cache \
+    GRACE2_RUNS_BUCKET=trid3nt-runs \
     GRACE2_RUN_ID="" \
     GRACE2_BUILD_SPEC_URI=""
 

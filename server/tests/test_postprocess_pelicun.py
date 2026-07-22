@@ -96,8 +96,8 @@ def _base_row(
     return row
 
 
-_DAMAGE_URI = "gs://grace-2-hazard-prod-cache/cache/static-30d/pelicun_damage/abc.fgb"
-_FLOOD_URI = "gs://grace-2-hazard-prod-runs/run-xyz/flood_depth.tif"
+_DAMAGE_URI = "s3://trid3nt-cache/cache/static-30d/pelicun_damage/abc.fgb"
+_FLOOD_URI = "s3://trid3nt-runs/run-xyz/flood_depth.tif"
 
 
 # ---------------------------------------------------------------------------

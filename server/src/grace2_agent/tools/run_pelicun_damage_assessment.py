@@ -62,7 +62,7 @@ realization_count)`` calls reuse the cached FlatGeobuf for 30 days.
 **Live verification gate**
 
 Acceptance run (``GRACE2_TEST_LIVE_PELICUN=1``): job-0086 Y-flip-fixed flood
-COG (``gs://grace-2-hazard-prod-runs/01KTJX71NKGDMXB9TN0DV75JWK/flood_depth_peak_0086.tif``)
+COG (``s3://trid3nt-runs/01KTJX71NKGDMXB9TN0DV75JWK/flood_depth_peak_0086.tif``)
 + Fort Myers place polygons from ``fetch_administrative_boundaries(level='place', bbox=...)``
 → FlatGeobuf with populated ``ds_mean``/``repair_cost_mean`` per asset,
 saved to ``reports/inflight/job-0120-engine-20260608/evidence/``.

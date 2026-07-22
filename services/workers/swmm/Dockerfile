@@ -60,8 +60,8 @@ RUN python3 -m venv "$VENV" \
 # --------------------------------------------------------------------------- #
 FROM python:3.11-slim-bookworm AS runtime
 
-LABEL org.opencontainers.image.title="grace-2-swmm-solver" \
-      org.opencontainers.image.source="https://github.com/double-r-squared/GRACE-2" \
+LABEL org.opencontainers.image.title="trid3nt-swmm-solver" \
+      org.opencontainers.image.source="https://github.com/double-r-squared/trid3nt-qgis-plugin" \
       org.opencontainers.image.description="SWMM (pyswmm) solver runtime (AWS Batch). Reads a quasi-2D SWMM deck from s3://...-cache/, runs pyswmm headless, writes outputs + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="MIT"
 

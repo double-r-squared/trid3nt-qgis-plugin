@@ -32,7 +32,7 @@ Two strategies, selected at runtime:
    build is implemented and unit-tested here; the gate stays OFF by default
    because this AWS deployment has no client-reachable HTTP face for the
    ``s3://`` PMTiles object yet (TiTiler only serves raster ``/cog`` tiles; the
-   web client never reaches ``s3://`` directly — Invariant 5). A follow-up infra
+   client never reaches ``s3://`` directly — Invariant 5). A follow-up infra
    job that stands up a PMTiles range-serving origin (CloudFront over the runs
    bucket, or an agent ``/vector-tiles/`` proxy) flips this on with no code
    change here.

@@ -119,8 +119,8 @@ _MAX_RECORDS_HARD_CAP = 100_000
 
 # User-Agent per GBIF usage guidelines.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # species/match matchType values we will ACCEPT as an unambiguous resolution.

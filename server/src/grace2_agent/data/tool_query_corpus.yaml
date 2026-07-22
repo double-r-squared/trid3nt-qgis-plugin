@@ -1,5 +1,5 @@
 # tool_query_corpus.yaml
-# Synthetic example-query corpus for GRACE-2 Wave 4.10 discover_dataset retrieval substrate.
+# Synthetic example-query corpus for the TRID3NT discover_dataset retrieval substrate.
 # Each key is an @register_tool function name; values are realistic user-prompt-style queries
 # that should route to that tool. 5-10 specific queries per tool, with synonym coverage,
 # regional variants, and adjacent-intent routing.

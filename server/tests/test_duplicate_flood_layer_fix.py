@@ -55,7 +55,7 @@ class _Sink:
 def _published_flood_layer_uri(run_id: str) -> LayerURI:
     """The single styled, ALREADY-PUBLISHED peak-depth LayerURI a flood scenario
     wrapper returns on success (uri is the renderable TiTiler tile template)."""
-    cog = f"s3://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif"
+    cog = f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif"
     return LayerURI(
         layer_id=f"flood-depth-peak-{run_id}",
         name="Peak flood depth",
@@ -127,7 +127,7 @@ class TestScenarioPublishedSignal:
             layer_id="flood-depth-peak-R",
             name="Peak flood depth",
             layer_type="raster",
-            uri="gs://grace-2-hazard-prod-runs/R/flood_depth_peak.tif",
+            uri="gs://legacy-cloud-runs/R/flood_depth_peak.tif",
             style_preset="continuous_flood_depth",
             role="primary",
         )
@@ -215,7 +215,7 @@ class TestDedupByIdentity:
     @pytest.mark.asyncio
     async def test_same_cog_two_display_urls_merge_to_one(self) -> None:
         emitter = PipelineEmitter(session_id=new_ulid(), sink=_Sink())
-        cog = "s3://grace-2-hazard-prod-runs/RUN/flood_depth_peak.tif"
+        cog = "s3://trid3nt-runs/RUN/flood_depth_peak.tif"
 
         # 1. The workflow's internal styled publish (continuous_flood_depth ramp).
         workflow_layer = LayerURI(

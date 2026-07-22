@@ -154,8 +154,8 @@ _CONUS_BBOX: tuple[float, float, float, float] = (-130.0, 20.0, -60.0, 55.0)
 
 #: User-Agent per AWS Open Data + NOAA usage guidelines.
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 #: HTTP timeouts (seconds).
@@ -812,7 +812,7 @@ def fetch_noaa_nwm_streamflow(
 
     Returns:
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/nwm_streamflow/<key>.fgb``
+        ``s3://trid3nt-cache/cache/dynamic-1h/nwm_streamflow/<key>.fgb``
         - ``layer_type="vector"``, ``role="primary"``,
           ``style_preset="nwm_streamflow"``, ``units="m^3/s"``.
         - Geometry: Point at each NHDPlus reach centroid (LineString midpoint

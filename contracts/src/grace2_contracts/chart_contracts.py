@@ -8,7 +8,7 @@ damage distribution") and get an inline chart back. The agent's chart-generation
 tools (job-0230: ``generate_histogram`` / ``generate_choropleth_legend`` /
 ``generate_time_series`` / ``generate_damage_distribution``) compute the chart
 data, build a **Vega-Lite v5 JSON spec**, and emit a ``chart-emission`` envelope
-(agent -> client, Appendix A.4 amendment). The web client (job-0231) renders the
+(agent -> client, Appendix A.4 amendment). The client (job-0231) renders the
 spec via ``vega-embed`` as an inline stacked preview and a full-viewport gallery.
 
 Why Vega-Lite as the wire format

@@ -36,7 +36,7 @@ Lazy-init contract:
 
 Bucket policy (TENTATIVE — see OQ-0121-QGS-CASE-BUCKET):
 
-The kickoff names ``gs://grace-2-qgis-projects/{case_id}.qgs`` but the
+The kickoff names a legacy cloud bucket path but the
 bucket provisioned by the (now-decommissioned) GCP infra no longer
 exists; the resolved default follows the local MinIO naming convention
 (``trid3nt-qgs``) and tests assert against the constant, not a literal; the env

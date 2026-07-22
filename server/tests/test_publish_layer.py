@@ -61,7 +61,7 @@ def test_publish_layer_registered() -> None:
 
 def test_parse_qgs_key() -> None:
     """_parse_qgs_key extracts the object key from a gs:// or s3:// URI."""
-    assert _parse_qgs_key("gs://grace-2-hazard-prod-qgs/grace2-sample.qgs") == "grace2-sample.qgs"
+    assert _parse_qgs_key("gs://legacy-cloud-qgs/sample.qgs") == "sample.qgs"
     assert _parse_qgs_key("gs://bucket/subdir/project.qgs") == "subdir/project.qgs"
     assert _parse_qgs_key("s3://bucket/subdir/project.qgs") == "subdir/project.qgs"
 
@@ -97,11 +97,11 @@ def test_derive_layer_id_prefers_registered_handle() -> None:
         reg = get_uri_registry("sess-derive-layer-id")
         reg.record(
             "dem-3dep-10m",
-            uri="s3://grace2-hazard-cache/cache/static-30d/fetch_dem/abc.tif",
+            uri="s3://trid3nt-cache/cache/static-30d/fetch_dem/abc.tif",
             tool_name="fetch_dem",
         )
         derived = derive_layer_id(
-            "s3://grace2-hazard-cache/cache/static-30d/fetch_dem/abc.tif", reg
+            "s3://trid3nt-cache/cache/static-30d/fetch_dem/abc.tif", reg
         )
         assert derived == "dem-3dep-10m"
     finally:
@@ -181,7 +181,7 @@ def test_derive_readable_layer_name_uri_segment_fallback() -> None:
         None,
         _BARE_ULID,
         None,
-        "s3://grace2-hazard-cache/cache/hillshade/9f8e7d6c5b4a3210.tif",
+        "s3://trid3nt-cache/cache/hillshade/9f8e7d6c5b4a3210.tif",
     )
     assert name.startswith("Hillshade")
     assert _BARE_ULID not in name
@@ -195,7 +195,7 @@ def test_derive_readable_layer_name_generic_fallback_never_bare_ulid() -> None:
         None,
         _BARE_ULID,
         None,
-        "s3://grace2-hazard-cache/9f8e7d6c5b4a3210fedcba9876543210.tif",
+        "s3://trid3nt-cache/9f8e7d6c5b4a3210fedcba9876543210.tif",
     )
     assert name.startswith("Layer")
     assert name != _BARE_ULID

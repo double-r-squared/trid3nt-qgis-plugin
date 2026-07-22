@@ -744,7 +744,7 @@ def fetch_hrrr_smoke(
 
     Returns:
         A ``LayerURI`` pointing at a COG in the cache bucket
-        ``gs://grace-2-hazard-prod-cache/cache/dynamic-1h/hrrr_smoke/<key>.tif``
+        ``s3://trid3nt-cache/cache/dynamic-1h/hrrr_smoke/<key>.tif``
         carrying the requested variable's forecast slice, EPSG:4326,
         float32, NaN nodata. ``layer_type="raster"``, ``role="primary"``,
         ``units`` per the variable (``"kg m-3"``, ``"kg m-2"``, or ``"1"``).

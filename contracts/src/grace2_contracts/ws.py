@@ -114,7 +114,7 @@ class Envelope(GraceModel, Generic[PayloadT]):
     """The shared message envelope (A.1).
 
     ``type`` is the kebab-case discriminator; it is set per message type by the
-    caller (the agent service / web client serialize the right value). ``id`` and
+    caller (the agent service / client serialize the right value). ``id`` and
     ``ts`` default to a fresh ULID and current UTC. ``payload`` is always an
     object.
     """
@@ -1007,7 +1007,7 @@ class RecoveryChoicePayload(GraceModel):
     """``recovery-choice`` (A.4 — sprint-08 amendment, FR-FR-1).
 
     Agent emits this when an atomic-tool step fails with a *recoverable*
-    error class (FR-FR-2 routing table). The web client renders a small
+    error class (FR-FR-2 routing table). The client renders a small
     out-of-chat modal (mirrors the §F.3 popup discipline) offering the user
     deny / retry / chat actions.
 
@@ -1155,7 +1155,7 @@ class OfferCatalogAdditionPayload(GraceModel):
     """``offer-catalog-addition`` (A.4 — sprint-08 amendment, §F.1.2 Mode 2).
 
     Agent encountered a candidate `.gov` / `.edu` URL during research, ran a
-    conformity probe, and is offering to add it to the catalog. The web client
+    conformity probe, and is offering to add it to the catalog. The client
     renders a dedicated review modal (mirrors §F.3 secret-form pattern — popup,
     focus-trapped, separate from chat envelope) showing the URL + probe
     findings + the suggested catalog entry.

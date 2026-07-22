@@ -81,8 +81,8 @@ logging.basicConfig(
 
 SFINCS_BIN = os.environ.get("GRACE2_SFINCS_BIN", "/usr/local/bin/sfincs")
 SCRATCH = Path(os.environ.get("GRACE2_SFINCS_SCRATCH", "/opt/grace2/work"))
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "grace-2-hazard-prod")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "grace-2-hazard-prod-runs")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
+RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
 
 
 def _utc_now() -> str:
@@ -499,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
 
     build_mode = bool(build_spec_uri)
     LOG.info(
-        "grace-2-sfincs-solver starting — project=%s run_id=%s mode=%s src=%s "
+        "trid3nt-sfincs-solver starting — project=%s run_id=%s mode=%s src=%s "
         "object_store=%s",
         GCP_PROJECT,
         run_id,

@@ -36,7 +36,7 @@ Invariants:
 
 Pipeline-emitter integration (TENTATIVE per kickoff Open Question):
 - The composer accepts an optional ``pipeline_emitter`` keyword argument; when
-  provided, each major step is wrapped in ``emit_tool_call`` so the web client
+  provided, each major step is wrapped in ``emit_tool_call`` so the client
   renders one progress card per step inline in chat. When omitted, the
   composer runs silently (no emission) so direct-call unit/smoke harnesses do
   not need a mock emitter.
@@ -274,7 +274,7 @@ async def model_flood_habitat_scenario(
         6. Build ``case_summary_text`` from the metrics + counts.
 
     Each underlying call is wrapped in ``pipeline_emitter.emit_tool_call`` when
-    an emitter is provided, so the web client renders one progress card per
+    an emitter is provided, so the client renders one progress card per
     step. LayerURI returns flow into ``loaded_layers`` automatically via the
     emitter's built-in gate.
 

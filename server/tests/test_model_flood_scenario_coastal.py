@@ -69,9 +69,9 @@ def _make_handle(run_id: str | None = None) -> ExecutionHandle:
         compute_class="standard",
         workflows_execution_id=(
             "projects/test/locations/us-central1/workflows/"
-            "grace-2-sfincs-orchestrator/executions/test-exec"
+            "model_flood_scenario/executions/test-exec"
         ),
-        workflow_name="grace-2-sfincs-orchestrator",
+        workflow_name="model_flood_scenario",
         workflow_location="us-central1",
         submitted_at=datetime.now(timezone.utc),
     )
@@ -152,7 +152,7 @@ def _run_result_ok(run_id: str, handle_id: str) -> RunResult:
         run_id=run_id,
         handle_id=handle_id,
         status="complete",
-        output_uri=f"gs://grace-2-hazard-prod-runs/{run_id}/",
+        output_uri=f"s3://trid3nt-runs/{run_id}/",
         started_at=datetime.now(timezone.utc),
         completed_at=datetime.now(timezone.utc),
         duration_seconds=120.0,
@@ -164,7 +164,7 @@ def _flood_layer(run_id: str) -> LayerURI:
         layer_id=f"flood-depth-peak-{run_id}",
         name="Flood Depth (peak)",
         layer_type="raster",
-        uri=f"gs://grace-2-hazard-prod-runs/{run_id}/flood_depth_peak.tif",
+        uri=f"s3://trid3nt-runs/{run_id}/flood_depth_peak.tif",
         style_preset="continuous_flood_depth",
         role="primary",
         units="meters",
@@ -276,6 +276,18 @@ def _patched_chain(
         patch(
             "grace2_agent.workflows.model_flood_scenario.publish_layer",
             side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test"),
+        ),
+        # OFFLINE: the coastal auto-wire's live surge fetchers (CO-OPS/GTSM)
+        # must never hit the network or ambient object storage from a unit
+        # test - stub both so the ladder degrades to the parametric
+        # design-storm surge (rung 3, key-free and fully offline).
+        patch(
+            "grace2_agent.tools.fetch_noaa_coops_tides.fetch_noaa_coops_tides",
+            side_effect=RuntimeError("offline test - no live CO-OPS"),
+        ),
+        patch(
+            "grace2_agent.tools.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge",
+            side_effect=RuntimeError("offline test - no live GTSM"),
         ),
     )
 

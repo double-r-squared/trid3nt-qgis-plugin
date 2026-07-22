@@ -370,7 +370,7 @@ def test_user_agent_header_sent_on_request():
 
     assert "User-Agent" in captured_headers
     ua = captured_headers["User-Agent"]
-    assert "grace-2" in ua
+    assert "trid3nt" in ua
 
 
 # ---------------------------------------------------------------------------

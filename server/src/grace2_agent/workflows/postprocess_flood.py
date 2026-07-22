@@ -19,7 +19,7 @@ per the kickoff), so the style_preset string here references a name that the
 engine's styles follow-up job will author. See OQ-42-FLOOD-DEPTH-PRESET-QML.
 
 Tier separation (Invariant 5): the COG is written under
-``gs://grace-2-hazard-prod-runs/<run_id>/`` (the runs bucket from job-0040).
+``s3://trid3nt-runs/<run_id>/`` (the runs bucket from job-0040).
 The agent service doesn't re-render — QGIS Server picks up the URI from the
 AssessmentEnvelope's ``ResultLayer`` and serves WMS/WMTS tiles.
 

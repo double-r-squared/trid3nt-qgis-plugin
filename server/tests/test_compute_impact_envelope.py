@@ -69,12 +69,12 @@ from grace2_agent.workflows.compute_impact_envelope import (
 # --------------------------------------------------------------------------- #
 
 
-_FLOOD_URI = "gs://grace-2-hazard-prod-runs/01TEST/flood_depth_peak.tif"
+_FLOOD_URI = "s3://trid3nt-runs/01TEST/flood_depth_peak.tif"
 _NSI_URI = (
-    "gs://grace-2-hazard-prod-cache/cache/static-30d/usace_nsi/abc123.fgb"
+    "s3://trid3nt-cache/cache/static-30d/usace_nsi/abc123.fgb"
 )
 _DAMAGE_URI = (
-    "gs://grace-2-hazard-prod-cache/cache/static-30d/pelicun_damage/def456.fgb"
+    "s3://trid3nt-cache/cache/static-30d/pelicun_damage/def456.fgb"
 )
 _FT_MYERS_BBOX = (-81.92, 26.55, -81.80, 26.68)
 

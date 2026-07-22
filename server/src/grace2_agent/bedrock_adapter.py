@@ -3,7 +3,7 @@
 This service was built on Vertex AI / Gemini via ``adapter.py``. The AWS migration
 swaps the model provider to **Amazon Bedrock** (Claude Sonnet 4.6 by default)
 WITHOUT touching the multi-turn loop, the 57-tool catalog, the envelope
-emission, or the web client. The seam is deliberately narrow:
+emission, or the client. The seam is deliberately narrow:
 
   * This module accepts the SAME inputs ``adapter.stream_events_with_contents``
     accepts — a ``list[genai_types.Content]`` history + a list of

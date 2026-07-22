@@ -1107,7 +1107,7 @@ def fetch_gtsm_tide_surge(
 
     **Returns:**
 
-    ``LayerURI`` pointing at ``gs://grace-2-hazard-prod-cache/cache/static-30d/gtsm/<key>.fgb``.
+    ``LayerURI`` pointing at ``s3://trid3nt-cache/cache/static-30d/gtsm/<key>.fgb``.
     FlatGeobuf, Point geometry (EPSG:4326), one feature per GTSM gauge.
     Feature attributes: ``gauge_id``, ``lon``, ``lat``, ``time_start``,
     ``time_end``, ``n_timesteps``, ``wl_min_m`` / ``wl_max_m`` / ``wl_mean_m``

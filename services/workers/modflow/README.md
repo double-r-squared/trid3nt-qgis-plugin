@@ -2,9 +2,9 @@
 
 Sprint-13 / MOD-1 / job-0220 / FR-CE-1/2/3. The MODFLOW-6 analogue of
 `services/workers/sfincs/` — a containerized `mf6` 6.5.0 solver that runs as a
-Cloud Run Job, orchestrated by the `grace-2-modflow-orchestrator` Cloud
-Workflow (`infra/modflow.tf`). Produces the Case 2 groundwater-contaminant
-plume.
+Cloud Run Job, orchestrated by the `run_modflow` workflow (formerly a GCP
+Cloud Workflow; the cloud submit path is decommissioned). Produces the
+Case 2 groundwater-contaminant plume.
 
 ## What it is
 

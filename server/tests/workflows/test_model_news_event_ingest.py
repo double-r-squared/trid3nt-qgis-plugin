@@ -65,7 +65,7 @@ def _make_fake_layer_uri(name: str) -> Any:
     """Build an object with the LayerURI attributes the workflow reads."""
     obj = MagicMock()
     obj.name = name
-    obj.uri = f"gs://grace-2-hazard-prod-cache/cache/dynamic-1h/fake/{name}.fgb"
+    obj.uri = f"s3://trid3nt-cache/cache/dynamic-1h/fake/{name}.fgb"
     return obj
 
 

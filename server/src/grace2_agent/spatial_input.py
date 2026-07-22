@@ -1,7 +1,7 @@
 """Parse a drawn GeoJSON ``FeatureCollection`` into engine-shaped inputs
 (FR-WC-16 urban vector-draw -> FR-AS-10 ``request_spatial_input``).
 
-This is the AGENT-side consumer of the FR-WC-16 drawn output. The web client
+This is the AGENT-side consumer of the FR-WC-16 drawn output. The client
 opens a terra-draw surface and sends back a ``spatial-input-response`` whose
 ``features`` is a role-tagged ``FeatureCollection`` (see
 ``grace2_contracts.ws.SpatialInputResponsePayload`` /

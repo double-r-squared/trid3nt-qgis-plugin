@@ -346,13 +346,13 @@ def test_sandbox_execution_handle_shape() -> None:
 
     h = SandboxExecutionHandle(
         handle_id="01HX",
-        execution_name="projects/p/locations/us-central1/jobs/grace-2-python-sandbox/executions/e1",
+        execution_name="projects/p/locations/us-central1/jobs/legacy-python-sandbox/executions/e1",
         payload_uri="gs://b/sandbox/x/payload.json",
         result_uri="gs://b/sandbox/x/result.json",
         submitted_at=datetime.now(timezone.utc),
     )
     assert h.mode == "cloud"
-    assert "grace-2-python-sandbox" in h.execution_name
+    assert "legacy-python-sandbox" in h.execution_name
 
 
 # --------------------------------------------------------------------------- #

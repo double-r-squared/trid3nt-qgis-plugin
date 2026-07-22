@@ -96,8 +96,8 @@ logging.basicConfig(
 )
 
 SCRATCH = Path(os.environ.get("GRACE2_DECK_SCRATCH", "/opt/grace2/work"))
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "grace-2-hazard-prod")
-RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "grace-2-hazard-prod-runs")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
+RUNS_BUCKET = os.environ.get("GRACE2_RUNS_BUCKET", "trid3nt-runs")
 
 # The SFINCS binary the combined image carries (from deltares/sfincs-cpu). The
 # combined worker invokes it IN-PROCESS on the local deck dir after build.
@@ -2322,7 +2322,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     LOG.info(
-        "grace-2-sfincs-quadtree (BUILD+SOLVE) starting — run_id=%s spec=%s "
+        "trid3nt-sfincs-quadtree (BUILD+SOLVE) starting — run_id=%s spec=%s "
         "object_store=%s sfincs_bin=%s",
         run_id, build_spec_uri, _output_scheme(), SFINCS_BIN,
     )

@@ -14,8 +14,7 @@ one clone = a working end-to-end setup.
 
 The server (`server/`), contracts (`contracts/`) and engine workers
 (`services/workers/`) are first-class code in THIS repo - there is no upstream
-sync. (History note: they were vendored from an upstream monorepo until
-2026-07-21; the separate web + cloud products remain there.)
+sync.
 To extend the harness (write a tool / add an engine), see
 `docs/authoring/writing-a-tool.md` and `docs/authoring/adding-an-engine.md`.
 
@@ -29,23 +28,17 @@ or an API key for OpenAI/OpenRouter/Groq/etc.
 
 ```sh
 make setup     # one-time: create .env.local, fetch binaries (mf6/minio/mc), build the agent venv
-#              then edit .env.local -- set your LLM endpoint + key (see .env.openrouter.example)
+#              then edit .env.local -- set your LLM endpoint + key (make env writes a starter .env.local)
 make up        # start the local stack: minio (:9000) + agent (:8765 WS / :8766 HTTP)
 make plugin    # install the QGIS plugin into your QGIS profile
 #              then in QGIS: enable the TRID3NT plugin (or Plugin Reloader to reload)
 make status    # health-check the services
 ```
 
-Optional browser client (also reachable from a phone/laptop on your LAN/tailnet):
-
-```sh
-```
-
-Stop everything with `make down`. Run `make help` for the target list.
 
 ### LLM endpoint (.env.local)
 
-`make setup` copies `.env.openrouter.example` to `.env.local`. Set the provider:
+`make setup` copies `.env.local (via make env)` to `.env.local`. Set the provider:
 - Local Ollama: `MODEL_PROVIDER=openai`, `GRACE2_OPENAI_BASE_URL=http://127.0.0.1:11434/v1`,
   `GRACE2_OPENAI_MODEL=<your ollama model>`, `GRACE2_OPENAI_API_KEY=not-needed`.
 - OpenRouter / OpenAI / Groq: set `GRACE2_OPENAI_BASE_URL` + `GRACE2_OPENAI_MODEL` +

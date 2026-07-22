@@ -635,7 +635,7 @@ def _tier3_https_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[byt
         resp = _rq.get(
             entry.urls[0],
             params={str(k): str(v) for k, v in extra_qs.items()},
-            headers={"User-Agent": "grace-2/0.1 catalog_fetch Tier-3"},
+            headers={"User-Agent": "trid3nt/0.1 catalog_fetch Tier-3"},
             timeout=120.0,
         )
         resp.raise_for_status()
@@ -727,7 +727,7 @@ def catalog_fetch(entry_id: str, params: dict[str, Any] | None = None, **_extra_
     Returns:
         A dict with:
         - ``layer``: a ``LayerURI`` pointing at the cached artifact
-          (``gs://grace-2-hazard-prod-cache/cache/static-30d/catalog_fetch/<key>.<ext>``).
+          (``s3://trid3nt-cache/cache/static-30d/catalog_fetch/<key>.<ext>``).
         - ``entry_id``: the catalog id (echo).
         - ``access_tier``: the dispatched tier (1/2/3/4).
         - ``source_class``: the entry's source_class (for downstream routing).

@@ -131,8 +131,8 @@ _MAX_RECORDS_HARD_CAP = 1_000_000
 
 # User-Agent per Movebank usage etiquette (mirrors the GBIF pattern).
 _USER_AGENT = (
-    "grace-2/0.1 (Hazard Modeling Agent; "
-    "https://github.com/double-r-squared/GRACE-2; agent@grace-2.dev)"
+    "trid3nt/0.1 (Hazard Modeling Agent; "
+    "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
 # Attributes we pull. ``individual_local_identifier`` keys the per-animal
@@ -793,7 +793,7 @@ def fetch_movebank_tracks(
 
     Returns:
         A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/movebank/<key>.fgb``
+        ``s3://trid3nt-cache/cache/static-30d/movebank/<key>.fgb``
         containing the tracks/points clipped to the requested bbox (if any),
         in EPSG:4326. ``layer_type="vector"``, ``role="context"``,
         ``units=None``, ``style_preset="movebank_tracks"``.

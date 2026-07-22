@@ -111,7 +111,7 @@ def _tier2_entry() -> CatalogEntry:
             "GET ?get=B01003_001E&for=tract:*&in=state:<FIPS>&key=<KEY>\n"
             "Returns CSV; tract-level rows. Bbox not supported — use FIPS filters."
         ),
-        api_key_secret_ref="projects/grace-2-hazard-prod/secrets/census_acs_api_key/versions/latest",
+        api_key_secret_ref="projects/legacy-cloud-project/secrets/census_acs_api_key/versions/latest",
     )
 
 

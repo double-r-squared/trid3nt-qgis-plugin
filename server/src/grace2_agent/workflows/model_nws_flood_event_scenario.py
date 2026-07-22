@@ -13,7 +13,7 @@ three-layer accumulation the UI renders together:
          → observed accumulated precip raster (MRMS QPE Pass2 COG)
     3. model_flood_scenario(bbox=warning_bbox, forcing_raster_uri=mrms_uri)
          → SFINCS flood-depth COG (the job-0225 v2 area-mean netamt branch)
-    4. return the 3-layer accumulation contract so the web client renders the
+    4. return the 3-layer accumulation contract so the client renders the
        warning polygon, the precip raster, AND the flood-depth layer together.
 
 Per Decision G + FR-TA-1 + Invariant 2 this is **deterministic Python
@@ -952,7 +952,7 @@ async def run_model_nws_flood_event_scenario(
         Downstream (feeds):
         - Agent narration — cites ``flood_envelope.flood.metrics`` (max/mean
           depth, inundated area) verbatim (Invariant 7).
-        - The web client renders all three returned ``LayerURI`` dicts as a
+        - The client renders all three returned ``LayerURI`` dicts as a
           stacked accumulation (warning polygon + precip + flood depth).
     """
     return await model_nws_flood_event_scenario(

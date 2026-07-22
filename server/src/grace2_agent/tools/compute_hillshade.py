@@ -8,7 +8,7 @@ by wrapping GDAL's ``gdaldem hillshade`` command:
 The result is a single-band GeoTIFF in the same CRS and grid as the input DEM,
 stored under the FR-DC-3 cache shim at:
 
-    ``gs://grace-2-hazard-prod-cache/cache/static-30d/hillshade/<key>.tif``
+    ``s3://trid3nt-cache/cache/static-30d/hillshade/<key>.tif``
 
 **Style presets:**
 
@@ -694,7 +694,7 @@ def compute_hillshade(
 
     Returns:
         A ``LayerURI`` pointing at a hillshade GeoTIFF in the cache bucket:
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/hillshade/<key>.tif``.
+        ``s3://trid3nt-cache/cache/static-30d/hillshade/<key>.tif``.
         For "swiss_double", the URI points at the pre-blended composite;
         the LLM-visible result is always a single layer. The output is a
         single-band uint8 GeoTIFF (0–255 intensity) in the same CRS and

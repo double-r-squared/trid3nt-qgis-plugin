@@ -435,7 +435,7 @@ def fetch_statsgo_soils(
 
     Returns:
         ``LayerURI`` pointing at a single-band COG in the cache bucket
-        ``gs://grace-2-hazard-prod-cache/cache/static-30d/statsgo_soils/<key>.tif``.
+        ``s3://trid3nt-cache/cache/static-30d/statsgo_soils/<key>.tif``.
         ``layer_type="raster"``, ``role="input"``,
         ``style_preset="statsgo_kffact"`` or ``"statsgo_thick"``,
         ``units="centimeters"`` for THICK and ``None`` for KFFACT.

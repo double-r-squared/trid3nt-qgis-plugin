@@ -1,6 +1,6 @@
 """Single emission seam for client-bound ``LayerURI`` objects.
 
-THE ONE PLACE a ``LayerURI`` destined for the web client passes through before
+THE ONE PLACE a ``LayerURI`` destined for the client passes through before
 ``PipelineEmitter.add_loaded_layer`` tracks it and a ``session-state`` envelope
 carries it to the browser. Every site that hands a ``LayerURI`` to
 ``add_loaded_layer`` routes it through :func:`emit_layer_uri` first.
@@ -63,7 +63,7 @@ Correction 2). When ``SIGNED_URLS=true`` is set, emissions are byte-identical to
 ``SIGNED_URLS`` absent; only a WARNING is logged.
 
 When the direct-fetch feature lands, the implementer extends this seam (or, per
-Architecture A, the web client) to mint signed URLs for ``gs://`` rasters here —
+Architecture A, the client) to mint signed URLs for ``gs://`` rasters here —
 and at that point the guardrail's "drop renderable raw gs://" rule is relaxed for
 the signed case. Until then: dormant.
 """
@@ -123,7 +123,7 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
     ``SIGNED_URLS`` (dormant): when set truthy, a WARNING is logged and behavior
     is otherwise UNCHANGED (byte-identical emission). See the module docstring
     and Decision 11 — the natural consumer is a future direct-fetch feature whose
-    signing lives in the web client (scout Architecture A), not here.
+    signing lives in the client (scout Architecture A), not here.
     """
     if signed_urls_enabled():
         # DORMANT: no direct-fetch surface exists to sign for (Decision 11).

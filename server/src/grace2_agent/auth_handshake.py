@@ -413,7 +413,7 @@ def build_auth_ack(result: AuthResult) -> AuthAckEnvelope:
     """Construct the ``auth-ack`` envelope payload for a resolved AuthResult.
 
     Mirrors only the fields the H.5 ack surfaces -- never any credential
-    (Decision F wire isolation). The web client uses this to drive its
+    (Decision F wire isolation). The client uses this to drive its
     sticky-anonymous logic.
     """
     return AuthAckEnvelope(
