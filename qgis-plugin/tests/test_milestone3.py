@@ -741,13 +741,24 @@ class TestParseChatHistory(unittest.TestCase):
                     {"role": "user", "content": 42},  # non-string content
                     {"role": "user", "content": ""},  # empty content
                     {"role": "system", "content": "tool bookkeeping"},
+                    {"role": "tool"},  # tool row with NO tool_card and NO content
                     {"role": "tool", "content": "{...}"},
                     {"role": "bogus", "content": "hi"},
                     {"role": "user", "content": "the one good row"},
                 ]
             }
         )
-        self.assertEqual(rows, [{"role": "user", "content": "the one good row"}])
+        # Item H (qgis-ux-batch 2026-07-19): a tool row with a usable content
+        # twin SURFACES (tool_card rides along, None here); a tool row with
+        # NEITHER a tool_card dict NOR content is skipped like every other
+        # malformed row -- never raised on.
+        self.assertEqual(
+            rows,
+            [
+                {"role": "tool", "tool_card": None, "content": "{...}"},
+                {"role": "user", "content": "the one good row"},
+            ],
+        )
 
     def test_capped_at_replay_max_keeping_the_tail(self):
         many = [
@@ -768,17 +779,29 @@ class TestParseChatHistory(unittest.TestCase):
                     "loaded_layers": [],
                     "chat_history": [
                         {"role": "user", "content": "start a flood sim"},
-                        {"role": "tool", "content": "{tool_card}"},
+                        {
+                            "role": "tool",
+                            "tool_card": {"name": "run_flood_sim", "state": "ok"},
+                            "content": "{tool_card}",
+                        },
                         {"role": "agent", "content": "here is the result"},
                     ],
                 }
             }
         )
         self.assertIsNotNone(info)
+        # Item H (qgis-ux-batch 2026-07-19): tool rows are SURFACED with their
+        # typed tool_card dict (tool-call chain replay on reopen), in order,
+        # inline between the user and agent bubbles.
         self.assertEqual(
             info.chat_messages,
             [
                 {"role": "user", "content": "start a flood sim"},
+                {
+                    "role": "tool",
+                    "tool_card": {"name": "run_flood_sim", "state": "ok"},
+                    "content": "{tool_card}",
+                },
                 {"role": "agent", "content": "here is the result"},
             ],
         )

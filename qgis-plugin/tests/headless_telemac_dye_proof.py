@@ -46,7 +46,6 @@ PLUGIN_PATH = os.environ.get(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
 )
 sys.path.insert(0, PLUGIN_PATH)
-sys.path.insert(0, os.path.join(PLUGIN_PATH, "trid3nt"))
 
 MINIO_ENDPOINT = os.environ.get("TRID3NT_MINIO_ENDPOINT", "http://100.92.163.46:9000")
 RUN_ID = os.environ.get("TRID3NT_RUN_ID", "01KXHGVVSW3Y8SV8EQMTXNK8NS")
@@ -78,7 +77,7 @@ def check(label: str, cond: bool, detail: str = "") -> None:
         failures.append(label)
 
 
-import case_export  # noqa: E402
+from trid3nt.case import case_export  # noqa: E402
 
 print(f"[proof] downloading {MESH_ENTRY['s3_uri']} via MinIO", flush=True)
 mesh_dir = tempfile.mkdtemp(prefix="trid3nt_telemac_proof_")

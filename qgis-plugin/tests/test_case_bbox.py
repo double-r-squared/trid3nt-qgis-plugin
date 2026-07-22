@@ -9,7 +9,7 @@ Two layers of offline coverage:
     Checked against the StubAgentServer's recorded frames.
 
   * TestCaseBboxDock: the Qt dock behavior (overlay build, 4326<->canvas
-    conversion, default-on-create, state clear on switch/disconnect) runs in a
+    conversion, bbox-less-on-create, state clear on switch/disconnect) runs in a
     SUBPROCESS under the system interpreter that has ``qgis`` (a real
     QgsMapCanvas + QgsRubberBand), skipping honestly when absent -- the same
     convention as ``test_dock_ui``. The live QgsMapToolExtent DRAG itself is
