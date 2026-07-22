@@ -17,13 +17,13 @@ import threading
 import time
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "trid3nt"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import aoi  # noqa: E402
-import case_export  # noqa: E402
-import gate  # noqa: E402
-import trid3nt_client as tc  # noqa: E402
+from trid3nt.case import aoi  # noqa: E402
+from trid3nt.case import case_export  # noqa: E402
+from trid3nt.net import trid3nt_client as tc  # noqa: E402
+from trid3nt.ui import gate  # noqa: E402
 from stub_server import (  # noqa: E402
     CASE_LIST_ROWS,
     PAYLOAD_WARNING_HARDCAP_ROW,
@@ -699,7 +699,7 @@ class TestMaterializeExportStyles(unittest.TestCase):
         pkg_keys = [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]
         saved_pkg = {k: sys.modules.pop(k) for k in pkg_keys}
         try:
-            layers = importlib.import_module("trid3nt.layers")
+            layers = importlib.import_module("trid3nt.render.layers")
         finally:
             sys.path.remove(plugin_root)
             for k in [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]:
@@ -998,7 +998,7 @@ class TestMaterializeExportMesh(unittest.TestCase):
         pkg_keys = [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]
         saved_pkg = {k: sys.modules.pop(k) for k in pkg_keys}
         try:
-            layers = importlib.import_module("trid3nt.layers")
+            layers = importlib.import_module("trid3nt.render.layers")
         finally:
             sys.path.remove(plugin_root)
             for k in [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]:
@@ -1329,7 +1329,7 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
         pkg_keys = [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]
         saved_pkg = {k: sys.modules.pop(k) for k in pkg_keys}
         try:
-            layers = importlib.import_module("trid3nt.layers")
+            layers = importlib.import_module("trid3nt.render.layers")
         finally:
             sys.path.remove(plugin_root)
             for k in [k for k in list(sys.modules) if k.split(".")[0] == "trid3nt"]:
@@ -1348,7 +1348,7 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
     # -- ITEM A: case-switch clears stale TRID3NT groups ------------------- #
 
     def test_set_case_clears_previous_case_group_and_its_layers(self):
-        import trid3nt_client as tc
+        from trid3nt.net import trid3nt_client as tc
 
         layers, FakeProject, _fake_raster = self._import_layers()
         m = layers.LayerMaterializer(settings=None)
@@ -1374,7 +1374,7 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
         self.assertEqual(names, ["TRID3NT Case B"])
 
     def test_set_case_clears_export_group_too(self):
-        import case_export
+        from trid3nt.case import case_export
 
         layers, FakeProject, _fake_raster = self._import_layers()
         m = layers.LayerMaterializer(settings=None)
@@ -1388,7 +1388,7 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
         self.assertEqual(root.findGroups(), [])
 
     def test_reselecting_the_same_case_does_not_duplicate_layers(self):
-        import trid3nt_client as tc
+        from trid3nt.net import trid3nt_client as tc
 
         layers, FakeProject, _fake_raster = self._import_layers()
         m = layers.LayerMaterializer(settings=None)
@@ -1406,7 +1406,7 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
     # -- ITEM C: frame-sequence rasters land in a collapsed subgroup ------- #
 
     def test_frame_sequence_lands_in_collapsed_animation_subgroup(self):
-        import trid3nt_client as tc
+        from trid3nt.net import trid3nt_client as tc
 
         layers, FakeProject, _fake_raster = self._import_layers()
         m = layers.LayerMaterializer(settings=None)
@@ -1444,7 +1444,7 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
         )
 
     def test_growing_sequence_renames_subgroup_without_losing_members(self):
-        import trid3nt_client as tc
+        from trid3nt.net import trid3nt_client as tc
 
         layers, FakeProject, _fake_raster = self._import_layers()
         m = layers.LayerMaterializer(settings=None)
@@ -1481,7 +1481,7 @@ class TestGroupClearingAndAnimationGrouping(unittest.TestCase):
         )
 
     def test_materialize_export_groups_frame_sequences_too(self):
-        import case_export
+        from trid3nt.case import case_export
 
         layers, FakeProject, _fake_raster = self._import_layers()
         m = layers.LayerMaterializer(settings=None)

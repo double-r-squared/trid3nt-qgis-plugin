@@ -15,7 +15,8 @@ canvas-CRS rectangle, which covers everything downstream of the drag: the
 set-bbox persist, and the button restore.
 
 Checks:
-  1. new_case carries a DEFAULT AOI = the canvas extent (args.bbox, 4 floats).
+  1. new_case creates BBOX-LESS (A2, NATE 2026-07-20): case-command create
+     with args=None -- the canvas-as-AOI seed is gone; no local bbox either.
   2. _on_aoi_extent_chosen(rect) converts canvas-CRS -> EPSG:4326 (round-trips
      the seed box within tolerance), updates _case_bbox, builds the overlay,
      and persists via case-command set-bbox with the edited bbox.
@@ -120,26 +121,20 @@ dock.settings.auto_basemap = False        # no basemap fetch in the harness
 rec = RecBridge()
 dock.bridge = rec
 
-# ---- 1. new_case carries a default AOI = the canvas extent ----------------- #
+# ---- 1. new_case creates BBOX-LESS (A2, NATE 2026-07-20) ------------------- #
+# The canvas-as-AOI seed is GONE: a fresh case starts with NO AOI until the
+# user Sets one (the Set-AOI rectangle) or the LLM geocodes it -- new_case
+# issues case_command("create", args=None) and leaves no local bbox behind.
 
 dock.new_case()
 create_calls = [c for c in rec.calls if c[0] == "create"]
 if not create_calls:
     _fail("new_case did not issue a create case-command")
 _cmd, _cid, cargs = create_calls[-1]
-if not isinstance(cargs, dict) or "bbox" not in cargs:
-    _fail(f"new_case create carried no args.bbox: {cargs!r}")
-cbbox = cargs["bbox"]
-if not (isinstance(cbbox, list) and len(cbbox) == 4
-        and all(isinstance(v, float) for v in cbbox)):
-    _fail(f"new_case bbox is not 4 floats: {cbbox!r}")
-# The canvas widens its extent to the widget aspect ratio, so compare against
-# the dock's OWN resolved canvas bbox (the value new_case reads), not the seed.
-canvas_bbox = dock._canvas_bbox4326()
-if canvas_bbox is None:
-    _fail("dock._canvas_bbox4326() returned None on a real 3857 canvas")
-if not _approx(tuple(cbbox), canvas_bbox, tol=1e-4):
-    _fail(f"new_case bbox {cbbox} != canvas bbox {canvas_bbox}")
+if cargs is not None:
+    _fail(f"new_case must create BBOX-LESS (args=None), got args: {cargs!r}")
+if dock._case_bbox is not None:
+    _fail(f"new_case left a local bbox: {dock._case_bbox!r}")
 
 # ---- 2. _on_aoi_extent_chosen: convert + state + overlay + persist --------- #
 

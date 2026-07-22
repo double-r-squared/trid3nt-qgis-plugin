@@ -20,10 +20,10 @@ import sys
 import threading
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "trid3nt"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import probe  # noqa: E402
+from trid3nt.render import probe  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

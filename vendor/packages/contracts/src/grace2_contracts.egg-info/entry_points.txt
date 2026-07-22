@@ -1,2 +1,0 @@
-[console_scripts]
-grace2-export-schemas = grace2_contracts.export_schemas:main

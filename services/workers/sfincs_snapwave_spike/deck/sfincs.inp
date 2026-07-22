@@ -1,0 +1,40 @@
+$ SFINCS + SnapWave quadtree deck (hand-authored spike) — Mexico Beach pattern
+$ ---- grid / domain (quadtree) ----
+mmax              = 30
+nmax              = 20
+dx                = 50.0
+dy                = 50.0
+x0                = 600000.0
+y0                = 3200000.0
+rotation          = 0.0
+crs               = 32616
+qtrfile           = sfincs.nc
+$ ---- subgrid (building obstacles + topobathy) ----
+sbgfile           = sfincs.sbg
+$ ---- time ----
+tref              = 20181010 000000
+tstart            = 20181010 000000
+tstop             = 20181010 020000
+dtout             = 600
+dtmaxout          = 600
+$ ---- physics ----
+manning_land      = 0.04
+manning_sea       = 0.02
+$ ---- SURGE boundary (waterlevel) ----
+bndfile           = sfincs.bnd
+bzsfile           = sfincs.bzs
+$ ---- SnapWave coupling (source/src/sfincs_snapwave.f90) ----
+snapwave          = 1
+snapwave_bndfile  = snapwave.bnd
+snapwave_encfile  = snapwave.enc
+snapwave_bhsfile  = snapwave.bhs
+snapwave_btpfile  = snapwave.btp
+snapwave_bwdfile  = snapwave.bwd
+snapwave_bdsfile  = snapwave.bds
+snapwave_use_herbers = 1
+snapwave_wind     = 0
+snapwave_waveforces_ratio = 1.0
+$ ---- output ----
+outputformat      = net
+storehm0          = 1
+storehm0ig        = 1

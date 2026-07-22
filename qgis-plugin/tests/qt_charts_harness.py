@@ -45,7 +45,7 @@ QCoreApplication.setApplicationName("trid3nt-charts-harness")
 
 app = QApplication([])
 
-from trid3nt import charts  # noqa: E402
+from trid3nt.ui import charts  # noqa: E402
 from trid3nt.ui.dock import Trid3ntDock  # noqa: E402
 
 PROOF_DIR = os.path.abspath(

@@ -13,9 +13,8 @@ data/
 logs/
 run/
 runs/
-vendor/elmfire/
 cache/
-vendor/services/agent/build/
+server/build/
 
 # Secret-bearing local env (OpenRouter/API keys) - never commit
 .env.local
@@ -25,3 +24,5 @@ docs/proof/
 .nutshell-api-key
 .nutshell-server.pid
 .nutshell-server.log
+.env.local.bak
+*.egg-info/

@@ -13,9 +13,9 @@ import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "trid3nt"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import temporal  # noqa: E402
+from trid3nt.render import temporal  # noqa: E402
 
 
 UTC = timezone.utc

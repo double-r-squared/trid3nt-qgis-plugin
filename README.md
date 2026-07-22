@@ -1,21 +1,23 @@
 # TRID3NT Local
 
-Local-first build of TRID3NT: an AI workbench for multi-hazard geospatial
-modeling that runs entirely on your own machine. This repo bundles **the local
-server (the agent backend)** + **the QGIS plugin** that drives it, so one clone
-gives you a working end-to-end setup.
+TRID3NT: an AI workbench for multi-hazard geospatial modeling, built as a
+**QGIS plugin + its local server**, running entirely on your own machine. This
+repo IS the product: the plugin (the only client) and the server it drives,
+one clone = a working end-to-end setup.
 
-- **QGIS plugin** (primary client) + the same **web UI** as the cloud app
+- **QGIS plugin** - the client, deeply integrated with QGIS
 - **Pluggable LLM** via any OpenAI-compatible endpoint: local (Ollama, vLLM,
   llama.cpp, LM Studio) or cloud (OpenAI, Groq, DeepSeek, OpenRouter, ...)
 - **Real solvers run locally**: MODFLOW 6, TELEMAC, SFINCS, SWMM, and more via
   local `docker` containers; MODFLOW runs against a local `mf6` binary
 - File-based persistence + local tile rendering -- no cloud account required
 
-The agent code under `vendor/` is a tracked copy of the canonical **GRACE-2**
-repo (the shared server core); this bundle is the LOCAL runtime profile of it.
-To extend the harness (write a tool / add an engine), see the GRACE-2 authoring
-guides: `docs/authoring/writing-a-tool.md` and `docs/authoring/adding-an-engine.md`.
+The server (`server/`), contracts (`contracts/`) and engine workers
+(`services/workers/`) are first-class code in THIS repo - there is no upstream
+sync. (History note: they were vendored from the GRACE-2 monorepo until
+2026-07-21; GRACE-2 remains the home of the separate web + cloud products.)
+To extend the harness (write a tool / add an engine), see
+`docs/authoring/writing-a-tool.md` and `docs/authoring/adding-an-engine.md`.
 
 ## Quickstart
 
@@ -37,7 +39,6 @@ make status    # health-check the services
 Optional browser client (also reachable from a phone/laptop on your LAN/tailnet):
 
 ```sh
-make web       # vite dev server on :5173 (open http://<this-host>:5173)
 ```
 
 Stop everything with `make down`. Run `make help` for the target list.
@@ -69,7 +70,6 @@ The model can also be switched live from the plugin's Settings (no restart).
 | TiTiler        | http://localhost:8080        | raster tile server             |
 | MinIO API      | http://localhost:9000        | S3-compatible object storage   |
 | MinIO Console  | http://localhost:9001        | web UI (user: trid3nt)         |
-| Web UI         | http://localhost:5173        | optional browser client        |
 | Ollama         | http://localhost:11434       | optional local LLM             |
 
 ## Repo layout
@@ -77,11 +77,9 @@ The model can also be switched live from the plugin's Settings (no restart).
 ```
 qgis-plugin/trid3nt/   the QGIS plugin (net/ ui/ render/ case/ + plugin.py)
 qgis-plugin/tests/     plugin test harnesses + headless E2E drivers
-vendor/                the local server core, tracked copy synced from GRACE-2:
-  services/agent/        the agent (WS + tool dispatch + turn loop + persistence)
-  services/workers/      engine workers (mf6, telemac, sfincs, ... run via docker)
-  packages/contracts/    shared pydantic contracts
-  web/                   the browser SPA
+server/                the server (WS + tool dispatch + turn loop + persistence)
+contracts/             shared pydantic contracts (grace2-contracts package)
+services/workers/      engine workers (mf6, telemac, sfincs, ... docker or exec)
 scripts/               run + deploy scripts (start_*, install_plugin, build_*_image, ...)
 bin/ venvs/ data/ logs/ run/   gitignored runtime (binaries, venvs, storage, logs, pids)
 ```
@@ -89,8 +87,8 @@ bin/ venvs/ data/ logs/ run/   gitignored runtime (binaries, venvs, storage, log
 ## Deploy seams (when you change code)
 
 Three independent seams -- a git commit alone deploys none of them:
-- **Agent code**: edit canonical GRACE-2, then `scripts/sync_from_grace2.sh` +
-  restart the agent (`make agent`). The agent runs `vendor/`, not GRACE-2.
+- **Server code**: edit `server/`, then restart the agent (`make agent`) - the
+  venv installs `server/` editable, so a restart picks the change up.
 - **QGIS plugin**: `make plugin` (rsyncs into the QGIS profile), then reload in QGIS.
 - **Worker image**: `scripts/build_<engine>_image.sh` (e.g. `build_telemac_image.sh`).
 

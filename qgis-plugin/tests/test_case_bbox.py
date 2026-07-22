@@ -9,7 +9,7 @@ Two layers of offline coverage:
     Checked against the StubAgentServer's recorded frames.
 
   * TestCaseBboxDock: the Qt dock behavior (overlay build, 4326<->canvas
-    conversion, default-on-create, state clear on switch/disconnect) runs in a
+    conversion, bbox-less-on-create, state clear on switch/disconnect) runs in a
     SUBPROCESS under the system interpreter that has ``qgis`` (a real
     QgsMapCanvas + QgsRubberBand), skipping honestly when absent -- the same
     convention as ``test_dock_ui``. The live QgsMapToolExtent DRAG itself is
@@ -27,10 +27,10 @@ import sys
 import time
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "trid3nt"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import trid3nt_client as tc  # noqa: E402
+from trid3nt.net import trid3nt_client as tc  # noqa: E402
 from stub_server import CASE_LIST_ROWS, StubAgentServer  # noqa: E402
 
 

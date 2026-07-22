@@ -23,12 +23,12 @@ import time
 import unittest
 import urllib.parse
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "trid3nt"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import aoi  # noqa: E402
-import case_export  # noqa: E402
-import trid3nt_client as tc  # noqa: E402
+from trid3nt.case import aoi  # noqa: E402
+from trid3nt.case import case_export  # noqa: E402
+from trid3nt.net import trid3nt_client as tc  # noqa: E402
 from stub_server import (  # noqa: E402
     CASE_LIST_ROWS,
     EXPIRED_TOKEN,
@@ -741,13 +741,24 @@ class TestParseChatHistory(unittest.TestCase):
                     {"role": "user", "content": 42},  # non-string content
                     {"role": "user", "content": ""},  # empty content
                     {"role": "system", "content": "tool bookkeeping"},
+                    {"role": "tool"},  # tool row with NO tool_card and NO content
                     {"role": "tool", "content": "{...}"},
                     {"role": "bogus", "content": "hi"},
                     {"role": "user", "content": "the one good row"},
                 ]
             }
         )
-        self.assertEqual(rows, [{"role": "user", "content": "the one good row"}])
+        # Item H (qgis-ux-batch 2026-07-19): a tool row with a usable content
+        # twin SURFACES (tool_card rides along, None here); a tool row with
+        # NEITHER a tool_card dict NOR content is skipped like every other
+        # malformed row -- never raised on.
+        self.assertEqual(
+            rows,
+            [
+                {"role": "tool", "tool_card": None, "content": "{...}"},
+                {"role": "user", "content": "the one good row"},
+            ],
+        )
 
     def test_capped_at_replay_max_keeping_the_tail(self):
         many = [
@@ -768,17 +779,29 @@ class TestParseChatHistory(unittest.TestCase):
                     "loaded_layers": [],
                     "chat_history": [
                         {"role": "user", "content": "start a flood sim"},
-                        {"role": "tool", "content": "{tool_card}"},
+                        {
+                            "role": "tool",
+                            "tool_card": {"name": "run_flood_sim", "state": "ok"},
+                            "content": "{tool_card}",
+                        },
                         {"role": "agent", "content": "here is the result"},
                     ],
                 }
             }
         )
         self.assertIsNotNone(info)
+        # Item H (qgis-ux-batch 2026-07-19): tool rows are SURFACED with their
+        # typed tool_card dict (tool-call chain replay on reopen), in order,
+        # inline between the user and agent bubbles.
         self.assertEqual(
             info.chat_messages,
             [
                 {"role": "user", "content": "start a flood sim"},
+                {
+                    "role": "tool",
+                    "tool_card": {"name": "run_flood_sim", "state": "ok"},
+                    "content": "{tool_card}",
+                },
                 {"role": "agent", "content": "here is the result"},
             ],
         )
@@ -1396,8 +1419,8 @@ class TestAnonymousIdGuard(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            ps = importlib.import_module("plugin_settings")
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            ps = importlib.import_module("trid3nt.plugin_settings")
             FakeQSettings.store = {"trid3nt/anonymous_user_id": stored}
             return ps.PluginSettings()
         finally:
@@ -1447,8 +1470,8 @@ class TestShowThinkingSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            return importlib.import_module("plugin_settings").PluginSettings()
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            return importlib.import_module("trid3nt.plugin_settings").PluginSettings()
         finally:
             for k, v in saved.items():
                 if v is None:
@@ -1491,8 +1514,8 @@ class TestShowThinkingSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            ps = importlib.import_module("plugin_settings")
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            ps = importlib.import_module("trid3nt.plugin_settings")
             s = ps.PluginSettings()
             s.show_thinking = False
             self.assertEqual(FakeQSettings.store.get("trid3nt/show_thinking"), "false")
@@ -1533,8 +1556,8 @@ class TestAutoBasemapSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            return importlib.import_module("plugin_settings").PluginSettings()
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            return importlib.import_module("trid3nt.plugin_settings").PluginSettings()
         finally:
             for k, v in saved.items():
                 if v is None:
@@ -1577,8 +1600,8 @@ class TestAutoBasemapSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            ps = importlib.import_module("plugin_settings")
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            ps = importlib.import_module("trid3nt.plugin_settings")
             s = ps.PluginSettings()
             s.auto_basemap = False
             self.assertEqual(FakeQSettings.store.get("trid3nt/auto_basemap"), "false")
@@ -1620,8 +1643,8 @@ class TestProviderModelSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            return importlib.import_module("plugin_settings").PluginSettings(), FakeQSettings
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            return importlib.import_module("trid3nt.plugin_settings").PluginSettings(), FakeQSettings
         finally:
             for k, v in saved.items():
                 if v is None:

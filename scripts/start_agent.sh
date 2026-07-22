@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start_agent.sh -- start the GRACE-2 agent (vendored) for local TRID3NT dev
+# start_agent.sh -- start the TRID3NT server (grace2_agent) for local dev
 # Loads .env.local, starts the agent via python -m grace2_agent.main
 # Logs to ./logs/agent.log, writes PID to ./run/agent.pid (setsid/nohup style)
 set -euo pipefail

@@ -25,10 +25,10 @@ import threading
 import unittest
 import urllib.parse
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "trid3nt"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import push_layer  # noqa: E402
+from trid3nt.case import push_layer  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

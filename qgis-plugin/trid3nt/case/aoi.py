@@ -10,9 +10,9 @@ NOT invented):
 * The ONLY structured client->server AOI carrier in the protocol is the
   Case bbox: ``case-command create`` accepts ``args.bbox =
   [lon_min, lat_min, lon_max, lat_max]`` (EPSG:4326) -- the web's #170
-  "AOI-first" path (vendor/web/src/hooks/useCases.ts createCase). The agent
+  "AOI-first" path (the web client useCases.ts createCase - GRACE-2 repo). The agent
   seeds ``CaseSummary.bbox`` + ``state.case_bbox`` from it, and
-  ``_turn_case_bbox`` (services/agent server.py) anchors every turn's tool
+  ``_turn_case_bbox`` (server.py) anchors every turn's tool
   dispatch on that value. We mirror the exact field name (``bbox``) and
   element order (``[lon_min, lat_min, lon_max, lat_max]``).
 
