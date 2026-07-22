@@ -45,9 +45,8 @@ PLUGIN_PATH = os.environ.get(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
 )
 sys.path.insert(0, PLUGIN_PATH)
-sys.path.insert(0, os.path.join(PLUGIN_PATH, "trid3nt"))
 
-import probe  # noqa: E402
+from trid3nt.render import probe  # noqa: E402
 
 AGENT_HTTP = os.environ.get("TRID3NT_AGENT_HTTP", "http://127.0.0.1:8766")
 # The groundwater case named in the job-0308-style kickoff's live-verify

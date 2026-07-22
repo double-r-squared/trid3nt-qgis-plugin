@@ -23,12 +23,12 @@ import time
 import unittest
 import urllib.parse
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "trid3nt"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import aoi  # noqa: E402
-import case_export  # noqa: E402
-import trid3nt_client as tc  # noqa: E402
+from trid3nt.case import aoi  # noqa: E402
+from trid3nt.case import case_export  # noqa: E402
+from trid3nt.net import trid3nt_client as tc  # noqa: E402
 from stub_server import (  # noqa: E402
     CASE_LIST_ROWS,
     EXPIRED_TOKEN,
@@ -1396,8 +1396,8 @@ class TestAnonymousIdGuard(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            ps = importlib.import_module("plugin_settings")
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            ps = importlib.import_module("trid3nt.plugin_settings")
             FakeQSettings.store = {"trid3nt/anonymous_user_id": stored}
             return ps.PluginSettings()
         finally:
@@ -1447,8 +1447,8 @@ class TestShowThinkingSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            return importlib.import_module("plugin_settings").PluginSettings()
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            return importlib.import_module("trid3nt.plugin_settings").PluginSettings()
         finally:
             for k, v in saved.items():
                 if v is None:
@@ -1491,8 +1491,8 @@ class TestShowThinkingSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            ps = importlib.import_module("plugin_settings")
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            ps = importlib.import_module("trid3nt.plugin_settings")
             s = ps.PluginSettings()
             s.show_thinking = False
             self.assertEqual(FakeQSettings.store.get("trid3nt/show_thinking"), "false")
@@ -1533,8 +1533,8 @@ class TestAutoBasemapSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            return importlib.import_module("plugin_settings").PluginSettings()
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            return importlib.import_module("trid3nt.plugin_settings").PluginSettings()
         finally:
             for k, v in saved.items():
                 if v is None:
@@ -1577,8 +1577,8 @@ class TestAutoBasemapSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            ps = importlib.import_module("plugin_settings")
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            ps = importlib.import_module("trid3nt.plugin_settings")
             s = ps.PluginSettings()
             s.auto_basemap = False
             self.assertEqual(FakeQSettings.store.get("trid3nt/auto_basemap"), "false")
@@ -1620,8 +1620,8 @@ class TestProviderModelSettings(unittest.TestCase):
         saved = {k: sys.modules.get(k) for k in ("qgis", "qgis.PyQt", "qgis.PyQt.QtCore")}
         sys.modules.update({"qgis": qgis_mod, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
         try:
-            sys.modules.pop("plugin_settings", None)
-            return importlib.import_module("plugin_settings").PluginSettings(), FakeQSettings
+            sys.modules.pop("trid3nt.plugin_settings", None)
+            return importlib.import_module("trid3nt.plugin_settings").PluginSettings(), FakeQSettings
         finally:
             for k, v in saved.items():
                 if v is None:

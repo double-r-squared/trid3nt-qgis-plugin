@@ -46,9 +46,8 @@ PLUGIN_PATH = os.environ.get(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
 )
 sys.path.insert(0, PLUGIN_PATH)
-sys.path.insert(0, os.path.join(PLUGIN_PATH, "trid3nt"))
 
-import push_layer  # noqa: E402
+from trid3nt.case import push_layer  # noqa: E402
 
 AGENT_HTTP = os.environ.get("TRID3NT_AGENT_HTTP", "http://127.0.0.1:8766")
 CASE_ID = os.environ.get("TRID3NT_CASE_ID", "01KWRSGHJV4Q5R6SWDGNRZDYJS")
