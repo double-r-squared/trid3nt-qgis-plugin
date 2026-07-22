@@ -77,15 +77,14 @@ from ..workflows.postprocess_modflow import (
     postprocess_drawdown,
     postprocess_mounding,
     postprocess_saltwater_intrusion,
+    postprocess_stream_reaches,
+    postprocess_subsidence,
     postprocess_wetland_hydroperiod,
 )
 from ..workflows.run_modflow import (
     MODFLOWWorkflowError,
     build_and_stage_modflow_deck,
-    compose_and_upload_modflow_build_spec,
     is_local_mode,
-    modflow_archetype_offload_enabled,
-    read_modflow_archetype_manifest,
     run_modflow_local,
     submit_modflow_run,
 )
@@ -133,6 +132,17 @@ ARCHETYPE_POSTPROCESS: dict[str, Any] = {
     # bottom-layer 50%-isochlor toe penetration in metres (a positive scalar; the
     # > 0 floor applies). NOT in PRT_ARCHETYPES (no PRT sim; standard GWF+GWT run).
     "saltwater_intrusion": (postprocess_saltwater_intrusion, "intrusion_length_m"),
+    # module wave: SFR routed stream-depletion (LOCAL-ONLY v0.1; kept OFF the
+    # offload table alongside the PRT + saltwater archetypes). The headline is the
+    # net streamflow captured from the stream by the pumping (a positive scalar;
+    # the > 0 empty-result floor applies).
+    "stream_depletion": (postprocess_stream_reaches, "total_depletion_m3_day"),
+    # module wave: CSUB land subsidence (LOCAL-ONLY v0.1; kept OFF the offload
+    # table alongside stream_depletion + the PRT + saltwater archetypes). Standard
+    # single GWF run (no PRT, no two-sim sequence). The headline is the peak
+    # ground subsidence in cm (a positive scalar; the > 0 empty-result floor
+    # applies).
+    "land_subsidence": (postprocess_subsidence, "max_subsidence_cm"),
 }
 
 #: Archetypes whose headline deliverable is a SERIES / dict (truthy-when-present)
@@ -203,84 +213,6 @@ async def run_modflow_archetype_job(
 
     is_prt = archetype in PRT_ARCHETYPES
 
-    # --- OFFLOAD BRANCH (GRACE2_MODFLOW_ARCHETYPE_OFFLOAD=1) -------------------
-    # PRT archetypes (capture_zone / wellhead_protection) and saltwater_intrusion
-    # are LOCAL-ONLY and are NEVER offloaded. All other archetypes delegate the
-    # FloPy BUILD + mf6 SOLVE + archetype POSTPROCESS to the grace2-modflow Batch
-    # worker via the same compose/submit/read pattern the spill path uses.
-    _OFFLOAD_EXCLUDES = PRT_ARCHETYPES | frozenset({"saltwater_intrusion"})
-    if modflow_archetype_offload_enabled() and archetype not in _OFFLOAD_EXCLUDES:
-        logger.info(
-            "run_modflow_archetype_job offload path archetype=%s compute=%s",
-            archetype, compute_class,
-        )
-        try:
-            build_spec_uri = await asyncio.to_thread(
-                compose_and_upload_modflow_build_spec,
-                run_args,
-                compute_class=compute_class,
-            )
-            from .solver import run_modflow_build_solve
-
-            run_result = await run_modflow_build_solve(
-                build_spec_uri, compute_class=compute_class
-            )
-            if run_result.status != "complete":
-                return {
-                    "status": "error",
-                    "error_code": run_result.error_code or run_result.status.upper(),
-                    "error_message": (
-                        run_result.error_message
-                        or run_result.cancellation_reason
-                        or "MODFLOW archetype Batch job did not complete"
-                    ),
-                }
-            layer = await asyncio.to_thread(
-                read_modflow_archetype_manifest,
-                run_result,
-                archetype,
-            )
-            # Honesty floor (same gate as the in-agent path).
-            headline = getattr(layer, headline_attr, None)
-            if archetype in _NON_SCALAR_HEADLINES:
-                empty = not headline
-            else:
-                empty = not headline or float(headline) <= 0.0
-            if empty:
-                return {
-                    "status": "error",
-                    "error_code": "MODFLOW_ARCHETYPE_EMPTY_RESULT",
-                    "error_message": (
-                        f"the {archetype} run produced no non-trivial result "
-                        f"({headline_attr}={headline!r}); check the well / pit / "
-                        "gradient forcing. No layer was loaded."
-                    ),
-                }
-            logger.info(
-                "run_modflow_archetype_job offload complete archetype=%s %s=%s uri=%s",
-                archetype, headline_attr, headline, layer.uri,
-            )
-            return layer
-        except asyncio.CancelledError:
-            raise
-        except MODFLOWWorkflowError as exc:
-            logger.warning(
-                "run_modflow_archetype_job offload failed: %s (%s)",
-                exc.error_code, exc,
-            )
-            return {
-                "status": "error",
-                "error_code": exc.error_code,
-                "error_message": str(exc),
-            }
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("run_modflow_archetype_job offload unexpected failure")
-            return {
-                "status": "error",
-                "error_code": "MODFLOW_ARCHETYPE_INTERNAL_ERROR",
-                "error_message": str(exc),
-            }
-    # --- END OFFLOAD BRANCH ----------------------------------------------------
 
     logger.info(
         "run_modflow_archetype_job archetype=%s aoi=%s compute=%s local=%s prt=%s",

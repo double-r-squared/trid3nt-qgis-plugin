@@ -128,7 +128,6 @@ from .adapter import (
     REHYDRATE_HISTORY_CAP,
     stream_events,  # noqa: F401 — retained for tests / direct text-only callers
     stream_events_with_contents,
-    stream_reply,  # noqa: F401 — retained for any callers that use it directly
     summarize_tool_result,
     classify_result_usable,
 )
@@ -2887,6 +2886,25 @@ async def _stream_gemini_reply(
         user_text[:80],
     )
 
+    # job-0260 A3 (NATE 2026-07-20 live): name an Untitled Case from its FIRST
+    # user message BEFORE the model dispatch. The prior call site sat at the very
+    # END of the turn (after llm_generation completed), so a failed narration
+    # (LLM_UNAVAILABLE / transient upstream / context-window abort) jumped to an
+    # except handler and NEVER reached the autoname -- the freshly-created case
+    # stayed "Untitled" even though its first prompt was perfectly nameable. Auto-
+    # name is a cheap deterministic HEURISTIC (no LLM call), so running it up here
+    # is safe and independent of whether the turn later succeeds. Best-effort +
+    # never-raise; the end-of-turn call below stays as a no-op fallback (guarded
+    # by _AUTONAMED_CASES) that still covers a mid-stream case switch.
+    try:
+        if await _maybe_autoname_case(state, user_text):
+            await _emit_case_list(websocket, state, force=True)
+    except Exception:  # noqa: BLE001 -- naming is a nicety, never break the turn
+        logger.debug(
+            "pre-dispatch case auto-name failed session=%s", state.session_id,
+            exc_info=True,
+        )
+
     # job-0315: one bubble per CONTIGUOUS narration run. A fresh message_id is
     # minted lazily the FIRST time text arrives in a segment (A2); finalized
     # (done=True + per-segment persist) when the next function-call round is
@@ -4193,7 +4211,11 @@ async def _stream_gemini_reply(
         # LLM context (the carryover class, 74fc0d6).
         turn_history.append({"role": "user", "text": user_text})
         # job-0260: name an Untitled Case from its first prompt + refresh
-        # the left rail so accumulated demo Cases are distinguishable.
+        # the left rail so accumulated demo Cases are distinguishable. A3 moved
+        # the PRIMARY autoname to a pre-dispatch call (so a failed narration does
+        # not lose the name); this tail is now a guarded no-op fallback that only
+        # fires when a mid-stream case switch re-pinned active_case_id to a fresh
+        # Untitled case not yet seen by the pre-dispatch call.
         if await _maybe_autoname_case(state, user_text):
             await _emit_case_list(websocket, state, force=True)
 
@@ -5644,14 +5666,26 @@ async def _handle_case_command(
                 "case-command(set-bbox) requires case_id",
             )
             return
-        bbox = _coerce_bbox4((cmd.args or {}).get("bbox"))
-        if bbox is None:
+        # qgis-ux-batch item D (2026-07-19): the "Clear AOI" control sends
+        # set-bbox with an EXPLICIT null/empty bbox to RESET the case AOI. An
+        # explicitly-present-but-empty ``bbox`` (None or []) = CLEAR
+        # (CaseSummary.bbox -> None, state.case_bbox -> None); a MISSING bbox key
+        # or a non-empty-but-malformed bbox stays the honest error below. This
+        # is what lets the plugin's Clear-AOI actually stop the agent anchoring
+        # on the old extent every turn (mirrors the web "reset AOI on Case
+        # exit" behaviour, for an explicit user clear).
+        raw_args = cmd.args or {}
+        has_bbox_key = "bbox" in raw_args
+        raw_bbox = raw_args.get("bbox")
+        clear = has_bbox_key and (raw_bbox is None or raw_bbox == [])
+        bbox = None if clear else _coerce_bbox4(raw_bbox)
+        if not clear and bbox is None:
             await _send_error(
                 websocket,
                 state.session_id,
                 "INTERNAL_ERROR",
                 "case-command(set-bbox) requires args.bbox = "
-                "[min_lon, min_lat, max_lon, max_lat]",
+                "[min_lon, min_lat, max_lon, max_lat] (or an empty bbox to clear)",
             )
             return
         existing = await p.get_case(cmd.case_id)
@@ -5663,8 +5697,9 @@ async def _handle_case_command(
                 f"case-command(set-bbox): case {cmd.case_id!r} not found",
             )
             return
+        new_bbox = None if clear else list(bbox)
         updated = existing.model_copy(
-            update={"bbox": list(bbox), "updated_at": now_utc()}
+            update={"bbox": new_bbox, "updated_at": now_utc()}
         )
         try:
             await p.upsert_case(updated)
@@ -5678,9 +5713,10 @@ async def _handle_case_command(
             )
             return
         # Open case: refresh the durable in-session pin so the next turn's
-        # AOI line + fetch-bbox snapping use the new extent immediately.
+        # AOI line + fetch-bbox snapping use the new extent immediately (a
+        # CLEAR nulls it so the model re-derives the area from the prompt).
         if cmd.case_id == state.active_case_id:
-            state.case_bbox = list(bbox)
+            state.case_bbox = new_bbox
         await _persist_case_view_snapshot(state, case_id=cmd.case_id)
         await _persist_case_manifest(state, case_id=cmd.case_id)
         await _emit_case_list(websocket, state, force=True)
@@ -5688,7 +5724,7 @@ async def _handle_case_command(
             "case-command set-bbox session=%s case=%s bbox=%s",
             state.session_id,
             cmd.case_id,
-            list(bbox),
+            new_bbox,
         )
         return
 
@@ -5803,21 +5839,35 @@ async def _maybe_autoname_case(state: SessionState, prompt: str) -> bool:
     case_id = state.active_case_id
     if not case_id or case_id in _AUTONAMED_CASES:
         return False
-    _AUTONAMED_CASES.add(case_id)
     p = get_persistence()
     if p is None:
+        # Persistence unbound is NOT a permanent state -- do NOT mark the case
+        # "named" (a later turn, once bound, can still name it from its first
+        # prompt). A3 (2026-07-20): the guard used to be set unconditionally up
+        # front, so ANY early miss (transient error / fresh-case read race)
+        # burned the one-and-only naming attempt for that case forever.
         return False
     try:
         case = await p.get_case(case_id)
-        if case is None or case.title != "Untitled Case":
+        if case is None:
+            # Fresh case not visible in Persistence yet (create-then-read race)
+            # -> TRANSIENT: leave unmarked so the next turn retries the name.
+            return False
+        if case.title != "Untitled Case":
+            _AUTONAMED_CASES.add(case_id)  # already named -> stop checking
             return False
         title = _derive_case_title(prompt)
         if not title:
+            # First prompt is degenerate/unnameable -> DEFINITIVE (the first
+            # message defines the name); mark so later turns do not re-read.
+            _AUTONAMED_CASES.add(case_id)
             return False
         await p.upsert_case(case.model_copy(update={"title": title}))
+        _AUTONAMED_CASES.add(case_id)  # mark ONLY after the name actually landed
         logger.info("case auto-named case=%s title=%r", case_id, title)
         return True
-    except Exception:  # noqa: BLE001 — naming is a nicety
+    except Exception:  # noqa: BLE001 — naming is a nicety; TRANSIENT -> unmarked,
+        # so a persistence hiccup does not permanently forfeit the name.
         logger.debug("case auto-name failed case=%s", case_id, exc_info=True)
     return False
 
@@ -11537,57 +11587,6 @@ async def _emit_auto_publish_failure(
         )
 
 
-async def _terminate_turn_inflight_batch_jobs(state: SessionState) -> None:
-    """Terminate any Batch job this turn submitted but never finished waiting on.
-
-    THE GAP (Invariant 8 completeness): ``run_solver`` submits a Batch job and
-    returns in ONE tool call; ``wait_for_completion`` polls + terminates-on-cancel
-    in a SEPARATE, LATER call. The existing ``CancelledError -> terminate_job``
-    chain inside ``wait_for_completion`` only fires when that coroutine is the
-    frame being awaited. If the user cancels the turn (stop button /
-    same-stream re-prompt supersede) in the WINDOW between submit and wait --
-    during the intervening LLM generation, or before the agent ever issues
-    ``wait_for_completion`` -- nothing terminated the job, so it kept running on
-    Spot (costing money + orphaning a result).
-
-    Called FIRST in the turn-task ``finally`` (every exit path incl. cancel).
-    ``solver.begin_turn_inflight_tracking`` bound a fresh per-turn list at task
-    entry; ``run_solver`` appended each submitted jobId; ``wait_for_completion``
-    cleared each on terminal / its own cancel. So on a CLEAN turn the list is
-    empty and this is a no-op; only an abandoned-in-flight job remains.
-
-    Best-effort + never blocks the cancel:
-      * runs the synchronous boto3 ``terminate_job`` calls OFF the event loop
-        (``asyncio.to_thread``) per feedback_no_sync_blocking_on_asyncio_loop;
-      * SHIELDED so a pending parent ``CancelledError`` cannot cut the kill
-        short before the terminate is issued (same rationale as the durable
-        layer-persist) -- then the cancel propagates normally;
-      * swallows every error (a dead Batch client / bad jobId must never break
-        turn teardown or mask the original exception).
-    """
-    from .tools.solver import (
-        inflight_batch_jobs,
-        terminate_inflight_batch_jobs,
-    )
-
-    # Cheap pre-check on the loop: nothing in flight -> no thread, no work.
-    if not inflight_batch_jobs():
-        return
-    try:
-        await _run_to_completion_shielded(
-            asyncio.to_thread(
-                terminate_inflight_batch_jobs, "cancelled by user"
-            )
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:  # noqa: BLE001 - best-effort, never mask turn teardown
-        logger.exception(
-            "turn-inflight-batch terminate failed session=%s",
-            state.session_id,
-        )
-
-
 async def _persist_case_loaded_layers(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
@@ -12191,14 +12190,6 @@ async def _dispatch_gemini_and_persist(
     # envelope this turn emits (chunks, pipeline-state, session-state, …)
     # carries Envelope.case_id and the web routes it to the right stream.
     bind_turn_case(turn_case_id)
-    # Turn-cancel Batch kill path: bind a FRESH per-turn in-flight-jobs list so
-    # run_solver records any Batch jobId it submits THIS turn. On a stop /
-    # same-stream supersede / any cancel that abandons the wait, the finally
-    # below terminates whatever is still in flight (the gap: a job submitted but
-    # not currently being awaited by wait_for_completion was never terminated).
-    from .tools.solver import begin_turn_inflight_tracking
-
-    begin_turn_inflight_tracking()
     # job-0269: per-turn object capture. A concurrent turn (or a case
     # switch) re-points both SessionState fields mid-stream — this wrapper
     # must gauge completion against THIS turn's history list, and join the
@@ -12214,15 +12205,6 @@ async def _dispatch_gemini_and_persist(
             show_thinking=show_thinking,
         )
     finally:
-        # Turn-cancel Batch kill path: terminate any Batch job this turn
-        # submitted (run_solver) that is NOT being finished by an in-flight
-        # wait_for_completion -- the cancel-in-the-submit/wait-window gap. A
-        # clean turn drains its own list (wait_for_completion clears on terminal
-        # + its own cancel handler), so this is a no-op then. Best-effort + off
-        # the loop (sync boto3 terminate_job) per no-sync-blocking-on-the-loop;
-        # NEVER blocks/raises into the cancel. FIRST in the finally so a raise in
-        # the persistence below cannot skip the kill.
-        await _terminate_turn_inflight_batch_jobs(state)
         # job-0267 / job-0315: close out the turn's narration persistence.
         # With job-0315 each FINALIZED narration segment is already persisted
         # in-loop by ``_finalize_segment`` (interleaved with the mid-turn tool
@@ -12405,11 +12387,6 @@ async def _dispatch_tool_and_persist(
     # job-0268: entry-time Case capture — see _dispatch_gemini_and_persist.
     turn_case_id = _turn_case_id(state)
     bind_turn_case(turn_case_id)  # job-0277: envelope tagging
-    # Turn-cancel Batch kill path: bind a fresh per-turn in-flight-jobs list (the
-    # /invoke directive path can run_solver too). See _dispatch_gemini_and_persist.
-    from .tools.solver import begin_turn_inflight_tracking
-
-    begin_turn_inflight_tracking()
     try:
         try:
             await _invoke_tool_via_emitter(
@@ -12446,10 +12423,6 @@ async def _dispatch_tool_and_persist(
                 retryable=exc.retryable,
             )
     finally:
-        # Turn-cancel Batch kill path (see _dispatch_gemini_and_persist): FIRST
-        # in the finally so a cancel in the /invoke window still terminates the
-        # in-flight Batch job. No-op on a clean turn.
-        await _terminate_turn_inflight_batch_jobs(state)
         if turn_case_id:
             await _persist_chat_turn(
                 state,

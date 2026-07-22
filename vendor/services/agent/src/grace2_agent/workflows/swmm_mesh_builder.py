@@ -98,6 +98,7 @@ __all__ = [
     "build_swmm_mesh",
     "run_swmm_deck",
     "read_flow_routing_continuity",
+    "read_quality_routing_continuity",
     # adaptive budget (RE-FIT from the P0 anchor)
     "SWMM_RES_LADDER",
     "SWMM_SOLVE_BUDGET_S",
@@ -959,6 +960,11 @@ class BuildResult:
     grid_shape: tuple[int, int]
     outfall_cell: tuple[int, int]
     barriers_geojson: dict | None = field(default=None)
+    # Water-quality provenance (sprint-WQ): (name, unit) per authored pollutant,
+    # in [POLLUTANTS] / out.pollutants ORDER, so the postprocess maps each
+    # POLLUT_CONC index -> name/unit WITHOUT re-parsing the deck. Empty when the
+    # run authored no WQ sections (hydraulics-only) — the byte-identical default.
+    pollutants: list[tuple[str, str]] = field(default_factory=list)
 
 
 def _cell_node(i: int, j: int) -> str:
@@ -989,6 +995,9 @@ def build_swmm_mesh(
     sim_routing_step_s: float = 2.0,
     enable_autoscale: bool = True,
     advanced_physics: dict | None = None,
+    pollutants: list[Any] | None = None,
+    dry_buildup_days: int = 0,
+    washoff_model: str = "exp",
 ) -> BuildResult:
     """Build a quasi-2D SWMM ``.inp`` deck from a DEM (+ buildings + barriers).
 
@@ -1018,6 +1027,12 @@ def build_swmm_mesh(
             "SWMM_DEPENDENCY_MISSING",
             message=f"swmm-api unavailable: {exc}. Install pyswmm + swmm-api.",
         ) from exc
+
+    # --- water-quality specs (sprint-WQ): normalize to plain dicts ONCE so the
+    # authoring below is agnostic to PollutantSpec pydantic objects vs dicts.
+    # EMPTY => NO WQ sections => a BYTE-IDENTICAL hydraulics-only deck (the depth
+    # path is not touched when pollutants is None/[]). ------------------------
+    wq_specs: list[dict[str, Any]] = _normalize_pollutant_specs(pollutants)
 
     # --- choose resolution via the adaptive budget (RE-FIT from P0 anchor) ---
     # We need an active-cell estimate at the base resolution; read the DEM once
@@ -1150,6 +1165,23 @@ def build_swmm_mesh(
         if _k in _phys:
             inp[OPTIONS][_opt] = _phys[_k]
 
+    # CONSTITUTIVE-PHYSICS levers (advanced / demo-default): subcatchment
+    # roughness + imperviousness. Each falls back to the EXACT historical
+    # literal when the user did not set it, so an unset run is byte-identical.
+    #   n_imperv (SubArea)          historical 0.012
+    #   n_perv   (SubArea)          historical 0.1
+    #   imperviousness_pct          historical toggle: 100 (no infil) else 60
+    _n_imperv = float(_phys.get("n_imperv", 0.012))
+    _n_perv = float(_phys.get("n_perv", 0.1))
+    _imperv_override = _phys.get("imperviousness_pct")
+
+    # WQ antecedent dry-buildup lever: DRY_DAYS lets buildup accumulate over N
+    # antecedent dry days before the storm. Only overridden when WQ is active AND
+    # a non-zero value is requested — an unset/0 WQ run keeps the historical 0
+    # (so the OPTIONS block stays byte-identical on the hydraulics-only path).
+    if wq_specs and int(dry_buildup_days) > 0:
+        inp[OPTIONS]["DRY_DAYS"] = int(dry_buildup_days)
+
     inp[REPORT] = {
         "INPUT": "NO", "CONTROLS": "NO", "SUBCATCHMENTS": "NONE",
         "NODES": "ALL", "LINKS": "ALL",
@@ -1221,7 +1253,10 @@ def build_swmm_mesh(
                     rain_gage="RG",
                     outlet=_cell_node(i, j),
                     area=cell_area_ha,
-                    imperviousness=100.0 if infiltration_method == "none" else 60.0,
+                    imperviousness=(
+                        float(_imperv_override) if _imperv_override is not None
+                        else (100.0 if infiltration_method == "none" else 60.0)
+                    ),
                     width=res_m,
                     slope=0.5,
                 )
@@ -1229,8 +1264,8 @@ def build_swmm_mesh(
             inp.add_obj(
                 SubArea(
                     subcatchment=scname,
-                    n_imperv=0.012,
-                    n_perv=0.1,
+                    n_imperv=_n_imperv,
+                    n_perv=_n_perv,
                     storage_imperv=0.0,
                     storage_perv=0.0,
                     pct_zero=100,
@@ -1244,6 +1279,20 @@ def build_swmm_mesh(
                 ga_conductivity=green_ampt_conductivity_mm_hr,
                 ga_init_deficit=green_ampt_init_deficit,
             )
+            # WQ (sprint-WQ): assign the single uniform "urban" land use to THIS
+            # per-cell subcatchment at 100% (one Coverage row per active cell,
+            # mirroring the SubCatchment/SubArea loop). Gated on wq_specs so a
+            # non-WQ run adds no [COVERAGES] section.
+            if wq_specs:
+                _add_coverage_obj(inp, scname)
+
+    # --- WQ (sprint-WQ): author [POLLUTANTS]/[LANDUSES]/[BUILDUP]/[WASHOFF] ONCE.
+    # Gated on wq_specs => a hydraulics-only deck is byte-identical. The solver
+    # auto-runs buildup/washoff/routing when these sections are present (no
+    # OPTIONS change beyond the optional DRY_DAYS lever above). ----------------
+    wq_pollutants: list[tuple[str, str]] = []
+    if wq_specs:
+        wq_pollutants = _author_wq_sections(inp, wq_specs, washoff_model)
 
     # --- snap barriers to cell-pair edges BEFORE laying conduits ---
     barrier_edges = _snap_barriers_to_edges(grid, active, barriers)
@@ -1317,6 +1366,7 @@ def build_swmm_mesh(
         grid_shape=(nrows, ncols),
         outfall_cell=outfall_cell,
         barriers_geojson=barriers,
+        pollutants=wq_pollutants,
     )
 
 
@@ -1381,6 +1431,159 @@ def _lowest_active_cell(active, cell_elev):
 # --------------------------------------------------------------------------- #
 # Run + mass-balance honesty gate.
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Water-quality (buildup/washoff) deck authoring (sprint-WQ). All gated by the
+# caller on a non-empty pollutant list; a hydraulics-only deck never reaches
+# here, so the depth path stays byte-identical.
+# --------------------------------------------------------------------------- #
+#: The single uniform land use for v1. We have NO per-cell land-use raster, so
+#: one "urban" class at 100% coverage is the honest demo minimum (never fake
+#: sub-block residential/commercial precision — the NLCD split is the deferred
+#: upgrade). Kept as a constant so the Coverage loop + [LANDUSES] agree.
+_WQ_LAND_USE: str = "urban"
+
+
+def _normalize_pollutant_specs(pollutants: list[Any] | None) -> list[dict[str, Any]]:
+    """Coerce a list of ``PollutantSpec`` pydantic objects / dicts to plain dicts.
+
+    The builder must not depend on the contracts package, so it reads specs
+    structurally (getattr for pydantic, ``[]`` for dicts). Each returned dict has
+    the eight WQ keys (name/unit/buildup_max/buildup_rate/buildup_power/
+    washoff_coef/washoff_exp/decay_per_day) + ``emc_concentration``. A spec
+    missing a ``name`` or ``buildup_max`` is dropped (never author a nameless /
+    zero-buildup pollutant). Returns ``[]`` for ``None`` / empty (byte-identical
+    hydraulics-only deck).
+    """
+    if not pollutants:
+        return []
+
+    def _get(spec: Any, key: str, default: Any = None) -> Any:
+        if isinstance(spec, dict):
+            return spec.get(key, default)
+        return getattr(spec, key, default)
+
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for spec in pollutants:
+        name = _get(spec, "name")
+        bmax = _get(spec, "buildup_max")
+        if not name or bmax is None:
+            continue
+        nm = str(name)
+        if nm in seen:
+            continue  # dedup by name (POLLUT_CONC index must be 1:1 with name)
+        seen.add(nm)
+        out.append(
+            {
+                "name": nm,
+                "unit": str(_get(spec, "unit", "MG/L") or "MG/L"),
+                "buildup_max": float(bmax),
+                "buildup_rate": float(_get(spec, "buildup_rate", 1.0) or 0.0),
+                "buildup_power": float(_get(spec, "buildup_power", 1.0) or 1.0),
+                "washoff_coef": float(_get(spec, "washoff_coef", 5.0) or 0.0),
+                "washoff_exp": float(_get(spec, "washoff_exp", 1.8) or 0.0),
+                "decay_per_day": float(_get(spec, "decay_per_day", 0.0) or 0.0),
+                "emc_concentration": float(_get(spec, "emc_concentration", 100.0) or 0.0),
+            }
+        )
+    return out
+
+
+def _add_coverage_obj(inp: Any, scname: str) -> None:
+    """Add one [COVERAGES] row assigning the single "urban" land use at 100%."""
+    from swmm_api.input_file.sections.subcatch import Coverage
+
+    inp.add_obj(Coverage(subcatchment=scname, land_use_dict={_WQ_LAND_USE: 100.0}))
+
+
+def _author_wq_sections(
+    inp: Any, wq_specs: list[dict[str, Any]], washoff_model: str
+) -> list[tuple[str, str]]:
+    """Author [POLLUTANTS]/[LANDUSES]/[BUILDUP]/[WASHOFF] onto the deck ONCE.
+
+    Returns the ``(name, unit)`` list in authored ([POLLUTANTS]) ORDER — the SAME
+    order SWMM's ``out.pollutants`` reports, so the postprocess maps each
+    POLLUT_CONC index -> name/unit without re-parsing the deck. Semantics PINNED
+    by the Phase-1 in-image smoke:
+
+      - Pollutant: decay is a first-order routing sink (1/day); rain/gw/rdii
+        concentrations are 0 (demo). Count units (``#/L``) propagate to the
+        outfall load as a LOG10 count in the .rpt (handled downstream).
+      - BuildUp POW: swmm-api ``BuildUp(C1,C2,C3)`` IS SWMM's column order
+        (max, rate, TIME-EXPONENT); per-unit AREA => mass/ha (kg/ha for MG/L).
+        A large exponent overflows ``t^power`` and SWMM rejects the deck, so
+        ``buildup_power`` is kept small by the presets.
+      - WashOff: EXP (``W = C1 * q^C2 * B``, runoff-driven first flush) is the
+        headline; EMC (fixed event-mean concentration, bypasses buildup) is the
+        flat-conc control run selected by ``washoff_model="emc"``.
+    """
+    from swmm_api.input_file.sections.others import (
+        BuildUp,
+        LandUse,
+        Pollutant,
+        WashOff,
+    )
+
+    # ONE uniform land use (see _WQ_LAND_USE rationale).
+    inp.add_obj(LandUse(name=_WQ_LAND_USE))
+
+    use_emc = str(washoff_model).strip().lower() == "emc"
+    authored: list[tuple[str, str]] = []
+    for spec in wq_specs:
+        name = spec["name"]
+        unit = spec["unit"]
+        inp.add_obj(
+            Pollutant(
+                name=name,
+                unit=unit,
+                c_rain=0.0,
+                c_gw=0.0,
+                c_rdii=0.0,
+                decay=spec["decay_per_day"],
+            )
+        )
+        # BuildUp is authored even in EMC mode (harmless; EMC washoff ignores it).
+        inp.add_obj(
+            BuildUp(
+                land_use=_WQ_LAND_USE,
+                pollutant=name,
+                func_type=BuildUp.FUNCTIONS.POW,
+                C1=spec["buildup_max"],
+                C2=spec["buildup_rate"],
+                C3=spec["buildup_power"],
+                per_unit=BuildUp.UNIT.AREA,
+            )
+        )
+        if use_emc:
+            # EMC: C1 = fixed event-mean concentration; C2 unused (0). No first
+            # flush (a constant-concentration dilution control).
+            inp.add_obj(
+                WashOff(
+                    land_use=_WQ_LAND_USE,
+                    pollutant=name,
+                    func_type=WashOff.FUNCTIONS.EMC,
+                    C1=spec["emc_concentration"],
+                    C2=0.0,
+                    sweeping_removal=0.0,
+                    BMP_removal=0.0,
+                )
+            )
+        else:
+            inp.add_obj(
+                WashOff(
+                    land_use=_WQ_LAND_USE,
+                    pollutant=name,
+                    func_type=WashOff.FUNCTIONS.EXP,
+                    C1=spec["washoff_coef"],
+                    C2=spec["washoff_exp"],
+                    sweeping_removal=0.0,
+                    BMP_removal=0.0,
+                )
+            )
+        authored.append((name, unit))
+    return authored
+
+
 def read_flow_routing_continuity(rpt_path: str) -> float | None:
     """Parse the **Flow Routing Continuity** error (%) from a SWMM ``.rpt``.
 
@@ -1402,6 +1605,43 @@ def read_flow_routing_continuity(rpt_path: str) -> float | None:
             m = re.search(r"(-?\d+\.\d+)\s*$", line.strip())
             if m:
                 return float(m.group(1))
+    return None
+
+
+def read_quality_routing_continuity(
+    rpt_path: str, pollutant_index: int = 0
+) -> float | None:
+    """Parse the **Quality Routing Continuity** error (%) for one pollutant.
+
+    SWMM's ``.rpt`` Quality Routing Continuity block carries ONE column per
+    pollutant, in ``[POLLUTANTS]`` order (the header row shows the per-column
+    UNITS — ``kg`` / ``LogN`` — not the names, so the mapping is POSITIONAL:
+    ``pollutant_index`` is the 0-based position in ``BuildResult.pollutants``).
+    The block's ``Continuity Error (%) .....  <err_p0>  <err_p1> ...`` line has
+    one signed percentage per pollutant; this returns the value at
+    ``pollutant_index``.
+
+    Returns the signed percentage, or ``None`` when the block / column is absent
+    (a WQ-less run, or a run whose WQ report did not complete). Pinned against the
+    Phase-1 in-image smoke ``.rpt`` block format.
+    """
+    import re
+
+    try:
+        txt = Path(rpt_path).read_text()
+    except Exception:
+        return None
+    in_block = False
+    for line in txt.splitlines():
+        if "Quality Routing Continuity" in line:
+            in_block = True
+            continue
+        if in_block and "Continuity Error" in line:
+            # every signed decimal on the line, in column (pollutant) order.
+            nums = re.findall(r"-?\d+\.\d+", line)
+            if 0 <= pollutant_index < len(nums):
+                return float(nums[pollutant_index])
+            return None
     return None
 
 

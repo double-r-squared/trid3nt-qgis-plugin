@@ -387,6 +387,16 @@ _MESH_SIBLING_BY_STYLE_PRESET: dict[str, tuple[str, str, str]] = {
         "telemac_selafin",
         "TELEMAC dye mesh",
     ),
+    # GAIA v1 sediment: the deposition (CUMUL BED EVOL) COG maps to the GAIA
+    # result SELAFIN so QGIS Temporal Controller animates the bed evolution +
+    # per-frame suspended concentration. Same CRS-from-metrics path as the dye
+    # mesh (SELAFIN embeds no CRS -> utm_epsg from telemac_metrics.json). Adding a
+    # THIRD engine output needs only this one map entry.
+    "diverging_bed_evolution": (
+        "gaia_river.slf",
+        "telemac_selafin",
+        "GAIA sediment mesh",
+    ),
 }
 
 

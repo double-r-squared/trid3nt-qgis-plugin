@@ -396,6 +396,47 @@ class PressureForcing:
 
 
 @dataclass(frozen=True)
+class SpiderwebForcing:
+    """Parametric hurricane wind+pressure via a native Delft3D spiderweb (.spw).
+
+    COASTAL SFINCS wind track (2026-07-19): a Holland-1980/2010 polar wind +
+    pressure-drop field written as an ASCII ``.spw`` by
+    ``workflows/sfincs_spiderweb``. SFINCS ingests it through three sfincs.inp
+    keywords emitted into the ``setup_config`` passthrough (spwfile/utmzone are
+    first-class ``SfincsInput`` attrs in hydromt_sfincs 1.2.2) — the EXACT lines
+    the ``deltares/sfincs-cpu:sfincs-v2.3.3`` binary accepted byte-for-byte in
+    the docker smoke::
+
+        spwfile          = sfincs.spw
+        utmzone          = 16n
+        baro             = 1
+
+    - ``spw_path`` — LOCAL path of the generated ``.spw`` (the in-agent build
+      copies it into the deck dir before the manifest glob; the cloud worker
+      stages ``spw_uri`` instead).
+    - ``spw_uri`` — object-store URI of a staged ``.spw`` (cloud offload path).
+    - ``utmzone`` — the SFINCS ``utmzone`` value (``<zone><hemi>`` lowercase,
+      e.g. ``"16n"``). The grid MUST be built in the matching UTM CRS (the
+      spiderweb branch passes a UTM ``BuildOptions.crs`` overriding EPSG:3857):
+      the spw eye coords are lon/lat and SFINCS converts them to the grid UTM.
+    - ``spw_filename`` — the bare relative filename the ``spwfile`` keyword
+      references (deck-local, sits in the rundir next to sfincs.inp).
+
+    XOR (Invariant 7): a spiderweb is MUTUALLY EXCLUSIVE with the WindForcing /
+    PressureForcing members — the emitter raises a typed error if both are set
+    (double-counting the wind/pressure driver). It IS compatible with a
+    WaterlevelForcing (the low tide-base bzs boundary that supplies msk=2
+    cells). Counts in ``has_surge_forcing`` (it IS the surge driver).
+    """
+
+    spw_path: str | None = None
+    spw_uri: str | None = None
+    utmzone: str = ""
+    spw_filename: str = "sfincs.spw"
+    provenance: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class InfiltrationForcing:
     """Soil-infiltration LOSS term (SFINCS ``scsfile`` / ``qinffile`` / ``qinf``).
 
@@ -493,17 +534,22 @@ class ForcingSpec:
     breach: DischargeForcing | None = None
     wind: WindForcing | None = None
     pressure: PressureForcing | None = None
+    # SPIDERWEB (2026-07-19): parametric hurricane wind+pressure via a native
+    # Delft3D .spw. XOR with wind/pressure (enforced in the emitter). IS the
+    # surge driver -> counts in has_surge_forcing().
+    wind_spiderweb: SpiderwebForcing | None = None
     # NATE 2026-06-26: infiltration is a LOSS term (scsfile/qinffile/qinf), not a
     # driver -> emitted when set but NOT counted by has_surge_forcing().
     infiltration: InfiltrationForcing | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
 
     def has_surge_forcing(self) -> bool:
-        """True iff any non-precip (surge/tide/discharge/breach/wind/pressure) member is set.
+        """True iff any non-precip (surge/tide/discharge/breach/wind/pressure/spiderweb) member is set.
 
         NATE 2026-06-26: ``breach`` is a DRIVER (an interior discharge jet) so it
         joins the any(); ``infiltration`` is a loss term and is deliberately
-        excluded (it never drives a flood on its own).
+        excluded (it never drives a flood on its own). SPIDERWEB is the wind
+        driver so it counts.
         """
         return any(
             m is not None
@@ -513,6 +559,7 @@ class ForcingSpec:
                 self.breach,
                 self.wind,
                 self.pressure,
+                self.wind_spiderweb,
             )
         )
 
@@ -1939,6 +1986,57 @@ def _emit_surge_forcing_blocks(
         # sfincs.inp:qinf inside the setup_config block (_emit_physics_config).
 
 
+def _emit_spiderweb_config(
+    components: list[str],
+    forcing: ForcingSpec,
+) -> None:
+    """Append the parametric-hurricane spiderweb keys into the setup_config block.
+
+    Emits the THREE keys the ``deltares/sfincs-cpu:sfincs-v2.3.3`` binary
+    accepted byte-for-byte in the 2026-07-19 docker smoke::
+
+        spwfile          = sfincs.spw
+        utmzone          = 16n
+        baro             = 1
+
+    (spwfile/utmzone are first-class ``SfincsInput`` attrs; ``baro=1`` turns on
+    the inverse-barometer pressure response.) The ``.spw`` file itself is copied
+    into the deck dir by ``build_sfincs_model`` before the manifest glob.
+
+    XOR ENFORCEMENT (Invariant 7): a spiderweb is mutually exclusive with the
+    WindForcing / PressureForcing members — emitting both double-counts the
+    wind/pressure driver. Raises ``SFINCSSetupError("SPIDERWEB_FORCING_CONFLICT")``
+    when a co-present wind/pressure member is detected. A WaterlevelForcing (the
+    tide-base bzs boundary) is ALLOWED and expected (it supplies msk=2 cells).
+    """
+    sw = forcing.wind_spiderweb
+    if sw is None:
+        return
+    if forcing.wind is not None or forcing.pressure is not None:
+        raise SFINCSSetupError(
+            "SPIDERWEB_FORCING_CONFLICT",
+            message=(
+                "a parametric-hurricane spiderweb (wind_spiderweb) is mutually "
+                "exclusive with the wind / pressure forcing members — both would "
+                "double-count the wind/pressure driver. Set exactly one."
+            ),
+            details={
+                "wind_present": forcing.wind is not None,
+                "pressure_present": forcing.pressure is not None,
+            },
+        )
+    if not sw.utmzone:
+        raise SFINCSSetupError(
+            "SPIDERWEB_FORCING_CONFLICT",
+            message="wind_spiderweb.utmzone is required (SFINCS converts the spw "
+            "lon/lat eye to this UTM zone).",
+            details={"utmzone": sw.utmzone},
+        )
+    components.append(f"  spwfile: {sw.spw_filename}")
+    components.append(f"  utmzone: {sw.utmzone}")
+    components.append("  baro: 1")
+
+
 def _emit_physics_config(
     components: list[str],
     physics: dict[str, Any] | None,
@@ -2132,6 +2230,11 @@ def _generate_hydromt_yaml_config(
         dtout_seconds = max(600, int(_total_seconds / 24))
     components.append(f"  dtout: {dtout_seconds}")
     components.append(f"  dtmaxout: {dtout_seconds}")
+    # SPIDERWEB (2026-07-19): parametric-hurricane spwfile/utmzone/baro into THIS
+    # setup_config block (HydroMT passthrough -> sfincs.inp). No-op + XOR-checked
+    # when no wind_spiderweb member is set (deck byte-identical). The .spw file is
+    # copied into the deck dir by build_sfincs_model before the manifest glob.
+    _emit_spiderweb_config(components, forcing)
     # NATE 2026-06-26: advanced-physics overrides + a bare-constant infiltration
     # qinf land in THIS setup_config block (HydroMT passthrough -> sfincs.inp).
     # ``None`` advanced_physics + no bare-constant infiltration emit nothing, so a
@@ -2196,6 +2299,17 @@ def _generate_hydromt_yaml_config(
         f"  datasets_rgh: [{{ lulc: '{landcover_read_path}', "
         f"reclass_table: '{mapping_csv_path}' }}]"
     )
+    # CONSTITUTIVE-PHYSICS levers (advanced / demo-default): the CONSTANT
+    # land/sea Manning fallback HydroMT applies to cells the NLCD reclass does
+    # not cover (setup_manning_roughness manning_land=0.04 / manning_sea=0.02).
+    # Unset -> the line is omitted -> HydroMT keeps its historical default ->
+    # byte-identical. Set only from a user-provided value. (The per-class NLCD
+    # path above is already site-specific; this only bites uncovered cells.)
+    _sfincs_phys = options.advanced_physics or {}
+    if "manning_land" in _sfincs_phys:
+        components.append(f"  manning_land: {float(_sfincs_phys['manning_land'])}")
+    if "manning_sea" in _sfincs_phys:
+        components.append(f"  manning_sea: {float(_sfincs_phys['manning_sea'])}")
     # COASTAL SFINCS — SUBGRID tables. ``setup_subgrid`` lets SFINCS run on a
     # COARSE computational grid while resolving sub-cell topography + roughness
     # (the standard way to get an urban-flood-around-buildings estimate cheaply).
@@ -2598,6 +2712,33 @@ def build_sfincs_model(
         # worker does ``dest = scratch / item["dest"]`` and creates any needed
         # parent dirs, so ``gis/dep.tif`` works fine.
         deck_dir = tmp / "deck"
+        # SPIDERWEB (2026-07-19): copy the generated .spw into the deck dir BEFORE
+        # the manifest glob so it ships to the rundir alongside sfincs.inp (the
+        # spwfile keyword references the BARE relative name). model.write() has
+        # already emitted spwfile/utmzone/baro into sfincs.inp via setup_config.
+        # Proven byte-for-byte in the 2026-07-19 docker smoke ("reading spiderweb
+        # file sfincs.spw" + "converting spiderweb coordinates to UTM zone 16n").
+        _sw = forcing.wind_spiderweb
+        if _sw is not None:
+            _spw_src = _sw.spw_path or (
+                _stage_gcs_local(_sw.spw_uri) if _sw.spw_uri else None
+            )
+            if not _spw_src or not Path(_spw_src).is_file():
+                raise SFINCSSetupError(
+                    "SPIDERWEB_SPW_MISSING",
+                    message=(
+                        "wind_spiderweb is set but its .spw file could not be "
+                        f"resolved to a readable local path (spw_path={_sw.spw_path!r}, "
+                        f"spw_uri={_sw.spw_uri!r})."
+                    ),
+                    details={"spw_path": _sw.spw_path, "spw_uri": _sw.spw_uri},
+                )
+            import shutil as _shutil_local
+            _shutil_local.copyfile(_spw_src, deck_dir / _sw.spw_filename)
+            logger.info(
+                "sfincs_builder: staged spiderweb %s -> deck/%s (utmzone=%s)",
+                _spw_src, _sw.spw_filename, _sw.utmzone,
+            )
         # The on-GCS prefix for deck files: deck_base_uri + "deck/" because
         # fsspec recursive upload preserves the source directory name.
         deck_gcs_prefix = deck_base_uri + "deck/"

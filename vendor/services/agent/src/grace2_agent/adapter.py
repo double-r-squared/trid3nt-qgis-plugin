@@ -24,7 +24,8 @@ passes the tool catalog (``FunctionDeclaration`` from each registered tool's
 callable + docstring) plus a focused system prompt to ``generate_content_stream``,
 then demultiplexes each chunk into either a ``TextDeltaEvent`` or a
 ``FunctionCallEvent`` so the server can dispatch the tool through the registry.
-``stream_reply`` is retained as a thin compatibility shim (text-only calls).
+(``stream_reply`` -- the old text-only shim -- was removed in the offline-pivot
+cleanup; the live text path is ``stream_events_with_contents`` -> dispatch.)
 
 job-0169: multi-turn function_call → function_response loop.  job-0154 stopped
 after the first function_call (single-shot dispatch) — every multi-tool prompt
@@ -2701,24 +2702,11 @@ async def stream_events_with_contents(
 
 
 # ---------------------------------------------------------------------------
-# stream_reply — text-only shim (kept for backward-compat; delegates to
-# stream_events without tool declarations)
+# (offline-pivot cleanup) ``stream_reply`` -- a text-only shim delegating to
+# ``stream_events`` -- was DELETED here: zero live/test callers (only its own
+# docstrings + a retained server.py import referenced it).  The live text path
+# runs through ``stream_events_with_contents`` -> provider dispatch.
 # ---------------------------------------------------------------------------
-
-async def stream_reply(
-    client: genai.Client, model: str, user_text: str
-) -> AsyncIterator[str]:
-    """Stream Gemini's reply as a sequence of delta strings (text-only).
-
-    Retained for callers that only want text.  Internally delegates to
-    ``stream_events`` with no tool declarations.
-
-    Cancellation: ``asyncio.CancelledError`` is the cancel path.
-    """
-    async for event in stream_events(client, model, user_text):
-        if isinstance(event, TextDeltaEvent):
-            yield event.delta
-
 
 __all__ = [
     "GEMINI_DEFAULT_MODEL",
@@ -2742,7 +2730,6 @@ __all__ = [
     "load_settings",
     "stream_events",
     "stream_events_with_contents",
-    "stream_reply",
     "summarize_tool_result",
     "classify_result_usable",
     # B11 schema-normalisation helpers (exported for audit / test use)

@@ -25,14 +25,13 @@ Why the executor is invoked as a subprocess (not imported) even in local mode
    is a belt-and-suspenders wallclock bound that survives even if user code
    installs its own SIGALRM handler or blocks signals in a C extension. An inline
    call has no such outer bound.
-3. ``executor.py`` lives in ``infra/python-sandbox/`` (the container build
-   context), NOT on the agent's import path — running it by file path keeps that
-   single source of truth for the harness logic without copying it into the agent
-   package.
+3. ``sandbox_executor.py`` lives BESIDE this module in the agent package. It is
+   run by FILE PATH (not imported) so its process-global monkeypatches never
+   touch the agent process; keeping it a sibling file means the code_exec
+   runtime is fully self-contained in the agent package.
 
-The executor module is located by walking up from this file to the repo root and
-joining ``infra/python-sandbox/executor.py``; an env override
-(``GRACE2_SANDBOX_EXECUTOR``) lets tests / the container point elsewhere.
+The executor is located next to this module (``sandbox_executor.py``); an env
+override (``GRACE2_SANDBOX_EXECUTOR``) lets tests / a container point elsewhere.
 """
 
 from __future__ import annotations
@@ -135,7 +134,12 @@ def _executor_path() -> Path:
     override = os.environ.get("GRACE2_SANDBOX_EXECUTOR", "").strip()
     if override:
         return Path(override)
-    return _repo_root() / "infra" / "python-sandbox" / "executor.py"
+    # ``sandbox_executor.py`` lives BESIDE this module in the agent package
+    # (relocated here from the deleted ``infra/python-sandbox/`` cloud build
+    # context -- it is runtime code the code_exec tool loads, so it belongs in
+    # the agent package, not in cloud IaC). The env override still points tests
+    # / a container elsewhere.
+    return Path(__file__).resolve().parent / "sandbox_executor.py"
 
 
 # --------------------------------------------------------------------------- #

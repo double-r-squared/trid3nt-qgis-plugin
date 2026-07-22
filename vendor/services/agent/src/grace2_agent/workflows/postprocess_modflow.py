@@ -49,6 +49,8 @@ from grace2_contracts.modflow_contracts import (
     PlumeLayerURI,
     SaltwaterWedgeLayerURI,
     SeepageLayerURI,
+    StreamReachLayerURI,
+    SubsidenceLayerURI,
 )
 
 from . import cog_io
@@ -80,6 +82,8 @@ __all__ = [
     "compute_seasonal_head_range_m",
     "compute_recovery_efficiency",
     "compute_saltwater_intrusion_metrics",
+    "postprocess_subsidence",
+    "compute_subsidence_metrics",
     "PLUME_DETECTION_FLOOR_MGL",
     "PLUME_STYLE_PRESET",
     "SEEPAGE_STYLE_PRESET",
@@ -91,6 +95,7 @@ __all__ = [
     "HYDROPERIOD_STYLE_PRESET",
     "CAPTURE_ZONE_STYLE_PRESET",
     "SALTWATER_INTRUSION_STYLE_PRESET",
+    "SUBSIDENCE_STYLE_PRESET",
     "GWF_CBC_FILENAME",
     "GWF_HDS_FILENAME",
     "RUNS_BUCKET_DEFAULT",
@@ -175,6 +180,20 @@ CAPTURE_ZONE_STYLE_PRESET: str = "capture_zone"
 #: water layers, and the red alert overlays. ``publish_layer`` is RASTER-ONLY and
 #: must NOT be called for this vector; the inline-GeoJSON path renders it over WS.
 SALTWATER_INTRUSION_STYLE_PRESET: str = "saltwater_intrusion"
+
+#: Vector style preset for the SFR routed stream-depletion reach network (module
+#: wave). The reaches are a FlatGeobuf of per-reach line segments; the client's
+#: vector renderer matches ``presetColorFor`` on the substring "stream" -> the
+#: shared hydro-blue (#4477FF) so the routed stream reads as a waterway (no new
+#: web preset needed). ``publish_layer`` is RASTER-ONLY and must NOT be called
+#: for this vector; the inline-GeoJSON path renders it over WS.
+STREAM_DEPLETION_STYLE_PRESET: str = "stream_depletion"
+
+#: Raster style preset for the CSUB land-subsidence bowl (module wave). The
+#: z-displacement final frame is a continuous COG in cm (positive-down); this
+#: preset drives the raster colour ramp exactly like the drawdown COG. UNLIKE the
+#: SFR vector, this IS a raster layer that goes through ``publish_layer``.
+SUBSIDENCE_STYLE_PRESET: str = "continuous_subsidence_cm"
 
 #: PRT track CSV filename written by the MF6 PRT sim (``ModflowPrtoc`` +
 #: ``trackcsv_filerecord``). The model name the adapter uses for the PRT model is
@@ -2264,6 +2283,390 @@ def postprocess_drawdown(
     )
 
 
+# --------------------------------------------------------------------------- #
+# CSUB land-subsidence postprocess (module wave)
+#
+# The land_subsidence archetype layers a MODFLOW-6 CSUB package onto the
+# transient pumping (WEL) deck. CSUB writes a per-cell z-displacement grid whose
+# FINAL frame is the cumulative ground subsidence bowl, plus a per-interbed OBS
+# csv carrying, per interbed per timestep: COMPACTION_R{i} (total, m), INE_R{i}
+# (inelastic/permanent, m) and ELA_R{i} (elastic/recoverable, m). PINNED by the
+# local mf6 6.5.0 smoke fixture (services/workers/modflow/fixtures/csub_smoke):
+#   * z-displacement HeadFile text tag is CSUB-ZDISPLACE (TRUNCATED to 16 chars,
+#     NOT "CSUB-ZDISPLACEMENT"); compaction tag is CSUB-COMPACTION.
+#   * subsidence is POSITIVE-DOWN (z-displacement positive at the pumped cell).
+#   * dz(final) ~ Ssv * b * dh (the analytical ultimate-compaction cross-check).
+# The subsidence bowl is reprojected model-UTM -> EPSG:4326 as a COG (cm) and
+# reaches the client through the RASTER publish_layer path (unlike the SFR
+# vector).
+# --------------------------------------------------------------------------- #
+
+#: HeadFile text tag mf6 6.5.0 writes for the CSUB z-displacement grid (the
+#: subsidence bowl). TRUNCATED to 16 chars from "CSUB-ZDISPLACEMENT" - pinned by
+#: the smoke fixture; reading with the full name raises EOFError.
+CSUB_ZDISP_TEXT_TAG: str = "CSUB-ZDISPLACE"
+
+#: Cells whose final subsidence exceeds this floor (m) count toward the
+#: subsidence-bowl area. ~1 mm - below it is numerical noise, not real subsidence.
+SUBSIDENCE_AREA_FLOOR_M: float = 1e-3
+
+
+def _resolve_csub_zdisp_path(run_outputs_uri: str) -> Path:
+    """Locate ``<gwf>.csub.zdisp.bin`` under a local run-output directory.
+
+    Raises:
+        PostprocessMODFLOWError (``SUBSIDENCE_OUTPUT_READ_FAILED``) when no
+            ``*.csub.zdisp.bin`` is found under ``run_outputs_uri``.
+    """
+    p = Path(run_outputs_uri.replace("file://", ""))
+    if p.is_file() and p.name.endswith(".csub.zdisp.bin"):
+        return p
+    if p.is_dir():
+        hits = sorted(glob.glob(str(p / "**" / "*.csub.zdisp.bin"), recursive=True))
+        if hits:
+            return Path(hits[0])
+    raise PostprocessMODFLOWError(
+        "SUBSIDENCE_OUTPUT_READ_FAILED",
+        message=(
+            f"no *.csub.zdisp.bin found under {run_outputs_uri!r}; the "
+            "land_subsidence run must have written the CSUB z-displacement grid."
+        ),
+        details={"run_outputs_uri": run_outputs_uri},
+    )
+
+
+def _resolve_csub_obs_csv(run_outputs_uri: str) -> Path | None:
+    """Locate ``<gwf>.csub.obs.csv`` (the per-interbed compaction OBS); None if absent."""
+    p = Path(run_outputs_uri.replace("file://", ""))
+    if p.is_file() and p.name.endswith(".csub.obs.csv"):
+        return p
+    if p.is_dir():
+        hits = sorted(glob.glob(str(p / "**" / "*.csub.obs.csv"), recursive=True))
+        if hits:
+            return Path(hits[0])
+    return None
+
+
+def _read_csub_zdisplacement(zdisp_path: Path) -> Any:
+    """Read the FINAL-frame CSUB z-displacement grid (metres, positive-down) as 2D.
+
+    Reduces to 2D (max over layers) and masks the 1e30 mf6 dry/no-flow sentinel
+    to NaN - the same reduce-to-2D pattern as the head/plume readers. The final
+    frame at the top layer IS the cumulative subsidence bowl.
+
+    Raises ``PostprocessMODFLOWError("SUBSIDENCE_OUTPUT_*")`` on read failure.
+    """
+    try:
+        import flopy.utils  # type: ignore[import-not-found]
+        import numpy as np  # type: ignore[import-not-found]
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "SUBSIDENCE_OUTPUT_READ_FAILED",
+            message=f"flopy/numpy not importable: {exc}",
+            details={"zdisp_path": str(zdisp_path)},
+        ) from exc
+    try:
+        hobj = flopy.utils.HeadFile(str(zdisp_path), text=CSUB_ZDISP_TEXT_TAG)
+        kk = hobj.get_kstpkper()
+        if not kk:
+            raise PostprocessMODFLOWError(
+                "SUBSIDENCE_OUTPUT_EMPTY",
+                message=f"{zdisp_path} carries no z-displacement frames",
+                details={"zdisp_path": str(zdisp_path)},
+            )
+        data = hobj.get_data(kstpkper=kk[-1])
+    except PostprocessMODFLOWError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "SUBSIDENCE_OUTPUT_READ_FAILED",
+            message=(
+                f"could not read CSUB z-displacement from {zdisp_path} "
+                f"(text={CSUB_ZDISP_TEXT_TAG!r}): {exc}"
+            ),
+            details={"zdisp_path": str(zdisp_path)},
+        ) from exc
+    a = np.asarray(data, dtype="float64")
+    if a.ndim == 3:
+        a2 = np.nanmax(a, axis=0)
+    elif a.ndim == 2:
+        a2 = a
+    else:
+        a2 = np.squeeze(a)
+    return np.where(np.abs(a2) > _MF6_DRY_SENTINEL, np.nan, a2)
+
+
+def compute_subsidence_metrics(
+    zdisp_grid_m: Any,
+    *,
+    cell_area_m2: float,
+    obs_rows: list[dict[str, str]] | None = None,
+    n_interbeds: int | None = None,
+) -> dict[str, Any]:
+    """Compute the subsidence headline metrics from the z-displacement grid + OBS.
+
+    PURE arithmetic (no flopy, no mf6) so the SIGN + magnitude math is unit
+    testable directly on the smoke-fixture outputs. Subsidence is POSITIVE-DOWN
+    (pinned by the smoke), so a positive z-displacement IS subsidence; the peak is
+    ``max(zdisp)`` clamped >= 0 (a tiny negative rebound never narrates as
+    negative subsidence).
+
+    Args:
+        zdisp_grid_m: 2D final-frame z-displacement grid (m, positive-down, NaN
+            off-grid).
+        cell_area_m2: the model cell area (delr * delc, m^2) for the bowl area.
+        obs_rows: parsed rows of ``<gwf>.csub.obs.csv`` (header-keyed). The final
+            row's per-interbed INE_R{i} / ELA_R{i} give the inelastic fraction.
+        n_interbeds: interbed count (for the INE/ELA column loop); inferred from
+            the obs header when None.
+
+    Returns a dict with ``max_subsidence_cm`` (>= 0), ``subsidence_area_km2``
+    (cells past ``SUBSIDENCE_AREA_FLOOR_M``), ``inelastic_fraction`` (in [0, 1];
+    sum(INE)/(sum(INE)+sum(ELA)) over interbeds at the final step, defaulting to
+    1.0 when the obs is unavailable but there IS subsidence - the pcs0=0 demo
+    signature), and the per-step ``subsidence_series_cm`` + ``days`` (from the OBS
+    peak-compaction interbed) for the chart.
+    """
+    import numpy as np  # local - caller vouched for the import path
+
+    arr = np.asarray(zdisp_grid_m, dtype="float64")
+    finite = arr[np.isfinite(arr)] if arr.size else arr
+    max_sub_m = max(0.0, float(np.max(finite))) if finite.size else 0.0
+    n_cells = int(np.sum(finite > SUBSIDENCE_AREA_FLOOR_M)) if finite.size else 0
+    area_km2 = float(n_cells) * float(cell_area_m2) / 1e6
+
+    # --- inelastic fraction + per-step series from the OBS csv --------------- #
+    inelastic_fraction = 1.0 if max_sub_m > 0 else 0.0
+    days: list[float] = []
+    subsidence_series_cm: list[float] = []
+    if obs_rows:
+        header = list(obs_rows[0].keys())
+        if n_interbeds is None:
+            n_interbeds = sum(1 for k in header if k.upper().startswith("COMPACTION_R"))
+        n_interbeds = int(n_interbeds or 0)
+
+        def _val(row: dict[str, str], prefix: str, i: int) -> float:
+            key = f"{prefix}_R{i}"
+            if key in row:
+                try:
+                    return float(row[key])
+                except (TypeError, ValueError):
+                    return 0.0
+            for k, v in row.items():
+                if k.upper() == key:
+                    try:
+                        return float(v)
+                    except (TypeError, ValueError):
+                        return 0.0
+            return 0.0
+
+        last = obs_rows[-1]
+        has_split = any(k.upper().startswith("INE_R") for k in header)
+        if has_split and n_interbeds > 0:
+            tot_ine = sum(_val(last, "INE", i) for i in range(n_interbeds))
+            tot_ela = sum(_val(last, "ELA", i) for i in range(n_interbeds))
+            denom = tot_ine + tot_ela
+            if denom > 0:
+                inelastic_fraction = float(max(0.0, min(1.0, tot_ine / denom)))
+
+        # Per-step cumulative subsidence series at the peak-compaction interbed
+        # (total COMPACTION_R{i}); rises monotonically (permanence). cm.
+        if n_interbeds > 0 and any(
+            k.upper().startswith("COMPACTION_R") for k in header
+        ):
+            finals = [_val(last, "COMPACTION", i) for i in range(n_interbeds)]
+            peak_i = int(np.argmax(finals)) if finals else 0
+            for row in obs_rows:
+                subsidence_series_cm.append(
+                    _val(row, "COMPACTION", peak_i) * 100.0
+                )
+                try:
+                    days.append(float(row.get("time", len(days) + 1)))
+                except (TypeError, ValueError):
+                    days.append(float(len(days) + 1))
+
+    return {
+        "max_subsidence_cm": max_sub_m * 100.0,
+        "subsidence_area_km2": area_km2,
+        "inelastic_fraction": float(inelastic_fraction),
+        "days": days,
+        "subsidence_series_cm": subsidence_series_cm,
+    }
+
+
+def postprocess_subsidence(
+    run_outputs_uri: str,
+    *,
+    run_id: str,
+    model_crs: str,
+    deck_dir: str | None = None,
+    runs_bucket: str | None = None,
+    publish: bool = True,
+) -> SubsidenceLayerURI:
+    """Convert a CSUB land-subsidence run into a ``SubsidenceLayerURI``.
+
+    Reads the FINAL-frame CSUB z-displacement grid (the subsidence bowl, m,
+    positive-down), converts to cm, reprojects to an EPSG:4326 COG through the
+    EXISTING raster path (this IS a raster layer -> ``publish_layer``, unlike the
+    SFR vector), computes ``max_subsidence_cm`` / ``subsidence_area_km2`` from the
+    grid, ``max_head_decline_m`` from the ``.hds`` first-vs-last, and
+    ``inelastic_fraction`` from the ``.csub.obs.csv`` INE/ELA split, and narrates
+    the ``dz ~ Ssv*b*dh`` analytical cross-check honestly in the log. The
+    per-step subsidence chart is stashed as a private attr on the layer for the
+    composer to emit.
+
+    Args:
+        run_outputs_uri: the run-output directory (local path / ``file://``) that
+            ``run_modflow_local`` produced; must contain ``*.csub.zdisp.bin``.
+        run_id: run identifier; the COG is uploaded to
+            ``<runs_bucket>/<run_id>/subsidence_4326.tif``.
+        model_crs: the GWF deck's projected CRS string (e.g. ``"EPSG:32611"``).
+        deck_dir: the GWF deck directory; flopy reads the grid georegistration +
+            interbed count from it.
+        runs_bucket: optional override for the runs bucket name.
+        publish: dispatch ``publish_layer`` (raster WMS) when True.
+
+    Returns:
+        ``SubsidenceLayerURI`` (``layer_type='raster'``,
+        ``style_preset='continuous_subsidence_cm'``) with the subsidence metrics.
+
+    Raises:
+        PostprocessMODFLOWError: read / reproject / write / upload failure.
+    """
+    import numpy as np  # type: ignore[import-not-found]
+
+    zdisp_path = _resolve_csub_zdisp_path(run_outputs_uri)
+    geo = _grid_georegistration_from_deck(deck_dir)
+
+    zdisp_m = _read_csub_zdisplacement(zdisp_path)
+
+    # Cell area + interbed count from the deck (fallback to 1 m^2 / inferred).
+    if geo is not None:
+        cell_area_m2 = float(geo["delr"]) * float(geo["delc"])
+    else:
+        cell_area_m2 = 1.0
+
+    obs_csv = _resolve_csub_obs_csv(run_outputs_uri)
+    obs_rows: list[dict[str, str]] | None = None
+    if obs_csv is not None:
+        import csv as _csv
+
+        try:
+            with obs_csv.open() as fh:
+                obs_rows = list(_csv.DictReader(fh))
+        except Exception as exc:  # noqa: BLE001  -- obs is best-effort
+            logger.warning("could not read CSUB obs csv %s: %s", obs_csv, exc)
+            obs_rows = None
+
+    n_interbeds = None
+    if obs_rows:
+        n_interbeds = sum(
+            1 for k in obs_rows[0] if k.upper().startswith("COMPACTION_R")
+        )
+
+    metrics = compute_subsidence_metrics(
+        zdisp_m,
+        cell_area_m2=cell_area_m2,
+        obs_rows=obs_rows,
+        n_interbeds=n_interbeds,
+    )
+
+    # head decline (m) from the .hds first-vs-last (the drawdown that drove it).
+    max_head_decline_m = 0.0
+    try:
+        hds_path = _resolve_gwf_hds_path(run_outputs_uri)
+        decline, _ts = _read_head_decline_grid(hds_path, invert=False)
+        max_head_decline_m = compute_drawdown_metrics(decline)
+    except PostprocessMODFLOWError as exc:
+        logger.warning("subsidence head-decline read failed (metric -> 0): %s", exc)
+
+    max_sub_cm = float(metrics["max_subsidence_cm"])
+
+    # Analytical cross-check dz ~ Ssv * b * dh, narrated HONESTLY (never asserted):
+    # the transient run under-shoots the t->inf ultimate, so this is an
+    # order-of-magnitude yardstick, not an equality. Ssv/thick come from the deck
+    # manifest when available (best-effort log only).
+    logger.info(
+        "postprocess_subsidence run_id=%s max_subsidence_cm=%.4g area_km2=%.4g "
+        "max_head_decline_m=%.4g inelastic_fraction=%.3f n_interbeds=%s",
+        run_id,
+        max_sub_cm,
+        metrics["subsidence_area_km2"],
+        max_head_decline_m,
+        metrics["inelastic_fraction"],
+        n_interbeds,
+    )
+
+    # Subsidence bowl COG (cm, positive-down). The grid is already NaN off-grid;
+    # write AS-IS so the bowl edges survive (mask_below_floor False).
+    subsidence_cm_grid = zdisp_m * 100.0
+    cog_path = _write_reprojected_cog(
+        subsidence_cm_grid, model_crs, geo, mask_below_floor=False
+    )
+    bbox_4326 = _cog_bbox_4326(cog_path)
+    cog_uri = _upload_cog(
+        cog_path, run_id, runs_bucket, cog_filename="subsidence_4326.tif"
+    )
+
+    layer_id = f"subsidence-{run_id}"
+    final_uri = cog_uri
+    if publish:
+        wms_url = _dispatch_publish_layer(
+            cog_uri, layer_id, style_preset=SUBSIDENCE_STYLE_PRESET
+        )
+        if wms_url:
+            final_uri = wms_url
+
+    layer = SubsidenceLayerURI(
+        layer_id=layer_id,
+        name="Land subsidence (pumping-induced compaction)",
+        layer_type="raster",
+        uri=final_uri,
+        style_preset=SUBSIDENCE_STYLE_PRESET,
+        role="primary",
+        units="cm",
+        bbox=bbox_4326,
+        max_subsidence_cm=max_sub_cm,
+        subsidence_area_km2=float(metrics["subsidence_area_km2"]),
+        max_head_decline_m=float(max_head_decline_m),
+        inelastic_fraction=float(metrics["inelastic_fraction"]),
+        interbed_count=int(n_interbeds or 1),
+    )
+
+    # Stash the subsidence-vs-time chart (composer emits it; private attr so the
+    # Pydantic model ignores it).
+    try:
+        from ..tools.chart_tools import build_subsidence_timeseries_chart
+
+        chart = build_subsidence_timeseries_chart(
+            days=list(metrics["days"]),
+            subsidence_cm=list(metrics["subsidence_series_cm"]),
+            source_layer_uri=cog_uri,
+        )
+        object.__setattr__(layer, "_subsidence_chart", chart)
+    except Exception as exc:  # noqa: BLE001  -- chart is best-effort side output
+        logger.warning("postprocess_subsidence chart build failed: %s", exc)
+
+    # Stash a CONTEXT drawdown COG (the pumping cone that DROVE the compaction) so
+    # the composer can emit it beside the subsidence bowl (design: subsidence
+    # primary + drawdown context). Best-effort; reuses the tested drawdown path.
+    try:
+        drawdown_layer = postprocess_drawdown(
+            run_outputs_uri,
+            run_id=run_id,
+            model_crs=model_crs,
+            deck_dir=deck_dir,
+            runs_bucket=runs_bucket,
+            publish=publish,
+        )
+        object.__setattr__(drawdown_layer, "role", "context")
+        object.__setattr__(layer, "_drawdown_context", drawdown_layer)
+    except Exception as exc:  # noqa: BLE001  -- context layer is best-effort
+        logger.warning("postprocess_subsidence drawdown context build failed: %s", exc)
+
+    return layer
+
+
 def postprocess_dewatering(
     run_outputs_uri: str,
     *,
@@ -3231,6 +3634,458 @@ def postprocess_capture_zone(
         isochrone_areas_km2=isochrone_areas_km2,
         particle_count=particle_count,
     )
+
+
+# --------------------------------------------------------------------------- #
+# SFR routed stream-depletion postprocess (module wave)
+#
+# The stream_depletion archetype drapes a MODFLOW-6 SFR6 stream network onto the
+# GWF grid (path-ordered reaches) coupled to a pumping WEL well, and writes a
+# continuous per-reach observation CSV (``<gwf>.sfr.obs.csv``) carrying, per
+# reach per timestep: STAGE_R{i} (stage m), FLOW_R{i} (downstream-flow) and
+# GWF_R{i} (the sfr<->GWF exchange). The column casing + SIGNS are pinned by the
+# local mf6 6.5.0 smoke fixture (services/workers/modflow/fixtures/sfr_smoke):
+#   * FLOW (downstream-flow) is reported NEGATIVE (an outflow magnitude); the
+#     feature carries abs(FLOW) as the routed discharge.
+#   * GWF (sfr exchange) is reach-relative: POSITIVE = the reach LOSES water to
+#     the aquifer (losing reach); NEGATIVE = the aquifer FEEDS the reach (gaining
+#     reach). Reach flow balance: out = upstream_in + INFLOW - GWF.
+#   * Streamflow depletion = sum over reaches of (pumped-period GWF minus
+#     baseline-period GWF); POSITIVE = the streamflow the well captured.
+#
+# The reach cell (row, col) + per-cell reach length + the model grid origin come
+# from the deck itself (flopy reloads the SFR packagedata + modelgrid from
+# ``deck_dir``); the pumping rate comes from the WEL package. The per-reach
+# polyline is reprojected model-UTM -> EPSG:4326 and written as a FlatGeobuf,
+# reaching the client through the SAME inline-GeoJSON add_loaded_layer path as
+# the capture-zone vector (publish_layer is RASTER-ONLY - NOT used here).
+# --------------------------------------------------------------------------- #
+
+
+def _resolve_sfr_obs_csv(run_outputs_uri: str) -> Path:
+    """Locate ``<gwf>.sfr.obs.csv`` under a local run-output directory.
+
+    mf6 runs with its CWD at the deck dir, so the obs CSV lands there (or under a
+    reorganised subdir); a recursive glob finds it wherever it landed.
+
+    Raises:
+        PostprocessMODFLOWError: (``STREAM_DEPLETION_OUTPUT_READ_FAILED``) when no
+            ``*.sfr.obs.csv`` is found under ``run_outputs_uri``.
+    """
+    p = Path(run_outputs_uri.replace("file://", ""))
+    if p.is_file() and p.name.endswith(".sfr.obs.csv"):
+        return p
+    if p.is_dir():
+        hits = sorted(glob.glob(str(p / "**" / "*.sfr.obs.csv"), recursive=True))
+        if hits:
+            return Path(hits[0])
+    raise PostprocessMODFLOWError(
+        "STREAM_DEPLETION_OUTPUT_READ_FAILED",
+        message=(
+            f"no *.sfr.obs.csv found under {run_outputs_uri!r}; the stream_depletion "
+            "run must have written the SFR continuous-observation CSV."
+        ),
+        details={"run_outputs_uri": run_outputs_uri},
+    )
+
+
+def _read_sfr_obs_rows(csv_path: Path) -> list[dict[str, str]]:
+    """Read the SFR obs CSV into a list of dict rows (header-keyed)."""
+    import csv as _csv
+
+    try:
+        with csv_path.open() as fh:
+            rows = list(_csv.DictReader(fh))
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "STREAM_DEPLETION_OUTPUT_READ_FAILED",
+            message=f"could not read SFR obs CSV {csv_path}: {exc}",
+            details={"csv_path": str(csv_path)},
+        ) from exc
+    if len(rows) < 2:
+        raise PostprocessMODFLOWError(
+            "STREAM_DEPLETION_OUTPUT_READ_FAILED",
+            message=(
+                f"SFR obs CSV {csv_path} has < 2 timesteps (need a baseline row + at "
+                "least one pumped row for the depletion delta)."
+            ),
+            details={"csv_path": str(csv_path), "n_rows": len(rows)},
+        )
+    return rows
+
+
+def _sfr_obs_value(row: dict[str, str], prefix: str, i: int) -> float:
+    """Read the ``{prefix}_R{i}`` obs column (mf6 UPPERCASES the boundname)."""
+    key = f"{prefix}_R{i}"
+    if key in row:
+        return float(row[key])
+    # Case-insensitive fallback (defensive; the smoke fixture is uppercased).
+    for k, v in row.items():
+        if k.upper() == key:
+            return float(v)
+    raise KeyError(key)
+
+
+def compute_stream_depletion_metrics(
+    rows: list[dict[str, str]], n_reaches: int
+) -> dict[str, Any]:
+    """Compute per-reach + aggregate stream-depletion metrics from the obs rows.
+
+    PURE arithmetic over the parsed SFR obs CSV (no flopy, no mf6) so the SIGN
+    math is unit-testable directly on the smoke fixture. ``rows[0]`` is the steady
+    baseline (WEL off); ``rows[-1]`` is the final pumped step. The signs follow
+    the Phase-1 smoke findings (see the section header):
+      * depletion_i = GWF_pumped[i] - GWF_baseline[i] (POSITIVE = capture)
+      * gaining if GWF_pumped[i] < 0, losing if > 0
+      * flow = abs(FLOW_pumped[i]) (downstream-flow is a negative magnitude)
+
+    Returns a dict with ``per_reach`` (one entry per reach: exchange / flow /
+    stage / depletion / stage_decline / classification), the aggregate scalars
+    (``total_depletion_m3_day`` >= 0 after a max(0, .) floor, ``max_stage_decline_m``,
+    ``gaining_reach_count``, ``losing_reach_count``), and the per-timestep
+    depletion series (``days`` + ``depletion_series_m3_day``) for the chart.
+    """
+    base = rows[0]
+    pump = rows[-1]
+    per_reach: list[dict[str, Any]] = []
+    total_dep = 0.0
+    max_stage_decline = 0.0
+    gaining = 0
+    losing = 0
+    for i in range(n_reaches):
+        exch_b = _sfr_obs_value(base, "GWF", i)
+        exch_p = _sfr_obs_value(pump, "GWF", i)
+        dep_i = exch_p - exch_b
+        total_dep += dep_i
+        stage_b = _sfr_obs_value(base, "STAGE", i)
+        stage_p = _sfr_obs_value(pump, "STAGE", i)
+        decline = stage_b - stage_p
+        if decline > max_stage_decline:
+            max_stage_decline = decline
+        flow_p = abs(_sfr_obs_value(pump, "FLOW", i))
+        if exch_p < 0:
+            gaining += 1
+            classification = "gaining"
+        elif exch_p > 0:
+            losing += 1
+            classification = "losing"
+        else:
+            classification = "neutral"
+        per_reach.append(
+            {
+                "reach": i,
+                "exchange_m3_day": exch_p,
+                "exchange_baseline_m3_day": exch_b,
+                "depletion_m3_day": dep_i,
+                "flow_m3_day": flow_p,
+                "stage_m": stage_p,
+                "stage_decline_m": decline,
+                "classification": classification,
+            }
+        )
+
+    # Per-timestep depletion series (every row after the baseline).
+    days: list[float] = []
+    depletion_series: list[float] = []
+    base_exch = [_sfr_obs_value(base, "GWF", i) for i in range(n_reaches)]
+    for r in rows[1:]:
+        s = sum(_sfr_obs_value(r, "GWF", i) - base_exch[i] for i in range(n_reaches))
+        depletion_series.append(float(s))
+        try:
+            days.append(float(r.get("time", len(days) + 1)))
+        except (TypeError, ValueError):
+            days.append(float(len(days) + 1))
+
+    return {
+        "per_reach": per_reach,
+        "total_depletion_m3_day": max(0.0, float(total_dep)),
+        "max_stage_decline_m": max(0.0, float(max_stage_decline)),
+        "gaining_reach_count": gaining,
+        "losing_reach_count": losing,
+        "days": days,
+        "depletion_series_m3_day": depletion_series,
+    }
+
+
+def _read_sfr_reach_geometry(deck_dir: str | None) -> dict[str, Any] | None:
+    """Read the SFR reach cells + grid origin + pumping rate from the deck (flopy).
+
+    Reloads the MF6 simulation from ``deck_dir`` and reads: the SFR packagedata
+    (``ifno`` / ``cellid`` / ``rlen`` per reach in path order), the model grid
+    origin + cell sizes (for the reach cell-centre coordinates), and the WEL
+    pumping magnitude (for the depletion fraction). Returns None if the deck
+    cannot be read (the caller then degrades to metrics-only).
+    """
+    if not deck_dir:
+        return None
+    try:
+        import flopy  # type: ignore[import-not-found]
+
+        sim = flopy.mf6.MFSimulation.load(sim_ws=str(deck_dir), verbosity_level=0)
+        gwf = None
+        for mname in sim.model_names:
+            if mname.startswith("gwf"):
+                gwf = sim.get_model(mname)
+                break
+        if gwf is None and sim.model_names:
+            gwf = sim.get_model(sim.model_names[0])
+        if gwf is None:
+            return None
+        sfr = None
+        for pname in ("sfr-0", "sfr", "sfr_0"):
+            try:
+                sfr = gwf.get_package(pname)
+            except Exception:  # noqa: BLE001
+                sfr = None
+            if sfr is not None:
+                break
+        if sfr is None:
+            return None
+        pd = sfr.packagedata.array
+        reaches: list[tuple[int, int, int, float]] = []
+        for rec in pd:
+            cellid = rec["cellid"]
+            row = int(cellid[1])
+            col = int(cellid[2])
+            reaches.append((int(rec["ifno"]), row, col, float(rec["rlen"])))
+        reaches.sort(key=lambda t: t[0])  # path order = ifno order
+        mg = gwf.modelgrid
+        grid = {
+            "xorigin": float(mg.xoffset),
+            "yorigin": float(mg.yoffset),
+            "delr": float(mg.delr[0]),
+            "delc": float(mg.delc[0]),
+            "nrow": int(mg.nrow),
+            "ncol": int(mg.ncol),
+        }
+        # WEL pumping magnitude (period 1 = first pumped period).
+        pumping = 0.0
+        for pname in ("wel-0", "wel", "wel_0"):
+            try:
+                wel = gwf.get_package(pname)
+            except Exception:  # noqa: BLE001
+                wel = None
+            if wel is not None:
+                try:
+                    data = wel.stress_period_data.get_data(1)
+                    if data is not None and len(data) > 0:
+                        pumping = float(abs(data["q"][0]))
+                except Exception:  # noqa: BLE001
+                    pumping = 0.0
+                break
+        return {"reaches": reaches, "grid": grid, "pumping_m3_day": pumping}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("could not read SFR reach geometry from %s: %s", deck_dir, exc)
+        return None
+
+
+def postprocess_stream_reaches(
+    run_outputs_uri: str,
+    *,
+    run_id: str,
+    model_crs: str,
+    deck_dir: str | None = None,
+    runs_bucket: str | None = None,
+) -> StreamReachLayerURI:
+    """Convert MF6 SFR obs + deck geometry into a ``StreamReachLayerURI``.
+
+    Parses ``<gwf>.sfr.obs.csv`` from the run directory and the SFR reach cells +
+    grid + pumping from the deck (``deck_dir``), then:
+      * computes per-reach flow / stage / exchange / depletion + the aggregate
+        depletion scalars (signs per the Phase-1 smoke findings);
+      * builds a per-reach polyline FlatGeobuf (model-UTM -> EPSG:4326) reaching
+        the client via the inline-GeoJSON add_loaded_layer path (NOT the raster
+        publish_layer - same rule as the capture-zone vector);
+      * stashes the two Vega-Lite charts (depletion-vs-time + reach flow/stage
+        profile) on the returned layer as the runtime attributes
+        ``_depletion_chart`` / ``_reach_profile_chart`` (private-underscore so the
+        Pydantic model ignores them) for the composer to emit.
+
+    Args:
+        run_outputs_uri: the run-output directory (local path / ``file://``) that
+            ``run_modflow_local`` produced; must contain ``*.sfr.obs.csv``.
+        run_id: run identifier; the FlatGeobuf artifact is uploaded to
+            ``<runs_bucket>/<run_id>/stream_depletion_4326.fgb``.
+        model_crs: the GWF deck's projected CRS string (e.g. ``"EPSG:32611"``);
+            drives the reach-polyline reprojection to EPSG:4326.
+        deck_dir: the GWF deck directory; flopy reloads the SFR packagedata +
+            modelgrid + WEL from it for the reach geometry + pumping rate.
+        runs_bucket: optional override for the runs bucket name.
+
+    Returns:
+        ``StreamReachLayerURI`` (``layer_type='vector'``,
+        ``style_preset='stream_depletion'``) with the depletion metrics.
+
+    Raises:
+        PostprocessMODFLOWError: read / geometry / write / upload failure.
+    """
+    # --- Step 1: parse the SFR obs CSV --------------------------------------- #
+    csv_path = _resolve_sfr_obs_csv(run_outputs_uri)
+    rows = _read_sfr_obs_rows(csv_path)
+
+    # --- Step 2: reach geometry + pumping from the deck ---------------------- #
+    geom = _read_sfr_reach_geometry(deck_dir)
+    if geom is None or not geom["reaches"]:
+        raise PostprocessMODFLOWError(
+            "STREAM_DEPLETION_OUTPUT_READ_FAILED",
+            message=(
+                "could not recover the SFR reach geometry from the deck "
+                f"({deck_dir!r}); refusing to emit a mislocated reach vector."
+            ),
+            details={"deck_dir": deck_dir},
+        )
+    reaches = geom["reaches"]
+    grid = geom["grid"]
+    pumping = float(geom["pumping_m3_day"])
+    n_reaches = len(reaches)
+
+    metrics = compute_stream_depletion_metrics(rows, n_reaches)
+
+    # --- Step 3: reach cell centres in model UTM ----------------------------- #
+    xorigin = grid["xorigin"]
+    yorigin = grid["yorigin"]
+    delr = grid["delr"]
+    delc = grid["delc"]
+    nrow = grid["nrow"]
+    centers: list[tuple[float, float]] = []
+    cum_len_km: list[float] = []
+    running = 0.0
+    for (_ifno, row, col, rlen) in reaches:
+        east = xorigin + (col + 0.5) * delr
+        north = (yorigin + nrow * delc) - (row + 0.5) * delc
+        centers.append((east, north))
+        running += float(rlen)
+        cum_len_km.append(running / 1000.0)
+
+    try:
+        import geopandas as gpd  # type: ignore[import-not-found]
+        from shapely.geometry import LineString  # type: ignore[import-not-found]
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "STREAM_DEPLETION_WRITE_FAILED",
+            message=f"geopandas / shapely not importable for reach FlatGeobuf: {exc}",
+        ) from exc
+
+    # Per-reach segment: centre[i] -> centre[i+1] (last reach: prev -> self).
+    segments: list[Any] = []
+    for i in range(n_reaches):
+        p0 = centers[i]
+        if i < n_reaches - 1:
+            p1 = centers[i + 1]
+        elif n_reaches >= 2:
+            p1 = centers[i]
+            p0 = centers[i - 1]
+        else:
+            # Single reach: a tiny east-west tick so the geometry is non-degenerate.
+            p1 = (p0[0] + delr * 0.5, p0[1])
+        if p0 == p1:
+            p1 = (p1[0] + delr * 0.25, p1[1])
+        segments.append(LineString([p0, p1]))
+
+    props = []
+    for i, pr in enumerate(metrics["per_reach"]):
+        props.append(
+            {
+                "reach": pr["reach"],
+                "flow_m3_day": pr["flow_m3_day"],
+                "stage_m": pr["stage_m"],
+                "exchange_m3_day": pr["exchange_m3_day"],
+                "depletion_m3_day": pr["depletion_m3_day"],
+                "stage_decline_m": pr["stage_decline_m"],
+                "classification": pr["classification"],
+                "river_km": cum_len_km[i],
+            }
+        )
+
+    # --- Step 4: reproject model-UTM -> EPSG:4326, write FlatGeobuf ----------- #
+    src_crs = model_crs if str(model_crs).upper().startswith("EPSG") else None
+    try:
+        gdf = gpd.GeoDataFrame(props, geometry=segments, crs=src_crs)
+        if src_crs and src_crs != "EPSG:4326":
+            gdf = gdf.to_crs("EPSG:4326")
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "STREAM_DEPLETION_WRITE_FAILED",
+            message=f"could not reproject SFR reaches to EPSG:4326: {exc}",
+            details={"run_id": run_id, "model_crs": model_crs},
+        ) from exc
+
+    try:
+        fgb_path = Path(
+            tempfile.NamedTemporaryFile(
+                suffix="_stream_depletion_4326.fgb", delete=False
+            ).name
+        )
+        gdf.to_file(str(fgb_path), driver="FlatGeobuf", engine="pyogrio")
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessMODFLOWError(
+            "STREAM_DEPLETION_WRITE_FAILED",
+            message=f"could not write SFR reach FlatGeobuf: {exc}",
+            details={"run_id": run_id},
+        ) from exc
+
+    bbox_4326: tuple[float, float, float, float] | None = None
+    try:
+        b = gdf.total_bounds  # (minx, miny, maxx, maxy)
+        bbox_4326 = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
+    except Exception:  # noqa: BLE001
+        bbox_4326 = None
+
+    fgb_uri = _upload_fgb(
+        fgb_path, run_id, runs_bucket, fgb_filename="stream_depletion_4326.fgb"
+    )
+
+    total_dep = float(metrics["total_depletion_m3_day"])
+    depletion_fraction = (total_dep / pumping) if pumping > 0 else 0.0
+
+    logger.info(
+        "postprocess_stream_reaches run_id=%s n_reaches=%d total_depletion=%.4g "
+        "pumping=%.4g frac=%.3f gaining=%d losing=%d uri=%s",
+        run_id, n_reaches, total_dep, pumping, depletion_fraction,
+        metrics["gaining_reach_count"], metrics["losing_reach_count"], fgb_uri,
+    )
+
+    layer = StreamReachLayerURI(
+        layer_id=f"stream-depletion-{run_id}",
+        name="Stream depletion by reach (SFR routed exchange)",
+        layer_type="vector",
+        uri=fgb_uri,
+        style_preset=STREAM_DEPLETION_STYLE_PRESET,
+        role="primary",
+        bbox=bbox_4326,
+        total_depletion_m3_day=total_dep,
+        depletion_fraction=float(depletion_fraction),
+        n_reaches=n_reaches,
+        max_stage_decline_m=float(metrics["max_stage_decline_m"]),
+        gaining_reach_count=int(metrics["gaining_reach_count"]),
+        losing_reach_count=int(metrics["losing_reach_count"]),
+    )
+
+    # --- Step 5: build + stash the two charts (composer emits them) ---------- #
+    try:
+        from ..tools.chart_tools import (
+            build_depletion_timeseries_chart,
+            build_reach_profile_chart,
+        )
+
+        dep_chart = build_depletion_timeseries_chart(
+            days=metrics["days"],
+            depletion_m3_day=metrics["depletion_series_m3_day"],
+            pumping_rate_m3_day=pumping or None,
+            source_layer_uri=fgb_uri,
+        )
+        profile_chart = build_reach_profile_chart(
+            river_km=cum_len_km,
+            flow_m3_day=[pr["flow_m3_day"] for pr in metrics["per_reach"]],
+            stage_m=[pr["stage_m"] for pr in metrics["per_reach"]],
+            source_layer_uri=fgb_uri,
+        )
+        object.__setattr__(layer, "_depletion_chart", dep_chart)
+        object.__setattr__(layer, "_reach_profile_chart", profile_chart)
+    except Exception as exc:  # noqa: BLE001  -- charts are best-effort side output
+        logger.warning("postprocess_stream_reaches chart build failed: %s", exc)
+
+    return layer
 
 
 # --------------------------------------------------------------------------- #

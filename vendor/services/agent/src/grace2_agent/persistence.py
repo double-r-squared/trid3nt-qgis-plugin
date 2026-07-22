@@ -2355,16 +2355,15 @@ def make_file_persistence(base_dir: _Path | None = None) -> Persistence:
 
 
 # --------------------------------------------------------------------------- #
-# Backend selection (sprint-14-aws — additive, default 'file')
+# Backend selection (local-only)
 # --------------------------------------------------------------------------- #
 #
-# The AWS migration adds a DynamoDB backend (``dynamo_backend.DynamoMCPClient``)
-# behind this same ``MCPClientProtocol`` seam. Selection is a NEW env
-# ``GRACE2_PERSISTENCE_BACKEND`` (values: ``file`` | ``dynamodb``), default
-# ``file`` so the CURRENT AWS-live runtime (file-backed) is UNCHANGED until the
-# orchestrator flips the env on the EC2 agent service. This block is purely
-# additive: it does not alter ``Persistence`` / ``FileMCPClient`` /
-# ``MCPSurfaceTranslator`` semantics, and the actual selection CALL lives in
+# The persistence backend is FILE-only in the local-first build. A cloud
+# DynamoDB backend once sat behind this same ``MCPClientProtocol`` seam
+# (``GRACE2_PERSISTENCE_BACKEND=dynamodb``); it was removed in the local-only
+# slim (2026-07-21) and is preserved in git history for a future cloud re-weave.
+# ``make_persistence_for_backend`` now returns ``make_file_persistence``
+# unconditionally; the selection CALL lives in
 # ``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``
 # (NOT this file — see the job's crossTrackChanges).
 
@@ -2373,47 +2372,29 @@ def make_file_persistence(base_dir: _Path | None = None) -> Persistence:
 #: persistence. Default keeps current (file) behavior.
 PERSISTENCE_BACKEND_ENV = "GRACE2_PERSISTENCE_BACKEND"
 PERSISTENCE_BACKEND_FILE = "file"
-PERSISTENCE_BACKEND_DYNAMODB = "dynamodb"
 
 
 def resolve_persistence_backend() -> str:
     """Resolve the configured persistence backend name.
 
-    Returns ``"dynamodb"`` only when ``GRACE2_PERSISTENCE_BACKEND`` is set to
-    ``dynamodb`` (case-insensitive); every other value — including unset —
-    resolves to ``"file"`` so the demo stays file-backed by default.
+    TRID3NT local-only build: persistence is file-backed, always. The cloud
+    DynamoDB backend was removed (preserved in git history) — this now returns
+    ``"file"`` unconditionally. Retained as a function so the existing call
+    sites (``main._maybe_bind_dev_persistence`` logging) stay unchanged.
     """
-    raw = (_os_for_file.environ.get(PERSISTENCE_BACKEND_ENV) or "").strip().lower()
-    if raw == PERSISTENCE_BACKEND_DYNAMODB:
-        return PERSISTENCE_BACKEND_DYNAMODB
     return PERSISTENCE_BACKEND_FILE
-
-
-def make_dynamo_persistence(
-    *, table_prefix: str | None = None, resource: Any = None
-) -> Persistence:
-    """Construct a ``Persistence`` backed by the DynamoDB MCP shim.
-
-    Thin re-export of ``dynamo_backend.make_dynamo_persistence`` (imported
-    lazily so the file/Mongo paths never import boto3-resource machinery).
-    """
-    from .dynamo_backend import make_dynamo_persistence as _make
-
-    return _make(table_prefix=table_prefix, resource=resource)
 
 
 def make_persistence_for_backend(
     *, base_dir: _Path | None = None
 ) -> Persistence:
-    """Build the ``Persistence`` for the env-selected backend.
+    """Build the file-backed ``Persistence`` (TRID3NT local-only build).
 
-    Default (``file``) returns ``make_file_persistence``; ``dynamodb`` returns
-    the DynamoDB-backed ``Persistence``. The selection CALL sites
+    Always returns ``make_file_persistence``. The env-selected cloud backend
+    (DynamoDB) was removed; the selection CALL sites
     (``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``)
-    use this so the env is honored consistently across both binding paths.
+    keep using this so the file binding is honored consistently.
     """
-    if resolve_persistence_backend() == PERSISTENCE_BACKEND_DYNAMODB:
-        return make_dynamo_persistence()
     return make_file_persistence(base_dir=base_dir)
 
 
@@ -2423,7 +2404,6 @@ __all__ = [
     "MCPSurfaceTranslator",
     "FileMCPClient",
     "make_file_persistence",
-    "make_dynamo_persistence",
     "make_persistence_for_backend",
     "resolve_persistence_backend",
     "is_dev_persistence_enabled",
@@ -2432,7 +2412,6 @@ __all__ = [
     "DEV_PERSISTENCE_ENABLED_ENV",
     "PERSISTENCE_BACKEND_ENV",
     "PERSISTENCE_BACKEND_FILE",
-    "PERSISTENCE_BACKEND_DYNAMODB",
     "CASES_COLLECTION",
     "CHAT_COLLECTION",
     "SESSIONS_COLLECTION",

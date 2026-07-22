@@ -47,7 +47,6 @@ from botocore.exceptions import ClientError
 import grace2_agent.tools.solver as solver_mod
 from grace2_agent.tools.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
-    SOLVER_BACKEND_AWS_BATCH,
     SOLVER_BACKEND_LOCAL_DOCKER,
     SolverDispatchError,
     run_solver,
@@ -272,20 +271,17 @@ def _wait_for_completion_object(
 # --------------------------------------------------------------------------- #
 
 
-def test_solver_backend_defaults_to_aws_batch(
+def test_solver_backend_is_always_local_docker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # GCP decommissioned: the unset default is now aws-batch.
+    # The AWS Batch (and legacy GCP) dispatch arms are removed: this build is
+    # local-docker-only, so solver_backend() ALWAYS resolves to local-docker
+    # regardless of GRACE2_SOLVER_BACKEND (the env read is gone).
     monkeypatch.delenv("GRACE2_SOLVER_BACKEND", raising=False)
-    assert solver_backend() == SOLVER_BACKEND_AWS_BATCH
-    # The dead legacy value now falls through to aws-batch (no gcp backend).
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "gcp-workflows")
-    assert solver_backend() == SOLVER_BACKEND_AWS_BATCH
-    # Unknown values fall back to the default (never accidentally local).
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "gcp-workflows-someday")
-    assert solver_backend() == SOLVER_BACKEND_AWS_BATCH
-    monkeypatch.setenv("GRACE2_SOLVER_BACKEND", "local-docker")
     assert solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
+    for val in ("aws-batch", "gcp-workflows", "gcp-workflows-someday", "local-docker"):
+        monkeypatch.setenv("GRACE2_SOLVER_BACKEND", val)
+        assert solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 
 
 # --------------------------------------------------------------------------- #

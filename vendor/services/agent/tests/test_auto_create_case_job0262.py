@@ -393,3 +393,96 @@ def test_integration_two_root_prompts_one_case(
     ]
     # case-open fired once (for the auto-create), not on the second turn.
     assert [e["type"] for e in ws.sent].count("case-open") == 1
+
+
+# --------------------------------------------------------------------------- #
+# A3 (NATE 2026-07-20): a fresh Untitled Case must auto-name from its FIRST user
+# message reliably -- even when the turn later fails (LLM_UNAVAILABLE etc.) and
+# even across a transient persistence miss (the guard must not burn the one
+# naming attempt up front).
+# --------------------------------------------------------------------------- #
+
+
+def _untitled_case():
+    """A fresh Case that is genuinely Untitled (not creation-named)."""
+    return _fresh_case_summary().model_copy(update={"title": "Untitled Case"})
+
+
+def test_a3_fresh_untitled_case_names_from_first_message(
+    _persistence_bound: Persistence,
+) -> None:
+    """A brand-new Untitled Case + its first user prompt -> a derived title."""
+    case = _untitled_case()
+    asyncio.run(_persistence_bound.upsert_case(case))
+    server_mod._AUTONAMED_CASES.discard(case.case_id)
+    state = _fresh_state()
+    state.active_case_id = case.case_id
+
+    named = asyncio.run(
+        _maybe_autoname_case(
+            state, "Simulate a dye plume traveling downstream in the river"
+        )
+    )
+    assert named is True
+    stored = asyncio.run(_persistence_bound.get_case(case.case_id))
+    assert stored.title != "Untitled Case"
+    assert "Dye" in stored.title  # derived from the first prompt's tokens
+
+
+def test_a3_name_survives_a_failing_turn(
+    _persistence_bound: Persistence,
+) -> None:
+    """The name lands PRE-dispatch, so a turn that raises afterwards (the
+    LLM_UNAVAILABLE root cause) does not clear it."""
+    case = _untitled_case()
+    asyncio.run(_persistence_bound.upsert_case(case))
+    server_mod._AUTONAMED_CASES.discard(case.case_id)
+    state = _fresh_state()
+    state.active_case_id = case.case_id
+
+    assert asyncio.run(_maybe_autoname_case(state, PROMPT)) is True
+    named_title = asyncio.run(_persistence_bound.get_case(case.case_id)).title
+    assert named_title != "Untitled Case"
+
+    # Model dispatch raises AFTER the pre-dispatch autoname already landed.
+    async def _failing_turn() -> None:
+        raise RuntimeError("LLM_UNAVAILABLE")
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(_failing_turn())
+
+    still = asyncio.run(_persistence_bound.get_case(case.case_id)).title
+    assert still == named_title  # name preserved across the failed turn
+
+
+def test_a3_transient_miss_does_not_forfeit_name(
+    _persistence_bound: Persistence, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A transient persistence miss on the first attempt must NOT permanently
+    mark the Case 'named' -- the next turn still names it (pre-fix the guard was
+    set unconditionally up front, so any early miss burned the only attempt)."""
+    case = _untitled_case()
+    asyncio.run(_persistence_bound.upsert_case(case))
+    server_mod._AUTONAMED_CASES.discard(case.case_id)
+    state = _fresh_state()
+    state.active_case_id = case.case_id
+
+    calls = {"n": 0}
+    orig_get = _persistence_bound.get_case
+
+    async def _flaky_get(cid):  # noqa: ANN001, ANN202
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("transient persistence hiccup")
+        return await orig_get(cid)
+
+    monkeypatch.setattr(_persistence_bound, "get_case", _flaky_get)
+
+    first = asyncio.run(_maybe_autoname_case(state, PROMPT))
+    assert first is False  # transient error swallowed
+    assert case.case_id not in server_mod._AUTONAMED_CASES  # NOT burned
+
+    second = asyncio.run(_maybe_autoname_case(state, PROMPT))
+    assert second is True  # retried + named on the next turn
+    stored = asyncio.run(_persistence_bound.get_case(case.case_id))
+    assert stored.title != "Untitled Case"

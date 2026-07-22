@@ -96,6 +96,14 @@ async def run_telemac(
     spill_location_latlon: str | None = None,
     substance: str = "dye",
     contaminant: str | None = None,
+    decay_half_life_hours: float | None = None,
+    decay_rate_per_day: float | None = None,
+    grain_size_um: float | None = None,
+    sediment_type: str | None = None,
+    friction_coefficient: float | None = None,
+    friction_law: int | None = None,
+    velocity_diffusivity: float | None = None,
+    tracer_diffusivity: float | None = None,
     compute_class: str = "medium",
     # 2026-07-18 release-seeding tri-state, set ONLY by the approve-mesh
     # decision tail (underscore prefix -> stripped from the LLM schema by
@@ -114,12 +122,17 @@ async def run_telemac(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> TelemacDyeLayerURI | dict[str, Any]:
-    """Dye / contaminant / tracer SPILL IN A RIVER, carried DOWNSTREAM in the water.
+    """A DYE / TRACER / CONTAMINANT / POLLUTANT PLUME that TRAVELS DOWNSTREAM in a RIVER (surface water).
 
-    THE tool for "a dye spill in the river", "a contaminant / pollutant spilled
-    into the river / stream and how it travels / moves / flows downstream", "track
-    a spill down the river", "a tracer released into the channel". It runs a
-    TELEMAC-2D shallow-water solve with an advected tracer over a REAL river reach:
+    THE tool for "simulate how a dye plume travels downstream", "how far does the
+    dye / contaminant travel down the river", "a dye spill in the river", "a
+    contaminant / pollutant spilled into the river / stream and how it travels /
+    moves / flows / spreads downstream", "simulate a spill / release moving down
+    the river", "track a spill down the channel", "a tracer released into the
+    stream". This is SURFACE water carried IN the river channel by the current
+    (NOT groundwater / aquifer seepage - that is ``run_model_river_seepage_scenario``).
+    It runs a TELEMAC-2D shallow-water solve with an advected tracer over a REAL
+    river reach:
     a finite dye pulse is released at a mid-reach point source, then the plume
     travels downstream IN THE SURFACE WATER and dilutes. Produces a peak
     dye-concentration map layer PLUS the engine's native time-stepped mesh, which
@@ -182,8 +195,60 @@ async def run_telemac(
         substance: WHAT was spilled - e.g. "dye", "oil", "diesel", "sewage",
             "chemical". Set from the user's words. Modeled as a PASSIVELY
             ADVECTED dissolved tracer (transport + dilution); labels/narration
-            follow the substance. (True oil-slick physics - spreading,
-            evaporation, beaching - is the separate oil-spill module, WIP.)
+            follow the substance. THREE substance classes route automatically:
+            oil-family words ("oil"/"diesel"/"crude"/"bunker") add the oil-spill
+            slick module; DECAYING / BACTERIAL words ("sewage"/"E. coli"/
+            "coliform"/"effluent"/"wastewater"/"bacteria"/"die-off") add the
+            WAQTEL first-order DECAY module (WATER QUALITY PROCESS = 17) so the
+            plume ALSO decays as it travels - the downstream peak is lower and
+            the pulse persists a shorter time than a plain conservative dye;
+            SEDIMENT words ("sediment"/"sand"/"silt"/"mud"/"slurry"/"tailings"/
+            "sediment-laden runoff") activate the GAIA sediment module: the
+            suspended sediment SETTLES and DEPOSITS on the bed as it travels, so
+            you also get a "where and how much did it deposit" bed-deposition map
+            (mm) beside the concentration ribbon - answering "sediment washes down
+            the river, where does it settle out". everything else is the plain
+            conservative dye tracer. (True oil-slick physics - spreading,
+            evaporation, beaching - is the oil-spill module.)
+        decay_half_life_hours: OPTIONAL. For a DECAYING substance only, the
+            first-order half-life in HOURS (overrides the classify default). The
+            WAQTEL decay coefficient is k = ln(2)/half_life. Honest literature
+            defaults if unset: bacterial die-off ~ a T90 of ~2 h in daylight
+            freshwater (fecal-coliform / E. coli). Clamped to [0.1, 720] h. Set
+            from the user's words (e.g. "half-life of 6 hours"); do NOT invent it.
+        decay_rate_per_day: OPTIONAL alternative to ``decay_half_life_hours`` for
+            a decaying substance - the first-order decay rate k in per-DAY units
+            (WAQTEL law 3). Clamped to [0.01, 100] /day. Use one or the other.
+        grain_size_um: OPTIONAL. For a SEDIMENT substance only, the median grain
+            diameter d50 in MICRONS (sets how fast it settles: ~200 um fine sand
+            deposits within a few-km reach, ~20 um silt mostly stays in suspension
+            and exits). Default 200 (fine sand); clamped to [5, 2000]. An HONEST
+            demo default / user override - there is no site bed-composition
+            fetcher, so never presented as a measured value. Set from the user's
+            words (e.g. "silt" -> ~20, "fine sand" -> ~150).
+        sediment_type: OPTIONAL alias for a SEDIMENT substance - one of "sand" /
+            "silt" / "mud" - which also picks the default grain size when
+            grain_size_um is unset. All modeled as non-cohesive in v1 (cohesive
+            mud is a future upgrade), narrated honestly.
+        friction_coefficient: OPTIONAL ADVANCED / demo-default lever. The bed
+            roughness coefficient (Strickler Ks by default) that governs flow
+            velocity down the reach. Leave UNSET for the demo default (33,
+            Strickler) - the deck is byte-identical when unset. Set it ONLY when
+            the user gives a site-specific roughness. Clamped to [10, 90].
+            Narrate a set value as user-provided, an unset one as a demo default.
+        friction_law: OPTIONAL ADVANCED lever - the bottom-friction law that
+            interprets ``friction_coefficient``: 2=Chezy, 3=Strickler (default),
+            4=Manning. Set this WITH ``friction_coefficient`` when the user gives
+            a Manning n or Chezy C instead of a Strickler Ks. Leave unset for the
+            demo default (3).
+        velocity_diffusivity: OPTIONAL ADVANCED / demo-default lever - the
+            turbulent momentum diffusivity nu_t (m2/s) controlling jet/wake
+            spread. Leave unset for the demo default (0.1). Clamped to
+            [1e-3, 10]. Set only from a user-provided value.
+        tracer_diffusivity: OPTIONAL ADVANCED / demo-default lever - the
+            dye/tracer diffusivity (m2/s) that directly sets how fast the plume
+            spreads laterally. Leave unset for the demo default (0.1). Clamped to
+            [1e-3, 10]. Set only from a user-provided value.
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
 
     Returns:
@@ -364,11 +429,16 @@ async def run_telemac(
         )
         cont = "".join(c for c in str(contaminant).strip().lower()
                        if c.isalnum() or c in " -_")[:24]
+        # Promote a tracer-class substance to whatever NON-tracer class the
+        # contaminant names (oil OR decay) - the LLM splits intent across the
+        # two fields (substance="dye"/"water" + contaminant="crude oil" or
+        # "sewage"), proven live twice for oil. Any non-tracer contaminant wins.
         if (cont and classify_substance(substance)[0] == "tracer"
-                and classify_substance(cont)[0] == "oil"):
+                and classify_substance(cont)[0] != "tracer"):
             logger.info(
                 "run_telemac: substance %r is tracer-class but contaminant %r "
-                "is oil-family - classifying by contaminant", substance, cont,
+                "is %s-family - classifying by contaminant", substance, cont,
+                classify_substance(cont)[0],
             )
             substance = cont
     try:
@@ -391,6 +461,52 @@ async def run_telemac(
             source_q_m3s,
         )
         source_q_m3s = min(max(source_q_m3s, 0.5), 30.0)
+
+    # WAQTEL decay override coercion (the workflow does the law-mapping + final
+    # clamp; here we only coerce to a positive float or drop to None so a bogus
+    # arg never crashes the call). Only meaningful for the decay substance class.
+    def _pos_float(v: float | None, lo: float, hi: float) -> float | None:
+        if v is None:
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        if not (f > 0.0):
+            return None
+        return min(max(f, lo), hi)
+    decay_half_life_hours = _pos_float(decay_half_life_hours, 0.1, 720.0)
+    decay_rate_per_day = _pos_float(decay_rate_per_day, 0.01, 100.0)
+    # sediment grain size (microns): only meaningful for the sediment class. Clamp
+    # to [5, 2000] um (silt .. coarse sand); a bogus value coerces to None so the
+    # composer keeps the type-preset default (honest demo default, not measured).
+    grain_size_um = _pos_float(grain_size_um, 5.0, 2000.0)
+    # sediment_type alias (sand|silt|mud): label only, sanitized like substance.
+    if sediment_type is not None:
+        sediment_type = "".join(
+            c for c in str(sediment_type).strip().lower()
+            if c.isalnum() or c in " -_")[:8] or None
+
+    # TELEMAC-PHYS-1 constitutive-physics overrides (advanced / demo-default
+    # levers). Coerce + CLAMP to the physics_registry ranges here so a set value
+    # never errors the call (matches this tool's defensive style); the workflow
+    # re-validates via validate_and_resolve_physics. Any UNSET value stays None,
+    # so the worker emits the historical deck literal (byte-identical).
+    friction_coefficient = _pos_float(friction_coefficient, 10.0, 90.0)
+    velocity_diffusivity = _pos_float(velocity_diffusivity, 1e-3, 10.0)
+    tracer_diffusivity = _pos_float(tracer_diffusivity, 1e-3, 10.0)
+    if friction_law is not None:
+        try:
+            friction_law = int(friction_law)
+        except (TypeError, ValueError):
+            friction_law = None
+        else:
+            if friction_law not in (2, 3, 4):
+                logger.warning(
+                    "run_telemac: friction_law %r not in {2,3,4} - ignored",
+                    friction_law,
+                )
+                friction_law = None
 
     logger.info(
         "run_telemac location=%r bbox=%s spill_frac=%.3g pulse_s=%.0f dye=%.4g "
@@ -419,6 +535,14 @@ async def run_telemac(
             seed_release_lon=_seed_release_lon,
             seed_release_lat=_seed_release_lat,
             substance=substance,
+            decay_half_life_hours=decay_half_life_hours,
+            decay_rate_per_day=decay_rate_per_day,
+            grain_size_um=grain_size_um,
+            sediment_type=sediment_type,
+            friction_coefficient=friction_coefficient,
+            friction_law=friction_law,
+            velocity_diffusivity=velocity_diffusivity,
+            tracer_diffusivity=tracer_diffusivity,
             compute_class=compute_class,
         )
         logger.info(

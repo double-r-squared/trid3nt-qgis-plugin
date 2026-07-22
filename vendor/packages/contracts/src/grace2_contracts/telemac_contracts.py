@@ -23,7 +23,9 @@ from .execution import LayerURI
 
 __all__ = [
     "TELEMAC_DYE_STYLE_PRESET",
+    "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
     "TelemacDyeLayerURI",
+    "TelemacSedimentLayerURI",
 ]
 
 #: Style preset for the dye-concentration raster. A DISTINCT key (not the flood
@@ -33,6 +35,16 @@ __all__ = [
 #: always carries a data-driven ``legend`` so it renders regardless of the QML
 #: preset library's coverage of this key (additive, legend-drives-render design).
 TELEMAC_DYE_STYLE_PRESET: str = "continuous_dye_concentration"
+
+#: Style preset for the GAIA sediment BED-EVOLUTION (deposition) raster. A DISTINCT
+#: diverging key (mirrors the ``diverging_river_seepage`` pattern) so
+#: ``publish_layer._resolve_titiler_style_params`` renders it on a diverging rdbu
+#: ramp centered on 0 (deposition positive / erosion negative), and
+#: ``export_case_to_qgis._MESH_SIBLING_BY_STYLE_PRESET`` maps it to the GAIA SELAFIN
+#: mesh sibling (``gaia_river.slf``) without colliding with the dye preset. The
+#: layer carries a data-driven ``legend`` so the mm-scale range renders (a fixed
+#: registry range would wash out mm deposition), additive/legend-drives-render.
+TELEMAC_BED_EVOLUTION_STYLE_PRESET: str = "diverging_bed_evolution"
 
 
 class TelemacDyeLayerURI(LayerURI):
@@ -73,3 +85,44 @@ class TelemacDyeLayerURI(LayerURI):
     mesh_size_m: float | None = Field(default=None, gt=0.0)
     mesh_node_estimate: int | None = Field(default=None, ge=0)
     mesh_resolution_label: str | None = Field(default=None)
+    # GAIA v1 sediment scalars (OPTIONAL; only populated for a sediment run so the
+    # returned peak-CONCENTRATION layer ALSO carries the deposition numbers the
+    # agent narrates - Invariant 1). ``None`` for every non-sediment run so dye /
+    # oil / decay layers are byte-identical.
+    deposited_mass_kg: float | None = Field(default=None, ge=0.0)
+    deposit_fraction: float | None = Field(default=None, ge=0.0)
+    max_deposition_mm: float | None = Field(default=None, ge=0.0)
+
+
+class TelemacSedimentLayerURI(LayerURI):
+    """A ``LayerURI`` for the GAIA sediment BED-EVOLUTION (deposition) raster.
+
+    The SECOND COG a GAIA sediment run emits beside the peak suspended-sediment
+    concentration ribbon: the final CUMUL BED EVOL field (deposition, in mm) read
+    from ``gaia_river.slf`` and rendered on the diverging
+    ``TELEMAC_BED_EVOLUTION_STYLE_PRESET`` ramp. Extends ``LayerURI`` field-for-
+    field (so it still maps onto ``map-command load-layer``) and adds the sediment
+    scalars the agent cites rather than invents (Invariant 1 / FR-AS-7):
+
+        deposited_mass_kg: NET sediment mass left on the bed over the run (kg, >= 0)
+            - from GAIA's own listing mass balance (CUMULATED BED EVOLUTIONS, the
+            net deposition-minus-erosion closure), clamped >= 0. The SAME net
+            quantity the final-frame bed-evolution map and deposit_fraction
+            integrate; NEVER the gross CUMULATED DEPOSITION, which can cancel
+            against re-suspension erosion and contradict the (empty) map.
+        deposit_fraction: fraction of the injected sediment mass that settled to
+            the bed (0..1) - net bed mass / injected mass, the "how much stayed"
+            headline. ``None`` when the injected mass is unknown.
+        max_deposition_mm: peak bed-elevation gain anywhere in the reach (mm,
+            >= 0) - the thickest point of the deposition tongue.
+
+    ``layer_type`` is ``"raster"`` (the deposition COG); the time animation plays
+    from the ``gaia_river.slf`` SELAFIN mesh sibling that ``export_case_to_qgis``
+    discovers via ``TELEMAC_BED_EVOLUTION_STYLE_PRESET``.
+    """
+
+    deposited_mass_kg: float | None = Field(default=None, ge=0.0)
+    deposit_fraction: float | None = Field(default=None, ge=0.0)
+    max_deposition_mm: float | None = Field(default=None, ge=0.0)
+    grain_size_um: float | None = Field(default=None, gt=0.0)
+    sediment_type: str | None = Field(default=None)

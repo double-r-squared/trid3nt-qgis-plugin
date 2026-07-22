@@ -426,6 +426,17 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # biodiversity data layer, filed in the conservation lane next to the other
     # species/biodiversity fetchers.
     "fetch_mobi": "conservation_ecology",
+    # habitat-impact batch (2026-07-20): the affected-habitats analysis composer
+    # (WDPA + NWI wetlands + species presence intersected with a hazard footprint)
+    # plus its two key-free vector fetchers. analyze_affected_habitats is filed in
+    # the conservation lane (it is the "which habitats are affected" impact tool,
+    # the ecology analogue of analyze_affected_fields) and cross-lists to
+    # hazard_modeling + damage_assessment below. fetch_nwi_wetlands (USFWS NWI
+    # wetland polygons) and fetch_nhd_waterbodies (USGS NHD lake/pond/reservoir
+    # polygons) are the habitat/wetland/waterbody data layers it composes, filed
+    # here next to the other conservation/biodiversity fetchers.
+    "fetch_nwi_wetlands": "conservation_ecology",
+    "fetch_nhd_waterbodies": "conservation_ecology",
     # ---- 7. fire ----------------------------------------------------------
     "fetch_firms_active_fire": "fire",
     "fetch_mtbs_burn_severity": "fire",
@@ -617,6 +628,11 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # hazard_modeling (it scores a MODFLOW plume) AND land_cover_development (it
     # scores FTW/fiboa agricultural fields next to fetch_field_boundaries).
     "analyze_affected_fields": ("hazard_modeling", "land_cover_development"),
+    # habitat-impact batch (2026-07-20): the affected-habitats analysis is PRIMARY
+    # conservation_ecology (the ecology impact readout) and materially belongs to
+    # hazard_modeling (it scores a hazard/flood/plume footprint) AND
+    # damage_assessment (it IS an impact/exposure assessment, the ecology analogue
+    # of compute_impact_envelope / analyze_affected_fields).
     # The which-fields composer is PRIMARY hazard_modeling (it runs MODFLOW) and
     # cross-lists to damage_assessment (it produces the affected-field readout)
     # AND land_cover_development (it is reached from the farm-fields lane).

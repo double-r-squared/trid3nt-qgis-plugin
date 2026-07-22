@@ -71,16 +71,25 @@ from .postprocess_flood import (
 __all__ = [
     "PostprocessSWMMError",
     "postprocess_swmm",
+    "postprocess_swmm_pollutants",
     "publish_swmm_quantities",
     "scatter_node_depths_to_grid",
     "scatter_node_attr_to_grid",
     "scatter_link_attr_to_grid",
     "compute_swmm_depth_metrics",
+    "read_outfall_loading",
+    "read_runoff_quality_built_washed",
+    "CONCENTRATION_STYLE_PRESET",
     "FLOOD_DEPTH_STYLE_PRESET",
     "NODATA_DEPTH_M",
     "MAX_FLOOD_FRAMES",
     "RUNS_BUCKET_DEFAULT",
 ]
+
+#: Sequential style preset for the per-cell peak washoff-concentration COG (the
+#: single raster-styling seam; the actual TiTiler (rescale, colormap) lives in
+#: publish_layer._resolve_titiler_style_params under this key).
+CONCENTRATION_STYLE_PRESET = "continuous_concentration"
 
 logger = logging.getLogger("grace2_agent.workflows.postprocess_swmm")
 
@@ -1013,3 +1022,352 @@ def publish_swmm_quantities(
         specs=specs,
         bbox=bbox,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Water-quality postprocess (sprint-WQ) — the outfall pollutograph + cumulative
+# outfall LOAD + per-cell peak washoff-CONCENTRATION COG + the WQ mass-balance
+# readout, from the SAME solved ``.out`` / ``.rpt`` the depth path already read.
+#
+# Result reads PINNED by the Phase-1 in-image smoke (see the scoping report):
+#   - ``out.pollutants`` -> {name: index}; pollutant k's node concentration is
+#     read via a NodeAttribute member of value 6 + k. The toolkit enum only
+#     DEFINES POLLUT_CONC_0=6, and a PLAIN int 6+k is marshaled WRONG by the SWIG
+#     layer, so we EXTEND the aenum with POLLUT_CONC_<k> members (aenum.extend_
+#     enum) and pass the member — the pinned, verified read path.
+#   - the ``.rpt`` Outfall Loading Summary carries the cumulative load per
+#     pollutant per outfall; a MG/L pollutant reports ``kg``, a ``#/L`` COUNT
+#     pollutant reports ``LogN`` (log10 of the raw count) — we convert 10^value ->
+#     counts and label it honestly (never mislabel a count as kg).
+# --------------------------------------------------------------------------- #
+#: The builder's single dedicated boundary outfall node name.
+_OUTFALL_NODE = "OUT"
+
+
+def _pollut_node_attr(k: int) -> Any:
+    """Return the ``NodeAttribute`` member for pollutant index ``k`` (value 6+k).
+
+    The toolkit aenum defines only ``POLLUT_CONC_0`` (=6); we extend it with
+    ``POLLUT_CONC_<k>`` on first use so the SWIG binding marshals the enum
+    correctly (a plain int 6+k is read WRONG — pinned in the Phase-1 smoke).
+    """
+    import aenum
+    from swmm.toolkit.shared_enum import NodeAttribute
+
+    name = f"POLLUT_CONC_{int(k)}"
+    if not hasattr(NodeAttribute, name):
+        aenum.extend_enum(NodeAttribute, name, 6 + int(k))
+    return getattr(NodeAttribute, name)
+
+
+def _is_count_unit(unit: str) -> bool:
+    """True for a COUNT concentration unit (``#/L``) vs a MASS unit (MG/L, UG/L)."""
+    return "#" in str(unit)
+
+
+def _load_units_for(unit: str) -> str:
+    """The outfall-LOAD unit label derived from the concentration unit: a count
+    pollutant's load is a raw count (converted from the .rpt LogN); a mass
+    pollutant's load is kg (SI, because the deck is CMS)."""
+    return "counts" if _is_count_unit(unit) else "kg"
+
+
+def read_outfall_loading(
+    rpt_path: str, n_pollutants: int, *, outfall_node: str = _OUTFALL_NODE
+) -> list[float] | None:
+    """Parse the RAW per-pollutant load column from the ``.rpt`` Outfall Loading
+    Summary for one outfall node.
+
+    Layout PINNED by the Phase-1 smoke: a data row is
+    ``<node> <FlowFreqPcnt> <AvgFlow> <MaxFlow> <TotalVolume> <load_p0> <load_p1>
+    ...`` — four fixed numeric columns then one load column per pollutant in
+    ``[POLLUTANTS]`` order. Returns the ``n_pollutants`` RAW load values (kg for a
+    mass pollutant; LOG10-count for a ``#/L`` pollutant — the caller converts and
+    labels). Falls back to the ``System`` aggregate row when the named outfall row
+    is absent, and to ``None`` when the block / row cannot be parsed (the caller
+    then degrades to an honest zero / integral, never a fabricated load).
+    """
+    import re
+
+    try:
+        lines = Path(rpt_path).read_text().splitlines()
+    except Exception:
+        return None
+    in_block = False
+    system_floats: list[float] | None = None
+    for line in lines:
+        if "Outfall Loading Summary" in line:
+            in_block = True
+            continue
+        if not in_block:
+            continue
+        stripped = line.strip()
+        if not stripped:
+            continue
+        first = stripped.split()[0]
+        floats = [float(x) for x in re.findall(r"-?\d+\.\d+", stripped)]
+        if first == outfall_node and len(floats) >= 4 + n_pollutants:
+            return floats[4 : 4 + n_pollutants]
+        if first == "System" and len(floats) >= 4 + n_pollutants:
+            system_floats = floats[4 : 4 + n_pollutants]
+    return system_floats
+
+
+def read_runoff_quality_built_washed(
+    rpt_path: str, pollutant_index: int, *, is_count: bool
+) -> tuple[float, float] | None:
+    """Parse (total BUILT mass, WASHED-off mass) for one pollutant from the
+    ``.rpt`` Runoff Quality Continuity block.
+
+    built = Initial Buildup + Surface Buildup; washed = Surface Runoff (all at the
+    pollutant's column, in ``[POLLUTANTS]`` order). For a COUNT pollutant the .rpt
+    reports these as LOG10 values, so we convert 10^value -> counts before
+    combining. Returns ``(built, washed)`` or ``None`` when the block / column is
+    absent. Used for the supply-limited ``washoff_mass_fraction`` = washed / built.
+    """
+    import re
+
+    try:
+        lines = Path(rpt_path).read_text().splitlines()
+    except Exception:
+        return None
+
+    def _col(line: str) -> float | None:
+        nums = re.findall(r"-?\d+\.\d+", line)
+        if 0 <= pollutant_index < len(nums):
+            v = float(nums[pollutant_index])
+            return (10.0 ** v) if is_count else v
+        return None
+
+    in_block = False
+    initial = surface = washed = None
+    for line in lines:
+        if "Runoff Quality Continuity" in line:
+            in_block = True
+            continue
+        if not in_block:
+            continue
+        if "Quality Routing Continuity" in line:  # next block — stop.
+            break
+        if "Initial Buildup" in line:
+            initial = _col(line)
+        elif "Surface Buildup" in line:
+            surface = _col(line)
+        elif "Surface Runoff" in line:
+            washed = _col(line)
+    if washed is None or (initial is None and surface is None):
+        return None
+    built = (initial or 0.0) + (surface or 0.0)
+    return built, washed
+
+
+def postprocess_swmm_pollutants(
+    run: Any,
+    build: Any,
+    *,
+    run_id: str,
+    runs_bucket: str | None = None,
+) -> tuple[list[Any], dict[str, list[tuple[float, float]]], dict[str, dict[str, Any]]]:
+    """Read the WQ results off a solved SWMM run into layers + series + metrics.
+
+    Reuses the ALREADY-proven Output binary reader + the ``scatter_node_attr_to_
+    grid`` + COG path (do NOT reinvent). For each authored pollutant (in
+    ``build.pollutants`` order):
+
+      - the OUTFALL POLLUTOGRAPH: ``out.node_series("OUT", POLLUT_CONC_<k>)`` ->
+        the concentration-vs-time series (native units), downsampled minutes.
+      - the CUMULATIVE OUTFALL LOAD: parsed from the ``.rpt`` Outfall Loading
+        Summary (kg for MG/L; 10^LogN -> counts for ``#/L``).
+      - the per-cell PEAK washoff-CONCENTRATION COG: scatter the peak-load
+        timestep's node concentration onto the mesh grid and write/upload a COG
+        (``swmm_conc_<name>.tif``) through the existing depth-COG machinery.
+      - the WQ MASS-BALANCE readout: the Quality Routing Continuity error (%) +
+        the supply-limited ``washoff_mass_fraction`` (washed <= built).
+
+    Returns ``(pollutant_layers, pollutograph_series, wq_metrics)``:
+      - ``pollutant_layers``: one ``SWMMPollutantLayerURI`` per pollutant (role
+        ``"context"``; depth stays the primary).
+      - ``pollutograph_series``: ``{name: [(minute, conc), ...]}`` for the chart.
+      - ``wq_metrics``: ``{name: {outfall_load, outfall_load_units,
+        peak_outfall_conc, washoff_mass_fraction, wq_continuity_error_pct,
+        pollutant_units}}``.
+
+    Best-effort per the design: WQ is additive context, so a pollutant that
+    cannot be read is skipped (never sinks the others or the depth headline).
+    """
+    from datetime import datetime as _dt
+
+    import numpy as np
+
+    from grace2_contracts.swmm_contracts import SWMMPollutantLayerURI
+
+    from .swmm_mesh_builder import read_quality_routing_continuity
+
+    out_path = str(getattr(run, "out_path"))
+    rpt_path = str(getattr(run, "rpt_path", "")) or str(Path(out_path).with_suffix(".rpt"))
+    grid_shape = tuple(getattr(build, "grid_shape"))
+    grid_crs = str(getattr(build, "crs"))
+    grid_transform = _affine_from_build(build)
+    pollutants: list[tuple[str, str]] = list(getattr(build, "pollutants", []) or [])
+
+    if not pollutants:
+        return [], {}, {}
+
+    try:
+        from pyswmm import Output
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessSWMMError(
+            "SWMM_DEPENDENCY_MISSING",
+            message=f"pyswmm unavailable for WQ .out read: {exc}",
+            details={"out_path": out_path},
+        ) from exc
+
+    if not Path(out_path).exists():
+        raise PostprocessSWMMError(
+            "SWMM_OUTPUT_READ_FAILED",
+            message=f"SWMM .out not found at {out_path}",
+            details={"out_path": out_path},
+        )
+
+    # RAW outfall loads (one per pollutant, in deck order); None -> degrade.
+    raw_loads = read_outfall_loading(rpt_path, len(pollutants))
+
+    layers: list[Any] = []
+    series: dict[str, list[tuple[float, float]]] = {}
+    metrics: dict[str, dict[str, Any]] = {}
+
+    try:
+        with Output(out_path) as out:
+            name_to_idx = dict(out.pollutants or {})
+            times = list(out.times)
+            t0 = times[0] if times else None
+            for order_idx, (name, unit) in enumerate(pollutants):
+                # Key by NAME (the authoritative out.pollutants map) — never by
+                # assumed position (guards a composer/deck ordering divergence).
+                k = int(name_to_idx.get(name, order_idx))
+                attr = _pollut_node_attr(k)
+                is_count = _is_count_unit(unit)
+
+                # --- pollutograph (outfall conc vs minutes) ---
+                node_ser = out.node_series(_OUTFALL_NODE, attr)  # {datetime: conc}
+                rows: list[tuple[float, float]] = []
+                peak_conc = 0.0
+                peak_time: _dt | None = None
+                for tstamp, conc in node_ser.items():
+                    mins = (
+                        (tstamp - t0).total_seconds() / 60.0 if t0 is not None else 0.0
+                    )
+                    cval = float(conc)
+                    rows.append((mins, cval))
+                    if cval > peak_conc:
+                        peak_conc = cval
+                        peak_time = tstamp
+                series[name] = rows
+
+                # --- per-cell PEAK-load-timestep concentration grid -> COG ---
+                peak_t_idx = times.index(peak_time) if peak_time in times else (
+                    max(range(len(times)), key=lambda t: rows[t][1]) if rows else 0
+                )
+                conc_by_node = out.node_attribute(attr, peak_t_idx)
+                grid = scatter_node_attr_to_grid(
+                    conc_by_node, grid_shape, signed=False
+                )
+
+                # --- cumulative outfall load (kg or converted counts) ---
+                raw_load = (
+                    raw_loads[order_idx]
+                    if raw_loads is not None and order_idx < len(raw_loads)
+                    else None
+                )
+                if raw_load is None:
+                    outfall_load = 0.0
+                elif is_count:
+                    outfall_load = 10.0 ** float(raw_load)  # LogN -> raw count
+                else:
+                    outfall_load = float(raw_load)
+                load_units = _load_units_for(unit)
+
+                # --- supply-limited washoff fraction (washed / built) ---
+                bw = read_runoff_quality_built_washed(
+                    rpt_path, order_idx, is_count=is_count
+                )
+                washoff_frac: float | None = None
+                if bw is not None:
+                    built, washed = bw
+                    if built > 0:
+                        washoff_frac = max(0.0, min(1.0, washed / built))
+
+                # --- WQ mass-balance readout ---
+                wq_cont = read_quality_routing_continuity(rpt_path, order_idx)
+
+                pollutant_units = "#/L" if is_count else "mg/L"
+                metrics[name] = {
+                    "outfall_load": float(outfall_load),
+                    "outfall_load_units": load_units,
+                    "peak_outfall_conc": float(peak_conc),
+                    "washoff_mass_fraction": washoff_frac,
+                    "wq_continuity_error_pct": wq_cont,
+                    "pollutant_units": pollutant_units,
+                }
+
+                # --- write + upload the concentration COG (best-effort) ---
+                safe = _safe_pollutant_slug(name)
+                try:
+                    conc_cog = _write_depth_cog_4326(
+                        grid, grid_crs=grid_crs, grid_transform=grid_transform
+                    )
+                    conc_bbox = _cog_bbox_4326(conc_cog)
+                    try:
+                        conc_uri = _upload_cog_to_runs_bucket(
+                            conc_cog, run_id, runs_bucket,
+                            dest_filename=f"swmm_conc_{safe}.tif",
+                        )
+                    finally:
+                        _safe_unlink(conc_cog)
+                except PostprocessSWMMError as exc:
+                    logger.warning(
+                        "postprocess_swmm_pollutants: conc COG for %s failed "
+                        "(%s); emitting metrics without a raster.", name, exc,
+                    )
+                    continue
+
+                layers.append(
+                    SWMMPollutantLayerURI(
+                        layer_id=f"swmm-conc-{safe}-{run_id}",
+                        name=f"Peak {name} concentration",
+                        layer_type="raster",
+                        uri=conc_uri,
+                        style_preset=CONCENTRATION_STYLE_PRESET,
+                        role="context",
+                        units=pollutant_units,
+                        bbox=conc_bbox,
+                        pollutant_name=name,
+                        pollutant_units=pollutant_units,
+                        outfall_load=float(outfall_load),
+                        outfall_load_units=load_units,
+                        peak_outfall_conc=float(peak_conc),
+                        washoff_mass_fraction=washoff_frac,
+                        wq_continuity_error_pct=wq_cont,
+                    )
+                )
+    except PostprocessSWMMError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessSWMMError(
+            "SWMM_OUTPUT_READ_FAILED",
+            message=f"could not read WQ results from {out_path}: {exc}",
+            details={"out_path": out_path},
+        ) from exc
+
+    logger.info(
+        "postprocess_swmm_pollutants run_id=%s pollutants=%s loads=%s",
+        run_id,
+        [n for n, _ in pollutants],
+        {n: round(m["outfall_load"], 4) for n, m in metrics.items()},
+    )
+    return layers, series, metrics
+
+
+def _safe_pollutant_slug(name: str) -> str:
+    """Filesystem/URL-safe slug for a pollutant name (e.g. ``E_coli`` -> ``e_coli``)."""
+    return "".join(c.lower() if c.isalnum() else "_" for c in str(name)).strip("_") or "pollutant"

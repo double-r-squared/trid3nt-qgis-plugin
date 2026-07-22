@@ -1,0 +1,465 @@
+                                   MODFLOW 6
+                U.S. GEOLOGICAL SURVEY MODULAR HYDROLOGIC MODEL
+                          GROUNDWATER FLOW MODEL (GWF)
+                            VERSION 6.5.0 05/23/2024
+
+   MODFLOW 6 compiled May 23 2024 18:02:47 with Intel(R) Fortran Intel(R) 64
+   Compiler Classic for applications running on Intel(R) 64, Version 2021.7.0
+                             Build 20220726_000000
+
+This software has been approved for release by the U.S. Geological 
+Survey (USGS). Although the software has been subjected to rigorous 
+review, the USGS reserves the right to update the software as needed 
+pursuant to further analysis and review. No warranty, expressed or 
+implied, is made by the USGS or the U.S. Government as to the 
+functionality of the software and related material nor shall the 
+fact of release constitute any such warranty. Furthermore, the 
+software is released on condition that neither the USGS nor the U.S. 
+Government shall be held liable for any damages resulting from its 
+authorized or unauthorized use. Also refer to the USGS Water 
+Resources Software User Rights Notice for complete use, copyright, 
+and distribution information.
+
+
+As a work of the United States Government, this USGS product is 
+in the public domain within the United States. You can copy, 
+modify, distribute, and perform the work, even for commercial 
+purposes, all without asking permission. Additionally, USGS 
+waives copyright and related rights in the work worldwide 
+through CC0 1.0 Universal Public Domain Dedication 
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+The following GNU Lesser General Public License (LGPL) libraries
+are used in this USGS product:
+
+    SPARSKIT version 2.0
+      ilut, luson, and qsplit 
+      (https://www-users.cse.umn.edu/~saad/software/SPARSKIT/)
+
+    RCM - Reverse Cuthill McKee Ordering
+      (https://people.math.sc.edu/Burkardt/f_src/rcm/rcm.html)
+
+    BLAS - Basic Linear Algebra Subprograms Level 1
+      (https://people.math.sc.edu/Burkardt/f_src/blas1_d/blas1_d.html)
+
+    SPARSEKIT - Sparse Matrix Utility Package
+      amux, dperm, dvperm, rperm, and cperm
+      (https://people.sc.fsu.edu/~jburkardt/f77_src/sparsekit/sparsekit.html)
+
+The following BSD-3 License libraries are used in this USGS product:
+
+    Modern Fortran DAG Library
+      Copyright (c) 2018, Jacob Williams
+      All rights reserved.
+      (https://github.com/jacobwilliams/daglib)
+
+MODFLOW 6 compiler options: -Isrc/libmf6core.a.p -Isrc -I../src
+-Isrc/libmf6_external.a.p -D_FILE_OFFSET_BITS=64 -warn general -warn
+truncated_source -stand=f08 -g -traceback -O2 -fpe0 -no-heap-arrays
+-traceback -diag-disable:7416 -diag-disable:7025 -diag-disable:5268 -fPIC
+-module src/libmf6core.a.p
+-gen-dep=src/libmf6core.a.p/Utilities_compilerversion.F90.o
+-gen-depformat=make -o src/libmf6core.a.p/Utilities_compilerversion.F90.o -c
+
+System command used to initiate simulation:
+/home/nate/Documents/trid3nt-local/bin/mf6
+
+MODFLOW was compiled using uniform precision.
+
+Real Variables
+  KIND: 8
+  TINY (smallest non-zero value):    2.225074-308
+  HUGE (largest value):    1.797693+308
+  PRECISION: 15
+  SIZE IN BITS: 64
+
+Integer Variables
+  KIND: 4
+  HUGE (largest value): 2147483647
+  SIZE IN BITS: 32
+
+Long Integer Variables
+  KIND: 8
+  HUGE (largest value): 9223372036854775807
+  SIZE IN BITS: 64
+
+Logical Variables
+  KIND: 4
+  SIZE IN BITS: 32
+ 
+ NAMEFILE OPTIONS:
+    NEWTON-RAPHSON method enabled for the model.
+ END NAMEFILE OPTIONS:
+
+ DIS -- STRUCTURED GRID DISCRETIZATION PACKAGE, VERSION 2 : 3/27/2014 - INPUT READ FROM MEMPATH: __INPUT__/SFRSMOKE/DIS                            
+
+
+ NPF -- NODE PROPERTY FLOW PACKAGE, VERSION 1, 3/30/2015 INPUT READ FROM MEMPATH: __INPUT__/SFRSMOKE/NPF                            
+
+
+ IC -- Initial Conditions Package, Version 8, 3/28/2015 input read from mempath: __INPUT__/SFRSMOKE/IC                             
+
+
+ Setting Discretization Options
+ End Setting Discretization Options
+
+ Setting Discretization Dimensions
+    NLAY = 1
+    NROW = 40
+    NCOL = 40
+ End Setting Discretization Dimensions
+
+ Setting Discretization Griddata
+    DELR set from input file
+    DELC set from input file
+    TOP set from input file
+    BOTM set from input file
+ End Setting Discretization Griddata
+
+ Setting NPF Options
+ End Setting NPF Options
+
+ Setting NPF Griddata
+    ICELLTYPE set from input file
+    K set from input file
+    K33 not provided.  Setting K33 = K.
+    K22 not provided.  Setting K22 = K.
+ End Setting NPF Griddata
+
+
+ WEL   -- WEL PACKAGE, VERSION 8, 2/22/2014 INPUT READ FROM MEMPATH: __INPUT__/SFRSMOKE/WEL_0                          
+
+ PROCESSING WEL BASE OPTIONS
+ END OF WEL BASE OPTIONS
+
+ PROCESSING WEL OPTIONS
+ END OF WEL OPTIONS
+
+ PROCESSING WEL BASE DIMENSIONS
+    MAXBOUND =       1
+ END OF WEL BASE DIMENSIONS
+
+ CHD   -- CHD PACKAGE, VERSION 8, 2/22/2014 INPUT READ FROM MEMPATH: __INPUT__/SFRSMOKE/CHD_0                          
+
+ PROCESSING CHD BASE OPTIONS
+ END OF CHD BASE OPTIONS
+
+ PROCESSING CHD BASE DIMENSIONS
+    MAXBOUND =      80
+ END OF CHD BASE DIMENSIONS
+
+ SFR   -- SFR PACKAGE, VERSION 8, 2/22/2014 INPUT READ FROM UNIT 1011
+ # File generated by Flopy version 3.10.0 on 07/19/2026 at 08:11:56.
+
+ PROCESSING SFR OPTIONS
+    FLOWS WILL BE SAVED TO BUDGET FILE SPECIFIED IN OUTPUT CONTROL
+
+ OPENED sfrsmoke.sfr.stg
+ FILE TYPE:DATA(BINARY)   UNIT 1014   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+    SFR  STAGE  WILL BE SAVED TO FILE: sfrsmoke.sfr.stg
+    OPENED ON UNIT: 1014
+
+ OPENED sfrsmoke.sfr.bud
+ FILE TYPE:DATA(BINARY)   UNIT 1015   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+    SFR  BUDGET  WILL BE SAVED TO FILE: sfrsmoke.sfr.bud
+    OPENED ON UNIT: 1015
+
+ OPENED sfrsmoke.sfr.bud.csv
+ FILE TYPE:CSV   UNIT 1016   STATUS:REPLACE             
+ FORMAT:FORMATTED              ACCESS:SEQUENTIAL          
+ ACTION:READWRITE           
+
+    SFR  BUDGET CSV  WILL BE SAVED TO FILE: sfrsmoke.sfr.bud.csv
+    OPENED ON UNIT: 1016
+
+ OPENED sfrsmoke.sfr.obs
+ FILE TYPE:OBS   UNIT 1017   STATUS:OLD                 
+ FORMAT:FORMATTED              ACCESS:SEQUENTIAL          
+ ACTION:READ                
+
+ END OF SFR OPTIONS
+
+ PROCESSING SFR DIMENSIONS
+    NREACHES = 8
+ END OF SFR DIMENSIONS
+
+ PROCESSING SFR PACKAGEDATA
+ END OF SFR PACKAGEDATA
+
+ PROCESSING SFR CONNECTIONDATA
+ END OF SFR CONNECTIONDATA
+    STRT set from input file
+
+ STO -- STORAGE PACKAGE, VERSION 1, 5/19/2014 INPUT READ FROM UNIT 1006
+
+
+ # File generated by Flopy version 3.10.0 on 07/19/2026 at 08:11:56.
+ PROCESSING STORAGE OPTIONS
+ END OF STORAGE OPTIONS
+ PROCESSING GRIDDATA
+
+                 ICONVERT = 1
+
+         SPECIFIC STORAGE =  0.1000000E-04
+
+           SPECIFIC YIELD =  0.1500000    
+ END PROCESSING GRIDDATA
+    BINARY GRID INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1018
+      FILE NAME: sfrsmoke.dis.grb
+
+ OPENED sfrsmoke.dis.grb
+ FILE TYPE:DATA(BINARY)   UNIT 1018   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+      THE LAST TIME STEP WILL BE PRINTED
+      THE LAST TIME STEP WILL BE PRINTED
+ # File generated by Flopy version 3.10.0 on 07/19/2026 at 08:11:56.
+
+ PROCESSING OC OPTIONS
+
+    BUDGET INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1019
+      FILE NAME: sfrsmoke.cbc
+
+ OPENED sfrsmoke.cbc
+ FILE TYPE:DATA(BINARY)   UNIT 1019   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+    HEAD INFORMATION WILL BE WRITTEN TO:
+      UNIT NUMBER: 1020
+      FILE NAME: sfrsmoke.hds
+
+ OPENED sfrsmoke.hds
+ FILE TYPE:DATA(BINARY)   UNIT 1020   STATUS:REPLACE             
+ FORMAT:UNFORMATTED            ACCESS:STREAM              
+ ACTION:READWRITE           
+
+ END OF OC OPTIONS
+
+The observation utility is active for "SFR_0"
+ # File generated by Flopy version 3.10.0 on 07/19/2026 at 08:11:56.
+
+Processing observation options:
+
+
+
+start timestep kper="1" kstp="1" mode="normal"
+
+
+ BEGIN READING OUTPUT CONTROL FOR STRESS PERIOD 1
+      ALL TIME STEPS WILL BE SAVED
+      ALL TIME STEPS WILL BE SAVED
+
+ END READING OUTPUT CONTROL FOR STRESS PERIOD 1
+
+
+ PROCESSING STORAGE PERIOD DATA
+ END PROCESSING STORAGE PERIOD DATA
+
+
+ STRESS PERIOD 1 IS STEADY-STATE
+
+ UBDSV06 SAVING              SFR IN MODEL SFRSMOKE         PACKAGE SFRSMOKE        CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1019 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING     FLOW-JA-FACE IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING              GWF IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFRSMOKE         ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING         RAINFALL IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING      EVAPORATION IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING           RUNOFF IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING       EXT-INFLOW IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING      EXT-OUTFLOW IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      1
+ UBDSV06 SAVING          STORAGE IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      1
+
+ HEAD WILL BE SAVED ON UNIT 1020 AT END OF TIME STEP    1, STRESS PERIOD    1
+
+
+  SFR_0 BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   1
+  ------------------------------------------------------------------------------
+
+     CUMULATIVE SFR_0      L**3       RATES FOR THIS TIME STEP      L**3/T
+     ------------------                 ------------------------
+
+           IN:                                      IN:
+           ---                                      ---
+                 GWF =          14.5438                   GWF =          14.5438
+            RAINFALL =           0.0000              RAINFALL =           0.0000
+         EVAPORATION =           0.0000           EVAPORATION =           0.0000
+              RUNOFF =           0.0000                RUNOFF =           0.0000
+          EXT-INFLOW =        5000.0000            EXT-INFLOW =        5000.0000
+         EXT-OUTFLOW =           0.0000           EXT-OUTFLOW =           0.0000
+             STORAGE =           0.0000               STORAGE =           0.0000
+
+            TOTAL IN =        5014.5438              TOTAL IN =        5014.5438
+
+          OUT:                                     OUT:
+          ----                                     ----
+                 GWF =          93.9797                   GWF =          93.9797
+            RAINFALL =           0.0000              RAINFALL =           0.0000
+         EVAPORATION =           0.0000           EVAPORATION =           0.0000
+              RUNOFF =           0.0000                RUNOFF =           0.0000
+          EXT-INFLOW =           0.0000            EXT-INFLOW =           0.0000
+         EXT-OUTFLOW =        4920.5641           EXT-OUTFLOW =        4920.5641
+             STORAGE =           0.0000               STORAGE =           0.0000
+
+           TOTAL OUT =        5014.5438             TOTAL OUT =        5014.5438
+
+            IN - OUT =           0.0000              IN - OUT =           0.0000
+
+ PERCENT DISCREPANCY =           0.00     PERCENT DISCREPANCY =           0.00
+
+
+
+  VOLUME BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   1
+  ---------------------------------------------------------------------------------------------------
+
+     CUMULATIVE VOLUME      L**3       RATES FOR THIS TIME STEP      L**3/T          PACKAGE NAME    
+     ------------------                 ------------------------                     ----------------
+
+           IN:                                      IN:
+           ---                                      ---
+              STO-SS =           0.0000                STO-SS =           0.0000     STORAGE                          
+              STO-SY =           0.0000                STO-SY =           0.0000     STORAGE                          
+                 WEL =           0.0000                   WEL =           0.0000     WEL_0                            
+                 CHD =         458.6821                   CHD =         458.6821     CHD_0                            
+                 SFR =          93.9796                   SFR =          93.9796     SFR_0                            
+
+            TOTAL IN =         552.6617              TOTAL IN =         552.6617
+
+          OUT:                                     OUT:
+          ----                                     ----
+              STO-SS =           0.0000                STO-SS =           0.0000     STORAGE                          
+              STO-SY =           0.0000                STO-SY =           0.0000     STORAGE                          
+                 WEL =           0.0000                   WEL =           0.0000     WEL_0                            
+                 CHD =         538.1181                   CHD =         538.1181     CHD_0                            
+                 SFR =          14.5438                   SFR =          14.5438     SFR_0                            
+
+           TOTAL OUT =         552.6619             TOTAL OUT =         552.6619
+
+            IN - OUT =      -2.0964E-04              IN - OUT =      -2.0964E-04
+
+ PERCENT DISCREPANCY =          -0.00     PERCENT DISCREPANCY =          -0.00
+
+
+
+
+         TIME SUMMARY AT END OF TIME STEP    1 IN STRESS PERIOD    1
+                          TIME STEP LENGTH =    1.00000    
+                        STRESS PERIOD TIME =    1.00000    
+                     TOTAL SIMULATION TIME =    1.00000    
+
+end timestep
+
+
+start timestep kper="2" kstp="1" mode="normal"
+
+
+ END OF FILE DETECTED IN OUTPUT CONTROL.
+ CURRENT OUTPUT CONTROL SETTINGS WILL BE 
+ REPEATED UNTIL THE END OF THE SIMULATION.
+
+ OUTPUT CONTROL FOR STRESS PERIOD 2 IS REPEATED USING SETTINGS FROM A PREVIOUS STRESS PERIOD.
+
+
+ PROCESSING STORAGE PERIOD DATA
+ END PROCESSING STORAGE PERIOD DATA
+
+
+ STRESS PERIOD 2 IS STEADY-STATE
+
+ UBDSV06 SAVING              SFR IN MODEL SFRSMOKE         PACKAGE SFRSMOKE        CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1019 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING     FLOW-JA-FACE IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING              GWF IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFRSMOKE         ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING         RAINFALL IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING      EVAPORATION IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING           RUNOFF IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING       EXT-INFLOW IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING      EXT-OUTFLOW IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      2
+ UBDSV06 SAVING          STORAGE IN MODEL SFRSMOKE         PACKAGE SFR_0           CONNECTED TO MODEL SFRSMOKE         PACKAGE SFR_0            ON UNIT   1015 AT TIME STEP      1, STRESS PERIOD      2
+
+ HEAD WILL BE SAVED ON UNIT 1020 AT END OF TIME STEP    1, STRESS PERIOD    2
+
+
+  SFR_0 BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   2
+  ------------------------------------------------------------------------------
+
+     CUMULATIVE SFR_0      L**3       RATES FOR THIS TIME STEP      L**3/T
+     ------------------                 ------------------------
+
+           IN:                                      IN:
+           ---                                      ---
+                 GWF =        1342.1346                   GWF =           3.6372
+            RAINFALL =           0.0000              RAINFALL =           0.0000
+         EVAPORATION =           0.0000           EVAPORATION =           0.0000
+              RUNOFF =           0.0000                RUNOFF =           0.0000
+          EXT-INFLOW =     1830000.0000            EXT-INFLOW =        5000.0000
+         EXT-OUTFLOW =           0.0000           EXT-OUTFLOW =           0.0000
+             STORAGE =           0.0000               STORAGE =           0.0000
+
+            TOTAL IN =     1831342.1346              TOTAL IN =        5003.6372
+
+          OUT:                                     OUT:
+          ----                                     ----
+                 GWF =      117968.7534                   GWF =         322.9446
+            RAINFALL =           0.0000              RAINFALL =           0.0000
+         EVAPORATION =           0.0000           EVAPORATION =           0.0000
+              RUNOFF =           0.0000                RUNOFF =           0.0000
+          EXT-INFLOW =           0.0000            EXT-INFLOW =           0.0000
+         EXT-OUTFLOW =     1713373.3813           EXT-OUTFLOW =        4680.6926
+             STORAGE =           0.0000               STORAGE =           0.0000
+
+           TOTAL OUT =     1831342.1346             TOTAL OUT =        5003.6372
+
+            IN - OUT =       4.6566E-10              IN - OUT =       9.0949E-13
+
+ PERCENT DISCREPANCY =           0.00     PERCENT DISCREPANCY =           0.00
+
+
+
+  VOLUME BUDGET FOR ENTIRE MODEL AT END OF TIME STEP    1, STRESS PERIOD   2
+  ---------------------------------------------------------------------------------------------------
+
+     CUMULATIVE VOLUME      L**3       RATES FOR THIS TIME STEP      L**3/T          PACKAGE NAME    
+     ------------------                 ------------------------                     ----------------
+
+           IN:                                      IN:
+           ---                                      ---
+              STO-SS =           0.0000                STO-SS =           0.0000     STORAGE                          
+              STO-SY =           0.0000                STO-SY =           0.0000     STORAGE                          
+                 WEL =           0.0000                   WEL =           0.0000     WEL_0                            
+                 CHD =      192584.7109                   CHD =         526.3727     CHD_0                            
+                 SFR =      117968.7557                   SFR =         322.9446     SFR_0                            
+
+            TOTAL IN =      310553.4666              TOTAL IN =         849.3173
+
+          OUT:                                     OUT:
+          ----                                     ----
+              STO-SS =           0.0000                STO-SS =           0.0000     STORAGE                          
+              STO-SY =           0.0000                STO-SY =           0.0000     STORAGE                          
+                 WEL =      182500.0000                   WEL =         500.0000     WEL_0                            
+                 CHD =      126711.3757                   CHD =         345.6802     CHD_0                            
+                 SFR =        1342.1346                   SFR =           3.6372     SFR_0                            
+
+           TOTAL OUT =      310553.5104             TOTAL OUT =         849.3174
+
+            IN - OUT =      -4.3760E-02              IN - OUT =      -1.1932E-04
+
+ PERCENT DISCREPANCY =          -0.00     PERCENT DISCREPANCY =          -0.00
+
+
+
+
+         TIME SUMMARY AT END OF TIME STEP    1 IN STRESS PERIOD    2
+                          TIME STEP LENGTH =    365.000    
+                        STRESS PERIOD TIME =    365.000    
+                     TOTAL SIMULATION TIME =    366.000    
+
+end timestep
+

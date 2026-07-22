@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -143,6 +143,10 @@ class SWMMStaging:
     build: BuildResult
     run_args: SWMMRunArgs
     building_footprints: Any = None
+    # WQ (sprint-WQ): the resolved (name, unit) pollutants authored on the deck
+    # (echoed from BuildResult.pollutants; empty on a hydraulics-only run) so the
+    # composer knows whether to run the WQ postprocess without re-parsing.
+    pollutants: list[tuple[str, str]] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
@@ -250,6 +254,16 @@ def build_and_stage_swmm_deck(
             applied_physics_delta("swmm", resolved_physics),
         )
 
+    # WQ (sprint-WQ): resolve the pollutant KEYWORDS -> demo PollutantSpec presets
+    # HERE (composer's job), so the builder stays a pure deck author. An advanced
+    # caller may pass fully-specified ``pollutant_specs`` to override the presets.
+    # None/[] => no WQ sections => a byte-identical hydraulics-only deck.
+    from grace2_contracts.swmm_contracts import resolve_pollutant_presets
+
+    pollutant_specs = list(getattr(run_args, "pollutant_specs", None) or []) or (
+        resolve_pollutant_presets(getattr(run_args, "pollutants", None))
+    )
+
     total_depth = run_args.total_rain_depth_mm
     build_kwargs: dict[str, Any] = dict(
         dem_path=dem_path,
@@ -264,6 +278,9 @@ def build_and_stage_swmm_deck(
         barriers=run_args.barriers,
         enable_autoscale=bool(enable_autoscale),
         advanced_physics=resolved_physics or None,
+        pollutants=pollutant_specs or None,
+        dry_buildup_days=int(getattr(run_args, "dry_buildup_days", 0) or 0),
+        washoff_model=str(getattr(run_args, "washoff_model", "exp") or "exp"),
     )
     # total_rain_depth_mm is optional on SWMMRunArgs (the Atlas-14 lookup may
     # not have populated it); the builder has a sane default, so only override
@@ -303,6 +320,7 @@ def build_and_stage_swmm_deck(
         build=build,
         run_args=run_args,
         building_footprints=building_footprints,
+        pollutants=list(getattr(build, "pollutants", []) or []),
     )
 
 

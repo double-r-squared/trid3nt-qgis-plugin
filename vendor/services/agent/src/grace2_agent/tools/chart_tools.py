@@ -95,6 +95,8 @@ __all__ = [
     "build_head_series_chart",
     # Wave-5 saltwater intrusion cross-section heatmap (task-203).
     "build_saltwater_wedge_chart",
+    # sprint-WQ: SWMM outfall pollutograph (concentration vs time per pollutant).
+    "build_pollutograph_chart",
 ]
 
 logger = logging.getLogger("grace2_agent.tools.chart_tools")
@@ -639,6 +641,271 @@ def build_head_decline_chart(
     return build_chart_payload(
         vega_lite_spec=spec,
         title="Head decline at well over time",
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
+
+def build_subsidence_timeseries_chart(
+    *,
+    days: list[float],
+    subsidence_cm: list[float],
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Build a cumulative-subsidence-vs-time line chart (module wave CSUB).
+
+    ``subsidence_cm`` is the per-timestep cumulative ground subsidence at the
+    peak-compaction cell (cm, positive-down), the CSUB per-interbed OBS series the
+    postprocess parsed. ``days`` is the matching elapsed-time axis. The series
+    rises MONOTONICALLY and does NOT recover (permanence: pumping past
+    preconsolidation drives inelastic compaction). Returns ``None`` when fewer
+    than 2 points (a single point is not a trend). Capped at ``_MAX_ROWS`` with a
+    uniform stride so a long transient run stays under the wire-size limit.
+    """
+    if not subsidence_cm or len(subsidence_cm) < 2:
+        return None
+    xs = list(days) if days and len(days) == len(subsidence_cm) else list(
+        range(len(subsidence_cm))
+    )
+    rows = [
+        {"days": float(x), "subsidence_cm": float(v)}
+        for x, v in zip(xs, subsidence_cm)
+    ]
+    if len(rows) > _MAX_ROWS:
+        stride = max(1, len(rows) // _MAX_ROWS)
+        rows = rows[::stride][:_MAX_ROWS]
+    spec = {
+        "title": "Ground subsidence over time",
+        "data": {"values": rows},
+        "mark": {"type": "line", "point": True, "tooltip": True},
+        "encoding": {
+            "x": {"field": "days", "type": "quantitative", "title": "elapsed days"},
+            "y": {
+                "field": "subsidence_cm",
+                "type": "quantitative",
+                "title": "cumulative subsidence (cm)",
+            },
+        },
+        "width": "container",
+    }
+    peak = max(float(v) for v in subsidence_cm)
+    caption = (
+        f"{len(rows)} steps · peak subsidence {peak:.3g} cm at the pumped "
+        "footprint (permanent inelastic compaction; the curve does not recover)"
+    )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title="Ground subsidence over time",
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
+
+def build_depletion_timeseries_chart(
+    *,
+    days: list[float],
+    depletion_m3_day: list[float],
+    pumping_rate_m3_day: float | None = None,
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Build a streamflow-depletion-vs-time line chart (module wave SFR).
+
+    ``depletion_m3_day`` is the per-timestep streamflow captured from the stream
+    by the pumping - the sum over SFR reaches of the (period-t minus baseline)
+    reach<->aquifer exchange, m^3/day (a POSITIVE number = capture). ``days`` is
+    the matching elapsed-time axis. Returns ``None`` when fewer than 2 points
+    (a single point is not a trend). The series is capped at ``_MAX_ROWS`` with a
+    uniform stride so a long transient run stays under the wire-size limit.
+    """
+    if not depletion_m3_day or len(depletion_m3_day) < 2:
+        return None
+    xs = list(days) if days and len(days) == len(depletion_m3_day) else list(
+        range(len(depletion_m3_day))
+    )
+    rows = [
+        {"days": float(x), "depletion_m3_day": float(v)}
+        for x, v in zip(xs, depletion_m3_day)
+    ]
+    if len(rows) > _MAX_ROWS:
+        stride = max(1, len(rows) // _MAX_ROWS)
+        rows = rows[::stride][:_MAX_ROWS]
+    spec = {
+        "title": "Streamflow depletion over time",
+        "data": {"values": rows},
+        "mark": {"type": "line", "point": True, "tooltip": True},
+        "encoding": {
+            "x": {"field": "days", "type": "quantitative", "title": "elapsed days"},
+            "y": {
+                "field": "depletion_m3_day",
+                "type": "quantitative",
+                "title": "streamflow depletion (m3/day)",
+            },
+        },
+        "width": "container",
+    }
+    peak = max(float(v) for v in depletion_m3_day)
+    frac = ""
+    if pumping_rate_m3_day and abs(float(pumping_rate_m3_day)) > 0:
+        frac = f" ({peak / abs(float(pumping_rate_m3_day)) * 100:.0f}% of pumping)"
+    caption = (
+        f"{len(rows)} steps · peak depletion {peak:.4g} m3/day{frac} - "
+        "streamflow captured by the pumping well (baseline-vs-pumped SFR exchange "
+        "delta summed over reaches)"
+    )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title="Streamflow depletion over time",
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
+
+def build_pollutograph_chart(
+    *,
+    series_by_pollutant: dict[str, list[tuple[float, float]]],
+    units_by_pollutant: dict[str, str] | None = None,
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Build a SWMM OUTFALL POLLUTOGRAPH — concentration vs time per pollutant.
+
+    ``series_by_pollutant`` is ``{name: [(minute, concentration), ...]}`` (the
+    ``postprocess_swmm_pollutants`` output). One line per pollutant, colored by
+    pollutant. Pollutants can span wildly different unit scales (TSS ~mg/L vs
+    E.coli ~1e4 #/L), so the y-axis is LOG-scaled and each series is labeled with
+    its unit — the chart shows the SHAPE (the first-flush crest + decline), not a
+    cross-pollutant magnitude comparison (the honest caption says so). Each series
+    is downsampled to ``_MAX_ROWS`` with a uniform stride. Returns ``None`` when no
+    pollutant has >= 2 points (a single sample is not a curve).
+    """
+    units = units_by_pollutant or {}
+    rows: list[dict[str, Any]] = []
+    kept: list[str] = []
+    peaks: list[str] = []
+    for name, ser in (series_by_pollutant or {}).items():
+        pts = [(float(m), float(c)) for m, c in (ser or [])]
+        if len(pts) < 2:
+            continue
+        if len(pts) > _MAX_ROWS:
+            stride = max(1, len(pts) // _MAX_ROWS)
+            pts = pts[::stride][:_MAX_ROWS]
+        unit = units.get(name, "")
+        label = f"{name} ({unit})" if unit else name
+        for m, c in pts:
+            # log y-axis: keep only strictly-positive concentrations (a 0 is a
+            # dry/pre-flush step the log scale cannot plot — dropping it leaves the
+            # first-flush curve intact).
+            if c > 0:
+                rows.append({"minutes": m, "concentration": c, "pollutant": label})
+        kept.append(name)
+        pk = max(c for _, c in pts)
+        peaks.append(f"{name} {pk:.3g}{(' ' + unit) if unit else ''}")
+    if not rows or not kept:
+        return None
+    spec = {
+        "title": "Outfall pollutograph",
+        "data": {"values": rows},
+        "mark": {"type": "line", "point": True, "tooltip": True},
+        "encoding": {
+            "x": {"field": "minutes", "type": "quantitative", "title": "elapsed minutes"},
+            "y": {
+                "field": "concentration",
+                "type": "quantitative",
+                "scale": {"type": "log"},
+                "title": "outfall concentration (native units, log)",
+            },
+            "color": {"field": "pollutant", "type": "nominal", "title": "pollutant"},
+        },
+        "width": "container",
+    }
+    caption = (
+        f"outfall concentration vs time for {', '.join(kept)} "
+        f"(peak {'; '.join(peaks)}) - the first-flush crest rises early then "
+        "declines as buildup is depleted; y is log-scaled and units differ per "
+        "pollutant, so compare SHAPE not cross-pollutant magnitude"
+    )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title="Outfall pollutograph",
+        caption=caption,
+        source_layer_uri=source_layer_uri,
+        created_turn_id=created_turn_id,
+    )
+
+
+def build_reach_profile_chart(
+    *,
+    river_km: list[float],
+    flow_m3_day: list[float],
+    stage_m: list[float],
+    source_layer_uri: str | None = None,
+    created_turn_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Build a per-reach flow + stage vs river-km profile chart (module wave SFR).
+
+    Two series folded into one layered chart: the routed streamflow discharge
+    (``flow_m3_day``, the ABSOLUTE downstream-flow) and the stream stage
+    (``stage_m``), each plotted against the cumulative distance downstream
+    (``river_km``) at the pumped (final) timestep. Returns ``None`` when fewer
+    than 2 reaches. Capped at ``_MAX_ROWS`` reaches with a uniform stride.
+    """
+    n = min(len(river_km), len(flow_m3_day), len(stage_m))
+    if n < 2:
+        return None
+    idx = list(range(n))
+    if n > _MAX_ROWS:
+        stride = max(1, n // _MAX_ROWS)
+        idx = idx[::stride][:_MAX_ROWS]
+    rows = [
+        {
+            "river_km": float(river_km[i]),
+            "flow_m3_day": float(flow_m3_day[i]),
+            "stage_m": float(stage_m[i]),
+        }
+        for i in idx
+    ]
+    spec = {
+        "title": "Streamflow + stage along the reach",
+        "data": {"values": rows},
+        "layer": [
+            {
+                "mark": {"type": "line", "point": True, "tooltip": True, "color": "#4477FF"},
+                "encoding": {
+                    "x": {"field": "river_km", "type": "quantitative", "title": "river km (downstream)"},
+                    "y": {
+                        "field": "flow_m3_day",
+                        "type": "quantitative",
+                        "title": "streamflow (m3/day)",
+                    },
+                },
+            },
+            {
+                "mark": {"type": "line", "point": True, "tooltip": True, "color": "#E67E22", "strokeDash": [4, 2]},
+                "encoding": {
+                    "x": {"field": "river_km", "type": "quantitative"},
+                    "y": {
+                        "field": "stage_m",
+                        "type": "quantitative",
+                        "title": "stage (m)",
+                    },
+                },
+            },
+        ],
+        "resolve": {"scale": {"y": "independent"}},
+        "width": "container",
+    }
+    caption = (
+        f"{len(rows)} reaches · streamflow (blue) + stage (orange dashed) along "
+        "the routed stream, headwater to outlet (pumped timestep)"
+    )
+    return build_chart_payload(
+        vega_lite_spec=spec,
+        title="Streamflow + stage along the reach",
         caption=caption,
         source_layer_uri=source_layer_uri,
         created_turn_id=created_turn_id,

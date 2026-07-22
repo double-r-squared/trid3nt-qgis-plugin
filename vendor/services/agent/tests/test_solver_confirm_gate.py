@@ -383,8 +383,9 @@ def test_psha_solver_in_confirm_set() -> None:
 @pytest.mark.parametrize(
     "backend,expected,forbidden",
     [
+        # AWS Batch arm removed (local-only slim) -> solver_backend() is always
+        # local-docker, so only the local-solve recommendation prose is reachable.
         ("local-docker", "(local solve).", "cloud solve"),
-        ("aws-batch", "(cloud solve, typically 5-20 minutes).", "local solve"),
     ],
 )
 async def test_flood_gate_recommendation_deployment_aware(
@@ -439,17 +440,13 @@ async def test_flood_gate_recommendation_deployment_aware(
 @pytest.mark.parametrize(
     "backend,expected,forbidden",
     [
+        # AWS Batch arm removed (local-only slim) -> solver_backend() is always
+        # local-docker, so only the local-solve recommendation prose is reachable.
         (
             "local-docker",
             "This runs the OpenQuake engine locally (typically several "
             "minutes).",
             "AWS Batch",
-        ),
-        (
-            "aws-batch",
-            "This dispatches the OpenQuake engine to AWS Batch (a cloud "
-            "solve, typically several minutes).",
-            "locally",
         ),
     ],
 )

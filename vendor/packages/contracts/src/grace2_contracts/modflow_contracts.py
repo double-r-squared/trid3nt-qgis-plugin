@@ -70,6 +70,8 @@ __all__ = [
     "HydroperiodLayerURI",
     "CaptureZoneLayerURI",
     "SaltwaterWedgeLayerURI",
+    "StreamReachLayerURI",
+    "SubsidenceLayerURI",
     "DEFAULT_STREAMBED_CONDUCTANCE_M2_DAY",
     "DEFAULT_STREAMBED_THICKNESS_M",
     "DEFAULT_AQUIFER_SY",
@@ -374,9 +376,128 @@ class MODFLOWRunArgs(EngineRunArgsMixin):
             "capture_zone",
             "wellhead_protection",
             "saltwater_intrusion",
+            "stream_depletion",
+            "land_subsidence",
         ]
         | None
     ) = None
+
+    # --- stream_depletion: SFR routed river<->aquifer exchange (module wave) - #
+    # "How does pumping this well affect the river?" A routed MODFLOW-6 SFR6
+    # stream network (per-reach stage + Manning discharge + the GWF exchange
+    # term) draped from the fetched NHDPlus flowline, coupled to the EXISTING
+    # sustainable_yield WEL well. Depletion = the baseline-vs-pumped delta in the
+    # SFR<->GWF exchange summed over reaches (the streamflow captured by the
+    # well). All four forcing fields below are OPTIONAL demo-defaulted: a real
+    # fetcher supplies none of them today, so the adapter narrates them as demo
+    # assumptions (never fake site precision). When ``archetype`` is NOT
+    # "stream_depletion" they are ignored (additive; other decks byte-identical).
+    river_inflow_m3_s: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Headwater streamflow inflow at the most-upstream SFR reach, m^3/s "
+            "(the SFR perioddata INFLOW term, converted internally to m^3/day). "
+            "When None the adapter applies a demo default (narrated as a demo "
+            "assumption; a real run reads it from fetch_noaa_nwm_streamflow or "
+            "fetch_usgs_nwis_gauges). Must be > 0."
+        ),
+    )
+    river_width_m: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Channel width applied to every SFR reach (the packagedata rwid), m. "
+            "When None the adapter applies a 5-15 m demo default. A real run reads "
+            "it from NHDPlus VAA. Must be > 0."
+        ),
+    )
+    streambed_k_m_day: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Streambed hydraulic conductivity applied to every SFR reach (the "
+            "packagedata rhk), m/day - it controls the reach<->aquifer leakage. "
+            "When None the adapter applies a demo default (the "
+            "DEFAULT_RIVER_CONDUCTANCE lineage). Narrated as a demo assumption. "
+            "Must be > 0."
+        ),
+    )
+    manning_n: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Manning roughness coefficient applied to every SFR reach (the "
+            "packagedata man), used by SFR to compute reach stage + discharge from "
+            "the routed flow. When None the adapter applies a 0.035 demo default "
+            "(a natural-channel value). Narrated as a demo assumption. Must be > 0."
+        ),
+    )
+
+    # --- land_subsidence: CSUB aquifer-system compaction (module wave) ------- #
+    # "How much will the ground sink if we keep pumping this well?" A MODFLOW-6
+    # CSUB (Skeletal storage, Compaction, and SUBsidence) package layered onto the
+    # EXISTING sustainable_yield transient WEL deck: the pumping drawdown pushes the
+    # effective stress in a compressible fine-grained interbed past its
+    # preconsolidation, producing PERMANENT (inelastic) aquifer-system compaction
+    # -> a ground-subsidence bowl (cm) + a per-cell compaction time-series. v1 =
+    # ONE no-delay HEAD_BASED interbed per pumped footprint cell (bypasses the
+    # geostatic-stress geometry so a flat demo grid is honest); preconsolidation =
+    # the initial head so any drawdown drives inelastic compaction. All four fields
+    # below are OPTIONAL demo-defaulted (no site clay-fraction fetcher in v1 -- the
+    # subsidence MAGNITUDE is set by these, so the adapter narrates them as demo
+    # assumptions, never site precision). When ``archetype`` is NOT
+    # "land_subsidence" they are ignored (additive; other decks byte-identical).
+    #
+    # STORAGE double-count (pinned by the local mf6 6.5.0 smoke): CSUB supplies the
+    # coarse skeletal storage via ``csub_cg_ske_m``, so when land_subsidence is
+    # active the STO package ``ss`` is dropped to 0 -- mf6 6.5.0 HARD-REQUIRES
+    # STO ss == 0 in all active cells when CSUB is present, so the fix is
+    # engine-enforced (not a silent correction) and the CSUB-run head decline
+    # matches the plain sustainable_yield run.
+    csub_ssv_inelastic_m: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Inelastic (virgin) specific storage Ssv of the compressible interbed, "
+            "m^-1 -- the number that SETS the subsidence magnitude. When None the "
+            "adapter applies a ~2e-3 m^-1 Corcoran-Clay-scale demo default "
+            "(narrated as a demo assumption; a real run reads it from a Central "
+            "Valley textural / clay-fraction source, v2). Must be > 0."
+        ),
+    )
+    csub_sse_elastic_m: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Elastic (recompression) specific storage Sse of the interbed, m^-1 -- "
+            "one-to-two orders BELOW Ssv (the elastic/inelastic contrast IS the "
+            "subsidence physics). When None a ~5e-5 m^-1 demo default is applied "
+            "(narrated as a demo assumption). Must be > 0."
+        ),
+    )
+    csub_interbed_thick_frac: float | None = Field(
+        default=None,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Interbed thickness as a FRACTION of the model layer thickness (the "
+            "CSUB packagedata thick with cell_fraction=True). When None a ~0.5 demo "
+            "default is applied (interbed occupies ~half the ~30 m demo layer). The "
+            "ultimate compaction scales with this via dz = Ssv * b * dh. In (0, 1]."
+        ),
+    )
+    csub_cg_ske_m: float | None = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Coarse-grained ELASTIC skeletal specific storage Ss of the aquifer "
+            "matrix, m^-1 (the CSUB cg_ske_cr) -- this REPLACES the STO ss the plain "
+            "run used (mf6 requires STO ss==0 under CSUB), so it should match the "
+            "aquifer's elastic Ss (~1e-5). When None a ~1e-5 m^-1 demo default is "
+            "applied (narrated as a demo assumption). Must be > 0."
+        ),
+    )
 
     # --- multi_species: N-species solute transport (Wave-3) ----------------- #
     # An optional list of per-species transport specs. When None (the default)
@@ -1019,5 +1140,205 @@ class SaltwaterWedgeLayerURI(LayerURI):
             "postprocessor can geolocate the transect LINE and the toe POINT on "
             "the map without re-reading the run args. Must match "
             "``MODFLOWRunArgs.coastal_transect_latlon`` exactly."
+        ),
+    )
+
+
+class StreamReachLayerURI(LayerURI):
+    """A ``LayerURI`` for the SFR routed stream-depletion reach network (module wave).
+
+    The headline output of the ``"stream_depletion"`` archetype: a MODFLOW-6 SFR6
+    stream network is draped from the fetched NHDPlus flowline onto the model grid
+    as path-ordered reaches, coupled to a pumping WEL well. The postprocess parses
+    the per-reach SFR observation CSV (``<gwf>.sfr.obs.csv``: stage, downstream-
+    flow, and the reach<->aquifer ``sfr`` exchange term) and renders a per-reach
+    polyline FlatGeobuf carrying, per reach, the routed discharge, stage, the
+    signed exchange, and the pumping-induced depletion (baseline-vs-pumped delta).
+
+    SIGN CONVENTIONS (pinned by the local mf6 6.5.0 smoke fixture, per feature
+    attribute): the SFR ``downstream-flow`` obs is reported NEGATIVE (an outflow
+    magnitude); the feature ``flow_m3_day`` carries its ABSOLUTE value (the routed
+    discharge). The SFR ``sfr`` exchange obs is REACH-RELATIVE from the stream's
+    water balance: POSITIVE = the reach LOSES water to the aquifer (a losing
+    reach, stream->aquifer leakage); NEGATIVE = the aquifer FEEDS the reach (a
+    gaining reach, baseflow into the stream). Streamflow depletion for the run is
+    ``sum(exchange at the pumped period) - sum(exchange at the baseline period)``,
+    a POSITIVE number = the streamflow the well captured. Gaining/losing reach
+    counts are classified from the pumped-period per-reach exchange sign.
+
+    Like ``CaptureZoneLayerURI`` / ``SaltwaterWedgeLayerURI`` this is a VECTOR
+    layer (``layer_type='vector'``) reaching the client through the inline-GeoJSON
+    ``add_loaded_layer`` path, NOT the raster-only ``publish_layer``.
+
+    IMPORTANT PRECISION CAVEAT -- the aquifer K/Sy, the channel width, the Manning
+    roughness, and the streambed K are DEMO DEFAULTS with no site-specific fetcher.
+    Treat the depletion fraction as a qualitative planning estimate (the streambed
+    resistance keeps it below the Glover-Balmer analytic curve; an honest,
+    explainable gap), NOT a calibrated water-rights determination. The agent must
+    narrate this caveat (invariant 1, FR-AS-7).
+
+    Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
+    with no translation. Adds the structured numbers the agent narrates so the LLM
+    cites typed fields, never invents them (invariant 1, FR-AS-7):
+
+        total_depletion_m3_day: net streamflow captured from the stream by the
+            pumping (sum of the pumped-vs-baseline exchange delta over all
+            reaches), m^3/day (>= 0). The headline scalar.
+        depletion_fraction: total_depletion_m3_day / pumping_rate_m3_day,
+            dimensionless in [0, ~1] (a well captures at most its own pumping from
+            the stream at steady state; typically 0.4-0.8 for a near-stream well).
+        n_reaches: number of SFR reaches draped onto the grid (>= 1).
+        max_stage_decline_m: the largest per-reach stage drop from baseline to
+            pumped, m (>= 0) - how much the pumping lowered any reach's water
+            surface.
+        gaining_reach_count: number of reaches GAINING from the aquifer at the
+            pumped period (exchange < 0), >= 0.
+        losing_reach_count: number of reaches LOSING to the aquifer at the pumped
+            period (exchange > 0), >= 0.
+    """
+
+    layer_type: Literal["raster", "vector"] = "vector"
+
+    total_depletion_m3_day: float = Field(
+        ge=0.0,
+        description=(
+            "Net streamflow captured from the stream by the pumping well, m^3/day "
+            "(>= 0). Computed as sum over reaches of (pumped-period SFR<->GWF "
+            "exchange minus baseline-period exchange); positive = depletion "
+            "(capture). The headline scalar the honesty floor checks."
+        ),
+    )
+    depletion_fraction: float = Field(
+        ge=0.0,
+        description=(
+            "total_depletion_m3_day divided by the well pumping rate, "
+            "dimensionless. At steady state a well captures at most its own "
+            "pumping from the stream (fraction ~<= 1); a near-stream well is "
+            "typically 0.4-0.8. Streambed resistance keeps it below the "
+            "Glover-Balmer analytic curve (an honest, explainable gap)."
+        ),
+    )
+    n_reaches: int = Field(
+        ge=1,
+        description="Number of SFR reaches draped onto the model grid (>= 1).",
+    )
+    max_stage_decline_m: float = Field(
+        ge=0.0,
+        description=(
+            "Largest per-reach stream-stage drop from the baseline period to the "
+            "pumped period, m (>= 0) - how much the pumping lowered any reach's "
+            "water surface."
+        ),
+    )
+    gaining_reach_count: int = Field(
+        ge=0,
+        description=(
+            "Number of reaches GAINING water from the aquifer at the pumped period "
+            "(SFR exchange < 0, aquifer->stream baseflow). >= 0."
+        ),
+    )
+    losing_reach_count: int = Field(
+        ge=0,
+        description=(
+            "Number of reaches LOSING water to the aquifer at the pumped period "
+            "(SFR exchange > 0, stream->aquifer leakage). >= 0."
+        ),
+    )
+
+
+class SubsidenceLayerURI(LayerURI):
+    """A ``LayerURI`` for the CSUB pumping-induced land-subsidence bowl (module wave).
+
+    The headline output of the ``"land_subsidence"`` archetype: a MODFLOW-6 CSUB
+    package layered onto the transient pumping (WEL) deck computes aquifer-system
+    compaction as the pumping drawdown pushes the effective stress in a
+    compressible interbed past its preconsolidation, and writes a per-cell
+    z-displacement grid whose FINAL frame is the cumulative subsidence bowl. The
+    postprocess reprojects that final frame to an EPSG:4326 COG (cm) -- so, UNLIKE
+    the SFR ``StreamReachLayerURI`` VECTOR, this is a RASTER layer
+    (``layer_type='raster'``) reaching the client through ``publish_layer``, the
+    same raster path as ``DrawdownLayerURI``.
+
+    SIGN CONVENTION (PINNED by the local mf6 6.5.0 smoke fixture,
+    services/workers/modflow/fixtures/csub_smoke): downward subsidence/compaction
+    is reported POSITIVE. The CSUB z-displacement grid (HeadFile text tag
+    ``CSUB-ZDISPLACE`` -- truncated to 16 chars, NOT ``CSUB-ZDISPLACEMENT``) is
+    positive-down at the pumped cell on the real binary; the postprocess owns this
+    convention so the agent never narrates subsidence as uplift. Units are metres
+    in the binary; ``max_subsidence_cm`` is metres * 100.
+
+    STORAGE double-count guard (the #1 CSUB trap, pinned in the smoke): CSUB
+    supplies the coarse skeletal storage, so the reused STO ``ss`` is dropped to 0
+    when CSUB is present -- mf6 6.5.0 HARD-ERRORS ("Specific storage values in the
+    storage (STO) package must be zero in all active cells when using the CSUB
+    package") if it is not, so the fix is engine-enforced and the CSUB-run head
+    decline matches the plain sustainable_yield run (proven within 0.00% in the
+    smoke).
+
+    IMPORTANT PRECISION CAVEAT -- the aquifer K/Ss/Sy, the interbed thickness, and
+    the inelastic/elastic compaction indices are DEMO DEFAULTS with no
+    site-specific fetcher (v1). The HEAD_BASED formulation bypasses geostatic
+    stress (honest on a flat demo grid, cannot represent depth-dependent
+    effective-stress evolution -- that is v2). Treat the subsidence magnitude as a
+    qualitative planning estimate, NOT a calibrated Central Valley forecast. The
+    agent must narrate this caveat (invariant 1, FR-AS-7).
+
+    Extends ``LayerURI`` field-for-field so it maps onto ``map-command load-layer``
+    with no translation. Adds the structured numbers the agent narrates so the LLM
+    cites typed fields, never invents them (invariant 1, FR-AS-7):
+
+        max_subsidence_cm: peak cumulative ground subsidence over the pumping
+            horizon, cm (>= 0, positive-down). The headline scalar.
+        subsidence_area_km2: area of cells whose subsidence exceeds a small floor,
+            km^2 (>= 0) -- the footprint of the subsidence bowl.
+        max_head_decline_m: the largest head drop from the baseline to the final
+            period, m (>= 0) -- the drawdown that forced the compaction.
+        inelastic_fraction: share of the total compaction that is INELASTIC
+            (permanent, non-recoverable), dimensionless in [0, 1]. Near 1.0 when
+            preconsolidation == the initial head (the correct signature that
+            pumping past preconsolidation produces PERMANENT subsidence).
+        interbed_count: number of CSUB interbeds over the pumped footprint (>= 1).
+    """
+
+    layer_type: Literal["raster", "vector"] = "raster"
+
+    max_subsidence_cm: float = Field(
+        ge=0.0,
+        description=(
+            "Peak cumulative ground subsidence over the pumping horizon, cm "
+            "(>= 0, positive-down per the pinned CSUB sign convention). The final "
+            "z-displacement grid's maximum. The headline scalar the honesty floor "
+            "checks."
+        ),
+    )
+    subsidence_area_km2: float = Field(
+        ge=0.0,
+        description=(
+            "Area of grid cells whose final subsidence exceeds a small floor, "
+            "km^2 (>= 0) -- the footprint of the subsidence bowl."
+        ),
+    )
+    max_head_decline_m: float = Field(
+        ge=0.0,
+        description=(
+            "Largest head decline from the baseline period to the final pumped "
+            "period, m (>= 0) -- the pumping drawdown that forced the compaction."
+        ),
+    )
+    inelastic_fraction: float = Field(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Share of the total compaction that is INELASTIC (permanent, "
+            "non-recoverable), dimensionless in [0, 1]. Near 1.0 when the "
+            "preconsolidation head == the initial head (the physically-correct "
+            "signature that pumping past preconsolidation produces PERMANENT "
+            "subsidence, not recoverable elastic rebound)."
+        ),
+    )
+    interbed_count: int = Field(
+        ge=1,
+        description=(
+            "Number of CSUB interbeds draped over the pumped footprint (>= 1)."
         ),
     )

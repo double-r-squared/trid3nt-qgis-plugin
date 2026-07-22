@@ -433,3 +433,16 @@ from .. import categories as _categories  # noqa: E402,F401
 # QGIS layer can be registered onto a case conversationally, not just via the
 # plugin's "Push layer" button.
 from . import import_user_layer  # noqa: E402,F401 - registers import_user_layer (vector/raster upload -> case input layer; s3 object existence+size-cap validation, FlatGeobuf/COG registration reusing publish_layer + the #165 durable-vector-geojson writer, F32-style AOI pin)
+
+# habitat-impact triad (net-new): two key-free vector fetchers + the leverage
+# analysis tool that composes them (+ WDPA + GBIF) into a hazard-footprint
+# habitat-impact assessment. NWI/NHD endpoints probed live 2026-07-20.
+from . import fetch_nwi_wetlands  # noqa: E402,F401 - registers fetch_nwi_wetlands (USFWS National Wetlands Inventory Cowardin-classified wetland polygons via the public USFWS Wetlands MapServer/0; browser-UA WAF header trio + table-prefix-stripped attribute/wetland_type/acres columns; geojson-primary -> esri-json-fallback -> honest error; static-30d FlatGeobuf)
+from . import fetch_nhd_waterbodies  # noqa: E402,F401 - registers fetch_nhd_waterbodies (USGS NHDPlus HR NHDWaterbody open-water lake/pond/reservoir polygons via hydro.nationalmap.gov MapServer/9; permanent_identifier/gnis_name/ftype(+label)/areasqkm columns; NHDPlus_HR primary -> medium-res nhd/12 fallback -> honest error; distinct from fetch_nhdplus_nldi_navigate flowlines + fetch_jrc_global_surface_water raster)
+
+# COPY-ME authoring template (docs/authoring/writing-a-tool.md). Importing the
+# module is always safe: its @register_tool call is gated behind the
+# GRACE2_ENABLE_EXAMPLE_TOOL env flag, so it registers example_bbox_area ONLY
+# when a developer explicitly enables it (demo / retrieval-visibility check).
+# Default = imported-but-inert, so it never pollutes the production catalog.
+from . import _example_tool_template  # noqa: E402,F401 - INERT unless GRACE2_ENABLE_EXAMPLE_TOOL is set

@@ -557,6 +557,21 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # perceptually-uniform magma ramp; landslide susceptibility/probability in
     # [0,1] -> a red(high)->green(low) rdylgn_r ramp.
     "diverging_river_seepage": ("-100,100", "rdbu"),
+    # GAIA sediment bed-evolution (deposition/erosion, mm): a SIGNED field
+    # (deposition positive / erosion negative) -> a diverging rdbu ramp centered
+    # on 0, same pattern as river seepage. The deposition COG carries a data-
+    # driven legend (mm-scale) so the actual range renders; this registry range is
+    # the fallback (a fixed mm band would wash out sub-mm event deposition).
+    "diverging_bed_evolution": ("-20,20", "rdbu"),
+    # sprint-WQ: SWMM per-cell peak washoff CONCENTRATION (mg/L) - a sequential
+    # YlOrBr ramp (low->high pollutant load), visibly distinct from depth's
+    # SWMM WQ concentration (SWMM-WQ-1 fix 2026-07-21): INTENTIONALLY NOT a fixed
+    # entry. Pollutant concentration ranges span orders of magnitude across
+    # pollutants AND sites -- TSS is ~0-300 mg/L but E. coli is #/L in the 1e3-1e7
+    # range, so a single fixed rescale saturates one of them. The
+    # ``continuous_concentration`` preset therefore falls through to the GENERIC
+    # p2/p98 PERCENTILE fallback below, which auto-scales EACH pollutant COG to
+    # its OWN data range (viridis ramp). Do not re-add a fixed rescale here.
     "continuous_seismic_pga": ("0,1", "magma"),
     "continuous_landslide_susceptibility": ("0,1", "rdylgn_r"),
     # conservation micro-North-Star -- ADDITIVE. NDVI is the canonical
@@ -594,6 +609,12 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     "continuous_drawdown_m": ("0,10", "reds"),  # head decline under pumping
     "continuous_dewatering_rate": ("0,5000", "reds"),  # DRN outflow (m3/day)
     "continuous_mounding_m": ("0,10", "blues"),  # head rise under recharge (MAR)
+    # CSUB land subsidence (sprint sim-addons): ground compaction in cm, positive
+    # DOWN (subsidence). A sequential hot ramp so a deep bowl reads as intense; a
+    # subsidence run only produces positive values (pumping compaction), so a
+    # 0-based range is correct. Registered so the SubsidenceLayerURI style_preset
+    # validates instead of silently falling back to the percentile default.
+    "continuous_subsidence_cm": ("0,50", "inferno"),  # ground compaction (cm, +down)
     "continuous_hydroperiod_m": ("0,5", "viridis"),  # seasonal water-table range
     # Landlab discarded fields the component chain already computes. Drainage
     # area spans many orders of magnitude -> a high-contrast viridis (the
@@ -2318,6 +2339,7 @@ _STYLE_PRESET_LABELS: dict[str, str] = {
     "continuous_dem": "Elevation",
     "categorical_landcover": "Land Cover",
     "continuous_impervious_surface": "Impervious Surface",
+    "diverging_bed_evolution": "Sediment Deposition",
 }
 
 

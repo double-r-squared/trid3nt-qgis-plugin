@@ -55,10 +55,7 @@ from ..workflows.solve_progress import drive_live_solve_progress
 from ..workflows.run_modflow import (
     MODFLOWWorkflowError,
     build_and_stage_modflow_deck,
-    compose_and_upload_modflow_build_spec,
     is_local_mode,
-    modflow_build_offload_enabled,
-    read_modflow_build_manifest,
     run_modflow_local,
     submit_modflow_run,
 )
@@ -221,47 +218,6 @@ async def run_modflow_job(
 
     staging = None
     try:
-        # --- HEAVY-COMPUTE OFFLOAD (gated OFF by default) -------------------
-        # reports/design/heavy-compute-offload-2026-07-02.md (MODFLOW phase):
-        # when GRACE2_MODFLOW_BUILD_OFFLOAD is on, the FloPy deck BUILD + the
-        # UCN -> plume-COG POSTPROCESS run inside ONE grace2-modflow Batch job
-        # (the former in-agent build_and_stage_modflow_deck + postprocess_modflow
-        # never run here). The agent composes the job_spec, submits+awaits the
-        # combined job, then reads the worker's publish_manifest.json and returns
-        # the register-only PlumeLayerURI. Byte-identical to the legacy path when
-        # unset. Mirrors model_flood_scenario's SFINCS build offload branch.
-        if modflow_build_offload_enabled():
-            build_spec_uri = await asyncio.to_thread(
-                compose_and_upload_modflow_build_spec,
-                run_args,
-                compute_class=compute_class,
-            )
-            from .solver import run_modflow_build_solve
-
-            run_result = await run_modflow_build_solve(
-                build_spec_uri, compute_class=compute_class
-            )
-            if run_result.status != "complete":
-                return {
-                    "status": "error",
-                    "error_code": run_result.error_code or run_result.status.upper(),
-                    "error_message": (
-                        run_result.error_message
-                        or run_result.cancellation_reason
-                        or "MODFLOW build+solve job did not complete"
-                    ),
-                }
-            plume = await asyncio.to_thread(read_modflow_build_manifest, run_result)
-            logger.info(
-                "run_modflow_job (offload) complete run_id=%s "
-                "max_concentration_mgl=%.6g plume_area_km2=%.6g uri=%s",
-                run_result.run_id,
-                plume.max_concentration_mgl,
-                plume.plume_area_km2,
-                plume.uri,
-            )
-            return plume
-
         # --- Step 1: build + stage the deck ---------------------------------
         # audit #4: deck build (FloPy) + subdir reorg + S3/GCS upload are
         # synchronous and CPU/IO-bound. Offload to a worker thread so they do

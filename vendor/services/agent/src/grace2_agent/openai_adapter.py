@@ -68,6 +68,7 @@ the agent starts cleanly on environments where the package is not installed.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -573,6 +574,170 @@ def contents_to_openai_messages(
 # ---------------------------------------------------------------------------
 
 
+#: 429 retry policy (NATE 2026-07-19): OpenRouter free-tier models are a
+#: shared, transiently rate-limited pool - a single 429 mid multi-round tool
+#: turn would otherwise kill the whole turn. The request-time 429 lands BEFORE
+#: any token, so a bounded retry honoring the provider's ``retry_after`` makes
+#: throttled (incl. :free) models survive a tool-heavy turn. env-tunable.
+_RATE_LIMIT_MAX_RETRIES = int(os.environ.get("GRACE2_OPENAI_RATE_LIMIT_RETRIES", "4"))
+_RATE_LIMIT_MAX_WAIT_S = float(os.environ.get("GRACE2_OPENAI_RATE_LIMIT_MAX_WAIT_S", "45"))
+_RATE_LIMIT_BACKOFF_S = (5.0, 15.0, 30.0, 45.0)
+
+
+def _retry_after_seconds(exc: Any, attempt: int) -> float:
+    """Seconds to wait before retrying a 429 - honor the provider's
+    ``Retry-After`` header / ``retry_after_seconds`` metadata when present,
+    else fall back to the backoff schedule. Capped at _RATE_LIMIT_MAX_WAIT_S."""
+    wait: float | None = None
+    resp = getattr(exc, "response", None)
+    hdrs = getattr(resp, "headers", None)
+    if hdrs is not None:
+        try:
+            raw = hdrs.get("retry-after") or hdrs.get("Retry-After")
+            if raw is not None:
+                wait = float(raw)
+        except (TypeError, ValueError):
+            wait = None
+    if wait is None:
+        body = getattr(exc, "body", None)
+        try:
+            meta = (body or {}).get("error", {}).get("metadata", {})
+            ra = meta.get("retry_after_seconds")
+            if ra is not None:
+                wait = float(ra)
+        except (AttributeError, TypeError, ValueError):
+            wait = None
+    if wait is None:
+        wait = _RATE_LIMIT_BACKOFF_S[min(attempt, len(_RATE_LIMIT_BACKOFF_S) - 1)]
+    return max(1.0, min(float(wait), _RATE_LIMIT_MAX_WAIT_S))
+
+
+#: Case-insensitive substrings that mark a TRANSIENT UPSTREAM saturation the
+#: provider (or a shared free-tier worker pool) will recover from - NATE
+#: 2026-07-20: the nemotron :free endpoint surfaced "Upstream error from Nvidia:
+#: ResourceExhausted: Worker local total request limit reached (32/32)" as a
+#: NON-429 openai.APIError, so a single busy moment killed the whole turn
+#: (LLM_UNAVAILABLE) even though the tool had already run + published. These are
+#: the wire-visible signatures of a retryable upstream hiccup (5xx-family / pool
+#: saturation), NOT a bug in our request.
+_TRANSIENT_UPSTREAM_SIGNATURES: tuple[str, ...] = (
+    "resourceexhausted",
+    "worker local total request limit",
+    "temporarily rate-limited",
+    "temporarily rate limited",
+    "overloaded",
+    "over capacity",
+    "please try again",
+    "service unavailable",
+    "bad gateway",
+    "gateway timeout",
+    "502",
+    "503",
+    "504",
+)
+
+
+def _is_transient_upstream(exc: Any) -> bool:
+    """True if ``exc`` is a TRANSIENT upstream error worth retrying with backoff.
+
+    Retry policy (NATE 2026-07-20):
+      (a) a 429 ``RateLimitError`` (kept - honors Retry-After via caller);
+      (b) any ``APIStatusError`` whose HTTP status is >= 500 (upstream 5xx);
+      (c) any ``APIError`` whose message matches a transient-upstream signature
+          (ResourceExhausted / worker-pool-saturation / overloaded / 5xx text).
+
+    Genuine CLIENT errors NEVER retry (retrying is pointless + hides real bugs):
+    400 bad-request (incl. context-length / max-tokens), 401/403 auth, 404, 422.
+    Those propagate unchanged. Connection/timeout errors are NOT classified
+    transient here (unchanged pass-through behavior).
+    """
+    import openai  # noqa: WPS433 -- dep dormant unless the openai provider is on
+
+    # --- Genuine client errors: never retry (checked FIRST so a 400 whose body
+    # happens to contain a transient-looking phrase still propagates). ---
+    if isinstance(
+        exc,
+        (
+            openai.BadRequestError,  # 400 (context-length / max-tokens land here)
+            openai.AuthenticationError,  # 401
+            openai.PermissionDeniedError,  # 403
+            openai.NotFoundError,  # 404
+            openai.UnprocessableEntityError,  # 422
+        ),
+    ):
+        return False
+
+    # --- (a) 429 rate-limit: always transient. ---
+    if isinstance(exc, openai.RateLimitError):
+        return True
+
+    # --- (b) explicit HTTP status >= 500 (upstream 5xx). ---
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        resp = getattr(exc, "response", None)
+        status = getattr(resp, "status_code", None)
+    try:
+        if status is not None and int(status) >= 500:
+            return True
+    except (TypeError, ValueError):
+        pass
+
+    # --- (c) transient-upstream signature match on the message (APIError only,
+    # so we never reclassify a non-openai exception). ---
+    if isinstance(exc, openai.APIError):
+        msg = f"{getattr(exc, 'message', '') or ''} {exc}".lower()
+        if any(sig in msg for sig in _TRANSIENT_UPSTREAM_SIGNATURES):
+            return True
+
+    return False
+
+
+async def _create_stream_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
+    """Open the streaming completion, retrying a request-time TRANSIENT upstream
+    error with backoff (see _RATE_LIMIT_MAX_RETRIES). The error raises at
+    ``create`` before any token is streamed, so retrying here is clean (no
+    partial-stream replay). A 429 honors the provider's Retry-After; other
+    transient upstream errors (5xx / pool saturation - see
+    ``_is_transient_upstream``) use the backoff schedule. Genuine CLIENT errors
+    (400/401/403/404/422, context-length) propagate UNCHANGED. Returns the
+    AsyncStream context manager.
+    """
+    import openai  # noqa: WPS433 -- dep dormant unless the openai provider is on
+
+    last_exc: BaseException | None = None
+    for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
+        try:
+            return await client.chat.completions.create(**kwargs)  # type: ignore[attr-defined]
+        except openai.APIError as exc:
+            # Non-transient (genuine client error / unknown) -> propagate as-is.
+            if not _is_transient_upstream(exc):
+                raise
+            last_exc = exc
+            if attempt >= _RATE_LIMIT_MAX_RETRIES:
+                break
+            if isinstance(exc, openai.RateLimitError):  # 429 honors Retry-After
+                wait = _retry_after_seconds(exc, attempt)
+                logger.warning(
+                    "openai 429 rate-limited (attempt %d/%d) - sleeping %.0fs then "
+                    "retrying (model=%s)", attempt + 1, _RATE_LIMIT_MAX_RETRIES,
+                    wait, kwargs.get("model"),
+                )
+            else:  # transient 5xx / upstream-pool saturation -> backoff schedule
+                wait = _RATE_LIMIT_BACKOFF_S[
+                    min(attempt, len(_RATE_LIMIT_BACKOFF_S) - 1)
+                ]
+                wait = max(1.0, min(wait, _RATE_LIMIT_MAX_WAIT_S))
+                logger.warning(
+                    "openai transient upstream error (attempt %d/%d) - sleeping "
+                    "%.0fs then retrying (model=%s): %.180s",
+                    attempt + 1, _RATE_LIMIT_MAX_RETRIES, wait,
+                    kwargs.get("model"), str(exc),
+                )
+            await asyncio.sleep(wait)
+    assert last_exc is not None
+    raise last_exc
+
+
 async def _stream_one_round(
     client: Any, kwargs: dict[str, Any]
 ) -> AsyncIterator[StreamEvent]:
@@ -585,7 +750,7 @@ async def _stream_one_round(
     # Structure: {index: {"id": str, "name": str, "args_buf": str}}
     tool_call_accumulators: dict[int, dict[str, Any]] = {}
 
-    async with await client.chat.completions.create(**kwargs) as stream:  # type: ignore[attr-defined]
+    async with await _create_stream_with_retry(client, kwargs) as stream:  # type: ignore[attr-defined]
         async for chunk in stream:
             choices = getattr(chunk, "choices", None) or []
             for choice in choices:

@@ -21,3 +21,7 @@ vendor/services/agent/build/
 .env.local
 .env.*.local
 docs/proof/
+# Nutshell — local server state and API key
+.nutshell-api-key
+.nutshell-server.pid
+.nutshell-server.log

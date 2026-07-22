@@ -306,11 +306,10 @@ def _maybe_bind_dev_persistence() -> None:
         backend = resolve_persistence_backend()
         log.info(
             "dev Persistence bound (backend=%s; %s). "
-            "GRACE2_PERSISTENCE_BACKEND=dynamodb for DynamoDB, "
             "GRACE2_DEV_PERSISTENCE=0 to disable, "
             "GRACE2_MONGO_MCP_STDIO=1 for live MCP.",
             backend,
-            _default_dev_persistence_dir() if backend == "file" else "DynamoDB tables",
+            _default_dev_persistence_dir(),
         )
     except Exception as exc:  # noqa: BLE001 — startup must not abort on dev-fallback
         log.warning("dev Persistence bind failed: %s", exc)
@@ -452,22 +451,11 @@ def run(argv: list[str] | None = None) -> int:
     # ``GRACE2_MONGO_MCP_STDIO=1`` and this is a no-op.
     _maybe_bind_dev_persistence()
 
-    # GCP→AWS migration: initialize AWS Cognito ID-token verification (JWKS
-    # prefetch) for the WS connect handshake (Appendix H.5). The function name
-    # ``init_firebase_admin`` is retained at this call site to minimize the
-    # migration blast radius; it now drives the Cognito init (no GCP ADC). It
-    # is best-effort + log-only — when no Cognito pool is configured
-    # (GRACE2_COGNITO_USER_POOL_ID unset, the dev/demo default) or the public
-    # JWKS prefetch hiccups, the connect handshake transparently falls through
-    # to the anonymous-fallback path (Appendix H.3) and the agent still serves.
-    from .auth_handshake import init_firebase_admin
-
-    cognito_ready = init_firebase_admin()
-    logger.info(
-        "cognito verification init: ready=%s (anonymous-fallback path always "
-        "available)",
-        cognito_ready,
-    )
+    # TRID3NT local-only build: cloud Cognito ID-token verification is removed.
+    # Every WS connect resolves to the single fixed local user (see
+    # ``auth_handshake._resolve_local_single_user``), so there is no token-
+    # verification init to run at startup. (Cloud auth is preserved in git
+    # history for a future re-weave.)
 
     if startup_only:
         logger.info("--startup-only: tool registry verified; exiting without serving")

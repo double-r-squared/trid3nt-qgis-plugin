@@ -577,6 +577,19 @@ def _parse_ibtracs_csv(
         if pres is None:
             pres = _blank_to_none_float(_col(row, "WMO_PRES"))
         cat = _blank_to_none_int(_col(row, "USA_SSHS"))
+        # SPIDERWEB (2026-07-19): carry the ATCF wind-structure columns per fix so
+        # the Holland parametric (workflows/sfincs_spiderweb) can size the RMW +
+        # outer pressure + wind-radii. All blank-tolerant (frequently empty for
+        # older/weaker fixes -> the spiderweb builder falls back to Knaff-Zehr /
+        # standard atmosphere and SURFACES the fallback, never fabricates radii).
+        # USA_RMW / USA_ROCI / USA_R34_* are nautical miles; USA_POCI is mb.
+        rmw_nmi = _blank_to_none_float(_col(row, "USA_RMW"))
+        poci_mb = _blank_to_none_float(_col(row, "USA_POCI"))
+        roci_nmi = _blank_to_none_float(_col(row, "USA_ROCI"))
+        r34_ne = _blank_to_none_float(_col(row, "USA_R34_NE"))
+        r34_se = _blank_to_none_float(_col(row, "USA_R34_SE"))
+        r34_sw = _blank_to_none_float(_col(row, "USA_R34_SW"))
+        r34_nw = _blank_to_none_float(_col(row, "USA_R34_NW"))
         storms.setdefault(sid, []).append(
             {
                 "sid": sid,
@@ -591,6 +604,14 @@ def _parse_ibtracs_csv(
                 "pres_mb": pres,
                 "category": cat,
                 "status": _col(row, "USA_STATUS").strip() or None,
+                # Wind-structure (spiderweb) columns — blank-tolerant.
+                "rmw_nmi": rmw_nmi,
+                "poci_mb": poci_mb,
+                "roci_nmi": roci_nmi,
+                "r34_ne_nmi": r34_ne,
+                "r34_se_nmi": r34_se,
+                "r34_sw_nmi": r34_sw,
+                "r34_nw_nmi": r34_nw,
             }
         )
     return storms
@@ -1145,7 +1166,11 @@ def fetch_storm_tracks(
         ``max_category_label``, ``start_time``, ``end_time``, ``n_fixes``.
         Historical point props: ``sid``, ``name``, ``season``, ``basin``,
         ``iso_time``, ``nature``, ``wind_kt``, ``pres_mb``, ``category``,
-        ``category_label``, ``status``.
+        ``category_label``, ``status``, plus the wind-structure columns
+        (blank-tolerant): ``rmw_nmi`` (USA_RMW), ``poci_mb`` (USA_POCI),
+        ``roci_nmi`` (USA_ROCI), ``r34_ne_nmi`` / ``r34_se_nmi`` /
+        ``r34_sw_nmi`` / ``r34_nw_nmi`` (USA_R34_*) — consumed by the
+        hurricane-spiderweb parametric (``model_flood_scenario`` storm branch).
         Active point props: ``id``, ``name``, ``classification``,
         ``intensity_kt``, ``pressure_mb``, ``movement_dir_deg``,
         ``movement_speed_kt``, ``last_update``, ``tau_h`` (0 = current

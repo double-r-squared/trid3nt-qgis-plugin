@@ -427,22 +427,15 @@ def stage_elmfire_manifest(
 ) -> ElmfireStaging:
     """Stage the run_solver manifest for the built deck; return the staging.
 
-    Backend-aware (``tools.solver.solver_backend()``):
-
-    - ``local-docker`` (the FIRE-3 execution lane): the manifest is written to
-      ``<deck_dir>/manifest.json`` with ``file://`` input refs.
-      ``launch_local_solver`` copies each input into the rundir by scheme and
-      the docker spec runs the FIRE-1 image against the mounted rundir. No
-      object store is touched at staging time.
-    - anything else (``aws-batch`` — the FIRE-4 seam): deck files + manifest
-      upload to the cache bucket, mirroring ``stage_geoclaw_manifest``. This
-      lane stays inert until FIRE-4 registers the ELMFIRE job definition.
+    The manifest is written to ``<deck_dir>/manifest.json`` with ``file://``
+    input refs. ``launch_local_solver`` copies each input into the rundir by
+    scheme and the docker spec runs the FIRE-1 image against the mounted rundir.
+    No object store is touched at staging time. (The AWS Batch staging lane was
+    removed with the batch arm; local-docker is the only backend.)
 
     Raises ``ElmfireWorkflowError("ELMFIRE_STAGING_FAILED")`` on any staging
     failure (a run cannot dispatch without a reachable manifest — fail loudly).
     """
-    from ..tools.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
-
     deck_dir = Path(deck_dir)
     rid = run_id or new_ulid()
     grid = deck_manifest.get("grid") or {}
@@ -469,75 +462,22 @@ def stage_elmfire_manifest(
         },
     }
 
-    if solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER:
-        inputs = [
-            {"gs_uri": f"file://{p}", "dest": f"inputs/{p.name}"} for p in files
-        ]
-        manifest_dict["inputs"] = inputs
-        manifest_path = deck_dir / "manifest.json"
-        try:
-            manifest_path.write_text(json.dumps(manifest_dict, indent=2))
-        except OSError as exc:
-            raise ElmfireWorkflowError(
-                "ELMFIRE_STAGING_FAILED",
-                f"could not write local manifest {manifest_path}: {exc}",
-            ) from exc
-        manifest_uri = f"file://{manifest_path}"
-        logger.info(
-            "stage_elmfire_manifest (local) run_id=%s deck=%s files=%d -> %s",
-            rid, deck_dir, len(files), manifest_uri,
-        )
-        return ElmfireStaging(
-            run_id=rid,
-            manifest_uri=manifest_uri,
-            deck_dir=str(deck_dir),
-            deck_manifest=deck_manifest,
-            run_args=run_args,
-            n_cells=n_cells,
-            staged_inputs=inputs,
-        )
-
-    # --- aws-batch lane (FIRE-4 seam): upload deck + manifest to the cache
-    # bucket, exactly like stage_geoclaw_manifest (same client, same scheme).
-    from ..tools.cache import storage_scheme
-    from ..tools.solver import _get_s3_client
-
-    scheme = storage_scheme()
-    cache_bucket = os.environ.get(
-        "GRACE2_CACHE_BUCKET", "grace-2-hazard-prod-cache"
-    )
-    prefix = f"cache/static-30d/elmfire_setup/{rid}/"
-    inputs = []
+    inputs = [
+        {"gs_uri": f"file://{p}", "dest": f"inputs/{p.name}"} for p in files
+    ]
+    manifest_dict["inputs"] = inputs
+    manifest_path = deck_dir / "manifest.json"
     try:
-        s3 = _get_s3_client()
-        for p in files:
-            key = f"{prefix}inputs/{p.name}"
-            s3.upload_file(str(p), cache_bucket, key)
-            inputs.append(
-                {
-                    "gs_uri": f"{scheme}://{cache_bucket}/{key}",
-                    "dest": f"inputs/{p.name}",
-                }
-            )
-        manifest_dict["inputs"] = inputs
-        manifest_key = f"{prefix}manifest.json"
-        s3.put_object(
-            Bucket=cache_bucket,
-            Key=manifest_key,
-            Body=json.dumps(manifest_dict, indent=2).encode("utf-8"),
-            ContentType="application/json",
-        )
-    except Exception as exc:  # noqa: BLE001
+        manifest_path.write_text(json.dumps(manifest_dict, indent=2))
+    except OSError as exc:
         raise ElmfireWorkflowError(
             "ELMFIRE_STAGING_FAILED",
-            f"failed to stage the ELMFIRE deck to {scheme}://{cache_bucket}/"
-            f"{prefix}: {exc}",
-            details={"run_id": rid},
+            f"could not write local manifest {manifest_path}: {exc}",
         ) from exc
-    manifest_uri = f"{scheme}://{cache_bucket}/{manifest_key}"
+    manifest_uri = f"file://{manifest_path}"
     logger.info(
-        "stage_elmfire_manifest (batch) run_id=%s files=%d -> %s",
-        rid, len(files), manifest_uri,
+        "stage_elmfire_manifest (local) run_id=%s deck=%s files=%d -> %s",
+        rid, deck_dir, len(files), manifest_uri,
     )
     return ElmfireStaging(
         run_id=rid,
@@ -638,16 +578,15 @@ def elmfire_local_spec() -> Any:
 def register_elmfire_solver() -> None:
     """Register ``'elmfire'`` in ``SOLVER_WORKFLOW_REGISTRY`` (idempotent).
 
-    Maps to the AWS-Batch sentinel — the FIRE-4 seam. ``run_solver`` only
-    needs the KEY present to dispatch; the backend seam routes local-docker
-    runs to :func:`elmfire_local_spec` and Batch runs to
-    ``_resolve_batch_job_def('elmfire')`` (env
-    ``GRACE2_AWS_BATCH_JOB_DEF_ELMFIRE``, inert until FIRE-4 sets it).
+    ``run_solver`` only needs the KEY present to dispatch; the local-docker
+    backend seam routes runs to :func:`elmfire_local_spec`. (The registry value
+    is a presence-gate only; the local sentinel is used since the AWS Batch arm
+    was removed.)
     """
-    from ..tools.solver import AWS_BATCH_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
     SOLVER_WORKFLOW_REGISTRY.setdefault(
-        ELMFIRE_SOLVER_NAME, AWS_BATCH_WORKFLOW_NAME
+        ELMFIRE_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME
     )
 
 

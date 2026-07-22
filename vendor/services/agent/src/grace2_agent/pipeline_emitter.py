@@ -2627,7 +2627,7 @@ async def mint_dispatch_and_sim_cards(
     if emitter is None:
         return None
     job_id = str(getattr(handle, "workflows_execution_id", "") or "")
-    backend = str(getattr(handle, "workflow_name", "") or "aws-batch")
+    backend = str(getattr(handle, "workflow_name", "") or "local-docker")
     try:
         # Card 1 "Dispatch": a normal tool step recording the submit.
         dispatch_label = f"Dispatch {solver} solve"

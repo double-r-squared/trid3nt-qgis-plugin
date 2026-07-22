@@ -921,3 +921,156 @@ class TestMaxTokensCap:
         # together -- a single env knob, never two that can drift apart.
         assert captured["max_tokens"] == 512
         assert reserve_output_tokens() == 512
+
+
+# --------------------------------------------------------------------------- #
+# A1 (NATE 2026-07-20): retry TRANSIENT UPSTREAM errors, not just 429.
+#
+# The nemotron :free endpoint surfaced "Upstream error from Nvidia:
+# ResourceExhausted: Worker local total request limit reached (32/32)" as a
+# NON-429 openai.APIError (shared free workers momentarily saturated). Pre-fix
+# only RateLimitError was retried, so this died as a terminal LLM_UNAVAILABLE
+# even though the tool had already run + published. These tests pin the extended
+# retry policy in _create_stream_with_retry / _is_transient_upstream.
+# --------------------------------------------------------------------------- #
+class TestTransientUpstreamRetry:
+    """_create_stream_with_retry retries transient upstream errors + a 429, but
+    propagates genuine client (4xx) errors unchanged."""
+
+    def _req(self):
+        import httpx
+
+        return httpx.Request("POST", "http://localhost:11434/v1/chat/completions")
+
+    def _resp(self, status: int):
+        import httpx
+
+        return httpx.Response(status, request=self._req())
+
+    def _client(self, side_effects):
+        client = MagicMock()
+        client.chat.completions.create = AsyncMock(side_effect=side_effects)
+        return client
+
+    async def _run(self, side_effects, monkeypatch):
+        import grace2_agent.openai_adapter as oa
+
+        async def _nosleep(_seconds):  # noqa: ANN001, ANN202
+            return None
+
+        monkeypatch.setattr(oa.asyncio, "sleep", _nosleep)
+        client = self._client(side_effects)
+        result = await oa._create_stream_with_retry(
+            client, {"model": "nemotron:free"}
+        )
+        return result, client
+
+    @pytest.mark.asyncio
+    async def test_resource_exhausted_apierror_retried_then_succeeds(
+        self, monkeypatch
+    ):
+        """A non-429 ResourceExhausted APIError is retried, then succeeds."""
+        import openai
+
+        exc = openai.APIError(
+            "Upstream error from Nvidia: ResourceExhausted: Worker local total "
+            "request limit reached (32/32)",
+            self._req(),
+            body=None,
+        )
+        sentinel = object()
+        result, client = await self._run([exc, sentinel], monkeypatch)
+        assert result is sentinel
+        assert client.chat.completions.create.await_count == 2  # retried once
+
+    @pytest.mark.asyncio
+    async def test_upstream_5xx_status_error_retried_then_succeeds(
+        self, monkeypatch
+    ):
+        """An APIStatusError with HTTP status >= 500 is retried."""
+        import openai
+
+        exc = openai.APIStatusError(
+            "503 upstream service unavailable",
+            response=self._resp(503),
+            body=None,
+        )
+        sentinel = object()
+        result, client = await self._run([exc, sentinel], monkeypatch)
+        assert result is sentinel
+        assert client.chat.completions.create.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_still_retried(self, monkeypatch):
+        """A 429 RateLimitError is still retried (regression guard)."""
+        import openai
+
+        exc = openai.RateLimitError(
+            "429 too many requests", response=self._resp(429), body=None
+        )
+        sentinel = object()
+        result, client = await self._run([exc, sentinel], monkeypatch)
+        assert result is sentinel
+        assert client.chat.completions.create.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_bad_request_400_not_retried_propagates(self, monkeypatch):
+        """A genuine 400 BadRequestError (e.g. context-length) propagates
+        UNCHANGED with no retry."""
+        import openai
+
+        exc = openai.BadRequestError(
+            "This model's maximum context length is 8192 tokens",
+            response=self._resp(400),
+            body=None,
+        )
+        sentinel = object()
+        with pytest.raises(openai.BadRequestError):
+            await self._run([exc, sentinel], monkeypatch)
+
+    @pytest.mark.asyncio
+    async def test_auth_401_not_retried_propagates(self, monkeypatch):
+        """A 401 auth error propagates unchanged (retrying is pointless)."""
+        import openai
+
+        exc = openai.AuthenticationError(
+            "invalid api key", response=self._resp(401), body=None
+        )
+        with pytest.raises(openai.AuthenticationError):
+            await self._run([exc, object()], monkeypatch)
+
+    def test_is_transient_upstream_classification(self):
+        """Unit-level truth table for _is_transient_upstream."""
+        import openai
+        from grace2_agent.openai_adapter import _is_transient_upstream
+
+        req = self._req()
+        # Transient:
+        assert _is_transient_upstream(
+            openai.APIError("ResourceExhausted: worker local total request "
+                            "limit reached", req, body=None)
+        )
+        assert _is_transient_upstream(
+            openai.APIError("provider is overloaded, please try again", req,
+                            body=None)
+        )
+        assert _is_transient_upstream(
+            openai.RateLimitError("429", response=self._resp(429), body=None)
+        )
+        assert _is_transient_upstream(
+            openai.APIStatusError("502 bad gateway", response=self._resp(502),
+                                  body=None)
+        )
+        # NOT transient (genuine client errors):
+        assert not _is_transient_upstream(
+            openai.BadRequestError("max tokens", response=self._resp(400),
+                                   body=None)
+        )
+        assert not _is_transient_upstream(
+            openai.NotFoundError("no such model", response=self._resp(404),
+                                 body=None)
+        )
+        assert not _is_transient_upstream(
+            openai.PermissionDeniedError("forbidden", response=self._resp(403),
+                                         body=None)
+        )

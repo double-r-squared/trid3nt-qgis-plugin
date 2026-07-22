@@ -119,28 +119,32 @@ async def run_river_seepage_job(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> SeepageLayerURI | dict[str, Any]:
-    """Run a MODFLOW 6 river-coupled groundwater seepage + solute simulation.
+    """GROUNDWATER <-> river seepage EXCHANGE (MODFLOW 6 RIV): gaining/losing reaches, how much leaks aquifer<->river.
 
-    Drapes a river polyline onto a MODFLOW 6 grid as a RIV head-dependent
+    NOT for surface-water transport down the channel: "a dye plume travels
+    downstream", "how far does the dye/contaminant travel down the river", "a
+    spill moving down the river" is ``run_telemac`` (surface flow IN the river),
+    NOT this tool. This tool models the GROUNDWATER <-> river EXCHANGE (how much
+    water leaks between the aquifer and the river, gaining vs losing reaches), NOT
+    a plume moving down the channel.
+
+    It drapes a river polyline onto a MODFLOW 6 grid as a RIV head-dependent
     river<->aquifer flux boundary, runs the GWF (steady-state flow) + MF6-GWT
     (transient solute transport) solver, and produces a DIVERGING gaining/losing
     river-seepage layer (where the river leaks into the aquifer vs draws baseflow
-    out of it) plus the contaminant plume that entered with the seepage.
+    out of it) plus the contaminant that entered the aquifer with the seepage.
 
     Use this when:
         - The user wants to model how a RIVER exchanges water with the aquifer
-          (gaining vs losing reaches, baseflow, river-bed seepage).
-        - A contaminant enters the groundwater ALONG a river / stream (e.g. a
-          discharge or spill into a waterway that seeps into the aquifer).
+          (gaining vs losing reaches, baseflow, river-bed seepage flux).
+        - A contaminant enters the GROUNDWATER ALONG a river / stream (e.g. a
+          discharge that seeps into the aquifer, not one riding the surface
+          current downstream).
         - The user asks "is this reach gaining or losing", "how much does the
           river leak into the aquifer", or to model river-coupled groundwater.
 
-    Do NOT use this for:
-        - A dye / contaminant / tracer spill that travels DOWNSTREAM in the river
-          SURFACE water (the plume moving down the channel itself, not seeping into
-          the aquifer) — use ``run_telemac``. This tool is GROUNDWATER seepage
-          (water UNDER the ground); ``run_telemac`` is the surface flow IN the
-          river.
+    Do NOT use this for (see the routing block above):
+        - Surface-water dye / tracer transport down the channel — ``run_telemac``.
         - A point spill with NO river coupling (use ``run_modflow_job``).
         - Surface-water / inundation flooding (use ``run_model_flood_scenario``
           — that is SFINCS).

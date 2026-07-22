@@ -135,6 +135,25 @@ PHYSICS_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {
                 "curve [cd,cd,cd] with cdnrb=3 (0 = keep SFINCS default formula)."
             ),
         },
+        # CONSTITUTIVE physics (advanced / demo-default). The CONSTANT land/sea
+        # Manning fallback for cells the NLCD reclass does not cover. Defaults
+        # EQUAL HydroMT's setup_manning_roughness defaults -> unset omits the
+        # line -> byte-identical. Low overall impact: the NLCD path is already
+        # site-specific; this only bites uncovered cells / the no-landcover case.
+        "manning_land": {
+            "type": float,
+            "range": (0.01, 0.2),
+            "default": 0.04,
+            "deck_target": "sfincs.yaml:setup_manning_roughness:manning_land",
+            "doc": "Constant land Manning n fallback (HydroMT default 0.04).",
+        },
+        "manning_sea": {
+            "type": float,
+            "range": (0.005, 0.1),
+            "default": 0.02,
+            "deck_target": "sfincs.yaml:setup_manning_roughness:manning_sea",
+            "doc": "Constant open-water Manning n fallback (HydroMT default 0.02).",
+        },
     },
     # --- SWAN: whitecapping / breaking-gamma / bottom-friction / quadruplets. ---
     "swan": {
@@ -204,6 +223,32 @@ PHYSICS_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {
             "deck_target": "swmm.inp:OPTIONS:THREADS",
             "doc": "Solver thread count (raises the resolution ceiling).",
         },
+        # CONSTITUTIVE physics (advanced / demo-default). Defaults EQUAL the
+        # swmm_mesh_builder SubArea/SubCatchment literals -> unset = byte-identical.
+        "n_imperv": {
+            "type": float,
+            "range": (0.005, 0.05),
+            "default": 0.012,
+            "deck_target": "swmm.inp:SUBAREAS:N-Imperv",
+            "doc": "Impervious-area Manning n (overland roughness); deck default 0.012.",
+        },
+        "n_perv": {
+            "type": float,
+            "range": (0.05, 0.8),
+            "default": 0.1,
+            "deck_target": "swmm.inp:SUBAREAS:N-Perv",
+            "doc": "Pervious-area Manning n (overland roughness); deck default 0.1.",
+        },
+        "imperviousness_pct": {
+            "type": float,
+            "range": (0.0, 100.0),
+            "default": 60.0,
+            "deck_target": "swmm.inp:SUBCATCHMENTS:%Imperv",
+            "doc": (
+                "Subcatchment percent impervious; unset keeps the infil-method "
+                "toggle (100 for no-infiltration, else 60)."
+            ),
+        },
     },
     # --- MODFLOW 6 GWT: sorption (Kd) / first-order decay / dispersivity. ---
     "modflow": {
@@ -257,6 +302,49 @@ PHYSICS_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {
             "default": 1.0,
             "deck_target": "GwtDsp:ath1",
             "doc": "Transverse dispersivity (m).",
+        },
+        # CONSTITUTIVE: vertical dispersivity atv. Default EQUALS the historical
+        # ratio-locked value (alh 10 x vertical ratio 0.01 = 0.1) -> unset =
+        # byte-identical (same phys.get seam as alh/ath1 in the transport deck).
+        "vert_dispersivity_m": {
+            "type": float,
+            "range": (0.001, 100.0),
+            "default": 0.1,
+            "deck_target": "GwtDsp:atv",
+            "doc": "Vertical dispersivity (m); default 0.1 (ratio-locked to alh).",
+        },
+        # CONSTITUTIVE: the west->east regional head gradient that drives the CHD
+        # boundary = the single biggest flow driver in every CHD-building
+        # archetype. Default EQUALS the historical REGIONAL_GRADIENT constant so
+        # an unset run omits the override -> byte-identical (same phys.get seam as
+        # alh/ath1; head_west = AQUIFER_TOP_M + gradient * domain_width_m).
+        "regional_gradient": {
+            "type": float,
+            "range": (1e-4, 0.02),
+            "default": 0.002,
+            "deck_target": "GwfChd:head (west->east head build)",
+            "doc": "Regional west->east hydraulic head gradient driving the CHD boundary (dominant flow driver); default 0.002.",
+        },
+        # CONSTITUTIVE: SFR reach streambed hydraulic conductivity (reach rhk) =
+        # stream<->aquifer leakage. Default EQUALS DEFAULT_SFR_STREAMBED_K_M_DAY so
+        # an unset stream_depletion / river-seepage run is byte-identical; an
+        # explicit streambed_k_m_day run-arg still wins over this override.
+        "streambed_k_m_day": {
+            "type": float,
+            "range": (1e-3, 100.0),
+            "default": 0.5,
+            "deck_target": "GwfSfr:packagedata:rhk",
+            "doc": "SFR reach streambed hydraulic conductivity (m/day) controlling stream<->aquifer leakage; default 0.5.",
+        },
+        # CONSTITUTIVE: SFR reach Manning roughness (reach man) -> stage-discharge.
+        # Default EQUALS DEFAULT_SFR_MANNING_N so an unset run is byte-identical;
+        # an explicit manning_n run-arg still wins over this override.
+        "sfr_manning_n": {
+            "type": float,
+            "range": (0.01, 0.2),
+            "default": 0.035,
+            "deck_target": "GwfSfr:packagedata:man",
+            "doc": "SFR reach Manning roughness coefficient (stage-discharge relation); default 0.035.",
         },
     },
     # --- GeoClaw: solver order / limiter / CFL / source-splitting. ---
@@ -326,6 +414,52 @@ PHYSICS_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {
             "default": 10.0,
             "deck_target": "job.ini:area_source_discretization",
             "doc": "Area-source discretization step (km).",
+        },
+    },
+    # --- TELEMAC-2D river dye/tracer: the constitutive CONSTANTS the deck pins
+    # (TELEMAC-PHYS-1). All four defaults EQUAL the historical author_deck
+    # literals so validate_and_resolve_physics(None) -> {} leaves the deck
+    # byte-identical; a set value flows to the ReachConfig field -> deck line. ---
+    "telemac": {
+        "friction_coefficient": {
+            "type": float,
+            "range": (10.0, 90.0),
+            "default": 33.0,
+            "deck_target": "t2d.cas:FRICTION COEFFICIENT",
+            "doc": (
+                "Bed roughness coefficient (Strickler Ks by default) -> flow "
+                "velocity; advanced/demo-default lever (deck default 33)."
+            ),
+        },
+        "friction_law": {
+            "type": int,
+            "range": (2, 4),
+            "default": 3,
+            "deck_target": "t2d.cas:LAW OF BOTTOM FRICTION",
+            "doc": (
+                "Bottom-friction law (2=Chezy, 3=Strickler, 4=Manning); changes "
+                "how friction_coefficient is interpreted (deck default 3)."
+            ),
+        },
+        "velocity_diffusivity": {
+            "type": float,
+            "range": (1e-3, 10.0),
+            "default": 0.1,
+            "deck_target": "t2d.cas:VELOCITY DIFFUSIVITY",
+            "doc": (
+                "Turbulent momentum diffusivity nu_t (m2/s); controls jet/wake "
+                "spread (advanced/demo-default lever, deck default 0.1)."
+            ),
+        },
+        "tracer_diffusivity": {
+            "type": float,
+            "range": (1e-3, 10.0),
+            "default": 0.1,
+            "deck_target": "t2d.cas:COEFFICIENT FOR DIFFUSION OF TRACERS",
+            "doc": (
+                "Dye/tracer diffusivity (m2/s); directly sets the plume spread "
+                "(advanced/demo-default lever, deck default 0.1)."
+            ),
         },
     },
     # --- Landlab: component-chain numeric knobs (overland / landslide). ---

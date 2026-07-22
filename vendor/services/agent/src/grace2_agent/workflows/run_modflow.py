@@ -126,7 +126,6 @@ __all__ = [
     "submit_modflow_run",
     "run_modflow_local",
     "is_local_mode",
-    "is_batch_mode",
     "register_modflow_solver",
     "MODFLOW_SOLVER_NAME",
     "MODFLOW_WORKFLOW_NAME",
@@ -135,11 +134,9 @@ __all__ = [
     "set_mf6_binary",
     "build_modflow_deck",  # re-exported adapter alias (engine, job-0221)
     # Heavy-compute offload (reports/design/heavy-compute-offload-2026-07-02.md).
-    "modflow_build_offload_enabled",
     "compose_and_upload_modflow_build_spec",
     "read_modflow_build_manifest",
     # Archetype offload (GRACE2_MODFLOW_ARCHETYPE_OFFLOAD).
-    "modflow_archetype_offload_enabled",
     "read_modflow_archetype_manifest",
 ]
 
@@ -320,58 +317,6 @@ def is_local_mode() -> bool:
         "yes",
         "on",
     }
-
-
-def is_batch_mode() -> bool:
-    """True when the GENERIC AWS Batch seam should drive the MODFLOW solve.
-
-    The Batch path is INERT by default - it only activates when BOTH:
-
-      1. the shared solver backend is ``aws-batch`` (``solver_backend()`` -
-         i.e. ``GRACE2_SOLVER_BACKEND`` is unset or ``aws-batch``; NOT
-         ``local-docker``), AND
-      2. a MODFLOW-SPECIFIC Batch job-definition is resolvable - the per-solver
-         env ``GRACE2_AWS_BATCH_JOB_DEF_MODFLOW`` (the knob NATE flips after
-         ``tofu apply``) or an in-code ``SOLVER_BATCH_JOBDEF_REGISTRY['modflow']``
-         default.
-
-    The generic ``GRACE2_AWS_BATCH_JOB_DEF`` fallback is DELIBERATELY EXCLUDED
-    from this gate: the live agent box sets ``GRACE2_AWS_BATCH_JOB_DEF=grace2-sfincs``
-    (the SFINCS image's job-def, see infra/aws-batch/RUNBOOK.md), so honoring the
-    generic fallback would cross-route a MODFLOW run to the SFINCS container. The
-    gate requires the MODFLOW-OWN job-def so MODFLOW stays on the local-exec path
-    until NATE provisions + sets ``GRACE2_AWS_BATCH_JOB_DEF_MODFLOW`` - ZERO
-    regression on the current deployment. (The actual ``run_solver`` submit still
-    re-resolves via ``_resolve_batch_job_def`` once this gate opens, so the wired
-    MODFLOW job-def is what's submitted.)
-
-    ``is_local_mode`` (``GRACE2_MODFLOW_LOCAL``, the foreground dev seam) is
-    checked FIRST by the tool wrapper and is independent of this gate.
-    """
-    try:
-        from ..tools.solver import (
-            SOLVER_BACKEND_AWS_BATCH,
-            SOLVER_BATCH_JOBDEF_REGISTRY,
-            solver_backend,
-        )
-    except Exception:  # noqa: BLE001 - solver module unavailable -> stay local
-        return False
-    if solver_backend() != SOLVER_BACKEND_AWS_BATCH:
-        return False
-    # Mirror _resolve_batch_job_def's per-solver-env key derivation, but ONLY
-    # the MODFLOW-specific tiers (per-solver env + in-code registry) - NOT the
-    # generic GRACE2_AWS_BATCH_JOB_DEF fallback (which points at the SFINCS
-    # image on the live box).
-    key = "".join(
-        c if c.isalnum() else "_" for c in MODFLOW_SOLVER_NAME.strip().upper()
-    )
-    per_solver = (os.environ.get(f"GRACE2_AWS_BATCH_JOB_DEF_{key}") or "").strip()
-    if per_solver:
-        return True
-    registry_default = (
-        SOLVER_BATCH_JOBDEF_REGISTRY.get(MODFLOW_SOLVER_NAME) or ""
-    ).strip()
-    return bool(registry_default)
 
 
 def register_modflow_solver() -> None:
@@ -772,6 +717,24 @@ def build_and_stage_modflow_deck(
             et_max_rate_m_day=getattr(run_args, "et_max_rate_m_day", None),
             et_extinction_depth_m=getattr(run_args, "et_extinction_depth_m", None),
             specific_yield=getattr(run_args, "specific_yield", None),
+            # --- module wave: stream_depletion SFR forcing (demo-defaulted) --- #
+            # The river polyline itself is resolved into ``river_kwargs`` above
+            # (from run_args.river_geometry_uri); these four are the SFR-specific
+            # demo forcing fields the adapter drapes onto the reaches.
+            river_inflow_m3_s=getattr(run_args, "river_inflow_m3_s", None),
+            river_width_m=getattr(run_args, "river_width_m", None),
+            streambed_k_m_day=getattr(run_args, "streambed_k_m_day", None),
+            manning_n=getattr(run_args, "manning_n", None),
+            # --- module wave: land_subsidence CSUB forcing (demo-defaulted) --- #
+            # The four CSUB interbed/storage demo-default overrides the adapter
+            # drapes onto the pumped footprint; ignored unless the archetype is
+            # "land_subsidence".
+            csub_ssv_inelastic_m=getattr(run_args, "csub_ssv_inelastic_m", None),
+            csub_sse_elastic_m=getattr(run_args, "csub_sse_elastic_m", None),
+            csub_interbed_thick_frac=getattr(
+                run_args, "csub_interbed_thick_frac", None
+            ),
+            csub_cg_ske_m=getattr(run_args, "csub_cg_ske_m", None),
         )
 
     # --- 1b. advanced-physics overrides (levers STEP 3) ---------------------
@@ -869,6 +832,23 @@ def build_and_stage_modflow_deck(
         "mfsim.lst",
         f"**/{GWT_UCN_FILENAME}",
         "**/*.lst",
+        # module wave: stream_depletion SFR outputs (the postprocess parses the
+        # obs csv; the .stg/.bud are belt-and-suspenders binary outputs).
+        f"{gwf_name}.sfr.obs.csv",
+        f"{gwf_name}.sfr.stg",
+        f"{gwf_name}.sfr.bud",
+        "*.sfr.obs.csv",
+        "*.sfr.stg",
+        "*.sfr.bud",
+        # module wave: land_subsidence CSUB outputs (the postprocess reads the
+        # z-displacement grid + hds + obs csv; the compaction grid is a
+        # belt-and-suspenders binary output).
+        f"{gwf_name}.csub.zdisp.bin",
+        f"{gwf_name}.csub.compaction.bin",
+        f"{gwf_name}.csub.obs.csv",
+        "*.csub.zdisp.bin",
+        "*.csub.compaction.bin",
+        "*.csub.obs.csv",
     ]
     # job-0292b: scheme-aware deck prefix. ``cache.storage_scheme()`` returns
     # ``"gs"`` by default (byte-identical pre-job-0292b URI) and ``"s3"``
@@ -977,22 +957,6 @@ def build_and_stage_modflow_deck(
 # --------------------------------------------------------------------------- #
 
 
-def modflow_build_offload_enabled() -> bool:
-    """True when the MODFLOW deck build + plume postprocess should run on Batch.
-
-    Gated OFF by default (``GRACE2_MODFLOW_BUILD_OFFLOAD`` unset) so the composer
-    stays byte-identical to the legacy in-agent path. A truthy value
-    (``1``/``on``/``true``/``yes``) activates the combined build+solve+postprocess
-    Batch job. EXACT mirror of ``model_flood_scenario._sfincs_build_offload_enabled``.
-    """
-    return (os.environ.get("GRACE2_MODFLOW_BUILD_OFFLOAD") or "").strip().lower() in {
-        "1",
-        "on",
-        "true",
-        "yes",
-    }
-
-
 def _run_args_to_deck_kwargs(run_args: MODFLOWRunArgs) -> dict[str, Any]:
     """Assemble the ``build_modflow_deck`` kwargs for the worker job_spec.
 
@@ -1065,6 +1029,16 @@ def _run_args_to_deck_kwargs(run_args: MODFLOWRunArgs) -> dict[str, Any]:
             "et_max_rate_m_day",
             "et_extinction_depth_m",
             "specific_yield",
+            # module wave: stream_depletion SFR forcing (demo-defaulted).
+            "river_inflow_m3_s",
+            "river_width_m",
+            "streambed_k_m_day",
+            "manning_n",
+            # module wave: land_subsidence CSUB forcing (demo-defaulted).
+            "csub_ssv_inelastic_m",
+            "csub_sse_elastic_m",
+            "csub_interbed_thick_frac",
+            "csub_cg_ske_m",
         ):
             val = getattr(run_args, name, None)
             if val is not None:
@@ -1271,21 +1245,6 @@ def read_modflow_build_manifest(
 # ARCHETYPE OFFLOAD GATE + MANIFEST READER
 # (GRACE2_MODFLOW_ARCHETYPE_OFFLOAD, default OFF, independent of the spill gate)
 # --------------------------------------------------------------------------- #
-
-
-def modflow_archetype_offload_enabled() -> bool:
-    """True when the MODFLOW archetype build + postprocess should run on Batch.
-
-    Gated OFF by default (``GRACE2_MODFLOW_ARCHETYPE_OFFLOAD`` unset) so the
-    archetype tools stay byte-identical to the legacy in-agent path. A truthy
-    value (``1``/``on``/``true``/``yes``) activates the combined
-    build+solve+archetype-postprocess Batch job. PRT archetypes
-    (``capture_zone`` / ``wellhead_protection``) and ``saltwater_intrusion``
-    are LOCAL-ONLY and are NEVER offloaded even when the gate is ON.
-    """
-    return (
-        os.environ.get("GRACE2_MODFLOW_ARCHETYPE_OFFLOAD") or ""
-    ).strip().lower() in {"1", "on", "true", "yes"}
 
 
 def read_modflow_archetype_manifest(
@@ -1536,27 +1495,10 @@ def submit_modflow_run(
     from ..tools.solver import (
         SolverDispatchError,
         launch_local_solver,
-        run_solver,
     )
 
-    if is_batch_mode():
-        # GENERIC AWS Batch seam - shared run_solver dispatch. The manifest was
-        # staged to s3:// by build_and_stage_modflow_deck (storage_scheme()=='s3'
-        # under GRACE2_STORAGE_BACKEND=s3), so model_setup_uri is the s3:// the
-        # Batch backend requires.
-        try:
-            return run_solver(
-                solver=MODFLOW_SOLVER_NAME,
-                model_setup_uri=staging.manifest_uri,
-                compute_class=compute_class,
-            )
-        except SolverDispatchError as exc:
-            raise MODFLOWWorkflowError(
-                "MODFLOW_DISPATCH_FAILED",
-                message=f"AWS Batch MODFLOW dispatch failed: {exc}",
-                details={"run_id": staging.run_id},
-            ) from exc
-
+    # The AWS Batch dispatch arm was removed (local-only slim); MODFLOW always
+    # runs on the local-exec backend via launch_local_solver.
     try:
         return launch_local_solver(
             _modflow_local_spec(staging),

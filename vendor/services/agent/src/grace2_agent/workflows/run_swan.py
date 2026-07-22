@@ -402,17 +402,17 @@ def register_swan_solver() -> None:
     """Register ``'swan'`` in ``tools.solver.SOLVER_WORKFLOW_REGISTRY``.
 
     Mirrors ``register_geoclaw_solver``. SWAN is Batch-only (the GPL Fortran lives
-    in the worker image, never in the agent venv), so it maps to the AWS-Batch
-    workflow-name sentinel. ``run_solver`` only requires the KEY to be present to
-    dispatch (the backend seam routes to ``_run_solver_aws_batch``, and the
-    per-solver job-def is resolved from ``GRACE2_AWS_BATCH_JOB_DEF_SWAN``).
-    Idempotent ``setdefault`` -- safe to call at import. The orchestrator may ALSO
-    pin a static literal in ``SOLVER_WORKFLOW_REGISTRY`` (the composer name); if
-    so it is evaluated first and this ``setdefault`` is a no-op.
+    in the worker image, never in the agent venv). ``run_solver`` only requires
+    the KEY to be present to dispatch (the local-docker backend seam routes to
+    ``_run_solver_local_docker``). Idempotent ``setdefault`` -- safe to call at
+    import. The orchestrator may ALSO pin a static literal in
+    ``SOLVER_WORKFLOW_REGISTRY`` (the composer name); if so it is evaluated first
+    and this ``setdefault`` is a no-op. (The registry value is a presence-gate
+    only; the local sentinel is used since the AWS Batch arm was removed.)
     """
-    from ..tools.solver import AWS_BATCH_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
+    from ..tools.solver import LOCAL_DOCKER_WORKFLOW_NAME, SOLVER_WORKFLOW_REGISTRY
 
-    SOLVER_WORKFLOW_REGISTRY.setdefault(SWAN_SOLVER_NAME, AWS_BATCH_WORKFLOW_NAME)
+    SOLVER_WORKFLOW_REGISTRY.setdefault(SWAN_SOLVER_NAME, LOCAL_DOCKER_WORKFLOW_NAME)
 
 
 # Register at import so ``run_solver(solver='swan')`` is wired wherever this

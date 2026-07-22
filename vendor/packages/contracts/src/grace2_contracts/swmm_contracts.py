@@ -56,13 +56,18 @@ __all__ = [
     "BuildingRepresentation",
     "InfiltrationMethod",
     "BarrierType",
+    "WashoffModel",
     "DEFAULT_RETURN_PERIOD_YR",
     "DEFAULT_STORM_DURATION_HR",
     "DEFAULT_RAIN_INTERVAL_MIN",
     "DEFAULT_TARGET_RESOLUTION_M",
     "DEFAULT_MANNING_OVERLAND",
+    "PollutantSpec",
+    "POLLUTANT_PRESETS",
+    "resolve_pollutant_presets",
     "SWMMRunArgs",
     "SWMMDepthLayerURI",
+    "SWMMPollutantLayerURI",
 ]
 
 
@@ -118,6 +123,135 @@ DEFAULT_STORM_DURATION_HR: float = 6.0  # storm duration, hours (spike used 6 h)
 DEFAULT_RAIN_INTERVAL_MIN: int = 5  # hyetograph timestep, minutes
 DEFAULT_TARGET_RESOLUTION_M: float = 10.0  # target cell size, m (spike used 10 m)
 DEFAULT_MANNING_OVERLAND: float = 0.03  # overland Manning n (spike value)
+
+
+# --------------------------------------------------------------------------- #
+# Water-quality (buildup/washoff) — the urban engine's SECOND output family
+# (sprint-WQ). Rides SWMMRunArgs.pollutants as OPTIONAL fields; when unset the
+# deck is BYTE-IDENTICAL to the hydraulics-only depth deck (zero regression).
+# --------------------------------------------------------------------------- #
+# Washoff mode.
+#   "exp" — EXP washoff W = C1 * q^C2 * B (buildup-driven first-flush; the
+#           headline mode the demo asks for).
+#   "emc" — a fixed event-mean concentration (bypasses buildup; a flat-conc
+#           "conservative dilution" CONTROL run with NO first flush).
+WashoffModel = Literal["exp", "emc"]
+
+
+class PollutantSpec(GraceModel):
+    """One pollutant's SWMM buildup/washoff parameterization (a DEMO preset).
+
+    Every coefficient here is an EPA-literature DEMO DEFAULT, narrated as such by
+    the composer — NOT a site calibration (we have no per-site buildup/washoff
+    fetcher, exactly like the depth path's demo Manning n / infiltration
+    defaults). The composer resolves a keyword ("tss" / "e_coli" / "tn") to one of
+    these; an advanced caller may pass a fully-specified spec to override.
+
+    SWMM semantics PINNED by the Phase-1 in-image smoke (units + POW arg order):
+      - buildup POW: ``B = min(buildup_max, buildup_rate * t^buildup_power)`` per
+        unit AREA. In a CMS (SI) deck the mass unit is metric: ``buildup_max`` /
+        ``buildup_rate`` are in (pollutant-mass-unit) per HECTARE (kg/ha for a
+        MG/L pollutant; count/ha for a ``#/L`` count pollutant). ``buildup_power``
+        is the TIME EXPONENT (keep it ~0.5-2.0; a large exponent overflows
+        ``t^power`` and SWMM rejects the deck — the swmm-api ``BuildUp(C1,C2,C3)``
+        arg order IS SWMM's column order max/rate/EXPONENT).
+      - washoff EXP: ``W = washoff_coef * q^washoff_exp * B`` (runoff-driven).
+      - ``decay_per_day`` is a first-order routing sink (1/day; 0 = conservative
+        TSS; ~1/day die-off for bacteria).
+
+    Fields:
+        name: SWMM pollutant name (deck ``[POLLUTANTS]`` id; also the
+            ``out.pollutants`` key the postprocess maps to a concentration index).
+        unit: SWMM concentration unit — ``"MG/L"`` (mass) or ``"#/L"`` (count).
+            The count unit propagates to the outfall LOAD as a COUNT reported by
+            SWMM in LOG10 form (the ``.rpt`` "LogN" column), which the postprocess
+            carries through honestly (never mislabels counts as kg).
+        buildup_max: POW max buildup (mass/ha or count/ha), > 0.
+        buildup_rate: POW rate constant, >= 0.
+        buildup_power: POW time exponent (dimensionless), > 0, kept small.
+        washoff_coef: EXP washoff coefficient C1, >= 0.
+        washoff_exp: EXP washoff runoff exponent C2, >= 0.
+        decay_per_day: first-order routing decay (1/day), >= 0.
+        emc_concentration: fixed event-mean concentration (in ``unit``) used ONLY
+            when the run's ``washoff_model="emc"`` (the flat-conc control).
+    """
+
+    name: str
+    unit: Literal["MG/L", "#/L"] = "MG/L"
+    buildup_max: float = Field(gt=0.0)
+    buildup_rate: float = Field(default=1.0, ge=0.0)
+    buildup_power: float = Field(default=1.0, gt=0.0)
+    washoff_coef: float = Field(default=5.0, ge=0.0)
+    washoff_exp: float = Field(default=1.8, ge=0.0)
+    decay_per_day: float = Field(default=0.0, ge=0.0)
+    emc_concentration: float = Field(default=100.0, ge=0.0)
+
+
+# Keyword -> demo PollutantSpec. EPA-typical residential-runoff anchors (narrated
+# as demo values by the composer, never site precision):
+#   TSS  — EPA SWMM Applications-Manual Example 5 residential suspended solids:
+#          ~50 lb/ac cap (56 kg/ha) @ ~1 lb/ac/day (1.12 kg/ha/day); EMC 100 mg/L.
+#   E_coli — count pollutant (#/L); demo buildup cap ~1e11 count/ha, ~1/day
+#            freshwater daylight die-off.
+#   TN / TP — nutrient demo anchors (lower buildup than TSS).
+POLLUTANT_PRESETS: dict[str, PollutantSpec] = {
+    "tss": PollutantSpec(
+        name="TSS", unit="MG/L", buildup_max=56.0, buildup_rate=1.12,
+        buildup_power=1.0, washoff_coef=5.0, washoff_exp=1.8, decay_per_day=0.0,
+        emc_concentration=100.0,
+    ),
+    "e_coli": PollutantSpec(
+        name="E_coli", unit="#/L", buildup_max=1.0e11, buildup_rate=1.0e10,
+        buildup_power=1.0, washoff_coef=5.0, washoff_exp=1.8, decay_per_day=1.0,
+        emc_concentration=1.0e4,
+    ),
+    "tn": PollutantSpec(
+        name="TN", unit="MG/L", buildup_max=5.0, buildup_rate=0.1,
+        buildup_power=1.0, washoff_coef=2.0, washoff_exp=1.5, decay_per_day=0.0,
+        emc_concentration=2.0,
+    ),
+    "tp": PollutantSpec(
+        name="TP", unit="MG/L", buildup_max=1.0, buildup_rate=0.02,
+        buildup_power=1.0, washoff_coef=2.0, washoff_exp=1.5, decay_per_day=0.0,
+        emc_concentration=0.3,
+    ),
+}
+
+# Common LLM aliases -> canonical preset keyword.
+_POLLUTANT_ALIASES: dict[str, str] = {
+    "tss": "tss", "sediment": "tss", "suspended solids": "tss",
+    "total suspended solids": "tss", "turbidity": "tss",
+    "e_coli": "e_coli", "e-coli": "e_coli", "ecoli": "e_coli",
+    "bacteria": "e_coli", "coliform": "e_coli", "fecal": "e_coli",
+    "fecal coliform": "e_coli", "pathogen": "e_coli", "pathogens": "e_coli",
+    "tn": "tn", "nitrogen": "tn", "total nitrogen": "tn", "nutrient": "tn",
+    "nutrients": "tn", "nitrate": "tn",
+    "tp": "tp", "phosphorus": "tp", "total phosphorus": "tp", "phosphate": "tp",
+}
+
+
+def resolve_pollutant_presets(pollutants: list[str] | None) -> list[PollutantSpec]:
+    """Map a list of pollutant keywords to their demo ``PollutantSpec`` presets.
+
+    Case/space-insensitive, alias-aware ("bacteria" -> e_coli, "sediment" ->
+    tss). Duplicates and unknown keywords are dropped (an unknown keyword never
+    fabricates a spec — the composer simply models the ones it recognizes).
+    Returns ``[]`` for ``None`` / empty (=> no WQ sections => byte-identical
+    hydraulics-only deck). Order follows the caller's list (first occurrence).
+    """
+    if not pollutants:
+        return []
+    specs: list[PollutantSpec] = []
+    seen: set[str] = set()
+    for raw in pollutants:
+        if not isinstance(raw, str):
+            continue
+        key = _POLLUTANT_ALIASES.get(raw.strip().lower())
+        if key is None or key in seen:
+            continue
+        seen.add(key)
+        specs.append(POLLUTANT_PRESETS[key])
+    return specs
 
 
 class SWMMRunArgs(EngineRunArgsMixin):
@@ -205,6 +339,19 @@ class SWMMRunArgs(EngineRunArgsMixin):
     mass_balance_tolerance_pct: float = Field(default=5.0, gt=0.0, le=100.0)
 
     barriers: dict[str, Any] | None = None
+
+    # --- Water-quality (buildup/washoff) — OPTIONAL second output family ----
+    # ``pollutants`` is a list of keywords the composer maps to demo presets
+    # ("tss", "e_coli"/"bacteria", "tn", "tp"). ``None`` / [] => NO WQ sections
+    # => a BYTE-IDENTICAL hydraulics-only deck (zero depth-path regression). An
+    # advanced caller may pass fully-specified ``pollutant_specs`` to override the
+    # presets. ``dry_buildup_days`` sets OPTIONS DRY_DAYS so buildup accumulates
+    # over N antecedent dry days before the storm; ``washoff_model`` selects the
+    # EXP first-flush headline vs the EMC flat-conc control.
+    pollutants: list[str] | None = None
+    pollutant_specs: list[PollutantSpec] | None = None
+    dry_buildup_days: int = Field(default=0, ge=0)
+    washoff_model: WashoffModel = "exp"
 
     @field_validator("building_representation", mode="before")
     @classmethod
@@ -319,3 +466,44 @@ class SWMMDepthLayerURI(LayerURI):
         if value is None:
             return None
         return _validate_barrier_feature_collection(value)
+
+
+class SWMMPollutantLayerURI(LayerURI):
+    """A ``LayerURI`` for a SWMM per-cell peak washoff-CONCENTRATION raster, plus
+    the typed water-quality narration scalars.
+
+    Extends ``LayerURI`` field-for-field (so it maps onto ``map-command
+    load-layer`` with no translation, same as every other layer) and carries the
+    WQ numbers the agent narrates for one pollutant (invariant 1 / FR-AS-7 — the
+    LLM cites these typed fields, never invents a load or a concentration). It is
+    ADDITIVE CONTEXT beside the depth ``SWMMDepthLayerURI`` primary: a WQ failure
+    never sinks the flood headline.
+
+    Fields:
+        pollutant_name: the SWMM pollutant this layer describes (``[POLLUTANTS]``
+            id / ``out.pollutants`` key).
+        pollutant_units: the concentration unit — ``"mg/L"`` or ``"#/L"``.
+        outfall_load: cumulative mass (or count) delivered to the outfall over the
+            storm, parsed from the ``.rpt`` Outfall Loading Summary (>= 0). For a
+            count pollutant SWMM reports this in LOG10 form ("LogN"); the
+            postprocess converts it to a raw count and labels it honestly.
+        outfall_load_units: the load unit string — ``"kg"`` for a mass pollutant,
+            ``"counts"`` for a count pollutant (converted from the ``.rpt`` LogN),
+            so a count load is NEVER mislabeled as mass.
+        peak_outfall_conc: peak outfall concentration over the storm (in
+            ``pollutant_units``), >= 0 — the pollutograph crest (first flush).
+        washoff_mass_fraction: washed load / total built-up mass, in [0, 1] — the
+            supply-limited check (washed <= built). ``None`` when the built mass
+            could not be read.
+        wq_continuity_error_pct: the ``.rpt`` Quality Routing Continuity error (%)
+            for this pollutant — the WQ mass-balance honesty readout. ``None`` when
+            the block was absent/unreadable.
+    """
+
+    pollutant_name: str
+    pollutant_units: str
+    outfall_load: float = Field(ge=0.0)
+    outfall_load_units: str
+    peak_outfall_conc: float = Field(ge=0.0)
+    washoff_mass_fraction: float | None = None
+    wq_continuity_error_pct: float | None = None

@@ -37,8 +37,10 @@ from pathlib import Path
 from typing import Any
 
 from grace2_contracts.telemac_contracts import (
+    TELEMAC_BED_EVOLUTION_STYLE_PRESET,
     TELEMAC_DYE_STYLE_PRESET,
     TelemacDyeLayerURI,
+    TelemacSedimentLayerURI,
 )
 from grace2_contracts.execution import LegendKey
 
@@ -49,8 +51,10 @@ from .postprocess_flood import RUNS_BUCKET_DEFAULT
 __all__ = [
     "PostprocessTelemacError",
     "postprocess_telemac",
+    "postprocess_telemac_deposition",
     "read_selafin",
     "TELEMAC_DYE_STYLE_PRESET",
+    "TELEMAC_BED_EVOLUTION_STYLE_PRESET",
     "TELEMAC_DYE_WET_MGL",
     "TELEMAC_TARGET_GROUND_RES_M",
 ]
@@ -209,9 +213,24 @@ def read_selafin(path: str | Path) -> dict[str, Any]:
     }
 
 
-def _pick_dye_var(varnames: list[str]) -> str | None:
-    """The DYE tracer variable name (case-insensitive DYE, else a T-prefixed
-    tracer), or None. Mirrors the worker entrypoint's tracer-sanity selection."""
+def _pick_dye_var(varnames: list[str], *, prefer_sediment: bool = False) -> str | None:
+    """The tracer variable name to rasterize, or None.
+
+    Default (dye / decay runs): case-insensitive DYE, else a T-prefixed tracer
+    (mirrors the worker entrypoint's tracer-sanity selection).
+
+    ``prefer_sediment=True`` (GAIA sediment coupled run): the suspended sediment
+    concentration rides as a SECOND telemac2d tracer that the in-image smoke
+    (2026-07-19) showed lands in ``r2d_river.slf`` as ``NCOH SEDIMENT1`` (g/l ==
+    kg/m3) alongside the required DYE companion. Pick that sediment tracer (a name
+    carrying SEDIMENT / NCOH / COH), so the concentration COG is the SEDIMENT
+    ribbon, not the conservative dye reference. Falls back to the dye pick when no
+    sediment-named var is present (an uncoupled rerun)."""
+    if prefer_sediment:
+        for v in varnames:
+            u = v.strip().upper()
+            if "SEDIMENT" in u or u.startswith(("NCOH", "COH", "CS")):
+                return v
     for v in varnames:
         if "DYE" in v.upper():
             return v
@@ -300,6 +319,7 @@ def postprocess_telemac(
     utm_epsg: int,
     reach_name: str = "river_dye",
     substance: str = "dye",
+    substance_class: str = "tracer",
     dye_units: str = "mg/L",
     runs_bucket: str | None = None,
     target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
@@ -351,11 +371,15 @@ def postprocess_telemac(
             details={"slf": str(slf)},
         ) from exc
 
-    dye_var = _pick_dye_var(mesh["varnames"])
+    # GAIA sediment coupled run: pick the SUSPENDED SEDIMENT tracer (NCOH
+    # SEDIMENT1, g/l == kg/m3) that GAIA appends beside the dye companion, so this
+    # COG is the sediment concentration ribbon, not the conservative dye.
+    _prefer_sed = str(substance_class or "tracer").lower() == "sediment"
+    dye_var = _pick_dye_var(mesh["varnames"], prefer_sediment=_prefer_sed)
     if dye_var is None or mesh["data"].get(dye_var) is None or mesh["data"][dye_var].size == 0:
         raise PostprocessTelemacError(
             "TELEMAC_OUTPUT_EMPTY",
-            message=f"no DYE tracer / no time steps in {slf.name} "
+            message=f"no tracer / no time steps in {slf.name} "
             f"(vars={mesh['varnames']})",
             details={"slf": str(slf), "varnames": mesh["varnames"]},
         )
@@ -363,6 +387,14 @@ def postprocess_telemac(
     import numpy as np
 
     dye = np.asarray(mesh["data"][dye_var])  # (nframes, npoin)
+    # UNITS TRAP (pinned by the 2026-07-19 in-image smoke): the GAIA suspended
+    # sediment tracer lands in r2d as 'NCOH SEDIMENT1' in g/l (== kg/m3), while
+    # the dye tracer + our whole UI speak mg/L. Scale the sediment field g/l ->
+    # mg/L (x1000) so the concentration COG + cmax are in mg/L like the dye - a
+    # silent 1000x error otherwise passes every structural check.
+    _du = dye_var.strip().upper()
+    if _prefer_sed and ("SEDIMENT" in _du or _du.startswith(("NCOH", "COH", "CS"))):
+        dye = dye * 1000.0
     times = np.asarray(mesh["times"])
     x_utm = np.asarray(mesh["x"])
     y_utm = np.asarray(mesh["y"])
@@ -520,5 +552,204 @@ def postprocess_telemac(
         active_frames,
         int(times.size),
         uri,
+    )
+    return [layer], metrics
+
+
+# --------------------------------------------------------------------------- #
+# GAIA sediment: the SECOND COG - final CUMUL BED EVOL (deposition, mm).
+# --------------------------------------------------------------------------- #
+def postprocess_telemac_deposition(
+    gaia_slf_path: str | Path,
+    *,
+    run_id: str,
+    utm_epsg: int,
+    reach_name: str = "river_sediment",
+    worker_sed_metrics: dict[str, Any] | None = None,
+    runs_bucket: str | None = None,
+    target_ground_res_m: float = TELEMAC_TARGET_GROUND_RES_M,
+) -> tuple[list[TelemacSedimentLayerURI], dict[str, Any]]:
+    """Rasterize the GAIA final CUMUL BED EVOL field into ONE deposition COG.
+
+    Reads ``gaia_river.slf`` (the GAIA result), picks the CUMUL BED EVOL variable
+    (mnemonic ``E``; the in-image smoke confirmed it is present in METRES), takes
+    the FINAL frame (cumulative bed change -> final = total event deposition),
+    reprojects the mesh nodes ``utm_epsg`` -> EPSG:4326, rasterizes the SIGNED bed
+    change in MILLIMETRES onto an adaptive grid clipped to the channel, writes +
+    uploads ONE COG (``telemac_sediment_deposition.tif``) on the diverging
+    bed-evolution preset, and returns ``([TelemacSedimentLayerURI], metrics)``.
+
+    The layer's deposited_mass_kg / deposit_fraction come from
+    ``worker_sed_metrics`` (GAIA's OWN listing mass balance - the authoritative
+    closure numbers, never reconstructed): deposited_mass_kg is the NET bed mass
+    (CUMULATED BED EVOLUTIONS, clamped >= 0), the SAME net quantity the final-frame
+    E-field map and deposit_fraction integrate - never the gross CUMULATED
+    DEPOSITION, which can cancel against erosion and contradict the map.
+    max_deposition_mm is measured independently off the E field here (the design's
+    cross-check).
+
+    Raises ``PostprocessTelemacError`` on any read / rasterize / COG failure.
+    """
+    try:
+        import numpy as np
+        from pyproj import Transformer  # noqa: F401
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_DEPENDENCY_MISSING",
+            message=f"numpy/pyproj unavailable for GAIA deposition: {exc}",
+        ) from exc
+
+    slf = Path(gaia_slf_path)
+    try:
+        mesh = read_selafin(slf)
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"could not parse GAIA SELAFIN {slf.name}: {exc}",
+            details={"slf": str(slf)},
+        ) from exc
+
+    import numpy as np
+
+    # pick CUMUL BED EVOL (mnemonic E). Never pick BOTTOM (the static bed).
+    evol_var = None
+    for v in mesh["varnames"]:
+        u = v.strip().upper()
+        if "EVOL" in u or u.startswith("E"):
+            evol_var = v
+            break
+    if evol_var is None or mesh["data"].get(evol_var) is None \
+            or mesh["data"][evol_var].size == 0:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"no CUMUL BED EVOL in {slf.name} (vars={mesh['varnames']})",
+            details={"slf": str(slf), "varnames": mesh["varnames"]},
+        )
+
+    evol = np.asarray(mesh["data"][evol_var])  # (nframes, npoin), metres
+    x_utm = np.asarray(mesh["x"])
+    y_utm = np.asarray(mesh["y"])
+    node_final_mm = evol[-1] * 1000.0          # final cumulative bed change, mm
+    dep_only_mm = np.where(node_final_mm > 0.0, node_final_mm, 0.0)
+    max_dep_mm = float(dep_only_mm.max()) if dep_only_mm.size else 0.0
+
+    from pyproj import Transformer
+
+    back = Transformer.from_crs(int(utm_epsg), 4326, always_xy=True)
+    lon, lat = back.transform(x_utm, y_utm)
+    lon = np.asarray(lon)
+    lat = np.asarray(lat)
+
+    if max_dep_mm <= 0.0:
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_EMPTY",
+            message=f"no bed deposition anywhere in {slf.name} "
+            f"(supply-limited run deposited nothing measurable)",
+            details={"max_deposition_mm": max_dep_mm},
+        )
+
+    pad = 0.0009
+    bbox = (
+        float(lon.min() - pad), float(lat.min() - pad),
+        float(lon.max() + pad), float(lat.max() + pad),
+    )
+    shape = _grid_shape(bbox, target_ground_res_m)
+    clip_dist_deg = 1.5 * max(
+        (bbox[2] - bbox[0]) / shape[1], (bbox[3] - bbox[1]) / shape[0])
+    # rasterize the DEPOSITION (positive mm) field; erosion/zero -> NaN so the
+    # diverging ramp reads the tongue cleanly (v1 is supply-limited: near all
+    # signal is deposition). wet_floor tiny so a mm-scale tongue is not clipped.
+    try:
+        grid = _rasterize_nodes_to_grid(
+            lon, lat, dep_only_mm, bbox, shape, clip_dist_deg,
+            wet_floor=max(1e-4, 0.02 * max_dep_mm))
+    except Exception as exc:  # noqa: BLE001
+        raise PostprocessTelemacError(
+            "TELEMAC_OUTPUT_READ_FAILED",
+            message=f"deposition rasterization failed: {exc}",
+        ) from exc
+
+    from rasterio.transform import from_bounds
+
+    transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], shape[1], shape[0])
+    try:
+        cog = cog_io.write_cog_4326_from_grid(
+            grid, src_crs="EPSG:4326", src_transform=transform,
+            reproject=False, crs_roundtrip_guard=True,
+            dst_suffix="_telemac_deposition_4326.tif",
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    try:
+        uri = cog_io.upload_cog(
+            cog, run_id, runs_bucket,
+            dest_filename="telemac_sediment_deposition.tif",
+            content_type="image/tiff", gs_backend="fsspec",
+            gs_fallback_to_file=False, runs_bucket_default=RUNS_BUCKET_DEFAULT,
+            log_label="TELEMAC GAIA deposition COG",
+        )
+    except CogIoError as exc:
+        raise _reraise_cogio(exc) from exc
+    finally:
+        cog_io.safe_unlink(cog)
+
+    wsm = dict(worker_sed_metrics or {})
+    # deposited_mass_kg is the NET bed mass (CUMULATED BED EVOLUTIONS), NOT the
+    # gross CUMULATED DEPOSITION: net is the quantity the final-frame E-field map
+    # and deposit_fraction both integrate, so the headline number must agree with
+    # them. In a supply-limited v1 run gross deposition can equal gross erosion
+    # (re-suspension of just-settled sediment) leaving net ~= 0 -> the map is
+    # (correctly) suppressed as empty, and the narrated mass must be ~0 too, not
+    # the gross figure. A tiny numeric-negative net clamps to 0 (net erosion means
+    # nothing net-deposited; also keeps the contract's ge=0.0 valid).
+    _net = wsm.get("sediment_net_bed_mass_kg")
+    deposited_mass_kg = max(float(_net), 0.0) if _net is not None else None
+    deposit_fraction = wsm.get("sediment_deposit_fraction")
+    # diverging legend centered on 0; range = the deposition peak (symmetric so
+    # the rdbu midpoint is 0 bed change). mm units.
+    vext = round(max(max_dep_mm, 1e-3), 4)
+    legend = LegendKey(
+        kind="continuous", colormap="rdbu", vmin=-vext, vmax=vext, units="mm",
+        label="Bed evolution / deposition (mm)",
+    )
+    honesty = (
+        "Event-scale deposition (mm), not annual morphology: a supply-limited "
+        "GAIA run (bed initial thickness 0) - only the injected sediment pulse "
+        "can deposit, nothing erodes. Grain size is a demo default / user "
+        "override (no site bed-composition fetcher exists), not a site measurement."
+    )
+    layer = TelemacSedimentLayerURI(
+        layer_id=f"telemac-sediment-deposition-{run_id}",
+        name=f"Sediment deposition ({reach_name})",
+        layer_type="raster",
+        uri=uri,
+        style_preset=TELEMAC_BED_EVOLUTION_STYLE_PRESET,
+        role="primary",
+        units="mm",
+        bbox=bbox,
+        legend=legend,
+        fallback_note=honesty,
+        deposited_mass_kg=deposited_mass_kg,
+        deposit_fraction=deposit_fraction,
+        max_deposition_mm=round(max_dep_mm, 4),
+        grain_size_um=wsm.get("grain_size_um"),
+        sediment_type=wsm.get("sediment_type"),
+    )
+    metrics: dict[str, Any] = {
+        "evol_var": evol_var.strip(),
+        "max_deposition_mm": round(max_dep_mm, 4),
+        "deposited_mass_kg": deposited_mass_kg,
+        "deposit_fraction": deposit_fraction,
+        "npoin": int(mesh["npoin"]),
+        "utm_epsg": int(utm_epsg),
+        "bbox": list(bbox),
+        "crs": "EPSG:4326",
+        "honesty_label": honesty,
+    }
+    logger.info(
+        "postprocess_telemac_deposition run_id=%s evol_var=%s max_dep_mm=%.4g "
+        "deposited_kg=%s deposit_frac=%s -> %s",
+        run_id, evol_var.strip(), max_dep_mm, deposited_mass_kg,
+        deposit_fraction, uri,
     )
     return [layer], metrics

@@ -35,7 +35,6 @@ from grace2_agent.tools.solver import (
     COMPUTE_CLASS_LARGE_MAX_ELEMENTS,
     COMPUTE_CLASS_SMALL_MAX_ELEMENTS,
     COMPUTE_CLASS_STANDARD_MAX_ELEMENTS,
-    _aws_batch_sizing,
     _COMPUTE_CLASS_ALIAS,
     select_compute_class,
 )
@@ -117,7 +116,7 @@ def test_numeric_string_estimate_is_coerced() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 4. The new higher tier resolves through _aws_batch_sizing
+# 4. The compute-class sizing table (retained for the solve-progress readout)
 # --------------------------------------------------------------------------- #
 
 
@@ -132,23 +131,11 @@ def test_xlarge_tier_present_in_sizing_and_alias() -> None:
     assert AWS_BATCH_COMPUTE_CLASS_SIZING["gpu"]["vcpus"] == 32
 
 
-def test_aws_batch_sizing_resolves_xlarge() -> None:
-    sizing = _aws_batch_sizing("xlarge")
-    assert sizing["vcpus"] == 48
-    assert sizing["mem_mib"] == 98304
-    assert sizing["omp_threads"] == 48
-
-
-def test_aws_batch_sizing_unknown_class_falls_back_to_standard() -> None:
-    sizing = _aws_batch_sizing("does-not-exist")
-    assert sizing["vcpus"] == 8  # standard bucket
-
-
 def test_select_then_size_round_trip() -> None:
     """The class select_compute_class returns always resolves in the sizing map."""
     for n in (1_000, 100_000, 500_000, 9_000_000):
         cls = select_compute_class(n)
-        sizing = _aws_batch_sizing(cls)
+        sizing = AWS_BATCH_COMPUTE_CLASS_SIZING[_COMPUTE_CLASS_ALIAS[cls]]
         assert sizing["vcpus"] in {4, 8, 16, 48}
 
 

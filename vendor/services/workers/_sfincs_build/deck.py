@@ -276,6 +276,23 @@ class PressureForcing:
 
 
 @dataclass(frozen=True)
+class SpiderwebForcing:
+    """Parametric hurricane wind+pressure via a native Delft3D spiderweb (.spw).
+
+    Cloud-offload mirror of the agent ``sfincs_builder.SpiderwebForcing``. The
+    agent generates the ``.spw`` (Holland field) and stages it to the object
+    store; the worker downloads ``spw_uri`` into the deck dir and emits
+    ``spwfile``/``utmzone``/``baro`` into sfincs.inp. XOR with wind/pressure.
+    """
+
+    spw_path: str | None = None
+    spw_uri: str | None = None
+    utmzone: str = ""
+    spw_filename: str = "sfincs.spw"
+    provenance: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class InfiltrationForcing:
     """Soil-infiltration LOSS term (SFINCS ``scsfile`` / ``qinffile`` / ``qinf``).
 
@@ -373,17 +390,21 @@ class ForcingSpec:
     breach: DischargeForcing | None = None
     wind: WindForcing | None = None
     pressure: PressureForcing | None = None
+    # SPIDERWEB (2026-07-19): parametric hurricane wind+pressure (cloud mirror).
+    # XOR with wind/pressure (emitter). IS the surge driver -> counts.
+    wind_spiderweb: SpiderwebForcing | None = None
     # NATE 2026-06-26: infiltration is a LOSS term (scsfile/qinffile/qinf), not a
     # driver -> emitted when set but NOT counted by has_surge_forcing().
     infiltration: InfiltrationForcing | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
 
     def has_surge_forcing(self) -> bool:
-        """True iff any non-precip (surge/tide/discharge/breach/wind/pressure) member is set.
+        """True iff any non-precip (surge/tide/discharge/breach/wind/pressure/spiderweb) member is set.
 
         NATE 2026-06-26: ``breach`` is a DRIVER (an interior discharge jet) so it
         joins the any(); ``infiltration`` is a loss term and is deliberately
-        excluded (it never drives a flood on its own).
+        excluded (it never drives a flood on its own). SPIDERWEB is the wind
+        driver so it counts.
         """
         return any(
             m is not None
@@ -393,6 +414,7 @@ class ForcingSpec:
                 self.breach,
                 self.wind,
                 self.pressure,
+                self.wind_spiderweb,
             )
         )
 
@@ -1620,6 +1642,43 @@ def _emit_surge_forcing_blocks(
         # sfincs.inp:qinf inside the setup_config block (_emit_physics_config).
 
 
+def _emit_spiderweb_config(
+    components: list[str],
+    forcing: "ForcingSpec",
+) -> None:
+    """Append spwfile/utmzone/baro into setup_config (cloud mirror of the agent).
+
+    Emits the three keys the sfincs-cpu binary accepted byte-for-byte::
+
+        spwfile          = sfincs.spw
+        utmzone          = 16n
+        baro             = 1
+
+    XOR-checked against wind/pressure (raises SPIDERWEB_FORCING_CONFLICT). No-op
+    when no wind_spiderweb member is set. The .spw is downloaded into the deck
+    by ``build_sfincs_deck`` before the deck is finalized.
+    """
+    sw = getattr(forcing, "wind_spiderweb", None)
+    if sw is None:
+        return
+    if forcing.wind is not None or forcing.pressure is not None:
+        raise SFINCSSetupError(
+            "SPIDERWEB_FORCING_CONFLICT",
+            message=(
+                "wind_spiderweb is mutually exclusive with the wind / pressure "
+                "forcing members (both double-count the wind driver)."
+            ),
+        )
+    if not sw.utmzone:
+        raise SFINCSSetupError(
+            "SPIDERWEB_FORCING_CONFLICT",
+            message="wind_spiderweb.utmzone is required for the UTM conversion.",
+        )
+    components.append(f"  spwfile: {sw.spw_filename}")
+    components.append(f"  utmzone: {sw.utmzone}")
+    components.append("  baro: 1")
+
+
 def _emit_physics_config(
     components: list[str],
     physics: dict[str, Any] | None,
@@ -1813,6 +1872,9 @@ def _generate_hydromt_yaml_config(
         dtout_seconds = max(600, int(_total_seconds / 24))
     components.append(f"  dtout: {dtout_seconds}")
     components.append(f"  dtmaxout: {dtout_seconds}")
+    # SPIDERWEB (2026-07-19): parametric-hurricane spwfile/utmzone/baro (cloud
+    # mirror). No-op + XOR-checked when no wind_spiderweb member is set.
+    _emit_spiderweb_config(components, forcing)
     # NATE 2026-06-26: advanced-physics overrides + a bare-constant infiltration
     # qinf land in THIS setup_config block (HydroMT passthrough -> sfincs.inp).
     # ``None`` advanced_physics + no bare-constant infiltration emit nothing, so a
@@ -2081,6 +2143,8 @@ _FORCING_FILE_URI_KEYS = (
     "cn_uri",
     "lulc_uri",
     "reclass_table_uri",
+    # SPIDERWEB (2026-07-19): the staged .spw is localized like any forcing file.
+    "spw_uri",
 )
 
 
@@ -2144,6 +2208,19 @@ def _infiltration_from_dict(d: dict[str, Any] | None) -> "InfiltrationForcing | 
     )
 
 
+def _spiderweb_from_dict(d: dict[str, Any] | None) -> "SpiderwebForcing | None":
+    """Reconstruct a ``SpiderwebForcing`` from the job_spec forcing sub-dict."""
+    if not d:
+        return None
+    return SpiderwebForcing(
+        spw_path=d.get("spw_path"),
+        spw_uri=d.get("spw_uri"),
+        utmzone=str(d.get("utmzone") or ""),
+        spw_filename=str(d.get("spw_filename") or "sfincs.spw"),
+        provenance=dict(d.get("provenance") or {}),
+    )
+
+
 def forcing_spec_from_dict(d: dict[str, Any]) -> ForcingSpec:
     """Reconstruct a ``ForcingSpec`` from the job_spec ``forcing`` dict."""
     return ForcingSpec(
@@ -2157,6 +2234,8 @@ def forcing_spec_from_dict(d: dict[str, Any]) -> ForcingSpec:
         breach=_discharge_from_dict(d.get("breach")),
         wind=_wind_from_dict(d.get("wind")),
         pressure=_pressure_from_dict(d.get("pressure")),
+        # SPIDERWEB (2026-07-19): cloud-offload mirror.
+        wind_spiderweb=_spiderweb_from_dict(d.get("wind_spiderweb")),
         infiltration=_infiltration_from_dict(d.get("infiltration")),
         provenance=dict(d.get("provenance") or {}),
     )
@@ -2377,6 +2456,28 @@ def build_sfincs_deck(
             message=f"HydroMT SfincsModel build failed: {exc}",
             details={"bbox": list(bbox), "underlying": str(exc)},
         ) from exc
+
+    # SPIDERWEB (2026-07-19): download the staged .spw into the deck dir under
+    # the bare relative name so it ships to the rundir alongside sfincs.inp
+    # (model.write() already emitted spwfile/utmzone/baro). Cloud mirror of the
+    # agent build_sfincs_model deck-copy.
+    _sw = getattr(forcing, "wind_spiderweb", None)
+    if _sw is not None:
+        # ``spw_uri`` was already localized to a real path by
+        # ``_localize_forcing_uris`` (it is in _FORCING_FILE_URI_KEYS); prefer an
+        # explicit local ``spw_path`` if the agent set one.
+        _spw_src = _sw.spw_path or _sw.spw_uri
+        if not _spw_src or not Path(_spw_src).is_file():
+            raise SFINCSSetupError(
+                "SPIDERWEB_SPW_MISSING",
+                message="wind_spiderweb set but no readable spw_path/spw_uri.",
+                details={"spw_path": _sw.spw_path, "spw_uri": _sw.spw_uri},
+            )
+        _dest = deck_dir / _sw.spw_filename
+        if Path(_spw_src).resolve() != _dest.resolve():
+            import shutil as _shutil_local
+            _shutil_local.copyfile(_spw_src, _dest)
+        logger.info("worker build: staged spiderweb -> deck/%s", _sw.spw_filename)
 
     logger.info(
         "worker build: deck written to %s (grid_res=%.1f m, autoscale=%s)",

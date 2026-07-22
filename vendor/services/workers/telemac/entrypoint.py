@@ -86,10 +86,64 @@ DEFAULT_OUTPUTS = [
     "particles.json",      # oil class: parsed slick snapshots (EPSG:4326)
     "oil_spill.txt",       # oil class: the steering file used (evidence)
     "slick.geojson",       # oil class: renderable slick snapshots
+    "t2d_river.waqtel",    # decay class: the WAQTEL steering file (forcing evidence)
+    "gaia_river.slf",      # sediment class: GAIA result (CUMUL BED EVOL deposition)
+    "gaia_river.cas",      # sediment class: the GAIA steering file (evidence)
 ]
 
 #: Metrics filename the ``LocalSolverSpec.classify_exit`` reads from the rundir.
 METRICS_FILENAME = "telemac_metrics.json"
+
+
+def _parse_gaia_mass_balance(listing_text: str) -> dict[str, Any]:
+    """Parse GAIA's FINAL MASS-BALANCE OF SEDIMENTS block from the solver listing.
+
+    Returns the authoritative deposited / eroded / net-bed / lost masses (kg) GAIA
+    itself reports (the honesty-floor evidence: the run narrates from THESE typed
+    numbers, never invents them). In-image (v9) listing shape::
+
+        FINAL MASS-BALANCE OF SEDIMENTS:
+        GAIA MASS-BALANCE OF SEDIMENTS PER CLASS:
+         SEDIMENT CLASS NUMBER          =        1
+         CUMULATED BED EVOLUTIONS       =    0.481E-06  ( KG )
+         CUMULATED EROSION              =     394.4448  ( KG )
+         CUMULATED DEPOSITION           =     394.4448  ( KG )
+         CUMULATED LOST MASS            =    0.511E-12  ( KG )
+
+    Best-effort: any missing field is simply omitted (fail-open)."""
+    import re
+
+    out: dict[str, Any] = {}
+    m0 = re.search(r"FINAL MASS-BALANCE OF SEDIMENTS", listing_text or "")
+    block = (listing_text or "")[m0.end():] if m0 else ""
+    if not block:
+        return out
+    # isolate to the end-of-run marker so we do not read past the final block.
+    m1 = re.search(r"END OF TIME LOOP|CORRECT END OF RUN", block)
+    if m1:
+        block = block[:m1.start()]
+
+    def _num(label: str) -> float | None:
+        mm = re.search(
+            re.escape(label) + r"\s*=\s*([-\d.Ee+]+)", block)
+        try:
+            return float(mm.group(1)) if mm else None
+        except (TypeError, ValueError):
+            return None
+
+    dep = _num("CUMULATED DEPOSITION")
+    ero = _num("CUMULATED EROSION")
+    net = _num("CUMULATED BED EVOLUTIONS")
+    lost = _num("CUMULATED LOST MASS")
+    if dep is not None:
+        out["sediment_deposited_mass_kg"] = round(dep, 4)
+    if ero is not None:
+        out["sediment_eroded_mass_kg"] = round(ero, 4)
+    if net is not None:
+        out["sediment_net_bed_mass_kg"] = round(net, 6)
+    if lost is not None:
+        out["sediment_mass_lost_kg"] = round(lost, 8)
+    return out
 
 
 def _reach_config(data_dir: Path, reach_overrides: dict[str, Any]) -> Any:
@@ -467,6 +521,63 @@ def run_pipeline(
         except Exception as exc:  # noqa: BLE001
             LOG.warning("drogues parse failed (%s) - slick layer skipped", exc)
 
+    # GAIA v1 sediment class: read the GAIA result + listing for the deposition
+    # summary (mirrors the oil_stats block). CUMUL BED EVOL (var 'B/E', metres) in
+    # gaia_river.slf is the deposition map; the solver listing's FINAL
+    # MASS-BALANCE OF SEDIMENTS carries the authoritative deposited / eroded / net
+    # / lost masses in kg (GAIA's own closure - the honesty-floor evidence). All
+    # best-effort: a parse problem never voids a CORRECT END solve.
+    sediment_stats: dict[str, Any] = {}
+    gaia_slf = data_dir / B.GAIA_RESULT_FILENAME
+    if str(getattr(cfg, "substance_class", "tracer")).lower() == "sediment" \
+            and gaia_slf.exists():
+        try:
+            sediment_stats.update(_parse_gaia_mass_balance(out))
+            # injected sediment mass (kg): source discharge x source conc x pulse
+            # window. conc = the dye pulse concentration reused as source conc,
+            # kg/m3 = mg/L / 1000 (the GAIA source-keyword unit).
+            q = float(getattr(cfg, "source_q_m3s", 8.0))
+            conc_kgm3 = max(float(getattr(cfg, "dye_conc_mgl", 100.0)) / 1000.0, 0.0)
+            pulse_s = float(getattr(cfg, "pulse_window_s", 300.0))
+            injected_kg = round(q * conc_kgm3 * pulse_s, 3)
+            sediment_stats["sediment_injected_kg"] = injected_kg
+            # max deposition (mm) + deposit centroid distance from the release,
+            # read from the final CUMUL BED EVOL frame (metres -> mm x1000).
+            from data_manip.extraction.telemac_file import TelemacFile  # noqa: WPS433
+            gf = TelemacFile(str(gaia_slf))
+            evol = [v for v in gf.varnames
+                    if "EVOL" in v.upper() or v.strip().upper().startswith("E")]
+            if evol:
+                ev = np.asarray(gf.get_data_value(evol[0], len(gf.times) - 1))
+                gx = np.asarray(gf.meshx)
+                gy = np.asarray(gf.meshy)
+                dep = ev.copy()
+                dep[dep < 0] = 0.0                     # deposition only (mm map)
+                max_dep_mm = round(float(dep.max()) * 1000.0, 4)
+                sediment_stats["sediment_max_deposition_mm"] = max_dep_mm
+                # deposit centroid distance from the source point (metres): the
+                # spill point is re-derived from the SAME seam author_deck used.
+                try:
+                    sx, sy, _snode = B.spill_point(mesh, cfg)
+                except Exception:  # noqa: BLE001 - centroid dist is best-effort
+                    sx = sy = float("nan")
+                mmask = dep > (0.05 * dep.max() if dep.max() > 0 else 1e9)
+                if mmask.any() and dep[mmask].sum() > 0 and sx == sx and sy == sy:
+                    cx = float((gx[mmask] * dep[mmask]).sum() / dep[mmask].sum())
+                    cy = float((gy[mmask] * dep[mmask]).sum() / dep[mmask].sum())
+                    sediment_stats["sediment_deposit_centroid_dist_m"] = round(
+                        float(np.hypot(cx - sx, cy - sy)), 1)
+            gf.close()
+            # deposit fraction: net bed mass (kg) / injected (kg), clamped [0,1].
+            net = sediment_stats.get("sediment_net_bed_mass_kg")
+            if net is not None and injected_kg > 0:
+                sediment_stats["sediment_deposit_fraction"] = round(
+                    min(max(float(net) / injected_kg, 0.0), 1.0), 4)
+            LOG.info("gaia sediment parsed: %s", sediment_stats)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("gaia sediment parse failed (%s) - deposition metrics "
+                        "skipped", exc)
+
     wall_s = round(time.time() - t0, 1)
 
     metrics: dict[str, Any] = {
@@ -491,6 +602,23 @@ def run_pipeline(
         "bank_source": bank_source,
         **oil_stats,
         "substance_class": str(getattr(cfg, "substance_class", "tracer")),
+        # WAQTEL v1a decay honesty: record the degradation law + coefficient the
+        # deck was authored with (only meaningful for the decay class; harmless
+        # defaults otherwise) so the run summary carries the decay parameters.
+        **({"decay_law": int(getattr(cfg, "decay_law", 1)),
+            "decay_coef": float(getattr(cfg, "decay_coef", 2.0))}
+           if str(getattr(cfg, "substance_class", "tracer")).lower() == "decay"
+           else {}),
+        # GAIA v1 sediment: the deposition summary from gaia_river.slf + the GAIA
+        # listing mass balance (deposited/eroded/net/lost kg, max_deposition_mm,
+        # deposit_fraction, injected/centroid) - the Invariant-1 typed numbers the
+        # agent narrates. Harmless empty dict for every non-sediment run.
+        **sediment_stats,
+        **({"grain_size_um": float(getattr(cfg, "grain_size_um", 200.0)),
+            "sediment_type": str(getattr(cfg, "sediment_type", "sand")),
+            "sediment_density": float(getattr(cfg, "sediment_density", 2650.0))}
+           if str(getattr(cfg, "substance_class", "tracer")).lower() == "sediment"
+           else {}),
         "domain_mode": mesh.get("domain_mode"),
         "n_islands": mesh.get("n_islands"),
         "water_coverage_frac": mesh.get("water_coverage_frac"),

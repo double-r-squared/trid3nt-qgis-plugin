@@ -40,6 +40,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import tempfile
 from pathlib import Path
@@ -60,7 +61,16 @@ from ..pipeline_emitter import (
 )
 from ..tools import TOOL_REGISTRY
 from ..tools.publish_layer import PublishLayerError, publish_layer
-from .postprocess_telemac import PostprocessTelemacError, postprocess_telemac
+from .physics_registry import (
+    PhysicsRegistryError,
+    applied_physics_delta,
+    validate_and_resolve_physics,
+)
+from .postprocess_telemac import (
+    PostprocessTelemacError,
+    postprocess_telemac,
+    postprocess_telemac_deposition,
+)
 from .run_telemac import TELEMAC_SOLVER_NAME
 from .solve_progress import drive_live_solve_progress
 
@@ -160,13 +170,88 @@ OIL_SUBSTANCE_PRESETS: dict[str, str] = {
     "oil": "light_crude",   # generic 'oil' - matched LAST (substring order)
 }
 
+#: WAQTEL v1a first-order DECAY substance class (the third class beside oil and
+#: the plain conservative dye tracer). A decaying substance (sewage / E. coli /
+#: effluent) rides the UNCHANGED dye tracer but the .cas couples WAQTEL with
+#: WATER QUALITY PROCESS = 17, whose nametrac branch applies a first-order decay
+#: SINK to every existing user tracer - so ZERO new tracers, ZERO postprocess or
+#: contract change; only a sink term in the solve. The dict value picks the
+#: WAQTEL degradation law + a literature default coefficient; the run_telemac
+#: decay_half_life_hours / decay_rate_per_day param OVERRIDES the coefficient.
+#: ``law``: 1 = T90 bacterial die-off (coef = T90 hours), 2 = first-order (coef =
+#: k in h^-1), 3 = first-order (coef = k in d^-1) - verified vs telemac2d.dico
+#: LAW OF TRACERS DEGRADATION. Keys are matched as substrings AFTER the oil set.
+#: Bacterial keywords default to T90 ~ 2 h (daylight-freshwater fecal-coliform
+#: die-off, a narrated literature default - never a fabricated observation); a
+#: generic "decaying" substance falls to a mild first-order k. Both period-
+#: stripped variants ("e coli"/"ecoli", from the run_telemac alnum sanitize) and
+#: the raw ("e. coli"/"e.coli") are listed so classify matches on either path.
+DECAY_SUBSTANCE_PRESETS: dict[str, dict[str, float]] = {
+    "sewage": {"law": 1, "coef": 2.0},
+    "e. coli": {"law": 1, "coef": 2.0},
+    "e.coli": {"law": 1, "coef": 2.0},
+    "e coli": {"law": 1, "coef": 2.0},   # period-stripped by the tool sanitize
+    "ecoli": {"law": 1, "coef": 2.0},
+    "coliform": {"law": 1, "coef": 2.0},
+    "coli": {"law": 1, "coef": 2.0},     # catch-all for the coliform family
+    "bacteria": {"law": 1, "coef": 2.0},
+    "bacterial": {"law": 1, "coef": 2.0},
+    "effluent": {"law": 1, "coef": 2.0},
+    "wastewater": {"law": 1, "coef": 2.0},
+    "die-off": {"law": 1, "coef": 2.0},
+    "decaying": {"law": 2, "coef": 0.35},  # generic first-order k in h^-1
+    "half-life": {"law": 2, "coef": 0.35},
+}
 
-def classify_substance(substance: str) -> tuple[str, str | None]:
-    """('oil', preset) for oil-family substances, ('tracer', None) otherwise."""
+#: GAIA v1 SEDIMENT substance class (the FOURTH class beside oil, decay and the
+#: plain conservative dye tracer). A suspended sediment substance (sand / silt /
+#: mud / slurry / tailings / sediment-laden runoff) that SETTLES and DEPOSITS: the
+#: .cas couples GAIA (COUPLING WITH = 'GAIA'), which appends ONE suspended class as
+#: a second telemac2d tracer (r2d 'NCOH SEDIMENT1', g/l == kg/m3) and writes
+#: gaia_river.slf CUMUL BED EVOL (deposition, metres) - pinned by the in-image
+#: smoke (2026-07-19). v1 is SUPPLY-LIMITED (bed initial thickness 0: only the
+#: injected pulse can deposit, nothing erodes). ``grain_size`` is the default d50
+#: in microns for the type (fine sand deposits in-reach; silt mostly exits) and is
+#: honestly a demo default / user override - no site bed-composition fetcher
+#: exists. ``type`` tunes narration + the default grain. Keys are matched as
+#: substrings AFTER oil + decay (so a decaying-sediment stays decay only if a
+#: decay word appears first; a plain 'sediment' is the sediment class). All v1
+#: types are modeled as NON-cohesive (NCO); cohesive mud (Krone/Partheniades) is
+#: v2, so 'mud' is a very-fine NCO approximation, narrated honestly.
+SEDIMENT_SUBSTANCE_PRESETS: dict[str, dict[str, float | str]] = {
+    "sediment-laden runoff": {"type": "silt", "grain_size": 20.0},
+    "sediment": {"type": "sand", "grain_size": 200.0},
+    "sand": {"type": "sand", "grain_size": 200.0},
+    "silt": {"type": "silt", "grain_size": 20.0},
+    "mud": {"type": "mud", "grain_size": 8.0},
+    "slurry": {"type": "sand", "grain_size": 200.0},
+    "tailings": {"type": "silt", "grain_size": 30.0},
+}
+
+
+def classify_substance(substance: str) -> tuple[str, str | dict[str, float] | None]:
+    """Route a substance string to a TELEMAC substance class + its payload.
+
+    Returns ``('oil', preset)`` for oil-family substances (payload = the
+    OIL_PRESETS key), ``('decay', {law, coef})`` for a first-order-decaying
+    substance (payload = the WAQTEL degradation law + default coefficient),
+    ``('sediment', {type, grain_size})`` for a settling sediment (payload = the
+    GAIA type preset + default d50 in microns), and ``('tracer', None)`` for the
+    plain conservative dye. Order matters: oil keywords win first, then decay,
+    then sediment, else the tracer default - so 'oil' stays oil, 'sewage' stays
+    decay, 'sand' is sediment, and a bare 'dye' stays a conservative tracer,
+    byte-identical to before for the first three classes.
+    """
     s = str(substance or "dye").strip().lower()
     for key, preset in OIL_SUBSTANCE_PRESETS.items():
         if key in s:
             return "oil", preset
+    for key, params in DECAY_SUBSTANCE_PRESETS.items():
+        if key in s:
+            return "decay", dict(params)
+    for key, params in SEDIMENT_SUBSTANCE_PRESETS.items():
+        if key in s:
+            return "sediment", dict(params)
     return "tracer", None
 
 
@@ -517,6 +602,12 @@ def _stage_manifest(
         "full_listing.log",
         "telemac_metrics.json",
     ]
+    # GAIA v1 sediment class: the deposition SELAFIN + its steering file also ship
+    # so the postprocess can build the CUMUL BED EVOL deposition COG + animate the
+    # gaia_river.slf mesh sibling. Harmless for non-sediment runs (they are simply
+    # never produced, so the supervisor's output glob skips them).
+    if str((reach or {}).get("substance_class") or "") == "sediment":
+        outputs += ["gaia_river.slf", "gaia_river.cas"]
     if mesh_only:
         outputs = ["river.slf", "river.cli", "mesh_preview.geojson",
                    "telemac_metrics.json"]
@@ -582,6 +673,40 @@ def _download_telemac_result(run_id: str) -> tuple[str, int]:
     return slf_path, utm_epsg
 
 
+def _download_telemac_gaia(run_id: str) -> tuple[str | None, dict[str, Any]]:
+    """Download ``gaia_river.slf`` + read the sediment metrics from
+    ``telemac_metrics.json`` for a GAIA sediment run. Returns
+    ``(local_gaia_path_or_None, worker_metrics)``. Fail-open: a missing gaia SLF
+    returns ``(None, metrics)`` so the concentration COG still publishes."""
+    from ..tools.solver import _get_runs_bucket, _get_s3_client
+
+    runs_bucket = _get_runs_bucket()
+    s3 = _get_s3_client()
+    worker_metrics: dict[str, Any] = {}
+    try:
+        obj = s3.get_object(Bucket=runs_bucket,
+                            Key=f"{run_id}/telemac_metrics.json")
+        m = json.loads(obj["Body"].read().decode("utf-8"))
+        if isinstance(m, dict):
+            worker_metrics = m
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("telemac sediment: metrics read failed for %s: %s",
+                       run_id, exc)
+
+    gaia_key = f"{run_id}/gaia_river.slf"
+    tmp_dir = tempfile.mkdtemp(prefix=f"telemac-gaia-{run_id}-")
+    gaia_path = str(Path(tmp_dir) / "gaia_river.slf")
+    try:
+        resp = s3.get_object(Bucket=runs_bucket, Key=gaia_key)
+        with open(gaia_path, "wb") as fh:
+            fh.write(resp["Body"].read())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("telemac sediment: gaia_river.slf missing for %s "
+                       "(%s) - deposition COG skipped", run_id, exc)
+        return None, worker_metrics
+    return gaia_path, worker_metrics
+
+
 # --------------------------------------------------------------------------- #
 # The composer
 # --------------------------------------------------------------------------- #
@@ -601,10 +726,18 @@ async def model_river_dye_release_scenario(
     release_lon: float | None = None,
     release_lat: float | None = None,
     substance: str = "dye",
+    decay_half_life_hours: float | None = None,
+    decay_rate_per_day: float | None = None,
+    grain_size_um: float | None = None,
+    sediment_type: str | None = None,
     *,
     release_seeds_reach: bool | None = None,
     seed_release_lon: float | None = None,
     seed_release_lat: float | None = None,
+    friction_coefficient: float | None = None,
+    friction_law: int | None = None,
+    velocity_diffusivity: float | None = None,
+    tracer_diffusivity: float | None = None,
     compute_class: str = "medium",
     pipeline_emitter: Any | None = None,
 ) -> TelemacDyeLayerURI:
@@ -715,10 +848,68 @@ async def model_river_dye_release_scenario(
     # OPEN-26: hand the worker the NAMED watercourse so it re-seeds onto the
     # gnis_name mainstem (confluence disambiguation, Columbia-proven).
     river_name = _named_watercourse(location or location_name) or ""
-    substance_class, oil_preset = classify_substance(substance)
+    substance_class, substance_payload = classify_substance(substance)
+    oil_preset = substance_payload if substance_class == "oil" else None
+    # WAQTEL v1a decay class: classify_substance picks the degradation law + a
+    # literature default coefficient; the run_telemac decay_half_life_hours /
+    # decay_rate_per_day param OVERRIDES the coefficient (and, for a half-life,
+    # switches to first-order law 2 with k = ln2/hl; for a per-day rate, law 3).
+    # These are USER/LLM parameters with narrated defaults - never fabricated
+    # observations. The dye pulse (SOURCES column) is UNCHANGED; WAQTEL only
+    # adds a first-order decay SINK to the existing dye tracer in the solve.
+    decay_law = 1
+    decay_coef = 2.0
+    if substance_class == "decay":
+        if isinstance(substance_payload, dict):
+            decay_law = int(substance_payload.get("law", 1))
+            decay_coef = float(substance_payload.get("coef", 2.0))
+        if decay_half_life_hours is not None:
+            try:
+                hl = float(decay_half_life_hours)
+            except (TypeError, ValueError):
+                hl = 0.0
+            if hl > 0.0:
+                hl = min(max(hl, 0.1), 720.0)   # clamp: 6 min .. 30 days
+                decay_law = 2                    # first-order, k in h^-1
+                decay_coef = round(math.log(2.0) / hl, 6)
+        elif decay_rate_per_day is not None:
+            try:
+                kd = float(decay_rate_per_day)
+            except (TypeError, ValueError):
+                kd = 0.0
+            if kd > 0.0:
+                decay_law = 3                    # first-order, k in d^-1
+                decay_coef = round(min(max(kd, 0.01), 100.0), 6)
+        logger.info(
+            "substance %r -> decay class (WAQTEL process 17, law=%d coef=%.4g): "
+            "first-order sink on the dye tracer, no new tracer",
+            substance, decay_law, decay_coef,
+        )
     if substance_class == "oil":
         logger.info("substance %r -> oil class (preset %s): slick particles + "
                     "dissolved tracer", substance, oil_preset)
+    # GAIA v1 sediment class: classify picks the type preset + a default d50 in
+    # microns; the run_telemac grain_size_um / sediment_type params OVERRIDE them
+    # (honest demo defaults, never a fabricated site value - no bed-composition
+    # fetcher exists). The worker couples GAIA and the postprocess emits BOTH the
+    # suspended-concentration COG and the CUMUL BED EVOL deposition COG.
+    sed_grain_um = 200.0
+    sed_type = "sand"
+    if substance_class == "sediment":
+        if isinstance(substance_payload, dict):
+            sed_grain_um = float(substance_payload.get("grain_size", 200.0))
+            sed_type = str(substance_payload.get("type", "sand"))
+        if sediment_type is not None and str(sediment_type).strip():
+            sed_type = str(sediment_type).strip().lower()[:8]
+        if grain_size_um is not None:
+            try:
+                sed_grain_um = float(grain_size_um)
+            except (TypeError, ValueError):
+                pass
+        sed_grain_um = float(min(max(sed_grain_um, 5.0), 2000.0))  # [5,2000] um
+        logger.info("substance %r -> sediment class (GAIA, type=%s d50=%.4gum): "
+                    "suspended settling + supply-limited deposition",
+                    substance, sed_type, sed_grain_um)
     # 2026-07-18 release-seeding: plausible release coords ride the manifest;
     # whether they ALSO seed the worker's centerline/corridor resolution
     # (nearest flowline to the RELEASE, not the geocode center) is the
@@ -738,13 +929,49 @@ async def model_river_dye_release_scenario(
     seeds_reach = bool(release_seeds_reach) and (
         release_pair is not None or seed_release_pair is not None
     )
+    # TELEMAC-PHYS-1 constitutive-physics overrides (advanced / demo-default
+    # levers). Only the keys the user/LLM explicitly set are validated + carried
+    # onto the manifest; anything unset is absent from `reach`, so the worker
+    # ReachConfig field stays None and author_deck emits the historical literal
+    # (byte-identical). validate_and_resolve_physics range-checks + coerces.
+    _phys_overrides: dict[str, Any] = {}
+    if friction_coefficient is not None:
+        _phys_overrides["friction_coefficient"] = friction_coefficient
+    if friction_law is not None:
+        _phys_overrides["friction_law"] = friction_law
+    if velocity_diffusivity is not None:
+        _phys_overrides["velocity_diffusivity"] = velocity_diffusivity
+    if tracer_diffusivity is not None:
+        _phys_overrides["tracer_diffusivity"] = tracer_diffusivity
+    _resolved_phys: dict[str, Any] = {}
+    if _phys_overrides:
+        try:
+            _resolved_phys = validate_and_resolve_physics("telemac", _phys_overrides)
+        except PhysicsRegistryError as exc:
+            raise TelemacDyeScenarioInputError(
+                f"invalid TELEMAC advanced physics: {exc}"
+            ) from exc
+        logger.info(
+            "model_river_dye_release_scenario advanced physics applied "
+            "(user-provided): %s",
+            applied_physics_delta("telemac", _resolved_phys),
+        )
+
     reach: dict[str, Any] = {
         "name": reach_name,
         "seed_lon": round(seed_lon, 6),
         "seed_lat": round(seed_lat, 6),
+        **_resolved_phys,
         **({"river_name": river_name} if river_name else {}),
         **({"substance_class": "oil", "oil_preset": oil_preset}
            if substance_class == "oil" else {}),
+        **({"substance_class": "decay",
+            "decay_law": decay_law, "decay_coef": decay_coef}
+           if substance_class == "decay" else {}),
+        **({"substance_class": "sediment", "sediment_type": sed_type,
+            "grain_size_um": sed_grain_um, "sediment_density": 2650.0,
+            "erodible_bed": False}
+           if substance_class == "sediment" else {}),
         "nav_direction": "DM",
         "distance_km": float(reach_length_km),
         "channel_width_m": float(channel_width_m),
@@ -868,6 +1095,7 @@ async def model_river_dye_release_scenario(
                 utm_epsg=utm_epsg,
                 reach_name=reach_name,
                 substance=substance,
+                substance_class=substance_class,
             )
     finally:
         try:
@@ -895,6 +1123,70 @@ async def model_river_dye_release_scenario(
         batch_run_id, reach_name, peak.dye_cmax_mgl, peak.plume_reach_m,
         peak.active_frames, peak.uri,
     )
+
+    # --- GAIA v1 sediment class: deposition COG + fold the deposition scalars -- #
+    # The returned primary is the suspended-sediment CONCENTRATION ribbon; the
+    # CUMUL BED EVOL deposition tongue is emitted as a SECOND map layer beside it
+    # (mirrors the oil-slick emit pattern). GAIA's own listing mass balance
+    # supplies deposited_mass_kg / deposit_fraction (Invariant 1) - folded onto the
+    # returned peak so the agent narrates them. Best-effort: a deposition-COG
+    # failure never voids the concentration layer.
+    if substance_class == "sediment":
+        try:
+            gaia_path, worker_sed = await asyncio.to_thread(
+                _download_telemac_gaia, batch_run_id)
+            # deposited_mass_kg = NET bed mass (CUMULATED BED EVOLUTIONS), clamped
+            # >= 0 - the SAME net quantity the deposition map and deposit_fraction
+            # integrate. NEVER the gross CUMULATED DEPOSITION: in a supply-limited
+            # v1 run gross deposition can equal gross erosion (re-suspension) with
+            # net ~= 0, so the map is correctly suppressed as empty and the narrated
+            # mass must be ~0 to match - not the gross figure (honesty-floor).
+            _net = worker_sed.get("sediment_net_bed_mass_kg")
+            _dep = max(float(_net), 0.0) if _net is not None else None
+            peak = peak.model_copy(update={
+                "deposited_mass_kg": _dep,
+                "deposit_fraction": worker_sed.get("sediment_deposit_fraction"),
+                "max_deposition_mm": worker_sed.get("sediment_max_deposition_mm"),
+            })
+            if gaia_path:
+                async with substep(emitter, "postprocess_telemac"):
+                    dep_layers, _dep_metrics = await asyncio.to_thread(
+                        postprocess_telemac_deposition,
+                        gaia_path,
+                        run_id=batch_run_id,
+                        utm_epsg=utm_epsg,
+                        reach_name=reach_name,
+                        worker_sed_metrics=worker_sed,
+                    )
+                try:
+                    Path(gaia_path).unlink(missing_ok=True)
+                except Exception:  # noqa: BLE001
+                    pass
+                if dep_layers and emitter is not None:
+                    dep_raw = dep_layers[0]
+                    try:
+                        pub_uri = await asyncio.to_thread(
+                            publish_layer,
+                            layer_uri=dep_raw.uri,
+                            layer_id=dep_raw.layer_id,
+                            style_preset=dep_raw.style_preset,
+                        )
+                        dep_pub = dep_raw.model_copy(update={"uri": pub_uri})
+                    except PublishLayerError as exc:
+                        logger.warning("sediment deposition publish failed (%s) - "
+                                       "emitting the unpublished COG", exc)
+                        dep_pub = dep_raw
+                    from ..layer_uri_emit import publish_input_layer  # noqa: WPS433
+                    emitted = await publish_input_layer(emitter, dep_pub)
+                    logger.info("sediment deposition layer emitted=%s id=%s "
+                                "max_dep_mm=%s deposited_kg=%s", emitted,
+                                dep_pub.layer_id, dep_pub.max_deposition_mm,
+                                dep_pub.deposited_mass_kg)
+        except (PostprocessTelemacError, TelemacDyeScenarioError) as exc:
+            logger.warning("sediment deposition postprocess failed (%s) - the "
+                           "concentration COG still stands", exc)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("sediment deposition unexpected failure (%s)", exc)
 
     # --- M3 oil class: publish the floating-slick track as a vector layer ---- #
     # (mesh-preview pattern: the worker wrote slick.geojson next to the result;

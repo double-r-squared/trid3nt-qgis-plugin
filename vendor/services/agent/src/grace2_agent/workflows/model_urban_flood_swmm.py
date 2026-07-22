@@ -49,15 +49,18 @@ from grace2_contracts.swmm_contracts import SWMMDepthLayerURI
 from ..pipeline_emitter import (
     begin_substeps,
     current_emitter,
+    emit_chart_payloads,
     mint_dispatch_and_sim_cards,
     route_sim_terminal,
     substep,
 )
 from ..tools.publish_layer import PublishLayerError, publish_layer
 from .postprocess_swmm import (
+    CONCENTRATION_STYLE_PRESET,
     FLOOD_DEPTH_STYLE_PRESET,
     PostprocessSWMMError,
     postprocess_swmm,
+    postprocess_swmm_pollutants,
 )
 from .run_swmm import (
     SWMM_SOLVER_NAME,
@@ -1080,6 +1083,28 @@ async def model_urban_flood_swmm(
     # emission is skipped - the frames still live in `layers` for tests to assert.
     emitted_frames = await _emit_frame_layers(emitter, frame_layers, staging.run_id)
 
+    # --- Step 7c: WATER-QUALITY (buildup/washoff) additive context ----------
+    # When the run authored WQ sections (staging.pollutants non-empty), read the
+    # outfall pollutograph + cumulative outfall LOAD + per-cell peak washoff-
+    # concentration COGs from the SAME solved .out/.rpt, publish each concentration
+    # layer through the render chokepoint + emit it as role="context", and emit the
+    # pollutograph chart. Depth stays the PRIMARY return: WQ is additive, so a WQ
+    # failure never sinks the flood headline (best-effort, mirrors the input-layer
+    # emits + the registry-quantities block below). Off-loop per the
+    # no-sync-blocking norm (pyswmm Output read + COG rasterize/upload).
+    if getattr(staging, "pollutants", None):
+        try:
+            await _publish_and_emit_wq(
+                emitter, run, staging, bbox=tuple(bbox)
+            )
+        except Exception as exc:  # noqa: BLE001 - WQ is additive; never fatal
+            logger.warning(
+                "model_urban_flood_swmm: WQ postprocess/emit failed (non-fatal, "
+                "depth headline intact) run_id=%s: %s",
+                staging.run_id,
+                exc,
+            )
+
     # --- levers STEP 3 (gated): ADDITIVE registry quantities -----------------
     # The depth peak + frames above are the byte-identical headline. When the
     # registry-quantities flag is on, ALSO publish FLOODING_LOSSES / PONDED_VOLUME
@@ -1316,6 +1341,100 @@ async def _emit_frame_layers(
             run_id,
         )
     return emitted
+
+
+async def _publish_and_emit_wq(
+    emitter: Any, run: Any, staging: Any, *, bbox: tuple[float, float, float, float]
+) -> None:
+    """Read + publish + emit the WATER-QUALITY additive context (sprint-WQ).
+
+    Runs ``postprocess_swmm_pollutants`` off-loop (pyswmm Output read + COG
+    rasterize/upload — sync blocking work), publishes each per-cell peak washoff-
+    concentration COG through ``publish_layer`` (the render chokepoint) so it
+    carries a renderable URL, emits it as a ``role="context"`` layer beside the
+    depth headline, and emits the outfall pollutograph chart. Best-effort at every
+    step: a publish/emit miss drops just that piece (its raw s3:// uri never
+    renders, so the guardrail hides it), never the depth primary. No-op when no
+    emitter is bound (direct/smoke/test) beyond computing the metrics for the log.
+    """
+    async with substep(emitter, "postprocess_swmm_pollutants"):
+        pol_layers, series, metrics = await asyncio.to_thread(
+            postprocess_swmm_pollutants,
+            run,
+            staging.build,
+            run_id=staging.run_id,
+        )
+
+    logger.info(
+        "model_urban_flood_swmm WQ run_id=%s metrics=%s",
+        staging.run_id,
+        {
+            n: {
+                "outfall_load": round(float(m.get("outfall_load", 0.0)), 4),
+                "units": m.get("outfall_load_units"),
+                "peak_conc": round(float(m.get("peak_outfall_conc", 0.0)), 4),
+                "washoff_frac": m.get("washoff_mass_fraction"),
+                "wq_continuity_pct": m.get("wq_continuity_error_pct"),
+            }
+            for n, m in (metrics or {}).items()
+        },
+    )
+
+    if emitter is None:
+        return
+
+    # Publish + emit each concentration layer through the render chokepoint.
+    from grace2_contracts.swmm_contracts import SWMMPollutantLayerURI
+
+    for lyr in pol_layers:
+        emit_layer: LayerURI = lyr
+        if lyr.uri.startswith("gs://") or lyr.uri.startswith("s3://"):
+            try:
+                pub_uri = await asyncio.to_thread(
+                    publish_layer,
+                    layer_uri=lyr.uri,
+                    layer_id=lyr.layer_id,
+                    style_preset=lyr.style_preset or CONCENTRATION_STYLE_PRESET,
+                )
+            except PublishLayerError as exc:
+                logger.warning(
+                    "model_urban_flood_swmm: WQ publish_layer FAILED for %s "
+                    "(%s) - dropping the concentration raster (metrics still "
+                    "narrate).",
+                    lyr.layer_id,
+                    exc,
+                )
+                continue
+            # Stamp the AOI bbox + the published URL onto a fresh layer so it
+            # renders and the WQ scalars stay intact (model_copy keeps all fields).
+            emit_layer = lyr.model_copy(update={"uri": pub_uri, "bbox": tuple(bbox)})
+        try:
+            await emitter.add_loaded_layer(emit_layer)
+        except Exception as exc:  # noqa: BLE001 - never break the solve
+            logger.warning(
+                "model_urban_flood_swmm: WQ add_loaded_layer failed for %s: %s",
+                emit_layer.layer_id,
+                exc,
+            )
+
+    # Emit the outfall pollutograph chart (best-effort; None when < 2 points).
+    try:
+        from ..tools.chart_tools import build_pollutograph_chart
+
+        units_by = {
+            n: str(m.get("pollutant_units", "")) for n, m in (metrics or {}).items()
+        }
+        chart = build_pollutograph_chart(
+            series_by_pollutant=series,
+            units_by_pollutant=units_by,
+        )
+        if chart is not None:
+            await emit_chart_payloads(chart)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "model_urban_flood_swmm: pollutograph chart emit failed (non-fatal): %s",
+            exc,
+        )
 
 
 def _cleanup_deck_dir(deck_dir: str) -> None:

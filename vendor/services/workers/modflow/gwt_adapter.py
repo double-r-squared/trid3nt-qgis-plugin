@@ -41,6 +41,7 @@ import math
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import flopy
 import numpy as np
@@ -114,6 +115,102 @@ DEFAULT_RIVER_STAGE_DEPTH_M = 1.5
 #: the local aquifer head so the reach is a real head-dependent boundary (not a
 #: degenerate no-op). Expressed relative to AQUIFER_TOP_M (local datum).
 DEFAULT_RIVER_RBOT_ABOVE_TOP_M = 0.5
+
+
+# ---------------------------------------------------------------------------
+# SFR (streamflow-routing) demo defaults (module wave; stream_depletion
+# archetype). SFR6 upgrades the fixed-stage RIV boundary to a routed stream
+# network (per-reach stage + Manning discharge + the GWF<->stream exchange), so
+# the model answers "how does pumping this well affect the river". These are
+# v0.1 demo simplifications narrated as demo values exactly like the OQ-3
+# aquifer K / porosity and the J9 RIV streambed defaults. A real run reads
+# width/inflow from NHDPlus VAA / NWM / NWIS. All units are METERS + DAYS (the
+# deck's TDIS units); the SFR length_conversion=1.0 + time_conversion=86400.0
+# make Manning's flow internally consistent (unit_conversion is DEPRECATED
+# since mf6 6.4.2).
+# ---------------------------------------------------------------------------
+
+#: Demo channel width (m) written to every SFR reach packagedata rwid when the
+#: caller supplies no river_width_m. In the 5-15 m demo band for a small river.
+DEFAULT_SFR_WIDTH_M = 8.0
+
+#: Demo streambed thickness (m) written to every SFR reach packagedata rbth.
+DEFAULT_SFR_BED_THICKNESS_M = 1.0
+
+#: Demo streambed hydraulic conductivity (m/day) written to every reach
+#: packagedata rhk (reach<->aquifer leakage). Reuses the DEFAULT_RIVER_CONDUCTANCE
+#: lineage (silty streambed ~ 0.5 m/day) so the SFR leakage magnitude tracks the
+#: RIV seepage path's demo streambed.
+DEFAULT_SFR_STREAMBED_K_M_DAY = 0.5
+
+#: Demo Manning roughness (packagedata man) - a natural-channel value.
+DEFAULT_SFR_MANNING_N = 0.035
+
+#: Demo headwater INFLOW (m^3/day) written to the most-upstream reach perioddata
+#: when the caller supplies no river_inflow_m3_s. ~0.06 m^3/s of baseflow -> a
+#: small perennial stream the near-stream pumping can visibly deplete.
+DEFAULT_SFR_INFLOW_M3_DAY = 5000.0
+
+#: Demo streambed-top (rtp) gradient (m/m) for the linear fallback profile when
+#: no DEM rbot is supplied. Strictly > 0 so SFR Manning flow does not pool.
+DEFAULT_SFR_STREAMBED_GRADIENT = 0.001
+
+#: Demo streambed top of the MOST-UPSTREAM reach relative to AQUIFER_TOP_M. The
+#: streambed sits just below the local aquifer datum so the reach stage (rtp +
+#: depth) is a real head-dependent boundary near the water table (mirrors the
+#: smoke fixture where rtp sat just below the strt head).
+DEFAULT_SFR_HEADWATER_RTP_BELOW_TOP_M = 0.5
+
+#: Minimum strictly-positive per-reach streambed gradient (rgrd) after clamping.
+#: SFR errors / pools on a zero or negative Manning slope, so downstream rtp
+#: differences are floored here.
+MIN_SFR_STREAMBED_GRADIENT = 1e-4
+
+
+# ---------------------------------------------------------------------------
+# CSUB (aquifer-system compaction / land subsidence) demo defaults (module
+# wave; land_subsidence archetype). CSUB layers onto the EXISTING
+# sustainable_yield transient WEL deck: the pumping drawdown pushes the effective
+# stress in a compressible fine-grained interbed past its preconsolidation,
+# producing PERMANENT (inelastic) aquifer-system compaction -> a ground
+# subsidence bowl (cm). v1 = ONE no-delay HEAD_BASED interbed per pumped
+# footprint cell; preconsolidation = the initial head (pcs0=0) so any drawdown
+# drives inelastic compaction. These are v0.1 demo simplifications narrated as
+# demo values (no site clay-fraction fetcher yet -- the subsidence MAGNITUDE is
+# set by Ssv * interbed_thickness, so they are narrated honestly, never as site
+# precision). All units are m^-1 (specific storage) or dimensionless (fraction).
+# Pinned by the local mf6 6.5.0 smoke (fixtures/csub_smoke):
+#   * output text tags CSUB-COMPACTION / CSUB-ZDISPLACE (the latter TRUNCATED to
+#     16 chars; NOT "CSUB-ZDISPLACEMENT");
+#   * subsidence is POSITIVE-DOWN;
+#   * mf6 HARD-REQUIRES STO ss == 0 in all active cells when CSUB is present, so
+#     the storage double-count fix is engine-enforced (see the STO block below).
+# ---------------------------------------------------------------------------
+
+#: Inelastic (virgin) specific storage Ssv of the compressible interbed, m^-1 --
+#: the number that SETS the subsidence magnitude. Corcoran-Clay-scale compressible
+#: fine-grained interbed (San Joaquin Valley benchmark corridor).
+DEFAULT_CSUB_SSV_INELASTIC = 2e-3
+
+#: Elastic (recompression) specific storage Sse of the interbed, m^-1 -- one-to-two
+#: orders BELOW Ssv (the elastic/inelastic contrast IS the subsidence physics).
+DEFAULT_CSUB_SSE_ELASTIC = 5e-5
+
+#: Coarse-grained ELASTIC skeletal specific storage Ss of the aquifer matrix, m^-1
+#: (the CSUB cg_ske_cr). REPLACES the STO ss the plain run used (mf6 forces STO
+#: ss==0 under CSUB), so it matches the aquifer elastic Ss -- equals the default
+#: DEFAULT_AQUIFER_SS so the CSUB-run head decline matches the plain run.
+DEFAULT_CSUB_CG_SKE = 1e-5
+
+#: Interbed thickness as a FRACTION of the model layer thickness (the CSUB
+#: packagedata thick with cell_fraction=True). ~0.5 -> the interbed occupies about
+#: half the ~30 m demo layer. Ultimate compaction scales via dz = Ssv * b * dh.
+DEFAULT_CSUB_INTERBED_THICK_FRAC = 0.5
+
+#: STO specific storage ss written when CSUB is present. mf6 6.5.0 HARD-ERRORS
+#: unless STO ss == 0 in all active cells with CSUB (CSUB owns skeletal storage
+#: via cg_ske_cr) -- the engine-enforced double-count guard. Pinned in the smoke.
+CSUB_STO_SS_FLOOR = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -483,6 +580,35 @@ class DeckManifest:
     seawater_salinity_ppt: float = 0.0   # GHB+AUX boundary salinity (ppt); also IC strt
     # Headline scalar written to the manifest after the real run (0.0 before run):
     intrusion_length_m: float = 0.0  # bottom-layer 50%-isochlor toe penetration (m)
+    # --- module wave: stream_depletion SFR routed river<->aquifer exchange ------ #
+    # ``archetype == "stream_depletion"``: a transient GWF (WEL well) + a routed
+    # MODFLOW-6 SFR6 stream network draped from the fetched flowline. The SFR
+    # package forces an asymmetric matrix so the IMS flips to BICGSTAB (recorded
+    # via ``sfr_present`` / ``newton_under_relaxation``). Every field below stays
+    # at its default for all other archetypes (byte-identical manifests).
+    sfr_present: bool = False   # True iff a ModflowGwfsfr package was written
+    n_reaches: int = 0          # number of SFR reaches draped onto the grid
+    # Ordered reach cell echo for postprocess georegistration: one
+    # ``[ifno, row, col, reach_len_m]`` per reach in path (headwater->outlet) order.
+    sfr_reach_cells: list[list[float]] = field(default_factory=list)
+    sfr_inflow_m3_day: float = 0.0   # headwater INFLOW written to reach 0 (m^3/day)
+    sfr_width_m: float = 0.0         # channel width written to every reach (m)
+    sfr_streambed_k_m_day: float = 0.0  # streambed K written to every reach (m/day)
+    sfr_manning_n: float = 0.0       # Manning roughness written to every reach
+    # --- module wave: land_subsidence CSUB aquifer-system compaction ----------- #
+    # ``archetype == "land_subsidence"``: a transient GWF (WEL well) + a CSUB
+    # package (ONE no-delay HEAD_BASED interbed per pumped footprint cell). CSUB
+    # owns the coarse skeletal storage, so the STO ss is dropped to 0 (mf6-enforced
+    # double-count guard). Every field below stays at its default for all other
+    # archetypes (byte-identical manifests).
+    csub_present: bool = False   # True iff a ModflowGwfcsub package was written
+    n_interbeds: int = 0         # number of CSUB interbeds over the pumped footprint
+    # Ordered interbed cell echo for postprocess georegistration: one
+    # ``[icsubno, row, col]`` per interbed in footprint (row-major) order.
+    csub_interbed_cells: list[list[float]] = field(default_factory=list)
+    csub_ssv_inelastic_m: float = 0.0  # inelastic Ssv written to every interbed (m^-1)
+    csub_sse_elastic_m: float = 0.0    # elastic Sse written to every interbed (m^-1)
+    csub_interbed_thick_frac: float = 0.0  # interbed thickness fraction of the layer
     # Files written (relative to sim_dir), for manifest/upload assembly:
     files: list[str] = field(default_factory=list)
 
@@ -672,6 +798,270 @@ def build_riv_records(
     return records
 
 
+def _smooth_monotonic_rtp(rtp_raw: list[float]) -> list[float]:
+    """Force a streambed-top profile monotonically NON-INCREASING downstream.
+
+    SFR requires the streambed to descend (or stay level) from headwater to
+    outlet so Manning routing has a valid slope. A DEM-sampled rtp can wobble
+    upward (noise, a culvert, a mis-snapped cell); this walks the profile in
+    path order and clamps each reach top to at most its upstream neighbour minus
+    a tiny epsilon so the slope is strictly resolvable. The FIRST (headwater)
+    value is kept as-is. Pure arithmetic - no flopy, no mf6.
+    """
+    if not rtp_raw:
+        return []
+    out = [float(rtp_raw[0])]
+    eps = MIN_SFR_STREAMBED_GRADIENT  # a hair of drop even on flat inputs
+    for v in rtp_raw[1:]:
+        prev = out[-1]
+        out.append(min(float(v), prev - eps))
+    return out
+
+
+def _build_sfr_reaches(
+    river_cells: list[tuple[int, int, float]],
+    *,
+    rwid: float,
+    rhk: float,
+    man: float,
+    rbth: float,
+    inflow_m3_day: float,
+    n_stress_periods: int,
+    rtp_by_cell: dict[tuple[int, int], float] | None = None,
+) -> dict[str, Any]:
+    """Turn path-ordered draped cells into MF6 SFR6 deck inputs.
+
+    ``river_cells`` is the ``_drape_polyline_onto_grid`` output: ``(row, col,
+    reach_len_m)`` per UNIQUE cell in path (headwater->outlet) order - exactly the
+    ordered-reach input SFR needs. Reach ``ifno`` is the path index; the
+    connectivity is the simple chain ``[i, +(i-1), -(i+1)]`` (upstream positive,
+    downstream negative) MF6 SFR uses for a single stem (no diversions v0.1).
+
+    packagedata columns (mf6 SFR6):
+        ``(ifno, cellid, rlen, rwid, rgrd, rtp, rbth, rhk, man, ncon, ustrf, ndv)``
+      * rlen  = the per-cell reach length from the draping (metres);
+      * rwid  = demo channel width;
+      * rgrd  = the strictly-positive downstream streambed gradient, derived from
+                the smoothed rtp differences and floored at MIN_SFR_STREAMBED_GRADIENT;
+      * rtp   = the streambed top, monotonic non-increasing downstream (from the
+                DEM ``rtp_by_cell`` when supplied, else a linear demo profile);
+      * rbth  = demo streambed thickness; rhk = demo streambed K; man = Manning n;
+      * ncon  = 1 at the two ends, 2 in the interior; ustrf = 1.0; ndv = 0.
+
+    perioddata puts the headwater INFLOW on reach 0 in EVERY stress period (the
+    baseline steady period AND the pumped transient periods carry the same
+    inflow - the pumping delta, not the inflow, is the depletion signal).
+
+    Returns a dict with ``packagedata`` / ``connectiondata`` / ``perioddata`` /
+    ``obs`` (the continuous-observation mapping registering per-reach stage,
+    downstream-flow and the sfr GWF-exchange term to ``<gwf>.sfr.obs.csv``) plus
+    ``reach_meta`` (the ordered ``(ifno, row, col, reach_len_m)`` list echoed onto
+    the manifest for postprocess georegistration) and ``n_reaches``. Pure Python
+    (no flopy) so the geometry is unit-testable without the mf6 binary.
+    """
+    n = len(river_cells)
+    if n < 1:
+        raise ValueError("SFR requires >= 1 draped reach cell (empty river polyline?)")
+
+    # --- streambed top (rtp): DEM-sampled else a linear demo profile --------- #
+    if rtp_by_cell:
+        rtp_raw = [
+            float(rtp_by_cell.get((row, col), AQUIFER_TOP_M
+                  - DEFAULT_SFR_HEADWATER_RTP_BELOW_TOP_M
+                  - i * DEFAULT_SFR_STREAMBED_GRADIENT * max(rlen, 1.0)))
+            for i, (row, col, rlen) in enumerate(river_cells)
+        ]
+    else:
+        # Linear demo profile descending from the headwater at the demo gradient.
+        rtp_raw = [
+            AQUIFER_TOP_M
+            - DEFAULT_SFR_HEADWATER_RTP_BELOW_TOP_M
+            - i * DEFAULT_SFR_STREAMBED_GRADIENT * max(rlen, 1.0)
+            for i, (_row, _col, rlen) in enumerate(river_cells)
+        ]
+    rtp = _smooth_monotonic_rtp(rtp_raw)
+
+    # --- per-reach downstream gradient (rgrd), strictly > 0 ------------------- #
+    # rgrd[i] = (rtp[i] - rtp[i+1]) / rlen[i], clamped > 0; the LAST reach reuses
+    # the previous gradient (no downstream neighbour to difference against).
+    rgrd: list[float] = []
+    for i in range(n):
+        rlen_i = max(float(river_cells[i][2]), 1.0)
+        if i < n - 1:
+            drop = rtp[i] - rtp[i + 1]
+            g = drop / rlen_i
+        else:
+            g = rgrd[-1] if rgrd else DEFAULT_SFR_STREAMBED_GRADIENT
+        rgrd.append(max(g, MIN_SFR_STREAMBED_GRADIENT))
+
+    packagedata: list[tuple] = []
+    connectiondata: list[list[int]] = []
+    reach_meta: list[tuple[int, int, int, float]] = []
+    for i, (row, col, rlen) in enumerate(river_cells):
+        ncon = 2 if 0 < i < n - 1 else 1
+        cellid = (0, int(row), int(col))
+        packagedata.append(
+            (
+                i,               # ifno (0-based reach number)
+                cellid,          # cellid (lay, row, col)
+                float(rlen),     # rlen (per-cell reach length, m)
+                float(rwid),     # rwid (channel width, m)
+                float(rgrd[i]),  # rgrd (streambed gradient, m/m, > 0)
+                float(rtp[i]),   # rtp (streambed top, m; monotonic downstream)
+                float(rbth),     # rbth (streambed thickness, m)
+                float(rhk),      # rhk (streambed K, m/day)
+                float(man),      # man (Manning roughness)
+                ncon,            # ncon (number of connected reaches)
+                1.0,             # ustrf (upstream fraction; single stem)
+                0,               # ndv (no diversions v0.1)
+            )
+        )
+        chain = [i]
+        if i > 0:
+            chain.append(i - 1)         # upstream connection (positive)
+        if i < n - 1:
+            chain.append(-(i + 1))      # downstream connection (negative)
+        connectiondata.append(chain)
+        reach_meta.append((i, int(row), int(col), float(rlen)))
+
+    # --- perioddata: headwater INFLOW on reach 0 in every period ------------- #
+    period_records = [(0, "INFLOW", float(inflow_m3_day))]
+    perioddata = {p: period_records for p in range(max(1, n_stress_periods))}
+
+    # --- continuous OBS: stage / downstream-flow / sfr exchange per reach ---- #
+    # boundnames are UPPERCASED by mf6 into the csv header (STAGE_R{i} / FLOW_R{i}
+    # / GWF_R{i}); the postprocess parser matches that casing (pinned by the
+    # Phase-1 smoke fixture). Column ORDER follows this registration order.
+    obs_entries: list[tuple[str, str, tuple[int]]] = []
+    for i in range(n):
+        obs_entries.append((f"stage_r{i}", "stage", (i,)))
+    for i in range(n):
+        obs_entries.append((f"flow_r{i}", "downstream-flow", (i,)))
+    for i in range(n):
+        obs_entries.append((f"gwf_r{i}", "sfr", (i,)))
+    obs = {"{gwf}.sfr.obs.csv": obs_entries}
+
+    return {
+        "packagedata": packagedata,
+        "connectiondata": connectiondata,
+        "perioddata": perioddata,
+        "obs": obs,
+        "reach_meta": reach_meta,
+        "n_reaches": n,
+    }
+
+
+def _footprint_cells_around(
+    wr: int, wc: int, *, nrow: int, ncol: int
+) -> list[tuple[int, int]]:
+    """The pumped-cell footprint: the WEL cell + its 8 in-grid neighbours.
+
+    Pure arithmetic (no flopy). Returns the unique in-bounds ``(row, col)`` cells
+    of the 3x3 neighbourhood centred on ``(wr, wc)`` in a stable, deterministic
+    order (row-major). Cells outside the grid are dropped so a near-edge well
+    still yields a valid (smaller) footprint. This is the v1 subsidence footprint
+    over which one CSUB interbed is placed per cell.
+    """
+    cells: list[tuple[int, int]] = []
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            r, c = wr + dr, wc + dc
+            if 0 <= r < nrow and 0 <= c < ncol:
+                cells.append((r, c))
+    return cells
+
+
+def _build_csub_interbeds(
+    footprint_cells: list[tuple[int, int]],
+    *,
+    ssv: float,
+    sse: float,
+    thick_frac: float,
+    theta: float,
+) -> dict[str, Any]:
+    """Turn a pumped-cell footprint into MF6 CSUB deck inputs (ONE no-delay
+    HEAD_BASED interbed per cell).
+
+    ``footprint_cells`` is a list of ``(row, col)`` cells (layer 0 assumed). Pure
+    Python (no flopy) so the interbed geometry + OBS shape are unit-testable
+    without the mf6 binary, mirroring ``_build_sfr_reaches``.
+
+    packagedata columns (mf6 CSUB, ``compression_indices=False`` so ssv_cc/sse_cr
+    are specific-storage values Ssv/Sse in m^-1; ``cell_fraction=True`` so thick is
+    a fraction of the cell thickness):
+        ``(icsubno, cellid, cdelay, pcs0, thick_frac, rnb, ssv_cc, sse_cr, theta,
+           kv, h0, boundname)``
+      * cdelay   = "nodelay" (no delay interbeds in v1);
+      * pcs0     = 0.0 (preconsolidation OFFSET = 0 -> with head_based the INITIAL
+                   head is the preconsolidation head, so any drawdown is
+                   inelastic-capable -> PERMANENT subsidence, the demo signature);
+      * thick_frac = the interbed thickness as a fraction of the cell thickness;
+      * rnb      = 1.0 (single equivalent interbed; > 1 is only for delay beds);
+      * ssv_cc   = INELASTIC (virgin) Ssv, sse_cr = ELASTIC (recompression) Sse
+                   with Ssv >> Sse (the elastic/inelastic contrast);
+      * theta    = interbed porosity;
+      * kv       = 1.0 (ignored for nodelay; a positive dummy avoids the DELAY
+                   validation);
+      * h0       = 0.0 (initial interbed head offset);
+      * boundname = ``sub_r{i}`` (mf6 UPPERCASES it in the OBS csv header ->
+                    COMPACTION_R{i} / INE_R{i} / ELA_R{i}, pinned by the smoke).
+
+    The continuous OBS (registered to ``<gwf>.csub.obs.csv``) records, per
+    interbed: ``interbed-compaction`` (total, m), ``inelastic-compaction`` (INE,
+    the permanent share) and ``elastic-compaction`` (ELA, the recoverable share).
+    The postprocess parses these for ``inelastic_fraction = sum(INE) / (sum(INE)
+    + sum(ELA))``. The OBS types + the uppercased casing are pinned by the Phase-1
+    smoke fixture (fixtures/csub_smoke).
+
+    Returns a dict with ``packagedata`` / ``obs`` / ``interbed_meta`` (the ordered
+    ``[icsubno, row, col]`` echo for postprocess georegistration) and
+    ``n_interbeds``. Pure Python; the flopy ``ModflowGwfcsub`` call lives in the
+    deck builder.
+    """
+    n = len(footprint_cells)
+    if n < 1:
+        raise ValueError("CSUB requires >= 1 footprint cell (empty pumped footprint?)")
+    packagedata: list[tuple] = []
+    interbed_meta: list[tuple[int, int, int]] = []
+    for i, (row, col) in enumerate(footprint_cells):
+        cellid = (0, int(row), int(col))
+        packagedata.append(
+            (
+                i,                    # icsubno (0-based interbed number)
+                cellid,               # cellid (lay, row, col)
+                "nodelay",            # cdelay (no delay interbeds v1)
+                0.0,                  # pcs0 (preconsolidation OFFSET = 0)
+                float(thick_frac),    # thick (fraction of cell thickness)
+                1.0,                  # rnb (single equivalent interbed)
+                float(ssv),           # ssv_cc (inelastic Ssv, m^-1)
+                float(sse),           # sse_cr (elastic Sse, m^-1)
+                float(theta),         # theta (interbed porosity)
+                1.0,                  # kv (ignored for nodelay; positive dummy)
+                0.0,                  # h0 (initial interbed head offset)
+                f"sub_r{i}",          # boundname (-> SUB_R{i} in the OBS csv)
+            )
+        )
+        interbed_meta.append((i, int(row), int(col)))
+
+    # --- continuous OBS: total / inelastic / elastic compaction per interbed - #
+    # boundname-keyed obs (mf6 UPPERCASES -> COMPACTION_R{i} / INE_R{i} / ELA_R{i}).
+    obs_entries: list[tuple[str, str, str]] = []
+    for i in range(n):
+        obs_entries.append((f"compaction_r{i}", "interbed-compaction", f"sub_r{i}"))
+    for i in range(n):
+        obs_entries.append((f"ine_r{i}", "inelastic-compaction", f"sub_r{i}"))
+    for i in range(n):
+        obs_entries.append((f"ela_r{i}", "elastic-compaction", f"sub_r{i}"))
+    obs = {"{gwf}.csub.obs.csv": obs_entries}
+
+    return {
+        "packagedata": packagedata,
+        "obs": obs,
+        "interbed_meta": interbed_meta,
+        "n_interbeds": n,
+    }
+
+
 def _resolve_transient_periods(
     *,
     sim_years: float | None,
@@ -852,6 +1242,22 @@ def _build_gwf_only_archetype_deck(
     et_max_rate_m_day: float | None = None,
     et_extinction_depth_m: float | None = None,
     specific_yield: float | None = None,
+    # stream_depletion (module wave: SFR routed river<->aquifer exchange)
+    river_polyline_lonlat: list[tuple[float, float]] | None = None,
+    river_rbot_by_cell: dict[tuple[int, int], float] | None = None,
+    river_inflow_m3_s: float | None = None,
+    river_width_m: float | None = None,
+    streambed_k_m_day: float | None = None,
+    manning_n: float | None = None,
+    # land_subsidence (module wave: CSUB aquifer-system compaction)
+    csub_ssv_inelastic_m: float | None = None,
+    csub_sse_elastic_m: float | None = None,
+    csub_interbed_thick_frac: float | None = None,
+    csub_cg_ske_m: float | None = None,
+    # constitutive advanced-physics (levers STEP 3): ALREADY-VALIDATED resolved
+    # dict (regional_gradient / streambed_k_m_day / sfr_manning_n). None/{} =>
+    # every phys.get below returns the historical constant => byte-identical.
+    advanced_physics: dict | None = None,
 ) -> DeckManifest:
     """Assemble a GWF-ONLY archetype deck (no GWT block, no GWFGWT exchange).
 
@@ -883,7 +1289,22 @@ def _build_gwf_only_archetype_deck(
     # BICGSTAB is required for a robust solve. The other archetypes keep the
     # standard MODERATE/BICGSTAB linear solve. NEWTON is declared on the GWF model
     # (newtonoptions) AND the IMS linear_acceleration is forced to BICGSTAB.
-    use_newton = archetype == "wetland_hydroperiod"
+    # stream_depletion drapes a routed SFR6 network onto the GWF grid. SFR forces
+    # an ASYMMETRIC coefficient matrix ("PRODUCES AN ASYMMETRIC COEFFICIENT
+    # MATRIX... USE BICGSTAB", proven live under the default CG), and the
+    # near-stream unconfined water table wants NEWTON for a robust solve - so
+    # stream_depletion joins wetland_hydroperiod on the NEWTON + BICGSTAB path.
+    # ``sfr_present`` is the explicit flag: the linear_acceleration flip is gated
+    # on it so a NON-SFR archetype deck is never perturbed by the SFR path.
+    sfr_present = archetype == "stream_depletion"
+    # land_subsidence layers a CSUB package onto the sustainable_yield transient
+    # WEL deck. HEAD_BASED CSUB is LINEAR in head (no head-dependent CSUB
+    # nonlinearity) and does NOT force an asymmetric matrix, so it needs NEITHER
+    # NEWTON NOR a linear_acceleration change - the scaffold's BICGSTAB/MODERATE
+    # default holds, and every non-CSUB archetype deck stays byte-identical.
+    # ``csub_present`` gates the whole CSUB branch, mirroring ``sfr_present``.
+    csub_present = archetype == "land_subsidence"
+    use_newton = archetype in ("wetland_hydroperiod", "stream_depletion")
 
     gwf = flopy.mf6.ModflowGwf(
         sim,
@@ -898,6 +1319,9 @@ def _build_gwf_only_archetype_deck(
         complexity="MODERATE" if not use_newton else "COMPLEX",
         outer_dvclose=1e-6,
         inner_dvclose=1e-6,
+        # BICGSTAB is required whenever SFR is present (asymmetric matrix) AND for
+        # the NEWTON archetypes; the pre-existing archetypes keep their BICGSTAB
+        # default untouched (this helper never used CG), so no existing deck moves.
         linear_acceleration="BICGSTAB",
     )
     sim.register_ims_package(ims_gwf, [gwf_name])
@@ -912,9 +1336,19 @@ def _build_gwf_only_archetype_deck(
         "MAR",
         "ASR",
         "wetland_hydroperiod",
+        "stream_depletion",
+        "land_subsidence",
     )
     sy = float(aquifer_sy) if aquifer_sy is not None else DEFAULT_AQUIFER_SY
     ss = float(aquifer_ss) if aquifer_ss is not None else DEFAULT_AQUIFER_SS
+    # STORAGE double-count guard (land_subsidence): CSUB supplies the coarse
+    # skeletal storage via cg_ske_cr, and mf6 6.5.0 HARD-REQUIRES STO ss == 0 in
+    # all active cells when CSUB is present (proven in the fixtures/csub_smoke
+    # run: STO ss > 0 -> "Specific storage values ... must be zero ..." error).
+    # Drop ss to the floor so the aquifer does NOT store water twice - the
+    # CSUB-run head decline then matches the plain sustainable_yield run.
+    if csub_present:
+        ss = CSUB_STO_SS_FLOOR
     # MAR/ASR/wetland override sy with their own demo defaults (water-table response).
     if archetype == "MAR" and aquifer_sy is None:
         sy = DEFAULT_MAR_SY
@@ -949,7 +1383,12 @@ def _build_gwf_only_archetype_deck(
         else:
             n_wp = DEFAULT_N_TRANSIENT_PERIODS
         transient_periods = _resolve_monthly_periods(n_months=n_wp)
-    elif archetype == "sustainable_yield":
+    elif archetype in ("sustainable_yield", "stream_depletion", "land_subsidence"):
+        # stream_depletion + land_subsidence reuse the sustainable_yield transient
+        # schedule: a steady baseline (WEL off) then the pumped period(s). The
+        # steady spin-up holds the CSUB preconsolidation; the transient periods
+        # draw down and drive the compaction - ONE solve, same single-solve
+        # discipline the SFR smoke proved (no separate baseline run needed).
         transient_periods = _resolve_transient_periods(
             sim_years=sim_years, n_periods=n_periods
         )
@@ -991,8 +1430,13 @@ def _build_gwf_only_archetype_deck(
         pass
 
     # --- IC + NPF ------------------------------------------------------------ #
+    # regional_gradient: CONSTITUTIVE lever. Default EQUALS REGIONAL_GRADIENT so
+    # an unset run is byte-identical (same phys.get seam as alh/ath1).
+    phys = dict(advanced_physics or {})
     domain_width_m = ncol * delr
-    head_west = AQUIFER_TOP_M + REGIONAL_GRADIENT * domain_width_m
+    head_west = AQUIFER_TOP_M + float(
+        phys.get("regional_gradient", REGIONAL_GRADIENT)
+    ) * domain_width_m
     head_east = AQUIFER_TOP_M
     flopy.mf6.ModflowGwfic(gwf, strt=head_west, filename=f"{gwf_name}.ic")
 
@@ -1004,7 +1448,8 @@ def _build_gwf_only_archetype_deck(
     # confined (icelltype=0).
     npf_icelltype = (
         1
-        if archetype in ("mine_dewatering", "MAR", "wetland_hydroperiod")
+        if archetype
+        in ("mine_dewatering", "MAR", "wetland_hydroperiod", "stream_depletion")
         else 0
     )
     flopy.mf6.ModflowGwfnpf(
@@ -1062,15 +1507,32 @@ def _build_gwf_only_archetype_deck(
     et_surface_written = 0.0
     et_max_rate_written = 0.0
     et_extinction_written = 0.0
+    # stream_depletion SFR accumulators (default to the no-SFR value).
+    sfr_n_reaches = 0
+    sfr_reach_cells_meta: list[list[float]] = []
+    sfr_inflow_written = 0.0
+    sfr_width_written = 0.0
+    sfr_streambed_k_written = 0.0
+    sfr_manning_written = 0.0
 
-    if archetype == "sustainable_yield":
+    # land_subsidence CSUB accumulators (default to the no-CSUB value).
+    csub_n_interbeds = 0
+    csub_interbed_cells_meta: list[list[float]] = []
+    csub_ssv_written = 0.0
+    csub_sse_written = 0.0
+    csub_thick_frac_written = 0.0
+
+    if archetype in ("sustainable_yield", "stream_depletion", "land_subsidence"):
+        # stream_depletion + land_subsidence place the SAME sustained-extraction
+        # WEL as sustainable_yield (the pumping whose river/subsidence impact we
+        # measure); the SFR network / CSUB interbeds are added after this block.
         if well_location_latlon is None:
             raise ValueError(
-                "sustainable_yield archetype requires well_location_latlon"
+                f"{archetype} archetype requires well_location_latlon"
             )
         if pumping_rate_m3_day is None:
             raise ValueError(
-                "sustainable_yield archetype requires pumping_rate_m3_day"
+                f"{archetype} archetype requires pumping_rate_m3_day"
             )
         wlat, wlon = float(well_location_latlon[0]), float(well_location_latlon[1])
         if not (-90.0 <= wlat <= 90.0) or not (-180.0 <= wlon <= 180.0):
@@ -1409,6 +1871,163 @@ def _build_gwf_only_archetype_deck(
             pname="evt-0",
         )
 
+    # --- SFR: routed river<->aquifer exchange (stream_depletion) -------------- #
+    # Drape the fetched NHDPlus flowline onto the grid as path-ordered reaches
+    # (headwater->outlet), build the SFR6 packagedata/connectiondata/perioddata +
+    # continuous OBS (stage / downstream-flow / sfr GWF-exchange per reach ->
+    # <gwf>.sfr.obs.csv). length_conversion=1.0 + time_conversion=86400.0 make
+    # Manning's flow internally consistent in METERS/DAYS (unit_conversion is
+    # DEPRECATED since mf6 6.4.2). The postprocess parses the OBS csv; the reach
+    # cell echo goes onto the manifest for georegistration.
+    if sfr_present:
+        if not river_polyline_lonlat:
+            raise ValueError(
+                "stream_depletion archetype requires a river_polyline_lonlat "
+                "(fetch_river_geometry -> resolve_river_polyline_lonlat)"
+            )
+        verts_en = [
+            to_utm.transform(float(plon), float(plat))
+            for (plon, plat) in river_polyline_lonlat
+        ]
+        river_cells = _drape_polyline_onto_grid(
+            verts_en,
+            xorigin=xorigin,
+            yorigin=yorigin,
+            delr=delr,
+            delc=delc,
+            nrow=nrow,
+            ncol=ncol,
+        )
+        if not river_cells:
+            raise ValueError(
+                "stream_depletion river_polyline_lonlat draped to zero in-grid "
+                "reach cells (flowline outside the model grid?)"
+            )
+        sfr_width_written = (
+            float(river_width_m) if river_width_m is not None else DEFAULT_SFR_WIDTH_M
+        )
+        # SFR streambed K / Manning n: an explicit run-arg still wins; otherwise
+        # fall back to the advanced_physics override, then the historical constant
+        # (phys.get => byte-identical when unset). Same seam as regional_gradient.
+        sfr_streambed_k_written = (
+            float(streambed_k_m_day)
+            if streambed_k_m_day is not None
+            else float(phys.get("streambed_k_m_day", DEFAULT_SFR_STREAMBED_K_M_DAY))
+        )
+        sfr_manning_written = (
+            float(manning_n)
+            if manning_n is not None
+            else float(phys.get("sfr_manning_n", DEFAULT_SFR_MANNING_N))
+        )
+        # INFLOW: the contract carries river_inflow_m3_s (m^3/s); SFR perioddata is
+        # in the deck's time unit (DAYS) so convert to m^3/day.
+        sfr_inflow_written = (
+            float(river_inflow_m3_s) * SECONDS_PER_DAY
+            if river_inflow_m3_s is not None
+            else DEFAULT_SFR_INFLOW_M3_DAY
+        )
+        sfr_build = _build_sfr_reaches(
+            river_cells,
+            rwid=sfr_width_written,
+            rhk=sfr_streambed_k_written,
+            man=sfr_manning_written,
+            rbth=DEFAULT_SFR_BED_THICKNESS_M,
+            inflow_m3_day=sfr_inflow_written,
+            n_stress_periods=n_stress_periods,
+            rtp_by_cell=river_rbot_by_cell,
+        )
+        sfr_n_reaches = int(sfr_build["n_reaches"])
+        sfr_reach_cells_meta = [list(m) for m in sfr_build["reach_meta"]]
+        # OBS boundnames are registered on the package; the csv filename resolves
+        # to "<gwf>.sfr.obs.csv" (the postprocess-parse target).
+        obs_map = {
+            key.format(gwf=gwf_name): entries
+            for key, entries in sfr_build["obs"].items()
+        }
+        sfr = flopy.mf6.ModflowGwfsfr(
+            gwf,
+            save_flows=True,
+            print_input=True,
+            print_flows=True,
+            length_conversion=1.0,
+            time_conversion=86400.0,
+            nreaches=sfr_n_reaches,
+            packagedata=sfr_build["packagedata"],
+            connectiondata=sfr_build["connectiondata"],
+            perioddata=sfr_build["perioddata"],
+            stage_filerecord=f"{gwf_name}.sfr.stg",
+            budget_filerecord=f"{gwf_name}.sfr.bud",
+            observations=obs_map,
+            filename=f"{gwf_name}.sfr",
+            pname="sfr-0",
+        )
+
+    # --- CSUB: aquifer-system compaction / land subsidence (land_subsidence) -- #
+    # Layer ONE no-delay HEAD_BASED interbed per pumped footprint cell (the WEL
+    # cell + its 8 neighbours). The pumping drawdown drives inelastic (permanent)
+    # compaction because pcs0=0 makes the initial head the preconsolidation head.
+    # CSUB writes the total compaction grid + the z-displacement grid (the
+    # subsidence bowl) + a per-interbed OBS csv (total / inelastic / elastic
+    # compaction). The STO ss was already dropped to 0 above (mf6-enforced
+    # double-count guard). PINNED by the smoke: output text tags CSUB-COMPACTION /
+    # CSUB-ZDISPLACE (the latter TRUNCATED to 16 chars); subsidence positive-down.
+    if csub_present:
+        csub_ssv_written = (
+            float(csub_ssv_inelastic_m)
+            if csub_ssv_inelastic_m is not None
+            else DEFAULT_CSUB_SSV_INELASTIC
+        )
+        csub_sse_written = (
+            float(csub_sse_elastic_m)
+            if csub_sse_elastic_m is not None
+            else DEFAULT_CSUB_SSE_ELASTIC
+        )
+        csub_thick_frac_written = (
+            float(csub_interbed_thick_frac)
+            if csub_interbed_thick_frac is not None
+            else DEFAULT_CSUB_INTERBED_THICK_FRAC
+        )
+        cg_ske_written = (
+            float(csub_cg_ske_m) if csub_cg_ske_m is not None else DEFAULT_CSUB_CG_SKE
+        )
+        footprint = _footprint_cells_around(
+            int(well_row), int(well_col), nrow=nrow, ncol=ncol
+        )
+        csub_build = _build_csub_interbeds(
+            footprint,
+            ssv=csub_ssv_written,
+            sse=csub_sse_written,
+            thick_frac=csub_thick_frac_written,
+            theta=porosity,
+        )
+        csub_n_interbeds = int(csub_build["n_interbeds"])
+        csub_interbed_cells_meta = [list(m) for m in csub_build["interbed_meta"]]
+        obs_map = {
+            key.format(gwf=gwf_name): entries
+            for key, entries in csub_build["obs"].items()
+        }
+        csub_pkg = flopy.mf6.ModflowGwfcsub(
+            gwf,
+            save_flows=True,
+            boundnames=True,
+            head_based=True,
+            initial_preconsolidation_head=True,
+            cell_fraction=True,          # thick is a fraction of cell thickness
+            compression_indices=False,   # ssv_cc/sse_cr are Ss values (m^-1)
+            ninterbeds=csub_n_interbeds,
+            maxsig0=0,
+            cg_ske_cr=cg_ske_written,
+            cg_theta=porosity,
+            packagedata=csub_build["packagedata"],
+            compaction_filerecord=f"{gwf_name}.csub.compaction.bin",
+            zdisplacement_filerecord=f"{gwf_name}.csub.zdisp.bin",
+            filename=f"{gwf_name}.csub",
+            pname="csub-0",
+        )
+        csub_pkg.obs.initialize(
+            filename=f"{gwf_name}.csub.obs", continuous=obs_map
+        )
+
     # --- OC: save HEAD + BUDGET ALL ------------------------------------------ #
     flopy.mf6.ModflowGwfoc(
         gwf,
@@ -1480,6 +2099,21 @@ def _build_gwf_only_archetype_deck(
         et_max_rate_m_day=et_max_rate_written,
         et_extinction_depth_m=et_extinction_written,
         newton_under_relaxation=use_newton,
+        # --- module wave: stream_depletion SFR --------------------------------- #
+        sfr_present=sfr_present,
+        n_reaches=sfr_n_reaches,
+        sfr_reach_cells=sfr_reach_cells_meta,
+        sfr_inflow_m3_day=sfr_inflow_written,
+        sfr_width_m=sfr_width_written,
+        sfr_streambed_k_m_day=sfr_streambed_k_written,
+        sfr_manning_n=sfr_manning_written,
+        # --- module wave: land_subsidence CSUB --------------------------------- #
+        csub_present=csub_present,
+        n_interbeds=csub_n_interbeds,
+        csub_interbed_cells=csub_interbed_cells_meta,
+        csub_ssv_inelastic_m=csub_ssv_written,
+        csub_sse_elastic_m=csub_sse_written,
+        csub_interbed_thick_frac=csub_thick_frac_written,
     )
 
     if write:
@@ -1731,6 +2365,9 @@ def _build_multi_species_deck(
     gwf_name: str,
     write: bool,
     save_concentration_all_steps: bool,
+    # constitutive advanced-physics (levers STEP 3): resolved dict; regional_gradient
+    # is the only lever this GWF+GWT archetype reads. None/{} => byte-identical.
+    advanced_physics: dict | None = None,
 ) -> DeckManifest:
     """Assemble a multi_species GWF + N-GWT deck (ONE shared flow field, N plumes).
 
@@ -1814,8 +2451,13 @@ def _build_multi_species_deck(
     except Exception:  # pragma: no cover - older flopy signature fallback
         pass
 
+    # regional_gradient: CONSTITUTIVE lever (default EQUALS REGIONAL_GRADIENT ->
+    # byte-identical when unset; same phys.get seam as the spill deck).
+    phys = dict(advanced_physics or {})
     domain_width_m = ncol * delr
-    head_west = AQUIFER_TOP_M + REGIONAL_GRADIENT * domain_width_m
+    head_west = AQUIFER_TOP_M + float(
+        phys.get("regional_gradient", REGIONAL_GRADIENT)
+    ) * domain_width_m
     head_east = AQUIFER_TOP_M
     flopy.mf6.ModflowGwfic(gwf, strt=head_west, filename=f"{gwf_name}.ic")
     flopy.mf6.ModflowGwfnpf(
@@ -2035,6 +2677,9 @@ def _build_prt_capture_zone_deck(
     pumping_rate_m3_day: float | None,
     n_particles: int,
     capture_zone_travel_time_years: list[float] | None,
+    # constitutive advanced-physics (levers STEP 3): resolved dict; regional_gradient
+    # is the only lever this GWF-only PRT archetype reads. None/{} => byte-identical.
+    advanced_physics: dict | None = None,
 ) -> DeckManifest:
     """Assemble the STEADY GWF deck for a PRT capture-zone or wellhead-protection run.
 
@@ -2221,8 +2866,13 @@ def _build_prt_capture_zone_deck(
     # CHD: west->east regional gradient (high head west, low head east).
     # Use the same REGIONAL_GRADIENT as all other archetypes; domain_width in
     # local coords is ncol * delr = 4100 m -> head drop = 0.002 * 4100 = 8.2 m.
+    # regional_gradient: CONSTITUTIVE lever (default EQUALS REGIONAL_GRADIENT ->
+    # byte-identical when unset; same phys.get seam as the spill deck).
+    phys = dict(advanced_physics or {})
     domain_width_m = ncol * delr
-    head_west = PRT_AQUIFER_TOP_M + REGIONAL_GRADIENT * domain_width_m
+    head_west = PRT_AQUIFER_TOP_M + float(
+        phys.get("regional_gradient", REGIONAL_GRADIENT)
+    ) * domain_width_m
     head_east = PRT_AQUIFER_TOP_M
     chd_records = []
     for r in range(nrow):
@@ -2903,6 +3553,22 @@ def build_modflow_deck(
     river_rbot_by_cell: dict[tuple[int, int], float] | None = None,
     river_stage_by_cell: dict[tuple[int, int], float] | None = None,
     along_river_source: bool = False,
+    # --- stream_depletion SFR forcing (module wave; ADDITIVE, all optional) - #
+    # Threaded into the SFR deck branch of ``_build_gwf_only_archetype_deck``
+    # when ``archetype == "stream_depletion"``; ignored otherwise. All four are
+    # demo-defaulted in the helper (narrated as demo assumptions).
+    river_inflow_m3_s: float | None = None,
+    river_width_m: float | None = None,
+    streambed_k_m_day: float | None = None,
+    manning_n: float | None = None,
+    # --- land_subsidence CSUB forcing (module wave; ADDITIVE, all optional) - #
+    # Threaded into the CSUB deck branch of ``_build_gwf_only_archetype_deck``
+    # when ``archetype == "land_subsidence"``; ignored otherwise. All four are
+    # demo-defaulted in the helper (narrated as demo assumptions).
+    csub_ssv_inelastic_m: float | None = None,
+    csub_sse_elastic_m: float | None = None,
+    csub_interbed_thick_frac: float | None = None,
+    csub_cg_ske_m: float | None = None,
     # --- Archetype switch (sprint-18 Wave-1; ADDITIVE, all optional) -------- #
     # archetype is None -> the EXISTING spill/seepage GWF+GWT deck (byte-identical).
     # The three new archetypes are GWF-only and dispatch to
@@ -3152,6 +3818,8 @@ def build_modflow_deck(
             "capture_zone",
             "wellhead_protection",
             "saltwater_intrusion",
+            "stream_depletion",
+            "land_subsidence",
         ):
             raise ValueError(f"unknown MODFLOW archetype: {archetype!r}")
         # Wave-5 saltwater_intrusion: GWF (BUY variable-density) + GWT in ONE sim,
@@ -3193,6 +3861,7 @@ def build_modflow_deck(
                 pumping_rate_m3_day=pumping_rate_m3_day,
                 n_particles=n_particles,
                 capture_zone_travel_time_years=capture_zone_travel_time_years,
+                advanced_physics=advanced_physics,
             )
         # multi_species is a GWF+GWT deck (ONE shared GWF + N transport models),
         # NOT a GWF-only archetype, so it dispatches to its own builder.
@@ -3222,6 +3891,7 @@ def build_modflow_deck(
                 gwf_name=gwf_name,
                 write=write,
                 save_concentration_all_steps=save_concentration_all_steps,
+                advanced_physics=advanced_physics,
             )
         return _build_gwf_only_archetype_deck(
             archetype=archetype,
@@ -3267,6 +3937,24 @@ def build_modflow_deck(
             et_max_rate_m_day=et_max_rate_m_day,
             et_extinction_depth_m=et_extinction_depth_m,
             specific_yield=specific_yield,
+            # --- module wave: stream_depletion SFR routed exchange ------------ #
+            # The river geometry reuses the SAME river-coupling kwargs the RIV
+            # seepage path threads (river_polyline_lonlat + river_rbot_by_cell);
+            # the four SFR forcing fields are demo-defaulted in the helper.
+            river_polyline_lonlat=river_polyline_lonlat,
+            river_rbot_by_cell=river_rbot_by_cell,
+            river_inflow_m3_s=river_inflow_m3_s,
+            river_width_m=river_width_m,
+            streambed_k_m_day=streambed_k_m_day,
+            manning_n=manning_n,
+            # --- module wave: land_subsidence CSUB compaction ----------------- #
+            # Four demo-defaulted CSUB forcing fields threaded into the CSUB deck
+            # branch; ignored unless archetype == "land_subsidence".
+            csub_ssv_inelastic_m=csub_ssv_inelastic_m,
+            csub_sse_elastic_m=csub_sse_elastic_m,
+            csub_interbed_thick_frac=csub_interbed_thick_frac,
+            csub_cg_ske_m=csub_cg_ske_m,
+            advanced_physics=advanced_physics,
         )
 
     # Transport time stepping: aim for ~daily resolution but cap step count so
@@ -3347,9 +4035,13 @@ def build_modflow_deck(
         pass
 
     # Constant-head gradient: west column high, east column low -> west->east
-    # flow. Head drop = gradient x domain width.
+    # flow. Head drop = gradient x domain width. regional_gradient: CONSTITUTIVE
+    # lever (default EQUALS REGIONAL_GRADIENT -> byte-identical when unset; the
+    # spill/seepage `phys` dict is built below, so read advanced_physics here).
     domain_width_m = ncol * delr
-    head_west = AQUIFER_TOP_M + REGIONAL_GRADIENT * domain_width_m
+    head_west = AQUIFER_TOP_M + float(
+        (advanced_physics or {}).get("regional_gradient", REGIONAL_GRADIENT)
+    ) * domain_width_m
     head_east = AQUIFER_TOP_M
     flopy.mf6.ModflowGwfic(gwf, strt=head_west, filename=f"{gwf_name}.ic")
     flopy.mf6.ModflowGwfnpf(
@@ -3487,7 +4179,13 @@ def build_modflow_deck(
         ath1 = float(phys["trans_dispersivity_m"])
     else:
         ath1 = LONGITUDINAL_DISPERSIVITY_M * TRANSVERSE_HORIZONTAL_RATIO
-    atv = LONGITUDINAL_DISPERSIVITY_M * TRANSVERSE_VERTICAL_RATIO
+    # Vertical dispersivity (atv): CONSTITUTIVE lever. Default EQUALS the
+    # historical ratio-locked value so an unset run is byte-identical; a set
+    # vert_dispersivity_m flows straight through (same phys.get seam as alh/ath1).
+    if "vert_dispersivity_m" in phys:
+        atv = float(phys["vert_dispersivity_m"])
+    else:
+        atv = LONGITUDINAL_DISPERSIVITY_M * TRANSVERSE_VERTICAL_RATIO
     flopy.mf6.ModflowGwtdsp(
         gwt,
         alh=alh,
