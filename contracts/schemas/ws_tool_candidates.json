@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "ToolCandidate": {
+      "additionalProperties": false,
+      "description": "One ranked tool candidate inside a ``tool-candidates`` request.\n\n- ``tool_name`` -- the registry tool name, echoed VERBATIM in the\n  ``tool-choice`` reply when picked (the server re-resolves the tool by\n  this name; the client never invents one).\n- ``summary`` -- one-line human summary the card renders beside the name\n  (drawn from the tool's docstring/description server-side; may be empty\n  for a defensively-built candidate).\n- ``score`` -- the retrieval ranker's score for this candidate, verbatim\n  (Invariant 1: never an LLM estimate). Unconstrained float: ranker\n  backends differ (cosine similarity may be negative). Candidates arrive\n  ranked best-first; ``score`` lets the client show/inspect the margin.",
+      "properties": {
+        "score": {
+          "default": 0.0,
+          "title": "Score",
+          "type": "number"
+        },
+        "summary": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Summary",
+          "type": "string"
+        },
+        "tool_name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_name"
+      ],
+      "title": "ToolCandidate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``tool-candidates`` (A.4 extension): agent -> client tool picker.\n\nFields:\n\n- ``request_id`` -- ULID correlating this request with the ``tool-choice``\n  reply (and the server's paused-selection record). Echoed verbatim.\n- ``stage_label`` -- the analysis-flow stage this pick belongs to (e.g.\n  ``\"Data step\"``, ``\"Analysis step\"``) so staged ASK-mode waves read as\n  a narrative, not a flood. Plain prose, client-rendered as the card\n  title.\n- ``candidates`` -- the ranked candidates, best-first. MAY be empty when\n  the retrieval side degraded (the client then offers only the free-text\n  + let-agent-decide affordances -- honest degrade, mirroring the\n  region-choice empty-candidates rule).\n- ``reason`` -- ``\"ambiguity\"`` (AUTO-mode measured near-tie) or\n  ``\"ask_mode\"`` (the user asked to see every staged selection).\n- ``timeout_s`` -- how long the SERVER waits before proceeding with its\n  own top-ranked pick (fail-open; the client card notes the state when\n  the turn moves on).",
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/ToolCandidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "reason": {
+      "enum": [
+        "ambiguity",
+        "ask_mode"
+      ],
+      "title": "Reason",
+      "type": "string"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "stage_label": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Stage Label",
+      "type": "string"
+    },
+    "timeout_s": {
+      "default": 60.0,
+      "exclusiveMinimum": 0,
+      "title": "Timeout S",
+      "type": "number"
+    }
+  },
+  "required": [
+    "request_id",
+    "stage_label",
+    "reason"
+  ],
+  "title": "ToolCandidatesPayload",
+  "type": "object"
+}

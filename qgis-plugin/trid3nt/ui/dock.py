@@ -83,6 +83,7 @@ from .cards import (
     CredentialCard,
     GateCard,
     SimCard,
+    ToolCandidatesCard,
     _AssistantEntry,
     _ChatInput,
     _ToolCard,
@@ -127,6 +128,17 @@ from ..render.layers import (
 _LLM_STEP_NAMES = {
     "llm_generation", "gemini_generate", "thinking", "llm",
     "model_generate", "generate", "bedrock_generate", "ollama_generate",
+}
+
+# ADR 0018 picker fail-open (Stage 3, 2026-07-22): event kinds that mean the
+# TURN MOVED ON -- any of these arriving while a ToolCandidatesCard is still
+# unanswered proves the server's ``timeout_s`` fail-open (or a cancel/error)
+# already resolved that selection, so the dock folds the open card to its
+# "agent proceeded" chip. Housekeeping kinds (session-state / case-list /
+# solve-progress) are deliberately absent -- they can arrive while the server
+# is still genuinely waiting on the pick.
+_PICKER_SUPERSEDE_KINDS = {
+    "thinking-chunk", "chunk", "pipeline", "tool-io", "turn-complete", "error",
 }
 
 _DOT_STYLE = "border-radius: 6px; min-width: 12px; max-width: 12px; min-height: 12px; max-height: 12px;"
@@ -248,6 +260,12 @@ class Trid3ntDock(QDockWidget):
         # Item R2 (live-feedback 2026-07-18): short arg summaries from the
         # tool-io sidecar, keyed by step_id, for the tool chip rows.
         self._tool_args_by_step: Dict[str, str] = {}
+        # ADR 0018 (Stage 3, 2026-07-22): the OPEN (not yet answered/
+        # superseded) tool-picker cards, in arrival order. A subsequent turn
+        # event folds them to "agent proceeded" (_supersede_open_tool_pickers);
+        # reset on case switch (_clear_messages -- the widgets die with the
+        # message list).
+        self._open_tool_pickers: List[ToolCandidatesCard] = []
         # O1 (NATE 2026-07-20): the standing "AOI: drawn X x Y deg" readout is
         # GONE (clutter). The ONLY AOI note is the one-time inline transcript
         # note ``_on_aoi_extent_chosen`` emits WHEN the user actually sets the
@@ -538,6 +556,9 @@ class Trid3ntDock(QDockWidget):
         # gone -- the AOI note now fires only on an explicit Set-AOI.)
         self._sim_cards.clear()
         self._tool_args_by_step.clear()
+        # ADR 0018: open picker cards are per-case transcript state -- the
+        # widgets die in the loop below; drop the tracking refs with them.
+        self._open_tool_pickers = []
         # Per-case-bbox 2026-07-19: the previous case's AOI overlay must not
         # linger across a switch -- _on_case_open_event repaints it below from
         # the newly-opened case's own bbox (or leaves it cleared when absent).
@@ -1683,6 +1704,15 @@ class Trid3ntDock(QDockWidget):
     def _on_event(self, kind: str, data: object) -> None:
         if not isinstance(data, dict):
             return
+        # ADR 0018 picker fail-open: any turn-progress event proves the server
+        # already resolved every still-open tool picker (its timeout_s
+        # proceeded, or the turn errored/completed past it) -- fold them to
+        # the "agent proceeded" chip BEFORE handling the event. A new
+        # tool-candidates request supersedes older open pickers too (the
+        # server asks one selection at a time; moving to the next wave means
+        # the previous one is settled).
+        if kind in _PICKER_SUPERSEDE_KINDS or kind == "tool-candidates":
+            self._supersede_open_tool_pickers()
         if kind == "thinking-chunk":
             # F9 (live-feedback 2026-07-09): local model reasoning-channel token.
             # Accumulate into the pending entry's thinking block; the block
@@ -1802,6 +1832,12 @@ class Trid3ntDock(QDockWidget):
             # closed: previously fell through as kind="raw" and was dropped,
             # so the agent's pause waited out its TTL and failed.
             self._show_credential_card(data)
+        elif kind == "tool-candidates":
+            # ADR 0018 (Stage 3, 2026-07-22): the tool-selection picker --
+            # ranked candidates + free-text + let-agent-decide, replying on
+            # ONE tool-choice envelope. Fail-open: unanswered, the server's
+            # timeout_s proceeds and the supersede hook above folds the card.
+            self._show_tool_candidates_card(data)
         elif kind == "case-open":
             self._on_case_open_event(data)
         elif kind == "case-list":
@@ -2089,6 +2125,74 @@ class Trid3ntDock(QDockWidget):
             # before any failure surface we format here).
             self._note(f"credential reply send failed: {exc}", error=True)
 
+    # -- tool-selection picker card (ADR 0018, Stage 3 2026-07-22) --------------- #
+
+    def _show_tool_candidates_card(self, payload: dict) -> None:
+        """Render the ``tool-candidates`` picker as an inline card (contracts
+        ``ws.ToolCandidatesPayload``): the agent ranked several plausible
+        tools for a step and asks which should run. Mirrors
+        ``_show_gate_card``'s malformed-envelope honesty and the BUG-4/N5
+        close-out discipline (post-decision narration lands in a fresh entry
+        BELOW the card). Fail-open by contract -- a malformed/unanswered
+        request costs nothing but the one-click error-kill window (the
+        server's ``timeout_s`` proceeds with its own pick)."""
+        request = gate.parse_tool_candidates(payload)
+        if request is None:
+            self._note(
+                "Received a malformed tool-candidates request (no request_id)"
+                " -- cannot answer it; the agent will proceed with its own "
+                "pick after its timeout.",
+                error=True,
+            )
+            return
+        card = ToolCandidatesCard(request, self._on_tool_choice)
+        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        self._open_tool_pickers.append(card)
+        self._close_pending_for_card()
+        self._scroll_to_bottom()
+
+    def _on_tool_choice(
+        self, request_id: str, tool_name: Optional[str], free_text: Optional[str]
+    ) -> None:
+        """Send the picker reply: ONE ``tool-choice`` envelope carrying the
+        verbatim pick, the typed guidance, or both-None (let the agent
+        decide)."""
+        try:
+            self.bridge.send_tool_choice(
+                request_id, tool_name=tool_name, free_text=free_text
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"tool choice send failed: {exc}", error=True)
+
+    def _supersede_open_tool_pickers(self) -> None:
+        """Fold every still-open picker card to its "agent proceeded" chip
+        (the turn moved on -- the server's fail-open already resolved the
+        selection) and drop every terminal card from the tracking list.
+        ``mark_superseded`` no-ops on an answered card, so answered cards are
+        merely garbage-collected from the list here."""
+        if not self._open_tool_pickers:
+            return
+        for card in self._open_tool_pickers:
+            try:
+                card.mark_superseded()
+            except RuntimeError:
+                # The underlying C++ widget died (case switch raced an
+                # event) -- nothing to fold; the ref is dropped below.
+                pass
+        self._open_tool_pickers = [
+            c for c in self._open_tool_pickers if not self._picker_terminal(c)
+        ]
+
+    @staticmethod
+    def _picker_terminal(card: ToolCandidatesCard) -> bool:
+        """True when the card reached ANY terminal state (answered or
+        superseded) OR its widget already died -- either way it needs no
+        further tracking. Never raises."""
+        try:
+            return card.answered
+        except RuntimeError:
+            return True
+
     # -- sending ------------------------------------------------------------- #
 
     def _send(self) -> None:
@@ -2123,11 +2227,16 @@ class Trid3ntDock(QDockWidget):
             # model_id (empty = agent env default) so a MODEL switch applies
             # live on the next message with no agent restart -- mirrors the
             # show_thinking add. Provider base_url/key stay agent-process env.
+            # ADR 0018 (Stage 3, 2026-07-22): ride the persisted Auto/Ask
+            # mode so the server surfaces tool selection as picker cards in
+            # ask mode -- the same per-turn settings carrier as show_thinking
+            # /model_id ("auto" is omitted on the wire; it IS the default).
             self.bridge.send_chat(
                 text,
                 show_thinking=self.settings.show_thinking,
                 model_id=self.settings.model_id,
                 aoi_bbox=bbox,
+                tool_choice_mode=self.settings.tool_choice_mode,
             )
         except Exception as exc:  # noqa: BLE001
             self._pending.add_note(f"send failed: {exc}", error=True)

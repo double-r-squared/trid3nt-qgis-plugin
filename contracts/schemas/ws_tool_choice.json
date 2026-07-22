@@ -1,0 +1,41 @@
+{
+  "additionalProperties": false,
+  "description": "``tool-choice`` (A.4b extension): client -> agent picker reply.\n\nExactly one of three shapes, keyed by which fields are set:\n\n- ``tool_name`` set -- the user picked a candidate; the value is a\n  ``ToolCandidate.tool_name`` echoed VERBATIM. ``free_text`` is None.\n- ``free_text`` set -- the user typed guidance instead of picking (the\n  card's free-text option); the server feeds it to the selection step.\n  ``tool_name`` is None.\n- both None -- \"let the agent decide\": the server proceeds immediately\n  with its own top-ranked pick (the same outcome as the timeout, but\n  user-initiated and instant).\n\nCross-shape discipline (lightweight -- full enforcement is the consumer's\nresponsibility, matching the A.4b response shapes): ``tool_name`` and\n``free_text`` SHOULD NOT both be set; the server prefers ``tool_name``\nwhen both arrive (the explicit pick is the stronger signal).",
+  "properties": {
+    "free_text": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Free Text"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "tool_name": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Name"
+    }
+  },
+  "required": [
+    "request_id"
+  ],
+  "title": "ToolChoicePayload",
+  "type": "object"
+}

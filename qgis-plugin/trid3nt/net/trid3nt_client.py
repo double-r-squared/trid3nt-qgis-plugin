@@ -1427,6 +1427,7 @@ class AgentClient:
         show_thinking: bool = False,
         model_id: str = "",
         aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
+        tool_choice_mode: str = "",
     ) -> None:
         """Send a user chat message.
 
@@ -1450,6 +1451,13 @@ class AgentClient:
             ...]"). ``None`` = no AOI this turn; the key is then OMITTED so a
             plain message stays byte-identical to the pre-field payload
             (mirrors the ``show_thinking`` / ``model_id`` omit convention).
+        :param tool_choice_mode: ADR 0018 auto/ask modes (Stage 3, 2026-07-22)
+            - ``"ask"`` rides ``tool_choice_mode="ask"`` on the payload so the
+            server surfaces tool selection as ``tool-candidates`` picker cards
+            for this turn. Anything else (``""`` / ``"auto"``) OMITS the key --
+            the server's default IS auto, so a default send stays byte-identical
+            to the pre-field payload (the ``show_thinking`` omit convention;
+            AUTO's measured-ambiguity cards need no flag).
         """
         payload: dict = {"text": text, "case_id": self.case_id}
         if show_thinking:
@@ -1458,6 +1466,8 @@ class AgentClient:
             payload["model_id"] = model_id
         if aoi_bbox is not None:
             payload["aoi_bbox"] = [float(v) for v in aoi_bbox]
+        if tool_choice_mode == "ask":
+            payload["tool_choice_mode"] = "ask"
         self._send(
             "user-message",
             payload,
@@ -1540,6 +1550,32 @@ class AgentClient:
         self._send(
             "credential-provided",
             {"request_id": request_id, "secret_id": None, "provided": False},
+            queue_if_closed=True,
+        )
+
+    def send_tool_choice(
+        self,
+        request_id: str,
+        tool_name: Optional[str] = None,
+        free_text: Optional[str] = None,
+    ) -> None:
+        """Answer a ``tool-candidates`` picker (ADR 0018 auto/ask modes).
+
+        Contract (``ws.ToolChoicePayload``): ONE envelope, ``request_id`` echo
+        + exactly one of three shapes -- ``tool_name`` set (a candidate's name
+        echoed VERBATIM), ``free_text`` set (typed guidance), both None ("let
+        the agent decide" -- the server proceeds immediately with its own top
+        pick, the instant twin of its ``timeout_s`` fail-open). Both keys are
+        always sent (None-valued when unused) so the wire shape is the full
+        contract surface, mirroring ``credential-provided``'s explicit
+        ``secret_id=None``."""
+        self._send(
+            "tool-choice",
+            {
+                "request_id": request_id,
+                "tool_name": tool_name,
+                "free_text": free_text,
+            },
             queue_if_closed=True,
         )
 
@@ -1644,6 +1680,18 @@ class AgentClient:
             # renders the key-entry card (ui/cards.CredentialCard); the reply
             # goes out via submit_credential / decline_credential below.
             return AgentEvent("credential-request", payload)
+        if etype == "tool-candidates":
+            # Tool-selection picker (ADR 0018 auto/ask modes, Stage 3
+            # 2026-07-22): the agent ranked several plausible tools for a
+            # step and asks which should run (contracts ws.
+            # ToolCandidatesPayload -- request_id / stage_label / candidates
+            # / reason / timeout_s). The dock renders the picker card
+            # (ui/cards.ToolCandidatesCard); the reply goes out via
+            # send_tool_choice below. Unanswered, the SERVER's timeout_s
+            # fail-open proceeds with its own top pick -- so this envelope
+            # must surface as its own kind (a "raw" fallthrough would
+            # silently waste the user's one-click error-kill window).
+            return AgentEvent("tool-candidates", payload)
         if etype == "chart-emission":
             # OpenQuake result parity (live-feedback 2026-07-13): a live
             # mid-turn chart (ChartEmissionPayload -- Vega-Lite spec + title

@@ -36,7 +36,7 @@ ASCII only.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from trid3nt_server.categories import HOT_SET_TOOLS
 from trid3nt_server.tools import TOOL_REGISTRY
@@ -51,7 +51,12 @@ from trid3nt_server.tools.discovery.discover_dataset import (
 if TYPE_CHECKING:  # avoid a hard import cycle at module load
     from trid3nt_server.categories import AllowedToolSet
 
-__all__ = ["retrieve_visible_tools", "DEFAULT_K", "MAX_K"]
+__all__ = [
+    "retrieve_visible_tools",
+    "retrieve_ranked_tools",
+    "DEFAULT_K",
+    "MAX_K",
+]
 
 logger = logging.getLogger("trid3nt_server.tools.discovery.tool_retrieval")
 
@@ -60,25 +65,15 @@ DEFAULT_K = 25
 MAX_K = 25
 
 
-def _discover_topk(user_text: str, k: int) -> set[str] | None:
-    """Top-k tool names ranked by relevance to ``user_text`` via the CACHED
-    discover index (BM25 + name-substring + LOCAL dense).
+def _build_channel_rankings(query_clean: str, index: Any) -> list[list[int]]:
+    """The 3 sync ranking channels (BM25 + local dense + name-substring) over
+    the CACHED discover index, as rank lists of tool indices.
 
-    Returns ``None`` when the index is COLD (not yet warmed) so the caller can
-    FAIL-OPEN without triggering a blocking cold model build on the hot path; an
-    empty ``set()`` when the index is warm but nothing matched.
-
-    Mirrors ``discover_dataset``'s inline ranking minus the async Mongo
-    co-occurrence channel, reusing that module's primitives so the paths stay
-    aligned. The network-backed Vertex dense backend's per-query encode is skipped
-    here (it would be hot-path I/O); local sentence-transformers / hashed dense and
-    BM25 are pure-CPU against the cached index.
+    Split out of ``_discover_topk`` (Stage 3, ADR 0017/0018) so the scored
+    variant ``retrieve_ranked_tools`` fuses the SAME channels -- the visible-set
+    and the ambiguity-margin paths can never drift apart. Pure CPU; never
+    builds the index.
     """
-    query_clean = user_text.strip()
-    index = _dd._INDEX  # live module global; None until the orchestrator warms it
-    if index is None or not getattr(index, "tool_names", None):
-        return None  # cold -- never build on the hot path; caller fail-opens
-
     rankings: list[list[int]] = []
 
     # --- BM25 channel ---
@@ -152,6 +147,29 @@ def _discover_topk(user_text: str, k: int) -> set[str] | None:
         ]
         if substr:
             rankings = [substr]
+    return rankings
+
+
+def _discover_topk(user_text: str, k: int) -> set[str] | None:
+    """Top-k tool names ranked by relevance to ``user_text`` via the CACHED
+    discover index (BM25 + name-substring + LOCAL dense).
+
+    Returns ``None`` when the index is COLD (not yet warmed) so the caller can
+    FAIL-OPEN without triggering a blocking cold model build on the hot path; an
+    empty ``set()`` when the index is warm but nothing matched.
+
+    Mirrors ``discover_dataset``'s inline ranking minus the async Mongo
+    co-occurrence channel, reusing that module's primitives so the paths stay
+    aligned. The network-backed Vertex dense backend's per-query encode is skipped
+    here (it would be hot-path I/O); local sentence-transformers / hashed dense and
+    BM25 are pure-CPU against the cached index.
+    """
+    query_clean = user_text.strip()
+    index = _dd._INDEX  # live module global; None until the orchestrator warms it
+    if index is None or not getattr(index, "tool_names", None):
+        return None  # cold -- never build on the hot path; caller fail-opens
+
+    rankings = _build_channel_rankings(query_clean, index)
     if not rankings:
         return set()
 
@@ -160,6 +178,46 @@ def _discover_topk(user_text: str, k: int) -> set[str] | None:
     for idx, _score in fused[:k]:
         names.add(index.tool_names[idx])
     return names
+
+
+def retrieve_ranked_tools(
+    user_text: str, k: int = DEFAULT_K
+) -> list[tuple[str, float]]:
+    """Ranked ``(tool_name, rrf_score)`` list for one turn's query (Stage 3).
+
+    The SCORED face of the same 3-channel RRF ranking ``retrieve_visible_tools``
+    uses -- feeds (a) the openai-provider top-k tool gating and (b) the ADR 0018
+    ambiguity signal (top-1 vs top-2 margin). Scores are the raw RRF fusion
+    values (rank-derived, NOT probabilities; only their ordering + relative
+    margin are meaningful).
+
+    Returns ``[]`` when the index is COLD, the query is empty, or nothing
+    matched -- callers MUST fail open (no gating / no ambiguity ask) on an
+    empty result. Never raises on the hot path; any channel fault degrades to
+    the surviving channels exactly like ``retrieve_visible_tools``.
+    """
+    if not isinstance(user_text, str) or not user_text.strip():
+        return []
+    query_clean = user_text.strip()
+    index = _dd._INDEX  # live module global; None until the orchestrator warms it
+    if index is None or not getattr(index, "tool_names", None):
+        return []  # cold -- caller fails open
+    try:
+        k = int(k)
+    except (TypeError, ValueError):
+        k = DEFAULT_K
+    k = max(1, min(k, len(index.tool_names)))
+    try:
+        rankings = _build_channel_rankings(query_clean, index)
+    except Exception:  # noqa: BLE001 -- fail open, never break dispatch
+        logger.warning("retrieve_ranked_tools: channel build failed", exc_info=True)
+        return []
+    if not rankings:
+        return []
+    fused = _reciprocal_rank_fusion(rankings, k=60)
+    return [
+        (index.tool_names[idx], float(score)) for idx, score in fused[:k]
+    ]
 
 
 def _full_registry_floor(floor: set[str]) -> set[str]:

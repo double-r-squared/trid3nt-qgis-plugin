@@ -18,6 +18,7 @@ from qgis.PyQt.QtWidgets import (
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    QRadioButton,
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
@@ -205,6 +206,25 @@ _CRED_CARD_STYLE = (
     "background-color: rgba(63, 185, 80, 7%); }"
 )
 _CRED_TITLE_STYLE = "color: #3fb950; font-weight: bold; border: none;"
+
+# Tool-selection picker card chrome (ADR 0018 auto/ask modes -- Stage 3,
+# 2026-07-22). Teal -- a "steer the routing" affordance, distinct from the
+# amber caution gate, the blue code gate and the green credential card --
+# with the same N6/STYLE-1 discipline: a subtle low-alpha fill scoped to the
+# FRAME id (never cascading onto child labels), theme-neutral over light and
+# dark QGIS windows alike.
+_PICKER_CARD_STYLE = (
+    "QFrame#toolpickercard { border: 1px solid #39c5cf; border-radius: 8px; "
+    "background-color: rgba(57, 197, 207, 7%); }"
+)
+_PICKER_TITLE_STYLE = "color: #39c5cf; font-weight: bold; border: none;"
+# The candidate radio row: the tool NAME is monospace (it is a registry
+# identifier, same class of text as the tool-card rows), the one-line summary
+# rides under it as a muted indented note.
+_PICKER_RADIO_STYLE = "font-family: monospace; font-size: 9pt; border: none;"
+_PICKER_SUMMARY_STYLE = (
+    "color: palette(mid); font-size: 8pt; border: none; padding-left: 22px;"
+)
 
 # Item R4 (live-feedback 2026-07-18): simulation-card chrome -- purple, the
 # color the web reserves for sim progress affordances; the collapse pattern
@@ -1774,6 +1794,252 @@ class CredentialCard(QFrame):
             if self._decided == "provided"
             else f"Key skipped for {label}"
         )
+        self._summary_container.setVisible(True)
+        self._body.setVisible(False)
+        self.details_toggle.setChecked(False)
+        self.details_toggle.setText("show details")
+
+
+class ToolCandidatesCard(QFrame):
+    """Inline tool-selection picker for one ``tool-candidates`` request (ADR
+    0018 auto/ask modes -- Stage 3, 2026-07-22).
+
+    The agent's retrieval ranked several plausible tools for a step and is
+    asking WHICH one should run -- either because ASK mode surfaces every
+    staged selection or because AUTO mode measured a near-tie (the card's
+    reason note says which, off the closed contract enum). The card shows the
+    stage label as its title, the ranked candidates as radio choices (tool
+    name + one-line summary), a free-text line edit as the last option, and
+    Confirm / "Let agent decide" buttons. The decision maps through the pure
+    ``gate.resolve_tool_choice`` (pick wins outright; else stripped guidance;
+    else both-None = let the agent decide) and rides back on ONE
+    ``tool-choice`` envelope via ``on_decide(request_id, tool_name,
+    free_text)`` -- the dock's send hook. Locks after one answer and folds to
+    a chip ("picked spatial_query" / "agent decided" / the guidance variant)
+    -- the exact GateCard collapse pattern.
+
+    FAIL-OPEN twin (contract ``timeout_s``): unanswered, the SERVER times out
+    and proceeds with its own top pick -- the card never blocks the turn. When
+    a subsequent turn event reaches the dock while this card is still open,
+    the dock calls ``mark_superseded()`` and the card folds to an "agent
+    proceeded" chip (locked -- answering a request the server already
+    resolved would be a lie on the wire).
+
+    Keyboard-safe: Return inside the (focused) free-text field confirms, but
+    the buttons are plain QPushButtons in a dock -- no dialog auto-default
+    that a composer ENTER could fire. Typing in the free-text field selects
+    its radio so a typed answer is never silently attributed to a candidate.
+    """
+
+    def __init__(self, request: gate.ToolCandidatesRequest, on_decide, parent=None):
+        super().__init__(parent)
+        self._request = request
+        self._on_decide = on_decide
+        self._decided: Optional[str] = None
+        self.setObjectName("toolpickercard")  # STYLE-1: scope the fill to the frame
+        self.setStyleSheet(_PICKER_CARD_STYLE)
+        self.setFrameShape(QFrame.StyledPanel)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(3)
+
+        # Collapsed one-line chip (hidden until answered/superseded) + "show
+        # details" re-expand -- the GateCard affordance verbatim.
+        summary_row = QHBoxLayout()
+        self.summary_lbl = QLabel("")
+        self.summary_lbl.setWordWrap(True)
+        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setStyleSheet(_PICKER_TITLE_STYLE)
+        summary_row.addWidget(self.summary_lbl, 1)
+        self.details_toggle = QPushButton("show details")
+        self.details_toggle.setFlat(True)
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.details_toggle.clicked.connect(self._toggle_details)
+        summary_row.addWidget(self.details_toggle)
+        self._summary_container = QWidget()
+        self._summary_container.setLayout(summary_row)
+        self._summary_container.setVisible(False)
+        outer.addWidget(self._summary_container)
+
+        # Full card content -- visible until answered, then folded behind the
+        # chip (re-expandable read-only; controls stay disabled).
+        self._body = QWidget()
+        lay = QVBoxLayout(self._body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(3)
+        outer.addWidget(self._body)
+
+        # Title = the stage label ("Data step" etc.) -- the staged-waves
+        # narrative anchor; a defensively-parsed envelope falls back to a
+        # generic title rather than an empty line.
+        title = request.stage_label or "Tool choice"
+        title_lbl = QLabel(f"{title}: pick a tool")
+        title_lbl.setWordWrap(True)
+        title_lbl.setTextFormat(Qt.PlainText)
+        title_lbl.setStyleSheet(_PICKER_TITLE_STYLE)
+        lay.addWidget(title_lbl)
+
+        note = request.reason_note
+        if note:
+            note_lbl = QLabel(note)
+            note_lbl.setWordWrap(True)
+            note_lbl.setTextFormat(Qt.PlainText)
+            note_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            lay.addWidget(note_lbl)
+
+        # Ranked candidates as radio choices: monospace tool name on the
+        # radio, the one-line summary as a muted indented note under it. All
+        # radios share this card as parent widget, so Qt keeps them mutually
+        # exclusive (the free-text radio below included).
+        self._candidate_radios: List[Tuple[QRadioButton, str]] = []
+        for cand in request.candidates:
+            radio = QRadioButton(cand.tool_name)
+            radio.setStyleSheet(_PICKER_RADIO_STYLE)
+            lay.addWidget(radio)
+            self._candidate_radios.append((radio, cand.tool_name))
+            if cand.summary:
+                summary_lbl = QLabel(cand.summary)
+                summary_lbl.setWordWrap(True)
+                summary_lbl.setTextFormat(Qt.PlainText)
+                summary_lbl.setStyleSheet(_PICKER_SUMMARY_STYLE)
+                lay.addWidget(summary_lbl)
+
+        # The free-text escape hatch, always the LAST option: "none of these
+        # -- here is what I actually want". Typing selects its radio.
+        free_row = QHBoxLayout()
+        self.free_radio = QRadioButton("Other:")
+        self.free_radio.setStyleSheet(_PICKER_RADIO_STYLE)
+        free_row.addWidget(self.free_radio)
+        self.free_edit = QLineEdit()
+        self.free_edit.setPlaceholderText("describe what to do instead")
+        self.free_edit.textEdited.connect(self._on_free_text_edited)
+        self.free_edit.returnPressed.connect(self._confirm)
+        free_row.addWidget(self.free_edit, 1)
+        lay.addLayout(free_row)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        self.confirm_btn = QPushButton("Confirm")
+        self.confirm_btn.clicked.connect(self._confirm)
+        btn_row.addWidget(self.confirm_btn)
+        self.decide_btn = QPushButton("Let agent decide")
+        self.decide_btn.clicked.connect(self._let_agent_decide)
+        btn_row.addWidget(self.decide_btn)
+        lay.addLayout(btn_row)
+
+        self.result_lbl = QLabel("")
+        self.result_lbl.setWordWrap(True)
+        self.result_lbl.setTextFormat(Qt.PlainText)
+        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl.setVisible(False)
+        lay.addWidget(self.result_lbl)
+
+    # -- properties -------------------------------------------------------- #
+
+    @property
+    def request_id(self) -> str:
+        return self._request.request_id
+
+    @property
+    def answered(self) -> bool:
+        """True once ANY terminal state landed (user answer OR superseded)."""
+        return self._decided is not None
+
+    # -- toggles ----------------------------------------------------------- #
+
+    def _toggle_details(self, checked: bool) -> None:
+        self._body.setVisible(checked)
+        self.details_toggle.setText("hide details" if checked else "show details")
+
+    def _on_free_text_edited(self, _text: str) -> None:
+        """Typing IS choosing the free-text option -- select its radio so the
+        typed guidance is never silently attributed to a candidate pick."""
+        if self._decided is None and not self.free_radio.isChecked():
+            self.free_radio.setChecked(True)
+
+    # -- UI state ----------------------------------------------------------- #
+
+    def _picked_tool(self) -> Optional[str]:
+        for radio, tool_name in self._candidate_radios:
+            if radio.isChecked():
+                return tool_name
+        return None
+
+    # -- actions ------------------------------------------------------------ #
+
+    def _confirm(self) -> None:
+        if self._decided is not None:
+            return  # locked -- a picker is answered exactly once
+        picked = self._picked_tool()
+        free_text = (
+            self.free_edit.text() if self.free_radio.isChecked() else None
+        )
+        if picked is None and not (free_text or "").strip():
+            # No decision consumed: an accidental Confirm/Return with nothing
+            # selected must not send "let the agent decide" on the user's
+            # behalf (the empty-Submit honesty the credential card uses).
+            self.result_lbl.setText(
+                "Pick a tool, type what to do instead, or press "
+                "Let agent decide."
+            )
+            self.result_lbl.setVisible(True)
+            return
+        tool_name, guidance = gate.resolve_tool_choice(picked, free_text)
+        self._commit(tool_name, guidance)
+
+    def _let_agent_decide(self) -> None:
+        if self._decided is not None:
+            return  # locked
+        self._commit(None, None)
+
+    def _commit(self, tool_name: Optional[str], free_text: Optional[str]) -> None:
+        self._decided = "answered"
+        self._lock()
+        if tool_name:
+            self.result_lbl.setText(f"Sent your pick: {tool_name}.")
+        elif free_text:
+            self.result_lbl.setText("Sent your guidance to the agent.")
+        else:
+            self.result_lbl.setText("Left the choice to the agent.")
+        self.result_lbl.setVisible(True)
+        self._collapse(gate.tool_choice_summary(tool_name, free_text))
+        self._on_decide(self._request.request_id, tool_name, free_text)
+
+    def mark_superseded(self) -> None:
+        """The turn moved on (a subsequent event arrived) while this card was
+        still open -- the SERVER's ``timeout_s`` fail-open already resolved
+        the selection with the agent's own pick. Lock + fold to the honest
+        "agent proceeded" chip; NO reply is sent (answering a request the
+        server already resolved would be a lie on the wire). No-op once any
+        terminal state landed."""
+        if self._decided is not None:
+            return
+        self._decided = "superseded"
+        self._lock()
+        self.result_lbl.setText(
+            "No answer before the agent moved on -- it proceeded with its "
+            "own pick."
+        )
+        self.result_lbl.setVisible(True)
+        self._collapse("agent proceeded")
+
+    def _lock(self) -> None:
+        widgets: List[QWidget] = [
+            self.confirm_btn, self.decide_btn, self.free_radio, self.free_edit
+        ]
+        widgets.extend(radio for radio, _name in self._candidate_radios)
+        for widget in widgets:
+            widget.setEnabled(False)
+
+    # -- collapse (the GateCard affordance) --------------------------------- #
+
+    def _collapse(self, chip: str) -> None:
+        """Fold to the one-line chip; the body stays intact underneath
+        (controls already disabled) so "show details" can re-expand a
+        read-only view."""
+        self.summary_lbl.setText(chip)
         self._summary_container.setVisible(True)
         self._body.setVisible(False)
         self.details_toggle.setChecked(False)

@@ -150,6 +150,22 @@ class PluginSettings:
         self._set("show_thinking", "true" if value else "false")
 
     @property
+    def tool_choice_mode(self) -> str:
+        """ADR 0018 auto/ask modes (Stage 3, 2026-07-22): the tool-selection
+        VISIBILITY mode ridden on every user-message (mirrors show_thinking).
+        ``"auto"`` (default) = autonomous selection, no picker cards (the
+        server may still ask on a measured retrieval near-tie); ``"ask"`` =
+        every staged selection surfaces as a ``tool-candidates`` picker card.
+        Consent gates are never mode-dependent. Reads filter to the closed
+        vocabulary so a hand-edited/stale value degrades to the default."""
+        value = self._get("tool_choice_mode", "auto")
+        return value if value in ("auto", "ask") else "auto"
+
+    @tool_choice_mode.setter
+    def tool_choice_mode(self, value: str) -> None:
+        self._set("tool_choice_mode", value if value in ("auto", "ask") else "auto")
+
+    @property
     def provider(self) -> str:
         """OpenRouter model-extensibility (design 2026-07-19): the selected
         LLM PROVIDER preset label (``PROVIDER_PRESETS`` key in dock.py --

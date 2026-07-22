@@ -796,6 +796,94 @@ def test_clarification_request_ok(session_id: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# tool-candidates / tool-choice (ADR 0018 auto/ask modes -- Stage 3)
+# --------------------------------------------------------------------------- #
+
+
+def test_tool_candidates_round_trip(session_id: str) -> None:
+    payload = ws.ToolCandidatesPayload(
+        request_id=new_ulid(),
+        stage_label="Analysis step",
+        candidates=[
+            ws.ToolCandidate(tool_name="spatial_query", summary="stats", score=0.7),
+        ],
+        reason="ask_mode",
+        timeout_s=45.0,
+    )
+    dumped = _roundtrip_idempotent(_wrap(payload, session_id))
+    assert dumped["type"] == "tool-candidates"
+    assert dumped["payload"]["reason"] == "ask_mode"
+    assert dumped["payload"]["candidates"][0]["tool_name"] == "spatial_query"
+
+
+def test_tool_candidates_reason_closed_enum() -> None:
+    with pytest.raises(ValidationError):
+        ws.ToolCandidatesPayload(
+            request_id=new_ulid(),
+            stage_label="Data step",
+            candidates=[],
+            reason="vibes",  # type: ignore[arg-type]  # not in the closed enum
+        )
+
+
+def test_tool_candidates_empty_candidates_allowed(session_id: str) -> None:
+    """Retrieval degrade: an empty candidate list is legal -- the client then
+    offers only the free-text + let-agent-decide affordances (region-choice
+    empty-candidates precedent)."""
+    payload = ws.ToolCandidatesPayload(
+        request_id=new_ulid(), stage_label="Data step", reason="ambiguity"
+    )
+    dumped = _roundtrip_idempotent(_wrap(payload, session_id))
+    assert dumped["payload"]["candidates"] == []
+
+
+def test_tool_choice_three_shapes(session_id: str) -> None:
+    """Pick / free-text / let-agent-decide all round-trip; the both-None
+    shape is the explicit 'agent decides' reply, not an error."""
+    pick = ws.ToolChoicePayload(request_id=new_ulid(), tool_name="spatial_query")
+    dumped = _roundtrip_idempotent(_wrap(pick, session_id))
+    assert dumped["payload"]["tool_name"] == "spatial_query"
+    assert dumped["payload"]["free_text"] is None
+
+    free = ws.ToolChoicePayload(
+        request_id=new_ulid(), free_text="use the landcover tool instead"
+    )
+    dumped = _roundtrip_idempotent(_wrap(free, session_id))
+    assert dumped["payload"]["tool_name"] is None
+    assert dumped["payload"]["free_text"] == "use the landcover tool instead"
+
+    decide = ws.ToolChoicePayload(request_id=new_ulid())
+    dumped = _roundtrip_idempotent(_wrap(decide, session_id))
+    assert dumped["payload"]["tool_name"] is None
+    assert dumped["payload"]["free_text"] is None
+
+
+def test_tool_picker_payloads_registered() -> None:
+    """Direction wiring: the request is agent->client, the reply is
+    client->agent -- and both reach ALL_PAYLOADS (schema export + the smoke
+    factory inventory key off it)."""
+    assert "tool-candidates" in ws.AGENT_TO_CLIENT_PAYLOADS
+    assert "tool-choice" in ws.CLIENT_TO_AGENT_PAYLOADS
+    assert "tool-candidates" not in ws.CLIENT_TO_AGENT_PAYLOADS
+    assert "tool-choice" not in ws.AGENT_TO_CLIENT_PAYLOADS
+
+
+def test_user_message_tool_choice_mode(session_id: str) -> None:
+    """ADR 0018: the mode rides user-message like show_thinking/model_id;
+    absent (None) preserves the prior wire shape, and the Literal is closed."""
+    default = ws.UserMessagePayload(text="hi")
+    dumped = _roundtrip_idempotent(_wrap(default, session_id))
+    assert dumped["payload"]["tool_choice_mode"] is None
+
+    ask = ws.UserMessagePayload(text="hi", tool_choice_mode="ask")
+    dumped = _roundtrip_idempotent(_wrap(ask, session_id))
+    assert dumped["payload"]["tool_choice_mode"] == "ask"
+
+    with pytest.raises(ValidationError):
+        ws.UserMessagePayload(text="hi", tool_choice_mode="always")  # type: ignore[arg-type]
+
+
+# --------------------------------------------------------------------------- #
 # Envelope-level + registry coverage
 # --------------------------------------------------------------------------- #
 
@@ -1002,6 +1090,31 @@ def test_every_a3_a4_a4b_payload_round_trips(session_id: str) -> None:
             vcpus=8,
             elapsed_seconds=42.5,
             eta_seconds=300.0,
+        ),
+        # ADR 0018 auto/ask modes -- tool-selection picker (Stage 3,
+        # 2026-07-22). Request is agent->client (ranked candidates + reason +
+        # fail-open timeout); reply is client->agent (verbatim pick OR
+        # free-text guidance OR both-None let-agent-decide).
+        "tool-candidates": lambda: ws.ToolCandidatesPayload(
+            request_id=new_ulid(),
+            stage_label="Data step",
+            candidates=[
+                ws.ToolCandidate(
+                    tool_name="spatial_query",
+                    summary="Query/summarize features of a loaded layer",
+                    score=0.62,
+                ),
+                ws.ToolCandidate(
+                    tool_name="assess_building_damage",
+                    summary="Estimate structural damage over an AOI",
+                    score=0.61,
+                ),
+            ],
+            reason="ambiguity",
+            timeout_s=60.0,
+        ),
+        "tool-choice": lambda: ws.ToolChoicePayload(
+            request_id=new_ulid(), tool_name="spatial_query"
         ),
         # tool-io — raw args + function_response sidecar for the tool-card
         # expander (tool-card-expand-output spec).

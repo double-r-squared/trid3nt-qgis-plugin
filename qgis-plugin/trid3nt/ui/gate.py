@@ -41,6 +41,8 @@ __all__ = [
     "CredentialRequest",
     "GateDecision",
     "PayloadWarning",
+    "ToolCandidate",
+    "ToolCandidatesRequest",
     "code_exec_layer_lines",
     "credential_note_lines",
     "parse_credential_request",
@@ -49,9 +51,12 @@ __all__ = [
     "estimate_frames",
     "parse_code_exec_request",
     "parse_payload_warning",
+    "parse_tool_candidates",
     "resolve_code_exec_decision",
     "resolve_gate_decision",
+    "resolve_tool_choice",
     "summary_lines",
+    "tool_choice_summary",
 ]
 
 
@@ -464,6 +469,140 @@ def credential_note_lines(request: CredentialRequest) -> list:
     if request.tool_name:
         lines.append(f"Waiting tool: {request.tool_name}")
     return lines
+
+
+# --------------------------------------------------------------------------- #
+# Tool-selection picker card (ADR 0018 auto/ask modes -- Stage 3, 2026-07-22)
+# --------------------------------------------------------------------------- #
+#
+# Contract source of truth (mirrored EXACTLY, not paraphrased):
+# ``contracts/src/trid3nt_contracts/ws.py``:
+#
+# * inbound ``tool-candidates`` (ToolCandidatesPayload): ``request_id`` (the
+#   correlation key the reply echoes), ``stage_label`` ("Data step" etc. --
+#   the card title), ``candidates`` (ranked best-first ``{tool_name, summary,
+#   score}`` rows; MAY be empty on retrieval degrade -- the card then offers
+#   only free-text + let-agent-decide), ``reason`` ("ambiguity" = AUTO-mode
+#   measured near-tie / "ask_mode" = the user asked to see every staged
+#   selection), ``timeout_s`` (the SERVER's fail-open window -- unanswered,
+#   the turn proceeds with the agent's own top pick).
+# * the reply is ONE ``tool-choice`` envelope (ToolChoicePayload):
+#   ``request_id`` echo + exactly one of three shapes -- ``tool_name`` set
+#   (verbatim candidate pick), ``free_text`` set (typed guidance), both None
+#   (let the agent decide -- same outcome as the timeout, but instant).
+
+
+@dataclass
+class ToolCandidate:
+    """One ranked candidate row (defensive parse of the contract shape)."""
+
+    tool_name: str
+    summary: str = ""
+    score: float = 0.0
+
+
+@dataclass
+class ToolCandidatesRequest:
+    """Parsed ``tool-candidates`` payload (defensive; raw kept)."""
+
+    request_id: str
+    stage_label: str = ""
+    candidates: list = field(default_factory=list)  # list[ToolCandidate]
+    reason: str = ""
+    timeout_s: float = 0.0
+    raw: dict = field(default_factory=dict)
+
+    @property
+    def reason_note(self) -> str:
+        """The honest one-liner under the title: WHY the agent is asking
+        (never invented client-side -- keyed off the closed contract enum,
+        with an empty fallback for a defensively-parsed envelope)."""
+        if self.reason == "ambiguity":
+            return "The top matches are nearly tied -- your pick avoids a wrong turn."
+        if self.reason == "ask_mode":
+            return "Ask mode: confirm which tool runs for this step."
+        return ""
+
+
+def parse_tool_candidates(payload: dict) -> Optional[ToolCandidatesRequest]:
+    """Parse a raw ``tool-candidates`` payload dict; None when the envelope is
+    unusable -- no ``request_id`` (nothing to correlate the reply against).
+    Candidate rows missing a usable ``tool_name`` are SKIPPED, never a crash;
+    an empty surviving list is legal (free-text + let-agent-decide still
+    render)."""
+    if not isinstance(payload, dict):
+        return None
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str) or not request_id:
+        return None
+    rows = payload.get("candidates")
+    candidates: list = []
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            name = row.get("tool_name")
+            if not isinstance(name, str) or not name:
+                continue
+            summary = row.get("summary")
+            score = row.get("score")
+            candidates.append(
+                ToolCandidate(
+                    tool_name=name,
+                    summary=summary if isinstance(summary, str) else "",
+                    score=(
+                        float(score)
+                        if isinstance(score, (int, float))
+                        and not isinstance(score, bool)
+                        else 0.0
+                    ),
+                )
+            )
+    stage_label = payload.get("stage_label")
+    reason = payload.get("reason")
+    timeout_s = payload.get("timeout_s")
+    return ToolCandidatesRequest(
+        request_id=request_id,
+        stage_label=stage_label if isinstance(stage_label, str) else "",
+        candidates=candidates,
+        reason=reason if isinstance(reason, str) else "",
+        timeout_s=(
+            float(timeout_s)
+            if isinstance(timeout_s, (int, float)) and not isinstance(timeout_s, bool)
+            else 0.0
+        ),
+        raw=payload,
+    )
+
+
+def resolve_tool_choice(
+    picked_tool: Optional[str], free_text: Optional[str]
+) -> tuple:
+    """Normalize the card's UI state to the ``tool-choice`` wire shape
+    ``(tool_name, free_text)`` -- exactly one of the contract's three shapes:
+
+    - a picked candidate wins outright (the explicit pick is the stronger
+      signal; any stray free text is dropped so both are never sent),
+    - else non-whitespace free text rides alone (stripped),
+    - else ``(None, None)`` -- the explicit let-agent-decide reply.
+    """
+    if isinstance(picked_tool, str) and picked_tool:
+        return (picked_tool, None)
+    if isinstance(free_text, str) and free_text.strip():
+        return (None, free_text.strip())
+    return (None, None)
+
+
+def tool_choice_summary(tool_name: Optional[str], free_text: Optional[str]) -> str:
+    """The folded chip line for an ANSWERED picker card ("picked
+    spatial_query" / "agent decided" / the free-text variant). The
+    unanswered-timeout fold ("agent proceeded") is a separate card state --
+    see the card's ``mark_superseded``."""
+    if tool_name:
+        return f"picked {tool_name}"
+    if free_text:
+        return "sent guidance to the agent"
+    return "agent decided"
 
 
 # --------------------------------------------------------------------------- #

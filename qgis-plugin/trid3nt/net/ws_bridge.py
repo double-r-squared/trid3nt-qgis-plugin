@@ -248,6 +248,7 @@ class AgentWorker(QObject):
         show_thinking: bool = False,
         model_id: str = "",
         aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
+        tool_choice_mode: str = "",
     ) -> None:
         if self.client is not None:
             self.client.send_chat(
@@ -255,6 +256,7 @@ class AgentWorker(QObject):
                 show_thinking=show_thinking,
                 model_id=model_id,
                 aoi_bbox=aoi_bbox,
+                tool_choice_mode=tool_choice_mode,
             )
 
     def cancel(self) -> None:
@@ -299,6 +301,20 @@ class AgentWorker(QObject):
     def decline_credential(self, request_id: str) -> None:
         if self.client is not None:
             self.client.decline_credential(request_id)
+
+    def send_tool_choice(
+        self,
+        request_id: str,
+        tool_name: Optional[str] = None,
+        free_text: Optional[str] = None,
+    ) -> None:
+        # ADR 0018 picker reply -- one tool-choice envelope (pick / guidance
+        # / let-agent-decide), buffered while disconnected like every
+        # user-intent verb.
+        if self.client is not None:
+            self.client.send_tool_choice(
+                request_id, tool_name=tool_name, free_text=free_text
+            )
 
 
 class AgentBridge(QObject):
@@ -378,6 +394,7 @@ class AgentBridge(QObject):
         show_thinking: bool = False,
         model_id: str = "",
         aoi_bbox: Optional[Tuple[float, float, float, float]] = None,
+        tool_choice_mode: str = "",
     ) -> None:
         if self._worker is not None:
             self._worker.send_chat(
@@ -385,6 +402,7 @@ class AgentBridge(QObject):
                 show_thinking=show_thinking,
                 model_id=model_id,
                 aoi_bbox=aoi_bbox,
+                tool_choice_mode=tool_choice_mode,
             )
 
     def cancel(self) -> None:
@@ -430,3 +448,16 @@ class AgentBridge(QObject):
     def decline_credential(self, request_id: str) -> None:
         if self._worker is not None:
             self._worker.decline_credential(request_id)
+
+    def send_tool_choice(
+        self,
+        request_id: str,
+        tool_name: Optional[str] = None,
+        free_text: Optional[str] = None,
+    ) -> None:
+        # ADR 0018 picker reply: pass-through to the worker's client
+        # (mutex-guarded socket write; buffers while disconnected).
+        if self._worker is not None:
+            self._worker.send_tool_choice(
+                request_id, tool_name=tool_name, free_text=free_text
+            )

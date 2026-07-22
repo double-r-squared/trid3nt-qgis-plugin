@@ -43,9 +43,12 @@ Design notes:
 
 from __future__ import annotations
 
+import difflib
 import inspect
 import logging
+import os
 import re
+import typing
 from collections.abc import Callable
 from typing import Any
 
@@ -55,6 +58,7 @@ __all__ = [
     "autofill_missing_bbox",
     "coerce_bbox_value",
     "coerce_latlon",
+    "fuzzy_correct_enum_args",
     "normalize_args",
     "parse_forcing_string",
     "snake_case",
@@ -797,6 +801,134 @@ def autofill_missing_bbox(
 
 
 # --------------------------------------------------------------------------- #
+# Stage 3 (ADR 0017 guard c) -- fuzzy enum-arg correction
+# --------------------------------------------------------------------------- #
+#
+# A string arg that fails a ``Literal[...]`` schema ("truecolour" for
+# Literal["truecolor", "ndvi"], "Flood-Depth" for "flood_depth") used to fall
+# straight through to the tool's typed error and burn a full model round on a
+# near-miss the harness can fix deterministically. At the normalize seam we
+# difflib-match the bad value against the param's declared Literal choices
+# (cutoff 0.8, case/sep-insensitive) and substitute the canonical choice with
+# one log line; anything under the cutoff is left untouched so the tool's own
+# typed error still owns genuine mismatches.
+#
+# Kill-switch: ``TRID3NT_ENUM_FUZZY=0`` (or ``off``/``false``) disables the
+# correction entirely (default ON).
+
+#: difflib similarity cutoff for an enum correction (assignment-fixed).
+_ENUM_FUZZY_CUTOFF = 0.8
+
+
+def _enum_fuzzy_enabled() -> bool:
+    raw = (os.environ.get("TRID3NT_ENUM_FUZZY") or "").strip().lower()
+    return raw not in ("0", "off", "false", "no")
+
+
+def _literal_values(annotation: Any) -> tuple[str, ...]:
+    """Extract the STRING choices from a (possibly nested) ``Literal`` annotation.
+
+    Handles ``Literal[...]`` directly and one level of union nesting
+    (``Literal[...] | None`` / ``Optional[Literal[...]]``). Non-string literal
+    members disqualify the param (we only ever correct strings).
+    """
+    origin = typing.get_origin(annotation)
+    if origin is typing.Literal:
+        vals = typing.get_args(annotation)
+        if vals and all(isinstance(v, str) for v in vals):
+            return tuple(vals)
+        return ()
+    # Union / Optional: scan members for a single string-Literal.
+    import types as _types
+
+    if origin is typing.Union or origin is getattr(_types, "UnionType", None):
+        for member in typing.get_args(annotation):
+            vals = _literal_values(member)
+            if vals:
+                return vals
+    return ()
+
+
+def _literal_choices(fn: Callable[..., Any]) -> dict[str, tuple[str, ...]]:
+    """``{param_name: (choice, ...)}`` for every string-Literal param of ``fn``.
+
+    Best-effort: an un-introspectable signature or unresolvable annotations
+    return ``{}`` (never raises -- the correction is an optimization).
+    """
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return {}
+    try:
+        hints = typing.get_type_hints(fn)
+    except Exception:  # noqa: BLE001 -- string annotations may not resolve
+        hints = {}
+    out: dict[str, tuple[str, ...]] = {}
+    for name, p in sig.parameters.items():
+        annotation = hints.get(name, p.annotation)
+        if annotation is inspect.Parameter.empty:
+            continue
+        vals = _literal_values(annotation)
+        if vals:
+            out[name] = vals
+    return out
+
+
+def _enum_norm(value: str) -> str:
+    """Case/separator-insensitive comparison form ('Flood-Depth' -> 'flood_depth')."""
+    return value.strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def fuzzy_correct_enum_args(
+    tool_name: str,
+    params: dict[str, Any],
+    fn: Callable[..., Any],
+) -> dict[str, Any]:
+    """difflib-correct string args that miss their param's ``Literal`` choices.
+
+    Only fires for params whose annotation declares string ``Literal`` choices
+    AND whose supplied value is a string not among them. An exact
+    case/separator-insensitive match maps straight to the canonical choice;
+    otherwise ``difflib.get_close_matches`` (n=1, cutoff 0.8) decides. Below
+    the cutoff the value is left as-is (the tool's typed error owns it).
+    Pure: returns a fresh dict when a correction fires, the original otherwise.
+    """
+    if not params or not _enum_fuzzy_enabled():
+        return params
+    choices_by_param = _literal_choices(fn)
+    if not choices_by_param:
+        return params
+    out: dict[str, Any] | None = None
+    for name, choices in choices_by_param.items():
+        value = params.get(name)
+        if not isinstance(value, str) or value in choices:
+            continue
+        norm_map = {_enum_norm(c): c for c in choices}
+        norm_val = _enum_norm(value)
+        corrected: str | None = norm_map.get(norm_val)
+        if corrected is None:
+            close = difflib.get_close_matches(
+                norm_val, list(norm_map), n=1, cutoff=_ENUM_FUZZY_CUTOFF
+            )
+            corrected = norm_map[close[0]] if close else None
+        if corrected is None or corrected == value:
+            continue
+        if out is None:
+            out = dict(params)
+        out[name] = corrected
+        logger.info(
+            "tool_arg_normalizer[%s]: fuzzy enum correction %s=%r -> %r "
+            "(choices=%s)",
+            tool_name,
+            name,
+            value,
+            corrected,
+            list(choices),
+        )
+    return out if out is not None else params
+
+
+# --------------------------------------------------------------------------- #
 # Public entry point
 # --------------------------------------------------------------------------- #
 
@@ -976,6 +1108,13 @@ def normalize_args(
                 coerced,
             )
             out["bbox"] = coerced
+
+    # Step 4c (Stage 3, ADR 0017 guard c): fuzzy enum-arg correction. A string
+    # value that misses its param's Literal choices by a near-miss (typo /
+    # case / separator) is difflib-corrected (cutoff 0.8) with a log line;
+    # anything below the cutoff keeps the normal typed-error path.
+    # TRID3NT_ENUM_FUZZY=0 is the kill switch (checked inside).
+    out = fuzzy_correct_enum_args(tool_name, out, fn)
 
     # Logging tail.
     if dropped_silent:

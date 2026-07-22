@@ -214,6 +214,22 @@ class SettingsDialog(QDialog):
         self.show_thinking_checkbox.setChecked(settings.show_thinking)
         form.addRow("", self.show_thinking_checkbox)
 
+        # ADR 0018 auto/ask modes (Stage 3, 2026-07-22): the small Auto/Ask
+        # tool-selection control -- rides every user-message like
+        # show_thinking (apply-on-Save, the item-4 discipline). "auto" =
+        # autonomous tool selection (picker only on a measured near-tie);
+        # "ask" = every staged selection surfaces as an in-chat picker card.
+        # Consent gates (payload warnings / code-exec / credentials / ...)
+        # are never mode-dependent.
+        self.tool_choice_combo = QComboBox()
+        self.tool_choice_combo.addItems(["auto", "ask"])
+        self.tool_choice_combo.setCurrentText(settings.tool_choice_mode)
+        self.tool_choice_combo.setToolTip(
+            "auto: the agent picks tools itself (asks only on a near-tie). "
+            "ask: confirm each step's tool from a ranked picker card."
+        )
+        form.addRow("Tool selection", self.tool_choice_combo)
+
         # S3 (NATE 2026-07-20): the long provider_note ("On Save ...") is
         # REMOVED -- keep the dialog terse (explanation -> future Help page).
 
@@ -274,6 +290,9 @@ class SettingsDialog(QDialog):
         self._settings.auto_basemap = self.auto_basemap_checkbox.isChecked()
         self._settings.basemap_preset = self.basemap_combo.currentText()
         self._settings.show_thinking = self.show_thinking_checkbox.isChecked()
+        # ADR 0018: persist the Auto/Ask tool-selection mode (rides the next
+        # user-message via the dock's send path -- no restart, no push).
+        self._settings.tool_choice_mode = self.tool_choice_combo.currentText()
         # OpenRouter model-extensibility (design 2026-07-19): persist provider
         # + key + model, then PUSH the live config to the agent so a
         # provider/key switch applies on the NEXT message with no restart

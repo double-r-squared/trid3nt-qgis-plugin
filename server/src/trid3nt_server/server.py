@@ -33,6 +33,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import math
+import re
 import weakref
 import logging
 import os
@@ -326,6 +327,212 @@ def _code_exec_approval_timeout_s() -> float:
     if value <= 0:
         return CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S
     return value
+
+
+# ---------------------------------------------------------------------------
+# Stage 3 (ADR 0017 mechanisms 3-5 + ADR 0018) -- harness-absorbs-prompt
+# config seams. Every mechanism ships with an env kill-switch so a live
+# regression can be flipped off without a code change (the TRID3NT_* idiom).
+# ---------------------------------------------------------------------------
+
+
+def _env_flag(name: str, default: bool = True) -> bool:
+    """Boolean env flag, read LIVE: '0'/'off'/'false'/'no' -> False,
+    '1'/'on'/'true'/'yes' -> True, unset/unknown -> ``default``."""
+    raw = (os.environ.get(name) or "").strip().lower()
+    if raw in ("0", "off", "false", "no"):
+        return False
+    if raw in ("1", "on", "true", "yes"):
+        return True
+    return default
+
+
+def _session_routing_mode(state: "SessionState") -> str:
+    """ADR 0018 routing-visibility mode for this session: 'auto' | 'ask'.
+
+    A per-session setting (the ``session-config`` envelope's ``mode`` field)
+    wins; else the ``TRID3NT_MODE`` env default; else 'auto'. Gates are NEVER
+    mode-dependent -- the mode governs tool-selection VISIBILITY only.
+    """
+    mode = getattr(state, "routing_mode", None)
+    if isinstance(mode, str) and mode in ("auto", "ask"):
+        return mode
+    env = (os.environ.get("TRID3NT_MODE") or "auto").strip().lower()
+    return env if env in ("auto", "ask") else "auto"
+
+
+def _ambiguity_margin_threshold() -> float:
+    """ADR 0018 measured-ambiguity threshold (``TRID3NT_AMBIGUITY_MARGIN``).
+
+    RELATIVE top-1 vs top-2 retrieval-score margin under which AUTO mode still
+    surfaces the tool-candidates card. Calibration: RRF fused scores are
+    rank-compressed -- a tool that is rank-1 on every channel beats a
+    consistent rank-2 by only ~1.6% relative, while a genuine cross-channel
+    tie (each of two tools rank-1 somewhere) lands well under ~1%. The 0.01
+    default therefore fires ONLY on genuine channel disagreement, not on any
+    consistently-ordered ranking. ``0`` disables ambiguity asks entirely (the
+    kill switch; ask mode is unaffected). Malformed -> default.
+    """
+    raw = os.environ.get("TRID3NT_AMBIGUITY_MARGIN")
+    if raw is None:
+        return 0.01
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 0.01
+    return max(0.0, value)
+
+
+def _tool_choice_timeout_s() -> float:
+    """Bounded wait (seconds) for a ``tool-choice`` reply to the
+    ``tool-candidates`` card (``TRID3NT_TOOL_CHOICE_TIMEOUT_S``, default 45).
+
+    Deliberately BYPASSES the F6 24h local-lane ``_gate_wait_timeout``
+    override (the code-exec-gate precedent): an unanswered picker must
+    degrade to autonomous routing, never hang the turn.
+    """
+    raw = os.environ.get("TRID3NT_TOOL_CHOICE_TIMEOUT_S")
+    if raw is None:
+        return 45.0
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 45.0
+    return value if value > 0 else 45.0
+
+
+#: Max candidates surfaced on one tool-candidates card (avoid flooding).
+_TOOL_CANDIDATES_MAX = 4
+
+#: Turn-loop-invariant continuation nudge (ADR 0017 mechanism 4). ONE per
+#: turn, injected as a user-role content when a turn (a) terminates with tool
+#: results but zero assistant text since the last tool round, or (b) only ever
+#: geocoded while the user asked for data/analysis.
+_CONTINUATION_NUDGE: str = (
+    "You have tool results but have not answered the user yet. Summarize "
+    "the results for the user now, and if their requested data or analysis "
+    "is not complete, continue with the appropriate tool calls."
+)
+
+#: Data/analysis-intent heuristic for the bare-geocode backstop. Deliberately
+#: broad verbs/nouns -- a pure "where is X" locate ask matches none of these.
+_DATA_INTENT_RE = re.compile(
+    r"\b(show|display|map|fetch|get|load|download|overlay|plot|chart|graph|"
+    r"visuali[sz]e|analy[sz]e|analysis|model|simulat\w*|comput\w*|calculat\w*|"
+    r"estimat\w*|assess\w*|data|imagery|satellite|layer|flood\w*|fire|smoke|"
+    r"earthquake|rainfall|precipitation|storm|surge|wind|population|"
+    r"buildings?|roads?|elevation|terrain|dem|landcover|damage|risk|hazard|"
+    r"depth|extent|inundat\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def _asks_for_data_or_analysis(user_text: Any) -> bool:
+    """True when the user's message asks for data/analysis (not a bare locate)."""
+    return bool(isinstance(user_text, str) and _DATA_INTENT_RE.search(user_text))
+
+
+def _stage_label_for_tool(tool_name: str) -> str:
+    """Coarse analysis-flow stage for the tool-candidates card (ADR 0018:
+    acquisition -> preprocessing -> analysis -> visualization)."""
+    if tool_name.startswith(("fetch_", "geocode_", "discover_", "catalog_")):
+        return "acquisition"
+    if tool_name.startswith(("clip_", "merge_", "fill_", "cut_", "import_")):
+        return "preprocessing"
+    if tool_name.startswith(("publish_", "generate_", "export_", "zoom")):
+        return "visualization"
+    if tool_name.startswith(("compute_", "run_", "model_", "spatial_", "query_")):
+        return "analysis"
+    return "tool-selection"
+
+
+def _tool_summary_line(entry: Any) -> str:
+    """First docstring line of a registered tool, for the candidates card."""
+    doc = getattr(getattr(entry, "fn", None), "__doc__", None) or ""
+    first = doc.strip().splitlines()[0].strip() if doc.strip() else ""
+    return first[:140]
+
+
+def _geocode_drift_note(
+    args: Any, geocode_bbox: Any, active_aoi: Any
+) -> str | None:
+    """Stage 3 guard (d): WARNING text when a call's bbox intersects NEITHER
+    the turn's geocoded bbox NOR the active AOI; ``None`` = no drift.
+
+    Advisory only -- the dispatch is never blocked. Calls without a coercible
+    bbox arg are skipped (nothing to compare).
+    """
+    if not isinstance(args, dict):
+        return None
+    for key in ("bbox", "aoi_bbox"):
+        cand = _coerce_bbox4(args.get(key))
+        if cand is None:
+            continue
+        if _bbox_overlaps(cand, geocode_bbox):
+            return None
+        if active_aoi is not None and _bbox_overlaps(cand, active_aoi):
+            return None
+        gc = _coerce_bbox4(geocode_bbox)
+        return (
+            f"WARNING: this call's {key} {[round(v, 4) for v in cand]} does "
+            f"not intersect the geocoded location bbox "
+            f"{[round(v, 4) for v in gc] if gc else geocode_bbox}"
+            + (" or the active AOI" if active_aoi is not None else "")
+            + ". The area of interest may have drifted -- verify the "
+            "coordinates before relying on this result."
+        )
+    return None
+
+
+# --------------------------------------------------------------------------- #
+# ADR 0018 -- pending tool-choice registry (mirrors the job-0243 session-
+# scoped confirmation registry: module-level, keyed by the unguessable ULID
+# request_id + owning session_id, so a reply arriving on a sibling WebSocket
+# connection of the same session still resolves the paused turn).
+# --------------------------------------------------------------------------- #
+
+_PENDING_TOOL_CHOICES: dict[str, tuple[str, "asyncio.Future"]] = {}
+
+
+def _register_pending_tool_choice(
+    session_id: str, request_id: str, fut: "asyncio.Future"
+) -> None:
+    _PENDING_TOOL_CHOICES[request_id] = (session_id, fut)
+
+
+def _pop_pending_tool_choice(request_id: str) -> None:
+    _PENDING_TOOL_CHOICES.pop(request_id, None)
+
+
+def _resolve_pending_tool_choice(session_id: str, payload: Any) -> bool:
+    """Complete the pending tool-candidates gate for ``payload['request_id']``.
+
+    The payload is a LOOSE dict on purpose -- the contracts lane declares the
+    ``tool-choice`` model; until integration we parse defensively. Returns
+    True when a live future was resolved.
+    """
+    if not isinstance(payload, dict):
+        return False
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str) or not request_id:
+        return False
+    entry = _PENDING_TOOL_CHOICES.get(request_id)
+    if entry is None:
+        return False
+    owner_session, fut = entry
+    if owner_session != session_id:
+        logger.warning(
+            "tool-choice request_id=%s owned by session=%s but resolved-by=%s; "
+            "ignoring",
+            request_id,
+            owner_session,
+            session_id,
+        )
+        return False
+    if fut.done():
+        return False
+    fut.set_result(dict(payload))
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -1783,6 +1990,11 @@ class SessionState:
     # dispatch-time bbox auto-fill: explicit arg > active AOI > case bbox.
     # ``None`` = no drawn AOI.
     active_aoi_bbox: list[float] | None = None
+    # ADR 0018 (Stage 3): per-session routing-visibility mode ('auto' | 'ask').
+    # Set by the ``session-config`` envelope's ``mode`` field; ``None`` falls
+    # back to the TRID3NT_MODE env default (see _session_routing_mode). Governs
+    # tool-selection VISIBILITY only -- consent gates are never mode-dependent.
+    routing_mode: str | None = None
     # job-0121: per-turn layer + map-command emission accumulators. Reset at
     # the start of every dispatch (Gemini stream or /invoke tool). The
     # CaseChatMessage write at turn close reads from these so a Case replay
@@ -2428,6 +2640,167 @@ async def _emit_cache_status(
         )
 
 
+async def _maybe_emit_tool_candidates(
+    websocket: ServerConnection,
+    state: SessionState,
+    user_text: str,
+) -> tuple[str | None, list[str]]:
+    """ADR 0018: surface the retrieval-ranked tool candidates BEFORE dispatch.
+
+    Fires when the session mode is ``ask``, OR in ``auto`` when the top-1 vs
+    top-2 retrieval-score margin is under the measured-ambiguity threshold
+    (``_ambiguity_margin_threshold``; 0 disables). Emits the ``tool-candidates``
+    envelope (raw-JSON, heartbeat-style -- the contracts lane declares the
+    typed model; until integration the payload is a plain dict) and waits
+    gate-style for the ``tool-choice`` reply with a BOUNDED timeout
+    (``_tool_choice_timeout_s`` -- deliberately bypasses the F6 24h local-lane
+    override, code-exec-gate precedent). On timeout / fault the turn proceeds
+    AUTONOMOUSLY (fail-open) -- the picker is an optimization, never a wall.
+
+    Returns ``(pinned_tool_name | None, notes)``:
+      * a ``tool_name`` reply pins that tool for the next dispatch -- the
+        caller unions it into the visible registry + allowed set, and a
+        directive note rides into ``contents``;
+      * a ``free_text`` reply becomes a user-clarification note;
+      * timeout yields a proceed-autonomously note.
+    """
+    mode = _session_routing_mode(state)
+    threshold = _ambiguity_margin_threshold()
+    if mode != "ask" and threshold <= 0.0:
+        return None, []
+
+    from .tools.discovery.tool_retrieval import retrieve_ranked_tools
+
+    ranked = retrieve_ranked_tools(user_text, k=8)
+    if not ranked:
+        # Cold index / no match: nothing to offer -- autonomous (fail-open).
+        return None, []
+
+    reason: str | None = None
+    if mode == "ask":
+        reason = "ask_mode"
+    elif len(ranked) >= 2 and ranked[0][1] > 0.0:
+        margin = (ranked[0][1] - ranked[1][1]) / ranked[0][1]
+        if margin < threshold:
+            reason = "ambiguity"
+    if reason is None:
+        return None, []
+
+    candidates = [
+        {
+            "tool_name": name,
+            "summary": _tool_summary_line(TOOL_REGISTRY.get(name)),
+            "score": round(float(score), 6),
+        }
+        for name, score in ranked[:_TOOL_CANDIDATES_MAX]
+    ]
+    timeout_s = _tool_choice_timeout_s()
+    request_id = new_ulid()
+    payload = {
+        "request_id": request_id,
+        "stage_label": _stage_label_for_tool(ranked[0][0]),
+        "candidates": candidates,
+        "reason": reason,
+        "timeout_s": timeout_s,
+    }
+
+    import json as _json
+
+    fut: asyncio.Future = asyncio.get_running_loop().create_future()
+    _register_pending_tool_choice(state.session_id, request_id, fut)
+    try:
+        await _session_safe_send(
+            websocket,
+            state.session_id,
+            _json.dumps(
+                {
+                    "type": "tool-candidates",
+                    "id": new_ulid(),
+                    "ts": now_utc().isoformat().replace("+00:00", "Z"),
+                    "session_id": state.session_id,
+                    "case_id": current_turn_case(),
+                    "payload": payload,
+                }
+            ),
+        )
+        logger.info(
+            "tool-candidates emitted session=%s request_id=%s reason=%s "
+            "n=%d top=%s timeout=%.0fs",
+            state.session_id,
+            request_id,
+            reason,
+            len(candidates),
+            ranked[0][0],
+            timeout_s,
+        )
+        reply = await asyncio.wait_for(fut, timeout=timeout_s)
+    except asyncio.TimeoutError:
+        logger.info(
+            "tool-candidates TIMEOUT session=%s request_id=%s (%.0fs) -- "
+            "proceeding autonomously",
+            state.session_id,
+            request_id,
+            timeout_s,
+        )
+        return None, [
+            "(The tool-selection card was not answered in time -- proceed "
+            "autonomously with your best tool choice.)"
+        ]
+    except asyncio.CancelledError:
+        raise
+    except Exception:  # noqa: BLE001 -- the picker must never break the turn
+        logger.warning(
+            "tool-candidates gate fault session=%s -- proceeding autonomously",
+            state.session_id,
+            exc_info=True,
+        )
+        return None, []
+    finally:
+        _pop_pending_tool_choice(request_id)
+
+    # Defensive dict parse (contracts lane declares the typed model later).
+    tool_name: str | None = None
+    free_text: str | None = None
+    if isinstance(reply, dict):
+        tn = reply.get("tool_name")
+        ft = reply.get("free_text")
+        if isinstance(tn, str) and tn.strip():
+            tool_name = tn.strip()
+        if isinstance(ft, str) and ft.strip():
+            free_text = ft.strip()
+
+    notes: list[str] = []
+    pinned: str | None = None
+    if tool_name:
+        if tool_name in TOOL_REGISTRY:
+            pinned = tool_name
+            notes.append(
+                f"[User tool choice] Use the tool '{tool_name}' for this "
+                "request."
+            )
+            logger.info(
+                "tool-choice PINNED session=%s request_id=%s tool=%s",
+                state.session_id,
+                request_id,
+                tool_name,
+            )
+        else:
+            logger.warning(
+                "tool-choice named unknown tool %r session=%s -- ignored",
+                tool_name,
+                state.session_id,
+            )
+    if free_text:
+        notes.append(f"[User clarification] {free_text}")
+        logger.info(
+            "tool-choice free-text session=%s request_id=%s len=%d",
+            state.session_id,
+            request_id,
+            len(free_text),
+        )
+    return pinned, notes
+
+
 async def _stream_gemini_reply(
     websocket: ServerConnection,
     state: SessionState,
@@ -2679,6 +3052,84 @@ async def _stream_gemini_reply(
                 exc_info=True,
             )
             _retrieval_registry = TOOL_REGISTRY
+
+    # Stage 3 TOP-K TOOL GATING (the routing bench's own recommendation): the
+    # openai adapter path was sending ALL ~190 tool schemas every round. Gate
+    # the per-turn tool list to the retrieval top-k (TRID3NT_TOOL_GATING_TOPK,
+    # default 24; 0 disables) PLUS the always-include floors -- the META set
+    # (hot set + catalog pair + web_fetch), every tool already used this
+    # case-session (AllowedToolSet dispatched + explicit), and any tool the
+    # user NAMED in the message. SCOPED to MODEL_PROVIDER=openai: bedrock /
+    # scripted / vertex tool lists are byte-unchanged. FAIL-OPEN on a cold
+    # index / empty ranking / any fault (see tool_gating.gate_tool_registry).
+    if _provider == "openai":
+        try:
+            from .tool_gating import gate_tool_registry, gating_topk
+            from .tools.discovery.tool_retrieval import retrieve_ranked_tools
+
+            _gate_k = gating_topk()
+            if _gate_k > 0:
+                _gate_ranked = retrieve_ranked_tools(user_text, k=_gate_k)
+                _used_tools = set(state.allowed_tool_set.dispatched_tools) | set(
+                    state.allowed_tool_set.explicit_tools
+                )
+                _gated = gate_tool_registry(
+                    user_text,
+                    _retrieval_registry,
+                    _gate_ranked,
+                    _gate_k,
+                    used_tools=_used_tools,
+                )
+                if _gated is not None:
+                    logger.info(
+                        "tool-gating: %d/%d tools visible (topk=%d used=%d "
+                        "turn=%s session=%s)",
+                        len(_gated),
+                        len(_retrieval_registry),
+                        _gate_k,
+                        len(_used_tools),
+                        pipeline_id,
+                        state.session_id,
+                    )
+                    _retrieval_registry = _gated
+                else:
+                    logger.info(
+                        "tool-gating: UNGATED (%d tools; topk=%d ranked=%d) "
+                        "turn=%s -- fail-open",
+                        len(_retrieval_registry),
+                        _gate_k,
+                        len(_gate_ranked),
+                        pipeline_id,
+                    )
+        except Exception:  # noqa: BLE001 — gating faults FAIL OPEN (all tools)
+            logger.warning(
+                "tool-gating: fault; FAIL-OPEN to ungated registry",
+                exc_info=True,
+            )
+
+    # ADR 0018 (Stage 3): auto/ask tool-candidates gate. May PAUSE here
+    # (bounded -- see _tool_choice_timeout_s) awaiting the user's tool-choice.
+    # A pinned tool is unioned into the visible registry + allowed set BEFORE
+    # declarations are built so the model can actually call it; notes (pin
+    # directive / free-text clarification / timeout note) ride into
+    # ``contents`` after it is built below. Any fault proceeds autonomously.
+    _pin_notes: list[str] = []
+    try:
+        _pinned_tool, _pin_notes = await _maybe_emit_tool_candidates(
+            websocket, state, user_text
+        )
+        if _pinned_tool and _pinned_tool in TOOL_REGISTRY:
+            state.allowed_tool_set.add_tools({_pinned_tool})
+            if _pinned_tool not in _retrieval_registry:
+                _retrieval_registry = dict(_retrieval_registry)
+                _retrieval_registry[_pinned_tool] = TOOL_REGISTRY[_pinned_tool]
+    except asyncio.CancelledError:
+        raise
+    except Exception:  # noqa: BLE001 — the picker is an optimization
+        logger.warning(
+            "tool-candidates gate failed; proceeding autonomously",
+            exc_info=True,
+        )
     tool_decls = build_tool_declarations(_retrieval_registry)
 
     # LESSONS LOOP v1 READ SEAM (track 4, TRID3NT_LESSONS gate -- dark by
@@ -2739,6 +3190,14 @@ async def _stream_gemini_reply(
     except Exception:  # noqa: BLE001 — the note is an optimization, never fatal
         logger.debug("per-turn case-state note build failed", exc_info=True)
     contents = build_contents_from_history(user_text, turn_history_for_contents)
+
+    # ADR 0018 (Stage 3): feed the tool-candidates outcome into the model
+    # context -- the pin directive ("Use the tool 'X'"), the user's free-text
+    # clarification, or the timeout proceed-autonomously note. Appended AFTER
+    # the user message so the model reads the ask, then the user's routing
+    # decision. No-op when the gate never fired (the common path).
+    for _pin_note in _pin_notes:
+        contents.append(build_user_text_content(_pin_note))
 
     # Wave 4.11 M6: refresh the dynamic hot set once per user-message dispatch
     # so the allowed set is primed with the user's most-dispatched tools before
@@ -2808,6 +3267,19 @@ async def _stream_gemini_reply(
     # empty round falls through to the existing terminal break (never an infinite
     # loop). Local-path only (guarded on ``_provider == "openai"`` below).
     _empty_retries = 0
+
+    # Stage 3 (ADR 0017 mechanism 4) turn-loop invariants + guard (d) tracker:
+    #   _turn_tools_dispatched -- every tool NAME this turn requested (the
+    #       bare-geocode backstop reads it: a turn whose ONLY tool was
+    #       geocode_location while the user asked for data gets one nudge).
+    #   _continuation_nudged  -- the ONE-per-turn continuation-nudge budget
+    #       shared by both invariants (never more than one nudge per turn).
+    #   _turn_geocode_bbox    -- the last successful geocode_location bbox this
+    #       turn; guard (d) appends an advisory drift WARNING to any later
+    #       call whose bbox intersects neither this nor the active AOI.
+    _turn_tools_dispatched: set[str] = set()
+    _continuation_nudged = False
+    _turn_geocode_bbox: list[float] | None = None
 
     iterations = 0
     try:
@@ -3016,6 +3488,50 @@ async def _stream_gemini_reply(
                     # inventing a new envelope type is out of scope (NATE is
                     # live) -- the log.warning is the durable retry witness.
                     continue
+                # Stage 3 (ADR 0017 mechanism 4) TURN-LOOP INVARIANTS. ONE
+                # continuation nudge per turn, shared budget, injected as a
+                # user-role content and the round retried:
+                #   (a) NO-SILENT-END -- the turn is terminating with tool
+                #       results but ZERO assistant text since the last tool
+                #       round (this terminal round's text is empty). Skipped
+                #       when OPEN-16 already nudged this turn (that seam owns
+                #       the openai empty-round shape; ``_empty_retries > 0``).
+                #   (b) BARE-GEOCODE BACKSTOP -- the turn's ONLY tool was
+                #       geocode_location while the user asked for data or
+                #       analysis (the model located the place then stopped).
+                # Kill-switch: TRID3NT_TURN_INVARIANTS=0. Bounded: the nudge
+                # round still counts toward the step cap, and the budget flag
+                # guarantees at most one nudge per turn. The budget is UNIFIED
+                # with OPEN-16: a turn the empty-completion seam already
+                # nudged (``_empty_retries > 0``) gets NO additional invariant
+                # nudge -- corrective nudges never stack past their caps.
+                if (
+                    not _continuation_nudged
+                    and _empty_retries == 0
+                    and _env_flag("TRID3NT_TURN_INVARIANTS", True)
+                ):
+                    _nudge_reason: str | None = None
+                    if (
+                        _turn_ever_called_tool
+                        and not "".join(turn_text_parts).strip()
+                    ):
+                        _nudge_reason = "no-silent-end"
+                    elif _turn_tools_dispatched == {
+                        "geocode_location"
+                    } and _asks_for_data_or_analysis(user_text):
+                        _nudge_reason = "bare-geocode"
+                    if _nudge_reason is not None:
+                        _continuation_nudged = True
+                        logger.info(
+                            "turn-invariant nudge (%s) session=%s iter=%d",
+                            _nudge_reason,
+                            state.session_id,
+                            iterations,
+                        )
+                        contents.append(
+                            build_user_text_content(_CONTINUATION_NUDGE)
+                        )
+                        continue
                 logger.info(
                     "gemini loop terminal session=%s iter=%d text_chunks=%d",
                     state.session_id,
@@ -3061,6 +3577,9 @@ async def _stream_gemini_reply(
                         _segment_buf.append(_caveat)
                 break
             _turn_ever_called_tool = True
+            # Stage 3 invariants: record this round's requested tool names
+            # (the bare-geocode backstop compares the turn's full set).
+            _turn_tools_dispatched.update(c.name for c in turn_function_calls)
 
             # GUARD 3 (loop watchdog): compute THIS round's (tool, args_hash)
             # signature now, but feed it to the watchdog AFTER dispatch (below)
@@ -3361,6 +3880,34 @@ async def _stream_gemini_reply(
                 # rewrite never raises (falls back to the unrewritten
                 # summary inside rewrite_result_for_llm).
                 summary = _uri_reg.rewrite_result_for_llm(summary)
+                # Stage 3 guard (d): geocode drift warning. A successful
+                # geocode_location pins this turn's geocoded bbox; any LATER
+                # call whose bbox arg intersects NEITHER that bbox NOR the
+                # active AOI gets an advisory WARNING appended to its
+                # function_response (never blocks -- the model/user decide).
+                # Kill-switch: TRID3NT_GEOCODE_DRIFT_WARN=0.
+                if call.name == "geocode_location":
+                    if dispatch_error is None and isinstance(result, dict):
+                        _gc_bbox = _coerce_bbox4(result.get("bbox"))
+                        if _gc_bbox is not None:
+                            _turn_geocode_bbox = list(_gc_bbox)
+                elif (
+                    _turn_geocode_bbox is not None
+                    and isinstance(summary, dict)
+                    and _env_flag("TRID3NT_GEOCODE_DRIFT_WARN", True)
+                ):
+                    _drift_note = _geocode_drift_note(
+                        call.args, _turn_geocode_bbox, state.active_aoi_bbox
+                    )
+                    if _drift_note:
+                        summary["aoi_drift_warning"] = _drift_note
+                        logger.info(
+                            "geocode-drift WARNING session=%s tool=%s "
+                            "geocoded=%s",
+                            state.session_id,
+                            call.name,
+                            _turn_geocode_bbox,
+                        )
                 # job-0263 + ADR 0014: surface the layer handles this dispatch
                 # registered so Gemini passes HANDLES — never raw storage
                 # paths — into downstream *_uri params. The announcement maps
@@ -10192,7 +10739,10 @@ async def _invoke_tool_via_emitter(
         # the downstream tool body never sees an unexpected kwarg.
         for _k in ("force_rerun", "rerun", "re_run", "force"):
             params.pop(_k, None)
-        if not _force_rerun:
+        # Stage 3: env kill-switch (TRID3NT_SCENARIO_REUSE=0 disables the
+        # short-circuit; the guard-control strip above stays unconditional so
+        # the kwargs never leak to the tool body either way).
+        if not _force_rerun and _env_flag("TRID3NT_SCENARIO_REUSE", True):
             scenario_index = get_scenario_index(state.session_id)
             # Seed the index from this Case's durable loaded_layers so reuse
             # survives a reconnect / sibling connection (the in-memory index may
@@ -10255,7 +10805,13 @@ async def _invoke_tool_via_emitter(
         )
         for _k in ("force_refetch", "refetch", "force"):
             params.pop(_k, None)
-        if not _force_refetch and state.emitter is not None:
+        # Stage 3: env kill-switch (TRID3NT_FETCH_REUSE=0 disables the fetch
+        # short-circuit; the guard-control strip stays unconditional).
+        if (
+            not _force_refetch
+            and state.emitter is not None
+            and _env_flag("TRID3NT_FETCH_REUSE", True)
+        ):
             fetch_case_bbox = _turn_case_bbox(state)
             fmatch = find_reusable_fetched_layer(
                 tool_name,
@@ -12780,6 +13336,21 @@ def _make_handler(settings: GeminiSettings):
                             _set_active_aoi_from_payload(
                                 state, payload_dict.get("aoi_bbox")
                             )
+                        # ADR 0018 (Stage 3): routing-visibility mode. The
+                        # contracts lane carries it as the user-message's
+                        # ``tool_choice_mode`` field (the show_thinking /
+                        # model_id precedent). Read DEFENSIVELY off the raw
+                        # dict; a set value updates the session's sticky mode,
+                        # absent/None leaves the prior mode (env default
+                        # otherwise -- see _session_routing_mode). The
+                        # session-config branch below remains as the
+                        # alternate config path.
+                        _tcm = payload_dict.get("tool_choice_mode")
+                        if isinstance(_tcm, str) and _tcm.strip().lower() in (
+                            "auto",
+                            "ask",
+                        ):
+                            state.routing_mode = _tcm.strip().lower()
                         # FR-FR-3 (job-0048): check the turn cap BEFORE
                         # dispatching. Increment first so "26th turn" fires
                         # on turn_count == MAX_TURNS_PER_SESSION + 1 (i.e.
@@ -13223,6 +13794,69 @@ def _make_handler(settings: GeminiSettings):
                             spatial_resp.cancelled,
                             spatial_resp.geometry_type,
                         )
+
+                    elif msg_type == "tool-choice":
+                        # ADR 0018 (Stage 3): the user's reply to a pending
+                        # ``tool-candidates`` card. Parsed DEFENSIVELY as a
+                        # loose dict (the contracts lane declares the typed
+                        # model; until integration this seam must accept the
+                        # raw payload). Resolves the paused turn's future --
+                        # may arrive on a sibling connection of the session
+                        # (job-0243 registry pattern).
+                        if not isinstance(payload_dict, dict) or not isinstance(
+                            payload_dict.get("request_id"), str
+                        ):
+                            await _send_error(
+                                websocket,
+                                state.session_id,
+                                "TOOL_PARAMS_INVALID",
+                                "tool-choice requires a request_id",
+                            )
+                            continue
+                        if not _resolve_pending_tool_choice(
+                            state.session_id, payload_dict
+                        ):
+                            logger.warning(
+                                "tool-choice for unknown/closed request_id=%s "
+                                "session=%s",
+                                payload_dict.get("request_id"),
+                                state.session_id,
+                            )
+                            continue
+                        logger.info(
+                            "tool-choice accepted session=%s request_id=%s "
+                            "tool=%r free_text=%s",
+                            state.session_id,
+                            payload_dict.get("request_id"),
+                            payload_dict.get("tool_name"),
+                            bool(payload_dict.get("free_text")),
+                        )
+
+                    elif msg_type == "session-config":
+                        # ADR 0018 (Stage 3): per-session settings. Currently
+                        # the routing-visibility ``mode`` ('auto' | 'ask') --
+                        # read DEFENSIVELY off the raw dict (the contracts
+                        # lane declares the typed model). Unknown fields are
+                        # ignored for forward-compat.
+                        if isinstance(payload_dict, dict):
+                            _cfg_mode = payload_dict.get("mode")
+                            if isinstance(_cfg_mode, str) and _cfg_mode.strip().lower() in (
+                                "auto",
+                                "ask",
+                            ):
+                                state.routing_mode = _cfg_mode.strip().lower()
+                                logger.info(
+                                    "session-config: routing mode=%s session=%s",
+                                    state.routing_mode,
+                                    state.session_id,
+                                )
+                            elif _cfg_mode is not None:
+                                logger.warning(
+                                    "session-config: unknown mode %r ignored "
+                                    "session=%s",
+                                    _cfg_mode,
+                                    state.session_id,
+                                )
 
                     elif msg_type in (
                         "confirm-response",

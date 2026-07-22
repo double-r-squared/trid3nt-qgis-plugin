@@ -76,9 +76,13 @@ class RecBridge:
         self.calls.append(("select", case_id, None))
 
     def send_chat(
-        self, text, show_thinking=False, model_id="", aoi_bbox=None
+        self, text, show_thinking=False, model_id="", aoi_bbox=None,
+        tool_choice_mode="",
     ) -> None:
         # ADR 0017: record the STRUCTURED per-message AOI exactly as sent.
+        # (ADR 0018 grew the bridge surface with tool_choice_mode -- accepted
+        # here so the recorder mirrors the real AgentBridge signature; this
+        # harness asserts the AOI leg only.)
         self.calls.append(("chat", text, aoi_bbox))
 
     def stop(self) -> None:

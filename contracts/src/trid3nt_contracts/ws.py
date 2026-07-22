@@ -80,6 +80,12 @@ __all__ = [
     "ProbeFindings",
     "SuggestedCatalogEntry",
     "OfferCatalogAdditionPayload",
+    # ADR 0018 auto/ask modes -- tool-selection picker (Stage 3, 2026-07-22)
+    "ToolChoiceMode",
+    "ToolCandidatesReason",
+    "ToolCandidate",
+    "ToolCandidatesPayload",
+    "ToolChoicePayload",
     # client -> agent (sprint-08 forward-looking) — FR-FR-1 + §F.1.2 Mode 2
     "RecoveryChoice",
     "RecoveryChoiceResponsePayload",
@@ -184,6 +190,22 @@ ErrorCode = Literal[
 # mode (FR-HEP-4). This is an Appendix A amendment — see report amendment log.
 ResearchMode = Literal["research", "deep_research"]
 
+# ADR 0018 (auto/ask modes, Stage 3 2026-07-22): the ROUTING-VISIBILITY mode
+# for a turn. Governs ONLY whether tool selection is surfaced as a
+# ``tool-candidates`` picker card -- the consent surface (payload warnings,
+# granularity, solver confirm, code-exec approval, credential entry, region
+# choice, spatial input) is NEVER mode-dependent (gates answer "may I do
+# this"; modes answer "which tool"; the two layers never mix).
+#
+# - ``"auto"``: tool selection is autonomous; no pick cards -- EXCEPT on a
+#   MEASURED ambiguity signal (top-1 vs top-2 retrieval near-tie), where the
+#   server may still emit a ``tool-candidates`` card with
+#   ``reason="ambiguity"``.
+# - ``"ask"``: tool selection is surfaced as a ``tool-candidates`` card
+#   (``reason="ask_mode"``), staged in waves along the natural analysis flow
+#   (acquisition -> preprocessing -> analysis -> visualization).
+ToolChoiceMode = Literal["auto", "ask"]
+
 
 class UserMessagePayload(GraceModel):
     """``user-message`` (A.3): user-submitted text input."""
@@ -227,6 +249,17 @@ class UserMessagePayload(GraceModel):
     # wire-identical shape. This is the PER-TURN AOI; the persistent Case bbox
     # still rides ``case-command`` unchanged.
     aoi_bbox: list[float] | None = None
+    # ADR 0018 (auto/ask modes, Stage 3 2026-07-22): the routing-visibility
+    # mode for THIS turn -- the per-message settings carrier the QGIS dock /
+    # web settings toggle stamps, following the ``show_thinking`` /
+    # ``model_id`` precedent exactly (no session-config envelope exists; this
+    # IS the config path the server consumes). ``None`` / absent (older
+    # client, or a client that leaves the default) preserves the prior
+    # behavior: the server treats the turn as ``"auto"``. ``"ask"`` asks the
+    # server to surface tool selection as ``tool-candidates`` picker cards
+    # (see ``ToolCandidatesPayload``); consent gates are unaffected either
+    # way (``ToolChoiceMode`` docstring).
+    tool_choice_mode: ToolChoiceMode | None = None
 
     @field_validator("aoi_bbox")
     @classmethod
@@ -1260,6 +1293,113 @@ class CatalogAdditionResponsePayload(GraceModel):
 
 
 # =========================================================================== #
+# tool-candidates + tool-choice (ADR 0018 auto/ask modes -- Stage 3, 2026-07-22)
+# =========================================================================== #
+# The tool-selection picker seam. Retrieval/routing ties are a real error
+# species: the model picks a plausible-but-wrong tool and the turn goes down a
+# sad path the user could have prevented in one click (ADR 0018). The server
+# (Lane S) emits ``tool-candidates`` when either (a) the turn runs in ASK mode
+# (``UserMessagePayload.tool_choice_mode == "ask"``) or (b) AUTO mode measured
+# a retrieval near-tie (top-1 vs top-2 score) -- ``reason`` says which. The
+# client renders the ranked candidates as an inline picker card (radio choices
+# + a free-text option + "let the agent decide") and answers with
+# ``tool-choice``, correlated by ``request_id``.
+#
+# Timeout discipline (fail-open, mirrors the region-choice / credential
+# pause): an unanswered request times out SERVER-side after ``timeout_s`` and
+# the turn proceeds with the agent's own top-ranked pick -- the workflow never
+# blocks on the interactive card. The client folds an unanswered card to an
+# "agent proceeded" chip when subsequent turn events arrive.
+#
+# Invariant 1 (determinism boundary): ``score`` is the retrieval ranker's own
+# number, never an LLM estimate. Invariant 9: no cost field anywhere.
+# Consent gates are NEVER mode-dependent (``ToolChoiceMode`` docstring).
+
+
+#: Why the picker surfaced: a measured retrieval near-tie in AUTO mode, or
+#: the user's ASK mode surfacing every staged selection.
+ToolCandidatesReason = Literal["ambiguity", "ask_mode"]
+
+
+class ToolCandidate(GraceModel):
+    """One ranked tool candidate inside a ``tool-candidates`` request.
+
+    - ``tool_name`` -- the registry tool name, echoed VERBATIM in the
+      ``tool-choice`` reply when picked (the server re-resolves the tool by
+      this name; the client never invents one).
+    - ``summary`` -- one-line human summary the card renders beside the name
+      (drawn from the tool's docstring/description server-side; may be empty
+      for a defensively-built candidate).
+    - ``score`` -- the retrieval ranker's score for this candidate, verbatim
+      (Invariant 1: never an LLM estimate). Unconstrained float: ranker
+      backends differ (cosine similarity may be negative). Candidates arrive
+      ranked best-first; ``score`` lets the client show/inspect the margin.
+    """
+
+    tool_name: str = Field(min_length=1, max_length=200)
+    summary: str = Field(default="", max_length=500)
+    score: float = 0.0
+
+
+class ToolCandidatesPayload(GraceModel):
+    """``tool-candidates`` (A.4 extension): agent -> client tool picker.
+
+    Fields:
+
+    - ``request_id`` -- ULID correlating this request with the ``tool-choice``
+      reply (and the server's paused-selection record). Echoed verbatim.
+    - ``stage_label`` -- the analysis-flow stage this pick belongs to (e.g.
+      ``"Data step"``, ``"Analysis step"``) so staged ASK-mode waves read as
+      a narrative, not a flood. Plain prose, client-rendered as the card
+      title.
+    - ``candidates`` -- the ranked candidates, best-first. MAY be empty when
+      the retrieval side degraded (the client then offers only the free-text
+      + let-agent-decide affordances -- honest degrade, mirroring the
+      region-choice empty-candidates rule).
+    - ``reason`` -- ``"ambiguity"`` (AUTO-mode measured near-tie) or
+      ``"ask_mode"`` (the user asked to see every staged selection).
+    - ``timeout_s`` -- how long the SERVER waits before proceeding with its
+      own top-ranked pick (fail-open; the client card notes the state when
+      the turn moves on).
+    """
+
+    MESSAGE_TYPE: ClassVar[str] = "tool-candidates"
+
+    request_id: ULIDStr
+    stage_label: str = Field(min_length=1, max_length=120)
+    candidates: list[ToolCandidate] = Field(default_factory=list)
+    reason: ToolCandidatesReason
+    timeout_s: float = Field(default=60.0, gt=0)
+
+
+class ToolChoicePayload(GraceModel):
+    """``tool-choice`` (A.4b extension): client -> agent picker reply.
+
+    Exactly one of three shapes, keyed by which fields are set:
+
+    - ``tool_name`` set -- the user picked a candidate; the value is a
+      ``ToolCandidate.tool_name`` echoed VERBATIM. ``free_text`` is None.
+    - ``free_text`` set -- the user typed guidance instead of picking (the
+      card's free-text option); the server feeds it to the selection step.
+      ``tool_name`` is None.
+    - both None -- "let the agent decide": the server proceeds immediately
+      with its own top-ranked pick (the same outcome as the timeout, but
+      user-initiated and instant).
+
+    Cross-shape discipline (lightweight -- full enforcement is the consumer's
+    responsibility, matching the A.4b response shapes): ``tool_name`` and
+    ``free_text`` SHOULD NOT both be set; the server prefers ``tool_name``
+    when both arrive (the explicit pick is the stronger signal).
+    """
+
+    MESSAGE_TYPE: ClassVar[str] = "tool-choice"
+
+    request_id: ULIDStr
+    tool_name: str | None = Field(default=None, max_length=200)
+    free_text: str | None = Field(default=None, max_length=4096)
+
+
+# =========================================================================== #
 # Registries: kebab-case type -> payload model
 # =========================================================================== #
 
@@ -1274,6 +1414,8 @@ CLIENT_TO_AGENT_PAYLOADS: dict[str, type[GraceModel]] = {
     # sprint-08 — FR-FR-1 + §F.1.2 Mode 2
     RecoveryChoiceResponsePayload.MESSAGE_TYPE: RecoveryChoiceResponsePayload,
     CatalogAdditionResponsePayload.MESSAGE_TYPE: CatalogAdditionResponsePayload,
+    # ADR 0018 auto/ask modes -- the picker reply (Stage 3, 2026-07-22)
+    ToolChoicePayload.MESSAGE_TYPE: ToolChoicePayload,
 }
 
 # sprint-12-mega Wave 1.5 (job-0115): resolve OQ-0100-WS-REGISTRY-WIRING by
@@ -1322,6 +1464,8 @@ AGENT_TO_CLIENT_PAYLOADS: dict[str, type[GraceModel]] = {
     # sprint-08 — FR-FR-1 + §F.1.2 Mode 2
     RecoveryChoicePayload.MESSAGE_TYPE: RecoveryChoicePayload,
     OfferCatalogAdditionPayload.MESSAGE_TYPE: OfferCatalogAdditionPayload,
+    # ADR 0018 auto/ask modes -- the picker request (Stage 3, 2026-07-22)
+    ToolCandidatesPayload.MESSAGE_TYPE: ToolCandidatesPayload,
 }
 AGENT_TO_CLIENT_PAYLOADS.update(SECRET_AGENT_TO_CLIENT_PAYLOADS)
 AGENT_TO_CLIENT_PAYLOADS[
