@@ -152,6 +152,12 @@ class UsageMetadataEvent:
     prompt_token_count: int | None = None
     candidates_token_count: int | None = None
     cache_hit: bool = False
+    # Per-turn telemetry (LANE CORE, 2026-07-22): reasoning-channel tokens where
+    # the provider reports them (OpenAI-compatible
+    # ``usage.completion_tokens_details.reasoning_tokens``). ``None`` when the
+    # provider does not report the figure (Bedrock Converse metering carries no
+    # reasoning split) -- absent is tolerated, NEVER fabricated.
+    reasoning_token_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -200,6 +206,172 @@ StreamEvent = (
     | CompactionStartEvent
     | CompactionCompleteEvent
 )
+
+
+# ---------------------------------------------------------------------------
+# Upstream-provider discipline (LANE CORE, 2026-07-22 -- NATE hard rule:
+# never internalize an upstream failure).
+#
+# Both provider adapters (openai_adapter / bedrock_adapter) classify TRANSIENT
+# provider errors (HTTP 429, 5xx, timeouts, connection drops, provider-reported
+# overload) as ``error_class="upstream_provider"``, log the provider's VERBATIM
+# error, and retry with exponential backoff. On exhaustion they raise
+# ``UpstreamProviderError`` so the server turn loop ends the turn with an
+# HONEST provider-unavailable narration (typed, provider named) -- never a
+# silent empty turn, never recorded as an internal error. Non-transient
+# provider errors (auth, bad request) fail fast unchanged and are classified
+# ``error_class="provider_request"`` by ``classify_provider_error_class``.
+#
+# Retry policy env (shared by both adapters):
+#   TRID3NT_PROVIDER_RETRIES    -- max retries after the first attempt
+#                                  (default 3)
+#   TRID3NT_PROVIDER_BACKOFF_S  -- exponential-backoff BASE seconds; the wait
+#                                  before retry N (0-based) is
+#                                  ``base * 2**N`` (default 5.0). A provider
+#                                  Retry-After, when present, OVERRIDES the
+#                                  schedule for that attempt (openai path).
+# ---------------------------------------------------------------------------
+
+
+class UpstreamProviderError(RuntimeError):
+    """A TRANSIENT upstream model-provider failure that survived retry
+    exhaustion (429 / 5xx / timeout / connection drop / provider overload).
+
+    ``provider`` names the upstream provider for the user-facing narration
+    (e.g. ``"AWS Bedrock"`` / ``"openrouter.ai (openai-compatible)"``);
+    ``detail`` carries the provider's VERBATIM last error string (honesty
+    floor: never paraphrased away); ``attempts`` is the total number of
+    request attempts made (1 original + retries). ``error_class`` is the
+    turn-telemetry classification constant.
+    """
+
+    error_class = "upstream_provider"
+
+    def __init__(self, provider: str, detail: str, attempts: int = 1) -> None:
+        self.provider = provider
+        self.detail = detail
+        self.attempts = attempts
+        super().__init__(
+            f"upstream provider {provider} unavailable after {attempts} "
+            f"attempt(s): {detail}"
+        )
+
+
+def provider_retries() -> int:
+    """Max provider retries after the first attempt (``TRID3NT_PROVIDER_RETRIES``,
+    default 3). Read at call time so an env injection works without re-import."""
+    raw = os.environ.get("TRID3NT_PROVIDER_RETRIES")
+    if raw is not None and str(raw).strip():
+        try:
+            val = int(str(raw).strip())
+            if val >= 0:
+                return val
+        except (TypeError, ValueError):
+            pass
+    return 3
+
+
+def provider_backoff_s() -> float:
+    """Exponential-backoff BASE seconds (``TRID3NT_PROVIDER_BACKOFF_S``,
+    default 5.0)."""
+    raw = os.environ.get("TRID3NT_PROVIDER_BACKOFF_S")
+    if raw is not None and str(raw).strip():
+        try:
+            val = float(str(raw).strip())
+            if val > 0:
+                return val
+        except (TypeError, ValueError):
+            pass
+    return 5.0
+
+
+def provider_backoff_wait(attempt: int, *, cap: float = 60.0) -> float:
+    """Seconds to wait before retry ``attempt`` (0-based): ``base * 2**attempt``
+    capped at ``cap``. Pure so tests can pin the schedule."""
+    wait = provider_backoff_s() * (2.0 ** max(int(attempt), 0))
+    return max(0.0, min(wait, float(cap)))
+
+
+def classify_provider_error_class(exc: BaseException) -> str:
+    """Classify a turn-ending exception for the per-turn telemetry record.
+
+    Returns one of:
+      - ``"upstream_provider"`` -- a typed ``UpstreamProviderError`` (retry
+        exhaustion) OR a raw provider error that is transient-shaped (a
+        mid-stream 429/5xx/timeout/connection drop that escaped the request-
+        time retry seam). Upstream failures are never recorded as internal.
+      - ``"provider_request"`` -- a NON-transient provider rejection of OUR
+        request (auth / bad request / not found / validation). Fail-fast class.
+      - ``"internal"`` -- everything else (a genuine bug in our own code).
+
+    Optional-dependency imports are defensive: openai / botocore may be absent
+    on a build where that provider path is dormant.
+    """
+    if isinstance(exc, UpstreamProviderError) or getattr(exc, "error_class", None) == "upstream_provider":
+        return "upstream_provider"
+
+    # OpenAI-compatible path (optional dep).
+    try:
+        import openai  # noqa: WPS433
+
+        if isinstance(
+            exc,
+            (
+                openai.BadRequestError,  # 400
+                openai.AuthenticationError,  # 401
+                openai.PermissionDeniedError,  # 403
+                openai.NotFoundError,  # 404
+                openai.UnprocessableEntityError,  # 422
+            ),
+        ):
+            return "provider_request"
+        if isinstance(exc, (openai.RateLimitError, openai.APIConnectionError)):
+            return "upstream_provider"  # 429 / timeout / connection drop
+        if isinstance(exc, openai.APIStatusError):
+            try:
+                if int(getattr(exc, "status_code", 0) or 0) >= 500:
+                    return "upstream_provider"
+            except (TypeError, ValueError):
+                pass
+            return "provider_request"
+        if isinstance(exc, openai.APIError):
+            # Ambiguous APIError: transient-shaped messages are upstream.
+            from .openai_adapter import _is_transient_upstream
+
+            return (
+                "upstream_provider" if _is_transient_upstream(exc) else "provider_request"
+            )
+    except ImportError:
+        pass
+    except Exception:  # noqa: BLE001 -- classification must never raise
+        pass
+
+    # Bedrock / botocore path (optional dep).
+    try:
+        from botocore.exceptions import (  # noqa: WPS433
+            BotoCoreError,
+            ClientError,
+            ConnectionError as BotoConnectionError,
+        )
+
+        if isinstance(exc, ClientError):
+            from .bedrock_adapter import _is_transient_bedrock_error
+
+            return (
+                "upstream_provider"
+                if _is_transient_bedrock_error(exc)
+                else "provider_request"
+            )
+        if isinstance(exc, (BotoConnectionError,)):
+            return "upstream_provider"
+        if isinstance(exc, BotoCoreError):
+            return "internal"
+    except ImportError:
+        pass
+    except Exception:  # noqa: BLE001 -- classification must never raise
+        pass
+
+    return "internal"
 
 
 # ---------------------------------------------------------------------------
@@ -1043,6 +1215,41 @@ _FUNCTION_RESPONSE_CHAR_BUDGET = 4_000
 MAX_TURN_ITERATIONS = 12
 
 
+# ---------------------------------------------------------------------------
+# NEVER-REHYDRATE guard (LANE CORE, 2026-07-22 -- NATE requirement).
+#
+# The persisted agent chat row now carries a ``thinking`` field (the
+# reasoning-channel text for the same bubble as the answer -- see
+# ``trid3nt_contracts.case.CaseChatMessage.thinking``). That text is DISPLAY
+# REPLAY material only: it must NEVER re-enter LLM-bound contents. Before this
+# guard the exclusion was accidental (the history builders happened to read
+# only ``text`` / ``parts_blob`` / ``content``); it is now a RULE enforced at
+# every seam that turns persisted rows into model contents:
+#
+#   * ``build_contents_from_history`` strips the fields from every history
+#     entry before reading it;
+#   * ``_decode_parts_blob`` strips them from every full-fidelity blob entry
+#     (so even a future writer that leaks ``thinking`` into a parts_blob entry
+#     cannot re-inject it);
+#   * ``rehydrate_history_from_case`` reads only role/content/tool_card and is
+#     covered by the same regression test.
+# ---------------------------------------------------------------------------
+
+#: Persisted-row field names that must NEVER reach LLM-bound contents.
+NEVER_REHYDRATE_FIELDS: frozenset[str] = frozenset({"thinking"})
+
+
+def _strip_never_rehydrate(entry: dict) -> dict:
+    """Return ``entry`` without any ``NEVER_REHYDRATE_FIELDS`` key.
+
+    Identity (no copy) when the entry carries none of the guarded keys -- the
+    common path stays allocation-free. Never mutates the caller's dict.
+    """
+    if not any(k in entry for k in NEVER_REHYDRATE_FIELDS):
+        return entry
+    return {k: v for k, v in entry.items() if k not in NEVER_REHYDRATE_FIELDS}
+
+
 def _decode_parts_blob(blob: Any) -> list[genai_types.Part] | None:
     """Decode a persisted ``parts_blob`` into a list of ``Part`` (job-B10).
 
@@ -1094,6 +1301,11 @@ def _decode_parts_blob(blob: Any) -> list[genai_types.Part] | None:
     for entry in raw:
         if not isinstance(entry, dict):
             continue
+        # NEVER-REHYDRATE guard: strip ``thinking`` (and any future guarded
+        # field) from the blob entry BY RULE before any key is read -- the
+        # full-fidelity parts_blob path must never re-inject reasoning text
+        # into LLM-bound contents.
+        entry = _strip_never_rehydrate(entry)
         kwargs: dict[str, Any] = {}
         if "text" in entry and entry["text"]:
             kwargs["text"] = entry["text"]
@@ -1154,6 +1366,10 @@ def build_contents_from_history(
     contents: list[genai_types.Content] = []
     if chat_history:
         for entry in chat_history:
+            # NEVER-REHYDRATE guard: strip the ``thinking`` field BY RULE
+            # before ANY key is read. Persisted reasoning text is display
+            # replay material only and must never reach the model.
+            entry = _strip_never_rehydrate(entry)
             role = entry.get("role", "user")
             gem_role = "model" if role in ("agent", "assistant", "model") else "user"
             # B10: prefer parts_blob when present — it carries function_call /
@@ -1424,6 +1640,11 @@ def rehydrate_history_from_case(
 
     history: list[dict] = []
     for msg in rows:
+        # NEVER-REHYDRATE rule: read ONLY role / content / tool_card off the
+        # persisted row. The ``thinking`` field (reasoning-channel text,
+        # display replay only) is deliberately never read here -- see
+        # ``NEVER_REHYDRATE_FIELDS`` and the regression test pinning that
+        # thinking text never reaches LLM-bound contents.
         role = getattr(msg, "role", None)
         content = getattr(msg, "content", None)
         tool_card = getattr(msg, "tool_card", None)
@@ -2650,6 +2871,14 @@ __all__ = [
     "UsageMetadataEvent",
     "CompactionStartEvent",
     "CompactionCompleteEvent",
+    # Upstream-provider discipline (LANE CORE 2026-07-22)
+    "UpstreamProviderError",
+    "classify_provider_error_class",
+    "provider_retries",
+    "provider_backoff_s",
+    "provider_backoff_wait",
+    # Never-rehydrate guard (thinking persistence)
+    "NEVER_REHYDRATE_FIELDS",
     "SYSTEM_PROMPT",
     "build_client",
     "build_contents_from_history",

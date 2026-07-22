@@ -630,9 +630,12 @@ class Trid3ntDock(QDockWidget):
                 self._add_user_bubble(content)
             elif role == "agent":
                 entry = _AssistantEntry(self.messages_layout)
-                # T9: replay any persisted reasoning as the collapsed thinking
-                # block (defensive -- parse_chat_history drops it today, so this
-                # only fires once the server persists thinking on the row).
+                # T9 + LANE PLUGIN (2026-07-22): replay persisted reasoning as
+                # the SAME grey collapsible thinking fold the live
+                # agent-thinking-chunk path builds -- collapsed by default,
+                # above the answer text in the same bubble.
+                # parse_chat_history now surfaces "thinking" on agent rows
+                # (None when absent); "reasoning" stays as a defensive alias.
                 thinking = row.get("thinking") or row.get("reasoning")
                 if isinstance(thinking, str) and thinking.strip():
                     entry.append_thinking_delta(thinking)

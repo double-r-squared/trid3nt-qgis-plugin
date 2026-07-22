@@ -116,8 +116,10 @@ from .adapter import (
     SYSTEM_PROMPT,
     TextDeltaEvent,
     ThinkingDeltaEvent,
+    UpstreamProviderError,
     UsageMetadataEvent,
     build_client,
+    classify_provider_error_class,
     build_contents_from_history,
     build_layers_present_note,
     build_function_call_content,
@@ -183,6 +185,7 @@ from .telemetry import (
     compute_args_hash,
     emit_shadow_selection_event,
     emit_tool_call_event,
+    emit_turn_telemetry,
 )
 from .tool_arg_normalizer import (
     autofill_missing_bbox,
@@ -2904,6 +2907,19 @@ async def _stream_gemini_reply(
     # persist the un-finalized tail. Counter init at 0 so the wrapper's
     # ``segments_done`` read is well-defined even on instant death.
     _segment_buf: list[str] = []
+    # Thinking persistence (LANE CORE 2026-07-22): per-segment reasoning-text
+    # buffer, filled ONLY while the per-turn ``show_thinking`` toggle is ON
+    # (mirrors the wire gating below). ``_finalize_segment`` persists its
+    # joined text as the ``thinking`` field on the SAME agent row as the
+    # segment's answer (same-bubble contract; the field name "thinking" is the
+    # cross-lane interface the QGIS plugin reads) and clears it. A
+    # thinking-only segment (reasoning streamed, then a tool round with no
+    # answer text) keeps its buffer so the thinking attaches to the turn's
+    # NEXT persisted agent row; a turn that ends with thinking and no text at
+    # all persists nothing (no phantom bubble -- the job-0315 invariant).
+    # NEVER-REHYDRATE: the persisted field is display replay material only --
+    # adapter.build_contents_from_history strips it BY RULE.
+    _thinking_buf: list[str] = []
     _reg_task = asyncio.current_task()
     if _reg_task is not None:
         _TURN_NARRATION_BY_TASK[_reg_task] = turn_narration
@@ -3281,6 +3297,20 @@ async def _stream_gemini_reply(
     _continuation_nudged = False
     _turn_geocode_bbox: list[float] | None = None
 
+    # PER-TURN TELEMETRY accumulators (LANE CORE 2026-07-22). Token counts SUM
+    # the adapter's per-round UsageMetadataEvents across the whole turn; a
+    # provider that reports no usage leaves them None (null in the record --
+    # tolerated, never fabricated). ``_turn_error_class`` is stamped by the
+    # exception handlers below (upstream_provider / provider_request /
+    # context_window / cancelled / client_disconnect / internal) and stays
+    # None on a clean turn. The record is emitted in the ``finally`` at the
+    # end of this function -- one record per turn, every outcome.
+    _turn_prompt_tokens: int | None = None
+    _turn_completion_tokens: int | None = None
+    _turn_reasoning_tokens: int | None = None
+    _turn_tool_dispatch_count = 0
+    _turn_error_class: str | None = None
+
     iterations = 0
     try:
         while iterations < _step_cap:
@@ -3358,9 +3388,13 @@ async def _stream_gemini_reply(
                     # generated, but a model that leaks reasoning anyway must
                     # not reach a client that asked for it to stay hidden.
                     # Shares the segment's message_id (contract: the thinking
-                    # block and its answer live in the SAME bubble); a
-                    # thinking-only segment persists nothing (_finalize_segment
-                    # skips empty text).
+                    # block and its answer live in the SAME bubble). Thinking
+                    # PERSISTENCE (LANE CORE 2026-07-22): the deltas also
+                    # accumulate in ``_thinking_buf`` so ``_finalize_segment``
+                    # persists them as the ``thinking`` field on the SAME
+                    # agent row as the answer; a thinking-only segment still
+                    # persists no row of its own (no phantom bubble) — its
+                    # buffered thinking rides the turn's next persisted row.
                     if show_thinking:
                         if current_message_id is None:
                             current_message_id = new_ulid()
@@ -3375,6 +3409,11 @@ async def _stream_gemini_reply(
                                 ),
                             )
                         )
+                        # Thinking persistence (LANE CORE 2026-07-22):
+                        # accumulate the reasoning text for THIS segment so
+                        # ``_finalize_segment`` persists it as the ``thinking``
+                        # field on the same agent row as the answer.
+                        _thinking_buf.append(event.delta)
 
                 elif isinstance(event, FunctionCallEvent):
                     logger.info(
@@ -3395,6 +3434,25 @@ async def _stream_gemini_reply(
                     #  (b) emit a single ``cache-status`` envelope so the
                     #      web UI can render the live cache hit rate.
                     last_usage = event
+                    # PER-TURN TELEMETRY (LANE CORE 2026-07-22): sum the
+                    # reported counts across the turn's model rounds. A round
+                    # that reports None for a figure leaves that accumulator
+                    # untouched (null stays null when NO round reports it --
+                    # tolerate absent, never fabricate).
+                    if event.prompt_token_count is not None:
+                        _turn_prompt_tokens = (
+                            (_turn_prompt_tokens or 0) + event.prompt_token_count
+                        )
+                    if event.candidates_token_count is not None:
+                        _turn_completion_tokens = (
+                            (_turn_completion_tokens or 0)
+                            + event.candidates_token_count
+                        )
+                    if event.reasoning_token_count is not None:
+                        _turn_reasoning_tokens = (
+                            (_turn_reasoning_tokens or 0)
+                            + event.reasoning_token_count
+                        )
                     logger.info(
                         "gemini usage session=%s iter=%d cached=%s total=%s "
                         "prompt=%s candidates=%s hit=%s",
@@ -3505,6 +3563,16 @@ async def _stream_gemini_reply(
                 # with OPEN-16: a turn the empty-completion seam already
                 # nudged (``_empty_retries > 0``) gets NO additional invariant
                 # nudge -- corrective nudges never stack past their caps.
+                # Stage-3 invariant OBSERVABILITY (LANE CORE 2026-07-22 / P10
+                # follow-up): the invariants used to fire (one INFO line) or
+                # skip SILENTLY -- when a benched turn ended without a rescue
+                # there was no way to tell heuristic-miss from disabled from
+                # already-spent-budget from "the turn never reached this
+                # terminal branch at all" (the ACTUAL P10 shape: the turn
+                # parked on user-decision gates -- code-exec approval, then the
+                # 24h local-lane solver-confirm -- with the bench client gone,
+                # so this branch never ran). Every terminal round now logs one
+                # INFO line per invariant: FIRED, or SKIPPED with its reason.
                 if (
                     not _continuation_nudged
                     and _empty_retries == 0
@@ -3532,6 +3600,48 @@ async def _stream_gemini_reply(
                             build_user_text_content(_CONTINUATION_NUDGE)
                         )
                         continue
+                    # Neither invariant fired -- log each skip with its reason.
+                    logger.info(
+                        "turn-invariant no-silent-end skipped session=%s "
+                        "iter=%d reason=%s",
+                        state.session_id,
+                        iterations,
+                        (
+                            "no-tools-dispatched"
+                            if not _turn_ever_called_tool
+                            else "has-closing-text"
+                        ),
+                    )
+                    logger.info(
+                        "turn-invariant bare-geocode skipped session=%s "
+                        "iter=%d reason=%s tools=%s",
+                        state.session_id,
+                        iterations,
+                        (
+                            "tools-not-geocode-only"
+                            if _turn_tools_dispatched != {"geocode_location"}
+                            else "not-a-data-or-analysis-ask"
+                        ),
+                        sorted(_turn_tools_dispatched),
+                    )
+                elif _env_flag("TRID3NT_TURN_INVARIANTS", True):
+                    logger.info(
+                        "turn-invariants skipped session=%s iter=%d reason=%s",
+                        state.session_id,
+                        iterations,
+                        (
+                            "nudge-budget-spent"
+                            if _continuation_nudged
+                            else "empty-completion-retry-owned-this-turn"
+                        ),
+                    )
+                else:
+                    logger.info(
+                        "turn-invariants skipped session=%s iter=%d "
+                        "reason=disabled-by-env",
+                        state.session_id,
+                        iterations,
+                    )
                 logger.info(
                     "gemini loop terminal session=%s iter=%d text_chunks=%d",
                     state.session_id,
@@ -3618,7 +3728,8 @@ async def _stream_gemini_reply(
             # done=True frame AND persists this segment's own role="agent" row.
             if current_message_id is not None:
                 await _finalize_segment(
-                    websocket, state, current_message_id, _segment_buf
+                    websocket, state, current_message_id, _segment_buf,
+                    thinking_parts=_thinking_buf,
                 )
                 current_message_id = None  # next text opens a fresh segment
 
@@ -4070,6 +4181,9 @@ async def _stream_gemini_reply(
                         "error_code": _tel_error_code,
                     }
                 )
+                # PER-TURN TELEMETRY: one dispatched tool call counted at the
+                # same chokepoint the per-tool record is emitted from.
+                _turn_tool_dispatch_count += 1
                 # job-B10: pass the thought_signature harvested off the
                 # function_call Part through to the replayed model turn.
                 # Gemini 3 requires the same opaque byte-blob on the replayed
@@ -4243,6 +4357,7 @@ async def _stream_gemini_reply(
                 current_message_id,
                 _segment_buf,
                 is_terminal=True,
+                thinking_parts=_thinking_buf,
             )
             current_message_id = None
         else:
@@ -4305,6 +4420,7 @@ async def _stream_gemini_reply(
                     recovered_id,
                     [_closing],
                     is_terminal=True,
+                    thinking_parts=_thinking_buf,
                 )
             elif _crisp_concluded and _seg_done == 0:
                 # CRISP-END edge case (NATE 2026-06-29): the turn delivered a
@@ -4374,6 +4490,7 @@ async def _stream_gemini_reply(
         # ``current_turn_narration`` still holds the partial text and the
         # dispatch wrapper's finally persists the un-finalized open-segment tail
         # best-effort (one row), so no narration is lost.
+        _turn_error_class = "cancelled"
         cancelled_step = PipelineStep(
             step_id=step_id,
             name="llm_generation",
@@ -4405,6 +4522,7 @@ async def _stream_gemini_reply(
         # no close frame received or sent"). The persisted chat/tool rows plus
         # the session-resume replay carry the turn's results to the client
         # when it reconnects.
+        _turn_error_class = "client_disconnect"
         logger.warning(
             "client websocket closed mid-turn (transport drop, not a model "
             "failure) session=%s: %s",
@@ -4420,6 +4538,7 @@ async def _stream_gemini_reply(
         # transient model outage) and what to do about it. Mirrors the BUG 4b
         # terminal-failure-card persist so a reconnect / Case-reopen replay
         # shows the failed card rather than a phantom "still running" spinner.
+        _turn_error_class = "context_window"
         logger.warning(
             "context-budget: turn aborted, context window exceeded session=%s "
             "num_ctx=%d",
@@ -4510,7 +4629,95 @@ async def _stream_gemini_reply(
                 "context-budget: error-envelope send raised session=%s",
                 state.session_id,
             )
+    except UpstreamProviderError as exc:
+        # UPSTREAM-PROVIDER DISCIPLINE (LANE CORE 2026-07-22, NATE hard rule:
+        # never internalize upstream failure). The adapter already retried the
+        # transient provider failure with backoff and exhausted its budget --
+        # this turn ends with an HONEST provider-unavailable narration (typed,
+        # provider NAMED, verbatim detail), never a silent empty turn and
+        # never recorded as an internal error (``error_class=
+        # "upstream_provider"`` on the per-turn telemetry record). The wire
+        # ``error_code`` stays the contract-valid ``LLM_UNAVAILABLE``
+        # (retryable) -- the closed A.6 ErrorCode Literal is a contracts
+        # surface this lane may not widen -- while the free-form failure-card
+        # code carries the DISTINCT ``UPSTREAM_PROVIDER_UNAVAILABLE``.
+        _turn_error_class = "upstream_provider"
+        logger.error(
+            "upstream provider unavailable session=%s provider=%s attempts=%d "
+            "verbatim=%s",
+            state.session_id,
+            exc.provider,
+            exc.attempts,
+            exc.detail,
+        )
+        _narration = (
+            f"The upstream model provider ({exc.provider}) is currently "
+            f"unavailable -- the request was retried {exc.attempts} time(s) "
+            f"and the provider kept failing. Provider error: {exc.detail}. "
+            "This is a temporary provider-side outage, not a problem with "
+            "your request; please try again shortly or switch models."
+        )
+        # Honest closing narration IN CHAT (one bubble, streamed + terminal
+        # done=True) and persisted as an agent row so a Case reopen replays
+        # the same honest ending. Best-effort sends via _session_safe_send.
+        _upstream_msg_id = current_message_id or new_ulid()
+        await _session_safe_send(websocket, state.session_id,
+            _new_envelope(
+                "agent-message-chunk",
+                state.session_id,
+                AgentMessageChunkPayload(
+                    message_id=_upstream_msg_id, delta=_narration, done=False
+                ),
+            )
+        )
+        await _session_safe_send(websocket, state.session_id,
+            _new_envelope(
+                "agent-message-chunk",
+                state.session_id,
+                AgentMessageChunkPayload(
+                    message_id=_upstream_msg_id, delta="", done=True
+                ),
+            )
+        )
+        try:
+            await _persist_chat_turn(
+                state,
+                role="agent",
+                content=_narration,
+                pipeline_id=state.current_turn_pipeline_id,
+                layer_emissions=[],
+                case_id=_turn_case_id(state),
+            )
+        except Exception:  # noqa: BLE001 -- persist is best-effort
+            logger.exception(
+                "upstream-provider narration persist failed session=%s",
+                state.session_id,
+            )
+        try:
+            await _persist_terminal_failure_card(
+                state,
+                error_code="UPSTREAM_PROVIDER_UNAVAILABLE",
+                message=str(exc),
+                case_id=_turn_case_id(state),
+            )
+        except Exception:  # noqa: BLE001 -- defense-in-depth logging only
+            logger.exception(
+                "upstream-provider failure-card persist raised session=%s",
+                state.session_id,
+            )
+        await _send_error(
+            websocket,
+            state.session_id,
+            "LLM_UNAVAILABLE",
+            f"Upstream provider unavailable ({exc.provider}): {exc.detail}",
+            retryable=True,
+        )
     except Exception as exc:  # noqa: BLE001 — surface as A.6 LLM_UNAVAILABLE
+        # PER-TURN TELEMETRY: a NON-transient provider rejection (auth / bad
+        # request) classifies as ``provider_request`` (fail-fast, its own
+        # class); anything else is honestly ``internal``. Upstream transients
+        # that escaped the retry seam classify ``upstream_provider``.
+        _turn_error_class = classify_provider_error_class(exc)
         logger.exception("model stream failed: %s", exc)
         await _send_error(
             websocket,
@@ -4543,6 +4750,35 @@ async def _stream_gemini_reply(
                 error_code="LLM_UNAVAILABLE",
                 message=f"Model generation failed: {exc}",
                 case_id=_turn_case_id(state),
+            )
+    finally:
+        # PER-TURN TELEMETRY (LANE CORE 2026-07-22): exactly ONE record per
+        # turn, every outcome (clean / abort / cancel / provider failure).
+        # ``emit_turn_telemetry`` is fire-and-forget + never raises (async
+        # JSONL write off-loop per the no-sync-blocking rule), but the whole
+        # call is still wrapped so a telemetry fault can never mask the turn's
+        # own outcome (including a propagating CancelledError).
+        try:
+            _turn_wall_ms = (
+                asyncio.get_running_loop().time() - started_at
+            ) * 1000.0
+            emit_turn_telemetry(
+                turn_id=pipeline_id,
+                session_id=state.session_id,
+                case_id=_turn_case_id(state),
+                model_id=_effective_model,
+                provider=_provider,
+                prompt_tokens=_turn_prompt_tokens,
+                completion_tokens=_turn_completion_tokens,
+                reasoning_tokens=_turn_reasoning_tokens,
+                turn_wall_ms=_turn_wall_ms,
+                tool_dispatch_count=_turn_tool_dispatch_count,
+                error_class=_turn_error_class,
+            )
+        except Exception:  # noqa: BLE001 -- telemetry never breaks the turn
+            logger.warning(
+                "per-turn telemetry emit failed session=%s", state.session_id,
+                exc_info=True,
             )
 
 
@@ -6628,6 +6864,7 @@ async def _finalize_segment(
     segment_parts: list[str],
     *,
     is_terminal: bool = False,
+    thinking_parts: list[str] | None = None,
 ) -> None:
     """job-0315: close ONE narration bubble + persist it as its own agent row.
 
@@ -6656,6 +6893,15 @@ async def _finalize_segment(
     Best-effort persist (inherits ``_persist_chat_turn``'s swallow); the wire
     ``done=True`` still fires even if persistence is unbound. Clears the
     segment buffer and bumps the per-task finalized-count on a non-empty write.
+
+    ``thinking_parts`` (LANE CORE 2026-07-22, thinking persistence): the
+    per-segment reasoning-text buffer accumulated while the per-turn
+    ``show_thinking`` toggle was ON. When THIS segment persists a non-empty
+    row, its joined text rides the row's ``thinking`` field (same-bubble
+    contract) and the buffer is cleared. A thinking-only segment (no answer
+    text -> no row, the no-phantom-bubble invariant) KEEPS its buffer so the
+    thinking attaches to the turn's next persisted agent row instead of being
+    dropped. Same clear-not-rebind discipline as ``segment_parts``.
     """
     text = "".join(segment_parts).strip()
     # (1) wire terminal for this bubble — always fires (id has text).
@@ -6668,6 +6914,9 @@ async def _finalize_segment(
     )
     # (2) per-segment persist — only when there is real text.
     if text:
+        thinking_text = (
+            "".join(thinking_parts).strip() if thinking_parts else ""
+        )
         await _persist_chat_turn(
             state,
             role="agent",
@@ -6677,7 +6926,12 @@ async def _finalize_segment(
             # segments carry none (the accumulator rides the last row only).
             layer_emissions=None if is_terminal else [],
             case_id=_turn_case_id(state),
+            thinking=thinking_text or None,
         )
+        # Thinking consumed by this row — clear the SAME list object (do not
+        # rebind), mirroring the segment-buffer discipline below.
+        if thinking_parts:
+            thinking_parts.clear()
         _task = asyncio.current_task()
         if _task is not None:
             _TURN_SEGMENTS_PERSISTED_BY_TASK[_task] = (
@@ -6705,6 +6959,7 @@ async def _persist_chat_turn(
     layer_emissions: list[str] | None = None,
     case_id: str | None = None,
     message_id: str | None = None,
+    thinking: str | None = None,
 ) -> None:
     """Append one ``CaseChatMessage`` to Mongo for the active Case.
 
@@ -6746,6 +7001,11 @@ async def _persist_chat_turn(
         case_id=target_case,
         role=role,  # type: ignore[arg-type]
         content=content,
+        # Thinking persistence (LANE CORE 2026-07-22): reasoning-channel text
+        # for the same bubble; None on every non-agent row and on turns with
+        # show_thinking off. Display replay ONLY -- never rehydrated into
+        # LLM-bound contents (adapter.NEVER_REHYDRATE_FIELDS).
+        thinking=thinking,
         pipeline_id=pipeline_id,
         tool_card=tool_card,
         layer_emissions=(

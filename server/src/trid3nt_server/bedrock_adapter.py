@@ -42,7 +42,10 @@ from .adapter import (
     FunctionCallEvent,
     StreamEvent,
     TextDeltaEvent,
+    UpstreamProviderError,
     UsageMetadataEvent,
+    provider_backoff_wait,
+    provider_retries,
 )
 
 logger = logging.getLogger("trid3nt_server.bedrock_adapter")
@@ -817,6 +820,123 @@ class _ThinkingStripper:
 
 
 # --------------------------------------------------------------------------- #
+# Upstream-provider discipline (LANE CORE, 2026-07-22 -- NATE hard rule:
+# never internalize an upstream failure).
+#
+# The Converse call already has SDK-level resilience (botocore ``standard``
+# retry mode, ``_bedrock_timeout_config``) -- this layer EXTENDS it (does not
+# duplicate it) with an adapter-level classification + bounded exponential
+# backoff around the REQUEST-time ``converse_stream`` call, sharing the
+# cross-provider envs ``TRID3NT_PROVIDER_RETRIES`` /
+# ``TRID3NT_PROVIDER_BACKOFF_S`` with openai_adapter. Transient errors
+# (throttling / 5xx / model-not-ready / timeouts / connection drops) retry
+# with the provider's VERBATIM error logged; on exhaustion the producer raises
+# ``adapter.UpstreamProviderError`` (typed, provider named) so the server ends
+# the turn with an honest provider-unavailable narration. Non-transient
+# provider errors (validation / auth / not-found) fail fast UNCHANGED.
+# Retrying happens ONLY at request time (before any streamed event) -- a
+# mid-stream transient failure is classified (wrapped as
+# ``UpstreamProviderError``) but never replayed, since tokens already flowed.
+# --------------------------------------------------------------------------- #
+
+#: Bedrock / botocore error codes that mark a TRANSIENT upstream condition the
+#: service will recover from (retry-worthy). Everything else on a ClientError
+#: is a non-transient request rejection (fail fast).
+_TRANSIENT_BEDROCK_ERROR_CODES: frozenset[str] = frozenset(
+    {
+        "ThrottlingException",
+        "TooManyRequestsException",
+        "ServiceUnavailableException",
+        "InternalServerException",
+        "ModelNotReadyException",
+        "ModelTimeoutException",
+        "ModelErrorException",
+    }
+)
+
+
+def _is_transient_bedrock_error(exc: BaseException) -> bool:
+    """True when ``exc`` is a TRANSIENT upstream Bedrock/transport failure.
+
+    Transient: a ``ClientError`` whose error code is throttling / 5xx-family /
+    model-not-ready (see ``_TRANSIENT_BEDROCK_ERROR_CODES``) or whose HTTP
+    status is >= 500; any botocore read/connect timeout or connection error.
+    Non-transient (False): validation / auth / access-denied / not-found --
+    genuine request rejections where retrying is pointless.
+    """
+    try:
+        from botocore.exceptions import (  # noqa: WPS433
+            ClientError,
+            ConnectionError as BotoConnectionError,
+            ConnectTimeoutError,
+            ReadTimeoutError,
+        )
+    except ImportError:  # boto absent -> nothing to classify
+        return False
+
+    if isinstance(exc, (ReadTimeoutError, ConnectTimeoutError, BotoConnectionError)):
+        return True
+    if isinstance(exc, ClientError):
+        err = (getattr(exc, "response", None) or {}).get("Error", {}) or {}
+        code = str(err.get("Code") or "")
+        if code in _TRANSIENT_BEDROCK_ERROR_CODES:
+            return True
+        meta = (getattr(exc, "response", None) or {}).get("ResponseMetadata", {}) or {}
+        try:
+            if int(meta.get("HTTPStatusCode") or 0) >= 500:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
+
+
+_BEDROCK_PROVIDER_LABEL = "AWS Bedrock"
+
+
+def _converse_stream_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
+    """Open the Converse stream, retrying request-time TRANSIENT errors.
+
+    SYNCHRONOUS -- called from the producer's executor thread only, so the
+    ``time.sleep`` backoff never blocks the event loop. Bounded by
+    ``provider_retries()`` with exponential ``provider_backoff_wait`` waits.
+    Every transient attempt logs the provider's VERBATIM error. Exhaustion
+    raises ``UpstreamProviderError``; non-transient errors propagate UNCHANGED
+    (fail fast -- validation / auth / access-denied).
+    """
+    import time as _time
+
+    max_retries = provider_retries()
+    last_exc: BaseException | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            return client.converse_stream(**kwargs)
+        except Exception as exc:  # noqa: BLE001 -- classified right below
+            if not _is_transient_bedrock_error(exc):
+                raise
+            last_exc = exc
+            if attempt >= max_retries:
+                break
+            wait = provider_backoff_wait(attempt)
+            logger.warning(
+                "bedrock transient upstream error (attempt %d/%d) - sleeping "
+                "%.0fs then retrying (model=%s); provider error verbatim: %s",
+                attempt + 1, max_retries, wait, kwargs.get("modelId"), exc,
+            )
+            _time.sleep(wait)
+    assert last_exc is not None
+    logger.error(
+        "bedrock upstream provider unavailable after %d attempt(s) (model=%s); "
+        "last provider error verbatim: %s",
+        max_retries + 1, kwargs.get("modelId"), last_exc,
+    )
+    raise UpstreamProviderError(
+        provider=_BEDROCK_PROVIDER_LABEL,
+        detail=str(last_exc),
+        attempts=max_retries + 1,
+    ) from last_exc
+
+
+# --------------------------------------------------------------------------- #
 # Streaming
 # --------------------------------------------------------------------------- #
 
@@ -846,9 +966,14 @@ async def stream_bedrock(
     queue: asyncio.Queue[StreamEvent | None | BaseException] = asyncio.Queue()
 
     def _producer() -> None:
+        streamed_any = False
         try:
             client = _bedrock_client()
-            resp = client.converse_stream(**kwargs)
+            # Upstream-provider discipline: request-time transient errors
+            # (throttling / 5xx / timeouts) retry with exponential backoff and
+            # verbatim logging; exhaustion raises the typed
+            # UpstreamProviderError; non-transient errors fail fast unchanged.
+            resp = _converse_stream_with_retry(client, kwargs)
             # Per-contentBlock accumulation of streamed toolUse input JSON.
             tool_blocks: dict[int, dict[str, Any]] = {}
             # Per-turn inline <thinking> stripper: Amazon Nova writes its
@@ -860,6 +985,7 @@ async def stream_bedrock(
             # below), so this is a no-op for Claude.
             stripper = _ThinkingStripper()
             for event in resp["stream"]:
+                streamed_any = True
                 if "contentBlockStart" in event:
                     start = event["contentBlockStart"]
                     idx = start.get("contentBlockIndex", 0)
@@ -934,6 +1060,28 @@ async def stream_bedrock(
                 )
             loop.call_soon_threadsafe(queue.put_nowait, None)
         except BaseException as exc:  # noqa: BLE001 — surface to caller
+            # Upstream-provider discipline: a MID-STREAM transient failure
+            # (throttling / read-timeout / connection drop AFTER events began
+            # flowing) is still an UPSTREAM failure -- classify it as such
+            # (typed, verbatim detail) rather than let it be recorded as an
+            # internal error. It is NOT retried (tokens already streamed; a
+            # replay would duplicate output). Non-transient and already-typed
+            # errors pass through unchanged.
+            if (
+                streamed_any
+                and not isinstance(exc, UpstreamProviderError)
+                and _is_transient_bedrock_error(exc)
+            ):
+                logger.error(
+                    "bedrock mid-stream transient upstream failure (model=%s); "
+                    "provider error verbatim: %s",
+                    kwargs.get("modelId"), exc,
+                )
+                exc = UpstreamProviderError(
+                    provider=_BEDROCK_PROVIDER_LABEL,
+                    detail=str(exc),
+                    attempts=1,
+                )
             loop.call_soon_threadsafe(queue.put_nowait, exc)
 
     producer_task = loop.run_in_executor(None, _producer)

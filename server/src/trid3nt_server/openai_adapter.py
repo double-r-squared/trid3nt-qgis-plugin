@@ -85,7 +85,9 @@ from .adapter import (
     StreamEvent,
     TextDeltaEvent,
     ThinkingDeltaEvent,
+    UpstreamProviderError,
     UsageMetadataEvent,
+    provider_backoff_wait,
 )
 from .context_budget import (
     ContextWindowExceededError,
@@ -579,15 +581,57 @@ def contents_to_openai_messages(
 #: turn would otherwise kill the whole turn. The request-time 429 lands BEFORE
 #: any token, so a bounded retry honoring the provider's ``retry_after`` makes
 #: throttled (incl. :free) models survive a tool-heavy turn. env-tunable.
-_RATE_LIMIT_MAX_RETRIES = int(os.environ.get("TRID3NT_OPENAI_RATE_LIMIT_RETRIES", "4"))
+#:
+#: LANE CORE (2026-07-22, upstream-provider discipline): the retry count and
+#: backoff now EXTEND to the cross-provider envs ``TRID3NT_PROVIDER_RETRIES``
+#: (default 3) / ``TRID3NT_PROVIDER_BACKOFF_S`` (exponential base, default 5.0
+#: -- see ``adapter.provider_backoff_wait``), shared with bedrock_adapter. The
+#: legacy openai-specific envs stay honored as fallbacks so an existing local
+#: .env keeps working. Read at CALL time (env injection without re-import).
 _RATE_LIMIT_MAX_WAIT_S = float(os.environ.get("TRID3NT_OPENAI_RATE_LIMIT_MAX_WAIT_S", "45"))
-_RATE_LIMIT_BACKOFF_S = (5.0, 15.0, 30.0, 45.0)
+
+
+def _max_provider_retries() -> int:
+    """Max retries after the first attempt. Precedence:
+    ``TRID3NT_PROVIDER_RETRIES`` (cross-provider, preferred) >
+    ``TRID3NT_OPENAI_RATE_LIMIT_RETRIES`` (legacy openai-path env) > 3."""
+    for env in ("TRID3NT_PROVIDER_RETRIES", "TRID3NT_OPENAI_RATE_LIMIT_RETRIES"):
+        raw = os.environ.get(env)
+        if raw is not None and str(raw).strip():
+            try:
+                val = int(str(raw).strip())
+                if val >= 0:
+                    return val
+            except (TypeError, ValueError):
+                continue
+    return 3
+
+
+def _backoff_wait_s(attempt: int) -> float:
+    """Exponential backoff wait for retry ``attempt`` (0-based), capped at
+    ``_RATE_LIMIT_MAX_WAIT_S``. Delegates to the shared
+    ``adapter.provider_backoff_wait`` (base ``TRID3NT_PROVIDER_BACKOFF_S``)."""
+    return max(1.0, provider_backoff_wait(attempt, cap=_RATE_LIMIT_MAX_WAIT_S))
+
+
+def _provider_label() -> str:
+    """Human-readable provider name for honest narrations / typed errors --
+    the endpoint host (the closest thing the openai-compatible path has to a
+    provider identity: ollama / openrouter.ai / api.openai.com / ...)."""
+    try:
+        from urllib.parse import urlparse
+
+        host = urlparse(openai_base_url()).netloc or openai_base_url()
+    except Exception:  # noqa: BLE001 -- label building must never raise
+        host = "unknown"
+    return f"{host} (openai-compatible)"
 
 
 def _retry_after_seconds(exc: Any, attempt: int) -> float:
     """Seconds to wait before retrying a 429 - honor the provider's
     ``Retry-After`` header / ``retry_after_seconds`` metadata when present,
-    else fall back to the backoff schedule. Capped at _RATE_LIMIT_MAX_WAIT_S."""
+    else fall back to the exponential backoff schedule. Capped at
+    ``_RATE_LIMIT_MAX_WAIT_S``."""
     wait: float | None = None
     resp = getattr(exc, "response", None)
     hdrs = getattr(resp, "headers", None)
@@ -608,7 +652,7 @@ def _retry_after_seconds(exc: Any, attempt: int) -> float:
         except (AttributeError, TypeError, ValueError):
             wait = None
     if wait is None:
-        wait = _RATE_LIMIT_BACKOFF_S[min(attempt, len(_RATE_LIMIT_BACKOFF_S) - 1)]
+        return _backoff_wait_s(attempt)
     return max(1.0, min(float(wait), _RATE_LIMIT_MAX_WAIT_S))
 
 
@@ -640,16 +684,19 @@ _TRANSIENT_UPSTREAM_SIGNATURES: tuple[str, ...] = (
 def _is_transient_upstream(exc: Any) -> bool:
     """True if ``exc`` is a TRANSIENT upstream error worth retrying with backoff.
 
-    Retry policy (NATE 2026-07-20):
+    Retry policy (NATE 2026-07-20, extended LANE CORE 2026-07-22):
       (a) a 429 ``RateLimitError`` (kept - honors Retry-After via caller);
       (b) any ``APIStatusError`` whose HTTP status is >= 500 (upstream 5xx);
       (c) any ``APIError`` whose message matches a transient-upstream signature
-          (ResourceExhausted / worker-pool-saturation / overloaded / 5xx text).
+          (ResourceExhausted / worker-pool-saturation / overloaded / 5xx text);
+      (d) connection drops + request timeouts (``APIConnectionError``, which
+          subsumes ``APITimeoutError``) -- the upstream-provider discipline
+          classifies transport failures to the provider as upstream, never as
+          our own internal error.
 
     Genuine CLIENT errors NEVER retry (retrying is pointless + hides real bugs):
     400 bad-request (incl. context-length / max-tokens), 401/403 auth, 404, 422.
-    Those propagate unchanged. Connection/timeout errors are NOT classified
-    transient here (unchanged pass-through behavior).
+    Those propagate unchanged.
     """
     import openai  # noqa: WPS433 -- dep dormant unless the openai provider is on
 
@@ -669,6 +716,11 @@ def _is_transient_upstream(exc: Any) -> bool:
 
     # --- (a) 429 rate-limit: always transient. ---
     if isinstance(exc, openai.RateLimitError):
+        return True
+
+    # --- (d) connection drop / request timeout: transient upstream
+    # (APIConnectionError subsumes APITimeoutError in the openai SDK). ---
+    if isinstance(exc, openai.APIConnectionError):
         return True
 
     # --- (b) explicit HTTP status >= 500 (upstream 5xx). ---
@@ -694,18 +746,26 @@ def _is_transient_upstream(exc: Any) -> bool:
 
 async def _create_stream_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
     """Open the streaming completion, retrying a request-time TRANSIENT upstream
-    error with backoff (see _RATE_LIMIT_MAX_RETRIES). The error raises at
-    ``create`` before any token is streamed, so retrying here is clean (no
+    error with exponential backoff (``_max_provider_retries`` /
+    ``_backoff_wait_s`` -- env TRID3NT_PROVIDER_RETRIES /
+    TRID3NT_PROVIDER_BACKOFF_S, legacy openai envs honored). The error raises
+    at ``create`` before any token is streamed, so retrying here is clean (no
     partial-stream replay). A 429 honors the provider's Retry-After; other
-    transient upstream errors (5xx / pool saturation - see
-    ``_is_transient_upstream``) use the backoff schedule. Genuine CLIENT errors
-    (400/401/403/404/422, context-length) propagate UNCHANGED. Returns the
-    AsyncStream context manager.
+    transient upstream errors (5xx / pool saturation / connection drop /
+    timeout - see ``_is_transient_upstream``) use the backoff schedule. The
+    provider's VERBATIM error string is logged on every transient attempt
+    (upstream-provider discipline: never internalize / paraphrase away an
+    upstream failure). Genuine CLIENT errors (400/401/403/404/422,
+    context-length) propagate UNCHANGED (fail fast). On retry exhaustion
+    raises ``adapter.UpstreamProviderError`` (typed, provider named, verbatim
+    detail) so the server ends the turn with an honest provider-unavailable
+    narration. Returns the AsyncStream context manager.
     """
     import openai  # noqa: WPS433 -- dep dormant unless the openai provider is on
 
+    max_retries = _max_provider_retries()
     last_exc: BaseException | None = None
-    for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
+    for attempt in range(max_retries + 1):
         try:
             return await client.chat.completions.create(**kwargs)  # type: ignore[attr-defined]
         except openai.APIError as exc:
@@ -713,29 +773,37 @@ async def _create_stream_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
             if not _is_transient_upstream(exc):
                 raise
             last_exc = exc
-            if attempt >= _RATE_LIMIT_MAX_RETRIES:
+            if attempt >= max_retries:
                 break
             if isinstance(exc, openai.RateLimitError):  # 429 honors Retry-After
                 wait = _retry_after_seconds(exc, attempt)
                 logger.warning(
                     "openai 429 rate-limited (attempt %d/%d) - sleeping %.0fs then "
-                    "retrying (model=%s)", attempt + 1, _RATE_LIMIT_MAX_RETRIES,
-                    wait, kwargs.get("model"),
+                    "retrying (model=%s); provider error verbatim: %s",
+                    attempt + 1, max_retries, wait, kwargs.get("model"), exc,
                 )
-            else:  # transient 5xx / upstream-pool saturation -> backoff schedule
-                wait = _RATE_LIMIT_BACKOFF_S[
-                    min(attempt, len(_RATE_LIMIT_BACKOFF_S) - 1)
-                ]
-                wait = max(1.0, min(wait, _RATE_LIMIT_MAX_WAIT_S))
+            else:  # transient 5xx / pool saturation / connection drop / timeout
+                wait = _backoff_wait_s(attempt)
                 logger.warning(
                     "openai transient upstream error (attempt %d/%d) - sleeping "
-                    "%.0fs then retrying (model=%s): %.180s",
-                    attempt + 1, _RATE_LIMIT_MAX_RETRIES, wait,
-                    kwargs.get("model"), str(exc),
+                    "%.0fs then retrying (model=%s); provider error verbatim: %s",
+                    attempt + 1, max_retries, wait, kwargs.get("model"), exc,
                 )
             await asyncio.sleep(wait)
     assert last_exc is not None
-    raise last_exc
+    # Retry exhaustion on a TRANSIENT upstream failure: raise the TYPED error
+    # (provider named + verbatim detail) so the turn ends with an honest
+    # provider-unavailable narration, never a generic internal failure.
+    logger.error(
+        "openai upstream provider unavailable after %d attempt(s) (model=%s); "
+        "last provider error verbatim: %s",
+        max_retries + 1, kwargs.get("model"), last_exc,
+    )
+    raise UpstreamProviderError(
+        provider=_provider_label(),
+        detail=str(last_exc),
+        attempts=max_retries + 1,
+    ) from last_exc
 
 
 async def _stream_one_round(
@@ -812,6 +880,25 @@ async def _stream_one_round(
                 prompt_tokens = getattr(usage, "prompt_tokens", None)
                 completion_tokens = getattr(usage, "completion_tokens", None)
                 total_tokens = getattr(usage, "total_tokens", None)
+                # Per-turn telemetry (LANE CORE 2026-07-22): reasoning tokens
+                # where the provider reports them
+                # (``usage.completion_tokens_details.reasoning_tokens`` --
+                # OpenAI / OpenRouter / DeepSeek-style). Read defensively via
+                # getattr + the pydantic extras bag; absent -> None (tolerated,
+                # NEVER fabricated).
+                reasoning_tokens = None
+                details = getattr(usage, "completion_tokens_details", None)
+                if details is None:
+                    extra = getattr(usage, "model_extra", None)
+                    if isinstance(extra, dict):
+                        details = extra.get("completion_tokens_details")
+                if details is not None:
+                    if isinstance(details, dict):
+                        reasoning_tokens = details.get("reasoning_tokens")
+                    else:
+                        reasoning_tokens = getattr(details, "reasoning_tokens", None)
+                if not isinstance(reasoning_tokens, int):
+                    reasoning_tokens = None
                 if any(v is not None for v in (prompt_tokens, completion_tokens, total_tokens)):
                     yield UsageMetadataEvent(
                         prompt_token_count=prompt_tokens,
@@ -819,6 +906,7 @@ async def _stream_one_round(
                         total_token_count=total_tokens,
                         cached_content_token_count=None,
                         cache_hit=False,
+                        reasoning_token_count=reasoning_tokens,
                     )
 
     # After the stream, emit any accumulated tool calls.

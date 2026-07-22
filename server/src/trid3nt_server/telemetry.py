@@ -788,6 +788,281 @@ def record_solve_telemetry(record: dict) -> dict:
     return rec
 
 
+# --------------------------------------------------------------------------- #
+# PER-TURN telemetry (LANE CORE, 2026-07-22).
+#
+# One record per user-message turn, persisted BESIDE the tool-call telemetry
+# (its own JSONL sink -- follows ``record_solve_telemetry``'s own-sink pattern)
+# plus an ALWAYS-on structured INFO line. Token counts come from the adapter's
+# ``UsageMetadataEvent``s (openai: ``stream_options include_usage`` final
+# chunk; bedrock: Converse ``metadata.usage``), SUMMED across the turn's model
+# rounds; ``reasoning_tokens`` only where the provider reports the figure --
+# absent is recorded as null, NEVER fabricated. ``error_class`` is null on a
+# clean turn; ``"upstream_provider"`` when the turn died on a transient
+# provider failure after retry exhaustion (NATE hard rule: upstream failure is
+# never internalized); ``"provider_request"`` for a non-transient provider
+# rejection; ``"internal"`` for our own bugs; ``"cancelled"`` /
+# ``"context_window"`` / ``"client_disconnect"`` for those turn endings.
+#
+# Write path honors the no-sync-blocking rule: ``emit_turn_telemetry`` is
+# fire-and-forget -- it schedules the JSONL append through the async
+# ``_write_line`` helper (aiofiles or an executor thread) and returns
+# immediately. NEVER raises (telemetry must never break the turn loop).
+# --------------------------------------------------------------------------- #
+
+_DEFAULT_TURN_TELEMETRY_PATH = "/tmp/trid3nt_turn_telemetry.jsonl"
+
+#: Discriminator stamped on every per-turn record.
+TURN_RECORD_TYPE = "turn"
+
+#: Dedicated structured logger (scrape-able out of the agent log even when the
+#: JSONL path is unwritable -- mirrors solve_logger).
+turn_logger = logging.getLogger("trid3nt_server.turn_telemetry")
+
+
+def _get_turn_telemetry_path() -> str:
+    """JSONL output path for per-turn telemetry (env-overridable)."""
+    return os.environ.get(
+        "TRID3NT_TURN_TELEMETRY_PATH", _DEFAULT_TURN_TELEMETRY_PATH
+    )
+
+
+def build_turn_telemetry_record(
+    *,
+    turn_id: str,
+    session_id: str,
+    case_id: str | None,
+    model_id: str | None,
+    provider: str | None,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+    reasoning_tokens: int | None,
+    turn_wall_ms: float | None,
+    tool_dispatch_count: int,
+    error_class: str | None = None,
+    ts: str | None = None,
+) -> dict:
+    """Build one per-turn telemetry record (pure -- no I/O; testable shape).
+
+    Record shape (one JSON object per line, ``record_type="turn"``)::
+
+        {turn_id, session_id, case_id, model_id, provider,
+         prompt_tokens, completion_tokens, reasoning_tokens,
+         turn_wall_ms, tool_dispatch_count, error_class|null, ts}
+    """
+    return {
+        "record_type": TURN_RECORD_TYPE,
+        "turn_id": turn_id,
+        "session_id": session_id,
+        "case_id": case_id,
+        "model_id": model_id,
+        "provider": provider,
+        "prompt_tokens": int(prompt_tokens) if prompt_tokens is not None else None,
+        "completion_tokens": (
+            int(completion_tokens) if completion_tokens is not None else None
+        ),
+        "reasoning_tokens": (
+            int(reasoning_tokens) if reasoning_tokens is not None else None
+        ),
+        "turn_wall_ms": (
+            round(float(turn_wall_ms), 1) if turn_wall_ms is not None else None
+        ),
+        "tool_dispatch_count": int(tool_dispatch_count),
+        "error_class": error_class,
+        "ts": ts or now_iso_utc(),
+    }
+
+
+def emit_turn_telemetry(
+    *,
+    turn_id: str,
+    session_id: str,
+    case_id: str | None,
+    model_id: str | None,
+    provider: str | None,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+    reasoning_tokens: int | None,
+    turn_wall_ms: float | None,
+    tool_dispatch_count: int,
+    error_class: str | None = None,
+) -> dict | None:
+    """Emit ONE per-turn telemetry record (structured INFO line + async JSONL).
+
+    Fire-and-forget + NEVER raises (mirrors ``emit_tool_call_event``): the
+    JSONL append is scheduled through the async ``_write_line`` helper
+    (aiofiles / executor thread -- no sync blocking on the event loop) and not
+    awaited. The INFO line always fires so the record survives an unwritable
+    sink. Returns the built record (for tests / callers), or ``None`` if even
+    the record build failed.
+    """
+    try:
+        record = build_turn_telemetry_record(
+            turn_id=turn_id,
+            session_id=session_id,
+            case_id=case_id,
+            model_id=model_id,
+            provider=provider,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            reasoning_tokens=reasoning_tokens,
+            turn_wall_ms=turn_wall_ms,
+            tool_dispatch_count=tool_dispatch_count,
+            error_class=error_class,
+        )
+    except Exception:  # noqa: BLE001 -- telemetry must never break the turn loop
+        turn_logger.warning("turn telemetry: record build failed", exc_info=True)
+        return None
+
+    # Always log the structured line (the durable, scrape-able signal).
+    turn_logger.info(
+        "turn_telemetry turn=%s session=%s case=%s model=%s provider=%s "
+        "prompt_tokens=%s completion_tokens=%s reasoning_tokens=%s "
+        "wall_ms=%s tools=%s error_class=%s",
+        record["turn_id"],
+        record["session_id"],
+        record["case_id"],
+        record["model_id"],
+        record["provider"],
+        record["prompt_tokens"],
+        record["completion_tokens"],
+        record["reasoning_tokens"],
+        record["turn_wall_ms"],
+        record["tool_dispatch_count"],
+        record["error_class"],
+    )
+    try:
+        asyncio.ensure_future(_write_line(_get_turn_telemetry_path(), record))
+    except Exception:  # noqa: BLE001 -- e.g. no running loop in a sync test
+        turn_logger.warning(
+            "turn telemetry: JSONL schedule failed turn=%s",
+            record.get("turn_id"),
+            exc_info=True,
+        )
+    return record
+
+
+def load_turn_records(path: str | None = None, *, max_records: int = 5000) -> list[dict]:
+    """Read per-turn records from the JSONL sink (newest LAST, file order).
+
+    Tolerant reader: a missing / unreadable file or a malformed line yields
+    what could be read (never raises). Only rows carrying
+    ``record_type == TURN_RECORD_TYPE`` are returned. ``max_records`` bounds
+    memory on a long-lived sink (the TAIL is kept -- most recent turns win).
+    """
+    target = path or _get_turn_telemetry_path()
+    out: list[dict] = []
+    try:
+        with open(target, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(rec, dict) and rec.get("record_type") == TURN_RECORD_TYPE:
+                    out.append(rec)
+    except OSError:
+        return []
+    if len(out) > max_records:
+        out = out[-max_records:]
+    return out
+
+
+def _mean(values: list[float]) -> float | None:
+    """Mean of the non-empty list, rounded; ``None`` for no data (honest --
+    never fabricate a zero mean from zero observations)."""
+    if not values:
+        return None
+    return round(sum(values) / len(values), 1)
+
+
+def build_turn_summary(records: list[dict]) -> dict:
+    """Aggregate per-turn records into the /api/telemetry/summary section.
+
+    Shape::
+
+        {
+          "total_turns": int,
+          "models": [
+            {"model_id": str|None, "provider": str|None, "turns": int,
+             "mean_prompt_tokens": float|None,
+             "mean_completion_tokens": float|None,
+             "mean_reasoning_tokens": float|None,
+             "mean_wall_ms": float|None,
+             "upstream_error_count": int,
+             "error_count": int},
+            ...  # sorted by turns desc
+          ],
+        }
+
+    Means are computed over the turns that REPORTED the figure (token counts
+    are null where a provider does not report usage -- those rows do not drag
+    a mean to zero). ``upstream_error_count`` counts
+    ``error_class == "upstream_provider"`` rows; ``error_count`` counts ALL
+    non-null error classes.
+    """
+    by_model: dict[str, dict] = {}
+    for rec in records or []:
+        if not isinstance(rec, dict):
+            continue
+        key = str(rec.get("model_id"))
+        bucket = by_model.setdefault(
+            key,
+            {
+                "model_id": rec.get("model_id"),
+                "provider": rec.get("provider"),
+                "turns": 0,
+                "_prompt": [],
+                "_completion": [],
+                "_reasoning": [],
+                "_wall": [],
+                "upstream_error_count": 0,
+                "error_count": 0,
+            },
+        )
+        bucket["turns"] += 1
+        for field, acc in (
+            ("prompt_tokens", "_prompt"),
+            ("completion_tokens", "_completion"),
+            ("reasoning_tokens", "_reasoning"),
+            ("turn_wall_ms", "_wall"),
+        ):
+            val = rec.get(field)
+            if isinstance(val, (int, float)):
+                bucket[acc].append(float(val))
+        err = rec.get("error_class")
+        if err is not None:
+            bucket["error_count"] += 1
+            if err == "upstream_provider":
+                bucket["upstream_error_count"] += 1
+
+    models: list[dict] = []
+    for bucket in by_model.values():
+        models.append(
+            {
+                "model_id": bucket["model_id"],
+                "provider": bucket["provider"],
+                "turns": bucket["turns"],
+                "mean_prompt_tokens": _mean(bucket["_prompt"]),
+                "mean_completion_tokens": _mean(bucket["_completion"]),
+                "mean_reasoning_tokens": _mean(bucket["_reasoning"]),
+                "mean_wall_ms": _mean(bucket["_wall"]),
+                "upstream_error_count": bucket["upstream_error_count"],
+                "error_count": bucket["error_count"],
+            }
+        )
+    models.sort(key=lambda m: (-m["turns"], str(m["model_id"])))
+    return {"total_turns": sum(m["turns"] for m in models), "models": models}
+
+
+def empty_turn_summary() -> dict:
+    """Zero-state turn-summary shape (no turn telemetry recorded yet)."""
+    return {"total_turns": 0, "models": []}
+
+
 def build_live_solve_progress(
     *,
     run_id: str,
@@ -837,6 +1112,13 @@ __all__ = [
     "build_solve_telemetry_record",
     "record_solve_telemetry",
     "build_live_solve_progress",
+    # per-turn telemetry (LANE CORE 2026-07-22)
+    "TURN_RECORD_TYPE",
+    "build_turn_telemetry_record",
+    "emit_turn_telemetry",
+    "load_turn_records",
+    "build_turn_summary",
+    "empty_turn_summary",
     # tool-retrieval shadow telemetry (orchestrator half).
     "SHADOW_RECORD_TYPE",
     "build_shadow_selection_record",

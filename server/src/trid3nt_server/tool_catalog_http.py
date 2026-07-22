@@ -1273,6 +1273,23 @@ async def build_telemetry_summary(
     except Exception:  # noqa: BLE001 — never break the dashboard on solve read
         logger.warning("telemetry summary: solve telemetry read failed", exc_info=True)
         summary["solve_telemetry"] = _empty_solve_telemetry()
+
+    # Fold in the PER-TURN per-model aggregates (LANE CORE 2026-07-22): turns,
+    # mean token counts, mean wall ms, upstream_error_count per model_id. Read
+    # from the turn-telemetry JSONL sink the server's turn loop writes
+    # (telemetry.emit_turn_telemetry -- its own sink, like solve telemetry);
+    # the aggregation lives in telemetry.build_turn_summary. Best-effort: a
+    # read/compute fault leaves the zero-state section (never breaks the
+    # dashboard).
+    try:
+        from .telemetry import build_turn_summary, load_turn_records
+
+        summary["turns_by_model"] = build_turn_summary(load_turn_records())
+    except Exception:  # noqa: BLE001 — never break the dashboard on turn read
+        logger.warning("telemetry summary: turn telemetry read failed", exc_info=True)
+        from .telemetry import empty_turn_summary
+
+        summary["turns_by_model"] = empty_turn_summary()
     return summary
 
 

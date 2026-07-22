@@ -318,6 +318,28 @@ CREDENTIAL_REQUEST_ROW: dict[str, Any] = {
     "tool_name": "fetch_active_fires",
 }
 
+# Persisted chat_history rows the select rehydration replays (CaseChatMessage
+# subset). LANE PLUGIN (2026-07-22): the second agent row carries the
+# persisted "thinking" field (Lane CORE row-model addition -- the reasoning
+# channel the live turn streamed as agent-thinking-chunk, sharing the
+# bubble's message_id) so the plugin's history-replay thinking fold is
+# exercised offline; the first agent row is a PLAIN row (no thinking key at
+# all) proving the pre-field shape still replays unchanged.
+CASE_OPEN_CHAT_ROWS: list[dict[str, Any]] = [
+    {"role": "user", "content": "how deep does it flood near the river?"},
+    {"role": "agent", "content": "Up to 1.2 m along the riverfront blocks."},
+    {"role": "user", "content": "and which roads go under?"},
+    {
+        "role": "agent",
+        "content": "Riverside Drive and Lyman Street flood first.",
+        "thinking": (
+            "The depth raster peaks along the left-bank frontage; cross "
+            "referencing the road layer, Riverside Drive sits below the "
+            "1 m contour so it inundates before the arterials."
+        ),
+    },
+]
+
 # case-list rows (CaseSummary subset the plugin's case picker consumes).
 CASE_LIST_ROWS: list[dict[str, Any]] = [
     {
@@ -507,7 +529,9 @@ class StubAgentServer:
                                 "session_state": {
                                     "case": dict(row),
                                     "loaded_layers": [RASTER_LAYER_ROW],
-                                    "chat_history": [],
+                                    "chat_history": [
+                                        dict(r) for r in CASE_OPEN_CHAT_ROWS
+                                    ],
                                     "pipeline_history": [],
                                 }
                             },

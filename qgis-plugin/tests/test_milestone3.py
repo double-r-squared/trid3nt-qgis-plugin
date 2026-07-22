@@ -31,6 +31,7 @@ from trid3nt.case import case_export  # noqa: E402
 from trid3nt.net import trid3nt_client as tc  # noqa: E402
 from stub_server import (  # noqa: E402
     CASE_LIST_ROWS,
+    CASE_OPEN_CHAT_ROWS,
     EXPIRED_TOKEN,
     RASTER_LAYER_ROW,
     StubAgentServer,
@@ -619,6 +620,24 @@ class TestCaseSelect(unittest.TestCase):
             time.sleep(0.05)
         self.assertEqual(self.server.resume_case_ids[-1], target)
 
+    def test_select_rehydration_surfaces_persisted_thinking(self):
+        # LANE PLUGIN (2026-07-22): the stub's case-open chat_history now
+        # carries a thinking-carrying agent row (Lane CORE "thinking" field)
+        # plus a PLAIN agent row -- the parsed chat_messages must surface
+        # the field on the former and None-default it on the latter.
+        self.client.select_case(CASE_LIST_ROWS[0]["case_id"])
+        info = tc.parse_case_open(self._await_kind("case-open").data)
+        self.assertIsNotNone(info)
+        agent_rows = [r for r in info.chat_messages if r["role"] == "agent"]
+        self.assertEqual(len(agent_rows), 2)
+        self.assertIsNone(agent_rows[0]["thinking"])  # plain row unchanged
+        self.assertEqual(
+            agent_rows[1]["thinking"], CASE_OPEN_CHAT_ROWS[3]["thinking"]
+        )
+        self.assertEqual(
+            agent_rows[1]["content"], CASE_OPEN_CHAT_ROWS[3]["content"]
+        )
+
     def test_select_unknown_case_yields_null_rehydration(self):
         self.client.select_case("01NOSUCHCASEAAAAAAAAAAAAAA")
         ev = self._await_kind("case-open")
@@ -718,13 +737,65 @@ class TestParseChatHistory(unittest.TestCase):
                 ]
             }
         )
+        # LANE PLUGIN (2026-07-22): an agent row with no persisted thinking
+        # surfaces an honest thinking=None (plain rows replay unchanged).
         self.assertEqual(
             rows,
             [
                 {"role": "user", "content": "how deep does it flood?"},
-                {"role": "agent", "content": "up to 1.2 m near the river"},
+                {
+                    "role": "agent",
+                    "content": "up to 1.2 m near the river",
+                    "thinking": None,
+                },
             ],
         )
+
+    def test_agent_row_thinking_surfaces(self):
+        # LANE PLUGIN (2026-07-22): the persisted "thinking" field (Lane
+        # CORE row-model addition) rides through on agent rows so the dock
+        # replays the collapsed thinking fold on case reopen.
+        rows = tc.parse_chat_history(
+            {
+                "chat_history": [
+                    {
+                        "role": "agent",
+                        "content": "the answer",
+                        "thinking": "reasoning about the depth raster",
+                    },
+                ]
+            }
+        )
+        self.assertEqual(
+            rows,
+            [
+                {
+                    "role": "agent",
+                    "content": "the answer",
+                    "thinking": "reasoning about the depth raster",
+                }
+            ],
+        )
+
+    def test_agent_row_thinking_defensive_defaults_to_none(self):
+        # Absent, non-string, and blank thinking values all default to an
+        # honest None -- never raised on, never a fabricated fold. A user
+        # row never carries the key (thinking is an agent-row field).
+        for bad in ({}, {"thinking": None}, {"thinking": 42},
+                    {"thinking": ["not", "a", "string"]}, {"thinking": "   "}):
+            rows = tc.parse_chat_history(
+                {"chat_history": [{"role": "agent", "content": "hi", **bad}]}
+            )
+            self.assertEqual(
+                rows,
+                [{"role": "agent", "content": "hi", "thinking": None}],
+                f"thinking variant {bad!r} did not default to None",
+            )
+        rows = tc.parse_chat_history(
+            {"chat_history": [{"role": "user", "content": "hi",
+                               "thinking": "never on user rows"}]}
+        )
+        self.assertEqual(rows, [{"role": "user", "content": "hi"}])
 
     def test_absent_chat_history_yields_empty_list(self):
         self.assertEqual(tc.parse_chat_history({}), [])
@@ -802,7 +873,8 @@ class TestParseChatHistory(unittest.TestCase):
                     "tool_card": {"name": "run_flood_sim", "state": "ok"},
                     "content": "{tool_card}",
                 },
-                {"role": "agent", "content": "here is the result"},
+                {"role": "agent", "content": "here is the result",
+                 "thinking": None},
             ],
         )
 

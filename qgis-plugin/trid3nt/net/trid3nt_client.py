@@ -579,7 +579,13 @@ def parse_chat_history(session_state_payload: dict) -> list:
     dock's case-open chat replay.
 
     ``user``/``agent`` rows surface as the plain CONVERSATION (user bubbles +
-    assistant bubbles, no thinking blocks). Item H (qgis-ux-batch 2026-07-19):
+    assistant bubbles). LANE PLUGIN (2026-07-22): an ``agent`` row also
+    surfaces its persisted ``thinking`` field (the reasoning channel the
+    live turn streamed as ``agent-thinking-chunk``, persisted on the row by
+    Lane CORE sharing the bubble's message_id) -- ``thinking`` is a
+    non-empty string when present, else an honest ``None`` (absent field,
+    non-string, or empty/whitespace value all default to None; never
+    raised on). Item H (qgis-ux-batch 2026-07-19):
     ``role == "tool"`` rows are ALSO surfaced now (they were dropped, so a
     reopened case lost its whole tool-call chain -- the dock lagged the web
     client, which already replays ``tool_card`` on reopen). A tool row carries
@@ -618,7 +624,16 @@ def parse_chat_history(session_state_payload: dict) -> list:
             continue
         if not isinstance(content, str) or not content:
             continue
-        out.append({"role": role, "content": content})
+        if role == "agent":
+            # LANE PLUGIN (2026-07-22): surface persisted reasoning so the
+            # dock can replay the grey collapsible thinking fold. Defensive:
+            # absent / non-string / blank -> honest None.
+            thinking = row.get("thinking")
+            if not isinstance(thinking, str) or not thinking.strip():
+                thinking = None
+            out.append({"role": role, "content": content, "thinking": thinking})
+        else:
+            out.append({"role": role, "content": content})
     return out[-CHAT_HISTORY_REPLAY_MAX:]
 
 

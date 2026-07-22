@@ -843,7 +843,6 @@ class _AssistantEntry:
         self._thinking_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
         self._thinking_toggle.setCheckable(True)
         self._thinking_toggle.setChecked(True)  # expanded while streaming
-        self._thinking_toggle.clicked.connect(self._toggle_thinking)
         thinking_lay.addWidget(self._thinking_toggle)
 
         self._thinking_label = _WrapLabel("")
@@ -851,6 +850,13 @@ class _AssistantEntry:
         self._thinking_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self._thinking_label.setStyleSheet(_THINKING_BLOCK_STYLE)
         thinking_lay.addWidget(self._thinking_label)
+        # LANE PLUGIN (2026-07-22): wire the fold WIDGET-to-WIDGET (toggled ->
+        # setVisible) instead of through a bound method of this plain-python
+        # wrapper. Replayed entries (case reopen) are not retained by the dock,
+        # so a connection to ``self`` died with the wrapper's GC and the
+        # replayed fold became a dead button; a QObject-to-QObject connection
+        # lives as long as the widgets themselves.
+        self._thinking_toggle.toggled.connect(self._thinking_label.setVisible)
 
         self._thinking_container.setVisible(False)
         lay.addWidget(self._thinking_container)

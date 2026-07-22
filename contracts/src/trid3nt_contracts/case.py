@@ -309,6 +309,22 @@ class CaseChatMessage(GraceModel):
     role: Literal["user", "agent", "system", "tool"]
     content: str  # accumulated text after streaming completes
 
+    # Thinking persistence (LANE CORE, 2026-07-22): the reasoning-channel text
+    # streamed for the SAME bubble as this row's answer, persisted so a Case
+    # reopen can re-render the greyed foldable thinking block (same-bubble
+    # contract as the live ``agent-thinking-chunk`` wire). Set ONLY on
+    # ``role="agent"`` rows of turns whose per-turn ``show_thinking`` toggle was
+    # ON; ``None`` otherwise and on every pre-existing document (additive).
+    # The field NAME "thinking" is the fixed cross-lane interface contract
+    # (the QGIS plugin lane reads this exact key).
+    #
+    # NEVER-REHYDRATE INVARIANT (NATE): this field is display-replay material
+    # ONLY. ``adapter.build_contents_from_history`` / ``adapter.
+    # rehydrate_history_from_case`` skip it BY RULE (``adapter.
+    # NEVER_REHYDRATE_FIELDS``) -- thinking text must never re-enter LLM-bound
+    # contents, including via the full-fidelity ``parts_blob`` path.
+    thinking: str | None = None
+
     # job-0267: typed tool-card payload; set IFF ``role == "tool"``.
     tool_card: ToolCardRecord | None = None
 

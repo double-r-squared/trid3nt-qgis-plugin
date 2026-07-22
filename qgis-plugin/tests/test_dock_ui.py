@@ -103,6 +103,19 @@ class TestDockUiBatch(unittest.TestCase):
             out,
         )
 
+    def test_persisted_thinking_replay_fold(self):
+        """LANE PLUGIN (2026-07-22): a case-reopen agent row carrying the
+        persisted "thinking" field replays as the SAME grey collapsible
+        thinking fold the live agent-thinking-chunk path shows -- collapsed
+        by default ("Thought process" toggle, body hidden, answer visible in
+        the same bubble, click expands) -- while a plain agent row (no
+        thinking) renders unchanged with no fold."""
+        self.assertIn(
+            "[thinking-replay] persisted thinking -> collapsed grey fold in "
+            "the answer bubble; plain row unchanged",
+            self._stdout(),
+        )
+
     def test_code_exec_approval_card(self):
         """Live-feedback 2026-07-21: the code-exec-request confirm gate
         renders an inline approval card (collapsed verbatim code preview,

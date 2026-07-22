@@ -420,6 +420,98 @@ assert think_entry._thinking_label.textFormat() == Qt.PlainText, (
 assert think_entry.label.textFormat() == Qt.RichText, "finalize skipped the answer"
 print("[markdown] stream-plain -> finalize-rich, replay rich, user/thinking plain")
 
+# ---- 6b. LANE PLUGIN (2026-07-22): persisted thinking replays as the ------- #
+#          SAME grey collapsible fold the live agent-thinking-chunk path
+#          shows -- collapsed by default, in the same bubble as the answer;
+#          a plain agent row (no thinking) renders unchanged (no fold).
+from qgis.PyQt.QtWidgets import QPushButton  # noqa: E402
+from stub_server import CASE_OPEN_CHAT_ROWS  # noqa: E402
+
+THINK_ROW = CASE_OPEN_CHAT_ROWS[3]
+assert isinstance(THINK_ROW.get("thinking"), str) and THINK_ROW["thinking"], (
+    "stub CASE_OPEN_CHAT_ROWS lost its thinking-carrying agent row"
+)
+tr_before = dock.messages_layout.count()
+# The exact stub case-open shape, as parse_chat_history surfaces it: a plain
+# agent row carries thinking=None, the thinking row carries the string.
+dock._replay_chat_history(
+    [
+        {"role": "user", "content": CASE_OPEN_CHAT_ROWS[0]["content"]},
+        {"role": "agent", "content": CASE_OPEN_CHAT_ROWS[1]["content"],
+         "thinking": None},
+        {"role": "user", "content": CASE_OPEN_CHAT_ROWS[2]["content"]},
+        {"role": "agent", "content": THINK_ROW["content"],
+         "thinking": THINK_ROW["thinking"]},
+    ]
+)
+pump()
+assert dock.messages_layout.count() == tr_before + 4, "thinking replay rows missing"
+
+
+def _thinking_toggle_of(container):
+    """The thinking fold's toggle button inside one replayed bubble, or None."""
+    for btn in container.findChildren(QPushButton):
+        if btn.text() in ("Thinking...", "Thought process"):
+            return btn
+    return None
+
+
+# Rows insert BEFORE the layout's trailing stretch item, so index from the
+# end: [-2]=thinking agent row, [-3]=second user bubble, [-4]=plain agent row.
+tr_count = dock.messages_layout.count()
+plain_container = dock.messages_layout.itemAt(tr_count - 4).widget()
+think_container = dock.messages_layout.itemAt(tr_count - 2).widget()
+
+# Plain agent row: NO thinking fold appears (unchanged rendering).
+plain_toggle = _thinking_toggle_of(plain_container)
+assert plain_toggle is None or not plain_toggle.isVisible(), (
+    "plain agent row grew a thinking fold on replay"
+)
+plain_answer = [
+    l for l in plain_container.findChildren(QLabel)
+    if CASE_OPEN_CHAT_ROWS[1]["content"].split(".")[0] in l.text()
+]
+assert plain_answer and plain_answer[0].isVisible(), (
+    "plain agent row lost its answer text on replay"
+)
+
+# Thinking row: the fold is PRESENT, labeled as finished thought, and
+# COLLAPSED by default -- toggle visible, body hidden, answer visible below.
+think_toggle = _thinking_toggle_of(think_container)
+assert think_toggle is not None and think_toggle.isVisible(), (
+    "persisted thinking did not render the thinking fold on replay"
+)
+assert think_toggle.text() == "Thought process", (
+    f"replayed fold not collapsed-labeled: {think_toggle.text()!r}"
+)
+assert not think_toggle.isChecked(), "replayed thinking fold started expanded"
+think_body = [
+    l for l in think_toggle.parent().findChildren(QLabel)
+    if l.text() == THINK_ROW["thinking"]
+]
+assert think_body, "replayed fold lost the persisted thinking text"
+assert not think_body[0].isVisible(), (
+    "replayed thinking body visible while collapsed"
+)
+answer_lbls = [
+    l for l in think_container.findChildren(QLabel)
+    if THINK_ROW["content"].split(".")[0] in l.text()
+]
+assert answer_lbls and answer_lbls[0].isVisible(), (
+    "answer text missing/hidden under the replayed thinking fold"
+)
+# The same live affordance works on replay: clicking expands the body.
+think_toggle.click()
+pump()
+assert think_body[0].isVisible(), "replayed thinking fold did not expand on click"
+think_toggle.click()
+pump()
+assert not think_body[0].isVisible(), "replayed thinking fold did not re-collapse"
+print(
+    "[thinking-replay] persisted thinking -> collapsed grey fold in the "
+    "answer bubble; plain row unchanged"
+)
+
 # ---- 7. NATE 2026-07-19 chat-UI batch (N1 fold / N2 tree / N3 state / ------- #
 #         N4 collapsed-progress / N5 sim-card ordering) ----------------------- #
 
