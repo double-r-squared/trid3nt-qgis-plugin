@@ -30,7 +30,7 @@ from grace2_contracts.modflow_contracts import (
 from grace2_agent.tools import run_modflow_multi_species_tool as tool
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _find_mf6() -> str | None:

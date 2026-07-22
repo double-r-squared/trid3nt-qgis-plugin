@@ -10,7 +10,6 @@ except Docker and Ollama.
 |-------------|-----|
 | Linux x86_64 | binaries (mf6, MinIO) and docker images are linux-amd64 |
 | Python 3.12 | agent + TiTiler venvs (managed by `uv`) |
-| Node 20+ | Vite dev server for the web UI |
 | [uv](https://astral.sh/uv) | venv + dependency management (`make venv` assumes `~/.local/bin/uv`) |
 | Docker | SFINCS, GeoClaw, and SWAN engines run in containers |
 | [Ollama](https://ollama.com) | local LLM serving (any OpenAI-compatible endpoint also works) |
@@ -118,7 +117,6 @@ on `:8080`. See [Configuration](configuration.md) for every variable.
 make minio                                   # MinIO + bucket init (if not already up)
 make titiler                                 # TiTiler on :8080 backed by MinIO
 sg docker -c 'bash scripts/start_agent.sh'   # agent (WS :8765, HTTP :8766) -- inside the docker group
-make web                                     # Vite dev server on :5173
 ```
 
 Each start script is stop-then-start (kills a prior instance via its pidfile), writes a PID to
@@ -137,7 +135,6 @@ make stop      # stops minio, titiler, agent via pidfiles
 
 | Port | Service | Notes |
 |------|---------|-------|
-| 5173 | Web UI (Vite dev server) | `http://localhost:5173` |
 | 8765 | Agent WebSocket | chat protocol (`GRACE2_AGENT_PORT`) |
 | 8766 | Agent HTTP | tool catalog + stats endpoints (`GRACE2_AGENT_HTTP_PORT`) |
 | 9000 | MinIO S3 API | `AWS_ENDPOINT_URL` target; console on 9001 |

@@ -13,7 +13,6 @@ Repo: `trid3nt-local` (separate from the GRACE-2 cloud repo; publishable standal
 !!! note "Where this section is edited"
     The canonical source for these pages is `trid3nt-local/docs/site/`. They are copied into
     the GRACE-2 docs site (`docs-site/docs/local/`) by the docs-sync step in
-    `trid3nt-local/scripts/sync_from_grace2.sh`. Edit them in `trid3nt-local`, re-run the sync,
     and rebuild -- do not edit the copies under `GRACE-2/docs-site/docs/local/` directly.
     The tool-support page is generated -- see [Tool Support Matrix](tool-support.md).
 
@@ -32,7 +31,6 @@ cloud-to-local rewiring is environment variables -- no fork of the agent code.
 | Raster tiles | TiTiler EC2 (always-on) | TiTiler in a local venv on `:8080` | `GRACE2_TILE_SERVER_BASE` |
 | Solvers | AWS Batch (Spot, scale-to-zero) | Local subprocess / local docker per engine | `GRACE2_SOLVER_BACKEND`, per-engine gates |
 | Auth | Cognito JWT | Anonymous (server mints ULID users) | `AUTH_REQUIRED=false`, no Cognito env |
-| Web hosting | Vercel + CloudFront | Vite dev server on `:5173` | no `VITE_GRACE2_*` -> localhost WS/HTTP |
 
 Data fetchers need internet (USGS/NOAA/OSM/etc. are public HTTPS or anonymous public S3) but
 no cloud account. "Offline" means no-cloud-ACCOUNT, not air-gapped.
@@ -44,7 +42,6 @@ no cloud account. "Offline" means no-cloud-ACCOUNT, not air-gapped.
 ```mermaid
 graph TD
     subgraph Browser["Browser"]
-        SPA["React + MapLibre GL JS\nhttp://localhost:5173 (Vite dev)"]
     end
 
     subgraph Agent["Agent (host venv, venvs/agent)"]
@@ -103,7 +100,6 @@ map layers render. Only the substrate under each seam changes.
 This repo is the standalone QGIS product: plugin + server + engine workers,
 first-class, no upstream sync. The separate web and cloud products live in the
 GRACE-2 repo; until 2026-07-21 the server code here was a vendored copy synced
-from it (`scripts/sync_from_grace2.sh`, now removed). Edit `server/` directly.
 
 ## Section map
 

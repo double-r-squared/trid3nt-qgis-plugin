@@ -29,6 +29,7 @@ from grace2_agent.workflows.postprocess_modflow import (
 # interbeds; 4000 m^3/day well over 10 yearly periods; converged on bin/mf6 6.5.0).
 FIXTURE_DIR = (
     Path(__file__).resolve().parents[2]
+    / "services"
     / "workers"
     / "modflow"
     / "fixtures"

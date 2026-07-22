@@ -30,6 +30,7 @@ from grace2_agent.workflows.postprocess_modflow import (
 # 300 m south of an 8-reach-scale Boise flowline; converged on bin/mf6 6.5.0).
 FIXTURE = (
     Path(__file__).resolve().parents[2]
+    / "services"
     / "workers"
     / "modflow"
     / "fixtures"

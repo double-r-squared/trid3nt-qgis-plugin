@@ -30,7 +30,7 @@
 # vendor/services/workers/swan/``), NOT the 588 MB vendor/ tree -- the
 # container-hygiene rule (a .dockerignore trims tests/pyc). So the COPY path is
 # ``.`` relative to this dir:
-#   docker build -t trid3nt-local/telemac:latest vendor/services/workers/telemac/
+#   docker build -t trid3nt-local/telemac:latest services/workers/telemac/
 
 FROM mambaorg/micromamba:2.0.5-debian12-slim AS runtime
 

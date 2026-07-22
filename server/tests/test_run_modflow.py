@@ -38,7 +38,7 @@ from grace2_agent.workflows import postprocess_modflow as pp
 # mf6 binary discovery (for the live local-mode test)
 # --------------------------------------------------------------------------- #
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _find_mf6() -> str | None:

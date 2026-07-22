@@ -126,7 +126,7 @@ def _repo_root() -> Path:
     for parent in here.parents:
         if (parent / "infra" / "python-sandbox" / "executor.py").exists():
             return parent
-    # Fallback: four levels up from services/agent/src/grace2_agent/sandbox_runner.py
+    # Fallback: three levels up from server/src/grace2_agent/sandbox_runner.py
     return here.parents[3]
 
 

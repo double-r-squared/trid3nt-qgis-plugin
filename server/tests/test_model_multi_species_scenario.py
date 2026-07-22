@@ -53,7 +53,7 @@ from grace2_agent.workflows.model_multi_species_scenario import (
 # mf6 discovery (for the real local-mode postprocess test)
 # --------------------------------------------------------------------------- #
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _find_mf6() -> str | None:

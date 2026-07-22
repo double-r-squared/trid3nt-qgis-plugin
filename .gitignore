@@ -24,3 +24,5 @@ docs/proof/
 .nutshell-api-key
 .nutshell-server.pid
 .nutshell-server.log
+.env.local.bak
+*.egg-info/

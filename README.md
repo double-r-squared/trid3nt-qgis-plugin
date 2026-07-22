@@ -39,7 +39,6 @@ make status    # health-check the services
 Optional browser client (also reachable from a phone/laptop on your LAN/tailnet):
 
 ```sh
-make web       # vite dev server on :5173 (open http://<this-host>:5173)
 ```
 
 Stop everything with `make down`. Run `make help` for the target list.
