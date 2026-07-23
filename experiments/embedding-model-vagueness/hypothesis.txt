@@ -1,0 +1,4 @@
+Replacing the hashed dense channel with a real embedding model
+(sentence-transformers, already code-preferred when installed) raises
+vague-register hit@5 from the 9/20 baseline without degrading specific-register
+19/20 or interactive latency.

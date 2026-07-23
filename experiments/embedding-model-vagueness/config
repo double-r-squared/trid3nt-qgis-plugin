@@ -1,0 +1,32 @@
+experiment: embedding-model-vagueness
+engine: experiments/bench/retrieval_probe/run.py
+
+probe inputs (unchanged, same files both runs):
+  experiments/bench/retrieval_probe/inputs/phrasings_specific.json  (20 records, register=specific)
+  experiments/bench/retrieval_probe/inputs/phrasings_vague.json     (20 records, register=vague)
+
+command (both phases): zero-cost / model-free, no --i-have-permission needed
+  (BM25 + in-process dense retrieval only; see experiments/README.md)
+
+  venvs/agent/bin/python experiments/bench/retrieval_probe/run.py \
+    --inputs experiments/bench/retrieval_probe/inputs/phrasings_specific.json \
+             experiments/bench/retrieval_probe/inputs/phrasings_vague.json \
+    --runs 5 --k 5
+
+phase A (baseline): dense backend = hashed (no sentence-transformers installed
+  in venvs/agent). Engine writes to experiments/bench/retrieval_probe/data/<ts>/;
+  copied here to data/baseline_hashed/.
+
+phase B (treatment): sentence-transformers installed into venvs/agent via
+  `uv pip install --python venvs/agent/bin/python sentence-transformers`.
+  discover_dataset._select_dense_backend() tries sentence_transformers first
+  (all-MiniLM-L6-v2) and picks it automatically -- confirmed via
+  results.json meta.dense_backend == "sentence_transformers" (also printed at
+  probe start: "[index] warmed: ... backend=..."). Same probe command, same
+  --runs 5 --k 5. Copied here to data/sentence_transformers/.
+
+reps: 5 per phase (probe default index build is once per process invocation;
+  --runs governs per-query retrieval + timing reps against that single index).
+
+grading: unchanged deterministic top-5 membership grader built into the probe
+  (CORRECT iff >=1 acceptable name in top-5 and no forbidden name in top-5).

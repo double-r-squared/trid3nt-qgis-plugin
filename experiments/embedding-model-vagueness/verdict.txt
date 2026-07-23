@@ -1,0 +1,87 @@
+embedding-model-vagueness -- experiment 1 verdict
+====================================================
+
+Hypothesis (verbatim, hypothesis.txt):
+  Replacing the hashed dense channel with a real embedding model
+  (sentence-transformers, already code-preferred when installed) raises
+  vague-register hit@5 from the 9/20 baseline without degrading specific-register
+  19/20 or interactive latency.
+
+Decision rule: vague hit@5 must rise from 9/20 without specific dropping below
+19/20, and latency must stay interactive (<50 ms/query is fine).
+
+Backend proof
+-------------
+_select_dense_backend() was called directly (not inferred from probe output):
+  backend_name = "sentence_transformers"  (NOT "hashed")
+  model: all-MiniLM-L6-v2 (384-dim), loaded on first encode() call
+  HF cache after load: ~/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2
+    = 88 MB on disk (matches the ~90 MB estimate)
+The retrieval_probe run's own startup line confirms the same thing at the
+index-build seam used by the daemon:
+  "[index] warmed: 195 tools, backend=sentence_transformers, bm25=True, build=9581.6ms"
+
+Note: experiments/bench/retrieval_probe/run.py imported the retrieval index
+module under its pre-rename name (trid3nt_server.tools.discovery.discover_dataset),
+which the current HEAD (c72fcde, "verb-first renames") had already renamed to
+search_tools -- this broke the probe for anyone running it after that commit
+(routing_sweep/run.py had already been updated for the same rename; retrieval_probe
+had not). Fixed the two-line import in run.py to point at search_tools (mirrors
+the existing routing_sweep fix) so the phase B run could execute at all. This is
+a working-tree fix only -- nothing has been committed.
+
+Side-by-side numbers (run 1 of 5; retrieval is deterministic per index build,
+so hit@5/top1 are identical across all 5 reps within a phase -- see
+data/*/summary.txt for the full 5-rep tables)
+
+  register    metric   hashed        sentence_transformers    decision-rule check
+  --------    ------   ------        ----------------------   --------------------
+  specific    hit@5    19/20 (0.95)  20/20 (1.00)              must stay >= 19/20: PASS (improved)
+  specific    top1     12/20 (0.60)  15/20 (0.75)              (not gated, improved)
+  vague       hit@5    9/20  (0.45)  15/20 (0.75)               must rise from 9/20: PASS (+6, +30pp)
+  vague       top1     5/20  (0.25)  6/20  (0.30)              (not gated, improved)
+  overall     hit@5    28/40 (0.70)  35/40 (0.875)
+
+Latency (per-query turnaround, ms; steady state = runs 2-5, excluding run 1
+which carries first-call JIT/warm-cache effects on both backends)
+  hashed:                 mean 0.81 ms   (min 0.52 / max 1.09)
+  sentence_transformers:  mean 4.82 ms   (min 4.41 / max 6.25)
+  ratio: ~6.0x slower, but both are far under the 50 ms/query interactive
+  ceiling from the decision rule -> latency check PASSES.
+
+Index build time (one-time, per process -- NOT part of the per-query latency
+gate; sentence_transformers figure includes first-call model load and, on a
+cold HF cache as here, the 88 MB model download):
+  hashed:                 275 ms
+  sentence_transformers:  9,582 ms (dominated by the one-time model load/
+                           download; a warm-cache restart would still pay
+                           model-load but not the download)
+
+Graphs (graphs/):
+  hit5_top1_by_register_backend.png  -- grouped bars, hit@5 and top1 by
+                                         register x backend
+  latency_per_query.png              -- per-query latency, hashed vs ST,
+                                         with the 50ms interactive ceiling marked
+  index_build_time.png               -- one-time index build cost, both backends
+
+Verdict: SUPPORTED
+
+All three decision-rule conditions hold: vague-register hit@5 rose from 9/20
+to 15/20 (+30 percentage points), specific-register hit@5 did not degrade (it
+also rose slightly, 19/20 to 20/20, so no regression to worry about), and
+per-query latency -- the number that actually matters for an interactive
+retrieval seam -- stayed at ~4.8 ms mean, roughly 10x under the 50 ms ceiling
+despite being ~6x slower than the hashed fallback in relative terms. The
+one large cost is the ~9.3s one-time index-build/model-load hit on first use
+per process (or ~90MB one-time download on a cold cache), which is a startup
+cost, not a per-query cost, and is amortized across the life of the daemon
+process. Net: a real embedding model measurably improves the thing the
+hypothesis targeted (vague-phrasing retrieval) without the tradeoffs the
+decision rule was designed to catch (no specific-register regression, no
+interactive-latency regression).
+
+sentence-transformers remains installed in venvs/agent. Per the task's
+if-it-wins clause, it was left installed (NOT uninstalled) -- the live daemon
+will pick it up automatically on next restart, since _select_dense_backend()
+already tries sentence_transformers before falling back to hashed and no
+code change is needed for the daemon to adopt it.
