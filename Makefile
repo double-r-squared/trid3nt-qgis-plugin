@@ -4,7 +4,7 @@ SCRIPTS   := $(REPO_ROOT)/scripts
 RUN_DIR   := $(REPO_ROOT)/run
 LOG_DIR   := $(REPO_ROOT)/logs
 
-.PHONY: binaries minio agent venv status stop setup up down plugin env help
+.PHONY: binaries minio agent venv status stop setup up down plugin env help plugin-zip
 
 # ---- orchestration (the clone -> run flow) ----------------------------------
 help:
@@ -45,6 +45,19 @@ up: minio agent
 	@echo "stack up. Install the plugin (make plugin) + reload QGIS."
 
 down: stop
+
+# Client-only artifact: a ZIP installable via QGIS > Plugins > Install from ZIP
+# on any machine (no git, no server). LICENSE is copied INSIDE the plugin
+# folder (plugins.qgis.org zip rule). Excludes caches/hidden files.
+plugin-zip:
+	@rm -rf $(REPO_ROOT)/dist/pluginzip && mkdir -p $(REPO_ROOT)/dist/pluginzip
+	@rsync -a --exclude '__pycache__' --exclude '*.pyc' --exclude '.*' \
+	  $(REPO_ROOT)/qgis-plugin/trid3nt/ $(REPO_ROOT)/dist/pluginzip/trid3nt/
+	@cp $(REPO_ROOT)/qgis-plugin/LICENSE $(REPO_ROOT)/dist/pluginzip/trid3nt/LICENSE
+	@V=$$(grep '^version=' $(REPO_ROOT)/qgis-plugin/trid3nt/metadata.txt | cut -d= -f2); \
+	cd $(REPO_ROOT)/dist/pluginzip && zip -qr ../trid3nt-plugin-$$V.zip trid3nt && \
+	echo "wrote dist/trid3nt-plugin-$$V.zip (install via QGIS > Plugins > Install from ZIP, then set the Server URL)"
+	@rm -rf $(REPO_ROOT)/dist/pluginzip
 
 plugin:
 	@bash $(SCRIPTS)/install_plugin.sh

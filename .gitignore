@@ -27,3 +27,4 @@ docs/proof/
 .env.local.bak
 *.egg-info/
 .vscode/
+dist/
