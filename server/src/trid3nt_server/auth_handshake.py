@@ -39,11 +39,17 @@ Invariants this module is responsible for:
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 from dataclasses import dataclass
 
-from trid3nt_contracts.auth import AuthAckEnvelope, AuthTokenEnvelope, TierClaim
+from trid3nt_contracts.auth import (
+    AdvertisedEndpoints,
+    AuthAckEnvelope,
+    AuthTokenEnvelope,
+    TierClaim,
+)
 from trid3nt_contracts.common import new_ulid, now_utc
 from trid3nt_contracts.user import User
 
@@ -56,6 +62,108 @@ logger = logging.getLogger("trid3nt_server.auth_handshake")
 DEFAULT_AUTH_TOKEN_TIMEOUT_S: float = float(
     os.environ.get("TRID3NT_AUTH_TOKEN_TIMEOUT_S", "5.0")
 )
+
+# --------------------------------------------------------------------------- #
+# Remote-daemon access (2026-07): endpoint advertisement + optional token
+# --------------------------------------------------------------------------- #
+
+#: Object-store (MinIO) port the daemon co-hosts. Fixed on the local stack;
+#: a non-standard MinIO port is handled by the ``TRID3NT_ADVERTISED_DATA_BASE``
+#: full-URL override rather than a second port env.
+ADVERTISED_DATA_PORT: int = 9000
+
+#: Default agent read-only HTTP port. The real listener binds
+#: ``TRID3NT_AGENT_HTTP_PORT`` (default 8766); ``_advertised_http_port`` reads
+#: that same env so the advertised base always matches the bound port.
+ADVERTISED_HTTP_PORT_DEFAULT: int = 8766
+
+
+def _advertised_http_port() -> int:
+    """The port the agent HTTP surface is bound on (``TRID3NT_AGENT_HTTP_PORT``).
+
+    Falls back to :data:`ADVERTISED_HTTP_PORT_DEFAULT` when the env is unset or
+    unparseable, so the advertised ``http_base`` tracks the actual listener.
+    """
+    try:
+        return int(
+            os.environ.get(
+                "TRID3NT_AGENT_HTTP_PORT", str(ADVERTISED_HTTP_PORT_DEFAULT)
+            )
+        )
+    except (TypeError, ValueError):
+        return ADVERTISED_HTTP_PORT_DEFAULT
+
+
+def _host_for_url(host: str) -> str:
+    """Bracket a bare IPv6 literal for use in an ``http://host:port`` URL.
+
+    IPv4 / hostnames pass through unchanged; ``::1`` becomes ``[::1]`` so the
+    ``:port`` suffix is unambiguous.
+    """
+    if ":" in host and not host.startswith("["):
+        return f"[{host}]"
+    return host
+
+
+def derive_advertised_endpoints(
+    local_host: str | None,
+) -> AdvertisedEndpoints | None:
+    """Build the ``endpoints`` object advertised on the ``auth-ack``.
+
+    Precedence, per field, independently:
+
+    1. Env override -- ``TRID3NT_ADVERTISED_DATA_BASE`` /
+       ``TRID3NT_ADVERTISED_HTTP_BASE`` when set (a full ``http://host:port``
+       base). Wins unconditionally so an operator can front the daemon behind a
+       reverse proxy / different hostname.
+    2. Else DERIVED from ``local_host`` -- the server-side socket's local
+       address for THIS connection -- plus the known ports
+       (:data:`ADVERTISED_DATA_PORT` for data, :func:`_advertised_http_port`
+       for HTTP). This is the auto-magic: a laptop dialing ``100.x.x.x:8765``
+       over the tailnet gets ``http://100.x.x.x:9000`` / ``:8766`` back, no
+       config.
+
+    Returns ``None`` when neither an env override nor a usable ``local_host``
+    yields any base (e.g. a test / stub with no real socket and no env) -- the
+    ack then carries ``endpoints=None`` and old clients are unaffected.
+    """
+    data_base = os.environ.get("TRID3NT_ADVERTISED_DATA_BASE") or None
+    http_base = os.environ.get("TRID3NT_ADVERTISED_HTTP_BASE") or None
+    if local_host:
+        host = _host_for_url(local_host)
+        if data_base is None:
+            data_base = f"http://{host}:{ADVERTISED_DATA_PORT}"
+        if http_base is None:
+            http_base = f"http://{host}:{_advertised_http_port()}"
+    if data_base is None and http_base is None:
+        return None
+    return AdvertisedEndpoints(data_base=data_base, http_base=http_base)
+
+
+def configured_access_token() -> str | None:
+    """The shared access token gate, or ``None`` when auth is open (default).
+
+    Read at call time so a test env injection takes effect without re-import.
+    An empty string counts as UNSET (gate disabled) so a blank env cannot
+    accidentally lock everyone out.
+    """
+    tok = os.environ.get("TRID3NT_ACCESS_TOKEN")
+    return tok if tok else None
+
+
+def verify_access_token(presented: str | None) -> bool:
+    """Constant-time-compare a client-presented token against the gate.
+
+    Returns ``True`` when NO token is configured (the default anon behavior is
+    byte-identical) OR the presented token matches ``TRID3NT_ACCESS_TOKEN``.
+    Returns ``False`` only when a token IS required and the presented value is
+    missing / wrong. The compare uses :func:`hmac.compare_digest` so a
+    mismatch does not leak length/prefix via timing.
+    """
+    required = configured_access_token()
+    if required is None:
+        return True
+    return hmac.compare_digest(str(presented or ""), required)
 
 # --------------------------------------------------------------------------- #
 # TRID3NT local build: ONE fixed local user (F1, live-feedback 2026-07-09)
@@ -409,18 +517,27 @@ async def _anonymous_id_is_claimable(
     return existing is None
 
 
-def build_auth_ack(result: AuthResult) -> AuthAckEnvelope:
+def build_auth_ack(
+    result: AuthResult,
+    endpoints: AdvertisedEndpoints | None = None,
+) -> AuthAckEnvelope:
     """Construct the ``auth-ack`` envelope payload for a resolved AuthResult.
 
     Mirrors only the fields the H.5 ack surfaces -- never any credential
     (Decision F wire isolation). The client uses this to drive its
     sticky-anonymous logic.
+
+    ``endpoints`` (remote-daemon access, 2026-07) is the optional
+    server-advertised sibling-endpoint object (see
+    :func:`derive_advertised_endpoints`). Defaults ``None`` so existing callers
+    are unchanged and old clients / stubs stay byte-identical on the wire.
     """
     return AuthAckEnvelope(
         user_id=result.user.user_id,
         firebase_uid=result.firebase_uid,
         is_anonymous=result.is_anonymous,
         tier=result.tier,
+        endpoints=endpoints,
     )
 
 
@@ -445,8 +562,13 @@ def get_auth_token_timeout_s(default: float | None = None) -> float:
 __all__ = [
     "AuthResult",
     "DEFAULT_AUTH_TOKEN_TIMEOUT_S",
+    "ADVERTISED_DATA_PORT",
+    "ADVERTISED_HTTP_PORT_DEFAULT",
     "LOCAL_SINGLE_USER_ID",
     "authenticate_token",
     "build_auth_ack",
+    "configured_access_token",
+    "derive_advertised_endpoints",
     "get_auth_token_timeout_s",
+    "verify_access_token",
 ]

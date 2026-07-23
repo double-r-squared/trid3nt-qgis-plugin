@@ -90,8 +90,22 @@ PROVIDER_PRESETS: dict = {
 
 
 class SettingsDialog(QDialog):
-    """Mode local/remote, URLs, pasted token, MinIO + export API endpoints,
-    AOI toggles, and the auto-basemap toggle.
+    """Mode local/remote, URLs, pasted token, AOI toggles, and the
+    auto-basemap toggle.
+
+    Remote-daemon design (tailnet trust model -- NATE-decided): the
+    top "Server" section is deliberately ONE URL field + ONE optional token
+    field, both already-existing settings ("the existing URL+token fields
+    presented as the remote story"). There is NEVER a second data-endpoint
+    field -- pointing the URL at a tailscale peer (``ws://100.x.y.z:8765/ws``
+    instead of the ``ws://127.0.0.1:8765/ws`` default) is the entire
+    remote-daemon story; the agent's :8766 HTTP base and the MinIO/S3
+    ``/vsicurl/`` translation base are DERIVED (server-advertised endpoints
+    on the handshake, else a WS-host fallback -- see
+    ``trid3nt_client.resolve_http_base`` / ``resolve_data_base`` and
+    ``dock._effective_http_base`` / ``_effective_data_base``), never a
+    manually-configured field. The (no-TLS, tailnet-is-the-boundary) token is
+    OFF by default and optional either way.
 
     Item 4 (live-feedback 2026-07-09): the AOI checkboxes (canvas / selected
     polygon) used to live-apply straight from the dock; they now live here
@@ -121,13 +135,19 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("TRID3NT settings")
         form = QFormLayout(self)
 
+        # "Server" section (remote-daemon design): mode picks WHICH url row
+        # is live (local tailnet-or-loopback vs. the cloud/Cognito path), but
+        # the token row is a SINGLE always-visible field either way -- both
+        # the tailnet shared token and the cloud bearer token are the same
+        # "paste a token" UX, just optional in local mode (OFF by default).
         self.mode_combo = QComboBox()
         self.mode_combo.addItems([MODE_LOCAL, MODE_REMOTE])
         self.mode_combo.setCurrentText(settings.mode)
         form.addRow("Mode", self.mode_combo)
 
         self.local_url_edit = QLineEdit(settings.local_url)
-        form.addRow("Local agent URL", self.local_url_edit)
+        self.local_url_edit.setPlaceholderText("ws://127.0.0.1:8765/ws")
+        form.addRow("Server URL", self.local_url_edit)
 
         self.remote_url_edit = QLineEdit(settings.remote_url)
         self.remote_url_edit.setPlaceholderText("wss://<host>/ws")
@@ -135,18 +155,17 @@ class SettingsDialog(QDialog):
 
         self.token_edit = QLineEdit(settings.token)
         self.token_edit.setEchoMode(QLineEdit.Password)
-        self.token_edit.setPlaceholderText("paste bearer token (remote mode)")
-        form.addRow("Remote token", self.token_edit)
+        self.token_edit.setPlaceholderText(
+            "optional shared token (tailnet) / bearer token (remote)"
+        )
+        form.addRow("Server token (optional)", self.token_edit)
         # S2 (NATE 2026-07-20): the "Get token help" label row is REMOVED (the
         # explanation moves to a future Help page -- keep the dialog terse).
 
-        self.minio_edit = QLineEdit(settings.minio_endpoint)
-        form.addRow("Local MinIO endpoint", self.minio_edit)
-
-        self.export_api_edit = QLineEdit(settings.export_api)
-        form.addRow("Local export API", self.export_api_edit)
-        # S3 (NATE 2026-07-20): the big export/anonymous NOTE under "Local export
-        # API" is REMOVED (the explanation moves to a future Help page).
+        # Remote-daemon design: NO "Local MinIO endpoint" / "Local export API"
+        # fields -- ever. Both are now DERIVED (server-advertised endpoints on
+        # the connect handshake, else a WS-host-derived fallback); see
+        # ``trid3nt_client.resolve_http_base`` / ``resolve_data_base``.
 
         # S7 (NATE 2026-07-20): the AOI selector checkboxes (canvas / selected
         # polygon) are REMOVED -- the canvas-as-AOI path is gone (A2). The AOI is
@@ -252,12 +271,15 @@ class SettingsDialog(QDialog):
             self.conn_toggle_btn.clicked.connect(self._connect_and_close)
         form.addRow("Connection", self.conn_toggle_btn)
 
-        # S1 (NATE 2026-07-20): the remote-only rows (Remote agent URL + Remote
-        # token) show ONLY in REMOTE mode -- hidden in LOCAL. Toggled live off
-        # the mode combo and seeded from the current mode. Hiding a QFormLayout
-        # row hides BOTH the field and its label (labelForField).
+        # S1 (NATE 2026-07-20): the remote-only row (Remote agent URL) shows
+        # ONLY in REMOTE mode -- hidden in LOCAL. Toggled live off the mode
+        # combo and seeded from the current mode. Hiding a QFormLayout row
+        # hides BOTH the field and its label (labelForField). Remote-daemon
+        # design: the token row is NO LONGER remote-only -- it is the same
+        # "Server token (optional)" field in both modes now (LOCAL mode's
+        # optional shared tailnet token), so it stays visible always.
         self._form = form
-        self._remote_rows = [self.remote_url_edit, self.token_edit]
+        self._remote_rows = [self.remote_url_edit]
         self.mode_combo.currentTextChanged.connect(
             self._apply_mode_field_visibility
         )
@@ -283,8 +305,10 @@ class SettingsDialog(QDialog):
         self._settings.local_url = self.local_url_edit.text()
         self._settings.remote_url = self.remote_url_edit.text()
         self._settings.token = self.token_edit.text()
-        self._settings.minio_endpoint = self.minio_edit.text()
-        self._settings.export_api = self.export_api_edit.text()
+        # Remote-daemon design: no minio_endpoint / export_api writes here --
+        # those fields are gone from the dialog; both are DERIVED at call
+        # time (server-advertised endpoints, else a WS-host-derived
+        # fallback), never a settings-dialog value.
         # S7 (NATE 2026-07-20): canvas_aoi / selection_aoi checkboxes removed --
         # no writes here (the canvas-as-AOI path is gone, A2).
         self._settings.auto_basemap = self.auto_basemap_checkbox.isChecked()
@@ -318,6 +342,21 @@ class SettingsDialog(QDialog):
             self._on_connect()
         self.reject()
 
+    def _resolve_http_base(self) -> str:
+        """The agent's :8766 base for the provider-config POST + the
+        local-models GET (remote-daemon design). The dock (this dialog's
+        parent in every real usage) owns the derivation seam
+        (``_effective_http_base`` -- server-advertised, else WS-host
+        fallback); a standalone dialog with no dock (a test harness building
+        ``SettingsDialog(settings, None)``) falls back to
+        ``settings.export_api`` unchanged, so that path stays exactly as it
+        was before this design landed."""
+        dock = self.parent()
+        effective = getattr(dock, "_effective_http_base", None)
+        if callable(effective):
+            return effective()
+        return self._settings.export_api
+
     def _push_provider_config(self) -> None:
         """POST the persisted provider config to the agent OFF-THREAD (Feature
         3, design 2026-07-19) so a dead/asleep agent HTTP listener never freezes
@@ -335,7 +374,7 @@ class SettingsDialog(QDialog):
             "num_ctx": preset.get("num_ctx", ""),
         }
         dock = self.parent()
-        task = _ProviderConfigTask(self._settings.export_api, payload, dock)
+        task = _ProviderConfigTask(self._resolve_http_base(), payload, dock)
         # Own the task on the DOCK (not this closing dialog) so the daemon
         # thread + QObject outlive accept() -- mirrors _case_list_tasks.
         if dock is not None and hasattr(dock, "_provider_config_tasks"):
@@ -362,9 +401,9 @@ class SettingsDialog(QDialog):
         # LIVE free + tool-capable model list off the UI thread and swap it in
         # on success; the static shortlist above stays as the honest fallback
         # on any error/timeout. Combo stays editable, so any id is typeable.
-        base_url = (preset.get("base_url") or "").lower()
-        if "openrouter.ai" in base_url:
-            task = _ModelListTask(self._settings.export_api, provider, self)
+        preset_base_url = (preset.get("base_url") or "").lower()
+        if "openrouter.ai" in preset_base_url:
+            task = _ModelListTask(self._resolve_http_base(), provider, self)
             self._model_list_tasks.append(task)
             task.finished.connect(self._on_model_list_finished)
             task.errored.connect(self._on_model_list_errored)

@@ -112,6 +112,8 @@ from ..net.trid3nt_client import (
     PipelineStep,
     find_fallback_bbox,
     parse_case_open,
+    resolve_data_base,
+    resolve_http_base,
 )
 from ..net.ws_bridge import AgentBridge
 from ..plugin_settings import MODE_LOCAL, PluginSettings
@@ -211,6 +213,15 @@ class Trid3ntDock(QDockWidget):
         self.materializer = LayerMaterializer(self.settings)
         self._pending: Optional[_AssistantEntry] = None
         self._connected = False
+        # Remote-daemon (tailnet) endpoint derivation: server-advertised
+        # ``http_base`` / ``data_base`` from the last connect handshake (None
+        # until a daemon that advertises them acks). See
+        # ``_effective_http_base`` / ``_effective_data_base`` -- every
+        # :8766 caller and the MinIO/S3 ``/vsicurl/`` translation resolve
+        # through those two so a fresh daemon's advertisement always wins and
+        # an old daemon still falls back honestly.
+        self._advertised_http_base: Optional[str] = None
+        self._advertised_data_base: Optional[str] = None
         self._case_id: Optional[str] = None
         self._case_title: str = ""
         self._session_case_title: str = ""
@@ -916,11 +927,7 @@ class Trid3ntDock(QDockWidget):
             )
             return
         lon, lat = lonlat
-        base_url = (
-            self.settings.export_api
-            if self.settings.mode == MODE_LOCAL
-            else case_export.ws_url_to_http_base(self.settings.remote_url)
-        )
+        base_url = self._effective_http_base()
         self._set_probe_output(
             f"Probing {probe.probe_location_label(lon, lat)} ..."
         )
@@ -1162,6 +1169,29 @@ class Trid3ntDock(QDockWidget):
         self.bridge.resumed.connect(self._on_resumed)
         self.bridge.auth_expired.connect(self._on_auth_expired)
 
+    def _effective_http_base(self) -> str:
+        """The resolved agent HTTP (:8766) base for EVERY :8766 caller
+        (probe-point, ingest-layer/push-layer, export, case-list,
+        provider-config, local-models) -- the single derivation seam so they
+        can never drift out of sync (remote-daemon design). LOCAL mode
+        prefers the server-advertised ``http_base`` from the last connect
+        handshake; when absent (older daemon, or not connected yet -- e.g.
+        the cold pre-connect case-list fetch) it derives ``:8766`` from the
+        ONE "Server URL" setting's host, so pointing that URL at a tailnet
+        peer just works with no second field to configure. REMOTE (cloud)
+        mode is untouched -- CloudFront routes ``/api/*`` off the SAME
+        host/port as the WS, not a fixed :8766."""
+        if self.settings.mode != MODE_LOCAL:
+            return case_export.ws_url_to_http_base(self.settings.remote_url)
+        return resolve_http_base(self._advertised_http_base, self.settings.local_url)
+
+    def _effective_data_base(self) -> str:
+        """The resolved MinIO/S3 http base for the ``/vsicurl/`` raster +
+        vector translation (``s3_to_http``). Prefers the server-advertised
+        ``data_base``; falls back to the current localhost behavior
+        (``settings.minio_endpoint``) for daemons that do not advertise it."""
+        return resolve_data_base(self._advertised_data_base, self.settings.minio_endpoint)
+
     def connect_agent(self) -> None:
         if self.bridge.running:
             return
@@ -1271,7 +1301,7 @@ class Trid3ntDock(QDockWidget):
         gets an honest failure note, which is fine since remote already has
         its own Connect-first flow."""
         dlg.info_lbl.setText("Loading cases ...")
-        base_url = self.settings.export_api
+        base_url = self._effective_http_base()
         task = _CaseListTask(base_url, self)
         task.finished.connect(self._on_cold_case_list_finished)
         task.errored.connect(self._on_cold_case_list_errored)
@@ -1408,19 +1438,17 @@ class Trid3ntDock(QDockWidget):
         route on the HTTP base derived from the remote WS URL, then downloads
         the .gpkg/.qgz through GET /api/export-qgis/file into a temp dir.
         """
-        if self.settings.mode == MODE_LOCAL:
-            base_url = self.settings.export_api
-            remote = False
-            self._note(f"Exporting case '{label}' via the local agent ...")
-        else:
-            base_url = case_export.ws_url_to_http_base(self.settings.remote_url)
-            remote = True
+        remote = self.settings.mode != MODE_LOCAL
+        base_url = self._effective_http_base()
+        if remote:
             self._note(
                 f"Exporting case '{label}' on the remote agent "
                 f"({base_url}) -- artifacts download to a local temp dir ..."
             )
+        else:
+            self._note(f"Exporting case '{label}' via the local agent ...")
         task = _ExportTask(
-            base_url, case_id, self, remote=remote, minio_endpoint=self.settings.minio_endpoint
+            base_url, case_id, self, remote=remote, minio_endpoint=self._effective_data_base()
         )
         task.finished.connect(self._on_export_finished)
         task.errored.connect(self._on_export_errored)
@@ -1498,11 +1526,7 @@ class Trid3ntDock(QDockWidget):
             return
         make_aoi = aoi_checkbox.isChecked()
 
-        base_url = (
-            self.settings.export_api
-            if self.settings.mode == MODE_LOCAL
-            else case_export.ws_url_to_http_base(self.settings.remote_url)
-        )
+        base_url = self._effective_http_base()
         self._note(f"Pushing '{layer.name()}' to the case ...")
         task = _PushLayerTask(
             base_url, self._case_id, layer, make_aoi=make_aoi, parent=self
@@ -1634,7 +1658,7 @@ class Trid3ntDock(QDockWidget):
         model explicitly (that value is authoritative)."""
         if self.settings.model_id:
             return
-        task = _EffectiveModelTask(self.settings.export_api, self)
+        task = _EffectiveModelTask(self._effective_http_base(), self)
         task.finished.connect(self._on_effective_model)
         self._effective_model_tasks.append(task)  # keep-alive
         task.start()
@@ -1643,10 +1667,22 @@ class Trid3ntDock(QDockWidget):
         self._effective_model = model_id or ""
         self._refresh_model_label()
 
-    def _on_connected(self, user_id: str, is_anonymous: bool) -> None:
+    def _on_connected(
+        self,
+        user_id: str,
+        is_anonymous: bool,
+        http_base: str = "",
+        data_base: str = "",
+    ) -> None:
         self._connected = True
         if is_anonymous and self.settings.mode == MODE_LOCAL:
             self.settings.anonymous_user_id = user_id
+        # Remote-daemon (tailnet) endpoint derivation: stash whatever this
+        # handshake advertised BEFORE any :8766 call or layer materialize
+        # below reads through ``_effective_http_base`` / ``_effective_data_base``.
+        self._advertised_http_base = http_base or None
+        self._advertised_data_base = data_base or None
+        self.materializer.data_base_override = self._effective_data_base()
         self._refresh_model_label()
         self._probe_effective_model()
 
@@ -1896,6 +1932,21 @@ class Trid3ntDock(QDockWidget):
                 # the plain streamed text to rendered markdown now.
                 self._pending.finalize_markdown()
                 self._pending = None
+        else:
+            # Catch-all: log unhandled envelope kinds so new server-emitted
+            # types are visible in the QGIS log rather than silently dropped
+            # (the code-exec stall and loop_exhausted bugs were both caused
+            # by silent drops here).
+            raw_type = data.get("type", kind) if isinstance(data, dict) else kind
+            try:
+                from qgis.core import QgsMessageLog, Qgis  # type: ignore[import-not-found]
+                QgsMessageLog.logMessage(
+                    f"unhandled envelope kind={kind!r} type={raw_type!r}",
+                    "TRID3NT",
+                    Qgis.Warning,
+                )
+            except Exception:  # noqa: BLE001 -- headless/test: no QGIS
+                pass
 
     def _on_case_open_event(self, payload: dict) -> None:
         """A ``case-open`` rehydration arrived -- the select response, AND

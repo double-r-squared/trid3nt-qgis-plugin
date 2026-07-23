@@ -28,7 +28,16 @@ Protocol (mirrors the web client's ``ws.ts`` (separate repo) + ``scripts/tool_ro
              ``turn-complete``.
   remote     token rides BOTH as the ``?st=<token>`` query param (the cloud
              broker's pre-upgrade carrier) AND inside the ``auth-token``
-             envelope. Local mode sends an empty token (anonymous).
+             envelope. Local mode sends an empty token unless the user has
+             set an optional shared tailnet token (still OFF by default).
+  endpoints  ``auth-ack`` MAY carry server-advertised ``http_base`` /
+             ``data_base`` (flat fields, or nested under an ``endpoints``
+             dict -- both shapes read defensively since the field is still
+             optional on older daemons). When present they are the ONLY
+             source of truth for the agent's :8766 HTTP base and the
+             MinIO/S3 http-translation base; when absent, callers derive a
+             fallback (``resolve_http_base`` / ``resolve_data_base`` below)
+             so a tailnet daemon that predates advertisement still works.
 
 Threading: ``WebSocketConnection.send_text`` is mutex-guarded so a UI thread
 may send while a worker thread blocks in ``recv``. Everything else is
@@ -92,6 +101,10 @@ __all__ = [
     "qgis_xyz_uri",
     "s3_to_http",
     "utc_ts",
+    "DEFAULT_HTTP_PORT",
+    "derive_http_base",
+    "resolve_http_base",
+    "resolve_data_base",
 ]
 
 _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -893,6 +906,52 @@ def s3_to_http(uri: str, endpoint: str) -> Optional[str]:
     return f"{endpoint.rstrip('/')}/{bucket}/{key}"
 
 
+#: The local agent's HTTP listener port (tool catalog + /api/* routes --
+#: ``tool_catalog_http.py``). Old daemons that predate endpoint advertisement
+#: always bind this port, so it is the fallback-derivation constant.
+DEFAULT_HTTP_PORT = 8766
+
+
+def derive_http_base(ws_url: str, port: int = DEFAULT_HTTP_PORT) -> str:
+    """Fallback :8766 HTTP base derived from the WS URL's HOST -- used when
+    the daemon does not advertise ``http_base`` on ``auth-ack`` (older
+    daemons). ``ws://<host>:8765/ws`` -> ``http://<host>:8766``;
+    ``wss://<host>/ws`` -> ``https://<host>:8766``.
+
+    This is strictly better than a hardcoded ``127.0.0.1`` default: pointing
+    the plugin's ONE "Server URL" setting at a tailscale peer
+    (``ws://100.x.y.z:8765/ws``) now also reaches that SAME peer's :8766
+    listener for probe/ingest/export/case-list/provider-config/local-models,
+    with no second field to keep in sync.
+    """
+    parts = urllib.parse.urlsplit((ws_url or "").strip())
+    scheme = "https" if parts.scheme == "wss" else "http"
+    host = parts.hostname or "127.0.0.1"
+    return f"{scheme}://{host}:{port}"
+
+
+def resolve_http_base(advertised: Optional[str], ws_url: str) -> str:
+    """The effective :8766 HTTP base: the server-advertised ``http_base``
+    when present, else ``derive_http_base(ws_url)`` (see module docstring
+    "endpoints"). Every :8766 caller (probe-point, ingest-layer, export,
+    case-list, provider-config, local-models) resolves through this ONE
+    function so they can never drift out of sync."""
+    if advertised:
+        return advertised.rstrip("/")
+    return derive_http_base(ws_url)
+
+
+def resolve_data_base(advertised: Optional[str], fallback: str) -> str:
+    """The effective MinIO/S3 http-translation base for ``s3_to_http``: the
+    server-advertised ``data_base`` when present, else ``fallback`` (the
+    current localhost behavior -- old daemons never advertise this, and
+    unlike the HTTP API there is no WS-host-derivable port to fall back to,
+    so the caller's existing default/setting is the honest fallback)."""
+    if advertised:
+        return advertised.rstrip("/")
+    return fallback
+
+
 def qgis_xyz_uri(template: str, zmin: int = 0, zmax: int = 24) -> str:
     """Build the QGIS ``wms`` provider uri for an XYZ tile TEMPLATE.
 
@@ -1261,6 +1320,13 @@ class AgentClient:
         #: wait (e.g. AUTH_REQUIRED before a 1008 close) -- the bridge folds it
         #: into the failure text so token expiry is classifiable.
         self.last_handshake_error: Optional[dict] = None
+        #: Server-advertised endpoint bases from the last ``auth-ack``, read
+        #: defensively (flat or nested under ``endpoints``; the field is
+        #: still optional -- see module docstring "endpoints"). ``None``
+        #: until a daemon that advertises them acks; callers resolve a
+        #: fallback via ``resolve_http_base`` / ``resolve_data_base``.
+        self.advertised_http_base: Optional[str] = None
+        self.advertised_data_base: Optional[str] = None
         #: True between a completed handshake and the next transport loss.
         self.connected = False
         self._ws: Optional[WebSocketConnection] = None
@@ -1306,6 +1372,26 @@ class AgentClient:
             raise HandshakeFailed(f"auth-ack without user_id: {payload!r}")
         self.user_id = user_id
         self.is_anonymous = bool(payload.get("is_anonymous", not self.token))
+        # Server-advertised endpoints (optional; coordinate with the server
+        # lane's contract). Read BOTH a flat shape (``payload["http_base"]``)
+        # and a nested ``endpoints`` dict defensively via ``.get`` so an
+        # older daemon (or a contract that lands the other shape) never
+        # raises -- absence just means the caller falls back.
+        endpoints = payload.get("endpoints")
+        if not isinstance(endpoints, dict):
+            endpoints = {}
+        raw_http_base = endpoints.get("http_base") or payload.get("http_base")
+        raw_data_base = endpoints.get("data_base") or payload.get("data_base")
+        self.advertised_http_base = (
+            raw_http_base.rstrip("/")
+            if isinstance(raw_http_base, str) and raw_http_base
+            else None
+        )
+        self.advertised_data_base = (
+            raw_data_base.rstrip("/")
+            if isinstance(raw_data_base, str) and raw_data_base
+            else None
+        )
         if self.is_anonymous:
             # Sticky-anonymous: replay the server-assigned id on the next
             # connect so the SAME local User record re-binds (web mirror).
@@ -1788,6 +1874,13 @@ class AgentClient:
             # case-reuse decision reads the freshest list either way.
             self.last_case_list = cases
             return AgentEvent("case-list", {"cases": cases, "payload": payload})
+        if etype == "loop_exhausted":
+            # The agent hit its iteration/runaway guard (step cap,
+            # wall-clock, loop watchdog). Surface as an error so the
+            # dock shows the user WHY the turn stopped -- silent drops
+            # here are the same class of bug as the code-exec stall.
+            reason = (payload or {}).get("reason", "Agent reached its iteration limit.")
+            return AgentEvent("error", {"message": reason, "source": "loop_exhausted"})
         return AgentEvent("raw", {"type": etype, "payload": payload})
 
     def run_forever(

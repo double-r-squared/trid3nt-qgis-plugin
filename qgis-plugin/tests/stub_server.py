@@ -466,6 +466,12 @@ class StubAgentServer:
         #: reuse, live-feedback 2026-07-09). A client-stamped resume still
         #: echoes the client's id (job-CASE-AUTHORITY).
         self.resume_rebind_case_id: Optional[str] = None
+        #: Remote-daemon (tailnet) endpoint advertisement (LANE P, plugin
+        #: derivation tests). When set, EVERY ``auth-ack`` this reply merges
+        #: these keys (``http_base`` / ``data_base``) flat into the payload --
+        #: the shape ``AgentClient.connect`` reads. ``None`` (default) mirrors
+        #: an old daemon that never advertises anything.
+        self.advertise_endpoints: Optional[dict] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._ready = threading.Event()
@@ -548,10 +554,10 @@ class StubAgentServer:
                     )
                     await ws.close(code=1008, reason="auth required")
                     return
-                await send(
-                    "auth-ack",
-                    {"user_id": STUB_USER_ID, "is_anonymous": token == ""},
-                )
+                ack_payload = {"user_id": STUB_USER_ID, "is_anonymous": token == ""}
+                if self.advertise_endpoints:
+                    ack_payload.update(self.advertise_endpoints)
+                await send("auth-ack", ack_payload)
             elif etype == "session-resume":
                 # Real server interleaves housekeeping before session-state;
                 # emit a case-list first so the client's drain is exercised.

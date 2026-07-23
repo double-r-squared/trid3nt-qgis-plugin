@@ -71,8 +71,13 @@ class PluginSettings:
 
     @property
     def token(self) -> str:
-        """Pasted bearer token for remote mode. Auth ACQUISITION (Cognito
-        sign-in flow) is out of scope for milestone 1 -- paste-only."""
+        """The pasted token: a Cognito bearer token in REMOTE (cloud) mode,
+        or the optional shared tailnet token in LOCAL mode (remote-daemon
+        design -- OFF by default; the tailnet itself is the trust boundary,
+        no TLS). ``effective_token()`` rides this verbatim in BOTH modes now
+        -- the field is the same "Server token (optional)" UI row either
+        way. Auth ACQUISITION (Cognito sign-in flow) is out of scope for
+        milestone 1 -- paste-only."""
         return self._get("token", "")
 
     @token.setter
@@ -81,6 +86,12 @@ class PluginSettings:
 
     @property
     def minio_endpoint(self) -> str:
+        """Remote-daemon design: NOT a settings-dialog field anymore -- this
+        is the internal "current localhost behavior" FALLBACK
+        ``resolve_data_base`` (trid3nt_client) uses when a connect handshake
+        did not advertise ``data_base`` (older daemons). Reading defaults to
+        ``DEFAULT_MINIO_ENDPOINT`` unless a value was persisted by an older
+        plugin build (harmless -- it only matters as a fallback)."""
         return self._get("minio_endpoint", DEFAULT_MINIO_ENDPOINT) or DEFAULT_MINIO_ENDPOINT
 
     @minio_endpoint.setter
@@ -89,8 +100,12 @@ class PluginSettings:
 
     @property
     def export_api(self) -> str:
-        """The local agent's HTTP listener base URL (tool catalog + the
-        /api/export-qgis routes) -- Open-case-in-QGIS uses this."""
+        """Remote-daemon design: NOT a settings-dialog field anymore -- the
+        dock derives the effective :8766 base itself (server-advertised
+        ``http_base``, else WS-host-derived; ``dock._effective_http_base``).
+        This property survives ONLY as the last-resort fallback for a
+        standalone caller with no live dock/connection (e.g. the Settings
+        dialog opened outside the dock in a test harness)."""
         return self._get("export_api", DEFAULT_EXPORT_API) or DEFAULT_EXPORT_API
 
     @export_api.setter
@@ -232,4 +247,8 @@ class PluginSettings:
         return self.local_url if self.mode == MODE_LOCAL else self.remote_url
 
     def effective_token(self) -> str:
-        return "" if self.mode == MODE_LOCAL else self.token
+        """Remote-daemon design: the token rides in BOTH modes now -- LOCAL
+        mode's optional shared tailnet token defaults to "" (OFF), so this is
+        a no-op change for every existing local setup; REMOTE mode is
+        unchanged (the Cognito bearer token it always sent)."""
+        return self.token

@@ -720,6 +720,12 @@ class LayerMaterializer:
 
     def __init__(self, settings: PluginSettings):
         self._settings = settings
+        #: Remote-daemon (tailnet) endpoint derivation: the dock sets this
+        #: to the resolved (advertised-or-fallback) MinIO/S3 http base right
+        #: after each connect (``dock._on_connected``); ``None`` before the
+        #: first connect, in which case ``_effective_data_base`` falls back
+        #: to ``settings.minio_endpoint`` (current localhost behavior).
+        self.data_base_override: Optional[str] = None
         self._added_ids: set[str] = set()
         self._group_name: Optional[str] = None
         self._temp_dir: Optional[str] = None
@@ -747,6 +753,17 @@ class LayerMaterializer:
         self._stamped_counts = {}
         self._grouped_counts = {}
         self.last_added_layers = []
+
+    def _effective_data_base(self) -> str:
+        """The resolved MinIO/S3 http base for ``s3_to_http`` -- prefers the
+        dock-set ``data_base_override`` (server-advertised, or the dock's own
+        WS-host-derived-adjacent fallback via ``settings``), else falls back
+        to ``settings.minio_endpoint`` (current localhost behavior) directly,
+        e.g. before the first connect or in a test that builds this class
+        standalone."""
+        return self.data_base_override or getattr(
+            self._settings, "minio_endpoint", None
+        ) or "http://127.0.0.1:9000"
 
     def _clear_stale_groups(self) -> None:
         """Remove every layer-tree group whose name starts with the TRID3NT
@@ -909,8 +926,7 @@ class LayerMaterializer:
                 f"raster '{event.name}': s3 uri in remote mode -- skipped "
                 "(no presigned fetch yet)"
             )
-        endpoint = getattr(self._settings, "minio_endpoint", None) or "http://127.0.0.1:9000"
-        http = s3_to_http(cog_uri, endpoint)
+        http = s3_to_http(cog_uri, self._effective_data_base())
         if not http:
             return f"raster '{event.name}': unparseable s3 uri ({cog_uri}) -- skipped"
         layer = QgsRasterLayer(f"/vsicurl/{http}", event.name, "gdal")
@@ -960,7 +976,7 @@ class LayerMaterializer:
                     f"vector '{event.name}': s3 uri in remote mode -- skipped "
                     "(no presigned fetch yet)"
                 )
-            http = s3_to_http(event.uri, self._settings.minio_endpoint)
+            http = s3_to_http(event.uri, self._effective_data_base())
             if not http:
                 return f"vector '{event.name}': unparseable s3 uri -- skipped"
             layer = QgsVectorLayer(f"/vsicurl/{http}", event.name, "ogr")

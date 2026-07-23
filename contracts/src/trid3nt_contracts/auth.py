@@ -58,6 +58,7 @@ from .common import (
 
 __all__ = [
     "TierClaim",
+    "AdvertisedEndpoints",
     "AuthTokenEnvelope",
     "AuthAckEnvelope",
 ]
@@ -71,6 +72,48 @@ __all__ = [
 #: ``"pro"`` / ``"enterprise"`` reserved for the v0.2+ commercial track.
 #: No cost surface — this is a capability claim.
 TierClaim = Literal["free", "pro", "enterprise"]
+
+
+# --------------------------------------------------------------------------- #
+# Server-advertised sibling endpoints (remote-daemon access, 2026-07)
+# --------------------------------------------------------------------------- #
+
+
+class AdvertisedEndpoints(GraceModel):
+    """Server-advertised base URLs for the daemon's sibling services.
+
+    Remote-daemon access: a client (QGIS plugin / browser) that is configured
+    with ONLY the WebSocket server URL learns where the sibling surfaces live
+    directly from the connect handshake, so no second setting is required. The
+    server rides this object on the ``auth-ack`` -- the FIRST envelope the
+    client parses -- so the endpoints are known before any layer / data fetch.
+
+    - ``data_base`` -- the object-store (MinIO) http base, e.g.
+      ``http://<host>:9000``. Clients translate ``s3://bucket/key`` layer
+      URIs to path-style http against this base.
+    - ``http_base`` -- the agent's read-only HTTP surface (tool catalog etc.),
+      e.g. ``http://<host>:8766``.
+
+    The server DERIVES both from the connection's own local address (so a
+    client dialing ``100.x.x.x:8765`` over the tailnet gets ``100.x.x.x`` back
+    automatically) plus the known ports, OR from the
+    ``TRID3NT_ADVERTISED_DATA_BASE`` / ``TRID3NT_ADVERTISED_HTTP_BASE`` env
+    overrides when set.
+
+    Both fields are optional and the whole object is optional on the ack
+    (defaults ``None``): an old server / stub that never sets it, and an old
+    client that never reads it, are byte-identical on the wire. Clients MUST
+    treat it as best-effort and fall back to their own configured defaults
+    when it is absent.
+    """
+
+    #: Object-store (MinIO) http base, e.g. ``http://<host>:9000``. None when
+    #: the server cannot derive it and no env override is set.
+    data_base: str | None = Field(default=None, max_length=2048)
+
+    #: Agent read-only HTTP base, e.g. ``http://<host>:8766``. None when the
+    #: server cannot derive it and no env override is set.
+    http_base: str | None = Field(default=None, max_length=2048)
 
 
 # --------------------------------------------------------------------------- #
@@ -172,3 +215,10 @@ class AuthAckEnvelope(GraceModel):
 
     #: H.4 tier capability claim. v0.1 default ``"free"``.
     tier: TierClaim = "free"
+
+    #: Remote-daemon access (2026-07): optional server-advertised sibling
+    #: endpoints (object store + agent HTTP). ``None`` on old servers / stubs
+    #: -- clients treat it as best-effort and fall back to their own configured
+    #: defaults when absent. Additive + default-None, so ``extra="forbid"`` and
+    #: the on-the-wire shape stay backward-compatible.
+    endpoints: AdvertisedEndpoints | None = Field(default=None)

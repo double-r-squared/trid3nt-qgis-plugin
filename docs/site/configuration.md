@@ -61,6 +61,72 @@ The variables below are the complete shipped file, grouped by concern.
 | `TRID3NT_AGENT_HOST` | `0.0.0.0` | Bind host for the WS (`:8765`) and HTTP (`:8766`) listeners. `0.0.0.0` makes the agent LAN-reachable; `start_agent.sh` defaults it if unset. Ports are overridable via `TRID3NT_AGENT_PORT` (default 8765) and `TRID3NT_AGENT_HTTP_PORT` (default 8766) -- not set in the shipped file. |
 | `TRID3NT_DEV_PERSISTENCE_DIR` | `<repo>/data/persistence` | Directory for the FilePersistence JSON store (all collections: cases, layers, users, telemetry shadow...). Keeping it inside the repo keeps state out of `~/.trid3nt`. |
 
+## Remote daemon access (tailnet)
+
+Run the daemon on one machine (desktop/workstation) and reach it from another
+(laptop, phone, a second QGIS install) over a [Tailscale](https://tailscale.com)
+tailnet. **The tailnet IS the security boundary**: traffic is already
+device-authenticated and WireGuard-encrypted end to end, so there is no TLS and
+no auth on the wire by default. Only put the daemon on a trusted tailnet.
+
+The remote client needs exactly **one setting -- the WS server URL**
+(e.g. `ws://100.x.x.x:8765`). Everything else is advertised by the server on the
+connect handshake: the `auth-ack` (the first envelope the client parses) carries
+an optional `endpoints` object with `data_base` (MinIO, `:9000`) and `http_base`
+(agent HTTP, `:8766`). The server derives both from the address the client
+connected TO -- a laptop dialing `100.x.x.x:8765` gets `http://100.x.x.x:9000`
+and `http://100.x.x.x:8766` back automatically -- so the sibling services follow
+the daemon's host with zero extra config. Old clients that never read the field,
+and the offline stub that never sets it, are unaffected (it defaults absent).
+
+**Binding.** All three listeners must bind `0.0.0.0`, not loopback, to be
+reachable off-box:
+
+- **Agent WS (`:8765`) + HTTP (`:8766`)** -- `start_agent.sh` forces
+  `TRID3NT_AGENT_HOST=0.0.0.0`, and the HTTP catalog listener inherits that
+  host. Already remote-ready.
+- **MinIO (`:9000`)** -- `scripts/start_minio.sh` starts it with
+  `--address :9000` (empty host = all interfaces), so MinIO is already reachable
+  off-box. If you ever pin it to `127.0.0.1:9000`, remote layer fetches
+  (`s3://` -> path-style http against `data_base`) will fail from other devices;
+  keep the address host empty (or `0.0.0.0`).
+
+| Variable | Default | What it does |
+|----------|---------|--------------|
+| `TRID3NT_ACCESS_TOKEN` | _(unset)_ | Optional shared token. When set, the WS handshake requires the client's `auth-token` to match (constant-time compare); a missing/wrong token is rejected with a typed `AUTH_FAILED` close (WS code 1008) and the client stops retrying. **Unset (default) is byte-identical anonymous access** -- no token required. Set the same value on the client. |
+| `TRID3NT_ADVERTISED_DATA_BASE` | _(derived)_ | Override the advertised MinIO base URL (e.g. behind a reverse proxy / different hostname). When unset, derived as `http://<connected-host>:9000`. |
+| `TRID3NT_ADVERTISED_HTTP_BASE` | _(derived)_ | Override the advertised agent HTTP base URL. When unset, derived as `http://<connected-host>:<TRID3NT_AGENT_HTTP_PORT>` (default `:8766`). |
+
+### QGIS plugin: pointing at the remote daemon
+
+1. Start the daemon on the machine that should run it (the desktop/PC) --
+   `scripts/start_agent.sh` as usual.
+2. On the OTHER machine (laptop, a second QGIS install) open the plugin's
+   **Settings** dialog. The "Server" section is exactly two fields:
+   - **Server URL** -- the same field the loopback default lives in
+     (`ws://127.0.0.1:8765/ws`). Point it at the daemon's tailnet address
+     instead, e.g. `ws://100.x.x.x:8765/ws`.
+   - **Server token (optional)** -- leave blank unless the daemon set
+     `TRID3NT_ACCESS_TOKEN`, in which case paste the same value here.
+3. That is the whole setup. There is **no second field to configure** for
+   MinIO or the agent's HTTP API -- the plugin learns both automatically
+   from the connect handshake's advertised `data_base` / `http_base` (see
+   above), or derives a `:8766` HTTP fallback from the Server URL's host if
+   the daemon predates advertisement. Raster/vector layer loads, map-click
+   probing, layer push, case export, and the provider/model pickers all
+   follow the same derivation, so pointing the ONE url field at a new host
+   is sufficient for everything.
+4. **Simultaneous sessions.** The daemon is still single-user underneath
+   (Appendix H / F1 local-single-user collapse) -- the desktop and the
+   laptop share the SAME case list, not two independent ones. Live
+   turn-in-progress updates (streaming chunks, tool cards, layer replay)
+   land on whichever machine's connection actually SENT that turn; the
+   other machine sees the result once the turn finishes and its own
+   session/case state next refreshes (case switch, reconnect, or the next
+   message it sends). Do not expect two machines to co-drive one live turn
+   like two tabs of the same browser session -- treat it as "one user,
+   two doors," not true multi-client collaboration.
+
 ## Tool retrieval (small-model routing)
 
 | Variable | Shipped value | What it does |

@@ -137,6 +137,58 @@ class TestPureHelpers(unittest.TestCase):
         self.assertEqual(tc.parse_layer_events({}), [])
         self.assertEqual(tc.parse_layer_events({"loaded_layers": "junk"}), [])
 
+    # -- remote-daemon (tailnet) endpoint derivation (LANE P) ---------------- #
+
+    def test_derive_http_base_from_ws_host(self):
+        # ws:// + default port 8765 -> http:// same host, :8766.
+        self.assertEqual(
+            tc.derive_http_base("ws://100.64.0.5:8765/ws"),
+            "http://100.64.0.5:8766",
+        )
+        # wss:// -> https://, port still overridden to :8766.
+        self.assertEqual(
+            tc.derive_http_base("wss://example.com/ws"),
+            "https://example.com:8766",
+        )
+        # localhost default unchanged (matches the old DEFAULT_EXPORT_API).
+        self.assertEqual(
+            tc.derive_http_base("ws://127.0.0.1:8765/ws"),
+            "http://127.0.0.1:8766",
+        )
+        # A custom port override still applies.
+        self.assertEqual(
+            tc.derive_http_base("ws://127.0.0.1:8765/ws", port=9999),
+            "http://127.0.0.1:9999",
+        )
+        # Junk input never raises -- falls back to the 127.0.0.1 host.
+        self.assertEqual(tc.derive_http_base(""), "http://127.0.0.1:8766")
+
+    def test_resolve_http_base_prefers_advertised(self):
+        # Advertised wins outright (trailing slash stripped).
+        self.assertEqual(
+            tc.resolve_http_base("http://100.64.0.5:9001/", "ws://127.0.0.1:8765/ws"),
+            "http://100.64.0.5:9001",
+        )
+        # Absent/empty/None advertised -> WS-host-derived fallback.
+        for advertised in (None, ""):
+            self.assertEqual(
+                tc.resolve_http_base(advertised, "ws://100.64.0.5:8765/ws"),
+                "http://100.64.0.5:8766",
+            )
+
+    def test_resolve_data_base_prefers_advertised(self):
+        self.assertEqual(
+            tc.resolve_data_base("http://100.64.0.5:9000/", "http://127.0.0.1:9000"),
+            "http://100.64.0.5:9000",
+        )
+        # Absent -> the caller's fallback verbatim (current localhost
+        # behavior for old daemons -- NEVER WS-host-derived).
+        for advertised in (None, ""):
+            self.assertEqual(
+                tc.resolve_data_base(advertised, "http://127.0.0.1:9000"),
+                "http://127.0.0.1:9000",
+            )
+
     def test_parse_pipeline_steps(self):
         payload = {
             "steps": [
@@ -210,6 +262,58 @@ class TestHandshake(StubServerTestCase):
         dead = tc.AgentClient("ws://127.0.0.1:1/ws", connect_timeout=2)
         with self.assertRaises((tc.WebSocketError, OSError)):
             dead.connect()
+
+    # -- remote-daemon (tailnet) endpoint advertisement (LANE P) ------------- #
+
+    def test_no_advertised_endpoints_is_none(self):
+        """Old-daemon stub (default): auth-ack carries no endpoints at all --
+        both attrs stay None so callers fall through to their fallback."""
+        client = self._connect()
+        client.connect()
+        self.assertIsNone(client.advertised_http_base)
+        self.assertIsNone(client.advertised_data_base)
+
+    def test_flat_advertised_endpoints_are_parsed(self):
+        self.server.advertise_endpoints = {
+            "http_base": "http://100.64.0.5:8766/",
+            "data_base": "http://100.64.0.5:9000",
+        }
+        client = self._connect()
+        client.connect()
+        # Trailing slash stripped.
+        self.assertEqual(client.advertised_http_base, "http://100.64.0.5:8766")
+        self.assertEqual(client.advertised_data_base, "http://100.64.0.5:9000")
+
+    def test_nested_endpoints_dict_is_parsed(self):
+        """Defensive dual-shape read: the server lane may land ``endpoints``
+        as a nested dict instead of flat auth-ack fields -- both shapes must
+        work since the contract has not landed yet."""
+        self.server.advertise_endpoints = {
+            "endpoints": {
+                "http_base": "http://100.64.0.5:8766",
+                "data_base": "http://100.64.0.5:9000",
+            }
+        }
+        client = self._connect()
+        client.connect()
+        self.assertEqual(client.advertised_http_base, "http://100.64.0.5:8766")
+        self.assertEqual(client.advertised_data_base, "http://100.64.0.5:9000")
+
+    def test_partial_advertisement_leaves_the_other_none(self):
+        self.server.advertise_endpoints = {"http_base": "http://100.64.0.5:8766"}
+        client = self._connect()
+        client.connect()
+        self.assertEqual(client.advertised_http_base, "http://100.64.0.5:8766")
+        self.assertIsNone(client.advertised_data_base)
+
+    def test_malformed_advertisement_is_ignored_not_raised(self):
+        """A non-string / empty-string endpoint value never crashes the
+        handshake -- it degrades to None (fall back), same as absence."""
+        self.server.advertise_endpoints = {"http_base": 12345, "data_base": ""}
+        client = self._connect()
+        client.connect()  # must not raise
+        self.assertIsNone(client.advertised_http_base)
+        self.assertIsNone(client.advertised_data_base)
 
 
 class TestCaseAndChat(StubServerTestCase):

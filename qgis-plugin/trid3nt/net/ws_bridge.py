@@ -64,7 +64,8 @@ class AgentWorker(QObject):
     # event handler -> "TypeError: native Qt signal is not callable" -> qFatal
     # abort of the whole QGIS process. NEVER name a pyqtSignal after a
     # QObject virtual (event / eventFilter / timerEvent / childEvent / ...).
-    connected = pyqtSignal(str, bool)  # user_id, is_anonymous
+    # user_id, is_anonymous, advertised_http_base ("" if none), advertised_data_base ("" if none)
+    connected = pyqtSignal(str, bool, str, str)
     case_ready = pyqtSignal(str)       # case_id
     agent_event = pyqtSignal(str, object)  # AgentEvent.kind, AgentEvent.data
     failed = pyqtSignal(str)           # terminal setup failure (human-readable)
@@ -102,7 +103,12 @@ class AgentWorker(QObject):
         # First connect: fail-fast (see module docstring).
         try:
             user_id = self.client.connect()
-            self.connected.emit(user_id, bool(self.client.is_anonymous))
+            self.connected.emit(
+                user_id,
+                bool(self.client.is_anonymous),
+                self.client.advertised_http_base or "",
+                self.client.advertised_data_base or "",
+            )
             case_id = self._bind_startup_case()
             self.case_ready.emit(case_id)
         except Exception as exc:  # noqa: BLE001 -- surfaced verbatim, never silent

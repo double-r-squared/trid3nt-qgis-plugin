@@ -140,7 +140,9 @@ from .auth_handshake import (
     AuthResult,
     authenticate_token,
     build_auth_ack,
+    derive_advertised_endpoints,
     get_auth_token_timeout_s,
+    verify_access_token,
 )
 from .case_lifecycle import CaseLifecycleError, ensure_case_qgs
 from .context_budget import (
@@ -5685,6 +5687,45 @@ async def _replay_active_case_layers(state: SessionState) -> None:
 # --------------------------------------------------------------------------- #
 
 
+def _connection_local_host(websocket: "ServerConnection | Any") -> str | None:
+    """The server-side socket's local host for THIS connection.
+
+    Used to derive the advertised sibling endpoints (remote-daemon access): a
+    client dialing ``100.x.x.x:8765`` over the tailnet connected TO
+    ``100.x.x.x`` on the server side, so ``local_address`` reflects the exact
+    reachable host to hand back. Defensive: ``websocket.local_address`` is a
+    ``(host, port)`` tuple on a real ``ServerConnection`` but absent on the
+    test fakes -- return ``None`` (env overrides still apply; old tests are
+    unaffected).
+    """
+    addr = getattr(websocket, "local_address", None)
+    if isinstance(addr, (tuple, list)) and addr:
+        host = addr[0]
+        return host if isinstance(host, str) and host else None
+    return None
+
+
+async def _reject_auth_handshake(
+    websocket: ServerConnection,
+    session_id: str,
+    message: str,
+) -> None:
+    """Reject a connection at the handshake with a typed AUTH_FAILED close.
+
+    Remote-daemon access (2026-07): the shared-token gate's rejection path.
+    Emits the A.6 ``AUTH_FAILED`` error envelope, then closes the socket with
+    the WebSocket policy-violation code (1008) -- the SAME close the client's
+    ``is_auth_failure`` classifier recognizes, so the client stops its
+    reconnect ladder instead of hammering a token-gated daemon forever. Never
+    raises: a socket that is already down is fine.
+    """
+    await _send_error(websocket, session_id, "AUTH_FAILED", message)
+    try:
+        await websocket.close(code=1008, reason="AUTH_FAILED")
+    except Exception:  # noqa: BLE001 -- socket may already be gone
+        pass
+
+
 async def _handle_auth_token(
     websocket: ServerConnection,
     state: SessionState,
@@ -5715,6 +5756,25 @@ async def _handle_auth_token(
         # connection is still usable (per H.3).
         tok = None
 
+    # REMOTE-DAEMON ACCESS (2026-07): optional shared-token gate. When
+    # ``TRID3NT_ACCESS_TOKEN`` is set, the client's presented token MUST match
+    # (constant-time) or the connection is rejected with a typed AUTH_FAILED
+    # close (policy-violation 1008 -- the same close the client classifies as
+    # an auth failure and STOPS its reconnect ladder on). Unset (default) ->
+    # ``verify_access_token`` returns True and behavior is byte-identical anon.
+    presented = tok.token if tok is not None else None
+    if not verify_access_token(presented):
+        logger.info(
+            "auth-token rejected session=%s (access token missing/invalid)",
+            state.session_id,
+        )
+        await _reject_auth_handshake(
+            websocket,
+            state.session_id,
+            "access token required: the presented token is missing or invalid",
+        )
+        return
+
     # cases-vanish fix (belt-and-suspenders): if this connection presents NO
     # usable anonymous hint but a sibling connection of the SAME session already
     # bound an anon identity this process, replay that recorded id as the hint so
@@ -5731,14 +5791,19 @@ async def _handle_auth_token(
 
     _bind_auth_result(state, result)
     await _touch_session_record(state)  # D.6 heartbeat (job-0203 / M4)
-    ack = build_auth_ack(result)
+    # REMOTE-DAEMON ACCESS (2026-07): advertise the sibling endpoints derived
+    # from THIS connection's local address (so a tailnet client learns the
+    # data + HTTP bases automatically) plus any env override.
+    endpoints = derive_advertised_endpoints(_connection_local_host(websocket))
+    ack = build_auth_ack(result, endpoints=endpoints)
     await websocket.send(_new_envelope("auth-ack", state.session_id, ack))
     logger.info(
-        "auth-ack session=%s user_id=%s anonymous=%s tier=%s",
+        "auth-ack session=%s user_id=%s anonymous=%s tier=%s endpoints=%s",
         state.session_id,
         result.user.user_id,
         result.is_anonymous,
         result.tier,
+        endpoints.model_dump(mode="json") if endpoints else None,
     )
 
 
@@ -5884,7 +5949,7 @@ async def _reload_session_active_case(state: SessionState) -> None:
 async def _ensure_auth_handshake(
     websocket: ServerConnection,
     state: SessionState,
-) -> None:
+) -> bool:
     """Synchronous fallback: if the handshake hasn't run, run it as anonymous.
 
     Called when a non-``auth-token`` envelope arrives before the handshake
@@ -5892,9 +5957,29 @@ async def _ensure_auth_handshake(
     envelope raced ahead). Mirrors the 5-second timeout path from H.3 —
     instead of waiting 5 seconds we trip the anonymous fallback inline so
     the user is bound before their first real interaction.
+
+    Returns ``True`` when the connection may proceed (handshake already
+    complete, or the anonymous fallback bound successfully), ``False`` when the
+    shared-token gate rejected the connection (it was closed) so the caller
+    must NOT dispatch the pending envelope.
     """
     if state.auth_handshake_complete:
-        return
+        return True
+    # REMOTE-DAEMON ACCESS (2026-07): a token-gated daemon must not accept a
+    # connection that skipped the auth-token envelope entirely -- that would be
+    # a trivial bypass of the token. This implicit path presents NO token, so
+    # reject it with the same typed AUTH_FAILED close when a token is required.
+    if not verify_access_token(None):
+        logger.info(
+            "implicit handshake rejected session=%s (access token required)",
+            state.session_id,
+        )
+        await _reject_auth_handshake(
+            websocket,
+            state.session_id,
+            "access token required: connect with a valid token",
+        )
+        return False
     # cases-vanish fix: this implicit-anonymous path never saw a client hint
     # (the connection skipped the auth-token envelope). If a sibling connection
     # of this session already bound an anon identity this process, reuse it so
@@ -5906,7 +5991,8 @@ async def _ensure_auth_handshake(
         _set_session_anon_id(state.session_id, result.user.user_id)
     _bind_auth_result(state, result)
     await _touch_session_record(state)  # D.6 heartbeat (job-0203 / M4)
-    ack = build_auth_ack(result)
+    endpoints = derive_advertised_endpoints(_connection_local_host(websocket))
+    ack = build_auth_ack(result, endpoints=endpoints)
     try:
         await websocket.send(_new_envelope("auth-ack", state.session_id, ack))
     except Exception:  # noqa: BLE001 — socket may be down
@@ -5916,6 +6002,7 @@ async def _ensure_auth_handshake(
         state.session_id,
         result.user.user_id,
     )
+    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -14252,9 +14339,13 @@ def _make_handler(settings: GeminiSettings):
                         continue
                     # Implicit anonymous fallback when any other envelope
                     # arrives before the handshake — keeps the legacy
-                    # no-auth-token clients working.
+                    # no-auth-token clients working. Remote-daemon access
+                    # (2026-07): when a token gate is set, the implicit path
+                    # rejects + closes the socket (returns False) so we must
+                    # NOT dispatch the pending envelope.
                     if not state.auth_handshake_complete:
-                        await _ensure_auth_handshake(websocket, state)
+                        if not await _ensure_auth_handshake(websocket, state):
+                            continue
 
                     if msg_type == "session-resume":
                         sr = SessionResumePayload.model_validate(payload_dict)
