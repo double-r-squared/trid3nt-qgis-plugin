@@ -12,6 +12,8 @@ Files:
 - responsibility-cut.md - the central design principle: which checks are
   machine-enforced, machine-assisted, or human-only
 - roadmap-proposal.md - a PROPOSED build order (A-D). Not approved.
+- activation-boundary.md - WHEN the loop applies (simulation-class only,
+  via a tool metadata flag) vs the fast path for fetch/processing/query
 - agentic-loop.md - the research/plan/execute/review/edit loop mapped to
   simulations; context isolation as the review principle
 - open-questions.md - what must be answered before anything is built

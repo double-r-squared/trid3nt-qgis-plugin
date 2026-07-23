@@ -15,6 +15,14 @@ OBSERVATIONS
 - Event selection: who picks the validation event/window, and how is that
   choice recorded?
 
+ACTIVATION
+- The activation boundary (activation-boundary.md) says the loop is a
+  simulation-class property via a tool flag. Confirm the flag lives on tool
+  metadata; confirm the fetch/processing/query classes are all fast-path.
+- Within a flagged sim: tier-1 diagnostics always run (cheap); what gates the
+  EXPENSIVE tiers (fresh-context review + re-run loop)? default-on / user mode
+  / a stakes heuristic?
+
 MECHANICS
 - Where do validation results LIVE - on the run? the case? a report artifact?
   Do they persist and travel with exports?
