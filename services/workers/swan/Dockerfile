@@ -1,11 +1,16 @@
 # SWAN (Simulating WAves Nearshore) wave solver AWS Batch worker (Phase 1).
 #
-# FILE-ONLY SCAFFOLD (NOT built / pushed in Phase 1). This authors the runtime
-# image for the SWAN AWS Batch job -- the scale-to-zero CLOUD LANE for the SWAN
-# third-generation spectral nearshore wave engine. The image is built+pushed off
-# this Dockerfile via the SHARED grace2-worker-builder CodeBuild project
-# (WORKER_DIR=swan, ECR_REPO=grace2-swan) in a SEPARATE gated infra step the
-# orchestrator runs with NATE -- no docker build / ECR push happens here.
+# This authors the runtime image for the SWAN AWS Batch job -- the scale-to-zero
+# CLOUD LANE for the SWAN third-generation spectral nearshore wave engine. In
+# cloud deployment the image is built+pushed off this Dockerfile via the SHARED
+# grace2-worker-builder CodeBuild project (WORKER_DIR=swan, ECR_REPO=grace2-swan)
+# in a SEPARATE gated infra step the orchestrator runs with NATE. The Dockerfile
+# also builds locally (repo-root context) via:
+#   docker build -t trid3nt-local/swan:latest -f services/workers/swan/Dockerfile .
+# -- CONFIRMED BUILDING 2026-07-23 (docker build succeeded end to end: swan.exe +
+# swanrun compiled and run-tested inside the image, final image ~1.2 GB; see the
+# SWAN_SRC_SHA256 note below -- the placeholder SHA that shipped before that date
+# meant this had never actually built).
 #
 # SWAN is a GPL-3.0 Fortran-90 solver from TU Delft. GPL ISOLATION: the SWAN
 # binary lives ONLY in this worker image and NEVER enters the agent venv (the
@@ -29,11 +34,11 @@
 # Delft source tarball). The source tarball is SHA256-pinned below (the digest
 # analogue for a non-image asset; bump it in lockstep with SWAN_VERSION).
 #
-# NOTE for the gated build step (orchestrator + NATE): VERIFY the SWAN_VERSION +
-# SWAN_SRC_SHA256 + the download URL against the live TU Delft / SourceForge
-# release before the first build; the placeholder SHA256 below MUST be replaced
-# with the real digest of the pinned tarball (the build's sha256sum -c gate will
-# fail loudly until it is, which is the intended safety interlock).
+# NOTE for the gated cloud-push step (orchestrator + NATE): if SWAN_VERSION ever
+# bumps, re-verify SWAN_SRC_SHA256 + the download URL against the live TU Delft /
+# SourceForge release and re-run the local build below before pushing (the
+# sha256sum -c gate fails loudly on a stale digest, which is the intended safety
+# interlock).
 
 # Base via the AWS ECR Public mirror of Docker Hub library images (NOT
 # docker.io directly) to avoid the Docker Hub anonymous-pull 429 rate limit in
@@ -80,17 +85,26 @@ RUN apt-get update \
 #   make omp           # compiles swan.exe + the swanrun launcher (OpenMP)
 # We install the resulting swan.exe + swanrun onto $SWAN_HOME on PATH.
 #
-# GATED-BUILD PLACEHOLDER: replace SWAN_SRC_SHA256 + SWAN_SRC_URL with the real
-# pinned values at the first build (the sha256sum -c gate fails until then -- the
-# intended interlock so an unverified binary never ships).
-# sha256 updated 2026-07-05: SourceForge tarball bytes drifted (same URL/version);
-# verified VERNUM=41.51 in swanmain.ftn + Makefile present + 79 Fortran sources / 95 entries.
-ENV SWAN_SRC_SHA256=2e27367dd8c6e8316ce4f446ffad790e1cfca0a6649f7bc2291a81899ac0c4d0 \
+# VERIFIED 2026-07-23: downloaded https://swanmodel.sourceforge.io/download/zip/swan4151.tar.gz
+# (the URL swanmodel.sourceforge.io/download/download.htm still points to for "the
+# latest stable release of SWAN 41.51"); confirmed VERNUM = 41.51 in swanmain.ftn,
+# confirmed the tarball has the expected 94-entry SWAN source layout (Makefile +
+# platform.pl + switch.pl + the .ftn/.ftn90 solver units + swanrun), and computed
+# the real sha256sum of the downloaded bytes below. The prior SHA256 in this file
+# was a placeholder that never matched a real download, so the sha256sum -c gate
+# always failed and this Dockerfile had never actually built.
+ENV SWAN_SRC_SHA256=325c229f3dde0b812db4ec9ae6fa1cd4086d2109562c389576590ce8f94b26bb \
     SWAN_SRC_URL=https://swanmodel.sourceforge.io/download/zip/swan4151.tar.gz
+# --no-same-owner: the upstream tarball embeds the TU Delft uploader's numeric
+# uid/gid (130767/100513); under rootless Docker's user-namespace remap that id
+# is out of range and GNU tar's default --same-owner chown fails with EINVAL
+# (verified 2026-07-23 -- the sha256sum -c gate passed first, isolating this as
+# a separate extraction-environment issue, not a bad download). Extracted file
+# ownership doesn't matter for the build, so drop the chown attempt.
 RUN mkdir -p "$SWAN_HOME/src" \
     && curl -fsSL -o /tmp/swan-src.tar.gz "$SWAN_SRC_URL" \
     && echo "${SWAN_SRC_SHA256}  /tmp/swan-src.tar.gz" | sha256sum -c - \
-    && tar -xzf /tmp/swan-src.tar.gz -C "$SWAN_HOME/src" --strip-components=1 \
+    && tar -xzf /tmp/swan-src.tar.gz --no-same-owner -C "$SWAN_HOME/src" --strip-components=1 \
     && rm -f /tmp/swan-src.tar.gz \
     && cd "$SWAN_HOME/src" \
     && make config \

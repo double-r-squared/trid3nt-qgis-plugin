@@ -118,12 +118,13 @@ sg docker -c 'docker build -t trid3nt-local/geoclaw:latest -f services/workers/g
 sg docker -c 'docker build -t trid3nt-local/telemac:latest services/workers/telemac/'  # or: bash scripts/build_telemac_image.sh
 ```
 
-**SWAN** -- the worker Dockerfile (`services/workers/swan/Dockerfile`) exists but
-its pinned source-tarball checksum (`SWAN_SRC_SHA256`) is still the gated-build
-placeholder, not the real digest -- `docker build -f services/workers/swan/Dockerfile .`
-currently fails at the `sha256sum -c` step (verified 2026-07-23). SWAN is not yet
-buildable locally; `TRID3NT_SWAN_IMAGE` in `.env.local` is forward-configured for
-when that lands.
+**SWAN** -- builds locally (verified 2026-07-23; the pinned source-tarball
+checksum was a placeholder before that date and the `sha256sum -c` step always
+failed -- now fixed to the real digest of the SWAN 41.51 SourceForge tarball):
+
+```sh
+sg docker -c 'docker build -t trid3nt-local/swan:latest -f services/workers/swan/Dockerfile .'
+```
 
 These image names are what `.env.local` points at (`TRID3NT_SFINCS_IMAGE`,
 `TRID3NT_GEOCLAW_IMAGE`, `TRID3NT_SWAN_IMAGE`).
