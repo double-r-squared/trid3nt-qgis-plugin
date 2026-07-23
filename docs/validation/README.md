@@ -16,4 +16,6 @@ Files:
   via a tool metadata flag) vs the fast path for fetch/processing/query
 - agentic-loop.md - the research/plan/execute/review/edit loop mapped to
   simulations; context isolation as the review principle
+- tool-list.md - the exhaustive V&V primitive list (verify + calibrate),
+  mapped to package functions; the concrete build target
 - open-questions.md - what must be answered before anything is built
