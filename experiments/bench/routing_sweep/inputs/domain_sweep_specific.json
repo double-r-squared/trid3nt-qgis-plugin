@@ -151,6 +151,85 @@
         "acceptable": [],
         "no_tool": true
       }
+    },
+    {
+      "id": "rs-spec-14-spatial_query-analytical",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "Use SQL to count how many buildings have flood depth greater than one meter in the flood layer.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["spatial_query", "compute_zonal_statistics"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-15-catalog-escalation",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "Fetch the FEMA National Risk Index for Hamilton County, Tennessee.",
+      "execution": "run",
+      "_comment": "Catalog-only source: public_data_source_catalog.yaml id fema-national-risk-index has no dedicated fetch_* wrapper (grep-confirmed against server/src) -- correct routing escalates through the generic catalog search+fetch pair, not a named fetcher.",
+      "expected": {
+        "acceptable": ["search_data_catalog", "fetch_from_catalog"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-16-terrain-chain",
+      "category": "terrain_elevation",
+      "register": "specific",
+      "prompt": "Fetch a DEM for Bozeman, Montana and generate a hillshade from it.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_dem", "fetch_3dep_extra", "compute_hillshade"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-17-fire-credential",
+      "category": "fire",
+      "register": "specific",
+      "prompt": "Fetch NASA FIRMS active fire detections for Boulder County, Colorado.",
+      "execution": "run",
+      "_comment": "Credential-gated: nasa-firms-viirs-active-fire is credential_tier 2 (key-required) in public_data_source_catalog.yaml. Live execution may surface the credential-request card (SSM vault flow) rather than data -- tier stays run, not block_at_invocation; the routing pick is still fetch_firms_active_fire.",
+      "expected": {
+        "acceptable": ["fetch_firms_active_fire"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-18-hazard_modeling-seismic",
+      "category": "hazard_modeling",
+      "register": "specific",
+      "prompt": "Run an OpenQuake probabilistic seismic hazard analysis for Memphis, Tennessee at a 475-year return period.",
+      "execution": "block_at_invocation",
+      "expected": {
+        "acceptable": ["run_seismic_hazard_psha"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-19-weather-goes_animation",
+      "category": "weather_atmosphere",
+      "register": "specific",
+      "prompt": "Build a GOES-18 GeoColor animation over Mobile, Alabama for the six hours ending now.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_goes_animation", "fetch_goes_archive_animation"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-spec-20-no_tool-math",
+      "category": "no_tool",
+      "register": "specific",
+      "prompt": "What is 17 percent of 4,300?",
+      "execution": "run",
+      "expected": {
+        "acceptable": [],
+        "no_tool": true
+      }
     }
   ]
 }

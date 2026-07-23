@@ -191,6 +191,91 @@
         "acceptable": [],
         "no_tool": true
       }
+    },
+    {
+      "id": "rs-vag-14-spatial_query-analytical",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "How many homes here would end up getting wet?",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["spatial_query", "compute_zonal_statistics", "compute_exposure_summary"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-15-catalog-escalation",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "How much overall risk does this county face across flooding, wildfire, and earthquakes?",
+      "execution": "run",
+      "_comment": "Same catalog-only surface as rs-spec-15 (fema-national-risk-index, no dedicated fetcher) with the source name withheld -- correct routing still escalates through search_data_catalog + fetch_from_catalog.",
+      "expected": {
+        "acceptable": ["search_data_catalog", "fetch_from_catalog"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-16-terrain-chain",
+      "category": "terrain_elevation",
+      "register": "vague",
+      "prompt": "Show me the elevation and shaded relief of the land around Bozeman.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_dem", "fetch_3dep_extra", "compute_hillshade", "compute_colored_relief"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-17-fire-credential",
+      "category": "fire",
+      "register": "vague",
+      "prompt": "Is there an active wildfire anywhere near Boulder County right now?",
+      "execution": "run",
+      "_comment": "Same widened fire-detection set as rs-vag-07; fetch_firms_active_fire specifically is credential-gated (NASA FIRMS key-required) and may surface the credential-request card if picked -- tier stays run.",
+      "expected": {
+        "acceptable": [
+          "fetch_firms_active_fire",
+          "fetch_nifc_fire_perimeters",
+          "fetch_wfigs_incident",
+          "fetch_goes_active_fire",
+          "fetch_viirs_day_fire"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-18-hazard_modeling-seismic",
+      "category": "hazard_modeling",
+      "register": "vague",
+      "prompt": "If a big earthquake hit Memphis, how strong would the shaking be across town?",
+      "execution": "block_at_invocation",
+      "expected": {
+        "acceptable": ["run_seismic_hazard_psha"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-19-weather-goes_animation",
+      "category": "weather_atmosphere",
+      "register": "vague",
+      "prompt": "Show me how the sky changed over Mobile today.",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_goes_animation", "fetch_goes_archive_animation"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rs-vag-20-no_tool-math",
+      "category": "no_tool",
+      "register": "vague",
+      "prompt": "What's the capital of Australia?",
+      "execution": "run",
+      "expected": {
+        "acceptable": [],
+        "no_tool": true
+      }
     }
   ]
 }

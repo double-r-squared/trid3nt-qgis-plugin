@@ -238,6 +238,118 @@
         ],
         "no_tool": false
       }
+    },
+    {
+      "id": "rp-vag-21-typo-rivers",
+      "category": "hydrology",
+      "register": "vague",
+      "prompt": "how hihg are the rivres running rite now",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_usgs_nwis_gauges",
+          "fetch_noaa_nwm_streamflow",
+          "fetch_nws_river_forecast"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-22-typo-burning",
+      "category": "fire",
+      "register": "vague",
+      "prompt": "is anythign burnign nearby",
+      "execution": "run",
+      "expected": {
+        "acceptable": [
+          "fetch_firms_active_fire",
+          "fetch_nifc_fire_perimeters",
+          "fetch_wfigs_incident",
+          "fetch_goes_active_fire"
+        ],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-23-typo-tide",
+      "category": "coastal",
+      "register": "vague",
+      "prompt": "how hihg does the tide get hear",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["fetch_noaa_coops_tides", "fetch_gtsm_tide_surge"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-24-spatial_query-topn",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "which of those buildings got hit the hardest",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["spatial_query", "compute_zonal_statistics"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-25-spatial_query-groupby",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "break that down by neighborhood for me",
+      "execution": "run",
+      "expected": {
+        "acceptable": ["spatial_query", "compute_zonal_statistics"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-26-spatial_query-select",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "just show me the ones that are residential",
+      "execution": "run",
+      "expected": { "acceptable": ["spatial_query"], "no_tool": false }
+    },
+    {
+      "id": "rp-vag-27-search_spatial_functions-distance",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "whats the formula for finding how far apart two points are",
+      "execution": "run",
+      "expected": { "acceptable": ["search_spatial_functions"], "no_tool": false }
+    },
+    {
+      "id": "rp-vag-28-search_spatial_functions-buffer",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "is there a built in way to grow a shape outward by some distance",
+      "execution": "run",
+      "expected": { "acceptable": ["search_spatial_functions"], "no_tool": false }
+    },
+    {
+      "id": "rp-vag-29-atlimit-01",
+      "category": "geographic_primitives",
+      "register": "vague",
+      "prompt": "just tell me something useful about this place",
+      "execution": "run",
+      "_note": "expect_limit: true -- deliberately at the natural retrieval ceiling (near-zero domain signal). A MISS is expected and documented, not a regression.",
+      "expected": {
+        "acceptable": ["geocode_location", "fetch_administrative_boundaries"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-vag-30-atlimit-02",
+      "category": "land_cover_development",
+      "register": "vague",
+      "prompt": "is this a good spot",
+      "execution": "run",
+      "_note": "expect_limit: true -- deliberately at the natural retrieval ceiling (no domain, no criterion, no place named). A MISS is expected and documented, not a regression.",
+      "expected": {
+        "acceptable": ["fetch_landcover", "fetch_fema_nfhl_zones"],
+        "no_tool": false
+      }
     }
   ]
 }

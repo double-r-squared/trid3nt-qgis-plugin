@@ -175,6 +175,94 @@
       "prompt": "NLCD land covr for Sacremento",
       "execution": "run",
       "expected": { "acceptable": ["fetch_landcover"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-21-typo-nwis",
+      "category": "hydrology",
+      "register": "specific",
+      "prompt": "USGS NWIS streem guage staitons with observed discharg",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_usgs_nwis_gauges"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-22-typo-firms",
+      "category": "fire",
+      "register": "specific",
+      "prompt": "NASA FIRMS activ fire detecions for Los Angeles County",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_firms_active_fire"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-23-typo-coops",
+      "category": "coastal",
+      "register": "specific",
+      "prompt": "NOAA CO-OPS tide guage observaitons for Pensacoola",
+      "execution": "run",
+      "expected": { "acceptable": ["fetch_noaa_coops_tides"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-24-spatial_query-topn",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "which five buildings have the highest flood depth",
+      "execution": "run",
+      "expected": { "acceptable": ["spatial_query"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-25-spatial_query-groupby",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "average parcel value grouped by zip code",
+      "execution": "run",
+      "expected": { "acceptable": ["spatial_query"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-26-spatial_query-select",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "select all residential parcels inside the floodplain polygon",
+      "execution": "run",
+      "expected": { "acceptable": ["spatial_query"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-27-search_spatial_functions-distance",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "what DuckDB spatial function gives the distance between two points",
+      "execution": "run",
+      "expected": { "acceptable": ["search_spatial_functions"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-28-search_spatial_functions-buffer",
+      "category": "geographic_primitives",
+      "register": "specific",
+      "prompt": "which ST function buffers a polygon by a given radius",
+      "execution": "run",
+      "expected": { "acceptable": ["search_spatial_functions"], "no_tool": false }
+    },
+    {
+      "id": "rp-spec-29-atlimit-01",
+      "category": "news_events",
+      "register": "vague",
+      "prompt": "what's going on around here",
+      "execution": "run",
+      "_note": "expect_limit: true -- deliberately at the natural retrieval ceiling (near-zero domain signal, no place/source named). A MISS is expected and documented, not a regression.",
+      "expected": {
+        "acceptable": ["fetch_nws_event", "fetch_nws_alerts_conus", "fetch_storm_events_db"],
+        "no_tool": false
+      }
+    },
+    {
+      "id": "rp-spec-30-atlimit-02",
+      "category": "damage_assessment",
+      "register": "vague",
+      "prompt": "can you help me understand the risk here",
+      "execution": "run",
+      "_note": "expect_limit: true -- deliberately at the natural retrieval ceiling (no hazard type, no source, no place named). A MISS is expected and documented, not a regression.",
+      "expected": {
+        "acceptable": ["fetch_fema_nfhl_zones", "compute_exposure_summary", "search_data_catalog"],
+        "no_tool": false
+      }
     }
   ]
 }
