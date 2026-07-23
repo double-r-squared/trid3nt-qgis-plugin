@@ -39,29 +39,53 @@ from urllib.parse import urlparse
 
 __all__ = [
     "CodeExecRequest",
+    "CodeExecResult",
     "CredentialRequest",
     "GateDecision",
+    "ImpactSummary",
+    "LessonAdded",
     "Mode2CandidateRequest",
     "PayloadWarning",
+    "RegionCandidate",
+    "RegionChoiceRequest",
+    "SecretRow",
+    "SpatialInputRequest",
     "ToolCandidate",
     "ToolCandidatesRequest",
     "code_exec_layer_lines",
+    "code_exec_result_chip",
+    "code_exec_result_lines",
     "credential_note_lines",
+    "impact_summary_lines",
+    "lesson_added_line",
     "mode2_decision_chip",
     "mode2_reason_lines",
+    "parse_code_exec_result",
     "parse_credential_request",
     "estimate_cells",
     "estimate_eta_seconds",
     "estimate_frames",
     "parse_code_exec_request",
+    "parse_impact_envelope",
+    "parse_lesson_added",
     "parse_mode2_candidate",
     "parse_offer_catalog_addition",
     "parse_payload_warning",
+    "parse_region_choice",
+    "parse_secrets_list",
+    "parse_spatial_input_request",
     "parse_tool_candidates",
+    "region_choice_summary",
     "resolve_code_exec_decision",
     "resolve_gate_decision",
     "resolve_mode2_decision",
+    "resolve_region_choice",
+    "resolve_spatial_input_bbox",
+    "resolve_spatial_input_cancel",
+    "resolve_spatial_input_point",
     "resolve_tool_choice",
+    "secrets_list_lines",
+    "spatial_input_summary",
     "summary_lines",
     "tool_choice_summary",
 ]
@@ -889,3 +913,614 @@ def mode2_decision_chip(request: Mode2CandidateRequest, add: bool) -> str:
     if add:
         return f"added {request.display_host} to the catalog"
     return "dismissed"
+
+
+# --------------------------------------------------------------------------- #
+# Region-choice picker (state-bbox-fallback narrowing) -- GATE-WAIT.
+# --------------------------------------------------------------------------- #
+#
+# CRITICAL PAIR (server pauses the turn awaiting the reply; unhandled = a hung
+# turn, the same bug class the code-exec gate was). The server snaps a
+# vague/regional geocode ("south Florida") to the WHOLE state bbox (the honest
+# already-resolved default) and OFFERS a narrower pick.
+#
+# Contract source of truth (mirrored EXACTLY, not paraphrased):
+# ``contracts/src/trid3nt_contracts/region_choice.py``:
+#
+# * inbound ``region-choice-request`` (RegionChoiceRequestEnvelopePayload):
+#   ``request_id`` (the correlation key the reply echoes) / ``state_name`` /
+#   ``state_code`` / ``state_bbox`` (BBox = ``[min_lon, min_lat, max_lon,
+#   max_lat]``; the whole-state default) / ``candidates`` (RegionCandidate
+#   rows: ``region_id`` / ``name`` / ``bbox`` / ``admin_level``; MAY be empty
+#   on a region-set build failure -- the card then offers only the whole-state
+#   default) / ``default_action`` (always ``"use_whole_state"``) / ``message``
+#   (the honest "snapped to the whole state, offering a narrower pick" prompt).
+# * the reply is ONE ``region-choice-provided``
+#   (RegionChoiceProvidedEnvelopePayload): ``request_id`` echo + ``choice``
+#   (``"region"`` when narrowed / ``"whole_state"`` for the honest default) +
+#   ``selected_region_id`` (the candidate's id when ``choice == "region"``,
+#   else None -- the server re-resolves the bbox by this id, authoritative
+#   over a client-sent bbox) + ``selected_bbox`` (the candidate's bbox echo,
+#   a convenience/fallback; None for whole_state). A ``whole_state`` reply IS
+#   the decline path (Invariant 8: cancellation is first-class -- it keeps the
+#   already-correct default), so the card ALWAYS has an answer that closes the
+#   gate honestly, never a dead-end pause.
+
+
+@dataclass
+class RegionCandidate:
+    """One selectable sub-region (defensive parse of the contract shape)."""
+
+    region_id: str
+    name: str
+    bbox: list  # [min_lon, min_lat, max_lon, max_lat]
+    admin_level: str = "county"
+
+
+@dataclass
+class RegionChoiceRequest:
+    """Parsed ``region-choice-request`` payload (defensive; raw kept)."""
+
+    request_id: str
+    state_name: str
+    state_code: str
+    state_bbox: Optional[list] = None
+    candidates: list = field(default_factory=list)  # list[RegionCandidate]
+    message: str = ""
+    raw: dict = field(default_factory=dict)
+
+    @property
+    def state_label(self) -> str:
+        """The whole-state option's label -- the state name, with the code in
+        parens when both are present (never invented -- both are envelope
+        fields)."""
+        if self.state_name and self.state_code:
+            return f"{self.state_name} ({self.state_code})"
+        return self.state_name or self.state_code or "the whole state"
+
+
+def _coerce_bbox4(value) -> Optional[list]:
+    """A candidate ``[min_lon, min_lat, max_lon, max_lat]`` -> a clean float
+    4-list, or None. Never raises."""
+    if (
+        isinstance(value, (list, tuple))
+        and len(value) == 4
+        and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
+    ):
+        return [float(v) for v in value]
+    return None
+
+
+def parse_region_choice(payload: dict) -> Optional[RegionChoiceRequest]:
+    """Parse a raw ``region-choice-request`` payload dict; None when the
+    envelope is unusable -- no ``request_id`` (nothing to correlate the reply
+    against; an unanswerable request would leave the server's turn paused,
+    exactly the hung-turn bug this gate exists to close). Candidate rows
+    missing a usable ``region_id``/``name``/``bbox`` are SKIPPED, never a
+    crash; an empty surviving list is legal (the whole-state default still
+    answers the gate)."""
+    if not isinstance(payload, dict):
+        return None
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str) or not request_id:
+        return None
+    rows = payload.get("candidates")
+    candidates: list = []
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            region_id = row.get("region_id")
+            name = row.get("name")
+            bbox = _coerce_bbox4(row.get("bbox"))
+            if (
+                not isinstance(region_id, str)
+                or not region_id
+                or not isinstance(name, str)
+                or not name
+                or bbox is None
+            ):
+                continue
+            admin_level = row.get("admin_level")
+            candidates.append(
+                RegionCandidate(
+                    region_id=region_id,
+                    name=name,
+                    bbox=bbox,
+                    admin_level=(
+                        admin_level if isinstance(admin_level, str) and admin_level
+                        else "county"
+                    ),
+                )
+            )
+    state_name = payload.get("state_name")
+    state_code = payload.get("state_code")
+    message = payload.get("message")
+    return RegionChoiceRequest(
+        request_id=request_id,
+        state_name=state_name if isinstance(state_name, str) else "",
+        state_code=state_code if isinstance(state_code, str) else "",
+        state_bbox=_coerce_bbox4(payload.get("state_bbox")),
+        candidates=candidates,
+        message=message if isinstance(message, str) else "",
+        raw=payload,
+    )
+
+
+def resolve_region_choice(
+    request: RegionChoiceRequest, selected_region_id: Optional[str]
+) -> dict:
+    """Build the ``region-choice-provided`` wire dict for the card's decision
+    (contract RegionChoiceProvidedEnvelopePayload).
+
+    ``selected_region_id`` set + matching a candidate -> ``choice="region"``
+    with the id + the candidate's echoed bbox (the server re-resolves by id,
+    authoritative). ``None`` (or an unknown id -- the whole-state option) ->
+    ``choice="whole_state"`` with both selection fields None: the honest
+    already-resolved default, which is ALSO the decline path. Both keys are
+    always sent (None-valued when unused) so the wire shape is the full
+    contract surface (the ``credential-provided`` explicit-None convention)."""
+    if isinstance(selected_region_id, str) and selected_region_id:
+        for cand in request.candidates:
+            if cand.region_id == selected_region_id:
+                return {
+                    "request_id": request.request_id,
+                    "choice": "region",
+                    "selected_region_id": cand.region_id,
+                    "selected_bbox": list(cand.bbox),
+                }
+    return {
+        "request_id": request.request_id,
+        "choice": "whole_state",
+        "selected_region_id": None,
+        "selected_bbox": None,
+    }
+
+
+def region_choice_summary(
+    request: RegionChoiceRequest, selected_region_id: Optional[str]
+) -> str:
+    """The folded chip line for an ANSWERED region-choice card."""
+    if isinstance(selected_region_id, str) and selected_region_id:
+        for cand in request.candidates:
+            if cand.region_id == selected_region_id:
+                return f"narrowed to {cand.name}"
+    return f"kept the whole state ({request.state_label})"
+
+
+# --------------------------------------------------------------------------- #
+# Spatial-input picker (agent needs a point / bbox / drawn geometry) -- GATE-WAIT.
+# --------------------------------------------------------------------------- #
+#
+# CRITICAL PAIR (server pauses the turn awaiting the reply; unhandled = a hung
+# turn). The agent asks the user to pick a geometry on the map.
+#
+# Contract source of truth (mirrored EXACTLY, not paraphrased):
+# ``contracts/src/trid3nt_contracts/ws.py``:
+#
+# * inbound ``spatial-input-request`` (SpatialInputRequestPayload):
+#   ``request_id`` (the correlation key the reply echoes) / ``mode``
+#   (``"point"`` = single click / ``"bbox"`` = drag rectangle / ``"vector_draw"``
+#   = terra-draw FeatureCollection) / ``title`` / ``description`` / ``purpose``
+#   (vector_draw only: ``"barrier"`` | ``"line"`` | ``"aoi"``) /
+#   ``suggested_view`` / ``reference_layers`` / ``default_timeout_seconds``.
+# * the reply is ONE ``spatial-input-response`` (SpatialInputResponsePayload):
+#   ``request_id`` echo + ``geometry_type`` (``"point"`` / ``"bbox"`` /
+#   ``"vector_draw"``) + ``coordinates`` (``[lon, lat]`` for point,
+#   ``[minLon, minLat, maxLon, maxLat]`` for bbox) + ``features`` (the drawn
+#   FeatureCollection for vector_draw) + ``cancelled`` (True = the decline path
+#   -- every geometry field None). The QGIS plugin captures POINT (canvas
+#   point-emit tool) and BBOX (canvas extent tool) picks -- the exact
+#   probe/AOI click machinery -- and answers vector_draw HONESTLY (the
+#   terra-draw barrier surface is a web affordance; the plugin cannot draw
+#   tagged walls/flap-gates, so it offers Cancel, which sends ``cancelled=True``
+#   and CLOSES the gate rather than hanging the turn).
+
+
+@dataclass
+class SpatialInputRequest:
+    """Parsed ``spatial-input-request`` payload (defensive; raw kept)."""
+
+    request_id: str
+    mode: str  # "point" | "bbox" | "vector_draw"
+    title: str = ""
+    description: str = ""
+    purpose: str = "barrier"
+    raw: dict = field(default_factory=dict)
+
+    @property
+    def supported(self) -> bool:
+        """True when the QGIS plugin can capture this mode's geometry (point /
+        bbox via the canvas tools). ``vector_draw`` is a web terra-draw
+        affordance the plugin cannot reproduce -- the card degrades honestly
+        (Cancel closes the gate) rather than pretending to draw."""
+        return self.mode in ("point", "bbox")
+
+
+def parse_spatial_input_request(payload: dict) -> Optional[SpatialInputRequest]:
+    """Parse a raw ``spatial-input-request`` payload dict; None when the
+    envelope is unusable -- no ``request_id`` (nothing to correlate the reply
+    against, leaving the server's turn hung) or an unknown ``mode`` (the card
+    would not know which affordance to offer)."""
+    if not isinstance(payload, dict):
+        return None
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str) or not request_id:
+        return None
+    mode = payload.get("mode")
+    if mode not in ("point", "bbox", "vector_draw"):
+        return None
+    title = payload.get("title")
+    description = payload.get("description")
+    purpose = payload.get("purpose")
+    return SpatialInputRequest(
+        request_id=request_id,
+        mode=mode,
+        title=title if isinstance(title, str) else "",
+        description=description if isinstance(description, str) else "",
+        purpose=purpose if purpose in ("barrier", "line", "aoi") else "barrier",
+        raw=payload,
+    )
+
+
+def resolve_spatial_input_point(request_id: str, lon: float, lat: float) -> dict:
+    """Build the ``spatial-input-response`` wire dict for a POINT pick
+    (contract SpatialInputResponsePayload): ``coordinates=[lon, lat]``,
+    ``features`` None. All keys present (the explicit-None convention)."""
+    return {
+        "request_id": request_id,
+        "geometry_type": "point",
+        "coordinates": [round(float(lon), 6), round(float(lat), 6)],
+        "features": None,
+        "cancelled": False,
+    }
+
+
+def resolve_spatial_input_bbox(request_id: str, bbox) -> dict:
+    """Build the ``spatial-input-response`` wire dict for a BBOX pick
+    (contract SpatialInputResponsePayload): ``coordinates=[minLon, minLat,
+    maxLon, maxLat]``, ``features`` None."""
+    return {
+        "request_id": request_id,
+        "geometry_type": "bbox",
+        "coordinates": [round(float(v), 6) for v in bbox],
+        "features": None,
+        "cancelled": False,
+    }
+
+
+def resolve_spatial_input_cancel(request_id: str) -> dict:
+    """Build the ``spatial-input-response`` wire dict for a CANCEL (contract
+    SpatialInputResponsePayload): ``cancelled=True`` with every geometry field
+    None. This is the decline path AND the honest degrade for the unsupported
+    ``vector_draw`` mode -- either way it CLOSES the server's paused gate
+    (never a hung turn)."""
+    return {
+        "request_id": request_id,
+        "geometry_type": None,
+        "coordinates": None,
+        "features": None,
+        "cancelled": True,
+    }
+
+
+def spatial_input_summary(request: SpatialInputRequest, wire: dict) -> str:
+    """The folded chip line for an ANSWERED spatial-input card, keyed off the
+    committed wire reply (never re-derived)."""
+    if wire.get("cancelled"):
+        return "spatial input cancelled"
+    coords = wire.get("coordinates") or []
+    if request.mode == "point" and len(coords) == 2:
+        return f"picked point ({coords[1]:.5f}, {coords[0]:.5f})"
+    if request.mode == "bbox" and len(coords) == 4:
+        return (
+            f"picked bbox [{coords[0]:.4f}, {coords[1]:.4f}, "
+            f"{coords[2]:.4f}, {coords[3]:.4f}]"
+        )
+    return "spatial input sent"
+
+
+# --------------------------------------------------------------------------- #
+# code-exec-result -- the run outcome that follows an APPROVED code-exec-request.
+# --------------------------------------------------------------------------- #
+#
+# Contract source of truth (mirrored EXACTLY, not paraphrased):
+# ``contracts/src/trid3nt_contracts/sandbox_contracts.py``
+# (``CodeExecResultPayload``): ``code_exec_id`` (joins the result to the
+# originating ``code-exec-request`` card) / ``status`` (``ok`` / ``error`` /
+# ``timeout`` / ``blocked`` -- the HONEST terminal outcome, never dressed up) /
+# ``stdout_tail`` / ``stderr_tail`` (bounded tails) / ``result`` (the converted
+# ``{"kind": ...}`` descriptor, or None) / ``truncated`` / ``duration_s``.
+# Fire-and-forget by contract (no reply); the plugin updates the approved
+# code-exec card's folded chip with the outcome.
+
+
+@dataclass
+class CodeExecResult:
+    """Parsed ``code-exec-result`` payload (defensive; raw kept)."""
+
+    code_exec_id: str
+    status: str
+    stdout_tail: str = ""
+    stderr_tail: str = ""
+    result: Optional[dict] = None
+    truncated: bool = False
+    duration_s: float = 0.0
+    raw: dict = field(default_factory=dict)
+
+    @property
+    def ok(self) -> bool:
+        return self.status == "ok"
+
+
+def parse_code_exec_result(payload: dict) -> Optional[CodeExecResult]:
+    """Parse a raw ``code-exec-result`` payload dict; None when the envelope
+    is unusable -- no ``code_exec_id`` (nothing to join to the request card)
+    or no ``status`` (no honest outcome to show)."""
+    if not isinstance(payload, dict):
+        return None
+    code_exec_id = payload.get("code_exec_id")
+    if not isinstance(code_exec_id, str) or not code_exec_id:
+        return None
+    status = payload.get("status")
+    if not isinstance(status, str) or not status:
+        return None
+    result = payload.get("result")
+    duration = payload.get("duration_s")
+    return CodeExecResult(
+        code_exec_id=code_exec_id,
+        status=status,
+        stdout_tail=str(payload.get("stdout_tail") or ""),
+        stderr_tail=str(payload.get("stderr_tail") or ""),
+        result=result if isinstance(result, dict) else None,
+        truncated=bool(payload.get("truncated")),
+        duration_s=(
+            float(duration)
+            if isinstance(duration, (int, float)) and not isinstance(duration, bool)
+            else 0.0
+        ),
+        raw=payload,
+    )
+
+
+def code_exec_result_chip(result: CodeExecResult) -> str:
+    """The one-line state chip the approved code-exec card folds to once the
+    run outcome lands -- the HONEST terminal status (a blocked/timeout run is
+    never dressed up as ok), with the duration when non-trivial."""
+    status_word = {
+        "ok": "succeeded",
+        "error": "errored",
+        "timeout": "timed out",
+        "blocked": "blocked",
+    }.get(result.status, result.status)
+    line = f"Code run: {status_word}"
+    if result.duration_s > 0:
+        line += f" ({result.duration_s:g}s)"
+    if result.truncated:
+        line += " -- output truncated"
+    return line
+
+
+def code_exec_result_lines(result: CodeExecResult) -> list:
+    """The honest body lines for the code-exec result (the tails + a result
+    descriptor summary) -- every value is a structured envelope field."""
+    lines: list = []
+    kind = (result.result or {}).get("kind") if result.result else None
+    if isinstance(kind, str) and kind:
+        lines.append(f"Result: {kind}")
+    if result.stdout_tail.strip():
+        lines.append("stdout: " + result.stdout_tail.strip())
+    if result.stderr_tail.strip():
+        lines.append("stderr: " + result.stderr_tail.strip())
+    return lines
+
+
+# --------------------------------------------------------------------------- #
+# secrets-list -- the server's per-user/per-Case secret roster (settings state).
+# --------------------------------------------------------------------------- #
+#
+# Contract source of truth: ``contracts/src/trid3nt_contracts/secrets.py``
+# (``SecretsListEnvelopePayload`` -> list[``SecretRecord``]). Emitted in
+# response to opening the secrets surface OR as the confirmation after a
+# ``secret-add`` / ``secret-revoke``. The raw key value NEVER appears -- only
+# the ``vault_ref``-bearing records. The plugin stores these for the
+# settings/secrets state (minimal honest handling) and never logs a vault_ref.
+
+
+@dataclass
+class SecretRow:
+    """One parsed ``SecretRecord`` (defensive; raw key never present)."""
+
+    secret_id: str
+    provider: str
+    case_id: Optional[str] = None
+    label: Optional[str] = None
+    is_active: bool = True
+
+    @property
+    def display(self) -> str:
+        return self.label or self.provider or self.secret_id
+
+
+def parse_secrets_list(payload: dict) -> list:
+    """Parse a raw ``secrets-list`` payload into ``SecretRow``s (defensive:
+    a missing/non-list ``secrets`` field or a row without a usable
+    ``secret_id``/``provider`` is skipped, never raised on)."""
+    if not isinstance(payload, dict):
+        return []
+    rows = payload.get("secrets")
+    out: list = []
+    if not isinstance(rows, list):
+        return out
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        secret_id = row.get("secret_id")
+        provider = row.get("provider")
+        if not isinstance(secret_id, str) or not secret_id:
+            continue
+        if not isinstance(provider, str) or not provider:
+            continue
+        label = row.get("label")
+        case_id = row.get("case_id")
+        out.append(
+            SecretRow(
+                secret_id=secret_id,
+                provider=provider,
+                case_id=case_id if isinstance(case_id, str) else None,
+                label=label if isinstance(label, str) and label else None,
+                is_active=bool(row.get("is_active", True)),
+            )
+        )
+    return out
+
+
+def secrets_list_lines(secrets: list) -> list:
+    """The honest one-line-per-active-secret roster for the settings surface --
+    provider + optional label, NEVER a vault_ref or key material."""
+    lines: list = []
+    for row in secrets:
+        if not isinstance(row, SecretRow) or not row.is_active:
+            continue
+        scope = "this Case" if row.case_id else "all Cases"
+        line = f"{row.display} ({row.provider}) -- {scope}"
+        lines.append(line)
+    return lines
+
+
+# --------------------------------------------------------------------------- #
+# impact-envelope -- Pelicun portfolio damage/loss aggregates (compact note).
+# --------------------------------------------------------------------------- #
+#
+# Contract source of truth: ``contracts/src/trid3nt_contracts/impact_envelope.py``
+# (``ImpactEnvelope``): ``n_structures_total`` (the key signal the server keys
+# emission on) / ``n_structures_damaged`` / ``n_structures_destroyed`` /
+# ``expected_loss_usd`` / ``loss_percentile_95_usd`` / ``impact_area_km2`` /
+# population fields (may be None for MS_BUILDINGS inventory). Emitted IN
+# ADDITION to the function_response; the plugin renders a compact summary note
+# in chat (Invariant 1: every number is a structured aggregate, never prose).
+
+
+@dataclass
+class ImpactSummary:
+    """Parsed ``impact-envelope`` payload (defensive; raw kept)."""
+
+    n_structures_total: int
+    n_structures_damaged: Optional[int] = None
+    n_structures_destroyed: Optional[int] = None
+    expected_loss_usd: Optional[float] = None
+    loss_percentile_95_usd: Optional[float] = None
+    impact_area_km2: Optional[float] = None
+    raw: dict = field(default_factory=dict)
+
+
+def _opt_int(value) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
+def _opt_float(value) -> Optional[float]:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return None
+
+
+def parse_impact_envelope(payload: dict) -> Optional[ImpactSummary]:
+    """Parse a raw ``impact-envelope`` payload dict; None when the envelope is
+    unusable -- no top-level ``n_structures_total`` (the ImpactEnvelope key
+    signal the server keys emission on)."""
+    if not isinstance(payload, dict):
+        return None
+    total = _opt_int(payload.get("n_structures_total"))
+    if total is None:
+        return None
+    return ImpactSummary(
+        n_structures_total=total,
+        n_structures_damaged=_opt_int(payload.get("n_structures_damaged")),
+        n_structures_destroyed=_opt_int(payload.get("n_structures_destroyed")),
+        expected_loss_usd=_opt_float(payload.get("expected_loss_usd")),
+        loss_percentile_95_usd=_opt_float(payload.get("loss_percentile_95_usd")),
+        impact_area_km2=_opt_float(payload.get("impact_area_km2")),
+        raw=payload,
+    )
+
+
+def _fmt_usd(value: float) -> str:
+    """Compact USD -- ``$1.2M`` / ``$340K`` / ``$1,250`` (a latency-free
+    aggregate, not a cost estimate; Invariant 9 governs COST fields, this is a
+    modeled loss)."""
+    if value >= 1_000_000:
+        return f"${value / 1_000_000:.1f}M"
+    if value >= 1_000:
+        return f"${value / 1_000:.0f}K"
+    return f"${value:,.0f}"
+
+
+def impact_summary_lines(summary: ImpactSummary) -> list:
+    """The compact in-chat summary note lines -- every number is a structured
+    aggregate off the envelope (Invariant 1, never prose)."""
+    lines = [f"Structures assessed: {summary.n_structures_total:,}"]
+    dmg_bits = []
+    if summary.n_structures_damaged is not None:
+        dmg_bits.append(f"{summary.n_structures_damaged:,} damaged")
+    if summary.n_structures_destroyed is not None:
+        dmg_bits.append(f"{summary.n_structures_destroyed:,} destroyed")
+    if dmg_bits:
+        lines.append("  ".join(dmg_bits))
+    if summary.expected_loss_usd is not None:
+        loss = f"Expected loss: {_fmt_usd(summary.expected_loss_usd)}"
+        if summary.loss_percentile_95_usd is not None:
+            loss += f" (P95 {_fmt_usd(summary.loss_percentile_95_usd)})"
+        lines.append(loss)
+    if summary.impact_area_km2 is not None:
+        lines.append(f"Impact area: {summary.impact_area_km2:g} km2")
+    return lines
+
+
+# --------------------------------------------------------------------------- #
+# lesson-added -- the LESSONS LOOP ack (subtle status note).
+# --------------------------------------------------------------------------- #
+#
+# Server source: ``server.py`` ``_handle_lesson_add`` emits a raw-JSON
+# envelope (no ``trid3nt_contracts`` model yet -- the payload has no extra-key
+# schema): ``{"envelope_type": "lesson-added", "lesson_id": ..., "lesson":
+# <normalized text>}``. The plugin surfaces a subtle status note.
+
+
+@dataclass
+class LessonAdded:
+    """Parsed ``lesson-added`` ack payload (defensive; raw kept)."""
+
+    lesson_id: str = ""
+    lesson: str = ""
+    raw: dict = field(default_factory=dict)
+
+
+def parse_lesson_added(payload: dict) -> Optional[LessonAdded]:
+    """Parse a raw ``lesson-added`` payload dict; None when the envelope is
+    unusable -- neither a ``lesson_id`` nor a ``lesson`` text is present
+    (nothing to acknowledge)."""
+    if not isinstance(payload, dict):
+        return None
+    lesson_id = payload.get("lesson_id")
+    lesson = payload.get("lesson")
+    lesson_id = lesson_id if isinstance(lesson_id, str) else ""
+    lesson = lesson if isinstance(lesson, str) else ""
+    if not lesson_id and not lesson.strip():
+        return None
+    return LessonAdded(lesson_id=lesson_id, lesson=lesson, raw=payload)
+
+
+def lesson_added_line(added: LessonAdded) -> str:
+    """The subtle status note the dock shows on a lesson ack."""
+    if added.lesson.strip():
+        snippet = added.lesson.strip()
+        if len(snippet) > 120:
+            snippet = snippet[:117] + "..."
+        return f"Lesson saved: {snippet}"
+    return "Lesson saved."

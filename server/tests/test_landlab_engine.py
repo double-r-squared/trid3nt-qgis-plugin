@@ -498,3 +498,80 @@ def test_model_landslide_scenario_run_failure_raises_typed(tmp_path, monkeypatch
             )
         )
     assert exc.value.error_code == "LANDLAB_RUN_FAILED"
+
+
+# ===========================================================================
+# (6) REGRESSION — _download_batch_landlab_outputs must pick landlab_field.tif
+#     specifically, never "any .tif in output_uris" (the live-proven bug: a
+#     completion.json listing dem.tif BEFORE landlab_field.tif in output_uris
+#     caused the composer to feed raw DEM elevations into the
+#     probability-of-failure metrics, producing a degenerate
+#     unstable_area_fraction=1.0 / mean_probability_of_failure=1.0 result).
+# ===========================================================================
+def test_download_batch_landlab_outputs_picks_field_cog_not_dem(tmp_path, monkeypatch):
+    """completion.json's output_uris lists dem.tif FIRST (a real worker shape --
+    the local-exec supervisor re-uploads the staged DEM alongside the worker
+    outputs); _download_batch_landlab_outputs must still download
+    landlab_field.tif, not whichever .tif key happens to sort/list first."""
+    from trid3nt_server.tools.simulation import solver as _solver
+    from trid3nt_server.workflows import model_landslide_scenario as M
+
+    run_id = "field-select-rid"
+    runs_bucket = "trid3nt-runs"
+
+    completion = {
+        "run_id": run_id,
+        "status": "ok",
+        "exit_code": 0,
+        "output_uris": [
+            f"s3://{runs_bucket}/{run_id}/dem.tif",
+            f"s3://{runs_bucket}/{run_id}/landlab_field.tif",
+            f"s3://{runs_bucket}/{run_id}/landlab_secondary_slope.tif",
+        ],
+        "result": None,  # local-exec: no worker result block (recompute fallback)
+    }
+
+    monkeypatch.setattr(
+        _solver, "_get_runs_bucket", lambda: runs_bucket
+    )
+    monkeypatch.setattr(
+        _solver, "_try_get_completion_s3", lambda bucket, rid: completion
+    )
+
+    downloaded_keys: list[str] = []
+
+    class _FakeBody:
+        def __init__(self, data: bytes) -> None:
+            self._data = data
+            self._consumed = False
+
+        def read(self, *_args, **_kwargs) -> bytes:
+            # shutil.copyfileobj loops read() -> write() until an EMPTY read
+            # signals EOF; a stub that always returns non-empty bytes spins
+            # forever (a real ENOSPC, not a mock artifact) — mirror a real
+            # file-like object's one-shot-then-EOF behavior.
+            if self._consumed:
+                return b""
+            self._consumed = True
+            return self._data
+
+    class _FakeS3:
+        def get_object(self, *, Bucket: str, Key: str):  # noqa: N803
+            downloaded_keys.append(Key)
+            # Distinct byte payloads so a wrong pick is detectable.
+            tag = Key.rsplit("/", 1)[-1].encode()
+            return {"Body": _FakeBody(b"FAKE-BYTES-" + tag)}
+
+    monkeypatch.setattr(_solver, "_get_s3_client", lambda: _FakeS3())
+
+    local_field, result_block, out_dir, secondary = M._download_batch_landlab_outputs(
+        run_result=None, run_id=run_id
+    )
+
+    # Only the field COG was downloaded (not dem.tif / the secondary COG).
+    assert downloaded_keys == [f"{run_id}/landlab_field.tif"]
+    assert Path(local_field).name == "landlab_field.tif"
+    with open(local_field, "rb") as fh:
+        assert fh.read() == b"FAKE-BYTES-landlab_field.tif"
+    assert result_block == {}
+    assert secondary == {}

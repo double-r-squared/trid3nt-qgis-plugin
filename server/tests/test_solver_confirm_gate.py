@@ -36,6 +36,16 @@ the Eastern Snake River Plain aquifer and asked for plume modeling.
 """
 
 
+@pytest.fixture(autouse=True)
+def _cap_gate_waits(monkeypatch):
+    """LANE C: cap every user-decision gate wait so a headless run never hangs
+    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
+    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical behavior. Happy-path
+    approver tasks answer within milliseconds; the dedicated timeout test
+    tightens the cap so it hits the honest fail-closed path fast."""
+    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+
+
 class _FakeWS:
     def __init__(self) -> None:
         self.sent: list[dict] = []
@@ -146,6 +156,10 @@ async def test_gate_timeout_fails_closed(monkeypatch) -> None:
 
     _patch_extraction(monkeypatch)
     monkeypatch.setattr(server, "CODE_EXEC_CONFIRM_TIMEOUT_SECONDS", 0)
+    # No client answers the card: the F6 local-lane gate would wait 24h, so the
+    # LANE C cap forces the honest timeout path quickly (a tight override of the
+    # autouse 5s net keeps this pure-timeout assertion fast).
+    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "0.05")
     ws = _FakeWS()
     state = _FakeState()
 

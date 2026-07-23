@@ -1713,6 +1713,73 @@ class AgentClient:
             queue_if_closed=True,
         )
 
+    def send_region_choice(
+        self,
+        request_id: str,
+        choice: str,
+        selected_region_id: Optional[str] = None,
+        selected_bbox: Optional[list] = None,
+    ) -> None:
+        """Answer a ``region-choice-request`` gate (state-bbox-fallback
+        narrowing).
+
+        Contract (``region_choice.RegionChoiceProvidedEnvelopePayload``): ONE
+        ``region-choice-provided`` envelope, ``request_id`` echo + ``choice``
+        (``"region"`` when the user narrowed / ``"whole_state"`` for the honest
+        already-resolved default) + ``selected_region_id`` (the candidate's id
+        on a region pick, else None -- the server re-resolves the bbox by this
+        id, authoritative over a client-sent bbox) + ``selected_bbox`` (the
+        candidate's bbox echo, a convenience/fallback; None for whole_state).
+        All keys are always sent (None-valued when unused) so the wire shape is
+        the full contract surface. Buffered while disconnected like every
+        user-intent verb -- a pick tapped mid-reconnect must not be dropped
+        (the paused turn would then hang)."""
+        self._send(
+            "region-choice-provided",
+            {
+                "envelope_type": "region-choice-provided",
+                "request_id": request_id,
+                "choice": choice,
+                "selected_region_id": selected_region_id,
+                "selected_bbox": selected_bbox,
+            },
+            case_id=self.case_id,
+            queue_if_closed=True,
+        )
+
+    def send_spatial_input(
+        self,
+        request_id: str,
+        geometry_type: Optional[str] = None,
+        coordinates: Optional[list] = None,
+        features: Optional[dict] = None,
+        cancelled: bool = False,
+    ) -> None:
+        """Answer a ``spatial-input-request`` gate (the agent needs a picked
+        geometry).
+
+        Contract (``ws.SpatialInputResponsePayload``): ONE
+        ``spatial-input-response`` envelope, ``request_id`` echo +
+        ``geometry_type`` (``"point"`` / ``"bbox"`` / ``"vector_draw"``) +
+        ``coordinates`` (``[lon, lat]`` for point, ``[minLon, minLat, maxLon,
+        maxLat]`` for bbox) + ``features`` (the drawn FeatureCollection for
+        vector_draw) + ``cancelled`` (True = the decline path, every geometry
+        field None). All keys always sent (the explicit-None convention).
+        Buffered while disconnected like every user-intent verb -- the paused
+        turn would otherwise hang."""
+        self._send(
+            "spatial-input-response",
+            {
+                "request_id": request_id,
+                "geometry_type": geometry_type,
+                "coordinates": coordinates,
+                "features": features,
+                "cancelled": cancelled,
+            },
+            case_id=self.case_id,
+            queue_if_closed=True,
+        )
+
     # -- event pump ---------------------------------------------------------- #
 
     def next_event(self, timeout: float = 1.0) -> Optional[AgentEvent]:
@@ -1868,6 +1935,55 @@ class AgentClient:
             # on completion). The dock's tool chip rows render a short arg
             # summary from ``raw_args``.
             return AgentEvent("tool-io", payload)
+        if etype == "region-choice-request":
+            # CRITICAL gate-WAIT (state-bbox-fallback narrowing, contracts
+            # region_choice.py): the server snapped a vague geocode to the
+            # WHOLE state and PAUSES the turn awaiting a
+            # ``region-choice-provided`` reply. Previously fell through to
+            # "raw" and was dropped -- the turn then hung on its paused future
+            # (the code-exec stall bug class). The dock renders the picker
+            # card (ui/cards.RegionChoiceCard); the reply goes out via
+            # send_region_choice below. A "whole_state" answer keeps the
+            # honest default, so the gate always closes.
+            return AgentEvent("region-choice-request", payload)
+        if etype == "spatial-input-request":
+            # CRITICAL gate-WAIT (contracts ws.SpatialInputRequestPayload):
+            # the agent needs the user to pick a geometry (point / bbox /
+            # vector_draw) and PAUSES the turn awaiting a
+            # ``spatial-input-response``. Previously fell through to "raw" and
+            # was dropped -- the turn hung. The dock renders the pick card
+            # (ui/cards.SpatialInputCard) wired to the canvas point/AOI
+            # tools; the reply goes out via send_spatial_input below. Cancel
+            # (and the honest vector_draw degrade) sends cancelled=True and
+            # CLOSES the gate.
+            return AgentEvent("spatial-input-request", payload)
+        if etype == "code-exec-result":
+            # The run OUTCOME that follows an approved code-exec-request
+            # (contracts sandbox_contracts.CodeExecResultPayload, job-0233):
+            # status + stdout/stderr tails + the result descriptor. Fire-and-
+            # forget (no reply); the dock updates the approved code-exec
+            # card's folded chip with the outcome. Previously fell through to
+            # "raw" and was dropped, so an approved run showed no result.
+            return AgentEvent("code-exec-result", payload)
+        if etype == "secrets-list":
+            # The per-user/per-Case secret roster (contracts
+            # secrets.SecretsListEnvelopePayload) -- emitted when the secrets
+            # surface opens and after every secret-add/revoke. Raw key values
+            # NEVER ride here (only vault_ref records). The dock stores it for
+            # the settings/secrets state. Previously fell through to "raw"
+            # (the credential round trip already emits one on secret-add).
+            return AgentEvent("secrets-list", payload)
+        if etype == "impact-envelope":
+            # Pelicun portfolio damage/loss aggregates (contracts
+            # impact_envelope.ImpactEnvelope) emitted IN ADDITION to the
+            # function_response. The dock renders a compact summary note in
+            # chat. Previously fell through to "raw" and was dropped.
+            return AgentEvent("impact-envelope", payload)
+        if etype == "lesson-added":
+            # The LESSONS LOOP ack (server _handle_lesson_add raw-JSON
+            # envelope): lesson_id + normalized lesson text. The dock shows a
+            # subtle status note. Previously fell through to "raw".
+            return AgentEvent("lesson-added", payload)
         if etype == "case-list":
             cases = parse_case_list(payload)
             # Mirror of the last_session_state stash above: the startup

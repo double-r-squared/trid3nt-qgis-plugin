@@ -222,6 +222,22 @@ def _download_batch_landlab_outputs(
     runs_bucket = _get_runs_bucket()
     s3 = _get_s3_client()
 
+    # The PRIMARY field COG filename (mirrors
+    # services.workers.landlab.entrypoint.FIELD_COG_NAME /
+    # services.workers.landlab.run_chain.FIELD_COG_NAME). completion.json's
+    # ``output_uris`` lists EVERY uploaded artifact for the run -- the input
+    # ``dem.tif`` (re-uploaded by the supervisor alongside the outputs) AND
+    # every ``landlab_secondary_<token>.tif`` context layer, not just the
+    # field COG. BUG (found live): matching "any *.tif in output_uris" picked
+    # whichever key sorted first -- typically ``dem.tif`` -- and fed raw DEM
+    # elevations (meters, e.g. ~1761-2352) into the probability-of-failure
+    # metrics as if they were probabilities: every "active" cell exceeded the
+    # 0.75 unstable threshold (unstable_area_fraction=1.0) and the mean
+    # elevation clamped to the [0,1] range (mean_probability_of_failure=1.0).
+    # The FIX: match the field COG by its EXACT known basename, never by
+    # "any .tif".
+    FIELD_COG_NAME = "landlab_field.tif"
+
     field_keys: list[str] = []
     result_block: dict[str, Any] = {}
     manifest = _try_get_completion_s3(runs_bucket, run_id)
@@ -235,10 +251,10 @@ def _download_batch_landlab_outputs(
                 _scheme, _bucket, key = _split_object_uri(uri)
             except Exception:  # noqa: BLE001 — skip an unparseable entry
                 continue
-            if key.endswith(".tif"):
+            if Path(key).name == FIELD_COG_NAME:
                 field_keys.append(key)
     if not field_keys:
-        field_keys = [f"{run_id}/landlab_field.tif"]
+        field_keys = [f"{run_id}/{FIELD_COG_NAME}"]
 
     tmp_dir = tempfile.mkdtemp(prefix=f"landlab-batch-out-{run_id}-")
 

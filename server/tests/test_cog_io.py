@@ -256,15 +256,14 @@ def test_upload_gs_no_bucket_with_fallback_returns_file_uri(tmp_path: Path) -> N
     assert uri == f"file://{cog}"  # OpenQuake no-bucket short-circuit
 
 
-def test_upload_gs_fsspec_failure_no_fallback_raises(tmp_path: Path) -> None:
+def test_upload_non_s3_scheme_no_fallback_raises_typed(tmp_path: Path) -> None:
+    """GCP is decommissioned: a non-s3 scheme with no fallback is a typed
+    UPLOAD error naming the absent backend -- no gs client is ever
+    constructed (SWMM/GeoClaw/Landlab - no silent file:// on the cloud
+    path)."""
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")
-    fake_fsspec = MagicMock()
-    fake_fsspec.filesystem.return_value.put.side_effect = RuntimeError("gcs down")
-    with (
-        patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"),
-        patch.dict("sys.modules", {"fsspec": fake_fsspec}),
-    ):
+    with patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"):
         with pytest.raises(CogIoError) as ei:
             cog_io.upload_cog(
                 cog, "r", "bkt", dest_filename="d.tif",
@@ -273,15 +272,12 @@ def test_upload_gs_fsspec_failure_no_fallback_raises(tmp_path: Path) -> None:
     assert ei.value.stage == "UPLOAD"
 
 
-def test_upload_gs_fsspec_failure_with_fallback_returns_file(tmp_path: Path) -> None:
+def test_upload_non_s3_scheme_with_fallback_returns_file(tmp_path: Path) -> None:
+    """MODFLOW/OpenQuake opt-in fallback degrades straight to file:// --
+    no gs client is ever constructed, no failure needs to be simulated."""
     cog = tmp_path / "x.tif"
     cog.write_bytes(b"tiff")
-    fake_fsspec = MagicMock()
-    fake_fsspec.filesystem.return_value.put.side_effect = RuntimeError("gcs down")
-    with (
-        patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"),
-        patch.dict("sys.modules", {"fsspec": fake_fsspec}),
-    ):
+    with patch("trid3nt_server.tools.cache.storage_scheme", return_value="gs"):
         uri = cog_io.upload_cog(
             cog, "r", "bkt", dest_filename="d.tif",
             gs_backend="fsspec", gs_fallback_to_file=True,

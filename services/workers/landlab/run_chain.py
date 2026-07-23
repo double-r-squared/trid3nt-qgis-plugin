@@ -27,6 +27,18 @@ supervisor downloaded them before launching this shim):
 Outputs (written to CWD):
     landlab_field.tif   -- primary output field COG (always)
     landlab_secondary_<token>.tif  -- per secondary field (if any)
+    landlab_result.json -- the typed narration-scalar result block (always;
+                            SAME shape as the AWS Batch entrypoint's
+                            completion.json ``result`` block). The
+                            local-docker supervisor's ``classify_exit`` hook
+                            (``run_landlab.landlab_local_spec``) reads this
+                            file and folds it into completion.json's
+                            top-level ``result`` key so the composer's
+                            ``_download_batch_landlab_outputs`` gets the
+                            worker's AUTHORITATIVE scalars (min_factor_of_
+                            safety in particular is not recoverable from the
+                            probability field alone) instead of silently
+                            falling back to a recomputed 0.0.
 
 Exit codes:
     0  -- chain ran to completion and wrote the field COG
@@ -50,6 +62,10 @@ logging.basicConfig(
 
 #: Default field COG filename (mirrors entrypoint.FIELD_COG_NAME).
 FIELD_COG_NAME = "landlab_field.tif"
+
+#: The typed result-block sidecar filename ``landlab_local_spec``'s
+#: ``classify_exit`` reads back (see the module docstring).
+RESULT_JSON_NAME = "landlab_result.json"
 
 
 def _secondary_cog_name(token: str) -> str:
@@ -134,6 +150,37 @@ def run_chain(manifest_path: str) -> int:
     except Exception as exc:
         # Non-fatal: the primary field succeeded.
         sys.stderr.write(f"run_chain.py: secondary field write failed (non-fatal): {exc}\n")
+
+    # Write the typed result block (mirrors entrypoint._run_landlab's
+    # ``result_block`` shape exactly) so the local-docker supervisor's
+    # classify_exit hook can fold it into completion.json's ``result`` key.
+    # Without this the composer always falls back to a probability-field-only
+    # recompute, which cannot recover ``min_factor_of_safety`` (see the
+    # module docstring) and silently reports 0.0.
+    secondary_files: dict[str, str] = {
+        token: _secondary_cog_name(token)
+        for token in (chain.secondary_fields or {})
+        if (cwd / _secondary_cog_name(token)).exists()
+    }
+    result_block = {
+        "analysis": chain.analysis,
+        "unstable_area_fraction": float(chain.unstable_area_fraction),
+        "min_factor_of_safety": float(chain.min_factor_of_safety),
+        "mean_probability_of_failure": float(chain.mean_probability_of_failure),
+        "output_field_name": chain.output_field_name,
+        "resolution_m": float(resolution_m),
+        "grid_crs": str(crs),
+        "secondary_field_files": secondary_files,
+    }
+    try:
+        (cwd / RESULT_JSON_NAME).write_text(
+            json.dumps(result_block, indent=2), encoding="utf-8"
+        )
+        LOG.info("wrote result block -> %s", cwd / RESULT_JSON_NAME)
+    except Exception as exc:
+        # Non-fatal: the field COGs (the primary contract) already succeeded;
+        # a missing result.json degrades to the honest recompute fallback.
+        sys.stderr.write(f"run_chain.py: result block write failed (non-fatal): {exc}\n")
 
     return 0
 

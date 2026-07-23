@@ -282,7 +282,13 @@ def test_compute_slope_cache_hit_skips_fetch(fake_s3):
         "output_unit": "degrees",
         "algorithm": "Horn",
     }
-    key = compute_cache_key("slope", params, "static-30d", now=PINNED_NOW)
+    # ``compute_slope`` calls ``read_through`` without a ``now=`` override, so
+    # production keys on the REAL current time -- seeding with a key from the
+    # stale module-level ``PINNED_NOW`` drifts out of the same ``static-30d``
+    # (YYYY-MM) bucket after the month rolls over, silently missing the cache.
+    # Compute the seeding key from the actual current time.
+    now = datetime.now(timezone.utc)
+    key = compute_cache_key("slope", params, "static-30d", now=now)
     path = make_cache_path("slope", "static-30d", key, "tif")
     fake_s3.store[path] = fake_slope
 

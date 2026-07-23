@@ -312,6 +312,25 @@ def landlab_local_spec() -> Any:
     ) -> "tuple[str, int, str | None, dict]":
         if exit_code != 0:
             return "error", exit_code, f"landlab worker exited with code {exit_code}", {}
+        # Fold run_chain.py's typed result-block sidecar (landlab_result.json)
+        # into completion.json's top-level "result" key -- mirrors the AWS
+        # Batch entrypoint's completion.json shape exactly, so
+        # model_landslide_scenario._download_batch_landlab_outputs gets the
+        # worker's AUTHORITATIVE narration scalars (min_factor_of_safety in
+        # particular is not recoverable from the probability field alone)
+        # instead of silently falling back to a recomputed 0.0. A missing /
+        # unparseable sidecar degrades honestly to the empty-extra fallback
+        # (never a hard failure -- the field COG is the primary contract).
+        result_path = rundir / "landlab_result.json"
+        if result_path.exists():
+            try:
+                result_block = json.loads(result_path.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001 - honest degrade, not a hard failure
+                logger.warning(
+                    "landlab classify_exit: could not parse %s", result_path
+                )
+                return "ok", 0, None, {}
+            return "ok", 0, None, {"result": result_block}
         return "ok", 0, None, {}
 
     return LocalSolverSpec(

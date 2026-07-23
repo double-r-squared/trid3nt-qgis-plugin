@@ -83,7 +83,9 @@ from .cards import (
     CredentialCard,
     GateCard,
     Mode2CandidateCard,
+    RegionChoiceCard,
     SimCard,
+    SpatialInputCard,
     ToolCandidatesCard,
     _AssistantEntry,
     _ChatInput,
@@ -278,6 +280,16 @@ class Trid3ntDock(QDockWidget):
         # reset on case switch (_clear_messages -- the widgets die with the
         # message list).
         self._open_tool_pickers: List[ToolCandidatesCard] = []
+        # LANE A (2026-07-23): approved code-exec cards keyed by code_exec_id
+        # so the later ``code-exec-result`` envelope can update the right
+        # card's folded chip with the run outcome; reset on case switch
+        # (_clear_messages -- the widgets die with the message list).
+        self._code_exec_cards: Dict[str, CodeExecCard] = {}
+        # LANE A (2026-07-23): the latest ``secrets-list`` roster (parsed
+        # SecretRow list) for the settings/secrets surface. Minimal honest
+        # handling -- stored + a one-line status note; raw keys never ride
+        # here. Reset on case switch.
+        self._secrets: list = []
         # Wave-picker UX (LANE P, 2026-07-22): 1-based counter of picker
         # cards shown THIS turn -- the "Step N" affordance is trivially
         # derived from card arrival order, never a server field. Reset on
@@ -577,6 +589,12 @@ class Trid3ntDock(QDockWidget):
         # widgets die in the loop below; drop the tracking refs with them.
         self._open_tool_pickers = []
         self._tool_picker_turn_step = 0
+        # LANE A (2026-07-23): approved code-exec cards are per-case transcript
+        # state -- the widgets die in the loop below; drop the tracking refs.
+        # (self._secrets is user/Case-level roster state, refreshed by the next
+        # secrets-list; a switch clears it so a stale roster never lingers.)
+        self._code_exec_cards.clear()
+        self._secrets = []
         # Per-case-bbox 2026-07-19: the previous case's AOI overlay must not
         # linger across a switch -- _on_case_open_event repaints it below from
         # the newly-opened case's own bbox (or leaves it cleared when absent).
@@ -1895,6 +1913,46 @@ class Trid3ntDock(QDockWidget):
             # see gate.py's module docstring. Not yet emitted by the live
             # server; handled now so the plugin is ready the day it is.
             self._show_mode2_candidate_card(data, heavy=True)
+        elif kind == "region-choice-request":
+            # LANE A (2026-07-23): CRITICAL gate-WAIT -- the server snapped a
+            # vague geocode to the whole state and PAUSES the turn awaiting a
+            # region-choice-provided reply. Previously fell through as
+            # kind="raw" and was dropped, so the turn hung (the code-exec
+            # stall class). The dock renders the picker card; a whole_state
+            # answer keeps the honest default, so the gate always closes.
+            self._show_region_choice_card(data)
+        elif kind == "spatial-input-request":
+            # LANE A (2026-07-23): CRITICAL gate-WAIT -- the agent needs a
+            # picked geometry and PAUSES the turn. Previously dropped, hanging
+            # the turn. The dock renders the pick card wired to the canvas
+            # point/AOI tools; Cancel (and the honest vector_draw degrade)
+            # closes the gate.
+            self._show_spatial_input_card(data)
+        elif kind == "code-exec-result":
+            # LANE A (2026-07-23): the run outcome that follows an approved
+            # code-exec-request -- update the code-exec card's folded chip
+            # with the honest terminal status.
+            self._on_code_exec_result(data)
+        elif kind == "secrets-list":
+            # LANE A (2026-07-23): the per-user/per-Case secret roster --
+            # store it for the settings/secrets state (minimal honest
+            # handling; raw keys never ride here).
+            self._on_secrets_list(data)
+        elif kind == "impact-envelope":
+            # LANE A (2026-07-23): Pelicun portfolio damage/loss aggregates --
+            # render a compact summary note in chat (every number a structured
+            # aggregate, Invariant 1).
+            summary = gate.parse_impact_envelope(data)
+            if summary is not None:
+                lines = gate.impact_summary_lines(summary)
+                self._ensure_pending().add_note("Impact summary:\n" + "\n".join(lines))
+                self._scroll_to_bottom()
+        elif kind == "lesson-added":
+            # LANE A (2026-07-23): the LESSONS LOOP ack -- a subtle status note.
+            added = gate.parse_lesson_added(data)
+            if added is not None:
+                self._ensure_pending().add_note(gate.lesson_added_line(added))
+                self._scroll_to_bottom()
         elif kind == "case-open":
             self._on_case_open_event(data)
         elif kind == "case-list":
@@ -2139,6 +2197,9 @@ class Trid3ntDock(QDockWidget):
             )
             return
         card = CodeExecCard(request, self._on_code_exec_decision)
+        # LANE A (2026-07-23): track the card by code_exec_id so the later
+        # code-exec-result envelope updates THIS card's chip with the outcome.
+        self._code_exec_cards[request.code_exec_id] = card
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
         self._close_pending_for_card()
         self._scroll_to_bottom()
@@ -2152,6 +2213,136 @@ class Trid3ntDock(QDockWidget):
             self.bridge.confirm_payload(code_exec_id, decision, None)
         except Exception as exc:  # noqa: BLE001
             self._note(f"code-exec confirmation send failed: {exc}", error=True)
+
+    def _on_code_exec_result(self, payload: dict) -> None:
+        """LANE A (2026-07-23): fold the ``code-exec-result`` run outcome into
+        the matching approved code-exec card's chip (contracts
+        ``sandbox_contracts.CodeExecResultPayload``). Fire-and-forget -- a
+        malformed envelope, or a result for a card that is gone (case switch),
+        is dropped honestly, never a crash."""
+        result = gate.parse_code_exec_result(payload)
+        if result is None:
+            return
+        card = self._code_exec_cards.get(result.code_exec_id)
+        if card is None:
+            return
+        try:
+            card.update_from_result(result)
+        except RuntimeError:
+            # The underlying C++ widget died (case switch raced the result).
+            self._code_exec_cards.pop(result.code_exec_id, None)
+
+    # -- secrets-list roster (settings/secrets state) --------------------------- #
+
+    def _on_secrets_list(self, payload: dict) -> None:
+        """LANE A (2026-07-23): store the ``secrets-list`` roster for the
+        settings/secrets state (contracts ``secrets.SecretsListEnvelopePayload``).
+        Minimal honest handling -- the parsed rows carry only vault_ref-free
+        provider/label fields (raw keys NEVER ride this envelope), and a
+        one-line count note lands in chat so the user sees the roster
+        refreshed. A secrets-management UI surface is out of this lane's
+        scope; this is the durable state the settings dialog reads."""
+        self._secrets = gate.parse_secrets_list(payload)
+        active = [s for s in self._secrets if getattr(s, "is_active", True)]
+        if active:
+            self._ensure_pending().add_note(
+                f"Saved API keys: {len(active)} "
+                + "(" + ", ".join(s.display for s in active[:6])
+                + (", ..." if len(active) > 6 else "") + ")"
+            )
+            self._scroll_to_bottom()
+
+    # -- region-choice picker card (LANE A gate-WAIT, 2026-07-23) ---------------- #
+
+    def _show_region_choice_card(self, payload: dict) -> None:
+        """Render the ``region-choice-request`` gate as an inline picker card
+        (contracts ``region_choice.py``): the server snapped a vague geocode
+        to the whole state and PAUSES the turn offering a narrower pick.
+        Mirrors ``_show_gate_card``'s malformed-envelope honesty and the
+        BUG-4/N5 close-out discipline. On a malformed envelope the gate cannot
+        be answered -- but the server's fail-open default is the whole-state
+        bbox it already resolved, so the honest note says the turn will
+        proceed with that."""
+        request = gate.parse_region_choice(payload)
+        if request is None:
+            self._note(
+                "Received a malformed region-choice-request (no request_id) -- "
+                "cannot answer it; the agent will proceed with the whole-state "
+                "bbox it already resolved.",
+                error=True,
+            )
+            return
+        card = RegionChoiceCard(request, self._on_region_choice_decision)
+        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        self._close_pending_for_card()
+        self._scroll_to_bottom()
+
+    def _on_region_choice_decision(
+        self,
+        request_id: str,
+        choice: str,
+        selected_region_id: Optional[str],
+        selected_bbox: Optional[list],
+    ) -> None:
+        """Send the region-choice reply: ONE ``region-choice-provided``
+        envelope (region pick with id + echoed bbox, or the whole-state
+        default). A whole_state answer keeps the honest already-resolved
+        bbox -- the decline path that still closes the gate."""
+        try:
+            self.bridge.send_region_choice(
+                request_id,
+                choice,
+                selected_region_id=selected_region_id,
+                selected_bbox=selected_bbox,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"region choice send failed: {exc}", error=True)
+
+    # -- spatial-input pick card (LANE A gate-WAIT, 2026-07-23) ------------------ #
+
+    def _show_spatial_input_card(self, payload: dict) -> None:
+        """Render the ``spatial-input-request`` gate as an inline pick card
+        (contracts ``ws.SpatialInputRequestPayload``): the agent needs a
+        picked geometry (point / bbox / vector_draw) and PAUSES the turn. The
+        card is wired to the SAME canvas machinery the probe/AOI tools use
+        (``_point_to_lonlat4326`` / ``_rect_to_bbox4326``). Mirrors
+        ``_show_gate_card``'s malformed-envelope honesty and the BUG-4/N5
+        close-out discipline."""
+        request = gate.parse_spatial_input_request(payload)
+        if request is None:
+            self._note(
+                "Received a malformed spatial-input-request (no request_id / "
+                "unknown mode) -- cannot answer it; the agent's pick prompt "
+                "will time out server-side.",
+                error=True,
+            )
+            return
+        card = SpatialInputCard(
+            request,
+            self._on_spatial_input_decision,
+            iface=self.iface,
+            to_lonlat=self._point_to_lonlat4326,
+            to_bbox=self._rect_to_bbox4326,
+        )
+        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        self._close_pending_for_card()
+        self._scroll_to_bottom()
+
+    def _on_spatial_input_decision(self, wire: dict) -> None:
+        """Send the spatial-input reply: ONE ``spatial-input-response``
+        envelope built by the pure ``gate.resolve_spatial_input_*`` helpers
+        (point / bbox coordinates, or cancelled=True). Cancel -- and the
+        honest vector_draw degrade -- still CLOSES the server's paused gate."""
+        try:
+            self.bridge.send_spatial_input(
+                wire["request_id"],
+                geometry_type=wire.get("geometry_type"),
+                coordinates=wire.get("coordinates"),
+                features=wire.get("features"),
+                cancelled=bool(wire.get("cancelled")),
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"spatial input send failed: {exc}", error=True)
 
     # -- credential-request key-entry card (LANE K, 2026-07-22) ----------------- #
 

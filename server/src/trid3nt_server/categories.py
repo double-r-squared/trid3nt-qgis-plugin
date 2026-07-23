@@ -340,6 +340,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "compute_canopy_height": "hazard_modeling",
     "run_solver": "hazard_modeling",
     "wait_for_completion": "hazard_modeling",
+    # TELEMAC hydrodynamic/contaminant-transport dye-spill engine dispatcher --
+    # filed alongside the other run_* solver/engine composers.
+    "run_telemac": "hazard_modeling",
     # ---- 2. weather_atmosphere --------------------------------------------
     "fetch_nws_alerts_conus": "weather_atmosphere",
     "fetch_nws_event": "weather_atmosphere",
@@ -368,6 +371,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_asos_metar": "weather_atmosphere",
     "fetch_raws_weather": "weather_atmosphere",
     "fetch_gridmet": "weather_atmosphere",
+    # IBTrACS historical + NHC active hurricane/tropical-cyclone track fetcher --
+    # filed alongside the other weather-observation fetchers.
+    "fetch_storm_tracks": "weather_atmosphere",
     # ---- 3. hydrology -----------------------------------------------------
     "fetch_usgs_nwis_gauges": "hydrology",
     "fetch_noaa_nwm_streamflow": "hydrology",
@@ -551,6 +557,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "list_qgis_algorithms": "geographic_primitives",
     "describe_qgis_algorithm": "geographic_primitives",
     "qgis_process": "geographic_primitives",
+    "search_spatial_functions": "geographic_primitives",
     # ---- 12. news_events --------------------------------------------------
     "web_fetch": "news_events",
     "fetch_storm_events_db": "news_events",

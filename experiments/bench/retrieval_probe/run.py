@@ -177,8 +177,38 @@ def load_input_file(path: Path, catalog: set[str]) -> list[ProbeRecord]:
 # ---------------------------------------------------------------------------
 
 
-def grade_topk(record: ProbeRecord, topk_names: list[str]) -> dict:
-    """Membership-in-top-k grading over the record's sets."""
+def ndcg_at_k(topk_names: list[str], acceptable: frozenset[str], k: int) -> float:
+    """Binary-relevance nDCG over the top-k window.
+
+    rel_i = 1 iff topk_names[i] in acceptable, 0 otherwise. Ideal ranking
+    packs min(len(acceptable), k) relevant hits into the top ranks (the
+    number of acceptable tools is usually small and known from the input
+    record, independent of what actually got retrieved).
+    """
+    import math
+
+    dcg = sum(
+        1.0 / math.log2(i + 2)
+        for i, n in enumerate(topk_names[:k])
+        if n in acceptable
+    )
+    ideal_hits = min(len(acceptable), k)
+    if ideal_hits == 0:
+        return 0.0
+    idcg = sum(1.0 / math.log2(i + 2) for i in range(ideal_hits))
+    return round(dcg / idcg, 4) if idcg else 0.0
+
+
+def mrr_at_k(topk_names: list[str], acceptable: frozenset[str], k: int) -> float:
+    """Reciprocal rank of the first acceptable hit within the top-k window (0 if none)."""
+    for i, n in enumerate(topk_names[:k], start=1):
+        if n in acceptable:
+            return round(1.0 / i, 4)
+    return 0.0
+
+
+def grade_topk(record: ProbeRecord, topk_names: list[str], k: int) -> dict:
+    """Membership-in-top-k grading over the record's sets, plus ranked-quality metrics."""
     acceptable_hits = [n for n in topk_names if n in record.acceptable]
     forbidden_hits = [n for n in topk_names if n in record.forbidden]
     first_rank = None
@@ -193,6 +223,8 @@ def grade_topk(record: ProbeRecord, topk_names: list[str]) -> dict:
         "forbidden_hits": forbidden_hits,
         "rank_of_first_acceptable": first_rank,
         "top1_correct": bool(topk_names) and topk_names[0] in record.acceptable,
+        "ndcg_at_k": ndcg_at_k(topk_names, record.acceptable, k),
+        "mrr_at_k": mrr_at_k(topk_names, record.acceptable, k),
     }
 
 
@@ -224,7 +256,7 @@ def run_probe(records: list[ProbeRecord], runs: int, k: int, out_dir: Path,
                 ranked = retrieve_ranked_tools(record.prompt, record_depth)
                 turnaround_ms = round((time.perf_counter() - t1) * 1000.0, 3)
                 names = [n for n, _ in ranked]
-                g = grade_topk(record, names[:k])
+                g = grade_topk(record, names[:k], k)
                 raw_fh.write(json.dumps({
                     "run": run_index,
                     "record_id": record.id,
@@ -251,13 +283,18 @@ def aggregate_run(graded: list[dict]) -> dict:
     hits = sum(1 for g in graded if g["verdict"] == "CORRECT")
     top1 = sum(1 for g in graded if g["top1_correct"])
     times = [g["turnaround_ms"] for g in graded]
+    ndcgs = [g["ndcg_at_k"] for g in graded]
+    mrrs = [g["mrr_at_k"] for g in graded]
     by_register: dict[str, dict] = {}
     for reg in ("specific", "vague"):
         sub = [g for g in graded if g["register"] == reg]
         if sub:
+            sub_n = len(sub)
             by_register[reg] = {
-                "n": len(sub),
+                "n": sub_n,
                 "hit_at_k": sum(1 for g in sub if g["verdict"] == "CORRECT"),
+                "ndcg_at_k_mean": round(sum(g["ndcg_at_k"] for g in sub) / sub_n, 4),
+                "mrr_at_k_mean": round(sum(g["mrr_at_k"] for g in sub) / sub_n, 4),
             }
     return {
         "n": n,
@@ -265,6 +302,8 @@ def aggregate_run(graded: list[dict]) -> dict:
         "hit_at_k_rate": round(hits / n, 4) if n else None,
         "top1_correct": top1,
         "top1_rate": round(top1 / n, 4) if n else None,
+        "ndcg_at_k_mean": round(sum(ndcgs) / n, 4) if n else None,
+        "mrr_at_k_mean": round(sum(mrrs) / n, 4) if n else None,
         "turnaround_ms_mean": round(sum(times) / n, 3) if n else None,
         "turnaround_ms_min": min(times) if times else None,
         "turnaround_ms_max": max(times) if times else None,
@@ -275,11 +314,19 @@ def aggregate_run(graded: list[dict]) -> dict:
 def write_outputs(out_dir: Path, meta: dict, per_run: list[list[dict]], k: int) -> None:
     aggregates = [aggregate_run(g) for g in per_run]
     rates = [a["hit_at_k_rate"] for a in aggregates if a["hit_at_k_rate"] is not None]
+    ndcg_means = [a["ndcg_at_k_mean"] for a in aggregates if a["ndcg_at_k_mean"] is not None]
+    mrr_means = [a["mrr_at_k_mean"] for a in aggregates if a["mrr_at_k_mean"] is not None]
     overall = {
         "per_run": aggregates,
         "hit_at_k_rate_mean": round(sum(rates) / len(rates), 4) if rates else None,
         "hit_at_k_rate_min": min(rates) if rates else None,
         "hit_at_k_rate_max": max(rates) if rates else None,
+        "ndcg_at_k_mean": round(sum(ndcg_means) / len(ndcg_means), 4) if ndcg_means else None,
+        "ndcg_at_k_min": min(ndcg_means) if ndcg_means else None,
+        "ndcg_at_k_max": max(ndcg_means) if ndcg_means else None,
+        "mrr_at_k_mean": round(sum(mrr_means) / len(mrr_means), 4) if mrr_means else None,
+        "mrr_at_k_min": min(mrr_means) if mrr_means else None,
+        "mrr_at_k_max": max(mrr_means) if mrr_means else None,
     }
     (out_dir / "results.json").write_text(json.dumps({
         "meta": meta, "runs": per_run, "aggregate": overall,
@@ -305,13 +352,19 @@ def write_outputs(out_dir: Path, meta: dict, per_run: list[list[dict]], k: int) 
     lines.append("")
     for i, agg in enumerate(aggregates, 1):
         reg = "  ".join(
-            f"{r}={v['hit_at_k']}/{v['n']}" for r, v in agg["by_register"].items())
+            f"{r}={v['hit_at_k']}/{v['n']} nDCG={v['ndcg_at_k_mean']} MRR={v['mrr_at_k_mean']}"
+            for r, v in agg["by_register"].items())
         lines.append(f"run {i}: hit@{k}={agg['hit_at_k']}/{agg['n']} "
                      f"({agg['hit_at_k_rate']})  top1={agg['top1_correct']}/{agg['n']}  "
+                     f"nDCG@{k}={agg['ndcg_at_k_mean']}  MRR@{k}={agg['mrr_at_k_mean']}  "
                      f"[{reg}]  turnaround ms mean/min/max="
                      f"{agg['turnaround_ms_mean']}/{agg['turnaround_ms_min']}/{agg['turnaround_ms_max']}")
     lines.append(f"aggregate hit@{k}: mean={overall['hit_at_k_rate_mean']} "
                  f"min={overall['hit_at_k_rate_min']} max={overall['hit_at_k_rate_max']}")
+    lines.append(f"aggregate nDCG@{k}: mean={overall['ndcg_at_k_mean']} "
+                 f"min={overall['ndcg_at_k_min']} max={overall['ndcg_at_k_max']}")
+    lines.append(f"aggregate MRR@{k}: mean={overall['mrr_at_k_mean']} "
+                 f"min={overall['mrr_at_k_min']} max={overall['mrr_at_k_max']}")
     text = "\n".join(lines) + "\n"
     (out_dir / "summary.txt").write_text(text)
     print(text)

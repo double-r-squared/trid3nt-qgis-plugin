@@ -22,7 +22,11 @@ match runs through the Case-AOI-equivalence path of find_reusable_fetched_layer;
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+
 import pytest
+import pytest_asyncio
 
 from trid3nt_server import server
 from trid3nt_server import tools as agent_tools
@@ -32,6 +36,51 @@ from trid3nt_server.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
+
+
+@pytest.fixture(autouse=True)
+def _cap_gate_waits(monkeypatch):
+    """LANE C: cap every user-decision gate wait so a headless run never hangs
+    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
+    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical behavior; 5s is a
+    generous net -- the gate approver below answers within milliseconds, so the
+    cap is only a fail-closed backstop, never the path these tests exercise."""
+    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _auto_proceed_fetch_gate():
+    """Answer the fetch-resolution gate with ``proceed`` as each card appears.
+
+    ``fetch_dem`` is in ``FETCH_CONFIRM_TOOLS``, so ``_invoke_tool_via_emitter``
+    parks on the fetch-confirm gate before the fetcher runs. These tests
+    exercise the REUSE guard, not the gate (the gate has its own dedicated
+    suites), so a background approver replies ``proceed`` to every pending card:
+    the first fetch materializes the layer and the reuse guard can then
+    short-circuit (or re-fetch) the follow-up exactly as production would after
+    a user clicks through. Without an answer the gate would fail closed at the
+    cap above (or hang unbounded in production)."""
+
+    async def _watch() -> None:
+        while True:
+            for wid, entry in list(server._PENDING_CONFIRMATIONS.items()):
+                fut = entry[1]
+                if not fut.done():
+                    fut.set_result(
+                        PayloadConfirmationEnvelopePayload(
+                            warning_id=wid, decision="proceed"
+                        )
+                    )
+            await asyncio.sleep(0.002)
+
+    task = asyncio.create_task(_watch())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 class FakeWS:

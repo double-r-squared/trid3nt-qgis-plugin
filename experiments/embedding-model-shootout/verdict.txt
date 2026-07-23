@@ -1,0 +1,94 @@
+embedding-model-shootout -- experiment 2 verdict
+=================================================
+
+Hypothesis (verbatim, hypothesis.txt):
+  A BEIR-strong small embedding model (bge-small-en-v1.5 or gte-small,
+  ~100-130MB class) improves vague-register retrieval over all-MiniLM-L6-v2
+  without degrading specific-register or interactive latency.
+
+Decision rule: adopt a candidate ONLY if it beats MiniLM on vague hit@5
+WITHOUT losing specific hit@5 or exceeding 50ms/query. If no candidate
+clears that bar, verdict MIXED and the incumbent stays.
+
+Method
+------
+Extended probe (60 records: 30 specific + 30 vague, --runs 5 --k 5) run
+against three sentence-transformers checkpoints via the new
+TRID3NT_EMBEDDING_MODEL env override (config has full commands):
+  incumbent_minilm    all-MiniLM-L6-v2        (reused verbatim from the
+                                                extended-baseline data dir,
+                                                not re-run)
+  bge_small_en_v1_5   BAAI/bge-small-en-v1.5
+  gte_small           thenlper/gte-small
+All three loaded via the same _try_sentence_transformers_backend() seam
+(index warm line each run confirmed backend=sentence_transformers,
+195 tools, bm25=True). Retrieval is deterministic per index build: hit@5 /
+nDCG@5 / MRR@5 were identical across all 5 reps within each candidate (see
+data/*/summary.txt) -- reps here mostly bound per-query timing variance.
+
+Results (run 1 of 5; identical across reps within a candidate)
+----------------------------------------------------------------------------------------------------
+  model                 specific hit@5   vague hit@5    overall nDCG@5   overall MRR@5   top1
+  --------------------  --------------   -----------    --------------   -------------   -----
+  incumbent (MiniLM)    27/28 (0.9643)   21/32 (0.6563)  0.5950           0.6069          29/60
+  bge-small-en-v1.5     27/28 (0.9643)   20/32 (0.6250)  0.6068           0.5992          30/60
+  gte-small             25/28 (0.8929)   20/32 (0.6250)  0.5870           0.5736          28/60
+
+  decision-rule check (must beat incumbent's vague hit@5 = 21/32 WITHOUT
+  losing specific hit@5 = 27/28, latency <50ms/query):
+    bge-small-en-v1.5: vague hit@5 20/32 < 21/32  -> FAILS (regressed, -1)
+                        specific hit@5 27/28 = 27/28 -> holds (tied, no loss)
+    gte-small:         vague hit@5 20/32 < 21/32  -> FAILS (regressed, -1)
+                        specific hit@5 25/28 < 27/28 -> FAILS (also regressed)
+
+Neither candidate improves the metric the hypothesis targets (vague-register
+hit@5); both candidates are flat-to-worse on vague, and gte-small also
+regresses on specific. Interestingly both candidates score HIGHER than the
+incumbent on overall nDCG@5 for the specific register (0.8662 / 0.8161 vs
+implied specific-only incumbent nDCG not separately computed here for the
+addendum-derived run, but the raw hit-rate table above is the primary,
+task-specified gate) -- ranking quality among already-correct specific hits
+improved slightly, but that is not what the decision rule gates on, and it
+does not offset the vague-register miss.
+
+Latency (per-query turnaround, ms; steady state = runs 2-5, excluding run 1
+JIT/first-call effects; see graphs/latency_per_query.png)
+  incumbent_minilm:    mean 4.68 ms  (min 4.27 / max 5.35)
+  bge_small_en_v1_5:   mean 7.82 ms  (min 7.25 / max 10.09)
+  gte_small:           mean 7.96 ms  (min 7.15 / max 10.05)
+  All three are far under the 50 ms/query interactive ceiling -- latency
+  check PASSES for both candidates. (The two BEIR-shortlisted checkpoints
+  are consistently ~1.7x the incumbent's steady-state latency, plausibly
+  model-load/tokenizer differences; still trivial in absolute terms.)
+
+Graphs (graphs/):
+  hit5_by_register_model.png   -- grouped bars, hit@5 by register x model
+  ndcg_mrr_by_model.png        -- overall nDCG@5 / MRR@5 by model
+  latency_per_query.png        -- steady-state per-query latency, all three,
+                                   with the 50ms ceiling marked
+
+Verdict: MIXED
+
+The latency condition passes for both candidates, but the primary condition
+-- beating the incumbent's vague-register hit@5 -- fails for both. This is
+not really a close/ambiguous "mixed" result on the target metric itself
+(both candidates are flat-or-down on vague, never up); it is "mixed" only in
+the sense that the two conditions of the decision rule point different
+directions (latency: pass; the metric that mattered: fail). Per the decision
+rule, that is not an adopt -- the incumbent stays.
+
+Action taken: NONE. TRID3NT_EMBEDDING_MODEL is left unset in the codebase
+(defaults to all-MiniLM-L6-v2, the incumbent, per
+search_tools.py's _DEFAULT_SENTENCE_TRANSFORMERS_MODEL). The env override
+itself remains in place as a reusable seam (useful for future shootouts)
+but no default changed. bge-small-en-v1.5 and gte-small remain downloaded in
+the local HF cache (~/.cache/huggingface/hub) but are not wired to anything
+live.
+
+Caveat for a future rerun: this shootout used the SAME 60-record extended
+probe as the Lane E part-1 metrics work, which is still a small, hand-curated
+set (32 vague records) -- a single flipped record moves vague hit@5 by
+~3 points. The result here is a clean non-adoption on the numbers as
+measured, not proof that no BEIR-strong small model could ever beat MiniLM
+on this catalog; a larger or refreshed vague-phrasing input set would be a
+reasonable follow-up before revisiting the hypothesis.

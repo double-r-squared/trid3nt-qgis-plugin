@@ -322,6 +322,44 @@ class AgentWorker(QObject):
                 request_id, tool_name=tool_name, free_text=free_text
             )
 
+    def send_region_choice(
+        self,
+        request_id: str,
+        choice: str,
+        selected_region_id: Optional[str] = None,
+        selected_bbox: Optional[list] = None,
+    ) -> None:
+        # region-choice gate reply -- one region-choice-provided envelope
+        # (region pick / whole-state default), buffered while disconnected so
+        # the server's paused turn never hangs.
+        if self.client is not None:
+            self.client.send_region_choice(
+                request_id,
+                choice,
+                selected_region_id=selected_region_id,
+                selected_bbox=selected_bbox,
+            )
+
+    def send_spatial_input(
+        self,
+        request_id: str,
+        geometry_type: Optional[str] = None,
+        coordinates: Optional[list] = None,
+        features: Optional[dict] = None,
+        cancelled: bool = False,
+    ) -> None:
+        # spatial-input gate reply -- one spatial-input-response envelope
+        # (point / bbox / cancel), buffered while disconnected so the paused
+        # turn never hangs.
+        if self.client is not None:
+            self.client.send_spatial_input(
+                request_id,
+                geometry_type=geometry_type,
+                coordinates=coordinates,
+                features=features,
+                cancelled=cancelled,
+            )
+
 
 class AgentBridge(QObject):
     """Owns the QThread + worker pair; the dock talks only to this."""
@@ -466,4 +504,40 @@ class AgentBridge(QObject):
         if self._worker is not None:
             self._worker.send_tool_choice(
                 request_id, tool_name=tool_name, free_text=free_text
+            )
+
+    def send_region_choice(
+        self,
+        request_id: str,
+        choice: str,
+        selected_region_id: Optional[str] = None,
+        selected_bbox: Optional[list] = None,
+    ) -> None:
+        # region-choice gate reply: pass-through to the worker's client
+        # (mutex-guarded socket write; buffers while disconnected).
+        if self._worker is not None:
+            self._worker.send_region_choice(
+                request_id,
+                choice,
+                selected_region_id=selected_region_id,
+                selected_bbox=selected_bbox,
+            )
+
+    def send_spatial_input(
+        self,
+        request_id: str,
+        geometry_type: Optional[str] = None,
+        coordinates: Optional[list] = None,
+        features: Optional[dict] = None,
+        cancelled: bool = False,
+    ) -> None:
+        # spatial-input gate reply: pass-through to the worker's client
+        # (mutex-guarded socket write; buffers while disconnected).
+        if self._worker is not None:
+            self._worker.send_spatial_input(
+                request_id,
+                geometry_type=geometry_type,
+                coordinates=coordinates,
+                features=features,
+                cancelled=cancelled,
             )

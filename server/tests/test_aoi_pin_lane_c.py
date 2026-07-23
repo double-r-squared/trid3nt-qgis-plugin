@@ -114,7 +114,7 @@ def _stub_swmm_solver(monkeypatch):
     monkeypatch.setattr(
         server,
         "_gate_on_solver_confirm",
-        lambda ws, st, tn, params: _passthrough(params),
+        lambda ws, st, tn, params, _warning_id_out=None: _passthrough(params),
     )
     try:
         yield

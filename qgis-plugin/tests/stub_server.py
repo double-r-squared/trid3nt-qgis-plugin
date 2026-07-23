@@ -388,6 +388,102 @@ CREDENTIAL_REQUEST_ROW: dict[str, Any] = {
     "tool_name": "fetch_active_fires",
 }
 
+STUB_REGION_CHOICE_REQUEST_ID = "01STUBREGIONCHOICEAAAAAAAA"
+STUB_REGION_ID = "county-12071"
+
+# A region-choice-request payload field-for-field the
+# RegionChoiceRequestEnvelopePayload contract (contracts .../region_choice.py).
+# CRITICAL gate-WAIT (2026-07-23): the server snapped a vague geocode to the
+# WHOLE state and PAUSES the turn awaiting a region-choice-provided reply
+# (region pick OR whole_state default) -- handled in the
+# region-choice-provided branch below. Previously the plugin had ZERO handling
+# so the paused turn hung (the code-exec stall class).
+REGION_CHOICE_REQUEST_ROW: dict[str, Any] = {
+    "envelope_type": "region-choice-request",
+    "request_id": STUB_REGION_CHOICE_REQUEST_ID,
+    "state_name": "Florida",
+    "state_code": "FL",
+    "state_bbox": [-87.63, 24.52, -80.03, 31.0],
+    "candidates": [
+        {
+            "region_id": STUB_REGION_ID,
+            "name": "Lee County",
+            "bbox": [-82.32, 26.32, -81.56, 26.79],
+            "admin_level": "county",
+        },
+        {
+            "region_id": "county-12086",
+            "name": "Miami-Dade County",
+            "bbox": [-80.87, 25.13, -80.11, 25.98],
+            "admin_level": "county",
+        },
+    ],
+    "default_action": "use_whole_state",
+    "message": (
+        "I snapped 'south Florida' to the whole state of Florida. Pick a "
+        "county to narrow it, or keep the whole state."
+    ),
+}
+
+STUB_SPATIAL_POINT_REQUEST_ID = "01STUBSPATIALPOINTAAAAAAAA"
+STUB_SPATIAL_BBOX_REQUEST_ID = "01STUBSPATIALBBOXAAAAAAAAA"
+STUB_SPATIAL_VECTOR_REQUEST_ID = "01STUBSPATIALVECTORAAAAAAA"
+
+# spatial-input-request payloads field-for-field the SpatialInputRequestPayload
+# contract (contracts ws.py). CRITICAL gate-WAIT (2026-07-23): the agent needs
+# a picked geometry and PAUSES the turn awaiting a spatial-input-response
+# (point/bbox coordinates, drawn features, or cancelled=True) -- handled in the
+# spatial-input-response branch below. The vector_draw row exercises the
+# plugin's HONEST degrade (it cannot draw tagged barriers, so it cancels --
+# which still CLOSES the gate).
+SPATIAL_INPUT_POINT_ROW: dict[str, Any] = {
+    "request_id": STUB_SPATIAL_POINT_REQUEST_ID,
+    "mode": "point",
+    "title": "Where is the release point?",
+    "description": "Click the map to mark the dye release location.",
+}
+SPATIAL_INPUT_BBOX_ROW: dict[str, Any] = {
+    "request_id": STUB_SPATIAL_BBOX_REQUEST_ID,
+    "mode": "bbox",
+    "title": "Draw the study area",
+    "description": "Drag a rectangle over the AOI to model.",
+}
+SPATIAL_INPUT_VECTOR_ROW: dict[str, Any] = {
+    "request_id": STUB_SPATIAL_VECTOR_REQUEST_ID,
+    "mode": "vector_draw",
+    "title": "Draw the flood barriers",
+    "description": "Draw walls / flap gates for the urban-flood model.",
+    "purpose": "barrier",
+}
+
+STUB_IMPACT_ID = "01STUBIMPACTRUNAAAAAAAAAAA"
+
+# An impact-envelope payload -- the ImpactEnvelope shape (contracts
+# impact_envelope.py). Emitted as a fire-and-forget side effect (mirrors the
+# live server's _maybe_emit_impact_envelope on compute_impact_envelope);
+# n_structures_total is the key signal. Triggered by "impact" in the text.
+IMPACT_ENVELOPE_ROW: dict[str, Any] = {
+    "schema_version": "v1",
+    "pelicun_run_id": STUB_IMPACT_ID,
+    "n_structures_total": 1840,
+    "n_structures_damaged": 612,
+    "n_structures_destroyed": 47,
+    "expected_loss_usd": 12_400_000.0,
+    "loss_percentile_95_usd": 21_800_000.0,
+    "impact_area_km2": 8.3,
+}
+
+STUB_LESSON_ID = "01STUBLESSONAAAAAAAAAAAAAA"
+
+# A lesson-added ack payload -- the server _handle_lesson_add raw-JSON shape.
+# Emitted fire-and-forget on the "lesson" trigger (the client lesson-add verb
+# is web-thumbs-down scope; this exercises classification + the subtle note).
+LESSON_ADDED_ROW: dict[str, Any] = {
+    "envelope_type": "lesson-added",
+    "lesson_id": STUB_LESSON_ID,
+    "lesson": "Prefer OSM Overpass for building footprints over the MS parquet.",
+}
+
 # Persisted chat_history rows the select rehydration replays (CaseChatMessage
 # subset). LANE PLUGIN (2026-07-22): the second agent row carries the
 # persisted "thinking" field (Lane CORE row-model addition -- the reasoning
@@ -449,6 +545,10 @@ class StubAgentServer:
         self.tool_choices: list[dict] = []  # tool-choice payloads (ADR 0018)
         #: catalog-addition-response payloads (LANE P offer-to-add card).
         self.catalog_addition_responses: list[dict] = []
+        #: region-choice-provided payloads (LANE A region-choice gate-WAIT).
+        self.region_choices: list[dict] = []
+        #: spatial-input-response payloads (LANE A spatial-input gate-WAIT).
+        self.spatial_inputs: list[dict] = []
         #: ADR 0018 auto/ask carrier: every ``tool_choice_mode`` value PRESENT
         #: on a user-message payload (omitted keys are not recorded -- the
         #: default-auto send stays byte-identical, mirroring aoi_bbox).
@@ -676,6 +776,66 @@ class StubAgentServer:
                         case_id=case_id,
                     )
                     continue
+                if "narrow-region" in text:
+                    # Region-choice gate-WAIT (LANE A): the server snapped a
+                    # vague geocode to the whole state and BLOCKS until the
+                    # region-choice-provided reply arrives -- handled in the
+                    # region-choice-provided branch below.
+                    self._pending_gate_case = case_id
+                    await send(
+                        "region-choice-request",
+                        REGION_CHOICE_REQUEST_ROW,
+                        case_id=case_id,
+                    )
+                    continue
+                if "pick-point" in text or "pick-bbox" in text or "pick-vector" in text:
+                    # Spatial-input gate-WAIT (LANE A): the agent needs a
+                    # picked geometry and BLOCKS until the
+                    # spatial-input-response reply arrives -- handled in the
+                    # spatial-input-response branch below.
+                    self._pending_gate_case = case_id
+                    row = (
+                        SPATIAL_INPUT_POINT_ROW if "pick-point" in text
+                        else SPATIAL_INPUT_BBOX_ROW if "pick-bbox" in text
+                        else SPATIAL_INPUT_VECTOR_ROW
+                    )
+                    await send(
+                        "spatial-input-request", row, case_id=case_id
+                    )
+                    continue
+                if "impact" in text:
+                    # impact-envelope side effect (LANE A): a fire-and-forget
+                    # emission mid-turn; the turn completes normally after.
+                    await send(
+                        "impact-envelope", IMPACT_ENVELOPE_ROW, case_id=case_id
+                    )
+                    await send(
+                        "agent-message-chunk",
+                        {
+                            "message_id": "m-impact",
+                            "delta": "Assessed 1,840 structures.",
+                            "done": True,
+                        },
+                        case_id=case_id,
+                    )
+                    await send("turn-complete", {}, case_id=case_id)
+                    continue
+                if "lesson" in text:
+                    # lesson-added side effect (LANE A): a fire-and-forget ack.
+                    await send(
+                        "lesson-added", LESSON_ADDED_ROW, case_id=case_id
+                    )
+                    await send(
+                        "agent-message-chunk",
+                        {
+                            "message_id": "m-lesson",
+                            "delta": "Noted -- I'll remember that.",
+                            "done": True,
+                        },
+                        case_id=case_id,
+                    )
+                    await send("turn-complete", {}, case_id=case_id)
+                    continue
                 if "which-tool-timeout" in text:
                     # ADR 0018 fail-open twin: the live server emits the
                     # picker, waits timeout_s WITHOUT a tool-choice, then
@@ -835,6 +995,24 @@ class StubAgentServer:
                     # The code-exec confirm reply (warning_id == code_exec_id;
                     # the live server FAIL-CLOSES anything != "proceed").
                     if decision == "proceed":
+                        # LANE A (2026-07-23): the run OUTCOME rides an
+                        # ADDITIONAL code-exec-result envelope (job-0233), IN
+                        # ADDITION to the narration -- the dock folds it into
+                        # the approved card's chip.
+                        await send(
+                            "code-exec-result",
+                            {
+                                "envelope_type": "code-exec-result",
+                                "code_exec_id": STUB_CODE_EXEC_ID,
+                                "status": "ok",
+                                "stdout_tail": "",
+                                "stderr_tail": "",
+                                "result": {"kind": "scalar", "value": 0.31},
+                                "truncated": False,
+                                "duration_s": 1.4,
+                            },
+                            case_id=gate_case,
+                        )
                         await send(
                             "agent-message-chunk",
                             {
@@ -962,5 +1140,46 @@ class StubAgentServer:
                 # stub just records it. No envelope is sent back.
                 payload = env.get("payload") or {}
                 self.catalog_addition_responses.append(payload)
+            elif etype == "region-choice-provided":
+                # LANE A region-choice gate-WAIT (contract
+                # RegionChoiceProvidedEnvelopePayload): the reply that resumes
+                # the paused turn. choice="region" narrows to the picked
+                # county; choice="whole_state" keeps the honest already-
+                # resolved bbox (the decline path). The narration names which
+                # ran so round-trip tests can assert it.
+                payload = env.get("payload") or {}
+                self.region_choices.append(payload)
+                gate_case = getattr(self, "_pending_gate_case", None)
+                if payload.get("choice") == "region":
+                    rid = payload.get("selected_region_id")
+                    delta = f"Narrowed to region {rid}."
+                else:
+                    delta = "Kept the whole state of Florida."
+                await send(
+                    "agent-message-chunk",
+                    {"message_id": "m-region", "delta": delta, "done": True},
+                    case_id=gate_case,
+                )
+                await send("turn-complete", {}, case_id=gate_case)
+            elif etype == "spatial-input-response":
+                # LANE A spatial-input gate-WAIT (contract
+                # SpatialInputResponsePayload): the reply that resumes the
+                # paused turn. A point/bbox pick carries coordinates; a cancel
+                # (and the plugin's honest vector_draw degrade) carries
+                # cancelled=True -- either way the gate CLOSES.
+                payload = env.get("payload") or {}
+                self.spatial_inputs.append(payload)
+                gate_case = getattr(self, "_pending_gate_case", None)
+                if payload.get("cancelled"):
+                    delta = "No location picked -- proceeding without it."
+                else:
+                    coords = payload.get("coordinates") or []
+                    delta = f"Got the {payload.get('geometry_type')}: {coords}."
+                await send(
+                    "agent-message-chunk",
+                    {"message_id": "m-spatial", "delta": delta, "done": True},
+                    case_id=gate_case,
+                )
+                await send("turn-complete", {}, case_id=gate_case)
             elif etype == "cancel":
                 await send("turn-complete", {"cancelled": True}, case_id=env.get("case_id"))

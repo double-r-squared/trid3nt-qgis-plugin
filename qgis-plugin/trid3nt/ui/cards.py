@@ -251,6 +251,25 @@ _SIM_CARD_STYLE = (
 )
 _SIM_TITLE_STYLE = "color: #8957e5; font-weight: bold; border: none;"
 
+# Region-choice picker chrome (state-bbox-fallback narrowing -- GATE-WAIT).
+# Blue, a "pick a place" affordance, with the same N6/STYLE-1 discipline: a
+# subtle low-alpha fill scoped to the FRAME id (never cascading onto child
+# labels), theme-neutral over light and dark QGIS windows alike.
+_REGION_CARD_STYLE = (
+    "QFrame#regionchoicecard { border: 1px solid #58a6ff; border-radius: 8px; "
+    "background-color: rgba(88, 166, 255, 7%); }"
+)
+_REGION_TITLE_STYLE = "color: #58a6ff; font-weight: bold; border: none;"
+
+# Spatial-input picker chrome (agent needs a picked geometry -- GATE-WAIT).
+# Green-cyan, a "click the map" affordance, with the same N6/STYLE-1
+# discipline.
+_SPATIAL_CARD_STYLE = (
+    "QFrame#spatialinputcard { border: 1px solid #2dd4bf; border-radius: 8px; "
+    "background-color: rgba(45, 212, 191, 7%); }"
+)
+_SPATIAL_TITLE_STYLE = "color: #2dd4bf; font-weight: bold; border: none;"
+
 
 class _WrapLabel(QLabel):
     """Word-wrapping QLabel whose WRAPPED height the layouts actually honor.
@@ -1622,6 +1641,29 @@ class CodeExecCard(QFrame):
         self.details_toggle.setChecked(False)
         self.details_toggle.setText("show details")
 
+    # -- run outcome (code-exec-result, job-0233) -------------------------- #
+
+    def update_from_result(self, result: gate.CodeExecResult) -> None:
+        """Fold the run OUTCOME into this card once the ``code-exec-result``
+        arrives (only meaningful on an APPROVED run -- a denied card never
+        ran). Updates the folded chip with the HONEST terminal status
+        (``gate.code_exec_result_chip`` -- a blocked/timeout run is never
+        dressed up as ok) and appends the stdout/stderr tails + result
+        descriptor into the (re-expandable) body. No-op on a card that was
+        denied -- the deny chip stands."""
+        if self._decided != "proceed":
+            return
+        self.summary_lbl.setText(gate.code_exec_result_chip(result))
+        for line in gate.code_exec_result_lines(result):
+            lbl = QLabel(line)
+            lbl.setWordWrap(True)
+            lbl.setTextFormat(Qt.PlainText)
+            lbl.setStyleSheet(
+                _ERROR_LINE_STYLE if not result.ok and "stderr" in line
+                else _GATE_NOTE_STYLE
+            )
+            self._body.layout().addWidget(lbl)
+
 
 class CredentialCard(QFrame):
     """Inline key-entry card for one ``credential-request`` (LANE K, NATE
@@ -2504,3 +2546,429 @@ class SimCard(QFrame):
         # not just a terminal one.
         self._body.setVisible(checked)
         self.details_toggle.setText("hide details" if checked else "show details")
+
+
+class RegionChoiceCard(QFrame):
+    """Inline picker for one ``region-choice-request`` gate (state-bbox-fallback
+    narrowing) -- CRITICAL gate-WAIT.
+
+    The server snapped a vague/regional geocode ("south Florida") to the WHOLE
+    state bbox (the honest already-resolved default) and PAUSES the turn
+    offering a narrower pick. The card shows the agent's ``message`` verbatim,
+    a radio list of the candidate sub-regions (default: counties) PLUS a
+    "keep the whole state" option that is CHECKED by default (the honest
+    already-resolved answer), and Confirm / "Use whole state" buttons. The
+    decision maps through the pure ``gate.resolve_region_choice`` (a candidate
+    pick -> ``choice="region"`` + id + echoed bbox; else -> ``choice=
+    "whole_state"``) and rides back on ONE ``region-choice-provided`` envelope
+    via ``on_decide(request_id, choice, selected_region_id, selected_bbox)``.
+    A "whole_state" answer keeps the honest default, so the gate ALWAYS closes
+    (never a hung turn). Locks after one answer and folds to a one-line chip --
+    the exact GateCard collapse pattern.
+    """
+
+    #: The sentinel radio value for the whole-state option (never a region_id).
+    _WHOLE_STATE = ""
+
+    def __init__(self, request: gate.RegionChoiceRequest, on_decide, parent=None):
+        super().__init__(parent)
+        self._request = request
+        self._on_decide = on_decide
+        self._decided = False
+        self._selected_region_id: Optional[str] = None
+        self.setObjectName("regionchoicecard")  # STYLE-1: scope the fill
+        self.setStyleSheet(_REGION_CARD_STYLE)
+        self.setFrameShape(QFrame.StyledPanel)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(3)
+
+        # Collapsed one-line summary (hidden until answered) + "show details".
+        summary_row = QHBoxLayout()
+        self.summary_lbl = QLabel("")
+        self.summary_lbl.setWordWrap(True)
+        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setStyleSheet(_REGION_TITLE_STYLE)
+        summary_row.addWidget(self.summary_lbl, 1)
+        self.details_toggle = QPushButton("show details")
+        self.details_toggle.setFlat(True)
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.details_toggle.clicked.connect(self._toggle_details)
+        summary_row.addWidget(self.details_toggle)
+        self._summary_container = QWidget()
+        self._summary_container.setLayout(summary_row)
+        self._summary_container.setVisible(False)
+        outer.addWidget(self._summary_container)
+
+        self._body = QWidget()
+        lay = QVBoxLayout(self._body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(3)
+        outer.addWidget(self._body)
+
+        title_lbl = QLabel("Narrow the region?")
+        title_lbl.setStyleSheet(_REGION_TITLE_STYLE)
+        lay.addWidget(title_lbl)
+
+        if request.message:
+            # The agent's honest "snapped to the whole state, offering a
+            # narrower pick" prompt, verbatim (Invariant 1).
+            msg_lbl = QLabel(request.message)
+            msg_lbl.setWordWrap(True)
+            msg_lbl.setTextFormat(Qt.PlainText)
+            msg_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            lay.addWidget(msg_lbl)
+
+        # The whole-state option (CHECKED by default -- the honest already-
+        # resolved answer), then each candidate sub-region.
+        self._radios: List[Tuple[str, QRadioButton]] = []
+        whole = QRadioButton(f"Keep the whole state ({request.state_label})")
+        whole.setStyleSheet(_PICKER_RADIO_STYLE)
+        whole.setChecked(True)
+        lay.addWidget(whole)
+        self._radios.append((self._WHOLE_STATE, whole))
+        for cand in request.candidates:
+            radio = QRadioButton(cand.name)
+            radio.setStyleSheet(_PICKER_RADIO_STYLE)
+            lay.addWidget(radio)
+            self._radios.append((cand.region_id, radio))
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        self.confirm_btn = QPushButton("Confirm")
+        self.confirm_btn.clicked.connect(self._confirm)
+        btn_row.addWidget(self.confirm_btn)
+        self.whole_btn = QPushButton("Use whole state")
+        self.whole_btn.clicked.connect(self._use_whole_state)
+        btn_row.addWidget(self.whole_btn)
+        lay.addLayout(btn_row)
+
+        self.result_lbl = QLabel("")
+        self.result_lbl.setWordWrap(True)
+        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl.setVisible(False)
+        lay.addWidget(self.result_lbl)
+
+    # -- state ------------------------------------------------------------- #
+
+    def _checked_region_id(self) -> Optional[str]:
+        for region_id, radio in self._radios:
+            if radio.isChecked():
+                return region_id or None  # "" whole-state sentinel -> None
+        return None
+
+    def _toggle_details(self, checked: bool) -> None:
+        self._body.setVisible(checked)
+        self.details_toggle.setText("hide details" if checked else "show details")
+
+    # -- actions ----------------------------------------------------------- #
+
+    def _confirm(self) -> None:
+        self._commit(self._checked_region_id())
+
+    def _use_whole_state(self) -> None:
+        self._commit(None)
+
+    def _commit(self, selected_region_id: Optional[str]) -> None:
+        if self._decided:
+            return  # locked -- a gate is answered exactly once
+        self._decided = True
+        self._selected_region_id = selected_region_id
+        wire = gate.resolve_region_choice(self._request, selected_region_id)
+        for _region_id, radio in self._radios:
+            radio.setEnabled(False)
+        self.confirm_btn.setEnabled(False)
+        self.whole_btn.setEnabled(False)
+        self._on_decide(
+            wire["request_id"],
+            wire["choice"],
+            wire["selected_region_id"],
+            wire["selected_bbox"],
+        )
+        self.result_lbl.setText(
+            gate.region_choice_summary(self._request, selected_region_id)
+        )
+        self.result_lbl.setVisible(True)
+        self._collapse()
+
+    def _collapse(self) -> None:
+        self.summary_lbl.setText(
+            "Region: "
+            + gate.region_choice_summary(self._request, self._selected_region_id)
+        )
+        self._summary_container.setVisible(True)
+        self._body.setVisible(False)
+        self.details_toggle.setChecked(False)
+        self.details_toggle.setText("show details")
+
+
+class SpatialInputCard(QFrame):
+    """Inline pick card for one ``spatial-input-request`` gate -- CRITICAL
+    gate-WAIT.
+
+    The agent needs the user to pick a geometry on the map (``mode`` ==
+    ``point`` / ``bbox`` / ``vector_draw``) and PAUSES the turn. The card
+    shows the agent's title + description verbatim and a "click the map"
+    affordance wired to the SAME canvas machinery the probe/AOI tools use:
+
+    - ``point``: a ``QgsMapToolEmitPoint`` -- one click, transformed to
+      EPSG:4326 via the injected ``to_lonlat`` callable, replies
+      ``coordinates=[lon, lat]``.
+    - ``bbox``: a ``QgsMapToolExtent`` -- a drag rectangle, transformed via the
+      injected ``to_bbox`` callable, replies ``coordinates=[minLon, minLat,
+      maxLon, maxLat]``.
+    - ``vector_draw``: the web terra-draw barrier surface the plugin cannot
+      reproduce -- the card degrades HONESTLY (it says so and offers only
+      Cancel, which sends ``cancelled=True`` and CLOSES the gate rather than
+      hanging the turn).
+
+    Submit is disabled until a geometry is captured; Cancel is always
+    available (the decline path). The decision maps through the pure
+    ``gate.resolve_spatial_input_*`` helpers and rides back on ONE
+    ``spatial-input-response`` via ``on_decide(wire)``. Mirrors the GateCard
+    release-point map-tool discipline (ON saves + installs a tool, OFF/commit
+    restores the previous tool -- the canvas is never left on a tool the user
+    did not ask for) and the GateCard collapse pattern.
+    """
+
+    def __init__(
+        self, request: gate.SpatialInputRequest, on_decide, parent=None,
+        iface=None, to_lonlat=None, to_bbox=None,
+    ):
+        super().__init__(parent)
+        self._request = request
+        self._on_decide = on_decide
+        self._iface = iface
+        self._to_lonlat = to_lonlat
+        self._to_bbox = to_bbox
+        self._decided = False
+        self._captured: Optional[dict] = None  # the wire reply once captured
+        self._tool = None
+        self._prev_tool = None
+        self._marker = None
+        self.setObjectName("spatialinputcard")  # STYLE-1: scope the fill
+        self.setStyleSheet(_SPATIAL_CARD_STYLE)
+        self.setFrameShape(QFrame.StyledPanel)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(3)
+
+        # Collapsed one-line summary (hidden until answered) + "show details".
+        summary_row = QHBoxLayout()
+        self.summary_lbl = QLabel("")
+        self.summary_lbl.setWordWrap(True)
+        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setStyleSheet(_SPATIAL_TITLE_STYLE)
+        summary_row.addWidget(self.summary_lbl, 1)
+        self.details_toggle = QPushButton("show details")
+        self.details_toggle.setFlat(True)
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.details_toggle.clicked.connect(self._toggle_details)
+        summary_row.addWidget(self.details_toggle)
+        self._summary_container = QWidget()
+        self._summary_container.setLayout(summary_row)
+        self._summary_container.setVisible(False)
+        outer.addWidget(self._summary_container)
+
+        self._body = QWidget()
+        lay = QVBoxLayout(self._body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(3)
+        outer.addWidget(self._body)
+
+        title_lbl = QLabel(request.title or "Pick a location on the map")
+        title_lbl.setWordWrap(True)
+        title_lbl.setTextFormat(Qt.PlainText)
+        title_lbl.setStyleSheet(_SPATIAL_TITLE_STYLE)
+        lay.addWidget(title_lbl)
+
+        if request.description:
+            desc_lbl = QLabel(request.description)
+            desc_lbl.setWordWrap(True)
+            desc_lbl.setTextFormat(Qt.PlainText)
+            desc_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            lay.addWidget(desc_lbl)
+
+        self.pick_btn: Optional[QPushButton] = None
+        self.status_lbl = QLabel("")
+        self.status_lbl.setWordWrap(True)
+        self.status_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+
+        if request.supported:
+            # point / bbox: the "click the map" affordance.
+            pick_row = QHBoxLayout()
+            self.pick_btn = QPushButton(
+                "Click a point on the map" if request.mode == "point"
+                else "Draw a box on the map"
+            )
+            self.pick_btn.setCheckable(True)
+            self.pick_btn.toggled.connect(self._toggle_pick)
+            pick_row.addWidget(self.pick_btn)
+            self.status_lbl.setText("nothing picked yet")
+            pick_row.addWidget(self.status_lbl, 1)
+            lay.addLayout(pick_row)
+        else:
+            # vector_draw: honest degrade -- the plugin cannot draw tagged
+            # barriers; say so and let Cancel close the gate.
+            self.status_lbl.setText(
+                "Drawing tagged barriers/geometry is not available in the "
+                "QGIS plugin yet -- use the web client for this, or Cancel to "
+                "let the agent proceed without it."
+            )
+            lay.addWidget(self.status_lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        self.submit_btn = QPushButton("Submit")
+        self.submit_btn.setEnabled(False)
+        self.submit_btn.clicked.connect(self._submit)
+        if request.supported:
+            btn_row.addWidget(self.submit_btn)
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self._cancel)
+        btn_row.addWidget(self.cancel_btn)
+        lay.addLayout(btn_row)
+
+        self.result_lbl = QLabel("")
+        self.result_lbl.setWordWrap(True)
+        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl.setVisible(False)
+        lay.addWidget(self.result_lbl)
+
+    # -- map-tool pick (mirror of GateCard release-point discipline) -------- #
+
+    def _toggle_pick(self, checked: bool) -> None:
+        try:
+            canvas = self._iface.mapCanvas()
+        except Exception:  # noqa: BLE001 -- headless / no iface
+            return
+        if checked:
+            if self._tool is None:
+                if self._request.mode == "point":
+                    from qgis.gui import QgsMapToolEmitPoint
+
+                    self._tool = QgsMapToolEmitPoint(canvas)
+                    self._tool.canvasClicked.connect(self._on_point_clicked)
+                else:
+                    from qgis.gui import QgsMapToolExtent
+
+                    self._tool = QgsMapToolExtent(canvas)
+                    self._tool.extentChanged.connect(self._on_extent_chosen)
+            self._prev_tool = canvas.mapTool()
+            canvas.setMapTool(self._tool)
+        else:
+            if canvas.mapTool() is self._tool:
+                canvas.setMapTool(self._prev_tool)
+            self._prev_tool = None
+
+    def _on_point_clicked(self, point, _button) -> None:
+        try:
+            canvas = self._iface.mapCanvas()
+            authid = canvas.mapSettings().destinationCrs().authid()
+            lonlat = self._to_lonlat(point, authid) if self._to_lonlat else None
+        except Exception:  # noqa: BLE001
+            lonlat = None
+        if lonlat is None:
+            self.status_lbl.setText("could not read the clicked point - try again")
+            return
+        lon, lat = lonlat
+        self._captured = gate.resolve_spatial_input_point(
+            self._request.request_id, lon, lat
+        )
+        try:
+            from qgis.gui import QgsVertexMarker
+
+            if self._marker is None:
+                self._marker = QgsVertexMarker(self._iface.mapCanvas())
+                self._marker.setIconType(QgsVertexMarker.ICON_CROSS)
+                self._marker.setColor(Qt.red)
+                self._marker.setPenWidth(3)
+                self._marker.setIconSize(14)
+            self._marker.setCenter(point)
+        except Exception:  # noqa: BLE001 -- marker is cosmetic
+            pass
+        self.status_lbl.setText(
+            f"point: ({lat:.5f}, {lon:.5f}) - click again to move, then Submit"
+        )
+        self.submit_btn.setEnabled(True)
+
+    def _on_extent_chosen(self, *_args) -> None:
+        try:
+            canvas = self._iface.mapCanvas()
+            extent = self._tool.extent() if self._tool is not None else None
+            authid = canvas.mapSettings().destinationCrs().authid()
+            bbox = (
+                self._to_bbox(extent, authid)
+                if (self._to_bbox and extent is not None) else None
+            )
+        except Exception:  # noqa: BLE001
+            bbox = None
+        if bbox is None:
+            self.status_lbl.setText("could not read the drawn box - try again")
+            return
+        self._captured = gate.resolve_spatial_input_bbox(
+            self._request.request_id, bbox
+        )
+        self.status_lbl.setText(
+            f"box: [{bbox[0]:.4f}, {bbox[1]:.4f}, {bbox[2]:.4f}, {bbox[3]:.4f}]"
+            " - redraw to change, then Submit"
+        )
+        self.submit_btn.setEnabled(True)
+
+    def _pick_teardown(self, drop_marker: bool) -> None:
+        if self.pick_btn is not None and self.pick_btn.isChecked():
+            self.pick_btn.setChecked(False)  # restores the previous map tool
+        if drop_marker and self._marker is not None:
+            try:
+                self._iface.mapCanvas().scene().removeItem(self._marker)
+            except Exception:  # noqa: BLE001
+                pass
+            self._marker = None
+
+    # -- actions ----------------------------------------------------------- #
+
+    def _submit(self) -> None:
+        if self._captured is None:
+            self.status_lbl.setText("pick a location first, or press Cancel")
+            return
+        self._commit(self._captured, drop_marker=False)
+
+    def _cancel(self) -> None:
+        self._commit(
+            gate.resolve_spatial_input_cancel(self._request.request_id),
+            drop_marker=True,
+        )
+
+    def _commit(self, wire: dict, drop_marker: bool) -> None:
+        if self._decided:
+            return  # locked -- a gate is answered exactly once
+        self._decided = True
+        self._pick_teardown(drop_marker=drop_marker)
+        for widget in (self.submit_btn, self.cancel_btn, self.pick_btn):
+            if widget is not None:
+                widget.setEnabled(False)
+        self._on_decide(wire)
+        self.result_lbl.setText(
+            "Cancelled -- the agent will proceed without a picked location."
+            if wire.get("cancelled")
+            else gate.spatial_input_summary(self._request, wire)
+        )
+        self.result_lbl.setVisible(True)
+        self._collapse(wire)
+
+    def _toggle_details(self, checked: bool) -> None:
+        self._body.setVisible(checked)
+        self.details_toggle.setText("hide details" if checked else "show details")
+
+    def _collapse(self, wire: dict) -> None:
+        self.summary_lbl.setText(
+            "Spatial input: " + gate.spatial_input_summary(self._request, wire)
+        )
+        self._summary_container.setVisible(True)
+        self._body.setVisible(False)
+        self.details_toggle.setChecked(False)
+        self.details_toggle.setText("show details")

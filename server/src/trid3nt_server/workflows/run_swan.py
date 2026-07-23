@@ -472,13 +472,6 @@ def swan_local_spec() -> "Any":
             env_pairs.append(("AWS_SECRET_ACCESS_KEY", aws_secret_key))
         for k, v in env_pairs:
             cmd += ["-e", f"{k}={v}"]
-            # Legacy dual-EMIT (Layer B rename, container-env seam ONLY):
-            # already-built swan worker images still read the old GRACE2_*
-            # names at runtime. Emit the legacy twin with the same value so
-            # those images keep working. REMOVE once the swan image is
-            # rebuilt from this tree (services/workers/swan reads TRID3NT_*).
-            if k.startswith("TRID3NT_"):
-                cmd += ["-e", f"GRACE2_{k[len('TRID3NT_'):]}={v}"]
         cmd.append(image)
         cmd.extend(fixed_args)
         return cmd

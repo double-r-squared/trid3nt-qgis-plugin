@@ -29,6 +29,7 @@ These tests pin the three load-bearing behaviors of JOB 2:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 
 import pytest
@@ -51,11 +52,53 @@ from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
+from trid3nt_contracts.ws import PayloadConfirmationEnvelopePayload
 
 from .test_persistence import MockMCPClient, _fresh_case_summary
 
 # The bbox _fresh_case_summary stamps onto every seeded Case (Fort Myers).
 _CASE_AOI = (-82.0, 26.5, -81.8, 26.7)
+
+
+@pytest.fixture(autouse=True)
+def _cap_gate_waits(monkeypatch):
+    """LANE C: cap every user-decision gate wait so a headless run never hangs
+    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
+    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical; the 2c fetch calls are
+    driven through ``_invoke_with_gate_proceed`` (below) which answers the
+    fetch-confirm gate, so this cap is only a fail-closed backstop."""
+    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+
+
+async def _invoke_with_gate_proceed(ws, state, tool_name: str, params: dict):
+    """Invoke a fetcher, answering its fetch-confirm gate with ``proceed``.
+
+    ``fetch_dem`` is in ``FETCH_CONFIRM_TOOLS``, so a first fetch with a bbox
+    parks on the fetch-resolution gate. The 2c reuse tests exercise the AOI
+    cache -> reuse-guard path, not the gate, so a background approver replies
+    ``proceed`` to the pending card while the invoke runs -- the layer
+    materializes exactly as it would after the user clicks through, and the
+    reuse guard then governs the follow-up fetch."""
+
+    async def _watch() -> None:
+        while True:
+            for wid, entry in list(server._PENDING_CONFIRMATIONS.items()):
+                fut = entry[1]
+                if not fut.done():
+                    fut.set_result(
+                        PayloadConfirmationEnvelopePayload(
+                            warning_id=wid, decision="proceed"
+                        )
+                    )
+            await asyncio.sleep(0.002)
+
+    approver = asyncio.create_task(_watch())
+    try:
+        return await server._invoke_tool_via_emitter(ws, state, tool_name, params)
+    finally:
+        approver.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await approver
 
 
 class MockWebSocket:
@@ -282,11 +325,10 @@ def test_bare_followup_refetch_short_circuits_via_real_case_bbox(
     asyncio.run(_emit_case_open(ws, state, case.case_id))
     assert _turn_case_bbox(state) == list(_CASE_AOI)
 
-    # First fetch at the Case AOI: the DEM layer lands on the map.
+    # First fetch at the Case AOI: the DEM layer lands on the map (the
+    # fetch-confirm gate is answered 'proceed' via the harness approver).
     first = asyncio.run(
-        server._invoke_tool_via_emitter(
-            ws, state, "fetch_dem", {"bbox": list(_CASE_AOI)}
-        )
+        _invoke_with_gate_proceed(ws, state, "fetch_dem", {"bbox": list(_CASE_AOI)})
     )
     assert isinstance(first, LayerURI)
     assert len(_FETCHES) == 1
@@ -321,9 +363,7 @@ def test_bare_followup_refetches_without_case_bbox(
     assert _turn_case_bbox(state) is None
 
     asyncio.run(
-        server._invoke_tool_via_emitter(
-            ws, state, "fetch_dem", {"bbox": list(_CASE_AOI)}
-        )
+        _invoke_with_gate_proceed(ws, state, "fetch_dem", {"bbox": list(_CASE_AOI)})
     )
     assert len(_FETCHES) == 1
 

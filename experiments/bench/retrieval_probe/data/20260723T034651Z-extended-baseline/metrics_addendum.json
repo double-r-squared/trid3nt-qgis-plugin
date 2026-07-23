@@ -1,0 +1,111 @@
+{
+  "source": "raw_rankings.jsonl",
+  "note": "retro-computed nDCG@k / MRR@k over an existing data dir's raw rankings; pure math, no re-run; results.json/summary.txt untouched.",
+  "data_dir": "/home/nate/Documents/trid3nt-local/experiments/bench/retrieval_probe/data/20260723T034651Z-extended-baseline",
+  "inputs": [
+    "/home/nate/Documents/trid3nt-local/experiments/bench/retrieval_probe/inputs/phrasings_specific.json",
+    "/home/nate/Documents/trid3nt-local/experiments/bench/retrieval_probe/inputs/phrasings_vague.json"
+  ],
+  "runs": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "per_run": {
+    "1": {
+      "n": 60,
+      "ndcg_at_k_mean": 0.595,
+      "mrr_at_k_mean": 0.6069,
+      "by_register": {
+        "specific": {
+          "n": 28,
+          "ndcg_at_k_mean": 0.845,
+          "mrr_at_k_mean": 0.8363
+        },
+        "vague": {
+          "n": 32,
+          "ndcg_at_k_mean": 0.3763,
+          "mrr_at_k_mean": 0.4062
+        }
+      }
+    },
+    "2": {
+      "n": 60,
+      "ndcg_at_k_mean": 0.595,
+      "mrr_at_k_mean": 0.6069,
+      "by_register": {
+        "specific": {
+          "n": 28,
+          "ndcg_at_k_mean": 0.845,
+          "mrr_at_k_mean": 0.8363
+        },
+        "vague": {
+          "n": 32,
+          "ndcg_at_k_mean": 0.3763,
+          "mrr_at_k_mean": 0.4062
+        }
+      }
+    },
+    "3": {
+      "n": 60,
+      "ndcg_at_k_mean": 0.595,
+      "mrr_at_k_mean": 0.6069,
+      "by_register": {
+        "specific": {
+          "n": 28,
+          "ndcg_at_k_mean": 0.845,
+          "mrr_at_k_mean": 0.8363
+        },
+        "vague": {
+          "n": 32,
+          "ndcg_at_k_mean": 0.3763,
+          "mrr_at_k_mean": 0.4062
+        }
+      }
+    },
+    "4": {
+      "n": 60,
+      "ndcg_at_k_mean": 0.595,
+      "mrr_at_k_mean": 0.6069,
+      "by_register": {
+        "specific": {
+          "n": 28,
+          "ndcg_at_k_mean": 0.845,
+          "mrr_at_k_mean": 0.8363
+        },
+        "vague": {
+          "n": 32,
+          "ndcg_at_k_mean": 0.3763,
+          "mrr_at_k_mean": 0.4062
+        }
+      }
+    },
+    "5": {
+      "n": 60,
+      "ndcg_at_k_mean": 0.595,
+      "mrr_at_k_mean": 0.6069,
+      "by_register": {
+        "specific": {
+          "n": 28,
+          "ndcg_at_k_mean": 0.845,
+          "mrr_at_k_mean": 0.8363
+        },
+        "vague": {
+          "n": 32,
+          "ndcg_at_k_mean": 0.3763,
+          "mrr_at_k_mean": 0.4062
+        }
+      }
+    }
+  },
+  "aggregate": {
+    "ndcg_at_k_mean": 0.595,
+    "ndcg_at_k_min": 0.595,
+    "ndcg_at_k_max": 0.595,
+    "mrr_at_k_mean": 0.6069,
+    "mrr_at_k_min": 0.6069,
+    "mrr_at_k_max": 0.6069
+  }
+}

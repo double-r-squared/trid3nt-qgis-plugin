@@ -8671,6 +8671,29 @@ def _local_compute_lane() -> bool:
 _LOCAL_GATE_TIMEOUT_SECONDS: int = 24 * 3600
 
 
+def _gate_wait_cap_s() -> "float | None":
+    """Optional hard ceiling (seconds) applied to EVERY gate wait window.
+
+    Test seam (``TRID3NT_GATE_WAIT_CAP_S``): headless suites exercise the
+    gate-park machinery with no client to answer the card, so the 24h F6
+    local-lane lift (and even the cloud 300s defaults) would hang the run.
+    When this env is set to a positive value, ``_gate_wait_timeout`` returns
+    ``min(configured, cap)`` for every gate -- the F6 24h override included --
+    so the wait deterministically hits the honest timeout path. UNSET (the
+    production case) leaves every wait byte-identical; malformed / non-positive
+    values are ignored (treated as unset). Read LIVE so a per-test env flip is
+    honored.
+    """
+    raw = os.environ.get("TRID3NT_GATE_WAIT_CAP_S")
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
 def _gate_wait_timeout(default_seconds: float) -> float:
     """Effective ``asyncio.wait_for`` timeout for a user-decision gate future.
 
@@ -8681,10 +8704,19 @@ def _gate_wait_timeout(default_seconds: float) -> float:
     (byte-identical behavior when the backend is aws-batch/unset). The wire
     envelope (``ttl_seconds`` etc.) is NOT rewritten -- only the server-side
     wait changes, so the client contract is untouched.
+
+    Test cap (``TRID3NT_GATE_WAIT_CAP_S``, see ``_gate_wait_cap_s``): when set,
+    the resolved wait is floored to ``min(effective, cap)`` so headless suites
+    never hang on an unanswerable card. Unset -> production behavior unchanged.
     """
     if _local_compute_lane():
-        return float(_LOCAL_GATE_TIMEOUT_SECONDS)
-    return float(default_seconds)
+        effective = float(_LOCAL_GATE_TIMEOUT_SECONDS)
+    else:
+        effective = float(default_seconds)
+    cap = _gate_wait_cap_s()
+    if cap is not None:
+        return min(effective, cap)
+    return effective
 
 
 # NATE 2026-06-26: per-fetcher resolution ladders for the fetch-resolution gate.

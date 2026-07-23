@@ -66,6 +66,16 @@ from trid3nt_contracts.ws import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _cap_gate_waits(monkeypatch):
+    """LANE C: cap every user-decision gate wait so a headless run never hangs
+    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
+    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical behavior. Happy-path
+    resolvers answer within milliseconds; the emit/await timeout test tightens
+    the cap so it hits the honest None-return path fast."""
+    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+
+
 # =========================================================================== #
 # Geometry fixtures.
 # =========================================================================== #
@@ -497,8 +507,13 @@ def test_emit_and_wait_round_trips_a_drawn_reply():
     assert result["n_walls"] == 1 and result["n_flap_gates"] == 1
 
 
-def test_emit_and_wait_timeout_returns_none():
+def test_emit_and_wait_timeout_returns_none(monkeypatch):
     """No reply within the window -> None (caller surfaces a typed timeout)."""
+    # The F6 local-lane gate ignores the payload timeout and would wait 24h; the
+    # LANE C cap forces the honest timeout quickly (tight override of the autouse
+    # 5s net) so this asserts the real None-return path without hanging.
+    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "0.05")
+
     async def _run() -> SpatialInputResponsePayload | None:
         ws = _MockWebSocket()
         state = SessionState(session_id=new_ulid())

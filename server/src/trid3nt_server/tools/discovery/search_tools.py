@@ -396,12 +396,19 @@ def _load_corpus(path: Path | None = None) -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 
-def _try_sentence_transformers_backend() -> tuple[Any, Any, str] | None:
-    """Try to load sentence-transformers all-MiniLM-L6-v2 backend.
+#: Default sentence-transformers model id. Override via env for experiments
+#: (e.g. experiments/embedding-model-shootout) without a code change.
+_DEFAULT_SENTENCE_TRANSFORMERS_MODEL = "all-MiniLM-L6-v2"
 
-    Returns ``(encode_fn, np_module, backend_name)`` or ``None`` if the
-    library is not installed. Loading the model is deferred to the first
-    ``encode_fn`` call to keep import-time cost low.
+
+def _try_sentence_transformers_backend() -> tuple[Any, Any, str] | None:
+    """Try to load the configured sentence-transformers backend.
+
+    Model id comes from ``TRID3NT_EMBEDDING_MODEL`` if set, else the
+    incumbent default (``all-MiniLM-L6-v2``, 384-dim). Returns
+    ``(encode_fn, np_module, backend_name)`` or ``None`` if the library is
+    not installed. Loading the model is deferred to the first ``encode_fn``
+    call to keep import-time cost low.
     """
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
@@ -409,14 +416,15 @@ def _try_sentence_transformers_backend() -> tuple[Any, Any, str] | None:
     except Exception:
         return None
 
+    model_id = os.environ.get("TRID3NT_EMBEDDING_MODEL", _DEFAULT_SENTENCE_TRANSFORMERS_MODEL)
     model_holder: dict[str, Any] = {}
 
     def _encode(texts: list[str]) -> Any:
         import numpy as _np
 
         if "model" not in model_holder:
-            logger.info("loading sentence-transformers all-MiniLM-L6-v2 (first call)")
-            model_holder["model"] = SentenceTransformer("all-MiniLM-L6-v2")
+            logger.info("loading sentence-transformers model %r (first call)", model_id)
+            model_holder["model"] = SentenceTransformer(model_id)
         emb = model_holder["model"].encode(texts, convert_to_numpy=True, normalize_embeddings=True)
         return _np.asarray(emb, dtype="float32")
 

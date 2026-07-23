@@ -28,45 +28,23 @@ from trid3nt_server.tools.simulation.solver import (
 
 
 # --------------------------------------------------------------------------- #
-# Cloud lane (aws-batch, set or unset) -- byte-identical to the prior logic
-# --------------------------------------------------------------------------- #
-
-
-@pytest.mark.parametrize("backend_env", [None, "aws-batch"])
-@pytest.mark.parametrize(
-    ("compute_class", "expected"),
-    [
-        ("small", 4),
-        ("standard", 8),
-        ("large", 16),
-        ("xlarge", 48),
-        ("gpu", 32),
-        ("no-such-tier", None),  # unknown class -> None (old .get().get())
-        (None, None),  # no class -> None
-    ],
-)
-def test_cloud_lane_tier_lookup(monkeypatch, backend_env, compute_class, expected):
-    if backend_env is None:
-        monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
-    else:
-        monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend_env)
-    assert solve_progress_vcpus(compute_class) == expected
-
-
-@pytest.mark.parametrize("backend_env", [None, "aws-batch"])
-def test_cloud_lane_cloud_vcpus_passthrough(monkeypatch, backend_env):
-    """The SFINCS autoscale-provenance path: caller-resolved count wins."""
-    if backend_env is None:
-        monkeypatch.delenv("TRID3NT_SOLVER_BACKEND", raising=False)
-    else:
-        monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", backend_env)
-    assert solve_progress_vcpus(cloud_vcpus=8) == 8
-    # Passthrough beats the tier lookup when both are supplied.
-    assert solve_progress_vcpus("large", cloud_vcpus=8) == 8
-    # No caller count -> falls back to the tier lookup / None.
-    assert solve_progress_vcpus(cloud_vcpus=None) is None
-
-
+# Cloud lane (aws-batch) -- REMOVED (local-only slim, 2026-07 pass).
+#
+# ``solver_backend()`` now unconditionally returns ``SOLVER_BACKEND_LOCAL_DOCKER``
+# (the AWS Batch arm was pulled from this build; see its docstring). That makes
+# ``TRID3NT_SOLVER_BACKEND=aws-batch`` inert: ``solve_progress_vcpus`` never
+# reaches the tier-lookup / cloud_vcpus-passthrough branches below the
+# local-docker short-circuit, so a "cloud lane" test pinning tier vcpus or
+# passthrough values byte-for-byte duplicates the local-lane assertions
+# further down this file while asserting a code path this build cannot take.
+# The former ``test_cloud_lane_tier_lookup`` and
+# ``test_cloud_lane_cloud_vcpus_passthrough`` (which asserted AWS_BATCH tier
+# vcpus / cloud_vcpus passthrough regardless of the "aws-batch" env value)
+# are deleted rather than re-pinned: ``test_local_lane_reports_host_cpu_count``
+# and ``test_local_lane_ignores_cloud_vcpus`` already cover "env value does
+# not change the answer, host CPU count always wins" for the live behavior.
+# If the Batch arm is ever re-woven from git history, restore these from VCS
+# alongside it.
 # --------------------------------------------------------------------------- #
 # Local lane (local-docker) -- host CPU count, never the AWS tier
 # --------------------------------------------------------------------------- #

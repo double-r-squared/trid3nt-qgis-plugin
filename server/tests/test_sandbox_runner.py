@@ -557,32 +557,37 @@ def test_prefetch_degrades_on_fetch_failure(monkeypatch, tmp_path) -> None:
 
 
 def test_executor_path_honors_env_override_first(monkeypatch, tmp_path) -> None:
-    """TRID3NT_SANDBOX_EXECUTOR is honored FIRST, unconditionally, before any
-    repo-root walk-up.
+    """TRID3NT_SANDBOX_EXECUTOR is honored FIRST, unconditionally, before the
+    beside-module default.
 
-    This is the seam the agent deploy relies on: on the /opt/grace2 site-packages
-    install the repo-root walk-up + parents[4] fallback both miss (executor.py is
-    not on the import path), so deploy_agent_onbox.sh installs the bundled
-    executor.py to a stable path and points this env var at it. Resolving via the
-    override -- even to a path that does not exist yet -- proves the on-box fix
-    closes the FileNotFoundError-fails-closed gap deterministically.
+    ``sandbox_executor.py`` was relocated INTO the ``trid3nt_server`` package
+    (beside ``sandbox_runner.py``) when the deleted ``infra/python-sandbox/``
+    cloud build context was decommissioned -- there is no repo-root walk-up
+    anymore (see ``_executor_path``'s docstring). The env override still lets
+    a deploy point this at a stable path outside the installed package (e.g.
+    an ``/opt/grace2`` site-packages install), so this test pins that the
+    override wins first, and resolving it -- even to a path that does not
+    exist yet -- proves the seam closes the FileNotFoundError-fails-closed gap
+    deterministically.
     """
     from trid3nt_server import sandbox_runner as sr
 
-    override = tmp_path / "python-sandbox" / "executor.py"
+    override = tmp_path / "python-sandbox" / "sandbox_executor.py"
     monkeypatch.setenv("TRID3NT_SANDBOX_EXECUTOR", str(override))
     assert sr._executor_path() == override
 
-    # Whitespace-only / empty override is ignored -> falls through to the walk-up.
+    # Whitespace-only / empty override is ignored -> falls through to the
+    # beside-module default.
     monkeypatch.setenv("TRID3NT_SANDBOX_EXECUTOR", "   ")
     resolved = sr._executor_path()
-    assert resolved.name == "executor.py"
-    assert resolved.parent.name == "python-sandbox"
+    assert resolved.name == "sandbox_executor.py"
+    assert resolved.parent.name == "trid3nt_server"
 
 
 def test_executor_path_default_walkup_resolves_in_repo() -> None:
-    """With NO override (dev/repo layout) the walk-up finds the real
-    infra/python-sandbox/executor.py and it exists on disk."""
+    """With NO override, the default resolves to the real
+    ``trid3nt_server/sandbox_executor.py`` beside ``sandbox_runner.py``, and it
+    exists on disk."""
     import os as _os
 
     from trid3nt_server import sandbox_runner as sr
@@ -591,7 +596,7 @@ def test_executor_path_default_walkup_resolves_in_repo() -> None:
     try:
         p = sr._executor_path()
         assert p.exists(), f"executor not found at {p}"
-        assert p.parts[-2:] == ("python-sandbox", "executor.py")
+        assert p.parts[-2:] == ("trid3nt_server", "sandbox_executor.py")
     finally:
         if prior is not None:
             _os.environ["TRID3NT_SANDBOX_EXECUTOR"] = prior

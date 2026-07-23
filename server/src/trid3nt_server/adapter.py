@@ -948,6 +948,19 @@ def _simplify_annotation(annotation: Any) -> Any:
             result = str
             return (result | None) if has_none else result  # type: ignore[return-value]
 
+        # ``float | int`` (either order) — both are the JSON Schema "number"
+        # type; collapsing keeps a single primitive (float accepts int values
+        # from the LLM boundary too) instead of falling through to "keep
+        # as-is", which left params like ``fetch_usace_dams(min_height_ft:
+        # float | int | None)`` as an unresolved multi-primitive union that
+        # ``from_callable_with_api_option`` schematizes WITHOUT a 'type' field
+        # (Vertex 400 INVALID_ARGUMENT trigger — see test_gemini_schema_
+        # compliance.test_every_property_has_type).
+        numeric_args = {a for a in simplified_non_none if a in (int, float)}
+        if numeric_args and len(numeric_args) == len(simplified_non_none):
+            result = float
+            return (result | None) if has_none else result  # type: ignore[return-value]
+
         # Last resort — keep as-is; the ``from_callable`` call may still succeed
         # for simple multi-type unions like ``int | str``.
         return annotation

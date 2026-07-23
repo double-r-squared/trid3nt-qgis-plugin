@@ -166,11 +166,29 @@ def test_stage_swmm_manifest_uploads_inp_and_manifest(tmp_path, monkeypatch):
     inp = tmp_path / "mesh.inp"
     inp.write_text("[TITLE]\nstub deck\n", encoding="utf-8")
 
+    # ``stage_swmm_manifest`` reads ``staging.build.{grid_shape,resolution_m,
+    # crs,transform}`` + ``staging.run_args.bbox`` to populate
+    # ``postprocess_spec`` (the worker-side georegistration the SWMM
+    # postprocess needs to scatter node depths onto the grid and reproject) --
+    # both are genuinely consumed, not "unused by staging" as this fixture's
+    # stale comment claimed. Use minimal stand-ins carrying just those
+    # attributes rather than the full ``BuildResult`` / ``SWMMRunArgs``
+    # machinery, since staging itself only reads through them.
+    import types
+
+    fake_build = types.SimpleNamespace(
+        grid_shape=(4, 4),
+        resolution_m=10.0,
+        crs="EPSG:4326",
+        transform=[0.0001, 0.0, -85.32, 0.0, -0.0001, 35.06],
+    )
+    fake_run_args = types.SimpleNamespace(bbox=(-85.32, 35.02, -85.28, 35.06))
+
     staging = SWMMStaging(
         run_id="run-stage-1",
         inp_path=str(inp),
-        build=object(),  # unused by staging
-        run_args=None,  # unused by staging
+        build=fake_build,
+        run_args=fake_run_args,
         building_footprints=None,
     )
 
@@ -207,7 +225,9 @@ def test_stage_swmm_manifest_uploads_inp_and_manifest(tmp_path, monkeypatch):
     manifest = _json.loads(body.decode("utf-8") if isinstance(body, bytes) else body)
     # The exact worker-contract shape (services/workers/swmm/entrypoint.py).
     assert manifest["swmm_args"] == ["mesh.inp"]
-    assert manifest["outputs"] == ["*.out", "*.rpt"]
+    # services/workers/swmm/entrypoint.py's own manifest-contract docstring
+    # globs *.tif alongside *.out/*.rpt (worker postprocess COGs).
+    assert manifest["outputs"] == ["*.out", "*.rpt", "*.tif"]
     assert len(manifest["inputs"]) == 1
     inp_entry = manifest["inputs"][0]
     assert inp_entry["dest"] == "mesh.inp"
@@ -526,25 +546,46 @@ def test_full_local_chain_emits_peak_plus_frames(synthetic_inputs, monkeypatch):
     assert peak.uri.startswith("http"), peak.uri
     assert not peak.uri.startswith("s3://") and not peak.uri.startswith("gs://")
 
-    # --- emitted layers partition: ONE mesh context layer + the depth frames ----
+    # --- emitted layers partition: mesh context layer(s) + the depth frames ----
     # NATE task #156: model_urban_flood_swmm now emits a quasi-2D computational
     # "mesh_grid" CONTEXT vector layer via add_loaded_layer right after the deck
     # build (before the depth frames), so fake.loaded_layers carries that mesh
     # layer ALONGSIDE the SWMMDepthLayerURI depth frames. The depth FRAMES are
-    # still the "Flood depth step N" SWMMDepthLayerURI group; the mesh is the new,
+    # still the "Flood depth step N" SWMMDepthLayerURI group; the mesh is a
     # NON-SWMMDepthLayerURI addition (an inline-geojson vector, NOT published).
+    # ``make_buildings_input_layer_uri`` separately emits an "input"-role
+    # "Building footprints (N)" vector layer (also non-SWMMDepthLayerURI) when
+    # footprints are supplied, so the non-depth-frame layers now partition into
+    # the mesh (style_preset="mesh_grid") plus that buildings-input layer
+    # (style_preset="osm_buildings") -- not a single "mesh_layers" bucket.
     depth_frames = [
         f for f in fake.loaded_layers if isinstance(f, SWMMDepthLayerURI)
     ]
-    mesh_layers = [
+    non_frame_layers = [
         f for f in fake.loaded_layers if not isinstance(f, SWMMDepthLayerURI)
     ]
+    mesh_layers = [f for f in non_frame_layers if f.style_preset == "mesh_grid"]
+    buildings_input_layers = [
+        f for f in non_frame_layers if f.style_preset == "osm_buildings"
+    ]
+
+    assert len(non_frame_layers) == len(mesh_layers) + len(buildings_input_layers), (
+        f"unexpected non-depth-frame layer(s): {[getattr(m, 'name', m) for m in non_frame_layers]}"
+    )
 
     # Exactly ONE computational-mesh context layer, with its #156 contract.
     assert len(mesh_layers) == 1, (
         f"expected exactly one mesh context layer; got {len(mesh_layers)}: "
         f"{[getattr(m, 'name', m) for m in mesh_layers]}"
     )
+    # Exactly ONE buildings-input layer (the synthetic deck's 2 footprints).
+    assert len(buildings_input_layers) == 1, (
+        f"expected exactly one buildings-input layer; got {len(buildings_input_layers)}: "
+        f"{[getattr(m, 'name', m) for m in buildings_input_layers]}"
+    )
+    buildings_layer = buildings_input_layers[0]
+    assert buildings_layer.role == "input", buildings_layer.role
+    assert buildings_layer.name.startswith("Building footprint"), buildings_layer.name
     mesh = mesh_layers[0]
     assert mesh.style_preset == "mesh_grid", mesh.style_preset
     assert mesh.role == "context", mesh.role
@@ -852,21 +893,40 @@ def test_batch_lane_returns_populated_peak_envelope(synthetic_inputs, monkeypatc
     assert peak.uri.startswith("http"), peak.uri
 
     # The Batch lane also emits the per-frame animation group out-of-band, PLUS
-    # the #156 computational-mesh context layer right after the deck build. Split
-    # the emitted layers: the depth FRAMES are SWMMDepthLayerURI; the mesh layer
-    # is the lone NON-SWMMDepthLayerURI addition (an inline-geojson vector).
+    # the #156 computational-mesh context layer right after the deck build, PLUS
+    # (when footprints are supplied) an "input"-role "Building footprints (N)"
+    # layer from ``make_buildings_input_layer_uri``. Split the emitted layers:
+    # the depth FRAMES are SWMMDepthLayerURI; the mesh + buildings-input layers
+    # are the NON-SWMMDepthLayerURI additions (both inline-geojson vectors),
+    # distinguished by style_preset (mesh_grid vs osm_buildings).
     depth_frames = [
         f for f in fake.loaded_layers if isinstance(f, SWMMDepthLayerURI)
     ]
-    mesh_layers = [
+    non_frame_layers = [
         f for f in fake.loaded_layers if not isinstance(f, SWMMDepthLayerURI)
     ]
+    mesh_layers = [f for f in non_frame_layers if f.style_preset == "mesh_grid"]
+    buildings_input_layers = [
+        f for f in non_frame_layers if f.style_preset == "osm_buildings"
+    ]
+
+    assert len(non_frame_layers) == len(mesh_layers) + len(buildings_input_layers), (
+        f"unexpected non-depth-frame layer(s): {[getattr(m, 'name', m) for m in non_frame_layers]}"
+    )
 
     # Exactly ONE computational-mesh context layer, with its #156 contract.
     assert len(mesh_layers) == 1, (
         f"expected exactly one mesh context layer; got {len(mesh_layers)}: "
         f"{[getattr(m, 'name', m) for m in mesh_layers]}"
     )
+    # Exactly ONE buildings-input layer (the synthetic deck's footprints).
+    assert len(buildings_input_layers) == 1, (
+        f"expected exactly one buildings-input layer; got {len(buildings_input_layers)}: "
+        f"{[getattr(m, 'name', m) for m in buildings_input_layers]}"
+    )
+    buildings_layer = buildings_input_layers[0]
+    assert buildings_layer.role == "input", buildings_layer.role
+    assert buildings_layer.name.startswith("Building footprint"), buildings_layer.name
     mesh = mesh_layers[0]
     assert mesh.style_preset == "mesh_grid", mesh.style_preset
     assert mesh.role == "context", mesh.role

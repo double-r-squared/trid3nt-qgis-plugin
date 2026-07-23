@@ -46,6 +46,16 @@ _EPSG = 32616  # UTM 16N
 _OX, _OY = 500000.0, 4000000.0
 
 
+@pytest.fixture(autouse=True)
+def _cap_gate_waits(monkeypatch):
+    """LANE C: cap every user-decision gate wait so a headless run never hangs
+    on the F6 24h local-lane lift (``_gate_wait_timeout``). Production leaves
+    ``TRID3NT_GATE_WAIT_CAP_S`` unset -> byte-identical behavior. Happy-path
+    approver tasks answer within milliseconds; the dedicated timeout test
+    tightens the cap so it hits the honest fail-closed path fast."""
+    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "5")
+
+
 def _write_dem_geotiff(path: Path) -> None:
     import rasterio
     from rasterio.crs import CRS
@@ -331,6 +341,10 @@ async def test_timeout_fails_closed(monkeypatch, dem_path: str) -> None:
 
     _patch_dem_fetch(monkeypatch, dem_path)
     monkeypatch.setattr(server, "CODE_EXEC_CONFIRM_TIMEOUT_SECONDS", 0)
+    # No client answers the card: the F6 local-lane gate would wait 24h, so the
+    # LANE C cap forces the honest timeout path quickly (a tight override of the
+    # autouse 5s net keeps this pure-timeout assertion fast).
+    monkeypatch.setenv("TRID3NT_GATE_WAIT_CAP_S", "0.05")
     ws, state = _FakeWS(), _FakeState()
 
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]

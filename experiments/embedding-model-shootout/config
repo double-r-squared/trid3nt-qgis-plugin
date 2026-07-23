@@ -1,0 +1,58 @@
+experiment: embedding-model-shootout
+engine: experiments/bench/retrieval_probe/run.py
+
+probe inputs (unchanged across all three runs, same as the extended-baseline
+data dir this experiment reuses for the incumbent):
+  experiments/bench/retrieval_probe/inputs/phrasings_specific.json  (30 records, register=specific)
+  experiments/bench/retrieval_probe/inputs/phrasings_vague.json     (30 records, register=vague)
+
+model-selection seam: server/src/trid3nt_server/tools/discovery/search_tools.py
+  _try_sentence_transformers_backend() previously hardcoded model id
+  "all-MiniLM-L6-v2". Added env override TRID3NT_EMBEDDING_MODEL (default
+  unchanged: all-MiniLM-L6-v2) -- this is the experiment's ONE allowed
+  server-src touch, per the task. No other server/src file changed.
+
+candidates (sentence-transformers, all local HF downloads, zero API cost):
+  incumbent_minilm    all-MiniLM-L6-v2        (88 MB on disk, 384-dim)
+  bge_small_en_v1_5   BAAI/bge-small-en-v1.5  (129 MB on disk, 384-dim, BEIR-strong)
+  gte_small           thenlper/gte-small      (65 MB on disk, 384-dim, BEIR-strong)
+
+command (identical for all three, only TRID3NT_EMBEDDING_MODEL differs):
+  venvs/agent/bin/python experiments/bench/retrieval_probe/run.py --runs 5 --k 5
+
+  incumbent_minilm:   (no env override; picks the code default)
+    -- NOT re-run: reused verbatim from
+       experiments/bench/retrieval_probe/data/20260723T034651Z-extended-baseline/
+       (same probe, same inputs, same --runs 5 --k 5; copied here + its
+       metrics_addendum.json from Lane E part 1's retro-compute)
+
+  bge_small_en_v1_5:
+    TRID3NT_EMBEDDING_MODEL="BAAI/bge-small-en-v1.5" \
+      venvs/agent/bin/python experiments/bench/retrieval_probe/run.py --runs 5 --k 5
+
+  gte_small:
+    TRID3NT_EMBEDDING_MODEL="thenlper/gte-small" \
+      venvs/agent/bin/python experiments/bench/retrieval_probe/run.py --runs 5 --k 5
+
+Each candidate's raw output (results.json, summary.txt, raw_rankings.jsonl)
+was copied verbatim from the engine's data/<timestamp>/ into
+data/<candidate>/ here; nothing was edited by hand. run.py's own
+--runs 5 --k 5 loop already reports nDCG@5/MRR@5 for the two new runs
+(sentence-transformers reruns get it natively); the incumbent's addendum was
+retro-computed via retro_compute_metrics.py (Lane E part 1) since that run
+predates the nDCG/MRR figures landing in run.py.
+
+reps: 5 per candidate (retrieval is deterministic per index build -- 5 reps
+mostly measure per-query timing variance, not different rankings; confirmed
+identical hit@5/nDCG/MRR across all 5 runs within each candidate, see
+data/*/summary.txt).
+
+zero external API cost: all three models are local HF sentence-transformers
+checkpoints (downloaded once to ~/.cache/huggingface/hub, then loaded
+offline); no permission flag needed per experiments/README.md (retrieval_probe
+is a zero-cost engine) -- NATE pre-approved the shootout concept per the task.
+
+decision rule (verbatim from the task): adopt a candidate ONLY if it beats
+MiniLM on vague hit@5 WITHOUT losing specific hit@5 or exceeding 50ms/query.
+If no candidate clears that bar, verdict MIXED and the incumbent stays (env
+default unchanged).

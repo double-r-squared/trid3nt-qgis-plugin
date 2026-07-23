@@ -418,7 +418,13 @@ def test_compute_contours_cache_hit_skips_fetch(fake_storage):
 
     dem_uri = "gs://test-bucket/cache/static-30d/dem/abc123.tif"
     params = {"dem_uri": dem_uri, "interval_m": 10.0}
-    key = compute_cache_key("contours", params, "static-30d", now=PINNED_NOW)
+    # ``compute_contours`` calls ``read_through`` without a ``now=`` override,
+    # so production keys on the REAL current time -- seeding with a key from
+    # the stale module-level ``PINNED_NOW`` drifts out of the same
+    # ``static-30d`` (YYYY-MM) bucket after the month rolls over, silently
+    # missing the cache. Compute the seeding key from the actual current time.
+    now = datetime.now(timezone.utc)
+    key = compute_cache_key("contours", params, "static-30d", now=now)
     path = make_cache_path("contours", "static-30d", key, "fgb")
     fake_storage.store[path] = fake_fgb
 

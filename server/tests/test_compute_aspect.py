@@ -432,7 +432,15 @@ def test_compute_aspect_cache_hit_skips_fetch(fake_storage):
         "algorithm": "Horn",
         "zero_for_flat": True,
     }
-    key = compute_cache_key("aspect", params, "static-30d", now=PINNED_NOW)
+    # ``compute_aspect`` calls ``read_through`` without a ``now=`` override, so
+    # production keys on the REAL current time -- seeding the fake store with a
+    # key computed from the stale module-level ``PINNED_NOW`` (frozen at authoring
+    # time) drifts out of the same ``static-30d`` (YYYY-MM) bucket after the
+    # month rolls over, silently missing the cache and falling through to the
+    # (unstubbed-for-real-IO) fetch path. Compute the seeding key from the
+    # actual current time so it always matches what the code under test uses.
+    now = datetime.now(timezone.utc)
+    key = compute_cache_key("aspect", params, "static-30d", now=now)
     path = make_cache_path("aspect", "static-30d", key, "tif")
     fake_storage.store[path] = fake_aspect
 

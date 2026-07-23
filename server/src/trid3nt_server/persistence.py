@@ -1200,7 +1200,7 @@ class Persistence:
         capture; ``metadata`` is ``{"owner-user-id": <owner>}`` or ``{}`` when
         the Case has no owner); production lazily constructs a boto3 S3 client
         whose creds boto3 resolves from the EC2 instance role (same chain as
-        ``case_lifecycle.default_gcs_copy`` / the dense-vector reader).
+        the dense-vector reader).
         """
         import json
 
@@ -1912,63 +1912,44 @@ class Persistence:
             },
         )
 
-    async def get_secret_value(
-        self,
-        secret_ref: "SecretRecord",
-        *,
-        secret_manager_client=None,
-        ssm_client=None,
-    ) -> str:
-        """Read the live key value from the vault backend (job-0124 + AWS fix).
+    async def get_secret_value(self, secret_ref: "SecretRecord") -> str:
+        """Read the live key value from the local file vault (job-0124).
 
         Called by Tier-2 fetchers (FIRMS / eBird / ERA5 / etc.) at
         tool-invocation time to materialize the raw key for the outbound
         HTTP request — including the credential-card RETRY path. The caller
         never logs the returned value.
 
-        Backend routing is by the ``vault_ref`` *scheme* (not the env), so a
-        key written under one backend still resolves even if the env later
-        flips — the env only chooses the WRITE backend:
-
-        - ``aws-ssm://<param-name>`` → AWS SSM ``get_parameter`` with
-          ``WithDecryption=True`` (KMS-decrypted SecureString). This is the
-          AWS-stack path (the prod EC2 box has no GCP ADC — the GCP path was
-          the demo blocker NATE hit 2026-06-17).
-        - ``gcp-sm://…`` or a bare ``projects/…/versions/…`` resource name →
-          GCP Secret Manager ``access_secret_version`` (the default path).
+        TRID3NT is the local product: there is exactly ONE vault backend
+        (the local file vault, ``file-vault://…``). Legacy cloud refs
+        (``aws-ssm://…``, ``gcp-sm://…``, bare GCP resource names, the
+        interim ``local-file://…`` JSON store) can no longer resolve —
+        ``secrets_handler.read_secret_value`` raises the typed
+        ``SecretNotFoundError`` for them (never a crash, never a silent
+        empty value); the credential-request card re-prompts the user.
 
         Fail-closed semantics:
 
         - If the record's ``is_active`` flag is ``False`` (soft-revoked),
-          we raise ``SecretRevokedError`` BEFORE touching any vault so a
+          we raise ``SecretRevokedError`` BEFORE touching the vault so a
           revoked secret never resurrects via stale cache.
-        - If the vault fetch raises (missing version, permission denied,
-          etc.) we surface the original exception — Tier-2 fetchers wrap
-          this in a tool-level error envelope.
+        - Otherwise resolution delegates to
+          ``secrets_handler.read_secret_value`` (the single read seam).
 
         Args:
             secret_ref: the persisted ``SecretRecord`` (vault-ref only).
-            secret_manager_client: optional pre-constructed GCP client (tests
-                pass a mock; production lazy-constructs a live client).
-            ssm_client: optional pre-constructed AWS SSM client (tests pass a
-                mock; production lazy-constructs a live boto3 client).
 
         Returns:
             The raw key value as a string. **Caller MUST NOT log this.**
 
         Raises:
             SecretRevokedError: when ``secret_ref.is_active is False``.
+            SecretNotFoundError: when the vault_ref cannot be resolved
+                (missing, malformed, or a legacy cloud scheme).
         """
         # Local import — avoids a circular dependency between persistence
         # and secrets_handler (which imports Persistence).
-        from .secrets_handler import (
-            AWS_SSM_VAULT_SCHEME,
-            GCP_SM_VAULT_SCHEME,
-            LOCAL_FILE_VAULT_SCHEME,
-            SecretRevokedError,
-            _default_ssm_client,
-            _file_read_secret,
-        )
+        from .secrets_handler import SecretRevokedError, read_secret_value
 
         if not secret_ref.is_active:
             raise SecretRevokedError(
@@ -1976,62 +1957,7 @@ class Persistence:
                 f"(provider={secret_ref.provider})"
             )
 
-        ref = secret_ref.vault_ref
-
-        # LOCAL file-vault path (fingerprint audit L8): checked FIRST so a
-        # local-build ref never touches a cloud client. Refs written by the
-        # local build carry the ``local-file://`` scheme; the value lives in
-        # the mode-0600 ``secrets_vault.json`` next to the file-persistence
-        # store.
-        if ref.startswith(LOCAL_FILE_VAULT_SCHEME):
-            return _file_read_secret(ref)
-
-        # AWS SSM Parameter Store SecureString path (AWS prod stack).
-        if ref.startswith(AWS_SSM_VAULT_SCHEME):
-            param_name = ref[len(AWS_SSM_VAULT_SCHEME) :]
-            client = ssm_client or _default_ssm_client()
-            response = client.get_parameter(
-                Name=param_name, WithDecryption=True
-            )
-            # boto3 returns {"Parameter": {"Value": "...", ...}}; mock clients
-            # used in tests return the same shape.
-            param = response.get("Parameter") if isinstance(response, dict) else None
-            value = param.get("Value") if isinstance(param, dict) else None
-            if value is None:
-                raise RuntimeError(
-                    "SSM get_parameter returned no Parameter.Value"
-                )
-            return str(value)
-
-        # GCP Secret Manager path (default). The stored vault_ref is the
-        # resource name (no scheme prefix); tolerate the legacy ``gcp-sm://``
-        # shape by stripping it before the SDK call.
-        name = ref
-        if name.startswith(GCP_SM_VAULT_SCHEME):
-            name = name[len(GCP_SM_VAULT_SCHEME) :]
-
-        client = secret_manager_client
-        if client is None:
-            from google.cloud import secretmanager  # local — production only
-
-            client = secretmanager.SecretManagerServiceClient()
-
-        response = client.access_secret_version(request={"name": name})
-        # The live SDK returns a ``SecretPayload`` proto with a ``data``
-        # bytes field. Mock clients used in tests return the same shape.
-        data = getattr(response, "payload", None)
-        raw = getattr(data, "data", None) if data is not None else None
-        if raw is None:
-            # Some mocks/proto variants stuff the bytes directly on the
-            # response. Try a fallback before failing.
-            raw = getattr(response, "data", None)
-        if raw is None:
-            raise RuntimeError(
-                "Secret Manager access_secret_version returned no payload data"
-            )
-        if isinstance(raw, bytes):
-            return raw.decode("utf-8")
-        return str(raw)
+        return read_secret_value(secret_ref.vault_ref)
 
     # ----- Audit log -------------------------------------------------------- #
 

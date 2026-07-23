@@ -770,7 +770,7 @@ def run_user_code(
 
 
 # --------------------------------------------------------------------------- #
-# Payload loading (Cloud Run Job env / args / GCS staging)
+# Payload loading (local args / env)
 # --------------------------------------------------------------------------- #
 
 
@@ -779,12 +779,15 @@ def load_payload(argv: list[str] | None = None) -> dict[str, Any]:
 
     1. ``--payload-file <path>`` CLI arg (a local JSON file — the local fallback
        path used by ``sandbox_runner`` in TRID3NT_SANDBOX_LOCAL mode).
-    2. ``TRID3NT_SANDBOX_PAYLOAD_URI`` env — a ``gs://`` JSON staging file the
-       Cloud Run Job reads via google-cloud-storage.
-    3. ``TRID3NT_SANDBOX_PAYLOAD`` env — an inline JSON string (small payloads).
+    2. ``TRID3NT_SANDBOX_PAYLOAD`` env — an inline JSON string (small payloads).
 
     Payload schema:
-        {"python_code": "<str>", "layer_refs": {"<name>": "gs://..."}}
+        {"python_code": "<str>", "layer_refs": {"<name>": "..."}}
+
+    TRID3NT is the local product: there is no GCS staging backend. A
+    ``TRID3NT_SANDBOX_PAYLOAD_URI`` env is honored ONLY honestly — a
+    ``gs://`` value raises a typed error naming the feature as absent
+    rather than pretending to fetch it.
     """
     argv = list(sys.argv[1:] if argv is None else argv)
 
@@ -795,10 +798,14 @@ def load_payload(argv: list[str] | None = None) -> dict[str, Any]:
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)
 
-    # 2. gs:// staging file
+    # 2. legacy GCS staging-file env — no longer resolvable on the local build.
     gs_uri = os.environ.get("TRID3NT_SANDBOX_PAYLOAD_URI", "").strip()
     if gs_uri:
-        return _load_payload_from_gcs(gs_uri)
+        raise ValueError(
+            f"TRID3NT_SANDBOX_PAYLOAD_URI={gs_uri!r} requests GCS payload "
+            "staging, which is not available on the local build; pass "
+            "--payload-file or set TRID3NT_SANDBOX_PAYLOAD (inline JSON)"
+        )
 
     # 3. inline JSON env
     inline = os.environ.get("TRID3NT_SANDBOX_PAYLOAD", "").strip()
@@ -807,19 +814,8 @@ def load_payload(argv: list[str] | None = None) -> dict[str, Any]:
 
     raise ValueError(
         "no sandbox payload found: pass --payload-file, or set "
-        "TRID3NT_SANDBOX_PAYLOAD_URI (gs://) or TRID3NT_SANDBOX_PAYLOAD (inline JSON)"
+        "TRID3NT_SANDBOX_PAYLOAD (inline JSON)"
     )
-
-
-def _load_payload_from_gcs(gs_uri: str) -> dict[str, Any]:
-    from google.cloud import storage  # noqa: PLC0415 — container-only
-
-    if not gs_uri.startswith("gs://"):
-        raise ValueError(f"not a gs:// URI: {gs_uri!r}")
-    bucket_name, _, blob_name = gs_uri[len("gs://") :].partition("/")
-    client = storage.Client(project=os.environ.get("GCP_PROJECT"))
-    blob = client.bucket(bucket_name).blob(blob_name)
-    return json.loads(blob.download_as_text())
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -418,7 +418,13 @@ def test_compute_hillshade_cache_hit_skips_fetch(fake_storage):
         "altitude": 45.0,
         "z_factor": 1.0,
     }
-    key = compute_cache_key("hillshade", params, "static-30d", now=PINNED_NOW)
+    # ``compute_hillshade`` calls ``read_through`` without a ``now=`` override,
+    # so production keys on the REAL current time -- seeding with a key from
+    # the stale module-level ``PINNED_NOW`` drifts out of the same
+    # ``static-30d`` (YYYY-MM) bucket after the month rolls over, silently
+    # missing the cache. Compute the seeding key from the actual current time.
+    now = datetime.now(timezone.utc)
+    key = compute_cache_key("hillshade", params, "static-30d", now=now)
     path = make_cache_path("hillshade", "static-30d", key, "tif")
     fake_storage.store[path] = fake_hs
 

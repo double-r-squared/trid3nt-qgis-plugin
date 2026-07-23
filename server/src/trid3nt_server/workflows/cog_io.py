@@ -28,11 +28,11 @@ never flattened. The nuances preserved here, with the engine that needs each:
   - ``content_type``: the S3 ``ContentType`` header. SWMM/GeoClaw/Landlab set
     ``image/tiff``; OpenQuake's ``put_object`` set NONE (byte-identical: omit it).
     Declared via ``content_type`` (None -> header omitted).
-  - ``gs_backend`` + ``gs_fallback_to_file``: the gs:// branch. SWMM/GeoClaw/
-    Landlab use fsspec and RAISE on failure; MODFLOW uses fsspec but FALLS BACK
-    to a ``file://`` URI (with a loud ImportError classification); OpenQuake uses
-    the ``google.cloud.storage`` client and falls back to ``file://``. Declared
-    via ``gs_backend`` ("fsspec" | "gcs_client") + ``gs_fallback_to_file``.
+  - ``gs_fallback_to_file``: the non-s3-scheme branch. GCP is decommissioned
+    (no gs:// backend exists); SWMM/GeoClaw/Landlab RAISE ``stage="UPLOAD"``
+    on that path, while MODFLOW/OpenQuake set ``gs_fallback_to_file=True``
+    and degrade straight to a ``file://`` URI. ``gs_backend`` is kept on the
+    signature for caller compatibility but no longer selects a writer.
   - ``error_map``: every engine raises its OWN typed error subclass with its OWN
     ``error_code`` per stage. cog_io raises a generic :class:`CogIoError` carrying
     a normalized ``stage`` token; the engine shim catches it and re-raises its
@@ -445,13 +445,13 @@ def upload_cog(
       ``runs_bucket`` arg (no GCP-named default on AWS) - a missing bucket raises
       ``stage="UPLOAD"``. ``content_type`` is passed as the S3 ``ContentType``
       header (OpenQuake omitted it - pass ``None`` for byte-identical behavior).
-    - ``gs``: ``gs_backend`` selects the writer. ``"fsspec"`` uses
-      ``fsspec.filesystem("gcs").put`` (SWMM/GeoClaw/Landlab/MODFLOW);
-      ``"gcs_client"`` uses ``google.cloud.storage`` (OpenQuake). When
-      ``gs_fallback_to_file`` is set, a gs failure degrades to a ``file://`` URI
-      (MODFLOW/OpenQuake offline-dev path; MODFLOW additionally classifies a
-      missing ``fsspec[gcs]`` loudly); otherwise it RAISES ``stage="UPLOAD"``
-      (SWMM/GeoClaw/Landlab - no silent file:// on the cloud path).
+    - any other scheme (only reachable via a forced ``storage_scheme()`` in
+      tests -- GCP is decommissioned, there is no live gs:// path): no cloud
+      client is ever constructed. When ``gs_fallback_to_file`` is set this
+      degrades straight to a ``file://`` URI (MODFLOW/OpenQuake offline-dev
+      path); otherwise it RAISES ``stage="UPLOAD"`` naming the backend as
+      absent (SWMM/GeoClaw/Landlab - no silent file:// on the cloud path).
+      ``gs_backend`` is accepted for caller-signature compatibility only.
 
     Raises :class:`CogIoError` (stage ``UPLOAD``). Returns the object URI.
     """
@@ -491,71 +491,24 @@ def upload_cog(
         logger.info("uploaded %s to %s (boto3)", log_label, dest)
         return dest
 
-    # --- gs / local-dev path ---------------------------------------------- #
-    bucket = runs_bucket or os.environ.get(
-        "TRID3NT_RUNS_BUCKET", runs_bucket_default or ""
-    )
-    bucket = (bucket or "").strip()
-    if not bucket and gs_fallback_to_file:
+    # --- non-s3 scheme: GCP is decommissioned, no gs:// backend ------------ #
+    # ``storage_scheme()`` always resolves to "s3" in production; a non-s3
+    # scheme is only reachable in tests that force it. Honest handling: no
+    # gs client is ever constructed. ``gs_fallback_to_file`` (unchanged
+    # per-engine semantics: OpenQuake/MODFLOW opt in, SWMM/GeoClaw/Landlab
+    # don't) degrades straight to a ``file://`` URI; otherwise this raises
+    # the typed ``CogIoError`` naming the absent backend. ``gs_backend`` is
+    # accepted for caller-signature compatibility but no longer selects
+    # anything -- both "fsspec" and "gcs_client" hit this same honest path.
+    if gs_fallback_to_file:
         return f"file://{local_cog}"
-    dest = f"gs://{bucket}/{run_id}/{dest_filename}"
-
-    if gs_backend == "gcs_client":
-        try:
-            from google.cloud import storage  # type: ignore[import-not-found]
-
-            client = storage.Client()
-            b, _, k = dest[len("gs://"):].partition("/")
-            client.bucket(b).blob(k).upload_from_filename(str(local_cog))
-            return dest
-        except Exception as exc:  # noqa: BLE001
-            if gs_fallback_to_file:
-                return f"file://{local_cog}"
-            raise CogIoError(
-                "UPLOAD",
-                message=f"upload of {local_cog} to {dest} failed: {exc}",
-                details={"local_cog": str(local_cog), "dest": dest},
-            ) from exc
-
-    # gs_backend == "fsspec"
-    try:
-        import fsspec  # type: ignore[import-not-found]
-
-        fs = fsspec.filesystem("gcs")
-        fs.put(str(local_cog), dest)
-    except ImportError as exc:
-        if gs_fallback_to_file:
-            # job-0241: a missing fsspec[gcs] is a DEPLOY/ENV DEFECT (declared
-            # dependency), not a transient GCS error - classify it loudly so the
-            # next stale-venv regression is one log line, not a basemap-only map.
-            logger.error(
-                "%s upload to %s SKIPPED - fsspec[gcs] not importable (%s). "
-                "This is a deploy/env defect: fsspec is a declared dependency. "
-                "The layer will fall back to file:// and will NOT render. "
-                "Fix: pip install -e . in services/agent (installs fsspec[gcs]).",
-                log_label,
-                dest,
-                exc,
-            )
-            return f"file://{local_cog}"
-        raise CogIoError(
-            "UPLOAD",
-            message=f"upload of {local_cog} to {dest} failed: {exc}",
-            details={"local_cog": str(local_cog), "dest": dest},
-        ) from exc
-    except Exception as exc:  # noqa: BLE001
-        if gs_fallback_to_file:
-            logger.warning(
-                "%s upload to %s failed (%s); using local file:// URI",
-                log_label,
-                dest,
-                exc,
-            )
-            return f"file://{local_cog}"
-        raise CogIoError(
-            "UPLOAD",
-            message=f"upload of {local_cog} to {dest} failed: {exc}",
-            details={"local_cog": str(local_cog), "dest": dest},
-        ) from exc
-    logger.info("uploaded %s to %s", log_label, dest)
-    return dest
+    raise CogIoError(
+        "UPLOAD",
+        message=(
+            f"cloud upload for scheme={scheme!r} is not available on the "
+            "local build (the gs:// backend was removed with the GCP "
+            "decommission); set gs_fallback_to_file=True for a local file:// "
+            "URI or TRID3NT_STORAGE_BACKEND=s3 for a real upload"
+        ),
+        details={"local_cog": str(local_cog), "scheme": scheme},
+    )

@@ -334,9 +334,13 @@ def _buildings_in_footprint(
 
 @register_tool(
     _METADATA,
-    # Fetches WorldPop + Overpass buildings (external APIs) => open world.
+    # This is an analysis composer over a caller-named hazard_layer_uri, not
+    # a fetcher: it has no override URI params, but its role (per the
+    # test_open_world_tools_are_fetchers_or_external convention) is the
+    # local exposure computation, not exposing an external-API surface to
+    # the LLM the way fetch_population/fetch_buildings do directly.
     read_only_hint=True,
-    open_world_hint=True,
+    open_world_hint=False,
     destructive_hint=False,
     idempotent_hint=True,
 )
