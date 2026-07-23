@@ -94,3 +94,46 @@ BUILD ORDER (proposal)
 3. Group D (param setters) - atomic, sets up calibration without the loop.
 4. Group E (optimizer drivers) - FROZEN with the orchestration/loop layer.
 Each tool: verify package usage -> unit-correct -> live-data test harness.
+
+============================================================
+F. Webinar-derived review primitives (NATE - the AWS flood-review lecture)
+============================================================
+These come from PRACTICE (the review webinar), NOT the calibration packages.
+DEDUP RULE (NATE): before making a tool, confirm the check has NO home in the
+engine module / calibration package - only build where there's a real gap.
+Verdict per item: [pkg] already covered -> reuse; [gap] genuinely new tool;
+[data] a cross-check against data we already fetch; [human] not a tool.
+
+17. check_peak_in_window     [gap] - duration sufficiency: did max stage/flow
+     occur in the final time-slice? -> "peak likely truncated, extend duration"
+     (webinar 12:00). No package does this; reads the engine timeseries.
+18. check_trapped_water      [gap] - boundary-failure symptom: water still
+     rising / not receding at sim end with no downstream BC (webinar 38:28).
+     New; reads the last output frames + the deck's BC config.
+19. check_volume_vs_forcing  [gap] - volume sanity: total modeled water volume
+     / catchment area = implied rainfall depth; compare to the forcing WE
+     supplied (webinar 49:55). Arithmetic; new.
+20. check_parameter_vs_landcover [data] - assigned imperviousness/roughness
+     vs the NLCD landcover we ALREADY fetch for the same AOI (industrial site
+     at 100% pervious = catchable) (webinar 14:42). Cross-check, not a package.
+21. check_obstructions_present [data] - urban domain + zero building
+     obstructions in the mesh -> warn (webinar 41:26). We already fetch
+     footprints + treat them as obstructions; this is a count check.
+22. check_lidar_artifacts    [gap/hard] - culverts modeled "in the air" from
+     unstripped vegetation in LiDAR (webinar 20:46). HARD - may be human-only;
+     research whether any DEM-hydro-conditioning check applies. Flag, don't
+     assume a tool.
+
+ALREADY COVERED BY THE ENGINE MODULE (do NOT build - webinar item has a home):
+- Mass balance / continuity (webinar 19:10) -> read_*_diagnostics (A). [pkg]
+- Numerical stability / instability (webinar) -> Flow Instability Index in
+  read_swmm_diagnostics; CFL cell in read_sfincs_diagnostics. [pkg]
+- First-principle metrics (Q=VA, structure capacity) -> compute_skill_metrics
+  (B) where observations exist; manual nomograph cross-ref is [human].
+
+HUMAN-ONLY (webinar - never a tool, only a review-card prompt):
+- Dynamic visual review / vector arrows (33:47) - one-click animation is a UX
+  affordance, the SEEING is human.
+- Local knowledge / flow-path reasonableness / event selection (23:05) -
+  the tier-3 checklist. [human]
+- Collaborative walkthrough (43:32) - a workflow norm, not a tool.
