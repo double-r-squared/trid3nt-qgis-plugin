@@ -18,23 +18,56 @@ sync.
 To extend the harness (write a tool / add an engine), see
 `docs/authoring/writing-a-tool.md` and `docs/authoring/adding-an-engine.md`.
 
-## Quickstart
+## Install paths
 
-Prerequisites: Linux x86_64, Python 3.12, Node 20+, [uv](https://astral.sh/uv),
-and **Docker** (for the container-based solvers). Your user must be in the
-`docker` group (log out/in after being added, or wrap docker-touching commands in
-`sg docker -c '...'`). An LLM endpoint: either [ollama](https://ollama.com) local,
-or an API key for OpenAI/OpenRouter/Groq/etc.
+There are three ways to end up running TRID3NT, depending on which machine you're
+setting up:
+
+| Path | Machine | Steps | Needs QGIS? | Needs git/venv/docker? |
+|------|---------|-------|-------------|-------------------------|
+| **Daemon-only** | PC / headless box that runs the server | `git clone` + `make setup && make up` | No -- `qgis-plugin/` is inert, nothing there is ever loaded | Yes |
+| **Client-only** | laptop that just wants the QGIS dock | `make plugin-zip` on *any* checkout produces `dist/trid3nt-plugin-<version>.zip` -- copy that one file over, then QGIS: **Plugins > Install from ZIP**, then **Settings > Server URL** | Yes | No -- no clone, no venv, no server on this machine |
+| **Both** | one dev machine | `git clone` + `make setup && make up` + `make plugin` (syncs into your QGIS profile; reload in QGIS) | Yes | Yes |
+
+Full walkthrough per path (prerequisites, troubleshooting): [docs/site/install.md](docs/site/install.md).
+
+### Daemon-only / Both
 
 ```sh
 make setup     # one-time: create .env.local, fetch binaries (mf6/minio/mc), build the agent venv
 #              then edit .env.local -- set your LLM endpoint + key (make env writes a starter .env.local)
 make up        # start the local stack: minio (:9000) + agent (:8765 WS / :8766 HTTP)
-make plugin    # install the QGIS plugin into your QGIS profile
+make plugin    # (Both only) install the QGIS plugin into your QGIS profile
 #              then in QGIS: enable the TRID3NT plugin (or Plugin Reloader to reload)
 make status    # health-check the services
 ```
 
+Prerequisites: Linux x86_64, Python 3.12, [uv](https://astral.sh/uv), and **Docker**
+(for the container-based solvers). Your user must be in the `docker` group (log
+out/in after being added, or wrap docker-touching commands in `sg docker -c
+'...'`). An LLM endpoint: either [ollama](https://ollama.com) local, or an API key
+for OpenAI/OpenRouter/Groq/etc.
+
+### Client-only
+
+```sh
+make plugin-zip   # run on any checkout (repo clone not required on the client itself)
+#                 writes dist/trid3nt-plugin-<version>.zip
+```
+
+Copy `dist/trid3nt-plugin-<version>.zip` to the client machine, then in QGIS:
+**Plugins > Manage and Install Plugins > Install from ZIP**. Only prerequisite:
+QGIS 3.28+. See [qgis-plugin/README.md](qgis-plugin/README.md) for the full
+client walkthrough (Server URL / token settings, test suite).
+
+### Remote daemon (tailnet)
+
+A client machine points its plugin's **Server URL** at the daemon's [Tailscale](https://tailscale.com)
+address instead of loopback, e.g. `ws://100.x.x.x:8765/ws` -- everything else
+(MinIO, the HTTP catalog) is advertised automatically by the server on connect. Set
+`TRID3NT_ACCESS_TOKEN` on the daemon for a shared-secret lock; see
+[Remote daemon access (tailnet)](docs/site/configuration.md#remote-daemon-access-tailnet)
+for the full picture.
 
 ### LLM endpoint (.env.local)
 

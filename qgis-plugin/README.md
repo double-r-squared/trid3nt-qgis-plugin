@@ -62,35 +62,70 @@ copy-pasting file paths.
 ## Requirements
 
 - QGIS 3.28 or later
-- A running TRID3NT local stack (agent + supporting services) -- this is a
-  separate project (link TBD). The plugin only connects to the stack over
-  WebSocket; it never starts or stops it.
+- A running TRID3NT local stack (agent + MinIO + supporting services). This
+  plugin lives in the same repo as that stack (`trid3nt-local`, the parent
+  directory of this one) -- see the [daemon-only install](../docs/site/install.md#daemon-only-install-from-scratch)
+  if you need to stand one up. The plugin only connects to the stack over
+  WebSocket; it never starts or stops it, and a client-only machine (see
+  below) needs none of that -- just QGIS.
 
 ## Install
 
-**From ZIP (recommended for users):**
+There are two ways to get this plugin into QGIS, depending on whether this
+machine also runs the server (see the repo root's
+[three-path install matrix](../README.md#install-paths)).
+
+**From ZIP (client-only -- no git, no venv, no server on this machine):**
+
+From the repo root (run on the daemon machine, or any checkout -- not
+necessarily this one):
 
 ```bash
-git clone https://github.com/double-r-squared/trid3nt-qgis-plugin.git
-cd trid3nt-qgis-plugin
-make zip
+make plugin-zip
 ```
 
-Then in QGIS: **Plugins > Manage and Install Plugins > Install from ZIP**,
-and point it at the generated `trid3nt.zip`.
+writes `dist/trid3nt-plugin-<version>.zip` (e.g. `dist/trid3nt-plugin-0.3.2.zip`).
+Copy that one file to the client machine, then in QGIS: **Plugins > Manage
+and Install Plugins > Install from ZIP**, and point it at the file.
 
-**Straight into your profile (for local development):**
+**Dev install (this machine also runs the server):**
+
+From the repo root:
 
 ```bash
-make install
+make plugin
 ```
 
-This unzips the plugin directly into
-`~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt`.
+This runs `scripts/install_plugin.sh`, which `rsync -a --delete`s
+`qgis-plugin/trid3nt/` into
+`~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/trid3nt/`. **QGIS
+loads that installed profile copy, never this repo checkout directly** -- a
+plugin-code edit needs `make plugin` run again before QGIS sees it, and even
+then QGIS keeps running the OLD code in memory until you reload:
+**Plugins > Plugin Reloader** (or restart QGIS). `scripts/install_plugin.sh
+--check` diff-checks what a sync would change without touching anything.
 
 Either way, enable **TRID3NT** in the Plugin Manager afterward (check "Show
 also Experimental Plugins" under Settings -- the plugin currently ships with
 `experimental=True`).
+
+## Server URL and token settings
+
+Open the dock (toolbar trident icon) > **Settings**. The "Server" section is
+exactly two fields:
+
+- **Server URL** -- `ws://127.0.0.1:8765/ws` by default (the local daemon on
+  this same machine). Point it at a remote daemon's tailnet address instead,
+  e.g. `ws://100.x.x.x:8765/ws`, for the client-only setup.
+- **Server token** -- leave blank unless the daemon set the
+  `TRID3NT_ACCESS_TOKEN` environment variable, in which case paste the same
+  value here.
+
+That one URL is the whole setup -- MinIO and the agent's HTTP API are
+auto-derived from the connect handshake, not configured separately. See
+[Remote daemon access (tailnet)](../docs/site/configuration.md#remote-daemon-access-tailnet)
+for the full derivation. The LLM model can also be switched live from
+Settings (no restart).
 
 ## Quick start
 
@@ -107,28 +142,35 @@ also Experimental Plugins" under Settings -- the plugin currently ships with
 
 ## Development
 
-The connection layer (`trid3nt/trid3nt_client.py`) is a deliberately
-**stdlib-only** RFC 6455 WebSocket client (~200 lines: handshake, masking,
-fragmentation, ping/pong, TLS via `ssl`). QGIS's bundled Python does not
-reliably ship a WebSocket library across platforms, and vendoring one adds a
-third-party tree to maintain for a small protocol surface -- so the client,
-and everything else that can avoid it, has no PyQGIS/PyQt import and is
-testable with plain CPython.
+The connection layer (`trid3nt/net/trid3nt_client.py`) is a deliberately
+**stdlib-only** RFC 6455 WebSocket client (handshake, masking, fragmentation,
+ping/pong, TLS via `ssl`). QGIS's bundled Python does not reliably ship a
+WebSocket library across platforms, and vendoring one adds a third-party tree
+to maintain for a small protocol surface -- so the client, and everything
+else that can avoid it, has no PyQGIS/PyQt import and is testable with plain
+CPython.
+
+From this directory (needs the agent venv from the root `make venv` /
+`make setup` -- `make test` defaults `PYTHON` to `../venvs/agent/bin/python`):
 
 ```bash
 make test
 ```
 
-runs the full pure-Python test suite (176 tests) -- no QGIS installation is
-required for most of it. A small subset that exercises real Qt signal wiring
-runs in a subprocess against the system PyQt5 interpreter and skips honestly
-when one isn't available. See `trid3nt/trid3nt_client.py`'s module docstring
-for the full protocol reference, and `tests/` for coverage details.
+runs the full pure-Python test suite (300 tests as of this writing -- run
+`make test` for the current count) -- no QGIS installation is required for
+most of it. A small subset that exercises real Qt signal wiring runs in a
+subprocess against the system PyQt5 interpreter and skips honestly when one
+isn't available. See `trid3nt/net/trid3nt_client.py`'s module docstring for
+the full protocol reference, and `tests/` for coverage details.
 
-Other Makefile targets:
+Other Makefile targets local to this directory:
 
 ```bash
-make install   # zip + unzip into the default QGIS profile
+make zip       # trid3nt.zip (unversioned) -- for iterating on the plugin without
+               # the repo-root plugin-zip/plugin flow above
+make install   # zip + unzip into the default QGIS profile (no --delete; prefer
+               # the repo root's `make plugin` for a clean sync, see Install above)
 make clean     # remove build artifacts
 ```
 
