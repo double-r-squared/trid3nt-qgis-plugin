@@ -312,44 +312,32 @@ async def query_point_hazard(
 ) -> dict[str, Any]:
     """Sample every raster layer in the current Case at one point.
 
-    **What it does:** Resolves a location (an explicit ``lon``/``lat`` pair,
-    or a free-text ``place`` geocoded through the same Nominatim machinery as
-    ``geocode_location``), then samples EVERY raster layer loaded on the Case
-    at that point and returns the per-layer values with units when known.
+    Use this when: "what's the flood depth at my house / 123 Main St /
+    this point?" or "what do all the layers say at Fort Myers pier?" --
+    one call reads the whole loaded raster stack at a point instead of N
+    zonal calls. Resolves ``lon``/``lat`` or a geocoded ``place``. Do NOT
+    use for: area statistics (``compute_zonal_statistics``/
+    ``spatial_query``); a time series over frames
+    (``extract_timeseries_at_point``); vector layers (skipped here; use
+    vector query tools).
 
-    **When to use:**
-    - "What's the flood depth at my house / at 123 Main St / at this point?"
-    - "What do all the layers say at Fort Myers pier?" -- one call reads the
-      whole loaded stack at a point instead of N zonal calls.
+    Params:
+        lon/lat: explicit EPSG:4326 coords (both required if used; wins
+            over ``place``).
+        place: free-text place name to geocode.
+        case_id: Case to sample; default the turn's bound Case.
 
-    **When NOT to use:**
-    - Area statistics (use ``compute_zonal_statistics`` for rasters /
-      ``spatial_query`` for vectors).
-    - A time series over animation frames at a point -- use
-      ``extract_timeseries_at_point``.
-    - Vector layers (building footprints, boundaries): they are listed as
-      skipped here; use vector query tools instead.
+    Returns:
+        ``{"location": {lon, lat, label}, "case_id", "case_title",
+        "results": [{layer_id, name, value, units, note?, error?}, ...],
+        "skipped_vector_layers", "sampled_count", "computed_at"}``.
+        Per-layer failures are honest entries, never fabricated.
 
-    **Parameters:**
-    - ``lon`` / ``lat``: explicit EPSG:4326 coordinates (both required when
-      used; wins over ``place``).
-    - ``place``: free-text place name to geocode (e.g. "Mexico Beach, FL").
-    - ``case_id``: the Case whose layers to sample. Default: the Case bound
-      to the current turn.
-
-    **Returns:** dict with ``location`` ({lon, lat, label}), ``case_id``,
-    ``case_title``, ``results`` (one entry per raster layer:
-    ``{layer_id, name, value, units, note?, error?}`` -- ``value=None``
-    with a ``note`` for outside-extent/nodata, ``value=None`` with an
-    ``error`` for an unreadable layer), ``skipped_vector_layers`` (names),
-    ``sampled_count``, ``computed_at``. Per-layer failures are honest
-    entries, never fabricated values.
-
-    **Errors (FR-AS-11):** ``PointHazardInputError`` (no/invalid location or
-    geocode miss), ``NoCaseBoundError`` (no case_id and no turn Case),
-    ``NoCaseLayersError`` (the Case has no layers, or none of them is a
-    raster), ``PointHazardUpstreamError`` (persistence unavailable / case
-    not found).
+    Raises:
+        PointHazardInputError: no/invalid location or geocode miss.
+        NoCaseBoundError: no case_id and no turn Case.
+        NoCaseLayersError: Case has no layers, or none is a raster.
+        PointHazardUpstreamError: persistence unavailable / case not found.
     """
     q_lon, q_lat, label = resolve_point(lon, lat, place)
     resolved_case = resolve_case_id(case_id)

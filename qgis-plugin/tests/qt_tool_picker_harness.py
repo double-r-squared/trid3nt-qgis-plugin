@@ -17,8 +17,11 @@ the fixed interface contract):
   2. PICK: select a candidate radio + Confirm -> EXACTLY ONE
      ``send_tool_choice(request_id, tool_name, None)`` through the bridge
      hook; the card locks (single-answer -- a second Confirm is a no-op) and
-     folds to the chip "picked <tool>". A later turn event must NOT re-fold
-     an answered card to "agent proceeded".
+     folds to the chip "picked <tool>" (prefixed "Step N: " -- LANE P
+     2026-07-22 wave-picker UX; every card in this harness lands in the same
+     never-reset turn, so the chips run Step 1..4 in creation order). A
+     later turn event must NOT re-fold an answered card to "agent
+     proceeded".
   3. FREE TEXT: typing selects the free-text radio; Confirm sends
      ``(None, stripped_text)`` and folds to the guidance chip.
   4. EMPTY-CONFIRM HONESTY: Confirm with nothing selected consumes NO
@@ -141,7 +144,10 @@ assert tool_choice_sends == [
 ], f"pick send wrong: {tool_choice_sends}"
 assert card.answered
 assert not card.confirm_btn.isEnabled(), "card must lock after answering"
-assert card.summary_lbl.text() == "picked spatial_query", card.summary_lbl.text()
+# Wave-picker UX (LANE P, 2026-07-22): every picker this harness shows lands
+# in the SAME (never-_send-reset) turn, so the chip carries the running
+# "Step N" prefix -- this is card 1 of the sequence below.
+assert card.summary_lbl.text() == "Step 1: picked spatial_query", card.summary_lbl.text()
 assert card._summary_container.isVisible() and not card._body.isVisible()
 card.confirm_btn.click()  # locked -- a second answer must not send
 card.decide_btn.click()
@@ -151,7 +157,7 @@ assert len(tool_choice_sends) == 1, "single-answer lock violated"
 # A later turn event must NOT re-fold an ANSWERED card to "agent proceeded".
 dock._on_event("chunk", {"delta": "Running spatial_query."})
 pump()
-assert card.summary_lbl.text() == "picked spatial_query", (
+assert card.summary_lbl.text() == "Step 1: picked spatial_query", (
     "answered chip was clobbered by the supersede sweep"
 )
 assert dock._open_tool_pickers == [], "answered card must leave the open list"
@@ -174,7 +180,7 @@ assert tool_choice_sends[-1] == (
     None,
     "summarize the building layer instead",
 ), f"free-text send wrong: {tool_choice_sends[-1]}"
-assert card2.summary_lbl.text() == "sent guidance to the agent"
+assert card2.summary_lbl.text() == "Step 2: sent guidance to the agent"
 print("[free-text] typed guidance send + chip ok")
 
 # ---- 4. EMPTY-CONFIRM HONESTY ---------------------------------------------- #
@@ -194,7 +200,7 @@ assert card3.result_lbl.isVisible(), "empty Confirm must show the honest note"
 card3.decide_btn.click()
 pump()
 assert tool_choice_sends[-1] == (STUB_TOOL_CANDIDATES_REQUEST_ID, None, None)
-assert card3.summary_lbl.text() == "agent decided"
+assert card3.summary_lbl.text() == "Step 3: agent decided"
 print("[decide] let-agent-decide send + chip 'agent decided' ok")
 
 # ---- 6. UNANSWERED FOLD ---------------------------------------------------- #
@@ -207,7 +213,7 @@ n_before = len(tool_choice_sends)
 dock._on_event("chunk", {"delta": "No answer -- proceeding with spatial_query."})
 pump()
 assert card4.answered, "unanswered card must fold when the turn moves on"
-assert card4.summary_lbl.text() == "agent proceeded", card4.summary_lbl.text()
+assert card4.summary_lbl.text() == "Step 4: agent proceeded", card4.summary_lbl.text()
 assert not card4.confirm_btn.isEnabled(), "superseded card must lock"
 assert len(tool_choice_sends) == n_before, "superseded card must NOT reply"
 assert dock._open_tool_pickers == []

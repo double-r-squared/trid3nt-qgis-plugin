@@ -418,56 +418,37 @@ def compute_terrain_profile(
 ) -> dict[str, Any]:
     """Sample DEM elevation along a line and chart the terrain (long) profile.
 
-    Use this when the user wants the ELEVATION / TERRAIN PROFILE of the ground
-    along a drawn or derived line -- "show the elevation profile across this
-    ridge", "plot the terrain profile along the road", "what does the ground
-    look like along this transect", "long profile of the valley floor". The
-    x-axis is distance-along-the-line in metres (geodesic); the y-axis is
-    elevation in the DEM's native units.
+    Use this when: the user wants the elevation/terrain profile along a
+    drawn or derived line -- "elevation profile across this ridge",
+    "terrain profile along the road". x-axis = distance (m, geodesic),
+    y-axis = elevation. Pass ``extra_layer_uris`` (up to 3) to overlay
+    multiple DEMs on the same line (bare-earth vs topo-bathy, pre/post
+    event). Line may be projected differently per DEM -- stations are
+    reprojected into each raster's CRS automatically. Do NOT use for:
+    non-terrain value sections (``compute_cross_section``); a distribution
+    (``generate_histogram``); over time (``generate_time_series``); a
+    single number (``compute_zonal_statistics`` over a buffered line).
 
-    Multi-DEM overlay: pass ``extra_layer_uris`` to overlay several elevation
-    surfaces on the SAME line and distance axis (e.g. bare-earth DEM vs
-    topo-bathy, pre- vs post-event terrain). Cap of 4 DEMs.
-
-    CRS correctness: the line is EPSG:4326 (lon/lat); each DEM may be in a
-    projected CRS (UTM, etc.). The tool reprojects the sample stations into each
-    raster's CRS before sampling, so a lon/lat line over a UTM DEM samples the
-    correct cells (NOT all nodata).
-
-    The line input (any of):
-        - A user-DRAWN line: ``request_spatial_input(mode="vector_draw")``, then
-          pass the returned FeatureCollection (FIRST LineString used).
-        - An agent-DERIVED line: construct endpoints and pass a GeoJSON
-          LineString or a ``[[lon,lat], [lon,lat], ...]`` list.
-
-    Do NOT use this for: a non-terrain value section view across a flood/head
-    raster (use ``compute_cross_section``, the general distance-vs-value tool);
-    a value distribution (``generate_histogram``); a value over time
-    (``generate_time_series``); a single number for the line
-    (``compute_zonal_statistics`` over a buffered line).
-
-    Parameters:
-        layer_uri: ``s3://`` URI or local path of the PRIMARY DEM / elevation COG
-            (``fetch_dem`` / ``fetch_topobathy`` / ``fetch_3dep_extra`` output).
-        line: the profile line -- a GeoJSON LineString / Feature /
-            FeatureCollection, or a list of ``[lon, lat]`` vertices (EPSG:4326,
-            lon-first). At least 2 distinct vertices.
-        n_samples: number of evenly-spaced sample stations along the line
-            (default 200; clamped to [2, 2000]).
-        extra_layer_uris: OPTIONAL up to 3 additional DEM URIs to overlay on the
-            same line. Sampled over the SAME stations; uncovered stations read
-            null and that surface's line breaks there.
+    Params:
+        layer_uri: primary DEM/elevation COG (``fetch_dem``/
+            ``fetch_topobathy``/``fetch_3dep_extra`` output).
+        line: GeoJSON LineString/Feature/FeatureCollection or
+            ``[[lon,lat],...]`` list (EPSG:4326), >=2 vertices. Use
+            ``request_spatial_input(mode="vector_draw")`` for a user-drawn
+            line, or construct endpoints directly.
+        n_samples: sample count along the line (default 200, [2, 2000]).
+        extra_layer_uris: optional up to 3 additional DEMs on the same
+            stations; uncovered stations read null.
 
     Returns:
-        A ChartEmissionPayload dict (``envelope_type="chart-emission"``) carrying
-        a Vega-Lite v5 line chart (x = distance_m, y = elevation, one coloured
-        line per DEM), a title, and a caption with the elevation range / relief.
-        The agent loop emits this as a chart-emission envelope.
+        ``ChartEmissionPayload`` (``envelope_type="chart-emission"``):
+        Vega-Lite v5 line chart (x=distance_m, y=elevation, one line per
+        DEM), title, and elevation-range/relief caption.
 
     Raises:
-        TerrainProfileError: typed ``error_code`` (LINE_INVALID, NO_LAYERS,
-            TOO_MANY_LAYERS, LAYER_OPEN_FAILED, DOWNLOAD_FAILED,
-            LINE_REPROJECT_FAILED, LINE_OUTSIDE_RASTER).
+        TerrainProfileError: LINE_INVALID, NO_LAYERS, TOO_MANY_LAYERS,
+            LAYER_OPEN_FAILED, DOWNLOAD_FAILED, LINE_REPROJECT_FAILED,
+            LINE_OUTSIDE_RASTER.
     """
     # ---- validate inputs ---------------------------------------------------
     if not isinstance(layer_uri, str) or not layer_uri.strip():

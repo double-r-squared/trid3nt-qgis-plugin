@@ -886,57 +886,35 @@ async def export_case_to_qgis(
 ) -> dict[str, Any]:
     """Export a case's layers as a ready-to-open desktop QGIS project.
 
-    USE THIS when the user asks to EXPORT a case (or a set of layers) TO QGIS,
-    download the case for desktop GIS, or get a GeoPackage / GeoTIFF / .qgz
-    bundle of what is on the map. It writes a self-contained folder holding:
-    one GeoPackage (``export.gpkg``) with ALL vector layers in EPSG:4326,
-    a local GeoTIFF copy of every raster layer, and a ``project.qgz`` QGIS 3.x
-    project that opens directly in QGIS with the case's layer order, raster
-    color styling translated from the web map, and the case AOI as the initial
-    view extent.
+    Use this when: the user asks to EXPORT a case to QGIS, download it for
+    desktop GIS, or get a GeoPackage/GeoTIFF/.qgz bundle. Writes a
+    self-contained folder: one GeoPackage (``export.gpkg``, all vectors in
+    EPSG:4326), a local GeoTIFF per raster, and a ``project.qgz`` QGIS 3.x
+    project with layer order, translated raster styling, and the case AOI
+    as the initial extent. Provide EXACTLY ONE of ``case_id`` or ``layers``.
 
-    Provide EXACTLY ONE of ``case_id`` or ``layers``:
-
-    Parameters:
-        case_id: the case to export -- its persisted layer list, layer order,
-            bbox, and title drive the project. Preferred form.
-        layers: explicit layer list (fallback when no case applies): each item
-            is ``{"name": str, "layer_type": "raster"|"vector", "uri": str}``
-            (``uri`` may be a local path, ``s3://`` object, ``http(s)://`` URL,
-            or the TiTiler display tile template; a vector item may carry
-            ``inline_geojson`` instead of ``uri``).
-        output_dir: destination folder. Default:
-            ``${TRID3NT_EXPORT_DIR or ~/trid3nt-exports}/<case-or-project>-<hash>/``.
-        project_name: QGIS project title; defaults to the case title / case_id.
+    Params:
+        case_id: case to export (preferred) -- its layer list/order/bbox/
+            title drive the project.
+        layers: fallback explicit list, each ``{"name", "layer_type":
+            "raster"|"vector", "uri"}`` (uri may be local/s3/http/TiTiler
+            template; vectors may carry ``inline_geojson`` instead).
+        output_dir: destination folder; default
+            ``${TRID3NT_EXPORT_DIR or ~/trid3nt-exports}/<case>-<hash>/``.
+        project_name: QGIS project title; default case title/case_id.
 
     Returns:
-        {
-          "status": "ok" | "partial",   # "partial" when some layers skipped
-          "qgz_path": str,              # the .qgz to open in QGIS
-          "gpkg_path": str | None,      # None when the case has no vectors
-          "exported_vector_count": int,
-          "exported_raster_count": int,
-          "qml_paths": [str, ...],      # sidecar .qml style per raster
-          "skipped": [{"name": str, "reason": str}, ...],
-          "output_dir": str,
-          "mesh": [                     # additive (MDAL phase 1); [] if none
-            {
-              "kind": "mesh",
-              "format": "sfincs_map_netcdf",
-              "s3_uri": str,            # runs-bucket sfincs_map.nc -- NOT
-                                         # copied into output_dir; the caller
-                                         # downloads it itself
-              "crs_authid": str | None, # e.g. "EPSG:32616"; None if unresolved
-              "name": str,              # e.g. "SFINCS mesh (a1b2c3d4)"
-            },
-            ...
-          ],
-        }
+        ``{"status": "ok"|"partial", "qgz_path", "gpkg_path" (None if no
+        vectors), "exported_vector_count", "exported_raster_count",
+        "qml_paths", "skipped": [{name, reason}], "output_dir", "mesh":
+        [{"kind": "mesh", "format": "sfincs_map_netcdf", "s3_uri" (not
+        copied locally), "crs_authid", "name"}, ...] (additive, [] if
+        none)}``.
 
     Raises:
-        ExportCaseError: typed (FR-AS-11) -- INVALID_INPUT (not exactly one of
-            case_id/layers), CASE_NOT_FOUND, NO_EXPORTABLE_LAYERS (zero layers
-            or every layer skipped -- an empty export never claims success).
+        ExportCaseError: INVALID_INPUT (not exactly one of case_id/
+            layers), CASE_NOT_FOUND, NO_EXPORTABLE_LAYERS (empty export
+            never claims success).
     """
     if (case_id is None) == (layers is None):
         raise ExportInputError(

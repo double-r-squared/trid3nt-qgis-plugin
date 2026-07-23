@@ -454,57 +454,38 @@ def compute_cross_section(
 ) -> dict[str, Any]:
     """Sample raster value(s) along a line and chart the cross-section profile.
 
-    Use this when the user wants the "section view" / "long profile" / "transect"
-    of a surface ALONG a drawn or derived line -- "show me the elevation profile
-    across this valley", "plot the flood depth along the road", "draw a section
-    of the ground and water surface". This is the only chart keyed on DISTANCE
-    along a line (vs generate_time_series = over TIME, generate_histogram =
-    DISTRIBUTION of values).
+    Use this when: the user wants a "section view"/"long profile"/"transect"
+    ALONG a line -- "elevation profile across this valley", "flood depth
+    along the road". The only chart keyed on DISTANCE (vs
+    ``generate_time_series``=TIME, ``generate_histogram``=DISTRIBUTION).
+    Pass ``extra_layer_uris`` (up to 3) to overlay multiple surfaces on the
+    same line/axis (ground vs water surface, DEM vs bathymetry). Do NOT use
+    for: a distribution (``generate_histogram``); over time
+    (``generate_time_series``); a single number for the line
+    (``compute_zonal_statistics`` with a buffered line); rendering the line
+    (``publish_layer``).
 
-    DESIGN CALL B (multi-layer overlay): pass ``extra_layer_uris`` to overlay
-    several surfaces on the SAME line and the SAME distance axis -- ground vs
-    water surface (freeboard / inundation depth), DEM vs bathymetry, head vs land
-    surface (MODFLOW seepage), pre vs post event. Each layer is a coloured line
-    in one chart. Cap of 4 layers.
-
-    The line input (any of):
-        - A user-DRAWN line: call ``request_spatial_input(mode="vector_draw")``,
-          have the user draw a single LineString, then pass the returned
-          ``barriers`` FeatureCollection (or its first LineString) as ``line`` --
-          the FIRST LineString in an FC is used.
-        - An agent-DERIVED line: construct two endpoints (or a perpendicular to a
-          river / valley axis) yourself and pass them inline as a GeoJSON
-          LineString or a ``[[lon,lat], [lon,lat], ...]`` list -- no user draw
-          needed.
-
-    Do NOT use this for: a value distribution (use generate_histogram); a value
-    over time (use generate_time_series); a single number for the whole line
-    (use compute_zonal_statistics with a buffered line); rendering the line on
-    the map (use publish_layer).
-
-    Parameters:
-        layer_uri: s3:// URI or local path of the PRIMARY raster (DEM, flood
-            depth, head surface, bathymetry COG, ...) to profile.
-        line: the section line, as a GeoJSON LineString / Feature /
-            FeatureCollection, or a list of ``[lon, lat]`` vertices (EPSG:4326,
-            lon-first). At least 2 distinct vertices.
-        n_stations: number of evenly-spaced stations sampled along the line
-            (default 200; clamped to [2, 2000]).
-        extra_layer_uris: OPTIONAL up to 3 additional raster URIs to overlay on
-            the same line (multi-layer profile). Sampled over the SAME stations;
-            uncovered stations read null and that layer's line breaks there.
+    Params:
+        layer_uri: primary raster to profile (DEM, flood depth, head
+            surface, bathymetry COG).
+        line: GeoJSON LineString/Feature/FeatureCollection or
+            ``[[lon,lat],...]`` list (EPSG:4326), >=2 vertices. Use a
+            user-drawn line via ``request_spatial_input(mode="vector_draw")``
+            or construct endpoints directly.
+        n_stations: evenly-spaced sample count along the line (default 200,
+            clamped [2, 2000]).
+        extra_layer_uris: optional up to 3 additional rasters overlaid on
+            the same stations; uncovered stations read null.
 
     Returns:
-        A ChartEmissionPayload dict (``envelope_type="chart-emission"``) carrying
-        a Vega-Lite v5 line chart (x = distance_m, y = value, one coloured line
-        per layer when >1), a title, and a caption with the profile drop / range.
-        The agent loop emits this as a chart-emission envelope and feeds a compact
-        summary back for narration.
+        ``ChartEmissionPayload`` (``envelope_type="chart-emission"``):
+        Vega-Lite v5 line chart (x=distance_m, y=value, one line per
+        layer), title, and a profile-drop/range caption.
 
     Raises:
-        CrossSectionError: typed error_code (LINE_INVALID, NO_LAYERS,
-            TOO_MANY_LAYERS, LAYER_OPEN_FAILED, DOWNLOAD_FAILED,
-            LINE_REPROJECT_FAILED, LINE_OUTSIDE_RASTER).
+        CrossSectionError: LINE_INVALID, NO_LAYERS, TOO_MANY_LAYERS,
+            LAYER_OPEN_FAILED, DOWNLOAD_FAILED, LINE_REPROJECT_FAILED,
+            LINE_OUTSIDE_RASTER.
     """
     # ---- validate inputs ---------------------------------------------------
     if not isinstance(layer_uri, str) or not layer_uri.strip():

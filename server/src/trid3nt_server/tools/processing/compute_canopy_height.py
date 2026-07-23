@@ -306,61 +306,29 @@ async def compute_canopy_height(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI | dict[str, Any]:
-    """Estimate tree-canopy HEIGHT (metres) over an AOI from RGB imagery.
+    """Estimate tree-canopy HEIGHT (metres) over an AOI from RGB imagery (ML inference, not a measurement).
 
-    Use this (not fetch_usfs_canopy_fuels, which is fuel data) when you want ML-inferred tree-canopy HEIGHT in metres from RGB imagery.
-
-    Runs Meta's pretrained HighResCanopyHeight deep-learning model (a DINOv2 ViT
-    backbone + DPT decoder, Apache-2.0) on sub-metre RGB aerial imagery and
-    produces an ESTIMATED per-pixel canopy-top-height raster (metres), painted on
-    the map with a greens height ramp. This is an "AI-using-AI" inference tool:
-    the inference is heavy (a ViT on CPU is minutes-to-hours), so it runs on the
-    SAME scale-to-zero CPU AWS Batch substrate the physics engines use -- it is an
-    ordinary compute-heavy tool, NOT a special tier.
-
-    Use this when:
-        - The user wants tree / forest CANOPY HEIGHT over an area ("how tall are
-          the trees here", "estimate canopy height for <small forested AOI>",
-          "show a canopy-height map"); OR
-        - A downstream needs a height raster to feed ``compute_zonal_statistics``
-          (mean/max canopy height per polygon / FTW ag field).
-
-    Do NOT use this for:
-        - Vegetation greenness / health (use ``compute_ndvi``).
-        - Land-cover CLASSES (use ``fetch_landcover``).
-        - Building heights / a DSM-DTM difference (this is a TREE-canopy model).
-        - Very large AOIs -- a CPU ViT is slow, so the bbox is capped; narrow it
-          to a neighborhood / small preserve.
+    Use this when: the user wants tree/forest canopy HEIGHT ("how tall are
+    the trees", "canopy height map") or a height raster to feed
+    ``compute_zonal_statistics``. Do NOT use for: vegetation greenness/health
+    (``compute_ndvi``); land-cover classes (``fetch_landcover``); building
+    heights. Large AOIs are slow (CPU ViT inference) -- keep the bbox small.
 
     Params:
-        bbox: the AOI as ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326
-            (lon-first). Required UNLESS ``imagery_uri`` is supplied. CONUS-only
-            when relying on the NAIP RGB source.
-        imagery_uri: OPTIONAL ``s3://`` URI of an existing sub-metre RGB COG (an
-            imagery fetcher's output handle). PREFERRED when available -- skips
-            the NAIP fetch. When absent, NAIP is fetched for ``bbox``.
-        model_variant: ADVANCED. One of the CPU-runnable Meta variants
-            (``compressed_SSLhuge_aerial`` [default, aerial/NAIP-tuned],
-            ``compressed_SSLhuge``, ``compressed_SSLlarge``). The full
-            ``SSLhuge_satellite`` is GPU-only and rejected for v1.
-        compute_class: OPTIONAL FR-CE-3 compute class override. When unset it is
-            auto-selected from the estimated tile count (more tiles -> a bigger
-            CPU box).
+        bbox: AOI (min_lon, min_lat, max_lon, max_lat), EPSG:4326.
+            Required unless ``imagery_uri`` is given. CONUS-only via NAIP.
+        imagery_uri: optional existing sub-metre RGB COG; preferred when
+            available (skips the NAIP fetch).
+        model_variant: CPU-runnable Meta HighResCanopyHeight variant
+            (default ``compressed_SSLhuge_aerial``).
+        compute_class: optional compute-class override; else auto-selected
+            from estimated tile count.
 
     Returns:
-        On success: a ``LayerURI`` (``layer_type="raster"``) -- the emitter
-        appends it to ``session-state.loaded_layers`` and the map renders the
-        canopy-height COG with the ``canopy_height_m`` greens ramp. The layer
-        name reads "Estimated Canopy Height (m)" (truthfulness floor: it is a
-        model ESTIMATE, MAE ~2.5 m, not a measurement).
-
-        On failure: a dict ``{"status": "error", "error_code", "error_message"}``
-        so the LLM narrates the failure honestly (no layer). A non-complete Batch
-        solve or an empty output returns a typed error -- it NEVER reports a
-        silently-empty layer as success (honesty floor).
-
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-    ``source_class="workflow_dispatch"`` -- the cache shim is NOT invoked.
+        On success: ``LayerURI`` (raster, ``canopy_height_m`` greens ramp,
+        named "Estimated Canopy Height (m)"; model estimate, MAE ~2.5 m).
+        On failure: ``{"status": "error", "error_code", "error_message"}``
+        -- never a silently-empty layer. Not cached (``cacheable=False``).
     """
     # --- 1. Validate variant + resolve the AOI / imagery handle -------------
     variant = (model_variant or DEFAULT_MODEL_VARIANT).strip()

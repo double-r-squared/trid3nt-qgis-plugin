@@ -509,63 +509,31 @@ def compute_contours(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Compute elevation contour LINES (topographic isolines) from a DEM.
+    """Compute elevation contour LINES (topographic isolines) from a DEM. Wraps ``gdal_contour``.
 
-    Wraps GDAL's ``gdal_contour``: takes a single-band elevation DEM and returns
-    a vector layer of ``LineString`` contours, each carrying an ``elev``
-    (elevation, metres) attribute, at a fixed contour INTERVAL. The output is a
-    FlatGeobuf in EPSG:4326 that renders inline as a line layer (the job-0175
-    inline-GeoJSON vector path) with the thin ``"contours"`` line style.
-
-    When to use:
-        - The user asks to "show contour lines", "topographic contours",
-          "elevation isolines", "topo lines", or "contour map" for an area.
-        - Adding a topographic line overlay on top of a hillshade or
-          colored-relief base for a classic topo-map look.
-        - Communicating terrain shape as discrete elevation steps (vs the
-          continuous shading a hillshade gives).
-
-    When NOT to use:
-        - The continuous shaded-relief raster itself — use ``compute_hillshade``
-          (intensity raster) or ``compute_colored_relief`` (colored DEM).
-        - Slope / aspect rasters — use ``compute_slope`` / ``compute_aspect``.
-        - Quantitative per-zone elevation stats — use
-          ``compute_zonal_statistics``.
-        - Bathymetric / sub-aqueous contours (DEM is land elevation).
-
-    Pairs with:
-        - ``fetch_dem`` — supplies ``dem_uri`` (or pass ``bbox`` and this tool
-          fetches the DEM for you via the same 3DEP path).
-        - ``compute_hillshade`` — drape contours over the hillshade for a
-          professional topographic basemap.
+    Use this when: the user asks for "contour lines"/"topographic contours"/
+    "topo map", or wants a line overlay on a hillshade/colored-relief base.
+    Do NOT use for: the shaded-relief raster itself (``compute_hillshade``/
+    ``compute_colored_relief``); slope/aspect (``compute_slope``/
+    ``compute_aspect``); per-zone stats (``compute_zonal_statistics``).
 
     Params:
-        dem_uri: ``gs://``/``s3://`` URI of a single-band elevation DEM
-            GeoTIFF (typically ``fetch_dem(...).uri``). Mutually optional with
-            ``bbox``: provide one or the other.
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. When
-            ``dem_uri`` is omitted, the DEM is fetched for this bbox via
-            ``fetch_dem`` (the shared acquisition path).
-        interval_m: contour interval in metres. When ``None`` (default) a
-            sensible interval is derived from the DEM relief — roughly
-            ``(max - min) / 15`` snapped to a nice number (5/10/20/50/100 m …)
-            so any AOI yields ~10–20 readable contours. Never 0 or negative.
+        dem_uri: single-band elevation DEM (typically ``fetch_dem(...).uri``).
+            Provide this or ``bbox``.
+        bbox: (min_lon, min_lat, max_lon, max_lat) EPSG:4326; used to fetch
+            the DEM via ``fetch_dem`` when ``dem_uri`` is omitted.
+        interval_m: contour interval, metres. ``None`` (default) derives a
+            sensible interval from DEM relief (~10-20 readable contours).
 
     Returns:
-        A ``LayerURI`` (``layer_type="vector"``, ``role="context"``,
-        ``style_preset="contours"``, ``units="m"``) pointing at a FlatGeobuf of
-        contour ``LineString`` features in EPSG:4326. ``bbox`` is set to the DEM
-        extent so the client camera flies to the layer. The chosen contour
-        interval is reflected in the layer ``name`` and ``layer_id``.
-
-    FR-CE-8: Results are routed through ``read_through`` so repeat calls with
-    the same ``(dem_uri, interval_m)`` return the cached contours without
-    re-running gdal_contour. TTL is 30 days (DEM-derived outputs are stable).
+        ``LayerURI`` (vector, ``style_preset="contours"``, ``units="m"``)
+        for a FlatGeobuf of ``LineString`` contours (EPSG:4326, each with
+        an ``elev`` attribute), cache bucket, TTL 30d.
 
     Raises:
-        ContourComputeError: if gdal_contour is unavailable, returns non-zero,
-            the DEM cannot be fetched/read, reprojection fails, or neither
-            ``dem_uri`` nor ``bbox`` is supplied. Error carries ``error_code``.
+        ContourComputeError: gdal_contour unavailable/non-zero, DEM
+            fetch/read failure, reprojection failure, or neither
+            ``dem_uri`` nor ``bbox`` supplied.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 

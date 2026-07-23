@@ -429,52 +429,27 @@ def compute_ndvi(
 ) -> LayerURI:
     """Compute Sentinel-2 NDVI (vegetation vigor) for a bbox + time window.
 
-    Use this (not fetch_sentinel2_truecolor) when you want the NDVI vegetation-index values, not the raw true-color picture.
+    Use this (not ``fetch_sentinel2_truecolor``) when you want NDVI
+    vegetation-index values, not the raw picture -- vegetation condition/
+    greenness/canopy vigor, or the vegetation input to
+    ``model_conservation_priority``. Water/bare soil ~0, sparse vegetation
+    0.2-0.5, dense canopy 0.6-0.9. Do NOT use for: land-cover classes
+    (``fetch_landcover``/``extract_landcover_class``); true-color imagery
+    (``fetch_naip``).
 
-    **What it does:** Searches the Microsoft Planetary Computer for the
-    least-cloudy Sentinel-2 L2A scene intersecting ``bbox`` inside the time
-    window, reads the Red (B04) and NIR (B08) 10 m bands clipped to the bbox,
-    computes ``NDVI = (NIR - Red) / (NIR + Red)`` per pixel, and returns a
-    single-band float32 NDVI COG (range -1..1) with a green vegetation colormap.
+    Params:
+        bbox: (min_lon, min_lat, max_lon, max_lat) EPSG:4326, <= 1.0 deg^2.
+            AOIs under ~0.5 deg^2 read at native 10m; larger auto-coarsen
+            to fit 4096px.
+        start_date/end_date: "YYYY-MM-DD" window; default trailing ~14mo.
+        max_cloud_cover: scene cloud ceiling percent (default 30.0);
+            least-cloudy scene chosen.
 
-    NDVI is the standard greenness / live-biomass index: water and bare soil
-    sit near 0 (or negative), sparse vegetation 0.2-0.5, dense healthy canopy
-    0.6-0.9. It is the vegetation layer in the conservation-priority stack.
-
-    **When to use:**
-    - User wants vegetation condition, greenness, canopy vigor, or a
-      "where is the healthy vegetation" map for an area.
-    - As the vegetation input to ``model_conservation_priority`` (SC-DNR-style
-      species + vegetation + biodiversity stack).
-    - Comparing vegetation between two dates (call twice with different windows).
-
-    **When NOT to use:**
-    - Land-cover CLASSES (forest / crop / urban)  --  use ``fetch_landcover`` /
-      ``extract_landcover_class``; NDVI is a continuous index, not a classifier.
-    - High-res true-color aerial imagery  --  use ``fetch_naip``.
-    - Areas with persistent cloud cover in the window (raise the window or the
-      ``max_cloud_cover`` ceiling); a no-imagery result is an honest typed error.
-
-    **Parameters:**
-    - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
-      Required. AOI-scoped (<= 1.0 deg^2). AOIs under ~0.5 deg^2 read at native
-      10 m; larger AOIs (up to ~1.0 deg^2) are auto-coarsened to fit the 4096px
-      grid (effective cell ~= bbox_m/4096, ~20-24 m/px); narrow the bbox for
-      native 10 m.
-    - ``start_date`` / ``end_date`` (str, optional): ``"YYYY-MM-DD"`` window
-      bounds. Default: a trailing ~14-month window ending today.
-    - ``max_cloud_cover`` (float, default 30.0): only scenes below this
-      ``eo:cloud_cover`` percent are considered; the least-cloudy is chosen.
-
-    **Returns:** A ``LayerURI`` (``layer_type="raster"``, ``role="primary"``,
-    ``units="NDVI (-1..1)"``) pointing at a single-band float32 COG in the
-    ``static-30d``/``ndvi`` cache prefix. ``style_preset="ndvi"`` (RdYlGn ramp).
-
-    **Data source:** Sentinel-2 Level-2A via the Microsoft Planetary Computer
-    STAC (``sentinel-2-l2a`` collection; bands B04 + B08).
-
-    FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
-    cloud)`` calls reuse the cached NDVI COG.
+    Returns:
+        ``LayerURI`` (raster, ``role="primary"``, ``units="NDVI (-1..1)"``,
+        ``style_preset="ndvi"``) for a single-band float32 COG, cache
+        bucket, TTL 30d. Source: Sentinel-2 L2A via Microsoft Planetary
+        Computer STAC (bands B04+B08).
     """
     _validate_bbox(bbox)
     q_bbox = _round_bbox(bbox)

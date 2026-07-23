@@ -245,78 +245,49 @@ def code_exec_request(
 ) -> dict[str, Any]:
     """Run user-confirmed ad-hoc Python over on-map layers in a secure sandbox.
 
-    Use this when: the user asks a quantitative follow-up about a layer already on
-    the map that no existing analytical tool answers directly - a custom
-    aggregation, a percentile, a cross-tabulation, a derived field, or a custom
-    multi-panel figure - and you need to compute it from the layer's actual
-    pixels/features. Write a short Python snippet that assigns the answer to a
-    variable named ``result`` (a scalar, a dict, a pandas DataFrame, or a
-    matplotlib Figure); the user is shown the exact code and must approve it first.
+    Use this when: the user asks a quantitative follow-up about a layer
+    already on the map that no existing tool answers directly -- a custom
+    aggregation, percentile, cross-tabulation, derived field, or
+    multi-panel figure -- computed from the layer's actual pixels/features.
+    Write a snippet that assigns the answer to ``result`` (scalar, dict,
+    DataFrame, or matplotlib Figure); the user sees the exact code and
+    must approve it first. Do NOT use for: fetching new data
+    (``fetch_*``), running a hazard model (``run_model_*``), a standard
+    chart (``generate_histogram``/``generate_damage_distribution``), or
+    anything a purpose-built tool already does -- this is the escape
+    hatch for ad-hoc computation only.
 
-    CRITICAL - HOW TO ACCESS DATA (the sandbox has NO network, and NO file paths):
-    The sandbox is network-isolated AND there is NO filesystem path you can open.
-    You CANNOT download anything from inside it (``rasterio.open("s3://...")``,
-    ``urllib`` / ``requests`` / ``boto3``, any DNS) AND you must NOT guess a path:
-    there is no ``/layers/`` directory and no ``staged_inputs`` path to open. To use
-    ANY layer, COG, or run frame, list its URI in ``layer_refs``; the sandbox
-    pre-fetches it OFF the loop and injects it into your code AS A VARIABLE WHOSE
-    NAME IS EXACTLY THE layer_refs KEY -- already open (raster -> an OPEN rasterio
-    dataset, vector -> a loaded geopandas GeoDataFrame). For key ``"peak"`` you get
-    a variable ``peak`` (use ``peak.read(1)`` directly -- never ``rasterio.open``).
-    Two ways, both work: use the open handle ``peak`` directly, OR open the staged
-    LOCAL path ``rasterio.open(layer_refs["peak"])`` -- the injected dict
-    ``layer_refs`` (and its alias ``layer_uris``) maps each key to its staged local
-    file path (NOT the original s3:// URI). Also injected: ``<name>_uri`` (that same
-    local path) and ``layers`` (name -> open handle). NEVER open the s3:// URI you
-    passed in -- only the injected handle or the ``layer_refs[name]`` local path
-    resolve. A list-valued ref binds ``<name>`` to a LIST of open handles
-    plus ``<name>_uris``. Use SIMPLE identifier keys (letters/digits/underscore,
-    not starting with a digit, e.g. ``peak``, ``frame_20``) so the variable name
-    equals your key verbatim. If an open fails, the key holds the raw string and
-    the result's ``layer_errors`` says why -- check it instead of guessing a path.
-    Example for a multi-panel above-ground figure::
+    DATA ACCESS (the sandbox has NO network and NO guessable file paths):
+    you cannot ``rasterio.open("s3://...")`` / ``urllib`` / ``requests`` /
+    ``boto3`` from inside it. To use a layer, list its URI in
+    ``layer_refs``; the sandbox pre-fetches it off-loop and injects it as
+    a variable named EXACTLY the ``layer_refs`` key -- already open
+    (raster -> open rasterio dataset, vector -> geopandas GeoDataFrame).
+    For key ``"peak"`` you get variable ``peak`` (use ``peak.read(1)``
+    directly, never ``rasterio.open(peak)``). Also injected: ``<name>_uri``
+    (staged local path) and ``layers`` (name -> handle). Use simple
+    identifier keys (letters/digits/underscore). A failed open leaves the
+    key as the raw string with the reason in ``result["layer_errors"]``.
 
-        layer_refs = {
-            "peak": "s3://.../inundation_above_ground_peak.tif",
-            "f20":  "s3://.../inundation_above_ground_frame_20.tif",
-            "f40":  "s3://.../inundation_above_ground_frame_40.tif",
-        }
-        # in python_code: `peak` is ALREADY an open rasterio dataset
-        arr = peak.read(1)            # NOT rasterio.open(peak_uri)
+    Example::
 
-    Pass every frame COG you need as its own ``layer_refs`` entry. Get the exact
-    COG URIs from the Case's layer list or from ``list_run_frames``.
-
-    Do NOT use this for: fetching new data (use a ``fetch_*`` tool), running a
-    hazard model (use a ``run_model_*`` workflow), producing a standard chart (use
-    ``generate_histogram`` / ``generate_damage_distribution`` etc.), or anything a
-    purpose-built atomic tool already does - the sandbox is the escape hatch for
-    genuinely ad-hoc computation, not a replacement for the tool catalog. It cannot
-    reach the network (declare every input in ``layer_refs``) or write data out.
+        layer_refs = {"peak": "s3://.../peak.tif", "f20": "s3://.../frame_20.tif"}
+        # peak is ALREADY an open rasterio dataset
+        arr = peak.read(1)
 
     Args:
-        python_code: The Python to run. Assign the answer to ``result``. Each
-            ``layer_refs`` key is available as a pre-opened handle of that name
-            (raster -> an OPEN rasterio dataset, vector -> a geopandas
-            GeoDataFrame) plus a ``<name>_uri`` string alias. Reference the handle
-            directly; do NOT call ``rasterio.open`` / ``urllib`` / ``requests`` on
-            a URL (no network - it will fail). ``numpy`` / ``pandas`` /
-            ``rasterio`` / ``geopandas`` / ``matplotlib`` are importable.
-        layer_refs: ``{var_name: layer_uri}`` of the on-map layers / run-frame COGs
-            the computation needs - REQUIRED for any snippet that reads data, since
-            the sandbox has no network. Pass the ``s3://`` (or layer) URIs; each
-            becomes a pre-opened handle of that name. Omit only for pure-compute
-            snippets that touch no layer.
-        rationale: Optional one-line reason shown on the confirm card so the user
-            understands what they're approving.
+        python_code: Python to run; assign the answer to ``result``.
+            ``numpy``/``pandas``/``rasterio``/``geopandas``/``matplotlib``
+            importable.
+        layer_refs: ``{var_name: layer_uri}`` for every layer/COG the
+            snippet reads -- required since the sandbox has no network.
+            Omit only for pure-compute snippets.
+        rationale: optional one-line reason shown on the confirm card.
 
     Returns:
-        A compact result summary: ``{status, result, stdout_tail, truncated,
-        duration_s, ...}`` where ``result`` is the sandbox's structured result
-        descriptor (the numbers to narrate). On a non-``ok`` status the summary
-        carries the honest reason (``timeout`` / ``blocked`` / ``error``) — narrate
-        the failure truthfully; never claim a result a blocked/timed-out run did
-        not produce.
+        ``{status, result, stdout_tail, truncated, duration_s, ...}``.
+        On non-``ok`` status, narrate the honest reason (``timeout``/
+        ``blocked``/``error``) -- never claim a result it didn't produce.
     """
     # MANDATORY confirm gate (fail-closed). The server obtains user approval and
     # re-dispatches with confirmed=True; a call without it never runs the sandbox.

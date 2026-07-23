@@ -387,59 +387,39 @@ def compute_flood_depth_damage(
 ) -> FloodDepthDamageLayerURI:
     """Screen flood damage per structure from a depth raster (HAZUS-style curve).
 
-    Use this (not run_model_flood_scenario, which SIMULATES the flood) when a flood DEPTH raster already exists and you want per-structure HAZUS damage.
+    Use this (not ``run_model_flood_scenario``, which SIMULATES the flood)
+    when a flood DEPTH raster already exists and you want a quick
+    per-structure damage screen -- "roughly how much building damage does
+    this flood cause?", ranking scenarios, or a first pass before spending
+    a Pelicun run. HONEST SCOPE: a SCREENING estimate (one aggregate curve,
+    structure value only, no contents/uncertainty) -- NOT a Pelicun
+    component-level assessment. Do NOT use for: defensible per-asset loss
+    (``run_pelicun_damage_assessment`` / ``compute_impact_envelope``);
+    non-flood hazards; areas outside NSI coverage (CONUS+AK/HI/territories)
+    without a caller ``assets_uri``.
 
-    **What it does:** Samples the flood depth at every structure point (USACE
-    NSI fetched over the raster bounds by default, or caller-supplied
-    ``assets_uri``), converts to depth above the first floor (subtracting the
-    NSI ``found_ht`` foundation height when present), applies the documented
-    FEMA HAZUS-style / USACE EGM 04-01 residential one-story no-basement
-    depth-damage curve, multiplies by the per-structure replacement value
-    (NSI ``val_struct``) when available, and returns the points styled by
-    damage fraction plus totals (structures flooded, total estimated USD).
+    Params:
+        depth_raster_uri: flood-depth COG/GeoTIFF; positive=depth above
+            ground, nodata/<=0=dry.
+        assets_uri: optional structure points (FlatGeobuf/GeoJSON) with
+            optional ``val_struct``/``replacement_value``, ``found_ht``,
+            ``occtype``. Default: ``fetch_usace_nsi`` over the raster
+            bounds (must span <= ~1 degree).
+        depth_units: ``"m"`` (default) or ``"ft"``.
 
-    HONEST SCOPE: a SCREENING estimate -- one aggregate claims-based curve for
-    every occupancy class, structure value only (no contents / downtime), no
-    uncertainty. It is NOT a Pelicun component-level assessment; for
-    defensible per-asset loss use ``run_pelicun_damage_assessment`` /
-    ``compute_impact_envelope``. The result ``notes`` repeat this caveat.
+    Returns:
+        ``FloodDepthDamageLayerURI`` -- point vector ``LayerURI``
+        (FlatGeobuf, EPSG:4326; per-feature ``depth_ft``,
+        ``depth_above_ffe_ft``, ``damage_fraction``, ``damage_usd``,
+        ``val_struct``, ``occtype``) plus ``n_structures``/``n_flooded``/
+        ``n_with_value``/``total_damage_usd``/``mean_damage_fraction``/
+        ``max_damage_fraction`` and honest ``notes``.
 
-    **When to use:**
-    - "Roughly how much building damage does this flood cause?" right after a
-      SFINCS / GeoClaw / SWMM run produces a depth COG.
-    - Ranking neighborhoods / scenarios by exposed structure loss quickly.
-    - A first-pass exposure screen before deciding whether to spend a Pelicun
-      run on the scenario.
-
-    **When NOT to use:**
-    - Defensible per-asset loss estimates (component fragilities, contents,
-      uncertainty) -- use the Pelicun chain.
-    - Non-flood hazards (the curve is flood-depth-based only).
-    - Areas outside NSI coverage (CONUS + AK/HI/territories) without a
-      caller-supplied ``assets_uri``.
-
-    **Parameters:**
-    - ``depth_raster_uri``: flood-depth COG/GeoTIFF (s3:// or local). Positive
-      values = water depth above ground; nodata / <= 0 = dry.
-    - ``assets_uri``: optional structure points (FlatGeobuf / GeoJSON).
-      Optional properties honored: ``val_struct`` or ``replacement_value``
-      (USD), ``found_ht`` (ft), ``occtype``. Default: ``fetch_usace_nsi`` over
-      the raster bounds (must span <= ~1 degree, the NSI query limit).
-    - ``depth_units``: ``"m"`` (default; house depth COGs are meters) or
-      ``"ft"`` if the raster is already in feet.
-
-    **Returns:** ``FloodDepthDamageLayerURI`` -- a point vector ``LayerURI``
-    (FlatGeobuf, EPSG:4326; per-feature ``depth_ft``, ``depth_above_ffe_ft``,
-    ``damage_fraction``, ``damage_usd``, ``val_struct``, ``occtype``) with a
-    categorical damage-fraction legend (``value_field="damage_fraction"``)
-    plus ``n_structures`` / ``n_flooded`` / ``n_with_value`` /
-    ``total_damage_usd`` / ``mean_damage_fraction`` / ``max_damage_fraction``
-    and honest ``notes``.
-
-    **Errors (FR-AS-11):** ``FloodDamageNoStructuresError`` (no assets over
-    the footprint), ``FloodDamageInputError`` (unreadable inputs / bad units /
-    raster too large for NSI), ``FloodDamageUpstreamError`` (staging / NSI /
-    write failures).
+    Raises:
+        FloodDamageNoStructuresError: no assets over the footprint.
+        FloodDamageInputError: unreadable inputs, bad units, or raster
+            too large for NSI.
+        FloodDamageUpstreamError: staging/NSI/write failure.
     """
     units = str(depth_units or "m").strip().lower()
     if units not in ("m", "ft"):

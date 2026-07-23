@@ -226,6 +226,19 @@ _PICKER_SUMMARY_STYLE = (
     "color: palette(mid); font-size: 8pt; border: none; padding-left: 22px;"
 )
 
+# Offer-to-add card chrome (LANE P, mode2-candidate + offer-catalog-addition,
+# 2026-07-22). Orange -- a "discovery/growth" affordance, distinct from the
+# amber caution gate, the blue code gate, the green credential card and the
+# teal picker card -- with the same N6/STYLE-1 discipline: a subtle
+# low-alpha fill scoped to the FRAME id (never cascading onto child labels),
+# theme-neutral over light and dark QGIS windows alike.
+_MODE2_CARD_STYLE = (
+    "QFrame#mode2card { border: 1px solid #ffa657; border-radius: 8px; "
+    "background-color: rgba(255, 166, 87, 7%); }"
+)
+_MODE2_TITLE_STYLE = "color: #ffa657; font-weight: bold; border: none;"
+_MODE2_LINK_STYLE = "border: none; font-size: 8pt;"
+
 # Item R4 (live-feedback 2026-07-18): simulation-card chrome -- purple, the
 # color the web reserves for sim progress affordances; the collapse pattern
 # itself is the exact GateCard summary + "show details" affordance.
@@ -1837,11 +1850,24 @@ class ToolCandidatesCard(QFrame):
     its radio so a typed answer is never silently attributed to a candidate.
     """
 
-    def __init__(self, request: gate.ToolCandidatesRequest, on_decide, parent=None):
+    def __init__(
+        self,
+        request: gate.ToolCandidatesRequest,
+        on_decide,
+        parent=None,
+        step_index: Optional[int] = None,
+    ):
         super().__init__(parent)
         self._request = request
         self._on_decide = on_decide
         self._decided: Optional[str] = None
+        # Wave-picker UX (LANE P, 2026-07-22): when multiple picker cards
+        # land in one turn, ``step_index`` (1-based, dock-assigned off
+        # arrival order -- "trivially derivable from card order", never a
+        # server field) prefixes the title so a staged wave reads as a
+        # stepped wizard ("Step 1", "Step 2", ...) instead of stacked
+        # walls. None (a single/unstepped picker) omits the prefix.
+        self._step_index = step_index
         self.setObjectName("toolpickercard")  # STYLE-1: scope the fill to the frame
         self.setStyleSheet(_PICKER_CARD_STYLE)
         self.setFrameShape(QFrame.StyledPanel)
@@ -1879,9 +1905,11 @@ class ToolCandidatesCard(QFrame):
 
         # Title = the stage label ("Data step" etc.) -- the staged-waves
         # narrative anchor; a defensively-parsed envelope falls back to a
-        # generic title rather than an empty line.
+        # generic title rather than an empty line. The optional "Step N"
+        # prefix reads as a stepped wizard when a turn emits several waves.
         title = request.stage_label or "Tool choice"
-        title_lbl = QLabel(f"{title}: pick a tool")
+        prefix = f"Step {self._step_index} - " if self._step_index else ""
+        title_lbl = QLabel(f"{prefix}{title}: pick a tool")
         title_lbl.setWordWrap(True)
         title_lbl.setTextFormat(Qt.PlainText)
         title_lbl.setStyleSheet(_PICKER_TITLE_STYLE)
@@ -2040,6 +2068,186 @@ class ToolCandidatesCard(QFrame):
             widget.setEnabled(False)
 
     # -- collapse (the GateCard affordance) --------------------------------- #
+
+    def _collapse(self, chip: str) -> None:
+        """Fold to the one-line chip; the body stays intact underneath
+        (controls already disabled) so "show details" can re-expand a
+        read-only view." The "Step N" prefix rides along so a folded wave
+        still reads as a stepped wizard, not an anonymous stack of chips."""
+        prefix = f"Step {self._step_index}: " if self._step_index else ""
+        self.summary_lbl.setText(f"{prefix}{chip}")
+        self._summary_container.setVisible(True)
+        self._body.setVisible(False)
+        self.details_toggle.setChecked(False)
+        self.details_toggle.setText("show details")
+
+
+class Mode2CandidateCard(QFrame):
+    """Inline offer-to-add card for one Mode 2 catalog-enrichment offer (LANE
+    P, 2026-07-22 -- SRS Sec F.1.2). Renders EITHER the LIGHT
+    ``mode2-candidate`` fire-and-forget flag (a ``.gov``/``.edu``/``.mil``/
+    ``.int`` page the classifier flagged mid-research) or the HEAVY
+    ``offer-catalog-addition`` review envelope (``gate.Mode2CandidateRequest``
+    discriminates via ``kind``) -- same card, same buttons, same collapse.
+
+    Shows the host, the honest "why it was flagged" lines (the classifier's
+    structured-data pattern signals + confidence for a light candidate, or
+    the conformity-probe findings for a heavy offer -- ``gate.
+    mode2_reason_lines``, never invented client-side), and the URL as a real
+    clickable link. "Add to catalog" / "Dismiss" map through the pure
+    ``gate.resolve_mode2_decision`` to ONE ``catalog-addition-response``
+    envelope via ``on_decide(request, add)`` -- the dock's send hook (see
+    ``gate.py``'s module docstring for the light -> heavy ``request_id``
+    bridge: a light candidate's own ``candidate_id`` ULID stands in for the
+    reply's ``request_id``, since the light envelope defines no reply
+    contract of its own). Locks after one answer and folds to a chip
+    ("added <host> to the catalog" / "dismissed") -- the exact GateCard
+    collapse pattern.
+
+    Malformed envelope (no candidate_id/request_id, or no url): the dock
+    never constructs this card at all -- see ``dock._show_mode2_candidate_
+    card``'s honest note, mirroring every other gate's malformed-envelope
+    discipline.
+    """
+
+    def __init__(self, request: gate.Mode2CandidateRequest, on_decide, parent=None):
+        super().__init__(parent)
+        self._request = request
+        self._on_decide = on_decide
+        self._decided: Optional[str] = None
+        self.setObjectName("mode2card")  # STYLE-1: scope the fill to the frame
+        self.setStyleSheet(_MODE2_CARD_STYLE)
+        self.setFrameShape(QFrame.StyledPanel)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(3)
+
+        # Collapsed one-line chip (hidden until answered) + "show details"
+        # re-expand -- the GateCard affordance verbatim.
+        summary_row = QHBoxLayout()
+        self.summary_lbl = QLabel("")
+        self.summary_lbl.setWordWrap(True)
+        self.summary_lbl.setTextFormat(Qt.PlainText)
+        self.summary_lbl.setStyleSheet(_MODE2_TITLE_STYLE)
+        summary_row.addWidget(self.summary_lbl, 1)
+        self.details_toggle = QPushButton("show details")
+        self.details_toggle.setFlat(True)
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setStyleSheet(_THINKING_TOGGLE_STYLE)
+        self.details_toggle.clicked.connect(self._toggle_details)
+        summary_row.addWidget(self.details_toggle)
+        self._summary_container = QWidget()
+        self._summary_container.setLayout(summary_row)
+        self._summary_container.setVisible(False)
+        outer.addWidget(self._summary_container)
+
+        # Full card content -- visible until answered, then folded behind
+        # the chip (re-expandable read-only; controls stay disabled).
+        self._body = QWidget()
+        lay = QVBoxLayout(self._body)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(3)
+        outer.addWidget(self._body)
+
+        host = request.display_host or "this source"
+        kind_note = (
+            "Detected while researching"
+            if request.kind == "light"
+            else "Reviewed for the catalog"
+        )
+        title_lbl = QLabel(f"Add {host} to the catalog?")
+        title_lbl.setWordWrap(True)
+        title_lbl.setTextFormat(Qt.PlainText)
+        title_lbl.setStyleSheet(_MODE2_TITLE_STYLE)
+        lay.addWidget(title_lbl)
+
+        if request.title:
+            # The page's own <title> (or the heavy offer's suggested entry
+            # name), verbatim -- never paraphrased client-side.
+            page_title_lbl = QLabel(request.title)
+            page_title_lbl.setWordWrap(True)
+            page_title_lbl.setTextFormat(Qt.PlainText)
+            page_title_lbl.setStyleSheet(_GATE_BODY_STYLE)
+            lay.addWidget(page_title_lbl)
+
+        note_lbl = QLabel(kind_note)
+        note_lbl.setWordWrap(True)
+        note_lbl.setTextFormat(Qt.PlainText)
+        note_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        lay.addWidget(note_lbl)
+
+        # The URL as a REAL clickable link (never re-hosted/paraphrased).
+        href = _html_escape(request.url)
+        link_lbl = QLabel(f'<a href="{href}">{href}</a>')
+        link_lbl.setTextFormat(Qt.RichText)
+        link_lbl.setOpenExternalLinks(True)
+        link_lbl.setWordWrap(True)
+        link_lbl.setStyleSheet(_MODE2_LINK_STYLE)
+        lay.addWidget(link_lbl)
+
+        # "Why it was flagged" -- every line a structured signal off the
+        # envelope (classifier patterns + confidence, or probe findings).
+        for line in gate.mode2_reason_lines(request):
+            reason_lbl = QLabel(f"- {line}")
+            reason_lbl.setWordWrap(True)
+            reason_lbl.setTextFormat(Qt.PlainText)
+            reason_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+            lay.addWidget(reason_lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        self.add_btn = QPushButton("Add to catalog")
+        self.add_btn.clicked.connect(self._add)
+        btn_row.addWidget(self.add_btn)
+        self.dismiss_btn = QPushButton("Dismiss")
+        self.dismiss_btn.clicked.connect(self._dismiss)
+        btn_row.addWidget(self.dismiss_btn)
+        lay.addLayout(btn_row)
+
+        self.result_lbl = QLabel("")
+        self.result_lbl.setWordWrap(True)
+        self.result_lbl.setTextFormat(Qt.PlainText)
+        self.result_lbl.setStyleSheet(_GATE_NOTE_STYLE)
+        self.result_lbl.setVisible(False)
+        lay.addWidget(self.result_lbl)
+
+    # -- toggles ---------------------------------------------------------- #
+
+    def _toggle_details(self, checked: bool) -> None:
+        self._body.setVisible(checked)
+        self.details_toggle.setText("hide details" if checked else "show details")
+
+    # -- actions ------------------------------------------------------------ #
+
+    def _add(self) -> None:
+        if self._decided is not None:
+            return  # locked -- a gate is answered exactly once
+        self._commit(add=True)
+
+    def _dismiss(self) -> None:
+        if self._decided is not None:
+            return  # locked
+        self._commit(add=False)
+
+    def _commit(self, add: bool) -> None:
+        self._decided = "added" if add else "dismissed"
+        self._lock()
+        chip = gate.mode2_decision_chip(self._request, add)
+        self.result_lbl.setText(
+            "Sent to the agent -- " + chip + "."
+            if add
+            else "Dismissed -- no catalog entry sent."
+        )
+        self.result_lbl.setVisible(True)
+        self._collapse(chip)
+        self._on_decide(self._request, add)
+
+    def _lock(self) -> None:
+        for widget in (self.add_btn, self.dismiss_btn):
+            widget.setEnabled(False)
+
+    # -- collapse (the GateCard affordance) -------------------------------- #
 
     def _collapse(self, chip: str) -> None:
         """Fold to the one-line chip; the body stays intact underneath

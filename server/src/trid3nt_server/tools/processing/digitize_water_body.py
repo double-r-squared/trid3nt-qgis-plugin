@@ -538,66 +538,39 @@ def digitize_water_body(
 ) -> LayerURI:
     """Digitize open surface-water bodies (NDWI) for a bbox + recent window.
 
-    **What it does:** Searches the Microsoft Planetary Computer for the
-    least-cloudy Sentinel-2 L2A scene intersecting ``bbox`` inside the time
-    window, reads the Green (B03) and NIR (B08) 10 m bands clipped to the bbox,
-    computes ``NDWI = (Green - NIR) / (Green + NIR)`` per pixel, thresholds to a
-    water mask (``NDWI > ndwi_threshold``, default ``0``), vectorizes the mask to
-    water polygons, drops sub-``min_area_m2`` specks, and returns a FlatGeobuf
-    vector layer of the water bodies. This is the CPU spectral-index path to
-    "outline this lake / reservoir / pond"  --  no GPU, no SAM model.
+    Use this when: outlining/digitizing/mapping a lake, reservoir, pond,
+    or wide river reach ("draw the boundary of Lake X", "where is the open
+    water here?") -- CPU spectral-index path, no GPU/SAM. Also useful for
+    a vector water footprint to intersect with other layers, or comparing
+    extent between two dates. Do NOT use for: vegetation vigor
+    (``compute_ndvi``); land-cover classes (``fetch_landcover``/
+    ``extract_landcover_class``); regulatory floodplains
+    (``fetch_fema_nfhl_zones``) or modeled inundation
+    (``run_model_flood_scenario``); SLR bathtub footprints
+    (``fetch_noaa_slr_scenarios``).
 
-    **When to use:**
-    - User asks to outline / digitize / map a lake, reservoir, pond, or wide
-      river reach ("draw the boundary of Lake X", "vectorize this reservoir",
-      "where is the open water in this AOI?").
-    - As a vector water footprint to intersect with other layers (e.g. zonal
-      stats, shoreline buffers, contamination/plume overlap, habitat).
-    - Comparing a water body's extent between two dates (call twice with
-      different windows to see a reservoir draw-down / flood pulse).
+    Params:
+        bbox: EPSG:4326, <= 0.5 deg^2.
+        start_date/end_date: "YYYY-MM-DD" window; default trailing ~14mo.
+        ndwi_threshold: NDWI cutoff for water (default 0.0, McFeeters
+            1996); lower (e.g. -0.1) for turbid water; range [-1, 1].
+        max_cloud_cover: scene cloud ceiling percent (default 20.0).
+        min_area_m2: drop polygons smaller than this (default 1000,
+            removes few-pixel specks).
 
-    **When NOT to use:**
-    - Continuous greenness / vegetation vigor  --  use ``compute_ndvi``.
-    - Land-cover CLASSES (water as a categorical class among forest/crop/urban)
-      --  use ``fetch_landcover`` / ``extract_landcover_class``.
-    - Regulatory floodplains or modeled flood inundation  --  use
-      ``fetch_fema_nfhl_zones`` or a SFINCS ``run_model_flood_scenario`` run.
-    - Sea-level-rise bathtub footprints  --  use ``fetch_noaa_slr_scenarios``.
-    - Turbid / sediment-laden water may sit near the threshold; lower
-      ``ndwi_threshold`` (e.g. ``-0.1``) to capture it.
+    Returns:
+        ``LayerURI`` (vector, ``role="primary"``, ``units="m^2"``,
+        ``style_preset="water_bodies"``) for a FlatGeobuf of water
+        polygons (EPSG:4326) with ``area_m2``, ``water_index``,
+        ``ndwi_threshold``. Source: Sentinel-2 L2A via Microsoft Planetary
+        Computer STAC (bands B03+B08).
 
-    **Parameters:**
-    - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326.
-      Required. AOI-scoped (<= 0.5 deg^2).
-    - ``start_date`` / ``end_date`` (str, optional): ``"YYYY-MM-DD"`` window
-      bounds. Default: a trailing ~14-month window ending today.
-    - ``ndwi_threshold`` (float, default 0.0): NDWI cutoff for "water". The
-      McFeeters (1996) default is ``0``; lower it for turbid water, raise it to
-      tighten to only the clearest open water. Must be in [-1, 1].
-    - ``max_cloud_cover`` (float, default 20.0): only scenes below this
-      ``eo:cloud_cover`` percent are considered; the least-cloudy is chosen.
-    - ``min_area_m2`` (float, default 1000.0): drop water polygons smaller than
-      this (removes single/few-pixel NDWI specks; ~10 Sentinel-2 pixels).
-
-    **Returns:** A ``LayerURI`` (``layer_type="vector"``, ``role="primary"``,
-    ``units="m^2"``) pointing at a FlatGeobuf in the
-    ``static-30d``/``digitize_water_body`` cache prefix. Each feature is a water
-    Polygon in EPSG:4326 with ``area_m2`` (float), ``water_index`` ("NDWI"), and
-    ``ndwi_threshold`` (float) properties. ``style_preset="water_bodies"``.
-
-    **Data source:** Sentinel-2 Level-2A via the Microsoft Planetary Computer
-    STAC (``sentinel-2-l2a`` collection; bands B03 + B08). Tier-1 free, no key.
-
-    **Honesty (FR-AS-11 / data-source fallback norm):**
-    - ``WaterBodyNoImageryError``: no Sentinel-2 scene in the window/cloud cap.
-    - ``WaterBodyNoWaterError``: a scene was read but no water sits above the
-      threshold (a dry inland AOI). An honest typed error  --  NEVER an empty
-      layer that reads as success.
-    - ``WaterBodyBboxError``: bad bbox / threshold / min_area.
-    - ``WaterBodyUpstreamError``: STAC / read / vectorize / write failure.
-
-    FR-CE-8: routed through ``read_through`` so identical ``(bbox, window,
-    threshold, cloud, min_area)`` calls reuse the cached water FGB.
+    Raises:
+        WaterBodyNoImageryError: no scene in the window/cloud cap.
+        WaterBodyNoWaterError: honest no-water result (dry AOI) -- never
+            an empty layer read as success.
+        WaterBodyBboxError: bad bbox/threshold/min_area.
+        WaterBodyUpstreamError: STAC/read/vectorize/write failure.
     """
     _validate_bbox(bbox)
     q_bbox = _round_bbox(bbox)

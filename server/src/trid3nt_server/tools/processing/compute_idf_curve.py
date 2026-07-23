@@ -176,54 +176,25 @@ def compute_idf_curve(
 ) -> dict[str, Any]:
     """Chart the full NOAA Atlas 14 IDF (intensity-duration-frequency) curve for a point.
 
-    Use this (not fetch_climate_normals or a fetch_* rainfall tool) when you want the NOAA Atlas 14 IDF rainfall-frequency CHART.
+    Use this (not ``fetch_climate_normals`` or a fetch_* rainfall tool) for
+    the full Atlas 14 IDF CHART -- "IDF curve for Houston", picking a design
+    storm before a pluvial SFINCS/SWMM run, comparing cloudburst vs soaker
+    depths. Do NOT use for: one specific depth (``lookup_precip_return_period``,
+    same endpoint, scalar); observed rainfall (``fetch_mrms_qpe`` /
+    ``fetch_usgs_nwis_gauges``); points outside Atlas 14 coverage (Pacific
+    NW/Intermountain West; OCONUS beyond PR/USVI) -- raises an honest
+    no-coverage error.
 
-    Access pattern: Tier 3 (direct HTTPS point query to the NOAA PFDS endpoint).
+    Params:
+        location: ``(lat, lon)`` decimal degrees (lat first), or a 4-element
+            bbox whose center is used.
+        y_axis: ``"intensity"`` (default, in/hr, log y) or ``"depth"``
+            (inches, linear y).
 
-    **What it does:** Queries the NOAA Atlas 14 Precipitation Frequency Data
-    Server at the point (snapped to the Atlas 14 1/120-degree grid), parses the
-    FULL published duration x return-period matrix (19 durations, 5-min to
-    60-day x 10 ARIs, 1-yr to 1000-yr), and returns the house chart-emission
-    payload: a Vega-Lite line chart with duration on a LOG x axis, rainfall
-    intensity (in/hr; or depth in inches with ``y_axis="depth"``) on the y
-    axis, and one line per return period. This is the classic design-storm IDF
-    chart; for a single scalar depth use ``lookup_precip_return_period``.
-
-    **When to use:**
-    - "Show me the IDF curve for Houston" / "rainfall
-      intensity-duration-frequency chart at this site".
-    - Picking a design storm (duration + return period) before a pluvial
-      SFINCS / SWMM run.
-    - Comparing short-duration cloudburst vs long-duration soaker design
-      depths at one location.
-
-    **When NOT to use:**
-    - One specific depth (e.g. the 100-yr 24-hr) -- use
-      ``lookup_precip_return_period`` (same endpoint, scalar answer).
-    - Observed rainfall -- use ``fetch_mrms_qpe`` / ``fetch_usgs_nwis_gauges``.
-    - Points outside the Atlas 14 project areas (Pacific Northwest /
-      Intermountain West; OCONUS beyond PR/USVI): this tool raises an honest
-      typed no-coverage error (the Atlas-2 fallback in
-      ``lookup_precip_return_period`` is a 2-anchor reconstruction, not a
-      publishable full IDF family).
-
-    **Parameters:**
-    - ``location``: ``(lat, lon)`` decimal degrees (lat FIRST, the
-      ``lookup_precip_return_period`` convention), OR a 4-element
-      ``(min_lon, min_lat, max_lon, max_lat)`` bbox whose center is used.
-    - ``y_axis``: ``"intensity"`` (default; in/hr, log y -- the classic IDF
-      form) or ``"depth"`` (inches, linear y -- a DDF chart).
-
-    **Returns:** A ``ChartEmissionPayload`` dict (``envelope_type ==
-    "chart-emission"``): Vega-Lite v5 spec with the full inline matrix (one row
-    per duration x ARI), title, and a caption carrying the Atlas 14 volume +
-    project area provenance. The agent loop renders it as an inline chart card.
-
-    **Data source:** NOAA HDSC PFDS (``fe_text_mean.csv``; partial-duration
-    series, english units) -- the same endpoint + parser as
-    ``lookup_precip_return_period``. FR-CE-8: the CSV is routed through
-    ``read_through`` (``static-30d``/``idf_curve``) keyed on the snapped grid
-    point.
+    Returns:
+        ``ChartEmissionPayload`` (``envelope_type="chart-emission"``):
+        Vega-Lite v5 spec with the full duration x ARI matrix (19
+        durations x 10 return periods), title, and provenance caption.
     """
     lat, lon = _resolve_latlon(location)
     mode = str(y_axis or "intensity").strip().lower()

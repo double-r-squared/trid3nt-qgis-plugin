@@ -619,59 +619,38 @@ def compute_change_detection(
 ) -> ChangeDetectionLayerURI:
     """Detect surface change between two dates by differencing Sentinel-2 NDVI/NDWI.
 
-    Use this (not compute_ndvi, which is one date) when you want the DIFFERENCE between two dates.
+    Use this (not ``compute_ndvi``, which is one date) when you want the
+    DIFFERENCE between two dates -- deforestation/clearing/regrowth
+    (``index="ndvi"``), reservoir draw-down/flood-scar (``index="ndwi"``),
+    or before/after screening. Do NOT use for: single-date vegetation
+    (``compute_ndvi``); land-cover class transitions (compare
+    ``fetch_esri_landcover_10m`` years instead); cross-season comparisons
+    (two dates in different seasons read as false "change").
 
-    **What it does:** Fetches the least-cloudy Sentinel-2 L2A scene for EACH of
-    two date windows over ``bbox`` (Microsoft Planetary Computer STAC -- the
-    same search path as ``compute_ndvi``), computes the spectral index per date
-    (NDVI by default; NDWI when ``index="ndwi"``), differences them
-    (``delta = date_b - date_a``), thresholds ``|delta| >= threshold`` (default
-    0.15) into gain / loss classes, vectorizes to change polygons, and returns
-    a FlatGeobuf vector layer styled by gain (green) / loss (red) with
-    per-class counts + areas.
+    Params:
+        bbox: EPSG:4326, clamped to <= 0.2 deg per side.
+        date_a_start/date_a_end, date_b_start/date_b_end: "YYYY-MM-DD"
+            before/after windows (required unless both ``imagery_*_uri``
+            are supplied).
+        index: ``"ndvi"`` (default) or ``"ndwi"``.
+        threshold: |delta| cutoff for real change (default 0.15).
+        max_cloud_cover: per-window scene cloud ceiling (default 30.0).
+        min_area_m2: drop change polygons smaller than this (default 1000).
+        imagery_a_uri/imagery_b_uri: precomputed single-band index rasters;
+            skips the STAC fetch when both given.
 
-    **When to use:**
-    - "What changed here between 2020 and 2024?" -- deforestation / clearing,
-      vegetation regrowth, crop conversion (``index="ndvi"``).
-    - Reservoir draw-down / new open water / flood-scar mapping
-      (``index="ndwi"``).
-    - Post-event before/after screening (fire scar, storm blowdown) when a
-      categorical change footprint is wanted rather than two rasters.
+    Returns:
+        ``ChangeDetectionLayerURI`` -- vector ``LayerURI`` (FlatGeobuf,
+        EPSG:4326; ``change`` in {"gain","loss"} + ``area_m2`` per feature)
+        plus ``gain_count``/``loss_count``/``gain_area_m2``/``loss_area_m2``/
+        ``scene_a_id``/``scene_b_id``/``notes``.
 
-    **When NOT to use:**
-    - A single-date vegetation map -- use ``compute_ndvi``.
-    - Land-cover CLASS transitions (forest -> urban) -- compare
-      ``fetch_esri_landcover_10m`` years instead; this tool differences a
-      continuous index, not classes.
-    - Sub-annual crop phenology: two dates in different seasons will read as
-      "change" -- compare same-season windows.
-
-    **Parameters:**
-    - ``bbox``: ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326, clamped to
-      <= 0.2 degrees per side.
-    - ``date_a_start`` / ``date_a_end``: ``"YYYY-MM-DD"`` window for the
-      BEFORE date (required unless both ``imagery_*_uri`` are supplied).
-    - ``date_b_start`` / ``date_b_end``: window for the AFTER date (same rule).
-    - ``index``: ``"ndvi"`` (default, vegetation) or ``"ndwi"`` (open water).
-    - ``threshold``: |delta| cutoff for a real change (default 0.15).
-    - ``max_cloud_cover``: per-window scene cloud ceiling (default 30.0).
-    - ``min_area_m2``: drop change polygons smaller than this (default 1000).
-    - ``imagery_a_uri`` / ``imagery_b_uri``: PRECOMPUTED single-band index
-      rasters (s3:// or local GeoTIFF). When both are given no STAC call is
-      made; B is resampled onto A's grid before differencing.
-
-    **Returns:** ``ChangeDetectionLayerURI`` -- a vector ``LayerURI``
-    (FlatGeobuf, EPSG:4326; each feature carries ``change`` in
-    ``{"gain","loss"}`` + ``area_m2``) with a categorical gain/loss legend
-    (``value_field="change"``) plus ``gain_count`` / ``loss_count`` /
-    ``gain_area_m2`` / ``loss_area_m2`` / ``scene_a_id`` / ``scene_b_id`` and
-    honest ``notes``.
-
-    **Errors (FR-AS-11):** ``ChangeDetectionNoImageryError`` (no scene in a
-    window), ``ChangeDetectionNoChangeError`` (nothing crosses the threshold
-    -- an HONEST no-change result, never an empty layer),
-    ``ChangeDetectionAoiTooLargeError`` / ``ChangeDetectionInputError`` /
-    ``ChangeDetectionUpstreamError``.
+    Raises:
+        ChangeDetectionNoImageryError: no scene in a window.
+        ChangeDetectionNoChangeError: honest no-change result (nothing
+            crosses threshold) -- never an empty layer.
+        ChangeDetectionAoiTooLargeError / ChangeDetectionInputError /
+        ChangeDetectionUpstreamError.
     """
     q_bbox = _validate_bbox(bbox)
     idx_name = _validate_index(index)

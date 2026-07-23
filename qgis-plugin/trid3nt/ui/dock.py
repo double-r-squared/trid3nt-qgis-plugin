@@ -82,6 +82,7 @@ from .cards import (
     CodeExecCard,
     CredentialCard,
     GateCard,
+    Mode2CandidateCard,
     SimCard,
     ToolCandidatesCard,
     _AssistantEntry,
@@ -266,6 +267,11 @@ class Trid3ntDock(QDockWidget):
         # reset on case switch (_clear_messages -- the widgets die with the
         # message list).
         self._open_tool_pickers: List[ToolCandidatesCard] = []
+        # Wave-picker UX (LANE P, 2026-07-22): 1-based counter of picker
+        # cards shown THIS turn -- the "Step N" affordance is trivially
+        # derived from card arrival order, never a server field. Reset on
+        # every new user turn (_send) and on a case switch (_clear_messages).
+        self._tool_picker_turn_step = 0
         # O1 (NATE 2026-07-20): the standing "AOI: drawn X x Y deg" readout is
         # GONE (clutter). The ONLY AOI note is the one-time inline transcript
         # note ``_on_aoi_extent_chosen`` emits WHEN the user actually sets the
@@ -559,6 +565,7 @@ class Trid3ntDock(QDockWidget):
         # ADR 0018: open picker cards are per-case transcript state -- the
         # widgets die in the loop below; drop the tracking refs with them.
         self._open_tool_pickers = []
+        self._tool_picker_turn_step = 0
         # Per-case-bbox 2026-07-19: the previous case's AOI overlay must not
         # linger across a switch -- _on_case_open_event repaints it below from
         # the newly-opened case's own bbox (or leaves it cleared when absent).
@@ -1841,6 +1848,17 @@ class Trid3ntDock(QDockWidget):
             # ONE tool-choice envelope. Fail-open: unanswered, the server's
             # timeout_s proceeds and the supersede hook above folds the card.
             self._show_tool_candidates_card(data)
+        elif kind == "mode2-candidate":
+            # Offer-to-add card (LANE P, 2026-07-22): the light fire-and-
+            # forget classifier flag. Fire-and-forget by contract too -- a
+            # malformed/dropped envelope costs nothing but one candidate
+            # never getting a card.
+            self._show_mode2_candidate_card(data, heavy=False)
+        elif kind == "offer-catalog-addition":
+            # The heavier review flow (same card, richer probe findings) --
+            # see gate.py's module docstring. Not yet emitted by the live
+            # server; handled now so the plugin is ready the day it is.
+            self._show_mode2_candidate_card(data, heavy=True)
         elif kind == "case-open":
             self._on_case_open_event(data)
         elif kind == "case-list":
@@ -2148,7 +2166,13 @@ class Trid3ntDock(QDockWidget):
                 error=True,
             )
             return
-        card = ToolCandidatesCard(request, self._on_tool_choice)
+        # Wave-picker UX (LANE P): increment the per-turn step counter BEFORE
+        # constructing the card so a wave of N pickers in one turn reads
+        # "Step 1", "Step 2", ... in arrival order.
+        self._tool_picker_turn_step += 1
+        card = ToolCandidatesCard(
+            request, self._on_tool_choice, step_index=self._tool_picker_turn_step
+        )
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
         self._open_tool_pickers.append(card)
         self._close_pending_for_card()
@@ -2166,6 +2190,55 @@ class Trid3ntDock(QDockWidget):
             )
         except Exception as exc:  # noqa: BLE001
             self._note(f"tool choice send failed: {exc}", error=True)
+
+    # -- offer-to-add card (LANE P, mode2-candidate + offer-catalog-addition,
+    # 2026-07-22) --------------------------------------------------------------- #
+
+    def _show_mode2_candidate_card(self, payload: dict, heavy: bool) -> None:
+        """Render a Mode 2 offer-to-add card -- either the light
+        ``mode2-candidate`` flag (``heavy=False``) or the heavier
+        ``offer-catalog-addition`` review (``heavy=True``); same card class
+        either way (``ui/cards.Mode2CandidateCard``). Mirrors
+        ``_show_gate_card``'s malformed-envelope honesty and the BUG-4/N5
+        close-out discipline (post-decision narration lands in a fresh entry
+        BELOW the card)."""
+        request = (
+            gate.parse_offer_catalog_addition(payload)
+            if heavy
+            else gate.parse_mode2_candidate(payload)
+        )
+        if request is None:
+            self._note(
+                "Received a malformed "
+                + ("offer-catalog-addition" if heavy else "mode2-candidate")
+                + " envelope (no "
+                + ("request_id" if heavy else "candidate_id")
+                + "/url) -- no offer-to-add card shown.",
+                error=True,
+            )
+            return
+        card = Mode2CandidateCard(request, self._on_mode2_decision)
+        self.messages_layout.insertWidget(self.messages_layout.count() - 1, card)
+        self._close_pending_for_card()
+        self._scroll_to_bottom()
+
+    def _on_mode2_decision(
+        self, request: gate.Mode2CandidateRequest, add: bool
+    ) -> None:
+        """Send the offer-to-add decision: ONE ``catalog-addition-response``
+        envelope (contract ``ws.CatalogAdditionResponsePayload``) built by
+        the pure ``gate.resolve_mode2_decision`` -- see that function's
+        docstring for the light-candidate ``request_id`` bridge."""
+        wire = gate.resolve_mode2_decision(request, add)
+        try:
+            self.bridge.respond_catalog_addition(
+                wire["request_id"],
+                wire["decision"],
+                edited_catalog_entry=wire["edited_catalog_entry"],
+                reject_reason=wire["reject_reason"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"catalog-addition reply send failed: {exc}", error=True)
 
     def _supersede_open_tool_pickers(self) -> None:
         """Fold every still-open picker card to its "agent proceeded" chip
@@ -2209,6 +2282,11 @@ class Trid3ntDock(QDockWidget):
             return
         self.input_edit.clear()
         self._add_user_bubble(text)
+        # Wave-picker UX (LANE P): a fresh turn starts a fresh "Step N" count
+        # -- any still-open pickers from the PRIOR turn are already folded by
+        # _supersede_open_tool_pickers (a picker never survives a
+        # turn-complete), so this is safe to reset unconditionally.
+        self._tool_picker_turn_step = 0
         if self._pending is not None:
             # Feature 2026-07-13, defensive: a WS drop can strand a
             # streaming entry that never saw turn-complete -- final-render

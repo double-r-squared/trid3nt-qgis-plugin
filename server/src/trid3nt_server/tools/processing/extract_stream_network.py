@@ -157,47 +157,34 @@ def extract_stream_network(
     # job-0164: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> StreamNetworkLayerURI:
-    """Extract the stream network from a DEM by D8 flow accumulation.
+    """Extract the stream network from a DEM by D8 flow accumulation (pysheds).
 
-    Runs the pysheds D8 chain (pit/depression filling, flat resolution, flow
-    direction, flow accumulation) and traces every flow path whose upslope
-    area reaches ``accumulation_threshold`` cells, returning the channel
-    network as a line layer on the map.
+    Use this when: "where are the streams/drainage lines here", "trace
+    the channels on this DEM", terrain-derived drainage where NHD mapping
+    is missing/coarse, or upstream of ``delineate_watershed`` (streams
+    show where to put the pour point). Do NOT use for: mapped/named
+    rivers (``fetch_river_geometry``/``fetch_nhdplus_nldi_navigate`` --
+    surveyed, not DEM-derived); the basin boundary
+    (``delineate_watershed``).
 
-    When to use:
-        - "Where are the streams / drainage lines in this area", "trace the
-          channels on this DEM", terrain-derived drainage where NHD mapping
-          is missing/coarse, headwater channels below mapped rivers.
-        - Upstream of ``delineate_watershed`` (streams show WHERE to put the
-          pour point) or paired with a flood/erosion layer.
-
-    When NOT to use:
-        - Mapped river geometry / named rivers (use ``fetch_river_geometry``
-          or ``fetch_nhdplus_nldi_navigate`` -- those are surveyed, this is
-          DEM-derived).
-        - The basin boundary (use ``delineate_watershed``).
-
-    Parameters:
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326, clamped to
-            <= 0.3 degrees per side.
-        accumulation_threshold: minimum upslope CELL COUNT for a cell to be
-            channel (default 500 cells ~ 0.45 km^2 at 30 m). LOWER -> denser
-            network with more headwater channels; HIGHER -> only the main
-            stems.
-        dem_uri: optional override DEM (s3:// or local GeoTIFF). Default:
-            Copernicus GLO-30 via ``fetch_copernicus_dem``.
+    Params:
+        bbox: EPSG:4326, clamped to <= 0.3 deg per side.
+        accumulation_threshold: min upslope cell count to be channel
+            (default 500, ~0.45 km^2 at 30m). Lower=denser network.
+        dem_uri: optional override DEM; default Copernicus GLO-30.
 
     Returns:
-        ``StreamNetworkLayerURI`` -- the channel network as a vector layer
-        (GeoJSON LineStrings, one per branch) carrying ``segment_count``,
-        the threshold used, ``total_length_km`` (approximate), and honest
-        ``notes`` (engine path + provenance).
+        ``StreamNetworkLayerURI`` -- channel network (GeoJSON LineStrings,
+        one per branch) with ``segment_count``, threshold used,
+        ``total_length_km``, honest ``notes``.
 
-    Errors (FR-AS-11): ``HydrologyAoiTooLargeError`` (bbox over the clamp),
-    ``HydrologyInputError`` (bad bbox / threshold / URI), ``NoStreamsError``
-    (no cell reaches the threshold -- flat AOI or threshold too high),
-    ``HydrologyDependencyError`` (pysheds missing),
-    ``HydrologyUpstreamError`` (fetch/write failed).
+    Raises:
+        HydrologyAoiTooLargeError: bbox over the clamp.
+        HydrologyInputError: bad bbox/threshold/URI.
+        NoStreamsError: no cell reaches the threshold (flat AOI or
+            threshold too high).
+        HydrologyDependencyError: pysheds missing.
+        HydrologyUpstreamError: fetch/write failed.
     """
     q_bbox = _validate_bbox(bbox)
     try:

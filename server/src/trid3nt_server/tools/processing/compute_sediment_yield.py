@@ -640,54 +640,36 @@ def compute_sediment_yield(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> SedimentYieldLayerURI:
-    """Map annual soil loss over an AOI with the RUSLE erosion model.
+    """Map annual soil loss over an AOI with the RUSLE erosion model (A = R*K*LS*C*P, t/ha/yr).
 
-    Computes A = R * K * LS * C * P (t/ha/yr) per cell: slope (LS) from a
-    fetched Copernicus GLO-30 DEM, soil erodibility (K) from STATSGO KFFACT,
-    cover management (C) from Esri/IO 10 m land cover via a documented
-    literature C-factor table, support practice P = 1. Returns a styled
-    soil-loss raster (log-scaled color classes at 1/5/10/50/100/500 t/ha/yr).
+    Use this when: "where is erosion worst in this watershed", soil-loss/
+    sediment-yield maps for fields, erosion risk after land-use change, or
+    sediment-source screening upstream of a reservoir. Do NOT use for:
+    in-channel sediment transport/deposition (hillslope sheet+rill erosion
+    only); post-fire debris flows (``model_debris_flow``); single-storm
+    event loss (RUSLE is a long-term ANNUAL average).
 
-    When to use:
-        - "Where is erosion worst in this watershed", "soil loss / sediment
-          yield map for these fields", "erosion risk after this land-use
-          change", sediment-source screening upstream of a reservoir.
-        - Pair with ``compute_zonal_statistics`` to rank fields/parcels by
-          mean soil loss.
-
-    When NOT to use:
-        - In-channel sediment TRANSPORT / deposition (RUSLE is hillslope sheet
-          + rill erosion only; no gully/channel/mass-wasting processes).
-        - Post-fire debris flows (use ``model_debris_flow``).
-        - Single-storm event loss -- RUSLE is a long-term ANNUAL average.
-
-    Parameters:
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326, clamped to
-            <= 0.2 degrees per side (a field / small-watershed AOI).
-        rainfall_erosivity: R-factor in MJ mm/(ha h yr). Default: a constant
-            300 with an HONEST note (a coarse mid-range value -- pass the
-            local R for meaningful absolute numbers; relative patterns within
-            the AOI are unaffected).
-        dem_uri: optional override DEM raster (s3:// or local GeoTIFF).
-            Default: Copernicus GLO-30 via ``fetch_copernicus_dem``.
-        k_uri: optional override K-factor raster. Default: STATSGO KFFACT via
-            ``fetch_statsgo_soils``, then a constant 0.2 fallback (noted).
-        landcover_uri: optional override land-cover class raster (IO LULC
-            codes). Default: ``fetch_esri_landcover_10m``.
+    Params:
+        bbox: EPSG:4326, clamped to <= 0.2 deg per side.
+        rainfall_erosivity: R-factor MJ mm/(ha h yr); default a noted
+            coarse constant 300 -- pass the local R for absolute accuracy.
+        dem_uri: override DEM; default Copernicus GLO-30.
+        k_uri: override K-factor raster; default STATSGO KFFACT, then a
+            noted 0.2 fallback.
+        landcover_uri: override land-cover raster; default
+            ``fetch_esri_landcover_10m``.
 
     Returns:
-        ``SedimentYieldLayerURI`` -- a raster ``LayerURI`` (single-band float32
-        COG, values = A in t/ha/yr; ``style_preset="sediment_yield_t_ha_yr"``,
-        a log-scaled interval colormap) carrying ``mean_soil_loss_t_ha_yr`` /
-        ``max_soil_loss_t_ha_yr`` / ``p95_soil_loss_t_ha_yr``,
-        ``rainfall_erosivity`` (the R actually used), and honest ``notes``
-        (every default/fallback/simplification).
+        ``SedimentYieldLayerURI`` -- raster ``LayerURI`` (single-band
+        float32, ``style_preset="sediment_yield_t_ha_yr"``, log-scaled)
+        with ``mean_soil_loss_t_ha_yr``/``max_soil_loss_t_ha_yr``/
+        ``p95_soil_loss_t_ha_yr``, ``rainfall_erosivity``, honest ``notes``.
 
-    Errors (FR-AS-11):
-        - ``SedimentYieldAoiTooLargeError`` (AOI over the 0.2-deg clamp),
-        - ``SedimentYieldInputError`` (bad bbox / erosivity / unreadable URI),
-        - ``SedimentYieldDependencyError`` (rasterio missing),
-        - ``SedimentYieldUpstreamError`` (input fetch or artifact write failed).
+    Raises:
+        SedimentYieldAoiTooLargeError: AOI over the 0.2-deg clamp.
+        SedimentYieldInputError: bad bbox/erosivity/unreadable URI.
+        SedimentYieldDependencyError: rasterio missing.
+        SedimentYieldUpstreamError: input fetch or write failure.
     """
     q_bbox = _validate_bbox(bbox)
     notes: list[str] = []

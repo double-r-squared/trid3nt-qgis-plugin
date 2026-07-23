@@ -34,6 +34,7 @@ import asyncio
 import hashlib
 import math
 import re
+import time
 import weakref
 import logging
 import os
@@ -83,6 +84,7 @@ from trid3nt_contracts.region_choice import (
 from trid3nt_contracts.ws import (
     AgentMessageChunkPayload,
     CancelPayload,
+    CatalogAdditionResponsePayload,
     Envelope,
     AgentThinkingChunkPayload,
     ErrorPayload,
@@ -436,18 +438,71 @@ def _asks_for_data_or_analysis(user_text: Any) -> bool:
     return bool(isinstance(user_text, str) and _DATA_INTENT_RE.search(user_text))
 
 
+#: ADR 0018 analysis-flow stages, in pipeline order. The wave label derivation
+#: (``_stage_label_for_candidates``) tie-breaks toward the EARLIEST stage so a
+#: multi-step turn reads as a forward march acquisition -> ... -> visualization.
+_STAGE_ORDER: tuple[str, ...] = (
+    "acquisition",
+    "preprocessing",
+    "analysis",
+    "visualization",
+)
+
+
 def _stage_label_for_tool(tool_name: str) -> str:
-    """Coarse analysis-flow stage for the tool-candidates card (ADR 0018:
-    acquisition -> preprocessing -> analysis -> visualization)."""
-    if tool_name.startswith(("fetch_", "geocode_", "discover_", "catalog_")):
+    """Coarse analysis-flow stage for ONE tool name (ADR 0018:
+    acquisition -> preprocessing -> analysis -> visualization).
+
+    Category definitions: acquisition = fetchers (fetch_/geocode_/discover_/
+    catalog_/search_); preprocessing = processing/clip (clip_/merge_/fill_/cut_/
+    import_/digitize_/extract_); analysis = spatial_query/code_exec/compute
+    (compute_/run_/model_/spatial_/query_/analyze_/aggregate_/code_exec);
+    visualization = publish/charts (publish_/generate_/export_/zoom/compose_/
+    chart/plot). Anything else falls back to ``"tool-selection"``.
+    """
+    if tool_name.startswith(
+        ("fetch_", "geocode_", "discover_", "catalog_", "search_")
+    ):
         return "acquisition"
-    if tool_name.startswith(("clip_", "merge_", "fill_", "cut_", "import_")):
+    if tool_name.startswith(
+        ("clip_", "merge_", "fill_", "cut_", "import_", "digitize_", "extract_")
+    ):
         return "preprocessing"
-    if tool_name.startswith(("publish_", "generate_", "export_", "zoom")):
+    if tool_name.startswith(
+        ("publish_", "generate_", "export_", "zoom", "compose_", "chart", "plot")
+    ):
         return "visualization"
-    if tool_name.startswith(("compute_", "run_", "model_", "spatial_", "query_")):
+    if tool_name.startswith(
+        ("compute_", "run_", "model_", "spatial_", "query_", "analyze_", "aggregate_")
+    ) or tool_name.startswith("code_exec"):
         return "analysis"
     return "tool-selection"
+
+
+def _stage_label_for_candidates(ranked: list[tuple[str, float]]) -> str:
+    """Derive one wave ``stage_label`` from the TOP candidates' categories.
+
+    ADR 0018 wave completion: a single top tool is a brittle signal for a
+    round's stage (the rank-1 pick may be an outlier). Instead we aggregate the
+    categories of the top ``_TOOL_CANDIDATES_MAX`` candidates and pick the
+    PLURALITY stage, tie-broken toward the earliest pipeline stage so a
+    multi-step turn surfaces a forward-marching sequence of labels. A candidate
+    set that is all fallbacks (``"tool-selection"``) yields ``"tool-selection"``.
+    """
+    counts: dict[str, int] = {}
+    for name, _score in ranked[:_TOOL_CANDIDATES_MAX]:
+        stage = _stage_label_for_tool(name)
+        if stage == "tool-selection":
+            continue
+        counts[stage] = counts.get(stage, 0) + 1
+    if not counts:
+        return "tool-selection"
+    # Plurality; ties broken toward the earliest pipeline stage (_STAGE_ORDER).
+    best = max(
+        counts.items(),
+        key=lambda kv: (kv[1], -_STAGE_ORDER.index(kv[0])),
+    )
+    return best[0]
 
 
 def _tool_summary_line(entry: Any) -> str:
@@ -537,6 +592,361 @@ def _resolve_pending_tool_choice(session_id: str, payload: Any) -> bool:
         return False
     fut.set_result(dict(payload))
     return True
+
+
+def _union_pinned_tool(
+    pinned: str | None,
+    retrieval_registry: dict,
+    state: SessionState,
+) -> dict:
+    """Union a user-pinned tool into the allowed set + visible registry.
+
+    Shared by the pre-turn tool-candidates gate and the per-round ASK-mode
+    waves (ADR 0018): a pinned tool must be BOTH in the allowed set (post-hoc
+    validation) AND in the retrieval-visible registry (so the declaration is
+    built and the model can actually call it). Returns the registry to use --
+    a NEW dict when the pin widened it, else the same object (so callers can
+    skip a needless ``build_tool_declarations`` rebuild via identity check).
+    """
+    if pinned and pinned in TOOL_REGISTRY:
+        state.allowed_tool_set.add_tools({pinned})
+        if pinned not in retrieval_registry:
+            retrieval_registry = dict(retrieval_registry)
+            retrieval_registry[pinned] = TOOL_REGISTRY[pinned]
+    return retrieval_registry
+
+
+# ---------------------------------------------------------------------------
+# Mode 2 offer-to-add -- pending catalog-offer registry (FR-DS-* Mode 2).
+#
+# The ``mode2-candidate`` emission is FIRE-AND-FORGET: it never blocks the turn
+# (unlike the tool-choice gate, so there is no future to await). Instead we
+# stash the candidate keyed by its ``candidate_id`` -- which the plugin card
+# echoes back as the ``catalog-addition-response.request_id`` -- so a later
+# positive reply can draft the full catalog entry from the original candidate.
+#
+# BOUNDED, like every card: offers expire after a TTL and the registry is
+# capped, so an offer the user never answers cannot leak (proceeds, never
+# hangs). Session-scoped + unguessable-ULID keyed, mirroring the tool-choice
+# registry so a reply on a sibling connection of the same session still
+# resolves. Overlay write + probe run OFF the loop (asyncio.to_thread).
+# ---------------------------------------------------------------------------
+
+#: request_id -> (owner_session_id, candidate wire-dict, monotonic_expiry).
+_PENDING_CATALOG_OFFERS: dict[str, tuple[str, dict, float]] = {}
+
+#: Cap on outstanding offers; the oldest is dropped when the bound is hit.
+_CATALOG_OFFER_MAX = 64
+
+
+def _catalog_offer_ttl_s() -> float:
+    """Bounded offer validity (``TRID3NT_CATALOG_OFFER_TTL_S``, default 600s).
+
+    Mirrors the ``offer-catalog-addition`` contract's 10-minute default -- the
+    user is reading + sanity-checking provenance. Malformed / non-positive ->
+    default.
+    """
+    raw = os.environ.get("TRID3NT_CATALOG_OFFER_TTL_S")
+    if raw is None:
+        return 600.0
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 600.0
+    return value if value > 0 else 600.0
+
+
+def _prune_catalog_offers(now: float | None = None) -> None:
+    """Drop expired pending offers (called on every register / pop)."""
+    now = time.monotonic() if now is None else now
+    expired = [
+        rid for rid, (_s, _c, exp) in _PENDING_CATALOG_OFFERS.items() if exp <= now
+    ]
+    for rid in expired:
+        _PENDING_CATALOG_OFFERS.pop(rid, None)
+
+
+def _register_pending_catalog_offer(
+    session_id: str, request_id: str, candidate: dict
+) -> None:
+    """Stash a mode2 candidate so a later positive reply can draft its entry."""
+    _prune_catalog_offers()
+    # Insertion-ordered dict -> the first key is the oldest offer.
+    while len(_PENDING_CATALOG_OFFERS) >= _CATALOG_OFFER_MAX:
+        oldest = next(iter(_PENDING_CATALOG_OFFERS), None)
+        if oldest is None:
+            break
+        _PENDING_CATALOG_OFFERS.pop(oldest, None)
+    _PENDING_CATALOG_OFFERS[request_id] = (
+        session_id,
+        dict(candidate),
+        time.monotonic() + _catalog_offer_ttl_s(),
+    )
+
+
+def _pop_pending_catalog_offer(session_id: str, request_id: str) -> dict | None:
+    """Remove + return the candidate for ``request_id`` (owner-checked).
+
+    Returns ``None`` when the offer is unknown / expired, or when a DIFFERENT
+    session claims it (refused loudly -- mirrors ``_resolve_pending_tool_choice``).
+    A None here is NOT fatal: a self-contained ``edited_catalog_entry`` on the
+    reply can still be completed without the original candidate.
+    """
+    _prune_catalog_offers()
+    entry = _PENDING_CATALOG_OFFERS.get(request_id)
+    if entry is None:
+        return None
+    owner, candidate, _exp = entry
+    if owner != session_id:
+        logger.warning(
+            "catalog-addition-response request_id=%s owned by session=%s but "
+            "resolved-by=%s; ignoring",
+            request_id,
+            owner,
+            session_id,
+        )
+        return None
+    _PENDING_CATALOG_OFFERS.pop(request_id, None)
+    return candidate
+
+
+def _slug(text: str | None) -> str:
+    """Lowercase kebab slug for a derived catalog id (``weather.gov`` -> ``weather-gov``)."""
+    s = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    return s or "source"
+
+
+def _probe_catalog_endpoint_sync(url: str) -> "ProbeFindings":
+    """Cheap best-effort conformity probe for a Mode 2 candidate URL.
+
+    Fills the ``ProbeFindings`` axes we can observe from a single bounded HEAD
+    (with a ranged-GET fallback for servers that reject HEAD): content type,
+    last-modified, range support. DEGRADES HONESTLY -- any failure returns an
+    empty ``ProbeFindings`` (all None) rather than fabricating a finding. Runs
+    OFF the event loop (called via ``asyncio.to_thread``).
+    """
+    from trid3nt_contracts.ws import ProbeFindings
+
+    try:
+        import requests
+
+        resp = requests.head(url, timeout=5.0, allow_redirects=True)
+        if resp.status_code >= 400 or not (resp.headers or {}):
+            resp = requests.get(
+                url, timeout=5.0, stream=True, headers={"Range": "bytes=0-0"}
+            )
+        headers = resp.headers or {}
+        ct = headers.get("Content-Type") or headers.get("content-type")
+        lm = headers.get("Last-Modified") or headers.get("last-modified")
+        ar = headers.get("Accept-Ranges") or headers.get("accept-ranges")
+        supports_range = (
+            isinstance(ar, str) and "bytes" in ar.lower()
+        ) or resp.status_code == 206
+        return ProbeFindings(
+            content_type=(
+                ct.split(";")[0].strip() if isinstance(ct, str) and ct else None
+            ),
+            last_modified_header=lm if isinstance(lm, str) and lm else None,
+            supports_range_requests=supports_range or None,
+        )
+    except Exception:  # noqa: BLE001 -- honest degrade, never fabricate
+        logger.info(
+            "catalog probe failed url=%s -- degrading to empty ProbeFindings",
+            url,
+            exc_info=True,
+        )
+        return ProbeFindings()
+
+
+async def _probe_catalog_endpoint(url: str | None) -> "ProbeFindings | None":
+    """Bounded async wrapper for ``_probe_catalog_endpoint_sync`` (never raises)."""
+    from trid3nt_contracts.ws import ProbeFindings
+
+    if not isinstance(url, str) or not url:
+        return None
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_probe_catalog_endpoint_sync, url), timeout=8.0
+        )
+    except Exception:  # noqa: BLE001 -- probe is best-effort
+        return ProbeFindings()
+
+
+def _complete_catalog_entry(
+    base: Any, candidate: dict | None, findings: "ProbeFindings | None"
+) -> Any:
+    """Draft + complete a full ``CatalogEntry`` for the user-overlay catalog.
+
+    Sources, in precedence order: the user's ``edited_catalog_entry`` (a
+    ``SuggestedCatalogEntry``), then the originating mode2 ``candidate`` dict,
+    then the conformity ``findings``, then honest defaults. Returns a validated
+    ``CatalogEntry`` (status ``"active"`` -- in the single-user local build the
+    user's acceptance IS the curator approval), or ``None`` when no endpoint
+    URL is derivable (the one field we refuse to fabricate).
+    """
+    from trid3nt_contracts.catalog import CatalogEntry
+    from urllib.parse import urlparse
+
+    cand = candidate or {}
+
+    def _b(attr: str) -> Any:
+        return getattr(base, attr, None) if base is not None else None
+
+    urls: list[str] = []
+    if base is not None and _b("urls"):
+        urls = [u for u in _b("urls") if isinstance(u, str) and u]
+    if not urls and isinstance(cand.get("url"), str) and cand["url"]:
+        urls = [cand["url"]]
+    if not urls:
+        return None  # no endpoint -> cannot honestly draft an entry.
+    url = urls[0]
+    host = (urlparse(url).hostname or "").lower()
+
+    entry_id = _b("id") or f"user-{_slug(host or 'source')}-{new_ulid()[-8:].lower()}"
+    name = (
+        _b("name")
+        or (cand.get("title") if isinstance(cand.get("title"), str) else None)
+        or host
+        or entry_id
+    )
+    description = (
+        _b("description")
+        or f"User-added source via Mode 2 catalog addition ({host or url})."
+    )
+    access_tier = (
+        _b("access_tier")
+        or (findings.access_tier_inferred if findings is not None else None)
+        or 3
+    )
+    # credential_tier: draft ONLY as tier 1 (key-free). Tier >= 2 requires an
+    # api_key_secret_ref we do not have at draft time; downgrading keeps the
+    # entry valid against the CatalogEntry cross-field rule (honest, not a shim).
+    ttl_class = _b("ttl_class") or "semi-static-7d"
+    source_class = (
+        _b("source_class")
+        or (
+            cand.get("suggested_tool_kind")
+            if isinstance(cand.get("suggested_tool_kind"), str)
+            else None
+        )
+        or "user_added"
+    )
+    license_txt = (
+        _b("license_claim")
+        or (findings.license_observed if findings is not None else None)
+        or "Unknown (user-proposed, unverified)"
+    )
+    how_to_use = (
+        _b("how_to_use")
+        or (
+            f"User-proposed endpoint {url}. Fetch via web_fetch or the generic "
+            "OGC/HTTP adapters; verify the response shape before relying on it."
+        )
+    )
+    citation = (
+        f"{name} -- {host or url} (user-proposed via Mode 2, added "
+        f"{now_utc().date().isoformat()})"
+    )
+    try:
+        return CatalogEntry(
+            id=entry_id,
+            name=name,
+            description=description,
+            urls=urls,
+            access_tier=access_tier,
+            credential_tier=1,
+            ttl_class=ttl_class,
+            source_class=source_class,
+            license=license_txt,
+            citation=citation,
+            vintage=None,
+            last_verified=now_utc().isoformat(),
+            status="active",
+            how_to_use=how_to_use,
+            api_key_secret_ref=None,
+        )
+    except Exception:  # noqa: BLE001 -- surface the honest failure, no shim
+        logger.warning(
+            "catalog completion: could not build a valid CatalogEntry id=%r",
+            entry_id,
+            exc_info=True,
+        )
+        return None
+
+
+async def _handle_catalog_addition_response(
+    websocket: ServerConnection,
+    state: SessionState,
+    car: "CatalogAdditionResponsePayload",
+) -> None:
+    """Mode 2 offer-to-add completion (the server half of the loop).
+
+    On ACCEPT: draft + complete the entry (edited entry / candidate / probe),
+    APPEND it to the user-overlay catalog, and reset the catalog cache so
+    ``search_data_catalog`` finds it on the very next load. On REJECT / cancel:
+    just resolve (drop) the pending offer. Best-effort -- never raises into the
+    message loop; a probe / append fault degrades honestly and logs.
+    """
+    candidate = _pop_pending_catalog_offer(state.session_id, car.request_id)
+
+    if car.cancelled or car.decision != "accept":
+        logger.info(
+            "catalog-addition-response resolved session=%s request_id=%s "
+            "decision=%s cancelled=%s (offer dropped)",
+            state.session_id,
+            car.request_id,
+            car.decision,
+            car.cancelled,
+        )
+        return
+
+    base = car.edited_catalog_entry
+    if base is None and candidate is None:
+        logger.warning(
+            "catalog-addition-response accept with NO pending offer and NO "
+            "edited entry session=%s request_id=%s -- cannot draft; ignored",
+            state.session_id,
+            car.request_id,
+        )
+        return
+
+    url_for_probe: str | None = None
+    if base is not None and base.urls:
+        url_for_probe = base.urls[0]
+    elif candidate and isinstance(candidate.get("url"), str):
+        url_for_probe = candidate["url"]
+    findings = await _probe_catalog_endpoint(url_for_probe)
+
+    entry = _complete_catalog_entry(base, candidate, findings)
+    if entry is None:
+        logger.warning(
+            "catalog-addition-response accept could not complete a valid entry "
+            "session=%s request_id=%s",
+            state.session_id,
+            car.request_id,
+        )
+        return
+
+    try:
+        from .tools.discovery.catalog_common import append_user_catalog_entry
+
+        await asyncio.to_thread(append_user_catalog_entry, entry)
+    except Exception:  # noqa: BLE001 -- append fault must not break the loop
+        logger.exception(
+            "catalog-addition-response overlay append failed session=%s id=%s",
+            state.session_id,
+            entry.id,
+        )
+        return
+
+    logger.info(
+        "catalog-addition-response ACCEPTED session=%s request_id=%s appended "
+        "catalog id=%s url=%s",
+        state.session_id,
+        car.request_id,
+        entry.id,
+        entry.urls[0],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2711,6 +3121,7 @@ async def _maybe_emit_tool_candidates(
     websocket: ServerConnection,
     state: SessionState,
     user_text: str,
+    exclude_tools: "set[str] | None" = None,
 ) -> tuple[str | None, list[str]]:
     """ADR 0018: surface the retrieval-ranked tool candidates BEFORE dispatch.
 
@@ -2739,8 +3150,14 @@ async def _maybe_emit_tool_candidates(
     from .tools.discovery.tool_retrieval import retrieve_ranked_tools
 
     ranked = retrieve_ranked_tools(user_text, k=8)
+    if exclude_tools:
+        # ADR 0018 wave semantics: drop this turn's already-dispatched tools so
+        # each subsequent ASK-mode round's wave advances the stage label
+        # (acquisition -> preprocessing -> analysis -> visualization) instead of
+        # re-offering the same acquisition picks every round.
+        ranked = [(n, s) for (n, s) in ranked if n not in exclude_tools]
     if not ranked:
-        # Cold index / no match: nothing to offer -- autonomous (fail-open).
+        # Cold index / no match / all excluded: nothing to offer -- autonomous.
         return None, []
 
     reason: str | None = None
@@ -2765,7 +3182,7 @@ async def _maybe_emit_tool_candidates(
     request_id = new_ulid()
     payload = {
         "request_id": request_id,
-        "stage_label": _stage_label_for_tool(ranked[0][0]),
+        "stage_label": _stage_label_for_candidates(ranked),
         "candidates": candidates,
         "reason": reason,
         "timeout_s": timeout_s,
@@ -3228,11 +3645,9 @@ async def _stream_gemini_reply(
         _pinned_tool, _pin_notes = await _maybe_emit_tool_candidates(
             websocket, state, user_text
         )
-        if _pinned_tool and _pinned_tool in TOOL_REGISTRY:
-            state.allowed_tool_set.add_tools({_pinned_tool})
-            if _pinned_tool not in _retrieval_registry:
-                _retrieval_registry = dict(_retrieval_registry)
-                _retrieval_registry[_pinned_tool] = TOOL_REGISTRY[_pinned_tool]
+        _retrieval_registry = _union_pinned_tool(
+            _pinned_tool, _retrieval_registry, state
+        )
     except asyncio.CancelledError:
         raise
     except Exception:  # noqa: BLE001 — the picker is an optimization
@@ -3442,6 +3857,38 @@ async def _stream_gemini_reply(
             # stream_openai), and a round can legitimately mint+complete more
             # than one (proactive, then a later reactive retry).
             _compaction_step_id: str | None = None
+
+            # ADR 0018 wave semantics: in ASK mode, surface a pre-dispatch
+            # tool-candidates WAVE before EACH subsequent round (round 1 is
+            # covered by the pre-loop emission above). Excluding this turn's
+            # already-dispatched tools advances the stage label (acquisition ->
+            # preprocessing -> analysis -> visualization) so a multi-step turn
+            # reads as a SEQUENCE of stage-labeled picks, not one blob. AUTO
+            # mode is unchanged (single near-tie emission only). Fail-open: any
+            # fault proceeds; the wave is an optimization, never a wall.
+            if iterations > 1 and _session_routing_mode(state) == "ask":
+                try:
+                    _w_pinned, _w_notes = await _maybe_emit_tool_candidates(
+                        websocket,
+                        state,
+                        user_text,
+                        exclude_tools=_turn_tools_dispatched,
+                    )
+                    _w_reg = _union_pinned_tool(
+                        _w_pinned, _retrieval_registry, state
+                    )
+                    if _w_reg is not _retrieval_registry:
+                        _retrieval_registry = _w_reg
+                        tool_decls = build_tool_declarations(_retrieval_registry)
+                    for _w_note in _w_notes:
+                        contents.append(build_user_text_content(_w_note))
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 -- wave is best-effort
+                    logger.warning(
+                        "per-round tool-candidates wave failed; proceeding",
+                        exc_info=True,
+                    )
 
             async for event in stream_events_with_contents(
                 client,
@@ -12801,6 +13248,15 @@ async def _maybe_emit_mode2_candidate(
                 }
             )
         )
+        # Mode 2 offer-to-add: stash the candidate keyed by candidate_id (which
+        # the plugin card echoes back as catalog-addition-response.request_id)
+        # so a later positive reply can draft + append the full catalog entry.
+        # Fire-and-forget (never blocks this turn); the registry is bounded.
+        _register_pending_catalog_offer(
+            state.session_id,
+            candidate.candidate_id,
+            envelope.to_wire_dict()["candidate"],
+        )
         # job-0203 (M4): Mode-2 candidate audit routes through the MCP
         # ``audit_log`` collection (D.15) — the bespoke JSONL file writer
         # was deleted (remove-don't-shim). When Persistence is unbound
@@ -14314,6 +14770,38 @@ def _make_handler(settings: GeminiSettings):
                             payload_dict.get("request_id"),
                             payload_dict.get("tool_name"),
                             bool(payload_dict.get("free_text")),
+                        )
+
+                    elif msg_type == "catalog-addition-response":
+                        # §F.1.2 Mode 2 offer-to-add: the user accepted /
+                        # rejected a mode2-candidate. The plugin card echoes the
+                        # candidate_id back as request_id. On accept the server
+                        # drafts + probes + appends the entry to the user-overlay
+                        # catalog; reject / cancel just drops the pending offer.
+                        # Non-blocking + best-effort (never hangs the loop).
+                        try:
+                            car = CatalogAdditionResponsePayload.model_validate(
+                                payload_dict
+                            )
+                        except ValidationError as ve:
+                            await _send_error(
+                                websocket,
+                                state.session_id,
+                                "TOOL_PARAMS_INVALID",
+                                f"catalog-addition-response invalid: "
+                                f"{ve.errors()[0]['msg']}",
+                            )
+                            continue
+                        await _handle_catalog_addition_response(
+                            websocket, state, car
+                        )
+                        logger.info(
+                            "catalog-addition-response accepted session=%s "
+                            "request_id=%s decision=%s cancelled=%s",
+                            state.session_id,
+                            car.request_id,
+                            car.decision,
+                            car.cancelled,
                         )
 
                     elif msg_type == "session-config":

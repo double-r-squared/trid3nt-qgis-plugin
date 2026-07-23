@@ -77,71 +77,36 @@ async def request_spatial_input(
 ) -> dict[str, Any]:
     """Ask the user to DRAW geometry on the map, then PAUSE until they finish.
 
-    Use this when you need the user to physically draw on the map rather than
-    describe an area in words:
-
-        - Urban flood (SWMM): the user wants to place flood WALLS / FLAP GATES,
-          or outline the exact block / neighborhood AOI. Call this with
-          ``mode="vector_draw"`` BEFORE ``run_swmm_urban_flood`` — the result's
-          ``barriers`` field is the FeatureCollection you pass straight to
-          ``run_swmm_urban_flood(barriers=...)``, and ``aoi_bbox`` is the
-          ``bbox`` to model.
-        - A NEUTRAL elevation/section LINE (``mode="vector_draw"`` +
-          ``purpose="line"``): the user draws a single plain LineString -- an
-          elevation profile / cross-section line -- with NO wall/flap-gate
-          tagging. Pass the result's ``line`` (``[[lon,lat],...]``) or
-          ``linestring`` (a GeoJSON LineString) straight to
-          ``compute_terrain_profile(line=...)`` / ``compute_cross_section``.
-        - A single map click (``mode="point"``) or a drag-rectangle
-          (``mode="bbox"``) for a precise location the user could not name.
-
-    Do NOT use this when the user already gave a clear place name / address /
-    bbox in text (geocode it instead), or when no map is in front of the user.
+    Use this when the user must physically draw on the map rather than
+    describe an area in words: an AOI/region outline for any bbox-taking
+    tool (``mode="vector_draw"``, ``purpose="aoi"``); SWMM flood WALLS/
+    FLAP GATES before ``run_swmm_urban_flood`` (``purpose="barrier"``,
+    default -- result's ``barriers`` FeatureCollection passes straight to
+    ``run_swmm_urban_flood(barriers=...)``, ``aoi_bbox`` as its ``bbox``);
+    a neutral elevation/section LINE (``purpose="line"`` -- result's
+    ``line``/``linestring`` passes to ``compute_terrain_profile``/
+    ``compute_cross_section``); or a single click (``mode="point"``) /
+    drag-rectangle (``mode="bbox"``). Do NOT use when the user already
+    gave a clear place name/address/bbox in text (geocode instead).
 
     Params:
-        mode: ``"vector_draw"`` (DEFAULT — the terra-draw surface for AOIs +
-            tagged walls/flap-gates), ``"point"`` (single click), or ``"bbox"``
-            (drag-rectangle).
-        title: short prompt heading shown over the draw surface.
-        description: one-line instruction telling the user what to draw.
-        purpose: ``vector_draw`` only. ``"aoi"`` (SELECT AN AREA -- the user
-            draws a rectangle or polygon to define an area of interest; no
-            barrier tagging; use this when you need the user to outline a
-            region, watershed, or study area for ANY tool that takes an AOI or
-            bbox). ``"barrier"`` (DEFAULT -- drawn lines are structural SWMM
-            walls / flap gates that the user MUST tag; only for the urban-flood
-            SWMM engine). ``"line"`` (drawn line is a NEUTRAL elevation/section
-            line for ``compute_terrain_profile`` -- submitted plain, no tagging).
-            ROUTING: choose ``"aoi"`` for "show me X over Y", "landcover over
-            Washington", "flood risk in this area", or any area-selection
-            prompt. Use ``"barrier"`` only for flood walls / flap gates. Use
-            ``"line"`` only for elevation profiles / cross-sections.
-        suggested_view: OPTIONAL ``{"bbox": [minLon, minLat, maxLon, maxLat],
-            "zoom": <float>}`` camera hint so the map jumps to the right place
-            before drawing.
-        default_timeout_seconds: OPTIONAL wait window (seconds). Default 300.
+        mode: ``"vector_draw"`` (default), ``"point"``, or ``"bbox"``.
+        title/description: prompt heading + one-line draw instruction.
+        purpose: ``vector_draw`` only -- ``"aoi"`` (area selection, no
+            tagging; use for "show me X over Y"/"flood risk in this
+            area"), ``"barrier"`` (default, tagged SWMM walls/flap gates),
+            ``"line"`` (plain elevation/section line).
+        suggested_view: optional ``{"bbox", "zoom"}`` camera hint.
+        default_timeout_seconds: wait window (default 300).
 
-    Returns (after the user finishes — the turn is PAUSED until then):
-        On a ``vector_draw`` reply: ``{"status": "ok", "geometry_type":
-        "vector_draw", "aoi_bbox": [minLon,minLat,maxLon,maxLat] | absent,
-        "barriers": <FeatureCollection> | absent, "n_walls": int,
-        "n_flap_gates": int, "points": [[lon,lat],...], "n_aoi": int,
-        "n_lines": int, "line": [[lon,lat],...] | absent, "linestring":
-        <GeoJSON LineString> | absent}``. For SWMM, pass ``barriers`` straight
-        to ``run_swmm_urban_flood(barriers=...)`` and ``aoi_bbox`` as its
-        ``bbox``. For a ``purpose="line"`` request, pass ``line`` (or
-        ``linestring``) straight to ``compute_terrain_profile(line=...)``.
-
-        On a ``point`` / ``bbox`` reply: ``{"status": "ok", "geometry_type":
-        ..., "coordinates": [...]}``.
-
-        If the user cancels: ``{"status": "cancelled", ...}``. On timeout / no
-        interactive client / malformed drawing: ``{"status": "error",
-        "error_code": "SPATIAL_INPUT_...", "error_message": ...}``. NEVER invent
-        an AOI or barriers when the result is an error or cancellation — ask the
-        user or proceed without them.
-
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"``.
+    Returns (after the user finishes -- the turn PAUSES until then):
+        vector_draw: ``{"status": "ok", "geometry_type": "vector_draw",
+        "aoi_bbox"?, "barriers"? (FeatureCollection), "n_walls",
+        "n_flap_gates", "points", "n_aoi", "n_lines", "line"?, "linestring"?}``.
+        point/bbox: ``{"status": "ok", "geometry_type", "coordinates"}``.
+        Cancelled: ``{"status": "cancelled", ...}``. Timeout/no client/
+        malformed: ``{"status": "error", "error_code": "SPATIAL_INPUT_...",
+        "error_message"}`` -- never invent an AOI/barriers on error.
     """
     norm_mode = (mode or "vector_draw").strip()
     if norm_mode not in _VALID_MODES:

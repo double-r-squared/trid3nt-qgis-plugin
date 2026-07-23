@@ -102,83 +102,50 @@ async def run_geoclaw_inundation(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> GeoClawDepthLayerURI | dict[str, Any]:
-    """Run a GeoClaw (Clawpack) shallow-water inundation simulation over an AOI.
+    """Run a GeoClaw (Clawpack) shallow-water inundation simulation over an AOI (TSUNAMI/DAM-BREAK/SURGE run-up).
 
-    Solves the 2D nonlinear shallow-water equations over real topography with
-    adaptive mesh refinement, producing a peak overland-depth COG + a per-timestep
-    depth-frame animation group. Covers a hazard family the other flood engines do
-    not: TSUNAMI run-up, DAM-BREAK / embankment-failure overland flow, and
-    shallow-water SURGE run-up.
-
-    Use this when:
-        - The user asks to model a TSUNAMI, a DAM BREAK / embankment or levee
-          FAILURE / reservoir release, or shallow-water storm-SURGE RUN-UP over an
-          AOI, and wants the resulting inundation depth + animation.
-
-    Do NOT use this for:
-        - Rain-driven riverine / coastal compound flooding (use
-          ``run_model_flood_scenario`` - that is SFINCS).
-        - Urban / pluvial / drainage / stormwater flooding (use
-          ``run_swmm_urban_flood`` - that is SWMM).
-        - Groundwater contamination plumes (use ``run_modflow_job``).
+    Use this when: the user wants a TSUNAMI, DAM BREAK/levee failure, or
+    shallow-water storm-SURGE RUN-UP inundation depth + animation --
+    solves 2D nonlinear shallow-water equations with adaptive mesh
+    refinement. Do NOT use for: rain-driven riverine/coastal compound
+    flooding (``run_model_flood_scenario`` -- SFINCS); urban/pluvial
+    flooding (``run_swmm_urban_flood`` -- SWMM); groundwater plumes
+    (``run_modflow_job``).
 
     Params:
-        bbox: the computational-domain AOI as ``(min_lon, min_lat, max_lon,
-            max_lat)`` in EPSG:4326 (lon-first).
-        scenario: the driver family, EXACTLY one of {"dam_break", "tsunami",
-            "surge"}. ``"dam_break"`` (DEFAULT) releases a raised water column over
-            dry topo; ``"tsunami"`` drives a seafloor-displacement source;
-            ``"surge"`` applies a raised sea surface. Synonyms (e.g. "wave" ->
-            tsunami, "breach" -> dam_break) are normalized.
-        sim_duration_s: simulated physical time, seconds (> 0). Default 3600.
-        dam_break_depth_m: for ``scenario="dam_break"`` ONLY - the height (m) of
-            the raised water column released at t=0. Default 10.
-        source_lonlat: OPTIONAL ``(lon, lat)`` of the driver source (dam centroid
-            / tsunami epicentre). When unset the AOI centroid is used.
-        source_magnitude: for ``scenario="tsunami"`` synthetic-source mode - the
-            moment magnitude (Mw) scaling the Okada slip. Default 8.0.
-        tsunami_dtopo_uri: for ``scenario="tsunami"`` - OPTIONAL ``s3://`` URI of a
-            prescribed dtopo file (else a synthetic Okada source is built).
-        surge_forcing_uri: for ``scenario="surge"`` - OPTIONAL ``s3://`` URI of a
-            sea-surface hydrograph CSV.
-        output_frames: number of evenly-spaced fort.q output frames (>= 1).
-            Drives the animation frame count. Default 24.
-        amr_levels: AMR refinement levels (>= 1; 1 = uniform grid). Default 2.
-        manning_n: shallow-water friction Manning n (> 0). Default 0.025.
-        sea_level_m: still-water datum (m). Default 0.0.
-        fault_strike_deg: for ``scenario="tsunami"`` synthetic-Okada mode ONLY -
-            OPTIONAL USER-GATED fault strike (deg, [0, 360]). When unset the engine
-            substitutes a scenario default (and surfaces that substitution; it is
-            never silently fabricated). Default unset.
-        fault_dip_deg: OPTIONAL USER-GATED Okada fault dip (deg, (0, 90]). Default
-            unset.
-        fault_rake_deg: OPTIONAL USER-GATED Okada fault rake/slip (deg, [-180,
-            180]). Default unset.
-        fault_depth_km: OPTIONAL USER-GATED Okada fault depth (km, > 0). Default
-            unset.
-        extra_topo_uris: OPTIONAL ordered (coarse -> fine) list of additional
-            topo/bathy DEM ``s3://`` URIs layered onto the primary topo (finest
-            wins). Default unset.
-        coastal_gauge_lonlat: OPTIONAL ``(lon, lat)`` of a single coastal gauge
-            point to record a water-surface time series. Default unset.
-        fgmax_arrival_tol_m: OPTIONAL fgmax wet-cell threshold (m, > 0) backing the
-            wave-arrival-on-land time. When unset the contract default (0.01 m) is
-            used; ``arrival_time_s`` is only reported when an fgmax monitor ran.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        bbox: computational-domain AOI, EPSG:4326.
+        scenario: ``"dam_break"`` (default, raised water column at t=0),
+            ``"tsunami"`` (seafloor-displacement source), or ``"surge"``
+            (raised sea surface).
+        sim_duration_s: simulated time, seconds (default 3600).
+        dam_break_depth_m: dam_break only, released column height
+            (default 10).
+        source_lonlat: optional driver-source location; default AOI
+            centroid.
+        source_magnitude: tsunami synthetic-source Mw (default 8.0).
+        tsunami_dtopo_uri: optional prescribed dtopo file (else synthetic
+            Okada source).
+        surge_forcing_uri: optional sea-surface hydrograph CSV.
+        output_frames: animation frame count (default 24).
+        amr_levels: AMR refinement levels (default 2).
+        manning_n: friction coefficient (default 0.025).
+        sea_level_m: still-water datum (default 0.0).
+        fault_strike_deg/fault_dip_deg/fault_rake_deg/fault_depth_km:
+            optional user-gated Okada fault params (tsunami synthetic
+            mode); unset substitutes a noted scenario default.
+        extra_topo_uris: optional ordered coarse->fine DEM overlays.
+        coastal_gauge_lonlat: optional point to record a water-surface
+            time series.
+        fgmax_arrival_tol_m: optional wet-cell threshold for arrival time
+            (default 0.01m when unset).
+        compute_class: compute class (default "standard").
 
     Returns:
-        On success: a ``GeoClawDepthLayerURI`` (a ``LayerURI`` subtype) - the
-        emitter appends it to ``session-state.loaded_layers`` and the map renders
-        the peak depth COG. It carries ``max_depth_m`` + ``flooded_area_km2`` +
-        ``max_inundation_m`` (Invariant 1 - the agent narrates these typed
-        numbers, never invents them). The per-timestep depth frames are emitted
-        out-of-band as a temporal scrubber group.
-
-        On failure: a dict with ``status="error"`` + ``error_code`` +
-        ``error_message`` so the LLM narrates the failure honestly (no layer).
-
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-    ``source_class="workflow_dispatch"`` - the cache shim is NOT invoked.
+        On success: ``GeoClawDepthLayerURI`` -- peak-depth COG plus
+        out-of-band per-timestep scrubber animation, with ``max_depth_m``,
+        ``flooded_area_km2``, ``max_inundation_m``.
+        On failure: ``{"status": "error", "error_code", "error_message"}``.
+        Not cached (``cacheable=False``).
     """
     # --- Validate + coerce into the GeoClawRunArgs contract -----------------
     if bbox is None:

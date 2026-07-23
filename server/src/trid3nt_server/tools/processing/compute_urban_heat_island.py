@@ -399,57 +399,37 @@ def compute_urban_heat_island(
 ) -> UrbanHeatIslandLayerURI:
     """Quantify the urban heat island: MODIS LST stratified by land-cover class.
 
-    Use this (do not stop at geocode_location) once you have the AOI; it is the tool that actually computes the urban-heat-island analysis.
+    Use this (do not stop at ``geocode_location``) once you have the AOI --
+    it is the tool that computes the UHI analysis: "how strong is the
+    urban heat island here?", "how much hotter is built-up vs parks?"
+    Fetches MODIS 8-day LST + Esri/IO land cover, resamples LST onto the
+    land-cover grid, and reports ``uhi_delta_c`` = mean(Built) -
+    mean(vegetation classes). Do NOT use for: sub-kilometer thermal
+    contrast (MODIS is 1km; use ``fetch_landsat_imagery(band_combo=
+    "thermal")`` for 30m); air-temperature (2m canopy) UHI -- this is
+    SURFACE UHI; a plain LST map (``fetch_modis_lst``).
 
-    **What it does:** Fetches MODIS 8-day land-surface temperature (deg C, 1 km;
-    ``fetch_modis_lst``) and the Esri/IO 10 m annual land cover
-    (``fetch_esri_landcover_10m``) over ``bbox``, resamples the LST onto the
-    land-cover grid (coarse->fine bilinear; adds no sub-kilometer detail --
-    documented), computes the mean LST per land-cover class, and reports the
-    surface-UHI intensity ``uhi_delta_c = mean(Built area) -
-    mean(vegetation classes: Trees/Flooded veg/Crops/Rangeland)``. Returns the
-    aligned deg-C LST COG (thermal heat-map paint) with the per-class table +
-    delta riding on the result.
+    Params:
+        bbox: EPSG:4326, clamped to <= 1.0 deg per side.
+        start_date/end_date: "YYYY-MM-DD" LST window; default trailing
+            ~120 days.
+        daynight: ``"day"`` (default, peak surface heat) or ``"night"``
+            (overnight retention, public-health-relevant).
+        lst_uri: optional precomputed deg-C LST raster override.
+        landcover_uri: optional land-cover class raster override.
 
-    **When to use:**
-    - "How strong is the urban heat island here?" / "how much hotter is the
-      built-up area than the parks?" over a city or metro AOI.
-    - Heat-equity / extreme-heat exposure context (pair with
-      ``fetch_census_acs`` / ``fetch_cdc_svi`` and ``compute_zonal_statistics``).
-    - Night-time heat retention (``daynight="night"`` -- the
-      public-health-relevant signal).
+    Returns:
+        ``UrbanHeatIslandLayerURI`` -- raster ``LayerURI`` (single-band
+        float32 deg-C, ``style_preset="land_surface_temp_c"``) with
+        ``uhi_delta_c``, ``built_mean_lst_c``, ``vegetation_mean_lst_c``,
+        ``per_class_lst_c`` (per-class mean/min/max/count/share), honest
+        ``notes``. ``uhi_delta_c`` is ``None`` when no built or vegetated
+        pixels exist -- never fabricated.
 
-    **When NOT to use:**
-    - Fine-grained (sub-kilometer) thermal contrast, e.g. street trees vs one
-      parking lot -- MODIS LST is a 1 km composite; use
-      ``fetch_landsat_imagery(band_combo="thermal")`` for 30 m snapshots.
-    - AIR temperature UHI (2 m canopy UHI) -- this is SURFACE (skin) UHI.
-    - A plain LST map -- use ``fetch_modis_lst`` directly.
-
-    **Parameters:**
-    - ``bbox``: ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326, clamped to
-      <= 1.0 degree per side (metro scale).
-    - ``start_date`` / ``end_date``: ``"YYYY-MM-DD"`` LST window (default:
-      ``fetch_modis_lst``'s trailing ~120-day window). Set both to a heat-wave
-      month for an event analysis.
-    - ``daynight``: ``"day"`` (default; peak surface heat) or ``"night"``
-      (overnight heat retention).
-    - ``lst_uri``: optional PRECOMPUTED deg-C LST raster override (s3:// or
-      local GeoTIFF) -- the offline-test seam.
-    - ``landcover_uri``: optional land-cover class raster override (IO LULC
-      codes).
-
-    **Returns:** ``UrbanHeatIslandLayerURI`` -- a raster ``LayerURI``
-    (single-band float32 deg-C COG on the land-cover grid,
-    ``style_preset="land_surface_temp_c"``) carrying ``uhi_delta_c``,
-    ``built_mean_lst_c``, ``vegetation_mean_lst_c``, ``per_class_lst_c`` (one
-    row per class: code, label, mean/min/max LST, pixel count, share) and
-    honest ``notes``. ``uhi_delta_c`` is ``None`` when the AOI has no built or
-    no vegetated pixels (noted) -- never fabricated.
-
-    **Errors (FR-AS-11):** ``UhiAoiTooLargeError`` / ``UhiInputError`` (bad
-    bbox, unreadable URIs, no overlapping valid cells) / ``UhiUpstreamError``
-    (fetch / resample / write failures).
+    Raises:
+        UhiAoiTooLargeError / UhiInputError: bad bbox, unreadable URIs,
+            no overlapping valid cells.
+        UhiUpstreamError: fetch/resample/write failure.
     """
     q_bbox = _validate_bbox(bbox)
     dn = str(daynight or "day").strip().lower()

@@ -425,85 +425,32 @@ def clip_vector_to_polygon(
 ) -> LayerURI:
     """Clip a vector (points / lines / polygons) to an arbitrary polygon mask.
 
-    Uses geopandas spatial predicates (``intersects`` for partial, ``within``
-    for strict containment) to filter a vector dataset to features inside a
-    polygon mask. Supports attribute-based polygon selection and automatic CRS
-    reprojection. Returns a FlatGeobuf ``LayerURI``, cached for 30 days.
-
-    When to use:
-        - Trimming a nationwide or regional vector layer to a named place ("in
-          [state/county/protected area]") — e.g. GBIF occurrences clipped to
-          the Florida state polygon for a Case-1 species overlay.
-        - Preparing vector overlays (species occurrences, NWS alerts, OSM roads)
-          scoped to the analysis area before display or statistics.
-        - Case 1 flood-habitat workflow: clip GBIF species-point layers to
-          WDPA protected-area boundaries.
-
-    When NOT to use:
-        - Clipping rasters to polygons (use ``clip_raster_to_polygon``).
-        - Simple bbox clips (use ``clip_raster_to_bbox`` for rasters; for vectors
-          pass a 4-corner polygon FlatGeobuf).
-        - Spatial joins that enrich vector attributes (use ``qgis_process`` sjoin).
-        - CRS reprojection without spatial filtering (use ``qgis_process`` reproject).
+    Use this when: trimming a nationwide/regional vector layer to a named
+    place ("X in [state/county/protected area]") before display or
+    statistics. Do NOT use for: clipping rasters (``clip_raster_to_polygon``);
+    attribute-enriching spatial joins (``qgis_process`` sjoin); reprojection
+    without filtering (``qgis_process`` reproject).
 
     Params:
-        vector_uri: source vector URI — ``gs://`` GCS path or absolute local
-            file path. Must be a FlatGeobuf, GeoJSON, Shapefile, GeoPackage, or
-            GeoParquet (anything pyogrio can open). All features must share a
-            geometry kind (points / lines / polygons).
-        polygon_uri: polygon source URI — ``gs://`` or absolute local path.
-            Polygon-typed features. When the source has multiple features
-            (e.g. TIGER state file with all 50 states), use ``feature_filter``
-            to select; otherwise all polygons are dissolved (unary union) into
-            a single mask.
-        feature_filter: optional column→value equality filter to apply to the
-            polygon source before dissolving. Example: ``{"STUSPS": "FL"}``
-            to select Florida from a TIGER state file. Missing columns or a
-            filter matching zero rows raises ``ClipVectorError(POLYGON_FILTER_EMPTY)``.
-        keep_partial: ``True`` (default) keeps features that PARTIALLY intersect
-            the mask (full original geometry preserved — no in-place truncation,
-            so attribute columns like precomputed length/area are not silently
-            invalidated). ``False`` requires full containment — features must
-            be entirely within the mask (``gpd.within(polygon)``); used when
-            the caller wants strict-membership semantics (e.g. "buildings
-            fully inside the protected area").
+        vector_uri: source vector (FlatGeobuf/GeoJSON/SHP/GPKG/GeoParquet);
+            features must share one geometry kind.
+        polygon_uri: polygon mask source; if it has multiple features (e.g.
+            all 50 states), use ``feature_filter`` to select one, else all
+            polygons dissolve into a single mask.
+        feature_filter: optional column->value equality filter on the
+            polygon source, e.g. ``{"STUSPS": "FL"}``. Zero matches raises
+            ``ClipVectorError(POLYGON_FILTER_EMPTY)``.
+        keep_partial: ``True`` (default) keeps features that partially
+            intersect the mask (geometry untouched). ``False`` requires
+            full containment (``gpd.within``) for strict-membership intent.
 
     Returns:
-        A ``LayerURI`` pointing at a clipped FlatGeobuf in the cache bucket:
-        ``s3://trid3nt-cache/cache/static-30d/clip_vector_polygon/<key>.fgb``.
-        ``layer_type="vector"``, ``role="context"``.
-
-    LLM guidance:
-        - For "X in [named place]" queries: fetch the vector (e.g.
-          ``fetch_gbif_occurrences``), fetch the place polygon (e.g.
-          ``fetch_administrative_boundaries`` with a state-level filter), then
-          call ``clip_vector_to_polygon``.
-        - ``keep_partial=True`` matches the user-intuitive "anything visible
-          inside the mask" — use that as the default; only set ``keep_partial=False``
-          when the user explicitly asks for "entirely within" / "fully contained".
-
-    FR-CE-8: Routed through ``read_through`` so identical
-    ``(vector_uri, polygon_uri, feature_filter, keep_partial)`` calls reuse the
-    cached FlatGeobuf. TTL is 30 days (static-30d) — vector + polygon sources
-    are themselves static-30d cached layers.
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - ``fetch_gbif_occurrences`` / ``fetch_wdpa_protected_areas`` /
-          ``fetch_administrative_boundaries`` / ``fetch_nws_event`` — supply
-          ``vector_uri`` (the layer to be clipped).
-        - ``fetch_administrative_boundaries`` / ``fetch_wdpa_protected_areas`` —
-          also supply ``polygon_uri`` (the clip mask).
-        Downstream (feeds):
-        - ``publish_layer`` — publish the clipped vector FlatGeobuf to QGIS
-          Server WMS for display on the map.
-        - ``run_model_flood_habitat_scenario`` — calls this to clip species
-          occurrence layers to WDPA boundary extents for Case 1.
+        ``LayerURI`` for the clipped FlatGeobuf (cache bucket, TTL 30d;
+        ``layer_type="vector"``, ``role="context"``).
 
     Raises:
-        ClipVectorError: with a typed ``error_code`` when any layer is
-        unreadable, the filter matches zero polygons, the URI is unrecognised,
-        the geometry types are mixed, or the clip produces zero features.
+        ClipVectorError: unreadable layer, zero-match filter, unrecognised
+            URI, mixed geometry types, or zero-feature clip result.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 

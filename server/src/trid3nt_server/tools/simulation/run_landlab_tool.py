@@ -102,63 +102,37 @@ async def run_landlab_susceptibility(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LandlabSusceptibilityLayerURI | dict[str, Any]:
-    """Run a Landlab surface-process simulation over an AOI (landslide / runoff).
+    """Run a Landlab surface-process simulation over an AOI (landslide susceptibility or overland flow).
 
-    Builds a Landlab ``RasterModelGrid`` from the AOI DEM and runs a documented
-    component chain on AWS Batch:
-      - ``"landslide_probability"`` (DEFAULT): the infinite-slope
-        ``LandslideProbability`` chain (FlowAccumulator -> LandslideProbability)
-        — a Monte-Carlo probability-of-failure + factor-of-safety field driven by
-        topographic slope + contributing area + soil cohesion / friction /
-        transmissivity / recharge. The landslide-susceptibility / FoS hazard.
-      - ``"overland_flow"``: the ``OverlandFlow`` (de Almeida shallow-water)
-        chain — routes a rainfall pulse over the DEM and returns the peak
-        surface-water depth.
-    Returns a ``LandlabSusceptibilityLayerURI`` carrying the susceptibility / FoS
-    COG + the three narration scalars.
-
-    Use this when:
-        - The user asks to model LANDSLIDE susceptibility / slope stability /
-          factor of safety / where slopes may fail over a hillslope or catchment.
-        - The user asks to model rainfall OVERLAND FLOW / surface runoff routed
-          over terrain (pass ``analysis="overland_flow"``).
-
-    Do NOT use this for:
-        - Riverine / coastal flooding (use ``run_model_flood_scenario`` —
-          SFINCS) or urban / pluvial drainage flooding around buildings (use
-          ``run_swmm_urban_flood``).
-        - Groundwater contamination plumes (use ``run_modflow_job``).
+    Use this when: the user wants LANDSLIDE susceptibility/slope
+    stability/factor of safety over a hillslope or catchment (default
+    ``analysis="landslide_probability"``, infinite-slope Monte-Carlo
+    FoS), or rainfall OVERLAND FLOW/surface runoff
+    (``analysis="overland_flow"``, de Almeida shallow-water). Do NOT use
+    for: riverine/coastal flooding (``run_model_flood_scenario`` --
+    SFINCS) or urban/pluvial (``run_swmm_urban_flood``); groundwater
+    plumes (``run_modflow_job``).
 
     Params:
-        bbox: AOI as ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326
-            (lon-first). A hillslope / small catchment, not a county.
-        analysis: which component chain to run, one of
-            {"landslide_probability", "overland_flow"}. Default
-            "landslide_probability". Common synonyms (e.g. "landslide",
-            "susceptibility", "runoff") are normalized.
-        target_resolution_m: requested grid cell size, m (> 0). Default 30.
-        soil_transmissivity_m2_day / soil_cohesion_pa /
-            soil_internal_friction_deg / soil_density_kg_m3 / soil_thickness_m /
-            recharge_mm_day / n_monte_carlo: OPTIONAL infinite-slope soil
-            parameters (LandslideProbability). Leave UNSET to use the demo
-            defaults (narrated as demo values, not site-calibrated geotechnics).
-        rainfall_intensity_mm_hr / storm_duration_hr: OPTIONAL rainfall
-            parameters (OverlandFlow). Leave UNSET to use the demo defaults.
-        compute_class: FR-CE-3 compute class. Default "standard".
+        bbox: hillslope/small-catchment AOI, EPSG:4326.
+        analysis: ``"landslide_probability"`` (default) or
+            ``"overland_flow"``; common synonyms normalized.
+        target_resolution_m: grid cell size (default 30).
+        soil_transmissivity_m2_day/soil_cohesion_pa/
+            soil_internal_friction_deg/soil_density_kg_m3/
+            soil_thickness_m/recharge_mm_day/n_monte_carlo: optional
+            LandslideProbability soil params; unset uses noted demo
+            defaults (not site-calibrated).
+        rainfall_intensity_mm_hr/storm_duration_hr: optional OverlandFlow
+            rainfall params; unset uses demo defaults.
+        compute_class: compute class (default "standard").
 
     Returns:
-        On success: a ``LandlabSusceptibilityLayerURI`` (a ``LayerURI`` subtype)
-        — the emitter appends it to ``session-state.loaded_layers`` and the map
-        renders the susceptibility / FoS / depth COG. It carries
-        ``unstable_area_fraction`` + ``min_factor_of_safety`` +
-        ``mean_probability_of_failure`` (Invariant 1 — the agent narrates these
-        typed numbers, never invents them).
-
-        On failure: a dict with ``status="error"`` + ``error_code`` +
-        ``error_message`` so the LLM narrates the failure honestly (no layer).
-
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-    ``source_class="workflow_dispatch"`` — the cache shim is NOT invoked.
+        On success: ``LandlabSusceptibilityLayerURI`` -- susceptibility/
+        FoS/depth COG, with ``unstable_area_fraction``,
+        ``min_factor_of_safety``, ``mean_probability_of_failure``.
+        On failure: ``{"status": "error", "error_code", "error_message"}``.
+        Not cached (``cacheable=False``).
     """
     if bbox is None:
         return {

@@ -349,47 +349,32 @@ def compute_exposure_summary(
 ) -> dict[str, Any]:
     """Summarize exposure (population, buildings, area) inside a hazard footprint.
 
-    **What it does:** Derives the hazard footprint from a hazard raster (cells
-    with ``value > threshold``; default threshold: any wet/positive cell,
-    i.e. ``value > 0``) and computes: total WorldPop population on footprint
-    cells (via ``fetch_population``), the count of building footprints whose
-    representative point falls on a footprint cell (via ``fetch_buildings``),
-    and the footprint area in km^2.
+    Use this when: "how many people/buildings are in the flood zone?" right
+    after a flood/surge/plume solve produces a depth/intensity raster, or
+    for situation-report headline numbers (``compose_case_report`` consumes
+    this automatically). Do NOT use for: dollar losses/damage states
+    (``compute_flood_depth_damage`` screening or
+    ``run_pelicun_damage_assessment`` defensible); generic raster-in-zone
+    stats (``compute_zonal_statistics``).
 
-    **When to use:**
-    - "How many people / buildings are in the flood zone?" right after a
-      flood/surge/plume solve produced a depth or intensity raster.
-    - Headline exposure numbers for a situation report
-      (``compose_case_report`` picks this result up automatically).
+    Params:
+        hazard_layer_uri: hazard raster (band 1 defines the footprint).
+        threshold: footprint cutoff in raster units (e.g. 0.5 for >=0.5m
+            depth). ``None`` (default) = any positive/wet cell.
+        population_dataset: WorldPop vintage token (default
+            ``"worldpop_2020"``).
 
-    **When NOT to use:**
-    - Dollar losses or per-structure damage states -- use
-      ``compute_flood_depth_damage`` (screening) or
-      ``run_pelicun_damage_assessment`` (defensible).
-    - Generic raster-in-zone statistics -- use ``compute_zonal_statistics``.
+    Returns:
+        ``{"population", "buildings", "area_km2", "threshold", "bbox",
+        "errors": {per-component honest failure reasons, {} if clean},
+        "notes", "hazard_layer_uri", "computed_at"}``. A failed component
+        is ``None`` with its error recorded -- never fabricated.
 
-    **Parameters:**
-    - ``hazard_layer_uri``: the hazard raster (s3:// or local GeoTIFF/COG,
-      e.g. a flood-depth layer's uri). Single band; the footprint comes from
-      band 1.
-    - ``threshold``: footprint cutoff in the raster's own units (e.g. ``0.5``
-      for >= 0.5 m depth). Default ``None`` = any positive (wet) cell.
-    - ``population_dataset``: WorldPop vintage token (default
-      ``"worldpop_2020"``; see ``fetch_population``).
-
-    **Returns:** dict with
-    ``population`` (int or None), ``buildings`` (int or None),
-    ``area_km2`` (float), ``threshold`` (the cutoff actually used; None means
-    any-positive), ``bbox`` (footprint raster bounds, EPSG:4326),
-    ``errors`` (dict: per-component honest failure reasons, {} when clean),
-    ``notes`` (provenance + approximations), ``hazard_layer_uri``,
-    ``computed_at``. A failed component is ``None`` WITH its error recorded --
-    components degrade independently, values are never fabricated.
-
-    **Errors (FR-AS-11):** ``ExposureInputError`` (bad uri/threshold),
-    ``ExposureEmptyFootprintError`` (no cell crosses the threshold -- an
-    honest "nothing exposed" signal), ``ExposureUpstreamError`` (hazard
-    staging/read failed).
+    Raises:
+        ExposureInputError: bad uri/threshold.
+        ExposureEmptyFootprintError: no cell crosses the threshold (honest
+            "nothing exposed").
+        ExposureUpstreamError: hazard staging/read failed.
     """
     if not isinstance(hazard_layer_uri, str) or not hazard_layer_uri.strip():
         raise ExposureInputError(

@@ -363,90 +363,39 @@ def web_fetch(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Generic web-page ingest with content extraction modes.
+    """Generic web-page ingest with content extraction modes (article text / HTML / JSON / metadata).
 
-    Fetches an http/https URL with configurable extraction: stripped article
-    text, full HTML, JSON body, or metadata-only. Results are cached for 1 hour.
-    Returns a structured dict with the extracted content, HTTP status, and
-    provenance fields consumed by downstream claim aggregation.
-
-    When to use:
-        - Fetching the body of a news article or incident report URL for Case 2
-          event ingest (``run_model_news_event_ingest`` calls this via the
-          registry for "url" sources).
-        - Confirming a page's subject before deeper extraction (use
-          ``extract="metadata"`` — cheapest mode, reads only ``<meta>`` tags).
-        - Pulling a small public-data JSON API response that has no dedicated
-          fetcher tool.
-        - Research or citation checks for a specific URL.
-
-    When NOT to use:
-        - Large file downloads (no streaming surface — use a dedicated fetcher).
-        - Pages requiring JavaScript rendering (server-rendered HTML only; SPA
-          shells with empty bodies will return empty ``content``).
-        - Authenticated endpoints (no credential injection).
-        - Anything a domain-specific atomic tool already covers (``fetch_dem``,
-          ``fetch_landcover``, ``geocode_location``, ``fetch_administrative_boundaries``
-          are always preferred over a raw ``web_fetch`` call to the same upstream).
+    Use this when: fetching a news article or incident report URL (feeds
+    ``aggregate_claims_across_sources``); confirming a page's subject
+    cheaply (``extract="metadata"``); pulling a small public-data JSON API
+    with no dedicated fetcher; a citation/research check. Do NOT use for:
+    large file downloads (no streaming); JS-rendered SPA pages (empty
+    ``content``); authenticated endpoints; anything a domain-specific tool
+    already covers (``fetch_dem``/``fetch_landcover``/``geocode_location``
+    are always preferred over web_fetch to the same upstream).
 
     Params:
-        url: the absolute http/https URL to fetch. Schemes other than http/https
-            are rejected with ``WebFetchInputError``.
-        extract: one of:
-            - ``"full_html"`` — entire response body as a string in ``content``;
-            - ``"main_text"`` — boilerplate-stripped readable text via
-              BeautifulSoup + lxml (strips ``<script>``, ``<style>``,
-              ``<nav>``, ``<header>``, ``<footer>``, ``<aside>``,
-              ``<noscript>`` and prefers ``<main>``/``<article>`` over
-              ``<body>``); the default — best for article bodies;
-            - ``"json"`` — ``response.json()`` after a Content-Type check
-              (refuses to parse manifestly non-JSON bodies);
-            - ``"metadata"`` — Open Graph + ``<meta>`` tags + ``<title>``
-              only; cheapest mode, no body extraction.
-        timeout_s: per-request timeout in seconds. Default 30.0.
-        user_agent: User-Agent header sent with the request. Defaults to
-            ``"trid3nt-server/0.1 (research; contact: trid3nt-ops@local)"``; the
-            UA is part of the cache key so a change forces a refetch.
+        url: absolute http/https URL; other schemes raise
+            ``WebFetchInputError``.
+        extract: ``"main_text"`` (default, boilerplate-stripped readable
+            text), ``"full_html"`` (raw body), ``"json"`` (parsed after
+            Content-Type check), or ``"metadata"`` (OG/meta/title only,
+            cheapest).
+        timeout_s: per-request timeout (default 30.0).
+        user_agent: UA header, part of the cache key.
 
     Returns:
-        A dict with the shape::
+        ``{"url" (final, post-redirect), "status_code", "fetched_at",
+        "extract_mode", "content", "title", "lang", "content_length"}``.
+        Cached 1h (key: canonicalized url + extract + user_agent).
 
-            {
-              "url": str,           # final URL after redirects
-              "status_code": int,   # HTTP status (always 2xx here; 4xx/5xx raise)
-              "fetched_at": str,    # ISO-8601 UTC timestamp of the fetch
-              "extract_mode": str,  # echoes the ``extract`` argument
-              "content": str | dict | None,
-              "title": str | None,  # extracted ``<title>`` if present
-              "lang": str | None,   # extracted ``<html lang=...>`` if present
-              "content_length": int,
-            }
+    Raises:
+        WebFetchInputError: bad URL/scheme, unknown extract mode, 4xx,
+            Content-Type mismatch on json.
+        WebFetchUpstreamError: timeout, connection error, 5xx, JSON
+            decode failure.
 
-    Caching: the result is cached in GCS at
-    ``s3://trid3nt-cache/cache/dynamic-1h/web_fetch/<hash>.json``
-    with the 1-hour TTL window as the only freshness boundary. The cache key
-    inputs are ``(canonicalized url, extract, user_agent)``.
-
-    Typed errors (FR-AS-11):
-        - ``WebFetchInputError`` (not retryable) — bad URL, unsupported scheme,
-          unknown extract mode, 4xx HTTP response, Content-Type mismatch on
-          ``extract="json"``;
-        - ``WebFetchUpstreamError`` (retryable) — timeout, connection error,
-          5xx response, JSON decode failure.
-
-    Robots.txt: NOT honored in v0.1 (acceptable for research). Surfaced as
-    OQ-0092-WEB-FETCH-ROBOTS for sprint-13 revisit — a future version reads
-    and respects ``robots.txt`` per host before fetching.
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - No tool dependencies — takes a raw URL from the agent or user.
-        Downstream (feeds):
-        - ``aggregate_claims_across_sources`` — the returned dict (with ``url``,
-          ``content``, ``fetched_at``) is passed as an element of the ``sources``
-          list for cross-source claim extraction.
-        - ``run_model_news_event_ingest`` — calls this via the tool registry for
-          each "url"-type source in the ``sources`` input list.
+    Note: robots.txt is NOT honored in v0.1 (acceptable for research).
     """
     if extract not in _ALLOWED_EXTRACT_MODES:
         raise WebFetchInputError(

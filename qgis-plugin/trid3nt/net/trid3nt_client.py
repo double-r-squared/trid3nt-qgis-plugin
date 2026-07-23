@@ -1594,6 +1594,39 @@ class AgentClient:
             queue_if_closed=True,
         )
 
+    def respond_catalog_addition(
+        self,
+        request_id: str,
+        decision: str,
+        edited_catalog_entry: Optional[dict] = None,
+        reject_reason: Optional[str] = None,
+    ) -> None:
+        """Answer a Mode 2 offer-to-add card (LANE P, 2026-07-22): the
+        offer-to-add card's Add/Dismiss decision on EITHER the light
+        ``mode2-candidate`` flag or a heavy ``offer-catalog-addition``
+        review.
+
+        Contract (``ws.CatalogAdditionResponsePayload``): ``request_id``
+        echo + ``decision`` (``"accept"``/``"reject"``) + optional
+        ``edited_catalog_entry`` (None -- this card has no edit UI) +
+        optional ``reject_reason`` (None -- no reason UI) + ``cancelled``
+        (always False here -- the card only ever calls this on an explicit
+        Add/Dismiss, never a silent close). For a LIGHT ``mode2-candidate``
+        (no reply contract of its own), ``request_id`` carries the
+        candidate's own ULID ``candidate_id`` -- see ``ui/gate.py``'s
+        module docstring for the light -> heavy bridge."""
+        self._send(
+            "catalog-addition-response",
+            {
+                "request_id": request_id,
+                "decision": decision,
+                "edited_catalog_entry": edited_catalog_entry,
+                "reject_reason": reject_reason,
+                "cancelled": False,
+            },
+            queue_if_closed=True,
+        )
+
     # -- event pump ---------------------------------------------------------- #
 
     def next_event(self, timeout: float = 1.0) -> Optional[AgentEvent]:
@@ -1707,6 +1740,25 @@ class AgentClient:
             # must surface as its own kind (a "raw" fallthrough would
             # silently waste the user's one-click error-kill window).
             return AgentEvent("tool-candidates", payload)
+        if etype == "mode2-candidate":
+            # Offer-to-add card (LANE P, 2026-07-22 -- SRS Sec F.1.2 Mode 2):
+            # the LIGHT fire-and-forget flag the server's ``mode2_classifier``
+            # emits when a fetched ``.gov``/``.edu``/``.mil``/``.int`` page
+            # carries structured-data signals (server.py
+            # ``_maybe_emit_mode2_candidate`` -- raw dict, NOT a
+            # ``trid3nt_contracts`` model; payload
+            # ``{envelope_type, candidate: {candidate_id, url, domain, ...}}``
+            # verbatim). The dock renders it (ui/cards.Mode2CandidateCard);
+            # the reply goes out via respond_catalog_addition below.
+            return AgentEvent("mode2-candidate", payload)
+        if etype == "offer-catalog-addition":
+            # The HEAVIER review flow (contracts ws.OfferCatalogAdditionPayload
+            # -- request_id / url / discovered_via / probe_findings /
+            # suggested_catalog_entry / ttl_seconds). Not yet emitted by the
+            # live server (sprint-08 forward-looking); surfaced as its own
+            # kind now so the dock is ready the day it is, on the SAME card
+            # (ui/cards.Mode2CandidateCard) as the light mode2-candidate.
+            return AgentEvent("offer-catalog-addition", payload)
         if etype == "chart-emission":
             # OpenQuake result parity (live-feedback 2026-07-13): a live
             # mid-turn chart (ChartEmissionPayload -- Vega-Lite spec + title

@@ -454,86 +454,41 @@ def analyze_affected_fields(
     # tool_arg_normalizer, kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Which farm fields a contaminant plume reaches, ranked — by how badly.
+    """Which farm fields a contaminant plume reaches, ranked by how badly.
 
-    **What it does:** Intersects a MODFLOW groundwater-plume concentration COG
-    (mg/L) against agricultural field-boundary polygons (Fields of The World /
-    fiboa) and reports WHICH fields the plume reaches and HOW MUCH — each
-    affected field's peak + mean concentration and affected area, ranked, plus a
-    headline. Pairs ``run_modflow_job`` (the plume) with ``fetch_field_boundaries``
-    (the fields). The intersection is the existing ``compute_zonal_statistics``
-    vector-zone path; this tool adds the crop_name join, the affected/untouched
-    threshold split, the ranking, and the headline.
+    Use this when: you have a plume COG (from ``run_modflow_job`` /
+    ``run_model_groundwater_contamination_scenario``) and a field-boundary
+    vector (from ``fetch_field_boundaries``) and need "which fields/farms
+    are affected", ranked, with peak/mean concentration and area. Do NOT
+    use for: building/structure damage (``compute_impact_envelope``); a
+    generic raster-over-polygon summary with no plume semantics (call
+    ``compute_zonal_statistics`` directly).
 
-    **Use this when:**
-    - The user modeled a contaminant spill / groundwater plume near farmland and
-      asks "which fields does it reach", "which farms are affected", "rank the
-      affected fields", or "what crops are hit and how badly".
-    - You have a plume COG (from ``run_modflow_job`` /
-      ``run_model_groundwater_contamination_scenario``) AND a field-boundary
-      vector (from ``fetch_field_boundaries``) in hand.
+    Params:
+        plume_layer_uri: the exact ``PlumeLayerURI.uri`` from a prior
+            ``run_modflow_job`` call (concentration COG, mg/L, EPSG:4326).
+        fields_layer_uri: the exact ``LayerURI.uri`` from
+            ``fetch_field_boundaries`` (FTW/fiboa FlatGeobuf; each feature
+            carries ``crop_name``).
+        threshold_mgl: concentration above which a field counts as
+            affected. Defaults to the plume detection floor.
+        rank_by: ``"peak"`` (default, peak concentration) or ``"area"``
+            (affected cropland area).
 
-    **Do NOT use this for:**
-    - Building / structure damage (use ``compute_impact_envelope`` — that is
-      Pelicun over a flood layer).
-    - A generic raster-over-polygon summary with no plume semantics (use
-      ``compute_zonal_statistics`` directly).
-    - Fetching the fields or running the plume (call ``fetch_field_boundaries``
-      / ``run_modflow_job`` first; this tool consumes their outputs).
+    Returns:
+        ``{"affected_fields": [{"field_id", "crop_name",
+        "max_concentration_mgl", "mean_concentration_mgl", "area_km2"},
+        ...ranked], "n_fields_total", "n_fields_affected",
+        "affected_area_km2", "threshold_mgl", "rank_by", "worst_field",
+        "headline", "units": "mg/L", "computed_at"}``. A plume that never
+        reaches any field returns a valid ``affected_fields=[]`` with an
+        honest headline.
 
-    **Parameters:**
-    - ``plume_layer_uri`` (str): the EXACT ``PlumeLayerURI.uri`` a
-      ``run_modflow_job`` / ``run_model_groundwater_contamination_scenario`` call
-      returned earlier in this conversation — a plume concentration COG (mg/L,
-      EPSG:4326). Never invent / construct this value.
-    - ``fields_layer_uri`` (str): the EXACT ``LayerURI.uri`` a
-      ``fetch_field_boundaries`` call returned — an FTW / fiboa field-boundary
-      FlatGeobuf (each feature carries a ``crop_name``).
-    - ``threshold_mgl`` (float | None): the concentration (mg/L) above which a
-      field counts as affected. Defaults to the plume detection floor
-      (``DEFAULT_THRESHOLD_MGL``) so the affected-field count stays consistent
-      with the plume footprint. Raise it to report only fields above a regulatory
-      action level.
-    - ``rank_by`` (str): ``"peak"`` (default — rank by peak concentration) or
-      ``"area"`` (rank by affected cropland area).
-
-    **Returns:** a dict::
-
-        {
-          "affected_fields": [
-            {"field_id": int, "crop_name": str | None,
-             "max_concentration_mgl": float, "mean_concentration_mgl": float | None,
-             "area_km2": float}, ...   # ranked
-          ],
-          "n_fields_total": int,
-          "n_fields_affected": int,
-          "affected_area_km2": float,
-          "threshold_mgl": float,
-          "rank_by": str,
-          "worst_field": {...} | None,
-          "headline": str,             # deterministic narration (Invariant 1)
-          "units": "mg/L",
-          "computed_at": str,          # ISO 8601
-        }
-
-    An AOI whose fields the plume never reaches returns a VALID
-    ``affected_fields=[]`` result with an honest "no fields affected" headline —
-    never fabricated content (honesty floor).
-
-    **Cross-tool dependencies:**
-        Upstream (consumes): ``run_modflow_job`` /
-        ``run_model_groundwater_contamination_scenario`` (the plume COG),
-        ``fetch_field_boundaries`` (the FTW field vector),
-        ``compute_zonal_statistics`` (the per-field intersection, called via the
-        registry).
-        Downstream (feeds): agent narration; the
-        ``run_model_contamination_affected_fields`` composer.
-
-    Raises (typed; ``error_code`` + ``retryable`` on each):
-        AffectedFieldsInputError: a URI is missing / not a string, or
-            ``threshold_mgl`` is non-positive.
-        AffectedFieldsPlumeReadError: the plume COG could not be zonal-scored.
-        AffectedFieldsFieldsReadError: the FTW field vector could not be read.
+    Raises:
+        AffectedFieldsInputError: missing/non-string URI or non-positive
+            threshold_mgl.
+        AffectedFieldsPlumeReadError: plume COG could not be zonal-scored.
+        AffectedFieldsFieldsReadError: field vector could not be read.
     """
     # --- input validation ------------------------------------------------- #
     if not isinstance(plume_layer_uri, str) or not plume_layer_uri.strip():

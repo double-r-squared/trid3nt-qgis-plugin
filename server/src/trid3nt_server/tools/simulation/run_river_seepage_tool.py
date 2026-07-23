@@ -122,71 +122,41 @@ async def run_river_seepage_job(
     """GROUNDWATER <-> river seepage EXCHANGE (MODFLOW 6 RIV): gaining/losing reaches, how much leaks aquifer<->river.
 
     NOT for surface-water transport down the channel: "a dye plume travels
-    downstream", "how far does the dye/contaminant travel down the river", "a
-    spill moving down the river" is ``run_telemac`` (surface flow IN the river),
-    NOT this tool. This tool models the GROUNDWATER <-> river EXCHANGE (how much
-    water leaks between the aquifer and the river, gaining vs losing reaches), NOT
-    a plume moving down the channel.
-
-    It drapes a river polyline onto a MODFLOW 6 grid as a RIV head-dependent
-    river<->aquifer flux boundary, runs the GWF (steady-state flow) + MF6-GWT
-    (transient solute transport) solver, and produces a DIVERGING gaining/losing
-    river-seepage layer (where the river leaks into the aquifer vs draws baseflow
-    out of it) plus the contaminant that entered the aquifer with the seepage.
-
-    Use this when:
-        - The user wants to model how a RIVER exchanges water with the aquifer
-          (gaining vs losing reaches, baseflow, river-bed seepage flux).
-        - A contaminant enters the GROUNDWATER ALONG a river / stream (e.g. a
-          discharge that seeps into the aquifer, not one riding the surface
-          current downstream).
-        - The user asks "is this reach gaining or losing", "how much does the
-          river leak into the aquifer", or to model river-coupled groundwater.
-
-    Do NOT use this for (see the routing block above):
-        - Surface-water dye / tracer transport down the channel — ``run_telemac``.
-        - A point spill with NO river coupling (use ``run_modflow_job``).
-        - Surface-water / inundation flooding (use ``run_model_flood_scenario``
-          — that is SFINCS).
-        - Reactive transport with sorption or biodegradation (v0.1 models a
-          conservative tracer only).
+    downstream" is ``run_telemac``, NOT this tool. This models GROUNDWATER
+    <-> river EXCHANGE -- gaining vs losing reaches, baseflow, seepage
+    flux -- not a plume moving down the channel. Use this when: "is this
+    reach gaining or losing", "how much does the river leak into the
+    aquifer", or a contaminant enters groundwater ALONG a river (seeps
+    into the aquifer, not riding the surface current). Do NOT use for:
+    surface-water dye/tracer transport (``run_telemac``); a point spill
+    with no river coupling (``run_modflow_job``); surface-water flooding
+    (``run_model_flood_scenario``); sorption/biodegradation transport
+    (v0.1 is conservative-tracer only).
 
     Params:
-        spill_location_latlon: ``(lat, lon)`` of the scenario centre / spill in
-            EPSG:4326 degrees (lat-first — a point, not a bbox). The grid is
-            centred here and the river is draped onto it.
-        contaminant: contaminant name (e.g. ``"TCE"``). Conservative tracer.
-        release_rate_kg_s: contaminant mass-release rate in kg/s (> 0).
-        duration_days: release + transport duration in days (> 0).
-        river_geometry_uri: a FlatGeobuf / GeoJSON URI of the river flowline (
-            from ``fetch_river_geometry`` / NLDI) to drape onto the grid as the
-            RIV boundary. REQUIRED — without it this is a plain spill (use
-            ``run_modflow_job`` instead).
-        river_stage_m: optional explicit river stage (m, local datum) for every
-            reach cell. Defaults to DEM-derived / demo stage.
-        river_stage_depth_m: optional water depth (m) above the streambed used
-            to derive stage. Demo default applied when None.
-        streambed_conductance_m2_day: optional per-reach-cell RIV conductance
-            (m^2/day). Demo default applied when None.
-        along_river_source: when True (default) the contaminant SRC is placed
-            along the river reach (the seepage source); when False it stays at
-            the spill point.
-        aquifer_k_ms / porosity: optional demo-aquifer overrides (narrate as
-            demo defaults).
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        spill_location_latlon: (lat, lon) scenario centre; grid centres
+            here, river drapes onto it.
+        contaminant: name (e.g. "TCE"); conservative tracer.
+        release_rate_kg_s: mass-release rate, kg/s (>0).
+        duration_days: release + transport duration (>0).
+        river_geometry_uri: REQUIRED river flowline (``fetch_river_geometry``/
+            NLDI) draped as the RIV boundary -- without it, use
+            ``run_modflow_job`` instead.
+        river_stage_m: optional explicit river stage; default DEM-derived/demo.
+        river_stage_depth_m: optional depth above streambed for stage.
+        streambed_conductance_m2_day: optional per-cell RIV conductance.
+        along_river_source: ``True`` (default) places the contaminant
+            source along the river reach; ``False`` keeps it at the spill
+            point.
+        aquifer_k_ms/porosity: optional demo-aquifer overrides.
+        compute_class: default "standard".
 
     Returns:
-        On success: a ``SeepageLayerURI`` (the gaining/losing river-seepage
-        layer) carrying ``total_leakage_m3_day`` + ``gaining_m3_day`` +
-        ``losing_m3_day`` + ``river_cell_count`` (Invariant 1 — the agent
-        narrates these typed numbers). The contaminant plume layer is loaded
-        alongside it via the emitter.
-
-        On failure: a dict with ``status="error"`` + ``error_code`` +
-        ``error_message`` so the LLM narrates the failure honestly.
-
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-    ``source_class="workflow_dispatch"`` — the cache shim is NOT invoked.
+        On success: ``SeepageLayerURI`` with ``total_leakage_m3_day``,
+        ``gaining_m3_day``, ``losing_m3_day``, ``river_cell_count``; the
+        contaminant plume layer loads alongside it.
+        On failure: ``{"status": "error", "error_code", "error_message"}``.
+        Not cached (``cacheable=False``).
     """
     # --- Validate required params ------------------------------------------
     if (

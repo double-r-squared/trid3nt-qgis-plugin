@@ -475,85 +475,30 @@ def clip_raster_to_polygon(
 ) -> LayerURI:
     """Clip a raster to an arbitrary polygon (vs ``clip_raster_to_bbox`` which only does rectangles).
 
-    Uses ``rasterio.mask.mask(crop=True)`` to mask a raster to one or more
-    polygon features, with optional attribute-based feature selection and
-    automatic CRS reprojection of the polygon to the raster CRS. Returns a
-    new ``LayerURI`` for the masked raster, cached for 30 days.
-
-    When to use:
-        - User asks for analysis "in [named place]" (state, county, watershed,
-          protected area, parcel) and the place is a non-rectangular polygon.
-        - Masking a flood, slope, or DEM raster to a WDPA protected-area boundary
-          or TIGER county outline before aggregation.
-        - Preparing a raster zone input for ``compute_zonal_statistics`` by
-          restricting to an exact administrative or ecological boundary.
-        - Case 1 flood-habitat workflow: clip flood-depth COG to WDPA polygons.
-
-    When NOT to use:
-        - Rectangular bbox clips (use ``clip_raster_to_bbox`` — faster, no vector read).
-        - Vector-to-vector clips (use ``clip_vector_to_polygon``).
-        - Reprojection without spatial masking (use ``clip_raster_to_bbox`` with
-          ``target_crs``).
-        - Clipping based on complex attribute logic (pre-filter the vector first).
+    Use this when: analysis is scoped to a non-rectangular named place
+    (state, county, watershed, protected area, parcel) -- mask a flood/
+    slope/DEM raster to that boundary before aggregation. Do NOT use for:
+    rectangular bbox clips (``clip_raster_to_bbox`` -- faster, no vector
+    read); vector-to-vector clips (``clip_vector_to_polygon``).
 
     Params:
-        raster_uri: source raster URI — ``gs://`` GCS path or absolute local
-            file path. Must be a GeoTIFF or any GDAL-readable raster format.
-        polygon_uri: source polygon URI — ``gs://`` GCS path or absolute local
-            file path. Must be a GDAL/OGR-readable vector format (FlatGeobuf,
-            GeoJSON, GeoPackage, Shapefile, etc.) containing one or more
-            polygon features with explicit CRS metadata.
-        feature_filter: optional dict ``{"property": "<attribute_name>",
-            "value": <expected_value>}`` — if the vector has multiple polygons,
-            select only matching features BEFORE clip. Use to pick e.g. one
-            state by name out of a TIGER state FlatGeobuf. If None, the union
-            of ALL features in the vector is used as the mask.
-        nodata_outside: value to assign to pixels outside the polygon. If None,
-            uses the source raster's existing nodata value (or 0 for integer
-            dtypes / NaN for float dtypes if no source nodata is defined).
+        raster_uri: source raster (``gs://``/``s3://`` or local path).
+        polygon_uri: source polygon vector (FlatGeobuf/GeoJSON/GPKG/SHP).
+        feature_filter: optional ``{"property": name, "value": val}`` to
+            select matching features before clip; else all features
+            dissolve into one mask.
+        nodata_outside: value for pixels outside the polygon; defaults to
+            the source raster's own nodata (0 int / NaN float).
 
     Returns:
-        A ``LayerURI`` pointing at a masked GeoTIFF in the cache bucket::
-
-            s3://trid3nt-cache/cache/static-30d/clip_raster_polygon/<key>.tif
-
-        Output CRS matches the source raster's CRS. Output extent is the
-        polygon's bounding box (``crop=True`` in ``rasterio.mask.mask``).
-
-    LLM guidance:
-        - The polygon is reprojected to the raster's CRS automatically; you do
-          NOT need to pre-reproject. Just pass the LayerURI from any polygon
-          fetcher.
-        - feature_filter works on attribute equality only — for complex
-          attribute logic (regex, range), filter the vector first with
-          ``qgis_process``.
-        - Cache key includes (raster_uri, polygon_uri, feature_filter,
-          nodata_outside); same inputs return the same cached clip across runs.
-
-    FR-CE-8: Results are routed through ``read_through`` so repeat calls with
-    the same parameters return the cached clip without re-running rasterio.mask.
-    TTL is 30 days.
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - ``fetch_dem`` / ``fetch_landcover`` / ``compute_slope`` / ``compute_hillshade`` /
-          ``compute_colored_relief`` / ``compute_impervious_surface`` — supply the
-          ``raster_uri`` input.
-        - ``fetch_administrative_boundaries`` / ``fetch_wdpa_protected_areas`` —
-          supply the ``polygon_uri`` mask input.
-        - Flood-depth COG from ``postprocess_flood`` (via ``run_model_flood_scenario``)
-          — primary raster input for Case 1 flood-habitat analysis.
-        Downstream (feeds):
-        - ``compute_zonal_statistics`` — pass the clipped ``LayerURI`` as
-          ``value_raster_uri`` to aggregate within the polygon boundary.
-        - ``run_model_flood_habitat_scenario`` — calls this internally to clip
-          flood and species-layer rasters to WDPA polygon extents.
-        - ``publish_layer`` — publish the clipped raster to QGIS Server.
+        ``LayerURI`` for the masked GeoTIFF (cache bucket, TTL 30d; same
+        CRS as source; extent = polygon bbox via ``rasterio.mask.mask``).
+        Polygon is auto-reprojected to the raster CRS.
 
     Raises:
-        ClipRasterPolygonError: with one of the documented error codes if
-        raster/polygon I/O fails, the feature_filter matches no features, CRS
-        reprojection fails, or the polygon does not intersect the raster.
+        ClipRasterPolygonError: raster/polygon I/O failure, feature_filter
+            matches no features, CRS reprojection failure, or the polygon
+            does not intersect the raster.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 

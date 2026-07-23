@@ -110,53 +110,31 @@ async def run_modflow_job(
 ) -> PlumeLayerURI | dict[str, Any]:
     """Run a MODFLOW 6 groundwater-contamination (spill) plume simulation.
 
-    Builds a MODFLOW 6 GWF (steady-state flow) + MF6-GWT (transient solute
-    transport) deck from the spill parameters, runs the ``mf6`` solver (Cloud
-    Run Job via Cloud Workflows, or a local binary when
-    ``TRID3NT_MODFLOW_LOCAL=1``), reads the final-timestep contaminant
-    concentration field, reprojects it to an EPSG:4326 plume COG, and returns a
-    ``PlumeLayerURI`` carrying the peak concentration + plume footprint the
-    agent narrates.
-
-    Use this when:
-        - The user asks to model a groundwater contamination spill, simulate a
-          contaminant plume, estimate how far a chemical spill spreads in an
-          aquifer, or run a MODFLOW groundwater-transport scenario.
-        - A spill event (location + contaminant + release rate + duration) needs
-          a plume extent + peak concentration.
-
-    Do NOT use this for:
-        - Surface-water / inundation flooding (use ``run_model_flood_scenario``
-          — that is SFINCS).
-        - Reactive transport with sorption or biodegradation (v0.1 models a
-          conservative tracer only).
-        - Cancelling a running plume simulation (use the WS ``cancel`` envelope;
-          cancellation propagates through ``wait_for_completion``).
+    Use this when: the user wants to model a groundwater contamination
+    spill, simulate a contaminant plume, or estimate how far a chemical
+    spill spreads in an aquifer -- given location + contaminant + release
+    rate + duration, returns plume extent + peak concentration. Do NOT use
+    for: surface-water/inundation flooding (``run_model_flood_scenario``
+    -- SFINCS); reactive transport with sorption/biodegradation (v0.1 is
+    conservative-tracer only).
 
     Params:
-        spill_location_latlon: ``(lat, lon)`` of the spill in EPSG:4326 degrees
-            (lat-first — a point, not a bbox).
-        contaminant: contaminant name (e.g. ``"benzene"``, ``"TCE"``). The
-            transport math treats it as a conservative tracer.
-        release_rate_kg_s: contaminant mass-release rate in kg/s (> 0).
-        duration_days: release + transport duration in days (> 0).
-        aquifer_k_ms: aquifer hydraulic conductivity in m/s (> 0). Optional;
-            defaults to the demo value (1e-4 m/s) — narrate as a demo default.
-        porosity: aquifer effective porosity in (0, 1]. Optional; defaults to
-            the demo value (0.3) — narrate as a demo default.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        spill_location_latlon: (lat, lon) of the spill, EPSG:4326.
+        contaminant: name (e.g. "benzene", "TCE"); modeled as a
+            conservative tracer.
+        release_rate_kg_s: mass-release rate, kg/s (>0).
+        duration_days: release + transport duration (>0).
+        aquifer_k_ms: optional hydraulic conductivity; default demo 1e-4
+            m/s (noted).
+        porosity: optional effective porosity (0,1]; default demo 0.3
+            (noted).
+        compute_class: compute class (default "standard").
 
     Returns:
-        On success: a ``PlumeLayerURI`` (a ``LayerURI`` subtype) — the emitter
-        appends it to ``session-state.loaded_layers`` and the map renders it.
-        It carries ``max_concentration_mgl`` + ``plume_area_km2`` (Invariant 1 —
-        the agent narrates these typed numbers, never invents them).
-
-        On failure: a dict with ``status="error"`` + ``error_code`` +
-        ``error_message`` so the LLM narrates the failure honestly (no layer).
-
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-    ``source_class="workflow_dispatch"`` — the cache shim is NOT invoked.
+        On success: ``PlumeLayerURI`` with ``max_concentration_mgl``,
+        ``plume_area_km2``.
+        On failure: ``{"status": "error", "error_code", "error_message"}``.
+        Not cached (``cacheable=False``).
     """
     # --- Validate + coerce into the MODFLOWRunArgs contract -----------------
     # The contract owns range validation (lat/lon, positivity, porosity bound).

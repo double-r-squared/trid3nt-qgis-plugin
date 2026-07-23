@@ -325,50 +325,30 @@ async def compute_layer_bounds(
 ) -> dict[str, Any]:
     """Get a layer's geographic extent AND fit/zoom/resize the map to it.
 
-    USE THIS TO GET A LAYER'S GEOGRAPHIC EXTENT, or to FIT / ZOOM / RESIZE THE
-    MAP to a layer so all of its features are in view. NEVER use the code
-    sandbox (code_exec_request) for bounding-box / extent math — this tool is
-    the dedicated, fast, deterministic path and it ALSO drives the map view.
+    Use this when: the user asks to "fit the map to the layer", "zoom to
+    all the points", "resize the bbox to encompass <features>", or wants
+    the extent of a layer. NEVER use ``code_exec_request`` for bbox/extent
+    math -- this is the deterministic path and it drives the map view too
+    (emits a ``zoom-to`` map-command).
 
-    When the user asks to "resize the bounding box to encompass all the
-    <features>", "fit the map to the layer", "zoom to all the points", "show me
-    the whole extent", or anything that means fit-the-view-to-a-layer, call
-    THIS tool with the layer's handle/uri. You CAN drive the map view — do NOT
-    claim you cannot pan or zoom the map. The tool emits a ``zoom-to``
-    map-command (the same one the web's fitBounds handler consumes) so the
-    actual viewport fits all features.
-
-    Parameters:
-        layer_uri: the loaded vector or raster layer's handle / URI. PREFER the
-            layer's ``layer_id`` handle from [Case state] / loaded_layers, NOT
-            its display tile URL (the ``https://.../cog/tiles/...`` template) --
-            the handle resolves deterministically to the data COG. Also accepts a
-            gs:///s3:// object URI or a local path (the display tile URL is
-            tolerated as a fallback, but the handle is the reliable form). Vector
-            (.fgb/.geojson/.gpkg/.shp/.parquet) opens via geopandas; raster
-            (.tif/.tiff/.vrt) opens via rasterio. The extent is reprojected to
-            EPSG:4326.
-        pad_fraction: optional fractional padding added on every side
-            (0.0 = exact extent; 0.05 = 5% breathing room). Default 0.0.
-        fit_map: when True (default), emit a ``zoom-to`` map-command so the view
-            fits the computed bounds. Set False to compute the extent only
-            (no camera move).
+    Params:
+        layer_uri: the layer's ``layer_id`` handle (preferred) from
+            [Case state]/loaded_layers, or a gs://s3:// URI / local path.
+            Vector opens via geopandas, raster via rasterio; extent is
+            reprojected to EPSG:4326.
+        pad_fraction: fractional padding per side (0.0=exact, 0.05=5%
+            breathing room). Default 0.0.
+        fit_map: ``True`` (default) emits the zoom-to command; ``False``
+            computes the extent only, no camera move.
 
     Returns:
-        {
-          "min_lon": float, "min_lat": float, "max_lon": float, "max_lat": float,
-          "bbox": [min_lon, min_lat, max_lon, max_lat],  # convenience tuple
-          "layer_type": "vector" | "raster",
-          "crs": "EPSG:4326",
-          "pad_fraction": float,
-          "map_fitted": bool,        # True iff a zoom-to map-command was emitted
-          "layer_uri": str,          # provenance
-          "computed_at": str,        # ISO 8601 timestamp
-        }
+        ``{"min_lon", "min_lat", "max_lon", "max_lat", "bbox": [...],
+        "layer_type": "vector"|"raster", "crs": "EPSG:4326",
+        "pad_fraction", "map_fitted", "layer_uri", "computed_at"}``.
 
     Raises:
-        ComputeLayerBoundsError: typed (FR-AS-11) on unreadable URI, open
-            failure, empty layer, or degenerate bounds.
+        ComputeLayerBoundsError: unreadable URI, open failure, empty
+            layer, or degenerate bounds.
     """
     computed_at = datetime.now(timezone.utc).isoformat()
 

@@ -639,84 +639,38 @@ def compute_zonal_statistics(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Compute zonal statistics — aggregate values from a raster within zones.
+    """Compute zonal statistics -- aggregate values from a raster within zones.
 
-    Common uses:
-        - Population in flood zone: value=population_raster, zone=flood_depth_raster, zone_threshold=0.5 (>=0.5m)
-        - Mean elevation in watershed: value=DEM, zone=watershed_polygon
-        - Building footprint area exposed: value=buildings_raster, zone=hazard_raster
-        - Max wind in damage assessment area: value=wind_raster, zone=admin_boundary
+    Use this whenever the user asks "how much"/"how many"/"what's the
+    average" of one quantity within a zone defined by another -- e.g.
+    population within an inundation footprint or flood zone
+    (value=population raster, zone=flood_depth_raster,
+    zone_threshold=0.5), count of buildings where flood depth exceeds a
+    threshold (value=buildings_raster, zone=hazard_raster), mean elevation
+    in a watershed (value=DEM, zone=polygon), max wind in a damage area.
+    Do NOT use for: rendering (``compute_colored_relief``); a slope/
+    hillshade derivative (``compute_slope``/``compute_hillshade``);
+    anything needing spatial output rather than a statistical summary.
 
-    Use this whenever the user asks "how much" / "how many" / "what's the average"
-    of one quantity within a zone defined by another. For hazard exposure:
-    value=hazard intensity, zone=admin/asset/exposure layer. For impact:
-    value=population/buildings/assets, zone=hazard threshold.
-
-    Do NOT use this for: rendering or visualization (use compute_colored_relief);
-    creating a slope/hillshade derivative (use compute_slope/compute_hillshade);
-    anything that needs spatial outputs rather than statistical summaries.
-
-    Parameters:
-        value_raster_uri: gs:// URI or local path of a single-band raster
-            whose values are aggregated (e.g. flood depth COG, population
-            density raster, building value raster).
-        zone_input_uri: gs:// URI or local path of either:
-            - a raster (non-zero = in zone, or apply zone_threshold);
-            - a vector file (FlatGeobuf/GeoJSON/GPKG polygons; each feature = one zone).
-            Auto-detected by file extension.
-        statistics: list of summary statistics to compute. Supported values:
-            count, sum, mean, min, max, std, median,
-            percentile_25, percentile_75, percentile_95.
-            Defaults to [count, sum, mean, max].
-        zone_threshold: for raster zone inputs only — treat pixels where
-            zone_value >= zone_threshold as "in zone". Useful for flood-depth
-            thresholds (e.g. 0.5m). If None, non-zero = in zone.
-        nodata_value: explicit nodata value for the value raster. Overrides
-            the raster's internal nodata metadata. Pass None to use the
-            raster's own nodata tag.
+    Params:
+        value_raster_uri: single-band raster whose values are aggregated.
+        zone_input_uri: a raster (non-zero=in zone, or ``zone_threshold``)
+            or vector polygons (each feature=one zone); auto-detected by
+            extension.
+        statistics: subset of count/sum/mean/min/max/std/median/
+            percentile_25/75/95. Default [count, sum, mean, max].
+        zone_threshold: for raster zones only -- pixels >= threshold are
+            "in zone" (e.g. 0.5m flood depth). ``None`` = non-zero=in zone.
+        nodata_value: override the value raster's nodata tag.
 
     Returns:
-        dict with structure:
-            {
-              "by_zone": {<zone_id>: {<stat>: value, ...}, ...},  # per-zone (vector zones only; empty for raster zones)
-              "aggregate": {<stat>: value, ...},                  # whole-area aggregate
-              "value_raster": str,                                # provenance: value raster URI
-              "zone_input": str,                                  # provenance: zone input URI
-              "computed_at": str,                                 # ISO 8601 timestamp
-              "units": str | None,                               # propagated from value raster tags if present
-            }
-
-    LLM guidance:
-        - For hazard exposure questions ("how many people are in the flood zone"),
-          set value=population raster, zone=flood extent, zone_threshold=0 or 0.5m.
-        - For impact severity, set value=hazard intensity, zone=admin boundary polygon.
-        - "by_zone" is only populated when zone_input is a vector; check its keys
-          to see per-polygon breakdown vs the aggregate.
-
-    FR-CE-8: Results are cached via read_through. TTL is dynamic-1h because
-    both rasters are external and may update within a session.
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - ``fetch_dem`` / ``compute_slope`` / ``compute_aspect`` / ``compute_hillshade`` /
-          ``compute_colored_relief`` / ``compute_impervious_surface`` — any of these
-          produce a ``LayerURI`` suitable as ``value_raster_uri``.
-        - ``postprocess_flood`` (via ``run_model_flood_scenario``) — flood-depth
-          COG ``LayerURI`` is a primary ``value_raster_uri`` for exposure analysis.
-        - ``fetch_wdpa_protected_areas`` / ``fetch_gbif_occurrences`` /
-          ``fetch_administrative_boundaries`` — supply the ``zone_input_uri``
-          polygon layer for per-protected-area or per-admin-unit aggregation.
-        - ``clip_raster_to_polygon`` / ``clip_raster_to_bbox`` — trim inputs to a
-          study area before passing to this tool.
-        Downstream (feeds):
-        - ``run_model_flood_habitat_scenario`` — calls this to compute flood
-          impact metrics within WDPA protected-area polygons.
-        - Agent narration and ``AssessmentEnvelope`` ``impact_metrics`` fields
-          consume the returned ``aggregate`` dict for headline numbers.
+        ``{"by_zone": {<zone_id>: {<stat>: value}}, ...} (vector zones
+        only, empty for raster zones), "aggregate": {<stat>: value},
+        "value_raster", "zone_input", "computed_at", "units"}``.
 
     Raises:
-        ZonalStatisticsError: with a typed error_code if raster/vector reading
-            fails, GCS download fails, or inputs are incompatible.
+        ZonalStatisticsError: raster/vector read failure, download
+            failure, or incompatible inputs.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 

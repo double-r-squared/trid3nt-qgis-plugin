@@ -172,63 +172,34 @@ def compute_wave_nomograph(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Estimate significant wave height + peak period from wind speed and fetch.
+    """Estimate significant wave height + peak period from wind speed and fetch (deep-water nomograph).
 
-    A cheap, deterministic coastal REALITY CHECK: given a 10 m wind speed and the
-    over-water fetch the wind blows across, it returns the significant wave height
-    (Hs) and peak wave period (Tp) from the standard fetch-limited deep-water
-    wave-growth ("nomograph") formulas (USACE Shore Protection Manual 1984 /
-    Coastal Engineering Manual Part II-2, JONSWAP form). It is the pre-flight
-    sanity bound on a full spectral run (``run_swan_waves``) -- the lecture's
-    "is this wave field even plausible?" check.
+    Use this when: you want a QUICK sanity estimate of wave height/period
+    from wind and fetch before (or instead of) a full SWAN run -- "what
+    waves would a 20 m/s wind build over 50 km?", or to seed
+    ``run_swan_waves``'s offshore boundary when no measured spectrum
+    exists. USACE Shore Protection Manual / CEM Part II-2 JONSWAP form.
+    Do NOT use for: a defensible nearshore field over real bathymetry
+    (``run_swan_waves``); surge/inundation depth
+    (``run_model_flood_scenario``); shallow-water depth-limited breaking
+    (this is deep-water only).
 
-    Use this when:
-        - You want a QUICK sanity estimate of wave height / period from wind and
-          fetch BEFORE (or instead of) running a full SWAN simulation.
-        - The user asks "what waves would a 20 m/s wind build over 50 km of open
-          water?" or "is a 3 m offshore Hs reasonable for this wind and fetch?"
-        - You need a defensible offshore boundary Hs/Tp guess to seed
-          ``run_swan_waves`` when no measured spectrum is available.
-
-    Do NOT use this for:
-        - A defensible nearshore wave field over real bathymetry (use
-          ``run_swan_waves`` -- the actual SWAN spectral solver).
-        - Surge / inundation depth (use ``run_model_flood_scenario``).
-        - Shallow-water depth-limited breaking -- this tool is DEEP-WATER only;
-          if ``depth_m`` is given it is reported but no breaking cap is applied.
-
-    Parameters:
-        wind_speed_ms: sustained 10 m wind speed over the water, m/s (> 0).
-        fetch_km: the over-water fetch distance the wind blows across, km (> 0).
-        duration_hr: OPTIONAL storm duration, hours (> 0). When supplied, the
-            duration-equivalent fetch is computed and the SMALLER of the
-            geographic and duration-equivalent fetch governs (regime may become
-            ``duration-limited``).
-        depth_m: OPTIONAL representative water depth, m (> 0). Accepted for
-            provenance only; this version applies NO finite-depth correction and
-            notes the omission.
+    Params:
+        wind_speed_ms: sustained 10m wind speed over water (>0).
+        fetch_km: over-water fetch distance (>0).
+        duration_hr: optional storm duration; the smaller of geographic
+            and duration-equivalent fetch governs.
+        depth_m: optional water depth, reported for provenance only (no
+            finite-depth correction applied).
 
     Returns:
-        dict with structure::
-
-            {
-              "hs_m": float,            # significant wave height, m
-              "tp_s": float,            # peak wave period, s
-              "regime": str,            # "fetch-limited"|"duration-limited"|"fully-developed"
-              "wind_speed_ms": float,   # echoed input
-              "fetch_km": float,        # echoed (geographic) input fetch
-              "effective_fetch_km": float,  # fetch actually used (after duration cap)
-              "duration_hr": float | None,
-              "depth_m": float | None,
-              "dimensionless_fetch": float, # g*F/U^2 used
-              "method": str,            # citation string
-              "notes": list[str],       # honesty notes (deep-water-only, etc.)
-              "computed_at": str,       # ISO 8601 UTC timestamp
-            }
+        ``{"hs_m", "tp_s", "regime": "fetch-limited"|"duration-limited"|
+        "fully-developed", "wind_speed_ms", "fetch_km",
+        "effective_fetch_km", "duration_hr", "depth_m",
+        "dimensionless_fetch", "method", "notes", "computed_at"}``.
 
     Raises:
-        WaveNomographError: with a typed ``error_code`` when an input is missing,
-            non-numeric, or non-positive.
+        WaveNomographError: missing, non-numeric, or non-positive input.
     """
     u = _coerce_positive(wind_speed_ms, "WIND_SPEED_INVALID", "wind_speed_ms")
     fetch_km_f = _coerce_positive(fetch_km, "FETCH_INVALID", "fetch_km")

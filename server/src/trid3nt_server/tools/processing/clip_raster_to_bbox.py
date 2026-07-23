@@ -469,72 +469,30 @@ def clip_raster_to_bbox(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Clip a raster to a bounding box, optionally reprojecting.
+    """Clip a raster to a rectangular bounding box, optionally reprojecting.
 
-    Wraps ``gdal_translate -projwin`` (fast path, same CRS) or ``gdalwarp -te
-    -te_srs`` (reprojection path) to trim a GCS-hosted raster to a bounding box.
-    Returns a new ``LayerURI`` pointing at the clipped raster in the FR-DC cache.
-    Cached for 30 days.
-
-    When to use:
-        - A fetched raster is larger than the analysis area (national DEM clipped
-          to city/county extent, global wind field clipped to storm bbox).
-        - Before passing a large raster to ``compute_slope``, ``compute_hillshade``,
-          ``compute_colored_relief``, or ``compute_zonal_statistics`` to reduce
-          compute and transfer cost.
-        - When you need both clipping and CRS reprojection in a single operation.
-
-    When NOT to use:
-        - Vector clipping (use ``clip_vector_to_polygon``).
-        - Clipping to an irregular polygon boundary (use ``clip_raster_to_polygon``).
-        - Reprojection without spatial clipping (use a dedicated gdalwarp call).
-        - Per-pixel statistics over the full raster (clip first, then pass to
-          ``compute_zonal_statistics``).
+    Use this when: a fetched raster is larger than the analysis area
+    (national DEM -> city/county extent) or you need clip + CRS
+    reprojection in one step, before passing to ``compute_slope`` /
+    ``compute_hillshade`` / ``compute_zonal_statistics``. Do NOT use for:
+    irregular polygon clips (``clip_raster_to_polygon``); vector clipping
+    (``clip_vector_to_polygon``).
 
     Params:
-        raster_uri: source raster URI — ``gs://`` GCS path or absolute local
-            file path. Must be a GeoTIFF or any GDAL-readable raster format.
-        bbox: (west, south, east, north) bounding box in ``bbox_crs``. The
-            output raster will cover this extent (or the intersection with the
-            source raster if the bbox is larger than the source).
-        bbox_crs: CRS the bbox is expressed in (default ``"EPSG:4326"`` /
-            WGS84 lat/lon). Pass the source raster CRS to use the fast
-            ``gdal_translate -projwin`` path.
-        target_crs: if provided (e.g. ``"EPSG:3857"``), reproject the output
-            to this CRS; else preserve the source raster CRS.
+        raster_uri: source raster (``gs://``/``s3://`` or local path).
+        bbox: (west, south, east, north) in ``bbox_crs``.
+        bbox_crs: CRS of bbox (default ``"EPSG:4326"``); pass the raster's
+            own CRS to use the fast ``gdal_translate -projwin`` path.
+        target_crs: if set, reproject output to this CRS (else preserves
+            source CRS); combined with clipping in one gdalwarp pass.
 
     Returns:
-        A ``LayerURI`` pointing at a clipped GeoTIFF in the cache bucket:
-        ``s3://trid3nt-cache/cache/static-30d/clip_raster/<key>.tif``.
-
-    LLM guidance:
-        - bbox_crs default "EPSG:4326" matches user-facing lat/lon inputs;
-          pass the user's bbox coordinates directly without conversion.
-        - When target_crs is provided alongside bbox_crs "EPSG:4326", both
-          clipping and reprojection happen in one gdalwarp pass.
-        - Cache key includes all four parameters (bbox rounded to 6dp); a
-          1-meter change in bbox extent forces a new clip.
-
-    FR-CE-8: Results are routed through ``read_through`` so repeat calls with
-    the same ``(raster_uri, bbox, bbox_crs, target_crs)`` quadruple return the
-    cached clip without re-running GDAL. TTL is 30 days.
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - ``fetch_dem`` / ``fetch_landcover`` / ``compute_slope`` /
-          ``compute_hillshade`` / ``compute_colored_relief`` /
-          ``compute_impervious_surface`` — any of these produce a
-          ``LayerURI`` suitable as ``raster_uri``.
-        Downstream (feeds):
-        - ``compute_zonal_statistics`` — pass the clipped ``LayerURI`` as
-          ``value_raster_uri`` or ``zone_input_uri`` for cheaper aggregation.
-        - ``compute_slope`` / ``compute_hillshade`` / ``compute_colored_relief`` —
-          process only the clipped area.
-        - ``publish_layer`` — clip to display extent before publishing.
+        ``LayerURI`` for the clipped GeoTIFF (cache bucket, TTL 30d;
+        cache key covers all 4 params, bbox rounded to 6dp).
 
     Raises:
-        ClipRasterError: if GDAL binaries are unavailable, return non-zero,
-            the raster cannot be opened/downloaded, or the URI is unrecognised.
+        ClipRasterError: GDAL unavailable/non-zero exit, raster
+            unopenable, or unrecognised URI.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 

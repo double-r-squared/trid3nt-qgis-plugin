@@ -648,87 +648,40 @@ def compute_movement_trajectory(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Compute movement-trajectory metrics from a layer of timestamped track POINTS.
+    """Compute movement-trajectory metrics (speed, step length, turning angle) from timestamped track POINTS.
 
-    Use this (not fetch_dem) when you already have timestamped GPS/track POINTS and want movement metrics (speed, step length, turning angle).
-
-    Takes a point vector (one feature per telemetry fix, carrying a timestamp)
-    and returns an annotated **trajectory** vector: one LineString SEGMENT per
-    adjacent pair of fixes, each labelled with movement metrics, plus a
-    per-individual summary. Use it to quantify HOW an animal / vehicle / asset
-    moved — speed, turning, path length, directness — from raw GPS fixes.
-
-    When to use:
-        - The user has animal-tracking fixes (e.g. ``fetch_movebank_tracks`` with
-          ``geometry_type="point"``) and asks "how fast / how far / how straight
-          did it move", "show its speed along the track", "compute step lengths /
-          turning angles", or "trajectory metrics".
-        - Deriving a movement-annotated path layer to drape on a hazard surface
-          (e.g. migration speed vs a wildfire footprint, displacement vs flood
-          extent).
-
-    When NOT to use:
-        - You only want the raw line of the track with no metrics — use
-          ``fetch_movebank_tracks`` with ``geometry_type="linestring"``.
-        - The points have no timestamp — movement metrics are undefined without
-          time; this tool raises ``NO_TIMESTAMP_FIELD``.
-        - Aggregating a raster within a zone — use ``compute_zonal_statistics``.
-
-    Pairs with:
-        - ``fetch_movebank_tracks`` (``geometry_type="point"``) — the canonical
-          upstream point source.
+    Use this (not ``fetch_dem``) when you have timestamped GPS/track points
+    and want movement metrics -- "how fast/far/straight did it move",
+    "trajectory metrics". Emits one LineString segment per adjacent fix
+    pair, labelled with metrics, plus a per-individual summary. Do NOT use
+    for: the raw track line with no metrics
+    (``fetch_movebank_tracks(geometry_type="linestring")``); points with no
+    timestamp (raises ``NO_TIMESTAMP_FIELD``); raster-in-zone aggregation
+    (``compute_zonal_statistics``).
 
     Params:
-        points_uri: ``s3://`` URI or local path of a point vector (FlatGeobuf /
-            GeoJSON / GPKG). Each feature is one timestamped fix. Typically
+        points_uri: point vector of timestamped fixes, typically
             ``fetch_movebank_tracks(..., geometry_type="point").uri``.
-        individual_id_field: name of the column that separates one track from
-            another (so multi-animal studies produce one trajectory per animal).
-            When ``None`` the column is auto-detected from common aliases
-            (``individual_id``, ``individual_local_identifier``, ``track_id``,
-            ``id``, ...); if none is present, ALL points are treated as one track.
-        timestamp_field: name of the timestamp column. When ``None`` it is
-            auto-detected from common aliases (``timestamp``, ``time``,
-            ``datetime``, ...). ISO-8601 and the Movebank
-            ``YYYY-MM-DD HH:MM:SS.mmm`` form are both parsed.
+        individual_id_field: column separating tracks (multi-animal ->
+            one trajectory per animal). Auto-detected from common aliases
+            if ``None``; if none found, all points are one track.
+        timestamp_field: timestamp column; auto-detected if ``None``.
+            ISO-8601 and Movebank ``YYYY-MM-DD HH:MM:SS.mmm`` both parsed.
 
     Returns:
-        A ``LayerURI`` (``layer_type="vector"``, ``role="context"``,
-        ``style_preset="movement_trajectory"``, ``units="m"``) pointing at a
-        FlatGeobuf of LineString segments in EPSG:4326. Each segment feature
-        carries:
-
-            individual_id       (str)
-            seg_index           (int)    0-based index within the individual
-            step_length_m       (float)  geodesic length of the segment
-            duration_s          (float)  seconds between the two fixes
-            speed_mps           (float|null) step_length_m / duration_s
-            bearing_deg         (float)  forward azimuth 0..360 (0=N, 90=E)
-            turn_angle_deg      (float|null) change in bearing vs prior segment, (-180,180]
-            t_start, t_end      (str)    ISO-8601 fix timestamps
-            path_length_m       (float)  the individual's whole-track path length
-            net_displacement_m  (float)  geodesic first-fix -> last-fix distance
-            straightness        (float)  net_displacement_m / path_length_m (0..1)
-
-        The LayerURI ``metadata`` carries the full per-individual summary
-        (n_points, path_length_m, net_displacement_m, straightness, duration_s,
-        mean/max speed, mean step length, mean abs turn angle) plus an overall
-        rollup, so a downstream reader gets headline numbers without
-        re-aggregating segments. ``bbox`` is set to the segment extent for
-        camera fly-to.
-
-    FR-CE-8: routed through ``read_through`` keyed on
-    ``(points_uri, individual_id_field, timestamp_field)`` so repeat calls reuse
-    the cached trajectory. TTL is 30 days (a given point layer is immutable for
-    the life of its cache entry).
+        ``LayerURI`` (vector, ``style_preset="movement_trajectory"``,
+        ``units="m"``) for FlatGeobuf segments in EPSG:4326, each with
+        ``individual_id``, ``seg_index``, ``step_length_m``, ``duration_s``,
+        ``speed_mps``, ``bearing_deg``, ``turn_angle_deg``, ``t_start``/
+        ``t_end``, ``path_length_m``, ``net_displacement_m``,
+        ``straightness``. ``metadata`` carries the per-individual +
+        overall summary rollup. Cache bucket, TTL 30d.
 
     Raises:
-        MovementTrajectoryError: with a typed ``error_code`` when the points
-            layer cannot be read (``DOWNLOAD_FAILED`` / ``VECTOR_OPEN_FAILED``),
-            has no timestamp column (``NO_TIMESTAMP_FIELD``), is not point
-            geometry (``NOT_POINT_GEOMETRY``), yields no segment because no
-            individual has >= 2 timestamped fixes (``INSUFFICIENT_POINTS`` — the
-            honest empty path), or cannot be written (``WRITE_FAILED``).
+        MovementTrajectoryError: DOWNLOAD_FAILED/VECTOR_OPEN_FAILED (read
+            failure), NO_TIMESTAMP_FIELD, NOT_POINT_GEOMETRY,
+            INSUFFICIENT_POINTS (no individual has >=2 fixes -- honest
+            empty), WRITE_FAILED.
     """
     if not isinstance(points_uri, str) or not points_uri.strip():
         raise MovementTrajectoryError(

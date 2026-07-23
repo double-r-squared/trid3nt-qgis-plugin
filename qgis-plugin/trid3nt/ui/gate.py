@@ -35,25 +35,32 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 __all__ = [
     "CodeExecRequest",
     "CredentialRequest",
     "GateDecision",
+    "Mode2CandidateRequest",
     "PayloadWarning",
     "ToolCandidate",
     "ToolCandidatesRequest",
     "code_exec_layer_lines",
     "credential_note_lines",
+    "mode2_decision_chip",
+    "mode2_reason_lines",
     "parse_credential_request",
     "estimate_cells",
     "estimate_eta_seconds",
     "estimate_frames",
     "parse_code_exec_request",
+    "parse_mode2_candidate",
+    "parse_offer_catalog_addition",
     "parse_payload_warning",
     "parse_tool_candidates",
     "resolve_code_exec_decision",
     "resolve_gate_decision",
+    "resolve_mode2_decision",
     "resolve_tool_choice",
     "summary_lines",
     "tool_choice_summary",
@@ -676,3 +683,209 @@ def summary_lines(warning: PayloadWarning) -> list:
         if reason:
             lines.append(str(reason))
     return lines
+
+
+# --------------------------------------------------------------------------- #
+# Offer-to-add card (LANE P, mode2-candidate + offer-catalog-addition,
+# 2026-07-22) -- SRS Sec F.1.2 Mode 2 bounded-growth-path.
+# --------------------------------------------------------------------------- #
+#
+# Contract source of truth (mirrored EXACTLY, not paraphrased):
+#
+# * ``server/src/trid3nt_server/mode2_classifier.py``
+#   (``Mode2CandidateEnvelope`` / ``Mode2Candidate``): the LIGHT, fire-and-
+#   forget flag -- server.py emits it as a raw dict (NOT a pydantic
+#   ``trid3nt_contracts`` model; that package was FROZEN for the classifier's
+#   job), wire type ``mode2-candidate``, payload
+#   ``{envelope_type: "mode2-candidate", candidate: {candidate_id, url,
+#   domain, domain_tld, confidence, detected_patterns, title,
+#   suggested_tool_kind, snippet}}``. Deliberately carries no
+#   ``request_id``/``ttl_seconds`` -- the module docstring: "the client opens
+#   a passive 'candidate detected' indicator; user opt-in to the full review
+#   fires the heavier flow."
+# * ``contracts/src/trid3nt_contracts/ws.py`` ``OfferCatalogAdditionPayload``
+#   (agent -> client, wire type ``offer-catalog-addition``): the HEAVIER
+#   review flow -- ``request_id`` / ``url`` / ``discovered_via`` /
+#   ``probe_findings`` (``ProbeFindings``) / ``suggested_catalog_entry``
+#   (``SuggestedCatalogEntry``) / ``ttl_seconds``. Not yet emitted by the live
+#   server (sprint-08 forward-looking); this module parses it defensively so
+#   the plugin is ready the day it is.
+# * ``CatalogAdditionResponsePayload`` (client -> agent, wire type
+#   ``catalog-addition-response``): ``request_id`` (ULIDStr, echoes the
+#   offer's) / ``decision`` (``"accept"``|``"reject"``|None) /
+#   ``edited_catalog_entry`` / ``reject_reason`` / ``cancelled``. This is the
+#   ONLY reply shape either offer envelope has in the contract.
+#
+# Bridging light -> heavy (ws.py's own "the two envelopes coexist; the
+# lighter one feeds the heavier one" note, sprint-08 comment above
+# ``OfferCatalogAdditionPayload``): a light ``mode2-candidate`` has no reply
+# contract of its own to invent, but its ``candidate_id`` IS a ULID
+# (``new_ulid()`` in ``classify_for_mode2``) -- structurally the same shape
+# as the reply envelope's ``request_id`` ULIDStr. This card's decision on a
+# LIGHT candidate therefore rides the SAME ``catalog-addition-response``
+# contract shape, with ``candidate_id`` standing in for ``request_id``
+# (``edited_catalog_entry`` stays None -- a light candidate never carried a
+# drafted entry to edit). A genuine HEAVY ``offer-catalog-addition`` answers
+# on the identical shape using its own real ``request_id``.
+
+
+#: Human-readable label per ``classify_for_mode2``'s deterministic pattern
+#: name (``_PATTERN_ORDER`` in mode2_classifier.py) -- the "why it was
+#: flagged" line the card renders, never re-derived/guessed client-side.
+_MODE2_PATTERN_LABELS = {
+    "json-ld": "JSON-LD structured data found on the page",
+    "openapi-spec-link": "links to an OpenAPI/Swagger spec",
+    "rest-endpoint-pattern": "REST API endpoint pattern detected",
+    "data-download-link": "offers a downloadable data file (CSV/GeoJSON/...)",
+    "tabular-data": "tabular data / dataset listing detected",
+}
+
+
+def _host_from_url(url: str) -> str:
+    """Best-effort hostname for a URL; empty string on anything unparsable
+    (never raises -- this only feeds display text)."""
+    try:
+        return (urlparse(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+@dataclass
+class Mode2CandidateRequest:
+    """Parsed offer-to-add request -- either the LIGHT ``mode2-candidate``
+    fire-and-forget flag (``kind="light"``) or the HEAVY
+    ``offer-catalog-addition`` review envelope (``kind="heavy"``). Both
+    render on the same card; only the reply's ``request_id`` provenance
+    differs (see module docstring above)."""
+
+    kind: str  # "light" | "heavy"
+    request_id: str  # candidate_id (light) or the real request_id (heavy)
+    url: str
+    domain: str = ""
+    reasons: list = field(default_factory=list)  # honest "why flagged" lines
+    title: str = ""
+    raw: dict = field(default_factory=dict)
+
+    @property
+    def display_host(self) -> str:
+        """The host for the title/chip -- the server's ``domain`` verbatim
+        when present, else derived from the URL (never invented)."""
+        return self.domain or _host_from_url(self.url)
+
+
+def parse_mode2_candidate(payload: dict) -> Optional[Mode2CandidateRequest]:
+    """Parse a raw ``mode2-candidate`` envelope payload; None when the
+    envelope is unusable -- no ``candidate_id`` (nothing to correlate a
+    decision against) or no ``url`` (nothing to offer adding). Accepts
+    either the full envelope shape (``{"candidate": {...}}``) or a bare
+    candidate dict, defensively."""
+    if not isinstance(payload, dict):
+        return None
+    candidate = payload.get("candidate")
+    if not isinstance(candidate, dict):
+        candidate = payload  # bare-candidate fallback
+    candidate_id = candidate.get("candidate_id")
+    if not isinstance(candidate_id, str) or not candidate_id:
+        return None
+    url = candidate.get("url")
+    if not isinstance(url, str) or not url:
+        return None
+    domain = candidate.get("domain")
+    patterns = candidate.get("detected_patterns")
+    reasons = []
+    if isinstance(patterns, list):
+        reasons = [
+            _MODE2_PATTERN_LABELS.get(p, str(p))
+            for p in patterns
+            if isinstance(p, str)
+        ]
+    confidence = candidate.get("confidence")
+    if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):
+        reasons.append(f"classifier confidence {confidence:.2f}")
+    title = candidate.get("title")
+    return Mode2CandidateRequest(
+        kind="light",
+        request_id=candidate_id,
+        url=url,
+        domain=domain if isinstance(domain, str) else "",
+        reasons=reasons,
+        title=title if isinstance(title, str) else "",
+        raw=payload,
+    )
+
+
+def parse_offer_catalog_addition(payload: dict) -> Optional[Mode2CandidateRequest]:
+    """Parse a raw ``offer-catalog-addition`` envelope payload (contracts
+    ``ws.OfferCatalogAdditionPayload``); None when the envelope is unusable
+    -- no ``request_id`` (nothing to reply against) or no ``url``."""
+    if not isinstance(payload, dict):
+        return None
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str) or not request_id:
+        return None
+    url = payload.get("url")
+    if not isinstance(url, str) or not url:
+        return None
+    reasons: list = []
+    probe = payload.get("probe_findings")
+    if isinstance(probe, dict):
+        tls_org = probe.get("tls_cert_org")
+        if isinstance(tls_org, str) and tls_org:
+            reasons.append(f"TLS cert org: {tls_org}")
+        tier = probe.get("access_tier_inferred")
+        if isinstance(tier, int) and not isinstance(tier, bool):
+            reasons.append(f"inferred access tier {tier}")
+        if probe.get("stac_root_found"):
+            reasons.append("STAC root found")
+        if probe.get("ogc_capabilities_found"):
+            reasons.append("OGC GetCapabilities found")
+        license_observed = probe.get("license_observed")
+        if isinstance(license_observed, str) and license_observed:
+            reasons.append(f"license: {license_observed}")
+    entry = payload.get("suggested_catalog_entry")
+    title = ""
+    if isinstance(entry, dict):
+        name_val = entry.get("name")
+        if isinstance(name_val, str):
+            title = name_val
+    return Mode2CandidateRequest(
+        kind="heavy",
+        request_id=request_id,
+        url=url,
+        domain=_host_from_url(url),
+        reasons=reasons,
+        title=title,
+        raw=payload,
+    )
+
+
+def mode2_reason_lines(request: Mode2CandidateRequest) -> list:
+    """The card's "why it was flagged" body lines -- every line is a
+    structured signal off the envelope, never invented client-side."""
+    return list(request.reasons)
+
+
+def resolve_mode2_decision(request: Mode2CandidateRequest, add: bool) -> dict:
+    """Build the ``catalog-addition-response`` wire dict for the card's
+    decision (contract ``CatalogAdditionResponsePayload``). The LIGHT
+    ``mode2-candidate`` flow has no reply contract of its own, so
+    ``request.request_id`` (the candidate's own ULID, or the HEAVY offer's
+    real ``request_id``) stands in for the reply's ``request_id`` -- see the
+    module docstring's light -> heavy bridge. ``edited_catalog_entry`` is
+    always None (no edit UI in this card; the agent writes the original
+    suggestion, or nothing for a light candidate that never carried one)."""
+    return {
+        "request_id": request.request_id,
+        "decision": "accept" if add else "reject",
+        "edited_catalog_entry": None,
+        "reject_reason": None,
+        "cancelled": False,
+    }
+
+
+def mode2_decision_chip(request: Mode2CandidateRequest, add: bool) -> str:
+    """The folded chip text -- the exact strings the offer-to-add card
+    commits to once answered."""
+    if add:
+        return f"added {request.display_host} to the catalog"
+    return "dismissed"

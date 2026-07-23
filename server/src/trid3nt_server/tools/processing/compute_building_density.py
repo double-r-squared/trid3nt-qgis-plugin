@@ -709,65 +709,25 @@ def compute_building_density(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Building density raster from Microsoft Global ML Building Footprints.
+    """Building density raster (count-per-cell) from Microsoft Global ML Building Footprints.
 
-    **What it does:** Fetches building footprints from Microsoft's Global ML
-    Building Footprints dataset (Bing zoom-9 quadkey tiles), rasterizes building
-    centroids onto a regular EPSG:3857 grid at the requested cell size, and
-    returns a float32 count-per-cell COG via the 30-day cache. Cell values equal
-    the count of building centroids whose centroid falls inside each cell.
+    Use this when: the user wants "building density"/"urban density"/"how
+    developed is this area" as a raster, or exposure analysis needs a
+    buildings-per-cell signal to normalize hazard layers. Do NOT use for:
+    individual footprint polygons/heights (``fetch_buildings``); a
+    population-density proxy (``fetch_hrsl_population``); precise
+    admin-polygon counts (use ``fetch_buildings`` + zonal stats instead --
+    the raster grid can drift ~1 cell at bbox edges).
 
-    **When to use:**
-    - User asks for "building density", "urban density", or "how developed is
-      this area?" as a raster visualization.
-    - Exposure analysis needs a spatial density signal (buildings per unit area)
-      to normalize hazard layers (e.g. "buildings per cell under flood
-      inundation").
-    - Downstream impact computation (Pelicun, loss curves) requires a
-      rasterized count of structures rather than individual vector footprints.
-    - Any flood-impact or wildfire-exposure map that needs built-area context
-      over a large area where vector footprints would be too numerous.
+    Params:
+        bbox: (min_lon, min_lat, max_lon, max_lat) EPSG:4326.
+        cell_size_m: grid cell size in metres on EPSG:3857 (default 100,
+            suggested range 25-500; sub-25 mostly empty outside dense cores).
+        source: only ``"ms_footprints"`` supported (v0.1).
 
-    **When NOT to use:**
-    - DO NOT use when individual footprint polygons, building heights, or
-      parcel-level attributes are needed — use ``fetch_buildings`` for the
-      vector footprint path instead.
-    - DO NOT use as a proxy for population density — buildings per cell is
-      not residents per cell; use ``fetch_hrsl_population`` or
-      ``fetch_population`` for resident counts.
-    - DO NOT use for precise administrative-polygon counts — the raster grid
-      can drift by ~1 cell at bbox edges; use a vector + zonal-statistics
-      pipeline (``fetch_buildings`` + ``compute_zonal_statistics``) for
-      authoritative totals.
-
-    **Parameters:**
-    - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
-      max_lon, max_lat)`` in EPSG:4326. Web-Mercator valid range [-85.05,
-      85.05] latitude. Example for Cape Coral FL: ``(-81.9, 26.5, -81.8, 26.6)``.
-    - ``cell_size_m`` (float, default 100.0): grid cell size in metres on
-      EPSG:3857. Suggested range 25-500 m; sub-25 m produces mostly-empty
-      rasters outside dense city cores. Note: EPSG:3857 distorts ground
-      footprint by 1.13x at 28 N to 1.41x at 45 N.
-    - ``source`` (str, default ``"ms_footprints"``): v0.1 supports only
-      ``"ms_footprints"`` (Microsoft Global ML Building Footprints, >200
-      country/region entries, latest vintage ~2026-02-03).
-
-    **Returns:** A ``LayerURI`` pointing at a float32, LZW-compressed,
-    tiled GeoTIFF in the cache bucket
-    (``s3://trid3nt-cache/cache/static-30d/building_density/<key>.tif``).
-    ``layer_type="raster"``, ``role="context"``, ``units=None`` (semantic
-    is ``"buildings_per_cell"`` encoded in the GeoTIFF ``units`` tag).
-    Output CRS: EPSG:3857.
-
-    **Cross-tool dependencies:**
-    - Alternative: ``fetch_buildings`` for individual vector footprints;
-      ``fetch_hrsl_population`` for resident count.
-    - Downstream: ``compute_zonal_statistics`` can aggregate this raster over
-      an admin polygon; Pelicun exposure pipelines consume the count raster.
-    - Typically requested after ``geocode_location`` to establish the bbox.
-
-    FR-CE-8: ``read_through`` with ``ttl_class="static-30d"``; cache key is
-    SHA-256 over ``(bbox-rounded-6dp, cell_size_m, source)``.
+    Returns:
+        ``LayerURI`` for a float32 LZW GeoTIFF (cache bucket, TTL 30d,
+        EPSG:3857; units semantic ``"buildings_per_cell"``).
     """
     if not isinstance(bbox, (tuple, list)):
         raise BuildingDensityInputError(

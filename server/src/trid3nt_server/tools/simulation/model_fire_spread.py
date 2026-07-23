@@ -83,73 +83,44 @@ async def model_fire_spread(
 ) -> FireSpreadLayerURI | dict[str, Any]:
     """Run an ELMFIRE wildfire-spread simulation from a point ignition.
 
-    Simulates a fire front spreading from an ignition point across real
-    LANDFIRE 30 m fuels + terrain under a constant scenario wind, producing a
-    time-of-arrival map, an hourly burned-extent animation, and flame-length /
-    spread-rate rasters.
+    Use this when: the user wants to MODEL/SIMULATE/FORECAST wildfire
+    spread from a specific ignition ("if a fire started here, where does
+    it spread in 6 hours?") or explore wind/fuel-moisture what-ifs over
+    LANDFIRE 30m fuels+terrain. Do NOT use for: observed fire
+    perimeters/detections (``fetch_nifc_fire_perimeters``/
+    ``fetch_firms_active_fire``/``fetch_goes_active_fire``); satellite
+    animations of a real event (``run_model_goes_fire_animation``);
+    post-fire debris-flow (``model_debris_flow``); past burn severity
+    (``fetch_mtbs_burn_severity``).
 
-    Use this when:
-        - The user asks to MODEL / SIMULATE / FORECAST wildfire spread from a
-          specific ignition point ("if a fire started here, where does it
-          spread in 6 hours?"), or to explore wind / fuel-moisture what-ifs.
-
-    Do NOT use this for:
-        - OBSERVED fire perimeters or detections (use
-          ``fetch_nifc_fire_perimeters`` / ``fetch_firms_active_fire`` /
-          ``fetch_goes_active_fire``).
-        - Satellite fire ANIMATIONS of a real event (use
-          ``run_model_goes_fire_animation`` and siblings).
-        - Post-fire debris-flow hazard (use ``model_debris_flow``).
-        - Burn severity of past fires (use ``fetch_mtbs_burn_severity``).
-
-    IGNITION POINT IS REQUIRED — NEVER GUESS IT. If the user has not given a
-    concrete ignition location (a coordinate or an unambiguous named place you
-    can geocode), DO NOT invent one: either ask the user, or call
-    ``request_spatial_input(mode="point")`` so they click the ignition point on
-    the map, then pass the returned ``coordinates`` here as ``ignition_lonlat``.
+    IGNITION POINT IS REQUIRED -- NEVER GUESS IT. If not given, ask the
+    user or call ``request_spatial_input(mode="point")`` and pass the
+    returned coordinates as ``ignition_lonlat``.
 
     Params:
-        bbox: the simulation AOI ``(min_lon, min_lat, max_lon, max_lat)``
-            EPSG:4326 (lon-first). CONUS-only (LANDFIRE fuels coverage) — an
-            AOI outside CONUS fails with a typed error, never invented fuels.
-            County-scale or smaller works best (a fetch is capped ~123 km).
-        ignition_lonlat: REQUIRED ``(lon, lat)`` of the point ignition, inside
-            ``bbox``. From the user's words or a ``request_spatial_input``
-            map pick — never fabricated.
-        wind_speed_mph: constant wind speed in mph (ELMFIRE's 20 ft
-            convention). Default 15 (the canonical tutorial scenario).
-        wind_dir_deg: wind direction in meteorological degrees — the direction
-            the wind blows FROM (0 = from the north pushing the fire south,
-            270 = from the west pushing it east). Range [0, 360]. Default 0.
-        fuel_moisture: dead/live fuel-moisture preset, one of
-            ``"dry"`` (critical fire weather: 1-h/10-h/100-h = 3/4/5 percent,
-            live herb/woody 30/60 — the ELMFIRE tutorial constants),
-            ``"moderate"`` (6/7/8, live 60/90), or
-            ``"moist"`` (12/13/14, live 90/120 — marginal burning; spread may
-            be minimal, which is reported honestly). Default ``"dry"``.
-        duration_hours: simulated burn duration in hours (> 0, <= 48).
-            Default 6. Also the animation length (one frame per hour).
-        cellsize_m: computational cell size in metres. Default 30 (LANDFIRE
-            native). Coarsen (e.g. 60-90) for very large AOIs.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        bbox: simulation AOI, EPSG:4326. CONUS-only (LANDFIRE coverage);
+            county-scale or smaller (fetch capped ~123km).
+        ignition_lonlat: REQUIRED (lon, lat) inside bbox.
+        wind_speed_mph: constant wind speed (ELMFIRE 20ft convention,
+            default 15).
+        wind_dir_deg: direction wind blows FROM, meteorological deg
+            [0,360] (default 0).
+        fuel_moisture: ``"dry"`` (default, critical fire weather),
+            ``"moderate"``, or ``"moist"`` (marginal burning).
+        duration_hours: burn duration (>0, <=48, default 6); also
+            animation frame count.
+        cellsize_m: computational cell size (default 30, LANDFIRE native).
+        compute_class: compute class (default "standard").
 
     Returns:
-        On success: a ``FireSpreadLayerURI`` (a ``LayerURI`` subtype) — the
-        map renders the fire-arrival-time COG and the hourly burned-extent
-        frames arrive as a scrubber animation group, plus flame-length and
-        spread-rate layers. It carries ``burned_area_km2`` +
-        ``fire_arrival_max_hr`` + ``max_flame_length_m`` +
-        ``max_spread_rate_m_min`` (Invariant 1 — narrate these typed numbers,
-        never invent them).
-
-        On failure: a dict with ``status="error"`` + ``error_code`` +
-        ``error_message`` so the failure is narrated honestly (no layer).
-        Notable typed results: ``FIRE_IGNITION_REQUIRED`` (no ignition given —
-        ask the user / request a map pick), ``ELMFIRE_NO_SPREAD`` (the model
-        ran but nothing burned — nonburnable fuels at the ignition).
-
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-    ``source_class="workflow_dispatch"`` — the cache shim is NOT invoked.
+        On success: ``FireSpreadLayerURI`` -- fire-arrival-time COG,
+        hourly burned-extent scrubber animation, flame-length/spread-rate
+        layers, with ``burned_area_km2``, ``fire_arrival_max_hr``,
+        ``max_flame_length_m``, ``max_spread_rate_m_min``.
+        On failure: ``{"status": "error", "error_code", "error_message"}``
+        -- notably ``FIRE_IGNITION_REQUIRED`` or ``ELMFIRE_NO_SPREAD``
+        (nonburnable fuels at ignition). Not cached
+        (``cacheable=False``).
     """
     # --- ignition: REQUIRED, never fabricated --------------------------------
     # All SHAPE handling (string "lon,lat" / dict ignition, string / reordered

@@ -463,79 +463,30 @@ def compute_impervious_surface(
 ) -> LayerURI:
     """NLCD impervious-surface fraction computation.
 
-    Reads an NLCD landcover or NLCD Impervious Surface raster and returns a
-    Float32 COG of impervious fraction (0.0–1.0) in the same CRS and grid.
-    Path is auto-selected: NLCD Impervious Surface product (0-100 int) is
-    scaled by 1/100; NLCD landcover applies a dev-class mapping (21→0.0,
-    22→0.3, 23→0.6, 24→0.9). Cached for 30 days.
-
-    When to use:
-        - Urban hydrology or runoff analysis requiring impervious fraction.
-        - SFINCS infiltration parameter setup (impervious fraction → Manning's
-          roughness or infiltration capacity zones).
-        - Urban heat island or stormwater capacity analysis.
-        - Quick percent-developed visualization for a study area.
-        - Input to ``compute_zonal_statistics`` to aggregate imperviousness
-          by administrative zone or flood-depth threshold.
-
-    When NOT to use:
-        - Per-building impervious area (use ``fetch_buildings`` + geometry metrics).
-        - Time-varying impervious change detection (snapshot only).
-        - Non-CONUS coverage (NLCD covers CONUS L48 only).
-        - Pelicun-style damage assessment (this is an input layer, not a postprocess).
+    Use this when: urban hydrology/runoff analysis, SFINCS infiltration
+    parameterization, urban heat island / stormwater capacity, or a
+    percent-developed visualization needs an impervious fraction (0.0-1.0).
+    Path auto-selects: NLCD Impervious Surface product (0-100 int) scaled
+    by 1/100, or NLCD landcover dev-class mapping (21->0.0, 22->0.3,
+    23->0.6, 24->0.9). Do NOT use for: per-building impervious area
+    (``fetch_buildings`` + geometry); non-CONUS coverage (NLCD is CONUS
+    L48 only).
 
     Params:
-        landcover_uri: a ``gs://`` URI (or local path) of either an NLCD
-            landcover GeoTIFF (typical output of ``fetch_landcover``) or an
-            NLCD Impervious Surface GeoTIFF (separate USGS product). The path
-            selection is auto-detected via filename substring "impervious" and
-            via the raster's embedded tags.
-        bbox: optional ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
-            When provided, the input is windowed-read to the bbox (CRS-aware
-            via ``rasterio.warp.transform_bounds``) before computation —
-            cheaper for large source rasters with a small AOI. When ``None``,
-            the full input raster is processed.
+        landcover_uri: NLCD landcover or NLCD Impervious Surface GeoTIFF
+            (typically from ``fetch_landcover``); path auto-detected via
+            filename/tags.
+        bbox: optional (min_lon, min_lat, max_lon, max_lat) EPSG:4326 to
+            window-read a large source raster; ``None`` processes the
+            full input.
 
     Returns:
-        A ``LayerURI`` pointing at a Float32 GeoTIFF in the cache bucket:
-        ``s3://trid3nt-cache/cache/static-30d/impervious/<key>.tif``.
-        Single-band, values in [0.0, 1.0] (NaN nodata), same CRS and grid as
-        the input. ``layer_type="raster"``, ``role="context"``, ``units=None``
-        (the values are dimensionless fractions).
-
-    LLM guidance:
-        - If the user already has an NLCD landcover URI (typical from
-          ``fetch_landcover``), pass it directly — the dev-class mapping path
-          fires automatically.
-        - If the user explicitly fetched the NLCD Impervious Surface companion
-          product, the filename will contain "impervious" and the scaling
-          path fires.
-        - Pass ``bbox`` only when the input raster is materially larger than
-          the AOI — for AOI-sized inputs, leave bbox=None (full read).
-
-    FR-CE-8: Results are routed through ``read_through`` so repeat calls with
-    the same ``(landcover_uri, bbox)`` pair return the cached impervious
-    raster without re-running the computation. TTL is 30 days (input is
-    static-30d, output is a deterministic function of the input).
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - ``fetch_landcover`` — primary source of ``landcover_uri``; pass
-          the returned ``LayerURI.uri`` (gs:// COG) directly. The NLCD
-          landcover product triggers the dev-class mapping path.
-        Downstream (feeds):
-        - ``compute_zonal_statistics`` — pass the returned ``LayerURI`` as
-          ``value_raster_uri`` to aggregate impervious fraction by zone.
-        - ``build_sfincs_model`` (via ``run_model_flood_scenario``) — impervious
-          fraction can substitute for / supplement the landcover input for
-          Manning's infiltration parameterization.
-        - ``publish_layer`` — pass the returned ``LayerURI`` to display the
-          impervious-surface layer on the map.
+        ``LayerURI`` for a Float32 GeoTIFF (cache bucket, TTL 30d; single
+        band, [0.0, 1.0] NaN-nodata, same CRS/grid as input).
 
     Raises:
-        ImperviousSurfaceError: if the input cannot be read, the bbox does not
-            intersect the raster, or the output cannot be written. Error
-            carries ``error_code`` for the pipeline strip.
+        ImperviousSurfaceError: input unreadable, bbox doesn't intersect,
+            or output write failure.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 

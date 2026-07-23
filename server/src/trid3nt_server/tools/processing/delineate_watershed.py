@@ -179,50 +179,36 @@ def delineate_watershed(
     # job-0164: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> WatershedLayerURI:
-    """Delineate the watershed (drainage basin) upstream of a pour point.
+    """Delineate the watershed (drainage basin) upstream of a pour point (D8 flow analysis via pysheds).
 
-    Runs a D8 flow analysis (pysheds: pit/depression filling, flat
-    resolution, flow direction, flow accumulation) on a DEM over the AOI,
-    snaps the pour point to the nearest flow line, and returns the upstream
-    catchment as a polygon layer on the map.
+    Use this when: "what drains to this point/gauge/outfall/dam site",
+    "delineate the watershed above here", or as an AOI mask for
+    ``compute_zonal_statistics``/``clip_raster_to_polygon``. Do NOT use
+    for: the stream network itself (``extract_stream_network``); regional
+    named-basin boundaries (``fetch_nhdplus_nldi_navigate`` -- this is a
+    local DEM delineation clamped to 0.3 deg).
 
-    When to use:
-        - "What drains to this point / gauge / outfall / dam site",
-          "delineate the watershed above here", "catchment boundary for this
-          stream crossing".
-        - As the AOI mask for downstream analyses (pass the polygon to
-          ``compute_zonal_statistics`` / ``clip_raster_to_polygon``).
-
-    When NOT to use:
-        - The stream network itself (use ``extract_stream_network``).
-        - Named-basin boundaries at regional scale (use
-          ``fetch_nhdplus_nldi_navigate`` -- this tool is a local DEM
-          delineation, clamped to a 0.3-degree AOI).
-
-    Parameters:
-        pour_point: ``(lon, lat)`` EPSG:4326 outlet. Snapped to the nearest
-            cell with >= ``snap_threshold`` upslope cells (noted), so a click
-            near -- not exactly on -- the channel still works.
-        bbox: optional ``(min_lon, min_lat, max_lon, max_lat)`` analysis
-            extent, <= 0.3 degrees per side. Default: a 0.1-degree box
-            centered on the pour point. The watershed is TRUNCATED at the
-            bbox edge -- enlarge the bbox if the basin looks clipped.
-        dem_uri: optional override DEM (s3:// or local GeoTIFF). Default:
-            Copernicus GLO-30 via ``fetch_copernicus_dem``.
-        snap_threshold: upslope-cell count defining "a flow line" for the
-            pour-point snap (default 100 cells).
+    Params:
+        pour_point: (lon, lat) EPSG:4326 outlet; snapped to the nearest
+            cell with >= ``snap_threshold`` upslope cells.
+        bbox: optional analysis extent, <= 0.3 deg per side; default
+            0.1-deg box centered on the pour point. Watershed is truncated
+            at the bbox edge -- enlarge if the basin looks clipped.
+        dem_uri: optional override DEM; default Copernicus GLO-30.
+        snap_threshold: upslope-cell count defining a flow line (default
+            100).
 
     Returns:
-        ``WatershedLayerURI`` -- the catchment polygon as a vector layer
-        (GeoJSON) carrying ``area_km2``, ``cell_count``, the requested and
-        snapped pour points, and honest ``notes`` (engine path, snap
-        distance, truncation caveat).
+        ``WatershedLayerURI`` -- catchment polygon (GeoJSON) with
+        ``area_km2``, ``cell_count``, requested/snapped pour points,
+        honest ``notes``.
 
-    Errors (FR-AS-11): ``HydrologyAoiTooLargeError`` (bbox over the clamp),
-    ``HydrologyInputError`` (bad pour point / bbox / URI),
-    ``EmptyWatershedError`` (pour point produced an empty catchment),
-    ``HydrologyDependencyError`` (pysheds missing),
-    ``HydrologyUpstreamError`` (fetch/write failed).
+    Raises:
+        HydrologyAoiTooLargeError: bbox over the clamp.
+        HydrologyInputError: bad pour point/bbox/URI.
+        EmptyWatershedError: pour point produced an empty catchment.
+        HydrologyDependencyError: pysheds missing.
+        HydrologyUpstreamError: fetch/write failed.
     """
     lon, lat = _validate_pour_point(pour_point)
     if bbox is None:

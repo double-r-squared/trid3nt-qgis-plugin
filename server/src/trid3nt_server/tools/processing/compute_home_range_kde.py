@@ -635,80 +635,39 @@ def compute_home_range_kde(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Compute a kernel-density home range (utilization-distribution isopleths).
+    """Compute a kernel-density home range (utilization-distribution isopleths) from tracking fixes.
 
-    Use this (not compute_movement_trajectory) when you want the kernel-density utilization-distribution HOME-RANGE isopleths.
-
-    Takes the POINT FlatGeobuf that ``fetch_movebank_tracks(geometry_type=
-    "point")`` emits (one feature per telemetry fix) and fits a 2-D Gaussian
-    kernel density over the fix locations to produce the **utilization
-    distribution (UD)**, then contours it into **home-range polygons** at one or
-    more isopleth percentiles. The 95% isopleth is the conventional home-range
-    boundary; the 50% isopleth is the core-use area (den / nest / foraging core).
-    Each polygon carries its planimetric ``area_km2``.
-
-    When to use:
-        - The user asks for an animal's "home range", "core area", "utilization
-          distribution", "KDE range", "where does this animal spend its time",
-          or a "50%/95% isopleth" from tracking data.
-        - Summarising a cloud of GPS fixes (from ``fetch_movebank_tracks``) into
-          a smooth occupancy boundary for overlay on a hazard / habitat layer.
-
-    When NOT to use:
-        - A minimum-convex-polygon (MCP) range — this is the kernel-density
-          method (smooth, density-weighted), not the convex hull.
-        - The raw track line itself — use ``fetch_movebank_tracks(geometry_type=
-          "linestring")``.
-        - Per-zone statistics of a raster inside the home range — feed this
-          tool's output as the zone polygon to ``compute_zonal_statistics``.
-
-    Pairs with:
-        - ``fetch_movebank_tracks`` — supplies ``points_uri`` (use
-          ``geometry_type="point"``).
-        - ``compute_zonal_statistics`` — overlay the home range on a hazard /
-          NDVI / land-cover raster.
+    Use this (not ``compute_movement_trajectory``) when the user wants an
+    animal's "home range"/"core area"/"utilization distribution"/"50%/95%
+    isopleth" from GPS fixes -- fits a 2-D Gaussian KDE over fix locations
+    and contours it into home-range polygons (95%=conventional boundary,
+    50%=core-use area). Do NOT use for: a minimum-convex-polygon range
+    (this is kernel-density, not convex hull); the raw track line
+    (``fetch_movebank_tracks(geometry_type="linestring")``).
 
     Params:
-        points_uri: ``s3://`` URI (or local path) of a FlatGeobuf of telemetry
-            fixes — typically ``fetch_movebank_tracks(..., geometry_type=
-            "point").uri``. Point, MultiPoint, and LineString inputs are all
-            accepted (lines are exploded to their vertices).
-        isopleths: percentile(s) of the UD volume to contour. A list like
-            ``[50, 95]`` (default) or a single number. Each must be in
-            ``(0, 100]``. Smaller percentiles give tighter core areas.
-        bandwidth_m: kernel bandwidth in METRES. ``None`` (default) uses Scott's
-            rule (data-driven). A smaller value gives a tighter, lumpier range;
-            a larger value smooths it.
-        grid_size: UD evaluation grid resolution per axis (default 200, clamped
-            to [32, 600]). Higher = smoother contours, slower.
-        individual_id: optional — restrict to a single animal by its
-            ``individual_id`` (matches the column emitted by
-            ``fetch_movebank_tracks``). ``None`` pools all fixes in the layer.
+        points_uri: FlatGeobuf of telemetry fixes, typically
+            ``fetch_movebank_tracks(..., geometry_type="point").uri``.
+        isopleths: percentile(s) to contour, e.g. ``[50, 95]`` (default);
+            each in (0, 100].
+        bandwidth_m: kernel bandwidth, metres. ``None`` (default) uses
+            Scott's rule.
+        grid_size: UD grid resolution per axis (default 200, [32, 600]).
+        individual_id: restrict to one animal's ``individual_id``; ``None``
+            pools all fixes.
 
     Returns:
-        A ``LayerURI`` (``layer_type="vector"``, ``role="context"``,
-        ``style_preset="home_range_kde"``, ``units="km2"``) pointing at a
-        FlatGeobuf of isopleth ``Polygon``/``MultiPolygon`` features in
-        EPSG:4326. ``bbox`` is set to the isopleth extent so the camera flies to
-        the home range. Each feature carries:
-            isopleth_pct   (float)  — the UD percentile (e.g. 50.0, 95.0)
-            area_km2       (float)  — planimetric area of that isopleth
-            n_points       (int)    — number of fixes used
-            individual_id  (str)    — the animal id, or "all"
-            bandwidth_m    (float|null) — the metre bandwidth, or null for Scott
-
-    FR-CE-8: Results are routed through ``read_through`` so repeat calls with the
-    same ``(points_uri, isopleths, bandwidth_m, grid_size, individual_id)`` reuse
-    the cached FlatGeobuf. TTL is 30 days (derived from immutable historic
-    tracks).
+        ``LayerURI`` (vector, ``style_preset="home_range_kde"``,
+        ``units="km2"``) for isopleth polygons in EPSG:4326, each carrying
+        ``isopleth_pct``, ``area_km2``, ``n_points``, ``individual_id``,
+        ``bandwidth_m``. Cache bucket, TTL 30d.
 
     Raises:
-        HomeRangeKDEError (typed, carries ``error_code``):
-            NO_POINTS_INPUT / DOWNLOAD_FAILED / EMPTY_LAYER — input problems.
-            TOO_FEW_POINTS — below the KDE minimum or a degenerate (co-linear /
-                coincident) set; honest empty, never a fabricated polygon.
-            BAD_ISOPLETH / BAD_BANDWIDTH — invalid parameters.
-            NO_ISOPLETHS / KDE_FAILED — the UD could not be contoured.
+        HomeRangeKDEError: NO_POINTS_INPUT/DOWNLOAD_FAILED/EMPTY_LAYER
+            (input problems); TOO_FEW_POINTS (below KDE minimum or
+            degenerate set -- honest empty, never fabricated);
+            BAD_ISOPLETH/BAD_BANDWIDTH (invalid params);
+            NO_ISOPLETHS/KDE_FAILED (UD could not be contoured).
     """
     if not isinstance(points_uri, str) or not points_uri.strip():
         raise HomeRangeKDEError(

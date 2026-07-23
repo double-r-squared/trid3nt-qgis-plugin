@@ -346,55 +346,33 @@ def fill_gaps(
 ) -> LayerURI:
     """Find sliver gaps enclosed between adjacent polygons and emit them as polygons.
 
-    Unions the input polygons and harvests the INTERIOR RINGS of the combined
-    geometry -- each enclosed void (a sliver/gap fully surrounded by the inputs)
-    becomes a new polygon feature. This is topology cleanup for digitized or
-    ML-derived polygon coverages. Returns a FlatGeobuf ``LayerURI`` of the gap
-    polygons, cached for 30 days.
-
-    When to use:
-        - Find slivers between adjacent parcels / field boundaries / building
-          footprints that should tile without gaps (e.g. FTW ag-field boundaries,
-          OSM building footprints).
-        - Generate the "missing" polygons to backfill a coverage (courtyards,
-          interstitial voids).
-        - "find the gaps between these polygons", "fill the slivers", "what
-          areas are uncovered between the parcels".
-
-    When NOT to use:
-        - Extracting donut HOLES of individual features (that is interior-ring
-          extraction of single features -- a future ``fill_rings`` tool).
-        - Merging polygons together (use ``merge_features``).
-        - Removing an area (use ``cut_features_with_polygon``).
-
-    Note: only voids FULLY ENCLOSED by the inputs are detected -- a gap open to
-    the outside boundary is not an interior ring and is not returned.
+    Use this when: finding slivers between adjacent parcels/field
+    boundaries/building footprints that should tile without gaps, or
+    generating "missing" polygons to backfill a coverage -- "find the
+    gaps between these polygons", "fill the slivers". Unions the inputs
+    and harvests interior rings of the combined geometry; only voids
+    FULLY ENCLOSED are detected (a gap open to the outside boundary is
+    not returned). Do NOT use for: donut holes of individual features
+    (future ``fill_rings``); merging polygons (``merge_features``);
+    removing an area (``cut_features_with_polygon``).
 
     Params:
-        layer_uri: primary polygon layer -- ``s3://`` or absolute local path
-            (FlatGeobuf / GeoJSON / Shapefile / GeoPackage / GeoParquet).
-        extra_layer_uris: optional additional polygon layers to union together
-            with the primary before harvesting gaps (multi-layer slivers across
-            adjacent datasets). Reprojected to the primary layer's CRS.
-        feature_ids: optional 0-based positional indices selecting WHICH features
-            of the PRIMARY layer to use, indexing the layer AS READ by the driver
-            (FlatGeobuf and similar formats reorder by a spatial index, so this is
-            the deterministic on-disk read order). ``None`` (default) uses all
-            features.
-        max_gap_area: optional maximum gap area (in the primary layer CRS's area
-            units) -- gaps larger than this are dropped so only true slivers are
-            emitted. ``None`` (default) keeps every enclosed gap.
+        layer_uri: primary polygon layer.
+        extra_layer_uris: optional additional polygon layers unioned with
+            the primary before harvesting gaps; reprojected to match.
+        feature_ids: optional 0-based indices selecting which primary
+            features to use (driver read order). ``None`` uses all.
+        max_gap_area: optional max gap area (primary CRS units); larger
+            gaps dropped. ``None`` keeps every enclosed gap.
 
     Returns:
-        A ``LayerURI`` pointing at a FlatGeobuf of gap polygons (each with a
-        ``gap_index`` and ``gap_area`` attribute) in the cache bucket.
-        ``layer_type="vector"``, ``role="context"``.
+        ``LayerURI`` for a FlatGeobuf of gap polygons (each with
+        ``gap_index``, ``gap_area``; cache bucket, vector, role="context").
 
     Raises:
-        FillGapsError: typed ``error_code`` (GEOPANDAS_UNAVAILABLE,
-            VECTOR_OPEN_FAILED, UNKNOWN_VECTOR_URI, DOWNLOAD_FAILED, NO_LAYERS,
-            LAYER_EMPTY, NOT_POLYGONS, INVALID_FEATURE_IDS, NO_GAPS_FOUND,
-            WRITE_FAILED).
+        FillGapsError: GEOPANDAS_UNAVAILABLE, VECTOR_OPEN_FAILED,
+            UNKNOWN_VECTOR_URI, DOWNLOAD_FAILED, NO_LAYERS, LAYER_EMPTY,
+            NOT_POLYGONS, INVALID_FEATURE_IDS, NO_GAPS_FOUND, WRITE_FAILED.
     """
     if not isinstance(layer_uri, str) or not layer_uri.strip():
         raise FillGapsError(

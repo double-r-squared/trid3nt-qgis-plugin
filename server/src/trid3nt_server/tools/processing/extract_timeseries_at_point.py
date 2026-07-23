@@ -233,45 +233,37 @@ async def extract_timeseries_at_point(
 ) -> dict[str, Any]:
     """Extract a time series at a point from the Case's animation-frame stack.
 
-    **What it does:** Finds the time-stepped raster SEQUENCE loaded on the
-    Case (animation frames -- sibling raster layers whose names share a stem
-    and differ only in a monotonic ``step N`` / ``F+03h`` / ``t+2`` / ISO
-    valid-time token, the same series the map scrubber groups), samples every
-    frame at the given location, and returns the ordered series
-    ``[(timestamp_or_index, value), ...]``.
+    Use this when: "how does the flood depth at my house evolve over the
+    simulation?" / "plot water level at the pier over time" after an
+    animated solve (SFINCS steps, SWMM depth, GOES/GLM frames, HRRR
+    hours). Finds the time-stepped raster sequence loaded on the Case
+    (sibling layers sharing a stem, differing by a step/lead/ISO token --
+    same series the map scrubber groups) and samples every frame. Do NOT
+    use for: a single-time value (``query_point_hazard``); frames of a
+    run not yet loaded (``list_run_frames`` + sandbox); station/gauge
+    observations (fetch_* tools).
 
-    **When to use:**
-    - "How does the flood depth at my house evolve over the simulation?"
-    - "Plot the water level at the pier over time" after an animated solve
-      (SFINCS steps, SWMM overland depth, GOES/GLM frame stacks, HRRR hours).
+    Params:
+        lon/lat: explicit EPSG:4326 coords (both required if used; wins
+            over ``place``).
+        place: free-text place name to geocode.
+        layer: optional sequence-stem selector (e.g. "flood depth");
+            default the Case's largest sequence.
+        case_id: Case to read; default the turn's bound Case.
 
-    **When NOT to use:**
-    - A single-time value across all layers -- use ``query_point_hazard``.
-    - Frames of a RUN not yet loaded on the Case -- use ``list_run_frames``
-      + the sandbox instead.
-    - Station/gauge observations (use the fetch_* observation tools).
+    Returns:
+        ``{"sequence", "frame_count", "series": [{index, label, value,
+        note?, error?}, ...], "units", "location",
+        "available_sequences", "sampled_count", "computed_at"}``.
+        Unreadable/nodata frames are honest ``value=None`` -- never
+        gap-filled.
 
-    **Parameters:**
-    - ``lon`` / ``lat``: explicit EPSG:4326 coordinates (both required when
-      used; wins over ``place``).
-    - ``place``: free-text place name to geocode.
-    - ``layer``: optional sequence selector matched against the sequence stem
-      (e.g. ``"flood depth"``). Default: the Case's largest sequence (others
-      are listed in ``available_sequences``).
-    - ``case_id``: the Case to read. Default: the turn's bound Case.
-
-    **Returns:** dict with ``sequence`` (the stem matched), ``frame_count``,
-    ``series`` (ordered ``[{index, label, value, note?, error?}, ...]`` --
-    ``label`` is the frame's ISO valid-time when the name carries one, else
-    the step/lead token), ``units`` (when known), ``location``,
-    ``available_sequences`` (all detected stems), ``sampled_count``,
-    ``computed_at``. Unreadable/nodata frames are honest ``value=None``
-    entries -- the series is never gap-filled.
-
-    **Errors (FR-AS-11):** ``TimeseriesInputError`` (no/invalid location),
-    ``NoCaseBoundError`` (no case), ``NoFrameSequenceError`` (the Case has no
-    detectable frame sequence, or none matches ``layer``),
-    ``TimeseriesUpstreamError`` (persistence unavailable / case not found).
+    Raises:
+        TimeseriesInputError: no/invalid location.
+        NoCaseBoundError: no case.
+        NoFrameSequenceError: no detectable sequence, or none matches
+            ``layer``.
+        TimeseriesUpstreamError: persistence unavailable / case not found.
     """
     q_lon, q_lat, label = resolve_point(lon, lat, place, TimeseriesInputError)
     resolved_case = resolve_case_id(case_id, NoCaseBoundError)

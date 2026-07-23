@@ -201,67 +201,33 @@ def compute_overtopping(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
-    """Estimate the mean wave-overtopping discharge over a sloped coastal structure.
+    """Estimate mean wave-overtopping discharge over a sloped coastal structure (EurOtop 2018 Ch.5).
 
-    A deterministic empirical POST-PROCESSOR (EurOtop 2018, Chapter 5): given a
-    nearshore sea state (Hm0, Tp -- typically straight from a SWAN / SnapWave run)
-    and a structure geometry (crest freeboard Rc above still-water level, front
-    slope, optional roughness/reduction factors), it returns the mean overtopping
-    discharge ``q`` in m^3/s per metre of structure crest length. Use it to turn
-    a wave field into a coastal-defence overtopping rate.
+    Use this when: a nearshore wave height + period (typically from
+    ``run_swan_waves``/SnapWave) and a seawall/levee/dike/revetment crest
+    level -- "how much water overtops?", "is this crest high enough?".
+    SLOPED geometry only. Do NOT use for: vertical/battered seawalls
+    (EurOtop Ch.7); computing the wave field (``run_swan_waves``); inland/
+    pluvial flooding (``run_swmm_urban_flood``) or surge inundation depth
+    (``run_model_flood_scenario``).
 
-    Use this when:
-        - The user has a nearshore wave height + period and a seawall / levee /
-          dike / revetment crest level and asks "how much water overtops?",
-          "what is the overtopping rate?", or "is this crest high enough?".
-        - You have just run ``run_swan_waves`` (or SFINCS+SnapWave) and want the
-          overtopping discharge at a structure given its crest freeboard.
-
-    Do NOT use this for:
-        - Vertical / battered seawalls (EurOtop Chapter 7) -- this version covers
-          SLOPED dike/revetment geometry only.
-        - Computing the wave field itself (use ``run_swan_waves``).
-        - Inland / pluvial flooding (use ``run_swmm_urban_flood``) or surge
-          inundation depth (use ``run_model_flood_scenario``).
-
-    Parameters:
-        hs_m: nearshore significant wave height Hm0 at the structure toe, m (> 0).
-        tp_s: peak wave period Tp at the structure toe, s (> 0). Internally
-            converted to the spectral period T_{m-1,0} ~= Tp / 1.1.
-        crest_freeboard_m: crest freeboard Rc -- the crest height ABOVE the still
-            water level, m (>= 0). 0 means the crest is at the water line.
-        slope: the front-face slope as the TANGENT (rise/run), e.g. 0.5 for a 1:2
-            slope, 0.333 for 1:3 (> 0). A "cot" value > 1 is accepted and inverted
-            (e.g. 2 -> 0.5) for convenience.
-        gamma_f: front-face roughness/permeability reduction factor, (0, 1].
-            1.0 = smooth (concrete/asphalt); ~0.55 = 2-layer rock armour. Default 1.0.
-        gamma_b: berm influence factor, (0, 1]. 1.0 = no berm. Default 1.0.
-        gamma_beta: oblique-wave-attack factor, (0, 1]. 1.0 = perpendicular
-            attack. Default 1.0.
-        gamma_v: crest-wall / vertical-element-on-slope factor, (0, 1]. 1.0 =
-            none. Default 1.0.
+    Params:
+        hs_m: nearshore significant wave height Hm0 at structure toe (>0).
+        tp_s: peak wave period Tp at structure toe (>0).
+        crest_freeboard_m: crest height above still-water level (>=0).
+        slope: front-face slope as tangent (rise/run), e.g. 0.5 for 1:2;
+            a "cot" value >1 is auto-inverted.
+        gamma_f/gamma_b/gamma_beta/gamma_v: roughness/berm/obliquity/
+            crest-wall reduction factors, (0, 1], default 1.0 each.
 
     Returns:
-        dict with structure::
-
-            {
-              "q_m3_s_per_m": float,    # mean overtopping discharge, m^3/s per m
-              "q_l_s_per_m": float,     # same, litres/s per m (q*1000) -- convenience
-              "governing_formula": str, # "breaking" (Eqn 5.10) | "max" (Eqn 5.11)
-              "dimensionless_q": float, # q / sqrt(g * Hm0^3)
-              "breaker_parameter": float,  # surf-similarity xi_{m-1,0}
-              "hs_m": float, "tp_s": float, "crest_freeboard_m": float,
-              "slope_tan": float,       # slope used (tan form)
-              "gamma_f": float, "gamma_b": float,
-              "gamma_beta": float, "gamma_v": float,
-              "method": str,            # citation string
-              "notes": list[str],       # honesty notes
-              "computed_at": str,       # ISO 8601 UTC timestamp
-            }
+        ``{"q_m3_s_per_m", "q_l_s_per_m", "governing_formula", "dimensionless_q",
+        "breaker_parameter", "hs_m", "tp_s", "crest_freeboard_m",
+        "slope_tan", "gamma_f", "gamma_b", "gamma_beta", "gamma_v",
+        "method", "notes", "computed_at"}``.
 
     Raises:
-        OvertoppingError: with a typed ``error_code`` when an input is missing,
-            non-numeric, or out of range.
+        OvertoppingError: missing, non-numeric, or out-of-range input.
     """
     hs = _coerce_positive(hs_m, "HS_INVALID", "hs_m")
     tp = _coerce_positive(tp_s, "TP_INVALID", "tp_s")

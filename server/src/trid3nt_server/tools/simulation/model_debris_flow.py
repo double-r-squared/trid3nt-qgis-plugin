@@ -649,66 +649,43 @@ def model_debris_flow(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> DebrisFlowLayerURI:
-    """USGS post-fire debris-flow hazard assessment over a burned AOI (pfdf).
+    """USGS post-fire debris-flow hazard assessment over a burned AOI (pfdf: Staley/Gartner/Cannon models).
 
-    Runs the standard USGS emergency-assessment workflow: DEM -> watershed
-    analysis (flow directions, slopes, relief, accumulation) -> stream-segment
-    network delineation -> Staley et al. 2017 M1 logistic model (per-segment
-    debris-flow LIKELIHOOD at a 15-minute design-storm rainfall) -> Gartner et
-    al. 2014 emergency model (potential sediment VOLUME, m^3) -> Cannon et al.
-    2010 combined relative HAZARD class (Low / Moderate / High).
+    Use this when: "debris-flow risk below the <X> fire", "post-fire
+    debris flow hazard for this burned watershed", or after a wildfire
+    discussion when the user asks what happens when it rains on the burn
+    scar. Chain: DEM -> watershed -> stream segments -> Staley 2017 M1
+    LIKELIHOOD -> Gartner 2014 VOLUME (m^3) -> Cannon 2010 HAZARD class.
+    Do NOT use for: unburned terrain (raises ``NoBurnDataError``);
+    rainfall-driven flooding (SFINCS/SWMM composers) or generic landslide
+    susceptibility (``run_landlab_susceptibility``).
 
-    When to use:
-        - "Debris-flow risk below the <X> fire", "post-fire debris flow hazard
-          for this burned watershed", "which drainages below the burn scar are
-          dangerous in a storm".
-        - After a wildfire discussion (MTBS / NIFC / FIRMS layers) when the
-          user asks what happens when it rains on the burn scar.
-
-    When NOT to use:
-        - UNBURNED terrain -- the M1/Gartner models are post-fire models; the
-          tool raises ``NoBurnDataError`` when the AOI has no burn data.
-        - Rainfall-driven FLOODING (use the SFINCS/SWMM flood composers) or
-          generic landslide susceptibility (use run_landlab_susceptibility).
-
-    Parameters:
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326. Clamped to
-            <= 0.15 degrees per side (``AoiTooLargeError`` above) -- a single
-            fire / small watershed, e.g. ``(-117.68, 34.15, -117.55, 34.26)``.
-        rainfall_intensity_mm_h: peak 15-minute design-storm rainfall
-            INTENSITY in mm/h (default 24). Drives both models: the M1
-            likelihood uses the equivalent 15-minute accumulation
-            (intensity / 4 mm), the Gartner volume uses the intensity itself.
-        dem_uri: optional override DEM raster (s3:// or local GeoTIFF).
-            Default: Copernicus GLO-30 via ``fetch_copernicus_dem``.
-        severity_uri: optional override burn-severity raster -- either BARC4
-            classes 1-4 or a continuous dNBR (auto-detected). Default: MTBS
-            fire perimeters rasterized as uniform moderate severity (an
-            honest, noted approximation).
-        kf_uri: optional override soil KF-factor raster. Default: STATSGO
-            KFFACT, then a constant 0.2 fallback (noted).
-        min_burned_fraction: minimum burned fraction of the AOI (default 0.01)
-            below which ``NoBurnDataError`` is raised.
+    Params:
+        bbox: EPSG:4326, clamped to <= 0.15 deg per side.
+        rainfall_intensity_mm_h: peak 15-min design-storm intensity
+            (default 24); drives both models.
+        dem_uri: optional override DEM; default Copernicus GLO-30.
+        severity_uri: optional override burn-severity raster (BARC4 or
+            dNBR); default MTBS perimeters at uniform moderate severity.
+        kf_uri: optional override soil KF-factor raster; default STATSGO
+            KFFACT then a noted 0.2 fallback.
+        min_burned_fraction: min burned AOI fraction (default 0.01) below
+            which ``NoBurnDataError`` fires.
 
     Returns:
-        ``DebrisFlowLayerURI`` -- the stream-segment network as a vector
-        ``LayerURI`` (GeoJSON LineStrings; ``style_preset="debris_flow_hazard"``;
-        per-feature properties ``likelihood`` (0-1), ``volume_m3``, and
-        ``hazard_class`` "Low"/"Moderate"/"High"; "Unknown" for segments with
-        insufficient data) carrying the assessment summary as extra fields:
-        ``segment_count`` / ``high_hazard_count`` / ``moderate_hazard_count`` /
-        ``low_hazard_count`` (totals), ``likelihood_max`` / ``volume_max_m3``
-        (headline scalars), ``rainfall_intensity_mm_h`` (the design storm
-        actually used), ``burned_fraction``, and ``notes`` (honest provenance
-        + every fallback used).
+        ``DebrisFlowLayerURI`` -- stream-segment vector (GeoJSON
+        LineStrings, ``style_preset="debris_flow_hazard"``; per-feature
+        ``likelihood``, ``volume_m3``, ``hazard_class``) with
+        ``segment_count``/``high_hazard_count``/``moderate_hazard_count``/
+        ``low_hazard_count``, ``likelihood_max``/``volume_max_m3``,
+        ``rainfall_intensity_mm_h``, ``burned_fraction``, ``notes``.
 
-    Errors (FR-AS-11):
-        - ``AoiTooLargeError`` (AOI over the 0.15-deg clamp),
-        - ``NoBurnDataError`` (no fire in the AOI / burned fraction below
-          ``min_burned_fraction``),
-        - ``DebrisFlowInputError`` (bad bbox / intensity / unreadable URI),
-        - ``DebrisFlowDependencyError`` (pfdf/rasterio/geopandas missing),
-        - ``DebrisFlowUpstreamError`` (input fetch or artifact write failed).
+    Raises:
+        AoiTooLargeError: AOI over the 0.15-deg clamp.
+        NoBurnDataError: no fire / burned fraction below minimum.
+        DebrisFlowInputError: bad bbox/intensity/unreadable URI.
+        DebrisFlowDependencyError: pfdf/rasterio/geopandas missing.
+        DebrisFlowUpstreamError: input fetch or write failure.
     """
     q_bbox = _validate_bbox(bbox)
     intensity = _validate_intensity(rainfall_intensity_mm_h)

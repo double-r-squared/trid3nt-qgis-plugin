@@ -157,76 +157,39 @@ async def run_swan_waves(
 ) -> WaveFieldLayerURI | dict[str, Any]:
     """Run a STANDALONE SWAN nearshore spectral wave-field simulation over an AOI.
 
-    Solves the third-generation spectral action-balance equation over real
-    bathymetry, producing a defensible nearshore wave field: a peak significant
-    wave-height (Hs) COG + a per-timestep Hs-frame animation group (nonstationary),
-    plus mean peak period (Tp) and mean direction (Dir) narration scalars. SWAN is
-    the ADDITIVE higher-fidelity comparison engine: it lets the user COMPARE an
-    engineering-grade wave field against the existing SFINCS+SnapWave output on the
-    SAME case.
-
-    Use this when:
-        - The user wants the DEFENSIBLE nearshore WAVE FIELD itself: significant
-          wave heights / periods / direction (the "show me the incoming waves
-          onshore" ask), engineering-grade wave climate, overtopping inputs, or
-          buoy validation; OR
-        - The user wants to COMPARE SWAN against SFINCS+SnapWave on a coastal case.
-
-    Do NOT use this for:
-        - Compound-flood / surge inundation DEPTH (use
-          ``run_model_flood_scenario`` - that is SFINCS, which already carries the
-          FAST in-model SnapWave wave-setup path; SWAN is NOT a cheaper
-          compound-flood solver).
-        - Tsunami / dam-break / shallow-water run-up (use
-          ``run_geoclaw_inundation``).
-        - Urban / pluvial drainage (use ``run_swmm_urban_flood``).
+    Use this when: the user wants the DEFENSIBLE nearshore wave field
+    itself -- significant wave heights/periods/direction, engineering-grade
+    wave climate, overtopping inputs, buoy validation -- or wants to
+    COMPARE SWAN against the existing SFINCS+SnapWave output on the same
+    case. Solves the 3rd-gen spectral action-balance equation over real
+    bathymetry. Do NOT use for: compound-flood/surge inundation depth
+    (``run_model_flood_scenario`` -- SFINCS's fast in-model SnapWave path;
+    SWAN is not a cheaper compound-flood solver); tsunami/dam-break
+    (``run_geoclaw_inundation``); urban/pluvial drainage
+    (``run_swmm_urban_flood``).
 
     Params:
-        bbox: the computational-domain AOI as ``(min_lon, min_lat, max_lon,
-            max_lat)`` in EPSG:4326 (lon-first).
-        mode: the run mode, EXACTLY one of {"stationary", "nonstationary"}.
-            ``"stationary"`` (DEFAULT) solves a storm-PEAK wave field (fast);
-            ``"nonstationary"`` evolves a wave time-series (an animation). Synonyms
-            (e.g. "peak" -> stationary, "transient" -> nonstationary) are
-            normalized.
-        boundary_hs_m: significant wave height at the offshore boundary, m (> 0).
-            When unset a demo storm sea-state is synthesized from the AOI.
-        boundary_tp_s: peak wave period at the offshore boundary, s (> 0).
-        boundary_dir_deg: mean wave direction at the boundary, degrees nautical
-            (direction FROM which waves come), [0, 360).
-        boundary_spread_deg: directional spreading at the boundary, deg (> 0).
-        boundary_side: the AOI side the boundary forcing is imposed on, one of
-            {"N", "S", "E", "W"}. When unset it is chosen from AOI geometry.
-        wind_uri: OPTIONAL ``s3://`` URI of an ERA5 10 m wind input grid; when set
-            the deck enables GEN3 wind-sea growth.
-        n_dir: spectral directional bins over the full circle (>= 12). Default 36.
-        n_freq: spectral frequency bins (>= 4). Default 32.
-        freq_low_hz: lowest relative frequency, Hz (> 0). Default 0.04.
-        freq_high_hz: highest relative frequency, Hz (> freq_low_hz). Default 1.0.
-        sim_duration_s: nonstationary physical time, seconds (> 0). Default 10800.
-        time_step_s: nonstationary compute time-step, seconds (> 0). Default 600.
-        output_frames: number of evenly-spaced nonstationary output frames (>= 1).
-            Default 24.
-        friction: enable JONSWAP bottom friction. Default True.
-        breaking: enable depth-induced breaking. Default True.
-        triads: enable triad (three-wave) nonlinear interactions. Default True.
-        compute_class: FR-CE-3 compute class. Default ``"standard"``.
+        bbox: computational-domain AOI, EPSG:4326.
+        mode: ``"stationary"`` (default, fast storm-peak field) or
+            ``"nonstationary"`` (time-series animation); synonyms normalized.
+        boundary_hs_m/boundary_tp_s/boundary_dir_deg/boundary_spread_deg:
+            offshore boundary sea state; unset synthesizes a demo storm.
+        boundary_side: forcing side {"N","S","E","W"}; auto-chosen if unset.
+        wind_uri: optional ERA5 wind grid; enables GEN3 wind-sea growth.
+        n_dir/n_freq/freq_low_hz/freq_high_hz: spectral discretization
+            (defaults 36/32/0.04/1.0).
+        sim_duration_s/time_step_s/output_frames: nonstationary run
+            controls (defaults 10800/600/24).
+        friction/breaking/triads: physics toggles (all default True).
+        compute_class: default "standard".
 
     Returns:
-        On success: a ``WaveFieldLayerURI`` (a ``LayerURI`` subtype) - the emitter
-        appends it to ``session-state.loaded_layers`` and the map renders the peak
-        Hs COG. It carries ``max_hs_m`` + ``mean_tp_s`` + ``mean_dir_deg`` +
-        ``wave_area_km2`` (Invariant 1 - the agent narrates these typed numbers,
-        never invents them). Per-timestep Hs frames are emitted out-of-band as a
-        temporal scrubber group.
-
-        On failure: a dict with ``status="error"`` + ``error_code`` +
-        ``error_message`` so the LLM narrates the failure honestly (no layer). A
-        SWAN run that produced no wave field returns ``SWAN_OUTPUT_EMPTY`` - it
-        NEVER reports a silently-empty layer as success (honesty floor).
-
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-    ``source_class="workflow_dispatch"`` - the cache shim is NOT invoked.
+        On success: ``WaveFieldLayerURI`` -- peak Hs COG + out-of-band
+        per-timestep animation, with ``max_hs_m``, ``mean_tp_s``,
+        ``mean_dir_deg``, ``wave_area_km2``.
+        On failure: ``{"status": "error", "error_code", "error_message"}``
+        -- ``SWAN_OUTPUT_EMPTY`` when nothing computed, never a silent
+        empty layer. Not cached (``cacheable=False``).
     """
     # --- Validate + coerce into the SwanRunArgs contract --------------------
     if bbox is None:

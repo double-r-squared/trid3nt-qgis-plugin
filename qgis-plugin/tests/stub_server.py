@@ -293,6 +293,76 @@ TOOL_CANDIDATES_ROW: dict[str, Any] = {
     "timeout_s": 60.0,
 }
 
+# Wave-picker sequence (LANE P, 2026-07-22): two DISTINCT tool-candidates
+# requests emitted back-to-back in ONE turn (no wait between them, no wait
+# for a reply) -- exercises the client's supersede-on-new-picker fold so a
+# staged wave reads as a stepped wizard ("Step 1" folds to "agent proceeded"
+# the instant "Step 2" lands), not stacked walls. Triggered by
+# "wave-picks" in the user-message text.
+STUB_WAVE_STEP1_REQUEST_ID = "01STUBWAVESTEP1AAAAAAAAAA"
+STUB_WAVE_STEP2_REQUEST_ID = "01STUBWAVESTEP2AAAAAAAAAA"
+WAVE_TOOL_CANDIDATES_STEP1: dict[str, Any] = {
+    "request_id": STUB_WAVE_STEP1_REQUEST_ID,
+    "stage_label": "Data step",
+    "candidates": [
+        {
+            "tool_name": "fetch_landcover",
+            "summary": "Fetch NLCD landcover for an AOI",
+            "score": 0.58,
+        },
+        {
+            "tool_name": "fetch_elevation",
+            "summary": "Fetch a DEM for an AOI",
+            "score": 0.55,
+        },
+    ],
+    "reason": "ask_mode",
+    "timeout_s": 60.0,
+}
+WAVE_TOOL_CANDIDATES_STEP2: dict[str, Any] = {
+    "request_id": STUB_WAVE_STEP2_REQUEST_ID,
+    "stage_label": "Analysis step",
+    "candidates": [
+        {
+            "tool_name": "assess_building_damage",
+            "summary": "Estimate structural damage over an AOI",
+            "score": 0.60,
+        },
+        {
+            "tool_name": "spatial_query",
+            "summary": "Query/summarize features of a loaded layer",
+            "score": 0.50,
+        },
+    ],
+    "reason": "ask_mode",
+    "timeout_s": 60.0,
+}
+
+# Offer-to-add card (LANE P, 2026-07-22 -- SRS Sec F.1.2 Mode 2): the LIGHT
+# fire-and-forget ``mode2-candidate`` envelope field-for-field the
+# ``Mode2CandidateEnvelope.to_wire_dict()`` shape (server/src/
+# trid3nt_server/mode2_classifier.py) -- NOT a ``trid3nt_contracts`` model
+# (that package is FROZEN for the classifier's job). Unlike the gate cards
+# above, this is a SIDE EFFECT during a normal tool call, never a pause --
+# emitted mid-turn, the turn completes normally regardless of whether/how
+# the client answers it. Triggered by "mode2-candidate" in the user-message
+# text.
+STUB_MODE2_CANDIDATE_ID = "01STUBMODE2CANDAAAAAAAAAA"
+MODE2_CANDIDATE_ROW: dict[str, Any] = {
+    "envelope_type": "mode2-candidate",
+    "candidate": {
+        "candidate_id": STUB_MODE2_CANDIDATE_ID,
+        "url": "https://waterdata.usgs.gov/nwis/rt",
+        "domain": "waterdata.usgs.gov",
+        "domain_tld": "gov",
+        "confidence": 0.7,
+        "detected_patterns": ["rest-endpoint-pattern", "data-download-link"],
+        "title": "USGS National Water Information System",
+        "suggested_tool_kind": "fetcher",
+        "snippet": "Download real-time streamflow data as CSV or JSON via the REST API.",
+    },
+}
+
 STUB_CREDENTIAL_REQUEST_ID = "01STUBCREDREQAAAAAAAAAAAAA"
 
 # A credential-request payload field-for-field the
@@ -377,6 +447,8 @@ class StubAgentServer:
         self.secret_adds: list[dict] = []  # secret-add payloads (LANE K)
         self.credential_replies: list[dict] = []  # credential-provided payloads
         self.tool_choices: list[dict] = []  # tool-choice payloads (ADR 0018)
+        #: catalog-addition-response payloads (LANE P offer-to-add card).
+        self.catalog_addition_responses: list[dict] = []
         #: ADR 0018 auto/ask carrier: every ``tool_choice_mode`` value PRESENT
         #: on a user-message payload (omitted keys are not recorded -- the
         #: default-auto send stays byte-identical, mirroring aoi_bbox).
@@ -620,6 +692,38 @@ class StubAgentServer:
                     )
                     await send("turn-complete", {}, case_id=case_id)
                     continue
+                if "wave-picks" in text:
+                    # Wave-picker sequence: two DISTINCT tool-candidates
+                    # requests back-to-back in one turn, no wait -- the
+                    # turn then completes normally without either ever
+                    # being answered (the client-side fold/step-N behavior
+                    # is what's under test, not a reply gate).
+                    await send(
+                        "tool-candidates", WAVE_TOOL_CANDIDATES_STEP1, case_id=case_id
+                    )
+                    await send(
+                        "tool-candidates", WAVE_TOOL_CANDIDATES_STEP2, case_id=case_id
+                    )
+                    await send(
+                        "agent-message-chunk",
+                        {
+                            "message_id": "m-wave",
+                            "delta": "Ran the staged wave.",
+                            "done": True,
+                        },
+                        case_id=case_id,
+                    )
+                    await send("turn-complete", {}, case_id=case_id)
+                    continue
+                if "mode2-candidate" in text:
+                    # Offer-to-add card: a fire-and-forget SIDE EFFECT emitted
+                    # mid-turn (mirrors the live server's
+                    # _maybe_emit_mode2_candidate hook on web_fetch) -- the
+                    # turn falls through to the standard flow below
+                    # regardless of whether/how the client answers it.
+                    await send(
+                        "mode2-candidate", MODE2_CANDIDATE_ROW, case_id=case_id
+                    )
                 if "which-tool" in text:
                     # ADR 0018 picker pause: the agent surfaces the ranked
                     # candidates and BLOCKS until the tool-choice reply
@@ -844,5 +948,13 @@ class StubAgentServer:
                     case_id=gate_case,
                 )
                 await send("turn-complete", {}, case_id=gate_case)
+            elif etype == "catalog-addition-response":
+                # LANE P offer-to-add card (contract
+                # CatalogAdditionResponsePayload): fire-and-forget by design
+                # (mirrors the mode2-candidate side effect it answers) -- the
+                # live server does not pause a turn on this reply, so the
+                # stub just records it. No envelope is sent back.
+                payload = env.get("payload") or {}
+                self.catalog_addition_responses.append(payload)
             elif etype == "cancel":
                 await send("turn-complete", {"cancelled": True}, case_id=env.get("case_id"))

@@ -366,48 +366,31 @@ def merge_features(
 ) -> LayerURI:
     """Merge (dissolve) selected vector features into ONE combined feature.
 
-    Unions the geometries of the selected features with ``shapely.unary_union``
-    (the standard GEOS dissolve) and emits a single output feature carrying the
-    merged geometry. The result keeps ONE feature's attributes -- the "keeper".
-    Returns a FlatGeobuf ``LayerURI``, cached for 30 days.
-
-    When to use:
-        - Dissolve several adjacent polygons into one (e.g. combine parcels into a
-          single AOI, merge fragmented flood-zone polygons, fuse touching field
-          boundaries into one field).
-        - Combine a set of line segments / points into one multi-part feature.
-        - "merge these into one", "dissolve the selected polygons", "combine these
-          features".
-
-    When NOT to use:
-        - Differencing one polygon out of another (use ``cut_features_with_polygon``).
-        - Dissolving BY an attribute value into multiple groups (use ``qgis_process``
-          ``native:dissolve`` with a FIELD).
-        - Clipping a layer to a mask (use ``clip_vector_to_polygon``).
+    Use this when: dissolving several adjacent polygons into one (combine
+    parcels into a single AOI, merge fragmented flood-zone polygons) --
+    "merge these into one", "dissolve the selected polygons". Unions
+    geometries via ``shapely.unary_union``; output keeps ONE feature's
+    attributes (the "keeper"). Do NOT use for: differencing one polygon
+    out of another (``cut_features_with_polygon``); dissolve-by-attribute
+    into multiple groups (``qgis_process`` ``native:dissolve`` with a
+    FIELD); clipping to a mask (``clip_vector_to_polygon``).
 
     Params:
-        layer_uri: source vector URI -- ``s3://`` path or absolute local file
-            path (FlatGeobuf / GeoJSON / Shapefile / GeoPackage / GeoParquet).
-        feature_ids: optional list of 0-based positional feature indices to
-            merge, indexing the layer AS READ by the vector driver (note: some
-            formats such as FlatGeobuf reorder features by a spatial index, so
-            this is the deterministic on-disk read order, not necessarily the
-            original authoring order). ``None`` (default) merges ALL features.
-        keep_id: optional 0-based positional index (same read-order semantics as
-            ``feature_ids``) of the feature whose ATTRIBUTES the single merged
-            output keeps. Defaults to the first selected feature. If ``keep_id``
-            is not in ``feature_ids`` it is folded into the merge set (its
-            geometry must participate in the union).
+        layer_uri: source vector layer.
+        feature_ids: optional 0-based indices to merge (driver read
+            order). ``None`` merges all features.
+        keep_id: optional index of the feature whose attributes the
+            merged output keeps; defaults to the first selected feature.
 
     Returns:
-        A ``LayerURI`` pointing at a single-feature FlatGeobuf in the cache
-        bucket. ``layer_type="vector"``, ``role="context"``. The merged geometry
-        is promoted to MULTI- form so the output schema is homogeneous.
+        ``LayerURI`` for a single-feature FlatGeobuf (cache bucket,
+        vector, role="context"; geometry promoted to MULTI- form).
 
     Raises:
-        MergeFeaturesError: typed ``error_code`` (GEOPANDAS_UNAVAILABLE,
-            VECTOR_OPEN_FAILED, UNKNOWN_VECTOR_URI, DOWNLOAD_FAILED, LAYER_EMPTY,
-            INVALID_FEATURE_IDS, NOTHING_TO_MERGE, EMPTY_RESULT, WRITE_FAILED).
+        MergeFeaturesError: GEOPANDAS_UNAVAILABLE, VECTOR_OPEN_FAILED,
+            UNKNOWN_VECTOR_URI, DOWNLOAD_FAILED, LAYER_EMPTY,
+            INVALID_FEATURE_IDS, NOTHING_TO_MERGE, EMPTY_RESULT,
+            WRITE_FAILED.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 

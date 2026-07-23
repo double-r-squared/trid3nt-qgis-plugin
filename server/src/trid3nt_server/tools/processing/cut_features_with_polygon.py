@@ -374,55 +374,34 @@ def cut_features_with_polygon(
     _bucket: str | None = None,
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Erase (difference) a cutter polygon out of each target feature, in place.
+    """Erase (difference) a cutter polygon out of each target feature, in place, keeping attributes.
 
-    For every target feature, subtracts the cutter polygon geometry
-    (``geom.difference(cutter)``) while PRESERVING the target feature's
-    attributes. This is the in-place-attribute-preserving erase: unlike a generic
-    overlay difference, each surviving feature keeps its original columns on the
-    cut-down geometry. Returns a FlatGeobuf ``LayerURI``, cached for 30 days.
-
-    When to use:
-        - Punch a hole / remove an area from polygons (e.g. erase a water body
-          from land parcels, remove a no-build buffer from developable area,
-          subtract a protected zone from an analysis polygon).
-        - Trim features back from an obstacle while keeping their attributes.
-        - "cut this polygon out of those features", "erase the lake from the
-          parcels", "remove the overlap region".
-
-    When NOT to use:
-        - Keeping the INSIDE of a mask instead of removing it (use
-          ``clip_vector_to_polygon``).
-        - Merging features together (use ``merge_features``).
-        - Splitting a single feature along a line (a future split tool /
-          ``qgis_process`` ``native:splitwithlines``).
+    Use this when: punching a hole / removing an area from polygons (erase
+    a water body from parcels, subtract a protected zone from an analysis
+    polygon) while keeping each surviving feature's original attributes --
+    "cut this polygon out of those features", "erase the lake from the
+    parcels". Do NOT use for: keeping the INSIDE of a mask
+    (``clip_vector_to_polygon``); merging features (``merge_features``).
 
     Params:
-        target_uri: vector layer to cut -- ``s3://`` or absolute local path
-            (FlatGeobuf / GeoJSON / Shapefile / GeoPackage / GeoParquet). Its
-            features keep their attributes; only their geometries are trimmed.
-        cutter_uri: polygon layer whose geometry is subtracted from the target.
-            ``s3://`` or local path. Multiple cutter polygons are dissolved into
-            one mask before cutting. Reprojected to the target CRS if needed.
-        cutter_feature_ids: optional 0-based positional indices selecting WHICH
-            cutter features to use, indexing the cutter layer AS READ by the
-            driver (FlatGeobuf and similar formats reorder by a spatial index, so
-            this is the deterministic on-disk read order). ``None`` (default)
-            uses all cutter features.
-        delete_emptied: when ``True`` (default), target features that the cut
-            reduces to nothing are DROPPED from the output. When ``False`` they
-            are kept with an empty geometry (honest, never fabricated).
+        target_uri: vector layer to cut; features keep attributes, only
+            geometry is trimmed.
+        cutter_uri: polygon layer subtracted from the target; multiple
+            cutter polygons dissolve into one mask; reprojected as needed.
+        cutter_feature_ids: optional 0-based indices selecting which
+            cutter features to use (driver read order). ``None`` uses all.
+        delete_emptied: ``True`` (default) drops target features cut to
+            nothing; ``False`` keeps them with empty geometry.
 
     Returns:
-        A ``LayerURI`` pointing at the cut FlatGeobuf in the cache bucket.
-        ``layer_type="vector"``, ``role="context"``. Surviving geometries are
-        promoted to MULTI- form (a cut can split one polygon into parts).
+        ``LayerURI`` for the cut FlatGeobuf (cache bucket; vector,
+        role="context"; surviving geometries promoted to MULTI- form).
 
     Raises:
-        CutFeaturesError: typed ``error_code`` (GEOPANDAS_UNAVAILABLE,
-            TARGET_OPEN_FAILED, CUTTER_OPEN_FAILED, UNKNOWN_TARGET_URI,
-            UNKNOWN_CUTTER_URI, DOWNLOAD_FAILED, TARGET_EMPTY, CUTTER_EMPTY,
-            INVALID_FEATURE_IDS, ALL_FEATURES_CONSUMED, WRITE_FAILED).
+        CutFeaturesError: GEOPANDAS_UNAVAILABLE, TARGET_OPEN_FAILED,
+            CUTTER_OPEN_FAILED, UNKNOWN_TARGET_URI, UNKNOWN_CUTTER_URI,
+            DOWNLOAD_FAILED, TARGET_EMPTY, CUTTER_EMPTY,
+            INVALID_FEATURE_IDS, ALL_FEATURES_CONSUMED, WRITE_FAILED.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 
