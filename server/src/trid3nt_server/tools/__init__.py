@@ -402,11 +402,13 @@ from .simulation import run_telemac_tool  # noqa: E402,F401
 from .simulation import solver  # noqa: E402,F401
 
 # -- discovery (dataset/tool retrieval) --
-# NOTE: catalog_search / catalog_fetch / qgis_discovery register at daemon
-# startup via main.py's eager-import block, NOT here - importing this package
-# alone deliberately leaves them out of TOOL_REGISTRY (pre-reorg behavior:
-# the plain ``import trid3nt_server.tools`` surface is 190 tools).
-from .discovery import discover_dataset  # noqa: E402,F401
+# NOTE: search_data_catalog / fetch_from_catalog / qgis_discovery register at
+# daemon startup via main.py's eager-import block, NOT here - importing this
+# package alone deliberately leaves them out of TOOL_REGISTRY (pre-reorg
+# behavior: the plain ``import trid3nt_server.tools`` surface is 190 tools,
+# 191 after ADR 0019 added search_spatial_functions here).
+from .discovery import search_tools  # noqa: E402,F401
+from .discovery import search_spatial_functions  # noqa: E402,F401
 
 # -- meta (web fetch, code exec, passthroughs, case utilities) --
 from .meta import code_exec_tool  # noqa: E402,F401

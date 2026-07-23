@@ -1,44 +1,4 @@
 """``fetch_statsgo_soils`` atomic tool — STATSGO soils (job A11).
-
-Wraps the USGS STATSGO COG collection (published to ScienceBase) through the
-``pfdf.data.usgs.statsgo`` module. STATSGO is the State Soil Geographic
-Database — a coarse-scale soils inventory that pfdf re-publishes as
-30-meter Cloud-Optimized GeoTIFFs for the post-fire debris-flow (pfdf)
-hazard assessment workflow. The two surfaced fields are:
-
-    KFFACT  — soil KF-factor (erodibility, hydrologic soil group proxy)
-    THICK   — soil thickness (centimeters)
-
-These are the canonical STATSGO derivatives the pfdf debris-flow models
-(M1 / M3 / M4 et al. from Staley et al. 2017 / Gartner et al. 2014) ask
-for as catchment-aggregated covariates. KFFACT is also a stand-in for
-hydrologic soil group (USDA HSG A-D) when running curve-number / runoff
-analyses outside the wildfire context.
-
-API surface (verified live 2026-06-09 against ScienceBase via pfdf 3.0.4):
-
-    pfdf.data.usgs.statsgo.read(field, bounds, *, timeout=60)
-        field   — "KFFACT" or "THICK"
-        bounds  — pfdf.projection.BoundingBox (must carry a CRS)
-        returns — pfdf.raster.Raster (30 m nominal CONUS coverage)
-
-We wrap that call:
-
-    1. Convert the agent's standard ``bbox`` 4-tuple (EPSG:4326) into a
-       pfdf ``BoundingBox(left, bottom, right, top, crs=4326)``.
-    2. Call ``statsgo.read`` for the requested field; let pfdf mosaic
-       the underlying COG tiles.
-    3. Persist the ``Raster`` to a temp GeoTIFF and reload as a COG
-       through rioxarray for the agent-side cache.
-    4. Route bytes through ``read_through`` with
-       ``ttl_class="static-30d"``, ``source_class="statsgo_soils"``.
-
-Tier-1 free (no auth, no API key). CONUS coverage; the underlying STATSGO
-inventory does not extend to AK/HI/territories — ``supports_global_query``
-remains False and a bbox outside CONUS raises an empty/upstream error.
-
-FR-AS-11: typed exceptions ``STATSGOSoilsError`` + 3 sub-classes carry
-``error_code`` + ``retryable`` for the agent retry/clarify surface.
 """
 
 from __future__ import annotations
@@ -444,7 +404,7 @@ def fetch_statsgo_soils(
         polygon from ``fetch_administrative_boundaries`` /
         ``fetch_nhdplus_nldi_navigate`` basin).
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``compute_zonal_statistics`` (catchment-mean
           KFFACT for pfdf debris-flow scoring); ``clip_raster_to_polygon``
           (clip to a burn perimeter / watershed); ``publish_layer`` (map
@@ -459,7 +419,7 @@ def fetch_statsgo_soils(
     STATSGO is a regulatory / archival dataset; the 30-day bucket
     amortizes well across typical agent sessions.
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``STATSGOSoilsInputError``: bad bbox / unsupported field / bbox
           outside CONUS (retryable=False).
         - ``STATSGOSoilsUpstreamError``: ScienceBase 5xx / network error /

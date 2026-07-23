@@ -12,7 +12,7 @@ Coverage:
    HOT_SET_TOOLS cleanly.
 4. ``test_dynamic_hot_set_includes_meta_tools`` — the result from
    ``as_frozenset_async`` always includes the meta-tools
-   (list_categories, list_tools_in_category, discover_dataset) regardless of
+   (list_categories, list_tools_in_category, search_tools) regardless of
    what ``get_dynamic_hot_set`` returns.
 5. ``test_dynamic_hot_set_cached_after_first_call`` — the cached dynamic
    hot set is reused on subsequent synchronous ``as_frozenset()`` calls,
@@ -44,7 +44,7 @@ from trid3nt_server.categories import AllowedToolSet, HOT_SET_TOOLS
 # Meta-tools that must always be present.
 # ---------------------------------------------------------------------------
 
-_META_TOOLS = frozenset({"list_categories", "list_tools_in_category", "discover_dataset"})
+_META_TOOLS = frozenset({"list_categories", "list_tools_in_category", "search_tools"})
 
 _DYNAMIC_TOOL_NAMES: frozenset[str] = frozenset(
     {
@@ -97,7 +97,7 @@ async def test_env_flag_on_uses_get_dynamic_hot_set(monkeypatch):
     allowed = AllowedToolSet(user_id="user-abc")
 
     with patch(
-        "trid3nt_server.tools.discovery.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discovery.search_tools.get_dynamic_hot_set",
         side_effect=_fake_get_dyn,
     ):
         result = await allowed.as_frozenset_async()
@@ -130,7 +130,7 @@ async def test_mongo_failure_falls_back_to_static(monkeypatch):
 
     allowed = AllowedToolSet()
     with patch(
-        "trid3nt_server.tools.discovery.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discovery.search_tools.get_dynamic_hot_set",
         side_effect=_failing_get_dyn,
     ):
         result = await allowed.as_frozenset_async()
@@ -159,7 +159,7 @@ async def test_dynamic_hot_set_includes_meta_tools(monkeypatch):
 
     allowed = AllowedToolSet()
     with patch(
-        "trid3nt_server.tools.discovery.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discovery.search_tools.get_dynamic_hot_set",
         side_effect=_fake_get_dyn,
     ):
         result = await allowed.as_frozenset_async()
@@ -189,17 +189,17 @@ async def test_dynamic_hot_set_cached_after_first_call(monkeypatch):
 
     allowed = AllowedToolSet()
     with patch(
-        "trid3nt_server.tools.discovery.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discovery.search_tools.get_dynamic_hot_set",
         side_effect=_counting_get_dyn,
     ):
         # First async call — triggers Mongo fetch.
         result1 = await allowed.as_frozenset_async()
-        # Second async call — should reuse the in-process cache (discover_dataset's
+        # Second async call — should reuse the in-process cache (search_tools's
         # own 5-min refresh window guards the Mongo round-trip).
         result2 = await allowed.as_frozenset_async()
 
     # Exactly ONE call to the (possibly expensive) Mongo read within a session.
-    # (The discover_dataset module's own 5-min cache guards Mongo; here we just
+    # (The search_tools module's own 5-min cache guards Mongo; here we just
     # verify AllowedToolSet stores the result and reuses it synchronously.)
     assert result1 == result2
     # After the async call, synchronous access sees the same dynamic set.
@@ -225,7 +225,7 @@ async def test_user_id_propagated_to_get_dynamic_hot_set(monkeypatch):
 
     allowed = AllowedToolSet(user_id="user-xyz-789")
     with patch(
-        "trid3nt_server.tools.discovery.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discovery.search_tools.get_dynamic_hot_set",
         side_effect=_recording_get_dyn,
     ):
         await allowed.as_frozenset_async()
@@ -292,7 +292,7 @@ async def test_empty_dynamic_result_falls_back_to_static(monkeypatch):
 
     allowed = AllowedToolSet()
     with patch(
-        "trid3nt_server.tools.discovery.discover_dataset.get_dynamic_hot_set",
+        "trid3nt_server.tools.discovery.search_tools.get_dynamic_hot_set",
         side_effect=_empty_get_dyn,
     ):
         result = await allowed.as_frozenset_async()

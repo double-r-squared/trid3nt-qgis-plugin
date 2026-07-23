@@ -1,49 +1,4 @@
 """``fetch_3dep_extra`` atomic tool — USGS 3DEP non-default DEM paths (job A11).
-
-Wraps the USGS 3DEP / The National Map (TNM) DEM tile tree through pfdf's
-``pfdf.data.usgs.tnm.dem`` reader to expose the **non-default 3DEP
-resolutions** that the canonical ``fetch_dem`` tool does NOT serve:
-
-    1 arc-second   (~30 m, CONUS+OUS)         — coarser sibling of fetch_dem
-    1/9 arc-second (~3 m, county-scale)       — finer than fetch_dem default
-    1 meter        (UTM-zoned LiDAR mosaic)   — research-grade resolution
-    2 arc-second   (Alaska-only)              — Alaska-coverage fallback
-    5 meter        (Alaska-only)              — Alaska LiDAR mosaic
-
-The existing ``fetch_dem`` tool serves the 1/3 arc-second (~10 m) and
-30 m paths via ``py3dep`` and is the right default for most flood-modeling
-flows. This tool surfaces the **other** four 3DEP resolutions so the
-agent can:
-
-    * use 1/9 arc-second / 1 m for post-fire debris-flow channel work
-      and high-resolution slope / aspect derivatives;
-    * use 2-arc-second / 5-meter for Alaska where the standard path
-      has no coverage;
-    * use 1 arc-second when the bbox is too big for the 10 m path but
-      still fits 3DEP's CONUS+ tiles.
-
-The pfdf reader handles TNM tile discovery, mosaicing, and CRS
-reconciliation; we wrap it as an atomic tool with the standard
-cache + LayerURI + error-envelope surface.
-
-API surface (verified live 2026-06-09 against pfdf 3.0.4):
-
-    pfdf.data.usgs.tnm.dem.read(
-        bounds, resolution='1/3 arc-second',
-        *, max_tiles=10, timeout=60
-    ) -> pfdf.raster.Raster
-
-    bounds — pfdf.projection.BoundingBox (must carry a CRS)
-
-We convert the agent's standard ``bbox`` 4-tuple → ``BoundingBox(crs=4326)``,
-call ``dem.read``, write the result to a COG, and cache.
-
-FR-CE-8 / FR-DC-3: routed through ``read_through`` with
-``ttl_class="static-30d"`` (3DEP is a static archival product),
-``source_class="3dep_extra"``. Cache key on
-``(bbox-rounded-6dp, resolution, max_tiles)``.
-
-Tier-1 free (no auth). ``supports_global_query=False`` — 3DEP is US-only.
 """
 
 from __future__ import annotations
@@ -458,7 +413,7 @@ def fetch_3dep_extra(
         COG as elevation input for slope / aspect / hillshade / pfdf
         debris-flow watershed delineation.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``compute_slope`` / ``compute_aspect`` /
           ``compute_hillshade`` / ``compute_colored_relief`` (terrain
           derivatives); ``clip_raster_to_polygon`` (clip to a watershed
@@ -474,7 +429,7 @@ def fetch_3dep_extra(
     Cache: ``ttl_class="static-30d"``, ``source_class="3dep_extra"``.
     3DEP tiles are archival; the 30-day bucket amortizes well.
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``ThreeDEPExtraInputError``: bad bbox / unsupported resolution
           / out-of-US bbox / too many tiles (retryable=False).
         - ``ThreeDEPExtraUpstreamError``: TNM 5xx / network error / COG

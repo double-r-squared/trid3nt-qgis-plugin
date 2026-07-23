@@ -45,7 +45,7 @@ is defined in ``HOT_SET_TOOLS`` - ten tools that span the most common entry
 points to a session: the two top-level workflow composers, geocoding, terrain,
 weather alerts (CONUS sweep + state/county-scoped - job-0261), code-exec
 (job-0247), and the meta-tools (list_categories, list_tools_in_category,
-discover_dataset).
+search_tools).
 """
 
 from __future__ import annotations
@@ -210,7 +210,7 @@ CATEGORIES: tuple[CategorySpec, ...] = (
             "Foundational geographic operations and platform plumbing: "
             "geocoding, admin-boundary fetching, raster/vector clipping, "
             "layer publishing to QGIS, catalog search/fetch. Two Class-A "
-            "discovery entry points: discover_dataset for DATA (free-text -> "
+            "discovery entry points: search_tools for DATA (free-text -> "
             "vetted source), and the list_qgis_algorithms -> "
             "describe_qgis_algorithm -> qgis_process triple for COMPUTE (run "
             "any curated QGIS/GDAL/GRASS/SAGA algorithm)."
@@ -545,9 +545,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # imagery lane a user most often reaches it from) via SECONDARY_CATEGORIES.
     "enhance_satellite_image": "geographic_primitives",
     "publish_layer": "geographic_primitives",
-    "discover_dataset": "geographic_primitives",
-    "catalog_search": "geographic_primitives",
-    "catalog_fetch": "geographic_primitives",
+    "search_tools": "geographic_primitives",
+    "search_data_catalog": "geographic_primitives",
+    "fetch_from_catalog": "geographic_primitives",
     "list_qgis_algorithms": "geographic_primitives",
     "describe_qgis_algorithm": "geographic_primitives",
     "qgis_process": "geographic_primitives",
@@ -787,7 +787,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 # - geocode_location, fetch_dem, fetch_nws_alerts_conus, fetch_nws_event -
 #   the most commonly cited "before you can do anything else" tools
 #   (fetch_nws_event added by job-0261 - see inline comment).
-# - list_categories, list_tools_in_category, discover_dataset - the three
+# - list_categories, list_tools_in_category, search_tools - the three
 #   meta-tools that let Gemini surface anything else when the hot set
 #   isn't enough.
 # - code_exec_request - cross-cutting capability (job-0247).
@@ -803,7 +803,7 @@ HOT_SET_TOOLS: frozenset[str] = frozenset(
         "fetch_nws_alerts_conus",
         "list_categories",
         "list_tools_in_category",
-        "discover_dataset",
+        "search_tools",
         # job-0247 (OQ-0247-CODE-EXEC-NOT-IN-HOT-SET): code-exec is a
         # cross-cutting capability like the meta-tools, not a geographic
         # primitive the agent should have to discover via category listing.
@@ -895,7 +895,7 @@ class OutOfAllowedSetError(RuntimeError):
     as the canonical Wave 4.9 structured error envelope with
     ``error_code='OUT_OF_ALLOWED_SET'`` and ``retryable=False``. Gemini
     reads the envelope on its next turn and retries - typically by calling
-    ``list_tools_in_category`` / ``discover_dataset`` to find a real tool.
+    ``list_tools_in_category`` / ``search_tools`` to find a real tool.
     """
 
     error_code: str = "OUT_OF_ALLOWED_SET"
@@ -943,7 +943,7 @@ class AllowedToolSet:
       ``add_tools(...)`` (used by category-router code paths that want to
       pre-warm a specific tool).
     - **Always-available meta-tools**: ``list_categories``,
-      ``list_tools_in_category``, and ``discover_dataset`` are merged into
+      ``list_tools_in_category``, and ``search_tools`` are merged into
       every snapshot so the escape-hatch discovery path is never gated.
 
     The set is **monotonically growing** within a session - tools never
@@ -972,7 +972,7 @@ class AllowedToolSet:
 
     # Always-available meta-tools - never gated behind the hot set.
     _META_TOOLS: frozenset[str] = field(
-        default=frozenset({"list_categories", "list_tools_in_category", "discover_dataset"}),
+        default=frozenset({"list_categories", "list_tools_in_category", "search_tools"}),
         init=False,
         repr=False,
         compare=False,
@@ -1046,7 +1046,7 @@ class AllowedToolSet:
             return self.as_frozenset()
 
         try:
-            from .tools.discovery.discover_dataset import get_dynamic_hot_set as _get_dyn
+            from .tools.discovery.search_tools import get_dynamic_hot_set as _get_dyn
 
             dynamic = await _get_dyn(user_id=self.user_id, top_k=8)
             # Merge with the static set so tools the user has never called
@@ -1238,7 +1238,7 @@ def list_categories() -> dict:
         - Querying member tools of a specific category - call
           ``list_tools_in_category`` with the ``id`` instead.
         - Free-text retrieval of a tool by user-query - use
-          ``discover_dataset`` for that.
+          ``search_tools`` for that.
 
     Returns:
         A dict ``{"categories": [{"id": str, "name": str, "description": str},
@@ -1270,7 +1270,7 @@ def list_tools_in_category(category_id: str) -> dict:
           subsequent function_calls into this category are not rejected.
 
     Do NOT use this for:
-        - Free-text search across all tools - call ``discover_dataset``.
+        - Free-text search across all tools - call ``search_tools``.
         - Listing the categories themselves - call ``list_categories``.
 
     Args:

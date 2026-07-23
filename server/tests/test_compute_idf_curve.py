@@ -216,7 +216,7 @@ def test_category_and_corpus() -> None:
     import yaml
 
     from trid3nt_server import categories
-    from trid3nt_server.tools.discovery import discover_dataset as dd
+    from trid3nt_server.tools.discovery import search_tools as dd
 
     assert categories.PRIMARY_CATEGORY["compute_idf_curve"] == "hydrology"
     corpus_path = pathlib.Path(dd._default_corpus_path())

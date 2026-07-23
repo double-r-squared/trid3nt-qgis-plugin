@@ -1,68 +1,4 @@
 """``fetch_storm_tracks`` atomic tool - hurricane / tropical-cyclone tracks.
-
-Two data modes behind one tool:
-
-**HISTORICAL (default, ``active_only=False``)** - IBTrACS v04r01 (NOAA NCEI
-International Best Track Archive for Climate Stewardship), the authoritative
-merged best-track record of every tropical cyclone since 1842. We download the
-points CSV, subset by bbox + season (year) range + optional storm name, and
-emit either one LineString per storm (``geometry="lines"``, default) or one
-Point per 3/6-hourly best-track fix (``geometry="points"``), carrying wind
-speed (kt), central pressure (mb), and the Saffir-Simpson category.
-
-    CSV base (free, NO API key):
-        https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/
-
-    File selection (bounded-download discipline; verified sizes 2026-07-07):
-        - ``ibtracs.last3years.list.v04r01.csv`` (~9 MB) when the requested
-          year range is within the most recent 3 seasons (the default).
-        - per-basin ``ibtracs.<BASIN>.list.v04r01.csv`` (~5-60 MB) otherwise,
-          basins derived from the bbox (NA/EP/WP/NI/SI/SP/SA). A bbox spanning
-          more than 2 basins raises a typed input error - we never pull the
-          330 MB ``ALL`` file.
-
-    CSV shape: row 0 = column names, row 1 = units, then one row per fix.
-    Key columns: SID, SEASON, BASIN, NAME, ISO_TIME, NATURE, LAT, LON,
-    WMO_WIND/WMO_PRES, TRACK_TYPE (skip ``spur`` duplicates), USA_STATUS,
-    USA_WIND/USA_PRES (preferred wind/pressure), USA_SSHS (Saffir-Simpson
-    category, -5..5). Missing values are blank/whitespace strings.
-
-    Track selection is storm-wise: a storm whose track touches the bbox is
-    returned with its FULL track (not clipped), so landfalling storms keep
-    their open-ocean history for context.
-
-**ACTIVE (``active_only=True``)** - NHC ``CurrentStorms.json`` (the machine
-feed behind the NHC "Active Cyclones" page) for storms being advised on RIGHT
-NOW, enriched best-effort with each storm's official 5-day forecast-track GIS
-points (the ``forecastTrack`` zipped shapefile from https://www.nhc.noaa.gov/gis/).
-Active mode always emits POINTS: the current position (``tau=0``) plus the
-forecast positions (``tau`` = forecast hour) with ``max_wind_kt`` per point.
-If the forecast-track zip cannot be fetched/parsed the tool degrades to
-current-position points only (logged, never fabricated).
-
-    https://www.nhc.noaa.gov/CurrentStorms.json
-        -> {"activeStorms": [{"id", "name", "classification", "intensity"(kt),
-            "pressure"(mb), "latitudeNumeric", "longitudeNumeric",
-            "movementDir", "movementSpeed", "lastUpdate",
-            "forecastTrack": {"zipFile": ...}, ...}]}
-
-**Honest-empty paths** (data-source fallback norm - primary -> honest typed
-error, never an empty success-shaped layer):
-    - historical: no storm track touches the bbox/window/name filter ->
-      ``StormTracksNoStormsError``.
-    - active: NHC is advising on zero storms (the common out-of-season state;
-      live-verified 2026-07-07) or none match the bbox/name filter ->
-      ``StormTracksNoActiveStormsError``.
-
-Output: vector ``LayerURI`` (FlatGeobuf, EPSG:4326),
-``style_preset="storm_tracks"``, ``role="primary"``. ``LayerURI.bbox`` is the
-extent of the returned tracks so the camera frames the storms.
-
-Tier-1, no auth. ``supports_global_query=False`` for historical (bbox is
-REQUIRED to bound the subset); ``active_only=True`` accepts a missing bbox
-(the active set is globally small).
-
-FR-AS-11 typed-error surface; FR-TA-2 / FR-AS-3 docstring discipline applies.
 """
 
 from __future__ import annotations
@@ -1182,7 +1118,7 @@ def fetch_storm_tracks(
           (the common out-of-season state) or none match the filter.
         Never an empty success-shaped layer.
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``StormTracksInputError``: bad bbox / years / geometry, bbox spans
           too many basins, or a points-mode result over the 50000-fix cap
           (retryable=False).
@@ -1193,7 +1129,7 @@ def fetch_storm_tracks(
     hourly bucket keeps active storms fresh; identical historical queries
     within the hour reuse the FGB.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (derive a bbox from a place name first),
           ``fetch_nws_event`` (live warnings for an approaching storm),

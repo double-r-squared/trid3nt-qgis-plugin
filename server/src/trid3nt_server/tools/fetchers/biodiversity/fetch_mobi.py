@@ -1,41 +1,4 @@
 """``fetch_mobi`` atomic tool  --  NatureServe Map of Biodiversity Importance (MoBI).
-
-Fetches the NatureServe Map of Biodiversity Importance (MoBI) for a bbox via
-the Microsoft Planetary Computer (PC) STAC catalog. MoBI is the canonical
-imperiled-species biodiversity-priority raster for the conterminous US: it maps
-where concentrations of at-risk species (especially narrow-range endemics)
-occur, the headline biodiversity layer in the SC-DNR-style conservation-priority
-stack (``model_conservation_priority``).
-
-Data source
-===========
-
-PC collection ``mobi`` ("MoBI: Map of Biodiversity Importance"):
-
-    catalog: https://planetarycomputer.microsoft.com/api/stac/v1
-    extent:  conterminous US, ~990 m GSD, single CONUS-wide item
-    assets:  15 COG layers across three measures x five taxa groups:
-      - SpeciesRichness_{All,Plants,Vertebrates,AquaticInverts,PollinatorInverts}
-        (count of imperiled species)
-      - RSR_{...}  (Range-Size Rarity  --  weighted by range size)
-      - PWRSR_GAP12_SUM_{...}  (Protection-Weighted RSR  --  outside protected land)
-
-The chosen layer asset is a single CONUS-wide Azure-Blob COG behind a SAS token;
-this tool signs the href (``_pc_stac.sas_sign_href``), reads the asset warped to
-EPSG:4326 and WINDOWED to the bbox through GDAL ``/vsicurl/`` (so a small AOI
-materializes only its own clip of the CONUS raster), and re-emits a single-band
-float32 COG with the ``mobi_biodiversity`` colormap.
-
-Honesty (data-source fallback norm): MoBI is CONUS-only. A bbox outside CONUS
-(or whose window is entirely nodata) raises a typed ``MoBIEmptyError``  --  never a
-fabricated layer.
-
-FR-CE-8 / FR-DC-3/4: routed through ``read_through`` so identical ``(bbox,
-layer)`` calls reuse the cached COG in the ``static-30d`` / ``mobi`` prefix.
-
-Tier-1 free (no API key). Heavy emit-free sync raster work  --  registered in
-``_ALWAYS_OFFLOAD_SYNC_TOOLS`` so it runs via ``asyncio.to_thread`` and never
-stalls the WebSocket heartbeat.
 """
 
 from __future__ import annotations

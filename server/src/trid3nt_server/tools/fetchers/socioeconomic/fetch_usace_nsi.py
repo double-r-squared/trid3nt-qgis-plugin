@@ -1,79 +1,4 @@
 """``fetch_usace_nsi`` atomic tool — USACE National Structure Inventory (job A6).
-
-Wraps the U.S. Army Corps of Engineers (USACE) National Structure Inventory
-(NSI) REST API to return per-building structure inventory features — point
-geometries with HAZUS occupancy classification (``occtype``), structure
-replacement value (``val_struct``), content value (``val_cont``), square
-footage, number of stories, year built, FEMA flood zone, population residing
-at AM/PM, and ground elevation. NSI is the authoritative U.S.-wide structure
-inventory used by FEMA / USACE / FEMA HAZUS for flood loss estimation.
-
-This is the **preferred** building+occupancy+replacement-value source for
-``run_pelicun_damage_assessment`` / ``run_pelicun_with_buildings`` because every
-NSI structure already carries the HAZUS ``occtype`` (e.g. ``RES1``, ``COM1``)
-plus a real per-structure ``val_struct`` (USD), removing both the
-``compute_building_density`` default-RES1 proxy AND the
-``_REPLACEMENT_VALUE_DEFAULTS_USD`` per-class fallback. See "Cross-tool
-dependency" below.
-
-Endpoint (verified live 2026-06-09 against the USACE NSI API):
-
-    POST https://nsi.sec.usace.army.mil/nsiapi/structures?fmt=fc
-    Content-Type: application/json
-    Body: a GeoJSON FeatureCollection with a single Polygon feature
-        defining the area of interest (the API rejects GET ?bbox= with a
-        500; the POST polygon path is the documented contract).
-
-Response: a GeoJSON FeatureCollection of Point features (one per structure)
-with ~40 NSI properties per record. Documented schema at
-``https://www.hec.usace.army.mil/confluence/nsi/technicalreferences/2022``.
-
-Properties preserved on the output FlatGeobuf (HAZUS + downstream Pelicun
-consumers care about these; the rest of the NSI columns are dropped):
-
-    ``fd_id``           NSI persistent feature ID
-    ``occtype``         HAZUS occupancy class (RES1, RES3A, COM1, ...)
-    ``st_damcat``       Structure damage category (RES, COM, IND, AGR, ...)
-    ``bldgtype``        Building construction type (W, S, C, M, ...)
-    ``found_type``      Foundation type (S, B, C, P, ...)
-    ``found_ht``        Foundation height above ground (ft)
-    ``num_story``       Number of stories
-    ``sqft``            Building square footage
-    ``med_yr_blt``      Median year built (Census block tract)
-    ``val_struct``      Structure replacement value (USD)
-    ``val_cont``        Content replacement value (USD)
-    ``val_vehic``       Vehicle replacement value (USD)
-    ``firmzone``        FEMA FIRM flood zone (e.g. AE, X, VE, or None)
-    ``cbfips``          Census block FIPS code
-    ``ground_elv``      Ground elevation (ft)
-    ``ground_elv_m``    Ground elevation (m)
-    ``pop2amu65``       AM population <65
-    ``pop2amo65``       AM population >=65
-    ``pop2pmu65``       PM population <65
-    ``pop2pmo65``       PM population >=65
-    ``students``        Student count (schools / EDU class)
-    ``source``          NSI source tier (E=Estimated, P=Parcel, etc.)
-
-Cache: ``static-30d``, ``source_class="usace_nsi"``. The NSI is rebuilt by
-USACE on a ~quarterly cadence (the underlying parcel + Census + Microsoft
-Buildings inputs change slowly), so a 30-day TTL is consistent with the
-update cadence and matches HRSL / GCN250 / WDPA static-30d siblings.
-
-``supports_global_query=False``: NSI only covers the United States and the
-service rejects requests larger than ~1-2 degrees (a full-CONUS POST is
-rejected with a 500). Always bbox-scoped.
-
-Cross-tool dependency (codified in job A6):
-``run_pelicun_with_buildings`` should prefer NSI when available. Replaces the
-following Pelicun input limitations:
-    - ``compute_building_density`` (Microsoft Buildings raster) emits a single
-      ``component_type="RES1"`` per cell — NSI carries the real occupancy.
-    - ``_REPLACEMENT_VALUE_DEFAULTS_USD`` (HAZUS-MH 4.2 class defaults) is a
-      coarse per-class average — NSI carries the per-structure ``val_struct``.
-This swap is documented in ``run_pelicun_damage_assessment``'s "Assets
-convention" docstring as the v0.2 preferred path.
-
-FR-TA-2 / FR-AS-3 / FR-CE-8 / FR-DC-3/4 invariants honored.
 """
 
 from __future__ import annotations
@@ -658,9 +583,6 @@ def fetch_usace_nsi(
     ``USACE_NSIUpstreamError(retryable=True)`` so the agent's FR-AS-11
     surface decides whether to retry, clarify, or fall back.
 
-    Source-tier: FR-HEP-2 Tier 1 (USACE-issued, authoritative U.S. structure
-    inventory used by FEMA / HAZUS). Claims derived from this tool should
-    be marked ``source_authority_tier=1`` in any ``ClaimSet`` aggregation.
 
     Payload estimation (FR-DC-9 / Wave-1.5 hook): see ``estimate_payload_mb``
     — bbox-area-driven, with the dense-urban upper bound (~50 MB / deg²).

@@ -1,29 +1,4 @@
-"""``fetch_storm_events_db`` atomic tool — NOAA Storm Events DB Tier-1 fetcher (job-0091).
-
-Downloads the annual NOAA Storm Events Database details CSV (gzip) from
-``https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/``, filters by
-state, event-type, an optional spatial ``bbox`` (W,S,E,N), and an optional
-``begin_date``/``end_date`` temporal window, converts to FlatGeobuf with point
-geometry from ``BEGIN_LAT``/``BEGIN_LON``, and returns a ``LayerURI`` pointing
-at the cached artifact.
-
-The NOAA Storm Events Database is the authoritative US storm-event catalog
-maintained by NCEI. Files follow the pattern::
-
-    StormEvents_details-ftp_v1.0_d{year}_c{processed_date}.csv.gz
-
-``processed_date`` is volatile (re-stamped on every NCEI reprocessing), so the
-implementation scrapes the HTTP directory index to find the current file for
-``year`` rather than hard-coding the processed date.
-
-A ``begin_date``/``end_date`` window may span more than one calendar year; the
-fetcher then downloads every annual CSV the window touches (``year`` is used as
-the anchor when no window is given) and concatenates the rows before filtering.
-
-FR-TA-2: atomic tool returning ``LayerURI``.
-FR-CE-8 / FR-DC-3/4: routed through ``read_through`` so identical
-``(year, state, event_types, bbox, begin_date, end_date)`` calls reuse the
-cached FlatGeobuf (static-30d).
+"""``fetch_storm_events_db`` atomic tool — NOAA Storm Events DB Tier-1 fetcher.
 """
 
 from __future__ import annotations

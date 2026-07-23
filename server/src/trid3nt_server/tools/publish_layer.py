@@ -1932,99 +1932,78 @@ def publish_layer(
     their producing fetch tool's GeoJSON). Not cacheable (side-effect tool;
     registers layer faces + may write overview COGs).
 
-    When to use:
-        - After ``postprocess_flood``, ``compute_hillshade``, ``compute_slope``,
-          ``compute_colored_relief``, ``compute_aspect``, or any other tool that
-          returns a ``LayerURI`` with an ``s3://`` COG, when the user needs the
-          layer displayed on the map.
-        - As the final step in any workflow that produces a raster output -
-          the COG is not visible until this tool runs.
+    Use this after ``postprocess_flood``, ``compute_hillshade``,
+    ``compute_slope``, ``compute_colored_relief``, ``compute_aspect``, or any
+    tool that returns a ``LayerURI`` with an ``s3://`` COG, when the user
+    needs the layer displayed on the map — the COG is not visible until this
+    runs; it's the final step of any raster-producing workflow.
 
-    When NOT to use:
-        - Publishing vector layers (FlatGeobuf/GeoJSON already render inline
-          via their producing fetch tool).
-        - Caching or re-fetching data (this is a side-effect tool; the cache
-          shim is not invoked).
+    Do NOT use for: publishing vector layers (FlatGeobuf/GeoJSON already
+    render inline via their producing fetch tool); caching or re-fetching
+    data (side-effect tool, cache shim not invoked).
 
     Params:
-        layer_uri: the producing tool's ``layer_id`` HANDLE (PREFERRED -
-            job-0263 layer-handle indirection: the server resolves it to the
-            exact ``s3://`` COG it recorded), or the ``s3://`` URI copied
-            VERBATIM from the producing tool's result. NEVER construct or
-            re-type an s3:// path from memory.
-        layer_id: layer name for the published layer. Must be stable and
-            unique within the Case (e.g. ``"flood-depth-peak-<run_id>"``).
-            OPTIONAL (2026-07-08, small-model resilience): when omitted, the
-            id is DERIVED - from the producing tool's registered ``layer_id``
-            when the resolved ``layer_uri`` maps to a registered layer, else
-            from the URI basename stem (sanitized), else a fresh
-            ``layer-<ulid>``.
+        layer_uri: the producing tool's ``layer_id`` HANDLE (PREFERRED — the
+            server resolves it to the exact ``s3://`` COG it recorded), or
+            the ``s3://`` URI copied VERBATIM from the producing tool's
+            result. NEVER construct or re-type an s3:// path from memory.
+        layer_id: layer name for the published layer; stable + unique within
+            the Case (e.g. ``"flood-depth-peak-<run_id>"``). OPTIONAL — when
+            omitted, DERIVED from the producing tool's registered
+            ``layer_id`` if resolvable, else the URI basename stem
+            (sanitized), else a fresh ``layer-<ulid>``.
         style_preset: style preset name, or omit for AUTO selection
             (recommended): flood/plume depth COGs get the
             ``"continuous_flood_depth"`` ramp; terrain products (colored
-            relief, hillshade, raw DEM) get default rendering, which is
-            correct for RGBA/grayscale rasters - the flood ramp painted them
-            invisible.
+            relief, hillshade, raw DEM) get default rendering — correct for
+            RGBA/grayscale rasters (the flood ramp paints them invisible).
         project_qgs_uri: legacy ``.qgs`` project URI; consumed only by the
             dormant ``TRID3NT_QGIS_WMS_BASE`` vector-WMS seam. Omit.
-        case_id: optional Case identifier (FR-MP-6 / job-0121). When passed,
-            the server wrapper resolves the case-scoped ``.qgs`` URI via
-            ``case_lifecycle.ensure_case_qgs`` BEFORE invoking this tool;
-            this parameter is a transport-only carrier so the LLM-visible
-            tool surface is honest about Case context. The atomic tool body
-            itself does not perform Persistence I/O - the server-side
-            wrapper does the lazy-init and substitutes the resolved URI
-            into ``project_qgs_uri``. Defaults to ``None`` (single-tenant
-            demo path; OQ-62-QGS-MUTATION-CONFLICT preserved verbatim).
-        name: OPTIONAL human-readable display name for the UI's layer list
-            (OPEN-9, 2026-07-10). When given, used verbatim. When omitted
-            (or the model passes it as an unadorned copy of ``layer_id``),
-            a readable name is DERIVED server-side (``style_preset`` ->
-            label, else a ``layer_uri`` path segment, else a generic
-            fallback) so a bare ULID never reaches the layer summary. This
-            parameter is a transport-only carrier - the atomic tool body
-            does not consume it (it returns a bare URL string, not a
-            LayerURI); the server-side wrap-site
+        case_id: optional Case identifier. When passed, the server wrapper
+            resolves the case-scoped ``.qgs`` URI BEFORE invoking this tool;
+            transport-only carrier — the atomic tool body does no
+            Persistence I/O. Defaults to ``None`` (single-tenant demo path).
+        name: OPTIONAL human-readable display name for the UI's layer list.
+            When given, used verbatim. When omitted (or an unadorned copy of
+            ``layer_id``), a readable name is DERIVED server-side
+            (``style_preset`` -> label, else a ``layer_uri`` path segment,
+            else a generic fallback) so a bare ULID never reaches the layer
+            summary. Transport-only carrier — this function returns a bare
+            URL string, not a ``LayerURI``; the server-side wrap-site
             (``derive_readable_layer_name``) applies the same precedence
-            when it constructs the ``LayerURI`` the client renders.
+            when constructing the client-rendered ``LayerURI``.
 
     Returns:
-        The published raster's raw ``s3://`` COG URI string (the
-        overview-enforced COG when F33 auto-translated). Suitable for direct
-        use as a ``LayerURI.uri`` value - the QGIS plugin opens it via GDAL
+        The published raster's raw ``s3://`` COG URI string (overview-
+        enforced COG when auto-translated). Suitable for direct use as a
+        ``LayerURI.uri`` value — the QGIS plugin opens it via GDAL
         ``/vsicurl/`` and styles it from the envelope legend.
 
     Raises:
         PublishLayerError: on any failure (unknown layer handle, non-s3
-            raster URI). The ``error_code`` attribute carries a
-            SCREAMING_SNAKE_CASE code for the pipeline strip.
+            raster URI). ``error_code`` carries a SCREAMING_SNAKE_CASE code
+            for the pipeline strip.
 
-    FR-DC-6: This tool is uncacheable-by-construction (a side-effect tool
-    that registers per-Case layer state). The cache shim is NOT invoked.
+    FR-DC-6: uncacheable-by-construction (side-effect tool that registers
+    per-Case layer state). Cache shim NOT invoked.
 
-    Invariant 4 (Rendering): this tool IS the publish bridge. The ``s3://``
-    COG reaches the map only after this call registers it and stashes its
-    render legend.
+    Invariant 4 (Rendering): this tool IS the publish bridge — the
+    ``s3://`` COG reaches the map only after this call registers it and
+    stashes its render legend.
 
-    Invariant 6 (Metadata-payload pattern): the published layer is surfaced
-    to the client via the layer-load envelope (``observe_published_layer``);
-    persistence is DynamoDB (MongoDB was torn down 2026-06-16).
+    Invariant 6 (Metadata-payload pattern): published layer surfaces to the
+    client via the layer-load envelope (``observe_published_layer``);
+    persistence is DynamoDB.
 
     Cross-tool dependencies:
-        Upstream (consumes):
-        - ``postprocess_flood`` (via ``run_model_flood_scenario``) - flood-depth
-          COG ``LayerURI`` is the most common ``layer_uri`` input.
-        - ``compute_hillshade`` / ``compute_colored_relief`` / ``compute_slope`` /
-          ``compute_aspect`` / ``compute_impervious_surface`` - any tool that
-          returns a raster ``LayerURI`` with an ``s3://`` URI.
-        - ``clip_raster_to_polygon`` / ``clip_raster_to_bbox`` - clipped rasters
-          passed to this tool for display-extent-scoped publication.
-        Downstream (feeds):
-        - QGIS plugin layer panel - the returned ``s3://`` COG URI is used
-          directly as a ``LayerURI.uri`` value; the plugin loads it via GDAL
-          ``/vsicurl/`` and applies the envelope legend as its renderer.
-        - ``run_model_flood_scenario`` / ``run_model_flood_habitat_scenario`` -
-          call this as the final step of the workflow chain.
+        Upstream: ``postprocess_flood`` (via ``run_model_flood_scenario``,
+        most common input), ``compute_hillshade`` / ``compute_colored_relief``
+        / ``compute_slope`` / ``compute_aspect`` / ``compute_impervious_surface``
+        (any raster ``LayerURI``), ``clip_raster_to_polygon`` /
+        ``clip_raster_to_bbox`` (clipped rasters for extent-scoped display).
+        Downstream: QGIS plugin layer panel (loads the returned ``s3://``
+        COG URI via GDAL ``/vsicurl/``); ``run_model_flood_scenario`` /
+        ``run_model_flood_habitat_scenario`` call this as the final step.
     """
     # OPEN-17 (2026-07-13): unknown/placeholder handle guard. A registered
     # handle was already substituted with its real URI by the server's

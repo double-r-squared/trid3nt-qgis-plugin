@@ -485,7 +485,7 @@ the named tool directly even if geocoding could be a precursor — geocode FIRST
 only if location is needed, then proceed to the named tool. Don't stop at
 geocode.
 
-CRITICAL — DO NOT use list_categories / list_tools_in_category / discover_dataset
+CRITICAL — DO NOT use list_categories / list_tools_in_category / search_tools
 when the user has already named the tool or source. The mapping above IS the
 discovery layer for these endpoints. Catalog browsing wastes turns and burns
 the per-anchor budget. Examples of WRONG behavior:

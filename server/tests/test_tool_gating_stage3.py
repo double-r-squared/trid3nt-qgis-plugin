@@ -4,7 +4,7 @@ The routing bench's own recommendation: the openai adapter was sending ALL
 ~190 tool schemas per round. ``tool_gating.gate_tool_registry`` trims the
 per-turn registry to the retrieval top-k plus the always-include floors:
 
-  * the META floor (hot set + catalog_search/fetch + web_fetch),
+  * the META floor (hot set + search_data_catalog/fetch_from_catalog + web_fetch),
   * every tool already used this case-session (dispatched + explicit),
   * any tool the user NAMED in the message.
 

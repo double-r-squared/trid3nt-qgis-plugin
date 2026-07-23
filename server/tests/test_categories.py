@@ -248,7 +248,7 @@ def test_hot_set_has_seventeen_tools() -> None:
 
 
 def test_hot_set_contains_required_anchors() -> None:
-    """The hot set must include the meta-tools + discover_dataset so the LLM
+    """The hot set must include the meta-tools + search_tools so the LLM
     can always reach more tools when the initial set isn't enough, plus
     code_exec_request (job-0247: the validator rejected Gemini's CORRECT
     first-turn call and the agent narrated a false 'cannot run Python'),
@@ -264,7 +264,7 @@ def test_hot_set_contains_required_anchors() -> None:
     required = {
         "list_categories",
         "list_tools_in_category",
-        "discover_dataset",
+        "search_tools",
         "geocode_location",
         "fetch_dem",
         "fetch_nws_alerts_conus",

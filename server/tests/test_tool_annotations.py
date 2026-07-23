@@ -25,8 +25,8 @@ from trid3nt_server.tools import get_registered_tools
 # whose tools are in scope for annotation coverage. These are loaded by the
 # agent service at startup via server.py / main.py but not by the package
 # __init__.py. Import them here so the live registry is fully populated.
-import trid3nt_server.tools.discovery.catalog_fetch  # noqa: F401 — registers catalog_fetch
-import trid3nt_server.tools.discovery.catalog_search  # noqa: F401 — registers catalog_search
+import trid3nt_server.tools.discovery.fetch_from_catalog  # noqa: F401 — registers fetch_from_catalog
+import trid3nt_server.tools.discovery.search_data_catalog  # noqa: F401 — registers search_data_catalog
 import trid3nt_server.tools  # noqa: F401 — eager-registers the full tool surface (fetch_dem, fetch_buildings, etc.)
 import trid3nt_server.tools.publish_layer  # noqa: F401 — registers publish_layer
 import trid3nt_server.tools.simulation.solver  # noqa: F401 — registers run_solver + wait_for_completion

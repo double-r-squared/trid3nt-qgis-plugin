@@ -1,48 +1,4 @@
 """``fetch_overpass_pois`` atomic tool — generic OpenStreetMap POI / tagged-feature points via Overpass API.
-
-The flexible exposure-layer complement to the FIXED ``fetch_hifld_critical_infrastructure``
-tool. Where HIFLD exposes a curated, fixed set of US critical-infrastructure
-categories, this tool fetches ANY OpenStreetMap ``key=value`` tag as Point
-features inside a WGS84 bounding box — global coverage, the full OSM tag
-vocabulary, and consistent point geometry for exposure / context overlays.
-
-A caller-supplied ``tag`` (``"amenity=hospital"``), or the friendlier
-``amenity`` / ``category`` parameter, maps to an Overpass QL element filter
-queried across ``node``, ``way``, and ``relation`` element types. ``way`` and
-``relation`` matches are reduced to their **centroid** point (Overpass ``out
-center``) so every feature is a single Point — the same uniform shape the HIFLD
-tool emits, so the inline-GeoJSON vector path (job-0175) renders them
-identically. The full OSM tag dictionary for each feature is preserved inline as
-a ``tags_json`` attribute.
-
-**API surface** (OpenStreetMap Overpass, free, NO API key required):
-
-    [out:json][timeout:60];
-    (node["amenity"="hospital"](s,w,n,e);
-     way["amenity"="hospital"](s,w,n,e);
-     relation["amenity"="hospital"](s,w,n,e););
-    out center;
-
-Overpass returns the bbox corners as ``(south, west, north, east)`` (lat first,
-then lon) — the OPPOSITE corner-pair ordering from the caller's
-``(min_lon, min_lat, max_lon, max_lat)``.
-
-**Data-source fallback norm** (primary -> fallback -> honest typed error): the
-public ``overpass-api.de`` endpoint is rate-limited and prone to HTTP 429 / 504
-under load, so the tool walks a list of independent public Overpass mirrors
-(``overpass-api.de`` -> ``overpass.kumi.systems`` -> ``overpass.private.coffee``);
-if EVERY mirror fails it raises a retryable ``OverpassUpstreamError``. When the
-query succeeds but matches ZERO features in scope it raises a non-retryable
-``OverpassNoFeaturesError`` — never an empty success-shaped layer.
-
-FR-TA-2 atomic tool, returns ``LayerURI`` (vector, role="primary", units=None).
-FR-CE-8 / FR-DC-3: identical ``(bbox, key, value, element_types)`` calls reuse
-the cached FlatGeobuf within the 30-day TTL window.
-
-Pattern reference: ``fetch_roads_osm.py`` (Overpass query + parse + clip),
-``fetch_hifld_critical_infrastructure.py`` (point exposure-layer shape +
-payload estimator), ``fetch_usgs_nwis_gauges.py`` (point FlatGeobuf builder +
-extent-bbox camera fit).
 """
 
 from __future__ import annotations
@@ -733,14 +689,14 @@ def fetch_overpass_pois(
     ZERO features, a non-retryable ``OverpassNoFeaturesError`` is raised — never
     an empty success-shaped layer.
 
-    **Cross-tool dependencies (FR-TA-3):**
+    **Cross-tool dependencies:**
     - Composes WITH: ``geocode_location`` (derive a bbox from a place name
       BEFORE this call), ``compute_zonal_statistics`` /
       intersection tools (count POIs inside a hazard footprint),
       ``fetch_hifld_critical_infrastructure`` (the US-curated companion).
     - Upstream data source: OpenStreetMap via the Overpass API.
 
-    **Errors (FR-AS-11 typed-error surface):**
+    **Errors:**
     - ``OverpassInputError``: bad bbox / missing or garbled tag / Overpass
       rejected the query (retryable=False).
     - ``OverpassUpstreamError``: every Overpass mirror failed (retryable=True).

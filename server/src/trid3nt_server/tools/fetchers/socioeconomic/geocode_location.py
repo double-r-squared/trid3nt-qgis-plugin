@@ -1,10 +1,4 @@
-"""Nominatim forward geocoder (``geocode_location``) with the US-state snap
-fallback and POI/AOI bbox shaping.
-
-Carved out of the original multi-tool ``data_fetch`` module (job-0033) in the
-tools/ reorg; behavior and the registered tool surface are unchanged. The
-shared typed-error hierarchy + bbox helpers live in
-``trid3nt_server.tools.fetchers._fetch_common``.
+"""Nominatim forward geocoder (``geocode_location``) with the US-state snap fallback and POI/AOI bbox shaping.
 """
 
 from __future__ import annotations

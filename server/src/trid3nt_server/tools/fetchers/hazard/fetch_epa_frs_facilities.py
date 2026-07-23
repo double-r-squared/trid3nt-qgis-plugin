@@ -1,100 +1,4 @@
 """``fetch_epa_frs_facilities`` atomic tool — EPA regulated-facility POINTS by bbox.
-
-Returns a FlatGeobuf POINT layer of EPA-regulated facilities (Facility Registry
-Service / TRI / Superfund-NPL and the major program-interest classes)
-intersecting a user-supplied bbox, from a public, unauthenticated EPA ArcGIS
-REST MapServer. Each facility carries its EPA registry id, program (TRI, NPDES
-water, RCRA hazardous waste, air emissions, brownfields, Superfund/NPL), program
-system id, name and address payload.
-
-This is the chemical-/industrial-facility exposure source for the MODFLOW
-contamination-plume demo: intersect the returned facility points with a modeled
-groundwater contamination plume (or any hazard footprint) via
-``compute_zonal_statistics`` / ``clip_vector_to_polygon`` to answer "which
-regulated facilities sit inside the plume / flood / fire footprint?" and to seed
-a plume's chemical-source location from a real TRI / Superfund site.
-
-**Source / endpoint (verified live 2026-06-27):**
-    The EPA NEPAssist public map service exposes the FRS program-interest point
-    layers (the same data the EPA FRS / Envirofacts portals serve), on the
-    public EPA ArcGIS REST cluster with NO token::
-
-        https://geopub.epa.gov/arcgis/rest/services/
-            NEPAssist/NEPAVELayersPublic_fgdb/MapServer/<layerId>/query
-
-    where ``<layerId>`` is one of:
-        13  Brownfields                 (ACRES program, point)
-        14  Superfund                   (SEMS / NPL, POLYGON — point derived
-                                         from the layer's LATITUDE/LONGITUDE)
-        15  Toxic releases (TRI)        (TRIS program, point)
-        16  Water dischargers           (NPDES program, point)
-        17  Hazardous waste             (RCRAINFO program, point)
-        18  Air emissions               (AIR / AFS / ICIS-AIR program, point)
-
-    The point layers share an identical FRS schema (``registry_id``,
-    ``pgm_sys_acrnm``, ``pgm_sys_id``, ``primary_name``, address columns,
-    ``facility_url``). Each is ``maxRecordCount=2000`` and is queried by
-    ``esriGeometryEnvelope`` + ``inSR=4326`` + ``f=geojson`` exactly like the
-    ``fetch_hifld_critical_infrastructure`` / ``fetch_noaa_slr_scenarios`` ESRI
-    REST pattern. Superfund is a polygon layer, so we request its attributes
-    (``returnGeometry=false``) and synthesize a Point from the populated
-    ``LATITUDE`` / ``LONGITUDE`` columns.
-
-**What it does:**
-    Fetches all facility points of the requested ``facility_program`` intersecting
-    the bbox, paginating each underlying layer if the bbox holds more than one
-    server page, normalizes every program's records to ONE common point schema,
-    and serializes them to a FlatGeobuf vector layer in EPSG:4326. ``program`` and
-    ``program_label`` columns are added so the layer self-describes for narration
-    and downstream overlay.
-
-**When to use:**
-    - "Show EPA regulated facilities / TRI sites / Superfund sites near [place]".
-    - The MODFLOW contamination-plume demo: locate the candidate chemical-source
-      facility, or determine which regulated facilities a modeled plume reaches.
-    - Any hazard / exposure workflow that needs the locations of regulated
-      industrial / waste facilities inside a flood, fire, surge, or plume footprint
-      (intersect with ``compute_zonal_statistics`` or ``clip_vector_to_polygon``).
-
-**When NOT to use:**
-    - For life-safety facilities (hospitals / schools / fire / police / power) ->
-      ``fetch_hifld_critical_infrastructure``.
-    - For dams -> ``fetch_usace_dams``; for the building stock ->
-      ``fetch_usace_nsi``.
-    - For non-US facilities — EPA FRS coverage is US (50 states + DC + territories).
-    - For real-time emission / discharge readings — this is a static facility
-      inventory, not a monitoring feed.
-
-**Parameters:**
-    facility_program: One of ``"frs"`` (default — the union of all program point
-        layers: TRI + water + hazardous-waste + air + brownfields), ``"tri"``,
-        ``"superfund"``, ``"air"``, ``"water"``, ``"hazwaste"``, ``"brownfields"``.
-        Aliases are accepted (e.g. ``"all"`` / ``"facilities"`` -> frs,
-        ``"toxic_release"`` -> tri, ``"npl"`` -> superfund, ``"npdes"`` -> water,
-        ``"rcra"`` -> hazwaste). Unknown values raise a typed input error listing
-        the valid set.
-    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required —
-        ``supports_global_query=False`` (a national FRS sweep is millions of
-        points). Example for the Houston Ship Channel industrial belt:
-        ``(-95.30, 29.68, -95.05, 29.80)``.
-
-**Returns:**
-    ``LayerURI`` pointing at a FlatGeobuf of ``Point`` features in EPSG:4326.
-    Properties include ``registry_id``, ``program``, ``program_label``,
-    ``program_acronym``, ``program_id``, ``facility_name``, ``address``,
-    ``city``, ``county``, ``state``, ``postal_code``, ``epa_region``,
-    ``facility_url`` (and ``npl_status`` for Superfund). ``layer_type="vector"``,
-    ``role="primary"``, ``style_preset="epa_frs_facilities"``, ``units=None``.
-
-**Cache:** ``static-30d`` — the FRS inventory updates infrequently.
-
-**FR-AS-11 typed-error surface:** ``EpaFrsError`` (base, retryable=True),
-``EpaFrsInputError`` (bad facility_program / bbox, non-retryable),
-``EpaFrsUpstreamError`` (ArcGIS REST network / HTTP / parse failure, retryable),
-``EpaFrsEmptyError`` (no features — NOT raised by default; an empty FGB is
-serialized so the layer still appears with a zero-feature notice).
-
-``supports_global_query=False``. No API key required.
 """
 
 from __future__ import annotations
@@ -828,7 +732,7 @@ def fetch_epa_frs_facilities(
         ``npl_status`` for Superfund). ``layer_type="vector"``, ``role="primary"``,
         ``style_preset="epa_frs_facilities"``, ``units=None``.
 
-    **Error types (FR-AS-11):**
+    **Error types:**
         - ``EpaFrsInputError``: unknown facility_program or bad bbox
           (retryable=False).
         - ``EpaFrsUpstreamError``: HTTP/network failure, ArcGIS error envelope,

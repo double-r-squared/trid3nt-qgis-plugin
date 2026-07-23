@@ -1,122 +1,4 @@
-"""``fetch_epa_ejscreen`` atomic tool -- EPA EJScreen environmental-justice
-indices by census **block group** within a bbox, as a choropleth FlatGeobuf.
-
-EJScreen is EPA's environmental-justice screening tool: for every U.S. census
-block group it publishes a panel of environmental burden indicators (PM2.5,
-ozone, diesel particulate matter, air-toxics cancer risk & respiratory hazard,
-traffic proximity, lead-paint / pre-1960 housing, proximity to NPL Superfund /
-RMP / TSDF sites, and major water dischargers), each as a raw value AND as a
-nationwide **percentile** in ``[0, 100]``, plus demographic indicators (percent
-minority, percent low-income, the supplemental demographic index). EPA removed
-EJScreen from its own site on 2025-02-05; this tool reads the preserved national
-EJScreen 2.x block-group FeatureServer (Esri "US Federal Data" ArcGIS Online
-org), queried by envelope exactly like ``fetch_cdc_svi`` /
-``fetch_epa_frs_facilities``.
-
-**What it does:**
-Fetches all EJScreen block-group polygons intersecting a bbox and returns a
-FlatGeobuf choropleth. One ``indicator`` parameter selects WHICH EJScreen index
-drives the primary choropleth column ``value`` (its nationwide percentile,
-``[0, 100]``) -- e.g. ``pm25``, ``ozone``, ``diesel``, ``cancer``, ``resp``,
-``traffic``, ``lead_paint``, ``superfund_proximity``, ``rmp_proximity``,
-``tsdf_proximity``, ``wastewater``, or the ``demographic_index`` /
-``ej_index_*`` rollups. Every feature ALSO carries the full panel of percentile
-columns (``p_pm25``, ``p_ozone``, ...), the demographic context
-(``minority_pct``, ``lowincome_pct``, ``demographic_index``), the block-group
-id (``bg_id``, 12-digit GEOID), ``state_name``, and ``total_pop`` -- so a single
-fetch supports cumulative-exposure narration, multiple choropleth re-styles, and
-downstream zonal intersections without a re-fetch.
-
-**When to use:**
-- User asks for EJScreen, environmental justice, cumulative environmental
-  burden / exposure, "which block groups have the worst air quality / PM2.5 /
-  ozone / traffic / Superfund proximity", or an EJ overlay for a hazard footprint.
-- Agent needs an environmental-burden surface to combine with
-  ``fetch_cdc_svi`` (social vulnerability) and ``fetch_epa_frs_facilities``
-  (the regulated facilities themselves) for a full cumulative-EJ exposure story.
-
-**When NOT to use:**
-- For social-vulnerability percentile rankings (SVI themes) -> ``fetch_cdc_svi``
-  (tract-level; EJScreen is block-group and is environment+demographics, not the
-  16-factor SVI).
-- For the regulated-facility POINTS that drive the proximity indices ->
-  ``fetch_epa_frs_facilities`` (TRI / Superfund / RMP / TSDF point inventory).
-- For raw ACS demographic counts -> ``fetch_census_acs``.
-- For areas outside the United States -> EJScreen is U.S.-only (50 states + DC +
-  territories at block-group geography). An honest empty FGB is returned.
-
-**Parameters:**
-    indicator: which EJScreen index drives the primary ``value`` choropleth
-        column. Default ``"pm25"``. One of the canonical keys (aliases
-        accepted, case-insensitive): ``pm25``, ``ozone``, ``diesel`` /
-        ``dslpm``, ``cancer``, ``resp`` / ``respiratory``, ``traffic`` /
-        ``ptraf``, ``lead_paint`` / ``lead`` / ``ldpnt`` / ``pre1960``,
-        ``superfund_proximity`` / ``superfund`` / ``npl`` / ``pnpl``,
-        ``rmp_proximity`` / ``rmp`` / ``prmp``, ``tsdf_proximity`` / ``tsdf`` /
-        ``ptsdf``, ``wastewater`` / ``water`` / ``pwdis``,
-        ``demographic_index`` / ``demographic`` / ``minority`` (percent
-        minority percentile), or one of the EJ-index rollups
-        ``ej_pm25`` / ``ej_ozone`` / ``ej_traffic`` / ... (the
-        demographic-weighted "EJ Index" percentile for that burden). Unknown
-        values raise a typed input error listing the valid set.
-    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326 (WGS84 decimal
-        degrees). Required -- ``supports_global_query=False`` (a national
-        block-group sweep is ~220k polygons). Recommended a county-or-smaller
-        extent. Example urban Houston Ship Channel:
-        ``(-95.30, 29.68, -95.05, 29.80)``.
-
-**Returns:**
-    ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Each feature is a
-    Polygon (census block group) in EPSG:4326. Properties: ``bg_id`` (str,
-    12-digit block-group GEOID), ``state_name`` (str), ``total_pop`` (int|null),
-    ``value`` (float|null, the SELECTED indicator's percentile in [0,100]),
-    ``indicator`` (str, the selected key, so the layer self-describes), plus the
-    full percentile panel ``p_pm25``, ``p_ozone``, ``p_diesel``, ``p_cancer``,
-    ``p_resp``, ``p_traffic``, ``p_lead_paint``, ``p_superfund``, ``p_rmp``,
-    ``p_tsdf``, ``p_wastewater`` (float|null in [0,100]), the demographic
-    context ``minority_pct`` (float|null in [0,1]), ``lowincome_pct``
-    (float|null), ``demographic_index`` (float|null, supplemental demographic
-    index 0..1), and a few raw values ``pm25_raw`` / ``ozone_raw`` (float|null).
-    ``layer_type="vector"``, ``role="primary"``, ``style_preset="epa_ejscreen"``,
-    ``units="percentile"``.
-
-**Cross-tool dependencies (FR-TA-3):**
-    - Combine WITH ``fetch_cdc_svi`` (social vulnerability) +
-      ``fetch_epa_frs_facilities`` (the facilities) for cumulative
-      environmental-justice exposure.
-    - Feeds ``compute_zonal_statistics`` / ``clip_vector_to_polygon`` to find the
-      most-burdened block groups inside a hazard footprint
-      (``run_model_flood_scenario`` / ``fetch_firms_active_fire`` / a modeled
-      plume).
-
-**Cache:** ``static-30d`` (FR-DC-2). EJScreen is published annually; a 30-day
-stale window is appropriate.
-
-**FR-AS-11 typed-error surface:** ``EPA_EJScreenError`` (base, retryable=True),
-``EPA_EJScreenInputError`` (non-retryable bbox / indicator validation),
-``EPA_EJScreenUpstreamError`` (retryable ArcGIS REST network / HTTP / parse
-failure), ``EPA_EJScreenEmptyError`` (no block groups in bbox -- NOT raised by
-default; an empty FGB is serialized so the layer still appears -- e.g. a bbox
-over open ocean or outside the U.S.).
-
-**FR-DC-9 payload estimation:** ~4 MB per square degree of (urban) block-group
-polygons. Clipped to [0.02, 90] MB.
-
-``supports_global_query=False`` -- U.S. block-group polygon source. No API key.
-
-Endpoint (verified live 2026-06-27):
-    https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/
-        EPA_EJ_Screen/FeatureServer/0/query
-
-    The single layer ``EJSCREEN_Full`` (220,333 block-group polygons, national)
-    is queried by ``esriGeometryEnvelope`` (passed as a JSON envelope object,
-    NOT a comma string -- the comma form is rejected by this hosted service),
-    ``f=json`` (Esri JSON; ``f=geojson`` is NOT supported here, so Esri rings are
-    converted to GeoJSON Polygons in-code), ``returnGeometry=true`` (the service
-    rejects attribute-only queries), ``outFields=*`` (naming the ``P_*``
-    percentile fields explicitly trips an ArcGIS field-resolution quirk on this
-    layer -- ``*`` is reliable and we select columns in-code), paginated via
-    ``resultOffset`` / ``exceededTransferLimit`` (maxRecordCount=2000).
+"""``fetch_epa_ejscreen`` atomic tool -- EPA EJScreen environmental-justice indices by census **block group** within a bbox, as a choropleth FlatGeobuf.
 """
 
 from __future__ import annotations
@@ -837,13 +719,13 @@ def fetch_epa_ejscreen(
         (float|null). ``layer_type="vector"``, ``role="primary"``,
         ``style_preset="epa_ejscreen"``, ``units="percentile"``.
 
-    **Cross-tool dependencies (FR-TA-3):**
+    **Cross-tool dependencies:**
         - Combine WITH ``fetch_cdc_svi`` + ``fetch_epa_frs_facilities`` for
           cumulative environmental-justice exposure.
         - Feeds ``compute_zonal_statistics`` / ``clip_vector_to_polygon`` to find
           the most-burdened block groups inside a hazard footprint.
 
-    **Error types (FR-AS-11):**
+    **Error types:**
         - ``EPA_EJScreenInputError``: bad bbox or unknown indicator
           (retryable=False).
         - ``EPA_EJScreenUpstreamError``: HTTP/network failure, ArcGIS error

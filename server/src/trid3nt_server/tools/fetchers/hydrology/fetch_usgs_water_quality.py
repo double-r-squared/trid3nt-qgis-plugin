@@ -1,82 +1,4 @@
-"""``fetch_usgs_water_quality`` atomic tool — real USGS / EPA Water Quality
-Portal (WQP) sample sites + a chosen water-quality characteristic.
-
-Fetches **real, observed** water-quality monitoring sites and their latest
-measured value for one characteristic (e.g. nitrate, lead, arsenic, pH,
-dissolved oxygen, specific conductance) within a bounding box, from the EPA /
-USGS **Water Quality Portal** machine API (the federation behind
-``waterqualitydata.us`` spanning NWIS, STORET/WQX, and the Biodata system).
-One Point feature per monitoring location, carrying the latest result value /
-units / sample date for the requested characteristic.
-
-This is the **observed contaminant-concentration** counterpart to the MODFLOW
-groundwater-transport (GWT) contamination demos: a modeled plume can be
-ground-truthed against the real sampled concentrations the WQP serves. Where
-``model_groundwater_contamination_scenario`` produces a *modeled* plume raster,
-this tool produces the *observed* point samples to overlay and compare against.
-
-**API surface** (Water Quality Portal REST, free, NO API key required):
-
-    STATION service (monitoring-location LOCATIONS, as GeoJSON):
-        https://www.waterqualitydata.us/data/Station/search
-            ?bBox=west,south,east,north
-            &characteristicName=Nitrate
-            &mimeType=geojson
-        Returns a FeatureCollection of Point sites that have at least one
-        sample of the requested characteristic. This is the authoritative
-        COORDINATE source (every feature carries a Point geometry).
-
-    RESULT service (the measured VALUES, as CSV — resultPhysChem profile):
-        https://www.waterqualitydata.us/data/Result/search
-            ?bBox=west,south,east,north
-            &characteristicName=Nitrate
-            &mimeType=csv&dataProfile=resultPhysChem
-        Returns one row per sample result, keyed by
-        ``MonitoringLocationIdentifier`` and carrying ``ResultMeasureValue``,
-        ``ResultMeasure/MeasureUnitCode``, ``ActivityStartDate``,
-        ``ResultSampleFractionText``. We keep the LATEST numeric result per
-        site.
-
-**Join model**: fetch Station GeoJSON (locations) + Result CSV (values), JOIN
-by ``MonitoringLocationIdentifier``, and keep the single most-recent numeric
-result per site. A site with coordinates but no numeric result still survives
-as a Point (with null value) so the monitoring network stays visible; the join
-is left-on-stations. Prototype against a real Iowa corn-belt bbox confirmed
-182 sites / 172 with a latest value for ``Nitrate``.
-
-**Characteristic names**: the WQP ``characteristicName`` is case-sensitive and
-uses canonical CharacteristicName vocabulary (e.g. ``"Nitrate"``,
-``"Dissolved oxygen (DO)"``, ``"Specific conductance"``, ``"pH"``). We accept
-a small set of friendly aliases (``"nitrate"``, ``"dissolved_oxygen"``,
-``"specific_conductance"``, ``"do"``, ``"sc"``, ...) and map them to the
-canonical spelling; any other string is passed through verbatim so the full
-WQP vocabulary stays reachable. An unrecognized canonical name makes the WQP
-return HTTP 400, which we surface as a typed ``WqpInputError`` (never a silent
-empty).
-
-**Spatial selector**: a ``bbox=(west, south, east, north)`` in EPSG:4326. WQP
-imposes no hard area cap, but a very large bbox returns a large payload; we cap
-the bbox area at a generous ~100 deg^2 and raise ``WqpInputError`` above that
-so the LLM narrows the scope (a contamination demo is always local).
-
-**Fallback norm** (primary -> fallback -> honest typed error): the Station
-service is primary (locations). If it returns zero sites, the area genuinely
-has no WQP monitoring locations for that characteristic and we raise
-``WqpNoSitesError`` (retryable=False). If the Station service returns sites but
-the Result service yields no numeric values (rare — sites with only
-non-detect / qualitative samples), the sites still render with null values
-(the network is real even without a quantified latest reading). We never
-return an empty success-shaped layer.
-
-**Output**: a vector ``LayerURI`` (``layer_type="vector"``) whose artifact is a
-point FeatureCollection (one point per monitoring location), serialized as
-FlatGeobuf. ``style_preset="water_quality"``; ``LayerURI.bbox`` is set to the
-sites' extent so the camera auto-zooms.
-
-Tier-1, no auth, ``supports_global_query=False`` (US + territories; WQP is a
-US federal/state federation).
-
-FR-AS-11 typed-error surface; FR-TA-2 / FR-AS-3 docstring discipline applies.
+"""``fetch_usgs_water_quality`` atomic tool — real USGS / EPA Water Quality Portal (WQP) sample sites + a chosen water-quality characteristic.
 """
 
 from __future__ import annotations
@@ -802,7 +724,7 @@ def fetch_usgs_water_quality(
     Cache key is SHA-256 of the resolved characteristic + bbox-rounded-6dp, so
     identical-scope calls within the day reuse the FGB.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (derive a bbox from a place name BEFORE this call),
           ``fetch_field_boundaries`` / ``fetch_administrative_boundaries``
@@ -814,7 +736,7 @@ def fetch_usgs_water_quality(
         - Upstream data source: USGS / EPA Water Quality Portal
           (waterqualitydata.us/data/Station + /data/Result).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``WqpInputError``: missing/bad bbox, bbox too large, bad/empty
           characteristic, or a WQP HTTP 400 (unrecognized characteristicName)
           (retryable=False).
@@ -823,8 +745,6 @@ def fetch_usgs_water_quality(
         - ``WqpNoSitesError``: no monitoring sites for the characteristic in
           the bbox (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (USGS/EPA federal monitoring federation).
-    Claims from WQP samples should be marked ``source_authority_tier=1``.
 
     Tier-1 free. No API key. ``supports_global_query=False`` (US + territories).
     """

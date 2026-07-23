@@ -264,7 +264,7 @@ HOT_SET_TOOLS  UNION  the Case's accumulated allowed-set  UNION  discover top-k
 The `discover top-k` term ranks tools against the user's text with a BM25 + local
 dense + name-substring fusion over an index built from each tool's audited
 docstring **plus its `tool_query_corpus.yaml` example queries**
-(`discover_dataset._build_index`). If your tool has no corpus entry, the index has
+(`search_tools._build_index`). If your tool has no corpus entry, the index has
 nothing but the docstring to route on, and natural user phrasings that do not
 literally echo the docstring will MISS it -- the tool becomes unreachable even
 though it is registered.
@@ -297,8 +297,8 @@ run against the copy-me template:
 ```python
 import trid3nt_server.tools as T
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools import discover_dataset as dd
-from trid3nt_server.tools.tool_retrieval import retrieve_visible_tools
+from trid3nt_server.tools.discovery import search_tools as dd
+from trid3nt_server.tools.discovery.tool_retrieval import retrieve_visible_tools
 
 dd._get_index()  # warm the BM25 + dense index from TOOL_REGISTRY + corpus
 name = "fetch_noaa_slr_confidence"

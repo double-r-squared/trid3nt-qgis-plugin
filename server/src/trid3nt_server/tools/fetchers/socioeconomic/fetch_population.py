@@ -1,10 +1,4 @@
-"""Gridded-population fetcher (``fetch_population``): WorldPop 100 m raster
-primary; Census ACS B01003 tract GeoJSON on ``dataset="acs_2022"``.
-
-Carved out of the original multi-tool ``data_fetch`` module (job-0033) in the
-tools/ reorg; behavior and the registered tool surface are unchanged. The
-shared typed-error hierarchy + bbox helpers live in
-``trid3nt_server.tools.fetchers._fetch_common``.
+"""Gridded-population fetcher (``fetch_population``): WorldPop 100 m raster primary; Census ACS B01003 tract GeoJSON on ``dataset="acs_2022"``.
 """
 
 from __future__ import annotations
@@ -476,7 +470,7 @@ def fetch_population(
     tract-level aggregates); sub-100m resolution (WorldPop's native grid is
     100m; finer resolution is a paid LandScan-grade product, not Tier-1).
 
-    Default behavior (FR-AS-3, Appendix F.1 Tier-1 preference rule):
+    Default behavior:
         ``dataset="worldpop_2020"`` is the Tier-1 default — WorldPop
         Unconstrained 100m UN-adjusted gridded population. No API key
         required; global coverage; windowed read of the country GeoTIFF via

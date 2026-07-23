@@ -1,124 +1,4 @@
-"""``fetch_noaa_slr_scenarios`` atomic tool — NOAA Sea Level Rise scenario
-inundation polygons (job A10).
-
-Wraps NOAA's Office for Coastal Management (OCM) Sea Level Rise (SLR) Viewer
-ArcGIS REST MapServer endpoint, which publishes inundation-area polygons for
-21 scenario levels from 0 ft through 10 ft (whole-foot and 0.5-ft intervals).
-Each scenario layer contains dissolved inundation polygons for the contiguous
-United States (CONUS) coast derived from NOAA's 1/9 arc-second lidar-derived
-digital elevation data.
-
-**What it does:**
-Fetches dissolved inundation-area polygons for one or more SLR scenario
-levels, clipped to a user-specified bbox. Returns a FlatGeobuf vector layer
-with one polygon per scenario level intersecting the bbox, annotated with
-``slr_ft`` (scenario level in feet) and ``scenario_label`` attributes suitable
-for Gemini narration, map display, and downstream habitat / infrastructure
-overlay intersections.
-
-**When to use:**
-- User asks for the NOAA sea-level-rise map, coastal inundation projection,
-  SLR scenarios, or flooding under X feet of sea-level rise.
-- User asks "what areas flood under 1ft / 2ft / 3ft of SLR near [coastal city]?"
-- Agent needs the static SLR inundation footprint as a planning-level overlay
-  (e.g. to intersect with ``fetch_usace_nsi`` building inventory or
-  ``fetch_wdpa_protected_areas`` habitat polygons for exposure assessment).
-- User wants to compare current FEMA 100-year floodplain with future SLR
-  scenarios (side-by-side with ``fetch_fema_nfhl_zones``).
-
-**When NOT to use:**
-- For real-time / dynamic storm-surge inundation → use a SFINCS
-  ``run_model_flood_scenario`` run or ``fetch_noaa_coops_tides`` + ``fetch_gtsm_tide_surge``.
-  SLR polygons are static planning-level products, not event-driven.
-- For future probabilistic SLR projections with confidence intervals → the
-  NOAA Technical Report 2022 "Sweet et al." scenarios (intermediate, high,
-  etc.) are in a separate dataset; this tool returns the OCM Viewer's
-  deterministic bathtub inundation footprints only.
-- For inland / non-coastal flooding → use ``fetch_fema_nfhl_zones`` (regulatory
-  floodplains) or ``run_model_flood_scenario`` (SFINCS pluvial/fluvial).
-- For marsh migration or habitat-transition projections → the OCM Viewer's
-  ``marsh_*`` services are a separate dataset not covered by this tool.
-- For areas outside CONUS → SLR data coverage is CONUS-only (Alaska, Hawaii,
-  territories are not in this dataset). Use ``fetch_gtsm_tide_surge`` for
-  global coastal flooding context.
-
-**Parameters:**
-    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326 (WGS84
-        decimal degrees). Required — ``supports_global_query=False`` (CONUS
-        coastal polygon source; a global query would cover millions of polygons).
-        Recommended ≤ ~2° per side for tractable response times. Larger extents
-        will be accepted but may approach the 1000-feature page cap.
-        Example for coastal Lee County FL (Fort Myers / Naples):
-        ``(-82.2, 26.2, -81.5, 26.9)``.
-    scenario_ft: Scenario level(s) in feet. One of the 21 valid levels:
-        ``0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5,
-        8, 8.5, 9, 9.5, 10``. Pass a single float (e.g. ``1.0``) or a list
-        (e.g. ``[1.0, 2.0, 3.0]`` to fetch multiple scenarios at once). Default
-        is ``[1.0, 2.0, 3.0]`` (3 most commonly requested planning levels).
-        Each scenario is fetched from its own MapServer service and merged into
-        one output FlatGeobuf with a ``slr_ft`` column distinguishing them.
-
-**Returns:**
-    ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-    ``s3://trid3nt-cache/cache/static-30d/noaa_slr_scenarios/<key>.fgb``
-    Each feature is a Polygon in EPSG:4326. Properties:
-    ``slr_ft`` (float, scenario level), ``scenario_label`` (str, e.g.
-    "1.0 ft SLR"), ``dissolve`` (int, always 1 — source layer is fully
-    dissolved per scenario). ``layer_type="vector"``, ``role="primary"``,
-    ``style_preset="noaa_slr_scenarios"``, ``units="feet"``.
-
-**Cross-tool dependencies:**
-    - Often paired with ``fetch_usace_nsi`` (building inventory) →
-      ``compute_zonal_statistics`` for "how many structures are in the 2 ft SLR
-      footprint?" queries.
-    - Companion to ``fetch_fema_nfhl_zones`` for regulatory-vs-future comparison.
-    - Feeds ``clip_vector_to_polygon`` / ``clip_raster_to_polygon`` when combined
-      with ``fetch_administrative_boundaries`` for city/county scoped reports.
-    - Sibling tool for confidence assessment: a separate ``fetch_noaa_slr_confidence``
-      (not yet implemented) covers the ``conf_*`` services in the same folder.
-
-**Cache:** ``static-30d`` (FR-DC-2). The OCM SLR Viewer base data is derived
-from lidar DEMs that update infrequently (major revisions every few years);
-a 30-day stale window is fully appropriate for planning-level overlays.
-
-**FR-AS-11 typed-error surface:** ``NOAA_SLR_SCENARIOSError`` (base,
-retryable=True), ``NOAA_SLR_SCENARIOSInputError`` (non-retryable bbox/scenario
-validation), ``NOAA_SLR_SCENARIOSUpstreamError`` (retryable ArcGIS REST
-network / HTTP / parse failure), ``NOAA_SLR_SCENARIOSEmptyError`` (no features
-in bbox for all requested scenarios — not retryable, but NOT raised by default;
-we serialize an empty FGB instead so the layer still appears in the panel with
-a zero-feature notice).
-
-**FR-DC-9 payload estimation:** ~0.3 MB per scenario-level per square degree
-of coastal area (SLR polygons are heavily dissolved; a 1° coastal bbox
-typically returns 0.1–1.5 MB per scenario). Clipped to [0.02, 50] MB.
-
-``supports_global_query=False`` — CONUS coastal polygon source.
-
-Endpoint pattern (verified live 2026-06-09):
-    Base:
-        https://coast.noaa.gov/arcgis/rest/services/dc_slr/slr_{scenario}/MapServer/0/query
-
-    Where ``{scenario}`` is one of:
-        ``0ft``, ``0_5ft``, ``1ft``, ``1_5ft``, ``2ft``, ..., ``10ft``
-
-    Query parameters::
-        where=1=1
-        geometry={xmin,ymin,xmax,ymax}
-        geometryType=esriGeometryEnvelope
-        inSR=4326
-        spatialRel=esriSpatialRelIntersects
-        outFields=OBJECTID,Dissolve
-        outSR=4326
-        f=geojson
-        resultRecordCount=1000
-
-    Response: GeoJSON FeatureCollection, polygons with ``Dissolve=1``.
-    The low-lying-areas layer (layer 0) is the vector polygon layer; layer 1
-    is a raster depth layer that cannot be queried for features.
-
-    Coverage: CONUS coastline and tidal areas. Not available for Alaska,
-    Hawaii, or territories.
+"""``fetch_noaa_slr_scenarios`` atomic tool — NOAA Sea Level Rise scenario inundation polygons (job A10).
 """
 
 from __future__ import annotations
@@ -753,7 +633,7 @@ def fetch_noaa_slr_scenarios(
         is ``"vector"``, ``role`` is ``"primary"``, ``style_preset`` is
         ``"noaa_slr_scenarios"``, ``units`` is ``"feet"``.
 
-    **Cross-tool dependencies (FR-TA-3):**
+    **Cross-tool dependencies:**
         - Feeds INTO: ``compute_zonal_statistics`` (structure count / population
           inside SLR footprint), ``clip_vector_to_polygon`` (admin-bounded SLR
           exposure report), ``run_pelicun_damage_assessment`` (SLR exposure
@@ -765,7 +645,7 @@ def fetch_noaa_slr_scenarios(
           validating SLR baseline), ``fetch_gtsm_tide_surge`` (global coastal
           water-level for non-CONUS).
 
-    **Error types (FR-AS-11):**
+    **Error types:**
         - ``NOAA_SLR_SCENARIOSInputError``: bad bbox or unknown scenario_ft
           (retryable=False).
         - ``NOAA_SLR_SCENARIOSUpstreamError``: HTTP/network failure, ArcGIS

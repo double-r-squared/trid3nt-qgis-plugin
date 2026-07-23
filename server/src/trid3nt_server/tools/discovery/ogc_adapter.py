@@ -6,7 +6,7 @@ job-0044 against MRLC NLCD (canonical class integers via `GetCoverage` rather
 than palette indices via `GetMap`) — extracted here so:
 
 - `fetch_landcover` (NLCD MRLC) shares the adapter (single source of truth);
-- the new `catalog_fetch` Tier-2 dispatch routes any catalog entry through the
+- the new `fetch_from_catalog` Tier-2 dispatch routes any catalog entry through the
   same code path;
 - future Tier-2 entries (FEMA NFHL ArcGIS REST MapServer, 3DEP Elevation
   ImageServer, USGS NHDPlus HR MapServer, etc.) avoid duplicating service-
@@ -20,7 +20,7 @@ Service flavors supported (per §F.1.1 Tier 2):
   GeoServer); WCS 1.1.1 / 2.0.1 surface specific bugs (see job-0044 report).
 - ``WMS`` (Web Map Service): the rendered-pixel surface — useful for
   visualization layers but NOT for raw model-input bytes (the palette-index
-  trap job-0044 closed). Used by `catalog_fetch` for Tier-2 visualization-
+  trap job-0044 closed). Used by `fetch_from_catalog` for Tier-2 visualization-
   intent catalog entries (FEMA NFHL flood zones rendered as a map layer).
 - ``WFS`` (Web Feature Service): vector feature retrieval; the catalog-entry
   path for ArcGIS REST FeatureServer-flavored services as well (via the
@@ -296,7 +296,7 @@ def fetch_ogc_layer(
 
     Use this when: any §F.1.1 Tier 2 catalog entry needs to retrieve bytes
     (raster or vector) via WMS / WMTS / WCS / WFS / ArcGIS REST. This is the
-    shared substrate for `fetch_landcover` (NLCD WCS), `catalog_fetch` Tier-2
+    shared substrate for `fetch_landcover` (NLCD WCS), `fetch_from_catalog` Tier-2
     dispatch, and any future Tier-2 fetcher.
 
     Do NOT use this for: Tier 1 (STAC + COG, use `pystac-client`); Tier 3
@@ -334,7 +334,7 @@ def fetch_ogc_layer(
             neither is given.
         target_resolution_m: optional ground cell size in metres for the
             auto-computed raster grid. Phase-2 resolution lever: callers (e.g.
-            ``catalog_fetch`` forwarding an entry's ``native_resolution_m``)
+            ``fetch_from_catalog`` forwarding an entry's ``native_resolution_m``)
             opt into finer/coarser output without hard-coding pixel counts.
             Ignored when explicit ``width_px``/``height_px`` are given, or for
             vector (WFS / MapServer query) service types.

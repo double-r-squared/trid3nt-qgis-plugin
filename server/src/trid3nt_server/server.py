@@ -222,6 +222,7 @@ from .categories import (
     validate_function_call,
 )
 from .circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
+from .tool_gating import BenchBlockedError
 
 # job-0122: auth-token envelope (Appendix H.5 connect handshake).
 from trid3nt_contracts.auth import AuthTokenEnvelope
@@ -905,6 +906,61 @@ _EMPTY_COMPLETION_NUDGE: str = (
     "fulfill the request, or reply with your answer. Do not return an empty "
     "message."
 )
+
+#: DISCOVERY-EXPANDS-GATE (task 2): the max number of NEW tool names the
+#: tool-search tool's results may add to a turn's visible gate, summed across
+#: the whole turn. Bounds the widening so a chatty search cannot re-expand the
+#: gate back toward the full catalog it was meant to trim.
+_DISCOVERY_EXPAND_CAP: int = 8
+
+
+def _tool_search_tool_names() -> frozenset[str]:
+    """The registered name(s) of the tool-search (data-discovery) tool.
+
+    Resolved by REGISTRY LOOKUP off the discovery module's own registration
+    metadata (``search_tools``, formerly ``discover_dataset``) rather than a
+    hardcoded literal, so the parallel rename lands transparently. Any legacy
+    alias still present in the live registry is also honored. Never raises: a
+    resolution fault yields the empty set (the expand simply no-ops).
+    """
+    names: set[str] = set()
+    try:
+        from .tools.discovery.search_tools import _SEARCH_TOOLS_METADATA
+
+        if getattr(_SEARCH_TOOLS_METADATA, "name", None):
+            names.add(_SEARCH_TOOLS_METADATA.name)
+    except Exception:  # noqa: BLE001 -- module shape drift must not break dispatch
+        logger.debug("discovery-expand: search_tools metadata lookup failed",
+                     exc_info=True)
+    for _legacy in ("discover_dataset",):
+        if _legacy in TOOL_REGISTRY:
+            names.add(_legacy)
+    return frozenset(names)
+
+
+def _tool_names_from_search_result(result: Any) -> list[str]:
+    """Extract the ranked tool names from a tool-search result payload.
+
+    ``search_tools`` returns ``{"results": [{"tool_name": <name>, ...}, ...]}``.
+    Returns the names in rank order (best first), de-duplicated. Tolerant of a
+    malformed / partial shape -- a non-conforming entry is skipped, never
+    raised on.
+    """
+    if not isinstance(result, dict):
+        return []
+    rows = result.get("results")
+    if not isinstance(rows, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("tool_name")
+        if isinstance(name, str) and name and name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out
 
 
 def _is_terminal_composer(tool_name: str) -> bool:
@@ -1998,6 +2054,14 @@ class SessionState:
     # back to the TRID3NT_MODE env default (see _session_routing_mode). Governs
     # tool-selection VISIBILITY only -- consent gates are never mode-dependent.
     routing_mode: str | None = None
+    # BENCH pre-dispatch block hook (LANE A 2026-07-22): the armed, session-
+    # scoped ``BenchBlockConfig`` set ONLY by the bench harness via the
+    # ``session-config`` path (``bench_tool_block`` key). ``None`` = normal
+    # operation (the common path) -- the dispatch guard is a single
+    # ``is not None`` check with ZERO overhead when unarmed. When armed, the
+    # dispatch site blocks a wrong / block-tier tool pick BEFORE the fn runs
+    # (see tool_gating.bench_block_decision + _invoke_tool_via_emitter).
+    bench_block_config: Any = None
     # job-0121: per-turn layer + map-command emission accumulators. Reset at
     # the start of every dispatch (Gemini stream or /invoke tool). The
     # CaseChatMessage write at turn close reads from these so a Case replay
@@ -3080,12 +3144,42 @@ async def _stream_gemini_reply(
     # index / empty ranking / any fault (see tool_gating.gate_tool_registry).
     if _provider == "openai":
         try:
-            from .tool_gating import gate_tool_registry, gating_topk
+            from .tool_gating import (
+                WIDEN_K,
+                gate_tool_registry,
+                gating_topk,
+                gating_widen_threshold,
+                should_widen_for_poor_fit,
+            )
             from .tools.discovery.tool_retrieval import retrieve_ranked_tools
 
             _gate_k = gating_topk()
             if _gate_k > 0:
                 _gate_ranked = retrieve_ranked_tools(user_text, k=_gate_k)
+                # POOR-FIT WIDENING (task 3): a LOW top-1 retrieval score means
+                # the ranking is uncertain for this ask -- widen the gate k once
+                # (24 -> WIDEN_K) so recall does not silently drop on a vague /
+                # ambiguous turn. Fires at most once per turn, only when the
+                # widened k actually exceeds the current k. Threshold is
+                # env-tunable (TRID3NT_GATING_WIDEN_THRESHOLD); see the
+                # calibration note in tool_gating.py.
+                _widen_threshold = gating_widen_threshold()
+                if (
+                    WIDEN_K > _gate_k
+                    and should_widen_for_poor_fit(_gate_ranked, _widen_threshold)
+                ):
+                    _top_score = _gate_ranked[0][1] if _gate_ranked else None
+                    _gate_k = WIDEN_K
+                    _gate_ranked = retrieve_ranked_tools(user_text, k=_gate_k)
+                    logger.info(
+                        "tool-gating: POOR-FIT widen k->%d (top_score=%.5f < "
+                        "threshold=%.5f) turn=%s session=%s",
+                        _gate_k,
+                        _top_score if _top_score is not None else -1.0,
+                        _widen_threshold,
+                        pipeline_id,
+                        state.session_id,
+                    )
                 _used_tools = set(state.allowed_tool_set.dispatched_tools) | set(
                     state.allowed_tool_set.explicit_tools
                 )
@@ -3296,6 +3390,20 @@ async def _stream_gemini_reply(
     _turn_tools_dispatched: set[str] = set()
     _continuation_nudged = False
     _turn_geocode_bbox: list[float] | None = None
+
+    # BENCH pre-dispatch block hook: latched True by the dispatch except-path
+    # when a WRONG-pick block fired this round, so the turn ends after the
+    # round's function-responses are on the wire (see the check after the
+    # per-call loop). Unarmed sessions never touch it.
+    _bench_wrong_pick_end = False
+
+    # DISCOVERY-EXPANDS-GATE (task 2): tool names the tool-search tool
+    # (search_tools) returned THIS turn that were unioned into the visible gate
+    # for subsequent rounds, capped at ``_DISCOVERY_EXPAND_CAP`` per turn.
+    # ``_tool_decls_dirty`` requests a one-time rebuild of ``tool_decls`` after
+    # the round so the next model round sees the widened set.
+    _discovery_expanded: set[str] = set()
+    _tool_decls_dirty = False
 
     # PER-TURN TELEMETRY accumulators (LANE CORE 2026-07-22). Token counts SUM
     # the adapter's per-round UsageMetadataEvents across the whole turn; a
@@ -3944,6 +4052,43 @@ async def _stream_gemini_reply(
                         cat_id = result.get("category_id")
                         if isinstance(cat_id, str) and cat_id:
                             state.allowed_tool_set.open_category(cat_id)
+                    # DISCOVERY-EXPANDS-GATE (task 2): when the tool-search tool
+                    # returns candidate tool names, UNION them into this turn's
+                    # visible gate (and the Case allowed-set, so validation lets
+                    # the model actually call them) for SUBSEQUENT rounds --
+                    # capped at ``_DISCOVERY_EXPAND_CAP`` NEW names per turn, in
+                    # rank order. Only names that are real, registered, and not
+                    # already visible count toward the cap; the rebuild of
+                    # ``tool_decls`` is deferred to once-per-round below.
+                    elif call.name in _tool_search_tool_names():
+                        _hits = _tool_names_from_search_result(result)
+                        _added_now: list[str] = []
+                        for _cand in _hits:
+                            if len(_discovery_expanded) >= _DISCOVERY_EXPAND_CAP:
+                                break
+                            if (
+                                _cand in TOOL_REGISTRY
+                                and _cand not in _retrieval_registry
+                                and _cand not in _discovery_expanded
+                            ):
+                                _discovery_expanded.add(_cand)
+                                _added_now.append(_cand)
+                        if _added_now:
+                            _retrieval_registry = dict(_retrieval_registry)
+                            for _cand in _added_now:
+                                _retrieval_registry[_cand] = TOOL_REGISTRY[_cand]
+                            state.allowed_tool_set.add_tools(set(_added_now))
+                            _tool_decls_dirty = True
+                            logger.info(
+                                "discovery-expand: +%d tool(s) into the gate "
+                                "(turn total=%d/%d) via %s session=%s: %s",
+                                len(_added_now),
+                                len(_discovery_expanded),
+                                _DISCOVERY_EXPAND_CAP,
+                                call.name,
+                                state.session_id,
+                                _added_now,
+                            )
                 except asyncio.CancelledError:
                     # Propagate cancel through the loop — handled below.
                     raise
@@ -3963,9 +4108,24 @@ async def _stream_gemini_reply(
                     # would then BLOCK the corrected-args retry (Oklahoma-tornado
                     # bug). CircuitBreakerError is excluded entirely: it means
                     # the breaker already fired and we must not increment again.
-                    if not isinstance(exc, CircuitBreakerError):
+                    # BenchBlockedError is likewise excluded: a bench block is a
+                    # deliberate harness artifact, not a tool fault, and must
+                    # never penalize the tool's breaker.
+                    if not isinstance(exc, (CircuitBreakerError, BenchBlockedError)):
                         state.circuit_breaker.record_failure(call.name, exc)
                     dispatch_error = exc
+                    # BENCH pre-dispatch block hook: a WRONG-pick block ends the
+                    # turn (the "turn-ending note" -- the model must not get to
+                    # pick again; the bench grades the wrong pick and moves on).
+                    # A correct-block does NOT end the turn here (the bench ends
+                    # it client-side after grading CORRECT_BLOCKED). Latched; the
+                    # break happens once this round's calls are all recorded so
+                    # the blocked tool's function-response still reaches the wire.
+                    if (
+                        isinstance(exc, BenchBlockedError)
+                        and exc.blocked_class == "wrong_pick"
+                    ):
+                        _bench_wrong_pick_end = True
                     # job-186 loop-watchdog: a failed / circuit-broken call is
                     # the CIRCUIT BREAKER's territory (it delivers
                     # CIRCUIT_BREAKER_TRIPPED so the model adapts and the turn
@@ -4203,6 +4363,35 @@ async def _stream_gemini_reply(
                 contents.append(
                     build_function_response_content(call.name, summary, call.call_id)
                 )
+
+            # DISCOVERY-EXPANDS-GATE (task 2): a tool-search this round widened
+            # the visible gate -- rebuild ``tool_decls`` ONCE so the NEXT model
+            # round sees the unioned tools. No-op unless a search actually added
+            # (the common path never sets the dirty flag).
+            if _tool_decls_dirty:
+                tool_decls = build_tool_declarations(_retrieval_registry)
+                _tool_decls_dirty = False
+                logger.info(
+                    "discovery-expand: rebuilt tool declarations (%d tools "
+                    "visible) turn=%s session=%s",
+                    len(_retrieval_registry),
+                    pipeline_id,
+                    state.session_id,
+                )
+
+            # BENCH pre-dispatch block hook: a WRONG-pick block this round ends
+            # the turn (the turn-ending note). The blocked tool's typed
+            # function-response is already on the wire above; break to the clean
+            # post-loop finalize so a ``turn-complete`` is emitted and the bench
+            # grades the wrong pick and advances (mirrors the crisp-end break --
+            # a clean conclusion, NOT an ``_agent_abort`` runaway).
+            if _bench_wrong_pick_end:
+                logger.info(
+                    "bench-block: wrong-pick -> ending turn session=%s iter=%d",
+                    state.session_id,
+                    iterations,
+                )
+                break
 
             # GUARD 3 (loop watchdog) -- POST-DISPATCH record. The round counts
             # toward the no-progress streak ONLY when it had calls, did NOT
@@ -10827,6 +11016,41 @@ async def _invoke_tool_via_emitter(
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
     entry = TOOL_REGISTRY[tool_name]
 
+    # BENCH PRE-DISPATCH BLOCK HOOK (LANE A 2026-07-22). Armed ONLY by the
+    # bench harness via session-config (``state.bench_block_config``); ``None``
+    # (the common path) is a single is-not-None check with ZERO overhead and a
+    # byte-identical dispatch below. When armed, decide the tool's fate BEFORE
+    # any gate / fetch runs:
+    #   * wrong_pick     -- a non-member pick: block outright (no arg work).
+    #   * correct_blocked -- a member pick in the block tier: run the SAME arg
+    #       normalizer a real dispatch would (arg validation) then block, so the
+    #       block is graded on the canonicalized args -- but the fn never runs.
+    # Both raise ``BenchBlockedError`` THROUGH the emitter's ``emit_tool_call``
+    # so the tool still surfaces as a (failed) pipeline step -- the bench grades
+    # off the tool-io function-response's typed error_code -- while ``entry.fn``
+    # (the actual fetch / solve) is never reached: airtight before any fetch,
+    # unlike the racy v1 client-side cancel this replaces.
+    if state.bench_block_config is not None:
+        from .tool_gating import BenchBlockedError, bench_block_decision
+
+        _bench_class = bench_block_decision(state.bench_block_config, tool_name)
+        if _bench_class is not None:
+            if _bench_class == "correct_blocked":
+                # Arg validation before the block (the fn is still NOT invoked).
+                normalize_args(tool_name, params, entry.fn)
+
+            async def _bench_blocked_invoke() -> Any:
+                raise BenchBlockedError(_bench_class, tool_name)
+
+            # Mint the pipeline step (tool shows as 'fired'), then fail it via
+            # the raise -- which propagates out to the dispatch loop's typed-
+            # error path exactly like any tool exception.
+            return await state.emitter.emit_tool_call(
+                name=entry.metadata.name,
+                tool_name=tool_name,
+                invoke=_bench_blocked_invoke,
+            )
+
     # FIX B (#7 early input-only frame): snapshot the ORIGINAL call args NOW,
     # before the normalize_args / gating / URI-resolve / secret-inject pipeline
     # below rewrites ``params`` (normalize_args empties args that don't match the
@@ -14117,6 +14341,29 @@ def _make_handler(settings: GeminiSettings):
                                     _cfg_mode,
                                     state.session_id,
                                 )
+                            # BENCH pre-dispatch block hook (LANE A): the same
+                            # defensive session-config branch also arms/disarms
+                            # the bench tool-block config. ``bench_tool_block``
+                            # absent -> leave whatever is armed untouched; a
+                            # dict -> arm; an explicit null/false -> disarm.
+                            # Bench-only: a normal client never sends this key,
+                            # so the field stays None and dispatch pays nothing.
+                            if "bench_tool_block" in payload_dict:
+                                from .tool_gating import parse_bench_block_config
+
+                                _bench_cfg = parse_bench_block_config(payload_dict)
+                                state.bench_block_config = _bench_cfg
+                                logger.info(
+                                    "session-config: bench_tool_block %s "
+                                    "session=%s (allow=%d always=%d block=%d)",
+                                    "armed" if _bench_cfg else "disarmed",
+                                    state.session_id,
+                                    len(_bench_cfg.allow) if _bench_cfg else 0,
+                                    len(_bench_cfg.always_allowed) if _bench_cfg else 0,
+                                    len(_bench_cfg.block_at_invocation)
+                                    if _bench_cfg
+                                    else 0,
+                                )
 
                     elif msg_type in (
                         "confirm-response",
@@ -14309,7 +14556,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
 
     # TOOL-RETRIEVAL INDEX WARM-AT-STARTUP: when retrieval is enabled
     # (shadow/enforce), build the discover index off-loop NOW instead of
-    # lazily on the first discover_dataset tool call. Without this every
+    # lazily on the first search_tools tool call. Without this every
     # turn's _discover_topk sees a COLD index and FAIL-OPENS to the full
     # ~176-tool registry -- harmless for 200k-context cloud models, but a
     # SMALL-CONTEXT local model (offline build, e.g. 16k Ollama) gets its
@@ -14319,7 +14566,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     if _tool_retrieval_mode() != "off":
         async def _warm_discover_index() -> None:
             try:
-                from .tools.discovery import discover_dataset as _dd_warm
+                from .tools.discovery import search_tools as _dd_warm
                 await asyncio.to_thread(_dd_warm._get_index)
                 logger.info("tool_retrieval: discover index warmed at startup")
             except Exception:  # noqa: BLE001 -- warm is best-effort

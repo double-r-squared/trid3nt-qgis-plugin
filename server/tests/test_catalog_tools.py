@@ -1,11 +1,11 @@
-"""Unit tests for catalog_search + catalog_fetch + generic OGC adapter (job-0047).
+"""Unit tests for search_data_catalog + fetch_from_catalog + generic OGC adapter (job-0047).
 
 Coverage:
-- ``catalog_search`` returns ranked entries by topic match.
-- ``catalog_search`` with a bbox filter drops CONUS-only entries for non-CONUS bboxes.
-- ``catalog_search`` with ``source_filter`` returns only that source class.
-- ``catalog_fetch`` dispatches correctly per access_tier (Tier 1/2/3/4 paths).
-- ``catalog_fetch`` cache-shim integration (read_through hit + miss + cached URI).
+- ``search_data_catalog`` returns ranked entries by topic match.
+- ``search_data_catalog`` with a bbox filter drops CONUS-only entries for non-CONUS bboxes.
+- ``search_data_catalog`` with ``source_filter`` returns only that source class.
+- ``fetch_from_catalog`` dispatches correctly per access_tier (Tier 1/2/3/4 paths).
+- ``fetch_from_catalog`` cache-shim integration (read_through hit + miss + cached URI).
 - Generic OGC adapter — WMS GetMap mocked.
 - Generic OGC adapter — WCS GetCoverage mocked (mirror NLCD).
 - Generic OGC adapter — WFS GetFeature mocked.
@@ -25,8 +25,8 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.discovery import catalog_common as catalog_mod
 from trid3nt_server.tools.discovery import ogc_adapter as ogc_mod
 from trid3nt_server.tools.discovery.catalog_common import CatalogNotFoundError, load_catalog
-from trid3nt_server.tools.discovery.catalog_fetch import catalog_fetch
-from trid3nt_server.tools.discovery.catalog_search import catalog_search
+from trid3nt_server.tools.discovery.fetch_from_catalog import fetch_from_catalog
+from trid3nt_server.tools.discovery.search_data_catalog import search_data_catalog
 from trid3nt_server.tools.discovery.ogc_adapter import (
     OGCAdapterError,
     OGCResponse,
@@ -120,8 +120,8 @@ def fake_storage_patched(monkeypatch):
 
     # ``read_through`` is bound per-module at import time, so patch it in BOTH
     # split tool modules (catalog_common itself never calls it).
-    from trid3nt_server.tools.discovery import catalog_fetch as _cf_mod
-    from trid3nt_server.tools.discovery import catalog_search as _cs_mod
+    from trid3nt_server.tools.discovery import fetch_from_catalog as _cf_mod
+    from trid3nt_server.tools.discovery import search_data_catalog as _cs_mod
 
     monkeypatch.setattr(_cs_mod, "read_through", _patched)
     monkeypatch.setattr(_cf_mod, "read_through", _patched)
@@ -161,17 +161,17 @@ class _FakeOGCResponse:
 # ---------------------------------------------------------------------------
 
 
-def test_catalog_search_is_registered_with_semi_static_7d():
-    entry = TOOL_REGISTRY["catalog_search"]
+def test_search_data_catalog_is_registered_with_semi_static_7d():
+    entry = TOOL_REGISTRY["search_data_catalog"]
     assert entry.metadata.ttl_class == "semi-static-7d"
-    assert entry.metadata.source_class == "catalog_search"
+    assert entry.metadata.source_class == "search_data_catalog"
     assert entry.metadata.cacheable is True
 
 
-def test_catalog_fetch_is_registered_with_static_30d():
-    entry = TOOL_REGISTRY["catalog_fetch"]
+def test_fetch_from_catalog_is_registered_with_static_30d():
+    entry = TOOL_REGISTRY["fetch_from_catalog"]
     assert entry.metadata.ttl_class == "static-30d"
-    assert entry.metadata.source_class == "catalog_fetch"
+    assert entry.metadata.source_class == "fetch_from_catalog"
     assert entry.metadata.cacheable is True
 
 
@@ -183,8 +183,8 @@ def test_registry_has_catalog_tools_after_explicit_import():
     ≥16-tools floor is asserted at ``--startup-only`` (see evidence/), where
     ``main._import_tools_registry`` triggers every job's eager import.
     """
-    assert "catalog_search" in TOOL_REGISTRY
-    assert "catalog_fetch" in TOOL_REGISTRY
+    assert "search_data_catalog" in TOOL_REGISTRY
+    assert "fetch_from_catalog" in TOOL_REGISTRY
 
 
 # ---------------------------------------------------------------------------
@@ -215,72 +215,72 @@ def test_load_catalog_entries_validate_against_pydantic_shape():
 
 
 # ---------------------------------------------------------------------------
-# catalog_search: topic ranking + filters.
+# search_data_catalog: topic ranking + filters.
 # ---------------------------------------------------------------------------
 
 
-def test_catalog_search_finds_fema_nfhl_for_flood_zones(fake_storage_patched):
-    """`catalog_search(topic="flood zones")` returns the FEMA NFHL entry."""
-    results = catalog_search(topic="flood zones", location=FORT_MYERS_BBOX)
+def test_search_data_catalog_finds_fema_nfhl_for_flood_zones(fake_storage_patched):
+    """`search_data_catalog(topic="flood zones")` returns the FEMA NFHL entry."""
+    results = search_data_catalog(topic="flood zones", location=FORT_MYERS_BBOX)
     assert len(results) >= 1
     top_ids = [r["id"] for r in results[:5]]
     assert "fema-nfhl-flood-zones" in top_ids, top_ids
 
 
-def test_catalog_search_finds_3dep_for_dem_topic(fake_storage_patched):
-    """`catalog_search(topic="DEM")` returns the USGS 3DEP entry near the top."""
-    results = catalog_search(topic="DEM")
+def test_search_data_catalog_finds_3dep_for_dem_topic(fake_storage_patched):
+    """`search_data_catalog(topic="DEM")` returns the USGS 3DEP entry near the top."""
+    results = search_data_catalog(topic="DEM")
     assert len(results) >= 1
     top_ids = [r["id"] for r in results[:5]]
     assert any("3dep" in tid for tid in top_ids), top_ids
 
 
-def test_catalog_search_source_filter_restricts_results(fake_storage_patched):
+def test_search_data_catalog_source_filter_restricts_results(fake_storage_patched):
     """`source_filter="landcover"` returns only landcover-source-class entries."""
-    results = catalog_search(topic="land", source_filter="landcover")
+    results = search_data_catalog(topic="land", source_filter="landcover")
     assert results, "expected at least one landcover entry"
     for r in results:
         assert r["source_class"] == "landcover", r["id"]
 
 
-def test_catalog_search_bbox_filter_drops_conus_only_for_intl_bbox(
+def test_search_data_catalog_bbox_filter_drops_conus_only_for_intl_bbox(
     fake_storage_patched,
 ):
     """A bbox in central Africa should drop CONUS-only entries (e.g. 3DEP)."""
     africa_bbox = (15.0, -1.0, 20.0, 4.0)
-    results = catalog_search(topic="elevation", location=africa_bbox)
+    results = search_data_catalog(topic="elevation", location=africa_bbox)
     ids = [r["id"] for r in results]
     # 3DEP names "conterminous US" — should NOT appear for Africa bbox.
     assert "usgs-3dep-elevation-image-service" not in ids, ids
 
 
-def test_catalog_search_returns_empty_for_unmatched_topic(fake_storage_patched):
+def test_search_data_catalog_returns_empty_for_unmatched_topic(fake_storage_patched):
     """A topic that matches nothing returns an empty list (LLM escalates to Mode 2)."""
-    results = catalog_search(topic="zzz-completely-fake-data-source-name-zzz")
+    results = search_data_catalog(topic="zzz-completely-fake-data-source-name-zzz")
     assert results == []
 
 
-def test_catalog_search_routes_through_read_through(fake_storage_patched, monkeypatch):
-    """FR-CE-8: catalog_search is cacheable; repeat call hits the cache."""
+def test_search_data_catalog_routes_through_read_through(fake_storage_patched, monkeypatch):
+    """FR-CE-8: search_data_catalog is cacheable; repeat call hits the cache."""
     # First call writes through; second call should hit.
-    results_1 = catalog_search(topic="flood zones", location=FORT_MYERS_BBOX)
+    results_1 = search_data_catalog(topic="flood zones", location=FORT_MYERS_BBOX)
     paths = list(fake_storage_patched.store.keys())
     assert len(paths) == 1
-    assert paths[0].startswith("cache/semi-static-7d/catalog_search/")
+    assert paths[0].startswith("cache/semi-static-7d/search_data_catalog/")
     # Second identical call returns the cached payload.
-    results_2 = catalog_search(topic="flood zones", location=FORT_MYERS_BBOX)
+    results_2 = search_data_catalog(topic="flood zones", location=FORT_MYERS_BBOX)
     assert results_1 == results_2
 
 
 # ---------------------------------------------------------------------------
-# catalog_fetch: tier dispatch.
+# fetch_from_catalog: tier dispatch.
 # ---------------------------------------------------------------------------
 
 
-def test_catalog_fetch_tier2_arcgis_dispatch_for_fema_nfhl(
+def test_fetch_from_catalog_tier2_arcgis_dispatch_for_fema_nfhl(
     fake_storage_patched, monkeypatch
 ):
-    """`catalog_fetch("fema-nfhl-flood-zones", {bbox})` routes to ArcGIS REST query."""
+    """`fetch_from_catalog("fema-nfhl-flood-zones", {bbox})` routes to ArcGIS REST query."""
     captured: dict = {}
 
     def _fake_get(url, params=None, headers=None, timeout=None, **_kw):
@@ -294,7 +294,7 @@ def test_catalog_fetch_tier2_arcgis_dispatch_for_fema_nfhl(
 
     monkeypatch.setattr(ogc_mod.requests, "get", _fake_get)
 
-    result = catalog_fetch(
+    result = fetch_from_catalog(
         entry_id="fema-nfhl-flood-zones",
         params={"bbox": list(FORT_MYERS_BBOX), "layer_id": "28"},
     )
@@ -304,15 +304,15 @@ def test_catalog_fetch_tier2_arcgis_dispatch_for_fema_nfhl(
     assert "/MapServer/28/query" in captured["url"], captured["url"]
     # The dispatch chose ArcGIS REST shape.
     assert captured["params"]["f"] == "geojson"
-    # Cache landed under catalog_fetch prefix.
+    # Cache landed under fetch_from_catalog prefix.
     paths = list(fake_storage_patched.store.keys())
-    assert any(p.startswith("cache/static-30d/catalog_fetch/") for p in paths)
+    assert any(p.startswith("cache/static-30d/fetch_from_catalog/") for p in paths)
 
 
-def test_catalog_fetch_tier2_arcgis_imageserver_routes_to_exportimage(
+def test_fetch_from_catalog_tier2_arcgis_imageserver_routes_to_exportimage(
     fake_storage_patched, monkeypatch
 ):
-    """`catalog_fetch("usgs-3dep-elevation-image-service", {bbox})` routes to ArcGIS ImageServer exportImage.
+    """`fetch_from_catalog("usgs-3dep-elevation-image-service", {bbox})` routes to ArcGIS ImageServer exportImage.
 
     The 3DEP entry's primary URL is an ArcGIS ImageServer; v0.1 sniffs that
     as ARCGIS_REST and routes ImageServer endpoints through ``/exportImage``
@@ -331,7 +331,7 @@ def test_catalog_fetch_tier2_arcgis_imageserver_routes_to_exportimage(
 
     monkeypatch.setattr(ogc_mod.requests, "get", _fake_get)
 
-    result = catalog_fetch(
+    result = fetch_from_catalog(
         entry_id="usgs-3dep-elevation-image-service",
         params={"bbox": list(FORT_MYERS_BBOX)},
     )
@@ -346,27 +346,27 @@ def test_catalog_fetch_tier2_arcgis_imageserver_routes_to_exportimage(
     assert captured["params"]["format"] == "tiff"
 
 
-def test_catalog_fetch_tier1_raises_not_implemented(monkeypatch, fake_storage_patched):
+def test_fetch_from_catalog_tier1_raises_not_implemented(monkeypatch, fake_storage_patched):
     """Tier 1 STAC dispatch is reserved for a follow-up; v0.1 raises NotImplementedError."""
     # Pick a Tier 1 entry: Copernicus DEM GLO-30 STAC.
     with pytest.raises(NotImplementedError):
-        catalog_fetch(
+        fetch_from_catalog(
             entry_id="copernicus-dem-glo-30-stac",
             params={"bbox": list(FORT_MYERS_BBOX)},
         )
 
 
-def test_catalog_fetch_tier4_raises_not_implemented(fake_storage_patched):
+def test_fetch_from_catalog_tier4_raises_not_implemented(fake_storage_patched):
     """Tier 4 region-download dispatch is reserved for a follow-up; v0.1 raises NotImplementedError."""
     # Pick a Tier 4 entry: WorldPop 1km aggregated.
     with pytest.raises(NotImplementedError):
-        catalog_fetch(
+        fetch_from_catalog(
             entry_id="worldpop-1km-aggregated-rest",
             params={"bbox": list(FORT_MYERS_BBOX)},
         )
 
 
-def test_catalog_fetch_tier3_https_dispatch(fake_storage_patched, monkeypatch):
+def test_fetch_from_catalog_tier3_https_dispatch(fake_storage_patched, monkeypatch):
     """Tier 3 (HTTPS + Range) dispatch issues a single HTTPS GET."""
     captured: dict = {}
 
@@ -377,7 +377,7 @@ def test_catalog_fetch_tier3_https_dispatch(fake_storage_patched, monkeypatch):
             content_type="text/plain",
         )
 
-    from trid3nt_server.tools.discovery import catalog_fetch as _cf_mod
+    from trid3nt_server.tools.discovery import fetch_from_catalog as _cf_mod
 
     monkeypatch.setattr(_cf_mod, "_tier3_https_fetch",
                         lambda entry, params: (
@@ -386,7 +386,7 @@ def test_catalog_fetch_tier3_https_dispatch(fake_storage_patched, monkeypatch):
                         ))
 
     # NOAA NHC ATCF HURDAT2 is access_tier 3.
-    result = catalog_fetch(
+    result = fetch_from_catalog(
         entry_id="noaa-nhc-atcf-hurdat2",
         params={"query": {"year": 2022}},
     )
@@ -394,10 +394,10 @@ def test_catalog_fetch_tier3_https_dispatch(fake_storage_patched, monkeypatch):
     assert result["access_tier"] == 3
 
 
-def test_catalog_fetch_unknown_entry_raises_catalog_not_found(fake_storage_patched):
+def test_fetch_from_catalog_unknown_entry_raises_catalog_not_found(fake_storage_patched):
     """An unknown entry_id raises CatalogNotFoundError with a hint."""
     with pytest.raises(CatalogNotFoundError):
-        catalog_fetch(entry_id="zzz-not-a-real-entry", params={})
+        fetch_from_catalog(entry_id="zzz-not-a-real-entry", params={})
 
 
 # ---------------------------------------------------------------------------
@@ -671,7 +671,7 @@ def test_ogc_adapter_explicit_width_height_honored_byte_identical(monkeypatch):
     assert captured["params"]["HEIGHT"] == "256"
 
 
-def test_catalog_fetch_imageserver_uses_entry_native_resolution(
+def test_fetch_from_catalog_imageserver_uses_entry_native_resolution(
     fake_storage_patched, monkeypatch
 ):
     """3DEP ImageServer Tier-2 dispatch auto-targets the entry's 10 m native_resolution_m.
@@ -691,7 +691,7 @@ def test_catalog_fetch_imageserver_uses_entry_native_resolution(
 
     monkeypatch.setattr(ogc_mod.requests, "get", _fake_get)
 
-    result = catalog_fetch(
+    result = fetch_from_catalog(
         entry_id="usgs-3dep-elevation-image-service",
         params={"bbox": list(FORT_MYERS_BBOX)},
     )

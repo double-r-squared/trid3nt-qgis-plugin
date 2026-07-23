@@ -124,146 +124,108 @@ async def run_telemac(
 ) -> TelemacDyeLayerURI | dict[str, Any]:
     """A DYE / TRACER / CONTAMINANT / POLLUTANT PLUME that TRAVELS DOWNSTREAM in a RIVER (surface water).
 
-    THE tool for "simulate how a dye plume travels downstream", "how far does the
-    dye / contaminant travel down the river", "a dye spill in the river", "a
-    contaminant / pollutant spilled into the river / stream and how it travels /
-    moves / flows / spreads downstream", "simulate a spill / release moving down
-    the river", "track a spill down the channel", "a tracer released into the
-    stream". This is SURFACE water carried IN the river channel by the current
-    (NOT groundwater / aquifer seepage - that is ``run_model_river_seepage_scenario``).
-    It runs a TELEMAC-2D shallow-water solve with an advected tracer over a REAL
-    river reach:
-    a finite dye pulse is released at a mid-reach point source, then the plume
-    travels downstream IN THE SURFACE WATER and dilutes. Produces a peak
-    dye-concentration map layer PLUS the engine's native time-stepped mesh, which
-    the client animates (a Temporal Controller scrubber over the dye field).
+    THE tool for "simulate a dye plume travels downstream", "how far does the
+    dye/contaminant travel down the river", "a dye spill in the river", "a
+    contaminant/pollutant spilled into the river/stream and how it travels/
+    moves/flows/spreads downstream". SURFACE water carried IN the river
+    channel by the current (NOT groundwater/aquifer seepage - that is
+    ``run_model_river_seepage_scenario``). Runs a TELEMAC-2D shallow-water
+    solve with an advected tracer over a REAL river reach: a finite dye pulse
+    releases at a mid-reach point source, travels downstream in the surface
+    water and dilutes. Produces a peak dye-concentration map layer PLUS the
+    engine's native time-stepped mesh (client animates via a Temporal
+    Controller scrubber).
 
-    Use this when:
-        - The user asks to simulate a CONTAMINANT / DYE / TRACER / POLLUTANT /
-          CHEMICAL SPILL or RELEASE INTO A RIVER / STREAM / CREEK / CHANNEL and
-          wants to see how it TRAVELS / MOVES / FLOWS / SPREADS DOWNSTREAM in the
-          flowing water (the plume + how far / how strong / how long).
-        - Any "spill in the river ... downstream" surface-water transport request.
+    Use this for any "spill in the river ... downstream" surface-water
+    transport request.
 
     Do NOT use this for:
-        - GROUNDWATER / AQUIFER contamination, river<->aquifer SEEPAGE, or a
-          plume moving through the SUBSURFACE / soil (use ``run_modflow_job`` /
-          ``run_model_river_seepage_scenario``). THIS tool is the SURFACE water IN
-          the river channel; seepage tools are the water UNDER the ground. A dye
-          spill that travels DOWN THE RIVER is THIS tool, not seepage.
-        - Riverine / coastal / pluvial FLOODING depth (use ``run_model_flood_scenario``
+        - GROUNDWATER/AQUIFER contamination, river<->aquifer SEEPAGE, or a
+          subsurface plume (use ``run_modflow_job`` /
+          ``run_model_river_seepage_scenario`` - THIS tool is surface water
+          IN the channel; seepage tools are water UNDER the ground).
+        - Riverine/coastal/pluvial FLOODING depth (``run_model_flood_scenario``
           = SFINCS, or ``run_swmm_urban_flood`` = urban drainage).
-        - Dam-break / tsunami / surge inundation (use ``run_geoclaw_inundation``).
+        - Dam-break/tsunami/surge inundation (``run_geoclaw_inundation``).
 
     Params:
-        location: a place name near the river (e.g. "Twin Falls, Idaho"). Supply
-            this OR ``bbox`` - the location is GEOCODED (never hand-typed coords).
-        bbox: OPTIONAL explicit AOI ``(min_lon, min_lat, max_lon, max_lat)`` in
-            EPSG:4326 (e.g. a drawn canvas AOI). Supply this OR ``location``.
-        spill_fraction: along-reach position of the spill point, 0=upstream ..
-            1=downstream. Default 0.25 (near the top of the reach so the plume has
-            room to travel).
-        spill_duration_s: how long the dye source injects before it turns off
-            (the finite pulse window), seconds. Default 300.
+        location: place name near the river (e.g. "Twin Falls, Idaho").
+            Supply this OR ``bbox`` - geocoded, never hand-typed coords.
+        bbox: OPTIONAL explicit AOI ``(min_lon, min_lat, max_lon, max_lat)``
+            EPSG:4326. Supply this OR ``location``.
+        spill_fraction: along-reach spill position, 0=upstream..1=downstream.
+            Default 0.25.
+        spill_duration_s: finite pulse injection window, seconds. Default 300.
         dye_concentration_mgl: source dye concentration, mg/L. Default 100.
-        reach_length_km: how far downstream to model from the release, km.
+        reach_length_km: modeled reach length downstream of release, km.
             Default 6.
         sim_duration_s: simulated physical time, seconds. Default 3600.
-        source_q_m3s: carrier discharge of the point source, m3/s (small vs the
-            river inflow). Default 8.
-        channel_width_m: modeled channel width, m. Default 60 (a broad river).
-        river_geometry_uri: OPTIONAL. If you ALREADY called
-            ``fetch_river_geometry`` for this reach, pass its returned layer
-            ``uri`` here and this tool reuses that flowline for the spill point
-            (no re-fetch). Otherwise leave unset and the tool fetches the reach
-            itself from the place / AOI. (You do NOT need to fetch the river
-            first -- ``location`` alone is enough.)
-        mesh_resolution: mesh GRANULARITY lever (BK-3c). One of ``"auto"`` (the
-            default - the tool sizes the mesh from the reach geometry under a node
-            budget), ``"fine"`` (more cells across the channel; sharper plume,
-            slower solve), or ``"coarse"`` (fewer cells; faster, blockier). Set it
-            from the user's intent, e.g. "high-res mesh" -> ``"fine"``, "quick /
-            coarse run" -> ``"coarse"``. NOT hardcoded - the chosen edge length +
-            node estimate come back on the layer so they can be shown/approved.
-        mesh_resolution_m: OPTIONAL explicit mesh target edge length in METERS
-            (e.g. 8.0). Overrides ``mesh_resolution``. Still clamped under the node
-            budget so a reckless value can't wedge the solve. Leave unset unless
-            the user asks for a specific resolution.
-        release_lon: EPSG:4326 longitude of the USER-PICKED spill point (BK-6).
-            Comes from the approve-mesh gate's map click - do NOT invent it.
-        release_lat: EPSG:4326 latitude of the user-picked spill point.
-        substance: WHAT was spilled - e.g. "dye", "oil", "diesel", "sewage",
-            "chemical". Set from the user's words. Modeled as a PASSIVELY
-            ADVECTED dissolved tracer (transport + dilution); labels/narration
-            follow the substance. THREE substance classes route automatically:
-            oil-family words ("oil"/"diesel"/"crude"/"bunker") add the oil-spill
-            slick module; DECAYING / BACTERIAL words ("sewage"/"E. coli"/
-            "coliform"/"effluent"/"wastewater"/"bacteria"/"die-off") add the
-            WAQTEL first-order DECAY module (WATER QUALITY PROCESS = 17) so the
-            plume ALSO decays as it travels - the downstream peak is lower and
-            the pulse persists a shorter time than a plain conservative dye;
-            SEDIMENT words ("sediment"/"sand"/"silt"/"mud"/"slurry"/"tailings"/
-            "sediment-laden runoff") activate the GAIA sediment module: the
-            suspended sediment SETTLES and DEPOSITS on the bed as it travels, so
-            you also get a "where and how much did it deposit" bed-deposition map
-            (mm) beside the concentration ribbon - answering "sediment washes down
-            the river, where does it settle out". everything else is the plain
-            conservative dye tracer. (True oil-slick physics - spreading,
-            evaporation, beaching - is the oil-spill module.)
-        decay_half_life_hours: OPTIONAL. For a DECAYING substance only, the
-            first-order half-life in HOURS (overrides the classify default). The
-            WAQTEL decay coefficient is k = ln(2)/half_life. Honest literature
-            defaults if unset: bacterial die-off ~ a T90 of ~2 h in daylight
-            freshwater (fecal-coliform / E. coli). Clamped to [0.1, 720] h. Set
-            from the user's words (e.g. "half-life of 6 hours"); do NOT invent it.
-        decay_rate_per_day: OPTIONAL alternative to ``decay_half_life_hours`` for
-            a decaying substance - the first-order decay rate k in per-DAY units
-            (WAQTEL law 3). Clamped to [0.01, 100] /day. Use one or the other.
-        grain_size_um: OPTIONAL. For a SEDIMENT substance only, the median grain
-            diameter d50 in MICRONS (sets how fast it settles: ~200 um fine sand
-            deposits within a few-km reach, ~20 um silt mostly stays in suspension
-            and exits). Default 200 (fine sand); clamped to [5, 2000]. An HONEST
-            demo default / user override - there is no site bed-composition
-            fetcher, so never presented as a measured value. Set from the user's
-            words (e.g. "silt" -> ~20, "fine sand" -> ~150).
-        sediment_type: OPTIONAL alias for a SEDIMENT substance - one of "sand" /
-            "silt" / "mud" - which also picks the default grain size when
-            grain_size_um is unset. All modeled as non-cohesive in v1 (cohesive
-            mud is a future upgrade), narrated honestly.
-        friction_coefficient: OPTIONAL ADVANCED / demo-default lever. The bed
-            roughness coefficient (Strickler Ks by default) that governs flow
-            velocity down the reach. Leave UNSET for the demo default (33,
-            Strickler) - the deck is byte-identical when unset. Set it ONLY when
-            the user gives a site-specific roughness. Clamped to [10, 90].
-            Narrate a set value as user-provided, an unset one as a demo default.
-        friction_law: OPTIONAL ADVANCED lever - the bottom-friction law that
-            interprets ``friction_coefficient``: 2=Chezy, 3=Strickler (default),
-            4=Manning. Set this WITH ``friction_coefficient`` when the user gives
-            a Manning n or Chezy C instead of a Strickler Ks. Leave unset for the
-            demo default (3).
-        velocity_diffusivity: OPTIONAL ADVANCED / demo-default lever - the
-            turbulent momentum diffusivity nu_t (m2/s) controlling jet/wake
-            spread. Leave unset for the demo default (0.1). Clamped to
-            [1e-3, 10]. Set only from a user-provided value.
-        tracer_diffusivity: OPTIONAL ADVANCED / demo-default lever - the
-            dye/tracer diffusivity (m2/s) that directly sets how fast the plume
-            spreads laterally. Leave unset for the demo default (0.1). Clamped to
-            [1e-3, 10]. Set only from a user-provided value.
+        source_q_m3s: point-source discharge, m3/s (small vs river inflow).
+            Default 8.
+        channel_width_m: modeled channel width, m. Default 60.
+        river_geometry_uri: OPTIONAL. If already called
+            ``fetch_river_geometry`` for this reach, pass its returned
+            ``uri`` to reuse the flowline (no re-fetch); otherwise the tool
+            fetches it itself from ``location``/``bbox``.
+        mesh_resolution: ``"auto"`` (default - sizes mesh from reach geometry
+            under a node budget) | ``"fine"`` (sharper plume, slower solve) |
+            ``"coarse"`` (faster, blockier). Set from user intent
+            ("high-res" -> fine, "quick/coarse run" -> coarse).
+        mesh_resolution_m: OPTIONAL explicit target edge length in METERS;
+            overrides ``mesh_resolution``, still clamped under the node budget.
+        release_lon / release_lat: EPSG:4326 spill point from the approve-mesh
+            gate's map click - do NOT invent.
+        substance: what was spilled, e.g. "dye"/"oil"/"diesel"/"sewage"/
+            "chemical" - modeled as a passively advected dissolved tracer;
+            THREE classes route automatically by keyword: oil-family
+            ("oil"/"diesel"/"crude"/"bunker") adds the oil-spill slick
+            module; decaying/bacterial ("sewage"/"E. coli"/"coliform"/
+            "effluent"/"wastewater"/"bacteria"/"die-off") adds the WAQTEL
+            first-order decay module (lower downstream peak, shorter
+            persistence); sediment ("sediment"/"sand"/"silt"/"mud"/"slurry"/
+            "tailings") activates the GAIA module (settles + deposits on the
+            bed -> adds a bed-deposition map in mm beside the concentration
+            ribbon). Everything else is a plain conservative dye tracer.
+        decay_half_life_hours: OPTIONAL, decaying substance only - first-order
+            half-life in HOURS (k = ln(2)/half_life). Default honest
+            literature value ~2h (bacterial T90 in daylight freshwater).
+            Clamped [0.1, 720].
+        decay_rate_per_day: OPTIONAL alternative to
+            ``decay_half_life_hours`` - decay rate k per DAY. Clamped
+            [0.01, 100]. Use one or the other.
+        grain_size_um: OPTIONAL, sediment substance only - median grain
+            diameter d50 in MICRONS (~200um fine sand settles within a few
+            km, ~20um silt mostly stays suspended). Default 200; clamped
+            [5, 2000]. Honest demo default (no site bed-composition
+            fetcher) unless user-specified.
+        sediment_type: OPTIONAL sediment alias - "sand"/"silt"/"mud" - picks
+            default grain size when ``grain_size_um`` unset. Non-cohesive
+            in v1.
+        friction_coefficient: OPTIONAL ADVANCED lever - bed roughness
+            (Strickler Ks). Leave unset for demo default (33); clamped
+            [10, 90]. Set only from a site-specific user value.
+        friction_law: OPTIONAL ADVANCED lever - law interpreting
+            ``friction_coefficient``: 2=Chezy, 3=Strickler (default),
+            4=Manning. Set with ``friction_coefficient`` for a Manning n or
+            Chezy C.
+        velocity_diffusivity: OPTIONAL ADVANCED lever - turbulent momentum
+            diffusivity nu_t (m2/s). Default 0.1; clamped [1e-3, 10].
+        tracer_diffusivity: OPTIONAL ADVANCED lever - dye/tracer diffusivity
+            (m2/s), sets lateral plume spread. Default 0.1; clamped
+            [1e-3, 10].
         compute_class: FR-CE-3 compute class. Default ``"medium"``.
 
     Returns:
-        On success: a ``TelemacDyeLayerURI`` (a ``LayerURI`` subtype) - the emitter
-        appends it to ``session-state.loaded_layers`` and the map renders the peak
-        dye COG; the client also materializes + animates the SELAFIN mesh sibling.
-        It carries ``dye_cmax_mgl`` + ``dye_peak_time_s`` + ``plume_reach_m`` +
-        ``active_frames`` (Invariant 1 - the agent narrates these typed numbers,
-        never invents them) + a ``fallback_note`` labeling it an idealized-bed demo.
+        On success: ``TelemacDyeLayerURI`` (``LayerURI`` subtype) - emitter
+        loads it onto the map (peak dye COG) and the client animates the
+        SELAFIN mesh sibling. Carries ``dye_cmax_mgl`` / ``dye_peak_time_s`` /
+        ``plume_reach_m`` / ``active_frames`` (narrate these typed numbers
+        only - invariant 1) + a ``fallback_note`` (idealized-bed demo).
+        On failure: dict with ``status="error"`` + ``error_code`` +
+        ``error_message`` (no layer).
 
-        On failure: a dict with ``status="error"`` + ``error_code`` +
-        ``error_message`` so the LLM narrates the failure honestly (no layer).
-
-    FR-DC-6: ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-    ``source_class="workflow_dispatch"`` - the cache shim is NOT invoked.
+    FR-DC-6: ``cacheable=False``, ``ttl_class="live-no-cache"``,
+    ``source_class="workflow_dispatch"`` - cache shim not invoked.
     """
     coerced_bbox: tuple[float, float, float, float] | None = None
     if bbox is not None:

@@ -1,106 +1,4 @@
-"""``fetch_cdc_svi`` atomic tool -- CDC/ATSDR Social Vulnerability Index (SVI)
-census-tract choropleth polygons.
-
-Wraps CDC/ATSDR's public ArcGIS REST (OneMap) FeatureServer for the
-**Social Vulnerability Index 2022** (the most-recent published vintage). The
-SVI ranks every U.S. census tract on 16 social factors grouped into four
-themes, producing percentile-rank scores in ``[0, 1]`` where higher = more
-socially vulnerable. This tool returns the **tract-level** layer (layer 2),
-clipped to a user bbox, as a FlatGeobuf choropleth polygon layer.
-
-**What it does:**
-Fetches census-tract polygons intersecting a bbox and returns a FlatGeobuf
-with the overall summary ranking ``rpl_themes`` (``RPL_THEMES``) plus the four
-theme percentile rankings:
-
-    - ``rpl_theme1`` -> Theme 1: Socioeconomic Status
-    - ``rpl_theme2`` -> Theme 2: Household Characteristics
-    - ``rpl_theme3`` -> Theme 3: Racial & Ethnic Minority Status
-    - ``rpl_theme4`` -> Theme 4: Housing Type & Transportation
-
-plus tract identity attributes (``fips``, ``county``, ``state_abbr``,
-``location``, ``total_pop``) for narration, choropleth display, and downstream
-exposure/vulnerability intersections. CDC's ``-999`` null sentinel is
-normalized to ``null`` so the choropleth does not render suppressed tracts as
-extreme-low values.
-
-**When to use:**
-- User asks for the CDC SVI, social vulnerability, "which neighborhoods are
-  most vulnerable", or an equity / environmental-justice overlay.
-- Agent needs a vulnerability surface to combine with a hazard footprint
-  (flood inundation, wildfire perimeter, heat, plume) to find the most
-  socially vulnerable exposed population.
-- User asks "show social vulnerability for <city/county>" or "rank tracts by
-  vulnerability in this area".
-
-**When NOT to use:**
-- For raw demographic counts (population, income, race) -> use a Census/ACS
-  fetcher; SVI publishes *percentile rankings*, not the underlying estimates.
-- For county-level SVI (coarser) -> this tool returns tract-level (layer 2).
-  A county variant could query layer 1; not exposed here (tracts are the
-  standard analytical unit for vulnerability work).
-- For areas outside the United States -> SVI coverage is U.S.-only (50 states
-  + DC; tract geography). Honest empty FGB outside coverage.
-- For a different vintage (2020, 2018, ...) -> this tool pins SVI **2022**
-  (the latest published). Older vintages are separate services.
-
-**Parameters:**
-    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326 (WGS84
-        decimal degrees). Required -- ``supports_global_query=False`` (a
-        nationwide tract query would return ~85k polygons). Recommended a
-        county-or-smaller extent. Example for urban Houston / Harris County TX:
-        ``(-95.45, 29.65, -95.25, 29.85)``.
-
-**Returns:**
-    ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Each feature is
-    a Polygon (census tract) in EPSG:4326. Properties: ``fips`` (str, 11-digit
-    tract FIPS), ``county`` (str), ``state_abbr`` (str), ``location`` (str,
-    human label), ``total_pop`` (int|null), ``rpl_themes`` (float|null, overall
-    percentile rank in [0,1]), ``rpl_theme1..rpl_theme4`` (float|null, per-theme
-    percentile ranks). ``layer_type="vector"``, ``role="primary"``,
-    ``style_preset="cdc_svi"``, ``units="percentile"``.
-
-**Cross-tool dependencies:**
-    - Often paired with a hazard footprint (``run_model_flood_scenario`` /
-      ``fetch_noaa_slr_scenarios`` / ``fetch_firms_active_fire``) ->
-      ``compute_zonal_statistics`` or vector intersection for
-      "most-vulnerable exposed tracts".
-    - Feeds ``clip_vector_to_polygon`` when combined with
-      ``fetch_administrative_boundaries`` for city/county-scoped reports.
-
-**Cache:** ``static-30d`` (FR-DC-2). SVI is published annually; a 30-day
-stale window is fully appropriate.
-
-**FR-AS-11 typed-error surface:** ``CDC_SVIError`` (base, retryable=True),
-``CDC_SVIInputError`` (non-retryable bbox validation), ``CDC_SVIUpstreamError``
-(retryable ArcGIS REST network / HTTP / parse failure), ``CDC_SVIEmptyError``
-(no tracts in bbox -- NOT raised by default; an empty FGB is serialized so the
-layer still appears with a zero-feature notice -- e.g. a bbox over open ocean
-or outside the U.S.).
-
-**FR-DC-9 payload estimation:** ~3 MB per square degree of urban area (tract
-polygons are detailed). Clipped to [0.02, 80] MB.
-
-``supports_global_query=False`` -- U.S. tract polygon source.
-
-Endpoint (verified live 2026-06-27):
-    https://onemap.cdc.gov/onemapservices/rest/services/SVI/
-        CDC_ATSDR_Social_Vulnerability_Index_2022_USA/FeatureServer/2/query
-
-    Query parameters::
-        where=1=1
-        geometry={xmin,ymin,xmax,ymax}
-        geometryType=esriGeometryEnvelope
-        inSR=4326
-        spatialRel=esriSpatialRelIntersects
-        outFields=FIPS,STATE,ST_ABBR,COUNTY,LOCATION,E_TOTPOP,
-                  RPL_THEMES,RPL_THEME1,RPL_THEME2,RPL_THEME3,RPL_THEME4
-        outSR=4326
-        f=geojson
-        resultRecordCount=2000
-        resultOffset={offset}   (paginated; maxRecordCount=2000)
-
-    Layer 1 = county, layer 2 = tract (used here). Coverage: 50 states + DC.
+"""``fetch_cdc_svi`` atomic tool -- CDC/ATSDR Social Vulnerability Index (SVI) census-tract choropleth polygons.
 """
 
 from __future__ import annotations
@@ -620,14 +518,14 @@ def fetch_cdc_svi(
         (float|null, per-theme percentiles). ``layer_type="vector"``,
         ``role="primary"``, ``style_preset="cdc_svi"``, ``units="percentile"``.
 
-    **Cross-tool dependencies (FR-TA-3):**
+    **Cross-tool dependencies:**
         - Feeds INTO: ``compute_zonal_statistics`` (vulnerable population inside
           a hazard footprint), ``clip_vector_to_polygon`` (admin-bounded SVI).
         - Combine WITH: ``run_model_flood_scenario`` / ``fetch_noaa_slr_scenarios``
           / ``fetch_firms_active_fire`` (hazard footprints) for vulnerability-
           weighted exposure; ``fetch_administrative_boundaries`` (county scope).
 
-    **Error types (FR-AS-11):**
+    **Error types:**
         - ``CDC_SVIInputError``: bad bbox (retryable=False).
         - ``CDC_SVIUpstreamError``: HTTP/network failure, ArcGIS error envelope,
           or FlatGeobuf serialization failure (retryable=True).

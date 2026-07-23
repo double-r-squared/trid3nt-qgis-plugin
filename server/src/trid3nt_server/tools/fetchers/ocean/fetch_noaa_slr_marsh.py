@@ -1,17 +1,4 @@
 """``fetch_noaa_slr_marsh`` -- NOAA SLR MARSH-MIGRATION raster fetcher.
-
-The ``marsh_*`` sibling of ``fetch_noaa_slr_scenarios`` (named at that module's
-docstring L732-734). Returns NOAA OCM's marsh-migration projection raster for one
-SLR level: a symbolized overlay of how coastal wetland / marsh classes shift
-(transition, drown, or migrate inland) under that amount of sea-level rise.
-CONUS coastal only.
-
-Reads NOAA OCM ``dc_slr/marsh_<NNN>`` MapServer (anonymous / no key, where
-``NNN`` = SLR ft x 100, e.g. ``marsh_300`` = 3.0 ft) via the shared
-``_noaa_slr_raster`` export path -> a 4-band RGBA COG with the marsh-class
-symbology baked in, rendered directly by publish_layer's RGBA passthrough.
-
-ASCII only.
 """
 
 from __future__ import annotations

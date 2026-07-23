@@ -1,0 +1,1717 @@
+{
+  "duckdb_version": "1.5.5",
+  "extension": "spatial",
+  "generated_by": "scripts/vendor helper (see docs/decisions/0019)",
+  "functions": [
+    {
+      "function": "ST_Affine",
+      "function_type": "scalar",
+      "signature": "ST_Affine(geom GEOMETRY, a DOUBLE, b DOUBLE, c DOUBLE, d DOUBLE, e DOUBLE, f DOUBLE, g DOUBLE, h DOUBLE, i DOUBLE, xoff DOUBLE, yoff DOUBLE, zoff DOUBLE) -> GEOMETRY",
+      "description": "Applies an affine transformation to a geometry."
+    },
+    {
+      "function": "ST_Affine",
+      "function_type": "scalar",
+      "signature": "ST_Affine(geom GEOMETRY, a DOUBLE, b DOUBLE, d DOUBLE, e DOUBLE, xoff DOUBLE, yoff DOUBLE) -> GEOMETRY",
+      "description": "Applies an affine transformation to a geometry."
+    },
+    {
+      "function": "ST_Area",
+      "function_type": "scalar",
+      "signature": "ST_Area(box BOX_2D) -> DOUBLE",
+      "description": "Compute the area of a geometry."
+    },
+    {
+      "function": "ST_Area",
+      "function_type": "scalar",
+      "signature": "ST_Area(geom GEOMETRY) -> DOUBLE",
+      "description": "Compute the area of a geometry."
+    },
+    {
+      "function": "ST_Area",
+      "function_type": "scalar",
+      "signature": "ST_Area(linestring LINESTRING_2D) -> DOUBLE",
+      "description": "Compute the area of a geometry."
+    },
+    {
+      "function": "ST_Area",
+      "function_type": "scalar",
+      "signature": "ST_Area(point POINT_2D) -> DOUBLE",
+      "description": "Compute the area of a geometry."
+    },
+    {
+      "function": "ST_Area",
+      "function_type": "scalar",
+      "signature": "ST_Area(polygon POLYGON_2D) -> DOUBLE",
+      "description": "Compute the area of a geometry."
+    },
+    {
+      "function": "ST_Area_Spheroid",
+      "function_type": "scalar",
+      "signature": "ST_Area_Spheroid(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the area of a geometry in meters, using an ellipsoidal model of the earth"
+    },
+    {
+      "function": "ST_Area_Spheroid",
+      "function_type": "scalar",
+      "signature": "ST_Area_Spheroid(poly POLYGON_2D) -> DOUBLE",
+      "description": "Returns the area of a geometry in meters, using an ellipsoidal model of the earth"
+    },
+    {
+      "function": "ST_AsGeoJSON",
+      "function_type": "scalar",
+      "signature": "ST_AsGeoJSON(geom GEOMETRY) -> JSON",
+      "description": "Returns the geometry as a GeoJSON fragment"
+    },
+    {
+      "function": "ST_AsHEXWKB",
+      "function_type": "scalar",
+      "signature": "ST_AsHEXWKB(geom GEOMETRY) -> VARCHAR",
+      "description": "Returns the geometry as a HEXWKB string"
+    },
+    {
+      "function": "ST_AsMVT",
+      "function_type": "aggregate",
+      "signature": "ST_AsMVT(col0 ANY) -> BLOB",
+      "description": "Make a Mapbox Vector Tile from a set of geometries and properties The function takes as input a row type (STRUCT) containing a geometry column and any number of property columns. It returns a single binary BLOB containing the Mapbox Vector Tile."
+    },
+    {
+      "function": "ST_AsMVT",
+      "function_type": "aggregate",
+      "signature": "ST_AsMVT(col0 ANY, col1 VARCHAR) -> BLOB",
+      "description": "Make a Mapbox Vector Tile from a set of geometries and properties The function takes as input a row type (STRUCT) containing a geometry column and any number of property columns. It returns a single binary BLOB containing the Mapbox Vector Tile."
+    },
+    {
+      "function": "ST_AsMVT",
+      "function_type": "aggregate",
+      "signature": "ST_AsMVT(col0 ANY, col1 VARCHAR, col2 INTEGER) -> BLOB",
+      "description": "Make a Mapbox Vector Tile from a set of geometries and properties The function takes as input a row type (STRUCT) containing a geometry column and any number of property columns. It returns a single binary BLOB containing the Mapbox Vector Tile."
+    },
+    {
+      "function": "ST_AsMVT",
+      "function_type": "aggregate",
+      "signature": "ST_AsMVT(col0 ANY, col1 VARCHAR, col2 INTEGER, col3 VARCHAR) -> BLOB",
+      "description": "Make a Mapbox Vector Tile from a set of geometries and properties The function takes as input a row type (STRUCT) containing a geometry column and any number of property columns. It returns a single binary BLOB containing the Mapbox Vector Tile."
+    },
+    {
+      "function": "ST_AsMVT",
+      "function_type": "aggregate",
+      "signature": "ST_AsMVT(col0 ANY, col1 VARCHAR, col2 INTEGER, col3 VARCHAR, col4 VARCHAR) -> BLOB",
+      "description": "Make a Mapbox Vector Tile from a set of geometries and properties The function takes as input a row type (STRUCT) containing a geometry column and any number of property columns. It returns a single binary BLOB containing the Mapbox Vector Tile."
+    },
+    {
+      "function": "ST_AsMVTGeom",
+      "function_type": "scalar",
+      "signature": "ST_AsMVTGeom(geom GEOMETRY, bounds BOX_2D) -> GEOMETRY",
+      "description": "Transform and clip geometry to a tile boundary"
+    },
+    {
+      "function": "ST_AsMVTGeom",
+      "function_type": "scalar",
+      "signature": "ST_AsMVTGeom(geom GEOMETRY, bounds BOX_2D, extent BIGINT) -> GEOMETRY",
+      "description": "Transform and clip geometry to a tile boundary"
+    },
+    {
+      "function": "ST_AsMVTGeom",
+      "function_type": "scalar",
+      "signature": "ST_AsMVTGeom(geom GEOMETRY, bounds BOX_2D, extent BIGINT, buffer BIGINT) -> GEOMETRY",
+      "description": "Transform and clip geometry to a tile boundary"
+    },
+    {
+      "function": "ST_AsMVTGeom",
+      "function_type": "scalar",
+      "signature": "ST_AsMVTGeom(geom GEOMETRY, bounds BOX_2D, extent BIGINT, buffer BIGINT, clip_geom BOOLEAN) -> GEOMETRY",
+      "description": "Transform and clip geometry to a tile boundary"
+    },
+    {
+      "function": "ST_AsSVG",
+      "function_type": "scalar",
+      "signature": "ST_AsSVG(geom GEOMETRY, relative BOOLEAN, precision INTEGER) -> VARCHAR",
+      "description": "Convert the geometry into a SVG fragment or path"
+    },
+    {
+      "function": "ST_Azimuth",
+      "function_type": "scalar",
+      "signature": "ST_Azimuth(origin GEOMETRY, target GEOMETRY) -> DOUBLE",
+      "description": "Returns the azimuth (a clockwise angle measured from north) of two points in radian."
+    },
+    {
+      "function": "ST_Azimuth",
+      "function_type": "scalar",
+      "signature": "ST_Azimuth(origin POINT_2D, target POINT_2D) -> DOUBLE",
+      "description": "Returns the azimuth (a clockwise angle measured from north) of two points in radian."
+    },
+    {
+      "function": "ST_Boundary",
+      "function_type": "scalar",
+      "signature": "ST_Boundary(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the \"boundary\" of a geometry"
+    },
+    {
+      "function": "ST_Buffer",
+      "function_type": "scalar",
+      "signature": "ST_Buffer(geom GEOMETRY, distance DOUBLE) -> GEOMETRY",
+      "description": "Returns a buffer around the input geometry at the target distance"
+    },
+    {
+      "function": "ST_Buffer",
+      "function_type": "scalar",
+      "signature": "ST_Buffer(geom GEOMETRY, distance DOUBLE, num_triangles INTEGER) -> GEOMETRY",
+      "description": "Returns a buffer around the input geometry at the target distance"
+    },
+    {
+      "function": "ST_Buffer",
+      "function_type": "scalar",
+      "signature": "ST_Buffer(geom GEOMETRY, distance DOUBLE, num_triangles INTEGER, cap_style VARCHAR, join_style VARCHAR, mitre_limit DOUBLE) -> GEOMETRY",
+      "description": "Returns a buffer around the input geometry at the target distance"
+    },
+    {
+      "function": "ST_BuildArea",
+      "function_type": "scalar",
+      "signature": "ST_BuildArea(geom GEOMETRY) -> GEOMETRY",
+      "description": "Creates a polygonal geometry by attempting to \"fill in\" the input geometry."
+    },
+    {
+      "function": "ST_Centroid",
+      "function_type": "scalar",
+      "signature": "ST_Centroid(box BOX_2D) -> POINT_2D",
+      "description": "Returns the centroid of a geometry"
+    },
+    {
+      "function": "ST_Centroid",
+      "function_type": "scalar",
+      "signature": "ST_Centroid(box BOX_2DF) -> POINT_2D",
+      "description": "Returns the centroid of a geometry"
+    },
+    {
+      "function": "ST_Centroid",
+      "function_type": "scalar",
+      "signature": "ST_Centroid(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the centroid of a geometry"
+    },
+    {
+      "function": "ST_Centroid",
+      "function_type": "scalar",
+      "signature": "ST_Centroid(linestring LINESTRING_2D) -> POINT_2D",
+      "description": "Returns the centroid of a geometry"
+    },
+    {
+      "function": "ST_Centroid",
+      "function_type": "scalar",
+      "signature": "ST_Centroid(point POINT_2D) -> POINT_2D",
+      "description": "Returns the centroid of a geometry"
+    },
+    {
+      "function": "ST_Centroid",
+      "function_type": "scalar",
+      "signature": "ST_Centroid(polygon POLYGON_2D) -> POINT_2D",
+      "description": "Returns the centroid of a geometry"
+    },
+    {
+      "function": "ST_ClosestPoint",
+      "function_type": "scalar",
+      "signature": "ST_ClosestPoint(geom1 GEOMETRY, geom2 GEOMETRY) -> GEOMETRY",
+      "description": "Returns the closest point on the first geometry to the second geometry"
+    },
+    {
+      "function": "ST_Collect",
+      "function_type": "scalar",
+      "signature": "ST_Collect(geoms GEOMETRY[]) -> GEOMETRY",
+      "description": "Collects a list of geometries into a collection geometry. - If all geometries are `POINT`'s, a `MULTIPOINT` is returned. - If all geometries are `LINESTRING`'s, a `MULTILINESTRING` is returned. - If all geometries are `POLYGON`'s, a `MULTIPOLYGON` is returned. - Otherwise if the input collection contains a mix of geometry types, a `GEOMETRYCOLLECTION` is returned."
+    },
+    {
+      "function": "ST_CollectionExtract",
+      "function_type": "scalar",
+      "signature": "ST_CollectionExtract(geom GEOMETRY) -> GEOMETRY",
+      "description": "Extracts geometries from a GeometryCollection into a typed multi geometry."
+    },
+    {
+      "function": "ST_CollectionExtract",
+      "function_type": "scalar",
+      "signature": "ST_CollectionExtract(geom GEOMETRY, type INTEGER) -> GEOMETRY",
+      "description": "Extracts geometries from a GeometryCollection into a typed multi geometry."
+    },
+    {
+      "function": "ST_ConcaveHull",
+      "function_type": "scalar",
+      "signature": "ST_ConcaveHull(geom GEOMETRY, ratio DOUBLE, allowHoles BOOLEAN) -> GEOMETRY",
+      "description": "Returns the 'concave' hull of the input geometry, containing all of the source input's points, and which can be used to create polygons from points. The ratio parameter dictates the level of concavity; 1.0 returns the convex hull; and 0 indicates to return the most concave hull possible. Set allowHoles to a non-zero value to allow output containing holes."
+    },
+    {
+      "function": "ST_Contains",
+      "function_type": "scalar",
+      "signature": "ST_Contains(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the first geometry contains the second geometry"
+    },
+    {
+      "function": "ST_Contains",
+      "function_type": "scalar",
+      "signature": "ST_Contains(geom1 POLYGON_2D, geom2 POINT_2D) -> BOOLEAN",
+      "description": ""
+    },
+    {
+      "function": "ST_ContainsProperly",
+      "function_type": "scalar",
+      "signature": "ST_ContainsProperly(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the first geometry \\\"properly\\\" contains the second geometry"
+    },
+    {
+      "function": "ST_ConvexHull",
+      "function_type": "scalar",
+      "signature": "ST_ConvexHull(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the convex hull enclosing the geometry"
+    },
+    {
+      "function": "ST_CoverageClean",
+      "function_type": "scalar",
+      "signature": "ST_CoverageClean(geoms GEOMETRY[]) -> GEOMETRY",
+      "description": "Aligns the edges of a list of polygons whose edges are meant to align but are in fact exact matches."
+    },
+    {
+      "function": "ST_CoverageClean",
+      "function_type": "scalar",
+      "signature": "ST_CoverageClean(geoms GEOMETRY[], snapping_distance DOUBLE) -> GEOMETRY",
+      "description": "Aligns the edges of a list of polygons whose edges are meant to align but are in fact exact matches."
+    },
+    {
+      "function": "ST_CoverageClean",
+      "function_type": "scalar",
+      "signature": "ST_CoverageClean(geoms GEOMETRY[], snapping_distance DOUBLE, gap_maximum_width DOUBLE) -> GEOMETRY",
+      "description": "Aligns the edges of a list of polygons whose edges are meant to align but are in fact exact matches."
+    },
+    {
+      "function": "ST_CoverageInvalidEdges",
+      "function_type": "scalar",
+      "signature": "ST_CoverageInvalidEdges(geoms GEOMETRY[]) -> GEOMETRY",
+      "description": "Returns the invalid edges in a polygonal coverage, which are edges that are not shared by two polygons. Returns NULL if the input is not a polygonal coverage, or if the input is valid. Tolerance is 0 by default."
+    },
+    {
+      "function": "ST_CoverageInvalidEdges",
+      "function_type": "scalar",
+      "signature": "ST_CoverageInvalidEdges(geoms GEOMETRY[], tolerance DOUBLE) -> GEOMETRY",
+      "description": "Returns the invalid edges in a polygonal coverage, which are edges that are not shared by two polygons. Returns NULL if the input is not a polygonal coverage, or if the input is valid. Tolerance is 0 by default."
+    },
+    {
+      "function": "ST_CoverageInvalidEdges_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_CoverageInvalidEdges_Agg(col0 GEOMETRY) -> GEOMETRY",
+      "description": "Returns the invalid edges of a coverage geometry"
+    },
+    {
+      "function": "ST_CoverageInvalidEdges_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_CoverageInvalidEdges_Agg(col0 GEOMETRY, col1 DOUBLE) -> GEOMETRY",
+      "description": "Returns the invalid edges of a coverage geometry"
+    },
+    {
+      "function": "ST_CoverageSimplify",
+      "function_type": "scalar",
+      "signature": "ST_CoverageSimplify(geoms GEOMETRY[], tolerance DOUBLE) -> GEOMETRY",
+      "description": "Simplify the edges in a polygonal coverage, preserving the coverange by ensuring that the there are no seams between the resulting simplified polygons."
+    },
+    {
+      "function": "ST_CoverageSimplify",
+      "function_type": "scalar",
+      "signature": "ST_CoverageSimplify(geoms GEOMETRY[], tolerance DOUBLE, simplify_boundary BOOLEAN) -> GEOMETRY",
+      "description": "Simplify the edges in a polygonal coverage, preserving the coverange by ensuring that the there are no seams between the resulting simplified polygons."
+    },
+    {
+      "function": "ST_CoverageSimplify_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_CoverageSimplify_Agg(col0 GEOMETRY, col1 DOUBLE) -> GEOMETRY",
+      "description": "Simplifies a set of geometries while maintaining coverage"
+    },
+    {
+      "function": "ST_CoverageSimplify_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_CoverageSimplify_Agg(col0 GEOMETRY, col1 DOUBLE, col2 BOOLEAN) -> GEOMETRY",
+      "description": "Simplifies a set of geometries while maintaining coverage"
+    },
+    {
+      "function": "ST_CoverageUnion",
+      "function_type": "scalar",
+      "signature": "ST_CoverageUnion(geoms GEOMETRY[]) -> GEOMETRY",
+      "description": "Union all geometries in a polygonal coverage into a single geometry. This may be faster than using `ST_Union`, but may use more memory."
+    },
+    {
+      "function": "ST_CoverageUnion_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_CoverageUnion_Agg(col0 GEOMETRY) -> GEOMETRY",
+      "description": "Unions a set of geometries while maintaining coverage"
+    },
+    {
+      "function": "ST_CoveredBy",
+      "function_type": "scalar",
+      "signature": "ST_CoveredBy(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if geom1 is \"covered by\" geom2"
+    },
+    {
+      "function": "ST_Covers",
+      "function_type": "scalar",
+      "signature": "ST_Covers(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geom1 \"covers\" geom2"
+    },
+    {
+      "function": "ST_Crosses",
+      "function_type": "scalar",
+      "signature": "ST_Crosses(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if geom1 \"crosses\" geom2"
+    },
+    {
+      "function": "ST_DWithin",
+      "function_type": "scalar",
+      "signature": "ST_DWithin(geom1 GEOMETRY, geom2 GEOMETRY, distance DOUBLE) -> BOOLEAN",
+      "description": "Returns if two geometries are within a target distance of each-other"
+    },
+    {
+      "function": "ST_DWithin_GEOS",
+      "function_type": "scalar",
+      "signature": "ST_DWithin_GEOS(geom1 GEOMETRY, geom2 GEOMETRY, distance DOUBLE) -> BOOLEAN",
+      "description": "Returns true if two geometries are within a target distance of each-other"
+    },
+    {
+      "function": "ST_DWithin_Spheroid",
+      "function_type": "scalar",
+      "signature": "ST_DWithin_Spheroid(p1 POINT_2D, p2 POINT_2D, distance DOUBLE) -> BOOLEAN",
+      "description": "Returns if two POINT_2D's are within a target distance in meters, using an ellipsoidal model of the earths surface"
+    },
+    {
+      "function": "ST_Difference",
+      "function_type": "scalar",
+      "signature": "ST_Difference(geom1 GEOMETRY, geom2 GEOMETRY) -> GEOMETRY",
+      "description": "Returns the \"difference\" between two geometries"
+    },
+    {
+      "function": "ST_Dimension",
+      "function_type": "scalar",
+      "signature": "ST_Dimension(geom GEOMETRY) -> INTEGER",
+      "description": "Returns the \"topological dimension\" of a geometry."
+    },
+    {
+      "function": "ST_Disjoint",
+      "function_type": "scalar",
+      "signature": "ST_Disjoint(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geometries are disjoint"
+    },
+    {
+      "function": "ST_Distance",
+      "function_type": "scalar",
+      "signature": "ST_Distance(geom1 GEOMETRY, geom2 GEOMETRY) -> DOUBLE",
+      "description": "Returns the planar distance between two geometries"
+    },
+    {
+      "function": "ST_Distance",
+      "function_type": "scalar",
+      "signature": "ST_Distance(linestring LINESTRING_2D, point POINT_2D) -> DOUBLE",
+      "description": "Returns the planar distance between two geometries"
+    },
+    {
+      "function": "ST_Distance",
+      "function_type": "scalar",
+      "signature": "ST_Distance(point POINT_2D, linestring LINESTRING_2D) -> DOUBLE",
+      "description": "Returns the planar distance between two geometries"
+    },
+    {
+      "function": "ST_Distance",
+      "function_type": "scalar",
+      "signature": "ST_Distance(point1 POINT_2D, point2 POINT_2D) -> DOUBLE",
+      "description": "Returns the planar distance between two geometries"
+    },
+    {
+      "function": "ST_Distance_GEOS",
+      "function_type": "scalar",
+      "signature": "ST_Distance_GEOS(geom1 GEOMETRY, geom2 GEOMETRY) -> DOUBLE",
+      "description": "Returns the planar distance between two geometries"
+    },
+    {
+      "function": "ST_Distance_Sphere",
+      "function_type": "scalar",
+      "signature": "ST_Distance_Sphere(geom1 GEOMETRY, geom2 GEOMETRY) -> DOUBLE",
+      "description": "Returns the haversine (great circle) distance between two geometries."
+    },
+    {
+      "function": "ST_Distance_Sphere",
+      "function_type": "scalar",
+      "signature": "ST_Distance_Sphere(point1 POINT_2D, point2 POINT_2D) -> DOUBLE",
+      "description": "Returns the haversine (great circle) distance between two geometries."
+    },
+    {
+      "function": "ST_Distance_Spheroid",
+      "function_type": "scalar",
+      "signature": "ST_Distance_Spheroid(p1 POINT_2D, p2 POINT_2D) -> DOUBLE",
+      "description": "Returns the distance between two geometries in meters using an ellipsoidal model of the earths surface"
+    },
+    {
+      "function": "ST_Drivers",
+      "function_type": "table",
+      "signature": "ST_Drivers()",
+      "description": "Returns the list of supported GDAL drivers and file formats"
+    },
+    {
+      "function": "ST_Dump",
+      "function_type": "scalar",
+      "signature": "ST_Dump(geom GEOMETRY) -> STRUCT(geom GEOMETRY, path INTEGER[])[]",
+      "description": "Dumps a geometry into a list of sub-geometries and their \"path\" in the original geometry."
+    },
+    {
+      "function": "ST_EndPoint",
+      "function_type": "scalar",
+      "signature": "ST_EndPoint(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the end point of a LINESTRING."
+    },
+    {
+      "function": "ST_EndPoint",
+      "function_type": "scalar",
+      "signature": "ST_EndPoint(line LINESTRING_2D) -> POINT_2D",
+      "description": "Returns the end point of a LINESTRING."
+    },
+    {
+      "function": "ST_Envelope",
+      "function_type": "scalar",
+      "signature": "ST_Envelope(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the minimum bounding rectangle of a geometry as a polygon geometry"
+    },
+    {
+      "function": "ST_Envelope_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_Envelope_Agg(col0 GEOMETRY) -> GEOMETRY",
+      "description": "Alias for [ST_Extent_Agg](#st_extent_agg)."
+    },
+    {
+      "function": "ST_Equals",
+      "function_type": "scalar",
+      "signature": "ST_Equals(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geometries are \"equal\""
+    },
+    {
+      "function": "ST_Expand",
+      "function_type": "scalar",
+      "signature": "ST_Expand(geom GEOMETRY, distance DOUBLE) -> GEOMETRY",
+      "description": "Expand the input geometry by the specified distance, returning a polygon."
+    },
+    {
+      "function": "ST_Extent",
+      "function_type": "scalar",
+      "signature": "ST_Extent(geom GEOMETRY) -> BOX_2D",
+      "description": "Returns the minimal bounding box enclosing the input geometry"
+    },
+    {
+      "function": "ST_Extent_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_Extent_Agg(col0 GEOMETRY) -> GEOMETRY",
+      "description": "Computes the minimal-bounding-box polygon containing the set of input geometries"
+    },
+    {
+      "function": "ST_Extent_Approx",
+      "function_type": "scalar",
+      "signature": "ST_Extent_Approx(geom GEOMETRY) -> BOX_2DF",
+      "description": "Returns the approximate bounding box of a geometry, if available."
+    },
+    {
+      "function": "ST_ExteriorRing",
+      "function_type": "scalar",
+      "signature": "ST_ExteriorRing(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the exterior ring (shell) of a polygon geometry."
+    },
+    {
+      "function": "ST_ExteriorRing",
+      "function_type": "scalar",
+      "signature": "ST_ExteriorRing(polygon POLYGON_2D) -> LINESTRING_2D",
+      "description": "Returns the exterior ring (shell) of a polygon geometry."
+    },
+    {
+      "function": "ST_FlipCoordinates",
+      "function_type": "scalar",
+      "signature": "ST_FlipCoordinates(box BOX_2D) -> BOX_2D",
+      "description": "Returns a new geometry with the coordinates of the input geometry \"flipped\" so that x = y and y = x"
+    },
+    {
+      "function": "ST_FlipCoordinates",
+      "function_type": "scalar",
+      "signature": "ST_FlipCoordinates(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns a new geometry with the coordinates of the input geometry \"flipped\" so that x = y and y = x"
+    },
+    {
+      "function": "ST_FlipCoordinates",
+      "function_type": "scalar",
+      "signature": "ST_FlipCoordinates(linestring LINESTRING_2D) -> LINESTRING_2D",
+      "description": "Returns a new geometry with the coordinates of the input geometry \"flipped\" so that x = y and y = x"
+    },
+    {
+      "function": "ST_FlipCoordinates",
+      "function_type": "scalar",
+      "signature": "ST_FlipCoordinates(point POINT_2D) -> POINT_2D",
+      "description": "Returns a new geometry with the coordinates of the input geometry \"flipped\" so that x = y and y = x"
+    },
+    {
+      "function": "ST_FlipCoordinates",
+      "function_type": "scalar",
+      "signature": "ST_FlipCoordinates(polygon POLYGON_2D) -> POLYGON_2D",
+      "description": "Returns a new geometry with the coordinates of the input geometry \"flipped\" so that x = y and y = x"
+    },
+    {
+      "function": "ST_Force2D",
+      "function_type": "scalar",
+      "signature": "ST_Force2D(geom GEOMETRY) -> GEOMETRY",
+      "description": "Forces the vertices of a geometry to have X and Y components"
+    },
+    {
+      "function": "ST_Force3DM",
+      "function_type": "scalar",
+      "signature": "ST_Force3DM(geom GEOMETRY, m DOUBLE) -> GEOMETRY",
+      "description": "Forces the vertices of a geometry to have X, Y and M components"
+    },
+    {
+      "function": "ST_Force3DZ",
+      "function_type": "scalar",
+      "signature": "ST_Force3DZ(geom GEOMETRY, z DOUBLE) -> GEOMETRY",
+      "description": "Forces the vertices of a geometry to have X, Y and Z components"
+    },
+    {
+      "function": "ST_Force4D",
+      "function_type": "scalar",
+      "signature": "ST_Force4D(geom GEOMETRY, z DOUBLE, m DOUBLE) -> GEOMETRY",
+      "description": "Forces the vertices of a geometry to have X, Y, Z and M components"
+    },
+    {
+      "function": "ST_GeneratePoints",
+      "function_type": "table",
+      "signature": "ST_GeneratePoints(col0 BOX_2D, col1 BIGINT)",
+      "description": "Generates a set of random points within the specified bounding box."
+    },
+    {
+      "function": "ST_GeneratePoints",
+      "function_type": "table",
+      "signature": "ST_GeneratePoints(col0 BOX_2D, col1 BIGINT, col2 BIGINT)",
+      "description": "Generates a set of random points within the specified bounding box."
+    },
+    {
+      "function": "ST_GeomFromGeoJSON",
+      "function_type": "scalar",
+      "signature": "ST_GeomFromGeoJSON(geojson JSON) -> GEOMETRY",
+      "description": "Deserializes a GEOMETRY from a GeoJSON fragment."
+    },
+    {
+      "function": "ST_GeomFromGeoJSON",
+      "function_type": "scalar",
+      "signature": "ST_GeomFromGeoJSON(geojson VARCHAR) -> GEOMETRY",
+      "description": "Deserializes a GEOMETRY from a GeoJSON fragment."
+    },
+    {
+      "function": "ST_GeomFromHEXEWKB",
+      "function_type": "scalar",
+      "signature": "ST_GeomFromHEXEWKB(hexwkb VARCHAR) -> GEOMETRY",
+      "description": "Deserialize a GEOMETRY from a HEX(E)WKB encoded string"
+    },
+    {
+      "function": "ST_GeomFromHEXWKB",
+      "function_type": "scalar",
+      "signature": "ST_GeomFromHEXWKB(hexwkb VARCHAR) -> GEOMETRY",
+      "description": "Deserialize a GEOMETRY from a HEX(E)WKB encoded string"
+    },
+    {
+      "function": "ST_GeomFromText",
+      "function_type": "scalar",
+      "signature": "ST_GeomFromText(wkt VARCHAR) -> GEOMETRY",
+      "description": "Deserialize a GEOMETRY from a WKT encoded string"
+    },
+    {
+      "function": "ST_GeomFromText",
+      "function_type": "scalar",
+      "signature": "ST_GeomFromText(wkt VARCHAR, ignore_invalid BOOLEAN) -> GEOMETRY",
+      "description": "Deserialize a GEOMETRY from a WKT encoded string"
+    },
+    {
+      "function": "ST_GeometryType",
+      "function_type": "scalar",
+      "signature": "ST_GeometryType(geom GEOMETRY) -> ANY",
+      "description": "Returns a 'GEOMETRY_TYPE' enum identifying the input geometry type. Possible enum return types are: `POINT`, `LINESTRING`, `POLYGON`, `MULTIPOINT`, `MULTILINESTRING`, `MULTIPOLYGON`, and `GEOMETRYCOLLECTION`."
+    },
+    {
+      "function": "ST_GeometryType",
+      "function_type": "scalar",
+      "signature": "ST_GeometryType(linestring LINESTRING_2D) -> ANY",
+      "description": "Returns a 'GEOMETRY_TYPE' enum identifying the input geometry type. Possible enum return types are: `POINT`, `LINESTRING`, `POLYGON`, `MULTIPOINT`, `MULTILINESTRING`, `MULTIPOLYGON`, and `GEOMETRYCOLLECTION`."
+    },
+    {
+      "function": "ST_GeometryType",
+      "function_type": "scalar",
+      "signature": "ST_GeometryType(point POINT_2D) -> ANY",
+      "description": "Returns a 'GEOMETRY_TYPE' enum identifying the input geometry type. Possible enum return types are: `POINT`, `LINESTRING`, `POLYGON`, `MULTIPOINT`, `MULTILINESTRING`, `MULTIPOLYGON`, and `GEOMETRYCOLLECTION`."
+    },
+    {
+      "function": "ST_GeometryType",
+      "function_type": "scalar",
+      "signature": "ST_GeometryType(polygon POLYGON_2D) -> ANY",
+      "description": "Returns a 'GEOMETRY_TYPE' enum identifying the input geometry type. Possible enum return types are: `POINT`, `LINESTRING`, `POLYGON`, `MULTIPOINT`, `MULTILINESTRING`, `MULTIPOLYGON`, and `GEOMETRYCOLLECTION`."
+    },
+    {
+      "function": "ST_HasM",
+      "function_type": "scalar",
+      "signature": "ST_HasM(geom GEOMETRY) -> BOOLEAN",
+      "description": "Check if the input geometry has M values."
+    },
+    {
+      "function": "ST_HasZ",
+      "function_type": "scalar",
+      "signature": "ST_HasZ(geom GEOMETRY) -> BOOLEAN",
+      "description": "Check if the input geometry has Z values."
+    },
+    {
+      "function": "ST_Hilbert",
+      "function_type": "scalar",
+      "signature": "ST_Hilbert(box BOX_2D, bounds BOX_2D) -> UINTEGER",
+      "description": "Encodes the X and Y values as the hilbert curve index for a curve covering the given bounding box. If a geometry is provided, the center of the approximate bounding box is used as the point to encode. If no bounding box is provided, the hilbert curve index is mapped to the full range of a single-precision float. For the BOX_2D and BOX_2DF variants, the center of the box is used as the point to ..."
+    },
+    {
+      "function": "ST_Hilbert",
+      "function_type": "scalar",
+      "signature": "ST_Hilbert(box BOX_2DF, bounds BOX_2DF) -> UINTEGER",
+      "description": "Encodes the X and Y values as the hilbert curve index for a curve covering the given bounding box. If a geometry is provided, the center of the approximate bounding box is used as the point to encode. If no bounding box is provided, the hilbert curve index is mapped to the full range of a single-precision float. For the BOX_2D and BOX_2DF variants, the center of the box is used as the point to ..."
+    },
+    {
+      "function": "ST_Hilbert",
+      "function_type": "scalar",
+      "signature": "ST_Hilbert(geom GEOMETRY) -> UINTEGER",
+      "description": "Encodes the X and Y values as the hilbert curve index for a curve covering the given bounding box. If a geometry is provided, the center of the approximate bounding box is used as the point to encode. If no bounding box is provided, the hilbert curve index is mapped to the full range of a single-precision float. For the BOX_2D and BOX_2DF variants, the center of the box is used as the point to ..."
+    },
+    {
+      "function": "ST_Hilbert",
+      "function_type": "scalar",
+      "signature": "ST_Hilbert(geom GEOMETRY, bounds BOX_2D) -> UINTEGER",
+      "description": "Encodes the X and Y values as the hilbert curve index for a curve covering the given bounding box. If a geometry is provided, the center of the approximate bounding box is used as the point to encode. If no bounding box is provided, the hilbert curve index is mapped to the full range of a single-precision float. For the BOX_2D and BOX_2DF variants, the center of the box is used as the point to ..."
+    },
+    {
+      "function": "ST_Hilbert",
+      "function_type": "scalar",
+      "signature": "ST_Hilbert(x DOUBLE, y DOUBLE, bounds BOX_2D) -> UINTEGER",
+      "description": "Encodes the X and Y values as the hilbert curve index for a curve covering the given bounding box. If a geometry is provided, the center of the approximate bounding box is used as the point to encode. If no bounding box is provided, the hilbert curve index is mapped to the full range of a single-precision float. For the BOX_2D and BOX_2DF variants, the center of the box is used as the point to ..."
+    },
+    {
+      "function": "ST_InteriorRingN",
+      "function_type": "scalar",
+      "signature": "ST_InteriorRingN(geom GEOMETRY, n BIGINT) -> GEOMETRY",
+      "description": "Returns the N-th interior ring (hole) of a POLYGON as a LINESTRING. Indexing is 1-based (n = 1 returns the first interior ring). Returns NULL if the polygon is empty or has fewer than N interior rings."
+    },
+    {
+      "function": "ST_InteriorRingN",
+      "function_type": "scalar",
+      "signature": "ST_InteriorRingN(polygon POLYGON_2D, n BIGINT) -> LINESTRING_2D",
+      "description": "Returns the N-th interior ring (hole) of a POLYGON as a LINESTRING. Indexing is 1-based (n = 1 returns the first interior ring). Returns NULL if the polygon is empty or has fewer than N interior rings."
+    },
+    {
+      "function": "ST_InterpolatePoint",
+      "function_type": "scalar",
+      "signature": "ST_InterpolatePoint(line GEOMETRY, point GEOMETRY) -> DOUBLE",
+      "description": "Computes the closest point on a LINESTRING to a given POINT and returns the interpolated M value of that point."
+    },
+    {
+      "function": "ST_Intersection",
+      "function_type": "scalar",
+      "signature": "ST_Intersection(geom1 GEOMETRY, geom2 GEOMETRY) -> GEOMETRY",
+      "description": "Returns the intersection of two geometries"
+    },
+    {
+      "function": "ST_Intersection_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_Intersection_Agg(col0 GEOMETRY) -> GEOMETRY",
+      "description": "Computes the intersection of a set of geometries"
+    },
+    {
+      "function": "ST_Intersects",
+      "function_type": "scalar",
+      "signature": "ST_Intersects(box1 BOX_2D, box2 BOX_2D) -> BOOLEAN",
+      "description": ""
+    },
+    {
+      "function": "ST_Intersects",
+      "function_type": "scalar",
+      "signature": "ST_Intersects(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geometries intersect"
+    },
+    {
+      "function": "ST_IsClosed",
+      "function_type": "scalar",
+      "signature": "ST_IsClosed(geom GEOMETRY) -> BOOLEAN",
+      "description": "Check if a geometry is 'closed'"
+    },
+    {
+      "function": "ST_IsEmpty",
+      "function_type": "scalar",
+      "signature": "ST_IsEmpty(geom GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geometry is \"empty\"."
+    },
+    {
+      "function": "ST_IsEmpty",
+      "function_type": "scalar",
+      "signature": "ST_IsEmpty(linestring LINESTRING_2D) -> BOOLEAN",
+      "description": "Returns true if the geometry is \"empty\"."
+    },
+    {
+      "function": "ST_IsEmpty",
+      "function_type": "scalar",
+      "signature": "ST_IsEmpty(polygon POLYGON_2D) -> BOOLEAN",
+      "description": "Returns true if the geometry is \"empty\"."
+    },
+    {
+      "function": "ST_IsRing",
+      "function_type": "scalar",
+      "signature": "ST_IsRing(geom GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geometry is a ring (both ST_IsClosed and ST_IsSimple)."
+    },
+    {
+      "function": "ST_IsSimple",
+      "function_type": "scalar",
+      "signature": "ST_IsSimple(geom GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geometry is simple"
+    },
+    {
+      "function": "ST_IsValid",
+      "function_type": "scalar",
+      "signature": "ST_IsValid(geom GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geometry is valid"
+    },
+    {
+      "function": "ST_Length",
+      "function_type": "scalar",
+      "signature": "ST_Length(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the length of the input line geometry"
+    },
+    {
+      "function": "ST_Length",
+      "function_type": "scalar",
+      "signature": "ST_Length(linestring LINESTRING_2D) -> DOUBLE",
+      "description": "Returns the length of the input line geometry"
+    },
+    {
+      "function": "ST_Length_Spheroid",
+      "function_type": "scalar",
+      "signature": "ST_Length_Spheroid(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the length of the input geometry in meters, using an ellipsoidal model of the earth"
+    },
+    {
+      "function": "ST_Length_Spheroid",
+      "function_type": "scalar",
+      "signature": "ST_Length_Spheroid(line LINESTRING_2D) -> DOUBLE",
+      "description": "Returns the length of the input geometry in meters, using an ellipsoidal model of the earth"
+    },
+    {
+      "function": "ST_LineInterpolatePoint",
+      "function_type": "scalar",
+      "signature": "ST_LineInterpolatePoint(line GEOMETRY, fraction DOUBLE) -> GEOMETRY",
+      "description": "Returns a point interpolated along a line at a fraction of total 2D length."
+    },
+    {
+      "function": "ST_LineInterpolatePoints",
+      "function_type": "scalar",
+      "signature": "ST_LineInterpolatePoints(line GEOMETRY, fraction DOUBLE, repeat BOOLEAN) -> GEOMETRY",
+      "description": "Returns a multi-point interpolated along a line at a fraction of total 2D length."
+    },
+    {
+      "function": "ST_LineLocatePoint",
+      "function_type": "scalar",
+      "signature": "ST_LineLocatePoint(line GEOMETRY, point GEOMETRY) -> DOUBLE",
+      "description": "Returns the location on a line closest to a point as a fraction of the total 2D length of the line."
+    },
+    {
+      "function": "ST_LineMerge",
+      "function_type": "scalar",
+      "signature": "ST_LineMerge(geom GEOMETRY) -> GEOMETRY",
+      "description": "\"Merges\" the input line geometry, optionally taking direction into account."
+    },
+    {
+      "function": "ST_LineMerge",
+      "function_type": "scalar",
+      "signature": "ST_LineMerge(geom GEOMETRY, preserve_direction BOOLEAN) -> GEOMETRY",
+      "description": "\"Merges\" the input line geometry, optionally taking direction into account."
+    },
+    {
+      "function": "ST_LineString2DFromWKB",
+      "function_type": "scalar",
+      "signature": "ST_LineString2DFromWKB(blob BLOB) -> LINESTRING_2D",
+      "description": "Deserialize a LINESTRING_2D from a WKB encoded blob"
+    },
+    {
+      "function": "ST_LineSubstring",
+      "function_type": "scalar",
+      "signature": "ST_LineSubstring(line GEOMETRY, start_fraction DOUBLE, end_fraction DOUBLE) -> GEOMETRY",
+      "description": "Returns a substring of a line between two fractions of total 2D length."
+    },
+    {
+      "function": "ST_LocateAlong",
+      "function_type": "scalar",
+      "signature": "ST_LocateAlong(line GEOMETRY, measure DOUBLE) -> GEOMETRY",
+      "description": "Returns a point or multi-point, containing the point(s) at the geometry with the given measure"
+    },
+    {
+      "function": "ST_LocateAlong",
+      "function_type": "scalar",
+      "signature": "ST_LocateAlong(line GEOMETRY, measure DOUBLE, offset DOUBLE) -> GEOMETRY",
+      "description": "Returns a point or multi-point, containing the point(s) at the geometry with the given measure"
+    },
+    {
+      "function": "ST_LocateBetween",
+      "function_type": "scalar",
+      "signature": "ST_LocateBetween(line GEOMETRY, start_measure DOUBLE, end_measure DOUBLE) -> GEOMETRY",
+      "description": "Returns a geometry or geometry collection created by filtering and interpolating vertices within a range of \"M\" values"
+    },
+    {
+      "function": "ST_LocateBetween",
+      "function_type": "scalar",
+      "signature": "ST_LocateBetween(line GEOMETRY, start_measure DOUBLE, end_measure DOUBLE, offset DOUBLE) -> GEOMETRY",
+      "description": "Returns a geometry or geometry collection created by filtering and interpolating vertices within a range of \"M\" values"
+    },
+    {
+      "function": "ST_M",
+      "function_type": "scalar",
+      "signature": "ST_M(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the M coordinate of a point geometry"
+    },
+    {
+      "function": "ST_MMax",
+      "function_type": "scalar",
+      "signature": "ST_MMax(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the maximum M coordinate of a geometry"
+    },
+    {
+      "function": "ST_MMin",
+      "function_type": "scalar",
+      "signature": "ST_MMin(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the minimum M coordinate of a geometry"
+    },
+    {
+      "function": "ST_MakeBox2D",
+      "function_type": "scalar",
+      "signature": "ST_MakeBox2D(point1 GEOMETRY, point2 GEOMETRY) -> BOX_2D",
+      "description": "Create a BOX2D from two POINT geometries"
+    },
+    {
+      "function": "ST_MakeEnvelope",
+      "function_type": "scalar",
+      "signature": "ST_MakeEnvelope(min_x DOUBLE, min_y DOUBLE, max_x DOUBLE, max_y DOUBLE) -> GEOMETRY",
+      "description": "Create a rectangular polygon from min/max coordinates"
+    },
+    {
+      "function": "ST_MakeLine",
+      "function_type": "scalar",
+      "signature": "ST_MakeLine(geoms GEOMETRY[]) -> GEOMETRY",
+      "description": "Create a LINESTRING from a list of POINT geometries"
+    },
+    {
+      "function": "ST_MakeLine",
+      "function_type": "scalar",
+      "signature": "ST_MakeLine(start GEOMETRY, end GEOMETRY) -> GEOMETRY",
+      "description": "Create a LINESTRING from two POINT geometries"
+    },
+    {
+      "function": "ST_MakePoint",
+      "function_type": "scalar",
+      "signature": "ST_MakePoint(x DOUBLE, y DOUBLE) -> POINT_2D",
+      "description": "Creates a GEOMETRY point from an pair of floating point numbers."
+    },
+    {
+      "function": "ST_MakePoint",
+      "function_type": "scalar",
+      "signature": "ST_MakePoint(x DOUBLE, y DOUBLE, z DOUBLE) -> POINT_3D",
+      "description": "Creates a POINT_3D."
+    },
+    {
+      "function": "ST_MakePoint",
+      "function_type": "scalar",
+      "signature": "ST_MakePoint(x DOUBLE, y DOUBLE, z DOUBLE, m DOUBLE) -> POINT_4D",
+      "description": "Creates a POINT_4D."
+    },
+    {
+      "function": "ST_MakePolygon",
+      "function_type": "scalar",
+      "signature": "ST_MakePolygon(shell GEOMETRY) -> GEOMETRY",
+      "description": "Create a POLYGON from a LINESTRING shell"
+    },
+    {
+      "function": "ST_MakePolygon",
+      "function_type": "scalar",
+      "signature": "ST_MakePolygon(shell GEOMETRY, holes GEOMETRY[]) -> GEOMETRY",
+      "description": "Create a POLYGON from a LINESTRING shell and a list of LINESTRING holes"
+    },
+    {
+      "function": "ST_MakeValid",
+      "function_type": "scalar",
+      "signature": "ST_MakeValid(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns a valid representation of the geometry"
+    },
+    {
+      "function": "ST_MaximumInscribedCircle",
+      "function_type": "scalar",
+      "signature": "ST_MaximumInscribedCircle(geom GEOMETRY) -> STRUCT(center GEOMETRY, nearest GEOMETRY, radius DOUBLE)",
+      "description": "Returns the maximum inscribed circle of the input geometry, optionally with a tolerance."
+    },
+    {
+      "function": "ST_MaximumInscribedCircle",
+      "function_type": "scalar",
+      "signature": "ST_MaximumInscribedCircle(geom GEOMETRY, tolerance DOUBLE) -> STRUCT(center GEOMETRY, nearest GEOMETRY, radius DOUBLE)",
+      "description": "Returns the maximum inscribed circle of the input geometry, optionally with a tolerance."
+    },
+    {
+      "function": "ST_MemUnion_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_MemUnion_Agg(col0 GEOMETRY) -> GEOMETRY",
+      "description": "Computes the union of a set of input geometries. \"Slower, but might be more memory efficient than ST_UnionAgg as each geometry is merged into the union individually rather than all at once."
+    },
+    {
+      "function": "ST_MinimumRotatedRectangle",
+      "function_type": "scalar",
+      "signature": "ST_MinimumRotatedRectangle(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the minimum rotated rectangle that bounds the input geometry, finding the surrounding box that has the lowest area by using a rotated rectangle, rather than taking the lowest and highest coordinate values as per ST_Envelope()."
+    },
+    {
+      "function": "ST_Multi",
+      "function_type": "scalar",
+      "signature": "ST_Multi(geom GEOMETRY) -> GEOMETRY",
+      "description": "Turns a single geometry into a multi geometry."
+    },
+    {
+      "function": "ST_NGeometries",
+      "function_type": "scalar",
+      "signature": "ST_NGeometries(geom GEOMETRY) -> INTEGER",
+      "description": "Returns the number of component geometries in a collection geometry. If the input geometry is not a collection, this function returns 0 or 1 depending on if the geometry is empty or not."
+    },
+    {
+      "function": "ST_NInteriorRings",
+      "function_type": "scalar",
+      "signature": "ST_NInteriorRings(geom GEOMETRY) -> INTEGER",
+      "description": "Returns the number of interior rings of a polygon"
+    },
+    {
+      "function": "ST_NInteriorRings",
+      "function_type": "scalar",
+      "signature": "ST_NInteriorRings(polygon POLYGON_2D) -> INTEGER",
+      "description": "Returns the number of interior rings of a polygon"
+    },
+    {
+      "function": "ST_NPoints",
+      "function_type": "scalar",
+      "signature": "ST_NPoints(box BOX_2D) -> UBIGINT",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_NPoints",
+      "function_type": "scalar",
+      "signature": "ST_NPoints(geom GEOMETRY) -> UINTEGER",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_NPoints",
+      "function_type": "scalar",
+      "signature": "ST_NPoints(linestring LINESTRING_2D) -> UBIGINT",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_NPoints",
+      "function_type": "scalar",
+      "signature": "ST_NPoints(point POINT_2D) -> UBIGINT",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_NPoints",
+      "function_type": "scalar",
+      "signature": "ST_NPoints(polygon POLYGON_2D) -> UBIGINT",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_Node",
+      "function_type": "scalar",
+      "signature": "ST_Node(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns a \"noded\" MultiLinestring, produced by combining a collection of input linestrings and adding additional vertices where they intersect."
+    },
+    {
+      "function": "ST_Normalize",
+      "function_type": "scalar",
+      "signature": "ST_Normalize(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the \"normalized\" representation of the geometry"
+    },
+    {
+      "function": "ST_NumGeometries",
+      "function_type": "scalar",
+      "signature": "ST_NumGeometries(geom GEOMETRY) -> INTEGER",
+      "description": "Returns the number of component geometries in a collection geometry. If the input geometry is not a collection, this function returns 0 or 1 depending on if the geometry is empty or not."
+    },
+    {
+      "function": "ST_NumInteriorRings",
+      "function_type": "scalar",
+      "signature": "ST_NumInteriorRings(geom GEOMETRY) -> INTEGER",
+      "description": "Returns the number of interior rings of a polygon"
+    },
+    {
+      "function": "ST_NumInteriorRings",
+      "function_type": "scalar",
+      "signature": "ST_NumInteriorRings(polygon POLYGON_2D) -> INTEGER",
+      "description": "Returns the number of interior rings of a polygon"
+    },
+    {
+      "function": "ST_NumPoints",
+      "function_type": "scalar",
+      "signature": "ST_NumPoints(box BOX_2D) -> UBIGINT",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_NumPoints",
+      "function_type": "scalar",
+      "signature": "ST_NumPoints(geom GEOMETRY) -> UINTEGER",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_NumPoints",
+      "function_type": "scalar",
+      "signature": "ST_NumPoints(linestring LINESTRING_2D) -> UBIGINT",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_NumPoints",
+      "function_type": "scalar",
+      "signature": "ST_NumPoints(point POINT_2D) -> UBIGINT",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_NumPoints",
+      "function_type": "scalar",
+      "signature": "ST_NumPoints(polygon POLYGON_2D) -> UBIGINT",
+      "description": "Returns the number of vertices within a geometry"
+    },
+    {
+      "function": "ST_Overlaps",
+      "function_type": "scalar",
+      "signature": "ST_Overlaps(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geometries overlap"
+    },
+    {
+      "function": "ST_Perimeter",
+      "function_type": "scalar",
+      "signature": "ST_Perimeter(box BOX_2D) -> DOUBLE",
+      "description": "Returns the length of the perimeter of the geometry"
+    },
+    {
+      "function": "ST_Perimeter",
+      "function_type": "scalar",
+      "signature": "ST_Perimeter(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the length of the perimeter of the geometry"
+    },
+    {
+      "function": "ST_Perimeter",
+      "function_type": "scalar",
+      "signature": "ST_Perimeter(polygon POLYGON_2D) -> DOUBLE",
+      "description": "Returns the length of the perimeter of the geometry"
+    },
+    {
+      "function": "ST_Perimeter_Spheroid",
+      "function_type": "scalar",
+      "signature": "ST_Perimeter_Spheroid(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the length of the perimeter in meters using an ellipsoidal model of the earths surface"
+    },
+    {
+      "function": "ST_Perimeter_Spheroid",
+      "function_type": "scalar",
+      "signature": "ST_Perimeter_Spheroid(poly POLYGON_2D) -> DOUBLE",
+      "description": "Returns the length of the perimeter in meters using an ellipsoidal model of the earths surface"
+    },
+    {
+      "function": "ST_Point",
+      "function_type": "scalar",
+      "signature": "ST_Point(x DOUBLE, y DOUBLE) -> GEOMETRY",
+      "description": "Creates a GEOMETRY point"
+    },
+    {
+      "function": "ST_Point2D",
+      "function_type": "scalar",
+      "signature": "ST_Point2D(x DOUBLE, y DOUBLE) -> POINT_2D",
+      "description": "Creates a POINT_2D"
+    },
+    {
+      "function": "ST_Point2DFromWKB",
+      "function_type": "scalar",
+      "signature": "ST_Point2DFromWKB(blob BLOB) -> POINT_2D",
+      "description": "Deserialize a POINT_2D from a WKB encoded blob"
+    },
+    {
+      "function": "ST_Point3D",
+      "function_type": "scalar",
+      "signature": "ST_Point3D(x DOUBLE, y DOUBLE, z DOUBLE) -> POINT_3D",
+      "description": "Creates a POINT_3D"
+    },
+    {
+      "function": "ST_Point4D",
+      "function_type": "scalar",
+      "signature": "ST_Point4D(x DOUBLE, y DOUBLE, z DOUBLE, m DOUBLE) -> POINT_4D",
+      "description": "Creates a POINT_4D"
+    },
+    {
+      "function": "ST_PointN",
+      "function_type": "scalar",
+      "signature": "ST_PointN(geom GEOMETRY, index INTEGER) -> GEOMETRY",
+      "description": "Returns the n'th vertex from the input geometry as a point geometry"
+    },
+    {
+      "function": "ST_PointN",
+      "function_type": "scalar",
+      "signature": "ST_PointN(linestring LINESTRING_2D, index INTEGER) -> POINT_2D",
+      "description": "Returns the n'th vertex from the input geometry as a point geometry"
+    },
+    {
+      "function": "ST_PointOnSurface",
+      "function_type": "scalar",
+      "signature": "ST_PointOnSurface(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns a point guaranteed to lie on the surface of the geometry"
+    },
+    {
+      "function": "ST_Points",
+      "function_type": "scalar",
+      "signature": "ST_Points(geom GEOMETRY) -> GEOMETRY",
+      "description": "Collects all the vertices in the geometry into a MULTIPOINT"
+    },
+    {
+      "function": "ST_Polygon2DFromWKB",
+      "function_type": "scalar",
+      "signature": "ST_Polygon2DFromWKB(blob BLOB) -> POLYGON_2D",
+      "description": "Deserialize a POLYGON_2D from a WKB encoded blob"
+    },
+    {
+      "function": "ST_Polygonize",
+      "function_type": "scalar",
+      "signature": "ST_Polygonize(geometries GEOMETRY[]) -> GEOMETRY",
+      "description": "Returns a polygonized representation of the input geometries"
+    },
+    {
+      "function": "ST_QuadKey",
+      "function_type": "scalar",
+      "signature": "ST_QuadKey(longitude DOUBLE, latitude DOUBLE, level INTEGER) -> VARCHAR",
+      "description": "Compute the [quadkey](https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system) for a given lon/lat point at a given level. Note that the parameter order is __longitude__, __latitude__."
+    },
+    {
+      "function": "ST_QuadKey",
+      "function_type": "scalar",
+      "signature": "ST_QuadKey(point GEOMETRY, level INTEGER) -> VARCHAR",
+      "description": "Compute the [quadkey](https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system) for a given lon/lat point at a given level. Note that the parameter order is __longitude__, __latitude__."
+    },
+    {
+      "function": "ST_Read",
+      "function_type": "table",
+      "signature": "ST_Read(col0 VARCHAR, keep_wkb BOOLEAN, max_batch_size INTEGER, layer VARCHAR, sibling_files VARCHAR[], allowed_drivers VARCHAR[], open_options VARCHAR[])",
+      "description": "Read and import a variety of geospatial file formats using the GDAL library."
+    },
+    {
+      "function": "ST_ReadOSM",
+      "function_type": "table",
+      "signature": "ST_ReadOSM(col0 VARCHAR)",
+      "description": "The `ST_ReadOsm()` table function enables reading compressed OpenStreetMap data directly from a `.osm.pbf` file."
+    },
+    {
+      "function": "ST_ReadSHP",
+      "function_type": "table",
+      "signature": "ST_ReadSHP(col0 VARCHAR, encoding VARCHAR)",
+      "description": "Read a Shapefile without relying on the GDAL library"
+    },
+    {
+      "function": "ST_Read_Meta",
+      "function_type": "table",
+      "signature": "ST_Read_Meta(col0 VARCHAR)",
+      "description": "Read the metadata from a variety of geospatial file formats using the GDAL library."
+    },
+    {
+      "function": "ST_Read_Meta",
+      "function_type": "table",
+      "signature": "ST_Read_Meta(col0 VARCHAR[])",
+      "description": "Read the metadata from a variety of geospatial file formats using the GDAL library."
+    },
+    {
+      "function": "ST_ReducePrecision",
+      "function_type": "scalar",
+      "signature": "ST_ReducePrecision(geom GEOMETRY, precision DOUBLE) -> GEOMETRY",
+      "description": "Returns the geometry with all vertices reduced to the given precision"
+    },
+    {
+      "function": "ST_RemoveRepeatedPoints",
+      "function_type": "scalar",
+      "signature": "ST_RemoveRepeatedPoints(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the geometry with repeated points removed"
+    },
+    {
+      "function": "ST_RemoveRepeatedPoints",
+      "function_type": "scalar",
+      "signature": "ST_RemoveRepeatedPoints(geom GEOMETRY, tolerance DOUBLE) -> GEOMETRY",
+      "description": "Returns the geometry with repeated points removed"
+    },
+    {
+      "function": "ST_RemoveRepeatedPoints",
+      "function_type": "scalar",
+      "signature": "ST_RemoveRepeatedPoints(line LINESTRING_2D) -> LINESTRING_2D",
+      "description": "Remove repeated points from a LINESTRING."
+    },
+    {
+      "function": "ST_RemoveRepeatedPoints",
+      "function_type": "scalar",
+      "signature": "ST_RemoveRepeatedPoints(line LINESTRING_2D, tolerance DOUBLE) -> LINESTRING_2D",
+      "description": "Remove repeated points from a LINESTRING."
+    },
+    {
+      "function": "ST_Reverse",
+      "function_type": "scalar",
+      "signature": "ST_Reverse(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the geometry with the order of its vertices reversed"
+    },
+    {
+      "function": "ST_Rotate",
+      "function_type": "macro",
+      "signature": "ST_Rotate(geom None, radians None)",
+      "description": "Alias of ST_RotateZ"
+    },
+    {
+      "function": "ST_RotateX",
+      "function_type": "macro",
+      "signature": "ST_RotateX(geom None, radians None)",
+      "description": "Rotates a geometry around the X axis. This is a shorthand macro for calling ST_Affine."
+    },
+    {
+      "function": "ST_RotateY",
+      "function_type": "macro",
+      "signature": "ST_RotateY(geom None, radians None)",
+      "description": "Rotates a geometry around the Y axis. This is a shorthand macro for calling ST_Affine."
+    },
+    {
+      "function": "ST_RotateZ",
+      "function_type": "macro",
+      "signature": "ST_RotateZ(geom None, radians None)",
+      "description": "Rotates a geometry around the Z axis. This is a shorthand macro for calling ST_Affine."
+    },
+    {
+      "function": "ST_Scale",
+      "function_type": "macro",
+      "signature": "ST_Scale(geom None, xs None, ys None)",
+      "description": ""
+    },
+    {
+      "function": "ST_Scale",
+      "function_type": "macro",
+      "signature": "ST_Scale(geom None, xs None, ys None, zs None)",
+      "description": ""
+    },
+    {
+      "function": "ST_ShortestLine",
+      "function_type": "scalar",
+      "signature": "ST_ShortestLine(geom1 GEOMETRY, geom2 GEOMETRY) -> GEOMETRY",
+      "description": "Returns the shortest line between two geometries"
+    },
+    {
+      "function": "ST_Simplify",
+      "function_type": "scalar",
+      "signature": "ST_Simplify(geom GEOMETRY, tolerance DOUBLE) -> GEOMETRY",
+      "description": "Returns a simplified version of the geometry"
+    },
+    {
+      "function": "ST_SimplifyPreserveTopology",
+      "function_type": "scalar",
+      "signature": "ST_SimplifyPreserveTopology(geom GEOMETRY, tolerance DOUBLE) -> GEOMETRY",
+      "description": "Returns a simplified version of the geometry that preserves topology"
+    },
+    {
+      "function": "ST_Snap",
+      "function_type": "scalar",
+      "signature": "ST_Snap(geom GEOMETRY, snap_to GEOMETRY, tolerance DOUBLE) -> GEOMETRY",
+      "description": "Snaps the vertices and segments of a geometry to another geometry's vertices within the given tolerance"
+    },
+    {
+      "function": "ST_StartPoint",
+      "function_type": "scalar",
+      "signature": "ST_StartPoint(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the start point of a LINESTRING."
+    },
+    {
+      "function": "ST_StartPoint",
+      "function_type": "scalar",
+      "signature": "ST_StartPoint(line LINESTRING_2D) -> POINT_2D",
+      "description": "Returns the start point of a LINESTRING."
+    },
+    {
+      "function": "ST_SymDifference",
+      "function_type": "scalar",
+      "signature": "ST_SymDifference(geom1 GEOMETRY, geom2 GEOMETRY) -> GEOMETRY",
+      "description": "Returns the symmetric difference of two geometries"
+    },
+    {
+      "function": "ST_TileEnvelope",
+      "function_type": "scalar",
+      "signature": "ST_TileEnvelope(tile_zoom INTEGER, tile_x INTEGER, tile_y INTEGER) -> GEOMETRY",
+      "description": "The `ST_TileEnvelope` scalar function generates tile envelope rectangular polygons from specified zoom level and tile indices."
+    },
+    {
+      "function": "ST_Touches",
+      "function_type": "scalar",
+      "signature": "ST_Touches(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the geometries touch"
+    },
+    {
+      "function": "ST_TransScale",
+      "function_type": "macro",
+      "signature": "ST_TransScale(geom None, dx None, dy None, xs None, ys None)",
+      "description": "Translates and then scales a geometry in X and Y direction. This is a shorthand macro for calling ST_Affine."
+    },
+    {
+      "function": "ST_Transform",
+      "function_type": "scalar",
+      "signature": "ST_Transform(box BOX_2D, source_crs VARCHAR, target_crs VARCHAR) -> BOX_2D",
+      "description": "Transforms a geometry between two coordinate systems"
+    },
+    {
+      "function": "ST_Transform",
+      "function_type": "scalar",
+      "signature": "ST_Transform(box BOX_2D, source_crs VARCHAR, target_crs VARCHAR, always_xy BOOLEAN) -> BOX_2D",
+      "description": "Transforms a geometry between two coordinate systems"
+    },
+    {
+      "function": "ST_Transform",
+      "function_type": "scalar",
+      "signature": "ST_Transform(geom GEOMETRY, source_crs VARCHAR, target_crs VARCHAR) -> GEOMETRY",
+      "description": "Transforms a geometry between two coordinate systems"
+    },
+    {
+      "function": "ST_Transform",
+      "function_type": "scalar",
+      "signature": "ST_Transform(geom GEOMETRY, source_crs VARCHAR, target_crs VARCHAR, always_xy BOOLEAN) -> GEOMETRY",
+      "description": "Transforms a geometry between two coordinate systems"
+    },
+    {
+      "function": "ST_Transform",
+      "function_type": "scalar",
+      "signature": "ST_Transform(geom GEOMETRY, target_crs VARCHAR) -> GEOMETRY",
+      "description": "Transforms a geometry between two coordinate systems"
+    },
+    {
+      "function": "ST_Transform",
+      "function_type": "scalar",
+      "signature": "ST_Transform(geom GEOMETRY, target_crs VARCHAR, always_xy BOOLEAN) -> GEOMETRY",
+      "description": "Transforms a geometry between two coordinate systems"
+    },
+    {
+      "function": "ST_Transform",
+      "function_type": "scalar",
+      "signature": "ST_Transform(point POINT_2D, source_crs VARCHAR, target_crs VARCHAR) -> POINT_2D",
+      "description": "Transforms a geometry between two coordinate systems"
+    },
+    {
+      "function": "ST_Transform",
+      "function_type": "scalar",
+      "signature": "ST_Transform(point POINT_2D, source_crs VARCHAR, target_crs VARCHAR, always_xy BOOLEAN) -> POINT_2D",
+      "description": "Transforms a geometry between two coordinate systems"
+    },
+    {
+      "function": "ST_Translate",
+      "function_type": "macro",
+      "signature": "ST_Translate(geom None, dx None, dy None)",
+      "description": ""
+    },
+    {
+      "function": "ST_Translate",
+      "function_type": "macro",
+      "signature": "ST_Translate(geom None, dx None, dy None, dz None)",
+      "description": ""
+    },
+    {
+      "function": "ST_Union",
+      "function_type": "scalar",
+      "signature": "ST_Union(geom1 GEOMETRY, geom2 GEOMETRY) -> GEOMETRY",
+      "description": "Returns the union of two geometries"
+    },
+    {
+      "function": "ST_Union_Agg",
+      "function_type": "aggregate",
+      "signature": "ST_Union_Agg(col0 GEOMETRY) -> GEOMETRY",
+      "description": "Computes the union of a set of input geometries"
+    },
+    {
+      "function": "ST_VoronoiDiagram",
+      "function_type": "scalar",
+      "signature": "ST_VoronoiDiagram(geom GEOMETRY) -> GEOMETRY",
+      "description": "Returns the Voronoi diagram of the supplied MultiPoint geometry"
+    },
+    {
+      "function": "ST_Within",
+      "function_type": "scalar",
+      "signature": "ST_Within(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the first geometry is within the second"
+    },
+    {
+      "function": "ST_Within",
+      "function_type": "scalar",
+      "signature": "ST_Within(geom1 POINT_2D, geom2 POLYGON_2D) -> BOOLEAN",
+      "description": ""
+    },
+    {
+      "function": "ST_WithinProperly",
+      "function_type": "scalar",
+      "signature": "ST_WithinProperly(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the first geometry \\\"properly\\\" is contained by the second geometry"
+    },
+    {
+      "function": "ST_X",
+      "function_type": "scalar",
+      "signature": "ST_X(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the X coordinate of a point geometry"
+    },
+    {
+      "function": "ST_X",
+      "function_type": "scalar",
+      "signature": "ST_X(point POINT_2D) -> DOUBLE",
+      "description": "Returns the X coordinate of a point geometry"
+    },
+    {
+      "function": "ST_XMax",
+      "function_type": "scalar",
+      "signature": "ST_XMax(box BOX_2D) -> DOUBLE",
+      "description": "Returns the maximum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMax",
+      "function_type": "scalar",
+      "signature": "ST_XMax(box BOX_2DF) -> FLOAT",
+      "description": "Returns the maximum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMax",
+      "function_type": "scalar",
+      "signature": "ST_XMax(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the maximum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMax",
+      "function_type": "scalar",
+      "signature": "ST_XMax(line LINESTRING_2D) -> DOUBLE",
+      "description": "Returns the maximum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMax",
+      "function_type": "scalar",
+      "signature": "ST_XMax(point POINT_2D) -> DOUBLE",
+      "description": "Returns the maximum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMax",
+      "function_type": "scalar",
+      "signature": "ST_XMax(polygon POLYGON_2D) -> DOUBLE",
+      "description": "Returns the maximum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMin",
+      "function_type": "scalar",
+      "signature": "ST_XMin(box BOX_2D) -> DOUBLE",
+      "description": "Returns the minimum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMin",
+      "function_type": "scalar",
+      "signature": "ST_XMin(box BOX_2DF) -> FLOAT",
+      "description": "Returns the minimum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMin",
+      "function_type": "scalar",
+      "signature": "ST_XMin(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the minimum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMin",
+      "function_type": "scalar",
+      "signature": "ST_XMin(line LINESTRING_2D) -> DOUBLE",
+      "description": "Returns the minimum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMin",
+      "function_type": "scalar",
+      "signature": "ST_XMin(point POINT_2D) -> DOUBLE",
+      "description": "Returns the minimum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_XMin",
+      "function_type": "scalar",
+      "signature": "ST_XMin(polygon POLYGON_2D) -> DOUBLE",
+      "description": "Returns the minimum X coordinate of a geometry"
+    },
+    {
+      "function": "ST_Y",
+      "function_type": "scalar",
+      "signature": "ST_Y(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the Y coordinate of a point geometry"
+    },
+    {
+      "function": "ST_Y",
+      "function_type": "scalar",
+      "signature": "ST_Y(point POINT_2D) -> DOUBLE",
+      "description": "Returns the Y coordinate of a point geometry"
+    },
+    {
+      "function": "ST_YMax",
+      "function_type": "scalar",
+      "signature": "ST_YMax(box BOX_2D) -> DOUBLE",
+      "description": "Returns the maximum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMax",
+      "function_type": "scalar",
+      "signature": "ST_YMax(box BOX_2DF) -> FLOAT",
+      "description": "Returns the maximum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMax",
+      "function_type": "scalar",
+      "signature": "ST_YMax(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the maximum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMax",
+      "function_type": "scalar",
+      "signature": "ST_YMax(line LINESTRING_2D) -> DOUBLE",
+      "description": "Returns the maximum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMax",
+      "function_type": "scalar",
+      "signature": "ST_YMax(point POINT_2D) -> DOUBLE",
+      "description": "Returns the maximum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMax",
+      "function_type": "scalar",
+      "signature": "ST_YMax(polygon POLYGON_2D) -> DOUBLE",
+      "description": "Returns the maximum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMin",
+      "function_type": "scalar",
+      "signature": "ST_YMin(box BOX_2D) -> DOUBLE",
+      "description": "Returns the minimum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMin",
+      "function_type": "scalar",
+      "signature": "ST_YMin(box BOX_2DF) -> FLOAT",
+      "description": "Returns the minimum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMin",
+      "function_type": "scalar",
+      "signature": "ST_YMin(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the minimum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMin",
+      "function_type": "scalar",
+      "signature": "ST_YMin(line LINESTRING_2D) -> DOUBLE",
+      "description": "Returns the minimum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMin",
+      "function_type": "scalar",
+      "signature": "ST_YMin(point POINT_2D) -> DOUBLE",
+      "description": "Returns the minimum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_YMin",
+      "function_type": "scalar",
+      "signature": "ST_YMin(polygon POLYGON_2D) -> DOUBLE",
+      "description": "Returns the minimum Y coordinate of a geometry"
+    },
+    {
+      "function": "ST_Z",
+      "function_type": "scalar",
+      "signature": "ST_Z(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the Z coordinate of a point geometry"
+    },
+    {
+      "function": "ST_ZMFlag",
+      "function_type": "scalar",
+      "signature": "ST_ZMFlag(geom GEOMETRY) -> UTINYINT",
+      "description": "Returns a flag indicating the presence of Z and M values in the input geometry. 0 = No Z or M values 1 = M values only 2 = Z values only 3 = Z and M values"
+    },
+    {
+      "function": "ST_ZMax",
+      "function_type": "scalar",
+      "signature": "ST_ZMax(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the maximum Z coordinate of a geometry"
+    },
+    {
+      "function": "ST_ZMin",
+      "function_type": "scalar",
+      "signature": "ST_ZMin(geom GEOMETRY) -> DOUBLE",
+      "description": "Returns the minimum Z coordinate of a geometry"
+    },
+    {
+      "function": "st_asbinary",
+      "function_type": "scalar",
+      "signature": "st_asbinary(geom GEOMETRY) -> BLOB",
+      "description": "Returns the Well-Known Binary (WKB) representation of the geometry"
+    },
+    {
+      "function": "st_astext",
+      "function_type": "scalar",
+      "signature": "st_astext(box BOX_2D) -> VARCHAR",
+      "description": "Returns the geometry as a WKT string"
+    },
+    {
+      "function": "st_astext",
+      "function_type": "scalar",
+      "signature": "st_astext(geom GEOMETRY) -> VARCHAR",
+      "description": "Returns the Well-Known Text (WKT) representation of the geometry"
+    },
+    {
+      "function": "st_astext",
+      "function_type": "scalar",
+      "signature": "st_astext(linestring LINESTRING_2D) -> VARCHAR",
+      "description": "Returns the geometry as a WKT string"
+    },
+    {
+      "function": "st_astext",
+      "function_type": "scalar",
+      "signature": "st_astext(point POINT_2D) -> VARCHAR",
+      "description": "Returns the geometry as a WKT string"
+    },
+    {
+      "function": "st_astext",
+      "function_type": "scalar",
+      "signature": "st_astext(polygon POLYGON_2D) -> VARCHAR",
+      "description": "Returns the geometry as a WKT string"
+    },
+    {
+      "function": "st_aswkb",
+      "function_type": "scalar",
+      "signature": "st_aswkb(geom GEOMETRY) -> BLOB",
+      "description": "Returns the Well-Known Binary (WKB) representation of the geometry"
+    },
+    {
+      "function": "st_aswkt",
+      "function_type": "scalar",
+      "signature": "st_aswkt(geom GEOMETRY) -> VARCHAR",
+      "description": "Returns the Well-Known Text (WKT) representation of the geometry"
+    },
+    {
+      "function": "st_crs",
+      "function_type": "scalar",
+      "signature": "st_crs(geom GEOMETRY) -> VARCHAR",
+      "description": "Returns the Coordinate Reference System (CRS) identifier of the geometry"
+    },
+    {
+      "function": "st_geomfromwkb",
+      "function_type": "scalar",
+      "signature": "st_geomfromwkb(wkb BLOB) -> GEOMETRY",
+      "description": "Creates a geometry from Well-Known Binary (WKB) representation"
+    },
+    {
+      "function": "st_intersects_extent",
+      "function_type": "scalar",
+      "signature": "st_intersects_extent(geom1 GEOMETRY, geom2 GEOMETRY) -> BOOLEAN",
+      "description": "Returns true if the extent of two geometries intersects"
+    },
+    {
+      "function": "st_setcrs",
+      "function_type": "scalar",
+      "signature": "st_setcrs(geom GEOMETRY, crs VARCHAR) -> GEOMETRY",
+      "description": "Sets the Coordinate Reference System (CRS) identifier of the geometry"
+    }
+  ]
+}

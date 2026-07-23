@@ -1,17 +1,4 @@
 """``fetch_noaa_slr_confidence`` -- NOAA SLR mapping-CONFIDENCE raster fetcher.
-
-The ``conf_*`` sibling of ``fetch_noaa_slr_scenarios`` (named at that module's
-docstring L77-78). Where the scenarios tool returns the inundation FOOTPRINT
-polygons, this returns NOAA OCM's CONFIDENCE-of-mapping raster for one whole-foot
-SLR level: a symbolized overlay showing where the bathtub inundation mapping is
-high-confidence (blue) vs low-confidence (orange) given the underlying lidar DEM
-vertical uncertainty. CONUS coastal only.
-
-Reads NOAA OCM ``dc_slr/conf_<N>ft`` MapServer (anonymous / no key) via the shared
-``_noaa_slr_raster`` export path -> a 4-band RGBA COG with the symbology baked in,
-so publish_layer's RGBA passthrough renders it directly.
-
-ASCII only.
 """
 
 from __future__ import annotations

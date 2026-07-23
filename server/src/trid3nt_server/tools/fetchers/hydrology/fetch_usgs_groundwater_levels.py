@@ -1,86 +1,4 @@
-"""``fetch_usgs_groundwater_levels`` atomic tool — real USGS NWIS groundwater
-levels (monitoring wells + their latest water-level) as points.
-
-Fetches **real, observed** USGS groundwater monitoring wells and their latest
-groundwater-level reading from the modernized USGS Water Data OGC API — the
-machine API behind ``waterdata.usgs.gov`` (the same network that the legacy
-``waterservices.usgs.gov/nwis/gwlevels/`` service exposed). One Point feature
-per well-level reading at the well's coordinates, carrying the latest
-depth-to-water or groundwater-elevation value plus its parameter code, unit,
-vertical datum and reading timestamp.
-
-This is the OBSERVED head record the MODFLOW groundwater demos need to compare
-against modeled heads — the real instrument/field-measurement record of how deep
-the water table is, NOT a model estimate.
-
-**Why the OGC API (NOT the legacy gwlevels service)**: the legacy
-``waterservices.usgs.gov/nwis/gwlevels/`` endpoint was DECOMMISSIONED beginning
-2025-11-01 (it now serves only an HTML decommissioning notice for every format).
-The replacement is the USGS Water Data OGC API — keyless, OGC-Features-compliant,
-at ``api.waterdata.usgs.gov/ogcapi/v0``.
-
-**API surface** (USGS Water Data OGC API, free, NO API key required):
-
-    PRIMARY — latest field measurements (the latest discrete reading per series):
-        https://api.waterdata.usgs.gov/ogcapi/v0/collections/
-            latest-field-measurements/items
-            ?f=json
-            &parameter_code=72019,72150,62610,62611,61055
-            &bbox=west,south,east,north        (area asks)   -- OR --
-            &state_code=20                      (FIPS, state-level asks)
-            &limit=10000
-        Returns a GeoJSON FeatureCollection — one Feature per (well x parameter)
-        latest field measurement. Each feature's ``properties`` carry
-        ``monitoring_location_id`` (e.g. ``USGS-383047098095901`` or an agency
-        prefix like ``KS014-...``), ``parameter_code``, ``value``,
-        ``unit_of_measure``, ``time`` (ISO-8601), ``vertical_datum``,
-        ``approval_status``; geometry is a Point ``[lon, lat]``.
-
-    ENRICHMENT — monitoring-locations (well metadata: human name + aquifer):
-        https://api.waterdata.usgs.gov/ogcapi/v0/collections/
-            monitoring-locations/items
-            ?f=json&site_type_code=GW
-            &bbox=... | &state_code=...
-            &limit=...
-        Carries ``monitoring_location_number``, ``monitoring_location_name``,
-        ``national_aquifer_code``, ``well_constructed_depth`` keyed by the same
-        ``id`` as the measurement's ``monitoring_location_id``. We join on it to
-        attach a human well name + aquifer + well depth to each reading. The join
-        is best-effort (some agency series have no matching GW location) — a
-        missing name leaves ``site_name=""`` but never drops the reading.
-
-**Groundwater parameter codes** (NWIS pcodes for water-level):
-    - ``72019`` depth to water level, FEET below land surface (the most common).
-    - ``72150`` groundwater level relative to NAVD88 (ft).
-    - ``62610`` groundwater level above NGVD29 (ft).
-    - ``62611`` groundwater level above NAVD88 (ft).
-    - ``61055`` water level in well, ft below measuring point.
-We request all of them; each feature carries its own ``parameter_code`` so the
-client / a downstream comparison can distinguish depth-to-water from elevation.
-
-**Spatial selector handling**: the OGC API places NO area limit on ``bbox``
-(unlike the legacy NWIS ``bBox`` ~25 deg^2 cap), so a sub-state bbox of any size
-is accepted. For a state-level ask PREFER ``state_code`` — passed as a 2-letter
-USPS code (``"KS"``) and mapped internally to the FIPS numeric code the OGC API
-expects (``"20"``). When both are given, ``state_code`` wins. When neither is
-given, ``GwInputError`` is raised.
-
-**Fallback norm** (primary -> honest typed error): the OGC API returns an HTTP
-200 FeatureCollection with ZERO features for an area with no instrumented
-groundwater wells (e.g. open ocean). That is a legitimate "no wells" answer, not
-a success — so ``GwNoWellsError`` (retryable=False) is raised carrying the scope.
-We never return an empty success-shaped layer. If the measurement collection is
-itself unreachable we raise the retryable ``GwUpstreamError``.
-
-**Output**: a vector ``LayerURI`` (``layer_type="vector"``) whose artifact is a
-point FeatureCollection (one point per well-level reading), serialized as
-FlatGeobuf and rendered via the inline-GeoJSON vector path. ``style_preset`` =
-``"usgs_groundwater"``; ``LayerURI.bbox`` is set to the wells' extent so the
-camera auto-zooms.
-
-Tier-1, no auth, ``supports_global_query=False`` (US + territories only).
-
-FR-AS-11 typed-error surface; FR-TA-2 / FR-AS-3 docstring discipline applies.
+"""``fetch_usgs_groundwater_levels`` atomic tool — real USGS NWIS groundwater levels (monitoring wells + their latest water-level) as points.
 """
 
 from __future__ import annotations
@@ -837,7 +755,7 @@ def fetch_usgs_groundwater_levels(
     Cache key is SHA-256 of the resolved selector (``state_code`` or
     bbox-rounded-6dp), so identical-scope calls within the hour reuse the FGB.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (derive a bbox or surface a state from a place name BEFORE this call),
           ``fetch_administrative_boundaries`` (state/county framing),
@@ -848,7 +766,7 @@ def fetch_usgs_groundwater_levels(
           (api.waterdata.usgs.gov/ogcapi/v0 — latest-field-measurements +
           monitoring-locations).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``GwInputError``: no selector / bad bbox / bad state code
           (retryable=False).
         - ``GwUpstreamError``: USGS network failure / HTTP 5xx / bad body
@@ -856,8 +774,6 @@ def fetch_usgs_groundwater_levels(
         - ``GwNoWellsError``: no groundwater wells with a reading in scope
           (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (USGS federal groundwater network). Claims from
-    these well readings should be marked ``source_authority_tier=1``.
 
     Tier-1 free. No API key. ``supports_global_query=False`` (US + territories).
     """

@@ -1,47 +1,4 @@
 """``fetch_chirps_precipitation`` atomic tool — UCSB CHIRPS quasi-global rainfall COG.
-
-Wraps the UC Santa Barbara Climate Hazards Center CHIRPS-2.0 (Climate Hazards
-group InfraRed Precipitation with Station data) public archive and returns a
-single-band float32 millimetre precipitation Cloud-Optimized GeoTIFF clipped to
-the requested bbox (or the quasi-global CHIRPS extent when ``bbox`` is omitted,
-per the ``supports_global_query=True`` opt-in).
-
-CHIRPS is a quasi-global (50 S - 50 N) 0.05 deg (~5 km) gridded rainfall product
-blending satellite IR cold-cloud-duration estimates with in-situ station data.
-It is THE community-standard drought / agriculture / pluvial-flood precipitation
-baseline for data-sparse regions (Africa, South Asia, Latin America) where gauge
-networks and CONUS-only radar products (MRMS) do not reach. This complements the
-existing CONUS-only ``fetch_mrms_qpe`` (radar QPE) and ``fetch_gridmet`` (CONUS
-gridded met) by giving the agent a keyless, truly global rainfall layer.
-
-Source (keyless, no auth, no API key, no Earthdata login):
-
-    base:    https://data.chc.ucsb.edu/products/CHIRPS-2.0/
-    monthly: global_monthly/tifs/chirps-v2.0.YYYY.MM.tif.gz
-    daily:   global_daily/tifs/p05/YYYY/chirps-v2.0.YYYY.MM.DD.tif.gz
-
-Each archive entry is a gzip-compressed GeoTIFF:
-    - EPSG:4326, 0.05 deg grid, shape (2000, 7200) global
-    - bounds (-180, -50, 180, 50)
-    - dtype float32, values in mm (monthly: mm/month; daily: mm/day)
-    - nodata sentinel = -9999.0 (ocean / no-data; NOT tagged in the header,
-      so we detect and tag it explicitly). We collapse it to the GeoTIFF
-      nodata so downstream consumers mask cleanly.
-
-We HTTP-download the date's raster, gunzip it, window to the bbox with
-rasterio (cheap — the source is already a geographic 0.05 deg grid so the
-window is a pure array slice with a derived transform), tag nodata, and write
-a deflate-compressed COG. Routed through ``read_through`` so identical
-``(bbox, period, date)`` calls reuse the cached COG.
-
-Honest typed errors:
-    - ``CHIRPSInputError``   — bad bbox / unparseable or out-of-range date / bad period.
-    - ``CHIRPSNotAvailableError`` — the archive has no raster for that date
-      (HTTP 404: future date, pre-1981 date, or an unpublished recent month/day).
-    - ``CHIRPSUpstreamError`` — network / gzip / decode failure (retryable).
-    - ``CHIRPSEmptyError``   — bbox does not intersect the CHIRPS 50S-50N extent.
-
-Tier-1 free (no auth). Single-band float32 mm COG; ``style_preset="precip_mm"``.
 """
 
 from __future__ import annotations

@@ -1,0 +1,48 @@
+retrieval_probe summary  (20260723T012331Z)  k=5
+records=40  runs=1  backend=hashed  bm25=True  index_build_ms=283.3
+
+record                             reg       run1   rank1  top-k (run 1)
+------------------------------------------------------------------------
+rp-spec-01-hazard_modeling         specific  CORR   1      run_model_flood_scenario, run_model_nws_flood_event_scenario, fetch_topobathy
+rp-spec-02-weather_atmosphere      specific  CORR   2      fetch_nws_alerts_conus, fetch_nws_event, fetch_raws_weather
+rp-spec-03-hydrology               specific  CORR   1      fetch_usgs_nwis_gauges, fetch_usgs_groundwater_levels, fetch_usgs_water_quality
+rp-spec-04-terrain_elevation       specific  CORR   1      fetch_3dep_extra, fetch_copernicus_dem, fetch_dem
+rp-spec-05-land_cover_development  specific  CORR   2      fetch_esri_landcover_10m, fetch_landcover, compute_urban_heat_island
+rp-spec-06-conservation_ecology    specific  CORR   1      fetch_gbif_occurrences, run_model_multi_species_scenario, fetch_iucn_red_list_range
+rp-spec-07-fire                    specific  CORR   1      fetch_firms_active_fire, fetch_nifc_fire_perimeters, run_model_goes_fire_animation
+rp-spec-08-coastal                 specific  CORR   1      fetch_noaa_coops_tides, fetch_noaa_coops_currents, fetch_inaturalist_observations
+rp-spec-09-damage_assessment       specific  CORR   1      run_pelicun_damage_assessment, run_pelicun_with_buildings, compute_flood_depth_damage
+rp-spec-10-flood_infrastructure    specific  CORR   1      fetch_fema_nfhl_zones, fetch_openfema_disasters, fetch_usace_levees
+rp-spec-11-geographic_primitives   specific  MISS   -      fetch_openaq_measurements, extract_timeseries_at_point, run_swmm_urban_flood
+rp-spec-12-news_events             specific  CORR   1      fetch_storm_events_db, fetch_noaa_slr_confidence, fetch_noaa_slr_marsh
+rp-spec-13-hydrology-nwm           specific  CORR   1      fetch_noaa_nwm_streamflow, compute_model_residuals, fetch_nhd_waterbodies
+rp-spec-14-coastal-slr             specific  CORR   1      fetch_noaa_slr_scenarios, fetch_noaa_slr_confidence, fetch_noaa_slr_marsh
+rp-spec-15-spatial_query-stats     specific  CORR   2      compute_exposure_summary, spatial_query, run_pelicun_damage_assessment
+rp-spec-16-spatial_query-count     specific  CORR   2      fetch_fema_nfhl_zones, spatial_query, compute_flood_depth_damage
+rp-spec-17-spatial_query-zonal     specific  CORR   2      clip_raster_to_polygon, spatial_query, clip_vector_to_polygon
+rp-spec-18-spatial_query-aggregate specific  CORR   2      run_geoclaw_inundation, spatial_query, compute_impact_envelope
+rp-spec-19-typo-nfhl               specific  CORR   1      fetch_fema_nfhl_zones, fetch_openfema_disasters, fetch_usace_levees
+rp-spec-20-typo-nlcd               specific  CORR   2      fetch_esri_landcover_10m, fetch_landcover, compute_urban_heat_island
+rp-vag-01-hazard_modeling          vague     CORR   1      run_swmm_urban_flood, run_model_nws_flood_event_scenario, run_model_flood_habitat_scenario
+rp-vag-02-weather_atmosphere       vague     MISS   -      fetch_raws_weather, fetch_overpass_pois, request_spatial_input
+rp-vag-03-hydrology                vague     MISS   -      fetch_river_geometry, run_river_seepage_job, run_model_river_seepage_scenario
+rp-vag-04-terrain_elevation        vague     MISS   -      compute_terrain_profile, generate_histogram, compute_slope
+rp-vag-05-land_cover_development   vague     CORR   3      fetch_wdpa_protected_areas, lookup_precip_return_period, compute_building_density
+rp-vag-06-conservation_ecology     vague     CORR   1      fetch_ebird_observations, fetch_climate_normals, fetch_wdpa_protected_areas
+rp-vag-07-fire                     vague     MISS   -      compute_canopy_height, fetch_overpass_pois, fetch_usgs_water_quality
+rp-vag-08-coastal                  vague     CORR   1      fetch_noaa_coops_tides, fetch_gtsm_tide_surge, run_telemac
+rp-vag-09-damage_assessment        vague     CORR   1      compute_flood_depth_damage, run_pelicun_damage_assessment, generate_damage_distribution
+rp-vag-10-flood_infrastructure     vague     MISS   -      fetch_wdpa_protected_areas, run_landlab_susceptibility, fetch_usace_levees
+rp-vag-11-geographic_primitives    vague     MISS   -      delineate_watershed, run_model_groundwater_contamination_scenario, compute_canopy_height
+rp-vag-12-news_events              vague     CORR   1      fetch_openfema_disasters, fetch_ebird_observations, list_categories
+rp-vag-13-weather-precip           vague     MISS   -      fetch_viirs_day_fire, compute_overtopping, compute_terrain_profile
+rp-vag-14-coastal-slr              vague     MISS   -      catalog_search, run_swmm_urban_flood, fetch_gcn250_curve_numbers
+rp-vag-15-spatial_query-stats      vague     CORR   3      fetch_statsgo_soils, compute_canopy_height, spatial_query
+rp-vag-16-spatial_query-count      vague     CORR   3      cut_features_with_polygon, merge_features, spatial_query
+rp-vag-17-spatial_query-zonal      vague     CORR   3      fetch_usace_nsi, compute_impervious_surface, compute_zonal_statistics
+rp-vag-18-spatial_query-overlap    vague     MISS   -      run_swmm_urban_flood, merge_features, compute_flood_depth_damage
+rp-vag-19-typo-flood               vague     MISS   -      fetch_wdpa_protected_areas, compute_flood_depth_damage, run_model_flood_habitat_scenario
+rp-vag-20-typo-builtup             vague     MISS   -      fetch_naip, compute_canopy_height, lookup_precip_return_period
+
+run 1: hit@5=28/40 (0.7)  top1=17/40  [specific=19/20  vague=9/20]  turnaround ms mean/min/max=3.935/0.533/20.652
+aggregate hit@5: mean=0.7 min=0.7 max=0.7

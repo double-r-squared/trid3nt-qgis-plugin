@@ -26,7 +26,7 @@ Coverage:
   degrade-to-tabular on materialization failure.
 - ADR-0014 handle resolution: SessionUriRegistry.resolve_params resolves
   layer_refs dict VALUES (handle -> uri) for tool_name="spatial_query".
-- Retrieval (hard rule - corpus before acceptance): discover_dataset returns
+- Retrieval (hard rule - corpus before acceptance): search_tools returns
   spatial_query top-5 for folded-tool phrasings; retrieve_visible_tools
   always carries it (hot-set floor).
 
@@ -144,11 +144,11 @@ class TestRegistration:
         ):
             assert name not in TOOL_REGISTRY, f"{name} should be folded away"
 
-    def test_registry_count_is_190(self):
+    def test_registry_count_is_191(self):
         """192 (pre-fold plain-import surface) - 3 folded + 1 spatial_query."""
         from trid3nt_server.tools import TOOL_REGISTRY
 
-        assert len(TOOL_REGISTRY) == 190
+        assert len(TOOL_REGISTRY) == 191
 
     def test_primary_category(self):
         from trid3nt_server.categories import PRIMARY_CATEGORY
@@ -745,7 +745,7 @@ class TestHandleResolution:
 
 
 #: One folded-tool phrasing per ask family; each must rank spatial_query
-#: top-5 in discover_dataset (proven live at fold time, hashed backend).
+#: top-5 in search_tools (proven live at fold time, hashed backend).
 _RETRIEVAL_PHRASINGS = [
     # summary stats of a layer (summarize_layer_statistics lineage)
     "give me summary statistics for this layer, min max mean and sum",
@@ -760,7 +760,7 @@ _RETRIEVAL_PHRASINGS = [
 
 @pytest.fixture(scope="module")
 def fresh_index():
-    import trid3nt_server.tools.discovery.discover_dataset as dd
+    import trid3nt_server.tools.discovery.search_tools as dd
 
     dd._reset_index_for_tests()
     dd._get_index()
@@ -770,10 +770,10 @@ def fresh_index():
 
 class TestRetrieval:
     @pytest.mark.parametrize("phrase", _RETRIEVAL_PHRASINGS)
-    def test_discover_dataset_top5(self, fresh_index, phrase):
-        import trid3nt_server.tools.discovery.discover_dataset as dd
+    def test_search_tools_top5(self, fresh_index, phrase):
+        import trid3nt_server.tools.discovery.search_tools as dd
 
-        res = asyncio.run(dd.discover_dataset(query=phrase, top_k=5))
+        res = asyncio.run(dd.search_tools(query=phrase, top_k=5))
         names = [r["tool_name"] for r in res["results"]]
         assert "spatial_query" in names, f"{phrase!r} -> {names}"
 
@@ -787,7 +787,7 @@ class TestRetrieval:
             assert "spatial_query" in retrieve_visible_tools(phrase, None, 8)
 
     def test_corpus_has_spatial_query_and_not_folded_tools(self):
-        import trid3nt_server.tools.discovery.discover_dataset as dd
+        import trid3nt_server.tools.discovery.search_tools as dd
 
         corpus = dd._load_corpus()
         assert "spatial_query" in corpus

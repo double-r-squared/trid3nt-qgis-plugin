@@ -1,96 +1,4 @@
-"""``fetch_hifld_transmission_lines`` atomic tool — HIFLD electric power
-transmission LINES within a bbox.
-
-Wraps the national Homeland Infrastructure Foundation-Level Data (HIFLD)
-``Electric Power Transmission Lines`` polyline inventory, served from a public,
-unauthenticated ArcGIS REST FeatureService. Returns a FlatGeobuf
-``LineString`` / ``MultiLineString`` layer of every transmission line segment
-intersecting a user-supplied bbox, together with the canonical HIFLD attribute
-payload (line ID, line type, operational status, owner/operator, nominal
-``VOLTAGE`` in kV, ``VOLT_CLASS`` band, and the two connected substation names).
-
-This is the LINE (power-grid backbone) complement to the POINT lifeline
-inventory exposed by ``fetch_hifld_critical_infrastructure`` (hospitals /
-schools / fire stations / police / power plants). Together they cover the
-electric-power lifeline-infrastructure exposure surface: power plants as the
-generation points, transmission lines as the bulk-transport network.
-
-**Source / endpoint (verified live 2026-06-27):**
-    The HIFLD national transmission-line layer is published on a stable public
-    ArcGIS Online org (HIFLD Open / geoplatform-published, no token) at::
-
-        https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/
-            Electric_Power_Transmission_Lines/FeatureServer/0/query
-
-    It is an ``esriGeometryPolyline`` Feature Layer with ``maxRecordCount=2000``
-    and ``supportsPagination=True`` (52,244 features nationally). It is queried
-    by ``esriGeometryEnvelope`` + ``inSR=4326`` + ``f=geojson`` exactly like the
-    ``fetch_hifld_critical_infrastructure`` / ``fetch_noaa_slr_scenarios`` ESRI
-    REST pattern, but the geometries are polylines rather than points.
-
-    NOTE: this layer is on a DIFFERENT public ArcGIS org
-    (``Hp6G80Pky0om7QvQ``) than the HIFLD point mirror
-    (``C8EMgrsFcRFL6LrL`` used by ``fetch_hifld_critical_infrastructure``) —
-    the point mirror does not host the transmission-line polyline service.
-    Both are keyless.
-
-**What it does:**
-    Fetches all transmission-line segments intersecting the bbox, paginating if
-    the bbox holds more than one server page, and serializes them to a
-    FlatGeobuf vector layer in EPSG:4326 with the HIFLD attribute columns
-    preserved. A ``infra_type`` / ``infra_label`` column is added so the layer
-    self-describes for narration and downstream overlay.
-
-**When to use:**
-    - User asks "where are the power transmission lines near [place]?",
-      "show the electric grid / power lines in [bbox]", or "what high-voltage
-      lines cross this area?".
-    - A hazard / exposure workflow needs the electric-power transmission network
-      inside a flood, fire, surge, or earthquake footprint (intersect with
-      ``compute_zonal_statistics`` or ``clip_vector_to_polygon`` to find lines
-      at risk).
-    - Lifeline-infrastructure resilience analysis: which transmission corridors
-      and at what voltage class are exposed to a modeled hazard.
-    - Pairs with ``fetch_hifld_critical_infrastructure(facility_type="power_plants")``
-      to show generation points plus the lines that move that power.
-
-**When NOT to use:**
-    - For power PLANTS / hospitals / schools / fire / police POINTS ->
-      ``fetch_hifld_critical_infrastructure``.
-    - For dams -> ``fetch_usace_dams``. For the building stock -> ``fetch_usace_nsi``.
-    - For non-US areas — HIFLD coverage is US (50 states + DC + territories).
-    - For real-time grid load / outage status — HIFLD is a static inventory.
-      (Live outage data is a separate, event-driven source.)
-    - For local distribution lines / service drops — HIFLD covers the
-      bulk-power TRANSMISSION network, not last-mile distribution.
-
-**Parameters:**
-    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required —
-        ``supports_global_query=False`` (a national sweep is 52k+ polylines).
-        Example for Houston metro: ``(-95.8, 29.5, -95.0, 30.1)`` (569 lines).
-    min_voltage_kv: Optional nominal-voltage floor in kV. When provided, only
-        segments with ``VOLTAGE >= min_voltage_kv`` are returned (server-side
-        ``where`` filter). Useful to isolate high-voltage backbone (e.g.
-        ``230`` or ``345``). Default ``None`` returns all voltage classes.
-
-**Returns:**
-    ``LayerURI`` pointing at a FlatGeobuf of ``LineString`` / ``MultiLineString``
-    features in EPSG:4326. Properties include the HIFLD source columns (ID, TYPE,
-    STATUS, OWNER, VOLTAGE, VOLT_CLASS, SUB_1, SUB_2, ...) plus ``infra_type``
-    (str, always ``"transmission_line"``) and ``infra_label`` (str). ``layer_type``
-    is ``"vector"``, ``role="primary"``, ``style_preset="hifld_transmission_lines"``,
-    ``units="kV"``.
-
-**Cache:** ``static-30d`` — HIFLD inventories update infrequently (annual-ish).
-
-**FR-AS-11 typed-error surface:** ``HIFLDTransmissionError`` (base,
-retryable=True), ``HIFLDTransmissionInputError`` (bad bbox / min_voltage_kv,
-non-retryable), ``HIFLDTransmissionUpstreamError`` (ArcGIS REST network / HTTP /
-parse failure, retryable), ``HIFLDTransmissionEmptyError`` (no segments — NOT
-raised by default; an empty FGB is serialized so the layer still appears with a
-zero-feature notice).
-
-``supports_global_query=False``. No API key required.
+"""``fetch_hifld_transmission_lines`` atomic tool — HIFLD electric power transmission LINES within a bbox.
 """
 
 from __future__ import annotations
@@ -625,7 +533,7 @@ def fetch_hifld_transmission_lines(
         ``layer_type="vector"``, ``role="primary"``,
         ``style_preset="hifld_transmission_lines"``, ``units="kV"``.
 
-    **Error types (FR-AS-11):**
+    **Error types:**
         - ``HIFLDTransmissionInputError``: bad bbox or min_voltage_kv
           (retryable=False).
         - ``HIFLDTransmissionUpstreamError``: HTTP/network failure, ArcGIS error

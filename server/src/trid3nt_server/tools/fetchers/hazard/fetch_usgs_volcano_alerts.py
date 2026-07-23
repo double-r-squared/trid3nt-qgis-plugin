@@ -1,65 +1,4 @@
 """``fetch_usgs_volcano_alerts`` atomic tool — current US volcano alert levels.
-
-Queries the USGS Volcano Hazards Program HANS public API (the same machine API
-behind the USGS "current volcanic activity" / CAP-alert feeds) for the current
-volcanic-alert status of every monitored US volcano, and returns one Point
-feature per volcano at its summit carrying the four-stage Volcano Alert Level
-(``Normal`` / ``Advisory`` / ``Watch`` / ``Warning``) and the Aviation Color
-Code (``Green`` / ``Yellow`` / ``Orange`` / ``Red``). This is the canonical
-OBSERVED volcanic-unrest status — the observatory's current call on each
-volcano, NOT a probabilistic eruption-hazard model.
-
-**Why two endpoints (the alert spine has no coordinates)**
-
-The HANS ``getMonitoredVolcanoes`` route is the complete alert spine: it lists
-every monitored US volcano with its current ``alert_level`` and ``color_code``,
-INCLUDING the many that sit at ``NORMAL`` / ``GREEN`` (the
-``getElevatedVolcanoes`` route, by contrast, lists only the handful currently
-above-normal). But neither alert route carries latitude/longitude. The
-``getUSVolcanoes`` route is the geographic spine: it lists every US volcano with
-``latitude`` / ``longitude`` / ``elevation_meters`` / ``region`` keyed by
-``vnum``. We fetch BOTH and inner-join on ``vnum`` so each alert gets a real
-summit coordinate. Alert records that do not join to a coordinate (a couple of
-aggregate "Alaskan Volcanoes" / "Cascade Range" placeholder rows with a null
-``vnum``) are dropped — they are not point-locatable volcanoes.
-
-**API surface** (USGS HANS public API, free, NO API key required):
-
-    https://volcanoes.usgs.gov/hans-public/api/volcano/getMonitoredVolcanoes
-        -> JSON list, each: {volcano_name, vnum, alert_level, color_code,
-                             obs_abbr, sent_utc, notice_url, ...}
-    https://volcanoes.usgs.gov/hans-public/api/volcano/getUSVolcanoes
-        -> JSON list, each: {vnum, volcano_name, latitude, longitude,
-                             elevation_meters, region, volcano_url,
-                             nvews_threat, obs_abbr, ...}
-
-Both return a plain JSON array (HTTP 200). The join key is ``vnum`` (the
-Smithsonian Global Volcanism Program volcano number, as a string).
-
-**bbox semantics**: the monitored-volcano list is tiny and bounded (~70
-volcanoes), so the default is a GLOBAL (all-US) snapshot
-(``supports_global_query=True``). When a ``bbox`` is supplied we filter the
-joined points to that extent in-process (no server-side spatial query exists).
-Hawaii, Alaska (Aleutians), the Cascades, and the western CONUS volcanoes each
-fall in their own region, so a region bbox returns just that region's volcanoes.
-
-**Honest-empty path** (data-source fallback norm — primary -> honest typed
-error): a bbox that contains no monitored US volcano is a legitimate "no
-volcanoes here" answer, not an error, so we raise a typed
-``VolcanoAlertsNoVolcanoesError`` (retryable=False) carrying the scope — never
-an empty success-shaped layer. The same applies if HANS ever returns an empty
-monitored list.
-
-**Output**: a vector ``LayerURI`` (``layer_type="vector"``) whose artifact is a
-point FeatureCollection (one point per volcano), serialized as FlatGeobuf and
-rendered via the inline vector path. ``style_preset="volcano_alerts"`` (the
-client colors the marker by ``color_code`` / ``alert_level``);
-``LayerURI.bbox`` is set to the volcanoes' extent so the camera auto-zooms.
-
-Tier-1, no auth, ``supports_global_query=True`` (the monitored list is global to
-the US volcano-observatory network and tiny/bounded).
-
-FR-AS-11 typed-error surface; FR-TA-2 / FR-AS-3 docstring discipline applies.
 """
 
 from __future__ import annotations
@@ -761,7 +700,7 @@ def fetch_usgs_volcano_alerts(
     Cache key is SHA-256 of the bbox (rounded 6dp) or ``null`` for global, so
     identical-scope calls within the hour reuse the FGB.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (derive a bbox from a place name BEFORE this call),
           ``fetch_administrative_boundaries`` (state/region framing),
@@ -769,7 +708,7 @@ def fetch_usgs_volcano_alerts(
         - Upstream data source: USGS Volcano Hazards Program HANS public API
           (volcanoes.usgs.gov/hans-public/api/volcano/...).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``VolcanoAlertsInputError``: bad bbox shape / out-of-range coordinates
           (retryable=False).
         - ``VolcanoAlertsUpstreamError``: USGS HANS network failure / HTTP error
@@ -777,8 +716,6 @@ def fetch_usgs_volcano_alerts(
         - ``VolcanoAlertsNoVolcanoesError``: no monitored volcano matched the
           scope (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (USGS federal volcano-observatory network).
-    Claims from these records should be marked ``source_authority_tier=1``.
 
     Tier-1 free. No API key. ``supports_global_query=True``.
     """

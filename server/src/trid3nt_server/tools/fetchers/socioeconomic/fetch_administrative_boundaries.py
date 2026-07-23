@@ -1,35 +1,4 @@
-"""``fetch_administrative_boundaries`` atomic tool — TIGER/Line 2024 polygon fetcher (job-0084).
-
-Downloads US Census TIGER/Line 2024 administrative-boundary shapefiles from
-``https://www2.census.gov/geo/tiger/TIGER2024/``, clips to the requested bbox,
-and writes a FlatGeobuf to the FR-DC cache (static-30d, source_class="admin_boundaries").
-
-Supported levels:
-    "state"  — 50 US states + DC + territories (~9.5 MB ZIP nationwide)
-    "county" — 3000+ US counties (~80 MB ZIP nationwide)
-    "place"  — cities + towns + CDPs; per-state ZIPs (~5-10 MB each)
-    "zcta"   — ZIP Code Tabulation Areas (~504 MB ZIP nationwide)
-
-Strategy A (audit.md): download the nationwide/per-state ZIP → unzip to a temp
-directory → load with geopandas (via pyogrio driver) → bbox clip → write FlatGeobuf.
-Cache key is SHA-256 of (level, bbox-rounded-to-6dp, year="2024").
-
-FR-TA-2: atomic tool, returns ``LayerURI``.
-FR-CE-8 / FR-DC-3/4: routed through ``read_through`` so identical
-``(level, bbox)`` calls reuse the cached FlatGeobuf.
-
-Tier-1 free (no API key required). Year pinned to 2024 (most recent stable
-release at time of authoring); surfaced as an OQ for future auto-advancement.
-
-URL conventions (verified 2026-06-08):
-    state:  .../TIGER2024/STATE/tl_2024_us_state.zip
-    county: .../TIGER2024/COUNTY/tl_2024_us_county.zip
-    place:  .../TIGER2024/PLACE/tl_2024_{fips2}_place.zip  (per-state)
-    zcta:   .../TIGER2024/ZCTA520/tl_2024_us_zcta520.zip
-
-Note on ZCTA: the nationwide ZCTA ZIP is ~504 MB. The 30-day cache window
-makes subsequent requests fast (cache hit), but the first fetch is slow.
-Surfaced as OQ-84-ZCTA-DOWNLOAD-SIZE for sprint-12 optimization.
+"""``fetch_administrative_boundaries`` atomic tool — TIGER/Line 2024 polygon fetcher.
 """
 
 from __future__ import annotations

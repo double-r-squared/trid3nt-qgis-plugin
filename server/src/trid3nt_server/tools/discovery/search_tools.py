@@ -1,4 +1,4 @@
-"""``discover_dataset`` atomic tool — hybrid BM25 + dense retrieval (Wave 4.10 job-B7).
+"""``search_tools`` atomic tool — hybrid BM25 + dense retrieval (Wave 4.10 job-B7).
 
 §F.1.2 Mode 1 routing assist: given a free-text user query, return the top-k
 matching atomic tools ranked by hybrid lexical (BM25) + semantic (dense-
@@ -6,7 +6,7 @@ embedding) similarity over a corpus built from each tool's audited docstring
 plus the Wave 4.10 ``tool_query_corpus.yaml`` synthetic example queries.
 
 Goal: when the LLM sees a free-text need like "show me flood zones" or
-"national parks polygons", a single ``discover_dataset`` call returns the
+"national parks polygons", a single ``search_tools`` call returns the
 top-k tool names + short snippets, narrowing the function-calling search
 space without forcing the LLM to scan all 70+ atomic tools.
 
@@ -32,7 +32,7 @@ calls within the same Python process reuse the cached BM25 instance and
 dense-vector matrix. Reset for tests via ``_reset_index_for_tests()``.
 
 FR-TA-2 / FR-AS-3: registered with ``ttl_class="static-30d"``,
-``source_class="discover_dataset"``, ``cacheable=False`` — the routing
+``source_class="search_tools"``, ``cacheable=False`` — the routing
 output depends on the live registry contents and synthetic-corpus file,
 both of which are import-time-frozen, but caching the result through the
 GCS read_through shim would be wasteful for a sub-millisecond CPU lookup.
@@ -66,14 +66,14 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools import register_tool
 
 __all__ = [
-    "discover_dataset",
+    "search_tools",
     "_reset_index_for_tests",
     "_build_index",
     "_tokenize",
     "_close_vocab_matches",
     "_expand_query_tokens",
     "_reciprocal_rank_fusion",
-    "DiscoverDatasetError",
+    "SearchToolsError",
     "get_dynamic_hot_set",
     "_get_cooccurrence_index",
     "_reset_cooccurrence_cache_for_tests",
@@ -81,7 +81,7 @@ __all__ = [
     "CooccurrenceIndex",
 ]
 
-logger = logging.getLogger("trid3nt_server.tools.discovery.discover_dataset")
+logger = logging.getLogger("trid3nt_server.tools.discovery.search_tools")
 
 
 # ---------------------------------------------------------------------------
@@ -89,10 +89,10 @@ logger = logging.getLogger("trid3nt_server.tools.discovery.discover_dataset")
 # ---------------------------------------------------------------------------
 
 
-class DiscoverDatasetError(RuntimeError):
-    """Base class for discover_dataset failures."""
+class SearchToolsError(RuntimeError):
+    """Base class for search_tools failures."""
 
-    error_code: str = "DISCOVER_DATASET_ERROR"
+    error_code: str = "SEARCH_TOOLS_ERROR"
     retryable: bool = False
 
 
@@ -110,7 +110,7 @@ _INDEX: "_DiscoverIndex | None" = None
 #
 # The co-occurrence index is rebuilt from the ``tool_call_telemetry`` Mongo
 # collection on a ~5-minute cadence so that the RRF boost reflects recent
-# user behavior without round-tripping to Mongo on every discover_dataset
+# user behavior without round-tripping to Mongo on every search_tools
 # call.  When Mongo is unavailable (Persistence singleton unbound), the
 # index is left ``None`` and the 4th channel silently drops out — the 3-
 # channel ranking continues to work.
@@ -235,7 +235,7 @@ def _tokenize(text: str) -> list[str]:
 #
 # Seam: the wrappers below are installed on the built index's ``bm25`` and
 # (hashed-backend) ``dense_encode_fn`` slots, so EVERY consumer of the cached
-# index (discover_dataset's inline ranking AND tool_retrieval's
+# index (search_tools's inline ranking AND tool_retrieval's
 # retrieve_visible_tools) inherits the expansion without code changes.
 # ---------------------------------------------------------------------------
 
@@ -362,7 +362,7 @@ def _default_corpus_path() -> Path:
     env_path = os.environ.get("TRID3NT_TOOL_CORPUS_YAML")
     if env_path:
         return Path(env_path).expanduser().resolve()
-    # tools/discovery/discover_dataset.py -> trid3nt_server/ is parents[2]
+    # tools/discovery/search_tools.py -> trid3nt_server/ is parents[2]
     here = Path(__file__).resolve()
     return here.parents[2] / "data" / "tool_query_corpus.yaml"
 
@@ -370,7 +370,7 @@ def _default_corpus_path() -> Path:
 def _load_corpus(path: Path | None = None) -> dict[str, list[str]]:
     """Load the synthetic example-query corpus YAML, keyed by tool name.
 
-    Returns an empty dict when the file is missing — discover_dataset still
+    Returns an empty dict when the file is missing — search_tools still
     works in docstring-only mode in that case (e.g. when running outside the
     repo with no data file).
     """
@@ -508,7 +508,7 @@ def _select_dense_backend() -> tuple[Any, Any, str] | None:
             logger.debug("dense-backend probe %s raised: %s", builder.__name__, exc)
             picked = None
         if picked is not None:
-            logger.info("discover_dataset dense backend = %s", picked[2])
+            logger.info("search_tools dense backend = %s", picked[2])
             return picked
     return None
 
@@ -611,7 +611,7 @@ def _build_index(
             backend_name = None
 
     logger.info(
-        "discover_dataset index built: %d tools, bm25=%s, dense=%s",
+        "search_tools index built: %d tools, bm25=%s, dense=%s",
         len(tool_names),
         bm25 is not None,
         backend_name,
@@ -1146,8 +1146,8 @@ _STOPWORDS: set[str] = {
 # ---------------------------------------------------------------------------
 
 
-_DISCOVER_DATASET_METADATA = AtomicToolMetadata(
-    name="discover_dataset",
+_SEARCH_TOOLS_METADATA = AtomicToolMetadata(
+    name="search_tools",
     ttl_class="live-no-cache",
     source_class=None,
     cacheable=False,
@@ -1155,14 +1155,14 @@ _DISCOVER_DATASET_METADATA = AtomicToolMetadata(
 
 
 @register_tool(
-    _DISCOVER_DATASET_METADATA,
+    _SEARCH_TOOLS_METADATA,
     supports_global_query=False,
     # Annotations: readOnlyHint=True (in-process BM25 + dense retrieval; no
     # external API calls or state mutations), openWorldHint=False (queries the
     # local tool corpus, not the internet), destructiveHint=False,
     # idempotentHint=True (deterministic ranking for the same query + corpus).
 )
-async def discover_dataset(
+async def search_tools(
     query: str,
     top_k: int = 5,
     **_extra_ignored: Any,
@@ -1180,8 +1180,10 @@ async def discover_dataset(
 
     Do NOT use this for: enumerating EVERY atomic tool the agent has (the ADK
     tool catalog is the authoritative inventory); deciding whether to use
-    Mode 1 catalog substrate (use ``catalog_search`` for the curator-vetted
-    external-data catalog); planning multi-step workflows (use ``solver``).
+    Mode 1 catalog substrate (use ``search_data_catalog`` for the curator-vetted
+    external-data catalog); finding a DuckDB spatial SQL function (use
+    ``search_spatial_functions``); planning multi-step workflows (use
+    ``solver``).
 
     Params:
         query: free-text user query (required, non-empty). Lowercased and
@@ -1362,7 +1364,7 @@ async def discover_dataset(
         )
 
     logger.info(
-        "discover_dataset query=%r top_k=%d backend=%s results=%s",
+        "search_tools query=%r top_k=%d backend=%s results=%s",
         query_clean[:80],
         k,
         index.backend_name,

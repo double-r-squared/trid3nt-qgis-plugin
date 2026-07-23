@@ -1,36 +1,4 @@
 """``fetch_climate_normals`` atomic tool — NOAA NCEI 1991-2020 U.S. Climate Normals.
-
-Fetches the 1991-2020 U.S. Climate Normals (annual/seasonal product) from the
-NOAA National Centers for Environmental Information (NCEI) for every Normals
-station whose coordinates fall inside the requested bbox. The Climate Normals
-are the official 30-year baseline of U.S. climate: long-term average annual
-temperature (deg F) and total annual precipitation (inches), computed from
-GHCN-Daily station records. They are the canonical "what is normal here?"
-reference layer — the baseline against which an observed event (heat wave,
-drought, anomalous rainfall) is judged.
-
-API surface (NCEI Climate Normals, free, keyless HTTP access):
-
-    inventory: https://www.ncei.noaa.gov/data/normals-annualseasonal/1991-2020/
-               doc/inventory_30yr.txt
-    per-station access file:
-               https://www.ncei.noaa.gov/data/normals-annualseasonal/1991-2020/
-               access/{STATION_ID}.csv
-
-The station inventory is a fixed-width GHCN-Daily-style file (one row per
-Normals station: id, lat, lon, elevation, state, name). All stations inside the
-bbox are selected from the inventory (one cached fetch), then each matched
-station's annual access CSV is downloaded and the annual-temperature and
-annual-precipitation normals are extracted.
-
-Output: a FlatGeobuf point layer (one point per station, at the station
-coordinates) carrying ``station_id``, ``name``, ``normal_temp_f`` (annual
-average temperature, deg F), ``normal_tmin_f``, ``normal_tmax_f``,
-``normal_precip_in`` (annual total precipitation, inches), and
-``elevation_m``. EPSG:4326. Cache: ``static-30d`` (the 1991-2020 normals are a
-fixed published product that does not change).
-
-FR-TA-2 / FR-AS-3 docstring discipline applies.
 """
 
 from __future__ import annotations
@@ -603,15 +571,13 @@ def fetch_climate_normals(
         - Upstream: NCEI Climate Normals annual/seasonal access files +
           inventory (www.ncei.noaa.gov/data/normals-annualseasonal/1991-2020).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``ClimateNormalsInputError``: invalid bbox (retryable=False).
         - ``ClimateNormalsUpstreamError``: NCEI network failure or malformed
           inventory/CSV (retryable=True).
         - ``ClimateNormalsEmptyError``: no Normals stations in bbox / none with
           usable annual normals (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (NOAA NCEI official 30-year Climate Normals).
-    Claims should be marked ``source_authority_tier=1`` in ``ClaimSet``.
 
     supports_global_query=False — NCEI Normals cover the U.S. + territories.
     """

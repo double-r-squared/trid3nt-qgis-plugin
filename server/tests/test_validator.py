@@ -18,7 +18,7 @@ turn's ``AllowedToolSet`` BEFORE dispatch:
 The error is then routed through ``summarize_tool_result(error=...)`` in
 ``adapter.py`` so Gemini sees a structured envelope and can retry on its
 next turn (typically by calling ``list_tools_in_category`` /
-``discover_dataset`` to find a real tool).
+``search_tools`` to find a real tool).
 """
 
 from __future__ import annotations

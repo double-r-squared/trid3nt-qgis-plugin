@@ -1,78 +1,4 @@
 """``fetch_tsunami_events`` atomic tool - real historical tsunamis as points.
-
-Queries the NOAA NCEI / World Data Service (WDS) **Global Historical Tsunami
-Database** (the authoritative catalog of tsunamis from 2100 BC to the present,
-the same record behind the NCEI Natural Hazards viewer) for tsunami SOURCE
-EVENTS or coastal RUNUP observations inside a bbox and year window. Returns one
-Point feature per record at the source epicenter (events) or the observation
-shore location (runups), carrying ``year``, ``cause`` (earthquake / volcano /
-landslide / meteorological / ...), ``max_water_height`` (m), ``deaths``,
-``eq_magnitude`` and the ``source`` attribution. This is the canonical OBSERVED
-historical-tsunami record - what actually happened - NOT a probabilistic
-tsunami-inundation hazard model.
-
-**API surface** (NCEI Hazel "hazard-service", free, NO API key required):
-
-    https://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/tsunamis/events
-        ?minYear=...&maxYear=...
-        &minLatitude=...&maxLatitude=...&minLongitude=...&maxLongitude=...
-        &page=1&itemsPerPage=200
-
-    https://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/tsunamis/runups
-        ?...same selectors...
-
-The response is a paginated JSON object::
-
-    {"items": [ {...event...}, ... ],
-     "page": 1, "totalPages": 3, "itemsPerPage": 200, "totalItems": 481}
-
-Each ``events[]`` item carries ``id``, ``year``/``month``/``day``,
-``causeCode`` (integer tsunami cause), ``locationName``, ``country``,
-``latitude``/``longitude`` (the SOURCE location), ``eqMagnitude``,
-``maxWaterHeight`` (max observed water height, m), ``numRunups`` and
-``deathsTotal``/``deaths``. Each ``runups[]`` item carries the shore-side
-``latitude``/``longitude``, ``runupHt`` (the observed runup/water height at that
-shore, m), ``distFromSource`` (km), ``sourceCauseCode`` and
-``sourceEqMagnitude``.
-
-**Two observation modes** (``observation_type``):
-
-    - ``"events"`` (default): one Point per tsunami at its SOURCE. Sparse and
-      bounded - the whole global catalog is only a few thousand events. The
-      requested ``year`` / ``cause`` / ``max_water_height`` / ``deaths`` /
-      ``source`` props live here. This is the right default for "tsunamis near
-      X" / "historical tsunamis".
-    - ``"runups"``: one Point per coastal RUNUP observation (the dense
-      shore-by-shore measured water heights). A single active region/decade can
-      hold tens of thousands of runups, so this mode is strictly paginated and
-      capped; use it only for a tight bbox + year window.
-
-**Window semantics**: the database is YEAR-granular. ``min_year`` / ``max_year``
-default to the full historical range (``DEFAULT_MIN_YEAR`` .. current year). A
-``None`` bbox is a GLOBAL query (``supports_global_query=True``).
-
-**Result-cap handling**: pagination is followed up to ``MAX_PAGES`` pages
-(``MAX_PAGES * 200`` records). If the scope exceeds that we raise a typed
-``TsunamiResultTooLargeError`` telling the caller to narrow the bbox, shorten the
-year window, or switch to ``observation_type="events"`` - we never silently
-truncate.
-
-**Honest-empty path** (data-source fallback norm - primary -> honest typed
-error): the service returns HTTP 200 with ``totalItems = 0`` for a bbox/window
-with no recorded tsunamis. That is a legitimate "no tsunamis" answer, not an
-error, so we raise a typed ``TsunamiNoEventsError`` (retryable=False) - never an
-empty success-shaped layer.
-
-**Output**: a vector ``LayerURI`` (``layer_type="vector"``) whose artifact is a
-Point FeatureCollection serialized as FlatGeobuf and rendered via the inline
-vector path. ``style_preset="tsunami_events"``; ``LayerURI.bbox`` is set to the
-records' extent so the camera auto-zooms.
-
-Tier-1, no auth, ``supports_global_query=True`` (the NCEI catalog is global; a
-bbox-less call covers the whole planet, bounded by the year window + the page
-cap).
-
-FR-AS-11 typed-error surface; FR-TA-2 / FR-AS-3 docstring discipline applies.
 """
 
 from __future__ import annotations
@@ -865,7 +791,7 @@ def fetch_tsunami_events(
     Cache key is SHA-256 of ``(mode, bbox-rounded-6dp, min_year, max_year)``, so
     identical-scope calls within the week reuse the FGB.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (derive a bbox from a place name BEFORE this call),
           ``fetch_administrative_boundaries`` (country/region framing),
@@ -875,7 +801,7 @@ def fetch_tsunami_events(
         - Upstream data source: NOAA NCEI Hazel hazard-service
           (ngdc.noaa.gov/hazel/hazard-service/api/v1/tsunamis).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``TsunamiInputError``: bad bbox / bad year / reversed window / bad
           observation_type (retryable=False).
         - ``TsunamiResultTooLargeError``: the scope exceeds the page cap -
@@ -886,8 +812,6 @@ def fetch_tsunami_events(
         - ``TsunamiNoEventsError``: no tsunamis matched the scope
           (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (NOAA NCEI federal hazard catalog). Claims
-    from these records should be marked ``source_authority_tier=1``.
 
     Tier-1 free. No API key. ``supports_global_query=True``.
     """

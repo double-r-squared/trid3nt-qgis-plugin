@@ -1,4 +1,4 @@
-"""``catalog_fetch``: fetch a catalog entry by id through the tiered
+"""``fetch_from_catalog``: fetch a catalog entry by id through the tiered
 STAC -> OGC -> HTTPS -> region ladder into a cached LayerURI.
 
 Carved out of the original two-tool ``catalog`` module in the tools/ reorg;
@@ -29,20 +29,20 @@ from trid3nt_server.tools.discovery.catalog_common import (
     load_catalog,
 )
 
-__all__ = ["catalog_fetch"]
+__all__ = ["fetch_from_catalog"]
 
-logger = logging.getLogger("trid3nt_server.tools.discovery.catalog_fetch")
+logger = logging.getLogger("trid3nt_server.tools.discovery.fetch_from_catalog")
 
 
 # ---------------------------------------------------------------------------
-# catalog_fetch — generic Tier-aware dispatcher.
+# fetch_from_catalog — generic Tier-aware dispatcher.
 # ---------------------------------------------------------------------------
 
 
-_CATALOG_FETCH_METADATA = AtomicToolMetadata(
-    name="catalog_fetch",
+_FETCH_FROM_CATALOG_METADATA = AtomicToolMetadata(
+    name="fetch_from_catalog",
     ttl_class="static-30d",
-    source_class="catalog_fetch",
+    source_class="fetch_from_catalog",
     cacheable=True,
 )
 
@@ -124,7 +124,7 @@ def _tier1_stac_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[byte
     raw HTTPS GET. Captured as OQ-47-CATALOG-TIER1-STAC for a follow-up.
     """
     raise NotImplementedError(
-        f"Tier-1 STAC dispatch via catalog_fetch is reserved for a follow-up "
+        f"Tier-1 STAC dispatch via fetch_from_catalog is reserved for a follow-up "
         f"(entry_id={entry.id!r}); use the dedicated `fetch_dem` / "
         f"`fetch_landcover` tools for STAC-backed sources in v0.1."
     )
@@ -141,7 +141,7 @@ def _tier2_ogc_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[bytes
     bbox_in = params.get("bbox") or params.get("location")
     if bbox_in is not None and not isinstance(bbox_in, (list, tuple)):
         raise OGCAdapterError(
-            f"catalog_fetch params.bbox must be a list/tuple; got {type(bbox_in).__name__}"
+            f"fetch_from_catalog params.bbox must be a list/tuple; got {type(bbox_in).__name__}"
         )
     bbox: tuple[float, float, float, float] | None = (
         tuple(bbox_in) if bbox_in is not None else None  # type: ignore[assignment]
@@ -264,7 +264,7 @@ def _tier3_https_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[byt
         resp = _rq.get(
             entry.urls[0],
             params={str(k): str(v) for k, v in extra_qs.items()},
-            headers={"User-Agent": "trid3nt/0.1 catalog_fetch Tier-3"},
+            headers={"User-Agent": "trid3nt/0.1 fetch_from_catalog Tier-3"},
             timeout=120.0,
         )
         resp.raise_for_status()
@@ -297,31 +297,31 @@ def _tier4_region_fetch(
     dispatch is OQ-47-CATALOG-TIER4-REGION for the follow-up.
     """
     raise NotImplementedError(
-        f"Tier-4 region-download dispatch via catalog_fetch is reserved for a "
+        f"Tier-4 region-download dispatch via fetch_from_catalog is reserved for a "
         f"follow-up (entry_id={entry.id!r}); use the dedicated `fetch_river_geometry` / "
         f"`fetch_population` tools for Tier-4 sources in v0.1."
     )
 
 @register_tool(
-    _CATALOG_FETCH_METADATA,
+    _FETCH_FROM_CATALOG_METADATA,
     # Annotations: readOnlyHint=True (dispatches to external API but does not
     # mutate server state; writes to read-through cache only),
     # openWorldHint=True (Tier-2 OGC services, Tier-3 HTTPS external endpoints),
     # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
     open_world_hint=True,
 )
-def catalog_fetch(entry_id: str, params: dict[str, Any] | None = None, **_extra_ignored: Any) -> dict[str, Any]:
+def fetch_from_catalog(entry_id: str, params: dict[str, Any] | None = None, **_extra_ignored: Any) -> dict[str, Any]:
     """Fetch bytes for a vetted catalog entry by its stable id (§F.1.2 Mode 1).
 
-    Use this (not catalog_search, which only LISTS candidates) when you already have a stable catalog entry id and want its actual layer BYTES.
+    Use this (not search_data_catalog, which only LISTS candidates) when you already have a stable catalog entry id and want its actual layer BYTES.
 
-    Use this when: the LLM has chosen a `CatalogEntry` from `catalog_search`
+    Use this when: the LLM has chosen a `CatalogEntry` from `search_data_catalog`
     and needs the actual layer bytes — generic dispatcher routes by the
     entry's ``access_tier``: Tier 1 (STAC+COG), Tier 2 (OGC service), Tier 3
     (HTTPS+Range), Tier 4 (region+clip). The dispatched bytes are written
     through the FR-DC-3 cache and surfaced as a LayerURI.
 
-    Do NOT use this for: discovering candidate sources (use ``catalog_search``);
+    Do NOT use this for: discovering candidate sources (use ``search_data_catalog``);
     direct-bbox raster retrieval where a dedicated fetcher already exists
     (use ``fetch_dem`` / ``fetch_landcover`` etc.); user-supplied URLs not in
     the catalog (use ``web_fetch`` once it lands).
@@ -354,7 +354,7 @@ def catalog_fetch(entry_id: str, params: dict[str, Any] | None = None, **_extra_
     Returns:
         A dict with:
         - ``layer``: a ``LayerURI`` pointing at the cached artifact
-          (``s3://trid3nt-cache/cache/static-30d/catalog_fetch/<key>.<ext>``).
+          (``s3://trid3nt-cache/cache/static-30d/fetch_from_catalog/<key>.<ext>``).
         - ``entry_id``: the catalog id (echo).
         - ``access_tier``: the dispatched tier (1/2/3/4).
         - ``source_class``: the entry's source_class (for downstream routing).
@@ -362,11 +362,11 @@ def catalog_fetch(entry_id: str, params: dict[str, Any] | None = None, **_extra_
         - ``last_verified``: the entry's curator-vetted UTC timestamp.
 
     FR-DC-3 / FR-CE-8: registered with ``ttl_class="static-30d"``,
-    ``source_class="catalog_fetch"``, ``cacheable=True``. The cache key is the
+    ``source_class="fetch_from_catalog"``, ``cacheable=True``. The cache key is the
     entry id + params; identical fetches dedup.
     """
     if not isinstance(entry_id, str) or not entry_id.strip():
-        raise CatalogNotFoundError("catalog_fetch requires a non-empty entry_id")
+        raise CatalogNotFoundError("fetch_from_catalog requires a non-empty entry_id")
     params = params or {}
 
     entry = _get_catalog_entry(entry_id)
@@ -405,7 +405,7 @@ def catalog_fetch(entry_id: str, params: dict[str, Any] | None = None, **_extra_
     ext_hint = _ext_hint_for(entry, params)
 
     result = read_through(
-        metadata=_CATALOG_FETCH_METADATA,
+        metadata=_FETCH_FROM_CATALOG_METADATA,
         params=cache_params,
         ext=ext_hint,
         fetch_fn=_do_fetch,
@@ -424,7 +424,7 @@ def catalog_fetch(entry_id: str, params: dict[str, Any] | None = None, **_extra_
         "bytes": len(result.data),
     }
     logger.info(
-        "catalog_fetch entry_id=%r tier=%d cache_hit=%s bytes=%d",
+        "fetch_from_catalog entry_id=%r tier=%d cache_hit=%s bytes=%d",
         entry_id,
         tier,
         result.hit,

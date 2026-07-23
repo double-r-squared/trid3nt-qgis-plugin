@@ -96,7 +96,7 @@ def test_corpus():
 
     import yaml
 
-    from trid3nt_server.tools.discovery.discover_dataset import _default_corpus_path
+    from trid3nt_server.tools.discovery.search_tools import _default_corpus_path
 
     p = pathlib.Path(_default_corpus_path())
     corpus = yaml.safe_load(p.read_text())

@@ -85,9 +85,9 @@ def _import_tools_registry() -> int:
     from .tools.simulation import solver  # noqa: F401
     # job-0042: register run_model_flood_scenario (M5 capstone workflow wrapper).
     from .workflows import model_flood_scenario  # noqa: F401
-    # job-0047: register catalog_search + catalog_fetch (Mode 1 substrate).
-    from .tools.discovery import catalog_fetch  # noqa: F401
-    from .tools.discovery import catalog_search  # noqa: F401
+    # job-0047: register search_data_catalog + fetch_from_catalog (Mode 1 substrate).
+    from .tools.discovery import fetch_from_catalog  # noqa: F401
+    from .tools.discovery import search_data_catalog  # noqa: F401
     # job-0062: register publish_layer (COG → QGIS Server WMS bridge; side-effect tool).
     from .tools import publish_layer  # noqa: F401
     # job-0080: register compute_colored_relief (gdaldem color-relief; 4 ramp presets).

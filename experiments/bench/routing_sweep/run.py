@@ -382,6 +382,51 @@ async def _handshake_and_case(ws, rec: RawRecorder, run_index: int, record_id: s
                 return ss["case"]["case_id"]
 
 
+# LANE A: the discovery / bookkeeping MECHANISM tools that must ride THROUGH
+# the server block (else the model cannot discover its way to the pick). The
+# discovery tool name is resolved live off its registration metadata so the
+# discover_dataset -> search_tools rename lands transparently.
+def _mechanism_tool_names() -> frozenset[str]:
+    names = set(META_TOOLS)
+    try:
+        from trid3nt_server.tools.discovery.search_tools import (
+            _SEARCH_TOOLS_METADATA,
+        )
+        if getattr(_SEARCH_TOOLS_METADATA, "name", None):
+            names.add(_SEARCH_TOOLS_METADATA.name)
+    except Exception:  # noqa: BLE001 -- fall back to the static META set
+        pass
+    return frozenset(names)
+
+
+# LANE A: typed server block error_codes the grader reads off a tool-io
+# function_response (see tool_gating.BENCH_BLOCKED_*).
+BENCH_BLOCK_CODES = ("BENCH_BLOCKED_WRONG_PICK", "BENCH_BLOCKED_CORRECT")
+
+
+def _bench_block_payload(record: SweepRecord) -> dict | None:
+    """Build the ``bench_tool_block`` config the server arms for this record.
+
+    * allow -- the record's acceptable picks.
+    * always_allowed -- the record's supporting tools UNION the discovery /
+      bookkeeping mechanism tools (ride through, execute).
+    * block_at_invocation -- the acceptable picks, ONLY for the block tier
+      (validated then blocked without executing); empty for the run tier.
+
+    Returns ``None`` for a degenerate config with nothing to enforce (no
+    acceptable picks and not a no_tool record), so no session-config is sent.
+    """
+    block = record.acceptable if record.execution == "block_at_invocation" else frozenset()
+    payload = {
+        "allow": sorted(record.acceptable),
+        "always_allowed": sorted(record.always_allowed | _mechanism_tool_names()),
+        "block_at_invocation": sorted(block),
+    }
+    if not payload["allow"] and not record.no_tool:
+        return None
+    return payload
+
+
 async def drive_record(ws_url: str, record: SweepRecord, rec: RawRecorder,
                        run_index: int, timeout_s: float) -> DriveResult:
     """One record: fresh session + case, send prompt, watch envelopes, apply
@@ -395,6 +440,19 @@ async def drive_record(ws_url: str, record: SweepRecord, rec: RawRecorder,
     async with ws_client.connect(ws_url, open_timeout=15, close_timeout=10) as ws:
         case_id = await _handshake_and_case(
             ws, rec, run_index, record.id, session_id, f"routing-sweep-{record.id}-r{run_index}")
+
+        # LANE A (server-side pre-dispatch block hook): ARM the session-scoped
+        # tool-block config via session-config BEFORE the prompt. This is the
+        # server-authoritative replacement for the racy v1 client-side cancel:
+        # a non-member pick is BENCH_BLOCKED_WRONG_PICK'd (turn ends), a block-
+        # tier member pick is BENCH_BLOCKED_CORRECT'd after arg validation --
+        # both before any fetch. Sent only when the config carries something to
+        # enforce (else normal operation, zero server overhead).
+        _bench_cfg = _bench_block_payload(record)
+        if _bench_cfg is not None:
+            await _send(ws, rec, run_index, record.id,
+                        mk("session-config", session_id,
+                           {"bench_tool_block": _bench_cfg}, case_id=case_id))
 
         await _send(ws, rec, run_index, record.id,
                     mk("user-message", session_id,
@@ -463,6 +521,21 @@ async def drive_record(ws_url: str, record: SweepRecord, rec: RawRecorder,
                     result.tool_errors[name] = (payload.get("function_response") or "")[:2000]
                     if _matches(result.tool_errors[name], ARG_INVALID_PATTERNS) and len(result.fired) <= 1:
                         result.args_valid = False
+                    # LANE A: READ the server-side block. A BENCH_BLOCKED_*
+                    # typed function-response is authoritative -- the server
+                    # blocked the tool BEFORE any fetch, so mark the record
+                    # blocked (the grader's blocked+passed logic then lands
+                    # CORRECT_BLOCKED / SELECTED_WRONG_BLOCKED). A wrong-pick
+                    # block also ENDS the turn server-side; a correct-block does
+                    # not, so still cancel the turn client-side to advance.
+                    if _matches(result.tool_errors[name], BENCH_BLOCK_CODES):
+                        result.blocked = True
+                        if result.block_reason is None:
+                            result.block_reason = f"server bench-block: {name}"
+                        if "BENCH_BLOCKED_CORRECT" in result.tool_errors[name]:
+                            await cancel_turn(f"server correct-block: {name}")
+                if cancel_sent:
+                    break
 
             elif mtype == "tool-payload-warning":
                 decision = "cancel" if record.execution == "block_at_invocation" else "proceed"

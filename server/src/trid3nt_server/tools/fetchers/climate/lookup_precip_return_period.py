@@ -1,10 +1,4 @@
-"""NOAA Atlas 14 PFDS point precipitation-frequency lookup
-(``lookup_precip_return_period``) with the Atlas-2 western-US anchor fallback.
-
-Carved out of the original multi-tool ``data_fetch`` module (job-0033) in the
-tools/ reorg; behavior and the registered tool surface are unchanged. The
-shared typed-error hierarchy + bbox helpers live in
-``trid3nt_server.tools.fetchers._fetch_common``.
+"""NOAA Atlas 14 PFDS point precipitation-frequency lookup (``lookup_precip_return_period``) with the Atlas-2 western-US anchor fallback.
 """
 
 from __future__ import annotations

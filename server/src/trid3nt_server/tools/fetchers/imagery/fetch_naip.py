@@ -1,37 +1,4 @@
 """``fetch_naip`` atomic tool  --  NAIP high-res aerial imagery (conservation).
-
-Fetches USDA NAIP (National Agriculture Imagery Program) leaf-on aerial
-imagery for a bbox via the Microsoft Planetary Computer (PC) STAC catalog and
-returns a 3-band RGB COG suitable for direct display as the aerial BASE layer in
-the SC-DNR-style conservation-priority stack.
-
-Data source
-===========
-
-PC collection ``naip``:
-
-    catalog: https://planetarycomputer.microsoft.com/api/stac/v1
-    asset:   ``image``  --  a 4-band (R, G, B, NIR) uint8 COG at ~0.6-1 m GSD
-    extent:  CONUS + HI + PR + USVI (NAIP is US-only)
-
-The ``image`` asset is an Azure-Blob COG behind a SAS token; this tool signs the
-href (see ``_pc_stac.sas_sign_href``) and reads the first three bands (R, G, B)
-warped to EPSG:4326 and windowed to the bbox through GDAL ``/vsicurl/``, then
-re-emits a 3-band uint8 RGB COG. ``publish_layer`` renders multiband COGs
-directly (the RGBA/multiband passthrough), so no per-band rescale/colormap is
-applied  --  the baked aerial colors paint as-is.
-
-Honesty (data-source fallback norm): NAIP is US-only. If NO NAIP item
-intersects the bbox a typed ``NAIPNoCoverageError`` is raised (e.g. an offshore
-or foreign AOI)  --  never a fabricated layer.
-
-FR-CE-8 / FR-DC-3/4: routed through ``read_through`` so identical ``(bbox,
-year)`` calls reuse the cached RGB COG in the ``static-30d`` / ``naip`` cache
-prefix.
-
-Tier-1 free (no API key). Heavy emit-free sync raster work  --  registered in
-``_ALWAYS_OFFLOAD_SYNC_TOOLS`` so it runs via ``asyncio.to_thread`` and never
-stalls the WebSocket heartbeat.
 """
 
 from __future__ import annotations

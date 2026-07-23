@@ -1,61 +1,4 @@
 """``fetch_noaa_nwm_streamflow`` atomic tool — NOAA National Water Model streamflow (job A3).
-
-The NOAA National Water Model (NWM) is the operational hydrologic forecast
-system run by NOAA Office of Water Prediction. It produces streamflow,
-soil moisture, and snow estimates on the **NHDPlus v2.1 channel network**
-(~2.7 million stream reaches across CONUS, indexed by ``feature_id`` = NHDPlus
-COMID). Streamflow is the primary fluvial-forcing source for compound-flood
-modeling outside the gauge network — this tool composes with
-``model_flood_scenario`` to supply river-boundary discharge for SFINCS pluvial
-runs and similar engines.
-
-API surface (verified live 2026-06-09 against the AWS Open Data Registry):
-
-    bucket:   noaa-nwm-pds  (https://noaa-nwm-pds.s3.amazonaws.com/)
-    prefix:   nwm.YYYYMMDD/<product>/
-    products:
-        analysis_assim/  - real-time analysis (3h window, ~hourly cycles)
-        short_range/     - 18-hour deterministic forecast
-        medium_range/    - 10-day ensemble forecast
-        long_range/      - 30-day ensemble forecast
-    filenames:
-        nwm.tHHz.analysis_assim.channel_rt.tm00.conus.nc
-        nwm.tHHz.short_range.channel_rt.fNNN.conus.nc
-
-File layout (verified live):
-    - ~14 MiB per channel_rt netCDF (CONUS coverage)
-    - netCDF4 / HDF5 format (not GRIB — the kickoff's "GRIB → COG" hint
-      reflects an outdated assumption; modern NWM is netCDF4)
-    - Variable ``streamflow``: shape (2,776,734,), dtype float64, units m^3/s
-    - Index ``feature_id``: NHDPlus v2.1 COMID per reach (NOT a spatial grid)
-    - Time-stamped via ``time`` / ``reference_time`` coordinates
-    - No native lat/lon — the spatial mapping is via NHDPlus reach geometry
-
-Geometry-join strategy (OQ-A3-NWM-GEOMETRY-JOIN):
-    The NWM netCDF carries no geometry. We bridge to a renderable layer by
-    sampling **USGS NLDI** (api.water.usgs.gov/nldi) on a sparse 5×5 grid
-    within the requested bbox to discover nearby COMIDs, then we expand
-    via NLDI navigation (upstreamMain, up to ~50 reaches per seed point)
-    to find candidate reach IDs. Each reach geometry is fetched once from
-    NLDI and the streamflow value joined on COMID. The result is a
-    FlatGeobuf with point geometry at the reach centroid (LineString
-    midpoint) carrying ``feature_id``, ``streamflow_cms``, ``valid_time``.
-
-Output schema:
-    Driver: FlatGeobuf, EPSG:4326, Point geometry
-    Properties:
-        feature_id     - int, NHDPlus v2.1 COMID
-        streamflow_cms - float, river discharge in m^3/s
-        valid_time     - ISO-8601 UTC timestamp
-        product        - "analysis_assim" / "short_range" / etc.
-
-FR-CE-8 / FR-DC-3: routed through ``read_through`` with
-``ttl_class="dynamic-1h"``, ``source_class="nwm_streamflow"``. Cache key on
-``(bbox-rounded-6dp, product, valid_time, forecast_hour)``.
-
-Tier-1 free (no auth, no API key). ``supports_global_query=False`` —
-NWM is CONUS-only (the Alaska/Hawaii/PR coastal domains are surfaced as
-``OQ-A3-NWM-DOMAINS`` for a future extension).
 """
 
 from __future__ import annotations
@@ -829,7 +772,7 @@ def fetch_noaa_nwm_streamflow(
     ``(bbox-rounded-6dp, product, valid_time-iso-or-LATEST, forecast_hour)``
     so identical-bbox/hour calls hit the same FlatGeobuf.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``model_flood_scenario`` (fluvial forcing),
           ``fetch_river_geometry`` (downstream NHDPlus polyline join via
           ``feature_id``), ``publish_layer`` (display on the map).
@@ -841,7 +784,7 @@ def fetch_noaa_nwm_streamflow(
         - Upstream data sources: NOAA NWM (s3://noaa-nwm-pds) + USGS NLDI
           (api.water.usgs.gov/nldi) for the geometry join.
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``NWMStreamflowInputError``: bad bbox / product / valid_time /
           forecast_hour (retryable=False).
         - ``NWMStreamflowUpstreamError``: S3 / NLDI network failure or

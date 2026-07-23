@@ -1,10 +1,4 @@
-"""Building-footprint fetcher (``fetch_buildings``): OSM Overpass ways+relations
-primary, MS Open Maps ML footprints fallback -> FlatGeobuf + tags sidecar.
-
-Carved out of the original multi-tool ``data_fetch`` module (job-0033) in the
-tools/ reorg; behavior and the registered tool surface are unchanged. The
-shared typed-error hierarchy + bbox helpers live in
-``trid3nt_server.tools.fetchers._fetch_common``.
+"""Building-footprint fetcher (``fetch_buildings``): OSM Overpass ways+relations primary, MS Open Maps ML footprints fallback -> FlatGeobuf + tags sidecar.
 """
 
 from __future__ import annotations

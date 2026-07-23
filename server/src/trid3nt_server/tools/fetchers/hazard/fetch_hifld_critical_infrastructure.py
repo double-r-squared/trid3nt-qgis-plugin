@@ -1,83 +1,4 @@
-"""``fetch_hifld_critical_infrastructure`` atomic tool — HIFLD critical-
-infrastructure POINTS by facility type.
-
-Wraps the national Homeland Infrastructure Foundation-Level Data (HIFLD) Open
-critical-infrastructure point inventories, served from a public, unauthenticated
-ArcGIS REST FeatureService mirror. Returns a FlatGeobuf POINT layer of facilities
-of one ``facility_type`` (hospitals, schools, fire_stations, police, power_plants)
-intersecting a user-supplied bbox, together with the canonical HIFLD attribute
-payload (name, address, city, state, ZIP, and facility-type-specific fields like
-hospital beds / trauma level, school enrollment / grade range, fire-station
-apparatus counts).
-
-**Source / endpoint (verified live 2026-06-27):**
-    The original ``hifldgeoplatform.opendata.arcgis.com`` Open Data portal was
-    retired (shut down 2025-08-26). The HIFLD national point layers are mirrored
-    on a stable public ArcGIS Online org (NWS / NOAA-published, no token) at::
-
-        https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/
-            <Service>/FeatureServer/0/query
-
-    where ``<Service>`` is one of:
-        ``Hospitals``                       (7,570 features, HIFLD Hospitals)
-        ``Public_Schools``                  (102,274, HIFLD Public Schools K-12)
-        ``Fire_Stations``                   (53,087, HIFLD Fire Stations)
-        ``Local_Law_Enforcement_Locations`` (23,611, HIFLD Law Enforcement)
-        ``Power_Plants``                    (21,333, EPA/EIA Power Plants)
-
-    Each is an ``esriGeometryPoint`` layer, ``maxRecordCount=2000``, queried by
-    ``esriGeometryEnvelope`` + ``inSR=4326`` + ``f=geojson`` exactly like the
-    ``fetch_noaa_slr_scenarios`` / ``fetch_usace_dams`` ESRI REST pattern.
-
-**What it does:**
-    Fetches all facility points of one ``facility_type`` intersecting the bbox,
-    paginating if the bbox holds more than one server page, and serializes them
-    to a FlatGeobuf vector layer in EPSG:4326 with the HIFLD attribute columns
-    preserved. A ``facility_type`` and ``facility_label`` column are added so the
-    layer self-describes for narration and downstream overlay.
-
-**When to use:**
-    - User asks "where are the hospitals / schools / fire stations / police
-      stations near [place]?" or "show critical infrastructure in [bbox]".
-    - A hazard / exposure workflow needs the locations of life-safety facilities
-      inside a flood, fire, or surge footprint (intersect with
-      ``compute_zonal_statistics`` or ``clip_vector_to_polygon``).
-    - Evacuation / shelter planning needs school + fire-station + hospital points.
-    - Damage-assessment context: overlay critical facilities on a hazard layer.
-
-**When NOT to use:**
-    - For dams → ``fetch_usace_dams`` (NID).
-    - For the National Structure Inventory building stock → ``fetch_usace_nsi``.
-    - For non-US facilities — HIFLD coverage is US (50 states + DC + territories).
-    - For real-time facility status / occupancy — HIFLD is a static inventory.
-    - For an arbitrary OSM amenity not in the supported ``facility_type`` set —
-      use an OSM Overpass fetcher instead.
-
-**Parameters:**
-    facility_type: One of ``"hospitals"``, ``"schools"``, ``"fire_stations"``,
-        ``"police"``, ``"power_plants"``. Aliases are accepted (e.g.
-        ``"hospital"``, ``"public_schools"``, ``"fire"``, ``"law_enforcement"``,
-        ``"ems"`` → fire_stations). Unknown values raise a typed input error
-        listing the valid set.
-    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. Required —
-        ``supports_global_query=False`` (a national sweep of schools alone is
-        100k+ points). Example for Houston metro: ``(-95.8, 29.5, -95.0, 30.1)``.
-
-**Returns:**
-    ``LayerURI`` pointing at a FlatGeobuf of ``Point`` features in EPSG:4326.
-    Properties include the HIFLD source columns plus ``facility_type`` (str) and
-    ``facility_label`` (str). ``layer_type="vector"``, ``role="primary"``,
-    ``style_preset="hifld_critical_infrastructure"``, ``units=None``.
-
-**Cache:** ``static-30d`` — HIFLD inventories update infrequently (annual-ish).
-
-**FR-AS-11 typed-error surface:** ``HIFLDInfraError`` (base, retryable=True),
-``HIFLDInfraInputError`` (bad facility_type / bbox, non-retryable),
-``HIFLDInfraUpstreamError`` (ArcGIS REST network / HTTP / parse failure,
-retryable), ``HIFLDInfraEmptyError`` (no features — NOT raised by default; an
-empty FGB is serialized so the layer still appears with a zero-feature notice).
-
-``supports_global_query=False``. No API key required.
+"""``fetch_hifld_critical_infrastructure`` atomic tool — HIFLD critical- infrastructure POINTS by facility type.
 """
 
 from __future__ import annotations
@@ -645,7 +566,7 @@ def fetch_hifld_critical_infrastructure(
         ``layer_type="vector"``, ``role="primary"``,
         ``style_preset="hifld_critical_infrastructure"``, ``units=None``.
 
-    **Error types (FR-AS-11):**
+    **Error types:**
         - ``HIFLDInfraInputError``: unknown facility_type or bad bbox
           (retryable=False).
         - ``HIFLDInfraUpstreamError``: HTTP/network failure, ArcGIS error

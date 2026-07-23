@@ -1,35 +1,4 @@
-"""``fetch_nws_event`` atomic tool — NWS active alerts/events fetcher (job-0090).
-
-Wraps the National Weather Service ``api.weather.gov/alerts/active`` endpoint
-and emits FlatGeobuf polygons + properties (severity, headline, event, onset,
-ends, description, ...). Tier-1 free (no API key required); a descriptive
-``User-Agent`` header is REQUIRED by NWS or the API returns 403.
-
-Usage modes (``area`` polymorphism):
-
-- 2-letter US state code ("FL", "TX", ...) → ``?area={STATE}``
-- US county FIPS (5-digit string, e.g. "12071" for Lee County, FL) → ``?area=FIPS``
-- bbox tuple ``(min_lon, min_lat, max_lon, max_lat)`` (EPSG:4326) → converted
-  to a point center (lat, lon) and passed as ``?point={lat},{lon}`` for the
-  zone lookup (NWS does not accept bbox queries directly; point lookup returns
-  all alerts whose forecast zones contain that point).
-
-Cache: ``dynamic-1h`` (FR-DC-2 active-state) — alerts change frequently, but
-a one-hour bucket is the FR-DC-3 minimum window and keeps repeat queries
-inside a short demo / research session cheap.
-
-Cache key: SHA-256 of ``(area_canonicalized, event_types_sorted, status,
-message_type)`` — see ``read_through`` for the full canonicalization rules.
-
-Returns: ``LayerURI(layer_type="vector", role="context", units=None)`` pointing
-at a FlatGeobuf in the cache bucket containing the alert polygons + properties.
-
-FR-TA-2 / FR-AS-3 docstring discipline applies.
-
-Geographic-correctness check (job-0086 lesson, codified):
-The live test verifies that bbox→point conversion produces the EXACT center
-of the input bbox (algebraic identity, not just round-trip), so a sign-flip
-or axis-swap bug in the point computation surfaces as a wrong polygon.
+"""``fetch_nws_event`` atomic tool — NWS active alerts/events fetcher.
 """
 
 from __future__ import annotations

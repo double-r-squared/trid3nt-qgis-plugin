@@ -1579,17 +1579,15 @@ def run_solver(
 
     Params:
         solver: lowercase solver identifier. v0.1 supports ``"sfincs"``
-            only; other values raise ``SolverNotRegisteredError`` per
-            the kickoff's lazy-per-milestone deploy strategy.
+            only; other values raise ``SolverNotRegisteredError`` (other
+            solvers land per lazy per-milestone deploy).
         model_setup_uri: ``s3://`` URI of the manifest the solver envelope
-            will read (the job-0040 manifest schema: ``{"inputs":[...],
-            "sfincs_args":[...], "outputs":[...]}``). Input URIs inside the
-            manifest are resolved by scheme (job-0291). Engine job-0042's
-            ``model_flood_scenario`` workflow composes this from the M4
-            atomic-tool substrate.
-        compute_class: FR-CE-3 compute class — selects the AWS Batch sizing
-            bucket (small / standard / large / xlarge / gpu). Defaults to
-            ``"medium"`` (== standard).
+            reads (``{"inputs":[...], "sfincs_args":[...], "outputs":[...]}``);
+            input URIs inside are resolved by scheme. The
+            ``model_flood_scenario`` workflow composes this from the atomic
+            tool substrate.
+        compute_class: FR-CE-3 compute class — selects the sizing bucket
+            (small/standard/large/xlarge/gpu). Default ``"medium"``.
 
     Returns:
         ``ExecutionHandle{handle_id, run_id, solver, compute_class,
@@ -1719,8 +1717,7 @@ async def wait_for_completion(
             ``workflow_name`` field pins the backend (``local-docker`` /
             ``local-exec`` / ``aws-batch``) so the poll routes correctly.
         poll_interval_s: seconds between completion polls. Default 10s —
-            matches NFR-P-4 ≤15-min budget granularity (≥9 polls per run).
-            Surfaced as OQ-41-POLL-INTERVAL.
+            matches NFR-P-4 <=15-min budget granularity (>=9 polls per run).
         timeout_s: hard ceiling. Defaults to 1800 s (30 min — gives 2×
             headroom over NFR-P-4). On timeout the tool returns
             ``RunResult{status="failed", error_code="SOLVER_TIMEOUT"}``

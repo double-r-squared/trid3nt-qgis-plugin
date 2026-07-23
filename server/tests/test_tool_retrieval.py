@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-import trid3nt_server.tools.discovery.discover_dataset as dd
+import trid3nt_server.tools.discovery.search_tools as dd
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.discovery import tool_retrieval as trmod
 from trid3nt_server.tools.discovery.tool_retrieval import (
@@ -151,8 +151,8 @@ def test_k_clamps_low_and_bad(warm_index):
 # the 4 tools that register ONLY via the full startup path -- the fail-open
 # full-registry snapshot must include them even in a cold process.
 _STARTUP_ONLY = {
-    "catalog_search",
-    "catalog_fetch",
+    "search_data_catalog",
+    "fetch_from_catalog",
     "list_qgis_algorithms",
     "describe_qgis_algorithm",
 }

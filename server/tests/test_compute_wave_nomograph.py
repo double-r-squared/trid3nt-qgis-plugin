@@ -183,7 +183,7 @@ def test_in_coastal_category():
 
 
 def test_has_corpus_entries():
-    import trid3nt_server.tools.discovery.discover_dataset as dd  # noqa: F401  (ensures module import path exists)
+    import trid3nt_server.tools.discovery.search_tools as dd  # noqa: F401  (ensures module import path exists)
     from pathlib import Path
     import yaml
 

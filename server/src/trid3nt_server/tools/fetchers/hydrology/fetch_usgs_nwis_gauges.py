@@ -1,83 +1,4 @@
-"""``fetch_usgs_nwis_gauges`` atomic tool — real USGS NWIS / Water Services stream gauges (job-0332).
-
-Fetches **real, observed** USGS stream-gauge stations and their latest readings
-from the USGS Water Services machine API (the same data behind
-``waterdata.usgs.gov``). One Point feature per gauge station, carrying the
-latest instantaneous discharge (00060, ft^3/s) and/or gage height (00065, ft).
-
-This is the gap NATE hit: the agent had no USGS-gauge tool, so a "show me the
-USGS stream gauges in Washington" request fell back to
-``fetch_noaa_nwm_streamflow`` — which is **modeled** NHDPlus reach flow, not the
-actual instrument record. ``fetch_usgs_nwis_gauges`` is the canonical observed
-gauge source; ``fetch_noaa_nwm_streamflow`` is the modeled companion.
-
-**API surface** (USGS Water Services, free, NO API key required):
-
-    PRIMARY — Instantaneous Values (real-time observed):
-        https://waterservices.usgs.gov/nwis/iv/
-            ?format=json&siteStatus=active
-            &parameterCd=00060,00065
-            &stateCd=WA            (state-level asks)  -- OR --
-            &bBox=west,south,east,north   (area asks)
-        00060 = discharge (ft^3/s); 00065 = gage height (ft).
-
-    WINDOW / HYDROGRAPH mode (the compound-flood discharge driver — J4):
-        The SAME IV service accepts a TIME WINDOW (``startDT``/``endDT`` ISO
-        dates, or a relative ``period`` like ``P7D``). With a window the IV
-        body carries the FULL per-site time series (every sample in the
-        window) instead of just the latest reading. We emit one Point feature
-        per station carrying an inline ``time_series_csv`` attribute
-        (``"iso,value"`` rows, discharge in ft^3/s) — the EXACT shape
-        ``fetch_noaa_coops_tides`` emits for water level — so the SFINCS
-        forcing adapter (``discharge_forcing_from_fgb``) can preserve a REAL
-        multi-point river hydrograph instead of synthesising a flat 2-point
-        constant. The latest-instantaneous behaviour stays the DEFAULT; the
-        window mode engages only when an explicit start/end (or period) is
-        supplied.
-
-    FALLBACK — Site service (station LOCATIONS only, no current reading):
-        https://waterservices.usgs.gov/nwis/site/
-            ?format=rdb&siteStatus=active
-            &stateCd=WA | &bBox=...
-            &hasDataTypeCd=iv
-
-**Spatial selector handling** (IMPORTANT): USGS limits ``bBox`` so the PRODUCT
-of the lat-range × lon-range must be <= ~25 deg^2. A whole-state bbox like
-Washington (~8° × 3.5° = 28 deg^2) EXCEEDS that and the service returns HTTP
-400. Therefore:
-
-    - PREFER ``state_code`` (2-letter USPS, e.g. "WA") when given — this is the
-      correct call for state-level asks ("Washington state"). ``stateCd`` has no
-      area limit.
-    - Else use ``bbox=(west, south, east, north)``.
-    - If the bbox product exceeds ~24.5 deg^2 AND no ``state_code`` is given,
-      raise a typed ``NwisBboxTooLargeError`` telling the caller to pass
-      ``state_code`` (or a smaller bbox). We never silently 400.
-
-**IV WaterML-JSON parse**: ``value.timeSeries[]`` each carries
-``sourceInfo`` (``siteName``; ``siteCode[0].value`` = site_no;
-``geoLocation.geogLocation.latitude`` / ``longitude``) and
-``values[0].value[0]`` (latest reading + ``dateTime``) keyed by variable
-(``variableCode[0].value`` is 00060 or 00065). We GROUP by ``site_no`` →
-ONE Point feature per station carrying: ``site_no``, ``site_name``,
-``discharge_cfs`` (if present), ``gage_height_ft`` (if present),
-``reading_dt`` (latest reading timestamp).
-
-**Fallback norm** (primary → fallback → honest typed error): if IV returns zero
-sites (no active stations reporting those params in scope), fall back to the
-Site service to at least return station LOCATIONS (no current reading). If BOTH
-miss, raise ``NwisNoStationsError`` (retryable=False) with an honest message.
-We never return an empty success-shaped layer.
-
-**Output**: a vector ``LayerURI`` (``layer_type="vector"``) whose artifact is a
-point FeatureCollection (one point per station), serialized as FlatGeobuf and
-rendered via the inline-GeoJSON vector path (job-0175). ``style_preset`` =
-``"usgs_gauges"``; ``LayerURI.bbox`` is set to the stations' extent so the
-camera auto-zooms.
-
-Tier-1, no auth, ``supports_global_query=False`` (US + territories only).
-
-FR-AS-11 typed-error surface; FR-TA-2 / FR-AS-3 docstring discipline applies.
+"""``fetch_usgs_nwis_gauges`` atomic tool — real USGS NWIS / Water Services stream gauges.
 """
 
 from __future__ import annotations
@@ -1155,7 +1076,7 @@ def fetch_usgs_nwis_gauges(
     Cache key is SHA-256 of the resolved selector (``state_code`` or
     bbox-rounded-6dp), so identical-scope calls within the hour reuse the FGB.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (derive a bbox or surface a state from a place name BEFORE this call),
           ``fetch_administrative_boundaries`` (state/county framing).
@@ -1165,7 +1086,7 @@ def fetch_usgs_nwis_gauges(
         - Upstream data source: USGS Water Services
           (waterservices.usgs.gov/nwis/iv + /nwis/site).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``NwisInputError``: no selector / bad bbox / bad state code
           (retryable=False).
         - ``NwisBboxTooLargeError``: bbox exceeds the USGS ~25 deg^2 area limit
@@ -1175,8 +1096,6 @@ def fetch_usgs_nwis_gauges(
         - ``NwisNoStationsError``: no active gauges in scope from EITHER service
           (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (USGS federal gauge network). Claims from NWIS
-    gauge readings should be marked ``source_authority_tier=1``.
 
     Tier-1 free. No API key. ``supports_global_query=False`` (US + territories).
     """

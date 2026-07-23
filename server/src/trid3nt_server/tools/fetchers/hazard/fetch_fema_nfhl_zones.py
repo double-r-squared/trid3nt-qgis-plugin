@@ -1,77 +1,4 @@
 """``fetch_fema_nfhl_zones`` atomic tool — FEMA NFHL regulatory flood zones (job A1).
-
-Wraps the FEMA National Flood Hazard Layer (NFHL) ArcGIS REST MapServer's
-``Flood Hazard Zones`` layer (id ``28``) and returns FlatGeobuf polygons clipped
-to a bbox. NFHL is the authoritative federal record of Special Flood Hazard
-Areas (SFHA) used for flood-insurance rate determination and floodplain
-regulation under the National Flood Insurance Program (NFIP).
-
-Endpoint (verified live 2026-06-09):
-    https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query
-
-Query parameters used::
-
-    where=1=1
-    geometry={xmin,ymin,xmax,ymax}
-    geometryType=esriGeometryEnvelope
-    inSR=4326
-    spatialRel=esriSpatialRelIntersects
-    outFields=FLD_ZONE,ZONE_SUBTY,SFHA_TF,STATIC_BFE,V_DATUM,DEPTH,LEN_UNIT,
-              VELOCITY,VEL_UNIT,DFIRM_ID,FLD_AR_ID,STUDY_TYP,SOURCE_CIT,GFID
-    outSR=4326
-    f=geojson
-    resultRecordCount=2000
-    resultOffset={offset}
-
-NFHL FeatureServer has a per-page cap of 2000 features and signals more via
-``exceededTransferLimit`` in the response envelope. We paginate via OBJECTID-
-cursor (``where=OBJECTID>last_seen``) rather than ``resultOffset``, because
-the live endpoint reliably 500s on ``resultOffset>0`` queries against bbox-
-filtered selections — a documented FEMA quirk independent of the bbox size.
-Safety cap: 50 pages (100k features). A bbox that hits the cap is almost
-certainly a state-scale or larger query that should be narrowed.
-
-Properties preserved (the NFHL flood-zone semantic core):
-    - ``FLD_ZONE``    — primary zone designation (A, AE, AH, AO, AR, V, VE, X, D, ...)
-    - ``ZONE_SUBTY``  — sub-type detail (e.g. ``"FLOODWAY"``, ``"0.2 PCT ANNUAL
-                        CHANCE FLOOD HAZARD"``, ``"AREA OF MINIMAL FLOOD HAZARD"``)
-    - ``SFHA_TF``     — Special Flood Hazard Area flag (``T``/``F``)
-    - ``STATIC_BFE``  — Base Flood Elevation (1% annual chance), -9999 sentinel
-                        for "no BFE established"
-    - ``V_DATUM``     — vertical datum for BFE (NAVD88 / NGVD29 / NULL)
-    - ``DEPTH`` / ``LEN_UNIT`` — for AO zones (sheet-flow depth in feet/meters)
-    - ``VELOCITY`` / ``VEL_UNIT`` — for V zones (coastal high-hazard wave velocity)
-    - ``DFIRM_ID``    — Digital FIRM identifier (county-level DFIRM panel set)
-    - ``FLD_AR_ID``   — flood area identifier within the DFIRM
-    - ``STUDY_TYP``   — study type (NP=non-printed, PR=printed FIRM)
-    - ``SOURCE_CIT``  — LOMC / study citation reference
-    - ``GFID``        — global flood-area UUID (stable cross-version key)
-
-Cache: ``static-30d`` (FEMA publishes NFHL revisions monthly through Letter of
-Map Change (LOMC) updates and quarterly DFIRM panel republishes; a 30-day
-stale window is acceptable for hazard-modeling and floodplain-overlay use,
-and matches the lifecycle of the FEMA Map Service Center release cadence).
-
-``supports_global_query=False`` (polygon source, see kickoff): NFHL's CONUS+
-territories corpus is on the order of millions of polygons; a "global" query
-would be paginated for hours and exceed the bucket-scale limits. The catalog/
-discovery layer must route NFHL queries through a bbox or an admin polygon.
-
-FR-AS-11 typed-error surface: ``FEMA_NFHL_ZONESError`` (base, retryable),
-``FEMA_NFHL_ZONESInputError`` (non-retryable bbox/sfha_only validation),
-``FEMA_NFHL_ZONESUpstreamError`` (retryable ArcGIS REST network / HTTP / parse
-failure), ``FEMA_NFHL_ZONESEmptyError`` (reserved; not raised — the tool
-serializes an empty FGB instead, since an empty bbox over open water or a
-non-mapped area is LEGITIMATE).
-
-FR-DC-9 / Wave-1.5 payload estimation: bbox-area heuristic. NFHL polygon
-density varies wildly (urban floodplains are sliced into many small zones;
-rural West Texas has a handful of huge polygons), so we use a conservative
-~0.5 MB / square degree heuristic, clipped to [0.05, 50] MB.
-
-FR-TA-2 atomic tool, returns ``LayerURI``.
-FR-DC-3/4: routed through ``read_through`` so identical
-``(bbox, sfha_only, zone_filter)`` calls reuse the cached FlatGeobuf.
 """
 
 from __future__ import annotations
@@ -763,9 +690,6 @@ def fetch_fema_nfhl_zones(
     ``FEMA_NFHL_ZONESUpstreamError(retryable=True)`` so the agent's FR-AS-11
     surface decides whether to retry, clarify, or fall back.
 
-    Source-tier: FR-HEP-2 Tier 1 (FEMA is the authoritative federal source
-    for the regulatory floodplain). Claims derived from this tool should be
-    marked ``source_authority_tier=1`` in any ``ClaimSet`` aggregation.
 
     Payload estimation: ~0.5 MB per square degree, clipped to [0.05, 50] MB.
     Urban bbox (Houston, Fort Myers metro) typically returns 50-500 KB; rural

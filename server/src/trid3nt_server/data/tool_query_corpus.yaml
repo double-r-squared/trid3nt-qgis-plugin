@@ -1,9 +1,10 @@
 # tool_query_corpus.yaml
-# Synthetic example-query corpus for the TRID3NT discover_dataset retrieval substrate.
+# Synthetic example-query corpus for the TRID3NT search_tools retrieval substrate.
 # Each key is an @register_tool function name; values are realistic user-prompt-style queries
 # that should route to that tool. 5-10 specific queries per tool, with synonym coverage,
 # regional variants, and adjacent-intent routing.
-# Generated: job-B4 (Wave 4.10 discover_dataset retrieval substrate)
+# Generated: job-B4 (Wave 4.10 search_tools retrieval substrate; renamed from
+# discover_dataset under ADR 0019, lane-B)
 
 # ---------------------------------------------------------------------------
 # Terrain / Elevation
@@ -884,7 +885,7 @@ cut_features_with_polygon:
   - "trim these polygons back from the cutter and keep everything else intact"
   - "difference these parcels against this mask polygon in place"
   - "carve out the wetland from the parcel layer so the rest survives with its data"
-discover_dataset:
+search_tools:
   - "which tool should i use to show flood zones"
   - "find me the right function for national parks polygons in yosemite"
   - "what tool fetches hurricane wind probabilities"
@@ -1222,18 +1223,27 @@ spatial_query:
   - "sum the losses over the features in each zone"
   - "aggregate the population attribute within each zone"
   - "summary statistics of the flood layer attributes"
+search_spatial_functions:
+  - "what duckdb function computes the distance between two points"
+  - "how do i buffer a polygon in spatial_query sql"
+  - "which ST function reprojects coordinates to a different crs"
+  - "what's the function to get the intersection area of two geometries"
+  - "how do i convert a geometry column to geojson in duckdb"
+  - "what spatial sql function gives me the centroid of a polygon"
+  - "is there a duckdb function to simplify a geometry"
+  - "what function checks if one geometry contains another"
 
 # --- tool-retrieval STEP 7 follow-up: the 4 tools that register ONLY via the
 # full startup path (catalog + qgis_discovery), missed by the plain-import gap
 # scan. catalog_* restored verbatim; the qgis discovery pair newly written. ---
-catalog_search:
+search_data_catalog:
   - "what public hazard datasets are available for flood risk?"
   - "find a curated data source for wildfire risk mapping"
   - "search the catalog for FEMA or USGS flood data"
   - "what vetted sources do you have for sea-level rise inundation?"
   - "find publicly available datasets for wind hazard analysis"
   - "what hazard catalog entries cover earthquake shaking?"
-catalog_fetch:
+fetch_from_catalog:
   - "fetch that USFS Wildfire Hazard Potential dataset from the catalog"
   - "download the FEMA National Risk Index layer I found in the catalog"
   - "pull the NOAA Sea Level Rise Viewer entry we discovered"

@@ -1,33 +1,4 @@
 """``fetch_glm_lightning`` -- GOES GLM optical-lightning group-energy-density fetcher.
-
-A peer of the GOES ABI fetchers (``fetch_goes_satellite`` /
-``fetch_goes_archive_animation`` / ``fetch_goes_active_fire``). Where those read the
-ABI imager, this reads the **GLM** (Geostationary Lightning Mapper) ``GLM-L2-LCFA``
-product from the public ``noaa-goesNN`` S3 archive (anonymous / no key), bins the
-optical-lightning GROUP energy onto the SAME ~2 km EPSG:4326 grid the ABI products
-use, and returns the **group-energy-density (GED)** as a TRANSPARENT purple RGBA
-raster ``LayerURI`` -- only cells with detected lightning are opaque, everything
-else is transparent so it overlays a basemap / true-color frame directly.
-
-Why GED rather than raw counts: GLM reports discrete optical ``group`` detections,
-each carrying a ``group_energy`` (Joules). Summing that energy per grid cell over a
-short accumulation window yields a stable, physically meaningful "how electrically
-active is this cell" field that reads like the CIRA GLM density imagery -- bright
-violet/white over the convective cores, faint violet at the edges.
-
-Grid co-registration: GED bins onto ``_grid_for_bbox`` at ``_OUT_RES_DEG`` (0.02 deg
-~2 km) -- the IDENTICAL grid the ABI fire / true-color products land on -- so a GLM
-overlay sits pixel-aligned over a GOES ABI base with no extra resample.
-
-Rendering: the emitted COG is a 4-band RGBA (band 4 = alpha) with the purple
-log-ramp BAKED in, so publish_layer's RGBA/multiband passthrough renders the colors
-+ transparency directly (no colormap, no TiTiler autoscale, no new style preset
-needed) -- mirrors ``fetch_goes_active_fire``'s transparent hotspot overlay.
-
-Honesty floor: a window with no GLM granules OR no lightning groups inside the AOI
-raises a typed error -- it never emits a blank/fabricated overlay.
-
-ASCII only.
 """
 
 from __future__ import annotations

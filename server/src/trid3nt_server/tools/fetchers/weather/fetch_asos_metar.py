@@ -1,25 +1,4 @@
 """``fetch_asos_metar`` atomic tool — Iowa State IEM ASOS/METAR station observations (job-A7).
-
-Fetches hourly ASOS/METAR surface weather observations from the Iowa State
-University Iowa Environmental Mesonet (IEM) CGI service. Observations include
-temperature, dewpoint, wind speed/direction, altimeter, MSLP, visibility,
-sky coverage, and present-weather codes — the primary surface-met forcing
-layer for hazard-event context and boundary-layer weather overlays.
-
-API surface (IEM ASOS CGI, free, no API key required):
-
-    base: https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py
-    station discovery: https://mesonet.agron.iastate.edu/geojson/network/{state}_ASOS.geojson
-
-All ASOS stations in a bbox are discovered by fetching the per-state ASOS
-network GeoJSON (one request per state that overlaps the bbox), filtering by
-coordinates, then bulk-requesting all matching stations in a single CGI call.
-
-Output: a FlatGeobuf point layer (one point per observation, at the station
-coordinates) containing all standard ASOS surface-met fields. EPSG:4326.
-Cache: ``dynamic-1h`` for recent windows; ``static-30d`` for historical.
-
-FR-TA-2 / FR-AS-3 docstring discipline applies.
 """
 
 from __future__ import annotations
@@ -786,16 +765,13 @@ def fetch_asos_metar(
         - Upstream: IEM ASOS CGI + per-state ASOS network GeoJSON
           (mesonet.agron.iastate.edu).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``ASASMETARInputError``: invalid bbox or date strings (retryable=False).
         - ``ASASMETARUpstreamError``: IEM network failure or malformed CSV
           (retryable=True).
         - ``ASASMETAREmptyError``: no ASOS stations in bbox or all observations
           missing coordinates (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (federal-network stations archived by IEM;
-    ASOS is operated by FAA/NWS). Claims from ASOS observations should be
-    marked ``source_authority_tier=1`` in ``ClaimSet`` aggregation.
 
     supports_global_query=False — IEM ASOS archive covers US + territories only.
     """

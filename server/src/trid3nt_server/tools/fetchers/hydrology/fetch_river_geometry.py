@@ -1,10 +1,4 @@
-"""River/waterway geometry fetcher (``fetch_river_geometry``): OSM Overpass
-waterways primary, NHDPlus HR fallback -> clipped FlatGeobuf.
-
-Carved out of the original multi-tool ``data_fetch`` module (job-0033) in the
-tools/ reorg; behavior and the registered tool surface are unchanged. The
-shared typed-error hierarchy + bbox helpers live in
-``trid3nt_server.tools.fetchers._fetch_common``.
+"""River/waterway geometry fetcher (``fetch_river_geometry``): OSM Overpass waterways primary, NHDPlus HR fallback -> clipped FlatGeobuf.
 """
 
 from __future__ import annotations

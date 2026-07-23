@@ -1,4 +1,4 @@
-"""``catalog_search``: keyword/bbox relevance search over the audited public
+"""``search_data_catalog``: keyword/bbox relevance search over the audited public
 data-source YAML catalog.
 
 Carved out of the original two-tool ``catalog`` module in the tools/ reorg;
@@ -29,20 +29,20 @@ from trid3nt_server.tools.discovery.catalog_common import (
     load_catalog,
 )
 
-__all__ = ["catalog_search"]
+__all__ = ["search_data_catalog"]
 
-logger = logging.getLogger("trid3nt_server.tools.discovery.catalog_search")
+logger = logging.getLogger("trid3nt_server.tools.discovery.search_data_catalog")
 
 
 # ---------------------------------------------------------------------------
-# catalog_search — topic-ranked retrieval over the YAML catalog.
+# search_data_catalog — topic-ranked retrieval over the YAML catalog.
 # ---------------------------------------------------------------------------
 
 
-_CATALOG_SEARCH_METADATA = AtomicToolMetadata(
-    name="catalog_search",
+_SEARCH_DATA_CATALOG_METADATA = AtomicToolMetadata(
+    name="search_data_catalog",
     ttl_class="semi-static-7d",
-    source_class="catalog_search",
+    source_class="search_data_catalog",
     cacheable=True,
 )
 
@@ -156,14 +156,14 @@ def _bbox_overlaps_world(
     return True
 
 @register_tool(
-    _CATALOG_SEARCH_METADATA,
+    _SEARCH_DATA_CATALOG_METADATA,
     # Annotations: readOnlyHint=True (read-only; no state mutation),
-    # openWorldHint=True (in-memory catalog lookup, but catalog_fetch ultimately
+    # openWorldHint=True (in-memory catalog lookup, but fetch_from_catalog ultimately
     # dispatches to Tier-2/3 external APIs; search step itself is intra-process),
     # destructiveHint=False, idempotentHint=True (cache shim deduplicates).
     open_world_hint=True,
 )
-def catalog_search(
+def search_data_catalog(
     topic: str,
     location: tuple[float, float, float, float] | None = None,
     source_filter: str | None = None,
@@ -177,10 +177,10 @@ def catalog_search(
     "river flow data", "building footprints") and wants the catalog's
     curator-vetted endpoints + invocation hints (``how_to_use``) — the §F.1.2
     Mode 1 substrate. The returned entries carry stable IDs the LLM passes
-    to ``catalog_fetch``.
+    to ``fetch_from_catalog``.
 
     Do NOT use this for: live geocoding (use ``geocode_location``); pulling
-    actual bytes (use ``catalog_fetch`` or one of the dedicated fetchers);
+    actual bytes (use ``fetch_from_catalog`` or one of the dedicated fetchers);
     enumerating GCS-cached layers (those are not catalog entries — the
     catalog describes external sources).
 
@@ -207,11 +207,11 @@ def catalog_search(
         (offer-catalog-addition) per §F.1.2 prose.
 
     FR-DC-2 / FR-CE-8: registered with ``ttl_class="semi-static-7d"``,
-    ``source_class="catalog_search"``, ``cacheable=True``. The cache key
+    ``source_class="search_data_catalog"``, ``cacheable=True``. The cache key
     incorporates topic + bbox + filter so repeat searches dedup.
     """
     if not isinstance(topic, str) or not topic.strip():
-        raise CatalogNotFoundError("catalog_search requires a non-empty topic string")
+        raise CatalogNotFoundError("search_data_catalog requires a non-empty topic string")
 
     # Normalize the bbox to a list for cache-key canonicalization.
     bbox_param: list[float] | None = list(location) if location is not None else None
@@ -241,14 +241,14 @@ def catalog_search(
         return json.dumps(out).encode("utf-8")
 
     result = read_through(
-        metadata=_CATALOG_SEARCH_METADATA,
+        metadata=_SEARCH_DATA_CATALOG_METADATA,
         params=params,
         ext="json",
         fetch_fn=_do_search,
     )
     payload = json.loads(result.data.decode("utf-8"))
     logger.info(
-        "catalog_search topic=%r n_matches=%d cache_hit=%s",
+        "search_data_catalog topic=%r n_matches=%d cache_hit=%s",
         topic,
         len(payload),
         result.hit,

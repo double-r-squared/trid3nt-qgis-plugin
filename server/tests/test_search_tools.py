@@ -1,4 +1,4 @@
-"""Unit tests for the ``discover_dataset`` atomic tool (Wave 4.10 job-B7).
+"""Unit tests for the ``search_tools`` atomic tool (Wave 4.10 job-B7).
 
 Coverage:
 1. Registration: tool present in ``TOOL_REGISTRY`` with the expected
@@ -36,22 +36,22 @@ from trid3nt_server.tools import (  # noqa: F401 — registration side-effect
     publish_layer,
 )
 from trid3nt_server.tools.discovery import (  # noqa: F401 — registration side-effect
-    catalog_fetch,
-    catalog_search,
+    fetch_from_catalog,
+    search_data_catalog,
     qgis_discovery,
 )
-from trid3nt_server.tools.discovery import discover_dataset as discover_module
+from trid3nt_server.tools.discovery import search_tools as discover_module
 from trid3nt_server.tools.simulation import solver  # noqa: F401 — registration side-effect
 from trid3nt_server.workflows import model_flood_scenario  # noqa: F401 — registration side-effect
 
-from trid3nt_server.tools.discovery.discover_dataset import (
+from trid3nt_server.tools.discovery.search_tools import (
     _close_vocab_matches,
     _default_corpus_path,
     _expand_query_tokens,
     _reciprocal_rank_fusion,
     _reset_index_for_tests,
     _tokenize,
-    discover_dataset,
+    search_tools,
 )
 
 
@@ -75,12 +75,12 @@ def _fresh_index():
 # ---------------------------------------------------------------------------
 
 
-def test_discover_dataset_registered():
-    """``discover_dataset`` is present in TOOL_REGISTRY with the right shape."""
-    assert "discover_dataset" in TOOL_REGISTRY
-    entry = TOOL_REGISTRY["discover_dataset"]
+def test_search_tools_registered():
+    """``search_tools`` is present in TOOL_REGISTRY with the right shape."""
+    assert "search_tools" in TOOL_REGISTRY
+    entry = TOOL_REGISTRY["search_tools"]
     md = entry.metadata
-    assert md.name == "discover_dataset"
+    assert md.name == "search_tools"
     # Per FR-DC-6 enumeration: routing call is uncacheable.
     assert md.cacheable is False
     assert md.ttl_class == "live-no-cache"
@@ -95,7 +95,7 @@ def test_discover_dataset_registered():
 
 def _run_top_k(query: str, k: int = 5) -> list[str]:
     """Helper: run the async tool and return the ranked tool-name list."""
-    result = asyncio.run(discover_dataset(query, top_k=k))
+    result = asyncio.run(search_tools(query, top_k=k))
     assert "results" in result
     return [r["tool_name"] for r in result["results"]]
 
@@ -110,7 +110,7 @@ def _run_top_k(query: str, k: int = 5) -> list[str]:
         ("model flooding", "run_model_flood_scenario"),
     ],
 )
-def test_discover_dataset_routes_canonical_queries(query: str, expected_tool: str):
+def test_search_tools_routes_canonical_queries(query: str, expected_tool: str):
     """Each kickoff-canonical query surfaces its target tool in the top 3."""
     top = _run_top_k(query, k=5)
     assert expected_tool in top[:3], (
@@ -126,21 +126,21 @@ def test_discover_dataset_routes_canonical_queries(query: str, expected_tool: st
 def test_top_k_respected():
     """Asking for top_k=N returns at most N results."""
     for n in (1, 3, 5, 10):
-        out = asyncio.run(discover_dataset("flood depth modeling", top_k=n))
+        out = asyncio.run(search_tools("flood depth modeling", top_k=n))
         assert len(out["results"]) <= n
 
 
 def test_top_k_clamped_to_safe_range():
     """top_k is clamped to [1, 25] — extreme values still produce a sane result."""
-    out_lo = asyncio.run(discover_dataset("flood depth", top_k=0))
+    out_lo = asyncio.run(search_tools("flood depth", top_k=0))
     assert 1 <= len(out_lo["results"]) <= 25
-    out_hi = asyncio.run(discover_dataset("flood depth", top_k=10_000))
+    out_hi = asyncio.run(search_tools("flood depth", top_k=10_000))
     assert len(out_hi["results"]) <= 25
 
 
 def test_top_k_non_numeric_falls_back():
     """A non-numeric top_k coerces to the default rather than raising."""
-    out = asyncio.run(discover_dataset("flood depth", top_k="not-an-int"))
+    out = asyncio.run(search_tools("flood depth", top_k="not-an-int"))
     assert "results" in out
 
 
@@ -151,19 +151,19 @@ def test_top_k_non_numeric_falls_back():
 
 def test_empty_query_returns_empty_results():
     """Empty string query returns empty result, no exception."""
-    out = asyncio.run(discover_dataset("", top_k=5))
+    out = asyncio.run(search_tools("", top_k=5))
     assert out == {"results": []}
 
 
 def test_whitespace_query_returns_empty_results():
     """Whitespace-only query is treated as empty (no crash)."""
-    out = asyncio.run(discover_dataset("   \t\n  ", top_k=5))
+    out = asyncio.run(search_tools("   \t\n  ", top_k=5))
     assert out == {"results": []}
 
 
 def test_non_string_query_does_not_crash():
     """A non-string query (e.g. None or int) returns empty rather than raising."""
-    out_none = asyncio.run(discover_dataset(None, top_k=5))  # type: ignore[arg-type]
+    out_none = asyncio.run(search_tools(None, top_k=5))  # type: ignore[arg-type]
     assert out_none == {"results": []}
 
 
@@ -236,7 +236,7 @@ def test_rrf_single_ranking_preserves_order():
 
 def test_description_snippet_bounded_length():
     """Each returned description_snippet is ≤240 chars."""
-    out = asyncio.run(discover_dataset("flood zones in Lee County, FL", top_k=10))
+    out = asyncio.run(search_tools("flood zones in Lee County, FL", top_k=10))
     for r in out["results"]:
         snippet = r.get("description_snippet", "")
         assert isinstance(snippet, str)
@@ -245,7 +245,7 @@ def test_description_snippet_bounded_length():
 
 def test_result_shape_is_complete():
     """Every result carries the four required fields."""
-    out = asyncio.run(discover_dataset("flood zones", top_k=3))
+    out = asyncio.run(search_tools("flood zones", top_k=3))
     assert out["results"], "expected at least 1 result for 'flood zones'"
     for r in out["results"]:
         assert "tool_name" in r and isinstance(r["tool_name"], str)
@@ -262,7 +262,7 @@ def test_result_shape_is_complete():
 def test_matched_queries_populated_for_corpus_hit():
     """A query that lexically overlaps a synthetic-corpus entry surfaces it
     via ``matched_queries`` (diagnostic for the LLM)."""
-    out = asyncio.run(discover_dataset("show me national parks", top_k=3))
+    out = asyncio.run(search_tools("show me national parks", top_k=3))
     wdpa = [r for r in out["results"] if r["tool_name"] == "fetch_wdpa_protected_areas"]
     assert wdpa, "expected fetch_wdpa_protected_areas in top results"
     matched = wdpa[0]["matched_queries"]
@@ -277,7 +277,7 @@ def test_matched_queries_populated_for_corpus_hit():
 def test_extra_kwargs_ignored():
     """``**_extra_ignored`` absorbs LLM-invented kwargs without raising."""
     out = asyncio.run(
-        discover_dataset(
+        search_tools(
             "flood zones",
             top_k=3,
             unexpected="ignored",
@@ -399,9 +399,9 @@ def test_typo_query_ranking_is_deterministic():
     """Same typo query -> byte-identical results, within one index build and
     across an index rebuild (same registry + corpus)."""
     query = "can you show me a gradinet relief over this bbox"
-    out_1 = asyncio.run(discover_dataset(query, top_k=10))
-    out_2 = asyncio.run(discover_dataset(query, top_k=10))
+    out_1 = asyncio.run(search_tools(query, top_k=10))
+    out_2 = asyncio.run(search_tools(query, top_k=10))
     assert out_1 == out_2
     _reset_index_for_tests()
-    out_3 = asyncio.run(discover_dataset(query, top_k=10))
+    out_3 = asyncio.run(search_tools(query, top_k=10))
     assert out_1 == out_3

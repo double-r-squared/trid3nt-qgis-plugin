@@ -1,66 +1,4 @@
 """``fetch_snotel_snow`` atomic tool — real NRCS SNOTEL / SCAN snow stations.
-
-Fetches **real, observed** mountain-snowpack measurements from the USDA NRCS
-Air-Water Database (AWDB) REST API — the modern REST surface behind the National
-Water and Climate Center (``wcc.sc.egov.usda.gov/awdbRestApi/``), NOT the
-deprecated SOAP service. One Point feature per SNOTEL/SCAN station within a
-bbox, carrying the station triplet/name plus the latest Snow Water Equivalent
-(SWE, inches) and snow depth (inches).
-
-This is the mountain water-supply gap: snowpack is the dominant western US water
-reservoir, and the SNOTEL network is the federal automated record for it. The
-agent had no way to answer "show me the SNOTEL snow stations in the Colorado
-Rockies / Sierra Nevada and their current snow water equivalent" — this is the
-canonical observed snowpack source.
-
-**API surface** (NRCS AWDB REST, free, NO API key required):
-
-    STATIONS metadata (locations + elevation, used for the bbox filter):
-        https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations
-            ?networkCds=SNTL,SCAN&activeOnly=true
-        Returns one JSON object per station with ``stationTriplet``, ``name``,
-        ``stateCode``, ``networkCode``, ``latitude``, ``longitude``,
-        ``elevation`` (ft). The endpoint has NO bbox parameter, so we fetch the
-        active SNTL+SCAN catalog (a few thousand stations, cached upstream) and
-        filter to the requested bbox client-side. The loose ``networkCds``
-        filter can leak SNOW/USGS/COOP/BOR neighbours, so we additionally pin to
-        ``networkCode in {SNTL, SCAN}`` (the NRCS automated networks).
-
-    DATA (the SWE + snow-depth readings):
-        https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data
-            ?stationTriplets=<csv>&elements=WTEQ,SNWD&duration=DAILY
-            &beginDate=<iso>&endDate=<iso>&periodRef=END
-        ``WTEQ`` = snow water equivalent (in); ``SNWD`` = snow depth (in). Each
-        station block carries one ``data[]`` entry per element, each with a
-        ``values[]`` array of ``{date, value}``. We take the LATEST non-null
-        sample per element. To resolve "latest" we request a short trailing
-        window (default last 10 days ending today) and keep the final reading;
-        a no-data sentinel (null ``value``) is skipped, and an off-season zero
-        (e.g. midsummer SWE = 0.0) is reported HONESTLY as 0.0, not dropped.
-
-**Spatial selector**: a single required ``bbox=(west, south, east, north)`` in
-EPSG:4326. SNOTEL is a US-mountains network (Western US + Alaska + a few eastern
-SCAN sites), so ``supports_global_query=False``. There is no service-side bbox
-area cap (we filter the full catalog client-side), but a global-scale bbox is
-pointless — the network is spatially sparse and mountain-bound.
-
-**Fallback norm** (primary -> honest typed error): the STATIONS metadata fetch
-is the spatial primary; the DATA fetch attaches readings. If zero SNTL/SCAN
-stations fall inside the bbox, we raise a typed ``SnotelNoStationsError`` (the
-area has no SNOTEL coverage — most of the US lowlands). If stations exist but
-the DATA service is unreachable, we still emit the station LOCATIONS with null
-readings (locations are useful on their own) rather than failing the whole
-layer. We never return an empty success-shaped layer and never fabricate a
-reading.
-
-**Output**: a vector ``LayerURI`` (``layer_type="vector"``) whose artifact is a
-point FeatureCollection (one point per station), serialized as FlatGeobuf.
-``style_preset="snotel_snow"``; ``LayerURI.bbox`` is the stations' extent so the
-camera auto-zooms.
-
-Tier-1, no auth, ``supports_global_query=False`` (US mountain networks only).
-
-FR-AS-11 typed-error surface; FR-TA-2 / FR-AS-3 docstring discipline applies.
 """
 
 from __future__ import annotations
@@ -748,7 +686,7 @@ def fetch_snotel_snow(
     is SHA-256 of the bbox-rounded-6dp, so identical-scope calls within the hour
     reuse the FGB.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (derive a bbox from a mountain place name BEFORE this call),
           ``fetch_administrative_boundaries`` (state/county framing).
@@ -757,15 +695,13 @@ def fetch_snotel_snow(
         - Upstream data source: NRCS AWDB REST
           (wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations + /data).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``SnotelInputError``: no bbox / bad bbox (retryable=False).
         - ``SnotelUpstreamError``: NRCS network failure / HTTP 5xx / bad body
           (retryable=True).
         - ``SnotelNoStationsError``: no SNOTEL/SCAN stations in the bbox
           (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (USDA NRCS federal snow network). Claims from
-    SNOTEL readings should be marked ``source_authority_tier=1``.
 
     Tier-1 free. No API key. ``supports_global_query=False`` (US mountains).
     """

@@ -1,47 +1,4 @@
 """``fetch_nhdplus_nldi_navigate`` atomic tool — NHDPlus NLDI navigation (job A11).
-
-Wraps the USGS NLDI (Network Linked Data Index) navigation endpoint —
-the official REST surface that walks the NHDPlus v2.1 stream network
-from any indexed seed feature (a snapped point COMID, an NWIS gauge
-site, a Hydrologic Linked Data Index point, etc.) in one of four
-directions:
-
-    UM  upstream main stem      — single trunk reaches above the seed
-    UT  upstream tributaries    — full tributary network above the seed
-    DM  downstream main stem    — single trunk reaches below the seed
-    DD  downstream + diversions — main stem plus any anastomosing splits
-
-The output is a FlatGeobuf of NHDPlus flowline LineStrings carrying the
-``nhdplus_comid`` join key, suitable for downstream routing analyses,
-hazard-cascade overlays (post-fire debris flow downstream impact zones,
-pollution plumes, dam-break inundation paths), and for the agent's
-"trace water from here to there" narrative class.
-
-API surface (verified live 2026-06-09):
-
-    base:       https://api.water.usgs.gov/nldi/linked-data
-    snap:       /comid/position?coords=POINT(<lon> <lat>)
-                  → returns the NHDPlus COMID nearest a point
-    navigate:   /comid/<comid>/navigation/<mode>/flowlines?distance=<km>
-                  → returns a GeoJSON FeatureCollection of flowline
-                    LineStrings, each tagged with nhdplus_comid
-
-We expose two seed modes:
-
-    (1) ``comid=<int>``     — start from an already-known NHDPlus COMID
-    (2) ``seed_point=(lon, lat)`` — snap a point to the nearest COMID
-                                    via /comid/position first
-
-…then call navigate with the requested direction + distance. Output is
-written as a FlatGeobuf with the inline-GeoJSON conversion path Wave 4.9
-job-0175 codified, so the agent surface can stream it to the map.
-
-FR-CE-8 / FR-DC-3: routed through ``read_through`` with
-``ttl_class="static-30d"`` (NHDPlus topology is static on multi-year
-horizons), ``source_class="nhdplus_nldi"``. Cache key on
-``(seed-comid OR rounded-seed-point, direction, distance_km)``.
-
-Tier-1 free. ``supports_global_query=False`` — CONUS-only.
 """
 
 from __future__ import annotations
@@ -502,7 +459,7 @@ def fetch_nhdplus_nldi_navigate(
     is raster-only and publishing a vector trips the vector guard. Simply
     return / surface the ``LayerURI`` and it paints on its own.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``fetch_noaa_nwm_streamflow`` (join NWM discharge
           values to navigated reaches by COMID); ``fetch_streamflow``
           (point NWIS gauges along the traversal).
@@ -517,7 +474,7 @@ def fetch_nhdplus_nldi_navigate(
     The NHDPlus topology is multi-year-stable, so a static-30d bucket is
     well amortized.
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``NHDPlusNLDIInputError``: missing/both seeds, unknown direction,
           out-of-range distance, seed outside CONUS (retryable=False).
         - ``NHDPlusNLDIUpstreamError``: NLDI 5xx / network error / malformed

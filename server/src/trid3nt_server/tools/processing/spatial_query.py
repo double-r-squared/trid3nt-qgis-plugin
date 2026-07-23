@@ -755,15 +755,25 @@ def spatial_query(
     all X in Y" queries whose result includes the geometry column return the
     matching features as a NEW painted map layer.
 
+    Usage pattern: (1) fetch the data first - every ``layer_refs`` alias needs
+    an existing layer HANDLE, so run the fetcher(s) that produce it before
+    calling this tool; (2) if unsure which DuckDB spatial SQL function to use,
+    call ``search_spatial_functions`` with a free-text ask (e.g. "distance
+    between two points") to get the exact function name + signature; (3)
+    compose the SQL and call this tool.
+
     Do NOT use for: rasters (v1 is vector-only - use compute_zonal_statistics
     or the code_exec_request playground); rendering an EXISTING layer
-    (publish_layer); charts (generate_histogram / generate_time_series).
+    (publish_layer); charts (generate_histogram / generate_time_series);
+    looking up a DuckDB spatial function by name (use
+    ``search_spatial_functions``, not this docstring).
 
     Params:
         sql: ONE read-only SELECT (WITH/CTEs allowed). Each layer_refs alias
-            is a table (view); the geometry column is ``geom``. DuckDB
-            spatial functions are available (ST_Within, ST_Intersects,
-            ST_Centroid, ST_Area, ST_AsText, ...). Results cap at 5000 rows.
+            is a table (view); the geometry column is ``geom``. The full
+            DuckDB ``spatial`` extension function set is available (ST_*) -
+            call ``search_spatial_functions`` for an unfamiliar one rather
+            than guessing. Results cap at 5000 rows.
         layer_refs: dict {alias: layer HANDLE}. Use the L<n>/layer_id handles
             from prior tool results (PREFERRED - the server resolves them to
             storage URIs; never construct s3:// paths by hand). Example:

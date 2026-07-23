@@ -2,7 +2,7 @@
 original two-tool ``catalog`` module): the YAML catalog loader + module-level
 cache, ``CatalogNotFoundError`` and the test-only cache reset.
 
-This module registers nothing; ``catalog_search`` / ``catalog_fetch`` are
+This module registers nothing; ``search_data_catalog`` / ``fetch_from_catalog`` are
 siblings that share the loaded catalog through this module.
 """
 

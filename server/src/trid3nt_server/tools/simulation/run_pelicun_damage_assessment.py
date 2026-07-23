@@ -1161,201 +1161,79 @@ def run_pelicun_damage_assessment(
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
-    """Fragility-curve-driven damage assessment via Pelicun.
+    """Fragility-curve-driven damage assessment via Pelicun (HAZUS v6.1 flood loss functions).
 
-    For each asset point or polygon in ``assets_uri``:
-        1. Sample the hazard raster at the asset location.
-        2. Look up the matching fragility function by ``component_type`` +
-           hazard intensity (from ``fragility_set``).
-        3. Monte-Carlo sample ``realization_count`` damage states.
-        4. Aggregate to per-asset expected damage state + 95% CI + repair-cost
-           statistics.
+    Use this when the user has a modeled/fetched hazard raster (flood depth
+    COG, earthquake intensity raster) AND an asset layer (buildings, parcels,
+    critical infrastructure) and wants quantitative damage/loss estimates:
+    "how much damage", "expected losses", "which buildings are most exposed",
+    "monte-carlo damage assessment".
 
-    Returns a ``LayerURI`` pointing at a FlatGeobuf of the asset features with
-    per-feature damage properties — see "Returns" below.
+    Do NOT use for:
+        - Plain hazard exposure counts — ``compute_zonal_statistics``
+          (value=hazard raster, zone=asset polygons) is cheaper.
+        - Building footprint counts/density — ``compute_building_density`` /
+          ``fetch_buildings`` (they emit the asset layer this tool consumes).
+        - Loss estimation with no asset layer — needs per-feature assets; for
+          aggregate population use a zonal-statistics + WorldPop pipeline.
+        - Hazards outside the available fragility sets — v0.1 ships flood
+          only; ``fragility_set="fema_hazus_eq_2020"`` is registered but
+          unwired and raises ``PelicunInputError``.
 
-    Use this when:
-        - The user has a modeled or fetched hazard raster (flood depth COG,
-          earthquake intensity raster) AND an asset layer (buildings, parcels,
-          critical infrastructure) and wants quantitative damage / loss
-          estimates over the asset set.
-        - The user asks "how much damage", "expected losses", "which buildings
-          are most exposed", or "monte-carlo damage assessment" on a modeled
-          hazard.
-
-    Do NOT use this for:
-        - Plain hazard exposure counts (use ``compute_zonal_statistics`` with
-          value=hazard raster, zone=asset polygons — cheaper and faster when
-          you only need "how many assets are in the flood zone").
-        - Building footprint counts or density (use ``compute_building_density``
-          or ``fetch_buildings`` — they emit the asset layer this tool consumes).
-        - Loss estimation without an asset layer (this tool requires per-asset
-          features; if you only have aggregate population in a zone, use a
-          zonal-statistics + WorldPop pipeline instead).
-        - Hazards outside the available fragility sets (v0.1 ships flood;
-          earthquake is registered but not wired — wildfire / wind /
-          liquefaction fragility sets are gated on the seismic and wildfire
-          engine work).
+    Pipeline: sample the hazard raster at each asset centroid -> HAZUS v6.1
+    loss-function lookup by ``component_type`` -> Monte Carlo
+    ``realization_count`` loss-ratio draws (bounded lognormal,
+    sigma_lnD=0.4) -> bin into DS0..DS4 by loss-ratio thresholds
+    [0, 0.05, 0.20, 0.50, 0.80] -> repair_cost = replacement_value *
+    loss_ratio.
 
     Parameters:
-        hazard_raster_uri: the hazard layer's ``layer_id`` HANDLE from a
-            prior tool result (PREFERRED — job-0263 layer-handle
-            indirection; e.g. ``"flood-depth-peak-<run_id>"`` from
-            ``run_model_flood_scenario``). The server resolves the handle
-            to the exact storage URI it recorded for the layer. A raw
-            gs:// URI is accepted only when copied VERBATIM from a prior
-            function_response; NEVER construct, guess, or pattern-match a
-            gs:// path, and NEVER pass the WMS display URL
-            (``https://...&LAYERS=...``) — invented or display URLs are
-            rejected with ``URI_HANDLE_UNRESOLVED``. Raster CRS
-            and the asset CRS are reconciled internally (assets are
-            reprojected to the raster CRS for sampling). Raster ``units`` tag
-            should be ``"meters"`` or ``"m"`` for HAZUS conversion; absent
-            tag defaults to metres.
-        assets_uri: the asset layer's ``layer_id`` HANDLE from a prior tool
-            result (PREFERRED — e.g. the ``usace-nsi-...`` layer_id returned
-            by ``fetch_usace_nsi``), or a verbatim gs:// URI to a FlatGeobuf
-            of asset features. Points (buildings, infrastructure) and polygons
-            (parcels, building footprints) are both supported. Each feature
-            MAY carry a ``component_type`` property matching the
-            fragility-set vocabulary (e.g. ``"RES1"`` / ``"COM1"`` for
-            HAZUS); features without one default to ``"RES1"``. Each feature
-            MAY carry a numeric ``replacement_value`` property in USD;
-            absent values fall back to occupancy-class defaults
-            (HAZUS-MH 4.2 reference, scaled to 2024 USD).
-        fragility_set: which fragility curve family to use. v0.1 ships:
-            - ``"hazus_flood_v6"`` — FEMA HAZUS-MH 6.1 flood depth-damage
-              loss functions (the only sprint-12 wiring). Pair with flood
-              depth COGs. Component vocabulary: HAZUS occupancy classes
-              (RES1/RES2/COM1/.../IND1/...).
-            - ``"fema_hazus_eq_2020"`` — registered for the contract but
-              the seismic-engine integration is not implemented; passing
-              this value raises ``PelicunInputError``.
-        component_types: optional list of component-type codes to RESTRICT
-            the assessment to (e.g. ``["RES1", "COM1"]`` for single-family
-            residential + retail commercial). Pass ``None`` (default) to
-            include every feature in ``assets_uri``. Empty list ``[]`` is
-            rejected — pass ``None`` instead.
-        realization_count: number of Monte-Carlo realizations per asset.
-            Default 100; raise (e.g. 500-1000) for tighter 95 % CIs at the
-            cost of compute. Each realization samples a loss ratio from a
-            bounded lognormal distribution centred on the deterministic
-            HAZUS curve value with ``σ_lnD = 0.4``.
+        hazard_raster_uri: ``layer_id`` HANDLE from a prior tool result
+            (PREFERRED), or a verbatim gs:// URI copied from a prior
+            function_response — NEVER construct/guess one; a WMS display
+            URL is rejected (``URI_HANDLE_UNRESOLVED``). Assets are
+            reprojected to the raster CRS for sampling. Raster ``units``
+            tag should be ``"meters"``/``"m"`` (untagged defaults to metres).
+        assets_uri: ``layer_id`` HANDLE or verbatim gs:// URI to a FlatGeobuf
+            of points or polygons. Optional per-feature ``component_type``
+            (HAZUS occupancy class, default ``"RES1"``) and
+            ``replacement_value`` (USD; else occupancy-class default).
+        fragility_set: ``"hazus_flood_v6"`` (only wired set; pair with flood
+            depth COGs) | ``"fema_hazus_eq_2020"`` (unwired, raises).
+        component_types: restrict to these codes (e.g. ``["RES1","COM1"]``);
+            ``None`` = all features; empty list rejected.
+        realization_count: Monte Carlo draws per asset (default 100; raise
+            to 500-1000 for tighter 95% CI at higher compute cost).
+
+    ``assets_uri`` sourcing, best to worst: ``fetch_usace_nsi`` (CONUS,
+    carries ``component_type`` + ``replacement_value``) >
+    ``compute_building_density`` (international fallback, one point-asset
+    per cell) > ``fetch_administrative_boundaries(level='place')`` (coarse
+    CDP polygons, last resort — rectangular damage pattern). Convenience
+    composer ``run_pelicun_with_buildings`` chains building-density fetch ->
+    this tool in one call.
 
     Returns:
-        A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket. Each
-        output feature has the same geometry as the corresponding asset and
-        carries these computed properties:
+        ``LayerURI`` (vector FlatGeobuf, ``style_preset="pelicun_damage_state"``)
+        with per-feature: ``component_type_used``, ``fragility_curve_id``,
+        ``hazard_depth_sampled``, ``ds_mean``/``ds_p05``/``ds_p95`` (0..4
+        HAZUS damage state: 0=None..4=Complete), ``loss_ratio_mean``/``p95``,
+        ``repair_cost_mean``/``p95`` (USD), ``replacement_value``. Narrate
+        ``ds_mean``/``repair_cost_mean`` from these fields only — never
+        LLM-generated numbers (invariant 1).
 
-        - ``component_type_used`` (str): occupancy class used in the lookup.
-        - ``fragility_curve_id`` (str): HAZUS curve ID for provenance.
-        - ``hazard_depth_sampled`` (float): raster value at the asset
-          centroid, in raster units (typically metres).
-        - ``ds_mean`` (float): expected damage state in 0..4 (HAZUS DS0-DS4
-          mapped: 0=None, 1=Slight, 2=Moderate, 3=Extensive, 4=Complete).
-        - ``ds_p05`` (float): 5th-percentile damage state across realizations.
-        - ``ds_p95`` (float): 95th-percentile damage state.
-        - ``loss_ratio_mean`` (float): expected loss ratio (0..0.6).
-        - ``loss_ratio_p95`` (float): 95th-percentile loss ratio.
-        - ``repair_cost_mean`` (float): expected repair cost (USD).
-        - ``repair_cost_p95`` (float): 95th-percentile repair cost (USD).
-        - ``replacement_value`` (float): per-asset replacement value (USD)
-          used to denominate repair cost.
-
-        Layer metadata: ``layer_type="vector"``, ``role="primary"``,
-        ``units="damage_state"``, ``style_preset="pelicun_damage_state"``.
-
-    Assets convention (``assets_uri``):
-        Preferred source (CONUS) — **USACE NSI structures** from
-        ``fetch_usace_nsi``.  NSI is the authoritative U.S. National
-        Structure Inventory (USACE-issued, used by FEMA / HAZUS).  Every
-        feature already carries the HAZUS occupancy class
-        (``component_type``) AND the per-structure replacement value
-        (``replacement_value`` = ``val_struct``), so the Pelicun loop runs
-        without the ``"RES1"`` default + class-default-USD fallback.  This
-        is the preferred Pelicun substrate inside the United States.  When
-        the bbox is outside CONUS / AK / HI, fall back to
-        ``compute_building_density``.
-
-        Fallback source — **building footprints / density grid** from
-        ``compute_building_density`` (Microsoft Global ML Buildings) for
-        international bboxes.  A density grid produces one point-asset per
-        100 m cell (or whatever ``cell_size_m`` was requested), so the
-        output damage choropleth shows spatially-varying damage aligned
-        with where buildings actually exist — not with administrative
-        boundaries.  Each cell defaults to ``component_type="RES1"``
-        because Microsoft Buildings carries no occupancy data.
-
-        v0.1 cache-first preference: if ``compute_building_density`` has
-        already been called for the same bbox (a cache hit exists in GCS),
-        pass its returned ``LayerURI.uri`` directly as ``assets_uri``.  The
-        tool reads the COG, samples every non-zero cell as an asset point, and
-        runs the Pelicun loop.
-
-        Fallback only — ``fetch_administrative_boundaries(level='place')``:
-        CDP polygons (Census Designated Places) cover large administrative
-        areas and produce a low-resolution rectangular pattern in the damage
-        output.  Use the admin-boundary fallback ONLY when building-footprint
-        data is unavailable (international bbox with no Microsoft coverage,
-        or explicit user request for an administrative aggregate).
-
-        Convenience composer: ``run_pelicun_with_buildings`` (in
-        ``trid3nt_server.workflows.pelicun_damage_with_buildings``) encapsulates
-        the "fetch building density → pass as assets" pattern in one call.
-
-    LLM guidance:
-        - Preferred CONUS pattern: ``fetch_usace_nsi(bbox)`` → use the
-          returned URI as ``assets_uri`` here.  Every structure carries the
-          real HAZUS ``component_type`` and ``replacement_value`` (USD), so
-          the damage layer reflects per-structure occupancy + replacement
-          cost rather than the RES1 + class-default fallback.
-        - International fallback: ``compute_building_density(bbox)`` → use
-          the returned URI as ``assets_uri`` here.  The resulting damage
-          layer shows real spatial structure (building density grid)
-          rather than administrative rectangles.
-        - For quick composition: use the ``run_pelicun_with_buildings`` workflow
-          wrapper — it handles the building-density fetch internally and
-          returns the same ``LayerURI`` this tool returns.
-        - Administrative-boundary fallback: ``fetch_administrative_boundaries(
-          level='place')`` is acceptable when building data is unavailable.
-          The output will be coarser (one point per CDP polygon) and may look
-          rectangular — prefer the building-density path when precision matters.
-        - Narrate ds_mean + repair_cost_mean from the returned feature
-          properties — never from LLM-generated numbers (invariant 1).
-
-    Cache: ``ttl_class="static-30d"``, ``source_class="pelicun_damage"``.
-    The Monte-Carlo loop is seeded per-asset for byte-identical reproducibility
-    across runs with the same inputs.
-
-    Cross-tool dependencies:
-        Upstream (consumes):
-        - ``run_model_flood_scenario`` / ``postprocess_flood`` — flood-depth
-          COG ``LayerURI.uri`` is the primary ``hazard_raster_uri`` input.
-        - ``fetch_usace_nsi`` — preferred CONUS ``assets_uri`` source; NSI
-          structures carry HAZUS ``component_type`` and ``replacement_value``
-          so no fallback defaults fire.
-        - ``compute_building_density`` — international ``assets_uri`` fallback;
-          the returned raster COG is sampled to generate per-cell asset points.
-        - ``fetch_administrative_boundaries`` — low-resolution fallback asset
-          layer (CDP polygons) when building data is unavailable.
-        Downstream (feeds):
-        - ``publish_layer`` — pass the returned FlatGeobuf ``LayerURI`` to
-          display the per-asset damage layer on the map.
-        - ``run_pelicun_with_buildings`` — convenience composer that calls this
-          after ``compute_building_density`` → ``density_cog_to_point_fgb``.
-        - Agent narration — extract ``ds_mean`` / ``repair_cost_mean`` from
-          the returned feature properties for headline numbers (Invariant 7).
+    Cache: ``static-30d``, ``source_class="pelicun_damage"``; Monte Carlo
+    seeded per-asset for byte-identical reproducibility across runs.
 
     Raises:
-        PelicunInputError: bad URI shape, ``fragility_set`` outside the
-            allowed enum, empty ``component_types`` list, or non-positive
-            ``realization_count``.
-        PelicunFragilityDataError: Pelicun isn't installed or the bundled
-            HAZUS CSV is missing/malformed.
-        PelicunRuntimeError: I/O failure (GCS download, rasterio open,
-            CRS reprojection).
-        PelicunNoAssetsError: zero assets in input, zero after the
-            component-types filter, or zero overlapping the hazard footprint.
+        PelicunInputError: bad URI shape, ``fragility_set`` outside enum,
+            empty ``component_types``, non-positive ``realization_count``.
+        PelicunFragilityDataError: Pelicun not installed or bundled HAZUS
+            CSV missing/malformed.
+        PelicunRuntimeError: I/O failure (download, rasterio open, CRS
+            reprojection).
+        PelicunNoAssetsError: zero assets in input, after the
+            component-types filter, or overlapping the hazard footprint.
     """
     # Input validation runs FIRST so the typed-error surface is preserved
     # even if downstream Pelicun runtime is unavailable.

@@ -1,35 +1,4 @@
 """``fetch_raws_weather`` atomic tool — Iowa Mesonet RAWS fire-weather stations (job-A12).
-
-Fetches observations from Remote Automated Weather Stations (RAWS) operated
-by US fire agencies (USFS, BLM, NPS, BIA, state forestry) and archived by
-the Iowa State University Iowa Environmental Mesonet (IEM). RAWS are
-specifically sited at fire-prone locations — ridges, canyons, forest margins
-— and report fire-weather parameters: temperature, relative humidity, wind
-speed/direction, solar radiation, and precipitation at sub-hourly intervals.
-
-**API surface** (IEM, free, no API key required):
-
-    Station discovery:
-        https://mesonet.agron.iastate.edu/geojson/network/{STATE}_DCP.geojson
-        Returns all DCP-network stations for a state; RAWS are identified by
-        the substring "RAWS" (case-insensitive) in the station name field.
-        One cheap request per state that overlaps the bbox.
-
-    Observation data (one request per station per date):
-        https://mesonet.agron.iastate.edu/api/1/obhistory.json
-            ?station={ID}&network={STATE}_DCP&date={YYYY-MM-DD}
-        Returns sub-hourly (typically 10 or 60 min) observations with fields:
-        tmpf (°F), sknt (kt), drct (°), dwpf (°F), plus SHEF-coded fire-
-        weather: URHRGZZ (RH %), XRIRGZZ (solar rad W/m²), PCIRGZZ
-        (precip in), TAIRGZZ (inst temp °F), TAIRGXZ/TAIRGNZ (max/min temp).
-
-Output: a FlatGeobuf point layer (one row per observation per station at the
-station coordinates) carrying all standard RAWS fire-weather fields, EPSG:4326.
-Cache: ``dynamic-1h`` for recent/active fire periods; ``static-30d`` for
-historical (both route through ``dynamic-1h`` here; callers with confirmed
-historical data may prefer ``static-30d``, but IEM data can be revised).
-
-FR-TA-2 / FR-AS-3 docstring discipline applies.
 """
 
 from __future__ import annotations
@@ -788,15 +757,13 @@ def fetch_raws_weather(
         - Upstream: IEM DCP network GeoJSON + obhistory API
           (mesonet.agron.iastate.edu).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``RAWSWeatherInputError``: bad bbox or dates (retryable=False).
         - ``RAWSWeatherUpstreamError``: IEM network or parse failure
           (retryable=True).
         - ``RAWSWeatherEmptyError``: no RAWS stations in bbox or no
           observations for the period (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (federal/state fire-agency stations archived
-    by IEM; RAWS operated under FAMWEB/WIMS by USFS/BLM/NPS).
 
     supports_global_query=False — IEM RAWS archive covers US + territories
     only; coverage is concentrated in the western US fire belt.

@@ -11,7 +11,7 @@ Design (locked by the kickoff):
                   UNION the Case's accumulated ``AllowedToolSet`` (opened
                       categories + dispatched + explicit -- so a tool once
                       visible NEVER leaves within a Case)
-                  UNION ``discover_dataset`` top-k RRF for the turn's user_text.
+                  UNION ``search_tools`` top-k RRF for the turn's user_text.
 
 Properties (asserted in tests):
   * DETERMINISTIC -- same (user_text, allowed_set state) -> same result.
@@ -25,9 +25,9 @@ Properties (asserted in tests):
     registry (logged). Over-inclusion is cheap; dropping a needed tool is a silent
     break, so recall@k is optimized, not precision.
 
-Reuse: the ranking reuses ``discover_dataset``'s cached index, tokenizer, RRF, and
+Reuse: the ranking reuses ``search_tools``'s cached index, tokenizer, RRF, and
 corpus 100% (no new infra). The 3 sync channels (BM25 + local-dense + name-substr)
-mirror ``discover_dataset``'s inline ranking (discover_dataset.py ~L1073-1182) MINUS
+mirror ``search_tools``'s inline ranking (search_tools.py ~L1073-1182) MINUS
 its async Mongo co-occurrence channel, which cannot run on this synchronous path.
 
 ASCII only.
@@ -40,8 +40,8 @@ from typing import TYPE_CHECKING, Any
 
 from trid3nt_server.categories import HOT_SET_TOOLS
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.discovery import discover_dataset as _dd
-from trid3nt_server.tools.discovery.discover_dataset import (
+from trid3nt_server.tools.discovery import search_tools as _dd
+from trid3nt_server.tools.discovery.search_tools import (
     _NAME_RANKER_GENERICS,
     _STOPWORDS,
     _reciprocal_rank_fusion,
@@ -60,7 +60,7 @@ __all__ = [
 
 logger = logging.getLogger("trid3nt_server.tools.discovery.tool_retrieval")
 
-#: discover_dataset top-k default + clamp ceiling (kickoff: k default 25, [1, 25]).
+#: search_tools top-k default + clamp ceiling (kickoff: k default 25, [1, 25]).
 DEFAULT_K = 25
 MAX_K = 25
 
@@ -140,7 +140,7 @@ def _build_channel_rankings(query_clean: str, index: Any) -> list[list[int]]:
             rankings.append(name_ranking)
 
     if not rankings:
-        # substring fallback over tool names (mirrors discover_dataset).
+        # substring fallback over tool names (mirrors search_tools).
         substr = [
             i for i, name in enumerate(index.tool_names)
             if query_clean.lower() in name.lower()
@@ -158,7 +158,7 @@ def _discover_topk(user_text: str, k: int) -> set[str] | None:
     FAIL-OPEN without triggering a blocking cold model build on the hot path; an
     empty ``set()`` when the index is warm but nothing matched.
 
-    Mirrors ``discover_dataset``'s inline ranking minus the async Mongo
+    Mirrors ``search_tools``'s inline ranking minus the async Mongo
     co-occurrence channel, reusing that module's primitives so the paths stay
     aligned. The network-backed Vertex dense backend's per-query encode is skipped
     here (it would be hot-path I/O); local sentence-transformers / hashed dense and
@@ -224,7 +224,7 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
     """The FAIL-OPEN result: every registered tool UNION the core floor.
 
     Ensures the FULL registry is populated first: the catalog + qgis_discovery
-    tools (catalog_search / catalog_fetch / list_qgis_algorithms /
+    tools (search_data_catalog / fetch_from_catalog / list_qgis_algorithms /
     describe_qgis_algorithm) register ONLY via the startup import path, NOT via
     tools/__init__, so without this the fail-open snapshot is short by those 4
     real tools in any process where the startup hook has not yet run

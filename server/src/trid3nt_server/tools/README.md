@@ -139,8 +139,9 @@ FR-DC-1 literal (`cache/<source-class>/<hash>.<ext>`). job-0031's
   bbox helpers), `_public_s3.py`, `us_states.py`.
 - `processing/` — compute_* / clip_* / extract_* / vector edits / charts (flat).
 - `simulation/` — run_* engine bridges, model_* engines, `solver.py`.
-- `discovery/` — `catalog_search`/`catalog_fetch` (+ `catalog_common`),
-  `discover_dataset`, `tool_retrieval`, `qgis_discovery`, `ogc_adapter`.
+- `discovery/` — `search_data_catalog`/`fetch_from_catalog` (+ `catalog_common`),
+  `search_tools`, `search_spatial_functions`, `tool_retrieval`, `qgis_discovery`,
+  `ogc_adapter`.
 - `meta/` — `web_fetch`, `code_exec_tool`, `passthroughs`, case utilities.
 - Root keeps the load-bearing seams: `__init__.py` (registry), `cache.py`,
   `publish_layer.py`, `vector_tiles.py` (pipeline_emitter's densify/PMTiles

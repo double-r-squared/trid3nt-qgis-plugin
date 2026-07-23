@@ -1,46 +1,4 @@
 """``fetch_viirs_day_fire`` atomic tool -- JPSS / VIIRS Day Fire polar animation frames (fire demo J3, the core net-new).
-
-PATH A (ready-made CIRA Polar SLIDER, sat=jpss). Builds an ORDERED list of
-per-overpass EPSG:4326 RGB COGs of the VIIRS Day Fire product over a multi-day
-window for an AOI -- the exact product + irregular polar cadence the CIRA
-cira_csu Day Fire animations are made from. This is the POLAR analogue of the
-geostationary ``fetch_goes_animation``: instead of a smooth 5-minute cadence it
-enumerates the IRREGULAR polar overpass timestamps from the SLIDER jpss time
-index (each timestamp directory = one overpass), keeps DAY-only passes (Day Fire
-is a daytime product -- the green/blue channels are reflectance and go black at
-night), and emits one frame per pass labelled with its REAL irregular UTC pass
-time.
-
-CONFIRMED SLIDER facts (define-products.js + live probes 2026-06-22):
-- sat slug = ``jpss``; the jpss time index is ALREADY the merged multi-satellite
-  polar pass list (SUOMI-NPP + NOAA-20 + NOAA-21), each ``timestamps_int``
-  directory = one overpass. The exact bird per pass is NOT exposed in the SLIDER
-  tile path, so ``satellite`` selects the conceptual subset and the per-frame
-  label records the requested satellite filter (or 'jpss' for the merged set);
-  it is NOT a per-pass bird tag (LIVE-VERIFY the per-bird attribution if exact
-  attribution is required -- the FIRMS overlay carries the true per-detection
-  satellite field for cross-check).
-- Day Fire RGB product slug = ``cira_natural_fire_color`` (title "Day Fire
-  (CIRA)") -- CONFIRMED LIVE. (The 375 m native fire product is
-  ``cira_hires_fire_temperature``; GeoColor is ``cira_geocolor``.)
-
-Day Fire RGB recipe (for reference -- the SLIDER product is pre-rendered, we do
-NOT composite it): R = VIIRS 3.7um BT (0-60 C, gamma 0.4); G = 0.86um NIR refl
-(0-100%); B = 0.64um visible refl (0-100%). Thermal-red fire over a near-true-
-color land/veg/smoke base; near-black sea (so the island + fire pop). PATH B (raw
-VIIRS L1b swath resample) is the optional 375 m full-control fallback noted in
-the spike J4 -- left as a commented seam, NOT built here.
-
-Georeferencing is the APPROXIMATE SLIDER sector-extent mapping documented in
-``_satellite_slider`` (SLIDER ships no projection; the JPSS polar remap is not a
-published projection, so it is approximate-only -- LIVE-VERIFY). The imagery +
-irregular cadence are the real CIRA product. The honesty floor holds: a run that
-produced no frames does NOT report success.
-
-Cache key (per frame): SHA-256 over ``(bbox-6dp, product, sector, ts_int,
-zoom)``.
-
-ASCII only.
 """
 
 from __future__ import annotations

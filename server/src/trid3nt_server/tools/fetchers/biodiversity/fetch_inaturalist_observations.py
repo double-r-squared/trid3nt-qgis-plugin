@@ -1,33 +1,4 @@
-"""``fetch_inaturalist_observations`` atomic tool — iNaturalist Tier-1 citizen-science fetcher (job-0088).
-
-Wraps the iNaturalist API v1 (https://api.inaturalist.org/v1/observations) to
-fetch vetted citizen-science occurrence points for a given taxon over a WGS84
-bounding box, clipped optionally by an observation-date lookback window. Results
-are paginated, serialized to FlatGeobuf points with species/date/observer/photo
-properties, and routed through ``read_through`` (FR-DC-3 / FR-CE-8 shim) so the
-30-day cache absorbs the API calls.
-
-iNaturalist is Tier-1 free (no API key required); the public ``per_page`` cap is
-200. ``quality_grade='research'`` returns only community-vetted observations
-suitable for ecological analysis. The tool also accepts a *scientific or common
-name string* as ``taxon_id`` and resolves it to an integer ID via the iNat taxa
-endpoint (``/v1/taxa?q=...``).
-
-FR-TA-2 atomic tool, returns ``LayerURI`` (vector, role="context", units=None).
-FR-CE-8 / FR-DC-3 / FR-DC-4: identical ``(taxon, bbox, quality_grade, days_back,
-max_records)`` calls reuse the cached FlatGeobuf within the 30-day window.
-
-Pattern reference: ``fetch_administrative_boundaries.py`` (job-0084).
-
-URL conventions (verified 2026-06-08):
-    observations: https://api.inaturalist.org/v1/observations
-    taxa search:  https://api.inaturalist.org/v1/taxa
-
-The codified job-0086 lesson (URL/render consistency != geographic correctness)
-applies here: the FlatGeobuf carries WGS84 point geometry direct from the iNat
-``geojson`` field; the live verification asserts that returned points actually
-fall **inside** the requested bbox (geographic-correctness check), not merely
-that bytes round-trip.
+"""``fetch_inaturalist_observations`` atomic tool — iNaturalist Tier-1 citizen-science fetcher.
 """
 
 from __future__ import annotations

@@ -1,36 +1,4 @@
 """``fetch_goes_active_fire`` -- standalone GOES split-window active-fire detector.
-
-Exposes the Matson-Dozier C07-vs-C13 split-window active-fire discriminator as a
-PROPER registered atomic tool. The discriminator itself lives in
-``fetch_goes_archive_animation._detect_active_fire_mask`` (where the
-``fire_hotspots`` band uses it); this tool surfaces it on its OWN so the agent can
-discover + run "detect the active fire in this AOI" without composing the whole
-GOES animation pipeline.
-
-It fetches the most-recent (or in-window) raw ``ABI-L2-MCMIPC`` frame(s) from the
-public ``noaa-goes18`` S3 archive (anonymous / no key), runs the split-window
-detector, and returns the active-fire hotspots as TRANSPARENT RGBA hotspot
-``LayerURI`` raster(s) -- the SAME ``fire_hotspots`` composite path the archive
-animation emits -- so a single detection is a usable map overlay.
-
-Split-window active-fire discriminator (Matson & Dozier 1981; MODIS MOD14 /
-VIIRS active-fire heritage):
-  A pixel is flagged active-fire when BOTH hold:
-    * its 3.9um brightness temperature (ABI C07) is hot
-      (``C07 >= bt_c07_min_k``), AND
-    * the 3.9um - 10.3um brightness-temperature difference (C07 - C13) is large
-      (``(C07 - C13) >= bt_diff_min_k``).
-  The 3.9um channel saturates over a sub-pixel fire far more than the 10.3um
-  longwave window channel, so a big positive split-window difference isolates
-  combustion from uniformly warm bare land (hot in BOTH channels -> SMALL
-  difference). The thresholds are tunable (the shared defaults 320 K / 10 K) and
-  flag a small active-fire fraction over a real fire AOI rather than warm land.
-
-This is the EXPLICITLY-DEFINED (Class B) tool surface for the discriminator; it
-reuses the shared archive band-read core + the hotspot composite so it does NOT
-duplicate any netCDF I/O or detection logic.
-
-ASCII only.
 """
 
 from __future__ import annotations

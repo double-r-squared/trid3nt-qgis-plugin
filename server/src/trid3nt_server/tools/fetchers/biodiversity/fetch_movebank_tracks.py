@@ -1,43 +1,4 @@
-"""``fetch_movebank_tracks`` atomic tool — Movebank animal tracking Tier-2 fetcher (job-0130).
-
-Wraps the Movebank REST API (https://www.movebank.org/movebank/service/direct-read)
-to return per-individual animal-tracking trajectories as FlatGeobuf linestrings (one
-line feature per ``individual_local_identifier``, vertices ordered by timestamp) OR
-points (one feature per telemetry fix). The tool is Movebank's "data SOURCE not
-plugin" path called out in ``docs/srs/E-qgis-plugins-inventory.md`` and the Tier-2
-keyed-endpoint pattern in §F.3 / Appendix H.6 (per-Case keys, vault-scoped).
-
-API surface (verified 2026-06-08 against https://www.movebank.org/movebank/help/):
-
-    https://www.movebank.org/movebank/service/direct-read?entity_type=event
-        &study_id=<study_id>
-        &attributes=individual_local_identifier,timestamp,location_lat,location_long,sensor_type_id
-        &sensor_type_id=<id>            # optional
-        &timestamp_start=YYYYMMDDhhmmssSSS  # optional
-        &timestamp_end=YYYYMMDDhhmmssSSS    # optional
-
-Authentication: HTTP Basic — every request carries a ``movebank`` username +
-password pair. Studies vary in their data-licence: some are publicly readable with
-ANY authenticated account; others demand "Data Use Statement" acceptance per
-study. The error surface distinguishes auth failures (401), licence-acceptance
-failures (403, "License not accepted"), and bad-study errors.
-
-Response shape: CSV with a header row + one row per fix. Empty studies (or any
-no-data response with bbox=outside-coverage) yield a header-only CSV; we serialize
-that as a 0-feature FlatGeobuf so downstream readers see a well-formed file.
-
-Cache: static-30d (historic tracks are immutable; live deployments still cycle
-the bucket through the 30-day lifecycle policy). Cache key on
-``(study_id, bbox-quantized, username, sensor_type_id, time_range, max_records,
-geometry_type)``. Username is part of the key because the visible study set
-depends on which Movebank account approved which study's Data Use Statement.
-
-The job-0086 codified lesson (URL/render consistency != geographic correctness)
-applies: every emitted feature MUST lie inside the requested bbox after the
-client-side spatial filter (Movebank does not bbox-filter server-side). The
-live test asserts ≥1 feature lies geographically inside the test bbox.
-
-FR-TA-2 atomic tool; FR-CE-8 / FR-DC-3/4 routed through ``read_through``.
+"""``fetch_movebank_tracks`` atomic tool — Movebank animal tracking Tier-2 fetcher.
 """
 
 from __future__ import annotations
@@ -816,7 +777,7 @@ def fetch_movebank_tracks(
     geometry_type)`` calls reuse the cached FlatGeobuf. Cache key includes the
     username because Movebank access varies per account licence acceptance.
 
-    Errors (FR-AS-11 typed surface):
+    Errors:
         MovebankInputError       — bad bbox, missing credentials, bad params (retryable=False)
         MovebankAuthError        — Movebank rejected credentials (401, retryable=False)
         MovebankLicenseError     — account has not accepted study's Data Use Statement (403, retryable=False)

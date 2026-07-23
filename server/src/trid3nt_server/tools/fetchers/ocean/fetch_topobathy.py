@@ -1,58 +1,4 @@
-"""``fetch_topobathy`` atomic tool — coastal merged topo-bathymetry DEM
-(SFINCS North Star P1).
-
-Produces a SINGLE seamless elevation surface that spans the shoreline — land
-topography from USGS 3DEP plus sea-floor / nearshore bathymetry from NOAA NCEI
-CUDEM — so a coastal SFINCS run has a continuous bed from the hills to the
-deep water with NO gap at the waterline. The output is byte-format identical
-to ``fetch_dem`` / ``fetch_3dep_extra`` (single-band float32 COG, LZW,
-``style_preset="continuous_dem"``, ``units="meters"``, ``role="input"``) so
-``build_sfincs_model``'s ``setup_dep`` consumes it UNCHANGED.
-
-Why a dedicated tool (vs. ``fetch_dem``):
-
-    3DEP is a LAND-surface DEM — it has no bathymetry; everything below the
-    waterline is nodata. A coastal flood model fed a land-only DEM has no
-    nearshore bed to route surge / run-up over. NOAA NCEI's CUDEM 1/9
-    arc-second (~3 m) "Topobathy" product is the canonical merged
-    topo-bathymetric DEM for the US coast: only the 1/9 arc-second tiles
-    integrate BOTH bathymetric and topographic data, referenced to NAVD88
-    (positive-up, bathymetry negative). This tool fetches the CUDEM tiles
-    that intersect the AOI, fetches the 3DEP land DEM for the same AOI, and
-    MERGES them onto a common UTM grid with CUDEM winning on the coast.
-
-Vertical convention (HARD CONTRACT — Invariant 7):
-
-    NAVD88 metres, POSITIVE-UP. Land is positive, bathymetry is NEGATIVE.
-    NO SIGN FLIP is applied anywhere — that is exactly what HydroMT's
-    ``setup_dep`` ``elevtn`` expects. The datum gate (``_assert_navd88``)
-    refuses to merge a tile that is NOT NAVD88 (e.g. an MHW / MSL / LMSL
-    product) unless a documented NAVD88 offset is supplied — never a silent
-    cross-datum merge.
-
-Data source (verified live 2026-06-18):
-
-    NOAA NCEI CUDEM 1/9 arc-second "Topobathy 2014" collection, public S3
-    bucket ``noaa-nos-coastal-lidar-pds`` (also mirrored at
-    ``chs.coast.noaa.gov/htdata/raster2/elevation/``):
-
-        s3://noaa-nos-coastal-lidar-pds/dem/NCEI_ninth_Topobathy_2014_8483/
-
-    The authoritative per-tile URL manifest is ``urllist8483.txt`` at the
-    collection root (one ``https://...tif`` per line). Tiles are named
-    ``ncei19_n{LAT}X{FRAC}_w{LON}X{FRAC}_{YEAR}v1.tif`` where the n/w
-    coordinates are the **NW (upper-left) corner** of a 0.25-degree tile
-    (e.g. ``ncei19_n30X00_w085X25_2019v1.tif`` covers lat [29.75, 30.00],
-    lon [-85.25, -85.00]). We download the manifest, parse each tile's NW
-    corner from its filename, intersect those 0.25-degree footprints with
-    the AOI bbox, and read the intersecting tiles over GDAL ``/vsicurl/``
-    with ``AWS_NO_SIGN_REQUEST`` (mirrors how ``fetch_dem`` reads public
-    3DEP S3). Tier-1 free, no auth.
-
-FR-CE-8 / FR-DC-3: routed through ``read_through`` with
-``ttl_class="static-30d"`` (CUDEM is a static archival product),
-``source_class="topobathy"``. ``supports_global_query=False`` — CUDEM
-covers the US coast only.
+"""``fetch_topobathy`` atomic tool — coastal merged topo-bathymetry DEM (SFINCS North Star P1).
 """
 
 from __future__ import annotations
@@ -1509,7 +1455,7 @@ def fetch_topobathy(
         ABSENT`` warning); only if there is no elevation at all does it raise
         ``TopobathyEmptyError``.
 
-    **Errors (FR-AS-11 typed-error surface):**
+    **Errors:**
         - ``TopobathyInputError``: bad bbox / outside US coast (retryable=False).
         - ``TopobathyDatumError``: a CUDEM tile is non-NAVD88 with no offset
           (retryable=False) — Invariant 7.
@@ -1518,7 +1464,7 @@ def fetch_topobathy(
         - ``TopobathyEmptyError``: no CUDEM AND no 3DEP for the AOI
           (retryable=False).
 
-    **Cross-tool dependencies (FR-TA-3):**
+    **Cross-tool dependencies:**
         - REUSES ``fetch_dem`` for the 3DEP land DEM (does NOT reimplement 3DEP).
         - Composes INTO ``build_sfincs_model`` (``setup_dep`` elevtn) — drop-in
           for ``fetch_dem`` on the coastal path.

@@ -1,88 +1,4 @@
 """``fetch_noaa_coops_tides`` atomic tool — NOAA CO-OPS tide-station observations and predictions (job A9).
-
-Wraps the NOAA Center for Operational Oceanographic Products and Services
-(CO-OPS) REST API to retrieve water-level time series — either verified
-observations (``product="water_level"``) or astronomical tide predictions
-(``product="predictions"``) — for all CO-OPS stations within a requested
-bbox and date range. Returns a FlatGeobuf with one Point feature per
-station, carrying the per-station time series inline.
-
-**API surface** (verified live 2026-06-09):
-
-    Station discovery:
-        https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json
-            ?type=waterlevels&units=metric&format=json
-        Returns all ~300 water-level stations globally; we filter by bbox
-        after download (a single cheap request covers the full network).
-
-    Data retrieval (one request per station):
-        https://api.tidesandcurrents.noaa.gov/api/prod/datagetter
-            ?begin_date=YYYYMMDD&end_date=YYYYMMDD
-            &station={id}&product={product}&datum=MLLW
-            &time_zone=gmt&interval=h&units=metric
-            &application=trid3nt&format=json
-
-    Response fields:
-        metadata.id, metadata.name, metadata.lat, metadata.lon
-        data[].t  — ISO datetime "YYYY-MM-DD HH:MM"
-        data[].v  — water-level value in meters
-        data[].s  — sigma (standard deviation of 6-minute samples, obs only)
-        data[].f  — quality flags comma-string
-        data[].q  — quality indicator ("p" preliminary, "v" verified)
-
-    Predictions response uses ``predictions[]`` key instead of ``data[]``;
-    each entry has ``t`` + ``v`` but no ``s`` or ``f``.
-
-API limits: no API key required. CO-OPS rate-limits to a single station per
-request; no explicit documented rate limit, but large fan-out (many stations
-× large date ranges) should be throttled. We impose a _MAX_STATIONS cap and
-_STATION_REQUEST_DELAY between per-station calls.
-
-**Date-range limits**: CO-OPS allows up to 31 calendar days per data request
-for 6-minute interval products; the hourly interval has no enforced maximum
-but very long ranges (>365 days) produce large responses. We cap at
-``_MAX_DATE_RANGE_DAYS = 366`` in the tool, with a warning for >31 days.
-
-**Cache**: ``dynamic-1h`` for recent / near-real-time observations (preliminary
-data may change); ``static-30d`` would be appropriate for old fully-verified
-observations but the single ``dynamic-1h`` class is conservative and safe.
-
-**Output format** (FlatGeobuf — vector with embedded time series):
-
-    Geometry: Point (station location, EPSG:4326)
-    Properties:
-        station_id           (str)   — CO-OPS station identifier (7 digits)
-        station_name         (str)   — station common name
-        lon                  (float) — station longitude (EPSG:4326)
-        lat                  (float) — station latitude (EPSG:4326)
-        product              (str)   — "water_level" or "predictions"
-        datum                (str)   — "MLLW" (always; see datum note)
-        time_start           (str)   — ISO-8601 first timestep
-        time_end             (str)   — ISO-8601 last timestep
-        n_timesteps          (int)   — count of hourly samples
-        wl_min_m             (float) — minimum water level (m)
-        wl_max_m             (float) — maximum water level (m)
-        wl_mean_m            (float) — mean water level (m)
-        time_series_csv      (str)   — "iso,value_m" comma-separated rows
-
-Datum note: the tool pins MLLW (Mean Lower Low Water) as the datum for both
-observations and predictions — the standard chart datum for US coastal work.
-NAVD88 is available for some stations but requires separate product codes;
-MLLW is safe everywhere CO-OPS publishes hourly data.
-
-``supports_global_query=False`` — CO-OPS is primarily a US/territory network
-(~300 stations worldwide). A global bbox would just return all ~300 stations,
-which is a ~500 KB payload; this is technically feasible but unlikely to be
-what the user intends, so we require bbox to be specified. The tool will NOT
-raise an error if you pass the entire world in the bbox, but it will warn.
-
-FR-AS-11 typed-error surface: ``COOPSTidesError`` (base, retryable=True),
-``COOPSTidesInputError`` (bad bbox / product / dates, retryable=False),
-``COOPSTidesUpstreamError`` (HTTP/network failure, retryable=True),
-``COOPSTidesEmptyError`` (no stations in bbox, retryable=False).
-
-FR-DC-9 / Wave-1.5 payload estimation: ~2 KB per station-day (hourly samples
-= 24 rows × ~80 bytes), so a 10-station × 30-day bbox → ~0.6 MB.
 """
 
 from __future__ import annotations
@@ -810,7 +726,7 @@ def fetch_noaa_coops_tides(
         boundary input). ``layer_type="vector"``, ``role="primary"``,
         ``units="m (MLLW)"``.
 
-    **Cross-tool dependencies (FR-TA-3):**
+    **Cross-tool dependencies:**
         - Feeds INTO: ``model_flood_scenario`` (coastal boundary forcing),
           ``publish_layer`` (map display).
         - Cross-checks: ``fetch_gtsm_tide_surge`` (global non-US tide+surge
@@ -823,7 +739,7 @@ def fetch_noaa_coops_tides(
         - Sibling NWM tool (river): ``fetch_noaa_nwm_streamflow`` for CONUS
           fluvial forcing.
 
-    **Error types (FR-AS-11):**
+    **Error types:**
         - ``COOPSTidesInputError``: bad bbox / product / dates (retryable=False).
         - ``COOPSTidesUpstreamError``: HTTP/network failure (retryable=True).
         - ``COOPSTidesEmptyError``: no CO-OPS stations in bbox or all stations

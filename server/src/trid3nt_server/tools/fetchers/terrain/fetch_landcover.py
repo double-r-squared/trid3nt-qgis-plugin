@@ -1,10 +1,4 @@
-"""Landcover fetcher (``fetch_landcover``): MRLC NLCD WCS primary, ESA WorldCover
-fallback -> paletted COG (incl. the state-scale path).
-
-Carved out of the original multi-tool ``data_fetch`` module (job-0033) in the
-tools/ reorg; behavior and the registered tool surface are unchanged. The
-shared typed-error hierarchy + bbox helpers live in
-``trid3nt_server.tools.fetchers._fetch_common``.
+"""Landcover fetcher (``fetch_landcover``): MRLC NLCD WCS primary, ESA WorldCover fallback -> paletted COG (incl. the state-scale path).
 """
 
 from __future__ import annotations

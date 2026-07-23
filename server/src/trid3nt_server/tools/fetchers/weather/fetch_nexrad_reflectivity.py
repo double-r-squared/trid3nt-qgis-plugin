@@ -1,46 +1,4 @@
-"""``fetch_nexrad_reflectivity`` atomic tool — NEXRAD composite radar via Iowa State Mesonet WMS (job-0102).
-
-NEXRAD composite radar reflectivity (and base reflectivity + VIL) served as a
-public WMS by the Iowa State University Mesonet. The endpoint requires no auth.
-
-Pattern: this is a **WMS-URL passthrough** tool — it composes a service URL the
-client (MapLibre via QGIS Server cascade, or any WMS-aware viewer) renders
-directly. The tool does **NOT** download or cache pixels because radar
-reflectivity refreshes every ~5 minutes; caching a static PNG would mis-represent
-the live storm. The cache shim is therefore deliberately bypassed.
-
-URL composition (verified 2026-06-08):
-
-    https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/{product}.cgi
-
-    where ``{product}`` ∈ {``n0r``, ``n0q``, ``vil``}:
-      - ``n0r``: composite reflectivity (the all-tilt max; default product)
-      - ``n0q``: base reflectivity (lowest tilt, ~0.5° elevation)
-      - ``vil``: vertically integrated liquid (precip-totaling diagnostic)
-
-When ``bbox`` is supplied, it is encoded as the ``BBOX=`` WMS parameter
-(``min_lon,min_lat,max_lon,max_lat`` in EPSG:4326 / WMS 1.3.0 CRS:84) so a
-client GetMap call already scopes geographically. When ``bbox`` is None the
-LayerURI carries no bbox and the client will request CONUS extent.
-
-FR-TA-2: atomic tool returning a ``LayerURI``.
-FR-DC-6: uncacheable-by-construction (WMS URL passthrough; pixels are dynamic
-and live-no-cache classed).
-
-OQ-0102-METADATA-FIELDS: the Wave 1.5 kickoff sketches new
-``AtomicToolMetadata`` fields (``supports_global_query``, ``estimate_payload_mb``)
-that the current ``contracts`` model does not yet expose. Engine job
-scope cannot land schema fields; surfacing as OQ for an upstream schema
-amendment. The tool meanwhile documents the intended values in this docstring
-so a follow-up registration update is mechanical.
-
-OQ-0102-CACHEABLE-FLAG-CONTRADICTION: the kickoff sketch sets
-``cacheable=True, ttl_class='live-no-cache'`` which the existing
-``AtomicToolMetadata`` model_validator rejects (``cacheable=True`` is
-inconsistent with the live-no-cache class). The kickoff body text is explicit
-that pixels are not cached ("does NOT cache pixels (the WMS is dynamic)"), so
-we follow the body's clear intent and register ``cacheable=False``. The Wave
-1.5 metadata-evolution OQ above will likely resolve this asymmetry.
+"""``fetch_nexrad_reflectivity`` atomic tool — NEXRAD composite radar via Iowa State Mesonet WMS.
 """
 
 from __future__ import annotations

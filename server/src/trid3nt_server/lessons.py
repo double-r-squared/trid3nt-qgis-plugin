@@ -25,7 +25,7 @@ Design (binding sketch, deliberately simple -- no training, no extra LLM call):
 
 - **Read side (per turn)**: ``lessons_appendix(user_text)`` scores stored
   lessons against the user prompt with BM25 (``rank_bm25.BM25Okapi`` -- the
-  same scorer family the tool-retrieval / discover_dataset index uses, reusing
+  same scorer family the tool-retrieval / search_tools index uses, reusing
   its ``_tokenize``; plain token-overlap fallback when either import is
   unavailable). Top ``MAX_INJECT_LESSONS`` above ``SCORE_FLOOR`` are rendered
   as a "Past corrections from this deployment:" appendix capped at
@@ -193,10 +193,10 @@ def _dedup_key(row: dict) -> tuple:
 
 
 def _tokenize(text: str) -> list[str]:
-    """Tokenize with discover_dataset's tokenizer (the one BM25 channel of the
+    """Tokenize with search_tools's tokenizer (the one BM25 channel of the
     tool-retrieval index uses) when importable; regex fallback otherwise."""
     try:
-        from .tools.discovery.discover_dataset import _tokenize as _dd_tokenize
+        from .tools.discovery.search_tools import _tokenize as _dd_tokenize
 
         return _dd_tokenize(text)
     except Exception:  # noqa: BLE001
@@ -206,10 +206,10 @@ def _tokenize(text: str) -> list[str]:
 
 
 def _content_tokens(tokens: list[str]) -> set[str]:
-    """Stopword-filtered token set (reuses discover_dataset's stopword list --
+    """Stopword-filtered token set (reuses search_tools's stopword list --
     the same one the tool-retrieval name channel filters with)."""
     try:
-        from .tools.discovery.discover_dataset import _STOPWORDS as stop
+        from .tools.discovery.search_tools import _STOPWORDS as stop
     except Exception:  # noqa: BLE001
         stop = {
             "the", "a", "an", "of", "in", "on", "for", "to", "and", "or",
@@ -243,7 +243,7 @@ def _distinctive_query_tokens(user_text: str, rows: list[dict]) -> set[str]:
 def _score_rows(user_text: str, rows: list[dict]) -> list[float]:
     """Score every row against ``user_text``.
 
-    BM25 (``rank_bm25.BM25Okapi`` -- same library backing discover_dataset /
+    BM25 (``rank_bm25.BM25Okapi`` -- same library backing search_tools /
     tool_retrieval's lexical channel) over ``trigger_text + lesson`` docs. The
     corpus is <= MAX_LESSONS tiny docs, so building BM25 per call is
     microseconds -- no persistent second index. BM25's idf degenerates to

@@ -75,7 +75,7 @@ _PAYLOAD_CACHE: dict[str, Any] | None = None
 def _default_corpus_path() -> Path:
     """Resolve ``data/tool_query_corpus.yaml`` under the package's ``data/`` dir.
 
-    Mirrors the resolution logic in ``discover_dataset._default_corpus_path``
+    Mirrors the resolution logic in ``search_tools._default_corpus_path``
     so both consumers read the same file by default. Honours the
     ``TRID3NT_TOOL_CORPUS_YAML`` env override for test/dev pinning.
     """

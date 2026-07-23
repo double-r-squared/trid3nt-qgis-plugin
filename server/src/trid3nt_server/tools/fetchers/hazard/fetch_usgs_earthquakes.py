@@ -1,60 +1,4 @@
 """``fetch_usgs_earthquakes`` atomic tool — real USGS seismic events as points.
-
-Queries the USGS FDSN Event Web Service (the same machine API behind the USGS
-"Latest Earthquakes" map) for recorded earthquakes inside a bbox and time
-window, above a minimum magnitude. Returns one Point feature per event at the
-epicenter, carrying ``mag``, ``depth_km``, ``time``, ``place`` and the USGS
-event-page ``url``. This is the canonical OBSERVED seismic-event source — the
-instrument/network record of what actually happened, NOT a probabilistic hazard
-model.
-
-**API surface** (USGS FDSN Event, free, NO API key required):
-
-    https://earthquake.usgs.gov/fdsnws/event/1/query
-        ?format=geojson
-        &minlongitude=...&minlatitude=...&maxlongitude=...&maxlatitude=...
-        &starttime=YYYY-MM-DDTHH:MM:SS&endtime=YYYY-MM-DDTHH:MM:SS
-        &minmagnitude=...
-        &orderby=time&limit=20000
-
-The response is a GeoJSON ``FeatureCollection``. Each feature is a Point whose
-geometry ``coordinates`` are ``[longitude, latitude, depth_km]`` (the THIRD
-coordinate is event depth in kilometers). Per-feature ``properties`` carry
-``mag`` (magnitude), ``magType`` (e.g. ``"md"``, ``"ml"``, ``"mw"``),
-``place`` (a human "5 km SW of Ridgemark, CA" string), ``time`` and ``updated``
-(epoch MILLISECONDS UTC), ``url`` (the USGS event page), ``type`` (usually
-``"earthquake"``; can be ``"quarry blast"`` etc.), ``status``, ``tsunami``,
-``felt``, ``sig`` and ``net``.
-
-**Window semantics**: when ``start_date`` / ``end_date`` are omitted the tool
-defaults to the most-recent ~30 days (the same window the USGS "Significant
-Earthquakes, Past 30 Days" feed uses). A window is capped at 366 days so a
-single call stays a bounded payload; a longer span should be chunked.
-
-**Result-cap handling**: the FDSN service caps a single response at 20000
-events. We request ``limit=20000`` and inspect ``metadata.count``; if the cap is
-hit we raise a typed ``EarthquakesResultTooLargeError`` telling the caller to
-narrow the bbox, shorten the window, or raise the minimum magnitude — we never
-silently truncate.
-
-**Honest-empty path** (data-source fallback norm — primary -> honest typed
-error): the FDSN service returns an HTTP 200 ``FeatureCollection`` with ZERO
-features for a quiescent area/window. That is a legitimate "no earthquakes"
-answer, not an error condition, so we raise a typed
-``EarthquakesNoEventsError`` (retryable=False) carrying the scope — never an
-empty success-shaped layer.
-
-**Output**: a vector ``LayerURI`` (``layer_type="vector"``) whose artifact is a
-point FeatureCollection (one point per event), serialized as FlatGeobuf and
-rendered via the inline vector path. ``style_preset="earthquakes"`` (the client
-sizes the marker by ``mag`` and colors by ``depth_km``); ``LayerURI.bbox`` is
-set to the events' extent so the camera auto-zooms.
-
-Tier-1, no auth, ``supports_global_query=True`` (the FDSN service is global; a
-bbox-less call covers the whole planet, bounded by the magnitude floor + window
-+ the 20000 result cap).
-
-FR-AS-11 typed-error surface; FR-TA-2 / FR-AS-3 docstring discipline applies.
 """
 
 from __future__ import annotations
@@ -881,7 +825,7 @@ def fetch_usgs_earthquakes(
     Cache key is SHA-256 of ``(bbox-rounded-6dp, starttime, endtime,
     min_magnitude)``, so identical-scope calls within the hour reuse the FGB.
 
-    Cross-tool dependencies (FR-TA-3):
+    Cross-tool dependencies:
         - Composes WITH: ``publish_layer`` (map overlay), ``geocode_location``
           (derive a bbox from a place name BEFORE this call),
           ``fetch_administrative_boundaries`` (state/county framing),
@@ -889,7 +833,7 @@ def fetch_usgs_earthquakes(
         - Upstream data source: USGS FDSN Event Web Service
           (earthquake.usgs.gov/fdsnws/event/1/query).
 
-    Errors (FR-AS-11 typed-error surface):
+    Errors:
         - ``EarthquakesInputError``: bad bbox / bad date / reversed window /
           out-of-range magnitude (retryable=False).
         - ``EarthquakesResultTooLargeError``: the query exceeds the FDSN
@@ -900,8 +844,6 @@ def fetch_usgs_earthquakes(
         - ``EarthquakesNoEventsError``: no events matched the scope
           (retryable=False).
 
-    Source-tier: FR-HEP-2 Tier 1 (USGS federal seismic network). Claims from
-    these event records should be marked ``source_authority_tier=1``.
 
     Tier-1 free. No API key. ``supports_global_query=True``.
     """

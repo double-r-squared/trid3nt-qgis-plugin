@@ -1,121 +1,4 @@
-"""``fetch_us_drought_monitor`` atomic tool — US Drought Monitor (USDM)
-weekly drought-category polygons (D0-D4) clipped to a bbox.
-
-Wraps the Esri Living Atlas ``US_Drought_Intensity_v1`` ArcGIS REST
-FeatureServer, the authoritative re-publication of the National Drought
-Mitigation Center (NDMC) US Drought Monitor. The USDM is released every
-Thursday (valid as of the prior Tuesday) and classifies drought into five
-intensity categories:
-
-    ``dm=0`` -> D0  Abnormally Dry
-    ``dm=1`` -> D1  Moderate Drought
-    ``dm=2`` -> D2  Severe Drought
-    ``dm=3`` -> D3  Extreme Drought
-    ``dm=4`` -> D4  Exceptional Drought
-
-**What it does:**
-Fetches the dissolved drought-category polygons intersecting a user bbox for
-either the current week (default) or a specified past USDM release date.
-Returns a FlatGeobuf vector layer with one (Multi)Polygon per drought class
-intersecting the bbox, annotated with ``dm`` (0-4 integer class), ``label``
-(human-readable category name), ``period`` (the USDM release period as
-``YYYYMMDD``), and ``valid_date`` (ISO date) attributes suitable for map
-display, narration, and downstream fire / agriculture overlays.
-
-**When to use:**
-- User asks for the US Drought Monitor map, current drought conditions, "how
-  bad is the drought in [region]?", or "show me drought categories near X".
-- Agent needs drought-intensity polygons as a wildfire-risk or
-  agricultural-stress context layer (intersect with ``fetch_field_boundaries``
-  / FTW ag fields, ``fetch_firms_active_fire``, or fuel/vegetation layers).
-- User wants a past drought snapshot (e.g. the 2021 Southwest megadrought) via
-  the optional ``date`` parameter.
-- User wants to count exposed assets/population inside a drought footprint
-  (feed into ``compute_zonal_statistics``).
-
-**When NOT to use:**
-- For soil-moisture / SPI / SPEI raster indices -> the USDM is a categorical
-  expert-synthesis product, not a continuous index; use a dedicated
-  reanalysis/index tool.
-- For precipitation deficit, streamflow drought, or reservoir levels -> use
-  ``fetch_usgs_nwis_gauges`` (streamflow) or a precip reanalysis tool.
-- For areas outside the United States -> the USDM covers the 50 states,
-  Puerto Rico, and the US-affiliated Pacific/Caribbean islands ONLY; a bbox
-  over the open ocean or a foreign country returns an honest empty layer.
-- For active-fire detections -> use ``fetch_firms_active_fire`` /
-  ``fetch_goes_active_fire``; drought is the antecedent dryness context, not
-  the fire itself.
-
-**Parameters:**
-    bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326 (WGS84 decimal
-        degrees). Required -- ``supports_global_query=False`` (US-only polygon
-        source; a global query would cover the entire CONUS dissolved set).
-        The USDM polygons are dissolved per category at national scale, so an
-        envelope-intersect query returns the FULL category polygon clipped at
-        intersection (geometry may extend beyond the bbox). Example for the
-        drought-prone US Southwest (Arizona): ``(-114.0, 31.3, -109.0, 37.0)``.
-    date: Optional USDM release date selecting a past weekly snapshot. Accepts
-        ``"YYYY-MM-DD"`` or ``"YYYYMMDD"``. The USDM releases weekly on a
-        Tuesday valid-date; the value is matched against the archive's
-        ``period`` field, so it should fall on a valid USDM Tuesday (the tool
-        does NOT snap to the nearest release -- an off-cadence date yields an
-        honest empty layer). Defaults to ``None`` -> the current/latest week
-        from the live "current conditions" layer.
-
-**Returns:**
-    ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
-    ``s3://<cache-bucket>/cache/semi-static-7d/us_drought_monitor/<key>.fgb``
-    Each feature is a (Multi)Polygon in EPSG:4326. Properties: ``dm`` (int 0-4,
-    drought class), ``label`` (str, e.g. "D2 Severe Drought"), ``period`` (str
-    ``YYYYMMDD`` USDM release), ``valid_date`` (str ISO date or empty).
-    ``layer_type="vector"``, ``role="primary"``,
-    ``style_preset="us_drought_monitor"``, ``units="dm_class"``.
-
-**Cross-tool dependencies:**
-    - Feeds INTO ``compute_zonal_statistics`` ("how many ag acres are in D3+
-      extreme drought?") and ``clip_vector_to_polygon`` (admin/watershed-scoped
-      drought report via ``fetch_administrative_boundaries``).
-    - Pairs WITH ``fetch_field_boundaries`` (FTW/fiboa ag fields) for
-      drought-on-agriculture demos and ``fetch_firms_active_fire`` /
-      ``fetch_goes_active_fire`` for drought-as-fire-antecedent context.
-
-**Cache:** ``semi-static-7d`` (FR-DC-2). The USDM publishes a new product once
-per week, so a 7-day stale window matches the source's release cadence exactly.
-
-**FR-AS-11 typed-error surface:** ``US_DROUGHT_MONITORError`` (base,
-retryable=True), ``US_DROUGHT_MONITORInputError`` (non-retryable bbox/date
-validation), ``US_DROUGHT_MONITORUpstreamError`` (retryable ArcGIS REST
-network / HTTP / parse failure), ``US_DROUGHT_MONITOREmptyError`` (no drought
-in bbox -- NOT raised by default; we serialize an empty FGB so the layer still
-appears with a zero-feature notice, e.g. a bbox over a non-drought area).
-
-**FR-DC-9 payload estimation:** USDM category polygons are heavily dissolved;
-geometry size is driven far more by how many category boundaries the bbox
-crosses than by bbox area. We estimate ~0.6 MB per square degree, clamped to
-[0.05, 60] MB.
-
-``supports_global_query=False`` -- US-only polygon source.
-
-Endpoint pattern (verified live 2026-06-27):
-    Current week (layer 3, "US_Drought_Current"):
-        https://services9.arcgis.com/RHVPKKiFTONKtxq3/arcgis/rest/services/
-        US_Drought_Intensity_v1/FeatureServer/3/query
-    Archive 2000-present (layer 2, "US_Drought", filter by ``period``):
-        .../US_Drought_Intensity_v1/FeatureServer/2/query
-
-    Query parameters::
-        where=1=1               (or period='YYYYMMDD' for the archive)
-        geometry={xmin,ymin,xmax,ymax}
-        geometryType=esriGeometryEnvelope
-        inSR=4326
-        spatialRel=esriSpatialRelIntersects
-        outFields=OBJECTID,dm,period,ddate
-        outSR=4326
-        f=geojson
-        resultRecordCount=2000
-
-    Response: GeoJSON FeatureCollection of (Multi)Polygons with a ``dm``
-    integer (0-4) and ``period`` (``YYYYMMDD``) per feature.
+"""``fetch_us_drought_monitor`` atomic tool — US Drought Monitor (USDM) weekly drought-category polygons (D0-D4) clipped to a bbox.
 """
 
 from __future__ import annotations
@@ -679,7 +562,7 @@ def fetch_us_drought_monitor(
         is ``"vector"``, ``role`` is ``"primary"``, ``style_preset`` is
         ``"us_drought_monitor"``, ``units`` is ``"dm_class"``.
 
-    **Cross-tool dependencies (FR-TA-3):**
+    **Cross-tool dependencies:**
         - Feeds INTO: ``compute_zonal_statistics`` (assets/acres inside a
           drought footprint), ``clip_vector_to_polygon`` (admin/watershed-scoped
           drought report with ``fetch_administrative_boundaries``).
@@ -687,7 +570,7 @@ def fetch_us_drought_monitor(
           drought-on-agriculture demos, ``fetch_firms_active_fire`` /
           ``fetch_goes_active_fire`` for drought-as-fire-antecedent context.
 
-    **Error types (FR-AS-11):**
+    **Error types:**
         - ``US_DROUGHT_MONITORInputError``: bad bbox or date (retryable=False).
         - ``US_DROUGHT_MONITORUpstreamError``: HTTP/network failure, ArcGIS
           error envelope, or FlatGeobuf serialization failure (retryable=True).

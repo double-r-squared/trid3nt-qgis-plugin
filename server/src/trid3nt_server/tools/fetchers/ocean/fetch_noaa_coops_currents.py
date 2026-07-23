@@ -1,92 +1,4 @@
 """``fetch_noaa_coops_currents`` atomic tool — NOAA CO-OPS tidal-current stations.
-
-Wraps the NOAA Center for Operational Oceanographic Products and Services
-(CO-OPS) REST API to retrieve the latest observed (or predicted) tidal-current
-speed and direction for all CO-OPS *current* stations within a requested bbox.
-Returns a FlatGeobuf with one Point feature per station, each carrying the
-station's latest current ``speed_kn`` (knots) + ``direction_deg`` (degrees
-true) + the observation/prediction ``datetime``.
-
-This is the *currents* sibling of ``fetch_noaa_coops_tides`` (water level). The
-two complement each other: tides give you the rising/falling water surface,
-currents give you the horizontal flood/ebb flow at tidal inlets and channels.
-
-**API surface** (verified live 2026-06-27):
-
-    Station discovery (currents network, distinct from water-level network):
-        https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json
-            ?type=currents&units=metric&format=json
-        Returns the ~88 realtime current stations globally; we filter by bbox
-        after download (a single cheap request covers the full network).
-        Current station ids are alphanumeric (e.g. "s08010"), unlike the
-        7-digit water-level ids.
-
-    Observed currents (product="currents", one request per station):
-        https://api.tidesandcurrents.noaa.gov/api/prod/datagetter
-            ?begin_date=YYYYMMDD&end_date=YYYYMMDD
-            &station={id}&product=currents&time_zone=gmt
-            &units=english&application=trid3nt&format=json
-        Response data[] rows:
-            t — ISO datetime "YYYY-MM-DD HH:MM"
-            s — current speed (knots when units=english; cm/s when metric)
-            d — current direction (degrees true, 0-359)
-            b — measurement bin index
-        We use ``units=english`` so ``s`` is in KNOTS — the standard unit
-        for reporting tidal currents.
-
-    Predicted currents (product="currents_predictions", one per station):
-        ...&product=currents_predictions&interval=MAX_SLACK
-            &units=english&time_zone=gmt&...
-        Response shape:
-            current_predictions.cp[] rows:
-                Time           — "YYYY-MM-DD HH:MM"
-                Type           — "flood" | "slack" | "ebb"
-                Velocity_Major — signed speed along the major axis (knots);
-                                 positive = flood, negative = ebb
-                meanFloodDir   — mean flood direction (deg true)
-                meanEbbDir     — mean ebb direction (deg true)
-                Bin / Depth    — measurement geometry
-        We map the prediction nearest to ``now`` to ``speed_kn`` =
-        abs(Velocity_Major) and ``direction_deg`` = meanFloodDir when flooding
-        / meanEbbDir when ebbing (0 speed at slack -> direction held from the
-        adjacent flood/ebb where available).
-
-API limits: no API key required. CO-OPS serves one station per data request;
-we impose ``_MAX_STATIONS`` and ``_STATION_REQUEST_DELAY`` to bound fan-out.
-
-**Snapshot semantics**: this tool returns the *single latest* observed value
-(or the prediction nearest ``now``) per station — a current-conditions
-snapshot, not a full time series. Callers wanting a time series of water
-level should use ``fetch_noaa_coops_tides`` (which embeds the full hourly
-series inline).
-
-**Cache**: ``dynamic-1h`` — observed currents update every ~6 minutes and
-predictions are recomputed; a 1-hour TTL keeps the snapshot fresh without
-hammering the upstream.
-
-**Output format** (FlatGeobuf — POINT vector):
-
-    Geometry: Point (station location, EPSG:4326)
-    Properties:
-        station_id     (str)   — CO-OPS current-station id (e.g. "s08010")
-        station_name   (str)   — station common name
-        lon            (float) — station longitude (EPSG:4326)
-        lat            (float) — station latitude (EPSG:4326)
-        product        (str)   — "currents" or "currents_predictions"
-        speed_kn       (float) — latest/predicted current speed (knots)
-        direction_deg  (float) — current set direction (degrees true 0-359)
-        datetime       (str)   — ISO-8601 UTC of the observation/prediction
-        bin            (int)   — measurement bin index (observed; -1 if N/A)
-        flow_state     (str)   — "flood"/"ebb"/"slack" (predictions) or "" (obs)
-
-``supports_global_query=False`` — CO-OPS currents is a US/territory network
-(~88 realtime stations). A bbox is required.
-
-FR-AS-11 typed-error surface: ``COOPSCurrentsError`` (base, retryable=True),
-``COOPSCurrentsInputError`` (bad bbox / product, retryable=False),
-``COOPSCurrentsUpstreamError`` (HTTP/network failure, retryable=True),
-``COOPSCurrentsEmptyError`` (no current stations in bbox / no data,
-retryable=False).
 """
 
 from __future__ import annotations
@@ -788,12 +700,12 @@ def fetch_noaa_coops_currents(
         for predictions, "" for observed). ``layer_type="vector"``,
         ``role="primary"``, ``units="kn"``.
 
-    **Cross-tool dependencies (FR-TA-3):**
+    **Cross-tool dependencies:**
         - Complements: ``fetch_noaa_coops_tides`` (water level at the same
           inlets), ``fetch_gtsm_tide_surge`` (global tide+surge).
         - Feeds INTO: ``publish_layer`` (map display of current vectors).
 
-    **Error types (FR-AS-11):**
+    **Error types:**
         - ``COOPSCurrentsInputError``: bad bbox / product (retryable=False).
         - ``COOPSCurrentsUpstreamError``: HTTP/network failure (retryable=True).
         - ``COOPSCurrentsEmptyError``: no current stations in bbox or none

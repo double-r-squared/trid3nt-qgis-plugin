@@ -583,15 +583,13 @@ def compute_model_residuals(
     (pcodes 72019/61055, ft below land surface -- NOT an elevation) and
     ELEVATION-referenced water level (pcodes 72150/62610/62611, ft relative
     to NAVD88/NGVD29 -- directly analogous to a MODFLOW head). A depth-to-
-    water reading compared against a head-ELEVATION raster is NOT a valid
-    residual without first converting (elevation = land-surface elevation
-    minus depth-to-water); this tool detects which family the observations
-    belong to (from the ``parameter_code`` USGS carries) and says so
-    explicitly. When both families appear in one fetch, it filters to the
-    elevation-referenced subset only and notes the drop. Even when semantics
-    cannot be confirmed (a generic, non-USGS observations layer), the result
-    is still useful for RELATIVE spatial-bias reading -- the warning says
-    that too.
+    water reading vs. a head-ELEVATION raster is NOT a valid residual
+    without converting first (elevation = land-surface elevation minus
+    depth-to-water); this tool detects which family the observations belong
+    to (from the USGS ``parameter_code``) and says so explicitly, filtering
+    to the elevation-referenced subset when both appear. A generic
+    non-USGS layer still yields useful RELATIVE spatial-bias reading; the
+    warning notes that too.
 
     **Parameters:**
     - ``model_layer_uri``: the MODEL raster to evaluate -- a layer handle
