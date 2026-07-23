@@ -439,7 +439,7 @@ def _netcdf_to_cog_bytes(
     - Latitudes can be ascending or descending depending on forcing.
     - Longitudes can be -180..180 or 0..360 depending on version.
 
-    Geographic-correctness gate (job-0086): we clip after normalizing
+    Geographic-correctness gate: we clip after normalizing
     longitude to -180..180 and sorting latitude ascending.
 
     Raises:

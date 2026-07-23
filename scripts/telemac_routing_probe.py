@@ -66,7 +66,7 @@ from trid3nt_server.adapter import (  # noqa: E402
 from trid3nt_server.lessons import lessons_appendix, lessons_enabled  # noqa: E402
 from trid3nt_server.openai_adapter import stream_openai, FunctionCallEvent  # noqa: E402
 from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.tools.discovery import discover_dataset as _dd  # noqa: E402
+from trid3nt_server.tools.discovery import search_tools as _dd  # noqa: E402
 from trid3nt_server.tools.discovery.tool_retrieval import retrieve_visible_tools  # noqa: E402
 
 RETRIEVAL_K = int(os.environ.get("TRID3NT_TOOL_RETRIEVAL_K", "8"))

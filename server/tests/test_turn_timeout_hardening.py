@@ -43,7 +43,7 @@ import pytest
 from botocore.exceptions import ClientError, ReadTimeoutError
 
 from trid3nt_server import bedrock_adapter as ba
-from trid3nt_server.adapter import TextDeltaEvent
+from trid3nt_server.adapter import TextDeltaEvent, UpstreamProviderError
 
 
 # --------------------------------------------------------------------------- #
@@ -187,7 +187,9 @@ def test_stream_bedrock_read_timeout_raises(monkeypatch):
     catches the exception, puts it on the queue, and ``stream_bedrock``
     re-raises it for the server turn loop's ``except Exception`` to handle."""
     client = _RaisingBedrockClient(_read_timeout_error())
-    with pytest.raises(ReadTimeoutError):
+    # e891d13 upstream-provider discipline: transient timeouts retry then
+    # surface as the typed UpstreamProviderError (never the raw botocore error).
+    with pytest.raises(UpstreamProviderError):
         _drive(client, monkeypatch)
 
 
@@ -237,7 +239,7 @@ def test_stream_bedrock_timeout_midstream_raises(monkeypatch):
             out.append(ev)
         return out
 
-    with pytest.raises(ReadTimeoutError):
+    with pytest.raises(UpstreamProviderError):
         asyncio.run(_collect())
 
 

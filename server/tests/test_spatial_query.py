@@ -144,11 +144,17 @@ class TestRegistration:
         ):
             assert name not in TOOL_REGISTRY, f"{name} should be folded away"
 
-    def test_registry_count_is_191(self):
-        """192 (pre-fold plain-import surface) - 3 folded + 1 spatial_query."""
+    def test_registry_core_membership_is_order_robust(self):
+        """Order-robust replacement for the brittle count pin: other test files
+        import workflow modules that grow the module-global registry (191 -> 195
+        in full-suite order), so assert MEMBERSHIP not cardinality."""
         from trid3nt_server.tools import TOOL_REGISTRY
+        assert "spatial_query" in TOOL_REGISTRY
+        for retired in ("summarize_layer_statistics", "count_features_above_threshold",
+                        "aggregate_property_within_zone"):
+            assert retired not in TOOL_REGISTRY
+        assert len(TOOL_REGISTRY) >= 191
 
-        assert len(TOOL_REGISTRY) == 191
 
     def test_primary_category(self):
         from trid3nt_server.categories import PRIMARY_CATEGORY
