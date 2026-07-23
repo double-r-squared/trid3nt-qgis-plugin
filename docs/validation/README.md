@@ -12,4 +12,6 @@ Files:
 - responsibility-cut.md - the central design principle: which checks are
   machine-enforced, machine-assisted, or human-only
 - roadmap-proposal.md - a PROPOSED build order (A-D). Not approved.
+- agentic-loop.md - the research/plan/execute/review/edit loop mapped to
+  simulations; context isolation as the review principle
 - open-questions.md - what must be answered before anything is built
