@@ -22,3 +22,4 @@ lands; never rewrite history - supersede with a new note that links back.
 - [0016 - server uses the src/ layout](0016-src-layout.md)
 - [0018 - auto and ask modes (accepted, picker to implement)](0018-auto-ask-modes.md)
 - [0019 - search wins at scale; enumerate only what's small and hot](0019-on-demand-capability-search.md)
+- [0020 - remote access is the same single user](0020-remote-single-user.md)
