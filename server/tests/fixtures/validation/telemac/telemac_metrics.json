@@ -1,0 +1,29 @@
+{
+  "status": "error",
+  "correct_end": false,
+  "run_id": "telemac-proof-1784070286",
+  "result_slf": "r2d_river.slf",
+  "geometry_slf": "river.slf",
+  "cli": "river.cli",
+  "cas": "t2d_river.cas",
+  "reach_name": "snake_river_twin_falls_proof",
+  "seed_comid": 24491448,
+  "n_flowlines": 1,
+  "utm_epsg": 32611,
+  "centerline_length_m": 5172.8,
+  "npoin": 1711,
+  "nelem": 2786,
+  "nptfr": 634,
+  "n_inflow_nodes": 5,
+  "n_outflow_nodes": 5,
+  "lb_order": [
+    "outflow",
+    "inflow"
+  ],
+  "enforced_slope": 0.006,
+  "bed_drop_m": 29.977473954770094,
+  "reach_len_m": 4996.245659128349,
+  "wall_s": 13.2,
+  "error": "TELEMAC did not reach CORRECT END OF RUN",
+  "listing_tail": "Running your simulation(s) :\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n\n\nIn /data/t2d_river.cas_2026-07-14-23h05min01s:\nmpirun --use-hwthread-cpus -np 1 /data/t2d_river.cas_2026-07-14-23h05min01s/out_telemac2d\n\n\nprterun has detected an attempt to run as root.\n\nRunning as root is *strongly* discouraged as any mistake (e.g., in\ndefining TMPDIR) or bug can result in catastrophic damage to the OS\nfile system, leaving your system in an unusable state.\n\nWe strongly suggest that you run prterun as a non-root user.\n\nYou can override this protection by adding the --allow-run-as-root\noption to your command line.  However, we reiterate our strong advice\nagainst doing so - please do so at your own risk.\n--------------------------------------------------------------------------\n\nTraceback (most recent call last):\n  File \"/opt/conda/opentelemac/scripts/python3/telemac2d.py\", line 9, in <module>\n    sys.exit(main('telemac2d'))\n             ^^^^^^^^^^^^^^^^^\n  File \"/opt/conda/opentelemac/scripts/python3/runcode.py\", line 287, in main\n    run_study(cas_file, code_name, options)\n  File \"/opt/conda/opentelemac/scripts/python3/execution/run_cas.py\", line 170, in run_study\n    run_local_cas(my_study, options)\n  File \"/opt/conda/opentelemac/scripts/python3/execution/run_cas.py\", line 66, in run_local_cas\n    my_study.run(options)\n  File \"/opt/conda/opentelemac/scripts/python3/execution/study.py\", line 655, in run\n    self.run_local()\n  File \"/opt/conda/opentelemac/scripts/python3/execution/study.py\", line 475, in run_local\n    run_code(self.run_cmd, self.sortie_file)\n  File \"/opt/conda/opentelemac/scripts/python3/execution/run.py\", line 180, in run_code\n    raise TelemacException(f'Failed to run {exe}\\n')\nutils.exceptions.TelemacException: Failed to run mpirun --use-hwthread-cpus -np 1 /data/t2d_river.cas_2026-07-14-23h05min01s/out_telemac2d\n"
+}

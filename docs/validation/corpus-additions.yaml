@@ -1,0 +1,118 @@
+# corpus-additions.yaml
+# Proposed tool_query_corpus.yaml entries for the 9-tool V&V wave (ADR 0021,
+# docs/validation/build-contract.md). tool_query_corpus.yaml itself carries
+# uncommitted user WIP and is off-limits to every build/integration agent, so
+# these entries are staged HERE for NATE to land by hand-merging into that
+# file (same key: list-of-query-strings format as tool_query_corpus.yaml).
+#
+# The retrieval acceptance check (standing rule: every new tool needs a
+# model-free retrieve_visible_tools(prompt, None, 8) check before acceptance)
+# runs ONLY once these entries are merged into the real corpus file -- it
+# reads from tool_query_corpus.yaml, not from this staging file. Until then,
+# treat retrieval visibility for these 9 tools as UNVERIFIED (see
+# build-report.md open issues).
+#
+# Source: lane structured reports (lanes A/B/C/D), collected verbatim by the
+# integration agent. No lane touched tool_query_corpus.yaml directly.
+
+# ---------------------------------------------------------------------------
+# Lane A
+# ---------------------------------------------------------------------------
+
+read_run_diagnostics:
+  - "did my flood simulation actually converge or is the result garbage"
+  - "check the mass balance of the last SFINCS run"
+  - "is this MODFLOW run healthy, what is the volume budget percent discrepancy"
+  - "show the SWMM continuity error and flow instability for my run"
+  - "was mass conserved in the GeoClaw tsunami run"
+  - "did the TELEMAC run reach correct end of run"
+  - "read the engine diagnostics for run 01KWRSECZGJEYBD44X6T0GRTT9"
+  - "how healthy is this simulation result before I trust it downstream"
+  - "what is the numerical stability and continuity of my hydraulic model run"
+  - "did the groundwater model have any dry cells or nonconverged steps"
+
+# ---------------------------------------------------------------------------
+# Lane B
+# ---------------------------------------------------------------------------
+
+compute_skill_metrics:
+  - "how well does this simulated streamflow match the observed gauge"
+  - "compute NSE and KGE for this model run"
+  - "score the model fit against observations with PBIAS and RSR"
+  - "grade the calibration quality of this SWMM hydrograph"
+  - "what is the peak flow error and timing error for this simulation"
+  - "scaled RMS error for the groundwater head calibration"
+  - "is this model result satisfactory or unsatisfactory per Moriasi criteria"
+  - "check skill metrics for the paired observed and simulated series"
+
+compute_flood_extent_skill:
+  - "does the modeled flood extent match the satellite observed extent"
+  - "compute hit rate false alarm ratio and CSI for this flood footprint"
+  - "compare the modeled wet dry raster against the benchmark flood polygon"
+  - "critical success index for the flood inundation extent"
+  - "validate flood extent against SAR imagery"
+  - "how accurate is the flood footprint compared to the FEMA flood extent"
+  - "confusion matrix of modeled versus observed flood extent"
+  - "score the flood extent skill of this SFINCS run"
+
+# ---------------------------------------------------------------------------
+# Lane C
+# ---------------------------------------------------------------------------
+
+extract_model_at_observations:
+  - "pair my modeled flood depth against the surveyed high water marks"
+  - "sample the model result at the observation points before computing skill"
+  - "align observed gauge readings with the simulated hydrograph"
+  - "build the observed vs simulated paired table for validation"
+  - "extract simulated values at each high water mark"
+  - "match model output to observation locations and reconcile the vertical datum"
+
+fetch_high_water_marks:
+  - "get the USGS high water marks for Hurricane Michael near Panama City"
+  - "surveyed flood peak elevations for this area"
+  - "high water marks from the USGS flood event data portal"
+  - "observed peak stage marks to validate my flood model"
+  - "STN high water marks for Hurricane Harvey in Houston"
+  - "where were the surveyed flood high-water marks and how good are they"
+
+fetch_flood_extent_observation:
+  - "satellite observed flood extent for this area"
+  - "where was actually flooded according to satellite"
+  - "observed inundation footprint to compare against my model"
+  - "MODIS flood map for the recent flooding"
+  - "benchmark flood extent raster to compute CSI against the model"
+  - "get the observed flood extent so I can score my simulation"
+
+# ---------------------------------------------------------------------------
+# Lane D
+# ---------------------------------------------------------------------------
+
+set_sfincs_parameters:
+  - "increase the overland Manning's roughness on this SFINCS model by 50% before rerunning"
+  - "set the land roughness coefficient to 0.08 in the flood model"
+  - "turn on 5 mm per hour infiltration for this SFINCS deck"
+  - "calibrate the SFINCS model by raising its infiltration rate"
+  - "lower the sea roughness value for the coastal flood setup"
+  - "adjust Manning's n on the staged SFINCS model before running it again"
+  - "scale up the infiltration losses in this flood scenario deck"
+  - "make the land surface rougher in this SFINCS run before I resolve it"
+
+set_swmm_parameters:
+  - "raise percent impervious to 60% on these subcatchments"
+  - "halve the Horton max infiltration rate for the whole SWMM model"
+  - "set the pervious Manning's n to 0.15 in this stormwater model"
+  - "increase imperviousness on this subcatchment before rerunning"
+  - "calibrate the SWMM infiltration decay constant"
+  - "adjust roughness coefficients on the staged SWMM deck"
+  - "scale down infiltration capacity for this urban drainage model"
+  - "make this catchment less permeable before the next SWMM run"
+
+set_modflow_parameters:
+  - "double the hydraulic conductivity in layer 2 of this groundwater model"
+  - "set specific yield to 0.15 site-wide in the MODFLOW model"
+  - "reduce recharge by 30% before rerunning MODFLOW"
+  - "calibrate the K field on this staged groundwater model"
+  - "increase the specific storage in the aquifer model"
+  - "adjust vertical hydraulic conductivity for this MODFLOW deck"
+  - "lower the recharge rate applied to the groundwater simulation"
+  - "make the second layer more permeable in this MODFLOW run"

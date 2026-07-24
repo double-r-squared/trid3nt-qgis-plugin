@@ -238,6 +238,9 @@ from .fetchers.weather import fetch_storm_tracks  # noqa: E402,F401
 
 # -- fetchers/hydrology --
 from .fetchers.hydrology import fetch_cama_flood_discharge  # noqa: E402,F401
+# V&V wave (ADR 0021, lane C): observed flood-validation data fetchers.
+from .fetchers.hydrology import fetch_flood_extent_observation  # noqa: E402,F401
+from .fetchers.hydrology import fetch_high_water_marks  # noqa: E402,F401
 from .fetchers.hydrology import fetch_jrc_global_surface_water  # noqa: E402,F401
 from .fetchers.hydrology import fetch_nhd_waterbodies  # noqa: E402,F401
 from .fetchers.hydrology import fetch_nhdplus_nldi_navigate  # noqa: E402,F401
@@ -352,6 +355,8 @@ from .processing import compute_contours  # noqa: E402,F401
 from .processing import compute_cross_section  # noqa: E402,F401
 from .processing import compute_exposure_summary  # noqa: E402,F401
 from .processing import compute_flood_depth_damage  # noqa: E402,F401
+# V&V wave (ADR 0021, lane B): flood-extent skill (raster/vector confusion).
+from .processing import compute_flood_extent_skill  # noqa: E402,F401
 from .processing import compute_hillshade  # noqa: E402,F401
 from .processing import compute_home_range_kde  # noqa: E402,F401
 from .processing import compute_idf_curve  # noqa: E402,F401
@@ -362,6 +367,8 @@ from .processing import compute_movement_trajectory  # noqa: E402,F401
 from .processing import compute_ndvi  # noqa: E402,F401
 from .processing import compute_overtopping  # noqa: E402,F401
 from .processing import compute_sediment_yield  # noqa: E402,F401
+# V&V wave (ADR 0021, lane B): model-fit skill-metrics wrap (spotpy).
+from .processing import compute_skill_metrics  # noqa: E402,F401
 from .processing import compute_slope  # noqa: E402,F401
 from .processing import compute_terrain_profile  # noqa: E402,F401
 from .processing import compute_urban_heat_island  # noqa: E402,F401
@@ -372,6 +379,8 @@ from .processing import delineate_watershed  # noqa: E402,F401
 from .processing import digitize_water_body  # noqa: E402,F401
 from .processing import enhance_satellite_image  # noqa: E402,F401
 from .processing import extract_landcover_class  # noqa: E402,F401
+# V&V wave (ADR 0021, lane C): model-vs-observation pairing primitive.
+from .processing import extract_model_at_observations  # noqa: E402,F401
 from .processing import extract_stream_network  # noqa: E402,F401
 from .processing import extract_timeseries_at_point  # noqa: E402,F401
 from .processing import fill_gaps  # noqa: E402,F401
@@ -387,6 +396,10 @@ from .processing import query_point_hazard  # noqa: E402,F401
 from .processing import spatial_query  # noqa: E402,F401
 
 # -- simulation (engine bridges, model_* engines, solver seam) --
+# V&V wave (ADR 0021, lane A): per-engine run-diagnostics dispatcher (folds
+# the 5 per-engine readers into one registered tool; the internal per-engine
+# parser modules under .simulation.diagnostics are NOT registered).
+from .simulation.diagnostics import read_run_diagnostics  # noqa: E402,F401
 from .simulation import model_debris_flow  # noqa: E402,F401
 from .simulation import model_fire_spread  # noqa: E402,F401
 from .simulation import postprocess_pelicun  # noqa: E402,F401
@@ -399,6 +412,11 @@ from .simulation import run_river_seepage_tool  # noqa: E402,F401
 from .simulation import run_swan_tool  # noqa: E402,F401
 from .simulation import run_swmm_tool  # noqa: E402,F401
 from .simulation import run_telemac_tool  # noqa: E402,F401
+# V&V wave (ADR 0021, lane D): derive-not-mutate parameter setters (write a
+# child deck/setup, leave the parent immutable).
+from .simulation import set_modflow_parameters  # noqa: E402,F401
+from .simulation import set_sfincs_parameters  # noqa: E402,F401
+from .simulation import set_swmm_parameters  # noqa: E402,F401
 from .simulation import solver  # noqa: E402,F401
 
 # -- discovery (dataset/tool retrieval) --

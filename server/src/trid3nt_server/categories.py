@@ -343,6 +343,16 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # TELEMAC hydrodynamic/contaminant-transport dye-spill engine dispatcher --
     # filed alongside the other run_* solver/engine composers.
     "run_telemac": "hazard_modeling",
+    # V&V wave (ADR 0021, lane A): the per-engine run-diagnostics dispatcher
+    # operates directly ON a run (mass balance / convergence / instability),
+    # so it sits beside run_solver / wait_for_completion.
+    "read_run_diagnostics": "hazard_modeling",
+    # V&V wave (ADR 0021, lane D): derive-not-mutate parameter setters
+    # operate directly ON a staged engine deck/setup -- filed beside the
+    # solver seam they feed.
+    "set_sfincs_parameters": "hazard_modeling",
+    "set_swmm_parameters": "hazard_modeling",
+    "set_modflow_parameters": "hazard_modeling",
     # ---- 2. weather_atmosphere --------------------------------------------
     "fetch_nws_alerts_conus": "weather_atmosphere",
     "fetch_nws_event": "weather_atmosphere",
@@ -383,6 +393,10 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "lookup_precip_return_period": "hydrology",
     "fetch_gcn250_curve_numbers": "hydrology",
     "fetch_statsgo_soils": "hydrology",
+    # V&V wave (ADR 0021, lane C): observed flood-validation data, siblings
+    # of fetch_usgs_nwis_gauges / fetch_sentinel1_sar in the hydrology lane.
+    "fetch_high_water_marks": "hydrology",
+    "fetch_flood_extent_observation": "hydrology",
     # RUSLE hillslope water-erosion composer (A = R*K*LS*C*P): PRIMARY
     # hydrology (rainfall-driven soil loss; sits beside its STATSGO / curve-
     # number inputs), cross-listed to land_cover_development (C-factor is
@@ -508,6 +522,14 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # listed to hazard_modeling below (its primary use is MODFLOW head
     # calibration against observed wells).
     "compute_model_residuals": "geographic_primitives",
+    # V&V wave (ADR 0021, lanes B + C): model-vs-observation skill/pairing
+    # analysis primitives, siblings of compute_model_residuals above (same
+    # "analysis primitive over model+obs" lane). Cross-listed to
+    # hazard_modeling below (their headline use validates a hazard-engine
+    # run).
+    "compute_skill_metrics": "geographic_primitives",
+    "compute_flood_extent_skill": "geographic_primitives",
+    "extract_model_at_observations": "geographic_primitives",
     # NATE 2026-06-17: fast layer-extent + fit-the-map tool. Replaces the
     # sandbox bbox-math anti-pattern and drives the zoom-to map-command.
     "compute_layer_bounds": "geographic_primitives",
@@ -783,6 +805,17 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # calibration against observed wells, so it materially belongs to the
     # hazard-modeling lane too.
     "compute_model_residuals": ("hazard_modeling",),
+    # V&V wave (ADR 0021, section 4.1): PRIMARY geographic_primitives
+    # (analysis primitives over model+obs); their headline use validates a
+    # hazard-engine run, so they materially belong to hazard_modeling too.
+    "compute_skill_metrics": ("hazard_modeling",),
+    "compute_flood_extent_skill": ("hazard_modeling",),
+    "extract_model_at_observations": ("hazard_modeling",),
+    # V&V wave (ADR 0021, section 4.1): PRIMARY hydrology (observed flood
+    # data fetchers); materially belong to hazard_modeling too (the
+    # validation input for a flood-engine run).
+    "fetch_high_water_marks": ("hazard_modeling",),
+    "fetch_flood_extent_observation": ("hazard_modeling",),
 }
 
 # ---------------------------------------------------------------------------

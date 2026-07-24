@@ -1,0 +1,31 @@
+{
+  "run_id": "01KXHE0B8V025C9DRZ0B180HHT",
+  "status": "error",
+  "exit_code": 1,
+  "correct_end": false,
+  "result_slf": "r2d_river.slf",
+  "npoin": 1711,
+  "nelem": 2786,
+  "nptfr": 634,
+  "reach_name": "snake_river_twin_falls_proof",
+  "seed_comid": 24491448,
+  "utm_epsg": 32611,
+  "centerline_length_m": 5172.8,
+  "lb_order": [
+    "outflow",
+    "inflow"
+  ],
+  "wall_s": 13.2,
+  "telemac_stdout_uri": "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180HHT/telemac.stdout",
+  "telemac_stderr_uri": "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180HHT/telemac.stderr",
+  "output_uris": [
+    "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180HHT/full_listing.log",
+    "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180HHT/river.cli",
+    "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180HHT/river.slf",
+    "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180HHT/t2d_river.cas",
+    "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180HHT/telemac_metrics.json"
+  ],
+  "started_at": "2026-07-14T23:04:46Z",
+  "finished_at": "2026-07-14T23:05:32Z",
+  "error": "TELEMAC did not reach CORRECT END OF RUN"
+}

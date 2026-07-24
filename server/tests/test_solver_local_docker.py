@@ -393,11 +393,15 @@ def test_local_manifest_dest_traversal_rejected(
 # 3+4. Supervisor completion.json (entrypoint schema) + wait_for_completion
 # --------------------------------------------------------------------------- #
 
-#: The EXACT key set services/workers/sfincs/entrypoint.py writes.
+#: The EXACT key set the local supervisor writes. Mirrors
+#: services/workers/sfincs/entrypoint.py PLUS the ``solver`` engine-identity
+#: field the V&V wave added (ADR 0021) so read_run_diagnostics can recover the
+#: engine directly instead of inferring it from the stdout field name.
 _ENTRYPOINT_COMPLETION_KEYS = {
     "run_id",
     "status",
     "exit_code",
+    "solver",
     "sfincs_stdout_uri",
     "sfincs_stderr_uri",
     "output_uris",

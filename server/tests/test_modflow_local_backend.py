@@ -385,6 +385,7 @@ _MODFLOW_COMPLETION_KEYS = {
     "run_id",
     "status",
     "exit_code",
+    "solver",  # V&V wave (ADR 0021): engine-identity field for read_run_diagnostics
     "converged",
     "model_crs",
     "mf6_stdout_uri",

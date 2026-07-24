@@ -207,6 +207,12 @@ dependencies = [
     # INSTALL and are cached under ~/.duckdb/extensions afterwards; a cold
     # offline box degrades with a typed EXTENSION_UNAVAILABLE error.
     "duckdb>=1",
+    # V&V wave (ADR 0021) group B: spotpy.objectivefunctions is the pinned
+    # source of NSE/KGE/PBIAS/RSR/RMSE/R2 for compute_skill_metrics -- no
+    # bespoke reimplementation of any metric spotpy already provides. Pure
+    # numpy+scipy dependency (no native/compiled extensions), so it installs
+    # cleanly on the offline box.
+    "spotpy>=1.6,<2",
     # Consumed verbatim from contracts/ in this repo (editable install).
     "trid3nt-contracts>=0.1,<0.2",
 ]

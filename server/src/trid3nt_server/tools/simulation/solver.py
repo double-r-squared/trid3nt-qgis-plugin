@@ -885,6 +885,7 @@ def _write_local_completion(
     stdout_uri_field: str = "sfincs_stdout_uri",
     stderr_uri_field: str = "sfincs_stderr_uri",
     extra: dict[str, Any] | None = None,
+    solver: str | None = None,
 ) -> None:
     """Write ``s3://<runs_bucket>/<run_id>/completion.json`` — EXACT
     worker-entrypoint schema (the ``wait_for_completion`` terminal signal).
@@ -894,11 +895,20 @@ def _write_local_completion(
     ``mf6_stderr_uri`` / ``converged`` / ``model_crs`` exactly like
     ``services/workers/modflow/entrypoint.py``; the SFINCS defaults are
     byte-identical to job-0291.
+
+    V&V wave (ADR 0021): ``solver`` is the lowercase engine identifier
+    (``run.spec.solver``) recorded so ``read_run_diagnostics`` can resolve the
+    engine directly instead of inferring it from the stdout field name. It is
+    inserted immediately after ``exit_code`` (before the spec's ``extra`` fold;
+    no engine spec's ``extra`` carries a ``solver`` key, so it is never
+    clobbered) and is forward-only: legacy completion.json objects lack it, so
+    the reader falls back to the stdout-field-name inference.
     """
     payload = {
         "run_id": run_id,
         "status": status,
         "exit_code": exit_code,
+        "solver": solver,
         **(extra or {}),
         stdout_uri_field: stdout_uri,
         stderr_uri_field: stderr_uri,
@@ -1031,6 +1041,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
             stdout_uri_field=run.spec.stdout_uri_field,
             stderr_uri_field=run.spec.stderr_uri_field,
             extra=completion_extra,
+            solver=run.spec.solver,
         )
     except Exception:  # noqa: BLE001 — terminal-signal write failed; log loudly
         logger.exception(

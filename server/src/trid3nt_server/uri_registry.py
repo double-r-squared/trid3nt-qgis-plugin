@@ -147,6 +147,15 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
         # other *_uri params above.
         "model_layer_uri",
         "observations_layer_uri",
+        # V&V wave (ADR 0021, integration pass): lane B's compute_skill_metrics
+        # (paired obs/sim table, a lane-C extract_model_at_observations output)
+        # and compute_flood_extent_skill (modeled + benchmark wet/dry extent)
+        # take handle/URI params like the ones above; NOTE run_handle
+        # (read_run_diagnostics) is deliberately excluded per build-contract.md
+        # section 2.1 -- it self-resolves and must not be mangled here.
+        "paired_table_uri",
+        "model_extent_uri",
+        "benchmark_extent_uri",
     }
 )
 

@@ -1,0 +1,96 @@
+  **************************        Volume         Depth
+  Runoff Quantity Continuity     hectare-m            mm
+  **************************     ---------       -------
+  Total Precipitation ......         0.305       120.000
+  Evaporation Loss .........         0.000         0.000
+  Infiltration Loss ........         0.000         0.000
+  Surface Runoff ...........         0.305       120.145
+  Final Storage ............         0.000         0.018
+  Continuity Error (%) .....        -0.135
+  
+  
+  **************************        Volume        Volume
+  Flow Routing Continuity        hectare-m      10^6 ltr
+  **************************     ---------     ---------
+  Dry Weather Inflow .......         0.000         0.000
+  Wet Weather Inflow .......         0.305         3.052
+  Groundwater Inflow .......         0.000         0.000
+  RDII Inflow ..............         0.000         0.000
+  External Inflow ..........         0.000         0.000
+  External Outflow .........         0.250         2.497
+  Flooding Loss ............         0.000         0.000
+  Evaporation Loss .........         0.000         0.000
+  Exfiltration Loss ........         0.000         0.000
+  Initial Stored Volume ....         0.000         0.001
+  Final Stored Volume ......         0.056         0.557
+  Continuity Error (%) .....        -0.018
+  
+  
+  *************************
+  Highest Continuity Errors
+  *************************
+  Node S_8_10 (6.99%)
+  Node S_10_8 (6.92%)
+  Node S_8_9 (6.50%)
+  Node S_9_8 (5.89%)
+  Node S_9_10 (4.93%)
+  
+  
+  ***************************
+  Time-Step Critical Elements
+  ***************************
+  None
+  
+  
+  ********************************
+  Highest Flow Instability Indexes
+  ********************************
+  Link L_8_10__8_9 (3)
+  Link L_8_9__9_9 (3)
+  Link L_10_8__9_8 (3)
+  Link L_9_8__9_9 (2)
+  Link L_8_10__9_10 (1)
+  
+  
+  *********************************
+  Most Frequent Nonconverging Nodes
+  *********************************
+  Convergence obtained at all time steps.
+  
+  
+  *************************
+  Routing Time Step Summary
+  *************************
+  Minimum Time Step           :     1.50 sec
+  Average Time Step           :     2.00 sec
+  Maximum Time Step           :     2.00 sec
+  % of Time in Steady State   :     0.00
+  Average Iterations per Step :     2.00
+  % of Steps Not Converging   :     0.00
+  Time Step Frequencies       :
+      2.000 -  1.516 sec      :    99.97 %
+      1.516 -  1.149 sec      :     0.03 %
+      1.149 -  0.871 sec      :     0.00 %
+      0.871 -  0.660 sec      :     0.00 %
+      0.660 -  0.500 sec      :     0.00 %
+  
+  
+  ************************
+
+
+  **********************
+  Node Surcharge Summary
+  **********************
+  
+  No nodes were surcharged.
+  
+  
+  *********************
+  Node Flooding Summary
+  *********************
+  
+  No nodes were flooded.
+  
+  
+  **********************
+  Storage Volume Summary

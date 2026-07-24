@@ -1,0 +1,17 @@
+{
+  "run_id": "01KY3KWGTXN7V2BDFS65JHQHKE",
+  "status": "ok",
+  "exit_code": 0,
+  "solver": "modflow",
+  "converged": true,
+  "model_crs": "EPSG:32613",
+  "mf6_stdout_uri": "s3://trid3nt-runs/01KY3KWGTXN7V2BDFS65JHQHKE/mf6.stdout",
+  "mf6_stderr_uri": "s3://trid3nt-runs/01KY3KWGTXN7V2BDFS65JHQHKE/mf6.stderr",
+  "output_uris": [
+    "s3://trid3nt-runs/01KY3KWGTXN7V2BDFS65JHQHKE/mfsim.lst",
+    "s3://trid3nt-runs/01KY3KWGTXN7V2BDFS65JHQHKE/gwf_model.lst"
+  ],
+  "started_at": "2026-07-20T03:57:00Z",
+  "finished_at": "2026-07-20T03:57:34Z",
+  "error": null
+}

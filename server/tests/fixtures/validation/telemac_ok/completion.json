@@ -1,0 +1,21 @@
+{
+  "run_id": "01KXHE0B8V025C9DRZ0B180OK0",
+  "status": "ok",
+  "exit_code": 0,
+  "solver": "telemac_river_dye",
+  "correct_end": true,
+  "result_slf": "r2d_river.slf",
+  "npoin": 1711,
+  "nelem": 2786,
+  "nptfr": 634,
+  "wall_s": 21.4,
+  "telemac_stdout_uri": "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180OK0/telemac.stdout",
+  "telemac_stderr_uri": "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180OK0/telemac.stderr",
+  "output_uris": [
+    "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180OK0/full_listing.log",
+    "s3://trid3nt-runs/01KXHE0B8V025C9DRZ0B180OK0/telemac_metrics.json"
+  ],
+  "started_at": "2026-07-15T00:00:00Z",
+  "finished_at": "2026-07-15T00:00:21Z",
+  "error": null
+}
