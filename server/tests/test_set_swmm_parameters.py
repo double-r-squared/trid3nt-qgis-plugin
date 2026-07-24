@@ -234,3 +234,31 @@ def test_manifest_written(parent_inp: Path, tmp_path: Path) -> None:
     assert manifest["engine"] == "swmm"
     assert manifest["parent_model"] == str(parent_inp)
     assert manifest["changes_applied"][0]["param"] == "imperviousness"
+
+
+def test_child_inp_solves_through_pyswmm(parent_inp: Path, tmp_path: Path) -> None:
+    """Solves-check (child deck must SOLVE, not merely round-trip through
+    swmm_api): the child ``.inp`` a global setter change produces runs to
+    completion under the real pyswmm engine, exactly like its parent. Guards
+    the group-D 'child deck must solve' regression class -- the sibling SFINCS
+    setter once shipped an unsolvable child deck (a mangled sfincs.inp CRS
+    line); this proves set_swmm_parameters does not have that defect class. The
+    ``swmm_api`` round-trip (read_inp_file -> write_file) is a faithful writer,
+    so a global imperviousness change preserves solvability. Fully offline
+    (pyswmm bundles the SWMM5 engine; zero network)."""
+    pytest.importorskip("pyswmm")
+    from pyswmm import Simulation
+
+    def _solves(inp_path: Path) -> None:
+        with Simulation(str(inp_path)) as sim:
+            for _ in sim:
+                pass
+
+    _solves(parent_inp)  # sanity: the parent is solvable to begin with
+    result = set_swmm_parameters(
+        parent_model_uri=str(parent_inp),
+        changes=[{"parameter": "imperviousness", "op": "set", "value": 55.0}],
+        _work_dir=str(tmp_path / "work"),
+    )
+    child_inp = Path(result["child_setup_uri"][len("file://"):]).parent / "model" / "model.inp"
+    _solves(child_inp)  # the real assertion: the child .inp solves under pyswmm

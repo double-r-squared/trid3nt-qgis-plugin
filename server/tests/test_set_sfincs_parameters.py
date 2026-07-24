@@ -286,3 +286,62 @@ def test_manifest_written(parent_deck: Path, tmp_path: Path) -> None:
     manifest = json.loads(manifest_path.read_text())
     assert manifest["engine"] == "sfincs"
     assert manifest["parent_model"] == str(parent_deck)
+
+
+def _parse_inp_config(inp_path: Path) -> dict[str, str]:
+    """Parse a sfincs.inp into a {config_key: raw_value_string} dict (SFINCS'
+    key column is whitespace-padded ``key = value``)."""
+    out: dict[str, str] = {}
+    for line in inp_path.read_text(encoding="utf-8").splitlines():
+        if "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        out[key.strip()] = val.strip()
+    return out
+
+
+def test_child_inp_epsg_bare_int_and_crs_survive(parent_deck: Path, tmp_path: Path) -> None:
+    """Regression (the child deck must SOLVE, not merely parse):
+    ``hydromt_sfincs.SfincsModel.write_config()`` used to rewrite the child
+    deck's native ``epsg`` from the bare integer SFINCS v2.3.3's Fortran reader
+    requires (``sfincs_input.f90`` line 837 list-directed integer read) into a
+    CRS *string* ("EPSG:3857") and DROP the separate ``crs = ...`` passthrough
+    line -- either regression makes EVERY child deck unsolvable ("Bad integer
+    for item 1 in list input", exit 2). The setter now restores the parent
+    deck's exact CRS lines after write_config. Assert (1) the child ``epsg``
+    line is a bare integer parseable as ``int`` (not a CRS string), (2) it
+    equals the parent's grid-CRS code (copy-on-write, unchanged), (3) the
+    ``crs`` line survives, and (4) the child's config-key SET matches the
+    parent's exactly -- a manning-only change touches the sfincs.man grid, not
+    any sfincs.inp config key, so no key is added or dropped (formatting-stable
+    copy-on-write)."""
+    result = set_sfincs_parameters(
+        parent_model_uri=str(parent_deck),
+        changes=[{"parameter": "manning_land", "op": "scale", "factor": 0.85}],
+        _work_dir=str(tmp_path / "work"),
+    )
+    child_inp = Path(result["child_setup_uri"][len("file://"):]).parent / "model" / "sfincs.inp"
+    parent_cfg = _parse_inp_config(parent_deck / "sfincs.inp")
+    child_cfg = _parse_inp_config(child_inp)
+
+    # (1) child epsg is a bare integer the SFINCS Fortran reader can parse.
+    assert "epsg" in child_cfg, "child sfincs.inp dropped the epsg line entirely"
+    assert not child_cfg["epsg"].upper().startswith("EPSG"), (
+        f"child epsg is a CRS string, not a bare int: {child_cfg['epsg']!r}"
+    )
+    int(child_cfg["epsg"])  # raises ValueError on a non-integer -> would be the bug
+    # (2) epsg matches the parent's grid CRS code (copy-on-write leaves it be).
+    assert child_cfg["epsg"] == parent_cfg["epsg"], (
+        f"child epsg {child_cfg['epsg']!r} != parent epsg {parent_cfg['epsg']!r}"
+    )
+    # (3) the crs passthrough line survives when the parent build deck had one.
+    assert "crs" in parent_cfg, "test precondition: build deck should carry a crs line"
+    assert child_cfg.get("crs") == parent_cfg["crs"], (
+        f"child crs {child_cfg.get('crs')!r} != parent crs {parent_cfg['crs']!r}"
+    )
+    # (4) no config key added/dropped by the manning-only setter run.
+    assert set(child_cfg) == set(parent_cfg), (
+        "child sfincs.inp config keys differ from parent: "
+        f"only-in-child={sorted(set(child_cfg) - set(parent_cfg))} "
+        f"only-in-parent={sorted(set(parent_cfg) - set(child_cfg))}"
+    )

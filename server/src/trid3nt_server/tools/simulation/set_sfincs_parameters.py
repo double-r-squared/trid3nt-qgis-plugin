@@ -15,6 +15,8 @@ ASCII hyphens only.
 from __future__ import annotations
 
 import logging
+import re
+from pathlib import Path
 from typing import Any
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -64,6 +66,89 @@ _METADATA = AtomicToolMetadata(
     source_class="param_setter",
     cacheable=False,
 )
+
+
+#: sfincs.inp config keys whose value/presence hydromt_sfincs.write_config()
+#: silently corrupts and which the copy-on-write setter therefore restores
+#: from the parent deck verbatim: the native ``epsg`` grid-CRS code (rewritten
+#: from the bare integer SFINCS' Fortran reader requires into a CRS string
+#: "EPSG:3857") and the separate ``crs`` passthrough line (dropped entirely).
+_SFINCS_CRS_CONFIG_KEYS = ("epsg", "crs")
+
+
+def _sfincs_inp_config_key(line: str) -> str:
+    """The config key of a ``key = value`` sfincs.inp line ("" for a blank or
+    no-``=`` line). SFINCS' key column is whitespace-padded, so strip it."""
+    return line.split("=", 1)[0].strip() if "=" in line else ""
+
+
+def _capture_parent_crs_lines(inp_path: Path) -> dict[str, str]:
+    """Snapshot the parent deck's ``epsg`` (normalized to the bare-integer form)
+    and verbatim ``crs`` lines from its sfincs.inp, keyed by config key, so they
+    can be restored after hydromt's ``write_config()`` mangles them (see
+    ``_restore_parent_crs_lines``). Normalizing ``epsg`` -- extracting the digit
+    run from either a bare integer ("32616") or a stray CRS string
+    ("EPSG:3857") -- makes the fix robust even if the parent was itself produced
+    by a pre-fix (buggy) setter run. Returns ``{}`` when the file is unreadable
+    (the setter's own read path will surface a real error later)."""
+    out: dict[str, str] = {}
+    try:
+        lines = inp_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        key = _sfincs_inp_config_key(line)
+        if key not in _SFINCS_CRS_CONFIG_KEYS:
+            continue
+        if key == "epsg":
+            m = re.search(r"\d+", line.split("=", 1)[1])
+            if m is not None:
+                left = line.split("=", 1)[0]
+                out["epsg"] = f"{left}= {m.group(0)}"
+        else:  # crs -- preserve the parent's line verbatim
+            out[key] = line
+    return out
+
+
+def _restore_parent_crs_lines(inp_path: Path, parent_crs_lines: dict[str, str]) -> None:
+    """Undo ``hydromt_sfincs.SfincsModel.write_config()``'s two CRS regressions
+    on the freshly written child sfincs.inp: it rewrites the native ``epsg``
+    line from the bare integer SFINCS v2.3.3's Fortran reader requires
+    (``sfincs_input.f90`` line 837 list-directed integer read) into a CRS
+    *string* ("EPSG:3857"), and DROPS the separate ``crs = ...`` passthrough
+    line -- either leaves the child deck UNSOLVABLE ("Bad integer for item 1 in
+    list input", exit code 2). Restore the parent deck's exact lines so the
+    child's sfincs.inp matches the ``build_sfincs_model`` deck-build format.
+    Copy-on-write invariant: the CRS is never an intended change of this setter,
+    so every OTHER line hydromt wrote is preserved verbatim -- only the ``epsg``
+    value is corrected in place (its column formatting kept) and the dropped
+    ``crs`` line re-inserted adjacent to ``epsg`` (SFINCS parses ``key = value``
+    lines order-independently)."""
+    if not parent_crs_lines:
+        return
+    try:
+        lines = inp_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+    out: list[str] = []
+    seen: set[str] = set()
+    for line in lines:
+        key = _sfincs_inp_config_key(line)
+        if key in parent_crs_lines:
+            out.append(parent_crs_lines[key])
+            seen.add(key)
+        else:
+            out.append(line)
+        # A ``crs`` line write_config() dropped is re-inserted right after the
+        # restored ``epsg`` line (deterministic position).
+        if key == "epsg" and "crs" in parent_crs_lines and "crs" not in seen:
+            out.append(parent_crs_lines["crs"])
+            seen.add("crs")
+    # Any captured CRS key write_config() emitted nowhere gets appended.
+    for key, text in parent_crs_lines.items():
+        if key not in seen:
+            out.append(text)
+    inp_path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
 def _land_sea_means(model: Any) -> tuple[float, float, float]:
@@ -180,6 +265,12 @@ def set_sfincs_parameters(
     child_root = work_dir / child_id
     child_model_dir = child_root / "model"
     stage_parent(parent_model_uri, child_model_dir, is_dir=True)
+    # Snapshot the parent deck's CRS config lines from the just-staged copy
+    # BEFORE hydromt overwrites sfincs.inp: write_config() mangles the native
+    # bare-integer ``epsg`` into a CRS string and drops the ``crs`` passthrough
+    # line, leaving the child unsolvable (restored after write; see
+    # _restore_parent_crs_lines).
+    _parent_crs_lines = _capture_parent_crs_lines(child_model_dir / "sfincs.inp")
 
     try:
         model = SfincsModel(root=str(child_model_dir), mode="r+")
@@ -245,6 +336,10 @@ def set_sfincs_parameters(
             model.setup_constant_infiltration(qinf=const)
         model.write_grid()
         model.write_config()
+        # Undo write_config()'s CRS regressions so the child sfincs.inp matches
+        # the build_sfincs_model deck-build format (bare-int epsg + crs line) and
+        # the child deck actually SOLVES (not merely parses).
+        _restore_parent_crs_lines(child_model_dir / "sfincs.inp", _parent_crs_lines)
     except Exception as exc:  # noqa: BLE001
         raise SetterUpstreamError(f"SFINCS deck write failed at {child_model_dir}: {exc}") from exc
 
