@@ -417,6 +417,7 @@ from .simulation import run_telemac_tool  # noqa: E402,F401
 from .simulation import set_modflow_parameters  # noqa: E402,F401
 from .simulation import set_sfincs_parameters  # noqa: E402,F401
 from .simulation import set_swmm_parameters  # noqa: E402,F401
+from .simulation import set_telemac_parameters  # noqa: E402,F401
 from .simulation import solver  # noqa: E402,F401
 
 # -- discovery (dataset/tool retrieval) --

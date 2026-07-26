@@ -1,0 +1,83 @@
+{
+  "case": "malpasset-dam-break-1959",
+  "description": "Malpasset dam-break (Reyran valley, Var, France; 2 December 1959). Official TELEMAC-2D validation case. Observation set = 17 police high-water-mark survey points, 3 electrical-transformer wave-arrival (shutdown) times, and 9 downstream gauges (points 6-14) of the 1:400 LNH physical scale model.",
+  "coordinate_reference_system": {
+    "type": "local_metric_planar",
+    "note": "Local coordinate system of the Malpasset study map, in metres. THIS IS THE SAME FRAME as the bundled TELEMAC mesh geo_malpasset-*.slf and the CADAM topography. Cross-check: the dam wall is a straight line between (4701,4143) and (4655,4392) in this frame (Biscarini et al. 2016, following EDF), which matches the ANUGA mesh dam nodes (4701.18,4143.41)-(4655.5,4392.10). Domain extent approx x in [0, 17300] m, y in [0, 8400] m.",
+    "not_a_standard_epsg": true,
+    "georef_hint": "Dam site is approx 43.5072 N, 6.7539 E (UTM zone 32N approx E=318435, N=4819592) per the anuga_malpasset georeferencing; this is an approximate anchor, NOT a published transform of the local frame."
+  },
+  "vertical_reference": {
+    "quantity": "water_surface_elevation",
+    "units": "m",
+    "datum_note": "Water levels are maximum free-surface ELEVATIONS in metres above the local vertical datum (Nivellement General de la France, NGF), not depths; values decrease monotonically down-valley (P1=79.15 near dam -> P17=14.0 near sea). Reservoir initial free-surface commonly cited at 100 m NGF (TUFLOW 2019). Sources do not restate the datum explicitly for every table; NGF is the standard French datum for this dataset."
+  },
+  "provenance": {
+    "numeric_source": "Biscarini, C.; Di Francesco, S.; Ridolfi, E.; Manciola, P. (2016). On the Simulation of Floods in a Narrow Bending Valley: The Malpasset Dam Break Case Study. Water 8(11):545. doi:10.3390/w8110545. Tables 2, 3 and 4 (open access; fetched via Wayback Machine snapshot 2026-01-13 of the MDPI HTML).",
+    "primary_data_origin": "The paper states the observed and laboratory data were kindly provided by Jean-Michel Hervouet, and cites for the gauge/point data: Morris (2000) CADAM Report SR571 (HR Wallingford) and Goutal (1999) 'The Malpasset dam failure - an overview and test case definition', 4th CADAM Meeting, Zaragoza. These CADAM/Hervouet sources are the primary origin; the MDPI paper is the open-access reproduction transcribed here.",
+    "transcription_chain": "primary (Goutal 1999 CADAM / Morris 2000 CADAM SR571 / Hervouet & Petitjean 1999 JHR 37:777-788, data via Hervouet) -> reproduced in Biscarini et al. 2016 Water 8:545 (open) -> transcribed verbatim into this file. Paywalled primaries (JHR, CADAM report) were not directly accessible offline; numbers are from the open MDPI reproduction which attributes them to those primaries."
+  },
+  "police_survey_points": {
+    "count": 17,
+    "quantity": "surveyed maximum water surface elevation (high-water marks recorded by local police after the flood)",
+    "columns": ["id", "x_m", "y_m", "bank", "ws_obs_m"],
+    "source": "Biscarini et al. 2016, Table 3 (WSobs column). Data via Hervouet.",
+    "points": [
+      {"id": "P1",  "x_m": 4913.1,  "y_m": 4244.0, "bank": "Right", "ws_obs_m": 79.15},
+      {"id": "P2",  "x_m": 5159.7,  "y_m": 4369.6, "bank": "Left",  "ws_obs_m": 87.20},
+      {"id": "P3",  "x_m": 5790.6,  "y_m": 4177.7, "bank": "Right", "ws_obs_m": 54.90},
+      {"id": "P4",  "x_m": 5886.5,  "y_m": 4503.9, "bank": "Left",  "ws_obs_m": 64.70},
+      {"id": "P5",  "x_m": 6763.0,  "y_m": 3429.6, "bank": "Right", "ws_obs_m": 51.10},
+      {"id": "P6",  "x_m": 6929.9,  "y_m": 3591.8, "bank": "Left",  "ws_obs_m": 43.75},
+      {"id": "P7",  "x_m": 7326.0,  "y_m": 2948.7, "bank": "Right", "ws_obs_m": 44.35},
+      {"id": "P8",  "x_m": 7451.0,  "y_m": 3232.1, "bank": "Left",  "ws_obs_m": 38.60},
+      {"id": "P9",  "x_m": 8735.9,  "y_m": 3264.6, "bank": "Right", "ws_obs_m": 31.90},
+      {"id": "P10", "x_m": 8628.6,  "y_m": 3604.6, "bank": "Left",  "ws_obs_m": 40.75},
+      {"id": "P11", "x_m": 9761.1,  "y_m": 3480.3, "bank": "Left",  "ws_obs_m": 24.15},
+      {"id": "P12", "x_m": 9832.9,  "y_m": 2414.7, "bank": "Right", "ws_obs_m": 24.90},
+      {"id": "P13", "x_m": 10957.2, "y_m": 2651.9, "bank": "Right", "ws_obs_m": 17.25},
+      {"id": "P14", "x_m": 11115.7, "y_m": 3800.7, "bank": "Left",  "ws_obs_m": 20.70},
+      {"id": "P15", "x_m": 11689.0, "y_m": 2592.3, "bank": "Right", "ws_obs_m": 18.60},
+      {"id": "P16", "x_m": 11626.0, "y_m": 3406.8, "bank": "Left",  "ws_obs_m": 17.25},
+      {"id": "P17", "x_m": 12333.7, "y_m": 2269.7, "bank": "Right", "ws_obs_m": 14.00}
+    ]
+  },
+  "transformers": {
+    "count": 3,
+    "quantity": "wave arrival time inferred from electrical-transformer shutdown time after dam failure",
+    "columns": ["id", "x_m", "y_m", "at_obs_s"],
+    "source": "Biscarini et al. 2016, Table 2 (ATobs column).",
+    "notes": "Transformer A sat just downstream of the dam; its shutdown (100 s) is taken as the reference wave-arrival time. For B and C the shutdown time lies between wave arrival and time of peak level (Biscarini et al. 2016). DISCREPANCY: TUFLOW (2019) reports transformer B recorded at 1204 s; MDPI/CADAM report 1240 s. 1240 s adopted here as primary (matches the CADAM/Hervouet dataset); 1204 s recorded as the TUFLOW variant.",
+    "points": [
+      {"id": "A", "x_m": 5500.0,  "y_m": 4400.0, "at_obs_s": 100},
+      {"id": "B", "x_m": 11900.0, "y_m": 3250.0, "at_obs_s": 1240, "at_obs_s_alt_tuflow": 1204},
+      {"id": "C", "x_m": 13000.0, "y_m": 2700.0, "at_obs_s": 1420}
+    ]
+  },
+  "physical_model_gauges": {
+    "count": 9,
+    "labels_note": "Downstream gauges numbered 6-14 of the 1:400 scale physical model built by Laboratoire National d'Hydraulique (EDF-LNH) in 1964 (upstream gauges 1-5 are in the reservoir and not used for downstream validation). Labelled G6-G14 in the source; requested as S6-S14 - same 9 points.",
+    "quantity": "maximum water surface elevation and wave arrival time from the 1:400 physical scale model, reported at prototype (full) scale",
+    "columns": ["id", "x_m", "y_m", "at_lab_s", "ws_lab_m"],
+    "source": "Biscarini et al. 2016, Table 4 (ATlab, WSlab columns), cited to Morris 2000 (CADAM SR571) and Goutal 1999 (CADAM).",
+    "points": [
+      {"id": "G6",  "x_m": 4947.4,  "y_m": 4289.7, "at_lab_s": 10.2, "ws_lab_m": 84.2},
+      {"id": "G7",  "x_m": 5717.3,  "y_m": 4407.6, "at_lab_s": 102,  "ws_lab_m": 49.1},
+      {"id": "G8",  "x_m": 6775.1,  "y_m": 3869.2, "at_lab_s": 182,  "ws_lab_m": 54.0},
+      {"id": "G9",  "x_m": 7128.2,  "y_m": 3162.0, "at_lab_s": 263,  "ws_lab_m": 40.2},
+      {"id": "G10", "x_m": 8585.3,  "y_m": 3443.1, "at_lab_s": 404,  "ws_lab_m": 34.9},
+      {"id": "G11", "x_m": 9675.0,  "y_m": 3085.9, "at_lab_s": 600,  "ws_lab_m": 27.4},
+      {"id": "G12", "x_m": 10939.1, "y_m": 3044.8, "at_lab_s": 845,  "ws_lab_m": 21.5},
+      {"id": "G13", "x_m": 11724.4, "y_m": 2810.4, "at_lab_s": 972,  "ws_lab_m": 16.1},
+      {"id": "G14", "x_m": 12723.7, "y_m": 2485.1, "at_lab_s": 1139, "ws_lab_m": 12.9}
+    ]
+  },
+  "published_model_comparison": {
+    "note": "NOT observations. Results of ONE published model (Biscarini et al. 2016, OpenFOAM 3D VOF RANS k-epsilon, Manning n not restated in text) reproduced here only as an additional published comparison target. Do not treat as ground truth.",
+    "source": "Biscarini et al. 2016, Tables 2 (AT3D), 3 (WS-3D), 4 (AT3D, WS-3D).",
+    "transformers_at3d_s": {"A": 100, "B": 1175, "C": 1425},
+    "police_ws3d_m": {"P1": 81.65, "P2": 87.57, "P3": 53.91, "P4": 63.85, "P5": 47.21, "P6": 45.08, "P7": 44.00, "P8": 37.8, "P9": 31.57, "P10": 37.21, "P11": 23.3, "P12": 26, "P13": 16.9, "P14": 21.2, "P15": 18.67, "P16": 19, "P17": 15},
+    "gauges_at3d_s": {"G6": 10, "G7": 107, "G8": 195, "G9": 245, "G10": 400, "G11": 625, "G12": 870, "G13": 990, "G14": 1125},
+    "gauges_ws3d_m": {"G6": 87.5, "G7": 53.7, "G8": 52.1, "G9": 44.2, "G10": 35.29, "G11": 26.1, "G12": 21.4, "G13": 17.4, "G14": 13.4}
+  }
+}
