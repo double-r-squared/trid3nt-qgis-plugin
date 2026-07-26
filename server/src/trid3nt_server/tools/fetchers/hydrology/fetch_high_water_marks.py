@@ -116,6 +116,11 @@ class HighWaterMarksLayerURI(LayerURI):
     - ``quality_breakdown`` -- ``{quality_label: count}`` (surveyor accuracy).
     - ``type_breakdown`` -- ``{hwm_type: count}`` (seed/debris/stain/mud line).
     - ``datum_summary`` -- ``{vertical_datum: count}``.
+    - ``observed_quantity`` -- the physical quantity the ``elev_ft`` observed
+      field carries: ``"water_surface_elevation"`` (a WSE above the stated
+      vertical datum, NOT a depth-above-ground). Stamped so
+      ``extract_model_at_observations`` never silently pairs this WSE against a
+      model DEPTH raster (the two need a ground-elevation conversion first).
     - ``caveats`` -- honest usage caveats (quality spread, datum, point-peak).
     - ``notes`` -- provenance detail.
     """
@@ -125,6 +130,7 @@ class HighWaterMarksLayerURI(LayerURI):
     quality_breakdown: dict[str, int] = {}
     type_breakdown: dict[str, int] = {}
     datum_summary: dict[str, int] = {}
+    observed_quantity: str = "water_surface_elevation"
     caveats: list[str] = []
     notes: list[str] = []
 
@@ -364,6 +370,12 @@ def _parse_hwm_records(
                 "site_no": str(r.get("site_no") or ""),
                 "lon": lon,
                 "lat": lat,
+                # QUANTITY STAMP: elev_ft is a WATER-SURFACE ELEVATION (above the
+                # stated vertical_datum), NOT a depth above ground. Stamped onto
+                # every feature so extract_model_at_observations can read it back
+                # from the FGB and refuse to silently pair this WSE against a
+                # model flood-DEPTH raster without a ground-elevation conversion.
+                "quantity": "water_surface_elevation",
                 "elev_ft": _f(r.get("elev_ft")),
                 "height_above_gnd": _f(r.get("height_above_gnd")),
                 "vertical_datum": str(r.get("verticalDatumName") or "") or None,
@@ -396,10 +408,11 @@ def _build_flatgeobuf(records: list[dict[str, Any]]) -> bytes:
 
     geoms = [Point(r["lon"], r["lat"]) for r in records]
     scalar_cols = [
-        "hwm_id", "site_no", "elev_ft", "height_above_gnd", "vertical_datum",
-        "horizontal_datum", "quality", "quality_id", "hwm_type", "hwm_type_id",
-        "hwm_environment", "event", "event_id", "state", "county", "waterbody",
-        "survey_date", "stillwater", "hwm_label",
+        "hwm_id", "site_no", "quantity", "elev_ft", "height_above_gnd",
+        "vertical_datum", "horizontal_datum", "quality", "quality_id",
+        "hwm_type", "hwm_type_id", "hwm_environment", "event", "event_id",
+        "state", "county", "waterbody", "survey_date", "stillwater",
+        "hwm_label",
     ]
     data = {c: [r.get(c) for r in records] for c in scalar_cols}
     gdf = gpd.GeoDataFrame(data, geometry=geoms, crs="EPSG:4326")
@@ -617,7 +630,12 @@ def fetch_high_water_marks(
     notes = [
         f"USGS STN FilteredHWMs: {n_marks} mark(s) in the AOI"
         + (f" for event {resolved_event_name!r}." if resolved_event_name else
-           f" across state(s) {states}.")
+           f" across state(s) {states}."),
+        "Observed quantity is WATER-SURFACE ELEVATION (elev_ft, above the "
+        "stated vertical_datum) -- stamped on every feature as "
+        "quantity='water_surface_elevation'. It is NOT a depth above ground; "
+        "pair it against a model flood-DEPTH raster only via "
+        "extract_model_at_observations (which converts WSE->depth with a DEM).",
     ]
 
     return HighWaterMarksLayerURI(
@@ -634,6 +652,7 @@ def fetch_high_water_marks(
         quality_breakdown=summary["quality_breakdown"],
         type_breakdown=summary["type_breakdown"],
         datum_summary=summary["datum_summary"],
+        observed_quantity="water_surface_elevation",
         caveats=caveats,
         notes=notes,
     )

@@ -356,14 +356,20 @@ def _peak_metrics(
     observed: np.ndarray,
     simulated: np.ndarray,
     times: list[datetime | None] | None,
+    is_time_series: bool,
     caveats: list[str],
 ) -> tuple[float | None, float | None]:
     """Peak-magnitude error (percent) + peak-timing error (seconds).
 
     Peak error compares each series' OWN maximum (index-independent, the
-    standard peak-flow-error convention); peak-timing error compares WHEN
-    each series' maximum occurred, only when a parseable time column/array
-    was supplied for both peak indices.
+    standard peak-flow-error convention); peak-timing error compares WHEN each
+    series' maximum occurred, and is meaningful ONLY when the pairs form a real
+    TIME SERIES sharing a model+obs time axis. A STATIC spatial pairing (one
+    sample per location / distinct obs_id, e.g. a max-flood raster sampled at
+    surveyed high-water marks) has NO simulated time axis: the ``time`` column
+    holds per-point survey dates, so comparing argmax(obs)-time to
+    argmax(sim)-time fabricates a sentinel (the live Harvey run's -86400 s).
+    In that case peak_timing_error stays ``null`` -- never faked.
     """
     idx_obs = int(np.argmax(observed))
     idx_sim = int(np.argmax(simulated))
@@ -377,7 +383,18 @@ def _peak_metrics(
         peak_error = round(100.0 * (sim_peak - obs_peak) / abs(obs_peak), 6)
 
     peak_timing_error: float | None = None
-    if times is not None:
+    if times is None:
+        pass  # no time axis at all -> null (never fabricated)
+    elif not is_time_series:
+        caveats.append(
+            "peak_timing_error is null: the paired data is a STATIC spatial "
+            "comparison (one sample per location / distinct obs_id, no shared "
+            "model time axis), so there is no simulated peak TIME to compare "
+            "against the observed one -- a timing error would be fabricated. "
+            "Any per-point 'time' values are observation survey dates, not a "
+            "model time series."
+        )
+    else:
         t_obs = times[idx_obs]
         t_sim = times[idx_sim]
         if t_obs is not None and t_sim is not None:
@@ -613,7 +630,14 @@ def compute_skill_metrics(
     sof = _import_spotpy_objectivefunctions()
     metrics = _compute_core_metrics(obs, sim, sof, caveats)
 
-    peak_error, peak_timing_error = _peak_metrics(obs, sim, times, caveats)
+    # peak_timing_error is only meaningful for a genuine TIME SERIES (repeated
+    # obs_id groups / an explicit time array over >1 sample). A static spatial
+    # pairing has one row per distinct obs_id (n_total == n_id_groups) and no
+    # simulated time axis -> timing stays null (never the -86400 s sentinel).
+    is_time_series = n_total > n_id_groups
+    peak_error, peak_timing_error = _peak_metrics(
+        obs, sim, times, is_time_series, caveats
+    )
     metrics["peak_error"] = peak_error
     metrics["peak_timing_error"] = peak_timing_error
 

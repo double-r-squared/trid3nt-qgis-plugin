@@ -4,10 +4,13 @@ Samples a MODEL result at OBSERVATION locations/times and writes the ALIGNED
 paired table the skill-metric tools (``compute_skill_metrics`` /
 ``compute_flood_extent_skill``) consume. This is the crucial alignment step:
 it reconciles space (exact cell, else nearest wet cell within a tolerance),
-time (static max vs surveyed peak, or nearest sample within a tolerance), and
-VERTICAL DATUM (the number-one silent killer -- a NAVD88 vs NGVD29 mismatch it
-cannot reconcile is a typed error, never a guess), and it ALWAYS lists every
-dropped observation with a per-item reason rather than silently discarding it.
+time (static max vs surveyed peak, or nearest sample within a tolerance),
+VERTICAL DATUM (a NAVD88 vs NGVD29 mismatch it cannot reconcile is a typed
+error, never a guess), and physical QUANTITY (a model flood-DEPTH raster vs an
+observed water-surface ELEVATION -- e.g. a USGS STN HWM ``elev_ft`` -- is
+converted WSE<->depth via a ground-elevation DEM, never paired silently; with
+no ground source it is a typed error). It ALWAYS lists every dropped
+observation with a per-item reason rather than silently discarding it.
 
 TWO input modes, auto-detected from the model handle:
 
@@ -56,6 +59,7 @@ __all__ = [
     "PairingInputError",
     "PairingNoPairsError",
     "PairingDatumMismatchError",
+    "PairingQuantityMismatchError",
     "PairingUpstreamError",
     "OBSERVED_FIELD_CANDIDATES",
     "OBS_ID_FIELD_CANDIDATES",
@@ -107,6 +111,23 @@ class PairingDatumMismatchError(PairingError):
     retryable = False
 
 
+class PairingQuantityMismatchError(PairingError):
+    """Model and observation measure DIFFERENT physical quantities and no
+
+    ground-elevation source is available to reconcile them. A model
+    flood-DEPTH raster (height above ground) vs an observed WATER-SURFACE
+    ELEVATION (height above a vertical datum) are NOT directly comparable --
+    pairing them produces a residual dominated by ground elevation (the
+    ~15 m Harvey false-error). Converting WSE<->depth requires sampling a
+    ground-elevation DEM; when none is supplied (``ground_elevation_uri``) and
+    none can be fetched, this typed error is raised NAMING both quantities,
+    NEVER a silent apples-vs-oranges pairing.
+    """
+
+    error_code = "PAIRED_OBS_QUANTITY_MISMATCH"
+    retryable = False
+
+
 class PairingUpstreamError(PairingError):
     """Input staging or the paired-table write failed (retryable)."""
 
@@ -127,9 +148,14 @@ class PairedObsLayerURI(LayerURI):
     - ``paired_table_uri`` -- the handle lane B consumes (== ``uri``).
     - ``n_paired`` / ``n_dropped`` -- kept vs dropped observation counts.
     - ``dropped`` -- list of ``{obs_id, reason}``; reason in ``DROP_REASONS``.
-    - ``alignment`` -- ``{spatial, temporal, datum, crs}`` provenance.
+    - ``alignment`` -- ``{spatial, temporal, datum, crs}`` provenance, plus
+      ``model_quantity`` / ``observed_quantity`` and (when a WSE<->depth
+      conversion ran) ``quantity_conversion`` + ``ground_source``.
     - ``columns`` -- the output feature columns.
-    - ``units_warning`` -- ALWAYS populated (datum/units honesty).
+    - ``units_warning`` -- ALWAYS populated (datum/units/quantity honesty).
+    - ``flags`` -- non-fatal per-point honesty flags kept in the pairs (e.g.
+      ``negative_depth`` where the sampled ground sat above the observed water
+      surface); ``[]`` when none. Flagged points are KEPT, never clamped.
     - ``notes`` -- provenance + per-step detail.
     """
 
@@ -140,6 +166,7 @@ class PairedObsLayerURI(LayerURI):
     alignment: dict[str, Any] = {}
     columns: list[str] = []
     units_warning: str = ""
+    flags: list[dict[str, Any]] = []
     notes: list[str] = []
 
 
@@ -349,6 +376,170 @@ def _resolve_observed_units(
         "would risk a silent feet-vs-metres mismatch. Pass observed_units="
         "'feet' or observed_units='meters' explicitly."
     )
+
+
+# ---------------------------------------------------------------------------
+# Quantity semantics (the WSE-vs-depth honesty core -- same class as ft->m).
+# ---------------------------------------------------------------------------
+#
+# The number-two silent killer after datum/units: pairing a model flood-DEPTH
+# raster (height above GROUND) against an observed WATER-SURFACE ELEVATION
+# (height above a vertical DATUM, e.g. a USGS STN HWM elev_ft). Their
+# difference is dominated by ground elevation (~15 m in the Harvey L2 run), so
+# a "residual" is meaningless. We classify each side into a physical FAMILY
+# and, on an elevation-vs-depth cross, CONVERT via a ground-elevation DEM
+# rather than pair silently.
+
+#: A raster-tag / band-tag key a producer MAY stamp to declare the quantity
+#: explicitly (forward-compatible; the flood workflow does not stamp it today,
+#: so the filename heuristic below is the live path).
+_QUANTITY_TAG_KEYS: tuple[str, ...] = ("quantity", "QUANTITY", "measured_quantity")
+
+#: Observation-layer column carrying a stamped quantity (fetch_high_water_marks
+#: writes ``quantity="water_surface_elevation"`` per feature).
+_OBS_QUANTITY_COLUMN = "quantity"
+
+
+def _classify_quantity(name: str | None) -> tuple[str | None, str | None]:
+    """Classify a quantity NAME -> ``(family, label)``.
+
+    ``family`` is ``"depth"`` (height above ground) or ``"elevation"`` (height
+    above a vertical datum -- WSE / head / bare elevation), or ``None`` when the
+    name carries no quantity tell (never guessed). ``label`` is a canonical
+    display string. The depth keywords are tested FIRST so ``flood_depth_peak``
+    classifies as depth even though it also names water.
+    """
+    n = (name or "").strip().lower()
+    if not n:
+        return None, None
+    if any(k in n for k in ("depth", "height_above_gnd", "water_depth", "hmax",
+                            "depth_above_ground")):
+        return "depth", "depth_above_ground"
+    if any(k in n for k in ("water_surface_elevation", "wse", "water_surface",
+                            "elev", "head")):
+        return "elevation", ("head" if "head" in n else "water_surface_elevation")
+    return None, None
+
+
+def _resolve_model_quantity(
+    tags: dict[str, Any], model_uri: str, override: str | None
+) -> tuple[str | None, str | None, str]:
+    """Resolve the MODEL raster quantity -> ``(family, label, note)``.
+
+    Order: caller ``model_quantity`` override -> a stamped raster tag (forward
+    compat) -> the raster filename heuristic (``flood_depth_peak`` -> depth).
+    Unknown (``None`` family) is honest -- the caller may pass ``model_quantity``.
+    """
+    if override:
+        fam, label = _classify_quantity(override)
+        if fam is None:
+            raise PairingInputError(
+                f"model_quantity={override!r} is not a recognized quantity; use a "
+                "depth-like ('depth'/'flood_depth'/'depth_above_ground') or "
+                "elevation-like ('wse'/'water_surface_elevation'/'head') name."
+            )
+        return fam, label, f"model quantity = {label} (caller model_quantity={override!r})"
+    for key in _QUANTITY_TAG_KEYS:
+        v = tags.get(key) if tags else None
+        if v:
+            fam, label = _classify_quantity(str(v))
+            if fam is not None:
+                return fam, label, f"model quantity = {label} (raster tag {key}={v!r})"
+    base = model_uri.rstrip("/").rsplit("/", 1)[-1]
+    fam, label = _classify_quantity(base)
+    if fam is not None:
+        return fam, label, f"model quantity = {label} (inferred from name {base!r})"
+    return None, None, (
+        f"model quantity could not be determined from raster tags or the name "
+        f"{base!r}; pass model_quantity if it must be reconciled against the "
+        "observation quantity."
+    )
+
+
+def _resolve_observed_quantity(
+    gdf: Any, observed_col: str, override: str | None
+) -> tuple[str | None, str | None, str]:
+    """Resolve the OBSERVED quantity -> ``(family, label, note)``.
+
+    Order: caller ``observed_quantity`` override -> the CHOSEN observed field's
+    name heuristic (specific) -> the layer-level ``quantity`` stamp column
+    (``fetch_high_water_marks`` writes ``water_surface_elevation``). Unknown is
+    honest -- never guessed.
+    """
+    if override:
+        fam, label = _classify_quantity(override)
+        if fam is None:
+            raise PairingInputError(
+                f"observed_quantity={override!r} is not a recognized quantity; use "
+                "a depth-like or elevation-like (WSE/head) name."
+            )
+        return fam, label, f"observed quantity = {label} (caller observed_quantity={override!r})"
+    fam, label = _classify_quantity(observed_col)
+    if fam is not None:
+        return fam, label, f"observed quantity = {label} (from field name {observed_col!r})"
+    if _OBS_QUANTITY_COLUMN in getattr(gdf, "columns", []):
+        for v in gdf[_OBS_QUANTITY_COLUMN].tolist():
+            if v is not None and str(v).strip():
+                fam2, label2 = _classify_quantity(str(v))
+                if fam2 is not None:
+                    return fam2, label2, (
+                        f"observed quantity = {label2} (layer quantity stamp {str(v)!r})"
+                    )
+                break
+    return None, None, (
+        f"observed quantity could not be determined from the field name "
+        f"{observed_col!r} or a layer quantity stamp; pass observed_quantity if "
+        "it must be reconciled against the model quantity."
+    )
+
+
+def _fetch_ground_dem(
+    bbox_4326: tuple[float, float, float, float], tmpdir: str
+) -> tuple[str, str]:
+    """Fetch a ground-elevation DEM for the AOI via ``fetch_dem`` (module seam).
+
+    Returns ``(local_path, source_label)``. Raises on any failure; the caller
+    turns a failure into a typed ``PairingQuantityMismatchError`` (never a
+    silent mismatched pairing). Patched in offline tests -- the committed suite
+    never calls the live 3DEP/GLO-30 fetch.
+    """
+    from trid3nt_server.tools.fetchers.terrain.fetch_dem import fetch_dem
+
+    layer = fetch_dem(bbox=tuple(bbox_4326))
+    local = _stage_local(layer.uri, tmpdir, "ground_dem")
+    label = f"3DEP/GLO-30 ground DEM via fetch_dem ({layer.uri}; meters above NAVD88)"
+    fb = getattr(layer, "fallback_note", None)
+    if fb:
+        label += f" [{fb}]"
+    return local, label
+
+
+def _sample_ground_elev(dem_local: str, gdf: Any) -> np.ndarray:
+    """Bilinear-sample the ground DEM at each observation point (NaN off-extent).
+
+    Returns a float array aligned with ``gdf`` row order; NaN where the point is
+    outside the DEM or lands on nodata (that point cannot be depth-converted and
+    is dropped ``nodata_sample`` by the caller).
+    """
+    import rasterio
+
+    with rasterio.open(dem_local) as src:
+        band = src.read(1).astype(np.float64)
+        nodata = src.nodata
+        if nodata is not None:
+            if isinstance(nodata, float) and math.isnan(nodata):
+                pass
+            elif math.isfinite(float(nodata)):
+                band[band == float(nodata)] = np.nan
+        transform = src.transform
+        crs = src.crs
+        pts = gdf.to_crs(crs) if crs is not None else gdf
+        xs = np.array([g.x for g in pts.geometry], dtype=np.float64)
+        ys = np.array([g.y for g in pts.geometry], dtype=np.float64)
+        in_bounds, samples = _bilinear_sample(band, transform, xs, ys)
+    samples = np.asarray(samples, dtype=np.float64)
+    samples[~np.asarray(in_bounds, dtype=bool)] = np.nan
+    return samples
 
 
 # ---------------------------------------------------------------------------
@@ -595,6 +786,7 @@ def _load_points(uri: str, tmpdir: str, label: str) -> Any:
 
 def _pair_raster_static(
     model_local: str,
+    model_uri: str,
     obs_uri: str,
     observed_value_field: str | None,
     obs_id_field: str | None,
@@ -602,16 +794,19 @@ def _pair_raster_static(
     model_datum: str | None,
     datum_shift_m: float | None,
     observed_units: str | None,
+    model_quantity: str | None,
+    observed_quantity: str | None,
+    ground_elevation_uri: str | None,
     nearest_wet_tolerance_m: float,
     tmpdir: str,
     notes: list[str],
-) -> tuple[Any, list[dict[str, Any]], dict[str, Any], str]:
+) -> tuple[Any, list[dict[str, Any]], dict[str, Any], str, list[dict[str, Any]]]:
     """Pair a single-band raster (model max/head) against observation points.
 
-    Returns ``(out_gdf, dropped, alignment, units_warning)``.
+    Returns ``(out_gdf, dropped, alignment, units_warning, flags)``.
     """
     import rasterio
-    from rasterio.warp import transform_bounds
+    from rasterio.warp import transform_bounds  # noqa: F401
 
     try:
         src = rasterio.open(model_local)
@@ -633,6 +828,11 @@ def _pair_raster_static(
         px = abs(transform.a)
         py = abs(transform.e)
         pixel_size_units = max(px, py) or 1.0
+        model_tags: dict[str, Any] = dict(src.tags() or {})
+        try:
+            model_tags.update(src.tags(1) or {})
+        except Exception:  # noqa: BLE001
+            pass
     finally:
         src.close()
 
@@ -665,6 +865,59 @@ def _pair_raster_static(
     shift_m, alignment_datum, units_warning = _reconcile_datum(
         obs_datum, model_datum, datum_shift_m, notes
     )
+
+    # --- Quantity compatibility (WSE-vs-depth honesty) ------------------
+    # Determine each side's physical FAMILY (depth above ground vs elevation
+    # above a datum). On an elevation-vs-depth cross, convert the observation to
+    # the model's family via a ground-elevation DEM; when neither side's family
+    # is known we proceed but WARN (cannot assert a mismatch we cannot see);
+    # when they cross and NO ground source is available we raise a typed
+    # QuantityMismatchError -- never a silent apples-vs-oranges pairing.
+    model_fam, model_qlabel, model_qnote = _resolve_model_quantity(
+        model_tags, model_uri, model_quantity
+    )
+    obs_fam, obs_qlabel, obs_qnote = _resolve_observed_quantity(
+        gdf, observed_col, observed_quantity
+    )
+    notes.append(model_qnote)
+    notes.append(obs_qnote)
+
+    if model_fam is not None and obs_fam is not None:
+        compat = "match" if model_fam == obs_fam else "convert"
+    else:
+        compat = "unverified"
+
+    ground: np.ndarray | None = None
+    ground_source: str | None = None
+    convert_to_depth = False
+    if compat == "convert":
+        # elevation-vs-depth -> reconcile via a ground-elevation DEM.
+        convert_to_depth = model_fam == "depth"
+        g4326 = gdf.to_crs(4326)
+        gb = g4326.total_bounds  # (minx, miny, maxx, maxy)
+        obs_bbox_4326 = (float(gb[0]), float(gb[1]), float(gb[2]), float(gb[3]))
+        dem_local: str | None = None
+        if ground_elevation_uri:
+            dem_local = _stage_local(ground_elevation_uri, tmpdir, "ground_dem")
+            ground_source = f"caller-supplied ground DEM ({ground_elevation_uri})"
+        else:
+            try:
+                dem_local, ground_source = _fetch_ground_dem(obs_bbox_4326, tmpdir)
+            except Exception as exc:  # noqa: BLE001
+                logger.info("ground DEM auto-fetch failed for quantity conversion: %s", exc)
+                dem_local = None
+        if dem_local is None:
+            raise PairingQuantityMismatchError(
+                f"model quantity is {model_qlabel!r} (a {model_fam}) but the "
+                f"observed quantity is {obs_qlabel!r} (an {obs_fam}); a "
+                "water-surface ELEVATION and a DEPTH above ground are NOT "
+                "directly comparable (their difference is dominated by ground "
+                "elevation). Reconciling them requires sampling a ground-"
+                "elevation DEM, but none was supplied (ground_elevation_uri) and "
+                "none could be fetched for the AOI. Pass ground_elevation_uri "
+                "(a DEM COG covering the observations) to convert WSE<->depth."
+            )
+        ground = _sample_ground_elev(dem_local, gdf)
 
     # Reproject to the model CRS for sampling (record any per-point failure).
     try:
@@ -710,6 +963,12 @@ def _pair_raster_static(
             else:
                 dropped.append({"obs_id": oid, "reason": "nodata_sample"})
                 continue
+        if ground is not None and not math.isfinite(float(ground[i])):
+            # A WSE<->depth conversion is required but the ground DEM has no
+            # value at this point -- it cannot be converted, so drop it honestly
+            # rather than pair a raw elevation against a depth.
+            dropped.append({"obs_id": oid, "reason": "nodata_sample"})
+            continue
         kept_rows.append(i)
         kept_sim.append(sim)
 
@@ -724,8 +983,57 @@ def _pair_raster_static(
     if out.crs is None or out.crs.to_epsg() != 4326:
         out = out.to_crs(4326)
     out["obs_id"] = [_obs_id_for(gdf, obs_id_col, i) for i in kept_rows]
-    # Convert observed into metres (obs_factor) THEN apply the metre datum shift.
-    out["observed"] = [float(observed[i]) * obs_factor + shift_m for i in kept_rows]
+
+    # Observed into metres (obs_factor) THEN the metre datum shift -> the value
+    # in its OWN native quantity (elevation or depth), in the model's datum.
+    observed_native = [float(observed[i]) * obs_factor + shift_m for i in kept_rows]
+
+    # Quantity conversion: reconcile observed onto the MODEL's family via the
+    # per-point ground elevation. Flag (never clamp) a negative depth (ground
+    # sampled ABOVE the observed water surface).
+    flags: list[dict[str, Any]] = []
+    if ground is not None:
+        kept_ground = [float(ground[i]) for i in kept_rows]
+        out["ground_elev_m"] = kept_ground
+        if convert_to_depth:
+            # model=depth, obs=elevation: depth = WSE - ground_elev.
+            observed_final = [o - g for o, g in zip(observed_native, kept_ground)]
+            conv_desc = (
+                f"obs {obs_qlabel} -> depth: depth = observed_WSE - ground_elev "
+                "(per-point DEM sample)"
+            )
+            for oid_v, val in zip(out["obs_id"].tolist(), observed_final):
+                if val < 0.0:
+                    flags.append({
+                        "obs_id": oid_v,
+                        "flag": "negative_depth",
+                        "depth_m": round(float(val), 4),
+                        "detail": "sampled ground elevation sits above the "
+                                  "observed water surface; kept, not clamped",
+                    })
+        else:
+            # model=elevation, obs=depth: elevation = depth + ground_elev.
+            observed_final = [o + g for o, g in zip(observed_native, kept_ground)]
+            conv_desc = (
+                f"obs {obs_qlabel} -> elevation: elevation = observed_depth + "
+                "ground_elev (per-point DEM sample)"
+            )
+        out["flag"] = [
+            next((f["flag"] for f in flags if f["obs_id"] == oid_v), "")
+            for oid_v in out["obs_id"].tolist()
+        ]
+        out["observed"] = observed_final
+        notes.append(
+            f"QUANTITY CONVERSION: {conv_desc}; ground source: {ground_source}. "
+            f"Assumes observations and the DEM share a vertical datum (fetch_dem "
+            f"DEM is NAVD88); pass datum_shift_m if the observations are on a "
+            f"different datum. {len(flags)} point(s) flagged negative_depth."
+        )
+    else:
+        observed_final = observed_native
+        conv_desc = None
+        out["observed"] = observed_final
+
     out["simulated"] = kept_sim
     out["time"] = [_time_for(gdf, time_col, i) for i in kept_rows]
 
@@ -752,8 +1060,39 @@ def _pair_raster_static(
         "datum": alignment_datum,
         "crs": f"{model_crs_str} -> EPSG:4326",
         "units": units_note,
+        "model_quantity": model_qlabel or "unknown",
+        "observed_quantity": obs_qlabel or "unknown",
     }
-    return out, dropped, alignment, units_warning
+    if compat == "convert":
+        alignment["quantity_conversion"] = conv_desc
+        alignment["ground_source"] = ground_source
+        units_warning += (
+            f" QUANTITY: model is a {model_fam} ({model_qlabel}) and observations "
+            f"are an {obs_fam} ({obs_qlabel}); observations were converted to the "
+            f"model quantity via a ground-elevation DEM ({ground_source})."
+        )
+        if flags:
+            units_warning += (
+                f" {len(flags)} point(s) yielded a negative depth (ground above "
+                "the observed water surface) -- kept and flagged, not clamped."
+            )
+    elif compat == "unverified":
+        alignment["quantity_conversion"] = "none (quantity compatibility unverified)"
+        units_warning += (
+            f" QUANTITY WARNING: could not confirm the model quantity "
+            f"({model_qlabel or 'unknown'}) and observed quantity "
+            f"({obs_qlabel or 'unknown'}) are the same physical quantity. If one "
+            "is a water-surface ELEVATION and the other a DEPTH above ground, the "
+            "pairs are meaningless -- pass model_quantity / observed_quantity (and "
+            "ground_elevation_uri) to reconcile them."
+        )
+    else:  # match
+        alignment["quantity_conversion"] = f"none (both {model_fam})"
+        units_warning += (
+            f" QUANTITY: model and observations are both {model_fam} "
+            f"({model_qlabel} vs {obs_qlabel}); no conversion needed."
+        )
+    return out, dropped, alignment, units_warning, flags
 
 
 # ---------------------------------------------------------------------------
@@ -792,7 +1131,7 @@ def _pair_timeseries(
     time_tolerance_s: float,
     tmpdir: str,
     notes: list[str],
-) -> tuple[Any, list[dict[str, Any]], dict[str, Any], str]:
+) -> tuple[Any, list[dict[str, Any]], dict[str, Any], str, list[dict[str, Any]]]:
     """Pair a model time-series vector layer against an observation time-series.
 
     Both layers are point vectors carrying an inline ``time_series_csv``
@@ -920,7 +1259,9 @@ def _pair_timeseries(
         f"Time-series pairing: {len(rows)} sample(s) across matched stations "
         f"(temporal={temporal})."
     )
-    return out, dropped, alignment, units_warning
+    # Mode B (time-series) pairs like-for-like series; the WSE-vs-depth quantity
+    # conversion is a mode-A (static raster) concern, so no flags here.
+    return out, dropped, alignment, units_warning, []
 
 
 # ---------------------------------------------------------------------------
@@ -993,6 +1334,9 @@ def extract_model_at_observations(
     nearest_wet_tolerance_m: float = 250.0,
     station_tolerance_m: float = 500.0,
     time_tolerance_s: float = 3600.0,
+    model_quantity: str | None = None,
+    observed_quantity: str | None = None,
+    ground_elevation_uri: str | None = None,
     *,
     _output_dir: str | None = None,
     **_extra_ignored: Any,
@@ -1053,17 +1397,40 @@ def extract_model_at_observations(
       the max distance a model station may sit from an observation station;
       recorded in the alignment block.
     - ``time_tolerance_s`` (default 3600): temporal match window (mode B).
+    - ``model_quantity`` / ``observed_quantity`` (mode A): OPTIONAL explicit
+      quantity for each side -- a depth-like (``"depth"`` / ``"flood_depth"`` /
+      ``"depth_above_ground"``) or elevation-like (``"wse"`` /
+      ``"water_surface_elevation"`` / ``"head"``) label. Overrides the automatic
+      resolution (raster tag / filename for the model; the observed field name
+      or a layer ``quantity`` stamp for the observations). When BOTH resolve and
+      one is a DEPTH while the other is an ELEVATION, the tool converts the
+      observations to the model's quantity (see ``ground_elevation_uri``); a
+      cross with NO ground source raises ``PairingQuantityMismatchError``.
+    - ``ground_elevation_uri`` (mode A): OPTIONAL ground-elevation DEM COG used
+      to convert a water-surface ELEVATION observation to a DEPTH (or back):
+      ``depth = observed_WSE - ground_elev`` sampled per point. When omitted and
+      a conversion is required, the tool auto-fetches a DEM for the AOI
+      (``fetch_dem``); if that also fails it raises
+      ``PairingQuantityMismatchError`` naming both quantities. The DEM's vertical
+      datum (3DEP: NAVD88) is assumed to match the observations' datum -- pass
+      ``datum_shift_m`` if not.
 
     **Returns:** ``PairedObsLayerURI`` -- a FlatGeobuf point layer (EPSG:4326,
-    columns ``obs_id`` / ``observed`` / ``simulated`` / ``time`` + passthrough)
-    named ``"Model-obs pairs (<n> points)"``, plus ``paired_table_uri`` (the
-    handle lane B reads), ``n_paired`` / ``n_dropped`` / ``dropped[]`` (per-item
-    reasons), ``alignment{spatial,temporal,datum,crs}``, ``columns``,
-    ``units_warning`` (always populated), ``notes``.
+    columns ``obs_id`` / ``observed`` / ``simulated`` / ``time`` + passthrough;
+    plus ``ground_elev_m`` / ``flag`` when a quantity conversion ran) named
+    ``"Model-obs pairs (<n> points)"``, plus ``paired_table_uri`` (the handle
+    lane B reads), ``n_paired`` / ``n_dropped`` / ``dropped[]`` (per-item
+    reasons), ``alignment`` (``spatial`` / ``temporal`` / ``datum`` / ``crs`` /
+    ``model_quantity`` / ``observed_quantity`` and, on a conversion,
+    ``quantity_conversion`` + ``ground_source``), ``columns``, ``units_warning``
+    (always populated), ``flags`` (e.g. ``negative_depth`` points -- kept, never
+    clamped), ``notes``.
 
     **Errors (FR-AS-11):** ``PairingInputError`` (bad/unreadable inputs, no
-    observed field); ``PairingDatumMismatchError`` (unreconciled vertical
-    datums); ``PairingNoPairsError`` (every observation dropped);
+    observed field, unrecognized quantity); ``PairingDatumMismatchError``
+    (unreconciled vertical datums); ``PairingQuantityMismatchError`` (model
+    quantity vs observed quantity cross elevation-vs-depth with no ground
+    source); ``PairingNoPairsError`` (every observation dropped);
     ``PairingUpstreamError`` (staging / write failure).
 
     Cross-tool dependencies:
@@ -1087,8 +1454,9 @@ def extract_model_at_observations(
     with tempfile.TemporaryDirectory(prefix="trid3nt_extract_obs_") as tmpdir:
         model_local = _stage_local(model_layer_uri, tmpdir, "model")
         if _looks_like_raster(model_local):
-            out, dropped, alignment, units_warning = _pair_raster_static(
+            out, dropped, alignment, units_warning, flags = _pair_raster_static(
                 model_local,
+                model_layer_uri,
                 observations_layer_uri,
                 observed_value_field,
                 obs_id_field,
@@ -1096,12 +1464,15 @@ def extract_model_at_observations(
                 model_datum,
                 datum_shift_m,
                 observed_units,
+                model_quantity,
+                observed_quantity,
+                ground_elevation_uri,
                 float(nearest_wet_tolerance_m),
                 tmpdir,
                 notes,
             )
         else:
-            out, dropped, alignment, units_warning = _pair_timeseries(
+            out, dropped, alignment, units_warning, flags = _pair_timeseries(
                 model_local,
                 observations_layer_uri,
                 observed_value_field,
@@ -1151,5 +1522,6 @@ def extract_model_at_observations(
         alignment=alignment,
         columns=columns,
         units_warning=units_warning,
+        flags=flags,
         notes=notes,
     )

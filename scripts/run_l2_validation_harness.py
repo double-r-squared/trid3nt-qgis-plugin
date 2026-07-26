@@ -59,6 +59,7 @@ import re
 import sys
 import tempfile
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -724,6 +725,519 @@ PENDING a concrete bbox from NATE) and a typed confirmation below.
 """
 
 
+# ---------------------------------------------------------------------------
+# Live mode -- OBSERVED-precipitation forcing (Harvey window).
+#
+# WHY (e2e-harness.md): the harness scores the SFINCS solve against REAL Harvey
+# high-water marks, so the precip forcing MUST be the OBSERVED Harvey rainfall,
+# not an Atlas 14 design storm. A design-storm depth scored against real HWMs is
+# physically meaningless; observed forcing is the default here and the design
+# storm is only the explicit ``--forcing design`` fallback.
+#
+# FORCING CONTRACT (discovered, not guessed --
+# model_flood_scenario.compute_precip_area_mean_mm_per_hr, model_flood_scenario.py
+# line ~1960, called at ~3799): ``forcing_raster_uri`` takes a SINGLE
+# accumulated-precip raster in mm (``raster_units`` default "mm"). The workflow
+# reads it, computes the AREA-MEAN over all valid cells, and divides by
+# ``duration_hr`` to get ONE uniform SFINCS ``netamt`` rate in mm/hr (the OQ-6
+# v0.1 netamt path). There is NO time-varying / spatially-varying forcing input
+# on this contract -- so the raster's real spatial structure is COLLAPSED to its
+# domain area-mean and applied as a CONSTANT rate. We still build the true
+# summed-MRMS accumulation raster (real spatial pattern, preserved in the file),
+# and record BOTH limitations honestly (uniform in space AND uniform in time).
+# ---------------------------------------------------------------------------
+
+DEFAULT_LIVE_WINDOW = "2017-08-26T00,2017-08-28T00"  # Harvey peak Houston rain (48 h)
+_MM_PER_M = 1000.0
+_MRMS_FETCH_NODATA = -9999.0  # fetch_mrms_qpe._NODATA (both MRMS sentinels collapsed)
+#: noaa-mrms-pds 01H Pass2 archive start (verified live 2026-07-24: earliest
+#: date prefix 20201014). Windows fully before this SKIP the MRMS tier (a 48-h
+#: window would otherwise burn ~1200 doomed S3 list probes in the 24-h
+#: walkback) and go straight to the gridMET daily tier.
+_MRMS_ARCHIVE_START = datetime(2020, 10, 14, tzinfo=timezone.utc)
+_HOURS_PER_DAY = 24
+
+
+class LiveForcingError(RuntimeError):
+    """Typed honest failure building observed-precip forcing.
+
+    Raised ONLY when the whole MRMS -> ERA5 fallback chain is exhausted, so a
+    live run fails LOUDLY rather than silently substituting a design storm.
+    Carries an A.6-style ``error_code`` + the underlying provider errors verbatim
+    (upstream provider errors are surfaced, never internalized).
+    """
+
+    def __init__(self, error_code: str, message: str) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+
+
+def _parse_live_window(window: str) -> tuple[datetime, datetime]:
+    """Parse ``'YYYY-MM-DDTHH,YYYY-MM-DDTHH'`` -> (start, end) UTC, end EXCLUSIVE."""
+    parts = [p.strip() for p in window.split(",")]
+    if len(parts) != 2:
+        raise LiveForcingError(
+            "OBSERVED_FORCING_BAD_WINDOW",
+            f"--window must be 'YYYY-MM-DDTHH,YYYY-MM-DDTHH'; got {window!r}",
+        )
+
+    def _one(s: str) -> datetime:
+        try:
+            dt = datetime.strptime(s, "%Y-%m-%dT%H")
+        except ValueError as exc:
+            raise LiveForcingError(
+                "OBSERVED_FORCING_BAD_WINDOW",
+                f"window bound {s!r} is not 'YYYY-MM-DDTHH': {exc}",
+            ) from exc
+        return dt.replace(tzinfo=timezone.utc)
+
+    start, end = _one(parts[0]), _one(parts[1])
+    if end <= start:
+        raise LiveForcingError(
+            "OBSERVED_FORCING_BAD_WINDOW",
+            f"window end {end.isoformat()} must be after start {start.isoformat()}",
+        )
+    return start, end
+
+
+def _enumerate_hours(start: datetime, end: datetime) -> list[datetime]:
+    """Hourly valid_times over [start, end) -- one MRMS 1h-QPE slot per hour."""
+    hours: list[datetime] = []
+    cur = start
+    while cur < end:
+        hours.append(cur)
+        cur += timedelta(hours=1)
+    return hours
+
+
+def _enumerate_days(start: datetime, end: datetime) -> list[Any]:
+    """UTC calendar days WHOLLY OR PARTIALLY covering [start, end).
+
+    Daily products (gridMET pr) cannot be sub-sliced below a day, so a window
+    that starts/ends mid-day pulls the WHOLE bounding day(s). The caller must
+    compare ``len(days) * 24`` (the hours the summed rasters actually
+    represent) against the window's hour count and record any excess honestly.
+    """
+    first = start.date()
+    # end is EXCLUSIVE: an end exactly at midnight does not pull the next day.
+    last = (end - timedelta(microseconds=1)).date()
+    days = []
+    cur = first
+    while cur <= last:
+        days.append(cur)
+        cur += timedelta(days=1)
+    return days
+
+
+def _accumulate_precip_rasters_to_total_mm(
+    slot_uris: list[str],
+    out_path: Path,
+    *,
+    source_tag: str,
+    slot_label: str,
+    fallback_bbox: tuple[float, ...] | None = None,
+) -> dict[str, Any]:
+    """Sum N same-grid precip COGs (each already in mm) into ONE total-mm raster.
+
+    Used by BOTH the MRMS tier (slots = hourly 1h-QPE, mm) and the gridMET tier
+    (slots = daily ``pr``, mm/day). UNIT CHAIN (the exact bug class this harness
+    exists to catch -- shown, not assumed): each slot cell is an accumulated
+    depth in **mm** for its slot; the element-wise SUM over the window's slots is
+    the TOTAL accumulated depth in **mm**. NO scaling factor -- both MRMS QPE and
+    gridMET ``pr`` are natively mm, mapping 1:1 to the contract's
+    ``raster_units="mm"`` default; ``compute_precip_area_mean_mm_per_hr`` then
+    divides the area-mean by ``duration_hr`` to get mm/hr. (Contrast the ERA5
+    fallback below, which IS in metres and needs a x1000 m->mm conversion.)
+
+    Per-cell masking: sum only VALID (finite, != nodata, >= 0) slot values; a
+    cell is valid in the output iff at least one slot had valid data. MRMS
+    collapses -3 (observed no-precip) AND -1 (missing) to one nodata, so an
+    all-nodata cell (dry OR unobserved every slot) is emitted as nodata -- a
+    known MRMS ambiguity, recorded rather than papered over. gridMET uses NaN
+    nodata, handled by the same finite mask.
+    """
+    import numpy as np
+    import rasterio
+
+    ref_transform = ref_crs = ref_shape = None
+    total: Any = None
+    valid_count: Any = None
+    for i, uri in enumerate(slot_uris):
+        data = _read_bytes_any(uri)
+        with rasterio.io.MemoryFile(data) as mf:
+            with mf.open() as src:
+                band = src.read(1).astype("float64")
+                nodata = src.nodata
+                if i == 0:
+                    ref_transform, ref_crs, ref_shape = src.transform, src.crs, band.shape
+                    total = np.zeros(ref_shape, dtype="float64")
+                    valid_count = np.zeros(ref_shape, dtype="int64")
+        if band.shape != ref_shape:
+            raise LiveForcingError(
+                "OBSERVED_FORCING_GRID_MISMATCH",
+                f"{slot_label} {i} shape {band.shape} != reference {ref_shape}; cannot "
+                "cell-sum misaligned grids (same bbox+product should always align)",
+            )
+        cell_mask = np.isfinite(band) & (band != _MRMS_FETCH_NODATA)
+        if nodata is not None and not (isinstance(nodata, float) and math.isnan(nodata)):
+            cell_mask &= band != nodata
+        cell_mask &= band >= 0.0
+        total[cell_mask] += band[cell_mask]
+        valid_count[cell_mask] += 1
+
+    # GEOREFERENCE REPAIR (observed live 2026-07-24): a tiny gridMET bbox subset
+    # can span a SINGLE row, and rioxarray then writes an IDENTITY geotransform
+    # into the fetched COG (cannot infer y-resolution from one coordinate).
+    # The solver contract (compute_precip_area_mean_mm_per_hr) never reads the
+    # transform -- it takes the whole-raster mean -- so netamt is unaffected;
+    # we still stamp an approximate transform from the AOI bbox so the forcing
+    # raster is inspectable/geolocated, and RECORD the repair.
+    transform_repaired = False
+    identity_like = ref_transform is None or (
+        abs(ref_transform.a) == 1.0 and abs(ref_transform.e) == 1.0
+        and ref_transform.b == 0.0 and ref_transform.d == 0.0
+        and ref_transform.c == 0.0 and ref_transform.f in (0.0, float(ref_shape[0]))
+    )
+    if identity_like and fallback_bbox is not None:
+        from rasterio.transform import from_bounds
+
+        w, s, e, n = fallback_bbox
+        ref_transform = from_bounds(w, s, e, n, ref_shape[1], ref_shape[0])
+        transform_repaired = True
+        log.warning(
+            "%s COGs carried an identity geotransform (single-row subset quirk); "
+            "stamped approximate transform from AOI bbox %s (area-mean unaffected)",
+            slot_label, fallback_bbox,
+        )
+
+    out_mask = valid_count > 0
+    out = np.full(ref_shape, _MRMS_FETCH_NODATA, dtype="float32")
+    out[out_mask] = total[out_mask].astype("float32")
+    with rasterio.open(
+        out_path, "w", driver="GTiff", height=ref_shape[0], width=ref_shape[1],
+        count=1, dtype="float32", crs=ref_crs, transform=ref_transform,
+        nodata=_MRMS_FETCH_NODATA, compress="deflate",
+    ) as dst:
+        dst.write(out, 1)
+        dst.set_band_description(1, "accumulated_precipitation_mm")
+        dst.update_tags(units="mm", source=source_tag)
+
+    vals = total[out_mask]
+    return {
+        "n_slots": len(slot_uris),
+        "n_valid_cells": int(out_mask.sum()),
+        "max_total_mm": float(vals.max()) if vals.size else 0.0,
+        "mean_total_mm": float(vals.mean()) if vals.size else 0.0,
+        "transform_repaired_from_bbox": transform_repaired,
+    }
+
+
+def _era5_to_total_mm(era5_uri: str, out_path: Path, n_hours: int) -> dict[str, Any]:
+    """Convert an ERA5 total_precipitation COG (metres, time-MEAN) -> total-mm raster.
+
+    UNIT CHAIN (shown): ERA5 ``total_precipitation`` is the per-hour accumulated
+    depth in **metres**; ``fetch_era5_reanalysis`` returns the TIME-MEAN over the
+    window (mean hourly depth, m). Total accumulation over the window =
+    ``mean_hourly_m * 1000 (m->mm) * n_hours``. The forcing path then divides the
+    area-mean by ``duration_hr(=n_hours)`` to recover ``mean_hourly_mm`` -- so the
+    x1000 m->mm conversion is the load-bearing step (omitting it would understate
+    rainfall by 1000x: exactly the unit bug the harness guards against).
+    """
+    import numpy as np
+    import rasterio
+
+    data = _read_bytes_any(era5_uri)
+    with rasterio.io.MemoryFile(data) as mf:
+        with mf.open() as src:
+            band = src.read(1).astype("float64")
+            nodata = src.nodata
+            transform, crs, shape = src.transform, src.crs, band.shape
+    mask = np.isfinite(band)
+    if nodata is not None and not (isinstance(nodata, float) and math.isnan(nodata)):
+        mask &= band != nodata
+    mask &= band >= 0.0
+    total_vals = band * _MM_PER_M * float(n_hours)
+    out = np.full(shape, _MRMS_FETCH_NODATA, dtype="float32")
+    out[mask] = total_vals[mask].astype("float32")
+    with rasterio.open(
+        out_path, "w", driver="GTiff", height=shape[0], width=shape[1],
+        count=1, dtype="float32", crs=crs, transform=transform,
+        nodata=_MRMS_FETCH_NODATA, compress="deflate",
+    ) as dst:
+        dst.write(out, 1)
+        dst.set_band_description(1, "accumulated_precipitation_mm")
+        dst.update_tags(units="mm", source="ERA5 total_precipitation (m->mm x1000 x n_hours)")
+
+    vals = total_vals[mask]
+    return {
+        "n_hours": n_hours,
+        "n_valid_cells": int(mask.sum()),
+        "max_total_mm": float(vals.max()) if vals.size else 0.0,
+        "mean_total_mm": float(vals.mean()) if vals.size else 0.0,
+    }
+
+
+def build_observed_forcing(
+    aoi_bbox: tuple[float, ...],
+    window: str,
+    duration_hr: int,
+    out_dir: Path,
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    """Build the observed-precip forcing raster for live Harvey mode.
+
+    Fallback chain (repo data-source norm): MRMS 1h QPE primary (1 km hourly,
+    archive 2020-10-14->present; pre-archive windows skip it without probing) ->
+    gridMET daily ``pr`` (4 km CONUS, 1979->present, no key -- the tier that
+    unblocks 2017 Harvey) -> ERA5 (27 km, Copernicus CDS key) -> typed
+    ``LiveForcingError`` if ALL fail (no silent design-storm substitution). Each
+    return records which source was used + its resolution caveat. Returns a dict
+    carrying the local ``forcing_raster_uri`` (a single accumulated-mm GeoTIFF
+    the contract accepts), the source used, resolution caveat, honest limitation
+    note, and BOTH netamt numbers (preview over the hours the rasters actually
+    represent vs the solver's --duration-hr divisor).
+
+    ``dry_run=True`` resolves + prints the PLAN (bbox, hourly valid_times, unit
+    chain, duration mapping) and returns WITHOUT any network fetch or file write
+    -- the side-effect-free seam used to verify arg plumbing.
+    """
+    start, end = _parse_live_window(window)
+    hours = _enumerate_hours(start, end)
+    n_hours = len(hours)
+    plan: dict[str, Any] = {
+        "aoi_bbox": list(aoi_bbox),
+        "window": [start.isoformat(), end.isoformat()],
+        "n_hours": n_hours,
+        "duration_hr": duration_hr,
+        "tier_1_primary": (
+            "fetch_mrms_qpe(accumulation='1h') per hour, cell-summed to total mm "
+            "(1 km hourly; noaa-mrms-pds archive starts 2020-10-14)"
+        ),
+        "tier_2_daily": (
+            "fetch_gridmet(variable='pr') per WHOLE day, cell-summed to total mm "
+            "(4 km daily, CONUS 1979->present, no key -- unblocks 2017 Harvey)"
+        ),
+        "tier_3_last_resort": (
+            "fetch_era5_reanalysis(total_precipitation) x1000 m->mm x n_hours "
+            "(27 km; needs Copernicus CDS key)"
+        ),
+        "unit_chain": (
+            "MRMS mm (1h accum) / gridMET pr mm (daily accum) --sum--> total mm; "
+            "contract raster_units default 'mm' (1:1, no scaling); ERA5 is metres "
+            "-> x1000 m->mm x n_hours; solver netamt = area_mean_mm / "
+            f"duration_hr({duration_hr})"
+        ),
+        # HONEST COVERAGE CAVEAT (verified live 2026-07-24): the public
+        # noaa-mrms-pds MRMS QPE archive starts 2020-10-14 -- it does NOT cover
+        # the 2017 Harvey default window. Pre-archive windows skip straight to
+        # the gridMET daily tier (CONUS 1979->present, no key), so 2017 Harvey
+        # runs WITHOUT a CDS key; ERA5 remains the keyed last resort.
+        "mrms_coverage_note": (
+            "noaa-mrms-pds 01H Pass2 archive begins 2020-10-14; the 2017 Harvey "
+            "window is NOT MRMS-covered -> gridMET daily tier engages (no key); "
+            "ERA5 (CDS key) is the last resort"
+        ),
+    }
+    if start < _MRMS_ARCHIVE_START:
+        log.warning(
+            "requested window start %s predates MRMS AWS coverage (%s); MRMS tier "
+            "will be SKIPPED -> gridMET daily tier (4 km, no key)",
+            start.isoformat(), _MRMS_ARCHIVE_START.date().isoformat(),
+        )
+    if n_hours != duration_hr:
+        warn = (
+            f"window spans {n_hours} h but --duration-hr={duration_hr}; the forcing "
+            "path divides the area-mean by duration_hr, so these SHOULD match for "
+            "netamt to equal the true observed mean rate"
+        )
+        plan["window_duration_mismatch_warning"] = warn
+        log.warning(warn)
+
+    if dry_run:
+        plan["dry_run"] = True
+        plan["hours"] = [h.strftime("%Y-%m-%dT%H:00:00Z") for h in hours]
+        return {"forcing_raster_uri": None, "source": "dry-run(plan-only)", **plan}
+
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    _OQ6_COLLAPSE_NOTE = (
+        "OQ-6 area-mean netamt: the forcing_raster_uri contract COLLAPSES "
+        "this raster to its domain area-mean (uniform in SPACE) and applies "
+        "it as a CONSTANT rate (uniform in TIME). The real space+time "
+        "rainfall structure is NOT resolved by the v0.1 forcing contract; "
+        "the real spatial pattern is built + preserved in this file but only "
+        "the area-mean drives the SFINCS solve."
+    )
+
+    def _divisor_fields(mean_total_mm: float, represented_hours: int) -> dict[str, Any]:
+        """Preview netamt divides by the ACTUAL hours the summed rasters
+        represent; the REAL solver call (run_model_flood_scenario ->
+        compute_precip_area_mean_mm_per_hr) divides the area-mean by
+        --duration-hr. Both are reported so a represented!=duration mismatch is
+        visible, never silently double-accounted."""
+        return {
+            "represented_hours": represented_hours,
+            "netamt_preview_mm_per_hr": mean_total_mm / float(represented_hours),
+            "solver_divisor_hr": duration_hr,
+            "solver_netamt_mm_per_hr": mean_total_mm / float(duration_hr),
+            "divisor_note": (
+                f"preview divides total mm by the {represented_hours} h the summed "
+                f"rasters actually represent; the solver call divides the area-mean "
+                f"by --duration-hr={duration_hr}. "
+                + ("These MATCH -- no double-accounting."
+                   if represented_hours == duration_hr else
+                   "MISMATCH -- the solver's constant rate will differ from the true "
+                   "observed mean rate by the ratio represented_hours/duration_hr; "
+                   "align --duration-hr with the represented hours before a scored run.")
+            ),
+        }
+
+    # --- Tier 1: MRMS 1h QPE (primary; noaa-mrms-pds starts 2020-10-14) -------
+    mrms_errors: list[str] = []
+    if start < _MRMS_ARCHIVE_START:
+        skip_msg = (
+            f"window start {start.isoformat()} predates the noaa-mrms-pds 01H "
+            f"Pass2 archive start {_MRMS_ARCHIVE_START.date().isoformat()} "
+            "(verified live) -- skipping the MRMS tier without probing"
+        )
+        mrms_errors.append(f"skipped: {skip_msg}")
+        log.warning("%s; trying gridMET daily tier", skip_msg)
+    else:
+        try:
+            fetch_mrms = TOOL_REGISTRY["fetch_mrms_qpe"].fn
+            hourly_uris: list[str] = []
+            for h in hours:
+                layer = fetch_mrms(
+                    bbox=aoi_bbox,
+                    accumulation="1h",
+                    valid_time=h.strftime("%Y-%m-%dT%H:00:00Z"),
+                )
+                hourly_uris.append(layer.uri)
+            out_path = out_dir / "harvey_mrms_accum_mm.tif"
+            stats = _accumulate_precip_rasters_to_total_mm(
+                hourly_uris, out_path,
+                source_tag="NOAA MRMS 1h QPE Pass2 (summed over window)",
+                slot_label="MRMS hour",
+                fallback_bbox=aoi_bbox,
+            )
+            return {
+                "forcing_raster_uri": str(out_path),
+                "source": "mrms",
+                "resolution_caveat": "MRMS ~1 km CONUS gauge-corrected (Pass2)",
+                "limitation_note": _OQ6_COLLAPSE_NOTE,
+                **_divisor_fields(stats["mean_total_mm"], stats["n_slots"]),
+                **plan,
+                **stats,
+            }
+        except LiveForcingError:
+            raise  # our own typed construction error (e.g. grid mismatch) -- do not mask
+        except Exception as exc:  # noqa: BLE001 -- upstream MRMS failure -> next tier
+            mrms_errors.append(f"{type(exc).__name__}: {exc}")
+            log.warning(
+                "MRMS primary forcing failed (%s: %s) -- falling back to gridMET daily",
+                type(exc).__name__, exc,
+            )
+
+    # --- Tier 2: gridMET daily pr (CONUS 4 km, 1979->present, no key) ---------
+    # Unblocks pre-2020-10 CONUS windows (2017 Harvey) that MRMS cannot cover.
+    # gridMET pr is natively mm/day; fetched PER DAY (start_date==end_date --
+    # fetch_gridmet time-MEANS across its window, so a one-day call returns that
+    # day's accumulation exactly) and cell-summed to total mm. Daily data cannot
+    # be sub-sliced: whole bounding days are pulled and the excess vs the
+    # requested window is recorded honestly via represented_hours.
+    gridmet_errors: list[str] = []
+    try:
+        fetch_gridmet = TOOL_REGISTRY["fetch_gridmet"].fn
+        days = _enumerate_days(start, end)
+        daily_uris: list[str] = []
+        for d in days:
+            layer = fetch_gridmet(
+                bbox=aoi_bbox,
+                variable="pr",
+                start_date=d.isoformat(),
+                end_date=d.isoformat(),
+            )
+            daily_uris.append(layer.uri)
+        out_path = out_dir / "harvey_gridmet_accum_mm.tif"
+        stats = _accumulate_precip_rasters_to_total_mm(
+            daily_uris, out_path,
+            source_tag="gridMET pr (daily mm, summed over window days)",
+            slot_label="gridMET day",
+            fallback_bbox=aoi_bbox,
+        )
+        represented_hours = len(days) * _HOURS_PER_DAY
+        partial_day_note = ""
+        if represented_hours != n_hours:
+            partial_day_note = (
+                f" DAILY GRANULARITY: the window spans {n_hours} h but daily data "
+                f"pulled {len(days)} WHOLE day(s) = {represented_hours} h of rain "
+                "(days cannot be sub-sliced); the total therefore includes "
+                "precipitation outside the requested hours."
+            )
+        return {
+            "forcing_raster_uri": str(out_path),
+            "source": "gridmet",
+            "resolution_caveat": (
+                "gridMET ~4 km CONUS PRISM/gauge-blended DAILY (coarser than MRMS "
+                "1 km hourly; finer than ERA5 27 km). Fallback tier -- MRMS "
+                "unavailable for this window."
+            ),
+            "limitation_note": _OQ6_COLLAPSE_NOTE + partial_day_note,
+            "days_fetched": [d.isoformat() for d in days],
+            "mrms_errors": mrms_errors,
+            **_divisor_fields(stats["mean_total_mm"], represented_hours),
+            **plan,
+            **stats,
+        }
+    except LiveForcingError:
+        raise
+    except Exception as exc:  # noqa: BLE001 -- upstream gridMET failure -> ERA5 tier
+        gridmet_errors.append(f"{type(exc).__name__}: {exc}")
+        log.warning(
+            "gridMET daily forcing failed (%s: %s) -- falling back to ERA5",
+            type(exc).__name__, exc,
+        )
+
+    # --- Tier 3: ERA5 fallback: single retrieve over the window (needs CDS key) ---
+    try:
+        fetch_era5 = TOOL_REGISTRY["fetch_era5_reanalysis"].fn
+        era5_layer = fetch_era5(
+            bbox=aoi_bbox,
+            variable="total_precipitation",
+            start_date=start.date().isoformat(),
+            end_date=(end - timedelta(hours=1)).date().isoformat(),
+        )
+        out_path = out_dir / "harvey_era5_accum_mm.tif"
+        stats = _era5_to_total_mm(era5_layer.uri, out_path, n_hours)
+        return {
+            "forcing_raster_uri": str(out_path),
+            "source": "era5",
+            "resolution_caveat": (
+                "ERA5 ~27 km (COARSE vs MRMS 1 km / gridMET 4 km); time-MEAN hourly "
+                "precip converted m->mm (x1000) x n_hours -> total mm. LAST-RESORT "
+                "tier -- MRMS and gridMET both unavailable."
+            ),
+            "limitation_note": (
+                "OQ-6 area-mean netamt (uniform in space AND time) PLUS a ~27 km ERA5 "
+                "grid time-meaned over the window: doubly smeared vs the observed "
+                "rainfall. Honest fallback because MRMS and gridMET both failed."
+            ),
+            "mrms_errors": mrms_errors,
+            "gridmet_errors": gridmet_errors,
+            **_divisor_fields(stats["mean_total_mm"], n_hours),
+            **plan,
+            **stats,
+        }
+    except Exception as exc:  # noqa: BLE001 -- fallback chain exhausted -> typed honest fail
+        raise LiveForcingError(
+            "OBSERVED_FORCING_UNAVAILABLE",
+            "ALL observed-precip tiers failed -- NO silent design-storm "
+            f"substitution. MRMS errors: {mrms_errors}; gridMET errors: "
+            f"{gridmet_errors}; ERA5 error: {type(exc).__name__}: {exc}",
+        ) from exc
+
+
 async def main_live(args: argparse.Namespace) -> int:
     print(LIVE_DISCIPLINE_NOTE)
     if args.aoi_bbox is None:
@@ -734,6 +1248,42 @@ async def main_live(args: argparse.Namespace) -> int:
             "sub-basin."
         )
         return 1
+    aoi_bbox = tuple(float(x) for x in args.aoi_bbox.split(","))
+
+    # --- DRY-RUN: side-effect-free plan check (arg plumbing + forcing plan). ---
+    # Takes the --aoi-bbox half of the gate but SKIPS the typed confirmation
+    # because it makes ZERO live calls (no fetch, no solve) -- it never reaches
+    # the solver, so the double gate that guards the REAL run below is untouched
+    # (that path still requires BOTH --aoi-bbox AND the typed confirmation).
+    if args.dry_run:
+        log.info("=== LIVE DRY-RUN (arg plumbing + forcing plan; no live call) ===")
+        if args.forcing == "observed":
+            with tempfile.TemporaryDirectory(prefix="l2_live_dryrun_") as td:
+                plan = build_observed_forcing(
+                    aoi_bbox, args.window, args.duration_hr, Path(td), dry_run=True
+                )
+            print("\n=== OBSERVED FORCING PLAN (dry-run) ===")
+            print(json.dumps(plan, indent=2, default=str))
+        else:
+            print("\n=== DESIGN FORCING PLAN (dry-run) ===")
+            print(json.dumps({
+                "forcing": "design",
+                "return_period_yr": args.return_period_yr,
+                "duration_hr": args.duration_hr,
+                "aoi_bbox": list(aoi_bbox),
+                "note": (
+                    "Atlas 14 design storm (EXPLICIT fallback mode) -- NOT observed "
+                    "Harvey precip; e2e-harness.md pins OBSERVED precip for HWM scoring"
+                ),
+            }, indent=2, default=str))
+        record(
+            "live-0-dry-run", True,
+            f"forcing={args.forcing} aoi={aoi_bbox} window={args.window} "
+            f"duration_hr={args.duration_hr}",
+        )
+        print_step_table()
+        return 0
+
     try:
         confirmation = input(
             "Type EXACTLY 'I CONFIRM LIVE HARVEY RUN' to proceed (any other "
@@ -751,32 +1301,80 @@ async def main_live(args: argparse.Namespace) -> int:
     # automation -- executing it live is exclusively NATE's call.
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    aoi_bbox = tuple(float(x) for x in args.aoi_bbox.split(","))
-    log.info("LIVE: baseline flood run (real Atlas 14 / observed precip) bbox=%s", aoi_bbox)
+    log.info("LIVE: baseline flood run (forcing=%s) bbox=%s", args.forcing, aoi_bbox)
     # NOTE (discovered live in smoke mode): AssessmentEnvelope.project_id /
     # .session_id are pydantic-constrained to actual 26-char ULIDs -- a
     # free-text tag there fails validation AFTER the solve completes. No
     # free-text case tag at this call site; recognizability comes from the
     # run_id(s) this prints, same as smoke mode.
     run_flood = TOOL_REGISTRY["run_model_flood_scenario"].fn
-    baseline = await run_flood(
-        bbox=aoi_bbox,
-        duration_hr=args.duration_hr,
-        return_period_yr=args.return_period_yr,
-        compute_class="medium",
-    )
+
+    # --- Step 1: forcing construction (OBSERVED default; DESIGN fallback). ---
+    if args.forcing == "observed":
+        forcing_dir = Path(tempfile.mkdtemp(prefix="l2_live_forcing_"))
+        try:
+            forcing_info = build_observed_forcing(
+                aoi_bbox, args.window, args.duration_hr, forcing_dir, dry_run=False
+            )
+        except LiveForcingError as exc:  # typed honest failure -- never internalized
+            record(
+                "live-1-observed-forcing", False,
+                f"TYPED FAILURE [{exc.error_code}]: {exc}",
+            )
+            print_step_table()
+            return 1
+        print("\n=== OBSERVED FORCING BUILT ===")
+        print(json.dumps(
+            {k: v for k, v in forcing_info.items() if k != "hours"},
+            indent=2, default=str,
+        ))
+        record(
+            "live-1-observed-forcing", True,
+            f"source={forcing_info['source']} n_hours={forcing_info.get('n_hours')} "
+            f"max_total_mm={forcing_info.get('max_total_mm')} "
+            f"mean_total_mm={forcing_info.get('mean_total_mm')} "
+            f"netamt_preview_mm_per_hr={forcing_info.get('netamt_preview_mm_per_hr')} "
+            f"caveat={forcing_info.get('resolution_caveat')} "
+            f"LIMITATION={forcing_info.get('limitation_note')}",
+        )
+        # forcing_raster_uri set -> workflow SKIPS Atlas 14 (model_flood_scenario.py
+        # ~3793); return_period_yr is deliberately omitted on this path.
+        baseline = await run_flood(
+            bbox=aoi_bbox,
+            duration_hr=args.duration_hr,
+            forcing_raster_uri=forcing_info["forcing_raster_uri"],
+            compute_class="medium",
+        )
+    else:
+        # DESIGN fallback (explicit, opt-in): today's Atlas 14 design-storm
+        # behaviour, byte-identical. NOT physically valid for HWM scoring -- a
+        # design storm is not the observed Harvey precip; recorded so a reviewer
+        # cannot mistake a design-storm run's skill numbers for observed skill.
+        record(
+            "live-1-design-forcing", True,
+            f"Atlas 14 design storm return_period_yr={args.return_period_yr} "
+            f"duration_hr={args.duration_hr} -- WARNING: design storm != observed "
+            "Harvey precip; e2e-harness.md pins OBSERVED precip for HWM scoring",
+        )
+        baseline = await run_flood(
+            bbox=aoi_bbox,
+            duration_hr=args.duration_hr,
+            return_period_yr=args.return_period_yr,
+            compute_class="medium",
+        )
+
     if _is_failed_envelope(baseline):
-        record("live-1-baseline-run", False, f"FAILED envelope: {_failure_detail(baseline)}")
+        record("live-2-baseline-run", False, f"FAILED envelope: {_failure_detail(baseline)}")
         print_step_table()
         return 1
-    record("live-1-baseline-run", True, f"peak_depth_uri={baseline.uri}")
+    record("live-2-baseline-run", True, f"peak_depth_uri={baseline.uri}")
 
     diag = step_diagnostics(baseline.uri)
-    record("live-2-read_run_diagnostics", True, json.dumps(diag, default=str)[:500])
+    record("live-3-read_run_diagnostics", True, json.dumps(diag, default=str)[:500])
 
     fetch_hwm = TOOL_REGISTRY["fetch_high_water_marks"].fn
     hwm_layer = fetch_hwm(bbox=aoi_bbox, event="2017 Harvey")
-    record("live-3-fetch_high_water_marks", True, f"uri={hwm_layer.uri}")
+    record("live-4-fetch_high_water_marks", True, f"uri={hwm_layer.uri}")
 
     # SPLIT-SAMPLE (spatial split -- one event cannot split temporally):
     # calibrate on a deterministic subset, score the HELD-OUT remainder.
@@ -798,15 +1396,15 @@ async def main_live(args: argparse.Namespace) -> int:
     held_path = hwm_local.parent / "hwm_heldout.fgb"
     gdf.iloc[cal_idx].to_file(cal_path, driver="FlatGeobuf", engine="pyogrio")
     gdf.iloc[held_idx].to_file(held_path, driver="FlatGeobuf", engine="pyogrio")
-    record("live-4-split-sample", True, f"n_calibrate={len(cal_idx)} n_heldout={len(held_idx)}")
+    record("live-5-split-sample", True, f"n_calibrate={len(cal_idx)} n_heldout={len(held_idx)}")
 
     paired_held_before = step_pairing(baseline.uri, held_path)
     skill_held_before = step_skill(paired_held_before.paired_table_uri)
-    record("live-5-skill(held-out, before)", True, json.dumps(skill_held_before["metrics"], default=str))
+    record("live-6-skill(held-out, before)", True, json.dumps(skill_held_before["metrics"], default=str))
 
     deck_dir = Path(os.environ.get("TRID3NT_RUNS_DIR", "data/runs")) / extract_run_id(baseline.uri)
     setter_env = step_setter(str(deck_dir))
-    record("live-6-set_sfincs_parameters", True, json.dumps(setter_env["changes_applied"], default=str))
+    record("live-7-set_sfincs_parameters", True, json.dumps(setter_env["changes_applied"], default=str))
 
     model_root = model_root_from_child_setup(setter_env["child_setup_uri"])
     manifest_path = build_rerun_manifest(model_root)
@@ -815,14 +1413,14 @@ async def main_live(args: argparse.Namespace) -> int:
     handle = run_solver(solver="sfincs", model_setup_uri=f"file://{manifest_path}", compute_class="medium")
     child_result = await wait_for_completion(handle, poll_interval_s=10, timeout_s=1800)
     if child_result.status != "complete":
-        record("live-7-rerun-child", False, f"status={child_result.status} error={child_result.error_message}")
+        record("live-8-rerun-child", False, f"status={child_result.status} error={child_result.error_message}")
     else:
         from trid3nt_server.workflows.postprocess_flood import postprocess_flood
 
         layers, _m = postprocess_flood(child_result.output_uri, run_id=handle.run_id)
         paired_held_after = step_pairing(layers[0].uri, held_path)
         skill_held_after = step_skill(paired_held_after.paired_table_uri)
-        record("live-7-rerun-child + re-score (held-out)", True, json.dumps(skill_held_after["metrics"], default=str))
+        record("live-8-rerun-child + re-score (held-out)", True, json.dumps(skill_held_after["metrics"], default=str))
 
     print_step_table()
     return 0 if all(r["ok"] for r in RESULTS) else 1
@@ -837,8 +1435,32 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--live", action="store_true", help="Run LIVE Harvey mode instead of smoke. Gated + confirmed.")
     p.add_argument("--aoi-bbox", default=None, help="Live mode only: 'west,south,east,north' EPSG:4326.")
-    p.add_argument("--duration-hr", type=int, default=24, help="Live mode only.")
-    p.add_argument("--return-period-yr", type=int, default=100, help="Live mode only (design-storm fallback).")
+    p.add_argument(
+        "--forcing", choices=["observed", "design"], default="observed",
+        help="Live mode precip forcing. 'observed' (DEFAULT) = real Harvey MRMS QPE "
+        "(-> ERA5 fallback), the only physically valid forcing for HWM scoring. "
+        "'design' = Atlas 14 return-period design storm (EXPLICIT fallback; NOT "
+        "observed precip).",
+    )
+    p.add_argument(
+        "--window", default=DEFAULT_LIVE_WINDOW,
+        help="Live/observed mode: precip window 'YYYY-MM-DDTHH,YYYY-MM-DDTHH' (UTC, "
+        f"end EXCLUSIVE). Default {DEFAULT_LIVE_WINDOW} (Harvey peak Houston rainfall, "
+        "48 h -- keep consistent with --duration-hr).",
+    )
+    p.add_argument(
+        "--dry-run", action="store_true",
+        help="Live mode: parse args + build the forcing PLAN (no fetch, no solve) and "
+        "exit. Verifies arg plumbing without the live chain. Requires --aoi-bbox; "
+        "skips the typed confirmation since it makes zero live calls.",
+    )
+    p.add_argument(
+        "--duration-hr", type=int, default=48,
+        help="Live mode: SFINCS run duration AND observed-precip accumulation window "
+        "(the forcing area-mean is divided by this). Default 48 (matches the default "
+        "--window).",
+    )
+    p.add_argument("--return-period-yr", type=int, default=100, help="Live mode: --forcing design ARI years.")
     p.add_argument("--calibrate-fraction", type=float, default=0.5, help="Live mode only: split-sample fraction.")
     p.add_argument("--split-seed", type=int, default=20170825, help="Live mode only: deterministic split seed.")
     return p.parse_args(argv)

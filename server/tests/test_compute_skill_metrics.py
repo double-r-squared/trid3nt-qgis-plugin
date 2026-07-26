@@ -146,6 +146,33 @@ def test_peak_timing_error() -> None:
     assert m["peak_timing_error"] == pytest.approx(-3600.0)
 
 
+def test_static_pairing_peak_timing_null(tmp_path) -> None:
+    # A STATIC spatial scatter: one row per DISTINCT obs_id (like a max-flood
+    # raster sampled at surveyed HWMs), with per-point survey dates in `time`.
+    # There is no shared model time axis, so peak_timing_error MUST be null --
+    # never the fabricated -86400 s sentinel the live Harvey run emitted.
+    records = [
+        {"obs_id": f"STN{i}", "observed": o, "simulated": s, "time": t}
+        for i, (o, s, t) in enumerate(
+            [
+                (15.0, 5.0, "2017-08-27"),
+                (18.0, 6.0, "2017-08-28"),
+                (12.0, 4.0, "2017-08-27"),
+                (20.0, 7.0, "2017-08-26"),  # observed peak (idx3), sim peak (idx3)
+                (14.0, 5.5, "2017-08-28"),
+            ]
+        )
+    ]
+    path = str(tmp_path / "static.fgb")
+    _write_paired_table(path, records)
+
+    result = compute_skill_metrics(paired_table_uri=path)
+    assert result["metrics"]["peak_timing_error"] is None
+    assert any("STATIC spatial comparison" in c for c in result["caveats"])
+    # Peak MAGNITUDE error is still real: 100*(7-20)/20 = -65.0.
+    assert result["metrics"]["peak_error"] == pytest.approx(-65.0)
+
+
 def test_variable_head_adds_srms() -> None:
     observed = [10.0, 20.0, 30.0, 40.0, 50.0]
     simulated = [v + 5.0 for v in observed]

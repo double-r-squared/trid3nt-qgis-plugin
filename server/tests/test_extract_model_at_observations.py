@@ -23,13 +23,34 @@ from shapely.geometry import Point
 
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.tools.processing import extract_model_at_observations as exmod
 from trid3nt_server.tools.processing.extract_model_at_observations import (
     PairedObsLayerURI,
     PairingDatumMismatchError,
     PairingInputError,
     PairingNoPairsError,
+    PairingQuantityMismatchError,
     extract_model_at_observations,
 )
+
+
+def _write_obs_lonlat(path: str, records) -> str:
+    """Write observation points at explicit lon/lat (props = the rest of rec)."""
+    features = []
+    for rec in records:
+        rec = dict(rec)
+        lon, lat = rec.pop("lon"), rec.pop("lat")
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": rec,
+            }
+        )
+    pathlib.Path(path).write_text(
+        json.dumps({"type": "FeatureCollection", "features": features})
+    )
+    return path
 
 # Synthetic model grid: 40x40 at 30 m, UTM 11N, head = BASE + SLOPE*col.
 N = 40
@@ -454,3 +475,124 @@ def test_station_tolerance_excludes_far_station(tmp_path) -> None:
             model_layer_uri=model, observations_layer_uri=obs,
             station_tolerance_m=500.0, _output_dir=str(tmp_path),
         )
+
+
+# ---------------------------------------------------------------------------
+# Quantity semantics -- WSE (elevation) vs model DEPTH (the Harvey L2 bug).
+# ---------------------------------------------------------------------------
+
+
+def test_stn_hwm_wse_to_depth_via_dem(tmp_path) -> None:
+    # The committed STN HWM fixture carries elev_ft = WATER-SURFACE ELEVATION.
+    # Paired against a model flood-DEPTH raster, the tool MUST convert
+    # WSE->depth per point via a ground-elevation DEM (NOT pair a 15 m WSE
+    # against a 2 m depth). Hand-computed: depth = elev_ft*0.3048 - ground(1.0).
+    obs, records = _stn_hwm_layer(str(tmp_path / "hwm.geojson"))
+    bbox = (-86.0, 29.0, -82.8, 30.3)
+    model = _write_constant_raster_4326(str(tmp_path / "flood_depth.tif"), bbox, value=2.0)
+    dem = _write_constant_raster_4326(str(tmp_path / "ground_dem.tif"), bbox, value=1.0)
+
+    result = extract_model_at_observations(
+        model_layer_uri=model,
+        observations_layer_uri=obs,
+        model_datum="NAVD88",
+        ground_elevation_uri=dem,
+        _output_dir=str(tmp_path),
+    )
+    assert result.n_paired == len(records)
+    assert result.alignment["model_quantity"] == "depth_above_ground"
+    assert result.alignment["observed_quantity"] == "water_surface_elevation"
+    assert "depth = observed_WSE - ground_elev" in result.alignment["quantity_conversion"]
+    assert "ground_source" in result.alignment
+    assert "WSE" in result.units_warning or "converted" in result.units_warning
+
+    gdf = gpd.read_file(result.uri)
+    assert "ground_elev_m" in gdf.columns
+    assert np.allclose(gdf["ground_elev_m"].to_numpy(), 1.0, atol=1e-6)
+    got = dict(zip(gdf["obs_id"].astype(str), gdf["observed"].astype(float)))
+    for r in records:
+        oid = str(r["hwm_id"])
+        expected_depth = float(r["elev_ft"]) * 0.3048 - 1.0  # hand-computed
+        assert got[oid] == pytest.approx(expected_depth, abs=1e-4)
+    # simulated is the constant model depth (2.0), NOT touched by the conversion.
+    assert np.allclose(gdf["simulated"].to_numpy(), 2.0, atol=1e-6)
+
+
+def test_wse_to_depth_negative_flag(tmp_path) -> None:
+    # Ground sampled ABOVE the observed water surface -> negative depth, KEPT
+    # and flagged (never clamped to 0).
+    bbox = (-95.6, 29.70, -95.40, 29.80)
+    model = _write_constant_raster_4326(str(tmp_path / "flood_depth.tif"), bbox, value=5.0)
+    dem = _write_constant_raster_4326(str(tmp_path / "ground_dem.tif"), bbox, value=10.0)
+    obs = _write_obs_lonlat(
+        str(tmp_path / "obs.geojson"),
+        [
+            {"lon": -95.50, "lat": 29.75, "hwm_id": "POS", "elev_ft": 60.0},  # 18.288-10=+8.288
+            {"lon": -95.52, "lat": 29.76, "hwm_id": "NEG", "elev_ft": 25.0},  # 7.62-10=-2.38
+        ],
+    )
+    result = extract_model_at_observations(
+        model_layer_uri=model, observations_layer_uri=obs,
+        ground_elevation_uri=dem, _output_dir=str(tmp_path),
+    )
+    assert result.n_paired == 2
+    assert len(result.flags) == 1
+    flag = result.flags[0]
+    assert flag["obs_id"] == "NEG" and flag["flag"] == "negative_depth"
+    assert flag["depth_m"] == pytest.approx(25.0 * 0.3048 - 10.0, abs=1e-3)
+
+    gdf = gpd.read_file(result.uri)
+    got = dict(zip(gdf["obs_id"].astype(str), gdf["observed"].astype(float)))
+    assert got["POS"] == pytest.approx(60.0 * 0.3048 - 10.0, abs=1e-3)  # +8.288, not clamped
+    assert got["NEG"] == pytest.approx(25.0 * 0.3048 - 10.0, abs=1e-3)  # -2.38, not clamped
+    flag_col = dict(zip(gdf["obs_id"].astype(str), gdf["flag"].astype(str)))
+    assert flag_col["NEG"] == "negative_depth"
+    assert flag_col["POS"] == ""
+
+
+def test_quantity_mismatch_no_ground_raises(tmp_path, monkeypatch) -> None:
+    # Model DEPTH vs observed WSE with NO ground source (and the auto-fetch
+    # patched to fail, keeping the test offline) -> typed QuantityMismatchError,
+    # never a silent apples-vs-oranges pairing.
+    def _boom(*_a, **_k):
+        raise RuntimeError("ground DEM unavailable (offline test)")
+
+    monkeypatch.setattr(exmod, "_fetch_ground_dem", _boom)
+    bbox = (-95.6, 29.70, -95.40, 29.80)
+    model = _write_constant_raster_4326(str(tmp_path / "flood_depth.tif"), bbox, value=5.0)
+    obs = _write_obs_lonlat(
+        str(tmp_path / "obs.geojson"),
+        [{"lon": -95.50, "lat": 29.75, "hwm_id": "H1", "elev_ft": 50.0}],
+    )
+    with pytest.raises(PairingQuantityMismatchError):
+        extract_model_at_observations(
+            model_layer_uri=model, observations_layer_uri=obs,
+            _output_dir=str(tmp_path),
+        )
+
+
+def test_quantity_match_depth_vs_depth_no_conversion(tmp_path, monkeypatch) -> None:
+    # A DEPTH model vs a DEPTH observation (height_above_gnd) needs NO
+    # conversion -- and must NOT attempt any ground-DEM fetch.
+    def _fail_if_called(*_a, **_k):
+        raise AssertionError("_fetch_ground_dem must not be called on a match")
+
+    monkeypatch.setattr(exmod, "_fetch_ground_dem", _fail_if_called)
+    bbox = (-95.6, 29.70, -95.40, 29.80)
+    model = _write_constant_raster_4326(str(tmp_path / "flood_depth.tif"), bbox, value=3.0)
+    obs = _write_obs_lonlat(
+        str(tmp_path / "obs.geojson"),
+        [{"lon": -95.50, "lat": 29.75, "hwm_id": "H1", "height_above_gnd": 3.2}],
+    )
+    result = extract_model_at_observations(
+        model_layer_uri=model, observations_layer_uri=obs,
+        observed_value_field="height_above_gnd", observed_units="meters",
+        _output_dir=str(tmp_path),
+    )
+    assert result.n_paired == 1
+    assert result.alignment["model_quantity"] == "depth_above_ground"
+    assert result.alignment["observed_quantity"] == "depth_above_ground"
+    assert result.alignment["quantity_conversion"] == "none (both depth)"
+    gdf = gpd.read_file(result.uri)
+    assert float(gdf["observed"].iloc[0]) == pytest.approx(3.2, abs=1e-4)
+    assert "ground_elev_m" not in gdf.columns
