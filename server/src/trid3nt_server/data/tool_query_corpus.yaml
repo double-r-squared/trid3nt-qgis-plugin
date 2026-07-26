@@ -1799,16 +1799,107 @@ run_telemac:
   - sewage released into the river, how far downstream does it travel
 
 # ---------------------------------------------------------------------------
+# Reports / Case meta
+# ---------------------------------------------------------------------------
+
+compose_case_report:
+  - "write me a summary report for this case"
+  - "generate a situation report of everything we have loaded"
+  - "make a markdown report with all the layers and findings"
+  - "put together a case brief I can share with the team"
+  - "summarize the analysis we have done so far in this case"
+  - "I need a report document listing all the data and results"
+  - "export a written summary of this flood case with the layers"
+
+# ---------------------------------------------------------------------------
+# Exposure / Impact
+# ---------------------------------------------------------------------------
+
+compute_exposure_summary:
+  - "how many people live in the flood zone"
+  - "what buildings are exposed to the inundation"
+  - "estimate the population inside the hazard footprint"
+  - "how many structures are in the flooded area"
+  - "what is the exposure in the surge zone - people and buildings"
+  - "count the buildings affected by this flood result"
+  - "give me a population and building count inside the plume boundary"
+
+# ---------------------------------------------------------------------------
+# Time series
+# ---------------------------------------------------------------------------
+
+extract_timeseries_at_point:
+  - "how does the flood depth at this location change over time"
+  - "plot water level at the pier over the simulation"
+  - "extract a time series of depth at my house from the flood run"
+  - "show me how surge height evolves at this point over the 48 hours"
+  - "graph the water depth over time at this coordinate"
+  - "what is the hydrograph at the outfall from the SWMM run"
+  - "track how the contaminant concentration changes over the animation frames"
+
+# ---------------------------------------------------------------------------
+# Storm tracks
+# ---------------------------------------------------------------------------
+
+fetch_storm_tracks:
+  - "show me the track of Hurricane Michael"
+  - "where did Hurricane Katrina travel"
+  - "fetch all historical hurricane paths that crossed Florida"
+  - "pull the IBTrACS best track for Tropical Storm Alberto"
+  - "what cyclones have passed within 100 km of Tampa Bay"
+  - "get tropical cyclone tracks in the Gulf of Mexico from 2005"
+  - "show me Category 5 hurricane tracks in the Atlantic"
+
+# ---------------------------------------------------------------------------
+# User layer import
+# ---------------------------------------------------------------------------
+
+import_user_layer:
+  - "I uploaded a shapefile, register it as a layer"
+  - "add the GeoTIFF I pushed from QGIS as an input layer"
+  - "I have a GeoJSON of parcels, bring it into this case"
+  - "register the raster I just uploaded so the model can use it"
+  - "push my local shapefile into the case as an input"
+  - "import the vector layer I sent as a case input"
+
+# ---------------------------------------------------------------------------
+# Fire spread
+# ---------------------------------------------------------------------------
+
+model_fire_spread:
+  - "simulate wildfire spread from this ignition point"
+  - "if a fire started here, where would it burn"
+  - "run an ELMFIRE simulation for a fire ignition near this location"
+  - "model fire behavior and spread across this landscape"
+  - "forecast how a wildfire would propagate from this point"
+  - "run a fire spread simulation using the current wind conditions"
+  - "if lightning struck here, how far would the fire spread in 24 hours"
+
+# ---------------------------------------------------------------------------
+# Point hazard query
+# ---------------------------------------------------------------------------
+
+query_point_hazard:
+  - "what is the flood depth at my house"
+  - "sample all the layers at this point"
+  - "what does every raster say at 123 Main Street"
+  - "check the hazard value at the Fort Myers pier"
+  - "probe this coordinate against all loaded results"
+  - "what is the water level at this location from the flood run"
+  - "query the depth and velocity at this point from the SFINCS output"
+
+# ---------------------------------------------------------------------------
 # Authoring template (docs/authoring/writing-a-tool.md). example_bbox_area is
 # the COPY-ME example tool; it registers ONLY when TRID3NT_ENABLE_EXAMPLE_TOOL is
 # set. These queries demonstrate the mandatory tool-corpus + retrieval-visibility
 # rule for a new tool -- they route this example's synonyms to it in the BM25 +
 # dense discover index so retrieve_visible_tools(prompt, None, 8) surfaces it.
+#
+# example_bbox_area:
+#   - "roughly how many square kilometres does this bounding box cover"
+#   - "estimate the ground area of this bbox in square km"
+#   - "what is the approximate area of this box on the map"
+#   - "how large is this area of interest in square kilometers"
+#   - "compute the width height and area of this bounding box"
+#   - "give me a quick area sanity check for this rectangle extent"
 # ---------------------------------------------------------------------------
-example_bbox_area:
-  - "roughly how many square kilometres does this bounding box cover"
-  - "estimate the ground area of this bbox in square km"
-  - "what is the approximate area of this box on the map"
-  - "how large is this area of interest in square kilometers"
-  - "compute the width height and area of this bounding box"
-  - "give me a quick area sanity check for this rectangle extent"
