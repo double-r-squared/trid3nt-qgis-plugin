@@ -65,7 +65,9 @@ from trid3nt_server.tools import TOOL_REGISTRY
 import trid3nt_server.workflows.sfincs.flood.flood  # noqa: F401 — side-effect import
 import trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario  # noqa: F401
 import trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest  # noqa: F401
-import trid3nt_server.workflows.pelicun.damage_with_buildings.damage_with_buildings  # noqa: F401
+# PELICUN fold: pelicun_damage_with_buildings folded into the
+# pelicun_damage_assessment template's bbox AUTO-FETCH input mode.
+import trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment  # noqa: F401
 import trid3nt_server.workflows.sfincs.postprocess_flood  # noqa: F401
 import trid3nt_server.workflows.sfincs.sfincs_builder  # noqa: F401
 
@@ -262,10 +264,8 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "hazard_raster_uri": _SAMPLE_RASTER_URI,
         "assets_uri": _SAMPLE_VECTOR_URI,
     },
-    "pelicun_damage_with_buildings": {
-        "hazard_raster_uri": _SAMPLE_RASTER_URI,
-        "bbox": _SAMPLE_BBOX,
-    },
+    # PELICUN fold: pelicun_damage_with_buildings folded into
+    # pelicun_damage_assessment's bbox AUTO-FETCH input mode (no separate tool).
     "run_solver": {
         "solver": "sfincs",
         "model_setup_uri": "s3://trid3nt-runs/test/setup/",

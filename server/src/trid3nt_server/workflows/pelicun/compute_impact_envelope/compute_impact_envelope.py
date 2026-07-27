@@ -13,7 +13,8 @@ read off a typed envelope, never invented (Invariant 1).
     geocode_location (if location_query, no bbox)
       → fetch_usace_nsi(bbox)  OR  compute_building_density(bbox)
       → pelicun_damage_assessment(hazard_raster_uri, assets_uri)
-         (or pelicun_damage_with_buildings for MS_BUILDINGS path)
+         (MS_BUILDINGS path: pelicun_damage_assessment(hazard_raster_uri, bbox)
+          — the AUTO-FETCH input mode does the building-density fetch itself)
       → postprocess_pelicun(damage_layer_uri, flood_layer_uri)
       → ImpactEnvelope dict + narrative string + provenance
 
@@ -46,8 +47,8 @@ doesn't have to assemble it from raw envelope fields.
 Cross-tool dependencies:
 
 - Upstream (consumes): ``geocode_location``, ``fetch_usace_nsi``,
-  ``compute_building_density``, ``pelicun_damage_assessment``,
-  ``pelicun_damage_with_buildings``, ``postprocess_pelicun``.
+  ``compute_building_density``, ``pelicun_damage_assessment`` (both the
+  explicit-inventory and the bbox auto-fetch input modes), ``postprocess_pelicun``.
 - Downstream (feeds): chat narration; Case summary panel UI; MongoDB
   ``runs`` collection for the parent ``AssessmentEnvelope`` linkage.
 """
@@ -232,12 +233,13 @@ async def compute_impact_envelope(
     Four-step deterministic chain (no LLM in the loop):
 
     1. ``geocode_location(location_query)`` (only when ``bbox`` not given).
-    2. ``fetch_usace_nsi(bbox)`` — preferred for CONUS — OR
-       ``pelicun_damage_with_buildings`` (which uses
-       ``compute_building_density``) for international bboxes.
-    3. ``pelicun_damage_assessment(flood_layer_uri, <assets_uri>)``
-       (skipped for the MS_BUILDINGS path, where
-       ``pelicun_damage_with_buildings`` already runs Pelicun internally).
+    2. ``fetch_usace_nsi(bbox)`` — preferred for CONUS — OR (for international
+       bboxes) the ``pelicun_damage_assessment`` bbox AUTO-FETCH mode, which
+       uses ``compute_building_density`` internally.
+    3. ``pelicun_damage_assessment(flood_layer_uri, assets_uri=<nsi>)`` for the
+       NSI path; the MS_BUILDINGS path calls
+       ``pelicun_damage_assessment(flood_layer_uri, bbox=...)`` (auto-fetch mode
+       runs the building-density fetch + Pelicun in one call).
     4. ``postprocess_pelicun(damage_uri, flood_layer_uri)`` →
        ``ImpactEnvelope`` aggregate (SRS Appendix B.6c).
 
@@ -254,9 +256,9 @@ async def compute_impact_envelope(
         - Cases where no flood layer exists yet — run
           ``sfincs_flood`` first.
         - Per-feature damage layers for spatial exploration on the map —
-          call ``pelicun_damage_assessment`` or
-          ``pelicun_damage_with_buildings`` directly. This composer collapses
-          per-feature properties into aggregate totals.
+          call ``pelicun_damage_assessment`` directly (with ``assets_uri`` for
+          an explicit inventory, or ``bbox`` to auto-fetch one). This composer
+          collapses per-feature properties into aggregate totals.
         - Non-flood hazards (the v0.1 fragility set is flood-only).
 
     Examples:
@@ -419,30 +421,31 @@ async def compute_impact_envelope(
         damage_uri = getattr(damage_layer, "uri", None) or str(damage_layer)
 
     elif structure_inventory_source == "MS_BUILDINGS":
-        # MS_BUILDINGS path: the composer ``pelicun_damage_with_buildings``
-        # owns the building-density → point-FGB → Pelicun chain. The
-        # inferred assets_uri is the intermediate point FlatGeobuf, which
-        # the composer hides — surface ``"<ms_buildings>"`` for provenance.
+        # MS_BUILDINGS path (PELICUN fold): the AUTO-FETCH input mode of
+        # ``pelicun_damage_assessment`` (pass a bbox, no assets_uri) owns the
+        # building-density -> point-FGB -> Pelicun chain. The intermediate point
+        # FlatGeobuf is hidden inside the tool -- surface
+        # ``"<ms_buildings>"`` for provenance.
         logger.info(
-            "compute_impact_envelope: MS_BUILDINGS path — pelicun_damage_with_buildings "
-            "hazard=%s bbox=%s fragility=%s",
+            "compute_impact_envelope: MS_BUILDINGS path — pelicun_damage_assessment "
+            "AUTO-FETCH hazard=%s bbox=%s fragility=%s",
             flood_layer_uri,
             resolved_bbox,
             fragility,
         )
         try:
-            ms_fn = TOOL_REGISTRY["pelicun_damage_with_buildings"].fn
-            damage_layer = await ms_fn(
+            pelicun_fn = TOOL_REGISTRY["pelicun_damage_assessment"].fn
+            damage_layer = pelicun_fn(
                 hazard_raster_uri=flood_layer_uri,
                 bbox=resolved_bbox,
                 fragility_set=fragility,
             )
         except Exception as exc:  # noqa: BLE001
             # Distinguish building-density / pelicun failures with the
-            # PELICUN_UPSTREAM_FAILED code; both surface through the
-            # composer's wrapper exception ``PelicunWithBuildingsError``.
+            # PELICUN_UPSTREAM_FAILED code; the auto-fetch mode surfaces failures
+            # through the tool's ``PelicunWithBuildingsError``.
             raise ComputeImpactEnvelopePelicunError(
-                f"pelicun_damage_with_buildings failed: {exc}"
+                f"pelicun_damage_assessment (auto-fetch) failed: {exc}"
             ) from exc
         damage_uri = getattr(damage_layer, "uri", None) or str(damage_layer)
         assets_uri = "<ms_buildings:intermediate>"

@@ -1,7 +1,8 @@
 """PELICUN engine-door slice (engine-door refactor, docs/specs/engine-rollout-contract.md).
 
-Offline floor for the ``run_pelicun`` door + the ``pelicun_damage_assessment`` /
-``pelicun_damage_with_buildings`` templates:
+Offline floor for the ``run_pelicun`` door + the ``pelicun_damage_assessment``
+template (PELICUN fold: the former ``pelicun_damage_with_buildings`` composer
+folded into that ONE template's bbox auto-fetch input mode):
 
 (a) DOOR LISTING - direct-call the door on the live registry; assert the
     read-only concierge envelope shape (``kind == "engine_door"``, a non-empty
@@ -16,8 +17,10 @@ Offline floor for the ``run_pelicun`` door + the ``pelicun_damage_assessment`` /
     gate-expander.
 
 (c) REGISTRY MEMBERSHIP - the old ``run_pelicun_damage_assessment`` /
-    ``run_pelicun_with_buildings`` names are GONE; ``run_pelicun`` is registered
-    tier=door and both templates tier=template.
+    ``run_pelicun_with_buildings`` names AND the folded
+    ``pelicun_damage_with_buildings`` template name are all GONE; ``run_pelicun``
+    is registered tier=door and the single ``pelicun_damage_assessment`` template
+    is tier=template.
 
 No network: the door reads the live registry; the index is rebuilt in-process.
 """
@@ -31,7 +34,9 @@ from trid3nt_server.tools.discovery import tool_retrieval as tr
 from trid3nt_server.tools.simulation.pelicun.run_pelicun.run_pelicun import run_pelicun
 
 _DOOR = "run_pelicun"
-_TEMPLATES = {"pelicun_damage_assessment", "pelicun_damage_with_buildings"}
+# PELICUN fold: ONE template (the with-buildings composer folded into its bbox
+# auto-fetch input mode).
+_TEMPLATES = {"pelicun_damage_assessment"}
 
 
 # ---------------------------------------------------------------------------
@@ -41,17 +46,21 @@ _TEMPLATES = {"pelicun_damage_assessment", "pelicun_damage_with_buildings"}
 
 def test_old_pelicun_names_gone_and_door_templates_registered():
     reg = agent_tools.TOOL_REGISTRY
-    for dead in ("run_pelicun_damage_assessment", "run_pelicun_with_buildings"):
-        assert dead not in reg, f"old registered name {dead} must be REPLACED (no alias)"
+    # The old engine-door RENAME sources AND the folded with-buildings template
+    # name are all gone (no alias): ONE pelicun_damage_assessment template remains.
+    for dead in (
+        "run_pelicun_damage_assessment",
+        "run_pelicun_with_buildings",
+        "pelicun_damage_with_buildings",
+    ):
+        assert dead not in reg, f"folded/old registered name {dead} must be REPLACED (no alias)"
     door = reg[_DOOR].metadata
     assert door.engine == "pelicun" and door.tier == "door"
     for t in _TEMPLATES:
         m = reg[t].metadata
         assert m.engine == "pelicun" and m.tier == "template", t
-    # each template keeps its own source_class (the core is cacheable pelicun_damage;
-    # the buildings composer stays workflow_dispatch).
+    # The single template keeps its cacheable pelicun_damage source_class.
     assert reg["pelicun_damage_assessment"].metadata.source_class == "pelicun_damage"
-    assert reg["pelicun_damage_with_buildings"].metadata.source_class == "workflow_dispatch"
 
 
 # ---------------------------------------------------------------------------

@@ -91,26 +91,42 @@ def test_bad_fragility_set_raises_input_error() -> None:
     assert "hazus_flood_v6" in str(err)
 
 
-def test_none_assets_uri_raises_input_error() -> None:
-    """``assets_uri=None`` → ``PelicunInputError``."""
-    with pytest.raises(PelicunInputError) as excinfo:
-        pelicun_damage_assessment(
-            hazard_raster_uri=_VALID_HAZARD_URI,
-            assets_uri=None,  # type: ignore[arg-type]
-        )
-    assert excinfo.value.error_code == "PELICUN_INPUT_INVALID"
-    assert "assets_uri" in str(excinfo.value)
+def test_no_assets_and_no_bbox_returns_user_input_required() -> None:
+    """PELICUN fold: ``assets_uri=None`` with NO ``bbox`` has no inventory to
+    assess -> a typed ``USER_INPUT_REQUIRED`` envelope (NOT a bare TypeError,
+    and NOT the auto-fetch path — that needs a bbox)."""
+    result = pelicun_damage_assessment(
+        hazard_raster_uri=_VALID_HAZARD_URI,
+        assets_uri=None,  # type: ignore[arg-type]
+    )
+    assert isinstance(result, dict)
+    assert result["error_code"] == "USER_INPUT_REQUIRED"
+    assert result["status"] == "error"
+    # names the either/or the caller must supply.
+    assert "assets_uri" in result["error_message"]
+    assert "bbox" in result["error_message"]
 
 
-def test_none_hazard_raster_uri_raises_input_error() -> None:
-    """``hazard_raster_uri=None`` → ``PelicunInputError``."""
-    with pytest.raises(PelicunInputError) as excinfo:
-        pelicun_damage_assessment(
-            hazard_raster_uri=None,  # type: ignore[arg-type]
-            assets_uri=_VALID_ASSETS_URI,
-        )
-    assert excinfo.value.error_code == "PELICUN_INPUT_INVALID"
-    assert "hazard_raster_uri" in str(excinfo.value)
+def test_missing_both_required_inputs_returns_user_input_required() -> None:
+    """PELICUN fold: a call missing hazard AND assets/bbox (the bare-TypeError
+    shape the panel flagged) returns the typed envelope, never a TypeError."""
+    result = pelicun_damage_assessment()  # no args at all
+    assert isinstance(result, dict)
+    assert result["error_code"] == "USER_INPUT_REQUIRED"
+    assert "hazard_raster_uri" in result["error_message"]
+
+
+def test_none_hazard_raster_uri_returns_user_input_required() -> None:
+    """PELICUN fold: a missing ``hazard_raster_uri`` (even with a valid
+    ``assets_uri``) is a missing required input -> typed USER_INPUT_REQUIRED
+    envelope (was a raised PelicunInputError pre-fold)."""
+    result = pelicun_damage_assessment(
+        hazard_raster_uri=None,  # type: ignore[arg-type]
+        assets_uri=_VALID_ASSETS_URI,
+    )
+    assert isinstance(result, dict)
+    assert result["error_code"] == "USER_INPUT_REQUIRED"
+    assert "hazard_raster_uri" in result["error_message"]
 
 
 def test_empty_component_types_list_raises_input_error() -> None:

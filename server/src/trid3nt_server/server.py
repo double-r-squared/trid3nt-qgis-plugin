@@ -1158,6 +1158,16 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # elmfire_fire_spread (the template that submits the solver; the run_elmfire
     # door runs no solve). Confirm-gate parity preserved.
     "elmfire_fire_spread",
+    # NATE 2026-07-27: the GeoClaw shallow-water inundation solver joins the
+    # confirm set (Invariant 9 gap the panel flagged — a consequential solver
+    # run: DEM/topobathy fetch + a containerized Clawpack solve). Mirrors the
+    # psha/fire wiring: a SIMPLE proceed/cancel card built inline by
+    # _build_geoclaw_confirm_envelope from the call args (AOI area + scenario +
+    # sim window + AMR levels). No granularity picker at v1 (amr_levels /
+    # sim_duration_s are explicit tool args the LLM can restate). Keyed on the
+    # geoclaw_inundation TEMPLATE that submits the solver; the run_geoclaw door
+    # runs no solve.
+    "geoclaw_inundation",
 }
 
 
@@ -9458,6 +9468,92 @@ def _build_fire_confirm_envelope(params: dict) -> Any:
     )
 
 
+def _build_geoclaw_confirm_envelope(params: dict) -> Any:
+    """NATE 2026-07-27: build the GeoClaw inundation solver-confirm card.
+
+    A simple proceed/cancel confirmation (mirrors ``openquake_psha`` /
+    ``elmfire_fire_spread``): PURE arithmetic from the call args — the
+    approximate AOI area (cosine-latitude correction) + the scenario
+    (dam_break / tsunami / surge) + the simulated window + AMR levels. No
+    fetch, no rasterio, so it is safe to build inline. GeoClaw's adaptive mesh
+    means there is no single fixed cell count to advertise (unlike the SWMM /
+    TELEMAC granularity gates), so this is a plain proceed/cancel: ``amr_levels``
+    / ``sim_duration_s`` are explicit tool args the LLM can restate. A missing
+    bbox is NOT enforced here — it falls through to the tool's own typed
+    ``GEOCLAW_PARAMS_INCOMPLETE`` error after approval (the gate must never mask
+    parameter problems, matching the fire/psha fall-through).
+    """
+    import math
+
+    from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
+    from .tool_arg_normalizer import coerce_bbox_value
+
+    scenario = str(params.get("scenario", "dam_break")).strip().lower() or "dam_break"
+    try:
+        sim_duration_s = float(params.get("sim_duration_s", 3600.0))
+    except (TypeError, ValueError):
+        sim_duration_s = 3600.0
+    try:
+        amr_levels = int(params.get("amr_levels", 2))
+    except (TypeError, ValueError):
+        amr_levels = 2
+
+    # Approximate AOI area (km^2) from the bbox via a cosine-latitude correction
+    # (~111.32 km/deg). Best-effort: None when the bbox is missing/malformed.
+    coerced = coerce_bbox_value(params.get("bbox"))
+    bbox_area_km2: float | None = None
+    if coerced is not None and len(coerced) == 4:
+        min_lon, min_lat, max_lon, max_lat = (float(v) for v in coerced)
+        mid_lat = (min_lat + max_lat) / 2.0
+        width_km = abs(max_lon - min_lon) * 111.32 * math.cos(math.radians(mid_lat))
+        height_km = abs(max_lat - min_lat) * 111.32
+        bbox_area_km2 = max(0.0, width_km * height_km)
+
+    area_phrase = (
+        f"~{bbox_area_km2:,.0f} km^2 AOI" if bbox_area_km2 is not None
+        else "the requested AOI"
+    )
+    sim_minutes = sim_duration_s / 60.0
+    window_phrase = (
+        f"~{sim_minutes:,.0f} min simulated" if sim_minutes >= 1.0
+        else f"{sim_duration_s:g} s simulated"
+    )
+    # Local-cloud fingerprint fix (mirrors the psha card): the local build runs
+    # the GeoClaw engine on this machine -- never say "AWS Batch"/"cloud solve"
+    # there.
+    dispatch_phrase = (
+        "This runs the GeoClaw engine locally (typically several minutes)."
+        if _local_compute_lane()
+        else (
+            "This dispatches the GeoClaw engine to AWS Batch (a cloud solve, "
+            "typically several minutes)."
+        )
+    )
+    recommendation = (
+        f"Run a GeoClaw {scenario} shallow-water inundation simulation over "
+        f"{area_phrase}: {window_phrase}, {amr_levels} AMR level(s). "
+        f"{dispatch_phrase} Confirm to start."
+    )[:512]
+
+    return PayloadWarningEnvelopePayload(
+        warning_id=new_ulid(),
+        tool_name="geoclaw_inundation",
+        tool_args={
+            "bbox": list(coerced) if coerced is not None else params.get("bbox"),
+            "scenario": scenario,
+            "sim_duration_s": sim_duration_s,
+            "amr_levels": amr_levels,
+            "aoi_area_km2": (
+                round(bbox_area_km2) if bbox_area_km2 is not None else None
+            ),
+        },
+        estimated_mb=0.0,
+        threshold_mb=0.0,
+        recommendation=recommendation,
+        options=["proceed", "cancel"],
+    )
+
+
 def _gate_memory_key(tool_name: str, params: dict[str, Any]) -> tuple[str, str]:
     """Turn-memory key for the solver-confirm / fetch-resolution gate.
 
@@ -9669,6 +9765,14 @@ async def _gate_on_solver_confirm(
             # offloaded. A missing ignition point deliberately falls through
             # to the tool's typed FIRE_IGNITION_REQUIRED error after approval.
             envelope = _build_fire_confirm_envelope(params)
+        elif tool_name == "geoclaw_inundation":
+            # NATE 2026-07-27: GeoClaw shallow-water inundation solver-confirm
+            # card. Simple proceed/cancel with the approximate AOI area +
+            # scenario + simulated window + AMR levels — PURE arithmetic built
+            # inline (no fetch/rasterio), so nothing is offloaded. A missing
+            # bbox deliberately falls through to the tool's typed
+            # GEOCLAW_PARAMS_INCOMPLETE error after approval.
+            envelope = _build_geoclaw_confirm_envelope(params)
         else:  # unknown gated tool: fail open to the tool's own validation
             return True, params
     except Exception:  # noqa: BLE001 — never mask param errors with a gate

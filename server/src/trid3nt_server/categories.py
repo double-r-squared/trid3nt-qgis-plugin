@@ -278,11 +278,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # membership - surfaced only by the run_swmm door's gate expansion). The
     # DOOR carries the hazard_modeling membership.
     "run_swmm": "hazard_modeling",
-    # engine-door refactor (PELICUN slice): run_pelicun_damage_assessment +
-    # run_pelicun_with_buildings are now the pelicun_damage_assessment /
-    # pelicun_damage_with_buildings templates (tier=template, pool-EXCLUDED, NO
-    # category membership - surfaced only by the run_pelicun door's gate
-    # expansion). The DOOR carries the hazard_modeling membership.
+    # engine-door refactor (PELICUN slice) + PELICUN fold: run_pelicun_damage_assessment
+    # + run_pelicun_with_buildings are now ONE pelicun_damage_assessment template
+    # (tier=template, pool-EXCLUDED, NO category membership - surfaced only by the
+    # run_pelicun door's gate expansion; the with-buildings composer folded into its
+    # bbox auto-fetch input mode). The DOOR carries the hazard_modeling membership.
     "run_pelicun": "hazard_modeling",
     # sprint-17 NEW engines (parallel lanes) - all are run_* hazard solvers /
     # composers, filed alongside the other engines above.

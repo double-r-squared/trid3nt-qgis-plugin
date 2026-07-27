@@ -100,11 +100,12 @@ run_model_nws_flood_event_scenario:
 - tie the active flash flood warning here to a depth map using observed precipitation, not a design storm
 - what does the flooding look like for the warning that's in effect, using actual measured rain
 - run the inundation for the second flood warning in the list over its warned area
-# engine-door refactor (PELICUN slice): the run_pelicun_with_buildings entries
-# migrated out of this central index. Door-common damage phrasings ->
+# engine-door refactor (PELICUN slice) + PELICUN fold: the Pelicun damage
+# phrasings migrated out of this central index. Door-common damage phrasings ->
 # tools/simulation/pelicun/run_pelicun/corpus.yaml (DOOR tier, walked into the
-# index); template-specific phrasings ->
-# workflows/pelicun/damage_with_buildings/corpus.yaml (TEMPLATE tier, NOT merged).
+# index); template-specific phrasings (both the explicit-inventory and the
+# folded bbox auto-fetch input modes) ->
+# workflows/pelicun/damage_assessment/corpus.yaml (TEMPLATE tier, NOT merged).
 read_run_diagnostics:
 - did my flood simulation actually converge or is the result garbage
 - check the mass balance of the last SFINCS run

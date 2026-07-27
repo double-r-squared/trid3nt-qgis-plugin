@@ -1,8 +1,11 @@
 # TEMPLATE tier (engine-door refactor): phrasings for pelicun_damage_assessment.
 # NOT merged into the main retrieval index; the run_pelicun door surfaces this
 # template via gate expansion (select-then-call). Carried from the migrated
-# run_pelicun_damage_assessment corpus entries.
+# run_pelicun_damage_assessment corpus entries; the PELICUN fold appended the
+# former pelicun_damage_with_buildings phrasings verbatim (that composer folded
+# into this template's bbox AUTO-FETCH input mode).
 pelicun_damage_assessment:
+# --- explicit-inventory mode (assets_uri) ---
 - run a damage assessment for buildings in this flood zone
 - compute structural losses from this flood scenario using fragility curves
 - I need Pelicun flood damage estimates for the Fort Myers housing stock
@@ -12,3 +15,12 @@ pelicun_damage_assessment:
 - I want building damage probability curves for this storm surge event
 - compute expected damage and 95% confidence intervals for this flood depth raster
 - run Pelicun over an explicit vector asset inventory for this hazard raster
+# --- auto-fetch mode (bbox -> building-density inventory) ---
+- estimate building-level flood damage over this area using the flood depth layer we just made
+- show me which buildings are damaged across the flood zone, not an administrative aggregate
+- run a spatially-distributed pelicun damage assessment on the building density grid for this bbox
+- pair the flood depth raster with building footprints and give me damage states and repair costs
+- compute hazus flood damage per building cell over this international bbox where nsi is unavailable
+- map the damage choropleth following the real built-area grid for the flood we just ran
+- assess structure damage and loss ratios over the buildings in this flooded extent
+- give me ds_mean and repair cost per cell for the buildings under this flood depth layer

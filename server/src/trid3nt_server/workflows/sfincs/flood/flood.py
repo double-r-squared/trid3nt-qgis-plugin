@@ -5578,9 +5578,9 @@ async def sfincs_flood(
         Downstream (feeds):
         - ``run_model_flood_habitat_scenario`` — calls this sub-workflow as
           step 3 to generate the flood layer for Case 1 habitat analysis.
-        - ``pelicun_damage_assessment`` / ``pelicun_damage_with_buildings`` —
-          consume the returned flood-depth COG ``LayerURI.uri`` as
-          ``hazard_raster_uri`` for building-damage assessment.
+        - ``pelicun_damage_assessment`` (explicit ``assets_uri`` OR bbox
+          auto-fetch mode) — consumes the returned flood-depth COG
+          ``LayerURI.uri`` as ``hazard_raster_uri`` for building-damage assessment.
         - ``compute_zonal_statistics`` — flood-depth COG as ``value_raster_uri``
           for population-in-flood-zone or habitat-impact metrics.
     """

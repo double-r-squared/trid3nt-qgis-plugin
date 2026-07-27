@@ -59,7 +59,10 @@ from .modflow.model_groundwater_contamination_scenario import model_groundwater_
 # half re-homes to a playground recipe (docs/playbooks/modflow-affected-fields-recipe.md).
 from .shared.model_news_event_ingest import model_news_event_ingest as _model_news_event_ingest  # noqa: F401  — job-0119 Case 2 composer
 from .sfincs.model_nws_flood_event_scenario import model_nws_flood_event_scenario as _model_nws_flood_event_scenario  # noqa: F401  — job-0229 Case 3 composer
-from .pelicun.damage_with_buildings.damage_with_buildings import pelicun_damage_with_buildings as _pelicun_damage_with_buildings  # noqa: F401  — engine-door refactor (PELICUN slice): renamed template (was run_pelicun_with_buildings)
+# PELICUN fold: the former pelicun_damage_with_buildings composer folded into the
+# pelicun_damage_assessment template's bbox AUTO-FETCH input mode; the template is
+# registered via tools/__init__.py's import of
+# workflows/pelicun/damage_assessment/damage_assessment.py (no separate import here).
 from .shared.model_conservation_priority import model_conservation_priority as _model_conservation_priority  # noqa: F401  -- conservation micro-North-Star composer (NAIP base + NDVI + MoBI + GBIF + IUCN); registers run_model_conservation_priority
 from .telemac import run_telemac as _run_telemac  # noqa: F401  -- P2: registers the telemac_river_dye local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); no LLM tool yet (P4)
 

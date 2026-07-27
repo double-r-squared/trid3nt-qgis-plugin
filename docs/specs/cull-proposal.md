@@ -245,3 +245,22 @@ PROPOSAL ONLY. Nothing in this document has been deleted, renamed, or
 otherwise changed in the codebase. NATE decides which (if any) of section 1's
 two concrete CULL candidates to action, and whether to open the section 3
 follow-up audit as its own job.
+
+## Cull acceptance standard (NATE 2026-07-27)
+
+Evidence for any cull = a SUCCESSFUL LIVE REPLICATION of the candidate's
+function using surviving tools (envelope-compared, run recorded) - "that is
+the whole reason it would be deleted." Paper redundancy arguments alone
+never cut a tool. Anything that cannot be replicated stays. Cuts execute
+only after the replication proof AND NATE's per-tool sign-off.
+
+## NATE decisions 2026-07-27 (open items resolved)
+
+- Cull pass 1 = "does the same thing" report, PROCESSING tools first,
+  FETCHERS OUT OF SCOPE; pass 2 = live replication attempts of the picks.
+- pelicun: FOLD to one template (optional assets_uri knob; absent ->
+  auto-fetch building-density inventory).
+- model_debris_flow: stays general, no door. swan_wave_field: confirmed.
+- run_model_flood_habitat_scenario: REPLACE candidate #1 - recipe = flood
+  result + intersect habitat polygons with existing spatial tools.
+- geoclaw_inundation: gets the solver confirm gate.

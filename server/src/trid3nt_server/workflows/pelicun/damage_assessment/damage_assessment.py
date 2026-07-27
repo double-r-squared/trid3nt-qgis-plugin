@@ -10,6 +10,19 @@ door's gate expansion (SELECT-THEN-CALL). Metadata (``source_class="pelicun_dama
 runtime. The LLM-visible API contract (name, parameters, allowed enums, return
 type) is unchanged from Wave 1; only the body is swapped.
 
+**PELICUN fold (engine-door refactor)** — ONE template, two input modes
+(functional-sameness fold of the former ``pelicun_damage_with_buildings``
+composer):
+
+- ``assets_uri`` provided  -> run against that EXPLICIT vector asset inventory
+  (the classic behavior).
+- ``assets_uri`` absent + ``bbox`` provided -> AUTO-FETCH a building-density
+  grid for the bbox (``compute_building_density`` -> point FlatGeobuf) and run
+  against it — spatially-distributed damage over the real built-area grid
+  rather than administrative polygons.
+- NEITHER given -> a typed ``USER_INPUT_REQUIRED`` failed envelope (never a
+  bare ``TypeError``).
+
 **What this tool computes**
 
 For each asset feature in ``assets_uri``:
@@ -92,7 +105,8 @@ import numpy as np
 from trid3nt_contracts.execution import LayerURI, LegendClass, LegendKey
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.tools import register_tool
+from trid3nt_server.tool_arg_normalizer import coerce_bbox_value
+from trid3nt_server.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.tools.cache import read_through
 from trid3nt_server.workflows.pelicun._template_card import TemplateCard
 
@@ -104,6 +118,12 @@ __all__ = [
     "PelicunRuntimeError",
     "PelicunFragilityDataError",
     "PelicunNoAssetsError",
+    # engine-door refactor (PELICUN fold): the auto-fetch (building-density)
+    # input mode is now a knob of this ONE template — the density->points
+    # helper + its typed error moved here from the former
+    # pelicun_damage_with_buildings composer.
+    "PelicunWithBuildingsError",
+    "density_cog_to_point_fgb",
 ]
 
 logger = logging.getLogger("trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment")
@@ -166,6 +186,231 @@ class PelicunNoAssetsError(PelicunDamageError):
 
     error_code = "PELICUN_NO_ASSETS_IN_HAZARD"
     retryable = False
+
+
+class PelicunWithBuildingsError(RuntimeError):
+    """Raised when the AUTO-FETCH (building-density) input mode fails.
+
+    ``error_code`` / ``retryable`` mirror the atomic-tool error surface so the
+    agent routes it to the WebSocket A.6 error frame (FR-AS-11 / NFR-R-1). For
+    the specific error subclass (e.g. a building-density upstream failure)
+    inspect ``__cause__``. Folded here from the former
+    ``pelicun_damage_with_buildings`` composer (PELICUN fold).
+    """
+
+    error_code: str = "PELICUN_WITH_BUILDINGS_ERROR"
+    retryable: bool = True
+
+
+# ---------------------------------------------------------------------------
+# AUTO-FETCH input mode (folded from pelicun_damage_with_buildings): a
+# building-density COG -> point FlatGeobuf inventory. Used when the caller
+# supplies a ``bbox`` instead of an explicit ``assets_uri``.
+#
+# ``compute_building_density`` returns a float32 single-band COG whose cell
+# values are building counts per cell. ``pelicun_damage_assessment`` consumes a
+# vector FlatGeobuf of point/polygon assets. This bridges the two by sampling
+# every non-zero cell centroid from the density COG and writing them as point
+# features (EPSG:4326) so they align with the flood COG which postprocess_flood
+# always writes in EPSG:4326. Empty-density cells (count == 0 or nodata) are
+# OMITTED — only cells where buildings were detected become assets, so the
+# damage choropleth follows the real built-area distribution.
+# ---------------------------------------------------------------------------
+
+
+def _stage_cog_to_local(cog_uri: str) -> tuple[str, bool]:
+    """Stage ``cog_uri`` to a readable LOCAL path for ``rasterio.open``.
+
+    ``compute_building_density`` returns an ``s3://`` COG. Opening ``s3://``
+    with raw ``rasterio.open`` bypasses the repo's boto3/MinIO reader (the
+    ``AWS_ENDPOINT_URL`` endpoint is never applied) AND risks the
+    orphaned-``MemoryFile`` read-corruption class. The established pattern is
+    download-then-open: read the object fully via the shared boto3 reader
+    (which honours ``AWS_ENDPOINT_URL`` for MinIO) into an on-disk temp file,
+    then open the disk path.
+
+    Returns ``(local_path, is_temp)``. When ``is_temp`` is True the caller MUST
+    unlink ``local_path`` after reading it.
+    """
+    if not cog_uri.startswith("s3://"):
+        # Local path (unit-test fixture / already-staged file) — open in place.
+        return cog_uri, False
+
+    from trid3nt_server.tools.cache import read_object_bytes_s3
+
+    try:
+        data = read_object_bytes_s3(cog_uri)
+    except Exception as exc:  # noqa: BLE001
+        raise PelicunWithBuildingsError(
+            f"density_cog_to_point_fgb: S3 download failed for {cog_uri!r}: {exc}"
+        ) from exc
+    fd, tmp_path = tempfile.mkstemp(suffix=".tif", prefix="trid3nt_density_cog_")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+    except Exception as exc:  # noqa: BLE001
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise PelicunWithBuildingsError(
+            f"density_cog_to_point_fgb: failed to stage {cog_uri!r} to disk: {exc}"
+        ) from exc
+    return tmp_path, True
+
+
+def density_cog_to_point_fgb(cog_uri: str) -> str:
+    """Convert a building-density COG to a temporary point FlatGeobuf.
+
+    Reads the ``s3://`` or local-path COG at ``cog_uri`` (an ``s3://`` COG is
+    staged to a local temp file first via ``_stage_cog_to_local`` — the
+    download-then-open pattern, never a raw ``rasterio.open("s3://...")``). For
+    each cell with a non-zero (and non-nodata) value, emits one EPSG:4326 point
+    feature at the cell centroid, carrying ``building_count`` and
+    ``component_type`` (always ``"RES1"`` in v0.1).
+
+    Returns the path to a NamedTemporaryFile ``.fgb`` that the caller is
+    responsible for unlinking after use.
+
+    Raises:
+        PelicunWithBuildingsError: if rasterio, geopandas, or pyproj are not
+            installed, or if the COG cannot be opened / has no buildings.
+    """
+    try:
+        import geopandas as gpd
+        import rasterio
+        import tempfile as _tempfile
+        from pyproj import Transformer
+        from shapely.geometry import Point  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise PelicunWithBuildingsError(
+            f"density_cog_to_point_fgb: required geospatial packages not installed: {exc}"
+        ) from exc
+
+    # Download-then-open: stage an s3:// COG to a local temp file via the shared
+    # boto3/MinIO reader, then open the disk path. Reading the full band inside
+    # the ``with`` block (then unlinking) avoids the orphaned-MemoryFile
+    # corruption class entirely.
+    local_cog, _cog_is_temp = _stage_cog_to_local(cog_uri)
+    try:
+        with rasterio.open(local_cog) as src:
+            arr = src.read(1)
+            nodata = src.nodata
+            transform = src.transform
+            crs_str = src.crs.to_string() if src.crs else "EPSG:3857"
+    except PelicunWithBuildingsError:
+        raise
+    except Exception as exc:
+        raise PelicunWithBuildingsError(
+            f"density_cog_to_point_fgb: failed to open COG {cog_uri!r}: {exc}"
+        ) from exc
+    finally:
+        if _cog_is_temp:
+            try:
+                os.unlink(local_cog)
+            except OSError:
+                pass
+
+    # Mask out zero and nodata cells.
+    mask = arr > 0.0
+    if nodata is not None:
+        mask &= (arr != nodata)
+    if not mask.any():
+        raise PelicunWithBuildingsError(
+            f"density_cog_to_point_fgb: COG {cog_uri!r} has no non-zero cells; "
+            "no buildings detected — cannot create asset layer for Pelicun."
+        )
+
+    # Building-density COGs are in EPSG:3857 (Web Mercator) per
+    # compute_building_density's documented grid CRS; project cell centroids to
+    # EPSG:4326.
+    try:
+        trans = Transformer.from_crs(crs_str, "EPSG:4326", always_xy=True)
+    except Exception as exc:
+        raise PelicunWithBuildingsError(
+            f"density_cog_to_point_fgb: CRS transform init failed "
+            f"({crs_str!r} -> EPSG:4326): {exc}"
+        ) from exc
+
+    rows, cols = np.where(mask)
+    # For a north-up raster: a > 0, e < 0, b = d = 0. Use the full Affine so a
+    # rotated grid is still handled correctly.
+    native_x = transform.c + (cols + 0.5) * transform.a + (rows + 0.5) * transform.b
+    native_y = transform.f + (cols + 0.5) * transform.d + (rows + 0.5) * transform.e
+
+    lons, lats = trans.transform(native_x, native_y)
+    counts = arr[rows, cols].tolist()
+
+    geometries = [Point(lon, lat) for lon, lat in zip(lons, lats)]
+    gdf = gpd.GeoDataFrame(
+        {
+            "geometry": geometries,
+            "building_count": counts,
+            "component_type": ["RES1"] * len(geometries),
+        },
+        crs="EPSG:4326",
+    )
+
+    tmp = _tempfile.NamedTemporaryFile(
+        suffix=".fgb", delete=False, prefix="trid3nt_density_pts_"
+    )
+    tmp_path = tmp.name
+    tmp.close()
+    gdf.to_file(tmp_path, driver="FlatGeobuf", engine="pyogrio")
+    logger.info(
+        "density_cog_to_point_fgb: wrote %d asset points to %s",
+        len(gdf),
+        tmp_path,
+    )
+    return tmp_path
+
+
+def _autofetch_building_assets(
+    bbox: tuple[float, float, float, float] | list[float] | str,
+    cell_size_m: float = 100.0,
+) -> str:
+    """AUTO-FETCH input mode: build a point-asset inventory from building density.
+
+    ``compute_building_density(bbox, cell_size_m)`` -> density COG ->
+    ``density_cog_to_point_fgb`` -> a temporary point FlatGeobuf the caller MUST
+    unlink. Encapsulates the two-step chain the former
+    ``pelicun_damage_with_buildings`` composer owned.
+
+    Raises:
+        PelicunInputError: bbox is missing / malformed.
+        PelicunWithBuildingsError: the building-density fetch or the
+            density -> points conversion failed.
+    """
+    coerced = coerce_bbox_value(bbox)
+    if coerced is None or len(coerced) != 4:
+        raise PelicunInputError(
+            "auto-fetch mode requires a valid bbox "
+            f"(min_lon, min_lat, max_lon, max_lat); got {bbox!r}."
+        )
+    logger.info(
+        "pelicun_damage_assessment: AUTO-FETCH mode — compute_building_density "
+        "bbox=%s cell_size_m=%s",
+        tuple(coerced),
+        cell_size_m,
+    )
+    try:
+        compute_fn = TOOL_REGISTRY["compute_building_density"].fn
+        buildings_uri: LayerURI = compute_fn(
+            bbox=tuple(coerced),
+            cell_size_m=cell_size_m,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise PelicunWithBuildingsError(
+            f"pelicun_damage_assessment: building-density fetch failed: {exc}"
+        ) from exc
+    try:
+        return density_cog_to_point_fgb(buildings_uri.uri)
+    except PelicunWithBuildingsError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise PelicunWithBuildingsError(
+            f"pelicun_damage_assessment: density->points conversion failed: {exc}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -325,11 +570,15 @@ _METADATA = AtomicToolMetadata(
 TEMPLATE_CARD = TemplateCard(
     question=(
         "per-asset structural damage + repair-cost losses over a hazard raster "
-        "for an EXPLICIT vector asset inventory (Pelicun HAZUS v6.1 flood loss "
-        "functions; Monte-Carlo loss ratios binned into DS0..DS4)"
+        "(Pelicun HAZUS v6.1 flood loss functions; Monte-Carlo loss ratios "
+        "binned into DS0..DS4). Give EITHER assets_uri (an explicit vector asset "
+        "inventory) OR bbox (auto-fetch a building-density inventory for the area)"
     ),
-    required_inputs=["hazard_raster_uri", "assets_uri"],
-    knobs="fragility_set, component_types, realization_count",
+    # hazard_raster_uri is always required; the second required input is EITHER
+    # assets_uri OR bbox (one of the two input modes) — surfaced as a knob line
+    # so the door lists a single, honest required input plus the either/or.
+    required_inputs=["hazard_raster_uri", "assets_uri OR bbox"],
+    knobs="assets_uri, bbox, cell_size_m (auto-fetch grid), fragility_set, component_types, realization_count",
 )
 
 
@@ -1175,60 +1424,138 @@ def _fetch_pelicun_damage_bytes(
     idempotent_hint=False,
 )
 def pelicun_damage_assessment(
+    hazard_raster_uri: str | None = None,
+    assets_uri: str | None = None,
+    bbox: tuple[float, float, float, float] | list[float] | str | None = None,
+    fragility_set: FragilitySet = "hazus_flood_v6",
+    component_types: list[str] | None = None,
+    realization_count: int = 100,
+    cell_size_m: float = 100.0,
+    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # tool_arg_normalizer, but kept as belt-and-suspenders).
+    **_extra_ignored: Any,
+) -> LayerURI | dict[str, Any]:
+    """Fragility-curve-driven damage assessment via Pelicun (HAZUS v6.1 flood loss functions).
+
+    Use this when: you have a hazard raster (flood depth COG, earthquake
+    intensity) and want quantitative damage/loss estimates -- "how much damage",
+    "expected losses", "which buildings are most exposed". Give the assets ONE
+    of two ways: pass ``assets_uri`` for an EXPLICIT vector inventory, OR pass a
+    ``bbox`` (no assets_uri) to AUTO-FETCH a building-density inventory for that
+    area (spatially-distributed damage over the real built-area grid, not
+    administrative polygons). Pipeline: sample hazard at each asset centroid ->
+    HAZUS v6.1 loss-function lookup -> Monte Carlo loss-ratio draws -> bin into
+    DS0..DS4 -> repair_cost = replacement_value * loss_ratio. Do NOT use for:
+    plain exposure counts (``compute_zonal_statistics`` is cheaper); hazards
+    outside flood (v0.1 ships flood only; ``fragility_set=
+    "fema_hazus_eq_2020"`` raises).
+
+    Params:
+        hazard_raster_uri: layer_id handle (preferred) or verbatim URI from a
+            prior result -- never construct/guess.
+        assets_uri: EXPLICIT-inventory mode — layer_id handle or URI to a
+            FlatGeobuf of points/polygons; optional ``component_type`` (default
+            "RES1") and ``replacement_value``. Omit to use auto-fetch mode.
+        bbox: AUTO-FETCH mode — ``(min_lon, min_lat, max_lon, max_lat)`` in
+            EPSG:4326. Used ONLY when ``assets_uri`` is absent: a
+            building-density grid is fetched for the bbox and converted to a
+            point inventory. Ignored when ``assets_uri`` is given.
+        fragility_set: ``"hazus_flood_v6"`` (only wired set).
+        component_types: restrict to these codes; ``None`` = all.
+        realization_count: Monte Carlo draws per asset (default 100).
+        cell_size_m: AUTO-FETCH mode only — building-density grid cell size in
+            metres on EPSG:3857 (default 100). Smaller = finer damage points.
+
+    ``assets_uri`` sourcing best-to-worst: ``fetch_usace_nsi`` (CONUS) >
+    auto-fetch mode / ``compute_building_density`` (international) >
+    ``fetch_administrative_boundaries(level='place')`` (last resort). Auto-fetch
+    mode (pass a ``bbox``, no ``assets_uri``) does the building-density fetch ->
+    this tool chain in one call.
+
+    Returns:
+        On success: a ``LayerURI`` (vector FlatGeobuf, ``style_preset=
+        "pelicun_damage_state"``) with per-feature ``component_type_used``,
+        ``fragility_curve_id``, ``hazard_depth_sampled``, ``ds_mean``/
+        ``ds_p05``/``ds_p95`` (0-4 HAZUS damage state), ``loss_ratio_mean``/
+        ``p95``, ``repair_cost_mean``/``p95`` (USD), ``replacement_value``.
+        When NEITHER ``assets_uri`` nor ``bbox`` is given: a typed
+        ``{"status":"error","error_code":"USER_INPUT_REQUIRED", ...}`` envelope
+        (never a bare ``TypeError``).
+
+    Raises:
+        PelicunInputError: bad URI shape, invalid fragility_set, empty
+            component_types, non-positive realization_count, malformed bbox.
+        PelicunWithBuildingsError: auto-fetch (building-density) mode failed.
+        PelicunFragilityDataError: Pelicun not installed / HAZUS CSV
+            missing.
+        PelicunRuntimeError: I/O failure (download, open, reprojection).
+        PelicunNoAssetsError: zero assets in input/filter/hazard overlap.
+    """
+    # ---- Missing-required-input guard (PELICUN fold) ----------------------- #
+    # A typed USER_INPUT_REQUIRED envelope, NEVER a bare Python TypeError: with
+    # assets_uri now optional (auto-fetch mode), a call that supplies neither an
+    # explicit inventory NOR a bbox to fetch one has no assets to assess. Also
+    # covers a missing hazard raster so no missing-required combination reaches
+    # a bare TypeError.
+    hazard_ok = isinstance(hazard_raster_uri, str) and bool(hazard_raster_uri.strip())
+    assets_ok = isinstance(assets_uri, str) and bool(assets_uri.strip())
+    bbox_ok = bbox is not None
+    missing: list[str] = []
+    if not hazard_ok:
+        missing.append("hazard_raster_uri (a hazard/flood-depth raster URI from a prior run)")
+    if not assets_ok and not bbox_ok:
+        missing.append(
+            "assets_uri (an explicit vector asset inventory) OR bbox "
+            "(to auto-fetch a building-density inventory)"
+        )
+    if missing:
+        return {
+            "status": "error",
+            "error_code": "USER_INPUT_REQUIRED",
+            "error_message": (
+                "pelicun_damage_assessment is missing required input(s): "
+                + "; ".join(missing)
+                + "."
+            ),
+        }
+
+    # ---- AUTO-FETCH input mode: no explicit inventory -> build one from a
+    # building-density grid over the bbox. The temp point FlatGeobuf is unlinked
+    # in the finally-block once the assessment has consumed (or failed on) it.
+    _autofetch_assets_path: str | None = None
+    if not assets_ok:
+        _autofetch_assets_path = _autofetch_building_assets(bbox, cell_size_m)
+        assets_uri = _autofetch_assets_path
+
+    try:
+        return _run_pelicun_damage_assessment(
+            hazard_raster_uri=hazard_raster_uri,  # type: ignore[arg-type]
+            assets_uri=assets_uri,  # type: ignore[arg-type]
+            fragility_set=fragility_set,
+            component_types=component_types,
+            realization_count=realization_count,
+        )
+    finally:
+        if _autofetch_assets_path is not None:
+            try:
+                os.unlink(_autofetch_assets_path)
+            except OSError:
+                pass
+
+
+def _run_pelicun_damage_assessment(
     hazard_raster_uri: str,
     assets_uri: str,
     fragility_set: FragilitySet = "hazus_flood_v6",
     component_types: list[str] | None = None,
     realization_count: int = 100,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders).
-    **_extra_ignored: Any,
 ) -> LayerURI:
-    """Fragility-curve-driven damage assessment via Pelicun (HAZUS v6.1 flood loss functions).
+    """Core explicit-inventory assessment (shared by both input modes).
 
-    Use this when: you have a hazard raster (flood depth COG, earthquake
-    intensity) AND an asset layer (buildings, parcels, infrastructure) and
-    want quantitative damage/loss estimates -- "how much damage",
-    "expected losses", "which buildings are most exposed". Pipeline:
-    sample hazard at each asset centroid -> HAZUS v6.1 loss-function
-    lookup -> Monte Carlo loss-ratio draws -> bin into DS0..DS4 ->
-    repair_cost = replacement_value * loss_ratio. Do NOT use for: plain
-    exposure counts (``compute_zonal_statistics`` is cheaper); building
-    footprint counts/density (``compute_building_density``/
-    ``fetch_buildings`` -- they feed this tool's asset layer); hazards
-    outside flood (v0.1 ships flood only; ``fragility_set=
-    "fema_hazus_eq_2020"`` raises).
-
-    Params:
-        hazard_raster_uri: layer_id handle (preferred) or verbatim gs://
-            URI from a prior result -- never construct/guess.
-        assets_uri: layer_id handle or URI to a FlatGeobuf of points/
-            polygons; optional ``component_type`` (default "RES1") and
-            ``replacement_value``.
-        fragility_set: ``"hazus_flood_v6"`` (only wired set).
-        component_types: restrict to these codes; ``None`` = all.
-        realization_count: Monte Carlo draws per asset (default 100).
-
-    ``assets_uri`` sourcing best-to-worst: ``fetch_usace_nsi`` (CONUS) >
-    ``compute_building_density`` (international) >
-    ``fetch_administrative_boundaries(level='place')`` (last resort).
-    ``pelicun_damage_with_buildings`` chains building-density fetch -> this
-    tool in one call.
-
-    Returns:
-        ``LayerURI`` (vector FlatGeobuf, ``style_preset=
-        "pelicun_damage_state"``) with per-feature ``component_type_used``,
-        ``fragility_curve_id``, ``hazard_depth_sampled``, ``ds_mean``/
-        ``ds_p05``/``ds_p95`` (0-4 HAZUS damage state), ``loss_ratio_mean``/
-        ``p95``, ``repair_cost_mean``/``p95`` (USD), ``replacement_value``.
-
-    Raises:
-        PelicunInputError: bad URI shape, invalid fragility_set, empty
-            component_types, non-positive realization_count.
-        PelicunFragilityDataError: Pelicun not installed / HAZUS CSV
-            missing.
-        PelicunRuntimeError: I/O failure (download, open, reprojection).
-        PelicunNoAssetsError: zero assets in input/filter/hazard overlap.
+    Validates inputs (raising typed ``PelicunInputError`` etc.), runs the
+    cache-backed Pelicun Monte-Carlo loop against ``assets_uri``, and returns
+    the damage ``LayerURI``. Both the EXPLICIT and the AUTO-FETCH entry paths
+    funnel here once a concrete ``assets_uri`` exists.
     """
     # Input validation runs FIRST so the typed-error surface is preserved
     # even if downstream Pelicun runtime is unavailable.

@@ -485,9 +485,9 @@ def fetch_usace_nsi(
         - User asks for the buildings or "structure inventory" inside an
           area (e.g. "show me every building in Fort Myers Beach", "what
           buildings are in the floodplain?").
-        - As the asset layer for ``pelicun_damage_assessment`` /
-          ``pelicun_damage_with_buildings`` — NSI carries the HAZUS occupancy
-          class AND per-structure replacement value, removing both the
+        - As the asset layer for ``pelicun_damage_assessment`` (explicit
+          ``assets_uri`` mode) — NSI carries the HAZUS occupancy class AND
+          per-structure replacement value, removing both the
           ``compute_building_density`` default-RES1 proxy AND the
           ``_REPLACEMENT_VALUE_DEFAULTS_USD`` per-class fallback. This is
           the **preferred** Pelicun asset substrate inside CONUS.
@@ -556,9 +556,9 @@ def fetch_usace_nsi(
         - ``source`` (str) — NSI source tier (E=Estimated, P=Parcel, ...).
 
     Cross-tool dependencies:
-        - Consumed by ``pelicun_damage_assessment`` (and the composer
-          ``pelicun_damage_with_buildings``): pass the returned ``LayerURI.uri``
-          as ``assets_uri``. Because every NSI feature already carries
+        - Consumed by ``pelicun_damage_assessment`` (explicit ``assets_uri``
+          mode): pass the returned ``LayerURI.uri`` as ``assets_uri``. Because
+          every NSI feature already carries
           ``component_type`` and ``replacement_value`` (added by this tool),
           the Pelicun damage loop uses real HAZUS occupancy + structure
           values rather than the ``"RES1"`` / class-default fallback. This

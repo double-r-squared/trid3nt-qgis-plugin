@@ -421,12 +421,14 @@ from .simulation.postprocess_pelicun import postprocess_pelicun  # noqa: E402,F4
 # TEMPLATE (engine="openquake", tier="template") registered in
 # workflows/openquake/psha/psha.py (imported below); the run_openquake door
 # lists + gate-expands it.
-# engine-door refactor (PELICUN slice): the run_pelicun_damage_assessment atomic
-# tool + the run_pelicun_with_buildings composer are now the pelicun_damage_assessment
-# and pelicun_damage_with_buildings TEMPLATES (engine="pelicun", tier="template"),
-# one folder each under workflows/pelicun/<template>/ (imported below); the
-# run_pelicun door lists + gate-expands them. postprocess_pelicun (above) +
-# compute_impact_envelope (below) STAY general.
+# engine-door refactor (PELICUN slice) + PELICUN fold: the
+# run_pelicun_damage_assessment atomic tool + the run_pelicun_with_buildings
+# composer are now ONE pelicun_damage_assessment TEMPLATE (engine="pelicun",
+# tier="template") under workflows/pelicun/damage_assessment/ (imported below).
+# The former with-buildings composer folded into that template's bbox AUTO-FETCH
+# input mode (assets_uri absent + bbox -> auto-fetch a building-density
+# inventory). The run_pelicun door lists + gate-expands it. postprocess_pelicun
+# (above) + compute_impact_envelope (below) STAY general.
 # engine-door refactor (SWAN slice): the run_swan_waves thin wrapper is DELETED.
 # The SWAN engine tool is now the swan_wave_field TEMPLATE (engine="swan",
 # tier="template") registered in workflows/swan/wave_field/wave_field.py (imported
@@ -570,15 +572,16 @@ from ..workflows.openquake.psha.psha import openquake_psha as _openquake_psha  #
 # the internal engine surface the template calls; workflows/elmfire/run_elmfire.py
 # stays the solver build/stage seam (distinct module from the run_elmfire door).
 from ..workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread as _elmfire_fire_spread  # noqa: E402,F401 - RENAME of model_fire_spread (engine=elmfire, tier=template)
-# engine-door refactor (PELICUN slice): the Pelicun damage/loss engine tools are now
-# the pelicun_damage_assessment + pelicun_damage_with_buildings TEMPLATES
-# (engine="pelicun", tier="template") - one folder each under workflows/pelicun/.
-# Importing each fires its @register_tool so the templates land in TOOL_REGISTRY at
-# startup; both are EXCLUDED from the default retrieval pool and surfaced only by the
-# run_pelicun door's gate expansion. compute_impact_envelope (a compute_* composer)
-# and postprocess_pelicun STAY general, NOT templates.
-from ..workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment as _pelicun_damage_assessment  # noqa: E402,F401 - RENAME of run_pelicun_damage_assessment (engine=pelicun, tier=template)
-from ..workflows.pelicun.damage_with_buildings.damage_with_buildings import pelicun_damage_with_buildings as _pelicun_damage_with_buildings  # noqa: E402,F401 - RENAME of run_pelicun_with_buildings (engine=pelicun, tier=template)
+# engine-door refactor (PELICUN slice) + PELICUN fold: the Pelicun damage/loss
+# engine is now ONE pelicun_damage_assessment TEMPLATE (engine="pelicun",
+# tier="template") under workflows/pelicun/damage_assessment/. Importing it fires
+# its @register_tool so the template lands in TOOL_REGISTRY at startup; it is
+# EXCLUDED from the default retrieval pool and surfaced only by the run_pelicun
+# door's gate expansion. The former pelicun_damage_with_buildings composer folded
+# into this template's bbox AUTO-FETCH input mode (one tool, two input modes).
+# compute_impact_envelope (a compute_* composer) and postprocess_pelicun STAY
+# general, NOT templates.
+from ..workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment as _pelicun_damage_assessment  # noqa: E402,F401 - FOLD of run_pelicun_damage_assessment + run_pelicun_with_buildings (engine=pelicun, tier=template; explicit assets_uri OR bbox auto-fetch)
 
 # fire-animation demos S5/J5: the satellite fire-animation composer carries its
 # OWN @register_tool (run_model_satellite_fire_animation); import it so the

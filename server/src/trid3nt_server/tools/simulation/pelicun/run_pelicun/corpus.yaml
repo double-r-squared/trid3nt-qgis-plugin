@@ -4,7 +4,8 @@
 # the specific pelicun_* template (select-then-call). Template-specific
 # phrasings live in each workflows/pelicun/<template>/corpus.yaml (TEMPLATE tier
 # - NOT merged into this index). Carried from the migrated
-# run_pelicun_damage_assessment / run_pelicun_with_buildings corpus entries.
+# run_pelicun_damage_assessment / run_pelicun_with_buildings corpus entries (the
+# latter folded into the pelicun_damage_assessment template's bbox auto-fetch mode).
 run_pelicun:
 - run a damage assessment for buildings in this flood zone
 - how much damage will these structures take from this flood

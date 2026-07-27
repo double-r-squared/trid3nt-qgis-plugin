@@ -31,9 +31,10 @@ Plus two ancillary tests:
 
 9. ``test_input_error_when_neither_bbox_nor_location_query`` — both bbox
    and location_query omitted → ``ComputeImpactEnvelopeInputError``.
-10. ``test_ms_buildings_path_routes_through_pelicun_damage_with_buildings`` —
+10. ``test_ms_buildings_path_routes_through_pelicun_autofetch`` —
     ``structure_inventory_source="MS_BUILDINGS"`` bypasses ``fetch_usace_nsi``
-    and uses ``pelicun_damage_with_buildings`` directly.
+    and uses the ``pelicun_damage_assessment`` bbox AUTO-FETCH input mode
+    directly (PELICUN fold).
 11. ``test_nsi_fetch_failure_raises_typed_error`` — fetcher exception → typed
     ``ComputeImpactEnvelopeNSIFetchError`` with ``error_code="NSI_FETCH_FAILED"``.
 12. ``test_pelicun_failure_raises_typed_error`` — Pelicun exception → typed
@@ -462,14 +463,16 @@ async def test_narrative_omits_population_when_ms_buildings() -> None:
         inventory_source="MS_BUILDINGS",
     )
 
-    ms_mock = AsyncMock(return_value=damage_layer)
+    # PELICUN fold: the MS_BUILDINGS path calls the SYNC pelicun_damage_assessment
+    # in bbox AUTO-FETCH mode (was the async pelicun_damage_with_buildings composer).
+    ms_mock = MagicMock(return_value=damage_layer)
     postprocess_mock = AsyncMock(return_value=envelope_dict)
 
-    ms_orig = TOOL_REGISTRY["pelicun_damage_with_buildings"]
+    ms_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
     fake_ms = type(ms_orig)(metadata=ms_orig.metadata, fn=ms_mock, module=ms_orig.module)
 
     with (
-        patch.dict(TOOL_REGISTRY, {"pelicun_damage_with_buildings": fake_ms}),
+        patch.dict(TOOL_REGISTRY, {"pelicun_damage_assessment": fake_ms}),
         patch(
             "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
@@ -604,13 +607,16 @@ async def test_input_error_when_neither_bbox_nor_location_query() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Test 10 — MS_BUILDINGS path routes through pelicun_damage_with_buildings.
+# Test 10 — MS_BUILDINGS path routes through the pelicun_damage_assessment
+# bbox AUTO-FETCH input mode (PELICUN fold).
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_ms_buildings_path_routes_through_pelicun_damage_with_buildings() -> None:
-    """MS_BUILDINGS path uses the composer ``pelicun_damage_with_buildings``."""
+async def test_ms_buildings_path_routes_through_pelicun_autofetch() -> None:
+    """MS_BUILDINGS path calls ``pelicun_damage_assessment`` in bbox AUTO-FETCH
+    mode (no assets_uri, a bbox) — the PELICUN fold of the former
+    ``pelicun_damage_with_buildings`` composer. It is a SYNC call now."""
     damage_layer = _mock_layer_uri(_DAMAGE_URI)
     envelope_dict = _mock_envelope_dict(
         inventory_source="MS_BUILDINGS",
@@ -619,14 +625,14 @@ async def test_ms_buildings_path_routes_through_pelicun_damage_with_buildings() 
         pop_high_risk=None,
     )
 
-    ms_mock = AsyncMock(return_value=damage_layer)
+    ms_mock = MagicMock(return_value=damage_layer)
     postprocess_mock = AsyncMock(return_value=envelope_dict)
 
-    ms_orig = TOOL_REGISTRY["pelicun_damage_with_buildings"]
+    ms_orig = TOOL_REGISTRY["pelicun_damage_assessment"]
     fake_ms = type(ms_orig)(metadata=ms_orig.metadata, fn=ms_mock, module=ms_orig.module)
 
     with (
-        patch.dict(TOOL_REGISTRY, {"pelicun_damage_with_buildings": fake_ms}),
+        patch.dict(TOOL_REGISTRY, {"pelicun_damage_assessment": fake_ms}),
         patch(
             "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
@@ -638,10 +644,12 @@ async def test_ms_buildings_path_routes_through_pelicun_damage_with_buildings() 
             structure_inventory_source="MS_BUILDINGS",
         )
 
-    ms_mock.assert_awaited_once()
-    ms_kwargs = ms_mock.await_args.kwargs
+    ms_mock.assert_called_once()
+    ms_kwargs = ms_mock.call_args.kwargs
     assert ms_kwargs["hazard_raster_uri"] == _FLOOD_URI
+    # AUTO-FETCH mode: a bbox, NO explicit assets_uri.
     assert ms_kwargs["bbox"] == _FT_MYERS_BBOX
+    assert "assets_uri" not in ms_kwargs
     assert ms_kwargs["fragility_set"] == "hazus_flood_v6"
 
     postprocess_mock.assert_awaited_once()
