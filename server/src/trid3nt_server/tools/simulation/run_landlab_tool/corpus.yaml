@@ -1,0 +1,9 @@
+run_landlab_susceptibility:
+- map where the slopes are likely to fail on this hillside after heavy rain
+- model landslide susceptibility and factor of safety across this catchment
+- where is slope instability highest in this bbox, give me a probability of failure raster
+- run the infinite-slope landslide model with soil cohesion and friction over this terrain
+- route a rainfall pulse over the DEM and show me the peak surface runoff depth
+- compute overland flow from a storm across this watershed
+- which hillslopes are prone to debris flows or slumps here
+- give me a slope-stability hazard map for this mountainous AOI

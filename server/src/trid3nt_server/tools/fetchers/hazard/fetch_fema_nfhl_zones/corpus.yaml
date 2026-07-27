@@ -1,0 +1,9 @@
+fetch_fema_nfhl_zones:
+- show me the FEMA flood map for Lee County
+- what is the 100-year floodplain near downtown Houston?
+- I want the Special Flood Hazard Area polygons for this zip code
+- give me NFIP flood insurance rate zones for this property
+- show me the regulatory floodplain boundaries in New Orleans
+- are there Zone AE or VE flood zones in this coastal area?
+- I need the FIRM zones for flood insurance underwriting in Miami
+- show me the Base Flood Elevation lines for this river corridor

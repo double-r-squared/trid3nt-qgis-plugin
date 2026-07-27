@@ -1,0 +1,9 @@
+fetch_gridmet:
+- what is the fuel moisture index for this fire-prone area?
+- give me fire-danger weather for the past week in this watershed
+- I need daily temperature and humidity for drought analysis in the West
+- fetch 100-hour fuel moisture for this historic fire date
+- show me the dead fuel moisture raster for this California study area
+- I need historical gridded wind speed for this fire weather analysis
+- fetch energy release component for the western US fire season
+- give me 1000-hour fuel moisture for the fire spread model

@@ -81,7 +81,7 @@ def _patch_extraction(monkeypatch):
         "clamps_applied": [],
         "extraction_notes": [],
     }
-    import trid3nt_server.workflows.model_groundwater_contamination_scenario as m
+    import trid3nt_server.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario as m
 
     monkeypatch.setattr(m, "extract_spill_parameters", lambda text, geocode=True: derived)
     return derived
@@ -175,7 +175,7 @@ async def test_gate_timeout_fails_closed(monkeypatch) -> None:
 async def test_extraction_failure_falls_through_to_composer(monkeypatch) -> None:
     """The gate must not mask parameter problems — composer raises its own error."""
     from trid3nt_server import server
-    import trid3nt_server.workflows.model_groundwater_contamination_scenario as m
+    import trid3nt_server.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario as m
 
     def _boom(text, geocode=True):
         raise ValueError("no spill scale found")
@@ -201,7 +201,7 @@ def test_solver_tool_registered_in_confirm_set() -> None:
 
 def test_wrapper_defaults_fail_closed() -> None:
     """The registered wrapper must NOT hardcode confirmed=True (the job-0235 bug)."""
-    from trid3nt_server.workflows.model_groundwater_contamination_scenario import (
+    from trid3nt_server.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
         run_model_groundwater_contamination_scenario as wrapper,
     )
 

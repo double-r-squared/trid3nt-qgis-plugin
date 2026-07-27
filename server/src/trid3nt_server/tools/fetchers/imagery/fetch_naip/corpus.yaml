@@ -1,0 +1,9 @@
+fetch_naip:
+- give me high-res aerial imagery for this neighborhood
+- pull a true-color naip basemap over this small preserve
+- show me sub-meter aerial photography for this us bbox
+- fetch the usda aerial leaf-on imagery as the base layer
+- i want a detailed aerial photo basemap under my species points
+- overlay high-resolution rgb aerial imagery for this site
+- get the planetary computer naip image for this aoi
+- drop an aerial true-color base layer for this conservation area

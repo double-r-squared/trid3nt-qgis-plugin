@@ -1,0 +1,9 @@
+fetch_usgs_water_quality:
+- show me the nitrate water quality sample sites in this agricultural watershed
+- where has arsenic been measured in the groundwater near here and what are the latest concentrations
+- map the USGS water quality monitoring stations for lead in this bbox with their values
+- i want the observed nitrate concentrations to compare against the modeled contamination plume
+- pull the EPA water quality portal sites for specific conductance over this area
+- plot dissolved oxygen sample sites and their latest readings for this river basin
+- give me the real measured pH samples at monitoring locations in this county
+- fetch observed water quality sample points for nitrate to ground truth the MODFLOW plume

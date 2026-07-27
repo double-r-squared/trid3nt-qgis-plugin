@@ -42,12 +42,12 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.processing.spatial_query import (
+from trid3nt_server.tools.processing.spatial_query.spatial_query import (
     SpatialQueryError,
     SpatialQueryLayerURI,
     spatial_query,
 )
-from trid3nt_server.tools.processing import spatial_query as sq_module
+from trid3nt_server.tools.processing.spatial_query import spatial_query as sq_module
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +581,7 @@ class TestResultMaterialization:
         """Without _output_dir the FGB uploads to
         s3://trid3nt-runs/spatial_query/<ulid>.fgb via the solver's shared
         boto3 seam (in-memory S3 double - no network)."""
-        from trid3nt_server.tools.simulation import solver
+        from trid3nt_server.tools.simulation.solver import solver
 
         monkeypatch.setattr(solver, "_S3_CLIENT", None)
         monkeypatch.setattr(solver, "_RUNS_BUCKET", None)
@@ -766,7 +766,7 @@ _RETRIEVAL_PHRASINGS = [
 
 @pytest.fixture(scope="module")
 def fresh_index():
-    import trid3nt_server.tools.discovery.search_tools as dd
+    import trid3nt_server.tools.discovery.search_tools.search_tools as dd
 
     dd._reset_index_for_tests()
     dd._get_index()
@@ -777,7 +777,7 @@ def fresh_index():
 class TestRetrieval:
     @pytest.mark.parametrize("phrase", _RETRIEVAL_PHRASINGS)
     def test_search_tools_top5(self, fresh_index, phrase):
-        import trid3nt_server.tools.discovery.search_tools as dd
+        import trid3nt_server.tools.discovery.search_tools.search_tools as dd
 
         res = asyncio.run(dd.search_tools(query=phrase, top_k=5))
         names = [r["tool_name"] for r in res["results"]]
@@ -793,7 +793,7 @@ class TestRetrieval:
             assert "spatial_query" in retrieve_visible_tools(phrase, None, 8)
 
     def test_corpus_has_spatial_query_and_not_folded_tools(self):
-        import trid3nt_server.tools.discovery.search_tools as dd
+        import trid3nt_server.tools.discovery.search_tools.search_tools as dd
 
         corpus = dd._load_corpus()
         assert "spatial_query" in corpus

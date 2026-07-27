@@ -103,7 +103,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.workflows.model_landslide_scenario import model_landslide_scenario
+    from trid3nt_server.workflows.landlab.model_landslide_scenario.model_landslide_scenario import model_landslide_scenario
     from trid3nt_contracts.landlab_contracts import LandlabRunArgs
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)

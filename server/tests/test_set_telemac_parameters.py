@@ -46,7 +46,7 @@ from trid3nt_server.tools.simulation._setter_envelope import (  # noqa: E402
     BoundsViolation,
     SetterInputError,
 )
-from trid3nt_server.tools.simulation.set_telemac_parameters import (  # noqa: E402
+from trid3nt_server.tools.simulation.set_telemac_parameters.set_telemac_parameters import (  # noqa: E402
     set_telemac_parameters,
 )
 

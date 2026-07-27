@@ -1,0 +1,9 @@
+fetch_sentinel1_sar:
+- all-weather radar image that sees through clouds and at night
+- Sentinel-1 SAR backscatter image for a bounding box
+- flood extent mapping when the sky is cloudy or smoky
+- radar imagery where flooded water reads as dark low backscatter
+- VV / VH polarization C-band SAR for an area
+- see the ground despite hurricane clouds or wildfire smoke
+- SAR backscatter in decibels for a bbox
+- before and after radar flood map of a location

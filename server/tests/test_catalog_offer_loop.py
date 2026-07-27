@@ -24,7 +24,7 @@ import pytest
 
 from trid3nt_server import server as agent_server
 from trid3nt_server.tools.discovery import catalog_common as cc
-from trid3nt_server.tools.discovery import search_data_catalog as sdc_mod
+from trid3nt_server.tools.discovery.search_data_catalog import search_data_catalog as sdc_mod
 from trid3nt_server.tools.discovery.catalog_common import load_catalog, reset_catalog_cache
 from trid3nt_server.tools.cache import ReadThroughResult
 from trid3nt_contracts.ws import (

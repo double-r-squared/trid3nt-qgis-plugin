@@ -1,0 +1,9 @@
+fetch_overpass_pois:
+- show me the hospitals in this area
+- where are the fire stations near this flood zone
+- overlay schools and pharmacies on the map
+- find places of worship that could serve as shelters
+- fetch OSM points for amenity=fuel gas stations here
+- which supermarkets are inside the inundation footprint
+- show power substations in this bbox
+- map all the fire hydrants in these blocks

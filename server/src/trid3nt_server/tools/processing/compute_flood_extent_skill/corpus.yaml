@@ -1,0 +1,9 @@
+compute_flood_extent_skill:
+- does the modeled flood extent match the satellite observed extent
+- compute hit rate false alarm ratio and CSI for this flood footprint
+- compare the modeled wet dry raster against the benchmark flood polygon
+- critical success index for the flood inundation extent
+- validate flood extent against SAR imagery
+- how accurate is the flood footprint compared to the FEMA flood extent
+- confusion matrix of modeled versus observed flood extent
+- score the flood extent skill of this SFINCS run

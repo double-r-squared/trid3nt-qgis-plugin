@@ -18,10 +18,10 @@ import rasterio
 from rasterio.io import MemoryFile
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.hydrology import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_flood_extent_observation import (
     fetch_flood_extent_observation as fe_mod,
 )
-from trid3nt_server.tools.fetchers.hydrology.fetch_flood_extent_observation import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_flood_extent_observation.fetch_flood_extent_observation import (
     FloodExtentInputError,
     FloodExtentLayerURI,
     FloodExtentNoCoverageError,

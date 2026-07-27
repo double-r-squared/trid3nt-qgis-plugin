@@ -48,7 +48,7 @@ what travels, the reader is bound where the heavy deps live.
 DEFAULT-OFF: the per-engine ``OUTPUT_QUANTITIES`` registry ships as an EMPTY
 scaffold (no engine migrated yet - that is STEP 3). ``get_output_registry`` of any
 engine returns ``()`` today, so nothing changes until an engine opts in. The
-executor (``trid3nt_server.workflows.publish_quantities``) is importable + typed +
+executor (``trid3nt_server.workflows.shared.publish_quantities``) is importable + typed +
 unit-tested against a FAKE registry now; the per-engine fan-out is STEP 3.
 """
 

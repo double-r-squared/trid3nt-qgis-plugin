@@ -1,0 +1,9 @@
+fetch_usace_nsi:
+- I need the National Structure Inventory for flood loss estimation
+- give me HAZUS occupancy and replacement values for buildings in this bbox
+- fetch NSI data so Pelicun can compute structural losses
+- I want per-structure replacement cost for all buildings in this flood zone
+- show me the USACE structure inventory for New Orleans
+- I need foundation heights and FIRM flood zones for these structures
+- pull NSI data for the Fort Myers area for damage assessment
+- what are the structure values at risk in this 100-year floodplain?

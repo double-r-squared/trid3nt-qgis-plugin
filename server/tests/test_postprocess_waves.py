@@ -30,8 +30,8 @@ pytest.importorskip("xarray")
 pytest.importorskip("scipy")
 pytest.importorskip("pyproj")
 
-from trid3nt_server.workflows import postprocess_waves as pw  # noqa: E402
-from trid3nt_server.workflows.postprocess_waves import (  # noqa: E402
+from trid3nt_server.workflows.sfincs import postprocess_waves as pw  # noqa: E402
+from trid3nt_server.workflows.sfincs.postprocess_waves import (  # noqa: E402
     NODATA_WAVE_M,
     WAVE_HEIGHT_STYLE_PRESET,
     PostprocessError,

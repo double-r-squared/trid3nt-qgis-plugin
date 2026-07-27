@@ -31,8 +31,8 @@ import httpx
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.meta import web_fetch as web_fetch_mod
-from trid3nt_server.tools.meta.web_fetch import (
+from trid3nt_server.tools.meta.web_fetch import web_fetch as web_fetch_mod
+from trid3nt_server.tools.meta.web_fetch.web_fetch import (
     WebFetchInputError,
     WebFetchUpstreamError,
     _canonicalize_url,

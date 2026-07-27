@@ -1,0 +1,9 @@
+digitize_water_body:
+- outline / digitize the boundary of a lake or reservoir
+- vectorize this water body into polygons
+- where is the open surface water in this area
+- map the extent of a pond / lake / reservoir from satellite imagery
+- NDWI water mask for an AOI
+- show me the shoreline of this reservoir as a vector layer
+- detect surface water from Sentinel-2 for a bounding box
+- how big is this lake / what is its surface area

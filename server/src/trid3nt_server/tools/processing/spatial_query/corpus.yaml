@@ -1,0 +1,24 @@
+spatial_query:
+- give me summary statistics for this layer, min max mean and sum
+- how many features are in this vector dataset
+- summarize the numeric attributes of this building footprint layer
+- how many buildings have a damage ratio above 0.5
+- count the structures where the ground elevation is below 2 meters
+- count how many parcels exceed a replacement value of 500000
+- give me the count of structures with flood depth over 1 meter in this layer
+- what is the total damage cost for the buildings inside the flood zone polygon
+- sum the structure replacement value for everything within the county boundary
+- average building value for the parcels whose centroid falls in this protected area
+- add up the Pelicun damage for the features within this admin boundary
+- spatial join the points to the zones and count the features per zone
+- run a sql query over the layers on the map
+- query the building layer with sql and group the damage by category
+- give me summary statistics for the building layer
+- summarize the buildings layer, average and total value
+- how many buildings have flood depth over 1 meter
+- how many features in the parcels layer exceed the threshold
+- count the buildings with water depth above 2 feet
+- what is the average flood depth across the buildings in this layer
+- sum the losses over the features in each zone
+- aggregate the population attribute within each zone
+- summary statistics of the flood layer attributes

@@ -38,9 +38,9 @@ from trid3nt_contracts.modflow_contracts import (
 )
 
 from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY
-from trid3nt_server.workflows import postprocess_modflow as pp
-from trid3nt_server.workflows import model_multi_species_scenario as ms
-from trid3nt_server.workflows.model_multi_species_scenario import (
+from trid3nt_server.workflows.modflow import postprocess_modflow as pp
+from trid3nt_server.workflows.modflow.model_multi_species_scenario import model_multi_species_scenario as ms
+from trid3nt_server.workflows.modflow.model_multi_species_scenario.model_multi_species_scenario import (
     MultiSpeciesInputError,
     MultiSpeciesResult,
     MultiSpeciesScenarioError,
@@ -97,7 +97,7 @@ def _fake_geocode(query: str, **_: Any) -> dict[str, Any]:
 def _install_fake_tool(name: str, fn: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     existing = TOOL_REGISTRY.get(name)
     if existing is None:
-        from trid3nt_server.tools.simulation.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
+        from trid3nt_server.tools.simulation.run_modflow_tool.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
 
         metadata = _RUN_MODFLOW_JOB_METADATA
     else:
@@ -275,7 +275,7 @@ def test_postprocess_multi_species_real_mf6(monkeypatch, tmp_path: Path) -> None
     # The agent re-export inserts the worker dir into sys.path lazily (so flopy is
     # only imported when a MODFLOW tool runs) - use it instead of importing the
     # bare ``gwt_adapter`` module (which is not on the path by default).
-    from trid3nt_server.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.modflow.run_modflow import build_modflow_deck
 
     d = build_modflow_deck(
         workdir=tmp_path,

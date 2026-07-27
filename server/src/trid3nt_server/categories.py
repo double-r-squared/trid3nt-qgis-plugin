@@ -1086,7 +1086,7 @@ class AllowedToolSet:
             return self.as_frozenset()
 
         try:
-            from .tools.discovery.search_tools import get_dynamic_hot_set as _get_dyn
+            from .tools.discovery.search_tools.search_tools import get_dynamic_hot_set as _get_dyn
 
             dynamic = await _get_dyn(user_id=self.user_id, top_k=8)
             # Merge with the static set so tools the user has never called

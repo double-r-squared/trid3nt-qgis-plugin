@@ -16,8 +16,8 @@ import geopandas as gpd
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.hydrology import fetch_high_water_marks as hwm_mod
-from trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks import (
+from trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks import fetch_high_water_marks as hwm_mod
+from trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.fetch_high_water_marks import (
     HighWaterMarksLayerURI,
     HwmEventNotFoundError,
     HwmInputError,

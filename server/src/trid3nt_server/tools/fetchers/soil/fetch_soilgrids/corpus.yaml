@@ -1,0 +1,9 @@
+fetch_soilgrids:
+- soil texture clay sand silt percent for a region
+- global soil organic carbon and bulk density raster
+- soil pH map outside the US for agriculture
+- SoilGrids soil property at a depth for infiltration modeling
+- what is the soil clay content here for hydrology
+- global 250m soil substrate for a non-US area
+- ISRIC soil properties for crop or infiltration analysis
+- soil bulk density and organic carbon for a watershed

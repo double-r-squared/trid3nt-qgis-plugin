@@ -1,0 +1,9 @@
+fetch_landsat_imagery:
+- show me a Landsat satellite image of this area
+- what did this area look like decades ago / historical satellite imagery before-and-after change
+- land surface temperature / urban heat island map for this city
+- false-color infrared composite showing vegetation and water
+- Landsat thermal imagery in degrees Celsius for a bbox
+- natural-color 30 m satellite picture of an area
+- compare this region across years using Landsat archive imagery
+- color-infrared Landsat scene where healthy vegetation is bright red

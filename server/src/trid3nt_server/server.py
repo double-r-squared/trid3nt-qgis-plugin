@@ -216,7 +216,7 @@ from .spatial_input import (
 )
 from .tools import TOOL_REGISTRY
 from .tools.processing.charts_common import is_chart_emission_result
-from .tools.meta.code_exec_tool import (
+from .tools.meta.code_exec_tool.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     is_code_exec_result,
 )
@@ -1337,7 +1337,7 @@ def _tool_search_tool_names() -> frozenset[str]:
     """
     names: set[str] = set()
     try:
-        from .tools.discovery.search_tools import _SEARCH_TOOLS_METADATA
+        from .tools.discovery.search_tools.search_tools import _SEARCH_TOOLS_METADATA
 
         if getattr(_SEARCH_TOOLS_METADATA, "name", None):
             names.add(_SEARCH_TOOLS_METADATA.name)
@@ -8403,7 +8403,7 @@ async def _build_telemac_mesh_envelope(
         GranularitySuggestion,
         PayloadWarningEnvelopePayload,
     )
-    from .workflows.model_river_dye_release_scenario import (
+    from .workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
         MESH_H_FLOOR_M,
         MESH_NODE_CAP,
         plausible_release_coords,
@@ -8542,16 +8542,16 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
     )
     from trid3nt_contracts.swmm_contracts import SWMMRunArgs
     from .tool_arg_normalizer import coerce_bbox_value
-    from .tools.simulation.solver import (
+    from .tools.simulation.solver.solver import (
         AWS_BATCH_COMPUTE_CLASS_SIZING,
         select_compute_class,
     )
-    from .workflows.model_urban_flood_swmm import (
+    from .workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (
         _enforce_min_urban_aoi,
         _fetch_dem_for_urban,
     )
-    from .workflows.run_swmm import is_local_mode
-    from .workflows.swmm_mesh_builder import (
+    from .workflows.swmm.run_swmm import is_local_mode
+    from .workflows.swmm.swmm_mesh_builder import (
         SWMM_RES_LADDER,
         estimate_swmm_solve_seconds,
         suggest_swmm_resolution,
@@ -8655,7 +8655,7 @@ def _local_compute_lane() -> bool:
     confirm-card wording (compute labels / "cloud solve" prose); it never
     changes dispatch. Cloud wording stays byte-identical when this is False.
     """
-    from .tools.simulation.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
+    from .tools.simulation.solver.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
 
     return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 
@@ -8957,12 +8957,12 @@ async def _build_flood_run_settings_envelope(
         TimeScaleSuggestion,
     )
     from .tool_arg_normalizer import coerce_bbox_value
-    from .workflows.model_flood_scenario import (
+    from .workflows.sfincs.model_flood_scenario.model_flood_scenario import (
         _estimate_frame_count,
         _resolve_output_interval_min,
     )
-    from .workflows.postprocess_flood import MAX_FLOOD_FRAMES
-    from .workflows.sfincs_builder import (
+    from .workflows.sfincs.postprocess_flood import MAX_FLOOD_FRAMES
+    from .workflows.sfincs.sfincs_builder import (
         SFINCS_RES_LADDER,
         suggest_sfincs_resolution_from_bbox,
     )
@@ -9264,7 +9264,7 @@ def _build_fire_confirm_envelope(params: dict) -> Any:
     from trid3nt_contracts.elmfire_contracts import FUEL_MOISTURE_PRESETS
     from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
     from .tool_arg_normalizer import coerce_bbox_value
-    from .workflows.run_elmfire import (
+    from .workflows.elmfire.run_elmfire import (
         estimate_elmfire_grid,
         estimate_elmfire_runtime_s,
     )
@@ -9447,7 +9447,7 @@ async def _gate_on_solver_confirm(
     flood_override_offered: bool = False
     try:
         if tool_name == "run_model_groundwater_contamination_scenario":
-            from .workflows.model_groundwater_contamination_scenario import (
+            from .workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
                 _build_confirmation_envelope,
                 extract_spill_parameters,
             )
@@ -9483,7 +9483,7 @@ async def _gate_on_solver_confirm(
             # same helper the composer uses, so the card shows the real point the
             # solver will run. AOI resolution (geocode) is off the loop (the
             # WS-heartbeat lives) via to_thread.
-            from .workflows.model_contamination_affected_fields import (
+            from .workflows.modflow.model_contamination_affected_fields.model_contamination_affected_fields import (
                 _build_confirmation_envelope as _build_aff_envelope,
                 place_spill_up_gradient,
                 resolve_aoi_bbox,
@@ -9502,7 +9502,7 @@ async def _gate_on_solver_confirm(
             # demo path supplies explicit params, so fall through (the composer
             # surfaces its own typed error) when neither path is parameterized.
             if article_text and str(article_text).strip():
-                from .workflows.model_groundwater_contamination_scenario import (
+                from .workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
                     extract_spill_parameters,
                 )
 
@@ -9894,7 +9894,7 @@ async def _gate_on_solver_confirm(
         used_real_clamp = False
         if swmm_dem_path:
             try:
-                from .workflows.swmm_mesh_builder import (
+                from .workflows.swmm.swmm_mesh_builder import (
                     clamp_swmm_resolution_to_real_cap,
                 )
 
@@ -10515,7 +10515,7 @@ def _build_region_candidates(
         import geopandas as gpd  # type: ignore[import-not-found]
         from io import BytesIO
 
-        from .tools.fetchers.socioeconomic.fetch_administrative_boundaries import (
+        from .tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
             _fetch_admin_boundaries_bytes,
         )
     except ImportError:
@@ -11949,7 +11949,7 @@ async def _invoke_tool_via_emitter(
     if tool_name == "publish_layer" and not params.get("layer_id"):
         _pl_uri = params.get("layer_uri")
         if isinstance(_pl_uri, str) and _pl_uri:
-            from .tools.publish_layer import derive_layer_id as _derive_layer_id
+            from .tools.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
 
             params = dict(params)
             params["layer_id"] = _derive_layer_id(_pl_uri, uri_registry)
@@ -12457,7 +12457,7 @@ async def _invoke_tool_via_emitter(
                     # name (params carries it even though publish_layer's own
                     # signature only uses it for logging), else the resolved
                     # style_preset, else the published URI's path segment.
-                    from .tools.publish_layer import derive_readable_layer_name
+                    from .tools.publish_layer.publish_layer import derive_readable_layer_name
 
                     _layer_name = derive_readable_layer_name(
                         params.get("name"),
@@ -15177,7 +15177,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     if _tool_retrieval_mode() != "off":
         async def _warm_discover_index() -> None:
             try:
-                from .tools.discovery import search_tools as _dd_warm
+                from .tools.discovery.search_tools import search_tools as _dd_warm
                 await asyncio.to_thread(_dd_warm._get_index)
                 logger.info("tool_retrieval: discover index warmed at startup")
             except Exception:  # noqa: BLE001 -- warm is best-effort

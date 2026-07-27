@@ -21,7 +21,7 @@ All paths:
   * Never raises for an expected-empty result -- returns status=error + typed code.
   * The manifest follows the shared ``_raster_postprocess.manifest`` schema.
 
-Ported from ``trid3nt_server.workflows.postprocess_modflow`` (archetype branches):
+Ported from ``trid3nt_server.workflows.modflow.postprocess_modflow`` (archetype branches):
 same readers, same metric math, same honesty gates.  Worker operates on LOCAL
 scratch files only; no S3/GCS download logic needed here.
 """
@@ -861,7 +861,7 @@ def run_plume_postprocess(
 #   5. Returns ModflowPostprocessResult.
 #   6. Implements the empty-result honesty gate (never fake-ok).
 #
-# Ported from ``trid3nt_server.workflows.postprocess_modflow``:
+# Ported from ``trid3nt_server.workflows.modflow.postprocess_modflow``:
 #   postprocess_drawdown / postprocess_dewatering / postprocess_budget_partition /
 #   postprocess_mounding / postprocess_asr / postprocess_wetland_hydroperiod.
 # ---------------------------------------------------------------------------

@@ -68,7 +68,7 @@ from trid3nt_contracts.execution import LayerURI, RunResult
 from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
 
 from trid3nt_server.pipeline_emitter import current_emitter
-from trid3nt_server.workflows.postprocess_modflow import (
+from trid3nt_server.workflows.modflow.postprocess_modflow import (
     PostprocessMODFLOWError,
     postprocess_asr,
     postprocess_budget_partition,
@@ -81,14 +81,14 @@ from trid3nt_server.workflows.postprocess_modflow import (
     postprocess_subsidence,
     postprocess_wetland_hydroperiod,
 )
-from trid3nt_server.workflows.run_modflow import (
+from trid3nt_server.workflows.modflow.run_modflow import (
     MODFLOWWorkflowError,
     build_and_stage_modflow_deck,
     is_local_mode,
     run_modflow_local,
     submit_modflow_run,
 )
-from trid3nt_server.workflows.solve_progress import drive_live_solve_progress
+from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
 
 logger = logging.getLogger("trid3nt_server.tools.simulation.run_modflow_archetype_tool")
 
@@ -255,7 +255,7 @@ async def run_modflow_archetype_job(
             handle = await asyncio.to_thread(
                 submit_modflow_run, staging, compute_class=compute_class
             )
-            from trid3nt_server.tools.simulation.solver import wait_for_completion
+            from trid3nt_server.tools.simulation.solver.solver import wait_for_completion
 
             try:
                 run_result: RunResult = await wait_for_completion(handle)
@@ -289,7 +289,7 @@ async def run_modflow_archetype_job(
         # flopy computations run in-memory without touching disk (``write=False``
         # skips the file I/O; ``sim.write_simulation`` is never called).
         if is_prt:
-            from trid3nt_server.workflows.run_modflow import (
+            from trid3nt_server.workflows.modflow.run_modflow import (
                 _import_gwt_adapter as _import_adapter,
                 _mf6_binary,
                 build_modflow_deck as _build_modflow_deck,

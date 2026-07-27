@@ -1,0 +1,9 @@
+compute_contours:
+- show me the topographic contour lines for this AOI
+- draw elevation isolines over this area at a 10 metre interval
+- give me a contour map of the terrain here
+- add topo lines on top of the hillshade for this bbox
+- generate elevation contours from the DEM with a sensible interval
+- i want discrete elevation steps as line features for this region
+- overlay topographic contour lines on the colored relief base
+- make contour lines from this DEM so i can see the terrain shape as isolines

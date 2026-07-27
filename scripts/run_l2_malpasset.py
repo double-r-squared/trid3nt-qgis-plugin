@@ -319,7 +319,7 @@ def step_wse(result_slf: Path, run_id: str, out_dir: Path) -> Any:
         MALPASSET_VERTICAL_DATUM,
         MALPASSET_CRS_CAVEAT,
     )
-    from trid3nt_server.workflows.postprocess_telemac import postprocess_telemac_wse
+    from trid3nt_server.workflows.telemac.postprocess_telemac import postprocess_telemac_wse
 
     layers, metrics = postprocess_telemac_wse(
         result_slf,

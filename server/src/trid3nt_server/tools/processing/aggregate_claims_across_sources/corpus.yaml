@@ -1,0 +1,9 @@
+aggregate_claims_across_sources:
+- i fetched three news articles about the same chemical spill, pull out the agreed date, location, and what leaked
+- cross-check these agency pages and tell me how many gallons were spilled and how confident you are
+- reconcile the casualty counts across all the sources i pulled for this train derailment
+- which contaminant do the most sources agree was released here, and which ones disagree
+- i have several reports about this event, give me the best-supported facts with provenance urls
+- extract the spill date, town, and chemical from these fetched articles and score the agreement
+- consolidate what the wire stories say about this incident into one set of claims with confidence
+- how many sources back the vinyl chloride figure versus the other numbers in these texts

@@ -1,0 +1,9 @@
+fetch_modis_lst:
+- land surface temperature map for this city in degrees Celsius
+- urban heat island surface temperature for a metro area
+- MODIS 8-day LST thermal grid for a bbox
+- how hot is the ground surface during this heat wave
+- daytime vs nighttime land surface temperature comparison
+- drought thermal stress surface temperature over a region
+- surface skin temperature heat map (not air temperature)
+- overnight heat retention land surface temperature for heat-risk

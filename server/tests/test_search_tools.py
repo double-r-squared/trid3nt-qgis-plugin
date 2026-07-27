@@ -31,22 +31,19 @@ from typing import Any
 import pytest
 
 # Force the full tool + workflow surface to register before the index builds.
-from trid3nt_server.tools import (  # noqa: F401 — registration side-effect
-    TOOL_REGISTRY,
-    publish_layer,
-)
-from trid3nt_server.tools.discovery import (  # noqa: F401 — registration side-effect
-    fetch_from_catalog,
-    search_data_catalog,
-    qgis_discovery,
-)
-from trid3nt_server.tools.discovery import search_tools as discover_module
-from trid3nt_server.tools.simulation import solver  # noqa: F401 — registration side-effect
-from trid3nt_server.workflows import model_flood_scenario  # noqa: F401 — registration side-effect
+from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401
+from trid3nt_server.tools.publish_layer import publish_layer  # noqa: F401 — registration side-effect
+from trid3nt_server.tools.discovery.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.tools.discovery.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.tools.discovery.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
+from trid3nt_server.tools.discovery.search_tools import search_tools as discover_module
+from trid3nt_server.tools.simulation.solver import solver  # noqa: F401 — registration side-effect
+from trid3nt_server.workflows.sfincs.model_flood_scenario import model_flood_scenario  # noqa: F401 — registration side-effect
 
-from trid3nt_server.tools.discovery.search_tools import (
+from trid3nt_server.tools.discovery.search_tools.search_tools import (
     _close_vocab_matches,
     _default_corpus_path,
+    _load_corpus,
     _expand_query_tokens,
     _reciprocal_rank_fusion,
     _reset_index_for_tests,
@@ -311,7 +308,7 @@ def test_typo_gradinet_relief_routes_without_exact_corpus_queries(
     """
     import yaml as _yaml
 
-    corpus = _yaml.safe_load(_default_corpus_path().read_text())
+    corpus = _load_corpus()
     stripped = [
         q
         for q in corpus.get("compute_colored_relief", [])

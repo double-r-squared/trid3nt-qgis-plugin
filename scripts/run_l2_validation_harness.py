@@ -632,7 +632,7 @@ async def main_smoke() -> int:
                 )
             else:
                 child_run_id = handle.run_id
-                from trid3nt_server.workflows.postprocess_flood import postprocess_flood
+                from trid3nt_server.workflows.sfincs.postprocess_flood import postprocess_flood
 
                 layers, _metrics = postprocess_flood(child_result.output_uri, run_id=child_run_id)
                 child_peak_uri = layers[0].uri
@@ -1415,7 +1415,7 @@ async def main_live(args: argparse.Namespace) -> int:
     if child_result.status != "complete":
         record("live-8-rerun-child", False, f"status={child_result.status} error={child_result.error_message}")
     else:
-        from trid3nt_server.workflows.postprocess_flood import postprocess_flood
+        from trid3nt_server.workflows.sfincs.postprocess_flood import postprocess_flood
 
         layers, _m = postprocess_flood(child_result.output_uri, run_id=handle.run_id)
         paired_held_after = step_pairing(layers[0].uri, held_path)

@@ -1,0 +1,15 @@
+run_swmm_urban_flood:
+- model street-level pluvial flooding from a 100-year design storm over this neighborhood
+- run a SWMM urban stormwater flood around the buildings in this city block
+- how deep will the water get in the streets during a 6-hour cloudburst here
+- simulate drainage flooding with a sound barrier wall and green flap gates on this AOI
+- model overland flow routing around building obstructions like a PCSWMM scenario
+- run a quasi-2D urban flood with an Atlas-14 nested hyetograph over this bbox
+- animate the rising water depth on the streets timestep by timestep for this storm
+- show where stormwater ponds against the flood wall in this downtown block
+- how much TSS and bacteria washes off the streets to the storm outfall in this storm
+- model E.coli buildup and washoff from a 2-inch storm over this residential catchment
+- what is the outfall pollutograph and cumulative sediment load for this urban storm
+- estimate the first-flush pollutant load to the drain from this neighborhood cloudburst
+- simulate stormwater suspended-solids and nutrient washoff to the outfall on this block
+- how many organisms of fecal coliform reach the outfall after N dry days of buildup here

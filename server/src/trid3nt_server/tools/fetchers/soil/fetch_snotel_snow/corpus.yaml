@@ -1,0 +1,9 @@
+fetch_snotel_snow:
+- show me the SNOTEL snow stations in the colorado rockies and their current snow water equivalent
+- where are the snowpack gauges in the sierra nevada and how much SWE do they have
+- map the snow water equivalent at the SNOTEL stations near lake tahoe
+- current snow depth at the NRCS snow telemetry sites in the wasatch mountains
+- plot the SNOTEL stations in this bbox with their latest swe in inches
+- what is the observed snowpack at the automated snow stations in the cascades
+- give me the snow water equivalent and snow depth at the SNOTEL gauges upstream of this basin
+- list the active SNOTEL snow stations in alaska with their elevation and SWE

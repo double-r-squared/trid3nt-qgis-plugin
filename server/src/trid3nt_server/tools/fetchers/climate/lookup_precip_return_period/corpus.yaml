@@ -1,0 +1,8 @@
+lookup_precip_return_period:
+- what is the 100-year rainfall depth at this location?
+- give me Atlas 14 precipitation frequency estimates for Houston
+- what is the 24-hour 10-year storm depth for Fort Myers?
+- I need design-storm precipitation for a pluvial flood scenario
+- what return period is this rainfall event in Charlotte, NC?
+- fetch NOAA Atlas 14 PFDS for this watershed centroid
+- I want the 2-year, 10-year, and 100-year 1-hour storm depths for Tampa

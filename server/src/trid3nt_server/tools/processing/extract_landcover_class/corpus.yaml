@@ -1,0 +1,8 @@
+extract_landcover_class:
+- extract just the wetland pixels from the NLCD raster
+- show me only urban/developed areas in this landcover layer
+- give me a binary mask of forest in the fire study area
+- isolate cropland cells from this landcover grid
+- I want just the open-water class from this NLCD dataset
+- create a mask of low-intensity development from the landcover
+- pull out the shrubland pixels for rangeland fuel analysis

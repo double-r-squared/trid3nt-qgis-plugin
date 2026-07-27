@@ -1,0 +1,8 @@
+fetch_3dep_extra:
+- I want 3-meter resolution elevation for downtown Seattle
+- give me 1 m LiDAR DEM for the Caldor Fire scar
+- fetch the highest-res elevation available for San Francisco Bay
+- I need 1/9 arc-second elevation tiles for the Los Angeles basin
+- pull 30-meter 3DEP DEM for Alaska — the standard tool only goes to 10m
+- get me 5-meter elevation for the Kenai Peninsula, AK
+- fetch sub-meter terrain for the Oroville Dam spillway area

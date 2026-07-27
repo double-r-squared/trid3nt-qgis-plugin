@@ -35,9 +35,9 @@ import pytest
 
 # Force the workflow module to register its atomic-tool wrapper before we
 # inspect TOOL_REGISTRY.
-import trid3nt_server.workflows.model_flood_habitat_scenario  # noqa: F401
+import trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario  # noqa: F401
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.model_flood_habitat_scenario import (
+from trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario import (
     model_flood_habitat_scenario,
     run_model_flood_habitat_scenario,
     _format_case_summary,
@@ -220,23 +220,23 @@ async def test_workflow_happy_path_orchestration_order() -> None:
 
     with (
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
             side_effect=_record("wdpa", wdpa_layer),
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_gbif_occurrences",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_gbif_occurrences",
             side_effect=_record("species", species_layer),
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.model_flood_scenario",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.model_flood_scenario",
             side_effect=_flood_async,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.compute_zonal_statistics",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.compute_zonal_statistics",
             side_effect=_record("zonal", impact_dict),
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario._count_features_safely",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario._count_features_safely",
             return_value=42,
         ),
     ):
@@ -280,19 +280,19 @@ async def test_workflow_empty_species_keys_still_produces_flood_and_wdpa() -> No
 
     with (
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
             return_value=wdpa_layer,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_gbif_occurrences",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_gbif_occurrences",
             side_effect=_record_gbif,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.model_flood_scenario",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.model_flood_scenario",
             side_effect=_flood_async,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.compute_zonal_statistics",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.compute_zonal_statistics",
             return_value=impact_dict,
         ),
     ):
@@ -323,15 +323,15 @@ async def test_workflow_protected_area_designation_forwarded() -> None:
 
     with (
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
             wdpa_mock,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.model_flood_scenario",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.model_flood_scenario",
             side_effect=_flood_async,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.compute_zonal_statistics",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.compute_zonal_statistics",
             return_value={"aggregate": {}, "by_zone": {}},
         ),
     ):
@@ -368,31 +368,31 @@ async def test_workflow_place_clip_polygon_fires_clipping_calls() -> None:
 
     with (
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
             return_value=wdpa_layer,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_gbif_occurrences",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_gbif_occurrences",
             return_value=species_layer,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.model_flood_scenario",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.model_flood_scenario",
             side_effect=_flood_async,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.compute_zonal_statistics",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.compute_zonal_statistics",
             return_value={"aggregate": {}, "by_zone": {}},
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.clip_raster_to_polygon",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.clip_raster_to_polygon",
             clip_raster_mock,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.clip_vector_to_polygon",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.clip_vector_to_polygon",
             clip_vector_mock,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario._count_features_safely",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario._count_features_safely",
             return_value=0,
         ),
     ):
@@ -427,23 +427,23 @@ async def test_workflow_pipeline_emitter_receives_expected_stage_events() -> Non
 
     with (
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
             return_value=_mk_layer("wdpa"),
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_gbif_occurrences",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_gbif_occurrences",
             return_value=_mk_layer("panther"),
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.model_flood_scenario",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.model_flood_scenario",
             side_effect=_flood_async,
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.compute_zonal_statistics",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.compute_zonal_statistics",
             return_value={"aggregate": {"max": 1.0, "mean": 0.5, "count": 100}, "by_zone": {}},
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario._count_features_safely",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario._count_features_safely",
             return_value=10,
         ),
     ):
@@ -502,11 +502,11 @@ async def test_flood_failure_marks_flood_layer_uri_none() -> None:
 
     with (
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.fetch_wdpa_protected_areas",
             return_value=_mk_layer("wdpa"),
         ),
         patch(
-            "trid3nt_server.workflows.model_flood_habitat_scenario.model_flood_scenario",
+            "trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario.model_flood_scenario",
             side_effect=_flood_async,
         ),
     ):

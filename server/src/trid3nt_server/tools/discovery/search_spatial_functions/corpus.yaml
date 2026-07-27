@@ -1,0 +1,9 @@
+search_spatial_functions:
+- what duckdb function computes the distance between two points
+- how do i buffer a polygon in spatial_query sql
+- which ST function reprojects coordinates to a different crs
+- what's the function to get the intersection area of two geometries
+- how do i convert a geometry column to geojson in duckdb
+- what spatial sql function gives me the centroid of a polygon
+- is there a duckdb function to simplify a geometry
+- what function checks if one geometry contains another

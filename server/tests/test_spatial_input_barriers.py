@@ -535,7 +535,7 @@ def test_emit_and_wait_timeout_returns_none(monkeypatch):
 
 
 def test_request_spatial_input_tool_returns_sentinel():
-    from trid3nt_server.tools.meta.spatial_input_tool import (
+    from trid3nt_server.tools.meta.spatial_input_tool.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -552,7 +552,7 @@ def test_request_spatial_input_tool_returns_sentinel():
 
 
 def test_request_spatial_input_tool_rejects_bad_mode():
-    from trid3nt_server.tools.meta.spatial_input_tool import (
+    from trid3nt_server.tools.meta.spatial_input_tool.spatial_input_tool import (
         SPATIAL_INPUT_SENTINEL_KEY,
         request_spatial_input,
     )
@@ -572,8 +572,8 @@ def test_request_spatial_input_tool_rejects_bad_mode():
 swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")
 
-from trid3nt_server.workflows import swmm_mesh_builder as mb  # noqa: E402
-from trid3nt_server.workflows.swmm_mesh_builder import build_swmm_mesh  # noqa: E402
+from trid3nt_server.workflows.swmm import swmm_mesh_builder as mb  # noqa: E402
+from trid3nt_server.workflows.swmm.swmm_mesh_builder import build_swmm_mesh  # noqa: E402
 
 _N = 20
 _CELL = 10.0

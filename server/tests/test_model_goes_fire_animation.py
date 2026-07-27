@@ -28,7 +28,7 @@ import pytest
 from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
-from trid3nt_server.workflows.model_goes_fire_animation import (
+from trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation import (
     DEFAULT_GOES_WINDOW,
     GOES_FIRE_PRODUCTS,
     GOESFireAnimEmptyError,
@@ -238,7 +238,7 @@ _GOES_TIMES = (
 def _patch_slider(ts: list[int]):
     """Patch the workflow's SLIDER reader so the auto-snap sees ``ts`` (no net)."""
     return patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._read_slider_timestamps",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._read_slider_timestamps",
         new=_make_async_reader(ts),
     )
 
@@ -265,10 +265,10 @@ def test_default_run_proceeds_unattended_and_emits_blended_group():
         TOOL_REGISTRY,
         {"fetch_goes_blend_animation": _reg(_fake_blend)},
     ), _patch_slider(available), patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._publish_layers",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -323,10 +323,10 @@ def test_off_window_request_is_auto_snapped_not_parked():
         TOOL_REGISTRY,
         {"fetch_goes_blend_animation": _reg(_fake_blend)},
     ), _patch_slider(available), patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._publish_layers",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -375,10 +375,10 @@ def test_single_product_emits_un_blended_group():
         TOOL_REGISTRY,
         {"fetch_goes_animation": _reg(_fake_goes)},
     ), _patch_slider(available), patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._publish_layers",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -433,7 +433,7 @@ def test_firms_overlay_is_co_registered_static_layer():
             "fetch_firms_active_fire": _reg(_fake_firms),
         },
     ), _patch_slider(available), patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._publish_layers",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         result = _run(
@@ -479,17 +479,17 @@ def test_available_but_all_frames_empty_raises_honesty_floor():
     )
 
     def _fake_blend(*a, **k):
-        from trid3nt_server.tools.fetchers.imagery.fetch_goes_animation import GOESAnimEmptyError
+        from trid3nt_server.tools.fetchers.imagery.fetch_goes_animation.fetch_goes_animation import GOESAnimEmptyError
 
         raise GOESAnimEmptyError("every frame empty over AOI")
 
     with patch.dict(
         TOOL_REGISTRY, {"fetch_goes_blend_animation": _reg(_fake_blend)}
     ), _patch_slider(available), patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._safe_overlay_firms",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._safe_overlay_firms",
         _async_none,
     ), patch(
-        "trid3nt_server.workflows.model_goes_fire_animation._publish_layers",
+        "trid3nt_server.workflows.shared.model_goes_fire_animation.model_goes_fire_animation._publish_layers",
         _async_empty_dict,
     ):
         with pytest.raises(GOESFireAnimEmptyError):

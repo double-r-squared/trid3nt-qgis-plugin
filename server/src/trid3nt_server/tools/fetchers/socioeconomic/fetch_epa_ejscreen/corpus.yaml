@@ -1,0 +1,9 @@
+fetch_epa_ejscreen:
+- EPA EJScreen environmental justice indices by census block group
+- which neighborhoods have the worst PM2.5 ozone or air quality burden
+- environmental justice overlay cumulative pollution exposure choropleth
+- block groups near Superfund NPL or RMP or TSDF facility proximity percentile
+- traffic proximity lead paint pre-1960 housing diesel particulate by block group
+- EJScreen demographic index percent minority low income map
+- show environmental burden percentile for this city or county
+- EJ index PM2.5 traffic wastewater discharger percentile block group

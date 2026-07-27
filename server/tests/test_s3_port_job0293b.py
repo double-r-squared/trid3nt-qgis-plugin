@@ -89,7 +89,7 @@ def _bind_failing_reader(monkeypatch, exc: Exception):
 
 
 def test_pelicun_download_s3_stages_to_temp_file(monkeypatch):
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -108,7 +108,7 @@ def test_pelicun_download_s3_stages_to_temp_file(monkeypatch):
 def test_pelicun_download_s3_mangle_repair_retries_last_two_segments(monkeypatch):
     """LLM path-mangle guard (job-0253) mirrored for s3:// URIs."""
     from trid3nt_server.tools import cache as cache_mod
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -137,7 +137,7 @@ def test_pelicun_download_s3_mangle_repair_retries_last_two_segments(monkeypatch
 
 
 def test_pelicun_download_s3_failure_raises_typed_error(monkeypatch):
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
         PelicunRuntimeError,
         _download_uri_to_local,
     )
@@ -155,7 +155,7 @@ _WMS_URI = (
 
 
 def test_pelicun_wms_reverse_map_uses_s3_scheme_on_aws(monkeypatch):
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -182,7 +182,7 @@ def test_pelicun_wms_reverse_map_uses_s3_scheme_on_aws(monkeypatch):
 
 
 def test_pelicun_fetch_stages_s3_inputs_and_unlinks_after(monkeypatch):
-    from trid3nt_server.tools.simulation import run_pelicun_damage_assessment as mod
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment as mod
 
     _bind_fake_reader(monkeypatch, b"PAYLOAD")
 
@@ -228,7 +228,7 @@ def test_pelicun_fetch_stages_s3_inputs_and_unlinks_after(monkeypatch):
 
 
 def test_postprocess_pelicun_download_s3_stages_and_wraps_errors(monkeypatch):
-    from trid3nt_server.tools.simulation.postprocess_pelicun import (
+    from trid3nt_server.tools.simulation.postprocess_pelicun.postprocess_pelicun import (
         PelicunPostprocessIOError,
         _download_uri_to_local,
     )
@@ -251,7 +251,7 @@ def test_postprocess_pelicun_download_s3_stages_and_wraps_errors(monkeypatch):
 def test_postprocess_pelicun_tool_unlinks_s3_staged_file(monkeypatch):
     import geopandas as gpd
 
-    from trid3nt_server.tools.simulation import postprocess_pelicun as mod
+    from trid3nt_server.tools.simulation.postprocess_pelicun import postprocess_pelicun as mod
 
     _bind_fake_reader(monkeypatch, b"FGB-PAYLOAD")
 
@@ -300,7 +300,7 @@ def test_postprocess_pelicun_tool_unlinks_s3_staged_file(monkeypatch):
 
 
 def test_clip_vector_resolve_s3_returns_temp_path_tuple(monkeypatch):
-    from trid3nt_server.tools.processing.clip_vector_to_polygon import (
+    from trid3nt_server.tools.processing.clip_vector_to_polygon.clip_vector_to_polygon import (
         _resolve_layer_to_local_path,
     )
 
@@ -322,7 +322,7 @@ def test_clip_vector_resolve_s3_returns_temp_path_tuple(monkeypatch):
 
 
 def test_clip_vector_resolve_s3_failure_raises_typed_error(monkeypatch):
-    from trid3nt_server.tools.processing.clip_vector_to_polygon import (
+    from trid3nt_server.tools.processing.clip_vector_to_polygon.clip_vector_to_polygon import (
         ClipVectorError,
         _resolve_layer_to_local_path,
     )
@@ -397,7 +397,7 @@ def test_clip_raster_to_bbox_get_source_crs_s3_stages_via_boto3(monkeypatch):
     # job-0293c: /vsis3/ creds don't resolve on the EC2 role in this env —
     # the s3 branch must stage bytes via the shared boto3 reader.
     from trid3nt_server.tools import cache as cache_mod
-    from trid3nt_server.tools.processing.clip_raster_to_bbox import _get_source_crs
+    from trid3nt_server.tools.processing.clip_raster_to_bbox.clip_raster_to_bbox import _get_source_crs
 
     calls: list[str] = []
     data = _tiny_tif_bytes()
@@ -414,7 +414,7 @@ def test_clip_raster_to_bbox_get_source_crs_s3_stages_via_boto3(monkeypatch):
 
 def test_clip_raster_to_polygon_get_source_crs_s3_stages_via_boto3(monkeypatch):
     from trid3nt_server.tools import cache as cache_mod
-    from trid3nt_server.tools.processing.clip_raster_to_polygon import _get_source_crs
+    from trid3nt_server.tools.processing.clip_raster_to_polygon.clip_raster_to_polygon import _get_source_crs
 
     calls: list[str] = []
     data = _tiny_tif_bytes()
@@ -427,7 +427,7 @@ def test_clip_raster_to_polygon_get_source_crs_s3_stages_via_boto3(monkeypatch):
 def test_extract_landcover_open_source_s3_stages_via_boto3(monkeypatch):
     import os
     from trid3nt_server.tools import cache as cache_mod
-    from trid3nt_server.tools.processing import extract_landcover_class as elc
+    from trid3nt_server.tools.processing.extract_landcover_class import extract_landcover_class as elc
 
     calls: list[str] = []
     data = _tiny_tif_bytes()

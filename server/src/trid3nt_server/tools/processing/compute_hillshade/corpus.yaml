@@ -1,0 +1,8 @@
+compute_hillshade:
+- make the terrain shaded so I can see the ridgelines
+- add a hillshade background behind the flood layer
+- I want a shaded relief map of the Cascade Range
+- render the terrain with sunlight from the northwest
+- show me a 3D-looking terrain base for this volcanic area
+- compute hillshade for the DEM I just fetched over the Sierra Nevada
+- the map looks flat — add terrain shading

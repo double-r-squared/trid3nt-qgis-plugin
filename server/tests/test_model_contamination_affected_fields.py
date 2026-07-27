@@ -30,7 +30,7 @@ from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
 from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
 
 from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY
-from trid3nt_server.workflows.model_contamination_affected_fields import (
+from trid3nt_server.workflows.modflow.model_contamination_affected_fields.model_contamination_affected_fields import (
     AffectedFieldsResult,
     ContaminationAffectedFieldsConfirmationDeniedError,
     ContaminationAffectedFieldsGeocodeError,
@@ -364,7 +364,7 @@ def test_solver_error_dict_surfaces_as_typed_error(
     _install_fake_tool("run_modflow_job", _err_modflow, monkeypatch)
 
     async def _run() -> None:
-        from trid3nt_server.workflows.model_contamination_affected_fields import (
+        from trid3nt_server.workflows.modflow.model_contamination_affected_fields.model_contamination_affected_fields import (
             ContaminationAffectedFieldsError,
         )
 

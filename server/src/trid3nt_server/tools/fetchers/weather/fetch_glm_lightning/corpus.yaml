@@ -1,0 +1,8 @@
+fetch_glm_lightning:
+- show me the lightning over this storm from GOES GLM
+- map the GOES lightning group energy density over this convective cluster
+- where is the most electrically active part of this thunderstorm
+- overlay GLM optical lightning on top of the GOES satellite imagery for this AOI
+- give me a purple lightning-density raster over this hurricane right now
+- animate the GLM lightning activity over this storm minute by minute
+- how much lightning is this cell producing from the geostationary lightning mapper

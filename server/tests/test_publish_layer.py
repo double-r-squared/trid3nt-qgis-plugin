@@ -25,7 +25,7 @@ from __future__ import annotations
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.publish_layer import (
+from trid3nt_server.tools.publish_layer.publish_layer import (
     PublishLayerError,
     derive_layer_id,
     derive_readable_layer_name,
@@ -42,7 +42,7 @@ from trid3nt_server.tools.publish_layer import (
 def test_publish_layer_registered() -> None:
     """publish_layer is in TOOL_REGISTRY with correct metadata."""
     # Import the module to trigger registration (mirrors _import_tools_registry).
-    import trid3nt_server.tools.publish_layer  # noqa: F401
+    import trid3nt_server.tools.publish_layer.publish_layer  # noqa: F401
 
     assert "publish_layer" in TOOL_REGISTRY, (
         f"publish_layer not found in TOOL_REGISTRY; keys={sorted(TOOL_REGISTRY)}"

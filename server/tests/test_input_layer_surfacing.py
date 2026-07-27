@@ -164,8 +164,8 @@ async def test_publish_input_layer_swallows_add_loaded_layer_failure():
 # ===========================================================================
 # (2) OpenQuake fault serialization + composer wiring.
 # ===========================================================================
-import trid3nt_server.workflows.model_seismic_hazard_scenario as seismic  # noqa: E402
-from trid3nt_server.workflows.model_seismic_hazard_scenario import (  # noqa: E402
+import trid3nt_server.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario as seismic  # noqa: E402
+from trid3nt_server.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import (  # noqa: E402
     FAULT_LINE_STYLE_PRESET,
     fault_records_to_feature_collection,
     make_fault_sources_layer_uri,
@@ -218,7 +218,7 @@ def test_make_fault_sources_layer_uri_uploads_and_is_role_input(monkeypatch):
         def put_object(self, **kw):
             puts.append(kw)
 
-    import trid3nt_server.tools.simulation.solver as solver_mod
+    import trid3nt_server.tools.simulation.solver.solver as solver_mod
 
     monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: _FakeS3())
     monkeypatch.setattr(solver_mod, "_get_runs_bucket", lambda: "test-runs")
@@ -238,7 +238,7 @@ def test_make_fault_sources_layer_uri_uploads_and_is_role_input(monkeypatch):
 
 def test_make_fault_sources_layer_uri_no_features_returns_none(monkeypatch):
     """No drawable traces => None (best-effort, no upload)."""
-    import trid3nt_server.tools.simulation.solver as solver_mod
+    import trid3nt_server.tools.simulation.solver.solver as solver_mod
 
     called = {"put": False}
 
@@ -259,7 +259,7 @@ def test_make_fault_sources_layer_uri_no_features_returns_none(monkeypatch):
 def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
     """An S3 put failure returns None (the fault input is simply absent), NEVER
     raises."""
-    import trid3nt_server.tools.simulation.solver as solver_mod
+    import trid3nt_server.tools.simulation.solver.solver as solver_mod
 
     class _BoomS3:
         def put_object(self, **kw):
@@ -274,10 +274,10 @@ def test_make_fault_sources_layer_uri_s3_failure_is_non_fatal(monkeypatch):
 #     real faults were used; nothing extra when no real faults. ---------------
 from trid3nt_contracts.openquake_contracts import OpenQuakeRunArgs  # noqa: E402
 from trid3nt_contracts.openquake_contracts import SeismicHazardLayerURI  # noqa: E402
-from trid3nt_server.workflows.postprocess_openquake import (  # noqa: E402
+from trid3nt_server.workflows.openquake.postprocess_openquake import (  # noqa: E402
     SEISMIC_HAZARD_STYLE_PRESET,
 )
-from trid3nt_server.workflows.model_seismic_hazard_scenario import (  # noqa: E402
+from trid3nt_server.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import (  # noqa: E402
     assemble_build_spec,
 )
 
@@ -325,7 +325,7 @@ def _wire_seismic_mocks(monkeypatch):
     async def _fake_wait(handle):
         return _Result()
 
-    import trid3nt_server.tools.simulation.solver as solver_mod
+    import trid3nt_server.tools.simulation.solver.solver as solver_mod
 
     monkeypatch.setattr(
         solver_mod, "run_solver",
@@ -357,7 +357,7 @@ def _wire_seismic_mocks(monkeypatch):
 async def test_composer_emits_fault_input_when_real_faults(monkeypatch):
     """When real faults are used, the composer surfaces a role="input" fault
     VECTOR layer (the fault_sources.geojson) on the emitter."""
-    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources.fetch_fault_sources as ff
 
     _wire_seismic_mocks(monkeypatch)
     emitter = _emitter()
@@ -390,7 +390,7 @@ async def test_composer_emits_fault_input_when_real_faults(monkeypatch):
 async def test_composer_emits_no_fault_input_when_no_real_faults(monkeypatch):
     """When NO real fault intersects the AOI, the composer emits NO fault input
     layer (nothing extra surfaced)."""
-    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources as ff
+    import trid3nt_server.tools.fetchers.hazard.fetch_fault_sources.fetch_fault_sources as ff
 
     _wire_seismic_mocks(monkeypatch)
     emitter = _emitter()
@@ -417,8 +417,8 @@ async def test_composer_emits_no_fault_input_when_no_real_faults(monkeypatch):
 # ===========================================================================
 # (3) SFINCS surfaces river vector + DEM/landcover rasters as role="input".
 # ===========================================================================
-import trid3nt_server.workflows.model_flood_scenario as flood  # noqa: E402
-from trid3nt_server.workflows.model_flood_scenario import model_flood_scenario  # noqa: E402
+import trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario as flood  # noqa: E402
+from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import model_flood_scenario  # noqa: E402
 
 
 def _flood_input_layer(kind: str) -> LayerURI:
@@ -541,7 +541,7 @@ async def test_sfincs_surfaces_dem_landcover_river_as_inputs(monkeypatch):
 # ===========================================================================
 # (4 bonus) SWMM building footprints surfaced as a role="input" vector.
 # ===========================================================================
-from trid3nt_server.workflows.model_urban_flood_swmm import (  # noqa: E402
+from trid3nt_server.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (  # noqa: E402
     make_buildings_input_layer_uri,
 )
 
@@ -549,7 +549,7 @@ from trid3nt_server.workflows.model_urban_flood_swmm import (  # noqa: E402
 def test_make_buildings_input_layer_uri_uploads_role_input(monkeypatch):
     """A buildings FeatureCollection uploads to the runs bucket + returns a
     role="input" vector LayerURI (bbox=None). S3 mocked."""
-    import trid3nt_server.tools.simulation.solver as solver_mod
+    import trid3nt_server.tools.simulation.solver.solver as solver_mod
 
     puts: list[dict] = []
 
@@ -577,7 +577,7 @@ def test_make_buildings_input_layer_uri_uploads_role_input(monkeypatch):
 
 def test_make_buildings_input_layer_uri_empty_returns_none(monkeypatch):
     """An empty / non-FC input returns None (best-effort, no upload, no raise)."""
-    import trid3nt_server.tools.simulation.solver as solver_mod
+    import trid3nt_server.tools.simulation.solver.solver as solver_mod
 
     monkeypatch.setattr(
         solver_mod, "_get_s3_client",

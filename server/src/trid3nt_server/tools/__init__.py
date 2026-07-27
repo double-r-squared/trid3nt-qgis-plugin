@@ -222,203 +222,203 @@ def clear_registry_for_tests() -> None:
 # ---------------------------------------------------------------------------
 
 # -- fetchers/weather --
-from .fetchers.weather import fetch_airnow_air_quality  # noqa: E402,F401
-from .fetchers.weather import fetch_asos_metar  # noqa: E402,F401
-from .fetchers.weather import fetch_glm_lightning  # noqa: E402,F401
-from .fetchers.weather import fetch_hrrr_forecast  # noqa: E402,F401
-from .fetchers.weather import fetch_hrrr_smoke  # noqa: E402,F401
-from .fetchers.weather import fetch_mrms_qpe  # noqa: E402,F401
-from .fetchers.weather import fetch_nexrad_reflectivity  # noqa: E402,F401
-from .fetchers.weather import fetch_nws_alerts_conus  # noqa: E402,F401
-from .fetchers.weather import fetch_nws_event  # noqa: E402,F401
-from .fetchers.weather import fetch_openaq_measurements  # noqa: E402,F401
-from .fetchers.weather import fetch_raws_weather  # noqa: E402,F401
-from .fetchers.weather import fetch_storm_events_db  # noqa: E402,F401
-from .fetchers.weather import fetch_storm_tracks  # noqa: E402,F401
+from .fetchers.weather.fetch_airnow_air_quality import fetch_airnow_air_quality  # noqa: E402,F401
+from .fetchers.weather.fetch_asos_metar import fetch_asos_metar  # noqa: E402,F401
+from .fetchers.weather.fetch_glm_lightning import fetch_glm_lightning  # noqa: E402,F401
+from .fetchers.weather.fetch_hrrr_forecast import fetch_hrrr_forecast  # noqa: E402,F401
+from .fetchers.weather.fetch_hrrr_smoke import fetch_hrrr_smoke  # noqa: E402,F401
+from .fetchers.weather.fetch_mrms_qpe import fetch_mrms_qpe  # noqa: E402,F401
+from .fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: E402,F401
+from .fetchers.weather.fetch_nws_alerts_conus import fetch_nws_alerts_conus  # noqa: E402,F401
+from .fetchers.weather.fetch_nws_event import fetch_nws_event  # noqa: E402,F401
+from .fetchers.weather.fetch_openaq_measurements import fetch_openaq_measurements  # noqa: E402,F401
+from .fetchers.weather.fetch_raws_weather import fetch_raws_weather  # noqa: E402,F401
+from .fetchers.weather.fetch_storm_events_db import fetch_storm_events_db  # noqa: E402,F401
+from .fetchers.weather.fetch_storm_tracks import fetch_storm_tracks  # noqa: E402,F401
 
 # -- fetchers/hydrology --
-from .fetchers.hydrology import fetch_cama_flood_discharge  # noqa: E402,F401
+from .fetchers.hydrology.fetch_cama_flood_discharge import fetch_cama_flood_discharge  # noqa: E402,F401
 # V&V wave (ADR 0021, lane C): observed flood-validation data fetchers.
-from .fetchers.hydrology import fetch_flood_extent_observation  # noqa: E402,F401
-from .fetchers.hydrology import fetch_high_water_marks  # noqa: E402,F401
-from .fetchers.hydrology import fetch_jrc_global_surface_water  # noqa: E402,F401
-from .fetchers.hydrology import fetch_nhd_waterbodies  # noqa: E402,F401
-from .fetchers.hydrology import fetch_nhdplus_nldi_navigate  # noqa: E402,F401
-from .fetchers.hydrology import fetch_noaa_nwm_streamflow  # noqa: E402,F401
-from .fetchers.hydrology import fetch_nwi_wetlands  # noqa: E402,F401
-from .fetchers.hydrology import fetch_nws_river_forecast  # noqa: E402,F401
-from .fetchers.hydrology import fetch_river_geometry  # noqa: E402,F401
-from .fetchers.hydrology import fetch_usgs_groundwater_levels  # noqa: E402,F401
-from .fetchers.hydrology import fetch_usgs_nwis_gauges  # noqa: E402,F401
-from .fetchers.hydrology import fetch_usgs_water_quality  # noqa: E402,F401
+from .fetchers.hydrology.fetch_flood_extent_observation import fetch_flood_extent_observation  # noqa: E402,F401
+from .fetchers.hydrology.fetch_high_water_marks import fetch_high_water_marks  # noqa: E402,F401
+from .fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_surface_water  # noqa: E402,F401
+from .fetchers.hydrology.fetch_nhd_waterbodies import fetch_nhd_waterbodies  # noqa: E402,F401
+from .fetchers.hydrology.fetch_nhdplus_nldi_navigate import fetch_nhdplus_nldi_navigate  # noqa: E402,F401
+from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow  # noqa: E402,F401
+from .fetchers.hydrology.fetch_nwi_wetlands import fetch_nwi_wetlands  # noqa: E402,F401
+from .fetchers.hydrology.fetch_nws_river_forecast import fetch_nws_river_forecast  # noqa: E402,F401
+from .fetchers.hydrology.fetch_river_geometry import fetch_river_geometry  # noqa: E402,F401
+from .fetchers.hydrology.fetch_usgs_groundwater_levels import fetch_usgs_groundwater_levels  # noqa: E402,F401
+from .fetchers.hydrology.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges  # noqa: E402,F401
+from .fetchers.hydrology.fetch_usgs_water_quality import fetch_usgs_water_quality  # noqa: E402,F401
 
 # -- fetchers/ocean --
-from .fetchers.ocean import fetch_gtsm_tide_surge  # noqa: E402,F401
-from .fetchers.ocean import fetch_noaa_coops_currents  # noqa: E402,F401
-from .fetchers.ocean import fetch_noaa_coops_tides  # noqa: E402,F401
-from .fetchers.ocean import fetch_noaa_slr_confidence  # noqa: E402,F401
-from .fetchers.ocean import fetch_noaa_slr_marsh  # noqa: E402,F401
-from .fetchers.ocean import fetch_noaa_slr_scenarios  # noqa: E402,F401
-from .fetchers.ocean import fetch_noaa_sst  # noqa: E402,F401
-from .fetchers.ocean import fetch_topobathy  # noqa: E402,F401
+from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa: E402,F401
+from .fetchers.ocean.fetch_noaa_coops_currents import fetch_noaa_coops_currents  # noqa: E402,F401
+from .fetchers.ocean.fetch_noaa_coops_tides import fetch_noaa_coops_tides  # noqa: E402,F401
+from .fetchers.ocean.fetch_noaa_slr_confidence import fetch_noaa_slr_confidence  # noqa: E402,F401
+from .fetchers.ocean.fetch_noaa_slr_marsh import fetch_noaa_slr_marsh  # noqa: E402,F401
+from .fetchers.ocean.fetch_noaa_slr_scenarios import fetch_noaa_slr_scenarios  # noqa: E402,F401
+from .fetchers.ocean.fetch_noaa_sst import fetch_noaa_sst  # noqa: E402,F401
+from .fetchers.ocean.fetch_topobathy import fetch_topobathy  # noqa: E402,F401
 
 # -- fetchers/terrain --
-from .fetchers.terrain import fetch_3dep_extra  # noqa: E402,F401
-from .fetchers.terrain import fetch_copernicus_dem  # noqa: E402,F401
-from .fetchers.terrain import fetch_dem  # noqa: E402,F401
-from .fetchers.terrain import fetch_esri_landcover_10m  # noqa: E402,F401
-from .fetchers.terrain import fetch_landcover  # noqa: E402,F401
+from .fetchers.terrain.fetch_3dep_extra import fetch_3dep_extra  # noqa: E402,F401
+from .fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem  # noqa: E402,F401
+from .fetchers.terrain.fetch_dem import fetch_dem  # noqa: E402,F401
+from .fetchers.terrain.fetch_esri_landcover_10m import fetch_esri_landcover_10m  # noqa: E402,F401
+from .fetchers.terrain.fetch_landcover import fetch_landcover  # noqa: E402,F401
 
 # -- fetchers/imagery --
-from .fetchers.imagery import fetch_goes_active_fire  # noqa: E402,F401
-from .fetchers.imagery import fetch_goes_animation  # noqa: E402,F401
-from .fetchers.imagery import fetch_goes_archive_animation  # noqa: E402,F401
-from .fetchers.imagery import fetch_goes_satellite  # noqa: E402,F401
-from .fetchers.imagery import fetch_landsat_imagery  # noqa: E402,F401
-from .fetchers.imagery import fetch_naip  # noqa: E402,F401
-from .fetchers.imagery import fetch_sentinel1_sar  # noqa: E402,F401
-from .fetchers.imagery import fetch_sentinel2_truecolor  # noqa: E402,F401
-from .fetchers.imagery import fetch_viirs_day_fire  # noqa: E402,F401
+from .fetchers.imagery.fetch_goes_active_fire import fetch_goes_active_fire  # noqa: E402,F401
+from .fetchers.imagery.fetch_goes_animation import fetch_goes_animation  # noqa: E402,F401
+from .fetchers.imagery.fetch_goes_archive_animation import fetch_goes_archive_animation  # noqa: E402,F401
+from .fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: E402,F401
+from .fetchers.imagery.fetch_landsat_imagery import fetch_landsat_imagery  # noqa: E402,F401
+from .fetchers.imagery.fetch_naip import fetch_naip  # noqa: E402,F401
+from .fetchers.imagery.fetch_sentinel1_sar import fetch_sentinel1_sar  # noqa: E402,F401
+from .fetchers.imagery.fetch_sentinel2_truecolor import fetch_sentinel2_truecolor  # noqa: E402,F401
+from .fetchers.imagery.fetch_viirs_day_fire import fetch_viirs_day_fire  # noqa: E402,F401
 
 # -- fetchers/climate --
-from .fetchers.climate import fetch_chirps_precipitation  # noqa: E402,F401
-from .fetchers.climate import fetch_climate_normals  # noqa: E402,F401
-from .fetchers.climate import fetch_era5_reanalysis  # noqa: E402,F401
-from .fetchers.climate import fetch_gridmet  # noqa: E402,F401
-from .fetchers.climate import fetch_modis_lst  # noqa: E402,F401
-from .fetchers.climate import fetch_us_drought_monitor  # noqa: E402,F401
-from .fetchers.climate import lookup_precip_return_period  # noqa: E402,F401
+from .fetchers.climate.fetch_chirps_precipitation import fetch_chirps_precipitation  # noqa: E402,F401
+from .fetchers.climate.fetch_climate_normals import fetch_climate_normals  # noqa: E402,F401
+from .fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noqa: E402,F401
+from .fetchers.climate.fetch_gridmet import fetch_gridmet  # noqa: E402,F401
+from .fetchers.climate.fetch_modis_lst import fetch_modis_lst  # noqa: E402,F401
+from .fetchers.climate.fetch_us_drought_monitor import fetch_us_drought_monitor  # noqa: E402,F401
+from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
 
 # -- fetchers/biodiversity --
-from .fetchers.biodiversity import fetch_ebird_observations  # noqa: E402,F401
-from .fetchers.biodiversity import fetch_gbif_occurrences  # noqa: E402,F401
-from .fetchers.biodiversity import fetch_inaturalist_observations  # noqa: E402,F401
-from .fetchers.biodiversity import fetch_iucn_red_list_range  # noqa: E402,F401
-from .fetchers.biodiversity import fetch_mobi  # noqa: E402,F401
-from .fetchers.biodiversity import fetch_movebank_tracks  # noqa: E402,F401
-from .fetchers.biodiversity import fetch_wdpa_protected_areas  # noqa: E402,F401
+from .fetchers.biodiversity.fetch_ebird_observations import fetch_ebird_observations  # noqa: E402,F401
+from .fetchers.biodiversity.fetch_gbif_occurrences import fetch_gbif_occurrences  # noqa: E402,F401
+from .fetchers.biodiversity.fetch_inaturalist_observations import fetch_inaturalist_observations  # noqa: E402,F401
+from .fetchers.biodiversity.fetch_iucn_red_list_range import fetch_iucn_red_list_range  # noqa: E402,F401
+from .fetchers.biodiversity.fetch_mobi import fetch_mobi  # noqa: E402,F401
+from .fetchers.biodiversity.fetch_movebank_tracks import fetch_movebank_tracks  # noqa: E402,F401
+from .fetchers.biodiversity.fetch_wdpa_protected_areas import fetch_wdpa_protected_areas  # noqa: E402,F401
 
 # -- fetchers/socioeconomic --
-from .fetchers.socioeconomic import fetch_administrative_boundaries  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_buildings  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_cdc_svi  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_census_acs  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_epa_ejscreen  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_field_boundaries  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_ghsl_population  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_hrsl_population  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_lehd_jobs  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_overpass_pois  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_population  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_roads_osm  # noqa: E402,F401
-from .fetchers.socioeconomic import fetch_usace_nsi  # noqa: E402,F401
-from .fetchers.socioeconomic import geocode_location  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_administrative_boundaries import fetch_administrative_boundaries  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_cdc_svi import fetch_cdc_svi  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_census_acs import fetch_census_acs  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_epa_ejscreen import fetch_epa_ejscreen  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_field_boundaries import fetch_field_boundaries  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_ghsl_population import fetch_ghsl_population  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_hrsl_population import fetch_hrsl_population  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_lehd_jobs import fetch_lehd_jobs  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_overpass_pois import fetch_overpass_pois  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_population import fetch_population  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_roads_osm import fetch_roads_osm  # noqa: E402,F401
+from .fetchers.socioeconomic.fetch_usace_nsi import fetch_usace_nsi  # noqa: E402,F401
+from .fetchers.socioeconomic.geocode_location import geocode_location  # noqa: E402,F401
 
 # -- fetchers/hazard --
-from .fetchers.hazard import fetch_epa_frs_facilities  # noqa: E402,F401
-from .fetchers.hazard import fetch_fault_sources  # noqa: E402,F401
-from .fetchers.hazard import fetch_fema_nfhl_zones  # noqa: E402,F401
-from .fetchers.hazard import fetch_firms_active_fire  # noqa: E402,F401
-from .fetchers.hazard import fetch_hifld_critical_infrastructure  # noqa: E402,F401
-from .fetchers.hazard import fetch_hifld_transmission_lines  # noqa: E402,F401
-from .fetchers.hazard import fetch_landfire_fuels  # noqa: E402,F401
-from .fetchers.hazard import fetch_mtbs_burn_severity  # noqa: E402,F401
-from .fetchers.hazard import fetch_nifc_fire_perimeters  # noqa: E402,F401
-from .fetchers.hazard import fetch_openfema_disasters  # noqa: E402,F401
-from .fetchers.hazard import fetch_tsunami_events  # noqa: E402,F401
-from .fetchers.hazard import fetch_usace_dams  # noqa: E402,F401
-from .fetchers.hazard import fetch_usace_levees  # noqa: E402,F401
-from .fetchers.hazard import fetch_usfs_canopy_fuels  # noqa: E402,F401
-from .fetchers.hazard import fetch_usgs_earthquakes  # noqa: E402,F401
-from .fetchers.hazard import fetch_usgs_volcano_alerts  # noqa: E402,F401
-from .fetchers.hazard import fetch_wfigs_incident  # noqa: E402,F401
+from .fetchers.hazard.fetch_epa_frs_facilities import fetch_epa_frs_facilities  # noqa: E402,F401
+from .fetchers.hazard.fetch_fault_sources import fetch_fault_sources  # noqa: E402,F401
+from .fetchers.hazard.fetch_fema_nfhl_zones import fetch_fema_nfhl_zones  # noqa: E402,F401
+from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # noqa: E402,F401
+from .fetchers.hazard.fetch_hifld_critical_infrastructure import fetch_hifld_critical_infrastructure  # noqa: E402,F401
+from .fetchers.hazard.fetch_hifld_transmission_lines import fetch_hifld_transmission_lines  # noqa: E402,F401
+from .fetchers.hazard.fetch_landfire_fuels import fetch_landfire_fuels  # noqa: E402,F401
+from .fetchers.hazard.fetch_mtbs_burn_severity import fetch_mtbs_burn_severity  # noqa: E402,F401
+from .fetchers.hazard.fetch_nifc_fire_perimeters import fetch_nifc_fire_perimeters  # noqa: E402,F401
+from .fetchers.hazard.fetch_openfema_disasters import fetch_openfema_disasters  # noqa: E402,F401
+from .fetchers.hazard.fetch_tsunami_events import fetch_tsunami_events  # noqa: E402,F401
+from .fetchers.hazard.fetch_usace_dams import fetch_usace_dams  # noqa: E402,F401
+from .fetchers.hazard.fetch_usace_levees import fetch_usace_levees  # noqa: E402,F401
+from .fetchers.hazard.fetch_usfs_canopy_fuels import fetch_usfs_canopy_fuels  # noqa: E402,F401
+from .fetchers.hazard.fetch_usgs_earthquakes import fetch_usgs_earthquakes  # noqa: E402,F401
+from .fetchers.hazard.fetch_usgs_volcano_alerts import fetch_usgs_volcano_alerts  # noqa: E402,F401
+from .fetchers.hazard.fetch_wfigs_incident import fetch_wfigs_incident  # noqa: E402,F401
 
 # -- fetchers/soil --
-from .fetchers.soil import fetch_gcn250_curve_numbers  # noqa: E402,F401
-from .fetchers.soil import fetch_snotel_snow  # noqa: E402,F401
-from .fetchers.soil import fetch_soilgrids  # noqa: E402,F401
-from .fetchers.soil import fetch_statsgo_soils  # noqa: E402,F401
+from .fetchers.soil.fetch_gcn250_curve_numbers import fetch_gcn250_curve_numbers  # noqa: E402,F401
+from .fetchers.soil.fetch_snotel_snow import fetch_snotel_snow  # noqa: E402,F401
+from .fetchers.soil.fetch_soilgrids import fetch_soilgrids  # noqa: E402,F401
+from .fetchers.soil.fetch_statsgo_soils import fetch_statsgo_soils  # noqa: E402,F401
 
 # -- processing (compute / clip / extract / vector-edit / charts) --
-from .processing import aggregate_claims_across_sources  # noqa: E402,F401
-from .processing import analyze_affected_fields  # noqa: E402,F401
-from .processing import clip_raster_to_bbox  # noqa: E402,F401
-from .processing import clip_raster_to_polygon  # noqa: E402,F401
-from .processing import clip_vector_to_polygon  # noqa: E402,F401
-from .processing import compute_aspect  # noqa: E402,F401
-from .processing import compute_blended_composite  # noqa: E402,F401
-from .processing import compute_building_density  # noqa: E402,F401
-from .processing import compute_canopy_height  # noqa: E402,F401
-from .processing import compute_change_detection  # noqa: E402,F401
-from .processing import compute_colored_relief  # noqa: E402,F401
-from .processing import compute_contours  # noqa: E402,F401
-from .processing import compute_cross_section  # noqa: E402,F401
-from .processing import compute_exposure_summary  # noqa: E402,F401
-from .processing import compute_flood_depth_damage  # noqa: E402,F401
+from .processing.aggregate_claims_across_sources import aggregate_claims_across_sources  # noqa: E402,F401
+from .processing.analyze_affected_fields import analyze_affected_fields  # noqa: E402,F401
+from .processing.clip_raster_to_bbox import clip_raster_to_bbox  # noqa: E402,F401
+from .processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
+from .processing.clip_vector_to_polygon import clip_vector_to_polygon  # noqa: E402,F401
+from .processing.compute_aspect import compute_aspect  # noqa: E402,F401
+from .processing.compute_blended_composite import compute_blended_composite  # noqa: E402,F401
+from .processing.compute_building_density import compute_building_density  # noqa: E402,F401
+from .processing.compute_canopy_height import compute_canopy_height  # noqa: E402,F401
+from .processing.compute_change_detection import compute_change_detection  # noqa: E402,F401
+from .processing.compute_colored_relief import compute_colored_relief  # noqa: E402,F401
+from .processing.compute_contours import compute_contours  # noqa: E402,F401
+from .processing.compute_cross_section import compute_cross_section  # noqa: E402,F401
+from .processing.compute_exposure_summary import compute_exposure_summary  # noqa: E402,F401
+from .processing.compute_flood_depth_damage import compute_flood_depth_damage  # noqa: E402,F401
 # V&V wave (ADR 0021, lane B): flood-extent skill (raster/vector confusion).
-from .processing import compute_flood_extent_skill  # noqa: E402,F401
-from .processing import compute_hillshade  # noqa: E402,F401
-from .processing import compute_home_range_kde  # noqa: E402,F401
-from .processing import compute_idf_curve  # noqa: E402,F401
-from .processing import compute_impervious_surface  # noqa: E402,F401
-from .processing import compute_layer_bounds  # noqa: E402,F401
-from .processing import compute_model_residuals  # noqa: E402,F401
-from .processing import compute_movement_trajectory  # noqa: E402,F401
-from .processing import compute_ndvi  # noqa: E402,F401
-from .processing import compute_overtopping  # noqa: E402,F401
-from .processing import compute_sediment_yield  # noqa: E402,F401
+from .processing.compute_flood_extent_skill import compute_flood_extent_skill  # noqa: E402,F401
+from .processing.compute_hillshade import compute_hillshade  # noqa: E402,F401
+from .processing.compute_home_range_kde import compute_home_range_kde  # noqa: E402,F401
+from .processing.compute_idf_curve import compute_idf_curve  # noqa: E402,F401
+from .processing.compute_impervious_surface import compute_impervious_surface  # noqa: E402,F401
+from .processing.compute_layer_bounds import compute_layer_bounds  # noqa: E402,F401
+from .processing.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
+from .processing.compute_movement_trajectory import compute_movement_trajectory  # noqa: E402,F401
+from .processing.compute_ndvi import compute_ndvi  # noqa: E402,F401
+from .processing.compute_overtopping import compute_overtopping  # noqa: E402,F401
+from .processing.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
 # V&V wave (ADR 0021, lane B): model-fit skill-metrics wrap (spotpy).
-from .processing import compute_skill_metrics  # noqa: E402,F401
-from .processing import compute_slope  # noqa: E402,F401
-from .processing import compute_terrain_profile  # noqa: E402,F401
-from .processing import compute_urban_heat_island  # noqa: E402,F401
-from .processing import compute_wave_nomograph  # noqa: E402,F401
-from .processing import compute_zonal_statistics  # noqa: E402,F401
-from .processing import cut_features_with_polygon  # noqa: E402,F401
-from .processing import delineate_watershed  # noqa: E402,F401
-from .processing import digitize_water_body  # noqa: E402,F401
-from .processing import enhance_satellite_image  # noqa: E402,F401
-from .processing import extract_landcover_class  # noqa: E402,F401
+from .processing.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
+from .processing.compute_slope import compute_slope  # noqa: E402,F401
+from .processing.compute_terrain_profile import compute_terrain_profile  # noqa: E402,F401
+from .processing.compute_urban_heat_island import compute_urban_heat_island  # noqa: E402,F401
+from .processing.compute_wave_nomograph import compute_wave_nomograph  # noqa: E402,F401
+from .processing.compute_zonal_statistics import compute_zonal_statistics  # noqa: E402,F401
+from .processing.cut_features_with_polygon import cut_features_with_polygon  # noqa: E402,F401
+from .processing.delineate_watershed import delineate_watershed  # noqa: E402,F401
+from .processing.digitize_water_body import digitize_water_body  # noqa: E402,F401
+from .processing.enhance_satellite_image import enhance_satellite_image  # noqa: E402,F401
+from .processing.extract_landcover_class import extract_landcover_class  # noqa: E402,F401
 # V&V wave (ADR 0021, lane C): model-vs-observation pairing primitive.
-from .processing import extract_model_at_observations  # noqa: E402,F401
-from .processing import extract_stream_network  # noqa: E402,F401
-from .processing import extract_timeseries_at_point  # noqa: E402,F401
-from .processing import fill_gaps  # noqa: E402,F401
-from .processing import generate_choropleth_legend  # noqa: E402,F401
-from .processing import generate_damage_distribution  # noqa: E402,F401
-from .processing import generate_histogram  # noqa: E402,F401
-from .processing import generate_time_series  # noqa: E402,F401
-from .processing import merge_features  # noqa: E402,F401
-from .processing import query_point_hazard  # noqa: E402,F401
+from .processing.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
+from .processing.extract_stream_network import extract_stream_network  # noqa: E402,F401
+from .processing.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
+from .processing.fill_gaps import fill_gaps  # noqa: E402,F401
+from .processing.generate_choropleth_legend import generate_choropleth_legend  # noqa: E402,F401
+from .processing.generate_damage_distribution import generate_damage_distribution  # noqa: E402,F401
+from .processing.generate_histogram import generate_histogram  # noqa: E402,F401
+from .processing.generate_time_series import generate_time_series  # noqa: E402,F401
+from .processing.merge_features import merge_features  # noqa: E402,F401
+from .processing.query_point_hazard import query_point_hazard  # noqa: E402,F401
 # DuckDB spatial-query fold (Phase B): ONE read-only SQL surface replaces the
 # three analytical Q&A tools (summarize_layer_statistics /
 # count_features_above_threshold / aggregate_property_within_zone).
-from .processing import spatial_query  # noqa: E402,F401
+from .processing.spatial_query import spatial_query  # noqa: E402,F401
 
 # -- simulation (engine bridges, model_* engines, solver seam) --
 # V&V wave (ADR 0021, lane A): per-engine run-diagnostics dispatcher (folds
 # the 5 per-engine readers into one registered tool; the internal per-engine
 # parser modules under .simulation.diagnostics are NOT registered).
 from .simulation.diagnostics import read_run_diagnostics  # noqa: E402,F401
-from .simulation import model_debris_flow  # noqa: E402,F401
-from .simulation import model_fire_spread  # noqa: E402,F401
-from .simulation import postprocess_pelicun  # noqa: E402,F401
-from .simulation import run_geoclaw_tool  # noqa: E402,F401
-from .simulation import run_landlab_tool  # noqa: E402,F401
-from .simulation import run_modflow_tool  # noqa: E402,F401
-from .simulation import run_openquake_tool  # noqa: E402,F401
-from .simulation import run_pelicun_damage_assessment  # noqa: E402,F401
-from .simulation import run_river_seepage_tool  # noqa: E402,F401
-from .simulation import run_swan_tool  # noqa: E402,F401
-from .simulation import run_swmm_tool  # noqa: E402,F401
-from .simulation import run_telemac_tool  # noqa: E402,F401
+from .simulation.model_debris_flow import model_debris_flow  # noqa: E402,F401
+from .simulation.model_fire_spread import model_fire_spread  # noqa: E402,F401
+from .simulation.postprocess_pelicun import postprocess_pelicun  # noqa: E402,F401
+from .simulation.run_geoclaw_tool import run_geoclaw_tool  # noqa: E402,F401
+from .simulation.run_landlab_tool import run_landlab_tool  # noqa: E402,F401
+from .simulation.run_modflow_tool import run_modflow_tool  # noqa: E402,F401
+from .simulation.run_openquake_tool import run_openquake_tool  # noqa: E402,F401
+from .simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment  # noqa: E402,F401
+from .simulation.run_river_seepage_tool import run_river_seepage_tool  # noqa: E402,F401
+from .simulation.run_swan_tool import run_swan_tool  # noqa: E402,F401
+from .simulation.run_swmm_tool import run_swmm_tool  # noqa: E402,F401
+from .simulation.run_telemac_tool import run_telemac_tool  # noqa: E402,F401
 # V&V wave (ADR 0021, lane D): derive-not-mutate parameter setters (write a
 # child deck/setup, leave the parent immutable).
-from .simulation import set_modflow_parameters  # noqa: E402,F401
-from .simulation import set_sfincs_parameters  # noqa: E402,F401
-from .simulation import set_swmm_parameters  # noqa: E402,F401
-from .simulation import set_telemac_parameters  # noqa: E402,F401
-from .simulation import solver  # noqa: E402,F401
+from .simulation.set_modflow_parameters import set_modflow_parameters  # noqa: E402,F401
+from .simulation.set_sfincs_parameters import set_sfincs_parameters  # noqa: E402,F401
+from .simulation.set_swmm_parameters import set_swmm_parameters  # noqa: E402,F401
+from .simulation.set_telemac_parameters import set_telemac_parameters  # noqa: E402,F401
+from .simulation.solver import solver  # noqa: E402,F401
 
 # -- discovery (dataset/tool retrieval) --
 # NOTE: search_data_catalog / fetch_from_catalog / qgis_discovery register at
@@ -426,65 +426,68 @@ from .simulation import solver  # noqa: E402,F401
 # package alone deliberately leaves them out of TOOL_REGISTRY (pre-reorg
 # behavior: the plain ``import trid3nt_server.tools`` surface is 190 tools,
 # 191 after ADR 0019 added search_spatial_functions here).
-from .discovery import search_tools  # noqa: E402,F401
-from .discovery import search_spatial_functions  # noqa: E402,F401
+from .discovery.search_tools import search_tools  # noqa: E402,F401
+from .discovery.search_spatial_functions import search_spatial_functions  # noqa: E402,F401
 
 # -- meta (web fetch, code exec, passthroughs, case utilities) --
-from .meta import code_exec_tool  # noqa: E402,F401
-from .meta import compose_case_report  # noqa: E402,F401
-from .meta import export_case_to_qgis  # noqa: E402,F401
-from .meta import import_user_layer  # noqa: E402,F401
-from .meta import list_run_frames  # noqa: E402,F401
-from .meta import passthroughs  # noqa: E402,F401
-from .meta import spatial_input_tool  # noqa: E402,F401
-from .meta import web_fetch  # noqa: E402,F401
+from .meta.code_exec_tool import code_exec_tool  # noqa: E402,F401
+from .meta.compose_case_report import compose_case_report  # noqa: E402,F401
+from .meta.export_case_to_qgis import export_case_to_qgis  # noqa: E402,F401
+from .meta.import_user_layer import import_user_layer  # noqa: E402,F401
+from .meta.list_run_frames import list_run_frames  # noqa: E402,F401
+from .meta.passthroughs import passthroughs  # noqa: E402,F401
+from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401
+from .meta.web_fetch import web_fetch  # noqa: E402,F401
 
 # -- tools/ root (load-bearing chokepoints kept flat) --
-from . import publish_layer  # noqa: E402,F401
+# Aliased so the registration-side-effect import of the inner module does NOT
+# rebind the ``tools.publish_layer`` attribute (which must stay the subpackage
+# so ``trid3nt_server.tools.publish_layer.publish_layer.<attr>`` resolves).
+from .publish_layer import publish_layer as _publish_layer_reg  # noqa: E402,F401
 
 # ---------------------------------------------------------------------------
 # Workflow-composer registrations (each carries its OWN @register_tool) and
 # the 12-category registry meta-tools. Comments preserved from the original
 # registration list.
 # ---------------------------------------------------------------------------
-from ..workflows import compute_impact_envelope as _compute_impact_envelope_workflow  # noqa: E402,F401 - Wave 4.11 P3: registers compute_impact_envelope (composes NSI/MS → Pelicun → postprocess into one envelope tool)
+from ..workflows.pelicun.compute_impact_envelope import compute_impact_envelope as _compute_impact_envelope_workflow  # noqa: E402,F401 - Wave 4.11 P3: registers compute_impact_envelope (composes NSI/MS → Pelicun → postprocess into one envelope tool)
 # The river-seepage COMPOSER carries its OWN @register_tool (run_model_river_seepage_scenario);
 # its bridge tool above does NOT import it, so register it explicitly (mirrors the
 # compute_impact_envelope composer import below). The MODFLOW-seepage verifier flagged
 # this composer as never-registered - this import is the fix.
-from ..workflows import model_river_seepage_scenario as _model_river_seepage_scenario  # noqa: E402,F401 - sprint-17: registers run_model_river_seepage_scenario (LLM-facing river-seepage composer)
+from ..workflows.modflow.model_river_seepage_scenario import model_river_seepage_scenario as _model_river_seepage_scenario  # noqa: E402,F401 - sprint-17: registers run_model_river_seepage_scenario (LLM-facing river-seepage composer)
 
 # sprint-18 Wave-1 MODFLOW archetypes (GWF-only): the three new composers each
 # carry their OWN @register_tool (LLM-facing run_model_*_scenario) and dispatch
 # to the shared run_modflow_archetype_job engine surface. Importing them seeds
 # TOOL_REGISTRY at startup (mirrors the river-seepage composer import above). The
 # archetype run-tool itself is NOT @register_tool'd (the composers are the surface).
-from ..workflows import model_sustainable_yield_scenario as _model_sustainable_yield_scenario  # noqa: E402,F401 - sprint-18 Wave-1: registers run_model_sustainable_yield_scenario (MODFLOW pumping-drawdown composer)
-from ..workflows import model_mine_dewatering_scenario as _model_mine_dewatering_scenario  # noqa: E402,F401 - sprint-18 Wave-1: registers run_model_mine_dewatering_scenario (MODFLOW pit-dewatering composer)
-from ..workflows import model_regional_water_budget_scenario as _model_regional_water_budget_scenario  # noqa: E402,F401 - sprint-18 Wave-1: registers run_model_regional_water_budget_scenario (MODFLOW zonal-budget composer)
+from ..workflows.modflow.model_sustainable_yield_scenario import model_sustainable_yield_scenario as _model_sustainable_yield_scenario  # noqa: E402,F401 - sprint-18 Wave-1: registers run_model_sustainable_yield_scenario (MODFLOW pumping-drawdown composer)
+from ..workflows.modflow.model_mine_dewatering_scenario import model_mine_dewatering_scenario as _model_mine_dewatering_scenario  # noqa: E402,F401 - sprint-18 Wave-1: registers run_model_mine_dewatering_scenario (MODFLOW pit-dewatering composer)
+from ..workflows.modflow.model_regional_water_budget_scenario import model_regional_water_budget_scenario as _model_regional_water_budget_scenario  # noqa: E402,F401 - sprint-18 Wave-1: registers run_model_regional_water_budget_scenario (MODFLOW zonal-budget composer)
 
 # sprint-18 Wave-2 MODFLOW archetypes (GWF-only): three more composers each carry
 # their OWN @register_tool (LLM-facing run_model_*_scenario) + dispatch through the
 # shared run_modflow_archetype_job. Importing them seeds TOOL_REGISTRY at startup
 # (mirrors the Wave-1 imports above). The archetype run-tool is NOT @register_tool'd.
-from ..workflows import model_mar_scenario as _model_mar_scenario  # noqa: E402,F401 - sprint-18 Wave-2: registers run_model_mar_scenario (MODFLOW managed-aquifer-recharge mounding composer)
-from ..workflows import model_asr_scenario as _model_asr_scenario  # noqa: E402,F401 - sprint-18 Wave-2: registers run_model_asr_scenario (MODFLOW aquifer-storage-&-recovery composer)
-from ..workflows import model_wetland_hydroperiod_scenario as _model_wetland_hydroperiod_scenario  # noqa: E402,F401 - sprint-18 Wave-2: registers run_model_wetland_hydroperiod_scenario (MODFLOW wetland-hydroperiod composer)
-from ..workflows import model_multi_species_scenario as _model_multi_species_scenario  # noqa: E402,F401 - sprint-18 Wave-3: registers run_model_multi_species_scenario (MODFLOW N-species transport composer; ONE shared GWF + N GWT -> N per-species plumes)
-from ..workflows import model_capture_zone_scenario as _model_capture_zone_scenario  # noqa: E402,F401 - sprint-18 Wave-4: registers run_model_capture_zone_scenario + run_model_wellhead_protection_scenario (MODFLOW PRT backward particle tracking -> capture-zone / WHPA vector polygon)
-from ..workflows import model_saltwater_intrusion_scenario as _model_saltwater_intrusion_scenario  # noqa: E402,F401 - sprint-18 Wave-5: registers run_model_saltwater_intrusion_scenario (MODFLOW BUY variable-density GWF+GWT Henry-style saltwater wedge -> cross-section heatmap chart + transect/toe vector layer)
+from ..workflows.modflow.model_mar_scenario import model_mar_scenario as _model_mar_scenario  # noqa: E402,F401 - sprint-18 Wave-2: registers run_model_mar_scenario (MODFLOW managed-aquifer-recharge mounding composer)
+from ..workflows.modflow.model_asr_scenario import model_asr_scenario as _model_asr_scenario  # noqa: E402,F401 - sprint-18 Wave-2: registers run_model_asr_scenario (MODFLOW aquifer-storage-&-recovery composer)
+from ..workflows.modflow.model_wetland_hydroperiod_scenario import model_wetland_hydroperiod_scenario as _model_wetland_hydroperiod_scenario  # noqa: E402,F401 - sprint-18 Wave-2: registers run_model_wetland_hydroperiod_scenario (MODFLOW wetland-hydroperiod composer)
+from ..workflows.modflow.model_multi_species_scenario import model_multi_species_scenario as _model_multi_species_scenario  # noqa: E402,F401 - sprint-18 Wave-3: registers run_model_multi_species_scenario (MODFLOW N-species transport composer; ONE shared GWF + N GWT -> N per-species plumes)
+from ..workflows.modflow.model_capture_zone_scenario import model_capture_zone_scenario as _model_capture_zone_scenario  # noqa: E402,F401 - sprint-18 Wave-4: registers run_model_capture_zone_scenario + run_model_wellhead_protection_scenario (MODFLOW PRT backward particle tracking -> capture-zone / WHPA vector polygon)
+from ..workflows.modflow.model_saltwater_intrusion_scenario import model_saltwater_intrusion_scenario as _model_saltwater_intrusion_scenario  # noqa: E402,F401 - sprint-18 Wave-5: registers run_model_saltwater_intrusion_scenario (MODFLOW BUY variable-density GWF+GWT Henry-style saltwater wedge -> cross-section heatmap chart + transect/toe vector layer)
 
 # fire-animation demos S5/J5: the satellite fire-animation composer carries its
 # OWN @register_tool (run_model_satellite_fire_animation); import it so the
 # review-gated GOES/JPSS animation workflow is in TOOL_REGISTRY at startup.
-from ..workflows import model_satellite_fire_animation as _model_satellite_fire_animation  # noqa: E402,F401 - fire-animation demos S5/J5: registers run_model_satellite_fire_animation (incident lookup -> bbox+window review gate -> GOES/VIIRS per-frame imagery -> FIRMS+NIFC overlays -> publish)
+from ..workflows.shared.model_satellite_fire_animation import model_satellite_fire_animation as _model_satellite_fire_animation  # noqa: E402,F401 - fire-animation demos S5/J5: registers run_model_satellite_fire_animation (incident lookup -> bbox+window review gate -> GOES/VIIRS per-frame imagery -> FIRMS+NIFC overlays -> publish)
 
 # fire-demo Track A: the UNATTENDED GOES fire-animation composer carries its OWN
 # @register_tool (run_model_goes_fire_animation); import it so the no-confirm-gate
 # GOES animation workflow is in TOOL_REGISTRY at startup. It auto-snaps the
 # requested window to the nearest available SLIDER frames and proceeds without
 # parking (the sibling of model_satellite_fire_animation that does NOT review-gate).
-from ..workflows import model_goes_fire_animation as _model_goes_fire_animation  # noqa: E402,F401 - fire-demo Track A: registers run_model_goes_fire_animation (auto-snap window -> GOES GeoColor+Fire Temperature per-frame imagery -> FIRMS overlay -> publish; NO confirm gate)
+from ..workflows.shared.model_goes_fire_animation import model_goes_fire_animation as _model_goes_fire_animation  # noqa: E402,F401 - fire-demo Track A: registers run_model_goes_fire_animation (auto-snap window -> GOES GeoColor+Fire Temperature per-frame imagery -> FIRMS overlay -> publish; NO confirm gate)
 
 # GLM lightning demo: the DIRECT GOES-19 GLM Group-Energy-Density animation composer
 # carries its OWN @register_tool (run_model_glm_lightning_animation); import it so the
@@ -492,7 +495,7 @@ from ..workflows import model_goes_fire_animation as _model_goes_fire_animation 
 # window DIRECTLY (NO news/geocode/snap front-half), bins GLM GED onto the ABI 2 km
 # grid per 1-min frame, bakes the purple overlay over the grayscale C02 visible base,
 # and publishes a scrubbable baked loop + a separable transparent GED overlay.
-from ..workflows import model_glm_lightning_animation as _model_glm_lightning_animation  # noqa: E402,F401 - GLM lightning demo: registers run_model_glm_lightning_animation (DIRECT AOI+window -> GLM GED purple overlay baked over GOES-19 C02 visible base, 1-min frames; NO news step)
+from ..workflows.shared.model_glm_lightning_animation import model_glm_lightning_animation as _model_glm_lightning_animation  # noqa: E402,F401 - GLM lightning demo: registers run_model_glm_lightning_animation (DIRECT AOI+window -> GLM GED purple overlay baked over GOES-19 C02 visible base, 1-min frames; NO news step)
 
 # job-B5 (Wave 4.10 Stage 2): the 12-category registry + the two meta-tools
 # (``list_categories`` + ``list_tools_in_category``) live alongside the rest

@@ -1,0 +1,9 @@
+run_geoclaw_inundation:
+- model the tsunami run-up along this stretch of coast and animate the inundation
+- what happens if the dam breaks upstream of this town, how deep does it flood
+- simulate an embankment failure and route the reservoir release over the terrain below
+- run a GeoClaw shallow-water inundation for a levee breach in this bbox
+- show me the wave run-up and peak overland depth from a magnitude 8 earthquake offshore
+- animate the dam-break flood wave moving across the floodplain frame by frame
+- model storm-surge run-up over the topography here with adaptive mesh refinement
+- how far inland does the tsunami reach and what is the max depth over this AOI

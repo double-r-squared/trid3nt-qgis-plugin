@@ -48,7 +48,7 @@ from trid3nt_server.tools.simulation._setter_envelope import (  # noqa: E402
     BoundsViolation,
     SetterInputError,
 )
-from trid3nt_server.tools.simulation.set_swmm_parameters import (  # noqa: E402
+from trid3nt_server.tools.simulation.set_swmm_parameters.set_swmm_parameters import (  # noqa: E402
     set_swmm_parameters,
 )
 

@@ -36,7 +36,7 @@ from rasterio.transform import from_bounds
 from trid3nt_contracts.execution import LayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing.compute_change_detection import (
+from trid3nt_server.tools.processing.compute_change_detection.compute_change_detection import (
     ChangeDetectionAoiTooLargeError,
     ChangeDetectionInputError,
     ChangeDetectionLayerURI,
@@ -251,12 +251,11 @@ def test_category_and_corpus() -> None:
     import yaml
 
     from trid3nt_server import categories
-    from trid3nt_server.tools.discovery import search_tools as dd
+    from trid3nt_server.tools.discovery.search_tools import search_tools as dd
 
     assert (
         categories.PRIMARY_CATEGORY["compute_change_detection"]
         == "land_cover_development"
     )
-    corpus_path = pathlib.Path(dd._default_corpus_path())
-    corpus = yaml.safe_load(corpus_path.read_text())
+    corpus = dd._load_corpus()
     assert len(corpus.get("compute_change_detection", [])) >= 5

@@ -1,0 +1,9 @@
+compute_wave_nomograph:
+- what wave height would a 20 m/s wind build over 50 km of open water?
+- estimate the significant wave height and peak period from wind speed and fetch
+- quick sanity check on the wave height for this wind and fetch before I run SWAN
+- is a 3 meter offshore wave height reasonable for a 25 knot wind and 80 km fetch?
+- use the nomograph to get Hs and Tp from wind and fetch
+- fetch-limited wave growth estimate for this wind over the lake
+- give me a ballpark significant wave height for a storm wind blowing across the bay
+- what is the fully developed sea state for a 30 m/s wind?

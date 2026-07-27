@@ -1,0 +1,9 @@
+run_modflow_job:
+- 'run a modflow groundwater plume sim with these exact spill parameters: point, contaminant, release rate, duration'
+- i already have the forcing numbers, simulate the contaminant transport in the aquifer
+- model how far a benzene spill at this lat lon spreads given 0.01 kg/s for 30 days
+- run mf6 gwt transport for this point spill and give me the peak concentration and plume area
+- simulate a conservative tracer plume in the groundwater from this release with k and porosity i specify
+- build a groundwater contamination plume directly from these spill forcing fields, no news article
+- estimate the aquifer plume extent for a chemical spill with explicit release rate and duration
+- do a modflow transport solve for this contaminant point source at this coordinate

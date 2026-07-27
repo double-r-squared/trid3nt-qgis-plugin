@@ -1,0 +1,8 @@
+compute_impervious_surface:
+- how much of this watershed is paved or developed?
+- compute impervious surface fraction for the Miami metro area
+- show me runoff potential from impervious cover in Houston
+- I need impervious surface percentage for SFINCS infiltration setup
+- what fraction of the Dallas urban core is impervious?
+- map the developed / sealed surface for this coastal city
+- calculate percent-paved for each cell in this flood-risk zone

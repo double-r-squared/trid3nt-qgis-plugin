@@ -1,0 +1,8 @@
+query_point_hazard:
+- what is the flood depth at my house
+- sample all the layers at this point
+- what does every raster say at 123 Main Street
+- check the hazard value at the Fort Myers pier
+- probe this coordinate against all loaded results
+- what is the water level at this location from the flood run
+- query the depth and velocity at this point from the SFINCS output

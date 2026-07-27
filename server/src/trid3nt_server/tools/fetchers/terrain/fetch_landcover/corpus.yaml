@@ -1,0 +1,9 @@
+fetch_landcover:
+- show me land use data for South Florida
+- I need NLCD landcover for the Houston area
+- fetch land classification raster for this watershed before SFINCS setup
+- what is the land cover around the Everglades?
+- give me land-use categories for the Sacramento Valley
+- I want a landcover map for the wildland-urban interface near Chico, CA
+- show me the vegetation map for this Texas coastal plain
+- I need landcover to compute Manning's roughness for the SFINCS model

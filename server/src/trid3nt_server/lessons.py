@@ -196,7 +196,7 @@ def _tokenize(text: str) -> list[str]:
     """Tokenize with search_tools's tokenizer (the one BM25 channel of the
     tool-retrieval index uses) when importable; regex fallback otherwise."""
     try:
-        from .tools.discovery.search_tools import _tokenize as _dd_tokenize
+        from .tools.discovery.search_tools.search_tools import _tokenize as _dd_tokenize
 
         return _dd_tokenize(text)
     except Exception:  # noqa: BLE001
@@ -209,7 +209,7 @@ def _content_tokens(tokens: list[str]) -> set[str]:
     """Stopword-filtered token set (reuses search_tools's stopword list --
     the same one the tool-retrieval name channel filters with)."""
     try:
-        from .tools.discovery.search_tools import _STOPWORDS as stop
+        from .tools.discovery.search_tools.search_tools import _STOPWORDS as stop
     except Exception:  # noqa: BLE001
         stop = {
             "the", "a", "an", "of", "in", "on", "for", "to", "and", "or",

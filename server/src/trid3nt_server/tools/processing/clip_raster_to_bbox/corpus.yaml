@@ -1,0 +1,7 @@
+clip_raster_to_bbox:
+- clip this DEM to the county boundary I fetched
+- I need to trim this national-scale precipitation raster to my study area
+- crop the population raster to this flood inundation extent
+- clip the landcover grid down to just this watershed bbox
+- trim this large-area DEM to the Fort Myers case extent
+- cut this HRRR wind raster to my storm domain

@@ -1,0 +1,8 @@
+fetch_nhdplus_nldi_navigate:
+- trace the river network upstream from this gauge
+- show me all tributaries feeding into this confluence
+- navigate downstream from this dam to the coast
+- I want all the connected flowlines upstream of this flood sensor
+- trace water flow downstream from this point for 50 kilometers
+- give me the full upstream tributary network from this location
+- find every river segment between this gauge and the bay

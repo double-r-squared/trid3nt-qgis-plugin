@@ -1,0 +1,8 @@
+fetch_raws_weather:
+- show me fire-weather station data near the active wildfire
+- what were the wind speed and relative humidity at RAWS stations during the Caldor Fire?
+- I need fire-weather observations from remote stations in this forest
+- fetch RAWS data from stations near the WUI community evacuation zone
+- give me temperature and RH readings from fire stations in this national forest
+- what were the weather conditions at the RAWS station nearest the ignition point?
+- I need sub-hourly fire weather observations for this time window

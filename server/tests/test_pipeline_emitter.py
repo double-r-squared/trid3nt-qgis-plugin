@@ -2002,7 +2002,7 @@ async def test_legend_lifted_from_publish_stash_by_uri(
     """The atomic publish_layer wrap-site rebuilds a LayerURI WITHOUT a legend; the
     emitter lifts the legend publish_layer stashed by display uri onto the
     summary (the continuous-raster path)."""
-    from trid3nt_server.tools.publish_layer import _stash_legend_for_uri
+    from trid3nt_server.tools.publish_layer.publish_layer import _stash_legend_for_uri
     from trid3nt_contracts.execution import LegendKey
 
     tile_uri = "https://cf.example/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2Fb%2Fx.tif&rescale=0,3&colormap_name=ylgnbu"

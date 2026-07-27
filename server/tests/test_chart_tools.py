@@ -29,10 +29,10 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools.processing.charts_common import ChartToolError, _MAX_ROWS, build_chart_payload, is_chart_emission_result
-from trid3nt_server.tools.processing.generate_choropleth_legend import generate_choropleth_legend
-from trid3nt_server.tools.processing.generate_damage_distribution import generate_damage_distribution
-from trid3nt_server.tools.processing.generate_histogram import generate_histogram
-from trid3nt_server.tools.processing.generate_time_series import generate_time_series
+from trid3nt_server.tools.processing.generate_choropleth_legend.generate_choropleth_legend import generate_choropleth_legend
+from trid3nt_server.tools.processing.generate_damage_distribution.generate_damage_distribution import generate_damage_distribution
+from trid3nt_server.tools.processing.generate_histogram.generate_histogram import generate_histogram
+from trid3nt_server.tools.processing.generate_time_series.generate_time_series import generate_time_series
 from trid3nt_contracts.chart_contracts import (
     ChartEmissionPayload,
     is_structurally_valid_vega_lite_spec,
@@ -624,7 +624,7 @@ def test_dispatch_detection_signal(tmp_path):
     spatial_query rows dict - the Phase-B fold of the analytical_qa surface)
     does not — this is the exact branch condition in _stream_gemini_reply.
     """
-    from trid3nt_server.tools.processing.spatial_query import spatial_query
+    from trid3nt_server.tools.processing.spatial_query.spatial_query import spatial_query
 
     arr = np.arange(16, dtype=np.float32).reshape(4, 4)
     path = _make_raster(tmp_path, arr)

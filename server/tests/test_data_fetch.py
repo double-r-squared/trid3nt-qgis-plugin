@@ -33,25 +33,25 @@ import pytest
 import requests
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.terrain import fetch_dem as dem_mod
-from trid3nt_server.tools.fetchers.socioeconomic import fetch_buildings as bld_mod
-from trid3nt_server.tools.fetchers.socioeconomic import fetch_population as pop_mod
-from trid3nt_server.tools.fetchers.socioeconomic import geocode_location as geo_mod
-from trid3nt_server.tools.fetchers.terrain import fetch_landcover as lc_mod
-from trid3nt_server.tools.fetchers.hydrology import fetch_river_geometry as riv_mod
-from trid3nt_server.tools.fetchers.climate import lookup_precip_return_period as pfd_mod
+from trid3nt_server.tools.fetchers.terrain.fetch_dem import fetch_dem as dem_mod
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings import fetch_buildings as bld_mod
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_population import fetch_population as pop_mod
+from trid3nt_server.tools.fetchers.socioeconomic.geocode_location import geocode_location as geo_mod
+from trid3nt_server.tools.fetchers.terrain.fetch_landcover import fetch_landcover as lc_mod
+from trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry import fetch_river_geometry as riv_mod
+from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period as pfd_mod
 from trid3nt_server.tools.fetchers._fetch_common import (
     BboxInvalidError,
     UpstreamAPIError,
     round_bbox_to_resolution,
 )
-from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings import fetch_buildings
-from trid3nt_server.tools.fetchers.socioeconomic.fetch_population import fetch_population
-from trid3nt_server.tools.fetchers.socioeconomic.geocode_location import (
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings import fetch_buildings
+from trid3nt_server.tools.fetchers.socioeconomic.fetch_population.fetch_population import fetch_population
+from trid3nt_server.tools.fetchers.socioeconomic.geocode_location.geocode_location import (
     GeocodeNoMatchError,
     geocode_location,
 )
-from trid3nt_server.tools.fetchers.terrain.fetch_dem import fetch_dem
+from trid3nt_server.tools.fetchers.terrain.fetch_dem.fetch_dem import fetch_dem
 
 
 
@@ -468,7 +468,7 @@ def test_fetch_dem_service_down_falls_back_to_copernicus(monkeypatch):
     """(a) 3DEP service-unavailable -> Copernicus fallback + honest labeling."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -502,7 +502,7 @@ def test_fetch_dem_hang_times_out_within_budget_then_falls_back(monkeypatch):
     import time as _time
     from unittest.mock import patch
 
-    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -537,7 +537,7 @@ def test_fetch_dem_both_sources_fail_raises_typed_error_naming_both(monkeypatch)
     """(c) 3DEP AND Copernicus fail -> one UpstreamAPIError naming both."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -564,7 +564,7 @@ def test_fetch_dem_pinned_3dep_no_fallback_suggests_copernicus(monkeypatch):
     """(d) explicit source='3dep' never falls back; error suggests copernicus."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -589,7 +589,7 @@ def test_fetch_dem_healthy_3dep_path_unchanged_no_fallback_note(monkeypatch):
     """(e) a healthy 3DEP fetch is unchanged: 3DEP name, no fallback_note."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -608,8 +608,8 @@ def test_fetch_dem_partial_coverage_propagates_not_ladder(monkeypatch):
     """DemPartialCoverageError is a DATA signal: no cross-source ladder."""
     from unittest.mock import patch
 
-    from trid3nt_server.tools.fetchers.terrain import fetch_copernicus_dem as cop_mod
-    from trid3nt_server.tools.fetchers.terrain.fetch_dem import DemPartialCoverageError
+    from trid3nt_server.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem as cop_mod
+    from trid3nt_server.tools.fetchers.terrain.fetch_dem.fetch_dem import DemPartialCoverageError
 
     fake_storage = FakeStorageClient()
     _patch_dem_read_through(monkeypatch, fake_storage)
@@ -2353,13 +2353,13 @@ def test_bbox_long_axis_km_and_square_km_bbox_roundtrip():
 # ---------------------------------------------------------------------------
 
 
-from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period import (  # noqa: E402 — after main test surface
+from trid3nt_server.tools.fetchers.climate.lookup_precip_return_period.lookup_precip_return_period import (  # noqa: E402 — after main test surface
     lookup_precip_return_period,
 )
-from trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry import (  # noqa: E402 — after main test surface
+from trid3nt_server.tools.fetchers.hydrology.fetch_river_geometry.fetch_river_geometry import (  # noqa: E402 — after main test surface
     fetch_river_geometry,
 )
-from trid3nt_server.tools.fetchers.terrain.fetch_landcover import (  # noqa: E402 — after main test surface
+from trid3nt_server.tools.fetchers.terrain.fetch_landcover.fetch_landcover import (  # noqa: E402 — after main test surface
     fetch_landcover,
 )
 

@@ -28,8 +28,8 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.imagery import fetch_landsat_imagery as landsat_mod
-from trid3nt_server.tools.fetchers.imagery.fetch_landsat_imagery import (
+from trid3nt_server.tools.fetchers.imagery.fetch_landsat_imagery import fetch_landsat_imagery as landsat_mod
+from trid3nt_server.tools.fetchers.imagery.fetch_landsat_imagery.fetch_landsat_imagery import (
     _METADATA,
     _STYLE_PRESET,
     LandsatBandComboError,
@@ -308,7 +308,7 @@ def test_band_combo_roundtrips_to_rgb_cog(combo, expect_role, expect_units) -> N
 def test_thermal_is_multiband_passthrough() -> None:
     """The 3-band RGB COG triggers publish_layer's RGBA/multiband passthrough
     (band count >= 3 -> rendered directly, no single-band rescale)."""
-    from trid3nt_server.tools.publish_layer import _is_rgba_or_multiband
+    from trid3nt_server.tools.publish_layer.publish_layer import _is_rgba_or_multiband
 
     fake = _FakeStore()
     _run_combo("thermal", fake)

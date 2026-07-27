@@ -62,12 +62,12 @@ from trid3nt_server.tools import TOOL_REGISTRY
 # Mirrors the startup-time import order; any module that calls @register_tool
 # at module level must appear here so the registry is fully populated.
 # ---------------------------------------------------------------------------
-import trid3nt_server.workflows.model_flood_scenario  # noqa: F401 — side-effect import
-import trid3nt_server.workflows.model_flood_habitat_scenario  # noqa: F401
-import trid3nt_server.workflows.model_news_event_ingest  # noqa: F401
-import trid3nt_server.workflows.pelicun_damage_with_buildings  # noqa: F401
-import trid3nt_server.workflows.postprocess_flood  # noqa: F401
-import trid3nt_server.workflows.sfincs_builder  # noqa: F401
+import trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario  # noqa: F401 — side-effect import
+import trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario  # noqa: F401
+import trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest  # noqa: F401
+import trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings  # noqa: F401
+import trid3nt_server.workflows.sfincs.postprocess_flood  # noqa: F401
+import trid3nt_server.workflows.sfincs.sfincs_builder  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

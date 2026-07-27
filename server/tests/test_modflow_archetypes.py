@@ -35,7 +35,7 @@ from trid3nt_contracts.modflow_contracts import (
     DrawdownLayerURI,
 )
 
-from trid3nt_server.workflows import postprocess_modflow as pp
+from trid3nt_server.workflows.modflow import postprocess_modflow as pp
 
 
 # --------------------------------------------------------------------------- #
@@ -170,7 +170,7 @@ def _patch_geocode(monkeypatch: Any, mod: Any, lat: float, lon: float) -> None:
 
 @pytest.mark.asyncio
 async def test_sustainable_yield_assembles_args_and_threads_result(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_sustainable_yield_scenario as mod
+    from trid3nt_server.workflows.modflow.model_sustainable_yield_scenario import model_sustainable_yield_scenario as mod
 
     _patch_geocode(monkeypatch, mod, 40.0, -100.0)
     captured: dict[str, Any] = {}
@@ -206,7 +206,7 @@ async def test_sustainable_yield_assembles_args_and_threads_result(monkeypatch) 
 
 @pytest.mark.asyncio
 async def test_sustainable_yield_no_well_is_user_input_required(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_sustainable_yield_scenario as mod
+    from trid3nt_server.workflows.modflow.model_sustainable_yield_scenario import model_sustainable_yield_scenario as mod
 
     # A run with no well must NOT reach the solver; it raises the honesty gate.
     with pytest.raises(mod.SustainableYieldInputError):
@@ -226,7 +226,7 @@ async def test_sustainable_yield_no_well_is_user_input_required(monkeypatch) -> 
 
 @pytest.mark.asyncio
 async def test_mine_dewatering_assembles_args_and_threads_result(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_mine_dewatering_scenario as mod
+    from trid3nt_server.workflows.modflow.model_mine_dewatering_scenario import model_mine_dewatering_scenario as mod
 
     captured: dict[str, Any] = {}
     layer = DewaterLayerURI(
@@ -256,7 +256,7 @@ async def test_mine_dewatering_assembles_args_and_threads_result(monkeypatch) ->
 
 @pytest.mark.asyncio
 async def test_mine_dewatering_accepts_geojson_polygon(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_mine_dewatering_scenario as mod
+    from trid3nt_server.workflows.modflow.model_mine_dewatering_scenario import model_mine_dewatering_scenario as mod
 
     captured: dict[str, Any] = {}
     layer = DewaterLayerURI(
@@ -289,7 +289,7 @@ async def test_mine_dewatering_accepts_geojson_polygon(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_mine_dewatering_no_pit_is_user_input_required() -> None:
-    from trid3nt_server.workflows import model_mine_dewatering_scenario as mod
+    from trid3nt_server.workflows.modflow.model_mine_dewatering_scenario import model_mine_dewatering_scenario as mod
 
     with pytest.raises(mod.MineDewateringInputError):
         await mod.model_mine_dewatering_scenario(
@@ -304,7 +304,7 @@ async def test_mine_dewatering_no_pit_is_user_input_required() -> None:
 
 @pytest.mark.asyncio
 async def test_regional_water_budget_assembles_args_and_threads_result(monkeypatch) -> None:
-    from trid3nt_server.workflows import model_regional_water_budget_scenario as mod
+    from trid3nt_server.workflows.modflow.model_regional_water_budget_scenario import model_regional_water_budget_scenario as mod
 
     captured: dict[str, Any] = {}
     layer = BudgetPartitionLayerURI(
@@ -419,7 +419,7 @@ def test_postprocess_drawdown_from_real_run(tmp_path, monkeypatch) -> None:
     import numpy as np
     import rasterio
 
-    from trid3nt_server.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.modflow.run_modflow import build_modflow_deck
 
     deck = build_modflow_deck(
         spill_location_latlon=(40.0, -100.0),
@@ -464,7 +464,7 @@ def test_postprocess_dewatering_from_real_run(tmp_path, monkeypatch) -> None:
     import numpy as np
     import rasterio
 
-    from trid3nt_server.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.modflow.run_modflow import build_modflow_deck
 
     pit = [
         (-100.003, 40.003),
@@ -510,7 +510,7 @@ def test_postprocess_dewatering_from_real_run(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.skipif(_MF6_BIN is None or not _HAVE_FLOPY, reason=_LIVE_REASON)
 def test_postprocess_budget_partition_from_real_run(tmp_path, monkeypatch) -> None:
-    from trid3nt_server.workflows.run_modflow import build_modflow_deck
+    from trid3nt_server.workflows.modflow.run_modflow import build_modflow_deck
 
     deck = build_modflow_deck(
         spill_location_latlon=(40.0, -100.0),

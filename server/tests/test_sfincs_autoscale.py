@@ -31,7 +31,7 @@ from trid3nt_server.telemetry import (
     build_solve_telemetry_record,
     emit_solve_telemetry,
 )
-from trid3nt_server.workflows.sfincs_builder import (
+from trid3nt_server.workflows.sfincs.sfincs_builder import (
     SFINCS_RES_LADDER,
     autoscale_grid_resolution,
     compute_cell_cap,
@@ -97,7 +97,7 @@ def test_more_vcpus_lowers_estimate() -> None:
 def test_cap_inversion_self_consistent() -> None:
     """The estimated solve at the computed cap is at/under the solve budget net
     of overhead — the cap and the perf model agree."""
-    from trid3nt_server.workflows import sfincs_builder as sb
+    from trid3nt_server.workflows.sfincs import sfincs_builder as sb
 
     for vcpus in (4, 8, 16, 32):
         cap = compute_cell_cap(vcpus)
@@ -254,7 +254,7 @@ def test_pathological_huge_aoi_clamps_to_coarsest_rung(tmp_path: Path, monkeypat
     monkeypatch.setenv("TRID3NT_SFINCS_SOLVE_BUDGET_S", "0.0001")
     import importlib
 
-    from trid3nt_server.workflows import sfincs_builder as sb
+    from trid3nt_server.workflows.sfincs import sfincs_builder as sb
 
     importlib.reload(sb)
     try:
@@ -275,7 +275,7 @@ def test_resolution_ladder_env_override(monkeypatch) -> None:
     monkeypatch.setenv("TRID3NT_SFINCS_RES_LADDER", "25, 75, 150")
     import importlib
 
-    from trid3nt_server.workflows import sfincs_builder as sb
+    from trid3nt_server.workflows.sfincs import sfincs_builder as sb
 
     importlib.reload(sb)
     try:

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-import trid3nt_server.tools.discovery.search_tools as dd
+import trid3nt_server.tools.discovery.search_tools.search_tools as dd
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.discovery import tool_retrieval as trmod
 from trid3nt_server.tools.discovery.tool_retrieval import (
@@ -249,10 +249,9 @@ def _load_corpus():
 
     import yaml
 
-    # Resolve through the module's own seam so the test never hardcodes the
-    # package depth (tools/discovery/ post-reorg).
-    path = pathlib.Path(dd._default_corpus_path())
-    return yaml.safe_load(path.read_text())
+    # Compose through the module's own loader (per-tool corpus.yaml tree +
+    # residual) so the test never hardcodes the package depth or the split.
+    return dd._load_corpus()
 
 
 def _full_registry_names() -> set[str]:

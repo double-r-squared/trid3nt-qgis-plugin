@@ -169,7 +169,7 @@ async def test_build_staging_threads_species_and_real_run(
     monkeypatch.setenv("TRID3NT_MODFLOW_LOCAL", "1")
     monkeypatch.setenv("TRID3NT_MF6_BIN", _MF6_BIN or "mf6")
     # Stub only COG write / upload / publish so we exercise the REAL deck + mf6 + UCN.
-    from trid3nt_server.workflows import postprocess_modflow as pp
+    from trid3nt_server.workflows.modflow import postprocess_modflow as pp
 
     monkeypatch.setattr(pp, "_write_reprojected_cog", lambda *a, **k: tmp_path / "x.tif")
     monkeypatch.setattr(pp, "_cog_bbox_4326", lambda _p: (-81.9, 26.6, -81.8, 26.7))

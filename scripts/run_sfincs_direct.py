@@ -106,7 +106,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.workflows.model_flood_scenario import run_model_flood_scenario
+    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import run_model_flood_scenario
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
     sys.exit(1)

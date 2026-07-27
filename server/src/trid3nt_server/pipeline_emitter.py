@@ -884,7 +884,7 @@ def _legend_for_layer_uri(uri: str | None) -> Any:
     if not uri:
         return None
     try:
-        from .tools.publish_layer import pop_legend_for_uri
+        from .tools.publish_layer.publish_layer import pop_legend_for_uri
 
         return pop_legend_for_uri(uri)
     except Exception:  # noqa: BLE001 - legend lift is best-effort, never fatal

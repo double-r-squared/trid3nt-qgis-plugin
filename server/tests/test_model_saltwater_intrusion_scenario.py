@@ -36,8 +36,8 @@ import pytest
 from trid3nt_contracts.modflow_contracts import SaltwaterWedgeLayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows import model_saltwater_intrusion_scenario as si_mod
-from trid3nt_server.workflows.model_saltwater_intrusion_scenario import (
+from trid3nt_server.workflows.modflow.model_saltwater_intrusion_scenario import model_saltwater_intrusion_scenario as si_mod
+from trid3nt_server.workflows.modflow.model_saltwater_intrusion_scenario.model_saltwater_intrusion_scenario import (
     SaltwaterIntrusionInputError,
     SaltwaterIntrusionResult,
     SaltwaterIntrusionScenarioError,

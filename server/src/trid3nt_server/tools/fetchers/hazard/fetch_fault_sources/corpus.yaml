@@ -1,0 +1,7 @@
+fetch_fault_sources:
+- show active fault traces near this area
+- GEM global active faults for California
+- fault lines with slip rates around the basin
+- which mapped faults could drive the seismic hazard here
+- fault source inputs for a PSHA run
+- known earthquake faults crossing this AOI

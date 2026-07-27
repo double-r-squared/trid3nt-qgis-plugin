@@ -1,0 +1,9 @@
+code_exec_request:
+- compute the 95th percentile flood depth over the city polygon from the actual pixels
+- cross-tabulate the damage by land-cover class for the layers on the map
+- run a custom calculation on this layer that none of the standard tools can do
+- write a short python snippet to derive a statistic from this raster and show me the result
+- i need an ad-hoc aggregation across these two layers, can you script it and let me approve the code
+- calculate a weird derived metric from the features in this vector layer programmatically
+- do some custom number-crunching on the on-map layers in a sandbox
+- compute the correlation between elevation and damage for the pixels in this AOI with python

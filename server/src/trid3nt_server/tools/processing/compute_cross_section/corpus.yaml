@@ -1,0 +1,9 @@
+compute_cross_section:
+- draw a section view of the ground and water surface along this line
+- plot the flood depth along the road through this neighborhood
+- give me a cross-section profile of the head surface versus the land surface across the seepage zone
+- overlay the DEM and the bathymetry along this transect so I can see bank to channel
+- show me the freeboard along the levee, ground line versus water surface on one chart
+- how deep is the inundation at each point along this drawn line
+- sample the flood layer along this transect and chart distance versus depth
+- compare the pre-event and post-event surface along this section line

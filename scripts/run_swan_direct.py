@@ -109,7 +109,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.workflows.model_wave_scenario import model_wave_scenario
+    from trid3nt_server.workflows.swan.model_wave_scenario.model_wave_scenario import model_wave_scenario
     from trid3nt_contracts.swan_contracts import SwanRunArgs, SwanWaveBoundary
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)

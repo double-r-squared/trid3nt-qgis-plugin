@@ -1,0 +1,8 @@
+fetch_firms_active_fire:
+- show me active fire hotspots in California right now
+- where are the satellite fire detections in Oregon today?
+- I need NASA FIRMS fire points for this wildfire event
+- show me thermal anomaly detections around the active wildfire perimeter
+- give me active fire locations with Fire Radiative Power in this bbox
+- are there any active fires near this forest community today?
+- fetch satellite fire detections for the last 7 days over western US

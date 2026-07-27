@@ -1,0 +1,9 @@
+fetch_mobi:
+- show me the biodiversity importance for this region
+- where are the imperiled-species hotspots in this bbox
+- map the conservation-priority areas over this us aoi
+- give me the natureserve mobi imperiled-species richness raster
+- highlight where at-risk species concentrate for this state
+- fetch the range-size rarity layer for this area
+- i need the biodiversity-priority raster for the conservation stack here
+- show protection-weighted rarity outside protected land for this bbox

@@ -40,8 +40,8 @@ from typing import TYPE_CHECKING, Any
 
 from trid3nt_server.categories import HOT_SET_TOOLS
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.discovery import search_tools as _dd
-from trid3nt_server.tools.discovery.search_tools import (
+from trid3nt_server.tools.discovery.search_tools import search_tools as _dd
+from trid3nt_server.tools.discovery.search_tools.search_tools import (
     _NAME_RANKER_GENERICS,
     _STOPWORDS,
     _reciprocal_rank_fusion,

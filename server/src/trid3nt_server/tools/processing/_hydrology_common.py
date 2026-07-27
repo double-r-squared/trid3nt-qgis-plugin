@@ -178,7 +178,7 @@ def _stage_dem(
         notes.append(f"DEM from caller-supplied dem_uri ({dem_uri}).")
         return local
     try:
-        from trid3nt_server.tools.fetchers.terrain.fetch_copernicus_dem import fetch_copernicus_dem
+        from trid3nt_server.tools.fetchers.terrain.fetch_copernicus_dem.fetch_copernicus_dem import fetch_copernicus_dem
 
         layer = fetch_copernicus_dem(bbox=bbox)
     except HydrologyPrimitivesError:
@@ -228,7 +228,7 @@ def _write_geojson(
             f.write(payload)
         return path
     try:
-        from trid3nt_server.tools.simulation.solver import _get_runs_bucket, _get_s3_client
+        from trid3nt_server.tools.simulation.solver.solver import _get_runs_bucket, _get_s3_client
 
         bucket = _get_runs_bucket()
         key = f"{prefix}-{seed}/{filename}"

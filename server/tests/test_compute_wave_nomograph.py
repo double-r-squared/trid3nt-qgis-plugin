@@ -17,7 +17,7 @@ import math
 
 import pytest
 
-from trid3nt_server.tools.processing.compute_wave_nomograph import (
+from trid3nt_server.tools.processing.compute_wave_nomograph.compute_wave_nomograph import (
     WaveNomographError,
     compute_wave_nomograph,
 )
@@ -183,17 +183,8 @@ def test_in_coastal_category():
 
 
 def test_has_corpus_entries():
-    import trid3nt_server.tools.discovery.search_tools as dd  # noqa: F401  (ensures module import path exists)
-    from pathlib import Path
-    import yaml
+    import trid3nt_server.tools.discovery.search_tools.search_tools as dd
 
-    corpus_path = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "trid3nt_server"
-        / "data"
-        / "tool_query_corpus.yaml"
-    )
-    corpus = yaml.safe_load(corpus_path.read_text())
+    corpus = dd._load_corpus()
     assert "compute_wave_nomograph" in corpus
     assert len(corpus["compute_wave_nomograph"]) >= 5

@@ -1,0 +1,7 @@
+import_user_layer:
+- I uploaded a shapefile, register it as a layer
+- add the GeoTIFF I pushed from QGIS as an input layer
+- I have a GeoJSON of parcels, bring it into this case
+- register the raster I just uploaded so the model can use it
+- push my local shapefile into the case as an input
+- import the vector layer I sent as a case input

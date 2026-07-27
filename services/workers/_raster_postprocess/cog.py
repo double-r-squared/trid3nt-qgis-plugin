@@ -1,7 +1,7 @@
 """COG encode tail: orient, face-rasterize, COG+overviews, CRS round-trip verify.
 
 LIFTED verbatim-in-spirit from the agent's
-``trid3nt_server.workflows.postprocess_flood`` (``_orient_array_for_cog`` /
+``trid3nt_server.workflows.sfincs.postprocess_flood`` (``_orient_array_for_cog`` /
 ``_rasterize_face_field`` / ``_finalize_cog`` + the ``_read_crs_from_dataset`` /
 ``_read_face_coords`` / ``_is_quadtree_output`` readers) and made GPL-free +
 agent-import-free.

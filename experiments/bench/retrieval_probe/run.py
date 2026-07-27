@@ -230,7 +230,7 @@ def grade_topk(record: ProbeRecord, topk_names: list[str], k: int) -> dict:
 
 def run_probe(records: list[ProbeRecord], runs: int, k: int, out_dir: Path,
               meta: dict) -> None:
-    from trid3nt_server.tools.discovery import search_tools as dd
+    from trid3nt_server.tools.discovery.search_tools import search_tools as dd
     from trid3nt_server.tools.discovery.tool_retrieval import retrieve_ranked_tools
 
     # Warm the index EXPLICITLY (timed, reported separately -- retrieve_ranked_

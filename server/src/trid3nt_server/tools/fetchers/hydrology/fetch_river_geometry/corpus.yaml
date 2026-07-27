@@ -1,0 +1,8 @@
+fetch_river_geometry:
+- show me the rivers and streams in this watershed
+- I need NHDPlus flowlines for SFINCS river burning
+- fetch the stream network for the Caloosahatchee River basin
+- give me the hydrography layer for this Florida coastal plain
+- I want the river centerlines for HydroMT hydro-conditioning
+- show me all the waterways in this county
+- pull NHDPlus high-res flowlines for the Sacramento Delta

@@ -314,7 +314,7 @@ def _is_local_single_user_mode() -> bool:
     local build pins it. Read at call time so a test env injection takes
     effect without re-import.
     """
-    from .tools.simulation.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
+    from .tools.simulation.solver.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
 
     return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 

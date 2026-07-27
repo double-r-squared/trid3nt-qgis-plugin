@@ -1,0 +1,9 @@
+fetch_openaq_measurements:
+- air quality measurements in a city
+- what is the PM2.5 in Delhi right now
+- global air pollution monitoring stations NO2 O3 SO2
+- show ground-station air quality near London
+- current pollutant concentrations around a wildfire smoke plume
+- PM10 and ozone observations outside the US
+- OpenAQ air quality sensor readings for a bbox
+- carbon monoxide and nitrogen dioxide monitoring near a region

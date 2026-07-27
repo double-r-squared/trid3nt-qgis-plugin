@@ -1,0 +1,9 @@
+compute_zonal_statistics:
+- how many people are in the projected flood inundation zone?
+- what is the total building replacement value exposed to this storm surge?
+- compute mean flood depth within each census tract
+- how much forest area burned in each county in this fire?
+- I need average wind speed within the damage footprint polygon
+- sum population at risk within each flood zone category
+- calculate the area of wetlands inside this fire perimeter
+- what fraction of developed land is in the flood zone?

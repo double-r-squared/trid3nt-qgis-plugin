@@ -1,0 +1,7 @@
+extract_model_at_observations:
+- pair my modeled flood depth against the surveyed high water marks
+- sample the model result at the observation points before computing skill
+- align observed gauge readings with the simulated hydrograph
+- build the observed vs simulated paired table for validation
+- extract simulated values at each high water mark
+- match model output to observation locations and reconcile the vertical datum

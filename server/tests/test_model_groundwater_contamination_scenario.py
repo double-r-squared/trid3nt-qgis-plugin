@@ -31,9 +31,9 @@ from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
 from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
 
 from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY
-from trid3nt_server.tools.simulation.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
-from trid3nt_server.workflows import model_groundwater_contamination_scenario as gw
-from trid3nt_server.workflows.model_groundwater_contamination_scenario import (
+from trid3nt_server.tools.simulation.run_modflow_tool.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
+from trid3nt_server.workflows.modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as gw
+from trid3nt_server.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
     Case2Result,
     ConfirmationDeniedError,
     DURATION_MAX_DAYS,

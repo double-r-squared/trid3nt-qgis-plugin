@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows import postprocess_telemac as P
+from trid3nt_server.workflows.telemac import postprocess_telemac as P
 
 
 def _rec(payload: bytes) -> bytes:

@@ -30,8 +30,8 @@ import pytest
 from trid3nt_contracts.modflow_contracts import CaptureZoneLayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows import model_capture_zone_scenario as cz_mod
-from trid3nt_server.workflows.model_capture_zone_scenario import (
+from trid3nt_server.workflows.modflow.model_capture_zone_scenario import model_capture_zone_scenario as cz_mod
+from trid3nt_server.workflows.modflow.model_capture_zone_scenario.model_capture_zone_scenario import (
     CAPTURE_ZONE_DEFAULT_TIERS,
     WELLHEAD_PROTECTION_DEFAULT_TIERS,
     CaptureZoneInputError,

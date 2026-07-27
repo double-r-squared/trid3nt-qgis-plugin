@@ -288,7 +288,7 @@ def stage_parent(
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     if parent_model_uri.startswith("s3://"):
-        from .solver import SolverDispatchError, _download_object, _get_s3_client
+        from .solver.solver import SolverDispatchError, _download_object, _get_s3_client
 
         bucket, _, key = parent_model_uri[len("s3://"):].partition("/")
         if not bucket or not key:
@@ -371,7 +371,7 @@ def publish_child(
         }
 
     try:
-        from .solver import _get_runs_bucket, _get_s3_client, _upload_file_s3
+        from .solver.solver import _get_runs_bucket, _get_s3_client, _upload_file_s3
 
         s3 = _get_s3_client()
         bucket = _get_runs_bucket()

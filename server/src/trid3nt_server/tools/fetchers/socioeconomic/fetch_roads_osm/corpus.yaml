@@ -1,0 +1,8 @@
+fetch_roads_osm:
+- show me the roads in this flood impact area
+- give me road network for evacuation routing context
+- I need carriageway centerlines for this county
+- overlay roads on the flood inundation map
+- show me transportation infrastructure in this hurricane impact zone
+- fetch OSM roads for the wildfire evacuation corridor
+- I need road network for accessibility analysis after the flood

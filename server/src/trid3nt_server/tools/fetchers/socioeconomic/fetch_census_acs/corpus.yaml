@@ -1,0 +1,9 @@
+fetch_census_acs:
+- median household income by census tract
+- show poverty rate choropleth for this county
+- demographics for environmental justice analysis
+- median home value per tract
+- percent of renter households by neighborhood
+- households with no vehicle by census tract
+- ACS census demographics for a bounding box
+- median age population by tract

@@ -109,3 +109,10 @@ describe_model: IDEAS.md.
 1. NATE's tool_query_corpus.yaml WIP lands (the corpus explosion detonates
    that file).
 2. NATE reviews this spec and calls the go.
+
+## Merge plan (NATE 2026-07-26)
+
+All wave work commits on branch refactor/engine-doors; local master stays the
+pre-wave fallback (rollback = checkout master + daemon restart). Merge to
+master + single remote push at the milestone: MODFLOW pilot done, gates
+green, canary passed, NATE visual pass - push on NATE's confirm.

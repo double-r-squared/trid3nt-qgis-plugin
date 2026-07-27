@@ -23,10 +23,10 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 
-import trid3nt_server.tools.simulation.solver as solver_mod
+import trid3nt_server.tools.simulation.solver.solver as solver_mod
 from trid3nt_server import pipeline_emitter as pe
 from trid3nt_server.pipeline_emitter import PipelineEmitter
-from trid3nt_server.workflows import model_urban_flood_swmm as M
+from trid3nt_server.workflows.swmm.model_urban_flood_swmm import model_urban_flood_swmm as M
 
 
 # --------------------------------------------------------------------------- #

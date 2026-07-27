@@ -1,6 +1,6 @@
 """Worker-side OpenQuake hazard-map CSV -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``trid3nt_server.workflows.postprocess_openquake`` (hazard
+Byte-faithful port of ``trid3nt_server.workflows.openquake.postprocess_openquake`` (hazard
 map rasterization path). Runs inside the Batch worker AFTER ``oq engine`` has
 exported its hazard-map CSV; rasterizes the site values onto an EPSG:4326 COG
 and builds the typed ``publish_manifest.json`` dict.

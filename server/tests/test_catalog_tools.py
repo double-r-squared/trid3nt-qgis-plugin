@@ -25,8 +25,8 @@ from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.discovery import catalog_common as catalog_mod
 from trid3nt_server.tools.discovery import ogc_adapter as ogc_mod
 from trid3nt_server.tools.discovery.catalog_common import CatalogNotFoundError, load_catalog
-from trid3nt_server.tools.discovery.fetch_from_catalog import fetch_from_catalog
-from trid3nt_server.tools.discovery.search_data_catalog import search_data_catalog
+from trid3nt_server.tools.discovery.fetch_from_catalog.fetch_from_catalog import fetch_from_catalog
+from trid3nt_server.tools.discovery.search_data_catalog.search_data_catalog import search_data_catalog
 from trid3nt_server.tools.discovery.ogc_adapter import (
     OGCAdapterError,
     OGCResponse,
@@ -120,8 +120,8 @@ def fake_storage_patched(monkeypatch):
 
     # ``read_through`` is bound per-module at import time, so patch it in BOTH
     # split tool modules (catalog_common itself never calls it).
-    from trid3nt_server.tools.discovery import fetch_from_catalog as _cf_mod
-    from trid3nt_server.tools.discovery import search_data_catalog as _cs_mod
+    from trid3nt_server.tools.discovery.fetch_from_catalog import fetch_from_catalog as _cf_mod
+    from trid3nt_server.tools.discovery.search_data_catalog import search_data_catalog as _cs_mod
 
     monkeypatch.setattr(_cs_mod, "read_through", _patched)
     monkeypatch.setattr(_cf_mod, "read_through", _patched)
@@ -377,7 +377,7 @@ def test_fetch_from_catalog_tier3_https_dispatch(fake_storage_patched, monkeypat
             content_type="text/plain",
         )
 
-    from trid3nt_server.tools.discovery import fetch_from_catalog as _cf_mod
+    from trid3nt_server.tools.discovery.fetch_from_catalog import fetch_from_catalog as _cf_mod
 
     monkeypatch.setattr(_cf_mod, "_tier3_https_fetch",
                         lambda entry, params: (
@@ -738,7 +738,7 @@ def test_fetch_landcover_routes_through_generic_ogc_adapter(monkeypatch):
     a future refactor can't accidentally fork the WCS implementation
     without this test catching it.
     """
-    from trid3nt_server.tools.fetchers.terrain import fetch_landcover as data_fetch
+    from trid3nt_server.tools.fetchers.terrain.fetch_landcover import fetch_landcover as data_fetch
 
     captured: dict = {}
 

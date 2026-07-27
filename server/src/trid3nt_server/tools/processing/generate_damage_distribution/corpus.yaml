@@ -1,0 +1,9 @@
+generate_damage_distribution:
+- show me the damage-state distribution after the pelicun run
+- chart how many structures are in each damage state DS0 through DS4
+- what's the damage-state breakdown for the buildings in this assessment
+- give me a bar chart of slight versus moderate versus complete damage counts
+- how many of the assessed structures are destroyed versus undamaged, as a chart
+- plot the per-asset damage states from the pelicun ds_mean results
+- i want to see the structural damage breakdown across the portfolio
+- visualize the distribution of building damage levels from the damage layer

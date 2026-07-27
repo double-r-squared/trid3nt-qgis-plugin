@@ -19,7 +19,7 @@ import math
 
 import pytest
 
-from trid3nt_server.tools.processing.compute_overtopping import (
+from trid3nt_server.tools.processing.compute_overtopping.compute_overtopping import (
     OvertoppingError,
     compute_overtopping,
 )
@@ -180,16 +180,8 @@ def test_in_coastal_category():
 
 
 def test_has_corpus_entries():
-    from pathlib import Path
-    import yaml
+    import trid3nt_server.tools.discovery.search_tools.search_tools as dd
 
-    corpus_path = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "trid3nt_server"
-        / "data"
-        / "tool_query_corpus.yaml"
-    )
-    corpus = yaml.safe_load(corpus_path.read_text())
+    corpus = dd._load_corpus()
     assert "compute_overtopping" in corpus
     assert len(corpus["compute_overtopping"]) >= 5

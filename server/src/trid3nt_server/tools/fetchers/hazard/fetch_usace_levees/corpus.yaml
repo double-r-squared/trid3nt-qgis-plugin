@@ -1,0 +1,8 @@
+fetch_usace_levees:
+- show me the levees protecting New Orleans
+- what levee systems are in this flood zone?
+- give me the USACE National Levee Database features for the Sacramento Delta
+- I need leveed-area polygons for compound flood infrastructure context
+- show me levee embankments in this floodplain
+- are there federally inspected levees in this risk area?
+- fetch NLD levee routes for the Mississippi River corridor

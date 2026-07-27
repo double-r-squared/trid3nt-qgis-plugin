@@ -1,0 +1,7 @@
+fetch_noaa_slr_confidence:
+- how confident is the sea-level-rise inundation mapping at 3 feet here
+- show me the NOAA SLR mapping confidence raster for this coast
+- where is the sea-level-rise inundation high vs low confidence at 2 ft
+- give me the SLR mapping uncertainty overlay for this coastline
+- flag the low-confidence sea-level-rise areas before I report exposure
+- NOAA SLR viewer confidence layer at 5 feet for this estuary

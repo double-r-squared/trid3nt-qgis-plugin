@@ -1,0 +1,9 @@
+fetch_field_boundaries:
+- show me the farm fields over this aoi in iowa
+- pull the agricultural field boundaries for this bbox in the us
+- map the cropland parcels around ames so i can see which fields a flood covers
+- i want the fields of the world polygons for this area in japan
+- overlay the usda crop sequence boundaries on this case
+- which ag fields are inside this contamination plume
+- get the fiboa field-boundary vectors for this denmark aoi
+- outline the individual farm parcels in this region for exposure mapping

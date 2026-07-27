@@ -1,0 +1,8 @@
+fetch_nifc_fire_perimeters:
+- show me the active wildfire perimeters in California
+- what is the current size and containment of all active megafires?
+- give me the live fire boundary for the Park Fire in Northern California
+- I need the current NIFC fire polygon for this incident
+- show me every active wildfire in the western US right now
+- fetch the WFIGS fire perimeter for this incident by name
+- what percent contained is the biggest fire in New Mexico?

@@ -38,9 +38,9 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 _SRC = pathlib.Path(server.__file__).resolve().parent
 _WORKFLOWS = _SRC / "workflows"
-_FLOOD = _WORKFLOWS / "model_flood_scenario.py"
-_GEOCLAW = _WORKFLOWS / "model_dambreak_geoclaw_scenario.py"
-_GLM_ANIM = _WORKFLOWS / "model_glm_lightning_animation.py"
+_FLOOD = _WORKFLOWS / "sfincs" / "model_flood_scenario" / "model_flood_scenario.py"
+_GEOCLAW = _WORKFLOWS / "geoclaw" / "model_dambreak_geoclaw_scenario" / "model_dambreak_geoclaw_scenario.py"
+_GLM_ANIM = _WORKFLOWS / "shared" / "model_glm_lightning_animation" / "model_glm_lightning_animation.py"
 
 
 def test_fetch_topobathy_in_always_set() -> None:

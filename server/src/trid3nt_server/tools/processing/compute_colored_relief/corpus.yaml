@@ -1,0 +1,12 @@
+compute_colored_relief:
+- can you show me a gradient relief over this area
+- gradient relief of the same bbox
+- make a shaded relief map here
+- shaded gradient relief from the DEM
+- colored relief map of this region
+- color the elevation raster by altitude
+- give me a hypsometric tint DEM for this mountain range
+- I want a rainbow-colored elevation map of Glacier National Park
+- render the DEM with a standard elevation color ramp
+- add a colored elevation basemap for the Appalachian Mountains
+- shade the terrain by height like a classic topo map

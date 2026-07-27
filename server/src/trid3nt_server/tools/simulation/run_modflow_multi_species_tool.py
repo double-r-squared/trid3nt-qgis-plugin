@@ -59,12 +59,12 @@ from trid3nt_contracts.modflow_contracts import (
 )
 
 from trid3nt_server.pipeline_emitter import current_emitter
-from trid3nt_server.workflows.postprocess_modflow import (
+from trid3nt_server.workflows.modflow.postprocess_modflow import (
     PLUME_DETECTION_FLOOR_MGL,
     PostprocessMODFLOWError,
     postprocess_multi_species,
 )
-from trid3nt_server.workflows.run_modflow import (
+from trid3nt_server.workflows.modflow.run_modflow import (
     MODFLOWWorkflowError,
     DeckStaging,
     build_modflow_deck,
@@ -72,7 +72,7 @@ from trid3nt_server.workflows.run_modflow import (
     run_modflow_local,
     submit_modflow_run,
 )
-from trid3nt_server.workflows.solve_progress import drive_live_solve_progress
+from trid3nt_server.workflows.shared.solve_progress import drive_live_solve_progress
 
 logger = logging.getLogger("trid3nt_server.tools.simulation.run_modflow_multi_species_tool")
 
@@ -268,7 +268,7 @@ async def run_modflow_multi_species_job(
             handle = await asyncio.to_thread(
                 submit_modflow_run, staging, compute_class=compute_class
             )
-            from trid3nt_server.tools.simulation.solver import wait_for_completion
+            from trid3nt_server.tools.simulation.solver.solver import wait_for_completion
 
             try:
                 run_result: RunResult = await wait_for_completion(handle)

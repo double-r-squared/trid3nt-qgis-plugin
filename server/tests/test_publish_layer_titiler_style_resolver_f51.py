@@ -30,8 +30,8 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from trid3nt_server.tools import publish_layer as pl
-from trid3nt_server.tools.publish_layer import (
+from trid3nt_server.tools.publish_layer import publish_layer as pl
+from trid3nt_server.tools.publish_layer.publish_layer import (
     _band1_percentile_rescale,
     _is_rgba_or_multiband,
     _is_terrain_token_preset,

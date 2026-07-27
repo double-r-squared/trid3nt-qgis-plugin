@@ -63,7 +63,7 @@ _DRY_CELL_RE = re.compile(r"(CELL[^\n]*\bDRY\b|\bDRY\b[^\n]*CELL)", re.IGNORECAS
 
 def _convergence_markers() -> tuple[str, str]:
     """(failure_marker, normal_termination_marker) from ``workflows.run_modflow``."""
-    from trid3nt_server.workflows.run_modflow import (
+    from trid3nt_server.workflows.modflow.run_modflow import (
         CONVERGENCE_FAILURE_MARKER,
         NORMAL_TERMINATION_MARKER,
     )

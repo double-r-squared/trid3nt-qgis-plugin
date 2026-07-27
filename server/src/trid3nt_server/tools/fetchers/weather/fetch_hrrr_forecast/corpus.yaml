@@ -1,0 +1,9 @@
+fetch_hrrr_forecast:
+- show me the wind forecast for the Gulf Coast over the next 6 hours
+- what is the 2-meter temperature forecast for the Dallas area?
+- I need HRRR wind speed for wildfire spread modeling
+- fetch short-range precipitation forecast for the Houston area
+- give me NOAA HRRR surface wind at forecast hour 12 for Florida
+- I need 10-meter wind for a storm surge model boundary setup
+- fetch HRRR surface pressure forecast for this hurricane approach
+- what does the wind look like over the next 18 hours in this basin?

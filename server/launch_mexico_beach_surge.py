@@ -67,12 +67,12 @@ async def main() -> int:
     from trid3nt_server.tools.fetchers.ocean.fetch_topobathy import fetch_topobathy
     from trid3nt_server.tools.fetchers.terrain.fetch_landcover import fetch_landcover
     from trid3nt_server.tools.simulation.solver import run_solver, wait_for_completion
-    from trid3nt_server.workflows.model_flood_scenario import (
+    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
         _build_surge_forcing_members,
         _resolve_surge_forcing_from_fetchers,
         _synthesize_parametric_surge_forcing,
     )
-    from trid3nt_server.workflows.sfincs_builder import (
+    from trid3nt_server.workflows.sfincs.sfincs_builder import (
         BuildOptions,
         ForcingSpec,
         build_sfincs_model,

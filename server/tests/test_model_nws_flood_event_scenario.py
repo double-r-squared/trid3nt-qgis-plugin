@@ -45,14 +45,14 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.workflows.model_nws_flood_event_scenario import (
+from trid3nt_server.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario import (
     Case3Error,
     FLOOD_WARNING_EVENT_TYPES,
     extract_polygon_bbox,
     model_nws_flood_event_scenario,
     select_flood_warning,
 )
-from trid3nt_server.workflows.model_nws_flood_event_scenario import (
+from trid3nt_server.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario import (
     _narrow_candidates,
     _accumulation_hours,
 )
@@ -418,7 +418,7 @@ def _failed_envelope(bbox: tuple[float, float, float, float], code: str) -> Asse
     )
 
 
-_MOD = "trid3nt_server.workflows.model_nws_flood_event_scenario"
+_MOD = "trid3nt_server.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario"
 
 
 # --------------------------------------------------------------------------- #
@@ -629,7 +629,7 @@ async def test_no_alerts_at_all_degrades_quiet() -> None:
 
 @pytest.mark.asyncio
 async def test_nws_fetch_failure_degrades() -> None:
-    from trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus import NWSConusUpstreamError
+    from trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus.fetch_nws_alerts_conus import NWSConusUpstreamError
 
     geojson_calls = {"count": 0}
 
@@ -660,7 +660,7 @@ async def test_nws_fetch_failure_degrades() -> None:
 
 @pytest.mark.asyncio
 async def test_mrms_failure_degrades_with_selected_warning() -> None:
-    from trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe import MRMSQPEUpstreamError
+    from trid3nt_server.tools.fetchers.weather.fetch_mrms_qpe.fetch_mrms_qpe import MRMSQPEUpstreamError
 
     features = [_feature("Flood Warning", severity="Severe", alert_id="picked")]
 
@@ -702,7 +702,7 @@ def test_wrapper_registered_workflow_dispatch() -> None:
 @pytest.mark.asyncio
 async def test_wrapper_forwards_to_composer() -> None:
     """The registered wrapper forwards verbatim to the composer body."""
-    from trid3nt_server.workflows.model_nws_flood_event_scenario import (
+    from trid3nt_server.workflows.sfincs.model_nws_flood_event_scenario.model_nws_flood_event_scenario import (
         run_model_nws_flood_event_scenario,
     )
 

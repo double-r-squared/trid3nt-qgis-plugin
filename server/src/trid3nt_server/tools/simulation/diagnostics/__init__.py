@@ -202,7 +202,7 @@ def _load_completion(
         return completion, run_id, path, None
 
     runs_bucket, run_id = _resolve_run_handle(run_handle)
-    from trid3nt_server.tools.simulation import solver
+    from trid3nt_server.tools.simulation.solver import solver
 
     bucket = runs_bucket or solver._get_runs_bucket()
     completion = solver._try_get_completion_s3(bucket, run_id)
@@ -275,7 +275,7 @@ def read_run_diagnostics(
             completion, engine=engine, run_id=run_id, run_dir=_run_dir
         )
     else:
-        from trid3nt_server.tools.simulation import solver
+        from trid3nt_server.tools.simulation.solver import solver
 
         art = RunArtifacts(
             completion,

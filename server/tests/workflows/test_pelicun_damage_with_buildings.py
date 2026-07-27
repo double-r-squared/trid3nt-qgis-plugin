@@ -30,9 +30,9 @@ import pytest
 
 # Force the workflow module to register its atomic-tool wrapper before we
 # inspect TOOL_REGISTRY.
-import trid3nt_server.workflows.pelicun_damage_with_buildings  # noqa: F401
+import trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings  # noqa: F401
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.pelicun_damage_with_buildings import (
+from trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings import (
     pelicun_damage_with_buildings,
     run_pelicun_with_buildings,
     PelicunWithBuildingsError,
@@ -148,11 +148,11 @@ async def test_composer_dispatches_building_density_then_pelicun_in_order() -> N
 
     with (
         patch(
-            "trid3nt_server.workflows.pelicun_damage_with_buildings.TOOL_REGISTRY",
+            "trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings.TOOL_REGISTRY",
             mock_registry,
         ),
         patch(
-            "trid3nt_server.workflows.pelicun_damage_with_buildings.density_cog_to_point_fgb",
+            "trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings.density_cog_to_point_fgb",
             side_effect=_fake_density_cog_to_point_fgb,
         ),
         # Suppress os.unlink for the fake path.
@@ -192,7 +192,7 @@ async def test_mocked_buildings_plus_flood_expected_damage_point_count() -> None
 
     from types import SimpleNamespace
     from unittest import mock as _mock
-    from trid3nt_server.tools.simulation import run_pelicun_damage_assessment as _pelicun_mod
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment as _pelicun_mod
 
     cell_size_m = 100.0
     min_lon, min_lat, max_lon, max_lat = _SMALL_BBOX
@@ -284,7 +284,7 @@ async def test_mocked_buildings_plus_flood_expected_damage_point_count() -> None
     try:
         with (
             patch(
-                "trid3nt_server.workflows.pelicun_damage_with_buildings.TOOL_REGISTRY",
+                "trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings.TOOL_REGISTRY",
                 mock_registry,
             ),
             _mock.patch.object(_pelicun_mod, "read_through", _fake_pelicun_read_through),
@@ -345,8 +345,8 @@ def test_each_damage_point_carries_ds_mean_in_0_4() -> None:
 
     from types import SimpleNamespace
     from unittest import mock as _mock
-    from trid3nt_server.tools.simulation import run_pelicun_damage_assessment as _pelicun_mod
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import (
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment as _pelicun_mod
+    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
         run_pelicun_damage_assessment,
     )
 

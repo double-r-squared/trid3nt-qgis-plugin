@@ -1,0 +1,9 @@
+compute_skill_metrics:
+- how well does this simulated streamflow match the observed gauge
+- compute NSE and KGE for this model run
+- score the model fit against observations with PBIAS and RSR
+- grade the calibration quality of this SWMM hydrograph
+- what is the peak flow error and timing error for this simulation
+- scaled RMS error for the groundwater head calibration
+- is this model result satisfactory or unsatisfactory per Moriasi criteria
+- check skill metrics for the paired observed and simulated series
