@@ -642,7 +642,7 @@ async def test_workflow_stops_before_solver_dispatch() -> None:
     forbidden = {
         "run_solver",
         "wait_for_completion",
-        "run_model_flood_scenario",
+        "sfincs_flood",
         "run_model_flood_habitat_scenario",
         "run_modflow_scenario",
     }

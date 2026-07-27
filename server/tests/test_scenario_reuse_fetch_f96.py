@@ -62,7 +62,7 @@ def test_fetched_kind_for_tool_maps_fetchers() -> None:
     assert fetched_kind_for_tool("fetch_landcover") == "landcover"
     assert fetched_kind_for_tool("fetch_dem") == "dem"
     # Non-fetcher / unknown tools have no fetched kind.
-    assert fetched_kind_for_tool("run_model_flood_scenario") is None
+    assert fetched_kind_for_tool("sfincs_flood") is None
     assert fetched_kind_for_tool("compute_layer_bounds") is None
 
 
@@ -175,7 +175,7 @@ def test_non_fetcher_tool_does_not_reuse() -> None:
     # the fetched-layer path.
     assert (
         find_reusable_fetched_layer(
-            "run_model_flood_scenario",
+            "sfincs_flood",
             {"bbox": SOUTH_FL_BBOX},
             [_wdpa_layer()],
         )

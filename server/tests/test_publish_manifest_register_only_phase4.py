@@ -393,7 +393,7 @@ def test_read_publish_manifest_unknown_schema_returns_none(monkeypatch):
 def test_flood_scenario_branch_is_clean_if_else():
     """The register-only vs on-box fallback split is a clean if/else gated on a
     present manifest, and the heavy on-box steps sit under ``if not register_only``."""
-    import trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario as mfs
+    import trid3nt_server.workflows.sfincs.flood.flood as mfs
 
     body = inspect.getsource(mfs.model_flood_scenario)
     # The branch trigger.

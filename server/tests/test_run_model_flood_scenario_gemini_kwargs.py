@@ -1,4 +1,4 @@
-"""Live integration test: ``run_model_flood_scenario`` survives Gemini-invented kwargs (job-0164).
+"""Live integration test: ``sfincs_flood`` survives Gemini-invented kwargs (job-0164).
 
 The kickoff motivating problem: Gemini routinely emits kwargs like
 ``run_name``, ``scenario_id``, ``description``, ``rainfall_event``,
@@ -10,7 +10,7 @@ After job-0164's sweep:
   2. Every ``@register_tool`` function additionally carries
      ``**_extra_ignored`` as belt-and-suspenders.
 
-These tests assert that calling ``run_model_flood_scenario`` with a real-world
+These tests assert that calling ``sfincs_flood`` with a real-world
 mash-up of valid + invented + alias kwargs **does not raise TypeError**.
 Network / GCS errors are tolerated (we cannot reach 3DEP / NLCD in CI), but
 the failure-envelope branch must produce an envelope, not raise.
@@ -26,7 +26,7 @@ from trid3nt_server.tool_arg_normalizer import normalize_args
 from trid3nt_server.tools import TOOL_REGISTRY
 
 # Import the workflow module so it registers.
-import trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario  # noqa: F401
+import trid3nt_server.workflows.sfincs.flood.flood  # noqa: F401
 
 
 def _invoke_via_normalizer(tool_name: str, raw: dict) -> object:
@@ -38,7 +38,7 @@ def _invoke_via_normalizer(tool_name: str, raw: dict) -> object:
     return entry.fn(**normalized)
 
 
-def test_run_model_flood_scenario_with_invented_kwargs_does_not_raise_type_error() -> None:
+def test_sfincs_flood_with_invented_kwargs_does_not_raise_type_error() -> None:
     """Simulate Gemini's worst-case kwargs combination.
 
     This is the exact failure mode that triggered the kickoff: a tool call
@@ -59,10 +59,10 @@ def test_run_model_flood_scenario_with_invented_kwargs_does_not_raise_type_error
         "description": "Hurricane Ian flood demo",
     }
     try:
-        _invoke_via_normalizer("run_model_flood_scenario", raw)
+        _invoke_via_normalizer("sfincs_flood", raw)
     except TypeError as exc:
         pytest.fail(
-            f"run_model_flood_scenario raised TypeError on Gemini-style kwargs: {exc}\n"
+            f"sfincs_flood raised TypeError on Gemini-style kwargs: {exc}\n"
             f"This indicates the normalizer + **_extra_ignored sweep failed."
         )
     except Exception:
@@ -72,7 +72,7 @@ def test_run_model_flood_scenario_with_invented_kwargs_does_not_raise_type_error
         pass
 
 
-def test_run_model_flood_scenario_with_only_invented_kwargs_does_not_raise_type_error() -> None:
+def test_sfincs_flood_with_only_invented_kwargs_does_not_raise_type_error() -> None:
     """Stress: every kwarg is invented (no valid ones). Must drop them all."""
     raw = {
         "run_name": "test",
@@ -83,14 +83,14 @@ def test_run_model_flood_scenario_with_only_invented_kwargs_does_not_raise_type_
         "explanation": "test",
     }
     try:
-        _invoke_via_normalizer("run_model_flood_scenario", raw)
+        _invoke_via_normalizer("sfincs_flood", raw)
     except TypeError as exc:
         pytest.fail(f"TypeError: {exc}")
     except Exception:
         pass  # expected: bbox/query missing → WorkflowError, not TypeError
 
 
-def test_normalizer_rewrites_camel_case_for_run_model_flood_scenario() -> None:
+def test_normalizer_rewrites_camel_case_for_sfincs_flood() -> None:
     """Direct normalizer assertion: ``durationHours`` → wrapper-accepted form.
 
     The wrapper signature exposes BOTH ``return_period_years`` (long, primary)
@@ -98,9 +98,9 @@ def test_normalizer_rewrites_camel_case_for_run_model_flood_scenario() -> None:
     The normalizer should land the LLM's camelCase / alias forms on one of
     them.
     """
-    entry = TOOL_REGISTRY["run_model_flood_scenario"]
+    entry = TOOL_REGISTRY["sfincs_flood"]
     out = normalize_args(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"durationHours": 12, "returnPeriodYears": 25, "rainfall_event": "atlas14_500yr"},
         entry.fn,
     )
@@ -114,13 +114,13 @@ def test_normalizer_rewrites_camel_case_for_run_model_flood_scenario() -> None:
 
 
 def test_normalizer_alias_yr_to_years_only_when_signature_accepts() -> None:
-    """``run_model_flood_scenario`` accepts ``return_period_years`` directly.
+    """``sfincs_flood`` accepts ``return_period_years`` directly.
 
     If LLM sends ``return_period_yr=500`` it should be aliased to
     ``return_period_years=500`` because the signature accepts the long form.
     """
-    entry = TOOL_REGISTRY["run_model_flood_scenario"]
-    out = normalize_args("run_model_flood_scenario", {"return_period_yr": 500}, entry.fn)
+    entry = TOOL_REGISTRY["sfincs_flood"]
+    out = normalize_args("sfincs_flood", {"return_period_yr": 500}, entry.fn)
     # The wrapper accepts BOTH ``return_period_years`` and ``return_period_yr``
     # (it normalizes internally). Either name is fine — the test asserts
     # neither is dropped.

@@ -1,9 +1,10 @@
 """Agent routing tests (job-0154): Gemini tool-dispatch wiring.
 
-Tests that confirm:
-1. ``run_model_flood_scenario`` is present in ``TOOL_REGISTRY`` (the catalog
-   includes the flood workflow so Gemini can see it).
-2. ``build_tool_declarations`` includes ``run_model_flood_scenario`` in the
+Tests that confirm (engine-door refactor, SFINCS slice: the flood entry is now
+the ``run_sfincs`` DOOR + the ``sfincs_flood`` template):
+1. ``run_sfincs`` (door) + ``sfincs_flood`` (template) are present in
+   ``TOOL_REGISTRY`` (the catalog includes the flood engine so Gemini can see it).
+2. ``build_tool_declarations`` includes the ``run_sfincs`` door in the
    list it builds from the registry.
 3. The ``stream_events`` adapter correctly yields a ``FunctionCallEvent``
    when a mocked Gemini stream emits a function_call part.
@@ -32,34 +33,39 @@ from trid3nt_server.adapter import (
 
 
 # ---------------------------------------------------------------------------
-# Test 1: run_model_flood_scenario is in TOOL_REGISTRY
+# Test 1: the run_sfincs door + sfincs_flood template are in TOOL_REGISTRY
 # ---------------------------------------------------------------------------
 
 
-def test_run_model_flood_scenario_in_registry():
-    """run_model_flood_scenario must be registered (root cause B gate)."""
+def test_sfincs_door_and_template_in_registry():
+    """run_sfincs (door) + sfincs_flood (template) must be registered; the old
+    run_model_flood_scenario name is GONE (engine-door refactor, no alias)."""
     # The workflow module is imported eagerly by main._import_tools_registry();
     # in tests we trigger the same import chain via the inflight job-0042 path.
-    from trid3nt_server.workflows.sfincs.model_flood_scenario import model_flood_scenario  # noqa: F401
-    assert "run_model_flood_scenario" in agent_tools.TOOL_REGISTRY, (
-        "run_model_flood_scenario is NOT in TOOL_REGISTRY — "
-        "Gemini will never see the flood workflow tool"
+    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
+    import trid3nt_server.tools  # noqa: F401 -- door registration side-effect
+    assert "run_sfincs" in agent_tools.TOOL_REGISTRY, "the SFINCS flood door must be registered"
+    assert "sfincs_flood" in agent_tools.TOOL_REGISTRY, "the sfincs_flood template must be registered"
+    assert "run_model_flood_scenario" not in agent_tools.TOOL_REGISTRY, (
+        "the old name must be REPLACED by the door + template (no alias)"
     )
 
 
 # ---------------------------------------------------------------------------
-# Test 2: build_tool_declarations includes run_model_flood_scenario
+# Test 2: build_tool_declarations includes the run_sfincs door
 # ---------------------------------------------------------------------------
 
 
-def test_build_tool_declarations_includes_flood_workflow():
-    """Tool declaration list must include run_model_flood_scenario."""
-    from trid3nt_server.workflows.sfincs.model_flood_scenario import model_flood_scenario  # noqa: F401
+def test_build_tool_declarations_includes_flood_door():
+    """Tool declaration list must include the run_sfincs door (the retrievable
+    flood entry; the sfincs_flood template is pool-excluded, door-surfaced)."""
+    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
+    import trid3nt_server.tools  # noqa: F401 -- door registration side-effect
 
     decls = build_tool_declarations(agent_tools.TOOL_REGISTRY)
     names = [d.name for d in decls]
-    assert "run_model_flood_scenario" in names, (
-        f"run_model_flood_scenario missing from declarations; got: {sorted(names)}"
+    assert "run_sfincs" in names, (
+        f"run_sfincs door missing from declarations; got: {sorted(names)}"
     )
 
 
@@ -75,7 +81,7 @@ async def test_stream_events_yields_function_call_event():
     # Build a fake chunk that looks like a google-genai streaming chunk with
     # a function_call part.
     fake_fn_call = MagicMock()
-    fake_fn_call.name = "run_model_flood_scenario"
+    fake_fn_call.name = "sfincs_flood"
     fake_fn_call.id = "call-abc123"
     fake_fn_call.args = {"location_query": "Fort Myers, FL", "return_period_yr": 100}
 
@@ -112,7 +118,7 @@ async def test_stream_events_yields_function_call_event():
     assert isinstance(evt, FunctionCallEvent), (
         f"Expected FunctionCallEvent, got {type(evt)}"
     )
-    assert evt.name == "run_model_flood_scenario"
+    assert evt.name == "sfincs_flood"
     assert evt.args.get("location_query") == "Fort Myers, FL"
     assert evt.args.get("return_period_yr") == 100
 
@@ -162,25 +168,25 @@ async def test_stream_events_yields_text_delta_event():
 
 
 def test_system_prompt_mentions_flood_routing():
-    """System prompt must instruct Gemini to call run_model_flood_scenario."""
-    assert "run_model_flood_scenario" in SYSTEM_PROMPT
+    """System prompt must instruct Gemini to call the run_sfincs flood door."""
+    assert "run_sfincs" in SYSTEM_PROMPT
     assert "100-year" in SYSTEM_PROMPT or "flood" in SYSTEM_PROMPT.lower()
 
 
 # ---------------------------------------------------------------------------
-# Test 6: run_model_flood_scenario docstring covers 100-year storm phrase
+# Test 6: sfincs_flood docstring covers 100-year storm phrase
 # ---------------------------------------------------------------------------
 
 
-def test_run_model_flood_scenario_docstring_covers_user_intent():
+def test_sfincs_flood_docstring_covers_user_intent():
     """Docstring must mention '100-year' to match the failing demo prompt."""
     from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.sfincs.model_flood_scenario import model_flood_scenario  # noqa: F401
+    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
 
-    entry = TOOL_REGISTRY.get("run_model_flood_scenario")
+    entry = TOOL_REGISTRY.get("sfincs_flood")
     assert entry is not None
     doc = entry.fn.__doc__ or ""
     assert "100-year" in doc, (
-        "run_model_flood_scenario docstring must mention '100-year' so Gemini "
+        "sfincs_flood docstring must mention '100-year' so Gemini "
         "matches the 'Model peak flood depth from a 100-year design storm' prompt"
     )

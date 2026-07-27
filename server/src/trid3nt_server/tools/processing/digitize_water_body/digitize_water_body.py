@@ -546,7 +546,7 @@ def digitize_water_body(
     (``compute_ndvi``); land-cover classes (``fetch_landcover``/
     ``extract_landcover_class``); regulatory floodplains
     (``fetch_fema_nfhl_zones``) or modeled inundation
-    (``run_model_flood_scenario``); SLR bathtub footprints
+    (``sfincs_flood``); SLR bathtub footprints
     (``fetch_noaa_slr_scenarios``).
 
     Params:

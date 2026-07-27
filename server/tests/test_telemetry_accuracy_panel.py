@@ -89,10 +89,10 @@ def test_classify_result_usable_modeled_empty_layers_is_false():
         "layers": [],
         "flood": {"metrics": {"flooded_area_km2": 12.0, "max_depth_m": 2.3}},
     }
-    summary = summarize_tool_result("run_model_flood_scenario", result)
+    summary = summarize_tool_result("sfincs_flood", result)
     assert summary["status"] == "error"
     assert summary["error_code"] == "NO_RENDERABLE_LAYER"
-    assert classify_result_usable("run_model_flood_scenario", result, summary) is False
+    assert classify_result_usable("sfincs_flood", result, summary) is False
 
 
 def test_classify_result_usable_failure_tagged_modeled_is_false():
@@ -102,8 +102,8 @@ def test_classify_result_usable_failure_tagged_modeled_is_false():
         "layers": [],
         "flood": {"metrics": {"solver_version": "failed:SOLVER_TIMEOUT"}},
     }
-    summary = summarize_tool_result("run_model_flood_scenario", result)
-    assert classify_result_usable("run_model_flood_scenario", result, summary) is False
+    summary = summarize_tool_result("sfincs_flood", result)
+    assert classify_result_usable("sfincs_flood", result, summary) is False
 
 
 def test_classify_result_usable_modeled_with_layers_is_true():
@@ -112,8 +112,8 @@ def test_classify_result_usable_modeled_with_layers_is_true():
         "workflow_name": "model_flood_scenario",
         "layers": [{"layer_id": "flood-1", "uri": "s3://b/flood.tif"}],
     }
-    summary = summarize_tool_result("run_model_flood_scenario", result)
-    assert classify_result_usable("run_model_flood_scenario", result, summary) is True
+    summary = summarize_tool_result("sfincs_flood", result)
+    assert classify_result_usable("sfincs_flood", result, summary) is True
 
 
 def test_classify_result_usable_data_payload_is_true():

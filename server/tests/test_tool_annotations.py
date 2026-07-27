@@ -8,7 +8,7 @@ Coverage:
   subset of the fetch_* / web_fetch / catalog_* group; compute_* /
   clip_* / intra-GCP tools are not open-world.
 - Specific spot-checks for known high-stakes tools (publish_layer,
-  run_solver, wait_for_completion, run_pelicun_damage_assessment).
+  run_solver, wait_for_completion, pelicun_damage_assessment).
 - Verify the four new fields land on AtomicToolMetadata with correct
   default values.
 """
@@ -97,7 +97,7 @@ def test_write_tools_are_not_read_only():
     assert write_tools, (
         "No tools have read_only_hint=False — check that publish_layer, "
         "run_solver, wait_for_completion, qgis_process, "
-        "run_pelicun_damage_assessment were all annotated."
+        "pelicun_damage_assessment were all annotated."
     )
     # All tools with read_only_hint=False must not have destructive_hint implied
     # to be True when the tool is actually not destructive.
@@ -173,7 +173,7 @@ def test_non_idempotent_write_tools_exist():
     assert non_idempotent, (
         "No tools have idempotent_hint=False — check run_solver, "
         "wait_for_completion, publish_layer, qgis_process, "
-        "run_pelicun_damage_assessment."
+        "pelicun_damage_assessment."
     )
 
 
@@ -216,12 +216,12 @@ def test_wait_for_completion_annotations():
 
 
 def test_run_pelicun_annotations():
-    """run_pelicun_damage_assessment: write + not idempotent (MC sampling)."""
+    """pelicun_damage_assessment: write + not idempotent (MC sampling)."""
     snapshot = _registry_snapshot()
-    assert "run_pelicun_damage_assessment" in snapshot, (
-        "run_pelicun_damage_assessment not registered"
+    assert "pelicun_damage_assessment" in snapshot, (
+        "pelicun_damage_assessment not registered"
     )
-    meta = snapshot["run_pelicun_damage_assessment"]
+    meta = snapshot["pelicun_damage_assessment"]
     assert meta.read_only_hint is False, "pelicun writes output FlatGeobuf → not read-only"
     assert meta.open_world_hint is False, "pelicun is local compute"
     assert meta.destructive_hint is False, "pelicun writes to new path → not destructive"

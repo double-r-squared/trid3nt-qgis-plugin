@@ -64,8 +64,8 @@ def _import_tools_registry() -> int:
     ``source_class="solver_dispatch"``) — they drive Cloud Workflows
     executions of the M5 SFINCS substrate landed by job-0040.
 
-    job-0042: imports ``workflows.model_flood_scenario`` so the M5 capstone
-    workflow's thin atomic-tool wrapper ``run_model_flood_scenario`` is
+    job-0042: imports ``workflows.sfincs.flood.flood`` so the M5 capstone
+    workflow's thin atomic-tool wrapper (the ``sfincs_flood`` engine template) is
     registered alongside the atomic tools it composes. The workflow itself
     is deterministic Python (FR-TA-1, Decision G); the wrapper exists so the
     LLM sees a single invocable tool that triggers the whole chain.
@@ -83,8 +83,8 @@ def _import_tools_registry() -> int:
     from .tools.discovery.qgis_discovery import qgis_discovery  # noqa: F401
     # job-0041: register run_solver + wait_for_completion (M5 substrate).
     from .tools.simulation.solver import solver  # noqa: F401
-    # job-0042: register run_model_flood_scenario (M5 capstone workflow wrapper).
-    from .workflows.sfincs.model_flood_scenario import model_flood_scenario  # noqa: F401
+    # job-0042: register sfincs_flood (M5 capstone workflow wrapper; engine template).
+    from .workflows.sfincs.flood.flood import sfincs_flood  # noqa: F401
     # job-0047: register search_data_catalog + fetch_from_catalog (Mode 1 substrate).
     from .tools.discovery.fetch_from_catalog import fetch_from_catalog  # noqa: F401
     from .tools.discovery.search_data_catalog import search_data_catalog  # noqa: F401
@@ -130,8 +130,10 @@ def _import_tools_registry() -> int:
     from .tools.processing.compute_building_density import compute_building_density  # noqa: F401
     # job-0097: register fetch_roads_osm (OSM Overpass road LineStrings; major+arterial default).
     from .tools.fetchers.socioeconomic.fetch_roads_osm import fetch_roads_osm  # noqa: F401
-    # job-0098: register run_pelicun_damage_assessment (Wave 1 stub; Wave 2 composer is job-0106).
-    from .tools.simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment  # noqa: F401
+    # job-0098 -> engine-door refactor (PELICUN slice): the pelicun_damage_assessment
+    # TEMPLATE (was run_pelicun_damage_assessment) now lives under
+    # workflows/pelicun/damage_assessment/; import it so it registers at daemon startup.
+    from .workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment  # noqa: F401
     # job-0102: register fetch_nexrad_reflectivity (Iowa Mesonet NEXRAD WMS passthrough).
     from .tools.fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: F401
     # job-0107: register clip_vector_to_polygon (vector clip-to-polygon utility).

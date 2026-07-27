@@ -363,7 +363,7 @@ async def test_emit_tool_call_drops_raster_gs_uri(
         return leaked
 
     result = await emitter.emit_tool_call(
-        name="Flood scenario", tool_name="run_model_flood_scenario", invoke=fake_tool
+        name="Flood scenario", tool_name="sfincs_flood", invoke=fake_tool
     )
     # The LLM-visible tool result is unchanged (retry contract preserved).
     assert result is leaked
@@ -902,7 +902,7 @@ async def test_emit_tool_call_failed_runresult_marks_card_failed(
     rr = _run_result("failed", error_code="SOLVER_FAILED", error_message="diverged")
 
     result = await emitter.emit_tool_call(
-        name="Flood scenario", tool_name="run_model_flood_scenario", invoke=lambda: rr
+        name="Flood scenario", tool_name="sfincs_flood", invoke=lambda: rr
     )
     assert result is rr
     last = _pipeline_frames(sink)[-1]
@@ -923,7 +923,7 @@ async def test_emit_tool_call_timeout_runresult_marks_card_failed(
         "failed", error_code="SOLVER_TIMEOUT", error_message="exceeded budget"
     )
     await emitter.emit_tool_call(
-        name="Flood scenario", tool_name="run_model_flood_scenario", invoke=lambda: rr
+        name="Flood scenario", tool_name="sfincs_flood", invoke=lambda: rr
     )
     last = _pipeline_frames(sink)[-1]
     assert last["payload"]["steps"][0]["state"] == "failed"
@@ -938,7 +938,7 @@ async def test_emit_tool_call_cancelled_runresult_marks_card_cancelled(
     (yellow), distinct from failed per Invariant 8."""
     rr = _run_result("cancelled", cancellation_reason="user stop")
     await emitter.emit_tool_call(
-        name="Flood scenario", tool_name="run_model_flood_scenario", invoke=lambda: rr
+        name="Flood scenario", tool_name="sfincs_flood", invoke=lambda: rr
     )
     last = _pipeline_frames(sink)[-1]
     assert last["payload"]["steps"][0]["state"] == "cancelled"
@@ -952,7 +952,7 @@ async def test_emit_tool_call_complete_runresult_marks_card_complete(
     card complete (green). The detector must NEVER mislabel a good run."""
     rr = _run_result("complete", output_uri="s3://bucket/run/out/")
     await emitter.emit_tool_call(
-        name="Flood scenario", tool_name="run_model_flood_scenario", invoke=lambda: rr
+        name="Flood scenario", tool_name="sfincs_flood", invoke=lambda: rr
     )
     last = _pipeline_frames(sink)[-1]
     assert last["payload"]["steps"][0]["state"] == "complete"
@@ -974,7 +974,7 @@ async def test_emit_tool_call_failed_envelope_dict_marks_card_failed(
     }
     await emitter.emit_tool_call(
         name="Flood scenario",
-        tool_name="run_model_flood_scenario",
+        tool_name="sfincs_flood",
         invoke=lambda: env_dict,
     )
     last = _pipeline_frames(sink)[-1]
@@ -995,7 +995,7 @@ async def test_emit_tool_call_cancelled_envelope_dict_marks_card_cancelled(
     }
     await emitter.emit_tool_call(
         name="Flood scenario",
-        tool_name="run_model_flood_scenario",
+        tool_name="sfincs_flood",
         invoke=lambda: env_dict,
     )
     last = _pipeline_frames(sink)[-1]

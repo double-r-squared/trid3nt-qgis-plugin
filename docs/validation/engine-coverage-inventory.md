@@ -113,7 +113,7 @@ grep -n 'register_tool' server/src/trid3nt_server/tools/simulation/set_sfincs_pa
 
 Key notes: only `set_sfincs_parameters` exposes individual hydromt_sfincs capabilities as tool args
 (setup_manning_roughness/setup_constant_infiltration + manning_land/manning_sea/qinf). Everything else
-is deterministically driven by `build_sfincs_model` inside `run_model_flood_scenario` (bbox/forcing-spec
+is deterministically driven by `build_sfincs_model` inside `sfincs_flood` (bbox/forcing-spec
 in, deck out -- no LLM choice), hence nested. `services/workers/_sfincs_build/deck.py` is a
 near-byte-identical older duplicate of `workflows/sfincs_builder.py` and was counted once.
 `services/workers/sfincs_quadtree_spike/ref/*.py` is a DIFFERENT vendored SFINCS Python codebase (its own
@@ -176,13 +176,16 @@ python3 -c "import importlib.metadata as m; [print(d.metadata['Name'], d.version
 # introspect_swmm_api.py: pkgutil.walk_packages skipping underscore-prefixed paths -> 817 (plotting_map_bokeh/plotly excluded, deps absent)
 grep -rn 'pyswmm' server/src/trid3nt_server services/workers --include='*.py' | grep -v __pycache__
 grep -rn 'swmm_api' server/src/trid3nt_server services/workers --include='*.py' | grep -v __pycache__
-grep -n 'swmm' server/src/trid3nt_server/tools/__init__.py   # registered: run_swmm_urban_flood, set_swmm_parameters
+grep -n 'swmm' server/src/trid3nt_server/tools/__init__.py   # registered: run_swmm (door), swmm_urban_flood (template), set_swmm_parameters
 python3 -c "import pyswmm.output as o; print(hasattr(o.Output,'period_count'))"   # False -> the postprocess bug
 ```
 
-Key notes: registered tools = `run_swmm_urban_flood` (`tools/simulation/run_swmm_tool.py`, pure
-orchestration, no pyswmm/swmm_api import) and `set_swmm_parameters`
-(`tools/simulation/set_swmm_parameters.py`). All 12 pyswmm touches (Simulation, Nodes, Node.depth,
+Key notes (engine-door refactor, SWMM slice): registered tools = the `run_swmm`
+DOOR (`tools/simulation/swmm/run_swmm/`, read-only concierge) + the
+`swmm_urban_flood` TEMPLATE (`workflows/swmm/urban_flood/urban_flood.py`, pure
+orchestration, no pyswmm/swmm_api import; engine=swmm, tier=template,
+pool-excluded) and `set_swmm_parameters`
+(`tools/simulation/swmm/set_swmm_parameters/`). All 12 pyswmm touches (Simulation, Nodes, Node.depth,
 Output.times/nodes/pollutants/node_attribute/link_attribute/node_series) live only in
 `workflows/swmm_mesh_builder.py`, `workflows/postprocess_swmm.py`, and `services/workers/swmm/*` +
 `_swmm_postprocess/postprocess.py` -> all nested. `set_swmm_parameters.py` directly touches
@@ -315,8 +318,12 @@ in `services/workers/telemac/telemac_river_dye_build.py` (the sole `.cas` author
 hydro/tracer/numerics block plus oil/decay(WAQTEL)/sediment(GAIA) coupling-activation appendices.
 `set_telemac_parameters.py` touches exactly 2 of those 52 (LAW OF BOTTOM FRICTION, FRICTION COEFFICIENT).
 `diagnostics/telemac.py` parses solver LISTING text + completion.json (run-health/mass-balance) -- zero
-keyword coverage. Registered tools: `run_telemac` (async, 26 params, direct) and `set_telemac_parameters`
-(direct); `read_run_diagnostics` is a shared 5-engine dispatcher whose telemac parser is nested.
+keyword coverage. Registered tools (engine-door refactor, TELEMAC slice - name flip): the `run_telemac`
+DOOR (`tools/simulation/telemac/run_telemac/`, read-only concierge) + the `telemac_river_dye` TEMPLATE
+(`workflows/telemac/river_dye/river_dye.py`, async, 26 params, direct; engine=telemac, tier=template,
+pool-excluded; was the old `run_telemac` engine tool) and `set_telemac_parameters`
+(`tools/simulation/telemac/set_telemac_parameters/`, direct); `read_run_diagnostics` is a shared 5-engine
+dispatcher whose telemac parser is nested.
 Direct/nested split of the 52: 10 direct (DURATION<-sim_duration_s, FRICTION COEFFICIENT, LAW OF BOTTOM
 FRICTION, VELOCITY DIFFUSIVITY, COEFFICIENT FOR DIFFUSION OF TRACERS, PRESCRIBED FLOWRATES<-source_q_m3s,
 and the 4 substance-class activation keywords COUPLING WITH / WAQTEL STEERING FILE / GAIA STEERING FILE /
@@ -499,7 +506,7 @@ Counting commands:
 find /home/nate/Documents/trid3nt-local -iname '*swan*' -not -path '*/node_modules/*' -not -path '*/.git/*' | sort
 curl -s https://swanmodel.sourceforge.io/online_doc/swanuse/node20.html -o scratch/swan_node20.html
 python3 -c "import re; t=re.sub('<[^>]+>',' ',open('scratch/swan_node20.html').read()); print(re.sub(r'\s+',' ',t))"   # ground-truth 54-command list with (a)-(j) groupings
-grep -n -i swan server/src/trid3nt_server/tools/__init__.py   # sole registered tool: run_swan_waves
+grep -n -i swan server/src/trid3nt_server/tools/__init__.py   # registered: run_swan (door), swan_wave_field (template)
 # for kw in <all 54 manual keywords>: grep -rn (word/quote-boundary) across tools/workflows/services/workers/swan_contracts.py; every hit manually triaged
 # Read services/workers/swan/deck_builder.py (the sole .swn author, 692 lines) to enumerate every 'KEYWORD = value' line -> 17
 ```
@@ -507,7 +514,7 @@ grep -n -i swan server/src/trid3nt_server/tools/__init__.py   # sole registered 
 Key notes: 17 of 54 commands genuinely emitted, all inside `services/workers/swan/deck_builder.py`:
 PROJECT, SET, MODE, COORD, CGRID, INPGRID (BOTTOM + optional WIND), READINP (BOTTOM + optional WIND),
 GEN3, OFF (QUAD), FRICTION, BREAKING, TRIAD, BOUND (SHAPE JONSWAP), BOUNDSPEC, BLOCK, COMPUTE, STOP.
-Exactly one registered tool: `run_swan_waves` (`tools/simulation/run_swan_tool.py`) -- other `swan` grep
+One engine template `swan_wave_field` (`workflows/swan/wave_field/wave_field.py`, was `run_swan_waves`) behind the read-only `run_swan` door (engine-door refactor, SWAN slice) -- other `swan` grep
 hits are narrative cross-references. 7 DIRECT commands driven by named params (bbox, mode,
 boundary_hs_m/tp_s/dir_deg/spread_deg/side, n_dir/n_freq/freq_low_hz/freq_high_hz, sim_duration_s/
 time_step_s/output_frames, friction/breaking/triads, cross-checked against `SwanRunArgs` in
@@ -568,12 +575,12 @@ Counting commands:
 ./venvs/agent/bin/python -c "from openquake.calculators.base import calculators; print(len(calculators)); print(sorted(calculators))"   # 14
 ./venvs/agent/bin/python -c "from openquake.commonlib.oqvalidation import OqParam; from openquake.hazardlib.valid import Param; params=[n for n in vars(OqParam) if not n.startswith('_') and isinstance(getattr(OqParam,n,None),Param)]; print(len(params))"   # 156
 grep -rn '^import openquake\|^from openquake\|import openquake' server/src/trid3nt_server services/workers --include=*.py   # zero real imports
-grep -n 'openquake\|fault\|hazard' server/src/trid3nt_server/tools/__init__.py   # registered: fetch_fault_sources, run_seismic_hazard_psha
+grep -n 'openquake\|fault\|hazard' server/src/trid3nt_server/tools/__init__.py   # registered: fetch_fault_sources, run_openquake (door), openquake_psha (template)
 grep -rn 'calculation_mode' server/src/trid3nt_server services/workers --include=*.py
 ```
 
 Key notes: 2 direct OpenQuake-lane tools -- `fetch_fault_sources` (GEM Global Active Faults fetcher) and
-`run_openquake_tool` -> `run_seismic_hazard_psha` (PSHA dispatch); `query_point_hazard` is a generic
+`openquake_psha` (PSHA dispatch template behind the `run_openquake` door; engine-door refactor, OPENQUAKE slice; was `run_seismic_hazard_psha`); `query_point_hazard` is a generic
 any-raster point-sampler with zero openquake import and was excluded. Nested usage:
 `services/workers/openquake/job_ini.py` (pure deck templating, no openquake import -- writes job.ini/NRML
 XML by hand), `run_oq.py` (CLI subprocess shim), postprocess parsing the CLI's CSV exports. Of 156 OqParam
@@ -607,7 +614,7 @@ Capability areas:
 
 | Area | Status | Note |
 |---|---|---|
-| Demand model (DemandModel / calculate_demand) | uncovered | `run_pelicun_damage_assessment.py` samples the hazard raster itself with rasterio, bypassing pelicun's demand pipeline. |
+| Demand model (DemandModel / calculate_demand) | uncovered | `damage_assessment.py` (the pelicun_damage_assessment template) samples the hazard raster itself with rasterio, bypassing pelicun's demand pipeline. |
 | Asset model (AssetModel / calculate_asset) | uncovered | asset/component definition is a plain GeoDataFrame column lookup (component_type). |
 | Damage model (DamageModel / calculate_damage, fragility) | uncovered | DS0..DS4 binning is hand-coded threshold logic on loss ratios, not pelicun.model.damage_model. |
 | Loss/repair model (LossModel / calculate_loss, aggregate_loss, repair) | uncovered | repair_cost_mean/p95 = hand-rolled loss ratio x hardcoded replacement-value dict; no LossModel call. |
@@ -632,11 +639,11 @@ venvs/agent/bin/python -c "import pelicun; print(pelicun.__file__, pelicun.__ver
 venvs/agent/bin/python -c "import pelicun.assessment as a; import inspect; [print(n) for n,o in inspect.getmembers(a) if inspect.isclass(o) and o.__module__=='pelicun.assessment']"
 venvs/agent/bin/python -c "import pelicun.assessment as a, inspect; classes=['AssessmentBase','Assessment','DLCalculationAssessment']; seen=set(); [seen.add(n) for c in classes for n,o in inspect.getmembers(getattr(a,c)) if not n.startswith('_') and (inspect.isfunction(o) or inspect.ismethod(o) or isinstance(o,property))]; print(sorted(seen), len(seen))"   # 12
 grep -rn '^import pelicun|^from pelicun|    import pelicun|    from pelicun' server/src/trid3nt_server services/workers
-grep -n 'pelicun' server/src/trid3nt_server/tools/__init__.py   # registered: postprocess_pelicun, run_pelicun_damage_assessment
+grep -n 'pelicun' server/src/trid3nt_server/tools/__init__.py   # registered: postprocess_pelicun, run_pelicun door, pelicun_damage_assessment + pelicun_damage_with_buildings templates
 ```
 
 Key notes: numerator is effectively zero. The ONLY touchpoint anywhere is a single `import pelicun` in
-`run_pelicun_damage_assessment.py` (line 460), used solely to read `pelicun.__file__` and hand-construct a
+`workflows/pelicun/damage_assessment/damage_assessment.py`, used solely to read `pelicun.__file__` and hand-construct a
 path to the bundled `resources/DamageAndLossModelLibrary/flood/building/portfolio/Hazus v6.1/
 loss_repair.csv`. That CSV's contents ARE genuinely used (real HAZUS v6.1 depth-damage curves), but zero
 methods of Assessment/AssessmentBase/DLCalculationAssessment are ever invoked -- no calculate_demand/asset/

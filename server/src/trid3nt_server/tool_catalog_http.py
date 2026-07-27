@@ -338,8 +338,12 @@ _SHADOW_RECORD_TYPE = "tool_retrieval_shadow"
 #: attributed to a flow when it dispatched one of these (the recall@k per-flow
 #: breakdown the kickoff asks for: SWMM / SFINCS / MODFLOW).
 _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
-    "run_swmm_urban_flood": "SWMM",
-    "run_model_flood_scenario": "SFINCS",
+    # engine-door refactor (SWMM slice): the urban family is now door + template.
+    "run_swmm": "SWMM",
+    "swmm_urban_flood": "SWMM",
+    # engine-door refactor (SFINCS slice): the flood family is now door + template.
+    "run_sfincs": "SFINCS",
+    "sfincs_flood": "SFINCS",
     "run_model_flood_habitat_scenario": "SFINCS",
     # engine-door refactor: the MODFLOW family is now door + templates. The door
     # and the contaminant-plume template are the MODFLOW-flow anchors; the news

@@ -4,11 +4,11 @@ Covers every helper patched in this job, driving the s3:// branches with a
 fake reader bound over the shared ``tools/cache.py::read_object_bytes_s3``
 seam (boto3-shaped; no network, no moto) + temp files:
 
-1. run_pelicun_damage_assessment._download_uri_to_local — s3 staging to a
+1. pelicun_damage_assessment._download_uri_to_local — s3 staging to a
    temp file, the job-0253 last-two-segment path-mangle retry mirrored for
    s3, typed PelicunRuntimeError wrap, and the scheme-aware WMS reverse-map
    (s3 under TRID3NT_STORAGE_BACKEND=s3; gs byte-identical by default).
-2. run_pelicun_damage_assessment._fetch_pelicun_damage_bytes — end-to-end
+2. pelicun_damage_assessment._fetch_pelicun_damage_bytes — end-to-end
    shaped: s3 hazard + asset URIs staged locally, was_remote flags proven by
    the finally-block unlink.
 3. postprocess_pelicun._download_uri_to_local + the async tool's was_remote
@@ -84,12 +84,12 @@ def _bind_failing_reader(monkeypatch, exc: Exception):
 
 
 # ---------------------------------------------------------------------------
-# 1. run_pelicun_damage_assessment._download_uri_to_local
+# 1. pelicun_damage_assessment._download_uri_to_local
 # ---------------------------------------------------------------------------
 
 
 def test_pelicun_download_s3_stages_to_temp_file(monkeypatch):
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -108,7 +108,7 @@ def test_pelicun_download_s3_stages_to_temp_file(monkeypatch):
 def test_pelicun_download_s3_mangle_repair_retries_last_two_segments(monkeypatch):
     """LLM path-mangle guard (job-0253) mirrored for s3:// URIs."""
     from trid3nt_server.tools import cache as cache_mod
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -137,7 +137,7 @@ def test_pelicun_download_s3_mangle_repair_retries_last_two_segments(monkeypatch
 
 
 def test_pelicun_download_s3_failure_raises_typed_error(monkeypatch):
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
         PelicunRuntimeError,
         _download_uri_to_local,
     )
@@ -155,7 +155,7 @@ _WMS_URI = (
 
 
 def test_pelicun_wms_reverse_map_uses_s3_scheme_on_aws(monkeypatch):
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
         _download_uri_to_local,
     )
 
@@ -182,7 +182,7 @@ def test_pelicun_wms_reverse_map_uses_s3_scheme_on_aws(monkeypatch):
 
 
 def test_pelicun_fetch_stages_s3_inputs_and_unlinks_after(monkeypatch):
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment as mod
+    from trid3nt_server.workflows.pelicun.damage_assessment import damage_assessment as mod
 
     _bind_fake_reader(monkeypatch, b"PAYLOAD")
 

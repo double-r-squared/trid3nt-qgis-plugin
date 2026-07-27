@@ -401,31 +401,64 @@ from .processing.spatial_query import spatial_query  # noqa: E402,F401
 # parser modules under .simulation.diagnostics are NOT registered).
 from .simulation.diagnostics import read_run_diagnostics  # noqa: E402,F401
 from .simulation.model_debris_flow import model_debris_flow  # noqa: E402,F401
-from .simulation.model_fire_spread import model_fire_spread  # noqa: E402,F401
+# engine-door refactor (ELMFIRE slice): the model_fire_spread engine tool is
+# DELETED from tools/simulation/. The ELMFIRE engine tool is now the
+# elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template") registered in
+# workflows/elmfire/fire_spread/fire_spread.py (imported below); the run_elmfire
+# door lists + gate-expands it.
 from .simulation.postprocess_pelicun import postprocess_pelicun  # noqa: E402,F401
-from .simulation.run_geoclaw_tool import run_geoclaw_tool  # noqa: E402,F401
-from .simulation.run_landlab_tool import run_landlab_tool  # noqa: E402,F401
+# engine-door refactor (LANDLAB slice): the run_landlab_susceptibility thin
+# wrapper is DELETED. The Landlab engine tool is now the landlab_susceptibility
+# TEMPLATE (engine="landlab", tier="template") registered in
+# workflows/landlab/susceptibility/susceptibility.py (imported below); the
+# run_landlab door lists + gate-expands it.
 # engine-door refactor: run_modflow_job (single spill) + run_river_seepage_job
 # are DELETED / UNREGISTERED. The single-species spill folded into the
 # modflow_contaminant_plume template; run_river_seepage_job is now the
 # unregistered internal engine surface the modflow_river_seepage template imports.
-from .simulation.run_openquake_tool import run_openquake_tool  # noqa: E402,F401
-from .simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment  # noqa: E402,F401
-from .simulation.run_swan_tool import run_swan_tool  # noqa: E402,F401
-from .simulation.run_swmm_tool import run_swmm_tool  # noqa: E402,F401
-from .simulation.run_telemac_tool import run_telemac_tool  # noqa: E402,F401
+# engine-door refactor (OPENQUAKE slice): the run_seismic_hazard_psha thin
+# wrapper is DELETED. The OpenQuake engine tool is now the openquake_psha
+# TEMPLATE (engine="openquake", tier="template") registered in
+# workflows/openquake/psha/psha.py (imported below); the run_openquake door
+# lists + gate-expands it.
+# engine-door refactor (PELICUN slice): the run_pelicun_damage_assessment atomic
+# tool + the run_pelicun_with_buildings composer are now the pelicun_damage_assessment
+# and pelicun_damage_with_buildings TEMPLATES (engine="pelicun", tier="template"),
+# one folder each under workflows/pelicun/<template>/ (imported below); the
+# run_pelicun door lists + gate-expands them. postprocess_pelicun (above) +
+# compute_impact_envelope (below) STAY general.
+# engine-door refactor (SWAN slice): the run_swan_waves thin wrapper is DELETED.
+# The SWAN engine tool is now the swan_wave_field TEMPLATE (engine="swan",
+# tier="template") registered in workflows/swan/wave_field/wave_field.py (imported
+# below); the run_swan door lists + gate-expands it.
+# engine-door refactor (SWMM + TELEMAC slices): the run_swmm_urban_flood and
+# run_telemac thin wrappers are DELETED. The SWMM engine tool is now the
+# swmm_urban_flood TEMPLATE (imported below); the TELEMAC engine tool is now the
+# telemac_river_dye TEMPLATE (engine="telemac", tier="template") registered in
+# workflows/telemac/river_dye/river_dye.py (imported below); the run_swmm /
+# run_telemac doors list + gate-expand them. The freed run_telemac name is
+# reused by the TELEMAC door.
 # V&V wave (ADR 0021, lane D): derive-not-mutate parameter setters (write a
 # child deck/setup, leave the parent immutable).
 from .simulation.modflow.set_modflow_parameters import set_modflow_parameters  # noqa: E402,F401
-from .simulation.set_sfincs_parameters import set_sfincs_parameters  # noqa: E402,F401
-from .simulation.set_swmm_parameters import set_swmm_parameters  # noqa: E402,F401
-from .simulation.set_telemac_parameters import set_telemac_parameters  # noqa: E402,F401
+from .simulation.sfincs.set_sfincs_parameters import set_sfincs_parameters  # noqa: E402,F401
+from .simulation.swmm.set_swmm_parameters import set_swmm_parameters  # noqa: E402,F401
+from .simulation.telemac.set_telemac_parameters import set_telemac_parameters  # noqa: E402,F401 - relocated beside the run_telemac door (engine-door refactor, TELEMAC slice); stays tier=general
 from .simulation.solver import solver  # noqa: E402,F401
 # -- engine doors (engine-door refactor: read-only concierge that lists +
 # gate-expands its engine's tier=template members; executes nothing). MODFLOW
 # pilot. Registry-driven: adding a template folder tagged engine+tier=template
 # makes it appear in the door's listing with zero door changes.
 from .simulation.modflow.run_modflow.run_modflow import run_modflow  # noqa: E402,F401
+from .simulation.geoclaw.run_geoclaw.run_geoclaw import run_geoclaw  # noqa: E402,F401 - GeoClaw run-up door (engine-door refactor, GEOCLAW slice)
+from .simulation.sfincs.run_sfincs.run_sfincs import run_sfincs  # noqa: E402,F401 - SFINCS flood door (engine-door refactor, SFINCS slice)
+from .simulation.swmm.run_swmm.run_swmm import run_swmm  # noqa: E402,F401 - SWMM urban-drainage door (engine-door refactor, SWMM slice)
+from .simulation.telemac.run_telemac.run_telemac import run_telemac  # noqa: E402,F401 - TELEMAC river-transport door (engine-door refactor, TELEMAC slice; reuses the freed run_telemac name)
+from .simulation.swan.run_swan.run_swan import run_swan  # noqa: E402,F401 - SWAN nearshore-wave door (engine-door refactor, SWAN slice)
+from .simulation.landlab.run_landlab.run_landlab import run_landlab  # noqa: E402,F401 - Landlab surface-process door (engine-door refactor, LANDLAB slice)
+from .simulation.openquake.run_openquake.run_openquake import run_openquake  # noqa: E402,F401 - OpenQuake seismic-hazard door (engine-door refactor, OPENQUAKE slice)
+from .simulation.elmfire.run_elmfire.run_elmfire import run_elmfire  # noqa: E402,F401 - ELMFIRE wildfire-spread door (engine-door refactor, ELMFIRE slice)
+from .simulation.pelicun.run_pelicun.run_pelicun import run_pelicun  # noqa: E402,F401 - Pelicun damage/loss door (engine-door refactor, PELICUN slice)
 
 # -- discovery (dataset/tool retrieval) --
 # NOTE: search_data_catalog / fetch_from_catalog / qgis_discovery register at
@@ -477,6 +510,75 @@ from ..workflows.modflow.wetland_hydroperiod.wetland_hydroperiod import modflow_
 from ..workflows.modflow.capture_zone.capture_zone import modflow_capture_zone as _modflow_capture_zone  # noqa: E402,F401 - PRT capture zone
 from ..workflows.modflow.wellhead_protection.wellhead_protection import modflow_wellhead_protection as _modflow_wellhead_protection  # noqa: E402,F401 - EPA WHPA (split from capture_zone; shared composer)
 from ..workflows.modflow.saltwater_intrusion.saltwater_intrusion import modflow_saltwater_intrusion as _modflow_saltwater_intrusion  # noqa: E402,F401 - BUY variable-density Henry-style wedge
+# engine-door refactor (SWMM slice): the SWMM urban-flood engine tool is now the
+# swmm_urban_flood TEMPLATE (engine="swmm", tier="template") - one folder under
+# workflows/swmm/urban_flood/. Importing it fires its @register_tool so the
+# template lands in TOOL_REGISTRY at startup; it is EXCLUDED from the default
+# retrieval pool and surfaced only by the run_swmm door's gate expansion. The
+# model_urban_flood_swmm composition body stays the internal engine surface the
+# template calls.
+from ..workflows.swmm.urban_flood.urban_flood import swmm_urban_flood as _swmm_urban_flood  # noqa: E402,F401 - RENAME of run_swmm_urban_flood (engine=swmm, tier=template)
+# engine-door refactor (TELEMAC slice): the TELEMAC river-dye engine tool is now
+# the telemac_river_dye TEMPLATE (engine="telemac", tier="template") - one folder
+# under workflows/telemac/river_dye/. Importing it fires its @register_tool so the
+# template lands in TOOL_REGISTRY at startup; it is EXCLUDED from the default
+# retrieval pool and surfaced only by the run_telemac door's gate expansion. The
+# model_river_dye_release_scenario composition body stays the internal engine
+# surface the template calls; workflows/telemac/run_telemac.py stays the local
+# solve seam (name flip: the door took the run_telemac name, the template submits
+# the solver).
+from ..workflows.telemac.river_dye.river_dye import telemac_river_dye as _telemac_river_dye  # noqa: E402,F401 - NAME FLIP of run_telemac (engine=telemac, tier=template)
+# engine-door refactor (GEOCLAW slice): the GeoClaw run-up engine tool is now the
+# geoclaw_inundation TEMPLATE (engine="geoclaw", tier="template") - one folder
+# under workflows/geoclaw/inundation/. Importing it fires its @register_tool so
+# the template lands in TOOL_REGISTRY at startup; it is EXCLUDED from the default
+# retrieval pool and surfaced only by the run_geoclaw door's gate expansion. The
+# model_dambreak_geoclaw_scenario composition body stays the internal engine
+# surface the template calls.
+from ..workflows.geoclaw.inundation.inundation import geoclaw_inundation as _geoclaw_inundation  # noqa: E402,F401 - RENAME of run_geoclaw_inundation (engine=geoclaw, tier=template)
+# engine-door refactor (SWAN slice): the SWAN standalone wave-field engine tool is
+# now the swan_wave_field TEMPLATE (engine="swan", tier="template") - one folder
+# under workflows/swan/wave_field/. Importing it fires its @register_tool so the
+# template lands in TOOL_REGISTRY at startup; it is EXCLUDED from the default
+# retrieval pool and surfaced only by the run_swan door's gate expansion. The
+# model_wave_scenario composition body stays the internal engine surface the
+# template calls.
+from ..workflows.swan.wave_field.wave_field import swan_wave_field as _swan_wave_field  # noqa: E402,F401 - RENAME of run_swan_waves (engine=swan, tier=template)
+# engine-door refactor (LANDLAB slice): the Landlab surface-process engine tool is
+# now the landlab_susceptibility TEMPLATE (engine="landlab", tier="template") - one
+# folder under workflows/landlab/susceptibility/. Importing it fires its
+# @register_tool so the template lands in TOOL_REGISTRY at startup; it is EXCLUDED
+# from the default retrieval pool and surfaced only by the run_landlab door's gate
+# expansion. The model_landslide_scenario composition body stays the internal
+# engine surface the template calls; workflows/landlab/run_landlab.py stays the
+# solver build/stage seam (distinct module from the run_landlab door).
+from ..workflows.landlab.susceptibility.susceptibility import landlab_susceptibility as _landlab_susceptibility  # noqa: E402,F401 - RENAME of run_landlab_susceptibility (engine=landlab, tier=template)
+# engine-door refactor (OPENQUAKE slice): the OpenQuake PSHA engine tool is now
+# the openquake_psha TEMPLATE (engine="openquake", tier="template") - one folder
+# under workflows/openquake/psha/. Importing it fires its @register_tool so the
+# template lands in TOOL_REGISTRY at startup; it is EXCLUDED from the default
+# retrieval pool and surfaced only by the run_openquake door's gate expansion.
+# The model_seismic_hazard_scenario composition body stays the internal engine
+# surface the template calls.
+from ..workflows.openquake.psha.psha import openquake_psha as _openquake_psha  # noqa: E402,F401 - RENAME of run_seismic_hazard_psha (engine=openquake, tier=template)
+# engine-door refactor (ELMFIRE slice): the ELMFIRE fire-spread engine tool is
+# now the elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template") - one
+# folder under workflows/elmfire/fire_spread/. Importing it fires its
+# @register_tool so the template lands in TOOL_REGISTRY at startup; it is
+# EXCLUDED from the default retrieval pool and surfaced only by the run_elmfire
+# door's gate expansion. The model_fire_spread_scenario composition body stays
+# the internal engine surface the template calls; workflows/elmfire/run_elmfire.py
+# stays the solver build/stage seam (distinct module from the run_elmfire door).
+from ..workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread as _elmfire_fire_spread  # noqa: E402,F401 - RENAME of model_fire_spread (engine=elmfire, tier=template)
+# engine-door refactor (PELICUN slice): the Pelicun damage/loss engine tools are now
+# the pelicun_damage_assessment + pelicun_damage_with_buildings TEMPLATES
+# (engine="pelicun", tier="template") - one folder each under workflows/pelicun/.
+# Importing each fires its @register_tool so the templates land in TOOL_REGISTRY at
+# startup; both are EXCLUDED from the default retrieval pool and surfaced only by the
+# run_pelicun door's gate expansion. compute_impact_envelope (a compute_* composer)
+# and postprocess_pelicun STAY general, NOT templates.
+from ..workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment as _pelicun_damage_assessment  # noqa: E402,F401 - RENAME of run_pelicun_damage_assessment (engine=pelicun, tier=template)
+from ..workflows.pelicun.damage_with_buildings.damage_with_buildings import pelicun_damage_with_buildings as _pelicun_damage_with_buildings  # noqa: E402,F401 - RENAME of run_pelicun_with_buildings (engine=pelicun, tier=template)
 
 # fire-animation demos S5/J5: the satellite fire-animation composer carries its
 # OWN @register_tool (run_model_satellite_fire_animation); import it so the

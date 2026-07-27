@@ -77,7 +77,7 @@ def _persistence_bound():
 
 @pytest.fixture()
 def _stub_swmm_solver(monkeypatch):
-    """Register a stub ``run_swmm_urban_flood`` that returns a peak LayerURI whose
+    """Register a stub ``swmm_urban_flood`` that returns a peak LayerURI whose
     bbox IS the floored solve domain, and pass the solver-confirm gate through.
 
     The stub stands in for the real (pyswmm) workflow: the production workflow
@@ -85,7 +85,7 @@ def _stub_swmm_solver(monkeypatch):
     model_urban_flood_swmm.py ~815), so the stub returning ``_SOLVE_DOMAIN`` as the
     LayerURI bbox faithfully exercises the dispatch-site pin path.
     """
-    name = "run_swmm_urban_flood"
+    name = "swmm_urban_flood"
     original = agent_tools.TOOL_REGISTRY.get(name)
     reset_scenario_indexes_for_tests()
     reset_uri_registries_for_tests()
@@ -153,7 +153,7 @@ def test_solve_pins_case_aoi_to_solve_domain(
 
     peak = asyncio.run(
         server._invoke_tool_via_emitter(
-            ws, state, "run_swmm_urban_flood", {"bbox": list(_SOLVE_DOMAIN)}
+            ws, state, "swmm_urban_flood", {"bbox": list(_SOLVE_DOMAIN)}
         )
     )
     assert isinstance(peak, LayerURI)
@@ -185,7 +185,7 @@ def test_followup_fetch_defaults_to_pinned_aoi_end_to_end(
     asyncio.run(_emit_case_open(ws, state, case.case_id))
     asyncio.run(
         server._invoke_tool_via_emitter(
-            ws, state, "run_swmm_urban_flood", {"bbox": list(_SOLVE_DOMAIN)}
+            ws, state, "swmm_urban_flood", {"bbox": list(_SOLVE_DOMAIN)}
         )
     )
     assert _turn_case_bbox(state) == list(_SOLVE_DOMAIN)
@@ -274,7 +274,7 @@ def test_fetch_default_snaps_drifted_but_honors_other(
     far = {"bbox": [-100.0, 40.0, -99.9, 40.1]}
     assert f("fetch_buildings", far, pin) == far
     # non-fetch tool -> no-op (even with a pin)
-    assert f("run_swmm_urban_flood", {}, pin) == {}
+    assert f("swmm_urban_flood", {}, pin) == {}
     # no pin -> no-op
     narrow = {"bbox": [-97.755, 30.26, -97.73, 30.275]}
     assert f("fetch_buildings", narrow, None) == narrow
@@ -306,7 +306,7 @@ def test_solve_emits_single_domain_zoom_to(
 
     asyncio.run(
         server._invoke_tool_via_emitter(
-            ws, state, "run_swmm_urban_flood", {"bbox": list(_SOLVE_DOMAIN)}
+            ws, state, "swmm_urban_flood", {"bbox": list(_SOLVE_DOMAIN)}
         )
     )
 

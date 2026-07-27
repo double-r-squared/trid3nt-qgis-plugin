@@ -45,3 +45,8 @@ been written yet but I don't want you to forget it.")
   (MODFLOW-style) stop duplicating it. NATE: hesitant because not all
   engines follow this structure - explicitly NOT NOW, backlogged; revisit
   after the engine-door refactor proves the per-engine shapes.
+- 2026-07-27 DOOR RRF BOOST: dense-channel scores drown door tools in RRF
+  fusion for some phrasings even when BM25 ranks the door #1 (2 known
+  dewatering cases); as doors carry more routing weight across engine
+  slices, consider a door-tier fusion boost or channel weighting - design
+  properly if the pattern recurs in other engine slices.

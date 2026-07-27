@@ -38,7 +38,8 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 _SRC = pathlib.Path(server.__file__).resolve().parent
 _WORKFLOWS = _SRC / "workflows"
-_FLOOD = _WORKFLOWS / "sfincs" / "model_flood_scenario" / "model_flood_scenario.py"
+_FLOOD = _WORKFLOWS / "sfincs" / "flood" / "flood.py"  # engine-door rollout renamed/moved
+# model_flood_scenario -> sfincs_flood (tier=template) under workflows/sfincs/flood/.
 _GEOCLAW = _WORKFLOWS / "geoclaw" / "model_dambreak_geoclaw_scenario" / "model_dambreak_geoclaw_scenario.py"
 _GLM_ANIM = _WORKFLOWS / "shared" / "model_glm_lightning_animation" / "model_glm_lightning_animation.py"
 

@@ -10,7 +10,7 @@ map layers of the same peak-depth data:
 The viridis one is a redundant / raw duplicate. These tests lock the workflow
 side of the fix: the ONE layer the workflow surfaces (postprocess_flood's
 ``LayerURI`` -> the published ``envelope.layers[0]`` -> the
-``run_model_flood_scenario`` wrapper return) must ALWAYS carry the canonical
+``sfincs_flood`` wrapper return) must ALWAYS carry the canonical
 ``continuous_flood_depth`` style preset and a clear human-readable name, and the
 workflow must never emit a second, styleless (viridis-defaulting) peak-depth
 layer of its own.
@@ -32,9 +32,9 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server.tools.publish_layer.publish_layer import PublishLayerError
-from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+from trid3nt_server.workflows.sfincs.flood.flood import (
     model_flood_scenario,
-    run_model_flood_scenario,
+    sfincs_flood,
 )
 from trid3nt_server.workflows.sfincs.postprocess_flood import (
     FLOOD_DEPTH_STYLE_PRESET,
@@ -180,19 +180,19 @@ def _patch_chain(publish_side_effect):  # noqa: ANN001, ANN201
         return _run_result_ok(run_id, handle.handle_id)
 
     patches = [
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.lookup_precip_return_period", return_value=_precip_result()),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.build_sfincs_model", return_value=_model_setup()),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.run_solver", return_value=handle),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_landcover", return_value=_landcover_result()),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=_precip_result()),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.build_sfincs_model", return_value=_model_setup()),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.run_solver", return_value=handle),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.wait_for_completion", side_effect=_wfc),
         patch(
-            "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.postprocess_flood",
+            "trid3nt_server.workflows.sfincs.flood.flood.postprocess_flood",
             return_value=([_flood_layer(run_id)], _DEPTH_METRICS),
         ),
         patch(
-            "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.publish_layer",
+            "trid3nt_server.workflows.sfincs.flood.flood.publish_layer",
             side_effect=publish_side_effect,
         ),
     ]
@@ -322,7 +322,7 @@ async def test_workflow_drops_raw_layer_when_publish_fails() -> None:
 
 @pytest.mark.asyncio
 async def test_wrapper_returns_single_styled_layer_uri() -> None:
-    """run_model_flood_scenario returns a single styled LayerURI on success — the
+    """sfincs_flood returns a single styled LayerURI on success — the
     one object emit_tool_call feeds to add_loaded_layer (one map layer, styled)."""
     run_id, patches = _patch_chain(
         publish_side_effect=lambda **kw: _published_wms_url(kw["layer_id"])
@@ -332,7 +332,7 @@ async def test_wrapper_returns_single_styled_layer_uri() -> None:
     with ExitStack() as stack:
         for p in patches:
             stack.enter_context(p)
-        result = await run_model_flood_scenario(
+        result = await sfincs_flood(
             bbox=_BBOX, return_period_yr=100, duration_hr=24
         )
 

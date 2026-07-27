@@ -889,7 +889,7 @@ async def modflow_sustainable_yield(
     Do NOT use this for:
         - A contaminant spill plume (use ``modflow_contaminant_plume``).
         - Mine-pit dewatering (use ``modflow_mine_dewatering``).
-        - Surface-water flooding (use ``run_model_flood_scenario``  -  SFINCS).
+        - Surface-water flooding (use ``sfincs_flood``  -  SFINCS).
         - Dye / tracer released INTO a surface river and carried DOWNSTREAM (that
           is surface-water transport  -  use ``run_telemac``).
         - A static fixed-stage river<->aquifer seepage / gaining-losing budget with

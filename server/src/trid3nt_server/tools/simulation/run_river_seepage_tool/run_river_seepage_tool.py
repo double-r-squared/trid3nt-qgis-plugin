@@ -116,7 +116,7 @@ async def run_river_seepage_job(
     into the aquifer, not riding the surface current). Do NOT use for:
     surface-water dye/tracer transport (``run_telemac``); a point spill
     with no river coupling (``modflow_contaminant_plume``); surface-water flooding
-    (``run_model_flood_scenario``); sorption/biodegradation transport
+    (``sfincs_flood``); sorption/biodegradation transport
     (v0.1 is conservative-tracer only).
 
     Params:

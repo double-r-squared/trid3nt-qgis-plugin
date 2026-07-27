@@ -7,7 +7,7 @@ Coverage:
 - Mocked: 5-feature NSI response → 5-point FlatGeobuf written through cache.
 - Output FlatGeobuf includes Pelicun-consumer columns (``component_type`` =
   ``occtype``, ``replacement_value`` = ``val_struct``) so the downstream
-  ``run_pelicun_damage_assessment`` branch fires unchanged.
+  ``pelicun_damage_assessment`` branch fires unchanged.
 - Network failure / 500 / non-FeatureCollection responses map to
   USACE_NSIUpstreamError(retryable=True).
 - User-Agent header is sent on every NSI POST.

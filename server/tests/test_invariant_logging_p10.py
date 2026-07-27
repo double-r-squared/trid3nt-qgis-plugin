@@ -11,7 +11,7 @@ turn that ended after geocode_location only. ROOT CAUSE (logs/agent.log
 2026-07-22 14:15-14:20, session 01KY5TY0XV67RGS6HR5JFSKT1Q): NOT a heuristic
 miss -- the live turn geocoded, then parked 180s on the code-exec approval
 gate (the headless bench never answers approval cards), then called
-run_swmm_urban_flood and parked again on the solver-confirm gate (24h in the
+swmm_urban_flood and parked again on the solver-confirm gate (24h in the
 local lane) after the bench client had already disconnected -- so the turn
 NEVER REACHED the terminal round where the backstop runs. These tests pin
 that for the true geocode-only shape the backstop DOES rescue the P10 prompt

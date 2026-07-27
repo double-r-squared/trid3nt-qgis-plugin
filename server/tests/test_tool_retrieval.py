@@ -80,13 +80,13 @@ def test_core_floor_always_subset(warm_index, query, allowed):
 def test_never_hide_mid_task(warm_index):
     a = _allowed(
         opened={"hydrology"},
-        dispatched={"run_swmm_urban_flood"},
+        dispatched={"swmm_urban_flood"},
         explicit={"compute_contours"},
     )
     # a query about something UNRELATED to the accumulated tools.
     res = retrieve_visible_tools("show me the lightning over the storm", a, DEFAULT_K)
     assert set(a.as_frozenset()) <= res
-    assert "run_swmm_urban_flood" in res  # dispatched stays
+    assert "swmm_urban_flood" in res  # dispatched stays
     assert "compute_contours" in res      # explicit stays
     assert set(tools_for_category("hydrology")) <= res  # opened-category tools stay
 
@@ -110,11 +110,11 @@ def test_never_hide_survives_invalid_opened_category():
     a = AllowedToolSet()
     a.open_category("hydrology")          # valid
     a.open_category("no_such_category")   # invalid (e.g. removed/renamed across a deploy)
-    a.record_dispatch("run_swmm_urban_flood")
+    a.record_dispatch("swmm_urban_flood")
     a.add_tools({"compute_contours"})
     for query in ("", "fetch radar reflectivity nexrad"):
         res = retrieve_visible_tools(query, a, DEFAULT_K)
-        assert "run_swmm_urban_flood" in res, query  # dispatched stays
+        assert "swmm_urban_flood" in res, query  # dispatched stays
         assert "compute_contours" in res, query      # explicit stays
         assert set(tools_for_category("hydrology")) <= res, query  # valid cat stays
         assert HOT_SET_TOOLS <= res
@@ -250,11 +250,11 @@ _RECALL_FIXTURE = [
     ("geocode this city to a bounding box", "geocode_location"),
     ("fetch NEXRAD radar reflectivity", "fetch_nexrad_reflectivity"),
     # newly-backfilled (STEP 7) tools -- prove the backfill lifts recall.
-    ("how deep will the water get from this hurricane flood", "run_model_flood_scenario"),
-    ("simulate urban street flooding from heavy rain in this city", "run_swmm_urban_flood"),
+    ("how deep will the water get from this hurricane flood", "run_sfincs"),
+    ("simulate urban street flooding from heavy rain in this city", "run_swmm"),
     ("fetch high resolution aerial imagery for this area", "fetch_naip"),
     ("model the groundwater contamination plume from this chemical spill", "run_model_groundwater_contamination_scenario"),
-    ("run a probabilistic seismic hazard calculation for this region", "run_seismic_hazard_psha"),
+    ("run a probabilistic seismic hazard calculation for this region", "run_openquake"),
     ("draw the topographic contour lines from the elevation", "compute_contours"),
 ]
 

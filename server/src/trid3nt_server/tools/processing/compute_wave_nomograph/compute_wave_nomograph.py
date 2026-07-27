@@ -66,7 +66,7 @@ LIMITATIONS (be honest -- this is a SANITY tool, not a spectral solver):
   flag (in ``notes``) that a shallow-water correction is NOT applied.
 - The wind-stress factor U_A is approximated by the 10 m wind U (factor = 1).
 - Single-segment straight-line fetch; no fetch-direction weighting.
-For a defensible nearshore wave field use ``run_swan_waves`` (the real SWAN
+For a defensible nearshore wave field use ``swan_wave_field`` (the real SWAN
 spectral solver); this tool is the pre-flight bound on that run.
 """
 
@@ -177,11 +177,11 @@ def compute_wave_nomograph(
     Use this when: you want a QUICK sanity estimate of wave height/period
     from wind and fetch before (or instead of) a full SWAN run -- "what
     waves would a 20 m/s wind build over 50 km?", or to seed
-    ``run_swan_waves``'s offshore boundary when no measured spectrum
+    ``swan_wave_field``'s offshore boundary when no measured spectrum
     exists. USACE Shore Protection Manual / CEM Part II-2 JONSWAP form.
     Do NOT use for: a defensible nearshore field over real bathymetry
-    (``run_swan_waves``); surge/inundation depth
-    (``run_model_flood_scenario``); shallow-water depth-limited breaking
+    (``swan_wave_field``); surge/inundation depth
+    (``sfincs_flood``); shallow-water depth-limited breaking
     (this is deep-water only).
 
     Params:

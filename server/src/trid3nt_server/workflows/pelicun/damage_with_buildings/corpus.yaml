@@ -1,0 +1,13 @@
+# TEMPLATE tier (engine-door refactor): phrasings for pelicun_damage_with_buildings.
+# NOT merged into the main retrieval index; the run_pelicun door surfaces this
+# template via gate expansion (select-then-call). Carried from the migrated
+# run_pelicun_with_buildings corpus entries.
+pelicun_damage_with_buildings:
+- estimate building-level flood damage over this area using the flood depth layer we just made
+- show me which buildings are damaged across the flood zone, not an administrative aggregate
+- run a spatially-distributed pelicun damage assessment on the building density grid for this bbox
+- pair the flood depth raster with building footprints and give me damage states and repair costs
+- compute hazus flood damage per building cell over this international bbox where nsi is unavailable
+- map the damage choropleth following the real built-area grid for the flood we just ran
+- assess structure damage and loss ratios over the buildings in this flooded extent
+- give me ds_mean and repair cost per cell for the buildings under this flood depth layer

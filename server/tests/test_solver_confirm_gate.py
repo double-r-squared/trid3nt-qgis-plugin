@@ -273,7 +273,7 @@ def test_code_exec_request_in_hot_set() -> None:
 
 @pytest.mark.asyncio
 async def test_flood_gate_emits_args_card_and_approve(monkeypatch) -> None:
-    """job-0256: run_model_flood_scenario is gated; the card carries the call
+    """job-0256: sfincs_flood is gated; the card carries the call
     args (no extraction) and approve injects confirmed=True."""
     from trid3nt_server import server
 
@@ -293,7 +293,7 @@ async def test_flood_gate_emits_args_card_and_approve(monkeypatch) -> None:
 
     approver = asyncio.create_task(_approve_soon())
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await approver
     assert should_run is True and effective["confirmed"] is True
@@ -305,14 +305,14 @@ async def test_flood_gate_emits_args_card_and_approve(monkeypatch) -> None:
 def test_flood_solvers_in_confirm_set() -> None:
     from trid3nt_server import server
 
-    assert "run_model_flood_scenario" in server.SOLVER_CONFIRM_TOOLS
+    assert "sfincs_flood" in server.SOLVER_CONFIRM_TOOLS
     assert "run_model_flood_habitat_scenario" in server.SOLVER_CONFIRM_TOOLS
 
 
 # NATE 2026-06-26: the OpenQuake classical-PSHA solver is gated like the others.
 @pytest.mark.asyncio
 async def test_psha_gate_emits_card_and_approve(monkeypatch) -> None:
-    """run_seismic_hazard_psha is gated; the card is a simple proceed/cancel
+    """openquake_psha is gated; the card is a simple proceed/cancel
     confirm summarizing the PSHA (AOI area, IMT, PoE -> return period) and
     approve injects confirmed=True (no granularity picker)."""
     from trid3nt_server import server
@@ -339,12 +339,12 @@ async def test_psha_gate_emits_card_and_approve(monkeypatch) -> None:
 
     approver = asyncio.create_task(_approve_soon())
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_seismic_hazard_psha", params
+        ws, state, "openquake_psha", params
     )
     await approver
     assert should_run is True and effective["confirmed"] is True
     card = next(e for e in ws.sent if e.get("type") == "tool-payload-warning")
-    assert card["payload"]["tool_name"] == "run_seismic_hazard_psha"
+    assert card["payload"]["tool_name"] == "openquake_psha"
     assert card["payload"]["options"] == ["proceed", "cancel"]
     assert card["payload"]["tool_args"]["imt"] == "PGA"
     # 10% in 50 yr -> ~475-year return period (rounded).
@@ -373,7 +373,7 @@ async def test_psha_gate_cancel_fails_closed() -> None:
 
     canceller = asyncio.create_task(_cancel_soon())
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_seismic_hazard_psha", params
+        ws, state, "openquake_psha", params
     )
     await canceller
     assert should_run is False
@@ -382,7 +382,7 @@ async def test_psha_gate_cancel_fails_closed() -> None:
 def test_psha_solver_in_confirm_set() -> None:
     from trid3nt_server import server
 
-    assert "run_seismic_hazard_psha" in server.SOLVER_CONFIRM_TOOLS
+    assert "openquake_psha" in server.SOLVER_CONFIRM_TOOLS
 
 
 # --------------------------------------------------------------------------- #
@@ -429,7 +429,7 @@ async def test_flood_gate_recommendation_deployment_aware(
 
     approver = asyncio.create_task(_approve_soon())
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await approver
     assert should_run is True
@@ -491,7 +491,7 @@ async def test_psha_gate_recommendation_deployment_aware(
 
     approver = asyncio.create_task(_approve_soon())
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_seismic_hazard_psha", params
+        ws, state, "openquake_psha", params
     )
     await approver
     assert should_run is True

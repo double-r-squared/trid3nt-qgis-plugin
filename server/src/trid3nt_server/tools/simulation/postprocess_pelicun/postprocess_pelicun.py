@@ -1,6 +1,6 @@
 """``postprocess_pelicun`` — aggregate Pelicun per-feature damage FGB → ImpactEnvelope (Wave 4.11 P2).
 
-This tool consumes the FlatGeobuf returned by ``run_pelicun_damage_assessment``
+This tool consumes the FlatGeobuf returned by ``pelicun_damage_assessment``
 (a per-asset damage layer) and produces an aggregate ``ImpactEnvelope`` —
 the portfolio-level damage / loss / population summary defined in
 ``trid3nt_contracts.impact_envelope`` (SRS Appendix B.6c, Decision N).
@@ -15,9 +15,9 @@ Design reference: ``reports/inflight/wave-4-11-p2-postprocess-pelicun-design-202
 **Inputs**
 
 - ``damage_layer_uri`` (str): ``gs://`` URI (or local path) to the FlatGeobuf
-  emitted by ``run_pelicun_damage_assessment``. Required.
+  emitted by ``pelicun_damage_assessment``. Required.
 - ``flood_layer_uri`` (str | None): The hazard raster URI passed upstream to
-  ``run_pelicun_damage_assessment``. Optional — carried forward into the
+  ``pelicun_damage_assessment``. Optional — carried forward into the
   envelope's ``flood_layer_uri`` provenance field. ``""`` is used when None.
 
 **Output**
@@ -46,7 +46,7 @@ structure_inventory_source)[:32]``.  The cached artifact is the
 ``ImpactEnvelope`` JSON payload.
 
 **Error envelope**: ``PelicunPostprocessError`` hierarchy parallels
-``PelicunDamageError`` (see ``run_pelicun_damage_assessment``).
+``PelicunDamageError`` (see ``pelicun_damage_assessment``).
 """
 
 from __future__ import annotations
@@ -140,7 +140,7 @@ _DS_HIGH_RISK_THRESHOLD = 2.5     # ds_mean >= 2.5 ⇒ at high risk (DS3+)
 _LR_DISPLACED_THRESHOLD = 0.20    # loss_ratio_mean >= 0.20 ⇒ displaced (DS2+)
 
 # Required columns on the damage FlatGeobuf (per the upstream tool's
-# documented output contract — see run_pelicun_damage_assessment.py:932-945).
+# documented output contract — see pelicun_damage_assessment.py:932-945).
 _REQUIRED_COLUMNS: tuple[str, ...] = (
     "component_type_used",
     "ds_mean",
@@ -207,7 +207,7 @@ def _validate_uri(uri: object, field_name: str, *, required: bool) -> str:
 
 
 # ---------------------------------------------------------------------------
-# URI helpers (mirrors the pattern in run_pelicun_damage_assessment).
+# URI helpers (mirrors the pattern in pelicun_damage_assessment).
 # ---------------------------------------------------------------------------
 
 
@@ -282,7 +282,7 @@ def _check_required_columns(gdf: Any) -> None:
         raise PelicunPostprocessSchemaError(
             "damage FlatGeobuf is missing required columns: "
             f"{missing!r}. Got columns={list(gdf.columns)!r}. "
-            "The upstream run_pelicun_damage_assessment tool produces these "
+            "The upstream pelicun_damage_assessment tool produces these "
             "columns at the per-asset level (see its output contract docstring)."
         )
 
@@ -588,7 +588,7 @@ def _bbox_from_gdf(gdf: Any) -> tuple[float, float, float, float]:
 
     Best-effort reprojects to EPSG:4326 if the CRS is set and differs.  Falls
     back to the raw total_bounds when the CRS is None (caller bears the cost
-    of the assumption — matches the run_pelicun_damage_assessment convention
+    of the assumption — matches the pelicun_damage_assessment convention
     which falls back to EPSG:4326).
     """
     try:
@@ -688,16 +688,16 @@ async def postprocess_pelicun(
 ) -> dict[str, Any]:
     """Aggregate a Pelicun per-asset damage FlatGeobuf into an ImpactEnvelope.
 
-    Use this when: right after ``run_pelicun_damage_assessment``, for
+    Use this when: right after ``pelicun_damage_assessment``, for
     portfolio-level totals (n_structures_damaged, expected_loss_usd,
     population_displaced) -- "how much damage"/"how many displaced"/
     "what's the expected loss". Do NOT use for: per-feature queries (read
     the FlatGeobuf directly); recomputing damage (call
-    ``run_pelicun_damage_assessment``); exposure counts without Pelicun
+    ``pelicun_damage_assessment``); exposure counts without Pelicun
     (``compute_zonal_statistics``).
 
     Params:
-        damage_layer_uri: FlatGeobuf from ``run_pelicun_damage_assessment``.
+        damage_layer_uri: FlatGeobuf from ``pelicun_damage_assessment``.
         flood_layer_uri: optional upstream hazard raster URI, for
             provenance only.
         fragility_set: fragility set actually used upstream (e.g.

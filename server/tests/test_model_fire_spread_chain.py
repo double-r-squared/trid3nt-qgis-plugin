@@ -20,7 +20,7 @@ test_run_geoclaw_chain.py).
      run_solver/wait_for_completion mocked, synthetic solver outputs, REAL
      postprocess (upload stubbed) -> the primary FireSpreadLayerURI + frame +
      aux COGs, no AWS, no docker.
-  7. **Confirm gate** — model_fire_spread in SOLVER_CONFIRM_TOOLS and the
+  7. **Confirm gate** — elmfire_fire_spread in SOLVER_CONFIRM_TOOLS and the
      fire confirm card carries cell count + runtime estimate.
 """
 
@@ -215,10 +215,10 @@ def test_tool_typed_error_on_missing_bbox():
     test env - any non-params error proves validation passed)."""
     import asyncio
 
-    from trid3nt_server.tools.simulation.model_fire_spread.model_fire_spread import model_fire_spread
+    from trid3nt_server.workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread
 
     out = asyncio.run(
-        model_fire_spread(
+        elmfire_fire_spread(
             bbox=None,
             ignition_lonlat=(-120.85, 39.02),
             duration_hours=1,
@@ -233,25 +233,25 @@ def test_tool_typed_error_on_missing_bbox():
 
 
 def test_tool_typed_error_on_missing_ignition():
-    from trid3nt_server.tools.simulation.model_fire_spread.model_fire_spread import model_fire_spread
+    from trid3nt_server.workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread
 
-    out = asyncio.run(model_fire_spread(bbox=list(_AOI), ignition_lonlat=None))
+    out = asyncio.run(elmfire_fire_spread(bbox=list(_AOI), ignition_lonlat=None))
     assert out["status"] == "error"
     assert out["error_code"] == "FIRE_IGNITION_REQUIRED"
     # The message points the LLM at the spatial-input pick machinery.
     assert "request_spatial_input" in out["error_message"]
 
     out2 = asyncio.run(
-        model_fire_spread(bbox=list(_AOI), ignition_lonlat="not-a-point")
+        elmfire_fire_spread(bbox=list(_AOI), ignition_lonlat="not-a-point")
     )
     assert out2["error_code"] == "FIRE_PARAMS_INVALID"
 
 
 def test_tool_typed_error_on_bad_preset():
-    from trid3nt_server.tools.simulation.model_fire_spread.model_fire_spread import model_fire_spread
+    from trid3nt_server.workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread
 
     out = asyncio.run(
-        model_fire_spread(
+        elmfire_fire_spread(
             bbox=list(_AOI), ignition_lonlat=list(_IGN), fuel_moisture="soggy"
         )
     )
@@ -668,10 +668,10 @@ def test_composer_mocked_end_to_end(tmp_path: Path, monkeypatch):
 # ===========================================================================
 # (7) Confirm gate: the tool is gated + the card carries cells + runtime.
 # ===========================================================================
-def test_model_fire_spread_in_solver_confirm_tools():
+def test_elmfire_fire_spread_in_solver_confirm_tools():
     from trid3nt_server.server import SOLVER_CONFIRM_TOOLS
 
-    assert "model_fire_spread" in SOLVER_CONFIRM_TOOLS
+    assert "elmfire_fire_spread" in SOLVER_CONFIRM_TOOLS
 
 
 def test_fire_confirm_envelope_carries_cells_and_runtime():
@@ -687,7 +687,7 @@ def test_fire_confirm_envelope_carries_cells_and_runtime():
             "duration_hours": 6.0,
         }
     )
-    assert env.tool_name == "model_fire_spread"
+    assert env.tool_name == "elmfire_fire_spread"
     assert env.options == ["proceed", "cancel"]
     assert env.tool_args["estimated_cells"] > 0
     assert env.tool_args["estimated_runtime_s"] >= 15
@@ -805,10 +805,10 @@ class TestArgShapeCoercion:
         test env) - the only forbidden outcomes are the params errors."""
         import asyncio
 
-        from trid3nt_server.tools.simulation.model_fire_spread.model_fire_spread import model_fire_spread
+        from trid3nt_server.workflows.elmfire.fire_spread.fire_spread import elmfire_fire_spread
 
         result = asyncio.run(
-            model_fire_spread(
+            elmfire_fire_spread(
                 bbox="-120.85,39.02",
                 ignition_lonlat="-120.85,39.02",
                 duration_hours=1,

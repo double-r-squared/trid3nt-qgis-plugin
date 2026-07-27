@@ -11,7 +11,7 @@
       "prompt": "Run a SFINCS pluvial flood simulation for Peoria, Illinois with a 50-year storm at coarse resolution.",
       "execution": "block_at_invocation",
       "expected": {
-        "acceptable": ["run_model_flood_scenario"],
+        "acceptable": ["run_sfincs", "sfincs_flood"],
         "no_tool": false
       }
     },
@@ -101,8 +101,9 @@
       "execution": "block_at_invocation",
       "expected": {
         "acceptable": [
-          "run_pelicun_damage_assessment",
-          "run_pelicun_with_buildings",
+          "run_pelicun",
+          "pelicun_damage_assessment",
+          "pelicun_damage_with_buildings",
           "fetch_usace_nsi"
         ],
         "no_tool": false
@@ -205,7 +206,7 @@
       "prompt": "Run an OpenQuake probabilistic seismic hazard analysis for Memphis, Tennessee at a 475-year return period.",
       "execution": "block_at_invocation",
       "expected": {
-        "acceptable": ["run_seismic_hazard_psha"],
+        "acceptable": ["run_openquake", "openquake_psha"],
         "no_tool": false
       }
     },

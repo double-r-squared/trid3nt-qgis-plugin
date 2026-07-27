@@ -86,7 +86,7 @@ def generate_damage_distribution(
 ) -> dict[str, Any]:
     """Generate a Pelicun damage-state distribution bar chart.
 
-    Use this after a Pelicun damage run (run_pelicun_damage_assessment), when
+    Use this after a Pelicun damage run (pelicun_damage_assessment), when
     the user asks to *see the damage breakdown*: "show me the damage
     distribution", "chart how many structures are in each damage state", "what's
     the damage-state breakdown".
@@ -101,7 +101,7 @@ def generate_damage_distribution(
 
     Parameters:
         damage_layer_uri: gs:// URI or local path to the FlatGeobuf returned by
-            run_pelicun_damage_assessment (must carry a ``ds_mean`` column).
+            pelicun_damage_assessment (must carry a ``ds_mean`` column).
 
     Returns:
         A ChartEmissionPayload dict with a Vega-Lite v5 bar chart of DS0..DS4
@@ -122,7 +122,7 @@ def generate_damage_distribution(
         raise ChartToolError(
             "MISSING_DAMAGE_COLUMN",
             "Damage layer is missing the 'ds_mean' column produced by "
-            "run_pelicun_damage_assessment. Available columns: "
+            "pelicun_damage_assessment. Available columns: "
             f"{sorted(str(c) for c in gdf.columns if c != 'geometry')}",
         )
 

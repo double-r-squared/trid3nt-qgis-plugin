@@ -50,18 +50,11 @@ run_model_flood_habitat_scenario:
 - compute flood impact within the national preserve and list the species occurrences
 - model the storm flood, clip it to Apalachicola National Forest, and add the species layers
 - give me flood depth, protected lands, and biodiversity impact metrics in one run
-run_model_flood_scenario:
-- model flooding
-- model the flood in this area and show me the inundation depth
-- simulate flooding here and map how deep the water gets
-- model the flood from a 100-year storm in Fort Myers and show me the inundation depth
-- how deep will the water get in this bbox during a 25-year design storm
-- simulate flood extent for a 500-year return period over New Orleans, 48 hour duration
-- run a coastal surge inundation near the shoreline including the sea floor bathymetry
-- estimate peak flood depth for this AOI from a hurricane rainfall event
-- model the compound flood here with storm surge plus river discharge plus rain
-- animate the storm surge rolling in over Mexico Beach with waves
-- run a SFINCS flood simulation routing water around the buildings downtown
+# engine-door refactor (SFINCS slice): the run_model_flood_scenario corpus block
+# migrated OUT of this main index. Hazard-common flood phrasings now live in the
+# run_sfincs door corpus (tools/simulation/sfincs/run_sfincs/corpus.yaml, DOOR
+# tier - walked into this index); template-specific phrasings live in
+# workflows/sfincs/flood/corpus.yaml (TEMPLATE tier - NOT indexed).
 run_model_goes_fire_animation:
 - animate the GOES fire loop over this AOI and just run it without asking me to confirm
 - recreate the CIRA GeoColor and Fire Temperature animation over this bbox
@@ -107,15 +100,11 @@ run_model_nws_flood_event_scenario:
 - tie the active flash flood warning here to a depth map using observed precipitation, not a design storm
 - what does the flooding look like for the warning that's in effect, using actual measured rain
 - run the inundation for the second flood warning in the list over its warned area
-run_pelicun_with_buildings:
-- estimate building-level flood damage over this area using the flood depth layer we just made
-- show me which buildings are damaged across the flood zone, not an administrative aggregate
-- run a spatially-distributed pelicun damage assessment on the building density grid for this bbox
-- pair the flood depth raster with building footprints and give me damage states and repair costs
-- compute hazus flood damage per building cell over this international bbox where nsi is unavailable
-- map the damage choropleth following the real built-area grid for the flood we just ran
-- assess structure damage and loss ratios over the buildings in this flooded extent
-- give me ds_mean and repair cost per cell for the buildings under this flood depth layer
+# engine-door refactor (PELICUN slice): the run_pelicun_with_buildings entries
+# migrated out of this central index. Door-common damage phrasings ->
+# tools/simulation/pelicun/run_pelicun/corpus.yaml (DOOR tier, walked into the
+# index); template-specific phrasings ->
+# workflows/pelicun/damage_with_buildings/corpus.yaml (TEMPLATE tier, NOT merged).
 read_run_diagnostics:
 - did my flood simulation actually converge or is the result garbage
 - check the mass balance of the last SFINCS run

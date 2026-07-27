@@ -243,7 +243,11 @@ CATEGORIES: tuple[CategorySpec, ...] = (
 
 PRIMARY_CATEGORY: dict[str, str] = {
     # ---- 1. hazard_modeling ------------------------------------------------
-    "run_model_flood_scenario": "hazard_modeling",
+    # engine-door refactor (SFINCS slice): run_model_flood_scenario is now the
+    # sfincs_flood template (tier=template, pool-EXCLUDED, NO category membership -
+    # surfaced only by the run_sfincs door's gate expansion). The DOOR carries the
+    # category membership so hazard_modeling widening surfaces the flood entry.
+    "run_sfincs": "hazard_modeling",
     "run_model_flood_habitat_scenario": "hazard_modeling",
     "run_model_news_event_ingest": "hazard_modeling",
     "run_model_nws_flood_event_scenario": "hazard_modeling",
@@ -269,31 +273,52 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # NOT categorized - they are excluded from the pool and surfaced only by the
     # door's gate expansion (adding a template to a category would re-leak it).
     "run_modflow": "hazard_modeling",
-    "run_swmm_urban_flood": "hazard_modeling",
-    "run_pelicun_damage_assessment": "hazard_modeling",
-    "run_pelicun_with_buildings": "hazard_modeling",
+    # engine-door refactor (SWMM slice): run_swmm_urban_flood is now the
+    # swmm_urban_flood template (tier=template, pool-EXCLUDED, NO category
+    # membership - surfaced only by the run_swmm door's gate expansion). The
+    # DOOR carries the hazard_modeling membership.
+    "run_swmm": "hazard_modeling",
+    # engine-door refactor (PELICUN slice): run_pelicun_damage_assessment +
+    # run_pelicun_with_buildings are now the pelicun_damage_assessment /
+    # pelicun_damage_with_buildings templates (tier=template, pool-EXCLUDED, NO
+    # category membership - surfaced only by the run_pelicun door's gate
+    # expansion). The DOOR carries the hazard_modeling membership.
+    "run_pelicun": "hazard_modeling",
     # sprint-17 NEW engines (parallel lanes) - all are run_* hazard solvers /
     # composers, filed alongside the other engines above.
     # engine-door refactor: run_river_seepage_job + run_model_river_seepage_scenario
     # folded into the modflow_river_seepage template (tier=template, not categorized).
-    "run_geoclaw_inundation": "hazard_modeling",
-    "run_seismic_hazard_psha": "hazard_modeling",
+    # engine-door refactor (GEOCLAW slice): run_geoclaw_inundation is now the
+    # geoclaw_inundation template (tier=template, pool-EXCLUDED, NO category
+    # membership - surfaced only by the run_geoclaw door's gate expansion). The
+    # DOOR carries the hazard_modeling membership.
+    "run_geoclaw": "hazard_modeling",
+    # engine-door refactor (OPENQUAKE slice): run_seismic_hazard_psha is now the
+    # openquake_psha template (tier=template, pool-EXCLUDED, NO category
+    # membership - surfaced only by the run_openquake door's gate expansion). The
+    # DOOR carries the hazard_modeling membership.
+    "run_openquake": "hazard_modeling",
     # real-fault seismic-source fetcher: the OpenQuake PSHA input data fetcher
     # (USGS / GEM fault sources -> source-model XML). Filed alongside its consumer
-    # run_seismic_hazard_psha (there is no dedicated geophysics data category).
+    # door run_openquake (there is no dedicated geophysics data category).
     "fetch_fault_sources": "hazard_modeling",
-    "run_landlab_susceptibility": "hazard_modeling",
+    # engine-door refactor (LANDLAB slice): run_landlab_susceptibility is now the
+    # landlab_susceptibility template (tier=template, pool-EXCLUDED, NO category
+    # membership - surfaced only by the run_landlab door's gate expansion). The
+    # DOOR carries the hazard_modeling membership.
+    "run_landlab": "hazard_modeling",
     # USGS post-fire debris-flow hazard composer (pfdf: Staley 2017 M1
     # likelihood + Gartner 2014 emergency volume + Cannon 2010 combined class
     # over a delineated stream-segment network). Filed as a hazard engine;
     # cross-listed to fire below (reached from the wildfire lane next to
     # MTBS / NIFC / FIRMS).
     "model_debris_flow": "hazard_modeling",
-    # FIRE-3: the ELMFIRE wildfire-spread composer (LANDFIRE fuels + terrain ->
-    # deck -> run_solver('elmfire') -> time-of-arrival + burned-extent
-    # animation). Filed as a hazard engine; cross-listed to fire below (reached
-    # from the wildfire lane next to LANDFIRE / NIFC / FIRMS).
-    "model_fire_spread": "hazard_modeling",
+    # engine-door refactor (ELMFIRE slice): model_fire_spread is now the
+    # elmfire_fire_spread template (tier=template, pool-EXCLUDED, NO category
+    # membership - surfaced only by the run_elmfire door's gate expansion). The
+    # DOOR carries the hazard_modeling membership; cross-listed to fire below
+    # (reached from the wildfire lane next to LANDFIRE / NIFC / FIRMS).
+    "run_elmfire": "hazard_modeling",
     # The QGIS bridge exporter: a case-product utility, not a modeling engine.
     # geographic_primitives is the general-purpose/utility lane; reached from
     # "take this into QGIS / export my project".
@@ -321,7 +346,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # comparison engine vs SFINCS+SnapWave). Filed as a hazard engine; also
     # cross-listed under coastal (SECONDARY_CATEGORIES) since it is a coastal/wave
     # tool a user reaches from the coastal lane.
-    "run_swan_waves": "hazard_modeling",
+    # engine-door refactor (SWAN slice): run_swan_waves is now the swan_wave_field
+    # template (tier=template, pool-EXCLUDED, NO category membership - surfaced
+    # only by the run_swan door's gate expansion). The DOOR carries the
+    # hazard_modeling membership.
+    "run_swan": "hazard_modeling",
     # conservation micro-North-Star composer: the run_* multi-tool workflow
     # (species occurrences + NDVI + MoBI -> priority surface). Filed alongside
     # the other run_model_* composers here; cross-listed to conservation_ecology
@@ -485,7 +514,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # two pure-analytic coastal-wave tools (no fetch, no solver). The nomograph
     # is the wind+fetch -> Hs/Tp pre-flight sanity bound on a SWAN run; the
     # EurOtop tool turns a nearshore Hs/Tp + structure crest into a mean
-    # overtopping discharge. Both sit in the coastal lane next to run_swan_waves.
+    # overtopping discharge. Both sit in the coastal lane next to the run_swan door.
     "compute_wave_nomograph": "coastal",
     "compute_overtopping": "coastal",
     # ---- 9. damage_assessment ---------------------------------------------
@@ -534,7 +563,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "compute_layer_bounds": "geographic_primitives",
     # FR-AS-10 / FR-WC-16: pause-the-turn and ask the user to DRAW on the map
     # (AOI + tagged flood walls / flap gates, or a point/bbox pick). The drawn
-    # barriers feed run_swmm_urban_flood; cross-cutting view/input action.
+    # barriers feed swmm_urban_flood; cross-cutting view/input action.
     "request_spatial_input": "geographic_primitives",
     # DuckDB spatial-query fold (Phase B): ONE read-only SQL surface replaces
     # the three job-0224 analytical Q&A tools (summarize_layer_statistics /
@@ -650,8 +679,9 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # NOAA SLR marsh-migration is a coastal product (primary) that materially
     # belongs to conservation/ecology too (it projects wetland habitat transition).
     "fetch_noaa_slr_marsh": ("conservation_ecology",),
-    "run_pelicun_damage_assessment": ("damage_assessment",),
-    "run_pelicun_with_buildings": ("damage_assessment",),
+    # engine-door refactor (PELICUN slice): the DOOR carries the secondary
+    # damage_assessment membership; its templates are pool-EXCLUDED (no membership).
+    "run_pelicun": ("damage_assessment",),
     "fetch_usace_nsi": ("damage_assessment",),
     # ftw-affected-fields demo: the affected-field analysis is PRIMARY-filed in
     # damage_assessment (the impact-readout analogue) and materially belongs to
@@ -680,7 +710,9 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # SWAN spans hazard_modeling (it runs the SWAN spectral solver) AND coastal
     # (it is THE defensible nearshore wave-field tool -- a user reaches it from the
     # coastal lane to compare against SFINCS+SnapWave on the same case).
-    "run_swan_waves": ("coastal",),
+    # engine-door refactor (SWAN slice): the DOOR run_swan carries the coastal
+    # cross-listing; the swan_wave_field template is pool-excluded (no membership).
+    "run_swan": ("coastal",),
     # The conservation-priority composer spans hazard_modeling (it runs the
     # multi-tool workflow) AND conservation_ecology (it IS the conservation
     # micro-North-Star -- a user reaches it from the conservation lane).
@@ -715,10 +747,12 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # engine) and materially belongs to fire (post-wildfire hazard, reached from
     # the MTBS / NIFC / FIRMS lane).
     "model_debris_flow": ("fire",),
-    # FIRE-3: the ELMFIRE wildfire-spread composer is PRIMARY hazard_modeling
-    # (a modeling engine) and materially belongs to fire (fire-behavior
-    # modeling, reached from the LANDFIRE / NIFC / FIRMS wildfire lane).
-    "model_fire_spread": ("fire",),
+    # engine-door refactor (ELMFIRE slice): the run_elmfire DOOR is PRIMARY
+    # hazard_modeling (its templates run the modeling engine) and materially
+    # belongs to fire (fire-behavior modeling, reached from the LANDFIRE / NIFC
+    # / FIRMS wildfire lane). The elmfire_fire_spread template gets NO category
+    # membership (pool-excluded, door-surfaced).
+    "run_elmfire": ("fire",),
     # The satellite fire-animation composer spans hazard_modeling (it composes a
     # multi-tool imagery pipeline) AND fire (it is the fire-branch demo) AND
     # news_events (it ingests the fire news / incident lookup up front).
@@ -817,8 +851,10 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 # Hot set - always-on tools surfaced before any category has been opened.
 # Picked to span the most-common entry points to a session:
 #
-# - run_model_flood_scenario, run_model_flood_habitat_scenario - the two
-#   top-level workflow composers a user is likely to invoke first.
+# - run_sfincs (SFINCS flood door), run_model_flood_habitat_scenario - the two
+#   top-level flood entry points a user is likely to invoke first (engine-door
+#   refactor: the door replaces run_model_flood_scenario as the always-on flood
+#   hot-path so the pool-excluded sfincs_flood template stays reachable).
 # - geocode_location, fetch_dem, fetch_nws_alerts_conus, fetch_nws_event -
 #   the most commonly cited "before you can do anything else" tools
 #   (fetch_nws_event added by job-0261 - see inline comment).
@@ -831,7 +867,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 
 HOT_SET_TOOLS: frozenset[str] = frozenset(
     {
-        "run_model_flood_scenario",
+        "run_sfincs",
         "run_model_flood_habitat_scenario",
         "geocode_location",
         "fetch_dem",

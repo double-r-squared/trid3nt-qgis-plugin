@@ -62,10 +62,10 @@ from trid3nt_server.tools import TOOL_REGISTRY
 # Mirrors the startup-time import order; any module that calls @register_tool
 # at module level must appear here so the registry is fully populated.
 # ---------------------------------------------------------------------------
-import trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario  # noqa: F401 — side-effect import
+import trid3nt_server.workflows.sfincs.flood.flood  # noqa: F401 — side-effect import
 import trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario  # noqa: F401
 import trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest  # noqa: F401
-import trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings  # noqa: F401
+import trid3nt_server.workflows.pelicun.damage_with_buildings.damage_with_buildings  # noqa: F401
 import trid3nt_server.workflows.sfincs.postprocess_flood  # noqa: F401
 import trid3nt_server.workflows.sfincs.sfincs_builder  # noqa: F401
 
@@ -254,15 +254,15 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "params": {"DISTANCE": 1000},
     },
     "run_model_flood_habitat_scenario": {"bbox": _SAMPLE_BBOX},
-    "run_model_flood_scenario": {},
+    "sfincs_flood": {},
     "run_model_news_event_ingest": {
         "sources": [{"url": "https://example.com/flood", "type": "news"}]
     },
-    "run_pelicun_damage_assessment": {
+    "pelicun_damage_assessment": {
         "hazard_raster_uri": _SAMPLE_RASTER_URI,
         "assets_uri": _SAMPLE_VECTOR_URI,
     },
-    "run_pelicun_with_buildings": {
+    "pelicun_damage_with_buildings": {
         "hazard_raster_uri": _SAMPLE_RASTER_URI,
         "bbox": _SAMPLE_BBOX,
     },
@@ -434,7 +434,7 @@ def test_tool_survives_invented_kwargs(tool_name: str, pattern_idx: int) -> None
     reason=(
         "job-0164 (engine sweep) is not yet merged. "
         "This test will turn green once all @register_tool functions gain "
-        "**_extra_ignored. Until then, only run_model_flood_scenario passes."
+        "**_extra_ignored. Until then, only sfincs_flood passes."
     ),
     strict=False,
 )
@@ -442,7 +442,7 @@ def test_all_tools_have_native_extra_ignored() -> None:
     """All @register_tool functions must have a VAR_KEYWORD (**_extra_ignored) param.
 
     This is the acceptance criterion for job-0164's harness sweep.  Before
-    that job merges, only ``run_model_flood_scenario`` passes; the test is
+    that job merges, only ``sfincs_flood`` passes; the test is
     marked xfail so it shows as an expected failure rather than a blocking
     red until job-0164 lands.
 

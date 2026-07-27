@@ -374,7 +374,7 @@ def _geojson_to_fgb(geojson: dict[str, Any]) -> bytes:
             row_props[key] = v
         # Pelicun-consumer convenience columns: duplicate occtype +
         # val_struct under the names Pelicun's
-        # run_pelicun_damage_assessment branch reads
+        # pelicun_damage_assessment branch reads
         # (``"component_type" in gdf.columns`` / ``asset.get("replacement_value")``).
         occtype = props.get("occtype")
         if isinstance(occtype, str) and occtype:
@@ -485,8 +485,8 @@ def fetch_usace_nsi(
         - User asks for the buildings or "structure inventory" inside an
           area (e.g. "show me every building in Fort Myers Beach", "what
           buildings are in the floodplain?").
-        - As the asset layer for ``run_pelicun_damage_assessment`` /
-          ``run_pelicun_with_buildings`` — NSI carries the HAZUS occupancy
+        - As the asset layer for ``pelicun_damage_assessment`` /
+          ``pelicun_damage_with_buildings`` — NSI carries the HAZUS occupancy
           class AND per-structure replacement value, removing both the
           ``compute_building_density`` default-RES1 proxy AND the
           ``_REPLACEMENT_VALUE_DEFAULTS_USD`` per-class fallback. This is
@@ -530,7 +530,7 @@ def fetch_usace_nsi(
         - ``occtype`` (str) — HAZUS occupancy class (``RES1``, ``RES3A``,
           ``COM1``, ``IND1``, ``EDU1``, ...). Downstream Pelicun reads this.
         - ``component_type`` (str) — duplicate of ``occtype`` under the
-          column name Pelicun's ``run_pelicun_damage_assessment`` looks for.
+          column name Pelicun's ``pelicun_damage_assessment`` looks for.
         - ``st_damcat`` (str) — Structure damage category (RES, COM, IND).
         - ``bldgtype`` (str) — Construction type (W=wood, S=steel, C=concrete,
           M=masonry).
@@ -556,8 +556,8 @@ def fetch_usace_nsi(
         - ``source`` (str) — NSI source tier (E=Estimated, P=Parcel, ...).
 
     Cross-tool dependencies:
-        - Consumed by ``run_pelicun_damage_assessment`` (and the composer
-          ``run_pelicun_with_buildings``): pass the returned ``LayerURI.uri``
+        - Consumed by ``pelicun_damage_assessment`` (and the composer
+          ``pelicun_damage_with_buildings``): pass the returned ``LayerURI.uri``
           as ``assets_uri``. Because every NSI feature already carries
           ``component_type`` and ``replacement_value`` (added by this tool),
           the Pelicun damage loop uses real HAZUS occupancy + structure
@@ -569,9 +569,9 @@ def fetch_usace_nsi(
           ``fetch_administrative_boundaries`` (admin polygons for zonal
           aggregation), and ``fetch_roads_osm`` (road network) for full
           exposure-context layers.
-        - Pair with ``run_model_flood_scenario`` output: use its flood
+        - Pair with ``sfincs_flood`` output: use its flood
           depth COG as ``hazard_raster_uri`` in
-          ``run_pelicun_damage_assessment(hazard_raster_uri=..., assets_uri=<this>)``.
+          ``pelicun_damage_assessment(hazard_raster_uri=..., assets_uri=<this>)``.
 
     Cache: ``static-30d`` (the NSI is rebuilt by USACE on a ~quarterly
     cadence; a 30-day TTL matches the update rhythm). Cache key:

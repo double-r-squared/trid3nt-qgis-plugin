@@ -1,7 +1,7 @@
 """COASTAL-path event-loop off-loading coverage for ``model_flood_scenario``.
 
-THE BUG (caught live): driving a COASTAL flood (run_model_flood_scenario with
-coastal=True / surge_forcing) the agent reached run_model_flood_scenario, then
+THE BUG (caught live): driving a COASTAL flood (sfincs_flood with
+coastal=True / surge_forcing) the agent reached sfincs_flood, then
 ~39s in the WebSocket died with code 1005 and the turn died. Root cause: the
 coastal-specific heavy SYNCHRONOUS steps ran INLINE on the asyncio event loop --
 the surge/wave forcing adapter (geopandas/rasterio/pandas reads + file writes),
@@ -32,7 +32,7 @@ import inspect
 import time
 from pathlib import Path
 
-import trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario as mfs
+import trid3nt_server.workflows.sfincs.flood.flood as mfs
 
 
 # --------------------------------------------------------------------------- #

@@ -2,10 +2,12 @@
 
 Pins the orchestrator half of the tool-retrieval feature:
 
-1. DEFAULT OFF is BYTE-IDENTICAL to today -- no retrieval computed, no shadow
-   row logged, build_tool_declarations gets the FULL registry.
-2. SHADOW mode logs the would-be-visible set WITHOUT changing the sent catalog
-   (build_tool_declarations still gets the FULL registry; the shadow event fires).
+1. DEFAULT OFF computes no retrieval and logs no shadow row; build_tool_declarations
+   gets the DEFAULT declarable registry (full MINUS tier=template templates, per
+   the ENGINE-DOOR refactor -- templates surface only via a door's gate expansion).
+2. SHADOW mode logs the would-be-visible set WITHOUT trimming by retrieval
+   (build_tool_declarations still gets the template-filtered default; the shadow
+   event fires).
 3. FAIL-OPEN: a retrieval error in shadow/enforce never trims the catalog.
 4. ENFORCE mode subsets the registry to the visible set, the CORE FLOOR stays a
    subset, and the Case's monotonic AllowedToolSet never shrinks across turns.
@@ -79,6 +81,26 @@ def _settings() -> GeminiSettings:
         location="us-central1",
         use_vertex=True,
     )
+
+
+def _non_template_names() -> set[str]:
+    """The names in the DEFAULT declarable registry: the full TOOL_REGISTRY
+    MINUS every tier=template engine template.
+
+    ENGINE-DOOR refactor: the gating-OFF / shadow / fail-open paths no longer
+    hand the RAW TOOL_REGISTRY (templates included) to build_tool_declarations
+    -- templates surface ONLY via their door's gate expansion. So the object
+    passed to build_tool_declarations in these paths is a template-filtered
+    NEW dict (server._default_declarable_registry), not the live registry
+    identity. Pre-door these tests asserted ``regs[0] is TOOL_REGISTRY``;
+    that contract is superseded."""
+    from trid3nt_server.tools import TOOL_REGISTRY
+
+    return {
+        name
+        for name, entry in TOOL_REGISTRY.items()
+        if getattr(entry.metadata, "tier", "general") != "template"
+    }
 
 
 async def _drive_one_turn(
@@ -156,9 +178,13 @@ async def test_off_mode_passes_full_registry_no_shadow(monkeypatch):
 
     # OFF computes NO retrieval and logs NO shadow row.
     assert shadow_calls == []
-    # The object passed to build_tool_declarations IS the live TOOL_REGISTRY.
+    # ENGINE-DOOR: the object passed to build_tool_declarations is the DEFAULT
+    # declarable registry -- the full registry MINUS tier=template templates
+    # (they surface only via a door's gate expansion). Pre-door this asserted
+    # ``regs[0] is TOOL_REGISTRY``.
     assert len(regs) == 1
-    assert regs[0] is TOOL_REGISTRY
+    assert set(regs[0]) == _non_template_names()
+    assert regs[0] is not TOOL_REGISTRY
 
 
 @pytest.mark.asyncio
@@ -175,7 +201,9 @@ async def test_unknown_mode_is_treated_as_off(monkeypatch):
             monkeypatch, mode="enabled-please", chunks=[_make_text_chunk("done")]
         )
     assert shadow_calls == []
-    assert regs[0] is TOOL_REGISTRY
+    # ENGINE-DOOR: template-filtered default (see _non_template_names).
+    assert set(regs[0]) == _non_template_names()
+    assert regs[0] is not TOOL_REGISTRY
 
 
 # --------------------------------------------------------------------------- #
@@ -203,8 +231,12 @@ async def test_shadow_mode_logs_set_but_sends_full_registry(monkeypatch):
     assert len(shadow_calls) == 1
     assert shadow_calls[0]["visible_tools"] == fake_visible
     assert shadow_calls[0]["mode"] == "shadow"
-    # ZERO behavior change: build_tool_declarations STILL got the FULL registry.
-    assert regs[0] is TOOL_REGISTRY
+    # SHADOW still does not TRIM by retrieval (the would-be set is only logged),
+    # but the DEFAULT declarable registry is template-filtered (ENGINE-DOOR):
+    # shadow sends the full registry MINUS tier=template templates, never the
+    # raw TOOL_REGISTRY identity.
+    assert set(regs[0]) == _non_template_names()
+    assert regs[0] is not TOOL_REGISTRY
 
 
 # --------------------------------------------------------------------------- #
@@ -224,8 +256,10 @@ async def test_shadow_fail_open_on_retrieval_error(monkeypatch):
         _state, regs, _disp = await _drive_one_turn(
             monkeypatch, mode="shadow", chunks=[_make_text_chunk("done")]
         )
-    # FAIL-OPEN: the full registry is sent, never trimmed.
-    assert regs[0] is TOOL_REGISTRY
+    # FAIL-OPEN: never trimmed by retrieval -- falls back to the DEFAULT
+    # declarable registry (full MINUS tier=template templates, ENGINE-DOOR).
+    assert set(regs[0]) == _non_template_names()
+    assert regs[0] is not TOOL_REGISTRY
 
 
 @pytest.mark.asyncio
@@ -240,7 +274,10 @@ async def test_enforce_fail_open_on_empty_result(monkeypatch):
         _state, regs, _disp = await _drive_one_turn(
             monkeypatch, mode="enforce", chunks=[_make_text_chunk("done")]
         )
-    assert regs[0] is TOOL_REGISTRY
+    # FAIL-OPEN on empty result: falls back to the DEFAULT declarable registry
+    # (full MINUS tier=template templates, ENGINE-DOOR), never empty/core-only.
+    assert set(regs[0]) == _non_template_names()
+    assert regs[0] is not TOOL_REGISTRY
 
 
 # --------------------------------------------------------------------------- #
@@ -328,24 +365,24 @@ def test_compute_recall_at_k_synthetic():
             "session_id": "S1",
             "turn_id": "TA",
             "k": 25,
-            "visible_tools": ["fetch_dem", "run_swmm_urban_flood"],
+            "visible_tools": ["fetch_dem", "swmm_urban_flood"],
         },
         {
             "record_type": "tool_retrieval_shadow",
             "session_id": "S1",
             "turn_id": "TB",
             "k": 25,
-            "visible_tools": ["fetch_topobathy", "run_model_flood_scenario"],
+            "visible_tools": ["fetch_topobathy", "sfincs_flood"],
         },
     ]
     tool_records = [
         # Turn A -- SWMM.
         {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "fetch_dem"},
         {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "fetch_buildings"},
-        {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "run_swmm_urban_flood"},
+        {"source": "llm", "session_id": "S1", "turn_id": "TA", "tool_name": "swmm_urban_flood"},
         # Turn B -- SFINCS.
         {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "fetch_topobathy"},
-        {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "run_model_flood_scenario"},
+        {"source": "llm", "session_id": "S1", "turn_id": "TB", "tool_name": "sfincs_flood"},
         # A workflow-sourced dispatch must be IGNORED by recall.
         {"source": "workflow", "session_id": "S1", "turn_id": "TA", "tool_name": "publish_layer"},
         # A dispatch with NO shadow row (different turn) -- excluded.

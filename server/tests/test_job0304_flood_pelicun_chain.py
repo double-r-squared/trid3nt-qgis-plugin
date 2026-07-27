@@ -68,11 +68,11 @@ def test_flood_handle_resolves_to_cog_not_template():
     reg.record(handle, uri=cog, wms_url=tpl)
     # then the emitted LayerURI (uri=template) is walked by register_tool_result
     reg.register_tool_result(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"layers": [{"layer_id": handle, "uri": tpl}]},
     )
     # Pelicun resolves the handle -> the openable COG, never the template
-    resolved = reg.resolve_params("run_pelicun_damage_assessment", {"hazard_raster_uri": handle})
+    resolved = reg.resolve_params("pelicun_damage_assessment", {"hazard_raster_uri": handle})
     assert resolved["hazard_raster_uri"] == cog
     # passing the template itself also resolves back to the COG
     resolved2 = reg.resolve_params("compute_impact_envelope", {"flood_layer_uri": tpl})
@@ -87,5 +87,5 @@ def test_register_order_template_first_then_cog_still_keeps_cog():
     tpl = "https://cf/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2Fb%2F02TEST%2Fx.tif"
     reg.record(handle, uri=tpl)          # template arrives first -> wms slot
     reg.record(handle, uri=cog)          # then the real COG -> data slot
-    resolved = reg.resolve_params("run_pelicun_damage_assessment", {"hazard_raster_uri": handle})
+    resolved = reg.resolve_params("pelicun_damage_assessment", {"hazard_raster_uri": handle})
     assert resolved["hazard_raster_uri"] == cog

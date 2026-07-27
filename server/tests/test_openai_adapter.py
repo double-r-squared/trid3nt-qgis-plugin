@@ -165,8 +165,8 @@ class TestContentsToOpenaiMessages:
             model_fc_content("geocode_location", {"query": "Austin, TX"}, call_id="c1"),
             user_fr_content("geocode_location", {"bbox": [-97.9, 30.1, -97.5, 30.4]}, call_id="c1"),
             model_content("Geocoded. Now running the flood model..."),
-            model_fc_content("run_model_flood_scenario", {"bbox": [-97.9, 30.1, -97.5, 30.4]}, call_id="c2"),
-            user_fr_content("run_model_flood_scenario", {"layer_id": "flood-xyz"}, call_id="c2"),
+            model_fc_content("sfincs_flood", {"bbox": [-97.9, 30.1, -97.5, 30.4]}, call_id="c2"),
+            user_fr_content("sfincs_flood", {"layer_id": "flood-xyz"}, call_id="c2"),
             model_content("The flood model completed. Peak depth: 1.2m."),
             user_content("Thanks"),
         ]

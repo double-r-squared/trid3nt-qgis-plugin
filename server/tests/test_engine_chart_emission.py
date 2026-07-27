@@ -518,7 +518,7 @@ async def test_seismic_composer_emits_curve_and_uhs(monkeypatch) -> None:
 
     await emitter.emit_tool_call(
         name="Model seismic hazard",
-        tool_name="run_seismic_hazard_psha",
+        tool_name="openquake_psha",
         invoke=run,
     )
 
@@ -566,7 +566,7 @@ async def test_seismic_composer_classical_only_emits_curve_only(monkeypatch) -> 
         )
 
     await emitter.emit_tool_call(
-        name="Model seismic hazard", tool_name="run_seismic_hazard_psha", invoke=run
+        name="Model seismic hazard", tool_name="openquake_psha", invoke=run
     )
 
     chart_frames = [f for f in sink.frames if f["type"] == "chart-emission"]
@@ -597,7 +597,7 @@ async def test_seismic_composer_no_curve_csv_emits_nothing(monkeypatch) -> None:
         )
 
     await emitter.emit_tool_call(
-        name="Model seismic hazard", tool_name="run_seismic_hazard_psha", invoke=run
+        name="Model seismic hazard", tool_name="openquake_psha", invoke=run
     )
 
     assert [f for f in sink.frames if f["type"] == "chart-emission"] == []

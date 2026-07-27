@@ -2,7 +2,7 @@
 
 These tests pin the workflow-side integration that turns the per-frame depth COGs
 ``postprocess_flood`` now emits into a SINGLE Wave-1 sequential temporal group on
-the map, WITHOUT changing ``run_model_flood_scenario``'s single-LayerURI return
+the map, WITHOUT changing ``sfincs_flood``'s single-LayerURI return
 shape (so the published/on_map LLM dedup + the habitat/Pelicun hazard-raster
 consumers are untouched).
 
@@ -36,7 +36,7 @@ from trid3nt_server.pipeline_emitter import (
     _CURRENT_EMITTER,
     _layer_identity_key,
 )
-from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import model_flood_scenario
+from trid3nt_server.workflows.sfincs.flood.flood import model_flood_scenario
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
 
@@ -203,19 +203,19 @@ async def test_frames_emitted_as_distinct_loaded_layers_via_emitter() -> None:
     token = _CURRENT_EMITTER.set(emitter)
     try:
         with (
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_landcover", return_value=landcover_result),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.lookup_precip_return_period", return_value=precip_result),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.build_sfincs_model", return_value=model_setup),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.run_solver", return_value=handle),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_landcover", return_value=landcover_result),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=precip_result),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.build_sfincs_model", return_value=model_setup),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.run_solver", return_value=handle),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.wait_for_completion", side_effect=_wfc),
             patch(
-                "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.postprocess_flood",
+                "trid3nt_server.workflows.sfincs.flood.flood.postprocess_flood",
                 return_value=([peak_layer] + frame_layers, depth_metrics),
             ),
             patch(
-                "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.publish_layer",
+                "trid3nt_server.workflows.sfincs.flood.flood.publish_layer",
                 side_effect=_mock_publish_layer,
             ),
         ):
@@ -316,19 +316,19 @@ async def test_no_emitter_does_not_publish_frames() -> None:
     # Ensure NO emitter is bound (direct-call / smoke / test path).
     assert _CURRENT_EMITTER.get() is None
     with (
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_landcover", return_value=landcover_result),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.lookup_precip_return_period", return_value=precip_result),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.build_sfincs_model", return_value=model_setup),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.run_solver", return_value=handle),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_landcover", return_value=landcover_result),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=precip_result),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.build_sfincs_model", return_value=model_setup),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.run_solver", return_value=handle),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.wait_for_completion", side_effect=_wfc),
         patch(
-            "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.postprocess_flood",
+            "trid3nt_server.workflows.sfincs.flood.flood.postprocess_flood",
             return_value=([peak_layer] + frame_layers, depth_metrics),
         ),
         patch(
-            "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.publish_layer",
+            "trid3nt_server.workflows.sfincs.flood.flood.publish_layer",
             side_effect=_mock_publish_layer,
         ),
     ):

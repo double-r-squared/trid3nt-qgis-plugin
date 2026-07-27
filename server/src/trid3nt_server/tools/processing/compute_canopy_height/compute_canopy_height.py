@@ -286,7 +286,7 @@ _METADATA = AtomicToolMetadata(
 
 @register_tool(
     _METADATA,
-    # Annotations mirror the solver dispatchers (run_swan_waves / run_solver):
+    # Annotations mirror the solver dispatchers (swan_wave_field / run_solver):
     # readOnlyHint=False (dispatches a Batch job that writes output COG artifacts),
     # openWorldHint=False (Batch worker + intra-cloud object store -- no public
     # external API from the agent), destructiveHint=False (writes go to a new

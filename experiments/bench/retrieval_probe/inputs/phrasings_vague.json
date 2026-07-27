@@ -11,7 +11,7 @@
       "prompt": "what would flooding look like here after a big storm",
       "execution": "run",
       "expected": {
-        "acceptable": ["run_model_flood_scenario", "run_swmm_urban_flood"],
+        "acceptable": ["run_sfincs", "sfincs_flood", "run_swmm", "swmm_urban_flood"],
         "no_tool": false
       }
     },
@@ -123,8 +123,9 @@
       "execution": "run",
       "expected": {
         "acceptable": [
-          "run_pelicun_damage_assessment",
-          "run_pelicun_with_buildings",
+          "run_pelicun",
+          "pelicun_damage_assessment",
+          "pelicun_damage_with_buildings",
           "compute_flood_depth_damage",
           "compute_impact_envelope"
         ],
@@ -219,7 +220,7 @@
       "prompt": "whta areas here tend to floood",
       "execution": "run",
       "expected": {
-        "acceptable": ["fetch_fema_nfhl_zones", "run_model_flood_scenario"],
+        "acceptable": ["fetch_fema_nfhl_zones", "run_sfincs", "sfincs_flood"],
         "no_tool": false
       }
     },

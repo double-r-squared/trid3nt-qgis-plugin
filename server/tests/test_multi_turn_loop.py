@@ -68,8 +68,8 @@ def test_summarize_tool_result_dict_with_metrics():
         "metrics": {"max_depth_m": 1.21, "mean_depth_m": 0.42, "area_km2": 18.3},
         "bbox": [-82.0, 26.5, -81.7, 26.8],
     }
-    summary = summarize_tool_result("run_model_flood_scenario", result)
-    assert summary["tool"] == "run_model_flood_scenario"
+    summary = summarize_tool_result("sfincs_flood", result)
+    assert summary["tool"] == "sfincs_flood"
     assert summary["status"] == "ok"
     # Critical fields the LLM needs to narrate the answer survive the summary.
     assert summary["result"]["metrics"]["max_depth_m"] == 1.21

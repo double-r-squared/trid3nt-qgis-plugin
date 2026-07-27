@@ -14,7 +14,7 @@ component chain -> susceptibility/FoS field -> COG):
   the user before submitting a Landlab run. Consumed by the engine worker
   (``services/workers/landlab/entrypoint.py``) which builds the grid from the
   AOI DEM and runs the documented component chain, and by the agent-side
-  ``run_landlab_susceptibility`` tool + ``model_landslide_scenario`` composer.
+  ``landlab_susceptibility`` template tool + ``model_landslide_scenario`` composer.
 - ``LandlabSusceptibilityLayerURI`` — the postprocess output layer. Extends
   ``LayerURI`` field-for-field (so it still maps onto ``map-command load-layer``
   with no translation, like every other layer) and adds the narration scalars

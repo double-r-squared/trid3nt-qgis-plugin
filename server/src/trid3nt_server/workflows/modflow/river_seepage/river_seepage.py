@@ -462,7 +462,7 @@ async def modflow_river_seepage(
         - Surface-water dye / tracer transport down the channel — ``run_telemac``.
         - A point spill with NO river (use ``modflow_contaminant_plume`` /
           ``run_model_groundwater_contamination_scenario``).
-        - Surface-water flooding (use ``run_model_flood_scenario`` — SFINCS).
+        - Surface-water flooding (use ``sfincs_flood`` — SFINCS).
 
     Params:
         location: place name (geocoded). Supply this OR ``spill_location_latlon``.

@@ -52,7 +52,7 @@ Cross-cutting principles in force (per AGENTS.md + engine.md):
 This module does NOT register an atomic tool. ``build_sfincs_model`` is a
 workflow-internal helper called by ``model_flood_scenario`` after the fetcher
 chain has run. The workflow itself is the LLM-exposed surface (via the thin
-``run_model_flood_scenario`` wrapper).
+``sfincs_flood`` wrapper).
 """
 
 from __future__ import annotations

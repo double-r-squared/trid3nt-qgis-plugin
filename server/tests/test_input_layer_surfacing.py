@@ -417,8 +417,8 @@ async def test_composer_emits_no_fault_input_when_no_real_faults(monkeypatch):
 # ===========================================================================
 # (3) SFINCS surfaces river vector + DEM/landcover rasters as role="input".
 # ===========================================================================
-import trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario as flood  # noqa: E402
-from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import model_flood_scenario  # noqa: E402
+import trid3nt_server.workflows.sfincs.flood.flood as flood  # noqa: E402
+from trid3nt_server.workflows.sfincs.flood.flood import model_flood_scenario  # noqa: E402
 
 
 def _flood_input_layer(kind: str) -> LayerURI:

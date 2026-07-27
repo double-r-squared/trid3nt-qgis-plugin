@@ -1,7 +1,7 @@
 """Deterministic expensive-simulation reuse guard (job-0326, NATE 2026-06-16).
 
 PROBLEM (live): the agent REDUNDANTLY re-runs expensive simulations
-(``run_model_flood_scenario`` / ``run_modflow_job`` / Pelicun) and re-derives
+(``sfincs_flood`` / ``modflow_contaminant_plume`` / Pelicun) and re-derives
 layers that ALREADY exist in the Case — burning minutes and money on a SFINCS /
 MODFLOW solve whose output layer is already on the map. The F54 soft prompt
 steer ("Reuse the existing handle/uri ... do NOT re-fetch or recompute") was
@@ -79,14 +79,19 @@ __all__ = [
 # (e.g. ``flood-depth-peak-<run_id>`` → ``flood-depth``). Keep these aligned with
 # the layer_id minted by the postprocess step of each workflow.
 EXPENSIVE_SCENARIO_TOOLS: dict[str, str] = {
-    "run_model_flood_scenario": "flood-depth",
+    # engine-door refactor (SFINCS slice): the SFINCS flood template that mints
+    # the flood-depth layer (the run_sfincs door executes no solve).
+    "sfincs_flood": "flood-depth",
     "run_model_nws_flood_event_scenario": "flood-depth",
     # engine-door refactor: run_modflow_job folded into modflow_contaminant_plume.
     "modflow_contaminant_plume": "plume",
     "run_model_groundwater_contamination_scenario": "plume",
     # sprint-16 P4: the quasi-2D PySWMM urban-flood engine mints a peak depth
     # layer id ``swmm-depth-peak-<run_id>`` (same depth family as SFINCS).
-    "run_swmm_urban_flood": "swmm-depth",
+    # engine-door refactor (SWMM slice): re-keyed run_swmm_urban_flood ->
+    # swmm_urban_flood (the template submits the solver; signature matcher reads
+    # params, unaffected by the rename).
+    "swmm_urban_flood": "swmm-depth",
 }
 
 #: ``layer_id`` prefixes that identify an existing RESULT layer of each family.

@@ -212,7 +212,7 @@ def _fake_flood_tool(
     duration_hours: int = 24,
     compute_class: str = "medium",
 ) -> dict[str, Any]:
-    """Signature mirrors ``run_model_flood_scenario`` for normalization tests."""
+    """Signature mirrors ``sfincs_flood`` for normalization tests."""
     return {"ok": True}
 
 
@@ -225,7 +225,7 @@ def _fake_tool_with_kwargs(
 
 def test_passes_known_kwargs_through() -> None:
     out = normalize_args(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"location_query": "Fort Myers, FL", "return_period_years": 100},
         _fake_flood_tool,
     )
@@ -235,7 +235,7 @@ def test_passes_known_kwargs_through() -> None:
 def test_drops_unknown_kwargs_does_not_raise() -> None:
     """Gemini's invented kwargs (``run_name``, ``scenario_id``) get dropped."""
     out = normalize_args(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {
             "location_query": "Fort Myers, FL",
             "run_name": "fort-myers-ian",
@@ -280,7 +280,7 @@ def test_alias_duration_hr_to_hours() -> None:
 
 def test_camel_to_snake() -> None:
     out = normalize_args(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"durationHours": 12, "returnPeriodYears": 25},
         _fake_flood_tool,
     )
@@ -289,7 +289,7 @@ def test_camel_to_snake() -> None:
 
 def test_string_form_forcing_parsed_when_signature_accepts() -> None:
     out = normalize_args(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"forcing": "atlas14_500yr_48hr", "location_query": "Houston"},
         _fake_flood_tool,
     )
@@ -302,7 +302,7 @@ def test_string_form_forcing_parsed_when_signature_accepts() -> None:
 
 def test_string_form_rainfall_event_parsed() -> None:
     out = normalize_args(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"rainfall_event": "100-yr / 24-hr design storm"},
         _fake_flood_tool,
     )
@@ -314,7 +314,7 @@ def test_string_form_does_not_overwrite_explicit_kwargs() -> None:
     """If LLM sends both ``forcing="..."`` and explicit ``return_period_years=...``,
     the explicit value wins (forcing-string fill is a fallback)."""
     out = normalize_args(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"forcing": "atlas14_100yr", "return_period_years": 500},
         _fake_flood_tool,
     )
@@ -333,7 +333,7 @@ def test_var_keyword_function_passes_unknowns_through() -> None:
 
 def test_tool_specific_alias_place_to_location_query() -> None:
     out = normalize_args(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"place": "Fort Myers, FL"},
         _fake_flood_tool,
     )
@@ -341,7 +341,7 @@ def test_tool_specific_alias_place_to_location_query() -> None:
 
 
 def test_empty_args_returns_empty_dict() -> None:
-    assert normalize_args("run_model_flood_scenario", {}, _fake_flood_tool) == {}
+    assert normalize_args("sfincs_flood", {}, _fake_flood_tool) == {}
 
 
 def test_canonical_alias_present_does_not_double_rename() -> None:
@@ -364,7 +364,7 @@ def test_silent_drop_kwargs_do_not_appear_in_log_warning_level() -> None:
     # Just assert the drop happens — log level enforcement is verified by
     # eyeballing the agent service logs (live verification step).
     out = normalize_args(
-        "run_model_flood_scenario",
+        "sfincs_flood",
         {"run_name": "x", "scenario_name": "y"},
         _fake_flood_tool,
     )
@@ -398,7 +398,7 @@ def test_forcing_string_table(
     expected_year: int | None,
     expected_hour: int | None,
 ) -> None:
-    out = normalize_args("run_model_flood_scenario", raw, _fake_flood_tool)
+    out = normalize_args("sfincs_flood", raw, _fake_flood_tool)
     if expected_year is not None:
         assert out.get("return_period_years") == expected_year
     if expected_hour is not None:

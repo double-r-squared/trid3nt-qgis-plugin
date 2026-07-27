@@ -10,8 +10,8 @@ don't have an ``AtomicToolMetadata`` of their own. The cache shim
 (``tools/cache.py``) only mediates atomic-tool calls; workflows compose
 already-cached + already-emitted atomic tools.
 
-LLM exposure: a thin atomic-tool wrapper (``run_model_flood_scenario`` in
-``model_flood_scenario.py``) lives in the registry so the LLM sees a single
+LLM exposure: a thin atomic-tool wrapper (the ``sfincs_flood`` engine template in
+``sfincs/flood/flood.py``) lives in the registry so the LLM sees a single
 invocable tool that triggers the workflow. The wrapper:
 
 - declares ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
@@ -52,14 +52,14 @@ from __future__ import annotations
 # Import the workflow modules so their @register_tool decorators fire at
 # package import time and the LLM-facing wrappers land in TOOL_REGISTRY.
 from .sfincs.model_flood_habitat_scenario import model_flood_habitat_scenario as _model_flood_habitat_scenario  # noqa: F401
-from .sfincs.model_flood_scenario import model_flood_scenario as _model_flood_scenario  # noqa: F401
+from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  — engine-door refactor (SFINCS slice): the run_model_flood_scenario wrapper is now the sfincs_flood template (engine=sfincs, tier=template); the run_sfincs door is imported in tools/__init__.py
 from .modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as _model_groundwater_contamination_scenario  # noqa: F401  — job-0228 Case 2 composer (news → MODFLOW → plume)
 # engine-door refactor: run_model_contamination_affected_fields is CUT (composer
 # removed). Its plume half IS modflow_contaminant_plume; the zonal field-scoring
 # half re-homes to a playground recipe (docs/playbooks/modflow-affected-fields-recipe.md).
 from .shared.model_news_event_ingest import model_news_event_ingest as _model_news_event_ingest  # noqa: F401  — job-0119 Case 2 composer
 from .sfincs.model_nws_flood_event_scenario import model_nws_flood_event_scenario as _model_nws_flood_event_scenario  # noqa: F401  — job-0229 Case 3 composer
-from .pelicun.pelicun_damage_with_buildings import pelicun_damage_with_buildings as _pelicun_damage_with_buildings  # noqa: F401  — job-0147 buildings→Pelicun composer
+from .pelicun.damage_with_buildings.damage_with_buildings import pelicun_damage_with_buildings as _pelicun_damage_with_buildings  # noqa: F401  — engine-door refactor (PELICUN slice): renamed template (was run_pelicun_with_buildings)
 from .shared.model_conservation_priority import model_conservation_priority as _model_conservation_priority  # noqa: F401  -- conservation micro-North-Star composer (NAIP base + NDVI + MoBI + GBIF + IUCN); registers run_model_conservation_priority
 from .telemac import run_telemac as _run_telemac  # noqa: F401  -- P2: registers the telemac_river_dye local-docker solve spec (SOLVER_WORKFLOW_REGISTRY + LOCAL_SOLVER_SPEC_REGISTRY); no LLM tool yet (P4)
 

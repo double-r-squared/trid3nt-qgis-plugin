@@ -1,5 +1,6 @@
-"""P4 tests for the TELEMAC river-dye LLM surface: the ``run_telemac`` tool +
-the ``model_river_dye_release_scenario`` composer.
+"""P4 tests for the TELEMAC river-dye LLM surface: the ``telemac_river_dye``
+template (engine-door refactor, TELEMAC slice - was ``run_telemac``, now the
+door owns that name) + the ``model_river_dye_release_scenario`` composer.
 
 Exercised in ISOLATION with geocode / fetch_river_geometry / run_solver / boto3 /
 postprocess / publish all MOCKED (no network, no docker, no TELEMAC). These pin:
@@ -69,39 +70,47 @@ def _fake_peak(run_id: str, reach_name: str) -> TelemacDyeLayerURI:
 # ===========================================================================
 # (1) Tool registration + metadata.
 # ===========================================================================
-def test_run_telemac_registered_with_workflow_dispatch_metadata():
+def test_telemac_river_dye_registered_as_engine_template():
+    # engine-door refactor (TELEMAC slice, name flip): the old run_telemac engine
+    # tool re-tiered to the telemac_river_dye TEMPLATE (engine=telemac,
+    # tier=template); the run_telemac name is now the read-only door.
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    entry = TOOL_REGISTRY.get("run_telemac")
+    entry = TOOL_REGISTRY.get("telemac_river_dye")
     assert entry is not None
     assert entry.metadata.source_class == "workflow_dispatch"
+    assert entry.metadata.engine == "telemac"
+    assert entry.metadata.tier == "template"
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
+    # the door owns the run_telemac name and executes nothing.
+    door = TOOL_REGISTRY.get("run_telemac")
+    assert door is not None and door.metadata.tier == "door"
 
 
 # ===========================================================================
 # (2) Tool arg validation / coercion.
 # ===========================================================================
 def test_tool_rejects_invalid_bbox():
-    from trid3nt_server.tools.simulation.run_telemac_tool.run_telemac_tool import run_telemac
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
 
-    out = asyncio.run(run_telemac(bbox="not,a,bbox"))
+    out = asyncio.run(telemac_river_dye(bbox="not,a,bbox"))
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_PARAMS_INVALID"
 
 
 def test_tool_rejects_neither_location_nor_bbox():
-    from trid3nt_server.tools.simulation.run_telemac_tool.run_telemac_tool import run_telemac
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
 
-    out = asyncio.run(run_telemac())
+    out = asyncio.run(telemac_river_dye())
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_PARAMS_INCOMPLETE"
 
 
 def test_tool_rejects_both_location_and_bbox():
-    from trid3nt_server.tools.simulation.run_telemac_tool.run_telemac_tool import run_telemac
+    from trid3nt_server.workflows.telemac.river_dye.river_dye import telemac_river_dye
 
-    out = asyncio.run(run_telemac(location="Twin Falls, Idaho", bbox=list(_AOI)))
+    out = asyncio.run(telemac_river_dye(location="Twin Falls, Idaho", bbox=list(_AOI)))
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_PARAMS_INCOMPLETE"
 
@@ -303,7 +312,7 @@ def test_composer_falls_back_to_centroid_when_no_river_seed():
 # (6) Tool happy path returns the layer.
 # ===========================================================================
 def test_tool_happy_path_returns_layer():
-    from trid3nt_server.tools.simulation.run_telemac_tool import run_telemac_tool as tool_mod
+    from trid3nt_server.workflows.telemac.river_dye import river_dye as tool_mod
 
     async def _fake_composer(**kwargs):
         assert kwargs["location"] == "Twin Falls, Idaho"
@@ -314,13 +323,13 @@ def test_tool_happy_path_returns_layer():
     from unittest.mock import patch
 
     with patch.object(tool_mod, "model_river_dye_release_scenario", _fake_composer):
-        out = asyncio.run(tool_mod.run_telemac(location="Twin Falls, Idaho"))
+        out = asyncio.run(tool_mod.telemac_river_dye(location="Twin Falls, Idaho"))
     assert isinstance(out, TelemacDyeLayerURI)
     assert out.dye_cmax_mgl == pytest.approx(97.3)
 
 
 def test_tool_maps_composer_error_to_typed_dict():
-    from trid3nt_server.tools.simulation.run_telemac_tool import run_telemac_tool as tool_mod
+    from trid3nt_server.workflows.telemac.river_dye import river_dye as tool_mod
     from trid3nt_server.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
         TelemacDyeScenarioError,
     )
@@ -331,6 +340,6 @@ def test_tool_maps_composer_error_to_typed_dict():
     from unittest.mock import patch
 
     with patch.object(tool_mod, "model_river_dye_release_scenario", _boom):
-        out = asyncio.run(tool_mod.run_telemac(location="Twin Falls, Idaho"))
+        out = asyncio.run(tool_mod.telemac_river_dye(location="Twin Falls, Idaho"))
     assert out["status"] == "error"
     assert out["error_code"] == "TELEMAC_DYE_RUN_FAILED"

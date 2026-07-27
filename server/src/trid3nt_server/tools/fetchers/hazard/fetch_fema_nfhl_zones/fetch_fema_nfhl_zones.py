@@ -673,9 +673,9 @@ def fetch_fema_nfhl_zones(
           / city polygon) → ``clip_vector_to_polygon`` to produce the "FEMA
           flood zones in [place]" clipped output the user typically wants.
         - Feeds ``compute_zonal_statistics`` for "% of [parcel] inside SFHA"
-          summaries, and ``run_pelicun_damage_assessment`` for the NSI
+          summaries, and ``pelicun_damage_assessment`` for the NSI
           structure inventory × NFHL intersection.
-        - Companion to ``run_model_flood_scenario`` (SFINCS) when the user
+        - Companion to ``sfincs_flood`` (SFINCS) when the user
           wants regulatory-vs-modeled comparison side-by-side.
 
     Cache: ``static-30d`` (FR-DC-2). NFHL is republished through LOMC updates

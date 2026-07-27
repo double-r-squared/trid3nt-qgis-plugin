@@ -1118,7 +1118,7 @@ class PipelineEmitter:
     def rebind_sink(self, sink: EmissionSink) -> None:
         """Swap the wire sink this emitter pushes frames to.
 
-        job-SOLVE-SURVIVE: a long-running solver turn (``run_model_flood_scenario``
+        job-SOLVE-SURVIVE: a long-running solver turn (``sfincs_flood``
         -> ``wait_for_completion``) is driven by ONE ``PipelineEmitter`` instance
         whose ``_sink`` closes over the WebSocket that LAUNCHED the turn. The web
         client opens multiple sockets per session (StrictMode double-mount +

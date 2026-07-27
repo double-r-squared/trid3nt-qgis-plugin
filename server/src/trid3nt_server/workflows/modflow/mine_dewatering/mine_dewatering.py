@@ -322,7 +322,7 @@ async def modflow_mine_dewatering(
     Do NOT use this for:
         - A pumping-well drawdown cone (use ``modflow_sustainable_yield``).
         - A contaminant spill plume (use ``modflow_contaminant_plume``).
-        - Surface-water flooding (use ``run_model_flood_scenario``  -  SFINCS).
+        - Surface-water flooding (use ``sfincs_flood``  -  SFINCS).
 
     Params:
         location: place name (geocoded). Supply this OR ``aoi_latlon``.

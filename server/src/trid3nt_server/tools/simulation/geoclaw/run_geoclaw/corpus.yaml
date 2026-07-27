@@ -1,0 +1,17 @@
+# Engine-door corpus (DOOR tier - walked into the main index; the door competes
+# in per-turn retrieval alongside general tools). Hazard-common run-up phrasings
+# route to the run_geoclaw door, whose gate expansion then surfaces the specific
+# geoclaw_* template (select-then-call). Template-specific phrasings live in each
+# workflows/geoclaw/<template>/corpus.yaml (TEMPLATE tier - NOT merged into this
+# index). Carried from the migrated run_geoclaw_inundation corpus entries.
+run_geoclaw:
+- model the tsunami run-up along this stretch of coast and animate the inundation
+- what happens if the dam breaks upstream of this town, how deep does it flood
+- simulate an embankment failure and route the reservoir release over the terrain below
+- run a GeoClaw shallow-water inundation for a levee breach in this bbox
+- show me the wave run-up and peak overland depth from a magnitude 8 earthquake offshore
+- animate the dam-break flood wave moving across the floodplain frame by frame
+- model storm-surge run-up over the topography here with adaptive mesh refinement
+- how far inland does the tsunami reach and what is the max depth over this AOI
+- what tsunami or dam-break models can you run
+- which GeoClaw scenario fits my question

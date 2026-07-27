@@ -111,10 +111,11 @@ def _build_alias_map() -> dict[str, str]:
 #: Shape: ``{tool_name: {wrong_kwarg: right_kwarg}}``. Tool-specific entries
 #: win over the generic alias map.
 _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
-    "run_model_flood_scenario": {
-        # Gemini sometimes uses "place" / "location_name" instead of
-        # "location_query" because the docstring's "Examples:" block names
-        # places freely.
+    "sfincs_flood": {
+        # engine-door refactor (SFINCS slice): the flood template (was
+        # run_model_flood_scenario). Gemini sometimes uses "place" /
+        # "location_name" instead of "location_query" because the docstring's
+        # "Examples:" block names places freely.
         "place": "location_query",
         "location_name": "location_query",
         "location": "location_query",
@@ -972,14 +973,16 @@ def normalize_args(
     """
     if not raw_args:
         return {}
-    # run_telemac combined-coordinate alias (live 2026-07-18, 3x): qwen packs
-    # the release point into ONE string field 'spill_location_latlon'
+    # telemac_river_dye combined-coordinate alias (live 2026-07-18, 3x): qwen
+    # packs the release point into ONE string field 'spill_location_latlon'
     # ("lat,lon") instead of release_lat/release_lon. This MUST normalize
     # HERE - the BK-3b gate preview reads normalized args before the tool
     # function runs, and the approve-click later injects release_* so a
     # tool-level parse guarded on "coords absent" never fires (proven live:
     # the preview meshed the wrong river while the coords sat unread).
-    if (tool_name == "run_telemac"
+    # (engine-door refactor, TELEMAC slice: keyed on the renamed template - the
+    # run_telemac name is now the read-only door.)
+    if (tool_name == "telemac_river_dye"
             and isinstance(raw_args.get("spill_location_latlon"), str)
             and raw_args.get("release_lat") is None
             and raw_args.get("release_lon") is None):
@@ -990,13 +993,13 @@ def normalize_args(
             raw_args["release_lon"] = float(_lon_s)
             raw_args.pop("spill_location_latlon")
             logger.info(
-                "normalize_args(run_telemac): spill_location_latlon -> "
+                "normalize_args(telemac_river_dye): spill_location_latlon -> "
                 "release_lat=%s release_lon=%s",
                 raw_args["release_lat"], raw_args["release_lon"],
             )
         except (ValueError, TypeError):
             logger.warning(
-                "normalize_args(run_telemac): unparseable "
+                "normalize_args(telemac_river_dye): unparseable "
                 "spill_location_latlon %r - left for the tool to drop",
                 raw_args.get("spill_location_latlon"),
             )

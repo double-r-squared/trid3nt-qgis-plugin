@@ -601,12 +601,12 @@ def fetch_noaa_slr_scenarios(
 
     **When NOT to use:**
     - For real-time / event-driven storm-surge inundation → use
-      ``run_model_flood_scenario`` (SFINCS) or ``fetch_gtsm_tide_surge``.
+      ``sfincs_flood`` (SFINCS) or ``fetch_gtsm_tide_surge``.
     - For probabilistic SLR projections with uncertainty ranges → the Sweet et
       al. (2022) NOAA Technical Report scenarios (Intermediate, High, etc.) are
       a separate dataset not in the OCM Viewer.
     - For inland / non-coastal flooding → use ``fetch_fema_nfhl_zones`` or
-      ``run_model_flood_scenario``.
+      ``sfincs_flood``.
     - For areas outside CONUS → use ``fetch_gtsm_tide_surge`` (global coastal
       water-level reanalysis); SLR Viewer data is CONUS-only.
     - For marsh migration / habitat-transition projections → a separate
@@ -636,7 +636,7 @@ def fetch_noaa_slr_scenarios(
     **Cross-tool dependencies:**
         - Feeds INTO: ``compute_zonal_statistics`` (structure count / population
           inside SLR footprint), ``clip_vector_to_polygon`` (admin-bounded SLR
-          exposure report), ``run_pelicun_damage_assessment`` (SLR exposure
+          exposure report), ``pelicun_damage_assessment`` (SLR exposure
           footprint × NSI building stock).
         - Compare WITH: ``fetch_fema_nfhl_zones`` (regulatory floodplain
           vs. projected SLR inundation side-by-side), ``fetch_usace_nsi``

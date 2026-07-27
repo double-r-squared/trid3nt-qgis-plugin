@@ -154,7 +154,7 @@ def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
     tool call when MODEL_PROVIDER=scripted -- proving the adapter.py seam routes
     BEFORE the Vertex/Bedrock client path (zero cost, no GCP/AWS creds)."""
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
-    sa.set_script([{"text": "Running SWAN.", "tool_call": {"name": "run_swan_waves",
+    sa.set_script([{"text": "Running SWAN.", "tool_call": {"name": "swan_wave_field",
                                                             "args": {"bbox": [-85.55, 29.85, -85.3, 30.05]}}}])
     evs = _run(_collect(stream_events_with_contents(
         client=None,            # no model client exists on this path
@@ -162,5 +162,5 @@ def test_dispatch_routes_to_scripted_with_no_client(monkeypatch):
         contents=[{"role": "user"}],
     )))
     fc = next(e for e in evs if isinstance(e, FunctionCallEvent))
-    assert fc.name == "run_swan_waves"
+    assert fc.name == "swan_wave_field"
     assert fc.args["bbox"] == [-85.55, 29.85, -85.3, 30.05]

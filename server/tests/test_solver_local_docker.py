@@ -806,7 +806,7 @@ def test_postprocess_cog_upload_scheme_aware(
 def test_composer_default_runs_prefix_scheme_aware(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import _default_runs_prefix
+    from trid3nt_server.workflows.sfincs.flood.flood import _default_runs_prefix
 
     # Local-only slim: the fallback always mints the honest s3:// shape the
     # local-docker solver writes under -- never a fabricated gs:// URI.

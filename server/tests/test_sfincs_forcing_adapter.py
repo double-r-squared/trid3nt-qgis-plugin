@@ -495,7 +495,7 @@ def test_build_surge_forcing_no_source_raises():
 
 
 def test_resolve_surge_forcing_materialises_raw_fetch_uri(tmp_path):
-    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+    from trid3nt_server.workflows.sfincs.flood.flood import (
         _resolve_surge_forcing_from_fetchers,
     )
 
@@ -523,7 +523,7 @@ def test_resolve_surge_forcing_materialises_raw_fetch_uri(tmp_path):
 
 
 def test_resolve_surge_forcing_leaves_premade_dict_untouched():
-    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+    from trid3nt_server.workflows.sfincs.flood.flood import (
         _resolve_surge_forcing_from_fetchers,
     )
 
@@ -541,7 +541,7 @@ def test_resolve_surge_forcing_leaves_premade_dict_untouched():
 
 
 def test_resolve_surge_forcing_none_passthrough():
-    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+    from trid3nt_server.workflows.sfincs.flood.flood import (
         _resolve_surge_forcing_from_fetchers,
     )
 
@@ -552,7 +552,7 @@ def test_resolve_surge_forcing_none_passthrough():
 def test_resolve_surge_forcing_bad_fetch_uri_raises_typed():
     """A raw fetch_uri that can't be materialised raises a typed adapter error
     (the workflow lifts it into a failed envelope — NOT a silent pluvial degrade)."""
-    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+    from trid3nt_server.workflows.sfincs.flood.flood import (
         _resolve_surge_forcing_from_fetchers,
     )
 
@@ -682,7 +682,7 @@ def test_three_driver_compound_deck_emits_all_blocks(tmp_path):
     import pandas as pd
     import yaml
 
-    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+    from trid3nt_server.workflows.sfincs.flood.flood import (
         _build_surge_forcing_members,
         _resolve_surge_forcing_from_fetchers,
     )

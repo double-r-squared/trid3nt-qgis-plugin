@@ -1,7 +1,7 @@
 """``compute_flood_depth_damage`` composer tool -- HAZUS-curve flood damage screening.
 
 Lightweight depth-damage estimator: the quick screening cousin of the Pelicun
-chain (``run_pelicun_damage_assessment`` / ``compute_impact_envelope``). Takes
+chain (``pelicun_damage_assessment`` / ``compute_impact_envelope``). Takes
 ANY flood-depth raster (a SFINCS / GeoClaw / SWMM depth COG, s3:// or local),
 samples the depth at each structure point, applies the FEMA HAZUS-style
 residential depth-damage curve below, multiplies by the structure replacement
@@ -36,7 +36,7 @@ sampled ground-referenced depth is reduced by it before entering the curve
 HONESTY: this is a SCREENING estimate -- one aggregate claims-based curve
 applied to every occupancy class, structure value only (no contents, no
 inventory, no downtime), no uncertainty treatment. It is NOT a Pelicun
-component-level assessment; use ``run_pelicun_damage_assessment`` /
+component-level assessment; use ``pelicun_damage_assessment`` /
 ``compute_impact_envelope`` for defensible per-asset loss work. Every result
 carries that note.
 
@@ -387,14 +387,14 @@ def compute_flood_depth_damage(
 ) -> FloodDepthDamageLayerURI:
     """Screen flood damage per structure from a depth raster (HAZUS-style curve).
 
-    Use this (not ``run_model_flood_scenario``, which SIMULATES the flood)
+    Use this (not ``sfincs_flood``, which SIMULATES the flood)
     when a flood DEPTH raster already exists and you want a quick
     per-structure damage screen -- "roughly how much building damage does
     this flood cause?", ranking scenarios, or a first pass before spending
     a Pelicun run. HONEST SCOPE: a SCREENING estimate (one aggregate curve,
     structure value only, no contents/uncertainty) -- NOT a Pelicun
     component-level assessment. Do NOT use for: defensible per-asset loss
-    (``run_pelicun_damage_assessment`` / ``compute_impact_envelope``);
+    (``pelicun_damage_assessment`` / ``compute_impact_envelope``);
     non-flood hazards; areas outside NSI coverage (CONUS+AK/HI/territories)
     without a caller ``assets_uri``.
 
@@ -444,7 +444,7 @@ def compute_flood_depth_damage(
         "FEMA HAZUS-MH flood default RES1 family) applied to every structure; "
         "structure value only, no contents/inventory/downtime, no uncertainty. "
         "NOT a Pelicun component-level assessment -- use "
-        "run_pelicun_damage_assessment / compute_impact_envelope for "
+        "pelicun_damage_assessment / compute_impact_envelope for "
         "defensible per-asset loss."
     ]
 

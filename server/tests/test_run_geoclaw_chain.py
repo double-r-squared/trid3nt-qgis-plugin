@@ -523,17 +523,19 @@ def test_geoclaw_registered_in_solver_workflow_registry():
     assert GEOCLAW_SOLVER_NAME in SOLVER_WORKFLOW_REGISTRY
 
 
-def test_run_geoclaw_inundation_typed_error_on_missing_bbox():
+def test_geoclaw_inundation_typed_error_on_missing_bbox():
     import asyncio
 
-    from trid3nt_server.tools.simulation.run_geoclaw_tool.run_geoclaw_tool import run_geoclaw_inundation
+    # engine-door refactor (GEOCLAW slice): run_geoclaw_inundation renamed to the
+    # geoclaw_inundation template under workflows/geoclaw/inundation/.
+    from trid3nt_server.workflows.geoclaw.inundation.inundation import geoclaw_inundation
 
-    out = asyncio.run(run_geoclaw_inundation(bbox=None))
+    out = asyncio.run(geoclaw_inundation(bbox=None))
     assert isinstance(out, dict)
     assert out["status"] == "error"
     assert out["error_code"] == "GEOCLAW_PARAMS_INCOMPLETE"
 
-    out2 = asyncio.run(run_geoclaw_inundation(bbox="garbage"))
+    out2 = asyncio.run(geoclaw_inundation(bbox="garbage"))
     assert out2["status"] == "error"
     assert out2["error_code"] == "GEOCLAW_PARAMS_INVALID"
 

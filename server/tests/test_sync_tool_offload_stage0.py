@@ -42,7 +42,7 @@ def test_should_offload_modes(monkeypatch: pytest.MonkeyPatch) -> None:
     assert server._should_offload_sync_tool("compute_slope") is True
     assert server._should_offload_sync_tool("clip_raster_to_bbox") is True
     assert server._should_offload_sync_tool("geocode_location") is False
-    assert server._should_offload_sync_tool("run_model_flood_scenario") is False
+    assert server._should_offload_sync_tool("sfincs_flood") is False
 
     # Global aliases -> every tool.
     for glob in ("global", "all", "on", "1", "true", "yes"):

@@ -38,7 +38,7 @@ from trid3nt_server.tools.discovery.search_data_catalog import search_data_catal
 from trid3nt_server.tools.discovery.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
 from trid3nt_server.tools.discovery.search_tools import search_tools as discover_module
 from trid3nt_server.tools.simulation.solver import solver  # noqa: F401 — registration side-effect
-from trid3nt_server.workflows.sfincs.model_flood_scenario import model_flood_scenario  # noqa: F401
+from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
 
 from trid3nt_server.tools.discovery.search_tools.search_tools import (
     _build_cooccurrence_from_docs,

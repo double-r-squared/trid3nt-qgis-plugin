@@ -179,7 +179,7 @@ class AtomicToolMetadata(GraceModel):
             "effects and does not mutate any external state (GCS, QGIS project, "
             "MongoDB, Cloud Run). Defaults to True — the safe assumption for "
             "fetchers and compute tools. Set to False for publish_layer, "
-            "run_solver, qgis_process, run_pelicun_damage_assessment, and any "
+            "run_solver, qgis_process, pelicun_damage_assessment, and any "
             "other tool that writes."
         ),
     )
@@ -217,7 +217,7 @@ class AtomicToolMetadata(GraceModel):
             "additional side effects. Defaults to True — fetchers with the cache "
             "shim satisfy this property. Set to False for tools that emit pipeline "
             "state (wait_for_completion), dispatch Cloud Run jobs (run_solver, "
-            "qgis_process), write GCS artifacts (run_pelicun_damage_assessment, "
+            "qgis_process), write GCS artifacts (pelicun_damage_assessment, "
             "publish_layer), or interact with stateful systems in non-idempotent ways."
         ),
     )

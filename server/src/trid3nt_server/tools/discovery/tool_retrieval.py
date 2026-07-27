@@ -44,6 +44,7 @@ from trid3nt_server.tools.discovery.search_tools import search_tools as _dd
 from trid3nt_server.tools.discovery.search_tools.search_tools import (
     _NAME_RANKER_GENERICS,
     _STOPWORDS,
+    _lexical_reinforcement,
     _reciprocal_rank_fusion,
     _tokenize,
 )
@@ -65,7 +66,9 @@ DEFAULT_K = 25
 MAX_K = 25
 
 
-def _build_channel_rankings(query_clean: str, index: Any) -> list[list[int]]:
+def _build_channel_rankings(
+    query_clean: str, index: Any
+) -> tuple[list[list[int]], list[int]]:
     """The 3 sync ranking channels (BM25 + local dense + name-substring) over
     the CACHED discover index, as rank lists of tool indices.
 
@@ -73,8 +76,14 @@ def _build_channel_rankings(query_clean: str, index: Any) -> list[list[int]]:
     variant ``retrieve_ranked_tools`` fuses the SAME channels -- the visible-set
     and the ambiguity-margin paths can never drift apart. Pure CPU; never
     builds the index.
+
+    Returns ``(rankings, bm25_ranking)``; the BM25 channel's rank list is
+    surfaced separately so both callers can feed it to
+    ``_lexical_reinforcement`` (the door / lexical-champion boost) without
+    re-deriving which channel is BM25.
     """
     rankings: list[list[int]] = []
+    bm25_ranking: list[int] = []
 
     # --- BM25 channel ---
     if index.bm25 is not None:
@@ -88,6 +97,7 @@ def _build_channel_rankings(query_clean: str, index: Any) -> list[list[int]]:
                     rankings.append(bm25_ranking)
             except Exception:  # noqa: BLE001 -- drop the channel, keep the others
                 logger.warning("tool_retrieval: BM25 channel failed", exc_info=True)
+                bm25_ranking = []
 
     # --- Dense channel (LOCAL backends only; skip Vertex network encode) ---
     # Positive allowlist of the known CPU-local backends so any FUTURE network
@@ -147,7 +157,7 @@ def _build_channel_rankings(query_clean: str, index: Any) -> list[list[int]]:
         ]
         if substr:
             rankings = [substr]
-    return rankings
+    return rankings, bm25_ranking
 
 
 def _discover_topk(user_text: str, k: int) -> set[str] | None:
@@ -169,11 +179,14 @@ def _discover_topk(user_text: str, k: int) -> set[str] | None:
     if index is None or not getattr(index, "tool_names", None):
         return None  # cold -- never build on the hot path; caller fail-opens
 
-    rankings = _build_channel_rankings(query_clean, index)
+    rankings, bm25_ranking = _build_channel_rankings(query_clean, index)
     if not rankings:
         return set()
 
     fused = _reciprocal_rank_fusion(rankings, k=60)
+    fused = _lexical_reinforcement(
+        fused, bm25_ranking, getattr(index, "tiers", None), k=60
+    )
     names: set[str] = set()
     for idx, _score in fused[:k]:
         names.add(index.tool_names[idx])
@@ -208,13 +221,16 @@ def retrieve_ranked_tools(
         k = DEFAULT_K
     k = max(1, min(k, len(index.tool_names)))
     try:
-        rankings = _build_channel_rankings(query_clean, index)
+        rankings, bm25_ranking = _build_channel_rankings(query_clean, index)
     except Exception:  # noqa: BLE001 -- fail open, never break dispatch
         logger.warning("retrieve_ranked_tools: channel build failed", exc_info=True)
         return []
     if not rankings:
         return []
     fused = _reciprocal_rank_fusion(rankings, k=60)
+    fused = _lexical_reinforcement(
+        fused, bm25_ranking, getattr(index, "tiers", None), k=60
+    )
     return [
         (index.tool_names[idx], float(score)) for idx, score in fused[:k]
     ]

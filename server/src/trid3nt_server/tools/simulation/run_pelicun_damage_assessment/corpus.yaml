@@ -1,9 +1,0 @@
-run_pelicun_damage_assessment:
-- run a damage assessment for buildings in this flood zone
-- compute structural losses from this flood scenario using fragility curves
-- I need Pelicun flood damage estimates for the Fort Myers housing stock
-- assess how many structures reach the DS3 damage state under this surge
-- give me repair cost statistics for this hurricane damage scenario
-- run a loss estimation for residential buildings in this 100-year flood footprint
-- I want building damage probability curves for this storm surge event
-- compute expected damage and 95% confidence intervals for this flood depth raster

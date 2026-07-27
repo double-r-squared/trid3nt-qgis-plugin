@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from trid3nt_server.pipeline_emitter import PipelineEmitter
-from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import run_model_flood_scenario
+from trid3nt_server.workflows.sfincs.flood.flood import sfincs_flood
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import ExecutionHandle, LayerURI, ModelSetup, RunResult
 
@@ -126,22 +126,22 @@ async def main() -> None:
         return run_result_ok
 
     with (
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_dem", return_value=_layer("dem")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_landcover", return_value=landcover_result),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_river_geometry", return_value=_layer("rivers")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.lookup_precip_return_period", return_value=precip_result),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.build_sfincs_model", return_value=model_setup),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.run_solver", return_value=handle),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_dem", return_value=_layer("dem")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_landcover", return_value=landcover_result),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_layer("rivers")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=precip_result),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.build_sfincs_model", return_value=model_setup),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.run_solver", return_value=handle),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.wait_for_completion", side_effect=_wfc),
         patch(
-            "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.postprocess_flood",
+            "trid3nt_server.workflows.sfincs.flood.flood.postprocess_flood",
             return_value=([flood_layer], depth_metrics),
         ),
     ):
         await emitter.emit_tool_call(
-            name="run_model_flood_scenario",
-            tool_name="run_model_flood_scenario",
-            invoke=lambda: run_model_flood_scenario(bbox=FT_MYERS_BBOX),
+            name="sfincs_flood",
+            tool_name="sfincs_flood",
+            invoke=lambda: sfincs_flood(bbox=FT_MYERS_BBOX),
         )
 
     # --- Report ---

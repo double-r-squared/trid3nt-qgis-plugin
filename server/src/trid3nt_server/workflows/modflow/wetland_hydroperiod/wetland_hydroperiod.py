@@ -355,7 +355,7 @@ async def modflow_wetland_hydroperiod(
     Do NOT use this for:
         - A recharge-basin mound (use ``modflow_managed_recharge``).
         - A pumping-well drawdown cone (use ``modflow_sustainable_yield``).
-        - Surface-water flooding (use ``run_model_flood_scenario``  -  SFINCS).
+        - Surface-water flooding (use ``sfincs_flood``  -  SFINCS).
 
     Params:
         location: place name (geocoded). Supply this OR ``aoi_latlon``.

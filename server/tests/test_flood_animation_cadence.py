@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+from trid3nt_server.workflows.sfincs.flood.flood import (
     _COASTAL_OUTPUT_INTERVAL_MIN_DEFAULT,
     _estimate_frame_count,
     _resolve_output_interval_min,
@@ -166,7 +166,7 @@ def test_coastal_deck_dtout_reflects_interval(
 def test_quadtree_deckbuild_output_dt_reflects_interval(monkeypatch) -> None:
     """The quadtree+SnapWave deck-build output_dt follows the fine cadence too."""
     from trid3nt_server.tools.simulation.solver import solver as solver_mod
-    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+    from trid3nt_server.workflows.sfincs.flood.flood import (
         _compose_and_upload_deckbuild_spec,
     )
 

@@ -1,0 +1,16 @@
+# Engine-door corpus (DOOR tier - walked into the main index; the door competes
+# in per-turn retrieval alongside general tools). Hazard-common wildfire-spread
+# phrasings route to the run_elmfire door, whose gate expansion then surfaces the
+# specific elmfire_* template (select-then-call). Template-specific phrasings live
+# in each workflows/elmfire/<template>/corpus.yaml (TEMPLATE tier - NOT merged
+# into this index). Carried from the migrated model_fire_spread corpus entries.
+run_elmfire:
+- simulate wildfire spread from this ignition point
+- if a fire started here, where would it burn in the next few hours
+- run an ELMFIRE fire-spread simulation for an ignition near this location
+- model fire behavior and spread across this landscape
+- forecast how a wildfire would propagate from this point
+- run a fire spread simulation using the current wind and fuel moisture
+- if lightning struck here, how far would the fire spread in 24 hours
+- what wildfire-spread or fire-behavior models can you run
+- which ELMFIRE fire scenario fits my question

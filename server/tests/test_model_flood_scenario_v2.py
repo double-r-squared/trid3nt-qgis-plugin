@@ -41,7 +41,7 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+from trid3nt_server.workflows.sfincs.flood.flood import (
     PrecipForcingError,
     compute_precip_area_mean_mm_per_hr,
     model_flood_scenario,
@@ -439,18 +439,18 @@ async def test_none_path_forcing_spec_identical_to_baseline() -> None:
         return _run_result_ok(run_id, handle.handle_id)
 
     with (
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.lookup_precip_return_period", return_value=_precip_result()) as mock_lookup,
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.build_sfincs_model", side_effect=_capture_build),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.run_solver", return_value=handle),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_landcover", return_value=_landcover_result()),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.lookup_precip_return_period", return_value=_precip_result()) as mock_lookup,
+        patch("trid3nt_server.workflows.sfincs.flood.flood.build_sfincs_model", side_effect=_capture_build),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.run_solver", return_value=handle),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.wait_for_completion", side_effect=_wfc),
         patch(
-            "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.postprocess_flood",
+            "trid3nt_server.workflows.sfincs.flood.flood.postprocess_flood",
             return_value=([_flood_layer(run_id)], _DEPTH_METRICS),
         ),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.publish_layer", side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.publish_layer", side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test")),
     ):
         envelope = await model_flood_scenario(
             bbox=_BBOX,
@@ -492,18 +492,18 @@ async def test_raster_path_skips_atlas14_and_builds_observed_forcing() -> None:
             Path(td) / "mrms.tif", np.full((12, 12), 72.0, dtype="float32")
         )
         with (
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.lookup_precip_return_period") as mock_lookup,
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.build_sfincs_model", side_effect=_capture_build),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.run_solver", return_value=handle),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.wait_for_completion", side_effect=_wfc),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_landcover", return_value=_landcover_result()),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.lookup_precip_return_period") as mock_lookup,
+            patch("trid3nt_server.workflows.sfincs.flood.flood.build_sfincs_model", side_effect=_capture_build),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.run_solver", return_value=handle),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.wait_for_completion", side_effect=_wfc),
             patch(
-                "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.postprocess_flood",
+                "trid3nt_server.workflows.sfincs.flood.flood.postprocess_flood",
                 return_value=([_flood_layer(run_id)], _DEPTH_METRICS),
             ),
-            patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.publish_layer", side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test")),
+            patch("trid3nt_server.workflows.sfincs.flood.flood.publish_layer", side_effect=PublishLayerError("JOBS_CLIENT_UNAVAILABLE", "no qgis in test")),
         ):
             envelope = await model_flood_scenario(
                 bbox=_BBOX,
@@ -545,10 +545,10 @@ async def test_raster_path_skips_atlas14_and_builds_observed_forcing() -> None:
 async def test_raster_path_unreadable_raster_returns_failed_envelope() -> None:
     """An unreadable forcing raster surfaces as a typed failed envelope (not a raise)."""
     with (
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_dem", return_value=_mock_layer_uri("dem")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_landcover", return_value=_landcover_result()),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
-        patch("trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario.lookup_precip_return_period") as mock_lookup,
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_landcover", return_value=_landcover_result()),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
+        patch("trid3nt_server.workflows.sfincs.flood.flood.lookup_precip_return_period") as mock_lookup,
     ):
         envelope = await model_flood_scenario(
             bbox=_BBOX,
@@ -669,7 +669,7 @@ def test_gs_forcing_read_path_unchanged_does_not_call_boto3() -> None:
             side_effect=AssertionError("boto3 reader must not be called for gs://"),
         ),
         patch(
-            "trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario._to_vsigs",
+            "trid3nt_server.workflows.sfincs.flood.flood._to_vsigs",
             return_value="/vsigs/test-cache/cache/mrms/precip.tif",
         ) as mock_to_vsigs,
         patch("rasterio.open", side_effect=RuntimeError("vsigs open stubbed")),

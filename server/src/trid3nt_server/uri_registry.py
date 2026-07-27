@@ -68,7 +68,7 @@ Scoping rules:
   with the consuming tool's own honest typed error. (The legacy-cloud-era
   managed-bucket strict-reject died with the cloud decommission -- nothing
   local mints the old bucket names anymore.)
-* Composer-internal publishes (``run_model_flood_scenario`` →
+* Composer-internal publishes (``sfincs_flood`` →
   ``publish_layer``) are captured via a ``ContextVar`` observation hook:
   ``publish_layer`` calls :func:`observe_published_layer` with the
   (validated) gs:// COG + the WMS display URL, so the registry knows BOTH
@@ -191,7 +191,7 @@ _ERROR_HANDLES_CAP = 10
 
 #: F32: tools that consume a DEM as their primary input. When the branch-4
 #: "no layers yet" fallback fires for one of these, suggest ``fetch_dem`` —
-#: the generic ``run_model_flood_scenario`` example was actively misleading
+#: the generic ``sfincs_flood`` example was actively misleading
 #: for a terrain-derivative ask (live incident: a reconnect-empty registry +
 #: the generic suggestion steered the model away from the actually-needed
 #: ``fetch_dem`` call).
@@ -1066,7 +1066,7 @@ class SessionUriRegistry:
         F32: when the registry genuinely has no layers, the "run the
         producing tool first" example is tool-aware — a DEM-consuming tool
         (``_DEM_CONSUMING_TOOLS``) is told to ``fetch_dem`` for this AOI
-        instead of the generic ``run_model_flood_scenario`` example, which
+        instead of the generic ``sfincs_flood`` example, which
         was actively misleading (and factually irrelevant) for a terrain
         derivative ask. When the registry DOES have layers (the common F32
         reconnect-repair case — the registry was simply unseeded, not
@@ -1088,7 +1088,7 @@ class SessionUriRegistry:
                 )
             return (
                 "No layers have been produced this session yet — run the "
-                "producing tool first (e.g. run_model_flood_scenario for a "
+                "producing tool first (e.g. sfincs_flood for a "
                 "flood-depth raster, fetch_usace_nsi for building assets)."
             )
         def _one(r: UriRecord) -> str:

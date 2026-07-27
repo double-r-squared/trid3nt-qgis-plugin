@@ -4,7 +4,7 @@ The #1 blocker: SFINCS flood modeling produced no successful run since Fort
 Myers because a WS disconnect KILLED the in-flight solve. Root cause: the
 handler ``finally`` blanket-``.cancel()``-ed every not-done task on the
 per-connection ``SessionState.inflight_tasks`` — including a detached
-``run_model_flood_scenario`` -> ``wait_for_completion``. The web client opens
+``sfincs_flood`` -> ``wait_for_completion``. The web client opens
 MULTIPLE sockets per session (StrictMode double-mount + reconnect), so a
 transient socket swap detonated the finally and docker-killed the solve ~7s in.
 

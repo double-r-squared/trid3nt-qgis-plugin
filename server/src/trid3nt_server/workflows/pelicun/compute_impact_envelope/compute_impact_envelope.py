@@ -12,8 +12,8 @@ read off a typed envelope, never invented (Invariant 1).
 
     geocode_location (if location_query, no bbox)
       → fetch_usace_nsi(bbox)  OR  compute_building_density(bbox)
-      → run_pelicun_damage_assessment(hazard_raster_uri, assets_uri)
-         (or run_pelicun_with_buildings for MS_BUILDINGS path)
+      → pelicun_damage_assessment(hazard_raster_uri, assets_uri)
+         (or pelicun_damage_with_buildings for MS_BUILDINGS path)
       → postprocess_pelicun(damage_layer_uri, flood_layer_uri)
       → ImpactEnvelope dict + narrative string + provenance
 
@@ -37,7 +37,7 @@ doesn't have to assemble it from raw envelope fields.
   atomic tools; failures in any step surface as typed
   ``ComputeImpactEnvelopeError`` subclasses with distinct error codes.
 - **3. Engine registration.** Composer is registered via the same
-  ``workflow_dispatch`` source class as ``run_model_flood_scenario``.
+  ``workflow_dispatch`` source class as ``sfincs_flood``.
 - **10. Minimal parameter surface.** Signature exposes the four
   irreducible inputs: ``flood_layer_uri`` (required), area (``bbox`` OR
   ``location_query``), ``structure_inventory_source`` (NSI vs. MS), and
@@ -46,8 +46,8 @@ doesn't have to assemble it from raw envelope fields.
 Cross-tool dependencies:
 
 - Upstream (consumes): ``geocode_location``, ``fetch_usace_nsi``,
-  ``compute_building_density``, ``run_pelicun_damage_assessment``,
-  ``run_pelicun_with_buildings``, ``postprocess_pelicun``.
+  ``compute_building_density``, ``pelicun_damage_assessment``,
+  ``pelicun_damage_with_buildings``, ``postprocess_pelicun``.
 - Downstream (feeds): chat narration; Case summary panel UI; MongoDB
   ``runs`` collection for the parent ``AssessmentEnvelope`` linkage.
 """
@@ -227,23 +227,23 @@ async def compute_impact_envelope(
 ) -> dict[str, Any]:
     """Compose flood-layer → structure inventory → Pelicun → ImpactEnvelope.
 
-    Use this (not run_model_flood_scenario, which SIMULATES the flood) when a flood layer already exists and you want the composed damage impact envelope.
+    Use this (not sfincs_flood, which SIMULATES the flood) when a flood layer already exists and you want the composed damage impact envelope.
 
     Four-step deterministic chain (no LLM in the loop):
 
     1. ``geocode_location(location_query)`` (only when ``bbox`` not given).
     2. ``fetch_usace_nsi(bbox)`` — preferred for CONUS — OR
-       ``run_pelicun_with_buildings`` (which uses
+       ``pelicun_damage_with_buildings`` (which uses
        ``compute_building_density``) for international bboxes.
-    3. ``run_pelicun_damage_assessment(flood_layer_uri, <assets_uri>)``
+    3. ``pelicun_damage_assessment(flood_layer_uri, <assets_uri>)``
        (skipped for the MS_BUILDINGS path, where
-       ``run_pelicun_with_buildings`` already runs Pelicun internally).
+       ``pelicun_damage_with_buildings`` already runs Pelicun internally).
     4. ``postprocess_pelicun(damage_uri, flood_layer_uri)`` →
        ``ImpactEnvelope`` aggregate (SRS Appendix B.6c).
 
     Use this when:
         - The user has a flood layer URI in hand (typically from
-          ``run_model_flood_scenario`` / a Case's primary flood layer) and
+          ``sfincs_flood`` / a Case's primary flood layer) and
           asks for impact / damage / loss / population at risk.
         - The user asks "how much damage", "how many structures impacted",
           "expected losses", "displaced population", or "summarize the
@@ -252,16 +252,16 @@ async def compute_impact_envelope(
 
     Do NOT use this for:
         - Cases where no flood layer exists yet — run
-          ``run_model_flood_scenario`` first.
+          ``sfincs_flood`` first.
         - Per-feature damage layers for spatial exploration on the map —
-          call ``run_pelicun_damage_assessment`` or
-          ``run_pelicun_with_buildings`` directly. This composer collapses
+          call ``pelicun_damage_assessment`` or
+          ``pelicun_damage_with_buildings`` directly. This composer collapses
           per-feature properties into aggregate totals.
         - Non-flood hazards (the v0.1 fragility set is flood-only).
 
     Examples:
         - "How much damage will the 100-yr flood cause in Fort Myers, FL?"
-          → ``flood_layer_uri = <result of run_model_flood_scenario>``;
+          → ``flood_layer_uri = <result of sfincs_flood>``;
             ``location_query = "Fort Myers, FL"``.
         - "Estimate displaced population for the Hurricane Ian inundation."
           → ``flood_layer_uri = <Hurricane Ian flood COG URI>``;
@@ -269,12 +269,12 @@ async def compute_impact_envelope(
 
     params:
         flood_layer_uri: the flood depth layer to assess. This MUST be the EXACT
-            LayerURI value (copied verbatim) that a ``run_model_flood_scenario`` /
+            LayerURI value (copied verbatim) that a ``sfincs_flood`` /
             ``run_model_nws_flood_event_scenario`` call returned EARLIER IN THIS
             CONVERSATION. NEVER invent, construct, or guess this value (e.g. a
             ``flood-depth-peak-<id>`` string you did not receive) — a fabricated id
             does not exist and the call will fail. If no flood scenario has been run
-            yet, call ``run_model_flood_scenario`` FIRST, wait for its result, then
+            yet, call ``sfincs_flood`` FIRST, wait for its result, then
             pass that result's layer URI here. Required; non-empty string.
         bbox: ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326. When
             ``None``, ``location_query`` is geocoded.
@@ -313,7 +313,7 @@ async def compute_impact_envelope(
         Composer itself: ``cacheable=False`` (workflow dispatch).
         Underlying atomic steps each carry their own cache:
         ``fetch_usace_nsi`` ``static-30d``,
-        ``run_pelicun_damage_assessment`` ``static-30d`` (deterministic
+        ``pelicun_damage_assessment`` ``static-30d`` (deterministic
         Monte-Carlo seeding), ``postprocess_pelicun`` ``static-30d``.
 
     Raises (typed; ``error_code`` + ``retryable`` on each):
@@ -400,13 +400,13 @@ async def compute_impact_envelope(
         assets_uri = getattr(nsi_layer, "uri", None) or str(nsi_layer)
 
         logger.info(
-            "compute_impact_envelope: run_pelicun_damage_assessment hazard=%s assets=%s fragility=%s",
+            "compute_impact_envelope: pelicun_damage_assessment hazard=%s assets=%s fragility=%s",
             flood_layer_uri,
             assets_uri,
             fragility,
         )
         try:
-            pelicun_fn = TOOL_REGISTRY["run_pelicun_damage_assessment"].fn
+            pelicun_fn = TOOL_REGISTRY["pelicun_damage_assessment"].fn
             damage_layer = pelicun_fn(
                 hazard_raster_uri=flood_layer_uri,
                 assets_uri=assets_uri,
@@ -414,24 +414,24 @@ async def compute_impact_envelope(
             )
         except Exception as exc:  # noqa: BLE001
             raise ComputeImpactEnvelopePelicunError(
-                f"run_pelicun_damage_assessment failed: {exc}"
+                f"pelicun_damage_assessment failed: {exc}"
             ) from exc
         damage_uri = getattr(damage_layer, "uri", None) or str(damage_layer)
 
     elif structure_inventory_source == "MS_BUILDINGS":
-        # MS_BUILDINGS path: the composer ``run_pelicun_with_buildings``
+        # MS_BUILDINGS path: the composer ``pelicun_damage_with_buildings``
         # owns the building-density → point-FGB → Pelicun chain. The
         # inferred assets_uri is the intermediate point FlatGeobuf, which
         # the composer hides — surface ``"<ms_buildings>"`` for provenance.
         logger.info(
-            "compute_impact_envelope: MS_BUILDINGS path — run_pelicun_with_buildings "
+            "compute_impact_envelope: MS_BUILDINGS path — pelicun_damage_with_buildings "
             "hazard=%s bbox=%s fragility=%s",
             flood_layer_uri,
             resolved_bbox,
             fragility,
         )
         try:
-            ms_fn = TOOL_REGISTRY["run_pelicun_with_buildings"].fn
+            ms_fn = TOOL_REGISTRY["pelicun_damage_with_buildings"].fn
             damage_layer = await ms_fn(
                 hazard_raster_uri=flood_layer_uri,
                 bbox=resolved_bbox,
@@ -442,7 +442,7 @@ async def compute_impact_envelope(
             # PELICUN_UPSTREAM_FAILED code; both surface through the
             # composer's wrapper exception ``PelicunWithBuildingsError``.
             raise ComputeImpactEnvelopePelicunError(
-                f"run_pelicun_with_buildings failed: {exc}"
+                f"pelicun_damage_with_buildings failed: {exc}"
             ) from exc
         damage_uri = getattr(damage_layer, "uri", None) or str(damage_layer)
         assets_uri = "<ms_buildings:intermediate>"

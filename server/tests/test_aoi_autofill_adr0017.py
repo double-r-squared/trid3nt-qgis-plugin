@@ -87,7 +87,7 @@ class TestAutofillHelper:
 
     def test_aoi_bbox_param_name_also_fills(self) -> None:
         out = autofill_missing_bbox(
-            "run_swmm_urban_flood", {}, _tool_required_aoi_bbox,
+            "swmm_urban_flood", {}, _tool_required_aoi_bbox,
             active_aoi=ACTIVE_AOI, case_bbox=None,
         )
         assert out["aoi_bbox"] == ACTIVE_AOI

@@ -81,7 +81,7 @@ def fetch_noaa_slr_confidence(
     **When NOT to use:**
     - For the inundation FOOTPRINT itself -> ``fetch_noaa_slr_scenarios``.
     - For marsh-migration projections -> ``fetch_noaa_slr_marsh``.
-    - For event-driven storm surge -> ``run_model_flood_scenario`` / ``fetch_gtsm_tide_surge``.
+    - For event-driven storm surge -> ``sfincs_flood`` / ``fetch_gtsm_tide_surge``.
     - Outside CONUS -> not covered (CONUS coastal product only).
 
     **Parameters:**

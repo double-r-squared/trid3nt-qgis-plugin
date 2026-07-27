@@ -2,10 +2,10 @@
 
 Coverage (≥4 unit + 1 live per kickoff):
 
-1. test_registry_registers_wrapper — ``run_pelicun_with_buildings`` lands in
+1. test_registry_registers_wrapper — ``pelicun_damage_with_buildings`` lands in
    TOOL_REGISTRY with workflow_dispatch metadata.
 2. test_composer_dispatches_building_density_then_pelicun_in_order — mocked
-   happy path verifies compute_building_density → run_pelicun_damage_assessment
+   happy path verifies compute_building_density → pelicun_damage_assessment
    call order.
 3. test_mocked_buildings_plus_flood_expected_damage_point_count — a small
    synthetic bbox produces approximately bbox_area/cell_size_m² damage points
@@ -30,11 +30,10 @@ import pytest
 
 # Force the workflow module to register its atomic-tool wrapper before we
 # inspect TOOL_REGISTRY.
-import trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings  # noqa: F401
+import trid3nt_server.workflows.pelicun.damage_with_buildings.damage_with_buildings  # noqa: F401
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings import (
+from trid3nt_server.workflows.pelicun.damage_with_buildings.damage_with_buildings import (
     pelicun_damage_with_buildings,
-    run_pelicun_with_buildings,
     PelicunWithBuildingsError,
 )
 from trid3nt_contracts.execution import LayerURI
@@ -90,15 +89,15 @@ def _mock_buildings_uri(uri: str = "gs://test-cache/buildings.tif") -> LayerURI:
 
 
 def test_registry_registers_wrapper() -> None:
-    """``run_pelicun_with_buildings`` is registered with workflow_dispatch metadata."""
-    assert "run_pelicun_with_buildings" in TOOL_REGISTRY, (
+    """``pelicun_damage_with_buildings`` is registered with workflow_dispatch metadata."""
+    assert "pelicun_damage_with_buildings" in TOOL_REGISTRY, (
         f"workflow wrapper not in TOOL_REGISTRY; keys={sorted(TOOL_REGISTRY)}"
     )
-    entry = TOOL_REGISTRY["run_pelicun_with_buildings"]
+    entry = TOOL_REGISTRY["pelicun_damage_with_buildings"]
     assert entry.metadata.cacheable is False, "workflow wrapper must be non-cacheable"
     assert entry.metadata.ttl_class == "live-no-cache"
     assert entry.metadata.source_class == "workflow_dispatch"
-    assert entry.fn is run_pelicun_with_buildings
+    assert entry.fn is pelicun_damage_with_buildings
 
 
 # ---------------------------------------------------------------------------
@@ -108,12 +107,12 @@ def test_registry_registers_wrapper() -> None:
 
 @pytest.mark.asyncio
 async def test_composer_dispatches_building_density_then_pelicun_in_order() -> None:
-    """compute_building_density → density_cog_to_point_fgb → run_pelicun_damage_assessment.
+    """compute_building_density → density_cog_to_point_fgb → pelicun_damage_assessment.
 
     Verifies:
     1. compute_building_density is called FIRST.
     2. density_cog_to_point_fgb is called with the buildings URI from step 1.
-    3. run_pelicun_damage_assessment is called LAST with the point-FGB path from step 2.
+    3. pelicun_damage_assessment is called LAST with the point-FGB path from step 2.
     """
     call_order: list[str] = []
 
@@ -133,7 +132,7 @@ async def test_composer_dispatches_building_density_then_pelicun_in_order() -> N
         return fake_fgb_path
 
     def _fake_pelicun(**kwargs: Any) -> LayerURI:
-        call_order.append("run_pelicun_damage_assessment")
+        call_order.append("pelicun_damage_assessment")
         # Verify assets_uri was set to the FGB path from density_cog_to_point_fgb.
         assert kwargs["assets_uri"] == fake_fgb_path, (
             f"assets_uri mismatch: expected {fake_fgb_path!r}, "
@@ -143,16 +142,16 @@ async def test_composer_dispatches_building_density_then_pelicun_in_order() -> N
 
     mock_registry = {
         "compute_building_density": MagicMock(fn=_fake_building_density),
-        "run_pelicun_damage_assessment": MagicMock(fn=_fake_pelicun),
+        "pelicun_damage_assessment": MagicMock(fn=_fake_pelicun),
     }
 
     with (
         patch(
-            "trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings.TOOL_REGISTRY",
+            "trid3nt_server.workflows.pelicun.damage_with_buildings.damage_with_buildings.TOOL_REGISTRY",
             mock_registry,
         ),
         patch(
-            "trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings.density_cog_to_point_fgb",
+            "trid3nt_server.workflows.pelicun.damage_with_buildings.damage_with_buildings.density_cog_to_point_fgb",
             side_effect=_fake_density_cog_to_point_fgb,
         ),
         # Suppress os.unlink for the fake path.
@@ -167,7 +166,7 @@ async def test_composer_dispatches_building_density_then_pelicun_in_order() -> N
     assert call_order == [
         "compute_building_density",
         "density_cog_to_point_fgb",
-        "run_pelicun_damage_assessment",
+        "pelicun_damage_assessment",
     ], f"unexpected call order: {call_order}"
     assert result is damage_layer
 
@@ -192,7 +191,7 @@ async def test_mocked_buildings_plus_flood_expected_damage_point_count() -> None
 
     from types import SimpleNamespace
     from unittest import mock as _mock
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment as _pelicun_mod
+    from trid3nt_server.workflows.pelicun.damage_assessment import damage_assessment as _pelicun_mod
 
     cell_size_m = 100.0
     min_lon, min_lat, max_lon, max_lat = _SMALL_BBOX
@@ -265,7 +264,7 @@ async def test_mocked_buildings_plus_flood_expected_damage_point_count() -> None
         return buildings_layer
 
     # We stub read_through on the Pelicun module so it calls fetch_fn
-    # but skips GCS upload — mirrors the pattern in test_run_pelicun_damage_assessment.py.
+    # but skips GCS upload — mirrors the pattern in test_pelicun_damage_assessment.py.
     out_fgb = tempfile.NamedTemporaryFile(suffix=".fgb", delete=False)
     out_fgb_path = out_fgb.name
     out_fgb.close()
@@ -278,13 +277,13 @@ async def test_mocked_buildings_plus_flood_expected_damage_point_count() -> None
 
     mock_registry = {
         "compute_building_density": MagicMock(fn=_fake_building_density),
-        "run_pelicun_damage_assessment": TOOL_REGISTRY["run_pelicun_damage_assessment"],
+        "pelicun_damage_assessment": TOOL_REGISTRY["pelicun_damage_assessment"],
     }
 
     try:
         with (
             patch(
-                "trid3nt_server.workflows.pelicun.pelicun_damage_with_buildings.pelicun_damage_with_buildings.TOOL_REGISTRY",
+                "trid3nt_server.workflows.pelicun.damage_with_buildings.damage_with_buildings.TOOL_REGISTRY",
                 mock_registry,
             ),
             _mock.patch.object(_pelicun_mod, "read_through", _fake_pelicun_read_through),
@@ -329,7 +328,7 @@ async def test_mocked_buildings_plus_flood_expected_damage_point_count() -> None
 
 
 def test_each_damage_point_carries_ds_mean_in_0_4() -> None:
-    """Every feature from run_pelicun_damage_assessment must have ds_mean in [0, 4].
+    """Every feature from pelicun_damage_assessment must have ds_mean in [0, 4].
 
     Also validates geographic-correctness gate: dry asset ds_mean ≤ deep asset ds_mean.
     """
@@ -345,9 +344,9 @@ def test_each_damage_point_carries_ds_mean_in_0_4() -> None:
 
     from types import SimpleNamespace
     from unittest import mock as _mock
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment as _pelicun_mod
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
-        run_pelicun_damage_assessment,
+    from trid3nt_server.workflows.pelicun.damage_assessment import damage_assessment as _pelicun_mod
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
+        pelicun_damage_assessment,
     )
 
     # Build a 1×3 synthetic FlatGeobuf — three point assets.
@@ -408,7 +407,7 @@ def test_each_damage_point_carries_ds_mean_in_0_4() -> None:
 
     try:
         with _mock.patch.object(_pelicun_mod, "read_through", _fake_read_through):
-            result = run_pelicun_damage_assessment(
+            result = pelicun_damage_assessment(
                 hazard_raster_uri=flood_path,
                 assets_uri=points_path,
                 fragility_set="hazus_flood_v6",

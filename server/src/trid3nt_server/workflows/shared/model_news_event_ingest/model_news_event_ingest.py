@@ -744,7 +744,7 @@ async def run_model_news_event_ingest(
     When NOT to use:
         - Dispatching a downstream solver (this workflow stops before any
           solver — review-gated by Invariant 9 design).
-        - Flood modeling without news/alert sources (use ``run_model_flood_scenario``
+        - Flood modeling without news/alert sources (use ``sfincs_flood``
           directly with bbox / location_query).
         - Summarizing a single page (use ``web_fetch`` directly).
 
@@ -775,7 +775,7 @@ async def run_model_news_event_ingest(
 
     FR-DC-6: This wrapper declares ``cacheable=False`` +
     ``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` —
-    the same shape as job-0042's ``run_model_flood_scenario``.
+    the same shape as job-0042's ``sfincs_flood``.
 
     Cross-tool dependencies:
         Upstream (step chain):

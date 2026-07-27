@@ -377,7 +377,7 @@ async def modflow_saltwater_intrusion(
         - The user wants to see how far inland the saltwater wedge penetrates.
 
     Do NOT use this for:
-        - Surface coastal flooding (use ``run_model_flood_scenario`` / SFINCS).
+        - Surface coastal flooding (use ``sfincs_flood`` / SFINCS).
         - A pumping-well drawdown (use ``modflow_sustainable_yield``).
         - Contaminant plume transport (use ``modflow_contaminant_plume``).
 

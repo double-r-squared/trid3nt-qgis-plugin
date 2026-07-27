@@ -1,0 +1,21 @@
+# Engine-door corpus (DOOR tier - walked into the main index; the door competes
+# in per-turn retrieval alongside general tools). Hazard-common damage / loss
+# phrasings route to the run_pelicun door, whose gate expansion then surfaces
+# the specific pelicun_* template (select-then-call). Template-specific
+# phrasings live in each workflows/pelicun/<template>/corpus.yaml (TEMPLATE tier
+# - NOT merged into this index). Carried from the migrated
+# run_pelicun_damage_assessment / run_pelicun_with_buildings corpus entries.
+run_pelicun:
+- run a damage assessment for buildings in this flood zone
+- how much damage will these structures take from this flood
+- compute structural losses from this scenario using fragility curves
+- estimate repair costs and expected losses for the housing stock here
+- assess how many buildings reach the DS3 damage state under this surge
+- run a Pelicun HAZUS flood damage and loss estimation for this footprint
+- which buildings are most damaged or most exposed to this hazard
+- give me repair cost statistics with 95% confidence intervals for this flood raster
+- building damage probability curves for this storm surge event
+- run a spatially-distributed building damage assessment over this bbox
+- damage-state distribution for structures under this hazard
+- what damage or loss models can you run
+- which pelicun scenario fits my question

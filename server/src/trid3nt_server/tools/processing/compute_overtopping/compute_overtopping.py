@@ -13,7 +13,7 @@ This is the lecture's OVERTOPPING tool: the AWS / Australian-Water-School
 small deterministic post-processor that "compute[s] the water VOLUME passing OVER
 a structure once the nearshore wave energy is known" (see
 ``reports/references/lecture_aws_swan_making_waves/notes.md`` -- OVERTOPPING
-MODELS [~46:07-46:33]). It pairs with ``run_swan_waves`` / SFINCS+SnapWave: the
+MODELS [~46:07-46:33]). It pairs with ``swan_wave_field`` / SFINCS+SnapWave: the
 wave engine gives Hm0 + Tp at the toe; this tool turns that plus a crest level
 into an overtopping rate for coastal-defence / levee / seawall scenarios.
 
@@ -204,12 +204,12 @@ def compute_overtopping(
     """Estimate mean wave-overtopping discharge over a sloped coastal structure (EurOtop 2018 Ch.5).
 
     Use this when: a nearshore wave height + period (typically from
-    ``run_swan_waves``/SnapWave) and a seawall/levee/dike/revetment crest
+    ``swan_wave_field``/SnapWave) and a seawall/levee/dike/revetment crest
     level -- "how much water overtops?", "is this crest high enough?".
     SLOPED geometry only. Do NOT use for: vertical/battered seawalls
-    (EurOtop Ch.7); computing the wave field (``run_swan_waves``); inland/
-    pluvial flooding (``run_swmm_urban_flood``) or surge inundation depth
-    (``run_model_flood_scenario``).
+    (EurOtop Ch.7); computing the wave field (``swan_wave_field``); inland/
+    pluvial flooding (``swmm_urban_flood``) or surge inundation depth
+    (``sfincs_flood``).
 
     Params:
         hs_m: nearshore significant wave height Hm0 at structure toe (>0).

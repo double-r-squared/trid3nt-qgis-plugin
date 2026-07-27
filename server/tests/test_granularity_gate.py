@@ -205,7 +205,7 @@ async def test_gate_emits_granularity_block(monkeypatch, dem_path: str) -> None:
 
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_swmm_urban_flood", _swmm_params()
+        ws, state, "swmm_urban_flood", _swmm_params()
     )
     await approver
 
@@ -240,7 +240,7 @@ async def test_proceed_pins_suggested_resolution(monkeypatch, dem_path: str) -> 
 
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_swmm_urban_flood", _swmm_params()
+        ws, state, "swmm_urban_flood", _swmm_params()
     )
     await approver
 
@@ -271,7 +271,7 @@ async def test_narrow_scope_finer_is_clamped(monkeypatch, dem_path: str) -> None
         _drive_decision(server, "narrow_scope", {"target_resolution_m": 1.0})
     )
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_swmm_urban_flood", _swmm_params()
+        ws, state, "swmm_urban_flood", _swmm_params()
     )
     await approver
 
@@ -304,7 +304,7 @@ async def test_narrow_scope_coarser_honored(monkeypatch, dem_path: str) -> None:
         _drive_decision(server, "narrow_scope", {"target_resolution_m": 20.0})
     )
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_swmm_urban_flood", _swmm_params()
+        ws, state, "swmm_urban_flood", _swmm_params()
     )
     await approver
 
@@ -327,7 +327,7 @@ async def test_cancel_fails_closed(monkeypatch, dem_path: str) -> None:
 
     canceller = asyncio.create_task(_drive_decision(server, "cancel"))
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_swmm_urban_flood", _swmm_params()
+        ws, state, "swmm_urban_flood", _swmm_params()
     )
     await canceller
     assert should_run is False
@@ -348,7 +348,7 @@ async def test_timeout_fails_closed(monkeypatch, dem_path: str) -> None:
     ws, state = _FakeWS(), _FakeState()
 
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_swmm_urban_flood", _swmm_params()
+        ws, state, "swmm_urban_flood", _swmm_params()
     )
     assert should_run is False
     err = next(e for e in ws.sent if e.get("type") == "error")
@@ -373,7 +373,7 @@ async def test_suggestion_exception_fails_open(monkeypatch) -> None:
     params = _swmm_params()
 
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_swmm_urban_flood", params
+        ws, state, "swmm_urban_flood", params
     )
     # FAIL OPEN: the gate must NEVER block/orphan a solve on its own error.
     assert should_run is True
@@ -396,7 +396,7 @@ async def test_flood_branch_unchanged_no_granularity(monkeypatch) -> None:
 
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await approver
 
@@ -421,7 +421,7 @@ async def test_flood_narrow_scope_still_fails_closed(monkeypatch) -> None:
         _drive_decision(server, "narrow_scope", {"return_period_yr": 50})
     )
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await driver
     assert should_run is False
@@ -441,7 +441,7 @@ async def test_no_stuck_pending_on_cancelled(monkeypatch, dem_path: str) -> None
 
     gate = asyncio.create_task(
         server._gate_on_solver_confirm(  # type: ignore[arg-type]
-            ws, state, "run_swmm_urban_flood", _swmm_params()
+            ws, state, "swmm_urban_flood", _swmm_params()
         )
     )
     # Wait until the gate has registered its pending future, then cancel it.
@@ -463,7 +463,7 @@ async def test_no_stuck_pending_on_cancelled(monkeypatch, dem_path: str) -> None
 def test_swmm_tool_in_confirm_set() -> None:
     from trid3nt_server import server
 
-    assert "run_swmm_urban_flood" in server.SOLVER_CONFIRM_TOOLS
+    assert "swmm_urban_flood" in server.SOLVER_CONFIRM_TOOLS
 
 
 def test_clamp_helper_honours_coarser_and_clamps_finer() -> None:
@@ -597,7 +597,7 @@ async def test_narrow_scope_override_real_build_under_cap(
         _drive_decision(server, "narrow_scope", {"target_resolution_m": 1.0})
     )
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_swmm_urban_flood", _swmm_params()
+        ws, state, "swmm_urban_flood", _swmm_params()
     )
     await approver
 

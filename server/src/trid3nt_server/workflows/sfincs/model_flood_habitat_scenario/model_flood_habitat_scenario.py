@@ -73,7 +73,7 @@ from trid3nt_server.tools.processing.clip_vector_to_polygon.clip_vector_to_polyg
 from trid3nt_server.tools.processing.compute_zonal_statistics.compute_zonal_statistics import compute_zonal_statistics
 from trid3nt_server.tools.fetchers.biodiversity.fetch_gbif_occurrences.fetch_gbif_occurrences import fetch_gbif_occurrences
 from trid3nt_server.tools.fetchers.biodiversity.fetch_wdpa_protected_areas.fetch_wdpa_protected_areas import fetch_wdpa_protected_areas
-from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import model_flood_scenario
+from trid3nt_server.workflows.sfincs.flood.flood import model_flood_scenario
 
 __all__ = [
     "model_flood_habitat_scenario",
@@ -581,7 +581,7 @@ async def run_model_flood_habitat_scenario(
        layer for the bbox.
     2. Per-species: ``fetch_gbif_occurrences(bbox, taxon_key)`` — one
        FlatGeobuf ``LayerURI`` per species in ``species_keys``.
-    3. ``run_model_flood_scenario(bbox, return_period_yr)`` — SFINCS flood
+    3. ``run_sfincs(bbox, return_period_yr)`` — SFINCS flood
        depth COG (9-step sub-chain; see that tool's docstring).
     4. ``compute_zonal_statistics(flood_depth_cog, wdpa_polygons)`` — flood
        impact metrics within each WDPA polygon.
@@ -598,7 +598,7 @@ async def run_model_flood_habitat_scenario(
           boundaries, impact summary, and narration text in one call.
 
     When NOT to use:
-        - Flood-only scenario (use ``run_model_flood_scenario`` directly).
+        - Flood-only scenario (use ``run_sfincs`` directly).
         - Species-only query (use ``fetch_gbif_occurrences`` directly).
         - Non-flood hazard composers (other milestones).
         - Custom multi-tool plans not covered by Case 1 (compose atomics
@@ -638,7 +638,7 @@ async def run_model_flood_habitat_scenario(
 
     FR-DC-6: This wrapper declares ``cacheable=False`` +
     ``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` —
-    same shape as ``run_model_flood_scenario`` (job-0042 / job-0060). The
+    same shape as ``run_sfincs`` (job-0042 / job-0060). The
     composer itself runs through cacheable atomic tools, so identical inputs
     still benefit from per-tool cache hits even though the composer itself
     is uncached.
@@ -647,7 +647,7 @@ async def run_model_flood_habitat_scenario(
         Upstream (step chain):
         - ``fetch_wdpa_protected_areas`` → step 1
         - ``fetch_gbif_occurrences`` (per species) → step 2
-        - ``run_model_flood_scenario`` → step 3 (itself a 9-step chain)
+        - ``run_sfincs`` → step 3 (itself a 9-step chain)
         - ``compute_zonal_statistics`` (flood × WDPA) → step 4
         - ``clip_raster_to_polygon`` (optional, flood + place polygon) → step 5
         - ``clip_vector_to_polygon`` (optional, per species + place polygon)

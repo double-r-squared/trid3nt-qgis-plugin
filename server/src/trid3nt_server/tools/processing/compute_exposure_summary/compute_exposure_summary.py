@@ -358,7 +358,7 @@ def compute_exposure_summary(
     for situation-report headline numbers (``compose_case_report`` consumes
     this automatically). Do NOT use for: dollar losses/damage states
     (``compute_flood_depth_damage`` screening or
-    ``run_pelicun_damage_assessment`` defensible); generic raster-in-zone
+    ``pelicun_damage_assessment`` defensible); generic raster-in-zone
     stats (``compute_zonal_statistics``).
 
     Params:

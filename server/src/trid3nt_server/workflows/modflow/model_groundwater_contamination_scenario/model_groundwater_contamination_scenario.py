@@ -1024,7 +1024,7 @@ async def run_model_groundwater_contamination_scenario(
           and the user wants "how far does it spread / how concentrated."
 
     Do NOT use this for:
-        - Surface-water / inundation flooding (use ``run_model_flood_scenario``
+        - Surface-water / inundation flooding (use ``sfincs_flood``
           — that is SFINCS).
         - A spill with explicit numeric parameters already in hand (call
           ``run_modflow_job`` directly with the forcing fields).

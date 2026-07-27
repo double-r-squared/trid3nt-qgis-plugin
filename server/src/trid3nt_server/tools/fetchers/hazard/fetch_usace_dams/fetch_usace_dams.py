@@ -1144,7 +1144,7 @@ def fetch_usace_dams(
         derive bbox → call this tool). Feeds into ``clip_vector_to_polygon``
         (clip dams to watershed / county / Case AOI), and into
         ``compute_zonal_statistics`` / Pelicun composers that pair dam
-        location with hazard footprints from ``run_model_flood_scenario``.
+        location with hazard footprints from ``sfincs_flood``.
 
     Cache: ``static-30d`` (NID is updated quarterly at fastest; a 30-day
     bucket gives ~12x amortization). Cache key: SHA-256 of bbox-rounded-6dp

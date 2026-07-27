@@ -77,7 +77,7 @@ def _candidate_envelopes(sock: _FakeSocket) -> list[dict]:
 
 #: A clear near-tie (relative margin ~0.2% < the 1% default threshold).
 _NEAR_TIE = [
-    ("run_geoclaw_inundation", 0.0500),
+    ("run_geoclaw", 0.0500),
     ("fetch_tsunami_events", 0.0499),
     ("fetch_dem", 0.0300),
 ]

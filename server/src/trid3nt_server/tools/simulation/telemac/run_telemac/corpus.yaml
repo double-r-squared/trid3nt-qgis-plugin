@@ -1,0 +1,21 @@
+# Engine-door corpus (DOOR tier - walked into the main index; the door competes
+# in per-turn retrieval alongside general tools). Hazard-common river-transport
+# phrasings route to the run_telemac door, whose gate expansion then surfaces the
+# specific telemac_* template (select-then-call). Template-specific phrasings live
+# in workflows/telemac/river_dye/corpus.yaml (TEMPLATE tier - NOT merged into this
+# index). Carried from the migrated run_telemac corpus entries.
+run_telemac:
+- simulate how a dye plume travels downstream over the next few hours
+- simulate how a dye plume travels downstream in the river
+- how far does the dye travel downstream in the river
+- how far does the contaminant travel down the river in the surface water
+- model a spill moving down the river and how far the plume travels
+- a tanker truck overturned and spilled chemicals into the river, show how the contamination travels downstream
+- someone dumped a chemical into the river, how far downstream does the plume travel
+- an oil spill on the river, show the slick drifting downstream over the next few hours
+- a factory discharged a pollutant into the stream, animate it flowing downriver with the flow
+- chemical released into the river upstream, where does it go and how fast does it move down the reach
+- sewage released into the river, how far downstream does it travel
+- diesel spilled into the river, track the plume in the water
+- what river dye or tracer transport can you model
+- which telemac scenario fits my river-spill question

@@ -74,7 +74,7 @@ from trid3nt_server.tools.fetchers.weather.fetch_nws_alerts_conus.fetch_nws_aler
     _filter_features_by_event_types,
     fetch_nws_alerts_conus,
 )
-from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import model_flood_scenario
+from trid3nt_server.workflows.sfincs.flood.flood import model_flood_scenario
 
 __all__ = [
     "model_nws_flood_event_scenario",
@@ -877,7 +877,7 @@ async def run_model_nws_flood_event_scenario(
 ) -> dict[str, Any]:
     """Model the flood from a live NWS flood warning (Case 3: NWS → MRMS → SFINCS).
 
-    Use this (not run_model_flood_scenario) when the flood is driven by a LIVE NWS flood warning/alert (NWS -> MRMS -> SFINCS).
+    Use this (not run_sfincs) when the flood is driven by a LIVE NWS flood warning/alert (NWS -> MRMS -> SFINCS).
 
     Five-step deterministic composition (zero LLM calls inside):
     1. ``fetch_nws_alerts_conus(event_types=["Flood Warning", "Flash Flood
@@ -886,7 +886,7 @@ async def run_model_nws_flood_event_scenario(
        a usable polygon and extract its bounding box.
     3. ``fetch_mrms_qpe(bbox=warning_bbox, accumulation)`` — observed accumulated
        radar-gauge precipitation over the warning area.
-    4. ``run_model_flood_scenario(bbox=warning_bbox,
+    4. ``run_sfincs(bbox=warning_bbox,
        forcing_raster_uri=mrms_uri)`` — SFINCS inundation forced by the OBSERVED
        precip (not a design storm).
     5. Return the warning polygon, the precip raster, AND the flood-depth layer
@@ -902,7 +902,7 @@ async def run_model_nws_flood_event_scenario(
 
     When NOT to use:
         - A hypothetical / design-storm flood for a named place with no active
-          warning — use ``run_model_flood_scenario`` with a
+          warning — use ``run_sfincs`` with a
           ``return_period_yr`` instead.
         - Just listing active alerts with no modeling — use
           ``fetch_nws_alerts_conus`` or ``fetch_nws_event`` directly.
@@ -939,7 +939,7 @@ async def run_model_nws_flood_event_scenario(
 
     FR-DC-6: declares ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"`` — same shape as
-    ``run_model_flood_scenario`` / ``run_model_flood_habitat_scenario``. The
+    ``run_sfincs`` / ``run_model_flood_habitat_scenario``. The
     composer runs through cacheable atomic tools, so identical inputs still
     benefit from per-tool cache hits even though the composer itself is uncached.
 
@@ -947,7 +947,7 @@ async def run_model_nws_flood_event_scenario(
         Upstream (step chain):
         - ``fetch_nws_alerts_conus`` → step 1 (warning-polygon layer)
         - ``fetch_mrms_qpe`` → step 3 (observed precip raster)
-        - ``run_model_flood_scenario`` (forcing_raster_uri branch) → step 4
+        - ``run_sfincs`` (forcing_raster_uri branch) → step 4
           (SFINCS inundation; itself a 9-step chain)
         Downstream (feeds):
         - Agent narration — cites ``flood_envelope.flood.metrics`` (max/mean

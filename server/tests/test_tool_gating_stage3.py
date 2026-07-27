@@ -47,16 +47,27 @@ agent_main._import_tools_registry()
 # ---------------------------------------------------------------------------
 
 
-def _pool_registry_size() -> int:
-    """Full registry MINUS engine TEMPLATES (engine-door refactor): tier=template
-    tools are pool-excluded and surfaced only by their door's gate expansion, so
-    they are absent from the default per-turn declarations on EVERY provider path
-    (bedrock / scripted / vertex / openai-disabled / fail-open). A door call then
-    unions the chosen template in (select-then-call)."""
-    return sum(
-        1 for e in TOOL_REGISTRY.values()
-        if getattr(e.metadata, "tier", "general") != "template"
+def _full_registry_size() -> int:
+    """The DEFAULT declarable-registry size handed to ``build_tool_declarations``
+    in the gating-OFF / fail-open paths -- membership-derived as
+    ``len(TOOL_REGISTRY) - count(tier="template")``.
+
+    ENGINE-DOOR invariant (refactor/engine-doors): ``tier=template`` engine
+    templates are EXCLUDED from DEFAULT declarations -- they reach the model
+    ONLY via their door's gate expansion. So the disabled-by-env path, the
+    scripted/bedrock/vertex byte-unchanged path, and the stage-3 gate's own
+    cold-index fail-open all declare the full registry MINUS templates (the
+    live registry is 212 total, 21 templates -> 191 declarable). A prior pass
+    flipped this helper to the raw ``len(TOOL_REGISTRY)`` (templates included),
+    which re-baselined AROUND the very leak the door architecture forbids; this
+    restores the pool-filtered invariant that
+    ``server._default_declarable_registry`` now enforces on the product side."""
+    n_templates = sum(
+        1
+        for entry in TOOL_REGISTRY.values()
+        if getattr(entry.metadata, "tier", "general") == "template"
     )
+    return len(TOOL_REGISTRY) - n_templates
 
 
 def test_gating_topk_default(monkeypatch):
@@ -235,7 +246,7 @@ async def test_openai_provider_gate_disabled_by_env(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     monkeypatch.setenv("TRID3NT_TOOL_GATING_TOPK", "0")
     captured = await _drive_turn_and_capture_registry(monkeypatch)
-    assert len(captured["registry"]) == _pool_registry_size()
+    assert len(captured["registry"]) == _full_registry_size()
 
 
 @pytest.mark.asyncio
@@ -249,7 +260,7 @@ async def test_scripted_provider_turn_is_never_gated(monkeypatch):
         captured = await _drive_turn_and_capture_registry(monkeypatch)
     finally:
         set_script(None)
-    assert len(captured["registry"]) == _pool_registry_size()
+    assert len(captured["registry"]) == _full_registry_size()
 
 
 @pytest.mark.asyncio
@@ -274,4 +285,58 @@ async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
         await agent_server._stream_gemini_reply(
             sock, state, _settings(), "fetch something", "research"
         )
-    assert len(captured["registry"]) == _pool_registry_size()
+    assert len(captured["registry"]) == _full_registry_size()
+
+
+# ---------------------------------------------------------------------------
+# ENGINE-DOOR: templates excluded from DEFAULT declarations, declarable after
+# a door expansion adds them to the turn's visible registry (refactor/engine-doors)
+# ---------------------------------------------------------------------------
+
+
+def _template_names() -> set[str]:
+    return {
+        name
+        for name, entry in TOOL_REGISTRY.items()
+        if getattr(entry.metadata, "tier", "general") == "template"
+    }
+
+
+def test_default_declarations_exclude_templates_but_door_expansion_declares():
+    """DEFAULT declarations exclude every tier=template engine template; a
+    simulated door expansion (adding a template back into the per-turn
+    registry, exactly as the door-expand block does) makes it declarable."""
+    from trid3nt_server.adapter import build_tool_declarations
+
+    templates = _template_names()
+    assert templates, "expected registered tier=template engine templates"
+
+    # DEFAULT declarable registry (the gating-off / fail-open base) excludes
+    # every template -- both as registry membership and as built declarations.
+    default_reg = agent_server._default_declarable_registry()
+    assert not (templates & set(default_reg)), (
+        "engine templates leaked into the DEFAULT declarable registry"
+    )
+    default_decls = {d.name for d in build_tool_declarations(default_reg)}
+    assert not (templates & default_decls), (
+        f"engine templates were DECLARED by default: {templates & default_decls}"
+    )
+    # ...but the engine DOORS themselves stay declared (the only surface the
+    # model has to reach a template).
+    door_names = {
+        name
+        for name, entry in TOOL_REGISTRY.items()
+        if getattr(entry.metadata, "tier", "general") == "door"
+    }
+    assert door_names <= set(default_reg), "engine doors dropped from defaults"
+
+    # A door expansion unions its curated templates into _retrieval_registry
+    # (server.py door-expand block); simulate that and confirm the template is
+    # now declared.
+    a_template = sorted(templates)[0]
+    expanded_reg = dict(default_reg)
+    expanded_reg[a_template] = TOOL_REGISTRY[a_template]
+    expanded_decls = {d.name for d in build_tool_declarations(expanded_reg)}
+    assert a_template in expanded_decls, (
+        f"door-expanded template {a_template!r} was NOT declared"
+    )

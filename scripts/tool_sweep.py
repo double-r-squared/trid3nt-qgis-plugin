@@ -117,7 +117,7 @@ OVERRIDES: dict[str, dict] = {
 }
 
 OVERRIDES.update({
-    "run_swmm_urban_flood": {"bbox": (-82.460, 27.945, -82.450, 27.955)},
+    "swmm_urban_flood": {"bbox": (-82.460, 27.945, -82.450, 27.955)},
     # vector-oriented tools whose generic param is the ambiguous layer_uri --
     # the chain map's default (DEM raster) is wrong for these
     "merge_features": {"layer_uri": "__CHAIN_COUNTIES__"},
@@ -202,7 +202,7 @@ def prefetch_chain(tools) -> None:
 
 
 TIMEOUT_OVERRIDES = {
-    "run_swmm_urban_flood": 1500,
+    "swmm_urban_flood": 1500,
     "fetch_storm_events_db": 420,
     "fetch_climate_normals": 420,
     "fetch_population": 420,

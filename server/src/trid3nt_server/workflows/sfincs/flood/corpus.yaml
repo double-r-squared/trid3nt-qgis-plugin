@@ -1,0 +1,11 @@
+# TEMPLATE tier (engine-door refactor): phrasings for sfincs_flood. NOT merged
+# into the main retrieval index; the run_sfincs door surfaces this template via
+# gate expansion (select-then-call). Carried verbatim from the migrated
+# run_model_flood_scenario corpus entries.
+sfincs_flood:
+- simulate flood inundation depth for this AOI
+- run the SFINCS flood solve for a design-storm return period
+- coastal storm-surge inundation with bathymetry and waves
+- compound flood: surge plus river discharge plus rainfall
+- route the flood around building footprints (urban obstacles)
+- named-hurricane surge inundation via a parametric spiderweb wind field

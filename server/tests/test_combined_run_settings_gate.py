@@ -115,7 +115,7 @@ async def test_coastal_gate_emits_combined_run_settings(monkeypatch) -> None:
 
     driver = asyncio.create_task(_drive_decision(server, "proceed"))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await driver
 
@@ -154,7 +154,7 @@ async def test_coastal_proceed_pins_both(monkeypatch) -> None:
 
     driver = asyncio.create_task(_drive_decision(server, "proceed"))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await driver
 
@@ -182,7 +182,7 @@ async def test_coastal_narrow_scope_pins_both_overrides(monkeypatch) -> None:
     }
     driver = asyncio.create_task(_drive_decision(server, "narrow_scope", revised))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await driver
 
@@ -209,7 +209,7 @@ async def test_coastal_narrow_scope_partial_override(monkeypatch) -> None:
     revised = {"output_interval_min": 15.0}
     driver = asyncio.create_task(_drive_decision(server, "narrow_scope", revised))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await driver
 
@@ -231,7 +231,7 @@ async def test_coastal_narrow_scope_interval_floored(monkeypatch) -> None:
     revised = {"output_interval_min": 0.1}
     driver = asyncio.create_task(_drive_decision(server, "narrow_scope", revised))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await driver
 
@@ -252,7 +252,7 @@ async def test_pluvial_bbox_gate_has_granularity_no_time_scale(monkeypatch) -> N
 
     driver = asyncio.create_task(_drive_decision(server, "proceed"))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await driver
 
@@ -284,7 +284,7 @@ async def test_bbox_less_pluvial_narrow_scope_fails_closed(monkeypatch) -> None:
         _drive_decision(server, "narrow_scope", {"grid_resolution_m": 50.0})
     )
     should_run, _ = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await driver
 

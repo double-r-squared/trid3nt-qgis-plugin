@@ -132,7 +132,7 @@ def test_rehydrate_converts_text_turns_in_order() -> None:
 
 def test_rehydrate_collapses_tool_rows_to_text_line() -> None:
     case_id = new_ulid()
-    card = ToolCardRecord(tool_name="run_model_flood_scenario", state="complete")
+    card = ToolCardRecord(tool_name="sfincs_flood", state="complete")
     rows = [
         _msg(case_id, "user", "model the flood", seq=0),
         _msg(case_id, "tool", card.model_dump_json(), seq=1, tool_card=card),
@@ -141,7 +141,7 @@ def test_rehydrate_collapses_tool_rows_to_text_line() -> None:
     history, _ = rehydrate_history_from_case(rows, [])
     assert history[1] == {
         "role": "model",
-        "text": "[tool run_model_flood_scenario completed]",
+        "text": "[tool sfincs_flood completed]",
     }
 
 

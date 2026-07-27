@@ -53,9 +53,9 @@ _DYNAMIC_TOOL_NAMES: frozenset[str] = frozenset(
         "fetch_nws_alerts_conus",
         "fetch_fema_nfhl_zones",
         "fetch_mrms_qpe",
-        "run_model_flood_scenario",
+        "run_sfincs",
         "fetch_usace_nsi",
-        "run_pelicun_damage_assessment",
+        "run_pelicun",
     }
 )
 

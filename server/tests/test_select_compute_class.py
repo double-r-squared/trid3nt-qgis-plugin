@@ -169,7 +169,7 @@ def _flood_mocks(monkeypatch):
     """Patch the flood workflow's fetcher chain + downstream so only the
     run_solver compute_class hand-off is under test. Returns the captured
     run_solver kwargs holder."""
-    from trid3nt_server.workflows.sfincs.model_flood_scenario import model_flood_scenario as mod
+    from trid3nt_server.workflows.sfincs.flood import flood as mod
     from trid3nt_contracts import new_ulid
     from trid3nt_contracts.execution import ExecutionHandle, LayerURI, RunResult
 
@@ -263,7 +263,7 @@ def _flood_mocks(monkeypatch):
 async def test_flood_workflow_passes_computed_large_class(monkeypatch) -> None:
     """A large estimated_active_cells -> run_solver gets 'large', NOT the
     caller's 'medium' default."""
-    from trid3nt_server.workflows.sfincs.model_flood_scenario import model_flood_scenario as mod
+    from trid3nt_server.workflows.sfincs.flood import flood as mod
 
     captured, patches = _flood_mocks(monkeypatch)
     big_setup = _model_setup_with_autoscale(500_000)  # in the LARGE band
@@ -288,7 +288,7 @@ async def test_flood_workflow_passes_computed_large_class(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_flood_workflow_passes_computed_xlarge_class(monkeypatch) -> None:
     """A very large estimate reaches the new xlarge tier."""
-    from trid3nt_server.workflows.sfincs.model_flood_scenario import model_flood_scenario as mod
+    from trid3nt_server.workflows.sfincs.flood import flood as mod
 
     captured, patches = _flood_mocks(monkeypatch)
     huge_setup = _model_setup_with_autoscale(3_000_000)
@@ -311,7 +311,7 @@ async def test_flood_workflow_passes_computed_xlarge_class(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_flood_workflow_falls_back_when_no_estimate(monkeypatch) -> None:
     """No autoscale estimate -> the caller's compute_class is used (no crash)."""
-    from trid3nt_server.workflows.sfincs.model_flood_scenario import model_flood_scenario as mod
+    from trid3nt_server.workflows.sfincs.flood import flood as mod
 
     captured, patches = _flood_mocks(monkeypatch)
     setup_no_estimate = _model_setup_with_autoscale(None)

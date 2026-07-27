@@ -1,0 +1,4018 @@
+{
+  "meta": {
+    "engine": "retrieval_probe",
+    "timestamp": "20260727T131308Z",
+    "runs": 3,
+    "k": 5,
+    "record_count": 60,
+    "inputs": [
+      "/home/nate/Documents/trid3nt-local/experiments/bench/retrieval_probe/inputs/phrasings_specific.json",
+      "/home/nate/Documents/trid3nt-local/experiments/bench/retrieval_probe/inputs/phrasings_vague.json"
+    ],
+    "catalog_size": 212,
+    "external_calls": "none (model-free; in-process retrieval seam only)",
+    "index_build_ms": 8724.9,
+    "index_tool_count": 191,
+    "dense_backend": "sentence_transformers",
+    "bm25": true
+  },
+  "runs": [
+    [
+      {
+        "record_id": "rp-spec-01-hazard_modeling",
+        "category": "hazard_modeling",
+        "register": "specific",
+        "turnaround_ms": 71.298,
+        "topk": [
+          "run_sfincs",
+          "set_sfincs_parameters",
+          "fetch_topobathy",
+          "fetch_noaa_coops_tides",
+          "run_model_nws_flood_event_scenario"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "run_sfincs"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.6131,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-02-weather_atmosphere",
+        "category": "weather_atmosphere",
+        "register": "specific",
+        "turnaround_ms": 24.534,
+        "topk": [
+          "fetch_nws_alerts_conus",
+          "fetch_nws_event",
+          "fetch_raws_weather",
+          "run_model_nws_flood_event_scenario",
+          "fetch_nws_river_forecast"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_nws_event"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-03-hydrology",
+        "category": "hydrology",
+        "register": "specific",
+        "turnaround_ms": 9.15,
+        "topk": [
+          "fetch_usgs_nwis_gauges",
+          "fetch_usgs_groundwater_levels",
+          "fetch_noaa_nwm_streamflow",
+          "fetch_cama_flood_discharge",
+          "fetch_usgs_water_quality"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_usgs_nwis_gauges"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-04-terrain_elevation",
+        "category": "terrain_elevation",
+        "register": "specific",
+        "turnaround_ms": 24.123,
+        "topk": [
+          "fetch_3dep_extra",
+          "fetch_copernicus_dem",
+          "fetch_dem",
+          "fetch_topobathy",
+          "compute_terrain_profile"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_3dep_extra",
+          "fetch_dem"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.9197,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-05-land_cover_development",
+        "category": "land_cover_development",
+        "register": "specific",
+        "turnaround_ms": 8.398,
+        "topk": [
+          "fetch_esri_landcover_10m",
+          "fetch_landcover",
+          "extract_landcover_class",
+          "compute_urban_heat_island",
+          "fetch_landfire_fuels"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_landcover"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-06-conservation_ecology",
+        "category": "conservation_ecology",
+        "register": "specific",
+        "turnaround_ms": 8.618,
+        "topk": [
+          "fetch_gbif_occurrences",
+          "fetch_inaturalist_observations",
+          "fetch_mtbs_burn_severity",
+          "fetch_iucn_red_list_range",
+          "fetch_ebird_observations"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_gbif_occurrences"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-07-fire",
+        "category": "fire",
+        "register": "specific",
+        "turnaround_ms": 9.011,
+        "topk": [
+          "fetch_firms_active_fire",
+          "fetch_goes_active_fire",
+          "fetch_nifc_fire_perimeters",
+          "run_model_goes_fire_animation",
+          "run_model_satellite_fire_animation"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_firms_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-08-coastal",
+        "category": "coastal",
+        "register": "specific",
+        "turnaround_ms": 24.293,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_noaa_coops_currents",
+          "fetch_gtsm_tide_surge",
+          "extract_model_at_observations",
+          "fetch_ebird_observations"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-09-damage_assessment",
+        "category": "damage_assessment",
+        "register": "specific",
+        "turnaround_ms": 8.628,
+        "topk": [
+          "compute_flood_depth_damage",
+          "run_pelicun",
+          "postprocess_pelicun",
+          "generate_damage_distribution",
+          "compute_idf_curve"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "run_pelicun"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2961,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-10-flood_infrastructure",
+        "category": "flood_infrastructure",
+        "register": "specific",
+        "turnaround_ms": 8.73,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "fetch_openfema_disasters",
+          "fetch_usace_levees",
+          "fetch_noaa_slr_scenarios",
+          "fetch_high_water_marks"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_fema_nfhl_zones"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-11-geographic_primitives",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 21.203,
+        "topk": [
+          "geocode_location",
+          "query_point_hazard",
+          "fetch_wfigs_incident",
+          "fetch_administrative_boundaries",
+          "fetch_openaq_measurements"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "geocode_location"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-12-news_events",
+        "category": "news_events",
+        "register": "specific",
+        "turnaround_ms": 17.255,
+        "topk": [
+          "fetch_storm_events_db",
+          "fetch_tsunami_events",
+          "fetch_nws_event",
+          "fetch_storm_tracks",
+          "fetch_noaa_coops_tides"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_storm_events_db"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-13-hydrology-nwm",
+        "category": "hydrology",
+        "register": "specific",
+        "turnaround_ms": 5.305,
+        "topk": [
+          "fetch_noaa_nwm_streamflow",
+          "fetch_high_water_marks",
+          "fetch_noaa_coops_tides",
+          "run_model_groundwater_contamination_scenario",
+          "fetch_nhd_waterbodies"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_nwm_streamflow"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-14-coastal-slr",
+        "category": "coastal",
+        "register": "specific",
+        "turnaround_ms": 5.108,
+        "topk": [
+          "fetch_noaa_slr_scenarios",
+          "fetch_noaa_slr_confidence",
+          "fetch_noaa_slr_marsh",
+          "fetch_noaa_coops_tides",
+          "fetch_noaa_coops_currents"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_slr_scenarios"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-15-spatial_query-stats",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.475,
+        "topk": [
+          "compute_exposure_summary",
+          "spatial_query",
+          "compute_zonal_statistics",
+          "compute_impact_envelope",
+          "generate_histogram"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-16-spatial_query-count",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.696,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "compute_flood_depth_damage",
+          "compute_exposure_summary",
+          "compute_zonal_statistics",
+          "compute_building_density"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2641,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-spec-17-spatial_query-zonal",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.497,
+        "topk": [
+          "compute_zonal_statistics",
+          "fetch_administrative_boundaries",
+          "spatial_query",
+          "clip_raster_to_bbox",
+          "clip_raster_to_polygon"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics",
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.9197,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-18-spatial_query-aggregate",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.382,
+        "topk": [
+          "compute_exposure_summary",
+          "fetch_lehd_jobs",
+          "fetch_hrsl_population",
+          "compute_zonal_statistics",
+          "fetch_population"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2021,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-spec-19-typo-nfhl",
+        "category": "flood_infrastructure",
+        "register": "specific",
+        "turnaround_ms": 16.322,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "fetch_openfema_disasters",
+          "fetch_noaa_coops_tides",
+          "fetch_from_catalog",
+          "fetch_hrsl_population"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_fema_nfhl_zones"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-20-typo-nlcd",
+        "category": "land_cover_development",
+        "register": "specific",
+        "turnaround_ms": 18.181,
+        "topk": [
+          "fetch_landcover",
+          "fetch_esri_landcover_10m",
+          "extract_landcover_class",
+          "compute_urban_heat_island",
+          "fetch_landsat_imagery"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_landcover"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-21-typo-nwis",
+        "category": "hydrology",
+        "register": "specific",
+        "turnaround_ms": 34.957,
+        "topk": [
+          "fetch_usgs_nwis_gauges",
+          "fetch_usgs_water_quality",
+          "fetch_usgs_groundwater_levels",
+          "fetch_cama_flood_discharge",
+          "extract_model_at_observations"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_usgs_nwis_gauges"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-22-typo-firms",
+        "category": "fire",
+        "register": "specific",
+        "turnaround_ms": 19.239,
+        "topk": [
+          "fetch_firms_active_fire",
+          "fetch_goes_active_fire",
+          "run_model_goes_fire_animation",
+          "fetch_nifc_fire_perimeters",
+          "run_model_satellite_fire_animation"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_firms_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-23-typo-coops",
+        "category": "coastal",
+        "register": "specific",
+        "turnaround_ms": 22.073,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_noaa_coops_currents",
+          "fetch_noaa_slr_confidence",
+          "fetch_gtsm_tide_surge",
+          "compute_idf_curve"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-24-spatial_query-topn",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.716,
+        "topk": [
+          "compute_flood_depth_damage",
+          "compute_exposure_summary",
+          "compute_impact_envelope",
+          "compute_flood_extent_skill",
+          "run_model_nws_flood_event_scenario"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-spec-25-spatial_query-groupby",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 12.32,
+        "topk": [
+          "geocode_location",
+          "code_exec_request",
+          "spatial_query",
+          "fetch_administrative_boundaries",
+          "compute_zonal_statistics"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.5,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-spec-26-spatial_query-select",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.607,
+        "topk": [
+          "spatial_query",
+          "fetch_fema_nfhl_zones",
+          "fill_gaps",
+          "fetch_usace_levees",
+          "merge_features"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-27-search_spatial_functions-distance",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.852,
+        "topk": [
+          "search_spatial_functions",
+          "spatial_query",
+          "query_point_hazard",
+          "extract_timeseries_at_point",
+          "request_spatial_input"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-28-search_spatial_functions-buffer",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 12.446,
+        "topk": [
+          "search_spatial_functions",
+          "fetch_administrative_boundaries",
+          "clip_raster_to_polygon",
+          "compute_zonal_statistics",
+          "fetch_iucn_red_list_range"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-29-atlimit-01",
+        "category": "news_events",
+        "register": "vague",
+        "turnaround_ms": 10.495,
+        "topk": [
+          "fetch_hrrr_forecast",
+          "fetch_ebird_observations",
+          "fetch_jrc_global_surface_water",
+          "run_swmm",
+          "fetch_climate_normals"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-spec-30-atlimit-02",
+        "category": "damage_assessment",
+        "register": "vague",
+        "turnaround_ms": 12.558,
+        "topk": [
+          "fetch_usfs_canopy_fuels",
+          "compute_canopy_height",
+          "fetch_usgs_volcano_alerts",
+          "run_pelicun",
+          "run_landlab"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-01-hazard_modeling",
+        "category": "hazard_modeling",
+        "register": "vague",
+        "turnaround_ms": 4.86,
+        "topk": [
+          "run_model_nws_flood_event_scenario",
+          "fetch_flood_extent_observation",
+          "fetch_storm_events_db",
+          "compute_flood_depth_damage",
+          "run_model_flood_habitat_scenario"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-02-weather_atmosphere",
+        "category": "weather_atmosphere",
+        "register": "vague",
+        "turnaround_ms": 13.512,
+        "topk": [
+          "fetch_raws_weather",
+          "fetch_nws_event",
+          "fetch_roads_osm",
+          "fetch_asos_metar",
+          "fetch_gridmet"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_nws_event"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.3869,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-03-hydrology",
+        "category": "hydrology",
+        "register": "vague",
+        "turnaround_ms": 4.819,
+        "topk": [
+          "fetch_river_geometry",
+          "fetch_high_water_marks",
+          "fetch_nws_river_forecast",
+          "fetch_snotel_snow",
+          "fetch_noaa_nwm_streamflow"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_nws_river_forecast",
+          "fetch_noaa_nwm_streamflow"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4162,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-vag-04-terrain_elevation",
+        "category": "terrain_elevation",
+        "register": "vague",
+        "turnaround_ms": 4.735,
+        "topk": [
+          "compute_terrain_profile",
+          "compute_colored_relief",
+          "compute_contours",
+          "compute_slope",
+          "compute_hillshade"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_colored_relief",
+          "compute_hillshade"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.3973,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-05-land_cover_development",
+        "category": "land_cover_development",
+        "register": "vague",
+        "turnaround_ms": 4.686,
+        "topk": [
+          "fetch_wdpa_protected_areas",
+          "compute_building_density",
+          "fetch_buildings",
+          "fetch_usace_nsi",
+          "compute_urban_heat_island"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_building_density",
+          "fetch_buildings"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4415,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-06-conservation_ecology",
+        "category": "conservation_ecology",
+        "register": "vague",
+        "turnaround_ms": 4.585,
+        "topk": [
+          "fetch_inaturalist_observations",
+          "fetch_ebird_observations",
+          "fetch_wdpa_protected_areas",
+          "fetch_nwi_wetlands",
+          "fetch_movebank_tracks"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_inaturalist_observations",
+          "fetch_ebird_observations"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.7654,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-07-fire",
+        "category": "fire",
+        "register": "vague",
+        "turnaround_ms": 4.643,
+        "topk": [
+          "fetch_mtbs_burn_severity",
+          "fetch_goes_active_fire",
+          "fetch_hrrr_smoke",
+          "fetch_usgs_volcano_alerts",
+          "compute_urban_heat_island"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_goes_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2463,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-08-coastal",
+        "category": "coastal",
+        "register": "vague",
+        "turnaround_ms": 4.57,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge",
+          "fetch_high_water_marks",
+          "fetch_noaa_coops_currents",
+          "fetch_river_geometry"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-09-damage_assessment",
+        "category": "damage_assessment",
+        "register": "vague",
+        "turnaround_ms": 4.72,
+        "topk": [
+          "compute_flood_depth_damage",
+          "generate_damage_distribution",
+          "compute_impact_envelope",
+          "compute_exposure_summary",
+          "compute_zonal_statistics"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_flood_depth_damage",
+          "compute_impact_envelope"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.5087,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-10-flood_infrastructure",
+        "category": "flood_infrastructure",
+        "register": "vague",
+        "turnaround_ms": 12.91,
+        "topk": [
+          "fetch_wdpa_protected_areas",
+          "compute_flood_depth_damage",
+          "fetch_usace_levees",
+          "fetch_noaa_slr_scenarios",
+          "fetch_nws_river_forecast"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-11-geographic_primitives",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.642,
+        "topk": [
+          "geocode_location",
+          "fetch_openfema_disasters",
+          "fetch_wfigs_incident",
+          "fetch_overpass_pois",
+          "fetch_noaa_slr_confidence"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "geocode_location"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-12-news_events",
+        "category": "news_events",
+        "register": "vague",
+        "turnaround_ms": 4.666,
+        "topk": [
+          "fetch_openfema_disasters",
+          "fetch_tsunami_events",
+          "fetch_storm_events_db",
+          "fetch_administrative_boundaries",
+          "fetch_nws_alerts_conus"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_openfema_disasters",
+          "fetch_storm_events_db"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.9197,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-13-weather-precip",
+        "category": "weather_atmosphere",
+        "register": "vague",
+        "turnaround_ms": 4.64,
+        "topk": [
+          "compute_overtopping",
+          "fetch_viirs_day_fire",
+          "compute_flood_depth_damage",
+          "fetch_modis_lst",
+          "compute_terrain_profile"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-14-coastal-slr",
+        "category": "coastal",
+        "register": "vague",
+        "turnaround_ms": 10.773,
+        "topk": [
+          "fetch_gcn250_curve_numbers",
+          "search_tools",
+          "fetch_noaa_sst",
+          "fetch_noaa_slr_scenarios",
+          "search_data_catalog"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_slr_scenarios"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4307,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-vag-15-spatial_query-stats",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.538,
+        "topk": [
+          "fetch_statsgo_soils",
+          "compute_wave_nomograph",
+          "run_model_conservation_priority",
+          "spatial_query",
+          "compute_canopy_height"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4307,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-vag-16-spatial_query-count",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.643,
+        "topk": [
+          "cut_features_with_polygon",
+          "merge_features",
+          "spatial_query",
+          "compute_exposure_summary",
+          "analyze_affected_fields"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.5,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-vag-17-spatial_query-zonal",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 10.683,
+        "topk": [
+          "compute_zonal_statistics",
+          "fetch_usace_nsi",
+          "fetch_fema_nfhl_zones",
+          "compute_exposure_summary",
+          "fetch_statsgo_soils"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.6131,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-18-spatial_query-overlap",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.537,
+        "topk": [
+          "fetch_flood_extent_observation",
+          "compute_flood_extent_skill",
+          "run_model_flood_habitat_scenario",
+          "fetch_cama_flood_discharge",
+          "compute_flood_depth_damage"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-19-typo-flood",
+        "category": "flood_infrastructure",
+        "register": "vague",
+        "turnaround_ms": 22.942,
+        "topk": [
+          "fetch_wdpa_protected_areas",
+          "fetch_administrative_boundaries",
+          "fetch_field_boundaries",
+          "fetch_usace_levees",
+          "fetch_lehd_jobs"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-20-typo-builtup",
+        "category": "land_cover_development",
+        "register": "vague",
+        "turnaround_ms": 15.458,
+        "topk": [
+          "lookup_precip_return_period",
+          "compute_urban_heat_island",
+          "compute_canopy_height",
+          "run_model_conservation_priority",
+          "fetch_topobathy"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-21-typo-rivers",
+        "category": "hydrology",
+        "register": "vague",
+        "turnaround_ms": 23.468,
+        "topk": [
+          "fetch_snotel_snow",
+          "set_sfincs_parameters",
+          "fetch_airnow_air_quality",
+          "set_swmm_parameters",
+          "compute_urban_heat_island"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-22-typo-burning",
+        "category": "fire",
+        "register": "vague",
+        "turnaround_ms": 20.424,
+        "topk": [
+          "fetch_goes_active_fire",
+          "geocode_location",
+          "fetch_hrrr_smoke",
+          "compute_urban_heat_island",
+          "fetch_usgs_volcano_alerts"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_goes_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.3904,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-23-typo-tide",
+        "category": "coastal",
+        "register": "vague",
+        "turnaround_ms": 10.211,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge",
+          "fetch_noaa_coops_currents",
+          "fetch_topobathy",
+          "fetch_noaa_slr_marsh"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-24-spatial_query-topn",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 12.427,
+        "topk": [
+          "fetch_buildings",
+          "run_pelicun",
+          "analyze_affected_fields",
+          "compute_flood_depth_damage",
+          "compute_impact_envelope"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-25-spatial_query-groupby",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.534,
+        "topk": [
+          "fetch_census_acs",
+          "request_spatial_input",
+          "geocode_location",
+          "fetch_nhdplus_nldi_navigate",
+          "fetch_buildings"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-26-spatial_query-select",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.509,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "fetch_population",
+          "fetch_usace_levees",
+          "extract_landcover_class",
+          "fetch_ghsl_population"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-27-search_spatial_functions-distance",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 18.475,
+        "topk": [
+          "compute_movement_trajectory",
+          "query_point_hazard",
+          "search_spatial_functions",
+          "extract_timeseries_at_point",
+          "compute_skill_metrics"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.5,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-vag-28-search_spatial_functions-buffer",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 17.99,
+        "topk": [
+          "fetch_buildings",
+          "search_spatial_functions",
+          "fetch_nhdplus_nldi_navigate",
+          "fetch_overpass_pois",
+          "fetch_field_boundaries"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-29-atlimit-01",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.667,
+        "topk": [
+          "fetch_goes_satellite",
+          "run_model_satellite_fire_animation",
+          "digitize_water_body",
+          "run_model_news_event_ingest",
+          "spatial_query"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-30-atlimit-02",
+        "category": "land_cover_development",
+        "register": "vague",
+        "turnaround_ms": 4.303,
+        "topk": [
+          "request_spatial_input",
+          "fetch_high_water_marks",
+          "fetch_landsat_imagery",
+          "fetch_buildings",
+          "fetch_sentinel2_truecolor"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      }
+    ],
+    [
+      {
+        "record_id": "rp-spec-01-hazard_modeling",
+        "category": "hazard_modeling",
+        "register": "specific",
+        "turnaround_ms": 4.715,
+        "topk": [
+          "run_sfincs",
+          "set_sfincs_parameters",
+          "fetch_topobathy",
+          "fetch_noaa_coops_tides",
+          "run_model_nws_flood_event_scenario"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "run_sfincs"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.6131,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-02-weather_atmosphere",
+        "category": "weather_atmosphere",
+        "register": "specific",
+        "turnaround_ms": 4.382,
+        "topk": [
+          "fetch_nws_alerts_conus",
+          "fetch_nws_event",
+          "fetch_raws_weather",
+          "run_model_nws_flood_event_scenario",
+          "fetch_nws_river_forecast"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_nws_event"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-03-hydrology",
+        "category": "hydrology",
+        "register": "specific",
+        "turnaround_ms": 4.778,
+        "topk": [
+          "fetch_usgs_nwis_gauges",
+          "fetch_usgs_groundwater_levels",
+          "fetch_noaa_nwm_streamflow",
+          "fetch_cama_flood_discharge",
+          "fetch_usgs_water_quality"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_usgs_nwis_gauges"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-04-terrain_elevation",
+        "category": "terrain_elevation",
+        "register": "specific",
+        "turnaround_ms": 4.597,
+        "topk": [
+          "fetch_3dep_extra",
+          "fetch_copernicus_dem",
+          "fetch_dem",
+          "fetch_topobathy",
+          "compute_terrain_profile"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_3dep_extra",
+          "fetch_dem"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.9197,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-05-land_cover_development",
+        "category": "land_cover_development",
+        "register": "specific",
+        "turnaround_ms": 4.457,
+        "topk": [
+          "fetch_esri_landcover_10m",
+          "fetch_landcover",
+          "extract_landcover_class",
+          "compute_urban_heat_island",
+          "fetch_landfire_fuels"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_landcover"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-06-conservation_ecology",
+        "category": "conservation_ecology",
+        "register": "specific",
+        "turnaround_ms": 4.56,
+        "topk": [
+          "fetch_gbif_occurrences",
+          "fetch_inaturalist_observations",
+          "fetch_mtbs_burn_severity",
+          "fetch_iucn_red_list_range",
+          "fetch_ebird_observations"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_gbif_occurrences"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-07-fire",
+        "category": "fire",
+        "register": "specific",
+        "turnaround_ms": 4.804,
+        "topk": [
+          "fetch_firms_active_fire",
+          "fetch_goes_active_fire",
+          "fetch_nifc_fire_perimeters",
+          "run_model_goes_fire_animation",
+          "run_model_satellite_fire_animation"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_firms_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-08-coastal",
+        "category": "coastal",
+        "register": "specific",
+        "turnaround_ms": 4.661,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_noaa_coops_currents",
+          "fetch_gtsm_tide_surge",
+          "extract_model_at_observations",
+          "fetch_ebird_observations"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-09-damage_assessment",
+        "category": "damage_assessment",
+        "register": "specific",
+        "turnaround_ms": 4.589,
+        "topk": [
+          "compute_flood_depth_damage",
+          "run_pelicun",
+          "postprocess_pelicun",
+          "generate_damage_distribution",
+          "compute_idf_curve"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "run_pelicun"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2961,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-10-flood_infrastructure",
+        "category": "flood_infrastructure",
+        "register": "specific",
+        "turnaround_ms": 4.422,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "fetch_openfema_disasters",
+          "fetch_usace_levees",
+          "fetch_noaa_slr_scenarios",
+          "fetch_high_water_marks"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_fema_nfhl_zones"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-11-geographic_primitives",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.356,
+        "topk": [
+          "geocode_location",
+          "query_point_hazard",
+          "fetch_wfigs_incident",
+          "fetch_administrative_boundaries",
+          "fetch_openaq_measurements"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "geocode_location"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-12-news_events",
+        "category": "news_events",
+        "register": "specific",
+        "turnaround_ms": 4.652,
+        "topk": [
+          "fetch_storm_events_db",
+          "fetch_tsunami_events",
+          "fetch_nws_event",
+          "fetch_storm_tracks",
+          "fetch_noaa_coops_tides"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_storm_events_db"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-13-hydrology-nwm",
+        "category": "hydrology",
+        "register": "specific",
+        "turnaround_ms": 4.462,
+        "topk": [
+          "fetch_noaa_nwm_streamflow",
+          "fetch_high_water_marks",
+          "fetch_noaa_coops_tides",
+          "run_model_groundwater_contamination_scenario",
+          "fetch_nhd_waterbodies"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_nwm_streamflow"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-14-coastal-slr",
+        "category": "coastal",
+        "register": "specific",
+        "turnaround_ms": 4.486,
+        "topk": [
+          "fetch_noaa_slr_scenarios",
+          "fetch_noaa_slr_confidence",
+          "fetch_noaa_slr_marsh",
+          "fetch_noaa_coops_tides",
+          "fetch_noaa_coops_currents"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_slr_scenarios"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-15-spatial_query-stats",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.644,
+        "topk": [
+          "compute_exposure_summary",
+          "spatial_query",
+          "compute_zonal_statistics",
+          "compute_impact_envelope",
+          "generate_histogram"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-16-spatial_query-count",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.575,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "compute_flood_depth_damage",
+          "compute_exposure_summary",
+          "compute_zonal_statistics",
+          "compute_building_density"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2641,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-spec-17-spatial_query-zonal",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.494,
+        "topk": [
+          "compute_zonal_statistics",
+          "fetch_administrative_boundaries",
+          "spatial_query",
+          "clip_raster_to_bbox",
+          "clip_raster_to_polygon"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics",
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.9197,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-18-spatial_query-aggregate",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.397,
+        "topk": [
+          "compute_exposure_summary",
+          "fetch_lehd_jobs",
+          "fetch_hrsl_population",
+          "compute_zonal_statistics",
+          "fetch_population"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2021,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-spec-19-typo-nfhl",
+        "category": "flood_infrastructure",
+        "register": "specific",
+        "turnaround_ms": 4.547,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "fetch_openfema_disasters",
+          "fetch_noaa_coops_tides",
+          "fetch_from_catalog",
+          "fetch_hrsl_population"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_fema_nfhl_zones"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-20-typo-nlcd",
+        "category": "land_cover_development",
+        "register": "specific",
+        "turnaround_ms": 4.459,
+        "topk": [
+          "fetch_landcover",
+          "fetch_esri_landcover_10m",
+          "extract_landcover_class",
+          "compute_urban_heat_island",
+          "fetch_landsat_imagery"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_landcover"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-21-typo-nwis",
+        "category": "hydrology",
+        "register": "specific",
+        "turnaround_ms": 5.132,
+        "topk": [
+          "fetch_usgs_nwis_gauges",
+          "fetch_usgs_water_quality",
+          "fetch_usgs_groundwater_levels",
+          "fetch_cama_flood_discharge",
+          "extract_model_at_observations"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_usgs_nwis_gauges"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-22-typo-firms",
+        "category": "fire",
+        "register": "specific",
+        "turnaround_ms": 4.959,
+        "topk": [
+          "fetch_firms_active_fire",
+          "fetch_goes_active_fire",
+          "run_model_goes_fire_animation",
+          "fetch_nifc_fire_perimeters",
+          "run_model_satellite_fire_animation"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_firms_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-23-typo-coops",
+        "category": "coastal",
+        "register": "specific",
+        "turnaround_ms": 4.891,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_noaa_coops_currents",
+          "fetch_noaa_slr_confidence",
+          "fetch_gtsm_tide_surge",
+          "compute_idf_curve"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-24-spatial_query-topn",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.472,
+        "topk": [
+          "compute_flood_depth_damage",
+          "compute_exposure_summary",
+          "compute_impact_envelope",
+          "compute_flood_extent_skill",
+          "run_model_nws_flood_event_scenario"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-spec-25-spatial_query-groupby",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 5.199,
+        "topk": [
+          "geocode_location",
+          "code_exec_request",
+          "spatial_query",
+          "fetch_administrative_boundaries",
+          "compute_zonal_statistics"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.5,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-spec-26-spatial_query-select",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.754,
+        "topk": [
+          "spatial_query",
+          "fetch_fema_nfhl_zones",
+          "fill_gaps",
+          "fetch_usace_levees",
+          "merge_features"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-27-search_spatial_functions-distance",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.924,
+        "topk": [
+          "search_spatial_functions",
+          "spatial_query",
+          "query_point_hazard",
+          "extract_timeseries_at_point",
+          "request_spatial_input"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-28-search_spatial_functions-buffer",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.909,
+        "topk": [
+          "search_spatial_functions",
+          "fetch_administrative_boundaries",
+          "clip_raster_to_polygon",
+          "compute_zonal_statistics",
+          "fetch_iucn_red_list_range"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-29-atlimit-01",
+        "category": "news_events",
+        "register": "vague",
+        "turnaround_ms": 4.603,
+        "topk": [
+          "fetch_hrrr_forecast",
+          "fetch_ebird_observations",
+          "fetch_jrc_global_surface_water",
+          "run_swmm",
+          "fetch_climate_normals"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-spec-30-atlimit-02",
+        "category": "damage_assessment",
+        "register": "vague",
+        "turnaround_ms": 4.591,
+        "topk": [
+          "fetch_usfs_canopy_fuels",
+          "compute_canopy_height",
+          "fetch_usgs_volcano_alerts",
+          "run_pelicun",
+          "run_landlab"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-01-hazard_modeling",
+        "category": "hazard_modeling",
+        "register": "vague",
+        "turnaround_ms": 4.804,
+        "topk": [
+          "run_model_nws_flood_event_scenario",
+          "fetch_flood_extent_observation",
+          "fetch_storm_events_db",
+          "compute_flood_depth_damage",
+          "run_model_flood_habitat_scenario"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-02-weather_atmosphere",
+        "category": "weather_atmosphere",
+        "register": "vague",
+        "turnaround_ms": 4.536,
+        "topk": [
+          "fetch_raws_weather",
+          "fetch_nws_event",
+          "fetch_roads_osm",
+          "fetch_asos_metar",
+          "fetch_gridmet"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_nws_event"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.3869,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-03-hydrology",
+        "category": "hydrology",
+        "register": "vague",
+        "turnaround_ms": 4.63,
+        "topk": [
+          "fetch_river_geometry",
+          "fetch_high_water_marks",
+          "fetch_nws_river_forecast",
+          "fetch_snotel_snow",
+          "fetch_noaa_nwm_streamflow"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_nws_river_forecast",
+          "fetch_noaa_nwm_streamflow"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4162,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-vag-04-terrain_elevation",
+        "category": "terrain_elevation",
+        "register": "vague",
+        "turnaround_ms": 4.361,
+        "topk": [
+          "compute_terrain_profile",
+          "compute_colored_relief",
+          "compute_contours",
+          "compute_slope",
+          "compute_hillshade"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_colored_relief",
+          "compute_hillshade"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.3973,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-05-land_cover_development",
+        "category": "land_cover_development",
+        "register": "vague",
+        "turnaround_ms": 4.546,
+        "topk": [
+          "fetch_wdpa_protected_areas",
+          "compute_building_density",
+          "fetch_buildings",
+          "fetch_usace_nsi",
+          "compute_urban_heat_island"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_building_density",
+          "fetch_buildings"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4415,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-06-conservation_ecology",
+        "category": "conservation_ecology",
+        "register": "vague",
+        "turnaround_ms": 4.434,
+        "topk": [
+          "fetch_inaturalist_observations",
+          "fetch_ebird_observations",
+          "fetch_wdpa_protected_areas",
+          "fetch_nwi_wetlands",
+          "fetch_movebank_tracks"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_inaturalist_observations",
+          "fetch_ebird_observations"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.7654,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-07-fire",
+        "category": "fire",
+        "register": "vague",
+        "turnaround_ms": 4.264,
+        "topk": [
+          "fetch_mtbs_burn_severity",
+          "fetch_goes_active_fire",
+          "fetch_hrrr_smoke",
+          "fetch_usgs_volcano_alerts",
+          "compute_urban_heat_island"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_goes_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2463,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-08-coastal",
+        "category": "coastal",
+        "register": "vague",
+        "turnaround_ms": 4.507,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge",
+          "fetch_high_water_marks",
+          "fetch_noaa_coops_currents",
+          "fetch_river_geometry"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-09-damage_assessment",
+        "category": "damage_assessment",
+        "register": "vague",
+        "turnaround_ms": 4.696,
+        "topk": [
+          "compute_flood_depth_damage",
+          "generate_damage_distribution",
+          "compute_impact_envelope",
+          "compute_exposure_summary",
+          "compute_zonal_statistics"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_flood_depth_damage",
+          "compute_impact_envelope"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.5087,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-10-flood_infrastructure",
+        "category": "flood_infrastructure",
+        "register": "vague",
+        "turnaround_ms": 4.525,
+        "topk": [
+          "fetch_wdpa_protected_areas",
+          "compute_flood_depth_damage",
+          "fetch_usace_levees",
+          "fetch_noaa_slr_scenarios",
+          "fetch_nws_river_forecast"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-11-geographic_primitives",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.573,
+        "topk": [
+          "geocode_location",
+          "fetch_openfema_disasters",
+          "fetch_wfigs_incident",
+          "fetch_overpass_pois",
+          "fetch_noaa_slr_confidence"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "geocode_location"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-12-news_events",
+        "category": "news_events",
+        "register": "vague",
+        "turnaround_ms": 4.668,
+        "topk": [
+          "fetch_openfema_disasters",
+          "fetch_tsunami_events",
+          "fetch_storm_events_db",
+          "fetch_administrative_boundaries",
+          "fetch_nws_alerts_conus"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_openfema_disasters",
+          "fetch_storm_events_db"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.9197,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-13-weather-precip",
+        "category": "weather_atmosphere",
+        "register": "vague",
+        "turnaround_ms": 4.938,
+        "topk": [
+          "compute_overtopping",
+          "fetch_viirs_day_fire",
+          "compute_flood_depth_damage",
+          "fetch_modis_lst",
+          "compute_terrain_profile"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-14-coastal-slr",
+        "category": "coastal",
+        "register": "vague",
+        "turnaround_ms": 5.332,
+        "topk": [
+          "fetch_gcn250_curve_numbers",
+          "search_tools",
+          "fetch_noaa_sst",
+          "fetch_noaa_slr_scenarios",
+          "search_data_catalog"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_slr_scenarios"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4307,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-vag-15-spatial_query-stats",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.664,
+        "topk": [
+          "fetch_statsgo_soils",
+          "compute_wave_nomograph",
+          "run_model_conservation_priority",
+          "spatial_query",
+          "compute_canopy_height"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4307,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-vag-16-spatial_query-count",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.705,
+        "topk": [
+          "cut_features_with_polygon",
+          "merge_features",
+          "spatial_query",
+          "compute_exposure_summary",
+          "analyze_affected_fields"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.5,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-vag-17-spatial_query-zonal",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.631,
+        "topk": [
+          "compute_zonal_statistics",
+          "fetch_usace_nsi",
+          "fetch_fema_nfhl_zones",
+          "compute_exposure_summary",
+          "fetch_statsgo_soils"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.6131,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-18-spatial_query-overlap",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.588,
+        "topk": [
+          "fetch_flood_extent_observation",
+          "compute_flood_extent_skill",
+          "run_model_flood_habitat_scenario",
+          "fetch_cama_flood_discharge",
+          "compute_flood_depth_damage"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-19-typo-flood",
+        "category": "flood_infrastructure",
+        "register": "vague",
+        "turnaround_ms": 4.676,
+        "topk": [
+          "fetch_wdpa_protected_areas",
+          "fetch_administrative_boundaries",
+          "fetch_field_boundaries",
+          "fetch_usace_levees",
+          "fetch_lehd_jobs"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-20-typo-builtup",
+        "category": "land_cover_development",
+        "register": "vague",
+        "turnaround_ms": 4.66,
+        "topk": [
+          "lookup_precip_return_period",
+          "compute_urban_heat_island",
+          "compute_canopy_height",
+          "run_model_conservation_priority",
+          "fetch_topobathy"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-21-typo-rivers",
+        "category": "hydrology",
+        "register": "vague",
+        "turnaround_ms": 4.761,
+        "topk": [
+          "fetch_snotel_snow",
+          "set_sfincs_parameters",
+          "fetch_airnow_air_quality",
+          "set_swmm_parameters",
+          "compute_urban_heat_island"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-22-typo-burning",
+        "category": "fire",
+        "register": "vague",
+        "turnaround_ms": 4.34,
+        "topk": [
+          "fetch_goes_active_fire",
+          "geocode_location",
+          "fetch_hrrr_smoke",
+          "compute_urban_heat_island",
+          "fetch_usgs_volcano_alerts"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_goes_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.3904,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-23-typo-tide",
+        "category": "coastal",
+        "register": "vague",
+        "turnaround_ms": 4.587,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge",
+          "fetch_noaa_coops_currents",
+          "fetch_topobathy",
+          "fetch_noaa_slr_marsh"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-24-spatial_query-topn",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.587,
+        "topk": [
+          "fetch_buildings",
+          "run_pelicun",
+          "analyze_affected_fields",
+          "compute_flood_depth_damage",
+          "compute_impact_envelope"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-25-spatial_query-groupby",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.533,
+        "topk": [
+          "fetch_census_acs",
+          "request_spatial_input",
+          "geocode_location",
+          "fetch_nhdplus_nldi_navigate",
+          "fetch_buildings"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-26-spatial_query-select",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.514,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "fetch_population",
+          "fetch_usace_levees",
+          "extract_landcover_class",
+          "fetch_ghsl_population"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-27-search_spatial_functions-distance",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 5.002,
+        "topk": [
+          "compute_movement_trajectory",
+          "query_point_hazard",
+          "search_spatial_functions",
+          "extract_timeseries_at_point",
+          "compute_skill_metrics"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.5,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-vag-28-search_spatial_functions-buffer",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 5.057,
+        "topk": [
+          "fetch_buildings",
+          "search_spatial_functions",
+          "fetch_nhdplus_nldi_navigate",
+          "fetch_overpass_pois",
+          "fetch_field_boundaries"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-29-atlimit-01",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.668,
+        "topk": [
+          "fetch_goes_satellite",
+          "run_model_satellite_fire_animation",
+          "digitize_water_body",
+          "run_model_news_event_ingest",
+          "spatial_query"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-30-atlimit-02",
+        "category": "land_cover_development",
+        "register": "vague",
+        "turnaround_ms": 4.326,
+        "topk": [
+          "request_spatial_input",
+          "fetch_high_water_marks",
+          "fetch_landsat_imagery",
+          "fetch_buildings",
+          "fetch_sentinel2_truecolor"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      }
+    ],
+    [
+      {
+        "record_id": "rp-spec-01-hazard_modeling",
+        "category": "hazard_modeling",
+        "register": "specific",
+        "turnaround_ms": 4.724,
+        "topk": [
+          "run_sfincs",
+          "set_sfincs_parameters",
+          "fetch_topobathy",
+          "fetch_noaa_coops_tides",
+          "run_model_nws_flood_event_scenario"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "run_sfincs"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.6131,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-02-weather_atmosphere",
+        "category": "weather_atmosphere",
+        "register": "specific",
+        "turnaround_ms": 4.422,
+        "topk": [
+          "fetch_nws_alerts_conus",
+          "fetch_nws_event",
+          "fetch_raws_weather",
+          "run_model_nws_flood_event_scenario",
+          "fetch_nws_river_forecast"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_nws_event"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-03-hydrology",
+        "category": "hydrology",
+        "register": "specific",
+        "turnaround_ms": 4.79,
+        "topk": [
+          "fetch_usgs_nwis_gauges",
+          "fetch_usgs_groundwater_levels",
+          "fetch_noaa_nwm_streamflow",
+          "fetch_cama_flood_discharge",
+          "fetch_usgs_water_quality"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_usgs_nwis_gauges"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-04-terrain_elevation",
+        "category": "terrain_elevation",
+        "register": "specific",
+        "turnaround_ms": 4.598,
+        "topk": [
+          "fetch_3dep_extra",
+          "fetch_copernicus_dem",
+          "fetch_dem",
+          "fetch_topobathy",
+          "compute_terrain_profile"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_3dep_extra",
+          "fetch_dem"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.9197,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-05-land_cover_development",
+        "category": "land_cover_development",
+        "register": "specific",
+        "turnaround_ms": 4.456,
+        "topk": [
+          "fetch_esri_landcover_10m",
+          "fetch_landcover",
+          "extract_landcover_class",
+          "compute_urban_heat_island",
+          "fetch_landfire_fuels"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_landcover"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-06-conservation_ecology",
+        "category": "conservation_ecology",
+        "register": "specific",
+        "turnaround_ms": 4.531,
+        "topk": [
+          "fetch_gbif_occurrences",
+          "fetch_inaturalist_observations",
+          "fetch_mtbs_burn_severity",
+          "fetch_iucn_red_list_range",
+          "fetch_ebird_observations"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_gbif_occurrences"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-07-fire",
+        "category": "fire",
+        "register": "specific",
+        "turnaround_ms": 4.79,
+        "topk": [
+          "fetch_firms_active_fire",
+          "fetch_goes_active_fire",
+          "fetch_nifc_fire_perimeters",
+          "run_model_goes_fire_animation",
+          "run_model_satellite_fire_animation"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_firms_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-08-coastal",
+        "category": "coastal",
+        "register": "specific",
+        "turnaround_ms": 4.668,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_noaa_coops_currents",
+          "fetch_gtsm_tide_surge",
+          "extract_model_at_observations",
+          "fetch_ebird_observations"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-09-damage_assessment",
+        "category": "damage_assessment",
+        "register": "specific",
+        "turnaround_ms": 4.575,
+        "topk": [
+          "compute_flood_depth_damage",
+          "run_pelicun",
+          "postprocess_pelicun",
+          "generate_damage_distribution",
+          "compute_idf_curve"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "run_pelicun"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2961,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-10-flood_infrastructure",
+        "category": "flood_infrastructure",
+        "register": "specific",
+        "turnaround_ms": 4.44,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "fetch_openfema_disasters",
+          "fetch_usace_levees",
+          "fetch_noaa_slr_scenarios",
+          "fetch_high_water_marks"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_fema_nfhl_zones"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-11-geographic_primitives",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.373,
+        "topk": [
+          "geocode_location",
+          "query_point_hazard",
+          "fetch_wfigs_incident",
+          "fetch_administrative_boundaries",
+          "fetch_openaq_measurements"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "geocode_location"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-12-news_events",
+        "category": "news_events",
+        "register": "specific",
+        "turnaround_ms": 4.654,
+        "topk": [
+          "fetch_storm_events_db",
+          "fetch_tsunami_events",
+          "fetch_nws_event",
+          "fetch_storm_tracks",
+          "fetch_noaa_coops_tides"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_storm_events_db"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-13-hydrology-nwm",
+        "category": "hydrology",
+        "register": "specific",
+        "turnaround_ms": 4.464,
+        "topk": [
+          "fetch_noaa_nwm_streamflow",
+          "fetch_high_water_marks",
+          "fetch_noaa_coops_tides",
+          "run_model_groundwater_contamination_scenario",
+          "fetch_nhd_waterbodies"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_nwm_streamflow"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-14-coastal-slr",
+        "category": "coastal",
+        "register": "specific",
+        "turnaround_ms": 4.518,
+        "topk": [
+          "fetch_noaa_slr_scenarios",
+          "fetch_noaa_slr_confidence",
+          "fetch_noaa_slr_marsh",
+          "fetch_noaa_coops_tides",
+          "fetch_noaa_coops_currents"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_slr_scenarios"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-15-spatial_query-stats",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.329,
+        "topk": [
+          "compute_exposure_summary",
+          "spatial_query",
+          "compute_zonal_statistics",
+          "compute_impact_envelope",
+          "generate_histogram"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-spec-16-spatial_query-count",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.587,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "compute_flood_depth_damage",
+          "compute_exposure_summary",
+          "compute_zonal_statistics",
+          "compute_building_density"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2641,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-spec-17-spatial_query-zonal",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.552,
+        "topk": [
+          "compute_zonal_statistics",
+          "fetch_administrative_boundaries",
+          "spatial_query",
+          "clip_raster_to_bbox",
+          "clip_raster_to_polygon"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics",
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.9197,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-18-spatial_query-aggregate",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.585,
+        "topk": [
+          "compute_exposure_summary",
+          "fetch_lehd_jobs",
+          "fetch_hrsl_population",
+          "compute_zonal_statistics",
+          "fetch_population"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2021,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-spec-19-typo-nfhl",
+        "category": "flood_infrastructure",
+        "register": "specific",
+        "turnaround_ms": 4.634,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "fetch_openfema_disasters",
+          "fetch_noaa_coops_tides",
+          "fetch_from_catalog",
+          "fetch_hrsl_population"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_fema_nfhl_zones"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-20-typo-nlcd",
+        "category": "land_cover_development",
+        "register": "specific",
+        "turnaround_ms": 4.515,
+        "topk": [
+          "fetch_landcover",
+          "fetch_esri_landcover_10m",
+          "extract_landcover_class",
+          "compute_urban_heat_island",
+          "fetch_landsat_imagery"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_landcover"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-21-typo-nwis",
+        "category": "hydrology",
+        "register": "specific",
+        "turnaround_ms": 5.186,
+        "topk": [
+          "fetch_usgs_nwis_gauges",
+          "fetch_usgs_water_quality",
+          "fetch_usgs_groundwater_levels",
+          "fetch_cama_flood_discharge",
+          "extract_model_at_observations"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_usgs_nwis_gauges"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-22-typo-firms",
+        "category": "fire",
+        "register": "specific",
+        "turnaround_ms": 4.967,
+        "topk": [
+          "fetch_firms_active_fire",
+          "fetch_goes_active_fire",
+          "run_model_goes_fire_animation",
+          "fetch_nifc_fire_perimeters",
+          "run_model_satellite_fire_animation"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_firms_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-23-typo-coops",
+        "category": "coastal",
+        "register": "specific",
+        "turnaround_ms": 4.919,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_noaa_coops_currents",
+          "fetch_noaa_slr_confidence",
+          "fetch_gtsm_tide_surge",
+          "compute_idf_curve"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-24-spatial_query-topn",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.48,
+        "topk": [
+          "compute_flood_depth_damage",
+          "compute_exposure_summary",
+          "compute_impact_envelope",
+          "compute_flood_extent_skill",
+          "run_model_nws_flood_event_scenario"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-spec-25-spatial_query-groupby",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.662,
+        "topk": [
+          "geocode_location",
+          "code_exec_request",
+          "spatial_query",
+          "fetch_administrative_boundaries",
+          "compute_zonal_statistics"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.5,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-spec-26-spatial_query-select",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.607,
+        "topk": [
+          "spatial_query",
+          "fetch_fema_nfhl_zones",
+          "fill_gaps",
+          "fetch_usace_levees",
+          "merge_features"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-27-search_spatial_functions-distance",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.838,
+        "topk": [
+          "search_spatial_functions",
+          "spatial_query",
+          "query_point_hazard",
+          "extract_timeseries_at_point",
+          "request_spatial_input"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-28-search_spatial_functions-buffer",
+        "category": "geographic_primitives",
+        "register": "specific",
+        "turnaround_ms": 4.845,
+        "topk": [
+          "search_spatial_functions",
+          "fetch_administrative_boundaries",
+          "clip_raster_to_polygon",
+          "compute_zonal_statistics",
+          "fetch_iucn_red_list_range"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-spec-29-atlimit-01",
+        "category": "news_events",
+        "register": "vague",
+        "turnaround_ms": 4.597,
+        "topk": [
+          "fetch_hrrr_forecast",
+          "fetch_ebird_observations",
+          "fetch_jrc_global_surface_water",
+          "run_swmm",
+          "fetch_climate_normals"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-spec-30-atlimit-02",
+        "category": "damage_assessment",
+        "register": "vague",
+        "turnaround_ms": 4.652,
+        "topk": [
+          "fetch_usfs_canopy_fuels",
+          "compute_canopy_height",
+          "fetch_usgs_volcano_alerts",
+          "run_pelicun",
+          "run_landlab"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-01-hazard_modeling",
+        "category": "hazard_modeling",
+        "register": "vague",
+        "turnaround_ms": 4.889,
+        "topk": [
+          "run_model_nws_flood_event_scenario",
+          "fetch_flood_extent_observation",
+          "fetch_storm_events_db",
+          "compute_flood_depth_damage",
+          "run_model_flood_habitat_scenario"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-02-weather_atmosphere",
+        "category": "weather_atmosphere",
+        "register": "vague",
+        "turnaround_ms": 4.56,
+        "topk": [
+          "fetch_raws_weather",
+          "fetch_nws_event",
+          "fetch_roads_osm",
+          "fetch_asos_metar",
+          "fetch_gridmet"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_nws_event"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.3869,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-03-hydrology",
+        "category": "hydrology",
+        "register": "vague",
+        "turnaround_ms": 4.646,
+        "topk": [
+          "fetch_river_geometry",
+          "fetch_high_water_marks",
+          "fetch_nws_river_forecast",
+          "fetch_snotel_snow",
+          "fetch_noaa_nwm_streamflow"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_nws_river_forecast",
+          "fetch_noaa_nwm_streamflow"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4162,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-vag-04-terrain_elevation",
+        "category": "terrain_elevation",
+        "register": "vague",
+        "turnaround_ms": 4.373,
+        "topk": [
+          "compute_terrain_profile",
+          "compute_colored_relief",
+          "compute_contours",
+          "compute_slope",
+          "compute_hillshade"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_colored_relief",
+          "compute_hillshade"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.3973,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-05-land_cover_development",
+        "category": "land_cover_development",
+        "register": "vague",
+        "turnaround_ms": 4.533,
+        "topk": [
+          "fetch_wdpa_protected_areas",
+          "compute_building_density",
+          "fetch_buildings",
+          "fetch_usace_nsi",
+          "compute_urban_heat_island"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_building_density",
+          "fetch_buildings"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4415,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-06-conservation_ecology",
+        "category": "conservation_ecology",
+        "register": "vague",
+        "turnaround_ms": 4.423,
+        "topk": [
+          "fetch_inaturalist_observations",
+          "fetch_ebird_observations",
+          "fetch_wdpa_protected_areas",
+          "fetch_nwi_wetlands",
+          "fetch_movebank_tracks"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_inaturalist_observations",
+          "fetch_ebird_observations"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.7654,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-07-fire",
+        "category": "fire",
+        "register": "vague",
+        "turnaround_ms": 4.263,
+        "topk": [
+          "fetch_mtbs_burn_severity",
+          "fetch_goes_active_fire",
+          "fetch_hrrr_smoke",
+          "fetch_usgs_volcano_alerts",
+          "compute_urban_heat_island"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_goes_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.2463,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-08-coastal",
+        "category": "coastal",
+        "register": "vague",
+        "turnaround_ms": 4.532,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge",
+          "fetch_high_water_marks",
+          "fetch_noaa_coops_currents",
+          "fetch_river_geometry"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-09-damage_assessment",
+        "category": "damage_assessment",
+        "register": "vague",
+        "turnaround_ms": 4.699,
+        "topk": [
+          "compute_flood_depth_damage",
+          "generate_damage_distribution",
+          "compute_impact_envelope",
+          "compute_exposure_summary",
+          "compute_zonal_statistics"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_flood_depth_damage",
+          "compute_impact_envelope"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.5087,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-10-flood_infrastructure",
+        "category": "flood_infrastructure",
+        "register": "vague",
+        "turnaround_ms": 4.534,
+        "topk": [
+          "fetch_wdpa_protected_areas",
+          "compute_flood_depth_damage",
+          "fetch_usace_levees",
+          "fetch_noaa_slr_scenarios",
+          "fetch_nws_river_forecast"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-11-geographic_primitives",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.582,
+        "topk": [
+          "geocode_location",
+          "fetch_openfema_disasters",
+          "fetch_wfigs_incident",
+          "fetch_overpass_pois",
+          "fetch_noaa_slr_confidence"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "geocode_location"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-12-news_events",
+        "category": "news_events",
+        "register": "vague",
+        "turnaround_ms": 4.679,
+        "topk": [
+          "fetch_openfema_disasters",
+          "fetch_tsunami_events",
+          "fetch_storm_events_db",
+          "fetch_administrative_boundaries",
+          "fetch_nws_alerts_conus"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_openfema_disasters",
+          "fetch_storm_events_db"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.9197,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-13-weather-precip",
+        "category": "weather_atmosphere",
+        "register": "vague",
+        "turnaround_ms": 5.08,
+        "topk": [
+          "compute_overtopping",
+          "fetch_viirs_day_fire",
+          "compute_flood_depth_damage",
+          "fetch_modis_lst",
+          "compute_terrain_profile"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-14-coastal-slr",
+        "category": "coastal",
+        "register": "vague",
+        "turnaround_ms": 5.25,
+        "topk": [
+          "fetch_gcn250_curve_numbers",
+          "search_tools",
+          "fetch_noaa_sst",
+          "fetch_noaa_slr_scenarios",
+          "search_data_catalog"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_slr_scenarios"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4307,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-vag-15-spatial_query-stats",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.641,
+        "topk": [
+          "fetch_statsgo_soils",
+          "compute_wave_nomograph",
+          "run_model_conservation_priority",
+          "spatial_query",
+          "compute_canopy_height"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 4,
+        "top1_correct": false,
+        "ndcg_at_k": 0.4307,
+        "mrr_at_k": 0.25
+      },
+      {
+        "record_id": "rp-vag-16-spatial_query-count",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.692,
+        "topk": [
+          "cut_features_with_polygon",
+          "merge_features",
+          "spatial_query",
+          "compute_exposure_summary",
+          "analyze_affected_fields"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "spatial_query"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.5,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-vag-17-spatial_query-zonal",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.97,
+        "topk": [
+          "compute_zonal_statistics",
+          "fetch_usace_nsi",
+          "fetch_fema_nfhl_zones",
+          "compute_exposure_summary",
+          "fetch_statsgo_soils"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "compute_zonal_statistics"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.6131,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-18-spatial_query-overlap",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 5.189,
+        "topk": [
+          "fetch_flood_extent_observation",
+          "compute_flood_extent_skill",
+          "run_model_flood_habitat_scenario",
+          "fetch_cama_flood_discharge",
+          "compute_flood_depth_damage"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-19-typo-flood",
+        "category": "flood_infrastructure",
+        "register": "vague",
+        "turnaround_ms": 5.023,
+        "topk": [
+          "fetch_wdpa_protected_areas",
+          "fetch_administrative_boundaries",
+          "fetch_field_boundaries",
+          "fetch_usace_levees",
+          "fetch_lehd_jobs"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-20-typo-builtup",
+        "category": "land_cover_development",
+        "register": "vague",
+        "turnaround_ms": 5.101,
+        "topk": [
+          "lookup_precip_return_period",
+          "compute_urban_heat_island",
+          "compute_canopy_height",
+          "run_model_conservation_priority",
+          "fetch_topobathy"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-21-typo-rivers",
+        "category": "hydrology",
+        "register": "vague",
+        "turnaround_ms": 5.104,
+        "topk": [
+          "fetch_snotel_snow",
+          "set_sfincs_parameters",
+          "fetch_airnow_air_quality",
+          "set_swmm_parameters",
+          "compute_urban_heat_island"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-22-typo-burning",
+        "category": "fire",
+        "register": "vague",
+        "turnaround_ms": 4.623,
+        "topk": [
+          "fetch_goes_active_fire",
+          "geocode_location",
+          "fetch_hrrr_smoke",
+          "compute_urban_heat_island",
+          "fetch_usgs_volcano_alerts"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_goes_active_fire"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 0.3904,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-23-typo-tide",
+        "category": "coastal",
+        "register": "vague",
+        "turnaround_ms": 4.641,
+        "topk": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge",
+          "fetch_noaa_coops_currents",
+          "fetch_topobathy",
+          "fetch_noaa_slr_marsh"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "fetch_noaa_coops_tides",
+          "fetch_gtsm_tide_surge"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 1,
+        "top1_correct": true,
+        "ndcg_at_k": 1.0,
+        "mrr_at_k": 1.0
+      },
+      {
+        "record_id": "rp-vag-24-spatial_query-topn",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.62,
+        "topk": [
+          "fetch_buildings",
+          "run_pelicun",
+          "analyze_affected_fields",
+          "compute_flood_depth_damage",
+          "compute_impact_envelope"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-25-spatial_query-groupby",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.534,
+        "topk": [
+          "fetch_census_acs",
+          "request_spatial_input",
+          "geocode_location",
+          "fetch_nhdplus_nldi_navigate",
+          "fetch_buildings"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-26-spatial_query-select",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.523,
+        "topk": [
+          "fetch_fema_nfhl_zones",
+          "fetch_population",
+          "fetch_usace_levees",
+          "extract_landcover_class",
+          "fetch_ghsl_population"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-27-search_spatial_functions-distance",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 5.001,
+        "topk": [
+          "compute_movement_trajectory",
+          "query_point_hazard",
+          "search_spatial_functions",
+          "extract_timeseries_at_point",
+          "compute_skill_metrics"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 3,
+        "top1_correct": false,
+        "ndcg_at_k": 0.5,
+        "mrr_at_k": 0.3333
+      },
+      {
+        "record_id": "rp-vag-28-search_spatial_functions-buffer",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 5.057,
+        "topk": [
+          "fetch_buildings",
+          "search_spatial_functions",
+          "fetch_nhdplus_nldi_navigate",
+          "fetch_overpass_pois",
+          "fetch_field_boundaries"
+        ],
+        "verdict": "CORRECT",
+        "acceptable_hits": [
+          "search_spatial_functions"
+        ],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": 2,
+        "top1_correct": false,
+        "ndcg_at_k": 0.6309,
+        "mrr_at_k": 0.5
+      },
+      {
+        "record_id": "rp-vag-29-atlimit-01",
+        "category": "geographic_primitives",
+        "register": "vague",
+        "turnaround_ms": 4.695,
+        "topk": [
+          "fetch_goes_satellite",
+          "run_model_satellite_fire_animation",
+          "digitize_water_body",
+          "run_model_news_event_ingest",
+          "spatial_query"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      },
+      {
+        "record_id": "rp-vag-30-atlimit-02",
+        "category": "land_cover_development",
+        "register": "vague",
+        "turnaround_ms": 4.439,
+        "topk": [
+          "request_spatial_input",
+          "fetch_high_water_marks",
+          "fetch_landsat_imagery",
+          "fetch_buildings",
+          "fetch_sentinel2_truecolor"
+        ],
+        "verdict": "MISS",
+        "acceptable_hits": [],
+        "forbidden_hits": [],
+        "rank_of_first_acceptable": null,
+        "top1_correct": false,
+        "ndcg_at_k": 0.0,
+        "mrr_at_k": 0.0
+      }
+    ]
+  ],
+  "aggregate": {
+    "per_run": [
+      {
+        "n": 60,
+        "hit_at_k": 45,
+        "hit_at_k_rate": 0.75,
+        "top1_correct": 28,
+        "top1_rate": 0.4667,
+        "ndcg_at_k_mean": 0.5531,
+        "mrr_at_k_mean": 0.5806,
+        "turnaround_ms_mean": 11.817,
+        "turnaround_ms_min": 4.303,
+        "turnaround_ms_max": 71.298,
+        "by_register": {
+          "specific": {
+            "n": 28,
+            "hit_at_k": 27,
+            "ndcg_at_k_mean": 0.8074,
+            "mrr_at_k_mean": 0.8155
+          },
+          "vague": {
+            "n": 32,
+            "hit_at_k": 18,
+            "ndcg_at_k_mean": 0.3306,
+            "mrr_at_k_mean": 0.375
+          }
+        }
+      },
+      {
+        "n": 60,
+        "hit_at_k": 45,
+        "hit_at_k_rate": 0.75,
+        "top1_correct": 28,
+        "top1_rate": 0.4667,
+        "ndcg_at_k_mean": 0.5531,
+        "mrr_at_k_mean": 0.5806,
+        "turnaround_ms_mean": 4.643,
+        "turnaround_ms_min": 4.264,
+        "turnaround_ms_max": 5.332,
+        "by_register": {
+          "specific": {
+            "n": 28,
+            "hit_at_k": 27,
+            "ndcg_at_k_mean": 0.8074,
+            "mrr_at_k_mean": 0.8155
+          },
+          "vague": {
+            "n": 32,
+            "hit_at_k": 18,
+            "ndcg_at_k_mean": 0.3306,
+            "mrr_at_k_mean": 0.375
+          }
+        }
+      },
+      {
+        "n": 60,
+        "hit_at_k": 45,
+        "hit_at_k_rate": 0.75,
+        "top1_correct": 28,
+        "top1_rate": 0.4667,
+        "ndcg_at_k_mean": 0.5531,
+        "mrr_at_k_mean": 0.5806,
+        "turnaround_ms_mean": 4.681,
+        "turnaround_ms_min": 4.263,
+        "turnaround_ms_max": 5.25,
+        "by_register": {
+          "specific": {
+            "n": 28,
+            "hit_at_k": 27,
+            "ndcg_at_k_mean": 0.8074,
+            "mrr_at_k_mean": 0.8155
+          },
+          "vague": {
+            "n": 32,
+            "hit_at_k": 18,
+            "ndcg_at_k_mean": 0.3306,
+            "mrr_at_k_mean": 0.375
+          }
+        }
+      }
+    ],
+    "hit_at_k_rate_mean": 0.75,
+    "hit_at_k_rate_min": 0.75,
+    "hit_at_k_rate_max": 0.75,
+    "ndcg_at_k_mean": 0.5531,
+    "ndcg_at_k_min": 0.5531,
+    "ndcg_at_k_max": 0.5531,
+    "mrr_at_k_mean": 0.5806,
+    "mrr_at_k_min": 0.5806,
+    "mrr_at_k_max": 0.5806
+  }
+}

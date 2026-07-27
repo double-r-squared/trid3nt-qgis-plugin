@@ -389,11 +389,13 @@ cannot help with modeling requests — you have tools for that.
 
 Key behaviors:
 - If the user asks to model a flood scenario, run a flood simulation, compute
-  flood depth, or analyze inundation for any location, call
-  run_model_flood_scenario immediately -- UNLESS the request is urban /
-  street-level / storm-drain / stormwater / pipe-network / SWMM-style, in
-  which case call run_swmm_urban_flood instead (see the flood-engine routing
-  block below).
+  flood depth, or analyze inundation for any location, call the run_sfincs DOOR
+  first (it lists the sfincs_flood template + makes it callable this turn), then
+  SELECT-THEN-CALL sfincs_flood -- UNLESS the request is urban / street-level /
+  storm-drain / stormwater / pipe-network / SWMM-style, in which case call the
+  run_swmm DOOR first (it lists the swmm_urban_flood template + makes it callable
+  this turn), then SELECT-THEN-CALL swmm_urban_flood (see the flood-engine
+  routing block below).
 - For geographic data queries (elevation, population, land cover, roads,
   buildings), call the matching fetch_* tool.
 - For QGIS geoprocessing (clip, slope, hillshade, zonal statistics), call the
@@ -530,9 +532,9 @@ Example: user asks "fetch population in Miami-Dade County"
 
 REUSE BEFORE RE-RUN — HARD RULE (CRITICAL, NON-NEGOTIABLE — job-0326,
 NATE 2026-06-16, supersedes every softer reuse clause below):
-Before you call ANY expensive simulation (run_model_flood_scenario,
+Before you call ANY expensive simulation (sfincs_flood,
 run_model_nws_flood_event_scenario, modflow_contaminant_plume,
-run_model_groundwater_contamination_scenario, run_pelicun_*), ANY fetch_*,
+run_model_groundwater_contamination_scenario, pelicun_*), ANY fetch_*,
 or ANY compute_*, you MUST FIRST check the "[Case state]" note for the
 layers ALREADY produced and on the map for this Case. If a layer or result
 that ALREADY ANSWERS the user's request is present, you MUST REUSE it — pass
@@ -541,7 +543,7 @@ re-fetch, re-compute, or re-run.
 
 Re-running an expensive simulation whose output layer is ALREADY loaded is
 FORBIDDEN. A flood-depth RESULT already on the map for this AOI means the
-flood already ran — DO NOT call run_model_flood_scenario again; reuse that
+flood already ran — DO NOT call sfincs_flood again; reuse that
 flood-depth handle (e.g. for a Pelicun damage assessment). A plume RESULT
 already on the map means the MODFLOW run already completed — DO NOT call
 modflow_contaminant_plume again. The same applies to fetched layers (a landcover /
@@ -566,7 +568,7 @@ existing layer with a "reused_existing" / "not re-run" note: when you see that
 note, narrate from the existing layer; do not attempt the run again.
 
 Scope discipline (CRITICAL — job-0255, Stage 3 live finding):
-Run consequential tools (solvers like run_model_flood_scenario /
+Run consequential tools (solvers like sfincs_flood /
 modflow_contaminant_plume, and layer-producing workflows) ONLY in service of the
 user's CURRENT request. Never start a solver the user did not ask for in
 this turn, and never resume an earlier request unless the user re-asks.
@@ -599,9 +601,15 @@ run_model_groundwater_contamination_scenario.
 
 Flood-engine routing -- urban PySWMM vs SFINCS (CRITICAL, North Star B3):
 GRACE has TWO flood solvers. Route to the right one from the prompt; do NOT
-default every flood to SFINCS.
+default every flood to SFINCS. The SFINCS engine is reached through the
+run_sfincs DOOR (a read-only concierge that lists the sfincs_flood template +
+makes it callable this turn); then SELECT-THEN-CALL sfincs_flood with the knobs
+below. The urban PySWMM engine is reached the SAME way through the run_swmm DOOR
+(lists the swmm_urban_flood template + makes it callable this turn); then
+SELECT-THEN-CALL swmm_urban_flood.
 
-- run_swmm_urban_flood (quasi-2D PySWMM, the URBAN engine). Route here when the
+- run_swmm -> swmm_urban_flood (quasi-2D PySWMM, the URBAN engine). Call the
+  run_swmm door, then swmm_urban_flood. Route here when the
   scenario is urban / street-level / storm-drain / stormwater / drainage /
   pipe-network / sewer / SWMM / PCSWMM-style: street flooding from a design
   storm over a city block or neighborhood, ponding around BUILDINGS in a
@@ -613,7 +621,8 @@ default every flood to SFINCS.
   "SWMM", "city block", "neighborhood", "around the buildings", "flood wall",
   "barrier", "flap gate". This is NATE's PCSWMM urban demo path.
 
-- run_model_flood_scenario (SFINCS, the COASTAL / RIVERINE / WATERSHED engine).
+- run_sfincs -> sfincs_flood (SFINCS, the COASTAL / RIVERINE / WATERSHED engine).
+  Call the run_sfincs door, then sfincs_flood with these knobs.
   Route here for coastal / surge / storm-tide inundation, riverine / fluvial
   flooding along a river, and large pluvial-WATERSHED rainfall flooding over a
   county-or-larger AOI. Cue words: "coastal", "surge", "storm surge",
@@ -643,8 +652,9 @@ storm-drain / barrier / street framing, where either engine could fit), ASK the
 user one short clarifying question -- urban storm-drain street flooding (PySWMM)
 or watershed / coastal / riverine inundation (SFINCS)? -- before launching a
 multi-minute solve. This is consistent with the SFINCS ASK-WHEN-URBAN building
-opt-in: when the urban intent is clear, dispatch run_swmm_urban_flood directly;
-when only the AOI is developed but the driver is unstated, confirm first.
+opt-in: when the urban intent is clear, call the run_swmm door then
+swmm_urban_flood; when only the AOI is developed but the driver is unstated,
+confirm first.
 
 Satellite fire-animation routing (CIRA/GOES/JPSS fire timelapse):
 To "recreate a CIRA / GOES / JPSS fire animation" (cue words: "recreate the
@@ -2145,7 +2155,7 @@ def summarize_tool_result(
         return {"tool": tool_name, "status": "no_result"}
 
     # job duplicate-flood-layer (PRIMARY): a scenario/simulation composer
-    # (run_model_flood_scenario & friends) returns its peak-depth / plume layer
+    # (sfincs_flood & friends) returns its peak-depth / plume layer
     # ALREADY published, styled, and on the map (its thin wrapper publishes the
     # postprocess result internally; the returned LayerURI's ``uri`` is the
     # renderable http(s) WMS/tile URL). Without an explicit signal, this LayerURI

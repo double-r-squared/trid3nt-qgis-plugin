@@ -149,14 +149,18 @@ def test_cross_listing_known_tools_appear_in_both_categories() -> None:
     """Pelicun and USACE NSI cross-list into damage_assessment."""
     _ensure_full_registry()
     damage_members = set(tools_for_category("damage_assessment"))
+    # engine-door refactor (PELICUN slice): the run_pelicun DOOR carries the
+    # category membership; its pelicun_* templates are pool-EXCLUDED (no membership).
     assert {
-        "run_pelicun_damage_assessment",
-        "run_pelicun_with_buildings",
+        "run_pelicun",
         "fetch_usace_nsi",
     }.issubset(damage_members)
+    assert "pelicun_damage_assessment" not in damage_members, (
+        "pelicun templates must NOT carry category membership (door-surfaced only)"
+    )
     # Their primary categories still claim them too.
     hazard_members = set(tools_for_category("hazard_modeling"))
-    assert "run_pelicun_damage_assessment" in hazard_members
+    assert "run_pelicun" in hazard_members
     landuse_members = set(tools_for_category("land_cover_development"))
     assert "fetch_usace_nsi" in landuse_members
 
@@ -281,7 +285,7 @@ def test_hot_set_contains_required_anchors() -> None:
         "fetch_dem",
         "fetch_nws_alerts_conus",
         "fetch_nws_event",
-        "run_model_flood_scenario",
+        "run_sfincs",
         "run_model_flood_habitat_scenario",
         "code_exec_request",
         "compute_layer_bounds",

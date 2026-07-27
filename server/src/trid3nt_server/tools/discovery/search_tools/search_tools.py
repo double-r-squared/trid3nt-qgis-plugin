@@ -73,6 +73,9 @@ __all__ = [
     "_close_vocab_matches",
     "_expand_query_tokens",
     "_reciprocal_rank_fusion",
+    "_lexical_reinforcement",
+    "_LEX_REINFORCE_GATE_DOOR",
+    "_LEX_REINFORCE_GATE_GENERAL",
     "SearchToolsError",
     "get_dynamic_hot_set",
     "_get_cooccurrence_index",
@@ -177,6 +180,9 @@ class _DiscoverIndex:
       ``dense_matrix``.
     - ``backend_name``: identifier for the dense backend
       (``"sentence_transformers"`` / ``"vertex"`` / ``"hashed"`` / ``None``).
+    - ``tiers``: per-tool routing tier (``"general"`` / ``"door"``), parallel to
+      ``tool_names``. Read by ``_lexical_reinforcement`` so doors get a wider
+      lexical-champion gate than general tools (tier=template is never indexed).
     """
 
     def __init__(
@@ -190,6 +196,7 @@ class _DiscoverIndex:
         dense_encode_fn: Any,
         backend_name: str | None,
         vocabulary: frozenset[str] = frozenset(),
+        tiers: list[str] | None = None,
     ) -> None:
         self.tool_names = tool_names
         self.descriptions = descriptions
@@ -200,6 +207,10 @@ class _DiscoverIndex:
         self.dense_encode_fn = dense_encode_fn
         self.backend_name = backend_name
         self.vocabulary = vocabulary
+        # Default to "general" for every tool when a caller (a test fixture)
+        # builds an index without tiers, so the reinforcement degrades to the
+        # champion-only gate rather than raising.
+        self.tiers = tiers if tiers is not None else ["general"] * len(tool_names)
 
 
 # ---------------------------------------------------------------------------
@@ -591,6 +602,7 @@ def _build_index(
     synthetic_queries: list[list[str]] = []
     documents: list[str] = []
     corpus_tokens: list[list[str]] = []
+    tiers: list[str] = []
 
     for name in sorted(snapshot.keys()):
         entry = snapshot[name]
@@ -620,6 +632,7 @@ def _build_index(
         synthetic_queries.append(list(qs))
         documents.append(body)
         corpus_tokens.append(_tokenize(body))
+        tiers.append(getattr(entry.metadata, "tier", "general") or "general")
 
     # Vocabulary for typo query expansion: every token the index already
     # produced from tool names, docstrings, and corpus queries (reused, not
@@ -686,6 +699,7 @@ def _build_index(
         dense_encode_fn=dense_encode_fn,
         backend_name=backend_name,
         vocabulary=vocabulary,
+        tiers=tiers,
     )
 
 
@@ -1104,6 +1118,65 @@ def _reciprocal_rank_fusion(
 
 
 # ---------------------------------------------------------------------------
+# Lexical-champion reinforcement (2026-07-27; "DOOR RRF BOOST", docs/IDEAS.md).
+# ---------------------------------------------------------------------------
+#
+# Failure mode (measured, model-free -- experiments/bench/retrieval_probe):
+# for short / domain-worded queries the dense channel ranks a tool's BEST
+# exact-lexical match (BM25 rank 1) only mid-pack, so plain RRF buries that
+# lexical #1 beneath general tools that merely rank mid on BOTH channels.
+# Observed BM25=1 targets drowned to fused rank 4-9: run_sfincs "model
+# flooding" (dense 19), fetch_dem "elevation Grand Canyon" (dense 8),
+# fetch_wdpa_protected_areas "show me national parks" (dense 25), run_modflow
+# "dewater this open pit mine" (dense 23).
+#
+# The engine-name DOORS are hit hardest: run_sfincs never earns a name-channel
+# term for "flooding" and its concierge docstring embeds far from the query,
+# so the door leans almost entirely on BM25 -- exactly the channel RRF dilutes.
+#
+# Fix: award a lexically-dominant tool ONE extra reciprocal-rank term, on the
+# SAME 1/(k+rank) scale as a real channel (bounded; never a hard slot). Doors
+# get a WIDER gate (top _LEX_REINFORCE_GATE_DOOR by BM25) than general tools
+# (champion only) because they are structurally disadvantaged in the dense and
+# name channels. Deterministic, tier-aware, zero corpus edits.
+_LEX_REINFORCE_GATE_GENERAL = 1  # general tools: reinforce only the BM25 champion
+_LEX_REINFORCE_GATE_DOOR = 3     # doors: reinforce the top-3 BM25 lexical matches
+
+
+def _lexical_reinforcement(
+    fused: list[tuple[int, float]],
+    bm25_ranking: list[int],
+    tiers: list[str] | None,
+    *,
+    k: int = 60,
+) -> list[tuple[int, float]]:
+    """Re-rank ``fused`` after awarding a bounded BM25-reinforcement term to
+    lexically-dominant tools (see the block comment above).
+
+    ``bm25_ranking`` is the BM25 channel's doc-index rank list (rank 1 first);
+    ``tiers[doc]`` is that doc's routing tier. Pure + deterministic; a doc's
+    bonus is ``1.0 / (k + its_bm25_rank)``, applied once, only within its
+    tier's gate. Returns a NEW sorted list; the input is unchanged when the
+    BM25 channel is absent or nothing falls inside a gate.
+    """
+    if not bm25_ranking:
+        return fused
+    bonus: dict[int, float] = {}
+    for rank, doc in enumerate(bm25_ranking, start=1):
+        tier = tiers[doc] if tiers is not None and doc < len(tiers) else "general"
+        gate = _LEX_REINFORCE_GATE_DOOR if tier == "door" else _LEX_REINFORCE_GATE_GENERAL
+        if rank <= gate:
+            bonus[doc] = 1.0 / (k + rank)
+        elif rank > _LEX_REINFORCE_GATE_DOOR:
+            break  # ranks are ascending; nothing past the widest gate qualifies
+    if not bonus:
+        return fused
+    rescored = [(doc, score + bonus.get(doc, 0.0)) for doc, score in fused]
+    rescored.sort(key=lambda pair: pair[1], reverse=True)
+    return rescored
+
+
+# ---------------------------------------------------------------------------
 # Query-time matched-queries selection.
 # ---------------------------------------------------------------------------
 
@@ -1334,7 +1407,7 @@ async def search_tools(
             logger.warning("dense scoring failed (%s); dropping dense channel", exc)
 
     # Name-substring ranking — third channel that catches "model flooding"
-    # → run_model_flood_scenario even when BM25 misses ("flooding" ≠
+    # → run_sfincs even when BM25 misses ("flooding" ≠
     # "flood-modeling"). Score = count of query content tokens whose
     # (optionally de-suffixed) form is a substring of the tool name.
     # Generic operator words ("polygon", "raster", "clip", "compute", "run",
@@ -1406,6 +1479,7 @@ async def search_tools(
         return {"results": []}
 
     fused = _reciprocal_rank_fusion(rankings, k=60)
+    fused = _lexical_reinforcement(fused, bm25_ranking, index.tiers, k=60)
 
     # Build the response payload.
     results: list[dict[str, Any]] = []

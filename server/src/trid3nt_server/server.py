@@ -1106,7 +1106,10 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # job-0256: flood solvers gated too — a live sandbox-only session was
     # observed running an unrequested SFINCS solve (~10-20 min). The card is
     # built from the call args (location/return period/duration).
-    "run_model_flood_scenario",
+    # engine-door refactor (SFINCS slice): run_model_flood_scenario is now the
+    # sfincs_flood template (the door run_sfincs executes no solve; the TEMPLATE
+    # submits the solver, so the gate keys on the template - RISK-8 parity).
+    "sfincs_flood",
     "run_model_flood_habitat_scenario",
     # #154 granularity gate (sprint-16): the SWMM urban-flood solver joins the
     # confirm set with an ENRICHED card carrying a GranularitySuggestion (the
@@ -1114,7 +1117,11 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # compute class). The user can override the rung before the heavy solve via
     # the existing tool-payload-confirmation ``narrow_scope`` path. Same gate
     # machinery, no new WS envelope type.
-    "run_swmm_urban_flood",
+    # engine-door refactor (SWMM slice): run_swmm_urban_flood is now the
+    # swmm_urban_flood template (the door run_swmm executes no solve; the
+    # TEMPLATE submits the solver, so the gate keys on the template - RISK-8
+    # parity).
+    "swmm_urban_flood",
     # NATE 2026-06-26: the OpenQuake classical-PSHA solver joins the confirm set
     # (Invariant 9 — a consequential long Batch run must be user-confirmed). It
     # dispatches an area-source PSHA over the whole bbox via run_solver
@@ -1123,7 +1130,10 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # proceed/cancel card (no granularity picker): the area source spans the
     # whole AOI, so no rupture/incident-area user input is needed for classical
     # PSHA (that is scenario mode, which is not built).
-    "run_seismic_hazard_psha",
+    # engine-door refactor (OPENQUAKE slice): re-keyed run_seismic_hazard_psha ->
+    # openquake_psha (the template that submits the solver; the run_openquake door
+    # runs no solve). Confirm-gate parity preserved.
+    "openquake_psha",
     # BK-3b approve-mesh gate (2026-07-17): the TELEMAC river-dye solver joins
     # the confirm set with the RICHEST card yet: the builder runs the FAST
     # mesh-only worker (gmsh, no DEM, no solve, ~10-25 s), emits the actual
@@ -1131,10 +1141,12 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # the card carries a GranularitySuggestion (mesh_resolution_m ladder + REAL
     # node/element counts + CFL-coupled dt + conservative solve estimate). The
     # user SEES the mesh before approving the expensive solve; narrow_scope
-    # re-runs with a different edge length. Closes the docstring debt in
-    # run_telemac_tool.py (it claimed a confirmation hook that did not exist).
-    "run_telemac",
-    # FIRE-3: the ELMFIRE wildfire-spread composer joins the confirm set
+    # re-runs with a different edge length. Keyed on the TEMPLATE that submits the
+    # solver (engine-door refactor, TELEMAC slice: the run_telemac name is now the
+    # read-only door, which runs no solve; the telemac_river_dye template is the
+    # tool the gate must intercept).
+    "telemac_river_dye",
+    # FIRE-3: the ELMFIRE wildfire-spread solver joins the confirm set
     # (Invariant 9 — a consequential solver run: LANDFIRE fetches + a
     # containerized level-set solve). The card is built by
     # _build_fire_confirm_envelope from the call args: approximate grid cell
@@ -1142,7 +1154,10 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # the user confirms the actual run about to dispatch. Simple
     # proceed/cancel (no granularity picker at v1 — cellsize_m is an explicit
     # tool arg the LLM can restate).
-    "model_fire_spread",
+    # engine-door refactor (ELMFIRE slice): re-keyed model_fire_spread ->
+    # elmfire_fire_spread (the template that submits the solver; the run_elmfire
+    # door runs no solve). Confirm-gate parity preserved.
+    "elmfire_fire_spread",
 }
 
 
@@ -1270,7 +1285,7 @@ def _dispatch_made_progress(result: Any) -> bool:
 #: How many CONSECUTIVE no-progress model rounds we tolerate AFTER a terminal
 #: composer has delivered its artifact before concluding the turn cleanly (NATE
 #: 2026-06-29). Symptom: a SFINCS flood publishes its depth layer
-#: (``run_model_flood_scenario`` -> ``layers=1``) and the model, having nothing
+#: (``sfincs_flood`` -> ``layers=1``) and the model, having nothing
 #: left to do, keeps emitting unproductive function calls until it trips the
 #: ``MAX_TURN_ITERATIONS`` cap and emits a (harmless but sloppy)
 #: ``loop_exhausted`` frame. Once the deliverable is in hand we (a) stamp the
@@ -1378,6 +1393,33 @@ def _engine_door_tool_names() -> frozenset[str]:
     return frozenset(names)
 
 
+def _default_declarable_registry() -> dict[str, Any]:
+    """The DEFAULT per-turn declarable tool set: the full ``TOOL_REGISTRY``
+    MINUS every ``tier="template"`` engine template.
+
+    ENGINE-DOOR invariant: engine templates (``sfincs_flood``, ``modflow_*``,
+    ``openquake_psha``, ...) surface to the model ONLY via their door's gate
+    expansion (see ``_gate_expander_tool_names`` and the door-expand block in
+    ``_stream_gemini_reply``). Declaring them by default -- which the raw
+    ``TOOL_REGISTRY`` default did in the gating-off / retrieval-off / fail-open
+    paths -- defeats the door architecture. This is the SINGLE default-registry
+    seam: the door expand re-adds the specific templates it lists back into the
+    per-turn ``_retrieval_registry`` (and the Case allowed-set), so an expanded
+    template stays declarable while the un-expanded rest never leak.
+
+    Resolved by REGISTRY LOOKUP (never a literal) so a new template is excluded
+    the moment it registers with ``tier="template"``. Mirrors the pool-side
+    filter in ``tools.discovery.tool_retrieval`` (fail-open dump) so the
+    default-declaration path and the retrieval pool exclude templates
+    identically.
+    """
+    return {
+        name: entry
+        for name, entry in TOOL_REGISTRY.items()
+        if getattr(entry.metadata, "tier", "general") != "template"
+    }
+
+
 def _gate_expander_tool_names() -> frozenset[str]:
     """The union of gate-expanders: the tool-search tool(s) AND every engine door.
 
@@ -1420,8 +1462,8 @@ def _is_terminal_composer(tool_name: str) -> bool:
     """True iff ``tool_name`` is a top-level run-a-model composer (NATE 2026-06-29).
 
     A terminal composer is a ``run_*`` workflow-dispatch tool (the
-    ``run_model_*`` / ``run_*_job`` / ``run_swmm_urban_flood`` /
-    ``run_seismic_hazard_psha`` family) -- the deliverable-producing entry
+    ``run_model_*`` / ``run_*_job`` / ``swmm_urban_flood`` /
+    ``openquake_psha`` family) -- the deliverable-producing entry
     points whose successful return IS the answer the user asked for. Helper
     workflow-dispatch tools that merely compute an intermediate
     (``compute_cross_section``, ``request_spatial_input``, ...) are
@@ -2277,7 +2319,7 @@ def _apply_session_anon_hint(
 # ``(session_id, turn_key)`` — mirrors ``_SESSION_ACTIVE_CASE``'s session-scoped
 # discipline so an in-flight turn OUTLIVES the per-connection ``SessionState``.
 #
-# ROOT CAUSE this fixes: a SFINCS solve (``run_model_flood_scenario`` ->
+# ROOT CAUSE this fixes: a SFINCS solve (``sfincs_flood`` ->
 # ``wait_for_completion``, minutes long) was launched detached on the launching
 # connection and stored ONLY in that connection's ``SessionState.inflight_tasks``.
 # The client opens MULTIPLE sockets per session (StrictMode double-mount +
@@ -3522,7 +3564,16 @@ async def _stream_gemini_reply(
     # result FAILS OPEN to the full registry for that turn (never empty /
     # core-only), logged. The cachePoint TAIL is inserted downstream by
     # bedrock_adapter (after tools), so subsetting the dict here preserves it.
-    _retrieval_registry = TOOL_REGISTRY
+    #
+    # ENGINE-DOOR default (refactor/engine-doors): the DEFAULT declarable set is
+    # the full registry MINUS tier=template engine templates -- NOT the raw
+    # TOOL_REGISTRY. Templates surface to the model ONLY via their door's gate
+    # expansion (the door-expand block re-adds the specific templates it lists
+    # back into _retrieval_registry). Using the raw registry here re-leaked every
+    # template into DEFAULT declarations in exactly the gating-off / retrieval-off
+    # / fail-open paths, defeating the door architecture. See
+    # _default_declarable_registry.
+    _retrieval_registry = _default_declarable_registry()
     _retrieval_mode = _tool_retrieval_mode()
     if _retrieval_mode in ("shadow", "enforce"):
         try:
@@ -3597,7 +3648,11 @@ async def _stream_gemini_reply(
                 _retrieval_mode,
                 exc_info=True,
             )
-            _retrieval_registry = TOOL_REGISTRY
+            # FAIL-OPEN to the template-filtered default (NOT raw TOOL_REGISTRY):
+            # a faulted retrieval must never re-leak engine templates into the
+            # default declarations. Templates still reach the turn via door
+            # expansion. See _default_declarable_registry.
+            _retrieval_registry = _default_declarable_registry()
 
     # Stage 3 TOP-K TOOL GATING (the routing bench's own recommendation): the
     # openai adapter path was sending ALL ~190 tool schemas every round. Gate
@@ -4384,7 +4439,7 @@ async def _stream_gemini_reply(
                     # spatial-input-request, await the drawn reply, and REPLACE
                     # ``result`` with the parsed, role-split geometry (the clean
                     # engine-ready ``barriers`` FeatureCollection + ``aoi_bbox`` +
-                    # ``points``). The LLM then calls run_swmm_urban_flood with
+                    # ``points``). The LLM then calls swmm_urban_flood with
                     # ``barriers=`` straight from this result. Mirrors the
                     # geocode_location -> region-choice pause/resume seam.
                     # Fail-open: timeout / cancel / no client / malformed draw all
@@ -7541,8 +7596,8 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
     NATE DIRECTIVE (#183): the SFINCS solve must compute ONLY within the active
     AOI bbox "unless something requires it to expand". The fetch-default rule
     (``_maybe_default_fetch_bbox_to_pinned_aoi``) snapped FETCHES onto the pinned
-    AOI, but the expensive AREAL SOLVERS (``run_model_flood_scenario`` /
-    ``run_model_nws_flood_event_scenario`` / ``run_swmm_urban_flood`` -- the
+    AOI, but the expensive AREAL SOLVERS (``sfincs_flood`` /
+    ``run_model_nws_flood_event_scenario`` / ``swmm_urban_flood`` -- the
     bbox-driven scenario types in ``_BBOX_DRIVEN_SOLVER_SCENARIOS``) were EXEMPT,
     so a follow-up / re-entry solve still ran on whatever bbox the LLM
     free-handed. The #159 lineage: the displayed AOI snapped smaller (the pinned
@@ -8436,7 +8491,7 @@ async def _gate_on_code_exec(
 async def _build_telemac_mesh_envelope(
     params: dict, emitter: Any = None
 ) -> tuple[Any, dict]:
-    """Build the BK-3b approve-mesh confirm card for ``run_telemac``.
+    """Build the BK-3b approve-mesh confirm card for ``telemac_river_dye``.
 
     The heavy-work-in-builder license comes from the SWMM #154 builder below
     (it fetches + reads the actual DEM there): this builder goes one further
@@ -8536,7 +8591,7 @@ async def _build_telemac_mesh_envelope(
     )
     envelope = PayloadWarningEnvelopePayload(
         warning_id=new_ulid(),
-        tool_name="run_telemac",
+        tool_name="telemac_river_dye",
         tool_args={
             "location": str(where),
             "mesh_resolution_m": h,
@@ -8571,7 +8626,7 @@ async def _build_telemac_mesh_envelope(
 
 
 async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]:
-    """Build the #154 granularity confirm card for ``run_swmm_urban_flood``.
+    """Build the #154 granularity confirm card for ``swmm_urban_flood``.
 
     Mirrors the SWMM tool / composer DEM-resolution path EXACTLY so the suggested
     resolution + active-cell count the user SEES is what the build would compute:
@@ -8627,7 +8682,7 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
     coerced = coerce_bbox_value(params.get("bbox"))
     if coerced is None:
         # No usable bbox: let the tool raise its own typed SWMM_PARAMS error.
-        raise ValueError("run_swmm_urban_flood gate: bbox missing/invalid")
+        raise ValueError("swmm_urban_flood gate: bbox missing/invalid")
     bbox = _enforce_min_urban_aoi(tuple(coerced))  # type: ignore[arg-type]
 
     # DEM fetch + read + suggest are SYNCHRONOUS compute (network + rasterio +
@@ -8678,7 +8733,7 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
     where = params.get("location_query") or params.get("bbox") or "?"
     envelope = PayloadWarningEnvelopePayload(
         warning_id=new_ulid(),
-        tool_name="run_swmm_urban_flood",
+        tool_name="swmm_urban_flood",
         tool_args={
             "location": str(where),
             "return_period_yr": params.get("return_period_yr"),
@@ -9013,7 +9068,7 @@ async def _build_flood_run_settings_envelope(
         TimeScaleSuggestion,
     )
     from .tool_arg_normalizer import coerce_bbox_value
-    from .workflows.sfincs.model_flood_scenario.model_flood_scenario import (
+    from .workflows.sfincs.flood.flood import (
         _estimate_frame_count,
         _resolve_output_interval_min,
     )
@@ -9281,7 +9336,7 @@ def _build_psha_confirm_envelope(params: dict) -> Any:
 
     return PayloadWarningEnvelopePayload(
         warning_id=new_ulid(),
-        tool_name="run_seismic_hazard_psha",
+        tool_name="openquake_psha",
         tool_args={
             "bbox": list(coerced) if coerced is not None else params.get("bbox"),
             "imt": imt,
@@ -9306,7 +9361,7 @@ def _build_psha_confirm_envelope(params: dict) -> Any:
 def _build_fire_confirm_envelope(params: dict) -> Any:
     """FIRE-3: build the ELMFIRE fire-spread solver-confirm card.
 
-    A simple proceed/cancel confirmation (mirrors ``run_seismic_hazard_psha``):
+    A simple proceed/cancel confirmation (mirrors ``openquake_psha``):
     PURE arithmetic from the call args — the approximate computational grid
     (``estimate_elmfire_grid``, cosine-latitude cell count) + the
     FIRE-1-calibrated runtime heuristic (``estimate_elmfire_runtime_s``) + the
@@ -9381,7 +9436,7 @@ def _build_fire_confirm_envelope(params: dict) -> Any:
 
     return PayloadWarningEnvelopePayload(
         warning_id=new_ulid(),
-        tool_name="model_fire_spread",
+        tool_name="elmfire_fire_spread",
         tool_args={
             "bbox": list(coerced) if coerced is not None else params.get("bbox"),
             "ignition_lonlat": params.get("ignition_lonlat"),
@@ -9532,7 +9587,7 @@ async def _gate_on_solver_confirm(
             envelope = _build_confirmation_envelope(
                 derived, MODFLOWRunArgs(**kwargs)
             )
-        elif tool_name in ("run_model_flood_scenario",
+        elif tool_name in ("sfincs_flood",
                            "run_model_flood_habitat_scenario"):
             # job-0256 (live finding: a flood solver ran in a sandbox-only
             # session): a ~10-20 min SFINCS solve is a consequence — show the
@@ -9553,7 +9608,7 @@ async def _gate_on_solver_confirm(
             flood_cadence_gated = True
             # narrow_scope is offered iff the card carried an override block.
             flood_override_offered = "narrow_scope" in envelope.options
-        elif tool_name == "run_telemac":
+        elif tool_name == "telemac_river_dye":
             # BK-3b approve-mesh gate: the builder runs the FAST mesh-only
             # worker and emits the wireframe preview layer BEFORE the card, so
             # the user approves a mesh they can SEE (with real node counts +
@@ -9561,7 +9616,7 @@ async def _gate_on_solver_confirm(
             envelope, telemac_preview = await _build_telemac_mesh_envelope(
                 params, emitter=state.emitter
             )
-        elif tool_name == "run_swmm_urban_flood":
+        elif tool_name == "swmm_urban_flood":
             # #154 granularity gate (sprint-16): make mesh resolution a USER
             # lever (memory: feedback_user_controlled_granularity). The enriched
             # card carries a GranularitySuggestion the user can override before
@@ -9596,7 +9651,7 @@ async def _gate_on_solver_confirm(
                 <= _LANDCOVER_DEFAULT_RES_M + 1e-9
             ):
                 return True, params
-        elif tool_name == "run_seismic_hazard_psha":
+        elif tool_name == "openquake_psha":
             # NATE 2026-06-26: OpenQuake classical-PSHA solver-confirm card. A
             # SIMPLE proceed/cancel confirm (no granularity/resolution picker):
             # the deck builds an area source over the WHOLE bbox/AOI, so there is
@@ -9606,7 +9661,7 @@ async def _gate_on_solver_confirm(
             # composer extraction is needed (the run args are the tool args), so
             # this is built inline rather than via a workflow helper.
             envelope = _build_psha_confirm_envelope(params)
-        elif tool_name == "model_fire_spread":
+        elif tool_name == "elmfire_fire_spread":
             # FIRE-3: ELMFIRE fire-spread solver-confirm card. Simple
             # proceed/cancel with the approximate cell count + the
             # FIRE-1-calibrated runtime estimate + the scenario weather —
@@ -9728,7 +9783,7 @@ async def _gate_on_solver_confirm(
         # the SWMM real-cap-clamp path below (the flood resolution is a bbox-area
         # ESTIMATE; the real DEM autoscale re-runs at build time, so we honour the
         # chosen rung directly without a re-probe). This branch is taken for the
-        # flood solvers; the SWMM branch below for run_swmm_urban_flood. Only
+        # flood solvers; the SWMM branch below for swmm_urban_flood. Only
         # honoured when an override was actually advertised (a pluvial/no-bbox
         # flood card offers only proceed/cancel -> a narrow_scope reply falls
         # through to the fail-closed path below).
@@ -10811,7 +10866,7 @@ async def _maybe_handle_region_choice(
 # the parsed, role-split drawn geometry — so the tool surface stays catalog-clean
 # while the actual websocket pause/resume lives here (where the live socket +
 # session future registry are reachable). The drawn barriers FeatureCollection
-# round-trips straight into ``run_swmm_urban_flood(barriers=...)``.
+# round-trips straight into ``swmm_urban_flood(barriers=...)``.
 
 # Sentinel result the ``request_spatial_input`` catalog tool returns; the turn
 # loop detects it and replaces it with the real drawn-geometry result.
@@ -10964,7 +11019,7 @@ def _spatial_response_to_result(
       ``{status: "ok", geometry_type: "vector_draw", aoi_bbox, barriers,
          n_walls, n_flap_gates, points, n_aoi, n_lines}`` -- ``barriers`` is the
       clean engine-ready FeatureCollection (pass straight to
-      ``run_swmm_urban_flood(barriers=...)``). When a NEUTRAL line was drawn
+      ``swmm_urban_flood(barriers=...)``). When a NEUTRAL line was drawn
       (purpose="line"), ``line`` (``[[lon,lat],...]``) + ``linestring`` (a
       GeoJSON LineString) carry it for ``compute_terrain_profile(line=...)``.
     - structurally invalid drawn FC               ->
@@ -11041,7 +11096,7 @@ def _spatial_response_to_result(
             result["aoi_bbox"] = list(parsed.aoi_bbox)
         if parsed.barriers is not None:
             # The clean, engine-ready barriers FeatureCollection — pass straight
-            # to run_swmm_urban_flood(barriers=...). It validates field-for-field
+            # to swmm_urban_flood(barriers=...). It validates field-for-field
             # against SWMMRunArgs.barriers.
             result["barriers"] = parsed.barriers
         if parsed.line_coords is not None:
@@ -11077,7 +11132,7 @@ async def _handle_request_spatial_input(
     result. Never raises — every failure path (no client, validation, parse,
     timeout, cancellation) becomes a typed result the LLM narrates honestly. The
     ``role=="barrier"`` features become the ``barriers`` FeatureCollection that
-    feeds ``run_swmm_urban_flood`` -> ``SWMMRunArgs.barriers`` -> the existing
+    feeds ``swmm_urban_flood`` -> ``SWMMRunArgs.barriers`` -> the existing
     ``build_swmm_mesh`` wall=omit-conduit / flap_gate=one-way-orifice seam.
     """
     if state.emitter is None:
@@ -11954,7 +12009,7 @@ async def _invoke_tool_via_emitter(
     state.current_turn_pipeline_id = state.current_pipeline_id
     # job-0263: bind the registry as the ambient observation sink for the
     # lifetime of the invoke so composer-internal publishes (publish_layer
-    # called inside run_model_flood_scenario) register the gs:// COG ↔ WMS
+    # called inside sfincs_flood) register the gs:// COG ↔ WMS
     # association even though the composer's envelope only carries the WMS URL.
     _uri_reg_token = activate_registry(uri_registry)
     # job-0267: tool-card persistence bookkeeping. ``_card_state`` stays None
@@ -15035,7 +15090,7 @@ def _make_handler(settings: GeminiSettings):
             # kill an in-flight turn. ROOT CAUSE of "no successful SFINCS run
             # since Fort Myers": this finally used to ``.cancel()`` EVERY not-done
             # task on ``state.inflight_tasks`` — including a detached
-            # ``run_model_flood_scenario`` -> ``wait_for_completion`` (minutes
+            # ``sfincs_flood`` -> ``wait_for_completion`` (minutes
             # long). The client opens MULTIPLE sockets per session (StrictMode
             # double-mount + reconnect), so a transient socket swap detonated this
             # and docker-killed the solve ~7s in.

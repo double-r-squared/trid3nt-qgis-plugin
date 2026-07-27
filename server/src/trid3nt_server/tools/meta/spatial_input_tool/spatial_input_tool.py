@@ -6,7 +6,7 @@ WALLS (red, water is dammed) and FLAP GATES (green, one-way drains), or a simple
 point / bbox pick. The drawn geometry comes back as a role-tagged GeoJSON
 ``FeatureCollection``; the agent splits it by role and the ``role=="barrier"``
 features become the ``barriers`` FeatureCollection that feeds
-``run_swmm_urban_flood(barriers=...)`` straight into the existing PySWMM engine
+``swmm_urban_flood(barriers=...)`` straight into the existing PySWMM engine
 seam (wall = omitted overland conduit; flap_gate = one-way SWMM orifice).
 
 ARCHITECTURE NOTE (why this tool body is a thin sentinel): the actual
@@ -80,9 +80,9 @@ async def request_spatial_input(
     Use this when the user must physically draw on the map rather than
     describe an area in words: an AOI/region outline for any bbox-taking
     tool (``mode="vector_draw"``, ``purpose="aoi"``); SWMM flood WALLS/
-    FLAP GATES before ``run_swmm_urban_flood`` (``purpose="barrier"``,
+    FLAP GATES before ``swmm_urban_flood`` (``purpose="barrier"``,
     default -- result's ``barriers`` FeatureCollection passes straight to
-    ``run_swmm_urban_flood(barriers=...)``, ``aoi_bbox`` as its ``bbox``);
+    ``swmm_urban_flood(barriers=...)``, ``aoi_bbox`` as its ``bbox``);
     a neutral elevation/section LINE (``purpose="line"`` -- result's
     ``line``/``linestring`` passes to ``compute_terrain_profile``/
     ``compute_cross_section``); or a single click (``mode="point"``) /

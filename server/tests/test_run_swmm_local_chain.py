@@ -11,7 +11,7 @@ depth) WITHOUT any live network fetch:
       -> postprocess_swmm (rasterize node depths -> peak + frames, P3)
       -> model_urban_flood_swmm composer (peak returned + frames emitted
          out-of-band via a fake emitter)
-      -> run_swmm_urban_flood tool (SWMMRunArgs coercion + typed-error surface)
+      -> swmm_urban_flood tool (SWMMRunArgs coercion + typed-error surface)
 
 This is the P4 acceptance: a REAL solved ``.out`` produces a peak primary
 ``SWMMDepthLayerURI`` + a contiguous "Flood depth step N" animation frame group,
@@ -64,28 +64,28 @@ def test_swmm_local_spec_is_exec_kind():
     assert spec.classify_exit is not None  # the continuity (mass-balance) guard
 
 
-def test_run_swmm_urban_flood_registered_and_typed_error():
+def test_swmm_urban_flood_registered_and_typed_error():
     """The LLM-facing tool is registered + returns a typed error dict (never
     raises) on a missing/invalid bbox."""
     import asyncio
 
     import trid3nt_server.tools as T
-    from trid3nt_server.tools.simulation.run_swmm_tool.run_swmm_tool import run_swmm_urban_flood
+    from trid3nt_server.workflows.swmm.urban_flood.urban_flood import swmm_urban_flood
 
-    assert "run_swmm_urban_flood" in T.TOOL_REGISTRY
+    assert "swmm_urban_flood" in T.TOOL_REGISTRY
 
     # No bbox -> typed error dict, not a raise.
-    out = asyncio.run(run_swmm_urban_flood(bbox=None))
+    out = asyncio.run(swmm_urban_flood(bbox=None))
     assert out["status"] == "error"
     assert out["error_code"] == "SWMM_PARAMS_INCOMPLETE"
 
     # A non-bbox string -> typed invalid-params error.
-    out2 = asyncio.run(run_swmm_urban_flood(bbox="not-a-bbox"))
+    out2 = asyncio.run(swmm_urban_flood(bbox="not-a-bbox"))
     assert out2["status"] == "error"
     assert out2["error_code"] == "SWMM_PARAMS_INVALID"
 
 
-def test_run_swmm_urban_flood_obstacles_alias_does_not_trip_params_invalid(monkeypatch):
+def test_swmm_urban_flood_obstacles_alias_does_not_trip_params_invalid(monkeypatch):
     """The LLM-invented 'obstacles' building_representation normalizes to 'drop'
     in SWMMRunArgs (contract alias validator) so the tool's FIRST attempt does
     NOT return SWMM_PARAMS_INVALID -> it proceeds into the workflow (no visible
@@ -93,7 +93,7 @@ def test_run_swmm_urban_flood_obstacles_alias_does_not_trip_params_invalid(monke
     run_args without running the heavy solver chain."""
     import asyncio
 
-    from trid3nt_server.tools.simulation.run_swmm_tool import run_swmm_tool as RT
+    from trid3nt_server.workflows.swmm.urban_flood import urban_flood as RT
 
     captured: dict = {}
 
@@ -106,7 +106,7 @@ def test_run_swmm_urban_flood_obstacles_alias_does_not_trip_params_invalid(monke
     monkeypatch.setattr(RT, "model_urban_flood_swmm", _fake_composer)
 
     out = asyncio.run(
-        RT.run_swmm_urban_flood(
+        RT.swmm_urban_flood(
             bbox=[-85.32, 35.02, -85.28, 35.06],
             building_representation="obstacles",
         )
@@ -120,13 +120,13 @@ def test_run_swmm_urban_flood_obstacles_alias_does_not_trip_params_invalid(monke
     assert out["error_code"] == "URBAN_STUB"
 
 
-def test_run_swmm_urban_flood_bogus_building_representation_is_params_invalid(monkeypatch):
+def test_swmm_urban_flood_bogus_building_representation_is_params_invalid(monkeypatch):
     """A genuinely-bogus building_representation still trips the honest
     SWMM_PARAMS_INVALID guard (the alias map does not silently coerce it) and the
     composer is never reached."""
     import asyncio
 
-    from trid3nt_server.tools.simulation.run_swmm_tool import run_swmm_tool as RT
+    from trid3nt_server.workflows.swmm.urban_flood import urban_flood as RT
 
     reached = {"composer": False}
 
@@ -137,7 +137,7 @@ def test_run_swmm_urban_flood_bogus_building_representation_is_params_invalid(mo
     monkeypatch.setattr(RT, "model_urban_flood_swmm", _fake_composer)
 
     out = asyncio.run(
-        RT.run_swmm_urban_flood(
+        RT.swmm_urban_flood(
             bbox=[-85.32, 35.02, -85.28, 35.06],
             building_representation="bananas",
         )
@@ -632,7 +632,7 @@ def test_full_local_chain_emits_peak_plus_frames(synthetic_inputs, monkeypatch):
 
 
 def test_tool_wrapper_drives_full_chain(synthetic_inputs, monkeypatch):
-    """The LLM-facing run_swmm_urban_flood tool drives the same chain and returns
+    """The LLM-facing swmm_urban_flood tool drives the same chain and returns
     a SWMMDepthLayerURI (the add_loaded_layer gate target) - DEM fetch stubbed to
     the synthetic file so no network is touched."""
     import asyncio
@@ -663,10 +663,10 @@ def test_tool_wrapper_drives_full_chain(synthetic_inputs, monkeypatch):
         lambda bbox, rp, dur: 120.0,
     )
 
-    from trid3nt_server.tools.simulation.run_swmm_tool.run_swmm_tool import run_swmm_urban_flood
+    from trid3nt_server.workflows.swmm.urban_flood.urban_flood import swmm_urban_flood
 
     out = asyncio.run(
-        run_swmm_urban_flood(
+        swmm_urban_flood(
             bbox=[-88.0, 36.0, -87.99, 36.01],
             storm_duration_hr=1.0,
             rain_interval_min=5,

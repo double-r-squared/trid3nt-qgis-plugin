@@ -171,7 +171,12 @@ def test_wse_empty_dry_solve_raises(tmp_path):
 # Driver friction deck edit (the honest bundled-deck "setter").
 # --------------------------------------------------------------------------- #
 def _load_driver():
-    path = Path("scripts/run_l2_malpasset.py").resolve()
+    # Anchored to the repo root via __file__ (NOT cwd-relative -- the Malpasset
+    # panel flagged this: a cwd-relative Path("scripts/...") only resolves when
+    # pytest happens to be invoked from the repo root). parents[0]=tests,
+    # [1]=server, [2]=repo root, matching the convention used elsewhere (e.g.
+    # test_land_subsidence.py's FIXTURE_DIR).
+    path = Path(__file__).resolve().parents[2] / "scripts" / "run_l2_malpasset.py"
     spec = importlib.util.spec_from_file_location("run_l2_malpasset", path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["run_l2_malpasset"] = mod

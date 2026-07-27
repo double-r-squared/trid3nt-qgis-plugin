@@ -144,24 +144,29 @@ def test_swan_registered_in_solver_workflow_registry():
     assert SWAN_SOLVER_NAME in SOLVER_WORKFLOW_REGISTRY
 
 
-def test_run_swan_waves_registered_in_tool_registry():
+def test_swan_wave_field_registered_in_tool_registry():
     import trid3nt_server.tools  # noqa: F401 -- fire eager imports
     from trid3nt_server.tools import TOOL_REGISTRY
 
-    assert "run_swan_waves" in TOOL_REGISTRY
+    # engine-door refactor (SWAN slice): run_swan_waves was RENAMED to the
+    # swan_wave_field template (engine=swan, tier=template); the old name is GONE
+    # (renames replace old names, no aliases) and the run_swan door lists it.
+    assert "swan_wave_field" in TOOL_REGISTRY
+    assert "run_swan_waves" not in TOOL_REGISTRY
+    assert "run_swan" in TOOL_REGISTRY
 
 
-def test_run_swan_waves_typed_error_on_missing_bbox():
+def test_swan_wave_field_typed_error_on_missing_bbox():
     import asyncio
 
-    from trid3nt_server.tools.simulation.run_swan_tool.run_swan_tool import run_swan_waves
+    from trid3nt_server.workflows.swan.wave_field.wave_field import swan_wave_field
 
-    out = asyncio.run(run_swan_waves(bbox=None))
+    out = asyncio.run(swan_wave_field(bbox=None))
     assert isinstance(out, dict)
     assert out["status"] == "error"
     assert out["error_code"] == "SWAN_PARAMS_INCOMPLETE"
 
-    out2 = asyncio.run(run_swan_waves(bbox="garbage"))
+    out2 = asyncio.run(swan_wave_field(bbox="garbage"))
     assert out2["status"] == "error"
     assert out2["error_code"] == "SWAN_PARAMS_INVALID"
 
@@ -643,7 +648,7 @@ def test_build_swan_build_spec_applies_inward_coercion():
 def test_normalize_boundary_side_words_and_phrases():
     """Words / phrases the LLM emits must coerce to a single cardinal so the
     strict Literal["N","S","E","W"] contract does not fail the first attempt."""
-    from trid3nt_server.tools.simulation.run_swan_tool.run_swan_tool import _normalize_boundary_side
+    from trid3nt_server.workflows.swan.wave_field.wave_field import _normalize_boundary_side
 
     assert _normalize_boundary_side("S") == "S"
     assert _normalize_boundary_side("south") == "S"
@@ -663,7 +668,7 @@ def test_normalize_boundary_side_words_and_phrases():
 def test_normalized_side_builds_a_valid_boundary():
     """The normalized side feeds the strict SwanWaveBoundary contract cleanly --
     a multi-char input ('from the south') no longer trips validation."""
-    from trid3nt_server.tools.simulation.run_swan_tool.run_swan_tool import _normalize_boundary_side
+    from trid3nt_server.workflows.swan.wave_field.wave_field import _normalize_boundary_side
 
     side = _normalize_boundary_side("from the south")
     assert side == "S"

@@ -658,7 +658,7 @@ def model_debris_flow(
     LIKELIHOOD -> Gartner 2014 VOLUME (m^3) -> Cannon 2010 HAZARD class.
     Do NOT use for: unburned terrain (raises ``NoBurnDataError``);
     rainfall-driven flooding (SFINCS/SWMM composers) or generic landslide
-    susceptibility (``run_landlab_susceptibility``).
+    susceptibility (the ``run_landlab`` door -> ``landlab_susceptibility``).
 
     Params:
         bbox: EPSG:4326, clamped to <= 0.15 deg per side.

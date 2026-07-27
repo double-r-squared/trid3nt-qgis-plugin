@@ -1,4 +1,4 @@
-"""Unit + live tests for ``run_pelicun_damage_assessment`` Wave 2 composer (job-0120).
+"""Unit + live tests for ``pelicun_damage_assessment`` Wave 2 composer (job-0120).
 
 Wave 2 (this file) replaces the Wave 1 stub raises with REAL Pelicun-backed
 behavior:
@@ -32,7 +32,7 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
+from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
     PelicunDamageError,
     PelicunFragilityDataError,
     PelicunInputError,
@@ -42,7 +42,7 @@ from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_d
     _load_hazus_flood_curves,
     _mc_loss_ratio_realizations,
     _seed_for_asset,
-    run_pelicun_damage_assessment,
+    pelicun_damage_assessment,
 )
 
 
@@ -59,16 +59,16 @@ _VALID_ASSETS_URI = "s3://trid3nt-cache/places/fort-myers-place-polys.fgb"
 # ---------------------------------------------------------------------------
 
 
-def test_run_pelicun_damage_assessment_registered() -> None:
+def test_pelicun_damage_assessment_registered() -> None:
     """The tool registers under its declared name with the Wave 1 metadata."""
-    assert "run_pelicun_damage_assessment" in TOOL_REGISTRY
-    entry = TOOL_REGISTRY["run_pelicun_damage_assessment"]
+    assert "pelicun_damage_assessment" in TOOL_REGISTRY
+    entry = TOOL_REGISTRY["pelicun_damage_assessment"]
     md = entry.metadata
-    assert md.name == "run_pelicun_damage_assessment"
+    assert md.name == "pelicun_damage_assessment"
     assert md.cacheable is True
     assert md.ttl_class == "static-30d"
     assert md.source_class == "pelicun_damage"
-    assert entry.fn is run_pelicun_damage_assessment
+    assert entry.fn is pelicun_damage_assessment
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ def test_run_pelicun_damage_assessment_registered() -> None:
 def test_bad_fragility_set_raises_input_error() -> None:
     """Unknown / typo'd ``fragility_set`` → ``PelicunInputError``."""
     with pytest.raises(PelicunInputError) as excinfo:
-        run_pelicun_damage_assessment(
+        pelicun_damage_assessment(
             hazard_raster_uri=_VALID_HAZARD_URI,
             assets_uri=_VALID_ASSETS_URI,
             fragility_set="not_a_real_fragility_set",  # type: ignore[arg-type]
@@ -94,7 +94,7 @@ def test_bad_fragility_set_raises_input_error() -> None:
 def test_none_assets_uri_raises_input_error() -> None:
     """``assets_uri=None`` → ``PelicunInputError``."""
     with pytest.raises(PelicunInputError) as excinfo:
-        run_pelicun_damage_assessment(
+        pelicun_damage_assessment(
             hazard_raster_uri=_VALID_HAZARD_URI,
             assets_uri=None,  # type: ignore[arg-type]
         )
@@ -105,7 +105,7 @@ def test_none_assets_uri_raises_input_error() -> None:
 def test_none_hazard_raster_uri_raises_input_error() -> None:
     """``hazard_raster_uri=None`` → ``PelicunInputError``."""
     with pytest.raises(PelicunInputError) as excinfo:
-        run_pelicun_damage_assessment(
+        pelicun_damage_assessment(
             hazard_raster_uri=None,  # type: ignore[arg-type]
             assets_uri=_VALID_ASSETS_URI,
         )
@@ -116,7 +116,7 @@ def test_none_hazard_raster_uri_raises_input_error() -> None:
 def test_empty_component_types_list_raises_input_error() -> None:
     """Empty ``component_types=[]`` → ``PelicunInputError``."""
     with pytest.raises(PelicunInputError) as excinfo:
-        run_pelicun_damage_assessment(
+        pelicun_damage_assessment(
             hazard_raster_uri=_VALID_HAZARD_URI,
             assets_uri=_VALID_ASSETS_URI,
             component_types=[],
@@ -129,7 +129,7 @@ def test_empty_component_types_list_raises_input_error() -> None:
 def test_nonpositive_realization_count_raises_input_error(bad_count: int) -> None:
     """``realization_count`` must be a positive int."""
     with pytest.raises(PelicunInputError) as excinfo:
-        run_pelicun_damage_assessment(
+        pelicun_damage_assessment(
             hazard_raster_uri=_VALID_HAZARD_URI,
             assets_uri=_VALID_ASSETS_URI,
             realization_count=bad_count,
@@ -327,7 +327,7 @@ def test_geographic_correctness_higher_depth_higher_damage(tmp_path) -> None:
     east_ds_mean > west_ds_mean. A sampling-pixel-swap bug would fail this
     assertion even if the FlatGeobuf round-trips bytes correctly.
     """
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
         _assess_assets,
     )
 
@@ -397,7 +397,7 @@ def test_geographic_correctness_higher_depth_higher_damage(tmp_path) -> None:
 
 def test_component_types_filter_restricts_assets(tmp_path) -> None:
     """``component_types=['COM1']`` filters out RES1 assets."""
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import _assess_assets
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import _assess_assets
 
     bbox = (-82.0, 26.0, -81.0, 27.0)
     raster_path = str(tmp_path / "hazard.tif")
@@ -430,7 +430,7 @@ def test_deterministic_output_byte_identical_across_runs(tmp_path) -> None:
     Verifies the per-asset RNG seeding is fully deterministic — required for
     the cache-key invariant.
     """
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import _assess_assets
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import _assess_assets
 
     bbox = (-82.0, 26.0, -81.0, 27.0)
     raster_path = str(tmp_path / "hazard.tif")
@@ -468,7 +468,7 @@ def test_deterministic_output_byte_identical_across_runs(tmp_path) -> None:
 
 def test_no_assets_in_hazard_raises_typed_error(tmp_path) -> None:
     """Asset outside hazard footprint → ``PelicunNoAssetsError``."""
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import _assess_assets
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import _assess_assets
 
     raster_path = str(tmp_path / "hazard.tif")
     _write_synthetic_flood_cog(
@@ -507,7 +507,7 @@ def test_registered_tool_returns_layer_uri_with_correct_shape(tmp_path) -> None:
     The shim is patched to skip GCS and just call the fetch_fn (which writes
     bytes to a local tmp file we point ``uri`` at).
     """
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment as mod
+    from trid3nt_server.workflows.pelicun.damage_assessment import damage_assessment as mod
 
     bbox = (-82.0, 26.0, -81.0, 27.0)
     raster_path = str(tmp_path / "hazard.tif")
@@ -542,7 +542,7 @@ def test_registered_tool_returns_layer_uri_with_correct_shape(tmp_path) -> None:
         return SimpleNamespace(uri=out_uri, data=data, hit=False)
 
     with mock.patch.object(mod, "read_through", fake_read_through):
-        result = run_pelicun_damage_assessment(
+        result = pelicun_damage_assessment(
             hazard_raster_uri=raster_path,
             assets_uri=assets_path,
             fragility_set="hazus_flood_v6",
@@ -569,7 +569,7 @@ def test_registered_tool_returns_layer_uri_with_correct_shape(tmp_path) -> None:
 def test_damage_state_legend_is_graduated_ds_mean_choropleth() -> None:
     """The ``ds_mean`` legend KEY: a 5-bucket green->red HAZUS damage ramp driven
     by the real feature property, with a canonical 0..4 damage-state scale."""
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
         _build_damage_state_legend,
     )
 
@@ -600,14 +600,14 @@ def test_fragility_set_eq_2020_raises_not_wired_yet() -> None:
     The Wave 1 contract reserved the slot; v0.1 only wires flood. We surface
     the deferral as a clear input-shape error rather than a runtime crash.
     """
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment as mod
+    from trid3nt_server.workflows.pelicun.damage_assessment import damage_assessment as mod
 
     def fake_read_through(metadata, params, ext, fetch_fn, **kw):
         return fetch_fn()  # triggers the inner raise
 
     with mock.patch.object(mod, "read_through", fake_read_through):
         with pytest.raises(PelicunInputError) as excinfo:
-            run_pelicun_damage_assessment(
+            pelicun_damage_assessment(
                 hazard_raster_uri="/nonexistent/x.tif",
                 assets_uri="/nonexistent/y.fgb",
                 fragility_set="fema_hazus_eq_2020",
@@ -658,7 +658,7 @@ def test_live_pelicun_fort_myers_e2e(tmp_path) -> None:
         level="place", bbox=fort_myers_bbox
     )
 
-    result = run_pelicun_damage_assessment(
+    result = pelicun_damage_assessment(
         hazard_raster_uri=hazard_uri,
         assets_uri=assets_layer.uri,
         fragility_set="hazus_flood_v6",
@@ -668,7 +668,7 @@ def test_live_pelicun_fort_myers_e2e(tmp_path) -> None:
 
     # Read the output FGB back and assert non-zero damage at Fort Myers.
     import geopandas as gpd
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import _download_uri_to_local
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import _download_uri_to_local
 
     local_fgb = _download_uri_to_local(result.uri, ".fgb")
     gdf = gpd.read_file(local_fgb, engine="pyogrio")
@@ -692,8 +692,8 @@ def test_download_repairs_llm_mangled_prefix(monkeypatch, tmp_path):
     GCP is decommissioned: the repair now runs on the boto3 S3 read path
     (``read_object_bytes_s3``); the gs:// download branch is gone.
     """
-    import trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment as mod
-    from trid3nt_server.tools.simulation.run_pelicun_damage_assessment.run_pelicun_damage_assessment import (
+    import trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment as mod
+    from trid3nt_server.workflows.pelicun.damage_assessment.damage_assessment import (
         _download_uri_to_local,
     )
 

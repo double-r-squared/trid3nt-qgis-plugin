@@ -1,7 +1,11 @@
 """Direct SFINCS pluvial flood invocation for trid3nt-local proof.
 
-Bypasses the LLM/agent chat layer -- calls the deterministic flood workflow
-(``run_model_flood_scenario``) directly. The workflow runs the FULL chain:
+Bypasses the LLM/agent chat layer -- calls the live registered flood template
+(``sfincs_flood``, in ``workflows/sfincs/flood/flood.py``) directly. The
+engine-door refactor deleted the old ``workflows/sfincs/model_flood_scenario``
+module; ``sfincs_flood`` is the tier=template tool that forwards to the
+``model_flood_scenario`` composition and returns the envelope as a dict. The
+workflow runs the FULL chain:
   fetch_dem / fetch_landcover -> lookup_precip_return_period
   -> build_sfincs_model (hydromt-sfincs, in-agent)
   -> run_solver (TRID3NT_SOLVER_BACKEND=local-docker: deltares/sfincs-cpu container)
@@ -106,7 +110,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.workflows.sfincs.model_flood_scenario.model_flood_scenario import run_model_flood_scenario
+    from trid3nt_server.workflows.sfincs.flood.flood import sfincs_flood
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
     sys.exit(1)
@@ -114,10 +118,10 @@ except ImportError as exc:
 
 async def _run():
     log.info(
-        "invoking run_model_flood_scenario bbox=%s pluvial rp=%dyr dur=%dhr class=small",
+        "invoking sfincs_flood bbox=%s pluvial rp=%dyr dur=%dhr class=small",
         BBOX, RETURN_PERIOD_YR, DURATION_HR,
     )
-    result = await run_model_flood_scenario(
+    result = await sfincs_flood(
         bbox=BBOX,
         return_period_yr=RETURN_PERIOD_YR,
         duration_hr=DURATION_HR,
@@ -188,11 +192,35 @@ log.info("summary written to %s", out_path)
 print("\n=== SFINCS direct run COMPLETE ===")
 print(json.dumps(summary, indent=2, default=str)[:4000])
 
-# Exit non-zero if the workflow returned a failed envelope (dict with error_code).
-if isinstance(result, dict) and result.get("error_code"):
-    log.error("workflow returned FAILED envelope: %s", result.get("error_code"))
+# ------------------------------------------------------------------------- #
+# Derive status from the result. ``sfincs_flood`` returns a LayerURI (the
+# primary depth-COG raster) on SUCCESS and a failed-AssessmentEnvelope dict on
+# failure (envelope_type=="modeled" + flood.metrics.solver_version =
+# "failed:<code>"). Recognize BOTH shapes: a depth COG is either the LayerURI
+# itself (uri + layer_type=="raster") or a primary raster in an envelope's
+# ``layers`` list.
+# ------------------------------------------------------------------------- #
+env = result_json if isinstance(result_json, dict) else {}
+solver_version = ((env.get("flood") or {}).get("metrics") or {}).get("solver_version", "")
+depth_cogs = []
+if env.get("layer_type") == "raster" and env.get("uri"):
+    depth_cogs.append(env)  # LayerURI success shape
+for lyr in (env.get("layers") or []):
+    if isinstance(lyr, dict) and lyr.get("layer_type") == "raster" and lyr.get("uri"):
+        depth_cogs.append(lyr)
+log.info(
+    "status: result_type=%s solver_version=%s depth_cogs=%d",
+    type(result).__name__, solver_version, len(depth_cogs),
+)
+
+if isinstance(solver_version, str) and solver_version.startswith("failed:"):
+    log.error("workflow returned FAILED envelope: %s", solver_version)
+    sys.exit(2)
+if not depth_cogs:
+    log.error("no depth COG raster layer in the result -- solve did not publish a result")
     sys.exit(2)
 if not new_prefixes:
     log.error("no new MinIO run prefix -- solve did not produce outputs")
     sys.exit(3)
-print("\nSFINCS direct run PASSED (new run prefix + outputs in MinIO)")
+print("\nSFINCS direct run PASSED (status=ok, depth COG published, new run prefix + outputs in MinIO)")
+print(f"depth COG: {depth_cogs[0].get('uri')}")

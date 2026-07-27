@@ -306,7 +306,7 @@ async def test_solver_branch_unchanged_no_fetch_suggestion(monkeypatch) -> None:
 
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
     should_run, effective = await server._gate_on_solver_confirm(  # type: ignore[arg-type]
-        ws, state, "run_model_flood_scenario", params
+        ws, state, "sfincs_flood", params
     )
     await approver
 

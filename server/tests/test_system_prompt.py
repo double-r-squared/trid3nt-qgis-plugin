@@ -166,8 +166,8 @@ def test_system_prompt_keeps_always_narrate_section() -> None:
 
 
 def test_system_prompt_still_routes_flood_modeling() -> None:
-    """job-0154 routing instruction (flood → run_model_flood_scenario) survives."""
-    assert "run_model_flood_scenario" in SYSTEM_PROMPT
+    """job-0154 routing instruction (flood → run_sfincs) survives."""
+    assert "run_sfincs" in SYSTEM_PROMPT
 
 
 def test_system_prompt_still_forbids_fabricated_numbers() -> None:

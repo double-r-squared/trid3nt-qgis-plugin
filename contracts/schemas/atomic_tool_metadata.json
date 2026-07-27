@@ -19,9 +19,22 @@
       "title": "Destructive Hint",
       "type": "boolean"
     },
+    "engine": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Owning engine slug for an engine-door family member (e.g. 'modflow', 'sfincs'). None (default) for every non-engine tool - zero impact on existing registrations. A door lists / gate-expands over its engine's tier=template members filtered by this slug.",
+      "title": "Engine"
+    },
     "idempotent_hint": {
       "default": true,
-      "description": "MCP annotation: idempotentHint. True when calling the tool multiple times with the same arguments produces the same result without additional side effects. Defaults to True \u2014 fetchers with the cache shim satisfy this property. Set to False for tools that emit pipeline state (wait_for_completion), dispatch Cloud Run jobs (run_solver, qgis_process), write GCS artifacts (run_pelicun_damage_assessment, publish_layer), or interact with stateful systems in non-idempotent ways.",
+      "description": "MCP annotation: idempotentHint. True when calling the tool multiple times with the same arguments produces the same result without additional side effects. Defaults to True \u2014 fetchers with the cache shim satisfy this property. Set to False for tools that emit pipeline state (wait_for_completion), dispatch Cloud Run jobs (run_solver, qgis_process), write GCS artifacts (pelicun_damage_assessment, publish_layer), or interact with stateful systems in non-idempotent ways.",
       "title": "Idempotent Hint",
       "type": "boolean"
     },
@@ -51,7 +64,7 @@
     },
     "read_only_hint": {
       "default": true,
-      "description": "MCP annotation: readOnlyHint. True when the tool has no side effects and does not mutate any external state (GCS, QGIS project, MongoDB, Cloud Run). Defaults to True \u2014 the safe assumption for fetchers and compute tools. Set to False for publish_layer, run_solver, qgis_process, run_pelicun_damage_assessment, and any other tool that writes.",
+      "description": "MCP annotation: readOnlyHint. True when the tool has no side effects and does not mutate any external state (GCS, QGIS project, MongoDB, Cloud Run). Defaults to True \u2014 the safe assumption for fetchers and compute tools. Set to False for publish_layer, run_solver, qgis_process, pelicun_damage_assessment, and any other tool that writes.",
       "title": "Read Only Hint",
       "type": "boolean"
     },
@@ -72,6 +85,17 @@
       "description": "True if this tool accepts ``bbox=None`` to mean global/CONUS-wide query. Default False (safer \u2014 tools opt in). When False, calling with ``bbox=None`` must raise ``ToolInputError(code='BBOX_REQUIRED', retryable=False)`` BEFORE issuing any network call. See memory: feedback_layer_global_bbox_policy.",
       "title": "Supports Global Query",
       "type": "boolean"
+    },
+    "tier": {
+      "default": "general",
+      "description": "Retrieval tier. 'general' (default) - the ordinary per-turn retrieval pool (today's behaviour). 'door' - a read-only engine concierge; ALSO retrievable in the per-turn pool (doors compete with general). 'template' - a registered engine template EXCLUDED from the default pool, surfaced only by its door's gate expansion (select-then-call). Excluding tier=template decouples registration from retrieval visibility.",
+      "enum": [
+        "general",
+        "door",
+        "template"
+      ],
+      "title": "Tier",
+      "type": "string"
     },
     "ttl_class": {
       "enum": [

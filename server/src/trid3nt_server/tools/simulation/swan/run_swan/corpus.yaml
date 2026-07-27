@@ -1,0 +1,15 @@
+# Engine-door corpus (DOOR tier - walked into the main index; the door competes
+# in per-turn retrieval alongside general tools). Hazard-common nearshore-wave
+# phrasings route to the run_swan door, whose gate expansion then surfaces the
+# specific swan_* template (select-then-call). Template-specific phrasings live in
+# each workflows/swan/<template>/corpus.yaml (TEMPLATE tier - NOT merged into this
+# index). Carried from the migrated run_swan_waves corpus entries.
+run_swan:
+- model the incoming waves coming onshore at Mexico Beach with SWAN
+- give me a defensible nearshore wave field with significant wave height, peak period and direction
+- run a SWAN spectral wave simulation over this coastal AOI to compare against SnapWave
+- show me the wave heights Hs Tp and mean wave direction for this coastline
+- compute an engineering-grade wave climate to validate against buoy data
+- run SWAN standalone so I can compare it with the SFINCS+SnapWave wave field on this case
+- what nearshore wave models can you run
+- which SWAN scenario fits my question

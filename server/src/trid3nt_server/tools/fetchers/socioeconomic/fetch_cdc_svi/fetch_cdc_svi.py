@@ -521,7 +521,7 @@ def fetch_cdc_svi(
     **Cross-tool dependencies:**
         - Feeds INTO: ``compute_zonal_statistics`` (vulnerable population inside
           a hazard footprint), ``clip_vector_to_polygon`` (admin-bounded SVI).
-        - Combine WITH: ``run_model_flood_scenario`` / ``fetch_noaa_slr_scenarios``
+        - Combine WITH: ``sfincs_flood`` / ``fetch_noaa_slr_scenarios``
           / ``fetch_firms_active_fire`` (hazard footprints) for vulnerability-
           weighted exposure; ``fetch_administrative_boundaries`` (county scope).
 
