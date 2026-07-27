@@ -1648,6 +1648,88 @@ def _check_convergence(scratch: Path) -> tuple[bool, str | None]:
     return False, "mfsim.lst has neither normal-termination nor convergence-failure marker"
 
 
+def _mirror_local_run_to_s3(
+    scratch: Path,
+    staging: DeckStaging,
+    completion: dict[str, Any],
+    output_paths: list[str],
+    stdout_path: Path,
+    stderr_path: Path,
+) -> None:
+    """Best-effort mirror of the local run's diagnostics artifacts to S3.
+
+    ``run_modflow_local`` writes ``completion.json`` into the EPHEMERAL scratch
+    deck dir with ``file://`` output_uris - invisible to ``read_run_diagnostics``,
+    which polls ``s3://<runs_bucket>/<run_id>/completion.json`` the same way the
+    generic ``_supervise_local_run`` path (SFINCS et al.) does. This mirrors the
+    diagnostics-relevant artifacts (``mfsim.lst`` + each per-model ``<model>.lst``,
+    plus mf6 stdout/stderr) to that prefix and writes an S3 completion.json whose
+    ``output_uris`` are the uploaded ``s3://`` uris and whose ``solver`` field is
+    ``"modflow"`` (so the diagnostics reader resolves the engine directly). Only
+    the MF6 listing files are mirrored - the reader reads no binary output, so
+    the heavy ``.ucn`` / ``.hds`` / ``.cbc`` stay local. NEVER raises: an upload
+    fault only means diagnostics-over-S3 are unavailable for this run, never a
+    failed solve. Runs off-loop (``run_modflow_local`` is dispatched via
+    ``asyncio.to_thread``), so the sync boto3 I/O is safe.
+    """
+    try:
+        from trid3nt_server.tools.simulation.solver import solver as _solver
+
+        s3 = _solver._get_s3_client()
+        runs_bucket = _solver._get_runs_bucket()
+        run_id = staging.run_id
+
+        # mf6 stdout/stderr (evidence parity with the generic path).
+        s3_stdout_uri = completion.get("mf6_stdout_uri")
+        s3_stderr_uri = completion.get("mf6_stderr_uri")
+        if stdout_path.exists():
+            s3_stdout_uri = _solver._upload_file_s3(
+                s3, stdout_path, runs_bucket, f"{run_id}/{stdout_path.name}"
+            )
+        if stderr_path.exists():
+            s3_stderr_uri = _solver._upload_file_s3(
+                s3, stderr_path, runs_bucket, f"{run_id}/{stderr_path.name}"
+            )
+
+        # ONLY the MF6 listing files (mfsim.lst + per-model <model>.lst) -- the
+        # exact artifacts diagnostics/modflow.parse_modflow reads.
+        s3_output_uris: list[str] = []
+        for rel in output_paths:
+            if not rel.endswith(".lst"):
+                continue
+            src = scratch / rel
+            if not src.exists():
+                continue
+            uri = _solver._upload_file_s3(s3, src, runs_bucket, f"{run_id}/{rel}")
+            s3_output_uris.append(uri)
+
+        s3_completion = dict(completion)
+        s3_completion["solver"] = "modflow"
+        s3_completion["mf6_stdout_uri"] = s3_stdout_uri
+        s3_completion["mf6_stderr_uri"] = s3_stderr_uri
+        s3_completion["output_uris"] = s3_output_uris
+        s3.put_object(
+            Bucket=runs_bucket,
+            Key=f"{run_id}/completion.json",
+            Body=json.dumps(s3_completion, indent=2).encode("utf-8"),
+            ContentType="application/json",
+        )
+        logger.info(
+            "run_modflow_local mirrored diagnostics -> s3://%s/%s/completion.json "
+            "(%d listing(s), status=%s)",
+            runs_bucket,
+            run_id,
+            len(s3_output_uris),
+            completion.get("status"),
+        )
+    except Exception as exc:  # noqa: BLE001 - diagnostics mirror is best-effort
+        logger.warning(
+            "run_modflow_local S3 diagnostics mirror skipped run_id=%s: %s",
+            staging.run_id,
+            exc,
+        )
+
+
 def run_modflow_local(staging: DeckStaging) -> str:
     """Run the staged deck against a local mf6 binary; write completion.json.
 
@@ -1690,8 +1772,8 @@ def run_modflow_local(staging: DeckStaging) -> str:
             "MODFLOW_LOCAL_RUN_FAILED",
             message=(
                 f"mf6 binary not found at {mf6!r}; set TRID3NT_MF6_BIN or "
-                "call set_mf6_binary(path). Download the USGS mf6 6.5.0 static "
-                "binary (see reports/inflight/job-0220 evidence)."
+                "call set_mf6_binary(path). Download the USGS mf6 6.7.0 static "
+                "binary (bash scripts/fetch_binaries.sh)."
             ),
             details={"run_id": staging.run_id, "mf6": mf6},
         ) from exc
@@ -1740,6 +1822,14 @@ def run_modflow_local(staging: DeckStaging) -> str:
     }
     (scratch / "completion.json").write_text(
         json.dumps(completion, indent=2), encoding="utf-8"
+    )
+
+    # Mirror the diagnostics-relevant listings + completion.json to the S3 runs
+    # prefix so read_run_diagnostics can read this local run (it polls
+    # s3://<runs_bucket>/<run_id>/completion.json). Runs even on a diverged/error
+    # run below so a bad solve stays honestly diagnosable.
+    _mirror_local_run_to_s3(
+        scratch, staging, completion, output_paths, stdout_path, stderr_path
     )
 
     if status != "ok":

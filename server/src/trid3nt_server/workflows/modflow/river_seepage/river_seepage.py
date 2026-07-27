@@ -460,7 +460,7 @@ async def modflow_river_seepage(
 
     Do NOT use this for (see the routing block above):
         - Surface-water dye / tracer transport down the channel — ``run_telemac``.
-        - A point spill with NO river (use ``run_modflow_job`` /
+        - A point spill with NO river (use ``modflow_contaminant_plume`` /
           ``run_model_groundwater_contamination_scenario``).
         - Surface-water flooding (use ``run_model_flood_scenario`` — SFINCS).
 

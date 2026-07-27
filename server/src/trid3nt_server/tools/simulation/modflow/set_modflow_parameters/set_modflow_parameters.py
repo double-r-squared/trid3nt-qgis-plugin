@@ -23,8 +23,8 @@ from typing import Any
 import numpy as np
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from ... import register_tool
-from .._setter_envelope import (
+from trid3nt_server.tools import register_tool
+from trid3nt_server.tools.simulation._setter_envelope import (
     PhysicalBound,
     SetterInputError,
     SetterUpstreamError,
@@ -39,7 +39,7 @@ from .._setter_envelope import (
 
 __all__ = ["set_modflow_parameters", "MODFLOW_PARAM_BOUNDS"]
 
-logger = logging.getLogger("trid3nt_server.tools.simulation.set_modflow_parameters.set_modflow_parameters")
+logger = logging.getLogger("trid3nt_server.tools.simulation.modflow.set_modflow_parameters.set_modflow_parameters")
 
 
 #: Physical bounds, named table, per-parameter literature source (lane-D brief).

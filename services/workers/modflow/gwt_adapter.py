@@ -4,9 +4,10 @@ Sprint-13 Stage 1 (MOD), job-0221. Owner: engine.
 
 This module assembles a *complete* MODFLOW 6 simulation deck for a
 groundwater-contamination ("spill") scenario via FloPy. A single MF6 binary
-(`mf6`, version-pinned 6.5.0 in the solver container - see
-`reports/inflight/sprint-13-mod-1-modflow-container-design-20260609/design.md`
-section 2) executes *both* model types from one simulation namefile:
+(`mf6`, version-pinned 6.7.0 - bumped from 6.5.0 so the PRT capture-zone path's
+flopy 3.10 PRP options EXTEND_TRACKING / COORDINATE_CHECK_METHOD are recognised;
+fetched by `scripts/fetch_binaries.sh`) executes *both* model types from one
+simulation namefile:
 
   * **GWF** (Groundwater Flow) - steady-state saturated flow. A west→east
     constant-head gradient drives a uniform regional flow field that advects

@@ -376,9 +376,9 @@ async def modflow_capture_zone(
 
     Do NOT use this for:
         - A wellhead PROTECTION area with EPA WHPA framing (use
-          ``run_model_wellhead_protection_scenario``).
-        - A pumping-well DRAWDOWN cone (use ``run_model_sustainable_yield_scenario``).
-        - A contaminant spill plume (use ``run_modflow_job``).
+          ``modflow_wellhead_protection``).
+        - A pumping-well DRAWDOWN cone (use ``modflow_sustainable_yield``).
+        - A contaminant spill plume (use ``modflow_contaminant_plume``).
 
     PRECISION CAVEAT: the polygon is the CONVEX HULL of discrete backtracked
     pathlines on a structured 100 m rectilinear grid with DEMO aquifer parameters

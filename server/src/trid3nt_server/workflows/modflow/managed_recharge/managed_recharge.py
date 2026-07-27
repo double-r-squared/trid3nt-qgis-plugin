@@ -347,9 +347,9 @@ async def modflow_managed_recharge(
           table (the mound), managed aquifer recharge, or aquifer water banking.
 
     Do NOT use this for:
-        - A pumping-well drawdown cone (use ``run_model_sustainable_yield_scenario``).
-        - Aquifer storage & recovery cycling (use ``run_model_asr_scenario``).
-        - A contaminant spill plume (use ``run_modflow_job``).
+        - A pumping-well drawdown cone (use ``modflow_sustainable_yield``).
+        - Aquifer storage & recovery cycling (use ``modflow_asr``).
+        - A contaminant spill plume (use ``modflow_contaminant_plume``).
 
     Params:
         location: place name (geocoded). Supply this OR ``aoi_latlon``.

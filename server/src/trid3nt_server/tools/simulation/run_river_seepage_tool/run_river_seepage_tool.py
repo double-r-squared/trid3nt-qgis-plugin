@@ -54,7 +54,6 @@ from trid3nt_contracts.modflow_contracts import (
 )
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.tools import register_tool
 from trid3nt_server.pipeline_emitter import current_emitter
 from trid3nt_server.tool_arg_normalizer import LatLonCoercionError, coerce_latlon
 from trid3nt_server.workflows.modflow.postprocess_modflow import (

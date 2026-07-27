@@ -228,12 +228,9 @@ def run_modflow() -> dict[str, Any]:
     NOT for surface-water flooding (SFINCS), urban storm sewers (run_swmm), or
     spectral waves (run_swan) - see ``mismatch_redirect``.
 
-    Returns a read-only concierge envelope::
-
-        {"engine": "modflow", "kind": "engine_door",
-         "templates": [{"tool_name", "question", "required_inputs", "knobs"}, ...],
-         "fidelity_brief": <str>, "mismatch_redirect": {...},
-         "next_action": <str>}
+    Returns a read-only concierge envelope: ``engine``, ``kind``, ``templates``
+    (each ``tool_name`` / ``question`` / ``required_inputs`` / ``knobs``),
+    ``fidelity_brief``, ``mismatch_redirect``, ``next_action``.
     """
     return {
         "engine": _ENGINE,

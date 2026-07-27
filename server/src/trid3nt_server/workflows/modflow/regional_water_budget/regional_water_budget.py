@@ -279,9 +279,9 @@ async def modflow_regional_water_budget(
           goes / comes from across an area, or a flow-accounting summary.
 
     Do NOT use this for:
-        - A pumping-well drawdown cone (use ``run_model_sustainable_yield_scenario``).
-        - Mine-pit dewatering (use ``run_model_mine_dewatering_scenario``).
-        - A contaminant spill plume (use ``run_modflow_job``).
+        - A pumping-well drawdown cone (use ``modflow_sustainable_yield``).
+        - Mine-pit dewatering (use ``modflow_mine_dewatering``).
+        - A contaminant spill plume (use ``modflow_contaminant_plume``).
 
     Params:
         location: place name (geocoded). Supply this OR ``aoi_latlon``.

@@ -353,8 +353,8 @@ async def modflow_wetland_hydroperiod(
           fluctuation, or how wet/dry seasons move the wetland water table.
 
     Do NOT use this for:
-        - A recharge-basin mound (use ``run_model_mar_scenario``).
-        - A pumping-well drawdown cone (use ``run_model_sustainable_yield_scenario``).
+        - A recharge-basin mound (use ``modflow_managed_recharge``).
+        - A pumping-well drawdown cone (use ``modflow_sustainable_yield``).
         - Surface-water flooding (use ``run_model_flood_scenario``  -  SFINCS).
 
     Params:

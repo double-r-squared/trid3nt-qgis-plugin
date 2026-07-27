@@ -21,6 +21,10 @@ run_modflow:
 - how much will pumping deplete the nearby river
 - stream depletion from groundwater pumping
 - mine dewatering drawdown cone
+- drawdown around an open pit
+- dewater an open pit mine
+- cone of depression around a pit excavation
+- how far does the drawdown cone reach from the pit
 - wetland hydroperiod under changing groundwater
 - regional groundwater water budget
 - river seepage exchange with the aquifer

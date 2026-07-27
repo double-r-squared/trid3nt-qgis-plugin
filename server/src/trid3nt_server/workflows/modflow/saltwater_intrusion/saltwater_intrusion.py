@@ -378,8 +378,8 @@ async def modflow_saltwater_intrusion(
 
     Do NOT use this for:
         - Surface coastal flooding (use ``run_model_flood_scenario`` / SFINCS).
-        - A pumping-well drawdown (use ``run_model_sustainable_yield_scenario``).
-        - Contaminant plume transport (use ``run_modflow_job``).
+        - A pumping-well drawdown (use ``modflow_sustainable_yield``).
+        - Contaminant plume transport (use ``modflow_contaminant_plume``).
 
     PRECISION CAVEAT: this is a demo Henry-style variable-density simulation
     (100-column structured cross-section, demo aquifer K=1e-4 m/s). Narrate it

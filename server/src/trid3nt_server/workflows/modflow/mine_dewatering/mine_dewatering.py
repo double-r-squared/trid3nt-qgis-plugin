@@ -320,8 +320,8 @@ async def modflow_mine_dewatering(
           groundwater inflow to an open pit, or required dewatering capacity.
 
     Do NOT use this for:
-        - A pumping-well drawdown cone (use ``run_model_sustainable_yield_scenario``).
-        - A contaminant spill plume (use ``run_modflow_job``).
+        - A pumping-well drawdown cone (use ``modflow_sustainable_yield``).
+        - A contaminant spill plume (use ``modflow_contaminant_plume``).
         - Surface-water flooding (use ``run_model_flood_scenario``  -  SFINCS).
 
     Params:

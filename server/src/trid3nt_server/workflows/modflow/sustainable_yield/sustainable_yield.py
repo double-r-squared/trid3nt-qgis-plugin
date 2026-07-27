@@ -887,13 +887,13 @@ async def modflow_sustainable_yield(
           compaction (set ``couple_subsidence=True``).
 
     Do NOT use this for:
-        - A contaminant spill plume (use ``run_modflow_job``).
-        - Mine-pit dewatering (use ``run_model_mine_dewatering_scenario``).
+        - A contaminant spill plume (use ``modflow_contaminant_plume``).
+        - Mine-pit dewatering (use ``modflow_mine_dewatering``).
         - Surface-water flooding (use ``run_model_flood_scenario``  -  SFINCS).
         - Dye / tracer released INTO a surface river and carried DOWNSTREAM (that
-          is surface-water transport  -  use ``run_telemac_river_dye_job``).
+          is surface-water transport  -  use ``run_telemac``).
         - A static fixed-stage river<->aquifer seepage / gaining-losing budget with
-          NO pumping question (use ``run_river_seepage_job``  -  it holds the river
+          NO pumping question (use ``modflow_river_seepage``  -  it holds the river
           stage fixed; this tool's ``couple_river_sfr`` instead ROUTES the stream
           and answers the pumping-vs-river DEPLETION question).
         - Land SUBSIDING from anything OTHER than groundwater pumping (tectonics,

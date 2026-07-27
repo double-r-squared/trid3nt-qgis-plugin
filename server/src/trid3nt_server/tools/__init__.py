@@ -416,7 +416,7 @@ from .simulation.run_swmm_tool import run_swmm_tool  # noqa: E402,F401
 from .simulation.run_telemac_tool import run_telemac_tool  # noqa: E402,F401
 # V&V wave (ADR 0021, lane D): derive-not-mutate parameter setters (write a
 # child deck/setup, leave the parent immutable).
-from .simulation.set_modflow_parameters import set_modflow_parameters  # noqa: E402,F401
+from .simulation.modflow.set_modflow_parameters import set_modflow_parameters  # noqa: E402,F401
 from .simulation.set_sfincs_parameters import set_sfincs_parameters  # noqa: E402,F401
 from .simulation.set_swmm_parameters import set_swmm_parameters  # noqa: E402,F401
 from .simulation.set_telemac_parameters import set_telemac_parameters  # noqa: E402,F401
