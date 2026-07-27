@@ -1,9 +1,0 @@
-run_river_seepage_job:
-- model how this river leaks into the aquifer along the reach in this AOI
-- is this stretch of the stream gaining or losing groundwater
-- simulate a TCE spill discharged into the creek that seeps into the aquifer
-- run a MODFLOW river-coupled groundwater seepage scenario for this flowline
-- how much baseflow does the river exchange with the aquifer here, gaining vs losing
-- map the contaminant that enters the groundwater along the river where it leaks in
-- drape this NLDI river polyline onto the groundwater grid and solve the streambed seepage
-- show the river-bed leakage and the solute plume that travels in with the seepage

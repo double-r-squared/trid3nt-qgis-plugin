@@ -170,7 +170,7 @@ def _patch_geocode(monkeypatch: Any, mod: Any, lat: float, lon: float) -> None:
 
 @pytest.mark.asyncio
 async def test_sustainable_yield_assembles_args_and_threads_result(monkeypatch) -> None:
-    from trid3nt_server.workflows.modflow.model_sustainable_yield_scenario import model_sustainable_yield_scenario as mod
+    from trid3nt_server.workflows.modflow.sustainable_yield import sustainable_yield as mod
 
     _patch_geocode(monkeypatch, mod, 40.0, -100.0)
     captured: dict[str, Any] = {}
@@ -206,7 +206,7 @@ async def test_sustainable_yield_assembles_args_and_threads_result(monkeypatch) 
 
 @pytest.mark.asyncio
 async def test_sustainable_yield_no_well_is_user_input_required(monkeypatch) -> None:
-    from trid3nt_server.workflows.modflow.model_sustainable_yield_scenario import model_sustainable_yield_scenario as mod
+    from trid3nt_server.workflows.modflow.sustainable_yield import sustainable_yield as mod
 
     # A run with no well must NOT reach the solver; it raises the honesty gate.
     with pytest.raises(mod.SustainableYieldInputError):
@@ -216,7 +216,7 @@ async def test_sustainable_yield_no_well_is_user_input_required(monkeypatch) -> 
             pumping_rate_m3_day=2000.0,
         )
     # The LLM-facing wrapper maps it to a typed USER_INPUT_REQUIRED envelope.
-    out = await mod.run_model_sustainable_yield_scenario(
+    out = await mod.modflow_sustainable_yield(
         aoi_latlon=[40.0, -100.0],
         pumping_rate_m3_day=2000.0,  # missing well
     )
@@ -226,7 +226,7 @@ async def test_sustainable_yield_no_well_is_user_input_required(monkeypatch) -> 
 
 @pytest.mark.asyncio
 async def test_mine_dewatering_assembles_args_and_threads_result(monkeypatch) -> None:
-    from trid3nt_server.workflows.modflow.model_mine_dewatering_scenario import model_mine_dewatering_scenario as mod
+    from trid3nt_server.workflows.modflow.mine_dewatering import mine_dewatering as mod
 
     captured: dict[str, Any] = {}
     layer = DewaterLayerURI(
@@ -256,7 +256,7 @@ async def test_mine_dewatering_assembles_args_and_threads_result(monkeypatch) ->
 
 @pytest.mark.asyncio
 async def test_mine_dewatering_accepts_geojson_polygon(monkeypatch) -> None:
-    from trid3nt_server.workflows.modflow.model_mine_dewatering_scenario import model_mine_dewatering_scenario as mod
+    from trid3nt_server.workflows.modflow.mine_dewatering import mine_dewatering as mod
 
     captured: dict[str, Any] = {}
     layer = DewaterLayerURI(
@@ -289,13 +289,13 @@ async def test_mine_dewatering_accepts_geojson_polygon(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_mine_dewatering_no_pit_is_user_input_required() -> None:
-    from trid3nt_server.workflows.modflow.model_mine_dewatering_scenario import model_mine_dewatering_scenario as mod
+    from trid3nt_server.workflows.modflow.mine_dewatering import mine_dewatering as mod
 
     with pytest.raises(mod.MineDewateringInputError):
         await mod.model_mine_dewatering_scenario(
             aoi_latlon=(40.0, -100.0), pit_footprint_lonlat=None
         )
-    out = await mod.run_model_mine_dewatering_scenario(
+    out = await mod.modflow_mine_dewatering(
         aoi_latlon=[40.0, -100.0]  # no pit
     )
     assert out["status"] == "error"
@@ -304,7 +304,7 @@ async def test_mine_dewatering_no_pit_is_user_input_required() -> None:
 
 @pytest.mark.asyncio
 async def test_regional_water_budget_assembles_args_and_threads_result(monkeypatch) -> None:
-    from trid3nt_server.workflows.modflow.model_regional_water_budget_scenario import model_regional_water_budget_scenario as mod
+    from trid3nt_server.workflows.modflow.regional_water_budget import regional_water_budget as mod
 
     captured: dict[str, Any] = {}
     layer = BudgetPartitionLayerURI(

@@ -1,7 +1,7 @@
 """job-0326: server-side reuse guard short-circuits a redundant expensive re-run.
 
 These exercise the REAL ``_invoke_tool_via_emitter`` dispatch path with a stub
-``run_modflow_job`` (an expensive scenario tool NOT gated by SOLVER_CONFIRM_TOOLS,
+``modflow_contaminant_plume`` (an expensive scenario tool NOT gated by SOLVER_CONFIRM_TOOLS,
 so the test needs no confirm-card plumbing). The stub counts solver launches.
 
   * A repeat dispatch with identical args REUSES the existing layer — the stub
@@ -59,8 +59,8 @@ def _make_plume(layer_id: str, lat: float, lon: float) -> PlumeLayerURI:
 
 @pytest.fixture(autouse=True)
 def _stub_modflow_tool():
-    """Shadow run_modflow_job with a launch-counting stub returning a plume."""
-    name = "run_modflow_job"
+    """Shadow modflow_contaminant_plume with a launch-counting stub returning a plume."""
+    name = "modflow_contaminant_plume"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _LAUNCHES.clear()
     reset_scenario_indexes_for_tests()
@@ -106,7 +106,7 @@ async def test_repeat_expensive_run_reuses_without_relaunch() -> None:
 
     # First run: the solver launches and the plume layer lands on the map.
     first = await server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_PARAMS)
     )
     assert isinstance(first, PlumeLayerURI)
     assert len(_LAUNCHES) == 1
@@ -114,7 +114,7 @@ async def test_repeat_expensive_run_reuses_without_relaunch() -> None:
 
     # Second IDENTICAL run: short-circuit — the solver does NOT launch again.
     second = await server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_PARAMS)
     )
     assert len(_LAUNCHES) == 1, "redundant expensive solver re-ran (guard failed)"
 
@@ -139,7 +139,7 @@ async def test_changed_args_run_again() -> None:
     state = server.SessionState(session_id=new_ulid())
 
     await server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_PARAMS)
     )
     assert len(_LAUNCHES) == 1
 
@@ -147,7 +147,7 @@ async def test_changed_args_run_again() -> None:
     changed = dict(_PARAMS)
     changed["spill_location_latlon"] = [41.5, -97.6]
     result = await server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", changed
+        ws, state, "modflow_contaminant_plume", changed
     )
     assert len(_LAUNCHES) == 2, "changed request was wrongly short-circuited"
     assert isinstance(result, PlumeLayerURI)
@@ -159,14 +159,14 @@ async def test_force_rerun_bypasses_guard() -> None:
     state = server.SessionState(session_id=new_ulid())
 
     await server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_PARAMS)
     )
     assert len(_LAUNCHES) == 1
 
     forced = dict(_PARAMS)
     forced["force_rerun"] = True
     result = await server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", forced
+        ws, state, "modflow_contaminant_plume", forced
     )
     assert len(_LAUNCHES) == 2, "force_rerun did not bypass the reuse guard"
     assert isinstance(result, PlumeLayerURI)
@@ -177,7 +177,7 @@ async def test_first_run_emits_session_state_with_layer() -> None:
     ws = FakeWS()
     state = server.SessionState(session_id=new_ulid())
     first = await server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_PARAMS)
     )
     session_states = [
         e

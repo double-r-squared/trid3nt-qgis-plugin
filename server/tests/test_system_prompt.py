@@ -233,15 +233,19 @@ def test_system_prompt_says_full_state_name_accepted() -> None:
 
 
 def test_system_prompt_has_groundwater_spill_routing_section() -> None:
-    """Prompt must carry the parameterized-vs-article groundwater routing."""
-    assert "Groundwater spill routing" in SYSTEM_PROMPT
+    """Prompt must carry the engine-door groundwater/MODFLOW routing (door-model)."""
+    assert "Groundwater / MODFLOW routing" in SYSTEM_PROMPT
+    # engine-door model: call the run_modflow door first, then select-then-call.
+    assert "run_modflow DOOR FIRST" in SYSTEM_PROMPT
+    assert "SELECT-THEN-CALL" in SYSTEM_PROMPT
 
 
-def test_system_prompt_routes_parameterized_spill_to_run_modflow_job() -> None:
-    """A parameterized spill (location + contaminant + rate + duration) goes
-    DIRECTLY to run_modflow_job."""
+def test_system_prompt_routes_parameterized_spill_to_modflow_contaminant_plume() -> None:
+    """A parameterized spill (location + contaminant + rate + duration) routes to
+    modflow_contaminant_plume (via the door), passing spill_location_latlon as a
+    2-element [lat, lon] array."""
     flat = " ".join(SYSTEM_PROMPT.split())
-    assert "call run_modflow_job DIRECTLY" in flat
+    assert "call modflow_contaminant_plume with" in flat
     # spill_location_latlon passed as a 2-element [lat, lon] array.
     assert "spill_location_latlon as a 2-element [lat, lon] array" in flat
 
@@ -255,8 +259,8 @@ def test_system_prompt_keeps_article_path_off_parameterized_spill() -> None:
 
 
 def test_system_prompt_still_routes_modflow_groundwater() -> None:
-    """run_modflow_job + the article-ingest tool both remain named in the prompt."""
-    assert "run_modflow_job" in SYSTEM_PROMPT
+    """modflow_contaminant_plume + the article-ingest tool both remain named in the prompt."""
+    assert "modflow_contaminant_plume" in SYSTEM_PROMPT
     assert "run_model_groundwater_contamination_scenario" in SYSTEM_PROMPT
 
 

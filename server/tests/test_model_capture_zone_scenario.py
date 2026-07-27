@@ -30,8 +30,9 @@ import pytest
 from trid3nt_contracts.modflow_contracts import CaptureZoneLayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.modflow.model_capture_zone_scenario import model_capture_zone_scenario as cz_mod
-from trid3nt_server.workflows.modflow.model_capture_zone_scenario.model_capture_zone_scenario import (
+from trid3nt_server.workflows.modflow.capture_zone import capture_zone as cz_mod
+from trid3nt_server.workflows.modflow.wellhead_protection import wellhead_protection as whpa_mod
+from trid3nt_server.workflows.modflow.capture_zone.capture_zone import (
     CAPTURE_ZONE_DEFAULT_TIERS,
     WELLHEAD_PROTECTION_DEFAULT_TIERS,
     CaptureZoneInputError,
@@ -221,7 +222,7 @@ async def test_composer_rejects_invalid_archetype() -> None:
 async def test_wrapper_missing_well_returns_user_input_required() -> None:
     """The LLM-facing wrapper maps a missing well to USER_INPUT_REQUIRED
     (Invariant 9: the tool never fabricates a well location)."""
-    out = await cz_mod.run_model_capture_zone_scenario(
+    out = await cz_mod.modflow_capture_zone(
         aoi_latlon=[26.64, -81.87],
         well_location_latlon=None,
     )
@@ -234,7 +235,7 @@ async def test_wrapper_missing_well_returns_user_input_required() -> None:
 async def test_whpa_wrapper_missing_well_returns_user_input_required() -> None:
     """The wellhead_protection LLM wrapper also maps a missing well to
     USER_INPUT_REQUIRED."""
-    out = await cz_mod.run_model_wellhead_protection_scenario(
+    out = await whpa_mod.modflow_wellhead_protection(
         aoi_latlon=[26.64, -81.87],
         well_location_latlon=None,
     )
@@ -250,8 +251,8 @@ async def test_whpa_wrapper_missing_well_returns_user_input_required() -> None:
 def test_capture_zone_registered_uncacheable() -> None:
     import trid3nt_server.tools  # noqa: F401 - fires registration side-effects
 
-    entry = TOOL_REGISTRY.get("run_model_capture_zone_scenario")
-    assert entry is not None, "run_model_capture_zone_scenario not in TOOL_REGISTRY"
+    entry = TOOL_REGISTRY.get("modflow_capture_zone")
+    assert entry is not None, "modflow_capture_zone not in TOOL_REGISTRY"
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
     assert entry.metadata.source_class == "workflow_dispatch"
@@ -260,8 +261,8 @@ def test_capture_zone_registered_uncacheable() -> None:
 def test_wellhead_protection_registered_uncacheable() -> None:
     import trid3nt_server.tools  # noqa: F401
 
-    entry = TOOL_REGISTRY.get("run_model_wellhead_protection_scenario")
-    assert entry is not None, "run_model_wellhead_protection_scenario not in TOOL_REGISTRY"
+    entry = TOOL_REGISTRY.get("modflow_wellhead_protection")
+    assert entry is not None, "modflow_wellhead_protection not in TOOL_REGISTRY"
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"
     assert entry.metadata.source_class == "workflow_dispatch"

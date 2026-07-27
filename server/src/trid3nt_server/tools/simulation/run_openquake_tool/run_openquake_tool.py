@@ -10,7 +10,7 @@ the deterministic assemble -> stage -> Batch-solve -> postprocess chain
 ``LayerURI`` so the ``emit_tool_call`` ``add_loaded_layer`` gate fires).
 
 This is the OpenQuake analogue of ``run_swmm_urban_flood`` (SWMM) /
-``run_modflow_job`` (MODFLOW) / ``run_model_flood_scenario`` (SFINCS). Like those
+``modflow_contaminant_plume`` (MODFLOW) / ``run_model_flood_scenario`` (SFINCS). Like those
 wrappers it declares ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"`` (FR-DC-6 — workflow exposure surface; never
 touches the cache shim). Confirmation before consequence (Invariant 9 — a solver
@@ -111,7 +111,7 @@ async def run_seismic_hazard_psha(
     HONESTLY, never claim real faults on a synthetic fallback. Do NOT use
     for: surface-water/riverine/coastal flooding
     (``run_model_flood_scenario``), urban/pluvial (``run_swmm_urban_flood``),
-    groundwater (``run_modflow_job``); estimating building damage itself
+    groundwater (``modflow_contaminant_plume``); estimating building damage itself
     (this produces the Pelicun hazard INPUT, not the damage tool).
 
     Params:

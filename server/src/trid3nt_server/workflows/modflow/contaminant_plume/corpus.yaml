@@ -1,0 +1,16 @@
+# TEMPLATE tier (engine-door refactor): phrasings for modflow_contaminant_plume.
+# NOT merged into the main retrieval index (templates are excluded from the
+# default pool); the run_modflow door surfaces this template via gate expansion.
+# Carried verbatim from the migrated run_modflow_job (single-contaminant spill)
+# + run_model_multi_species_scenario (N-species) corpus entries.
+modflow_contaminant_plume:
+- model a groundwater contamination plume
+- where does this spill go in the aquifer
+- how far does a contaminant spill spread in groundwater
+- simulate a contaminant plume and peak concentration
+- model a chemical spill in the aquifer
+- simulate multiple contaminants at once
+- multi species plume transport from one source
+- PCE and TCE plumes from the same spill
+- several solutes in one groundwater flow model
+- compare plumes for two chemicals released together

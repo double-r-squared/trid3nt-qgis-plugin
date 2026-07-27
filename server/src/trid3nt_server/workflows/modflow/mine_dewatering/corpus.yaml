@@ -1,0 +1,10 @@
+# TEMPLATE tier (engine-door refactor): phrasings for modflow_mine_dewatering. NOT merged
+# into the main retrieval index (templates are excluded from the default
+# pool); the run_modflow door surfaces this template via gate expansion.
+# Carried verbatim from the migrated run_model_mine_dewatering_scenario corpus entries.
+modflow_mine_dewatering:
+- how much inflow to dewater the open pit
+- mine dewatering drawdown cone extent
+- pit dewatering pumping requirement estimate
+- how far does the dewatering cone of depression reach
+- groundwater inflow to a proposed quarry pit

@@ -72,7 +72,7 @@ degrade -- the plugin falls back to "set CRS manually"); a missing
 ``sfincs_map.nc`` sibling (HeadObject miss) yields no entry at all.
 
 **MDAL phase 2 (MODFLOW, additive).** The groundwater engine's plume layer
-(``style_preset == "continuous_plume_concentration"``, ``run_modflow_job`` /
+(``style_preset == "continuous_plume_concentration"``, ``modflow_contaminant_plume`` /
 ``postprocess_modflow``) gets the SAME treatment against a sibling
 ``<run_id>/modflow_mesh.nc`` -- but unlike SFINCS's native quadtree output,
 this file does not come from the solver; ``workflows/modflow_mesh.py`` BUILDS
@@ -366,7 +366,7 @@ def _resolve_telemac_mesh_crs(bucket: str, run_id: str) -> str | None:
 #: postprocess ACTUALLY wires a mesh emitter for belong here -- an unwired
 #: preset must stay absent (a HeadObject miss reads identically to "no mesh
 #: support" either way, but an absent map entry is honest about scope: today
-#: only the MODFLOW spill/plume path, run_modflow_job, emits a mesh; the
+#: only the MODFLOW spill/plume path, modflow_contaminant_plume, emits a mesh; the
 #: GWF-only archetype postprocess functions -- drawdown/dewatering/mounding/
 #: ASR/hydroperiod/river-seepage -- do not call the emitter yet).
 _MESH_SIBLING_BY_STYLE_PRESET: dict[str, tuple[str, str, str]] = {

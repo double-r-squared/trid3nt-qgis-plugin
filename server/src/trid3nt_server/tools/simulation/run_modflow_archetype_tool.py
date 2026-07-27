@@ -22,7 +22,7 @@ reader they pick:
   * ``capture_zone``          -> ``postprocess_capture_zone``    -> CaptureZoneLayerURI
   * ``wellhead_protection``   -> ``postprocess_capture_zone``    -> CaptureZoneLayerURI
 
-Chain (mirrors ``run_modflow_job`` with the archetype branch):
+Chain (mirrors ``modflow_contaminant_plume`` with the archetype branch):
 
   1. Build + stage a GWF-only archetype deck (``build_and_stage_modflow_deck``
      threads ``run_args.archetype`` + the per-archetype fields into the adapter's
@@ -30,7 +30,7 @@ Chain (mirrors ``run_modflow_job`` with the archetype branch):
      (``gwf_model.cbc``) and NO UCN concentration.
   2. Run mf6 (AWS Batch ``modflow`` job-def, or local ``mf6`` when
      ``TRID3NT_MODFLOW_LOCAL=1``)  -  the SAME submit/wait/cancel seam as
-     ``run_modflow_job``.
+     ``modflow_contaminant_plume``.
   3. Postprocess the head / cbc into the archetype's headline LayerURI.
   4. Return it so the emitter's ``add_loaded_layer`` gate loads it onto the map.
 

@@ -320,7 +320,7 @@ async def test_emit_chart_payloads_emits_each_via_current_emitter() -> None:
 
     await emitter.emit_tool_call(
         name="Model sustainable yield",
-        tool_name="run_model_sustainable_yield_scenario",
+        tool_name="modflow_sustainable_yield",
         invoke=workflow,
     )
 
@@ -351,8 +351,8 @@ def _patch_archetype_run(monkeypatch: Any, layer: Any) -> None:
 async def test_regional_water_budget_composer_emits_budget_bar(monkeypatch) -> None:
     from trid3nt_contracts.modflow_contracts import BudgetPartitionLayerURI
 
-    from trid3nt_server.workflows.modflow.model_regional_water_budget_scenario import (
-        model_regional_water_budget_scenario as mod,
+    from trid3nt_server.workflows.modflow.regional_water_budget import (
+        regional_water_budget as mod,
     )
 
     layer = BudgetPartitionLayerURI(
@@ -378,7 +378,7 @@ async def test_regional_water_budget_composer_emits_budget_bar(monkeypatch) -> N
     # emit_tool_call binds current_emitter() so the composer's side-emit fires.
     await emitter.emit_tool_call(
         name="Model regional water budget",
-        tool_name="run_model_regional_water_budget_scenario",
+        tool_name="modflow_regional_water_budget",
         invoke=run,
     )
 
@@ -397,7 +397,7 @@ async def test_regional_water_budget_composer_emits_budget_bar(monkeypatch) -> N
 async def test_sustainable_yield_composer_emits_head_decline(monkeypatch) -> None:
     from trid3nt_contracts.modflow_contracts import DrawdownLayerURI
 
-    from trid3nt_server.workflows.modflow.model_sustainable_yield_scenario import model_sustainable_yield_scenario as mod
+    from trid3nt_server.workflows.modflow.sustainable_yield import sustainable_yield as mod
 
     layer = DrawdownLayerURI(
         layer_id="drawdown-RUN9",
@@ -426,7 +426,7 @@ async def test_sustainable_yield_composer_emits_head_decline(monkeypatch) -> Non
 
     await emitter.emit_tool_call(
         name="Model sustainable yield",
-        tool_name="run_model_sustainable_yield_scenario",
+        tool_name="modflow_sustainable_yield",
         invoke=run,
     )
 
@@ -444,7 +444,7 @@ async def test_sustainable_yield_no_series_emits_no_chart(monkeypatch) -> None:
     """The honesty floor end-to-end: a None head-decline series emits NO chart."""
     from trid3nt_contracts.modflow_contracts import DrawdownLayerURI
 
-    from trid3nt_server.workflows.modflow.model_sustainable_yield_scenario import model_sustainable_yield_scenario as mod
+    from trid3nt_server.workflows.modflow.sustainable_yield import sustainable_yield as mod
 
     layer = DrawdownLayerURI(
         layer_id="drawdown-RUN0",
@@ -471,7 +471,7 @@ async def test_sustainable_yield_no_series_emits_no_chart(monkeypatch) -> None:
 
     await emitter.emit_tool_call(
         name="Model sustainable yield",
-        tool_name="run_model_sustainable_yield_scenario",
+        tool_name="modflow_sustainable_yield",
         invoke=run,
     )
 

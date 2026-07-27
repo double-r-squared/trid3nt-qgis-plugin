@@ -80,7 +80,7 @@ def test_non_scenario_tool_has_no_signature() -> None:
 
 def test_plume_signature_keys_on_spill_point_and_params() -> None:
     sig = scenario_signature(
-        "run_modflow_job",
+        "modflow_contaminant_plume",
         {
             "spill_location_latlon": [40.81, -96.71],
             "contaminant": "benzene",
@@ -98,7 +98,7 @@ def test_plume_signature_keys_on_spill_point_and_params() -> None:
 def test_plume_signature_none_without_spill_point() -> None:
     assert (
         scenario_signature(
-            "run_modflow_job", {"contaminant": "benzene"}
+            "modflow_contaminant_plume", {"contaminant": "benzene"}
         )
         is None
     )
@@ -174,7 +174,7 @@ def test_different_aoi_runs_again() -> None:
 def test_plume_repeat_reuses_and_change_runs() -> None:
     idx = ScenarioResultIndex(session_id="s1")
     sig = scenario_signature(
-        "run_modflow_job",
+        "modflow_contaminant_plume",
         {
             "spill_location_latlon": [40.81, -96.71],
             "contaminant": "benzene",
@@ -191,7 +191,7 @@ def test_plume_repeat_reuses_and_change_runs() -> None:
         bbox=[-96.8, 40.7, -96.6, 40.9],  # plume FOOTPRINT, not the spill point
     )
     repeat = scenario_signature(
-        "run_modflow_job",
+        "modflow_contaminant_plume",
         {
             "spill_location_latlon": [40.81, -96.71],
             "contaminant": "benzene",
@@ -201,7 +201,7 @@ def test_plume_repeat_reuses_and_change_runs() -> None:
     )
     assert idx.find_reuse(repeat) is not None
     diff_contaminant = scenario_signature(
-        "run_modflow_job",
+        "modflow_contaminant_plume",
         {
             "spill_location_latlon": [40.81, -96.71],
             "contaminant": "TCE",

@@ -10,7 +10,7 @@ postprocess chain (``workflows/model_landslide_scenario.py``), and returns a
 ``LayerURI`` so the ``emit_tool_call`` ``add_loaded_layer`` gate fires).
 
 This is the Landlab analogue of ``run_swmm_urban_flood`` (SWMM),
-``run_modflow_job`` (MODFLOW) and ``run_model_flood_scenario`` (SFINCS). Like
+``modflow_contaminant_plume`` (MODFLOW) and ``run_model_flood_scenario`` (SFINCS). Like
 those wrappers it declares ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"`` (FR-DC-6 — workflow exposure surface; never
 touches the cache shim). Confirmation before consequence (Invariant 9 — a solver
@@ -111,7 +111,7 @@ async def run_landlab_susceptibility(
     (``analysis="overland_flow"``, de Almeida shallow-water). Do NOT use
     for: riverine/coastal flooding (``run_model_flood_scenario`` --
     SFINCS) or urban/pluvial (``run_swmm_urban_flood``); groundwater
-    plumes (``run_modflow_job``).
+    plumes (``modflow_contaminant_plume``).
 
     Params:
         bbox: hillslope/small-catchment AOI, EPSG:4326.

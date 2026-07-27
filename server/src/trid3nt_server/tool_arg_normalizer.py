@@ -577,7 +577,7 @@ def coerce_latlon(value: Any) -> list[float]:
 
     Bedrock Claude (and other providers) routinely pass a coordinate *point*
     parameter as a STRING rather than a JSON array — observed live (job-0317)
-    on ``run_modflow_job``'s ``spill_location_latlon``::
+    on ``modflow_contaminant_plume``'s ``spill_location_latlon``::
 
         "40.8088861,-96.7077751"   "40.81, -96.71"
         "[40.81, -96.71]"          "(40.81, -96.71)"

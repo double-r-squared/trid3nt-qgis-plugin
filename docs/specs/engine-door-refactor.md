@@ -6,11 +6,27 @@ the 2026-07-26 design discussion.
 
 ## Terminology (locked)
 
-- DOOR: the one registered tool per engine (run_modflow, run_swmm, ...).
-  Retrieval-gated, engine-fidelity character + limitations in its docstring.
-- TEMPLATE: a verified deck/workflow recipe behind a door, selected by
-  template= argument. Carries: deck recipe, knob manifest, postprocess,
-  co-located corpus entries.
+- DOOR (CORRECTED 2026-07-26, NATE): run_<engine> is a read-only CONCIERGE
+  entry point, NOT a dispatcher - it executes nothing. v1 responsibilities:
+  (1) template listing (registry query over its engine's tier=template
+  tools: name, one-line question, required inputs, knobs summary);
+  (2) gate expansion (make its templates visible to the turn - the existing
+  discovery-expands-gate mechanism); (3) fidelity briefing incl. active
+  mismatch redirection to the right door. v1.5: template recommendation
+  (ask-hint ranking), readiness checks. Later: case-viability + run
+  inventory (metadata designed now, built later).
+- TEMPLATE (CORRECTED): templates ARE REGISTERED TOOLS - individual
+  schemas, envelopes, telemetry, direct-call testability, bench grading.
+  Tagged engine=<engine>, tier=template in metadata; EXCLUDED from the
+  default retrieval pool (registration decouples from retrieval
+  visibility); surfaced by their door's gate expansion. SELECT-THEN-CALL:
+  LLM calls the door, then calls the chosen template tool directly.
+  EXTENSIBILITY: adding a template = adding a tool folder with the tags -
+  the door discovers it from the registry; door code never changes.
+  NOTHING IS COLLAPSED into internal dispatch - the 14-into-1 mega-tool
+  design is REJECTED (loses per-template machinery + extensibility).
+  Registered template-tool names carry the engine (modflow_capture_zone
+  style) - global namespace, cross-engine collision-proof.
 - HOT-PATH ALIAS: DROPPED (NATE 2026-07-26, supersedes the alias layer of
   ADR 0025): if a template achieves the same thing, an alias tool is noise -
   one extra nesting layer (door -> template) is acceptable. Hazard-common

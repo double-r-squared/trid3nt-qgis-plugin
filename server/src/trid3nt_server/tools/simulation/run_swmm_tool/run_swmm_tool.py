@@ -10,7 +10,7 @@ fetch -> build -> solve -> postprocess chain
 the emitter loads onto the map (it subclasses ``LayerURI`` so the
 ``emit_tool_call`` ``add_loaded_layer`` gate fires).
 
-This is the SWMM analogue of ``run_modflow_job`` (MODFLOW) and
+This is the SWMM analogue of ``modflow_contaminant_plume`` (MODFLOW) and
 ``run_model_flood_scenario`` (SFINCS). Like those wrappers it declares
 ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"`` (FR-DC-6 — workflow exposure surface; never
@@ -132,7 +132,7 @@ async def run_swmm_urban_flood(
           = SFINCS).
         - A river-reach dye/sediment slug or in-stream transport
           (``run_telemac`` — river hydrodynamics + GAIA sediment/WAQTEL decay).
-        - A groundwater contamination plume in an aquifer (``run_modflow_job``
+        - A groundwater contamination plume in an aquifer (``modflow_contaminant_plume``
           — MODFLOW-GWT subsurface transport).
         - Cancelling a running sim (use the WS ``cancel`` envelope).
 
@@ -210,7 +210,7 @@ async def run_swmm_urban_flood(
             ),
         }
     # Bedrock/Gemini frequently pass bbox as a STRING; coerce robustly BEFORE the
-    # contract validation (mirrors run_modflow_job's coerce_latlon guard).
+    # contract validation (mirrors modflow_contaminant_plume's coerce_latlon guard).
     coerced = coerce_bbox_value(bbox)
     if coerced is None:
         return {

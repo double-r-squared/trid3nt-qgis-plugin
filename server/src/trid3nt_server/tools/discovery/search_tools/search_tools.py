@@ -594,6 +594,14 @@ def _build_index(
 
     for name in sorted(snapshot.keys()):
         entry = snapshot[name]
+        # Engine-door refactor: templates (tier=template) are EXCLUDED from the
+        # default retrieval pool - they are surfaced only by their door's gate
+        # expansion (select-then-call). Skipping them here keeps them out of
+        # index.tool_names, hence out of retrieve_ranked_tools /
+        # retrieve_visible_tools (the sole default-pool producer). tier=door is
+        # NOT skipped: doors compete in per-turn retrieval alongside general.
+        if getattr(entry.metadata, "tier", "general") == "template":
+            continue
         doc = getattr(entry.fn, "__doc__", "") or ""
         snippet = _short_description(doc)
         # Full docstring fed to BM25 + dense — much richer signal than just

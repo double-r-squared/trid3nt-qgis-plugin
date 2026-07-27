@@ -40,6 +40,7 @@ from .common import GraceModel
 __all__ = [
     "TTLClass",
     "TTL_CLASSES",
+    "EngineTier",
     "AtomicToolMetadata",
 ]
 
@@ -78,6 +79,15 @@ TTL_CLASSES: tuple[str, ...] = (
     "dynamic-1h",
     "live-no-cache",
 )
+
+
+#: Retrieval tier for the engine-door refactor (docs/specs/engine-door-refactor.md).
+#: ``general`` (default) is the ordinary per-turn retrieval pool; ``door`` is a
+#: read-only engine concierge that ALSO competes in the per-turn pool; ``template``
+#: is a registered engine template EXCLUDED from the default pool and surfaced only
+#: by its door's gate expansion (select-then-call). Registration is thereby
+#: decoupled from retrieval visibility.
+EngineTier = Literal["general", "door", "template"]
 
 
 class AtomicToolMetadata(GraceModel):
@@ -240,6 +250,39 @@ class AtomicToolMetadata(GraceModel):
             "intermediate rasters (e.g. fetch_dem's raw DEM) whose raw output the "
             "user should not auto-see. Has no effect on vector layers, on layers "
             "that already carry an http(s) uri, or on publish_layer itself."
+        ),
+    )
+
+    # --- Engine-door refactor additions (docs/specs/engine-door-refactor.md) --- #
+    #
+    # Two OPTIONAL fields for the engine-door family. Both default to the
+    # zero-impact value so all existing ``AtomicToolMetadata(...)`` call sites
+    # keep working untouched (additive, same pattern as the Wave 1.5 / 4.10
+    # additions above). They are ORTHOGONAL to the cacheable/ttl_class rule -
+    # no new cross-field validator. The soft convention "tier in {door,
+    # template} SHOULD carry a non-null engine" is enforced server/audit-side,
+    # NOT here, to keep the contract a pure shape.
+
+    engine: str | None = Field(
+        default=None,
+        description=(
+            "Owning engine slug for an engine-door family member (e.g. "
+            "'modflow', 'sfincs'). None (default) for every non-engine tool - "
+            "zero impact on existing registrations. A door lists / gate-expands "
+            "over its engine's tier=template members filtered by this slug."
+        ),
+    )
+
+    tier: EngineTier = Field(
+        default="general",
+        description=(
+            "Retrieval tier. 'general' (default) - the ordinary per-turn "
+            "retrieval pool (today's behaviour). 'door' - a read-only engine "
+            "concierge; ALSO retrievable in the per-turn pool (doors compete "
+            "with general). 'template' - a registered engine template EXCLUDED "
+            "from the default pool, surfaced only by its door's gate expansion "
+            "(select-then-call). Excluding tier=template decouples registration "
+            "from retrieval visibility."
         ),
     )
 

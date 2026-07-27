@@ -158,10 +158,34 @@ _STARTUP_ONLY = {
 }
 
 
+def _template_names() -> set[str]:
+    """Registered engine-TEMPLATE names (tier=template).
+
+    engine-door refactor: templates are EXCLUDED from the default retrieval pool
+    (and the fail-open floor) and surfaced only by their door's gate expansion,
+    so they must NOT be expected in retrieve_visible_tools / the fail-open dump /
+    the MAIN corpus (their corpus is co-located under workflows/<engine>/)."""
+    import trid3nt_server.main as _m
+
+    _m._import_tools_registry()
+    from trid3nt_server.tools import TOOL_REGISTRY as _full
+
+    return {
+        n for n, e in _full.items()
+        if getattr(e.metadata, "tier", "general") == "template"
+    }
+
+
 def _assert_full_failopen(res):
-    full = _full_registry_names()
+    # engine-door refactor: the fail-open floor filters tier=template (a cold
+    # index must not leak the pool-excluded templates), so expect the full
+    # registry MINUS the templates.
+    full = _full_registry_names() - _template_names()
     assert full <= res, f"fail-open dropped: {sorted(full - res)}"
     assert _STARTUP_ONLY <= res, "fail-open omitted the startup-only tools"
+    assert not (_template_names() & res), (
+        f"fail-open leaked pool-excluded templates: {sorted(_template_names() & res)}"
+    )
 
 
 def test_fail_open_on_discovery_error(warm_index, monkeypatch):
@@ -269,7 +293,11 @@ def _full_registry_names() -> set[str]:
 
 def test_every_registered_tool_has_corpus_queries():
     corpus = _load_corpus()
-    missing = sorted(_full_registry_names() - set(corpus))
+    # engine-door refactor: tier=template tools are EXCLUDED from the default pool
+    # and surfaced only by their door's gate expansion, so their routing phrasings
+    # live in a CO-LOCATED workflows/<engine>/<template>/corpus.yaml (NOT walked
+    # into the main index). They are not required in the main corpus.
+    missing = sorted(_full_registry_names() - _template_names() - set(corpus))
     assert not missing, (
         "these registered tools have NO tool_query_corpus.yaml entry -- add 5-8 "
         f"routing queries each so retrieve_visible_tools can recall them: {missing}"

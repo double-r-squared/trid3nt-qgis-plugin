@@ -81,7 +81,8 @@ __all__ = [
 EXPENSIVE_SCENARIO_TOOLS: dict[str, str] = {
     "run_model_flood_scenario": "flood-depth",
     "run_model_nws_flood_event_scenario": "flood-depth",
-    "run_modflow_job": "plume",
+    # engine-door refactor: run_modflow_job folded into modflow_contaminant_plume.
+    "modflow_contaminant_plume": "plume",
     "run_model_groundwater_contamination_scenario": "plume",
     # sprint-16 P4: the quasi-2D PySWMM urban-flood engine mints a peak depth
     # layer id ``swmm-depth-peak-<run_id>`` (same depth family as SFINCS).

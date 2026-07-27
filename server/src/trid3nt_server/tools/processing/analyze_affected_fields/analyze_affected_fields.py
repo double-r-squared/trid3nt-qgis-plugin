@@ -3,7 +3,7 @@
 The net-new analysis tool from the contamination-plume x Fields-of-the-World
 demo spike (reports/design/demo_spike_contamination_fotw.md, section-7 step S1).
 Given a MODFLOW plume concentration COG (the ``PlumeLayerURI.uri`` from
-``run_modflow_job`` / ``postprocess_modflow``, mg/L, EPSG:4326) and an FTW /
+``modflow_contaminant_plume`` / ``postprocess_modflow``, mg/L, EPSG:4326) and an FTW /
 fiboa agricultural field-boundary vector (the FlatGeobuf from
 ``fetch_field_boundaries``, each feature carrying a ``crop_name``), it answers
 "which farm fields does the plume reach, and how badly", ranked.
@@ -456,7 +456,7 @@ def analyze_affected_fields(
 ) -> dict[str, Any]:
     """Which farm fields a contaminant plume reaches, ranked by how badly.
 
-    Use this when: you have a plume COG (from ``run_modflow_job`` /
+    Use this when: you have a plume COG (from ``modflow_contaminant_plume`` /
     ``run_model_groundwater_contamination_scenario``) and a field-boundary
     vector (from ``fetch_field_boundaries``) and need "which fields/farms
     are affected", ranked, with peak/mean concentration and area. Do NOT
@@ -466,7 +466,7 @@ def analyze_affected_fields(
 
     Params:
         plume_layer_uri: the exact ``PlumeLayerURI.uri`` from a prior
-            ``run_modflow_job`` call (concentration COG, mg/L, EPSG:4326).
+            ``modflow_contaminant_plume`` call (concentration COG, mg/L, EPSG:4326).
         fields_layer_uri: the exact ``LayerURI.uri`` from
             ``fetch_field_boundaries`` (FTW/fiboa FlatGeobuf; each feature
             carries ``crop_name``).

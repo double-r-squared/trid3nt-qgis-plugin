@@ -1,0 +1,9 @@
+# TEMPLATE tier (engine-door refactor): phrasings for modflow_wellhead_protection. NOT merged
+# into the main retrieval index; the run_modflow door surfaces it via gate
+# expansion. Carried verbatim from the migrated run_model_wellhead_protection_scenario corpus entries.
+modflow_wellhead_protection:
+- wellhead protection area for this well
+- WHPA delineation around the drinking water well
+- source water protection zone map
+- five year time of travel wellhead zone
+- protection area around the municipal supply well

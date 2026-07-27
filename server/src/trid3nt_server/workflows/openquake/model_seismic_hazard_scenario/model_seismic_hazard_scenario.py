@@ -21,7 +21,7 @@ job-def via the per-solver ``TRID3NT_AWS_BATCH_JOB_DEF_OPENQUAKE`` env knob.
 
 Returns the ``SeismicHazardLayerURI`` directly (a ``LayerURI`` subtype) so the
 ``emit_tool_call`` ``add_loaded_layer`` gate fires on it - exactly like
-``run_modflow_job`` returns a ``PlumeLayerURI``. The hazard map pairs DIRECTLY
+``modflow_contaminant_plume`` returns a ``PlumeLayerURI``. The hazard map pairs DIRECTLY
 with the existing Pelicun impact path: its ground-motion intensity is Pelicun's
 fragility input.
 

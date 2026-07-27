@@ -3,12 +3,12 @@
 The LLM-facing exposure of the sprint-17 MODFLOW 6 RIVER-SEEPAGE extension: a
 RIV head-dependent river<->aquifer flux boundary draped onto the structured GWF
 grid, plus an along-river SRC solute source, on top of the existing
-``run_modflow_job`` GWF+GWT engine. It REUSES the live MODFLOW solver path
+``modflow_contaminant_plume`` GWF+GWT engine. It REUSES the live MODFLOW solver path
 (``workflows/run_modflow.py`` deck-build -> submit/local-run, the ``modflow``
 Batch job-def, ``services/workers/modflow/gwt_adapter.py``) — there is NO new
 worker, container, or Batch job-def.
 
-Chain (mirrors ``run_modflow_job`` with the river extension):
+Chain (mirrors ``modflow_contaminant_plume`` with the river extension):
 
   1. Build + stage a GWF(+RIV)+GWT(+SRC) deck. The deck adapter
      (``gwt_adapter.build_modflow_deck``) drapes the ``river_geometry_uri``
@@ -18,7 +18,7 @@ Chain (mirrors ``run_modflow_job`` with the river extension):
      enters where the river leaks into the aquifer).
   2. Run mf6 (AWS Batch ``modflow`` job-def, or local ``mf6`` when
      ``TRID3NT_MODFLOW_LOCAL=1``) — the SAME submit/wait/cancel seam as
-     ``run_modflow_job``.
+     ``modflow_contaminant_plume``.
   3. Postprocess TWO layers:
        * ``postprocess_river_seepage`` reads the GWF ``gwf_model.cbc`` RIV
          leakage budget into a DIVERGING gaining/losing-stream COG (the
@@ -84,24 +84,11 @@ class RunRiverSeepageError(RuntimeError):
         self.error_code = error_code
 
 
-_RUN_RIVER_SEEPAGE_METADATA = AtomicToolMetadata(
-    name="run_river_seepage_job",
-    ttl_class="live-no-cache",
-    source_class="workflow_dispatch",
-    cacheable=False,
-)
-
-
-@register_tool(
-    _RUN_RIVER_SEEPAGE_METADATA,
-    # readOnlyHint=False (submits a solver run), openWorldHint=False (intra-AWS
-    # Batch / local mf6), destructiveHint=False (writes a new runs/ prefix),
-    # idempotentHint=False (each call mints a new run + Batch job).
-    read_only_hint=False,
-    open_world_hint=False,
-    destructive_hint=False,
-    idempotent_hint=False,
-)
+# FOLD (engine-door refactor): run_river_seepage_job is NO LONGER a registered
+# tool. It folded into the ``modflow_river_seepage`` template together with its
+# composer; it stays here as the UNREGISTERED internal engine surface (mirrors
+# run_modflow_archetype_job / run_modflow_multi_species_job) that the template
+# imports and calls directly.
 async def run_river_seepage_job(
     spill_location_latlon: tuple[float, float] | list[float] | str | None = None,
     contaminant: str | None = None,
@@ -129,7 +116,7 @@ async def run_river_seepage_job(
     aquifer", or a contaminant enters groundwater ALONG a river (seeps
     into the aquifer, not riding the surface current). Do NOT use for:
     surface-water dye/tracer transport (``run_telemac``); a point spill
-    with no river coupling (``run_modflow_job``); surface-water flooding
+    with no river coupling (``modflow_contaminant_plume``); surface-water flooding
     (``run_model_flood_scenario``); sorption/biodegradation transport
     (v0.1 is conservative-tracer only).
 
@@ -141,7 +128,7 @@ async def run_river_seepage_job(
         duration_days: release + transport duration (>0).
         river_geometry_uri: REQUIRED river flowline (``fetch_river_geometry``/
             NLDI) draped as the RIV boundary -- without it, use
-            ``run_modflow_job`` instead.
+            ``modflow_contaminant_plume`` instead.
         river_stage_m: optional explicit river stage; default DEM-derived/demo.
         river_stage_depth_m: optional depth above streambed for stage.
         streambed_conductance_m2_day: optional per-cell RIV conductance.
@@ -180,7 +167,7 @@ async def run_river_seepage_job(
             "error_message": (
                 "run_river_seepage_job requires river_geometry_uri (the river "
                 "flowline to drape onto the grid). For a point spill with no "
-                "river coupling, use run_modflow_job instead."
+                "river coupling, use modflow_contaminant_plume instead."
             ),
         }
     try:

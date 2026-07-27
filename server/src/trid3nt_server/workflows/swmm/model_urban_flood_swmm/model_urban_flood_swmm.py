@@ -19,7 +19,7 @@ the urban-flood engine end-to-end on NATE's PCSWMM screenshot path:
 
 Returns the PEAK ``SWMMDepthLayerURI`` directly (a ``LayerURI`` subtype) so the
 ``emit_tool_call`` ``add_loaded_layer`` gate fires on it - exactly like
-``run_modflow_job`` returns a ``PlumeLayerURI``. The per-frame depth COGs are
+``modflow_contaminant_plume`` returns a ``PlumeLayerURI``. The per-frame depth COGs are
 emitted OUT-OF-BAND through ``emitter.add_loaded_layer`` (distinct runs-bucket
 keys -> distinct TiTiler url -> no dedup collapse) so the web
 ``detectSequentialGroups`` LayerPanel scrubber group forms WITHOUT changing the

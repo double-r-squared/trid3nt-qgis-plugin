@@ -98,7 +98,19 @@ def test_every_registered_tool_has_a_primary_category() -> None:
     excludes them.
     """
     registered = _ensure_full_registry()
-    mapped = set(PRIMARY_CATEGORY.keys()) | {"list_categories", "list_tools_in_category"}
+    # engine-door refactor: tier=template tools are pool-excluded and surfaced
+    # only by their door's gate expansion, so they are INTENTIONALLY not in
+    # PRIMARY_CATEGORY (categorizing one would re-leak it into the retrieval pool).
+    from trid3nt_server.tools import TOOL_REGISTRY as _reg
+    _templates = {
+        n for n, e in _reg.items()
+        if getattr(e.metadata, "tier", "general") == "template"
+    }
+    mapped = (
+        set(PRIMARY_CATEGORY.keys())
+        | {"list_categories", "list_tools_in_category"}
+        | _templates
+    )
     missing = registered - mapped
     assert missing == set(), (
         f"the following registered tools have no primary category: {sorted(missing)}"

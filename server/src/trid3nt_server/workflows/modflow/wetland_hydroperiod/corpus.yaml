@@ -1,0 +1,10 @@
+# TEMPLATE tier (engine-door refactor): phrasings for modflow_wetland_hydroperiod. NOT merged
+# into the main retrieval index (templates are excluded from the default
+# pool); the run_modflow door surfaces this template via gate expansion.
+# Carried verbatim from the migrated run_model_wetland_hydroperiod_scenario corpus entries.
+modflow_wetland_hydroperiod:
+- wetland hydroperiod under groundwater pumping
+- how long does the wetland stay wet each year
+- water table at the marsh through the seasons
+- will pumping dry out this wetland
+- wetland inundation duration simulation

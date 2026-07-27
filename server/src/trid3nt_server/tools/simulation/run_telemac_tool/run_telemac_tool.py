@@ -129,7 +129,7 @@ async def run_telemac(
     contaminant/pollutant spilled into the river/stream and how it travels/
     moves/flows/spreads downstream". SURFACE water carried IN the river
     channel by the current (NOT groundwater/aquifer seepage - that is
-    ``run_model_river_seepage_scenario``). Runs a TELEMAC-2D shallow-water
+    ``modflow_river_seepage``). Runs a TELEMAC-2D shallow-water
     solve with an advected tracer over a REAL river reach: a finite dye pulse
     releases at a mid-reach point source, travels downstream in the surface
     water and dilutes. Produces a peak dye-concentration map layer PLUS the
@@ -141,8 +141,8 @@ async def run_telemac(
 
     Do NOT use this for:
         - GROUNDWATER/AQUIFER contamination, river<->aquifer SEEPAGE, or a
-          subsurface plume (use ``run_modflow_job`` /
-          ``run_model_river_seepage_scenario`` - THIS tool is surface water
+          subsurface plume (use ``modflow_contaminant_plume`` /
+          ``modflow_river_seepage`` - THIS tool is surface water
           IN the channel; seepage tools are water UNDER the ground).
         - Riverine/coastal/pluvial FLOODING depth (``run_model_flood_scenario``
           = SFINCS, or ``run_swmm_urban_flood`` = urban drainage).

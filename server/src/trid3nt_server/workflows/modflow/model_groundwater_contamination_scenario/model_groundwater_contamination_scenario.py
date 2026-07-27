@@ -708,7 +708,7 @@ def _build_confirmation_envelope(
         caveat = caveat + " Extraction notes: " + "; ".join(notes)
     return PayloadWarningEnvelopePayload(
         warning_id=new_ulid(),
-        tool_name="run_modflow_job",
+        tool_name="modflow_contaminant_plume",
         tool_args={
             "contaminant": run_args.contaminant,
             "location_name": derived["location_name"],
@@ -874,33 +874,42 @@ async def model_groundwater_contamination_scenario(
             )
 
     # --- Stage 4: run MODFLOW -> publish -> PlumeLayerURI ---
-    run_modflow_fn = _registry_fn("run_modflow_job")
-    result = await _maybe_emit(
-        pipeline_emitter,
-        name=f"Model groundwater plume [{derived['contaminant']}]",
-        tool_name="run_modflow_job",
-        invoke=lambda: run_modflow_fn(
-            spill_location_latlon=run_args.spill_location_latlon,
-            contaminant=run_args.contaminant,
-            release_rate_kg_s=run_args.release_rate_kg_s,
-            duration_days=run_args.duration_days,
-            aquifer_k_ms=run_args.aquifer_k_ms,
-            porosity=run_args.porosity,
-            compute_class=compute_class,
-        ),
+    # engine-door refactor: run_modflow_job is FOLDED into the
+    # modflow_contaminant_plume template. Call its composer function directly with
+    # the single-contaminant convenience fields and read plumes[0] (the news
+    # composer surfaces ONE plume). The composer loads the plume onto the map + the
+    # per-species chart itself (Invariant 1 typed scalars preserved).
+    from trid3nt_server.workflows.modflow.contaminant_plume.contaminant_plume import (
+        ContaminantPlumeInputError,
+        ContaminantPlumeScenarioError,
+        model_contaminant_plume,
     )
-    if not isinstance(result, PlumeLayerURI):
-        # run_modflow_job returns an error dict on failure (honest narration).
-        error_code = "MODFLOW_RUN_FAILED"
-        error_message = "MODFLOW run did not produce a plume layer"
-        if isinstance(result, dict):
-            error_code = result.get("error_code", error_code)
-            error_message = result.get("error_message", error_message)
-        raise GroundwaterContaminationError(
-            f"{error_code}: {error_message}"
-        )
 
-    plume = result
+    try:
+        cp_result = await _maybe_emit(
+            pipeline_emitter,
+            name=f"Model groundwater plume [{derived['contaminant']}]",
+            tool_name="modflow_contaminant_plume",
+            invoke=lambda: model_contaminant_plume(
+                spill_location_latlon=run_args.spill_location_latlon,
+                contaminant=run_args.contaminant,
+                release_rate_kg_s=run_args.release_rate_kg_s,
+                duration_days=run_args.duration_days,
+                aquifer_k_ms=run_args.aquifer_k_ms,
+                porosity=run_args.porosity,
+                compute_class=compute_class,
+            ),
+        )
+    except (ContaminantPlumeInputError, ContaminantPlumeScenarioError) as exc:
+        raise GroundwaterContaminationError(
+            f"{getattr(exc, 'error_code', 'MODFLOW_RUN_FAILED')}: {exc}"
+        ) from exc
+
+    if not getattr(cp_result, "plumes", None):
+        raise GroundwaterContaminationError(
+            "MODFLOW_RUN_FAILED: MODFLOW run did not produce a plume layer"
+        )
+    plume = cp_result.plumes[0]
     summary = _build_summary(derived, plume)
     logger.info(
         "case2 complete location=%r plume_area_km2=%.6g max_concentration_mgl=%.6g",

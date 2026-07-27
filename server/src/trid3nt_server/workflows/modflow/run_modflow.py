@@ -610,6 +610,106 @@ def _compose_manifest(
     return manifest, inputs
 
 
+def _normalize_species_payload(species: Any) -> list[dict[str, Any]]:
+    """Normalize a species list (SpeciesSpec objects OR dicts) into plain dicts.
+
+    Folded from ``run_modflow_multi_species_tool._species_payload``: the adapter's
+    ``_normalize_species`` accepts either attribute-style objects or plain dicts;
+    we hand it dicts so the build seam does not depend on the object-vs-dict
+    acceptance. Duck-typed (``model_dump``) to avoid a SpeciesSpec import here.
+    """
+    out: list[dict[str, Any]] = []
+    for sp in species or []:
+        if isinstance(sp, dict):
+            out.append(dict(sp))
+        elif hasattr(sp, "model_dump"):
+            out.append(sp.model_dump())
+        else:  # defensive: attribute-style object
+            out.append(
+                {
+                    "name": getattr(sp, "name", None),
+                    "release_rate_kg_s": getattr(sp, "release_rate_kg_s", None),
+                    "sorption_kd": getattr(sp, "sorption_kd", None),
+                    "decay_per_day": getattr(sp, "decay_per_day", None),
+                    "parent": getattr(sp, "parent", None),
+                }
+            )
+    return out
+
+
+def _build_and_stage_multi_species(
+    run_args: MODFLOWRunArgs,
+    *,
+    run_id: str | None = None,
+    workdir: str | Path | None = None,
+) -> DeckStaging:
+    """Build a multi_species deck (ONE shared GWF + N GWT) - FLAT layout.
+
+    FOLD (engine-door refactor): this is the deleted
+    ``run_modflow_multi_species_tool.build_multi_species_staging`` moved here so
+    ``build_and_stage_modflow_deck`` is the ONE build/stage seam for single AND
+    multi. Unlike the single/archetype path (gwf/ + gwt/ subdir reorg), the
+    multi_species deck is written FLAT (mf6 reads ``mfsim.nam`` from the deck-dir
+    CWD in local mode); the per-species ``gwt_<species>.ucn`` files land beside it
+    for the ``postprocess_multi_species`` glob.
+
+    Raises:
+        MODFLOWWorkflowError("MODFLOW_DECK_BUILD_FAILED"): the adapter build failed.
+        ValueError: re-raised from the adapter for an invalid species list.
+    """
+    rid = run_id or new_ulid()
+    base = Path(workdir) if workdir is not None else Path(
+        tempfile.mkdtemp(prefix=f"modflow-{rid}-")
+    )
+    deck_dir = base / "deck"
+    deck_dir.mkdir(parents=True, exist_ok=True)
+
+    species_payload = _normalize_species_payload(run_args.species or [])
+    try:
+        manifest_obj = build_modflow_deck(
+            spill_location_latlon=run_args.spill_location_latlon,
+            contaminant=run_args.contaminant,
+            release_rate_kg_s=run_args.release_rate_kg_s,
+            duration_days=run_args.duration_days,
+            aquifer_k_ms=run_args.aquifer_k_ms,
+            porosity=run_args.porosity,
+            workdir=str(deck_dir),
+            write=True,
+            archetype="multi_species",
+            species=species_payload,
+        )
+    except (MODFLOWWorkflowError, ValueError):
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise MODFLOWWorkflowError(
+            "MODFLOW_DECK_BUILD_FAILED",
+            message=f"multi_species build_modflow_deck failed: {exc}",
+            details={"run_id": rid},
+        ) from exc
+
+    deck_base_uri = f"file://{deck_dir}/"
+    return DeckStaging(
+        run_id=rid,
+        manifest_uri=deck_base_uri + "manifest.json",
+        deck_base_uri=deck_base_uri,
+        local_deck_dir=str(deck_dir),
+        model_crs=manifest_obj.model_crs,
+        gwf_name=manifest_obj.gwf_name,
+        gwt_name=manifest_obj.gwt_name,
+        spill_lat=float(manifest_obj.spill_lat),
+        spill_lon=float(manifest_obj.spill_lon),
+        output_globs=[
+            "gwt_*.ucn",
+            f"{manifest_obj.gwf_name}.hds",
+            f"{manifest_obj.gwf_name}.cbc",
+            "*.lst",
+            "mfsim.lst",
+        ],
+        archetype="multi_species",
+        gwt_present=True,
+    )
+
+
 def build_and_stage_modflow_deck(
     run_args: MODFLOWRunArgs,
     *,
@@ -639,6 +739,14 @@ def build_and_stage_modflow_deck(
         MODFLOWWorkflowError: any build / reorg / stage step failed.
     """
     rid = run_id or new_ulid()
+
+    # FOLD (engine-door refactor): a multi_species run (the modflow_contaminant_
+    # plume template, N>=1 species) builds a FLAT N-GWT deck. Threaded here so
+    # ONE build/stage seam handles single AND multi species (the standalone
+    # build_multi_species_staging was deleted). The single/archetype path below
+    # keeps its gwf/ + gwt/ subdir reorg untouched.
+    if getattr(run_args, "archetype", None) == "multi_species":
+        return _build_and_stage_multi_species(run_args, run_id=rid, workdir=workdir)
 
     # The base dir for both the FLAT build and the subdir-organised deck. We
     # keep it OUTSIDE a TemporaryDirectory context so the local-run path can
@@ -1053,6 +1161,12 @@ def _run_args_to_deck_kwargs(run_args: MODFLOWRunArgs) -> dict[str, Any]:
                     kwargs[name] = list(val)
                 else:
                     kwargs[name] = val
+        # FOLD (engine-door refactor): thread the per-species list into the
+        # worker's build_modflow_deck so the build-offload lane is identical to
+        # the in-agent multi_species path (normalized to plain JSON dicts).
+        species = getattr(run_args, "species", None)
+        if species:
+            kwargs["species"] = _normalize_species_payload(species)
 
     # --- advanced-physics overrides (resolved; None -> omitted). ----------------
     try:

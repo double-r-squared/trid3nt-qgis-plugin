@@ -105,7 +105,7 @@ class TestScenarioPublishedSignal:
             "run_model_nws_flood_event_scenario",
             "run_model_flood_habitat_scenario",
             "run_model_groundwater_contamination_scenario",
-            "run_modflow_job",
+            "modflow_contaminant_plume",
         ):
             assert tool in _published_scenario_tool_names(), tool
             summary = summarize_tool_result(tool, _published_flood_layer_uri("R"))

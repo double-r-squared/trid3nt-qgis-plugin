@@ -560,8 +560,8 @@ def compute_model_residuals(
 
     **When to use:**
     - "How well does this MODFLOW head raster match the observed wells?"
-      right after ``run_model_sustainable_yield_scenario`` /
-      ``run_modflow_job`` / any MODFLOW composer produces a head COG.
+      right after ``modflow_sustainable_yield`` /
+      ``modflow_contaminant_plume`` / any MODFLOW composer produces a head COG.
     - Model calibration / validation questions in general: any single-band
       MODEL raster vs. any point layer of MEASURED values at the same kind
       of quantity.
@@ -631,7 +631,7 @@ def compute_model_residuals(
 
     Cross-tool dependencies:
         Upstream (consumes):
-        - ``run_model_sustainable_yield_scenario`` / ``run_modflow_job`` / any
+        - ``modflow_sustainable_yield`` / ``modflow_contaminant_plume`` / any
           MODFLOW composer -- produces the simulated-head ``model_layer_uri``.
         - ``fetch_usgs_groundwater_levels`` -- produces the observed-wells
           ``observations_layer_uri`` (or is called internally via ``bbox``).

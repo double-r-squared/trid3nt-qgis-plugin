@@ -47,6 +47,18 @@ agent_main._import_tools_registry()
 # ---------------------------------------------------------------------------
 
 
+def _pool_registry_size() -> int:
+    """Full registry MINUS engine TEMPLATES (engine-door refactor): tier=template
+    tools are pool-excluded and surfaced only by their door's gate expansion, so
+    they are absent from the default per-turn declarations on EVERY provider path
+    (bedrock / scripted / vertex / openai-disabled / fail-open). A door call then
+    unions the chosen template in (select-then-call)."""
+    return sum(
+        1 for e in TOOL_REGISTRY.values()
+        if getattr(e.metadata, "tier", "general") != "template"
+    )
+
+
 def test_gating_topk_default(monkeypatch):
     monkeypatch.delenv("TRID3NT_TOOL_GATING_TOPK", raising=False)
     assert gating_topk() == TOOL_GATING_TOPK_DEFAULT == 24
@@ -223,7 +235,7 @@ async def test_openai_provider_gate_disabled_by_env(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     monkeypatch.setenv("TRID3NT_TOOL_GATING_TOPK", "0")
     captured = await _drive_turn_and_capture_registry(monkeypatch)
-    assert len(captured["registry"]) == len(TOOL_REGISTRY)
+    assert len(captured["registry"]) == _pool_registry_size()
 
 
 @pytest.mark.asyncio
@@ -237,7 +249,7 @@ async def test_scripted_provider_turn_is_never_gated(monkeypatch):
         captured = await _drive_turn_and_capture_registry(monkeypatch)
     finally:
         set_script(None)
-    assert len(captured["registry"]) == len(TOOL_REGISTRY)
+    assert len(captured["registry"]) == _pool_registry_size()
 
 
 @pytest.mark.asyncio
@@ -262,4 +274,4 @@ async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
         await agent_server._stream_gemini_reply(
             sock, state, _settings(), "fetch something", "research"
         )
-    assert len(captured["registry"]) == len(TOOL_REGISTRY)
+    assert len(captured["registry"]) == _pool_registry_size()

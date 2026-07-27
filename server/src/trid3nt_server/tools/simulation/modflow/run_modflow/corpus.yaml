@@ -1,0 +1,28 @@
+# Engine-door corpus (DOOR tier - walked into the main index; the door competes
+# in per-turn retrieval alongside general tools). Hazard-common groundwater
+# phrasings route to the run_modflow door, whose gate expansion then surfaces
+# the specific modflow_* template (select-then-call). Template-specific
+# phrasings live in each workflows/modflow/<template>/corpus.yaml (TEMPLATE
+# tier - NOT merged into this index).
+run_modflow:
+- model a groundwater contamination plume
+- where does this spill go in the aquifer
+- how far does a contaminant spill spread in groundwater
+- simulate groundwater flow and transport
+- run a MODFLOW groundwater model
+- groundwater aquifer simulation
+- pump test drawdown for this well
+- capture zone for this pumping well
+- wellhead protection area delineation
+- saltwater intrusion into the coastal aquifer
+- managed aquifer recharge mounding
+- aquifer storage and recovery
+- sustainable yield of this aquifer
+- how much will pumping deplete the nearby river
+- stream depletion from groundwater pumping
+- mine dewatering drawdown cone
+- wetland hydroperiod under changing groundwater
+- regional groundwater water budget
+- river seepage exchange with the aquifer
+- what groundwater models can you run
+- which MODFLOW scenario fits my question

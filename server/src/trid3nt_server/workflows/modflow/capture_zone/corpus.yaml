@@ -1,0 +1,9 @@
+# TEMPLATE tier (engine-door refactor): phrasings for modflow_capture_zone. NOT merged
+# into the main retrieval index; the run_modflow door surfaces it via gate
+# expansion. Carried verbatim from the migrated run_model_capture_zone_scenario corpus entries.
+modflow_capture_zone:
+- capture zone of this supply well
+- where does the well draw its water from
+- backward particle tracking to the wellhead
+- delineate the capture area for the pumping well
+- time of travel capture zone polygon

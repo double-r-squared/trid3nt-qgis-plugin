@@ -1014,7 +1014,7 @@ async def test_emit_tool_call_error_status_dict_marks_card_failed(
         "error_message": "MODFLOW did not complete",
     }
     await emitter.emit_tool_call(
-        name="MODFLOW run", tool_name="run_modflow_job", invoke=lambda: err
+        name="MODFLOW run", tool_name="modflow_contaminant_plume", invoke=lambda: err
     )
     last = _pipeline_frames(sink)[-1]
     step = last["payload"]["steps"][0]

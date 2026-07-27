@@ -9,8 +9,8 @@ Coverage (kickoff acceptance):
   * Plausibility clamps (release rate 1e-6..100 kg/s; duration 0.1..3650 d).
   * Confirmation-before-consequence gate BLOCKS the MODFLOW run without a
     confirm (fail-closed: no hook + confirmed=False -> ConfirmationDeniedError;
-    a denying hook -> ConfirmationDeniedError; no run_modflow_job dispatch).
-  * Full chain with run_modflow_job MOCKED — confirmed=True (or a proceeding
+    a denying hook -> ConfirmationDeniedError; no modflow_contaminant_plume dispatch).
+  * Full chain with modflow_contaminant_plume MOCKED — confirmed=True (or a proceeding
     hook) reaches the solver dispatch and returns a Case2Result with a non-zero
     plume summary.
   * Registration presence (PRIMARY_CATEGORY + TOOL_REGISTRY + FR-DC-6 metadata).
@@ -31,7 +31,18 @@ from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
 from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
 
 from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY
-from trid3nt_server.tools.simulation.run_modflow_tool.run_modflow_tool import _RUN_MODFLOW_JOB_METADATA
+# engine-door refactor: run_modflow_job is DELETED (folded into the
+# modflow_contaminant_plume template). The news composer now calls the
+# modflow_contaminant_plume COMPOSER FUNCTION directly (not via the registry), so
+# the plume is mocked by patching that function (see _patch_plume) rather than by
+# installing a fake registered tool.
+from trid3nt_server.workflows.modflow.contaminant_plume import (
+    contaminant_plume as _cp_mod,
+)
+from trid3nt_server.workflows.modflow.contaminant_plume.contaminant_plume import (
+    ContaminantPlumeResult,
+    ContaminantPlumeScenarioError,
+)
 from trid3nt_server.workflows.modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as gw
 from trid3nt_server.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
     Case2Result,
@@ -70,12 +81,18 @@ def _fake_geocode(query: str, **_: Any) -> dict[str, Any]:
 def _install_fake_tool(name: str, fn: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """Replace ``TOOL_REGISTRY[name]`` with a fake whose ``.fn`` is ``fn``."""
     existing = TOOL_REGISTRY.get(name)
-    metadata = existing.metadata if existing else _RUN_MODFLOW_JOB_METADATA
+    assert existing is not None, f"{name} must be registered to install a fake"
     monkeypatch.setitem(
         TOOL_REGISTRY,
         name,
-        RegisteredTool(metadata=metadata, fn=fn, module="test"),
+        RegisteredTool(metadata=existing.metadata, fn=fn, module="test"),
     )
+
+
+def _patch_plume(fn: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch the modflow_contaminant_plume COMPOSER FUNCTION the news composer
+    imports + calls directly (engine-door refactor: no longer a registry lookup)."""
+    monkeypatch.setattr(_cp_mod, "model_contaminant_plume", fn)
 
 
 def _fake_plume(area: float = 1.25, max_conc: float = 12.5) -> PlumeLayerURI:
@@ -90,6 +107,11 @@ def _fake_plume(area: float = 1.25, max_conc: float = 12.5) -> PlumeLayerURI:
         max_concentration_mgl=max_conc,
         plume_area_km2=area,
     )
+
+
+def _plume_result(area: float = 1.25, max_conc: float = 12.5) -> ContaminantPlumeResult:
+    """A ContaminantPlumeResult wrapping ONE plume (the composer reads plumes[0])."""
+    return ContaminantPlumeResult(plumes=[_fake_plume(area=area, max_conc=max_conc)])
 
 
 # --------------------------------------------------------------------------- #
@@ -246,11 +268,11 @@ def test_confirmation_gate_blocks_without_confirm(
 
     called = {"modflow": 0}
 
-    def _spy_modflow(**_: Any) -> PlumeLayerURI:
+    def _spy_modflow(**_: Any) -> ContaminantPlumeResult:
         called["modflow"] += 1
-        return _fake_plume()
+        return _plume_result()
 
-    _install_fake_tool("run_modflow_job", _spy_modflow, monkeypatch)
+    _patch_plume(_spy_modflow, monkeypatch)
     text = _FIXTURE.read_text()
 
     async def _run() -> None:
@@ -268,11 +290,11 @@ def test_confirmation_hook_deny_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fake_tool("geocode_location", _fake_geocode, monkeypatch)
     called = {"modflow": 0}
 
-    def _spy_modflow(**_: Any) -> PlumeLayerURI:
+    def _spy_modflow(**_: Any) -> ContaminantPlumeResult:
         called["modflow"] += 1
-        return _fake_plume()
+        return _plume_result()
 
-    _install_fake_tool("run_modflow_job", _spy_modflow, monkeypatch)
+    _patch_plume(_spy_modflow, monkeypatch)
     text = _FIXTURE.read_text()
 
     seen: dict[str, Any] = {}
@@ -292,7 +314,7 @@ def test_confirmation_hook_deny_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     # The confirmation envelope was emitted to the hook and carries the params.
     env = seen["envelope"]
     assert isinstance(env, PayloadWarningEnvelopePayload)
-    assert env.tool_name == "run_modflow_job"
+    assert env.tool_name == "modflow_contaminant_plume"
     assert env.tool_args["contaminant"] == "trichloroethylene"
     assert env.tool_args["location_name"] == "Twin Falls, Idaho"
     # No cost theater: the only numbers are the structured forcing fields.
@@ -310,7 +332,7 @@ def test_full_chain_confirmed_true(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fake_tool("geocode_location", _fake_geocode, monkeypatch)
     captured: dict[str, Any] = {}
 
-    def _fake_modflow(**kwargs: Any) -> PlumeLayerURI:
+    def _fake_modflow(**kwargs: Any) -> ContaminantPlumeResult:
         captured.update(kwargs)
         # Validate the composer assembled a real MODFLOWRunArgs-shaped call.
         MODFLOWRunArgs(
@@ -319,9 +341,9 @@ def test_full_chain_confirmed_true(monkeypatch: pytest.MonkeyPatch) -> None:
             release_rate_kg_s=kwargs["release_rate_kg_s"],
             duration_days=kwargs["duration_days"],
         )
-        return _fake_plume(area=2.5, max_conc=18.0)
+        return _plume_result(area=2.5, max_conc=18.0)
 
-    _install_fake_tool("run_modflow_job", _fake_modflow, monkeypatch)
+    _patch_plume(_fake_modflow, monkeypatch)
     text = _FIXTURE.read_text()
 
     result = asyncio.run(
@@ -347,7 +369,7 @@ def test_full_chain_confirmed_true(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_full_chain_proceeding_hook(monkeypatch: pytest.MonkeyPatch) -> None:
     """A proceeding confirmation hook authorizes the run (no confirmed bypass)."""
     _install_fake_tool("geocode_location", _fake_geocode, monkeypatch)
-    _install_fake_tool("run_modflow_job", lambda **_: _fake_plume(), monkeypatch)
+    _patch_plume(lambda **_: _plume_result(), monkeypatch)
     text = _FIXTURE.read_text()
 
     async def _approve(_env: PayloadWarningEnvelopePayload) -> bool:
@@ -365,17 +387,15 @@ def test_full_chain_proceeding_hook(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_solver_error_dict_surfaces_as_typed_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """run_modflow_job returning an error dict surfaces a typed composer error."""
+    """modflow_contaminant_plume returning an error dict surfaces a typed composer error."""
     _install_fake_tool("geocode_location", _fake_geocode, monkeypatch)
 
-    def _err_modflow(**_: Any) -> dict[str, Any]:
-        return {
-            "status": "error",
-            "error_code": "MODFLOW_SOLVER_DIVERGED",
-            "error_message": "list file reports a convergence failure",
-        }
+    def _err_modflow(**_: Any) -> ContaminantPlumeResult:
+        raise ContaminantPlumeScenarioError(
+            "MODFLOW_SOLVER_DIVERGED: list file reports a convergence failure"
+        )
 
-    _install_fake_tool("run_modflow_job", _err_modflow, monkeypatch)
+    _patch_plume(_err_modflow, monkeypatch)
     text = _FIXTURE.read_text()
 
     async def _run() -> None:

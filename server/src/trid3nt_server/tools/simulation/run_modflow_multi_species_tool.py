@@ -6,7 +6,7 @@ species) + N ModflowGwfgwt flow<->transport exchanges, authored in ONE mf6 run b
 ``services/workers/modflow/gwt_adapter.build_modflow_deck(archetype="multi_species",
 species=[...])`` (the Wave-3 DECK-AUTHOR landing). It is the multi_species analogue
 of ``run_modflow_archetype_job`` (the Wave-1/2 archetype surface) and
-``run_modflow_job`` (the single-species spill surface), differing only in:
+``modflow_contaminant_plume`` (the single-species spill surface), differing only in:
 
   * it threads the per-species ``species`` list into the adapter's multi_species
     branch (the staging seam ``build_and_stage_modflow_deck`` does NOT forward
@@ -16,7 +16,7 @@ of ``run_modflow_archetype_job`` (the Wave-1/2 archetype surface) and
     ``plume_area_km2`` + the species name in the layer label), returned inside a
     ``MultiSpeciesPlumeResult``.
 
-Chain (mirrors ``run_modflow_job`` with the multi_species branch):
+Chain (mirrors ``modflow_contaminant_plume`` with the multi_species branch):
 
   1. Build the multi_species deck (``build_modflow_deck(write=True,
      archetype="multi_species", species=[...])``)  -  ONE shared GWF + N GWT models,
@@ -66,8 +66,7 @@ from trid3nt_server.workflows.modflow.postprocess_modflow import (
 )
 from trid3nt_server.workflows.modflow.run_modflow import (
     MODFLOWWorkflowError,
-    DeckStaging,
-    build_modflow_deck,
+    build_and_stage_modflow_deck,
     is_local_mode,
     run_modflow_local,
     submit_modflow_run,
@@ -79,7 +78,6 @@ logger = logging.getLogger("trid3nt_server.tools.simulation.run_modflow_multi_sp
 __all__ = [
     "run_modflow_multi_species_job",
     "RunMODFLOWMultiSpeciesError",
-    "build_multi_species_staging",
 ]
 
 
@@ -89,106 +87,6 @@ class RunMODFLOWMultiSpeciesError(RuntimeError):
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code
-
-
-def _species_payload(species: list[SpeciesSpec | dict[str, Any]]) -> list[dict[str, Any]]:
-    """Normalize each species spec into a plain dict the adapter accepts.
-
-    The adapter's ``_normalize_species`` accepts either objects with ``.name`` /
-    ``.release_rate_kg_s`` / ``.sorption_kd`` / ``.decay_per_day`` / ``.parent``
-    attributes OR plain dicts; we hand it dicts so the agent does not depend on
-    the adapter's object-vs-dict acceptance.
-    """
-    out: list[dict[str, Any]] = []
-    for sp in species:
-        if isinstance(sp, SpeciesSpec):
-            out.append(sp.model_dump())
-        elif isinstance(sp, dict):
-            out.append(dict(sp))
-        else:  # defensive: attribute-style object
-            out.append(
-                {
-                    "name": getattr(sp, "name", None),
-                    "release_rate_kg_s": getattr(sp, "release_rate_kg_s", None),
-                    "sorption_kd": getattr(sp, "sorption_kd", None),
-                    "decay_per_day": getattr(sp, "decay_per_day", None),
-                    "parent": getattr(sp, "parent", None),
-                }
-            )
-    return out
-
-
-def build_multi_species_staging(
-    run_args: MODFLOWRunArgs,
-    *,
-    run_id: str | None = None,
-    workdir: str | Path | None = None,
-) -> DeckStaging:
-    """Build a multi_species deck (ONE shared GWF + N GWT) and wrap it for the run.
-
-    Unlike ``build_and_stage_modflow_deck`` (which does not forward ``species``),
-    this threads ``run_args.species`` + ``archetype="multi_species"`` into the
-    adapter's multi_species branch. The deck is written FLAT (mf6 reads
-    ``mfsim.nam`` from the deck dir CWD in local mode); the per-species
-    ``gwt_<species>.ucn`` files land beside it for the postprocess glob. Returns a
-    ``DeckStaging`` whose ``local_deck_dir`` is the flat deck dir + ``model_crs``
-    is the adapter's projected grid CRS (the postprocess reprojection key).
-
-    Raises:
-        MODFLOWWorkflowError("MODFLOW_DECK_BUILD_FAILED"): the adapter build failed.
-        ValueError: re-raised from the adapter for an invalid species list.
-    """
-    rid = run_id or new_ulid()
-    base = Path(workdir) if workdir is not None else Path(
-        tempfile.mkdtemp(prefix=f"modflow-{rid}-")
-    )
-    deck_dir = base / "deck"
-    deck_dir.mkdir(parents=True, exist_ok=True)
-
-    species_payload = _species_payload(run_args.species or [])
-    try:
-        manifest_obj = build_modflow_deck(
-            spill_location_latlon=run_args.spill_location_latlon,
-            contaminant=run_args.contaminant,
-            release_rate_kg_s=run_args.release_rate_kg_s,
-            duration_days=run_args.duration_days,
-            aquifer_k_ms=run_args.aquifer_k_ms,
-            porosity=run_args.porosity,
-            workdir=str(deck_dir),
-            write=True,
-            archetype="multi_species",
-            species=species_payload,
-        )
-    except (MODFLOWWorkflowError, ValueError):
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise MODFLOWWorkflowError(
-            "MODFLOW_DECK_BUILD_FAILED",
-            message=f"multi_species build_modflow_deck failed: {exc}",
-            details={"run_id": rid},
-        ) from exc
-
-    deck_base_uri = f"file://{deck_dir}/"
-    return DeckStaging(
-        run_id=rid,
-        manifest_uri=deck_base_uri + "manifest.json",
-        deck_base_uri=deck_base_uri,
-        local_deck_dir=str(deck_dir),
-        model_crs=manifest_obj.model_crs,
-        gwf_name=manifest_obj.gwf_name,
-        gwt_name=manifest_obj.gwt_name,
-        spill_lat=float(manifest_obj.spill_lat),
-        spill_lon=float(manifest_obj.spill_lon),
-        output_globs=[
-            "gwt_*.ucn",
-            f"{manifest_obj.gwf_name}.hds",
-            f"{manifest_obj.gwf_name}.cbc",
-            "*.lst",
-            "mfsim.lst",
-        ],
-        archetype="multi_species",
-        gwt_present=True,
-    )
 
 
 def _runs_prefix() -> str:
@@ -241,7 +139,10 @@ async def run_modflow_multi_species_job(
     staging = None
     try:
         # --- Step 1: build the multi_species deck (off-loop) -----------------
-        staging = await asyncio.to_thread(build_multi_species_staging, run_args)
+        # FOLD (engine-door refactor): build_and_stage_modflow_deck now forwards
+        # species (its multi_species branch builds the FLAT N-GWT deck the deleted
+        # build_multi_species_staging used to build) - ONE build/stage seam.
+        staging = await asyncio.to_thread(build_and_stage_modflow_deck, run_args)
 
         # --- Step 2: run the solver (local or local-exec/Batch) --------------
         if is_local_mode():

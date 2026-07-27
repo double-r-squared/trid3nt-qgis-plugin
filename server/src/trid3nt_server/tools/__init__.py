@@ -405,10 +405,12 @@ from .simulation.model_fire_spread import model_fire_spread  # noqa: E402,F401
 from .simulation.postprocess_pelicun import postprocess_pelicun  # noqa: E402,F401
 from .simulation.run_geoclaw_tool import run_geoclaw_tool  # noqa: E402,F401
 from .simulation.run_landlab_tool import run_landlab_tool  # noqa: E402,F401
-from .simulation.run_modflow_tool import run_modflow_tool  # noqa: E402,F401
+# engine-door refactor: run_modflow_job (single spill) + run_river_seepage_job
+# are DELETED / UNREGISTERED. The single-species spill folded into the
+# modflow_contaminant_plume template; run_river_seepage_job is now the
+# unregistered internal engine surface the modflow_river_seepage template imports.
 from .simulation.run_openquake_tool import run_openquake_tool  # noqa: E402,F401
 from .simulation.run_pelicun_damage_assessment import run_pelicun_damage_assessment  # noqa: E402,F401
-from .simulation.run_river_seepage_tool import run_river_seepage_tool  # noqa: E402,F401
 from .simulation.run_swan_tool import run_swan_tool  # noqa: E402,F401
 from .simulation.run_swmm_tool import run_swmm_tool  # noqa: E402,F401
 from .simulation.run_telemac_tool import run_telemac_tool  # noqa: E402,F401
@@ -419,6 +421,11 @@ from .simulation.set_sfincs_parameters import set_sfincs_parameters  # noqa: E40
 from .simulation.set_swmm_parameters import set_swmm_parameters  # noqa: E402,F401
 from .simulation.set_telemac_parameters import set_telemac_parameters  # noqa: E402,F401
 from .simulation.solver import solver  # noqa: E402,F401
+# -- engine doors (engine-door refactor: read-only concierge that lists +
+# gate-expands its engine's tier=template members; executes nothing). MODFLOW
+# pilot. Registry-driven: adding a template folder tagged engine+tier=template
+# makes it appear in the door's listing with zero door changes.
+from .simulation.modflow.run_modflow.run_modflow import run_modflow  # noqa: E402,F401
 
 # -- discovery (dataset/tool retrieval) --
 # NOTE: search_data_catalog / fetch_from_catalog / qgis_discovery register at
@@ -451,31 +458,25 @@ from .publish_layer import publish_layer as _publish_layer_reg  # noqa: E402,F40
 # registration list.
 # ---------------------------------------------------------------------------
 from ..workflows.pelicun.compute_impact_envelope import compute_impact_envelope as _compute_impact_envelope_workflow  # noqa: E402,F401 - Wave 4.11 P3: registers compute_impact_envelope (composes NSI/MS → Pelicun → postprocess into one envelope tool)
-# The river-seepage COMPOSER carries its OWN @register_tool (run_model_river_seepage_scenario);
-# its bridge tool above does NOT import it, so register it explicitly (mirrors the
-# compute_impact_envelope composer import below). The MODFLOW-seepage verifier flagged
-# this composer as never-registered - this import is the fix.
-from ..workflows.modflow.model_river_seepage_scenario import model_river_seepage_scenario as _model_river_seepage_scenario  # noqa: E402,F401 - sprint-17: registers run_model_river_seepage_scenario (LLM-facing river-seepage composer)
-
-# sprint-18 Wave-1 MODFLOW archetypes (GWF-only): the three new composers each
-# carry their OWN @register_tool (LLM-facing run_model_*_scenario) and dispatch
-# to the shared run_modflow_archetype_job engine surface. Importing them seeds
-# TOOL_REGISTRY at startup (mirrors the river-seepage composer import above). The
-# archetype run-tool itself is NOT @register_tool'd (the composers are the surface).
-from ..workflows.modflow.model_sustainable_yield_scenario import model_sustainable_yield_scenario as _model_sustainable_yield_scenario  # noqa: E402,F401 - sprint-18 Wave-1: registers run_model_sustainable_yield_scenario (MODFLOW pumping-drawdown composer)
-from ..workflows.modflow.model_mine_dewatering_scenario import model_mine_dewatering_scenario as _model_mine_dewatering_scenario  # noqa: E402,F401 - sprint-18 Wave-1: registers run_model_mine_dewatering_scenario (MODFLOW pit-dewatering composer)
-from ..workflows.modflow.model_regional_water_budget_scenario import model_regional_water_budget_scenario as _model_regional_water_budget_scenario  # noqa: E402,F401 - sprint-18 Wave-1: registers run_model_regional_water_budget_scenario (MODFLOW zonal-budget composer)
-
-# sprint-18 Wave-2 MODFLOW archetypes (GWF-only): three more composers each carry
-# their OWN @register_tool (LLM-facing run_model_*_scenario) + dispatch through the
-# shared run_modflow_archetype_job. Importing them seeds TOOL_REGISTRY at startup
-# (mirrors the Wave-1 imports above). The archetype run-tool is NOT @register_tool'd.
-from ..workflows.modflow.model_mar_scenario import model_mar_scenario as _model_mar_scenario  # noqa: E402,F401 - sprint-18 Wave-2: registers run_model_mar_scenario (MODFLOW managed-aquifer-recharge mounding composer)
-from ..workflows.modflow.model_asr_scenario import model_asr_scenario as _model_asr_scenario  # noqa: E402,F401 - sprint-18 Wave-2: registers run_model_asr_scenario (MODFLOW aquifer-storage-&-recovery composer)
-from ..workflows.modflow.model_wetland_hydroperiod_scenario import model_wetland_hydroperiod_scenario as _model_wetland_hydroperiod_scenario  # noqa: E402,F401 - sprint-18 Wave-2: registers run_model_wetland_hydroperiod_scenario (MODFLOW wetland-hydroperiod composer)
-from ..workflows.modflow.model_multi_species_scenario import model_multi_species_scenario as _model_multi_species_scenario  # noqa: E402,F401 - sprint-18 Wave-3: registers run_model_multi_species_scenario (MODFLOW N-species transport composer; ONE shared GWF + N GWT -> N per-species plumes)
-from ..workflows.modflow.model_capture_zone_scenario import model_capture_zone_scenario as _model_capture_zone_scenario  # noqa: E402,F401 - sprint-18 Wave-4: registers run_model_capture_zone_scenario + run_model_wellhead_protection_scenario (MODFLOW PRT backward particle tracking -> capture-zone / WHPA vector polygon)
-from ..workflows.modflow.model_saltwater_intrusion_scenario import model_saltwater_intrusion_scenario as _model_saltwater_intrusion_scenario  # noqa: E402,F401 - sprint-18 Wave-5: registers run_model_saltwater_intrusion_scenario (MODFLOW BUY variable-density GWF+GWT Henry-style saltwater wedge -> cross-section heatmap chart + transect/toe vector layer)
+# engine-door refactor (MODFLOW pilot): the MODFLOW composer family is now a set
+# of engine TEMPLATES (engine="modflow", tier="template"), one folder per template
+# under workflows/modflow/<template>/<template>.py. Importing each module fires its
+# @register_tool so the template lands in TOOL_REGISTRY at startup; the templates
+# are EXCLUDED from the default retrieval pool and surfaced only by the run_modflow
+# door's gate expansion. run_modflow_archetype_job / run_modflow_multi_species_job
+# / run_river_seepage_job are the UNREGISTERED internal engine surfaces the
+# templates call directly (not imported here).
+from ..workflows.modflow.contaminant_plume.contaminant_plume import modflow_contaminant_plume as _modflow_contaminant_plume  # noqa: E402,F401 - FOLD of run_modflow_job + run_model_multi_species_scenario (single OR multi species -> plumes[])
+from ..workflows.modflow.river_seepage.river_seepage import modflow_river_seepage as _modflow_river_seepage  # noqa: E402,F401 - FOLD of run_model_river_seepage_scenario + run_river_seepage_job
+from ..workflows.modflow.sustainable_yield.sustainable_yield import modflow_sustainable_yield as _modflow_sustainable_yield  # noqa: E402,F401
+from ..workflows.modflow.mine_dewatering.mine_dewatering import modflow_mine_dewatering as _modflow_mine_dewatering  # noqa: E402,F401
+from ..workflows.modflow.regional_water_budget.regional_water_budget import modflow_regional_water_budget as _modflow_regional_water_budget  # noqa: E402,F401
+from ..workflows.modflow.managed_recharge.managed_recharge import modflow_managed_recharge as _modflow_managed_recharge  # noqa: E402,F401
+from ..workflows.modflow.asr.asr import modflow_asr as _modflow_asr  # noqa: E402,F401
+from ..workflows.modflow.wetland_hydroperiod.wetland_hydroperiod import modflow_wetland_hydroperiod as _modflow_wetland_hydroperiod  # noqa: E402,F401
+from ..workflows.modflow.capture_zone.capture_zone import modflow_capture_zone as _modflow_capture_zone  # noqa: E402,F401 - PRT capture zone
+from ..workflows.modflow.wellhead_protection.wellhead_protection import modflow_wellhead_protection as _modflow_wellhead_protection  # noqa: E402,F401 - EPA WHPA (split from capture_zone; shared composer)
+from ..workflows.modflow.saltwater_intrusion.saltwater_intrusion import modflow_saltwater_intrusion as _modflow_saltwater_intrusion  # noqa: E402,F401 - BUY variable-density Henry-style wedge
 
 # fire-animation demos S5/J5: the satellite fire-animation composer carries its
 # OWN @register_tool (run_model_satellite_fire_animation); import it so the

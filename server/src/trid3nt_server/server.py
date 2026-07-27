@@ -1098,11 +1098,11 @@ class SolverConfirmationCancelledError(RuntimeError):
 # composers join once they grow confirm-envelope builders (OQ-FIXWAVE-FLOOD-GATE).
 SOLVER_CONFIRM_TOOLS: set[str] = {
     "run_model_groundwater_contamination_scenario",
-    # ftw-affected-fields demo: the which-farm-fields composer runs the same
-    # MODFLOW plume (a consequence) before the affected-field analysis, so it
-    # joins the confirm set. The card is built from the call args
-    # (AOI/contaminant/release) + the up-gradient-placed spill point.
-    "run_model_contamination_affected_fields",
+    # engine-door refactor: run_model_contamination_affected_fields is CUT (its
+    # zonal field-analysis half re-homed to a playground recipe). The MODFLOW
+    # plume templates (modflow_contaminant_plume et al.) were NOT confirm-gated
+    # before the fold (run_modflow_job was absent from this set), so gating parity
+    # is preserved by NOT adding them here (RISK-8).
     # job-0256: flood solvers gated too — a live sandbox-only session was
     # observed running an unrequested SFINCS solve (~10-20 min). The card is
     # built from the call args (location/return period/duration).
@@ -1325,6 +1325,15 @@ _EMPTY_COMPLETION_NUDGE: str = (
 #: gate back toward the full catalog it was meant to trim.
 _DISCOVERY_EXPAND_CAP: int = 8
 
+#: ENGINE-DOOR gate expansion: an engine door lists a CLOSED, CURATED set - its
+#: own engine's registered tier=template members (11 for MODFLOW). The open-ended
+#: ``_DISCOVERY_EXPAND_CAP`` was calibrated to bound an UNBOUNDED ranked tail from
+#: dataset discovery; capping a door's curated listing at 8 would hide templates
+#: and silently break select-then-call. Doors get this separate, larger cap
+#: (>= the largest engine's template count, with headroom) applied ONLY on the
+#: door branch; the open-ended search_tools branch keeps _DISCOVERY_EXPAND_CAP.
+_DOOR_EXPAND_CAP: int = 24
+
 
 def _tool_search_tool_names() -> frozenset[str]:
     """The registered name(s) of the tool-search (data-discovery) tool.
@@ -1350,17 +1359,49 @@ def _tool_search_tool_names() -> frozenset[str]:
     return frozenset(names)
 
 
-def _tool_names_from_search_result(result: Any) -> list[str]:
-    """Extract the ranked tool names from a tool-search result payload.
+def _engine_door_tool_names() -> frozenset[str]:
+    """Every registered engine-door name (``metadata.tier == "door"``).
 
-    ``search_tools`` returns ``{"results": [{"tool_name": <name>, ...}, ...]}``.
-    Returns the names in rank order (best first), de-duplicated. Tolerant of a
-    malformed / partial shape -- a non-conforming entry is skipped, never
-    raised on.
+    Resolved by REGISTRY LOOKUP (never a hardcoded literal) so a new engine
+    door is picked up automatically the moment it registers. A door is a
+    gate-expander by construction: its result carries the ``templates`` list the
+    server unions into the turn's visible set. Never raises: a lookup fault
+    yields the empty set (the door simply does not expand).
+    """
+    names: set[str] = set()
+    try:
+        for _name, _entry in TOOL_REGISTRY.items():
+            if getattr(_entry.metadata, "tier", "general") == "door":
+                names.add(_name)
+    except Exception:  # noqa: BLE001 -- registry shape drift must not break dispatch
+        logger.debug("engine-door: registry lookup failed", exc_info=True)
+    return frozenset(names)
+
+
+def _gate_expander_tool_names() -> frozenset[str]:
+    """The union of gate-expanders: the tool-search tool(s) AND every engine door.
+
+    A call to any of these expands the turn's visible gate with the tool names
+    its result names (search_tools -> ``results[].tool_name``; an engine door ->
+    ``templates[].tool_name``). See ``_tool_names_from_search_result`` for the
+    extraction and the dispatch post-processing for the union + cap.
+    """
+    return _tool_search_tool_names() | _engine_door_tool_names()
+
+
+def _tool_names_from_search_result(result: Any) -> list[str]:
+    """Extract the ranked tool names from a gate-expander result payload.
+
+    ``search_tools`` returns ``{"results": [{"tool_name": <name>, ...}, ...]}``;
+    an engine door returns ``{"templates": [{"tool_name": <name>, ...}, ...]}``.
+    Reads ``results`` first, falling back to ``templates`` when ``results`` is
+    absent/empty. Returns the names in listing order (best first), de-duplicated.
+    Tolerant of a malformed / partial shape -- a non-conforming entry is
+    skipped, never raised on.
     """
     if not isinstance(result, dict):
         return []
-    rows = result.get("results")
+    rows = result.get("results") or result.get("templates")
     if not isinstance(rows, list):
         return []
     out: list[str] = []
@@ -1390,10 +1431,16 @@ def _is_terminal_composer(tool_name: str) -> bool:
     entry = TOOL_REGISTRY.get(tool_name)
     if entry is None:
         return False
-    return (
-        tool_name.startswith("run_")
-        and getattr(entry.metadata, "source_class", None) == "workflow_dispatch"
+    # engine-door refactor (RISK-1): engine TEMPLATES carry deliverable-producing
+    # names that do NOT start with ``run_`` (``modflow_contaminant_plume`` et al.).
+    # A completed template IS a turn-ending deliverable, so ALSO latch any
+    # tier="template" workflow-dispatch tool - otherwise the crisp-end wrap-up +
+    # post-deliverable idle reset never fire and the turn spins to the loop cap.
+    is_workflow_dispatch = (
+        getattr(entry.metadata, "source_class", None) == "workflow_dispatch"
     )
+    is_template = getattr(entry.metadata, "tier", "general") == "template"
+    return is_workflow_dispatch and (tool_name.startswith("run_") or is_template)
 
 
 # --------------------------------------------------------------------------- #
@@ -4501,19 +4548,27 @@ async def _stream_gemini_reply(
                         cat_id = result.get("category_id")
                         if isinstance(cat_id, str) and cat_id:
                             state.allowed_tool_set.open_category(cat_id)
-                    # DISCOVERY-EXPANDS-GATE (task 2): when the tool-search tool
-                    # returns candidate tool names, UNION them into this turn's
-                    # visible gate (and the Case allowed-set, so validation lets
-                    # the model actually call them) for SUBSEQUENT rounds --
-                    # capped at ``_DISCOVERY_EXPAND_CAP`` NEW names per turn, in
-                    # rank order. Only names that are real, registered, and not
-                    # already visible count toward the cap; the rebuild of
-                    # ``tool_decls`` is deferred to once-per-round below.
-                    elif call.name in _tool_search_tool_names():
+                    # DISCOVERY-EXPANDS-GATE (task 2) + ENGINE-DOOR expansion:
+                    # when the tool-search tool OR an engine door returns
+                    # candidate tool names, UNION them into this turn's visible
+                    # gate (and the Case allowed-set, so validation lets the
+                    # model actually call them) for SUBSEQUENT rounds. Search
+                    # results are capped at ``_DISCOVERY_EXPAND_CAP`` (bounds an
+                    # unbounded ranked tail); an engine door lists a CLOSED,
+                    # curated set of its own templates and uses the larger
+                    # ``_DOOR_EXPAND_CAP`` so select-then-call is never truncated.
+                    # Only names that are real, registered, and not already
+                    # visible count toward the cap; the rebuild of ``tool_decls``
+                    # is deferred to once-per-round below.
+                    elif call.name in _gate_expander_tool_names():
                         _hits = _tool_names_from_search_result(result)
+                        _is_door = call.name in _engine_door_tool_names()
+                        _expand_cap = (
+                            _DOOR_EXPAND_CAP if _is_door else _DISCOVERY_EXPAND_CAP
+                        )
                         _added_now: list[str] = []
                         for _cand in _hits:
-                            if len(_discovery_expanded) >= _DISCOVERY_EXPAND_CAP:
+                            if len(_discovery_expanded) >= _expand_cap:
                                 break
                             if (
                                 _cand in TOOL_REGISTRY
@@ -4529,11 +4584,12 @@ async def _stream_gemini_reply(
                             state.allowed_tool_set.add_tools(set(_added_now))
                             _tool_decls_dirty = True
                             logger.info(
-                                "discovery-expand: +%d tool(s) into the gate "
+                                "%s-expand: +%d tool(s) into the gate "
                                 "(turn total=%d/%d) via %s session=%s: %s",
+                                "door" if _is_door else "discovery",
                                 len(_added_now),
                                 len(_discovery_expanded),
-                                _DISCOVERY_EXPAND_CAP,
+                                _expand_cap,
                                 call.name,
                                 state.session_id,
                                 _added_now,
@@ -7467,7 +7523,7 @@ def _maybe_default_fetch_bbox_to_pinned_aoi(
 
 #: Expensive-solver scenario types whose domain IS an AOI bbox (areal solvers).
 #: ``scenario_type_for_tool`` also recognizes the POINT-driven groundwater solvers
-#: (``run_modflow_job`` / ``run_model_groundwater_contamination_scenario`` ->
+#: (``modflow_contaminant_plume`` / ``run_model_groundwater_contamination_scenario`` ->
 #: ``"plume"``) which take NO bbox param -- their domain is a well / source point,
 #: not a rectangle. The AOI-snap below must NOT inject a bbox into those (it would
 #: be a spurious, ignored key today and latent wrong-extent debt tomorrow), so the
@@ -9475,79 +9531,6 @@ async def _gate_on_solver_confirm(
                 kwargs["porosity"] = float(params["porosity"])
             envelope = _build_confirmation_envelope(
                 derived, MODFLOWRunArgs(**kwargs)
-            )
-        elif tool_name == "run_model_contamination_affected_fields":
-            # ftw-affected-fields demo: build the MODFLOW confirm card from the
-            # composer's explicit call args (AOI + contaminant + release). The
-            # spill point is placed up-gradient (west) of the AOI centroid by the
-            # same helper the composer uses, so the card shows the real point the
-            # solver will run. AOI resolution (geocode) is off the loop (the
-            # WS-heartbeat lives) via to_thread.
-            from .workflows.modflow.model_contamination_affected_fields.model_contamination_affected_fields import (
-                _build_confirmation_envelope as _build_aff_envelope,
-                place_spill_up_gradient,
-                resolve_aoi_bbox,
-                DEFAULT_UPGRADIENT_OFFSET_KM,
-            )
-            from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
-
-            location_query = params.get("location_query")
-            aoi_bbox = params.get("bbox")
-            article_text = params.get("article_text")
-            contaminant = params.get("contaminant") or "trichloroethylene"
-            release_rate_kg_s = params.get("release_rate_kg_s")
-            duration_days = params.get("duration_days")
-
-            # Article-driven runs extract the forcing in the composer; the live
-            # demo path supplies explicit params, so fall through (the composer
-            # surfaces its own typed error) when neither path is parameterized.
-            if article_text and str(article_text).strip():
-                from .workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
-                    extract_spill_parameters,
-                )
-
-                derived_aff = await asyncio.to_thread(
-                    extract_spill_parameters, str(article_text), False
-                )
-                contaminant = derived_aff["contaminant"]
-                release_rate_kg_s = derived_aff["release_rate_kg_s"]
-                duration_days = derived_aff["duration_days"]
-                if not location_query and derived_aff.get("location_name"):
-                    location_query = derived_aff["location_name"]
-            if release_rate_kg_s is None:
-                release_rate_kg_s = 0.05
-            if duration_days is None:
-                duration_days = 1.0
-
-            resolved_bbox, centroid = await asyncio.to_thread(
-                resolve_aoi_bbox, aoi_bbox, location_query
-            )
-            explicit_spill = params.get("spill_location_latlon")
-            if explicit_spill is not None:
-                spill_pt = (
-                    float(explicit_spill[0]),
-                    float(explicit_spill[1]),
-                )
-            else:
-                offset = params.get("upgradient_offset_km")
-                spill_pt = place_spill_up_gradient(
-                    centroid,
-                    float(offset) if offset is not None
-                    else DEFAULT_UPGRADIENT_OFFSET_KM,
-                )
-            aff_kwargs: dict[str, Any] = dict(
-                spill_location_latlon=spill_pt,
-                contaminant=contaminant,
-                release_rate_kg_s=float(release_rate_kg_s),
-                duration_days=float(duration_days),
-            )
-            if params.get("aquifer_k_ms") is not None:
-                aff_kwargs["aquifer_k_ms"] = float(params["aquifer_k_ms"])
-            if params.get("porosity") is not None:
-                aff_kwargs["porosity"] = float(params["porosity"])
-            envelope = _build_aff_envelope(
-                MODFLOWRunArgs(**aff_kwargs),
-                location_query or "the farmland AOI",
             )
         elif tool_name in ("run_model_flood_scenario",
                            "run_model_flood_habitat_scenario"):

@@ -274,7 +274,7 @@ def test_read_side_location_boilerplate_does_not_qualify(lessons_env):
             ("run_sfincs", "coastal flood surge depth"),
             ("compute_slope", "terrain slope steepness"),
             ("fetch_nexrad", "radar reflectivity mosaic"),
-            ("run_modflow_job", "groundwater drawdown pumping"),
+            ("modflow_contaminant_plume", "groundwater drawdown pumping"),
         ]
     ):
         register_lesson(

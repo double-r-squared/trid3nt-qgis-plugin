@@ -54,7 +54,9 @@ from __future__ import annotations
 from .sfincs.model_flood_habitat_scenario import model_flood_habitat_scenario as _model_flood_habitat_scenario  # noqa: F401
 from .sfincs.model_flood_scenario import model_flood_scenario as _model_flood_scenario  # noqa: F401
 from .modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as _model_groundwater_contamination_scenario  # noqa: F401  — job-0228 Case 2 composer (news → MODFLOW → plume)
-from .modflow.model_contamination_affected_fields import model_contamination_affected_fields as _model_contamination_affected_fields  # noqa: F401  -- ftw-affected-fields demo: MODFLOW plume -> FTW field boundaries -> analyze_affected_fields (which farm fields the plume reaches); registers run_model_contamination_affected_fields
+# engine-door refactor: run_model_contamination_affected_fields is CUT (composer
+# removed). Its plume half IS modflow_contaminant_plume; the zonal field-scoring
+# half re-homes to a playground recipe (docs/playbooks/modflow-affected-fields-recipe.md).
 from .shared.model_news_event_ingest import model_news_event_ingest as _model_news_event_ingest  # noqa: F401  — job-0119 Case 2 composer
 from .sfincs.model_nws_flood_event_scenario import model_nws_flood_event_scenario as _model_nws_flood_event_scenario  # noqa: F401  — job-0229 Case 3 composer
 from .pelicun.pelicun_damage_with_buildings import pelicun_damage_with_buildings as _pelicun_damage_with_buildings  # noqa: F401  — job-0147 buildings→Pelicun composer

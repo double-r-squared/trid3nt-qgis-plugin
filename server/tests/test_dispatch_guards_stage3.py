@@ -289,8 +289,8 @@ _SIM_LAUNCHES: list[dict] = []
 
 @pytest.fixture()
 def _stub_expensive_tool():
-    """Shadow run_modflow_job with a launch-counting stub (job-0326 pattern)."""
-    name = "run_modflow_job"
+    """Shadow modflow_contaminant_plume with a launch-counting stub (job-0326 pattern)."""
+    name = "modflow_contaminant_plume"
     original = agent_tools.TOOL_REGISTRY.get(name)
     _SIM_LAUNCHES.clear()
     reset_scenario_indexes_for_tests()
@@ -337,10 +337,10 @@ async def test_scenario_reuse_kill_switch_disables_short_circuit(
     ws = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_SIM_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
     )
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_SIM_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
     )
     assert len(_SIM_LAUNCHES) == 2, (
         "TRID3NT_SCENARIO_REUSE=0 must disable the reuse short-circuit"
@@ -356,10 +356,10 @@ async def test_scenario_reuse_default_still_fires(
     ws = _FakeSocket()
     state = agent_server.SessionState(session_id=new_ulid())
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_SIM_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
     )
     await agent_server._invoke_tool_via_emitter(
-        ws, state, "run_modflow_job", dict(_SIM_PARAMS)
+        ws, state, "modflow_contaminant_plume", dict(_SIM_PARAMS)
     )
     assert len(_SIM_LAUNCHES) == 1
 

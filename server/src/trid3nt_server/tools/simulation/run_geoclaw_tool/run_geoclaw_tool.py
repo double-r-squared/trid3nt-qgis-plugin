@@ -10,7 +10,7 @@ fields, runs the deterministic fetch -> stage -> Batch-solve -> postprocess chai
 ``LayerURI`` so the ``emit_tool_call`` ``add_loaded_layer`` gate fires).
 
 This is the GeoClaw analogue of ``run_swmm_urban_flood`` (SWMM) /
-``run_modflow_job`` (MODFLOW) / ``run_model_flood_scenario`` (SFINCS). Like those
+``modflow_contaminant_plume`` (MODFLOW) / ``run_model_flood_scenario`` (SFINCS). Like those
 wrappers it declares ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"`` (FR-DC-6 - workflow exposure surface; never
 touches the cache shim). Confirmation before consequence (Invariant 9 - a solver
@@ -110,7 +110,7 @@ async def run_geoclaw_inundation(
     refinement. Do NOT use for: rain-driven riverine/coastal compound
     flooding (``run_model_flood_scenario`` -- SFINCS); urban/pluvial
     flooding (``run_swmm_urban_flood`` -- SWMM); groundwater plumes
-    (``run_modflow_job``).
+    (``modflow_contaminant_plume``).
 
     Params:
         bbox: computational-domain AOI, EPSG:4326.

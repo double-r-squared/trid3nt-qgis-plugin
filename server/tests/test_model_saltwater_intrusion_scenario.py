@@ -15,7 +15,7 @@ Four layers, mirroring ``test_model_capture_zone_scenario.py``:
     runtime attribute; the test verifies ``emit_chart_payloads`` is awaited
     with it (the chart path, no second UCN read).
 
-  * The LLM-facing wrapper ``run_model_saltwater_intrusion_scenario`` maps a
+  * The LLM-facing wrapper ``modflow_saltwater_intrusion`` maps a
     missing transect to ``USER_INPUT_REQUIRED`` (Invariant 9 surfaced as a
     narrated error).
 
@@ -36,8 +36,8 @@ import pytest
 from trid3nt_contracts.modflow_contracts import SaltwaterWedgeLayerURI
 
 from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.modflow.model_saltwater_intrusion_scenario import model_saltwater_intrusion_scenario as si_mod
-from trid3nt_server.workflows.modflow.model_saltwater_intrusion_scenario.model_saltwater_intrusion_scenario import (
+from trid3nt_server.workflows.modflow.saltwater_intrusion import saltwater_intrusion as si_mod
+from trid3nt_server.workflows.modflow.saltwater_intrusion.saltwater_intrusion import (
     SaltwaterIntrusionInputError,
     SaltwaterIntrusionResult,
     SaltwaterIntrusionScenarioError,
@@ -297,7 +297,7 @@ async def test_composer_surfaces_run_error_dict(
 async def test_wrapper_missing_transect_returns_user_input_required() -> None:
     """The LLM-facing wrapper maps a missing transect to USER_INPUT_REQUIRED
     (Invariant 9: the tool never fabricates a coastal transect)."""
-    out = await si_mod.run_model_saltwater_intrusion_scenario(
+    out = await si_mod.modflow_saltwater_intrusion(
         aoi_latlon=[25.78, -80.19],
         coastal_transect_latlon=None,
     )
@@ -311,7 +311,7 @@ async def test_wrapper_missing_transect_returns_user_input_required() -> None:
 async def test_wrapper_invalid_transect_shape_returns_user_input_required() -> None:
     """A malformed transect (wrong shape) returns USER_INPUT_REQUIRED, not a
     crash (the wrapper coerces + validates before calling the composer)."""
-    out = await si_mod.run_model_saltwater_intrusion_scenario(
+    out = await si_mod.modflow_saltwater_intrusion(
         aoi_latlon=[25.78, -80.19],
         coastal_transect_latlon=[[25.78]],  # too few coordinates
     )
@@ -327,9 +327,9 @@ async def test_wrapper_invalid_transect_shape_returns_user_input_required() -> N
 def test_saltwater_intrusion_registered_uncacheable() -> None:
     import trid3nt_server.tools  # noqa: F401 - fires registration side-effects
 
-    entry = TOOL_REGISTRY.get("run_model_saltwater_intrusion_scenario")
+    entry = TOOL_REGISTRY.get("modflow_saltwater_intrusion")
     assert entry is not None, (
-        "run_model_saltwater_intrusion_scenario not in TOOL_REGISTRY"
+        "modflow_saltwater_intrusion not in TOOL_REGISTRY"
     )
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"

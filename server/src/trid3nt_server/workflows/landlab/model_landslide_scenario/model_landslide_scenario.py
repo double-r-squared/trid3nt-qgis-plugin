@@ -15,7 +15,7 @@ Landlab surface-process engine end-to-end:
 
 Returns the primary ``LandlabSusceptibilityLayerURI`` directly (a ``LayerURI``
 subtype) so the ``emit_tool_call`` ``add_loaded_layer`` gate fires on it —
-exactly like ``run_modflow_job`` returns a ``PlumeLayerURI`` and
+exactly like ``modflow_contaminant_plume`` returns a ``PlumeLayerURI`` and
 ``run_swmm_urban_flood`` returns a ``SWMMDepthLayerURI``.
 
 Determinism boundary (Invariant 1): every number the agent narrates comes from

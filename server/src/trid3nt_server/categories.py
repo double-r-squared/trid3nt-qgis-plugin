@@ -260,17 +260,22 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # NO news step). Cross-listed to weather_atmosphere below.
     "run_model_glm_lightning_animation": "hazard_modeling",
     "run_model_groundwater_contamination_scenario": "hazard_modeling",
-    # ftw-affected-fields demo: the which-farm-fields-does-the-plume-reach
-    # composer (MODFLOW plume -> FTW field boundaries -> analyze_affected_fields).
-    "run_model_contamination_affected_fields": "hazard_modeling",
-    "run_modflow_job": "hazard_modeling",
+    # engine-door refactor: run_model_contamination_affected_fields is CUT;
+    # run_modflow_job folded into the modflow_contaminant_plume template. The 11
+    # MODFLOW templates are tier=template -> NOT categorized (categorizing one
+    # would re-leak it into the retrieval pool). Only the door is categorized.
+    # engine-door refactor: the read-only MODFLOW concierge door. Categorized
+    # (every registered tool needs a primary) but its tier=template members are
+    # NOT categorized - they are excluded from the pool and surfaced only by the
+    # door's gate expansion (adding a template to a category would re-leak it).
+    "run_modflow": "hazard_modeling",
     "run_swmm_urban_flood": "hazard_modeling",
     "run_pelicun_damage_assessment": "hazard_modeling",
     "run_pelicun_with_buildings": "hazard_modeling",
     # sprint-17 NEW engines (parallel lanes) - all are run_* hazard solvers /
     # composers, filed alongside the other engines above.
-    "run_river_seepage_job": "hazard_modeling",
-    "run_model_river_seepage_scenario": "hazard_modeling",
+    # engine-door refactor: run_river_seepage_job + run_model_river_seepage_scenario
+    # folded into the modflow_river_seepage template (tier=template, not categorized).
     "run_geoclaw_inundation": "hazard_modeling",
     "run_seismic_hazard_psha": "hazard_modeling",
     # real-fault seismic-source fetcher: the OpenQuake PSHA input data fetcher
@@ -306,23 +311,12 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "query_point_hazard": "geographic_primitives",
     "extract_timeseries_at_point": "geographic_primitives",
     "compose_case_report": "geographic_primitives",
-    # sprint-18 MODFLOW GWF-only archetype composers (Wave-1 + Wave-2): each is a
-    # run_model_* groundwater-flow composer that dispatches the shared MODFLOW
-    # solver via run_modflow_archetype_job. Filed alongside the other MODFLOW
-    # engines above (run_modflow_job / run_river_seepage_job).
-    "run_model_sustainable_yield_scenario": "hazard_modeling",
-    "run_model_mine_dewatering_scenario": "hazard_modeling",
-    "run_model_regional_water_budget_scenario": "hazard_modeling",
-    "run_model_mar_scenario": "hazard_modeling",
-    "run_model_asr_scenario": "hazard_modeling",
-    "run_model_wetland_hydroperiod_scenario": "hazard_modeling",
-    "run_model_multi_species_scenario": "hazard_modeling",
-    # MODFLOW Waves 4-5: PRT capture-zone / wellhead-protection + BUY saltwater
-    # intrusion. Registered composers that were missing a PRIMARY_CATEGORY (fell
-    # into the catch-all); filed with the other MODFLOW engines.
-    "run_model_capture_zone_scenario": "hazard_modeling",
-    "run_model_wellhead_protection_scenario": "hazard_modeling",
-    "run_model_saltwater_intrusion_scenario": "hazard_modeling",
+    # engine-door refactor: the sprint-18 MODFLOW GWF-only archetype composers +
+    # Waves 4-5 (PRT capture-zone / WHPA + BUY saltwater) are now engine TEMPLATES
+    # (tier=template, engine=modflow) under workflows/modflow/<template>/. They are
+    # deliberately NOT categorized: templates are excluded from the retrieval pool
+    # and surfaced only by the run_modflow door's gate expansion; adding one to a
+    # category (or opened-category widening) would re-leak it into the pool.
     # SWAN Phase 1: standalone spectral nearshore wave-field engine (the additive
     # comparison engine vs SFINCS+SnapWave). Filed as a hazard engine; also
     # cross-listed under coastal (SECONDARY_CATEGORIES) since it is a coastal/wave
@@ -353,6 +347,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "set_sfincs_parameters": "hazard_modeling",
     "set_swmm_parameters": "hazard_modeling",
     "set_modflow_parameters": "hazard_modeling",
+    # set_telemac_parameters was registered (malpasset arc) but never added to
+    # PRIMARY_CATEGORY - a pre-existing gap surfaced by test_every_registered_
+    # tool_has_a_primary_category; filed beside its sibling setters (tier=general,
+    # NOT a template).
+    "set_telemac_parameters": "hazard_modeling",
     # ---- 2. weather_atmosphere --------------------------------------------
     "fetch_nws_alerts_conus": "weather_atmosphere",
     "fetch_nws_event": "weather_atmosphere",
@@ -664,13 +663,9 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # hazard_modeling (it scores a hazard/flood/plume footprint) AND
     # damage_assessment (it IS an impact/exposure assessment, the ecology analogue
     # of compute_impact_envelope / analyze_affected_fields).
-    # The which-fields composer is PRIMARY hazard_modeling (it runs MODFLOW) and
-    # cross-lists to damage_assessment (it produces the affected-field readout)
-    # AND land_cover_development (it is reached from the farm-fields lane).
-    "run_model_contamination_affected_fields": (
-        "damage_assessment",
-        "land_cover_development",
-    ),
+    # engine-door refactor: run_model_contamination_affected_fields is CUT (the
+    # zonal field-analysis half re-homed to a playground recipe); its secondary
+    # cross-listing is removed with it.
     # NWS event ingest spans hazard_modeling (it's the news-event composer)
     # AND news_events (it's the canonical entry point to that category).
     "run_model_news_event_ingest": ("news_events",),

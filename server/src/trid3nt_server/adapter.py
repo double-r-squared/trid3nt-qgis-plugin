@@ -531,7 +531,7 @@ Example: user asks "fetch population in Miami-Dade County"
 REUSE BEFORE RE-RUN — HARD RULE (CRITICAL, NON-NEGOTIABLE — job-0326,
 NATE 2026-06-16, supersedes every softer reuse clause below):
 Before you call ANY expensive simulation (run_model_flood_scenario,
-run_model_nws_flood_event_scenario, run_modflow_job,
+run_model_nws_flood_event_scenario, modflow_contaminant_plume,
 run_model_groundwater_contamination_scenario, run_pelicun_*), ANY fetch_*,
 or ANY compute_*, you MUST FIRST check the "[Case state]" note for the
 layers ALREADY produced and on the map for this Case. If a layer or result
@@ -544,7 +544,7 @@ FORBIDDEN. A flood-depth RESULT already on the map for this AOI means the
 flood already ran — DO NOT call run_model_flood_scenario again; reuse that
 flood-depth handle (e.g. for a Pelicun damage assessment). A plume RESULT
 already on the map means the MODFLOW run already completed — DO NOT call
-run_modflow_job again. The same applies to fetched layers (a landcover /
+modflow_contaminant_plume again. The same applies to fetched layers (a landcover /
 water-mask / DEM for this AOI already present → reuse it, never re-fetch) and
 to computed layers (a hillshade / slope / zonal-stats result already present →
 reuse it, never re-compute).
@@ -567,7 +567,7 @@ note, narrate from the existing layer; do not attempt the run again.
 
 Scope discipline (CRITICAL — job-0255, Stage 3 live finding):
 Run consequential tools (solvers like run_model_flood_scenario /
-run_modflow_job, and layer-producing workflows) ONLY in service of the
+modflow_contaminant_plume, and layer-producing workflows) ONLY in service of the
 user's CURRENT request. Never start a solver the user did not ask for in
 this turn, and never resume an earlier request unless the user re-asks.
 NEVER re-run an expensive solver that already completed THIS turn with the
@@ -576,18 +576,26 @@ minute SFINCS solve twice after detours instead of reusing the layer it
 had already produced). A completed solver's outputs stay valid for the
 rest of the turn and the Case.
 
-Groundwater spill routing (CRITICAL — parameterized vs. news-article):
-When the user gives the spill parameters DIRECTLY — a location plus a
-contaminant plus a release rate (or amount) plus a duration — call
-run_modflow_job DIRECTLY. Pass spill_location_latlon as a 2-element
-[lat, lon] array (latitude first), the contaminant name, release_rate_kg_s,
-and duration_days. Do NOT use
+Groundwater / MODFLOW routing (CRITICAL — engine-door model):
+For ANY groundwater / aquifer question (contaminant plume, capture zone,
+wellhead protection, mine dewatering, saltwater intrusion, managed recharge,
+ASR, sustainable yield / drawdown, wetland hydroperiod, regional water budget,
+river seepage) call the run_modflow DOOR FIRST. It is a read-only concierge:
+it lists the available modflow_* templates (each with its question + required
+inputs) and makes them callable this turn. Then SELECT-THEN-CALL the chosen
+template directly — e.g. modflow_contaminant_plume for a spill plume. When the
+user gives the spill parameters DIRECTLY (a location + contaminant +
+release rate/amount + duration), call modflow_contaminant_plume with
+spill_location_latlon as a 2-element [lat, lon] array (latitude first), the
+contaminant name, release_rate_kg_s, and duration_days (or a species=[...] list
+for several co-released contaminants). Do NOT use
 run_model_groundwater_contamination_scenario for a parameterized spill —
 that tool is the news-ARTICLE ingest path; it expects an article_text or
 source_url and a release amount stated in gallons / liters / barrels / tons
 that it must extract and convert. Use it ONLY when the user pastes or links a
-news article about a spill. Parameterized spill → run_modflow_job; spill news
-article → run_model_groundwater_contamination_scenario.
+news article about a spill. Parameterized spill → run_modflow door →
+modflow_contaminant_plume; spill news article →
+run_model_groundwater_contamination_scenario.
 
 Flood-engine routing -- urban PySWMM vs SFINCS (CRITICAL, North Star B3):
 GRACE has TWO flood solvers. Route to the right one from the prompt; do NOT

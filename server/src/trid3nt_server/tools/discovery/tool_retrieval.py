@@ -239,7 +239,17 @@ def _full_registry_floor(floor: set[str]) -> set[str]:
         logger.warning(
             "tool_retrieval: full-registry import failed on fail-open", exc_info=True
         )
-    return set(TOOL_REGISTRY) | floor
+    # Engine-door refactor: even on the FAIL-OPEN dump, keep tier=template out
+    # of the visible set so a cold/faulted index does not re-leak every engine
+    # template into the pool. Templates reach the turn ONLY via their door's
+    # gate expansion; any that were already surfaced live in ``floor`` (the
+    # Case's accrued allowed set) and are preserved by the union below.
+    non_template = {
+        name
+        for name, entry in TOOL_REGISTRY.items()
+        if getattr(entry.metadata, "tier", "general") != "template"
+    }
+    return non_template | floor
 
 
 def retrieve_visible_tools(

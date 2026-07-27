@@ -194,7 +194,7 @@ async def test_composer_assembles_args_and_threads_result(monkeypatch) -> None:
     """``model_river_seepage_scenario`` geocodes -> fetches river -> calls the
     river-seepage tool with the assembled args, and threads the typed seepage
     result into the RiverSeepageResult — every tool mocked (no run_solver)."""
-    from trid3nt_server.workflows.modflow.model_river_seepage_scenario import model_river_seepage_scenario as mod
+    from trid3nt_server.workflows.modflow.river_seepage import river_seepage as mod
     from trid3nt_contracts.execution import LayerURI
 
     calls: dict[str, Any] = {}
@@ -233,9 +233,12 @@ async def test_composer_assembles_args_and_threads_result(monkeypatch) -> None:
     fake_registry = {
         "geocode_location": type("E", (), {"fn": staticmethod(_fake_geocode)}),
         "fetch_river_geometry": type("E", (), {"fn": staticmethod(_fake_fetch_river)}),
-        "run_river_seepage_job": type("E", (), {"fn": staticmethod(_fake_run)}),
     }
     monkeypatch.setattr(mod, "TOOL_REGISTRY", fake_registry)
+    # engine-door refactor: the composer imports the UNREGISTERED run_river_seepage_job
+    # engine surface directly, so patch it at its module (not via the registry).
+    import trid3nt_server.tools.simulation.run_river_seepage_tool.run_river_seepage_tool as _rs
+    monkeypatch.setattr(_rs, "run_river_seepage_job", _fake_run)
 
     result = await mod.model_river_seepage_scenario(
         location="Fort Myers, FL",
@@ -272,7 +275,7 @@ async def test_composer_assembles_args_and_threads_result(monkeypatch) -> None:
 async def test_composer_errors_when_no_river_found(monkeypatch) -> None:
     """A fetch_river_geometry result without a URI -> a typed scenario error
     (no silent fall-through to a riverless run)."""
-    from trid3nt_server.workflows.modflow.model_river_seepage_scenario import model_river_seepage_scenario as mod
+    from trid3nt_server.workflows.modflow.river_seepage import river_seepage as mod
 
     def _fake_geocode(location):
         return {"latitude": 26.64, "longitude": -81.87}
@@ -292,7 +295,7 @@ async def test_composer_errors_when_no_river_found(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_composer_requires_exactly_one_location_form() -> None:
-    from trid3nt_server.workflows.modflow.model_river_seepage_scenario import model_river_seepage_scenario as mod
+    from trid3nt_server.workflows.modflow.river_seepage import river_seepage as mod
 
     with pytest.raises(mod.RiverSeepageScenarioInputError):
         await mod.model_river_seepage_scenario()  # neither
