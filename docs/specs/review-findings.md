@@ -17,3 +17,10 @@ Accumulating during NATE's review; fixed as ONE identity-gated batch on his go.
    7 suspects were already-gutted untracked pycache shells (removed). Registry
    202 byte-identical (1 legit module-path change), suite exact 10-baseline,
    canary green.
+
+2. (2026-07-28, self-found) REMAINING HYGIENE DEBT, deferred honestly by the
+   mop-up: (a) 166 comment-line marker hits across 69 server/tests files
+   (needs per-line judgment, separate pass); (b) ~45 in-code STRING literals
+   (log/error messages) citing job-/OQ-/Wave- markers - these surface in
+   envelopes/logs, worth a judgment pass; (c) test FILE NAMES carrying job
+   numbers (test_case_binding_job0268.py etc.) - rename candidates.
