@@ -1,9 +1,0 @@
-merge_features:
-- dissolve these adjacent polygons into one shape
-- merge the selected parcels into a single AOI
-- combine these touching field boundaries into one field
-- fuse the fragmented flood-zone polygons together
-- union these features into one combined geometry
-- merge these line segments into one multi-part feature
-- collapse all the features in this layer into a single dissolved polygon
-- combine these into one and keep the first feature's attributes

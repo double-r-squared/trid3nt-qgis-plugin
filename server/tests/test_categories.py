@@ -242,7 +242,7 @@ def test_list_tools_in_category_is_registered() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_hot_set_has_seventeen_tools() -> None:
+def test_hot_set_has_sixteen_tools() -> None:
     """Hot set: the original 8 (Wave 4.10 kickoff) + code_exec_request
     (job-0247 — cross-cutting capability, see OQ-0247-CODE-EXEC-NOT-IN-HOT-SET)
     + fetch_nws_event (job-0261 — validator rejected Gemini's correct
@@ -259,8 +259,12 @@ def test_hot_set_has_seventeen_tools() -> None:
     catalog is trimmed) + the core analysis surface compute_zonal_statistics /
     generate_histogram / generate_time_series / spatial_query (the DuckDB
     spatial-query fold's SQL surface, holding the floor slot the folded
-    summarize_layer_statistics held)."""
-    assert len(HOT_SET_TOOLS) == 17
+    summarize_layer_statistics held).
+
+    cull pass 2 (2026-07-27): run_model_flood_habitat_scenario was CUT (its
+    flood+habitat recipe re-homes to sfincs_flood + spatial tools), dropping
+    the hot set from 17 to 16."""
+    assert len(HOT_SET_TOOLS) == 16
 
 
 def test_hot_set_contains_required_anchors() -> None:
@@ -286,7 +290,6 @@ def test_hot_set_contains_required_anchors() -> None:
         "fetch_nws_alerts_conus",
         "fetch_nws_event",
         "run_sfincs",
-        "run_model_flood_habitat_scenario",
         "code_exec_request",
         "compute_layer_bounds",
         "request_spatial_input",

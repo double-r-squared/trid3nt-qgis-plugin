@@ -29,10 +29,10 @@ import numpy as np
 import pytest
 
 from trid3nt_server.tools.processing.charts_common import ChartToolError, _MAX_ROWS, build_chart_payload, is_chart_emission_result
-from trid3nt_server.tools.processing.generate_choropleth_legend.generate_choropleth_legend import generate_choropleth_legend
-from trid3nt_server.tools.processing.generate_damage_distribution.generate_damage_distribution import generate_damage_distribution
-from trid3nt_server.tools.processing.generate_histogram.generate_histogram import generate_histogram
-from trid3nt_server.tools.processing.generate_time_series.generate_time_series import generate_time_series
+from trid3nt_server.tools.processing.charts.generate_choropleth_legend.generate_choropleth_legend import generate_choropleth_legend
+from trid3nt_server.tools.processing.charts.generate_damage_distribution.generate_damage_distribution import generate_damage_distribution
+from trid3nt_server.tools.processing.charts.generate_histogram.generate_histogram import generate_histogram
+from trid3nt_server.tools.processing.charts.generate_time_series.generate_time_series import generate_time_series
 from trid3nt_contracts.chart_contracts import (
     ChartEmissionPayload,
     is_structurally_valid_vega_lite_spec,

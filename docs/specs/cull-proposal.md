@@ -264,3 +264,20 @@ only after the replication proof AND NATE's per-tool sign-off.
 - run_model_flood_habitat_scenario: REPLACE candidate #1 - recipe = flood
   result + intersect habitat polygons with existing spatial tools.
 - geoclaw_inundation: gets the solver confirm gate.
+
+## NATE pass-2 picks (2026-07-27)
+
+- CUT on live replication proof: clip_vector_to_polygon, merge_features,
+  compute_terrain_profile (-> compute_cross_section survives as the generic),
+  cut_features_with_polygon, fill_gaps, run_model_flood_habitat_scenario,
+  analyze_affected_fields, compute_wave_nomograph, compute_overtopping.
+- KEEP calibration lane UNTOUCHED (compute_skill_metrics,
+  compute_flood_extent_skill): scoped structure beats reproducibility -
+  "we cut the effort to reproduce and make it easier for the LLM to drive
+  by adding structure."
+- KEEP charts (generate_histogram/time_series/damage_distribution/
+  choropleth_legend): interactivity is the product (Vega-Lite, own wiring);
+  reorganize into tools/processing/charts/ subfolder.
+- Internal-consumer rule: candidates imported by workflows get UNREGISTERED
+  from the LLM catalog but stay importable; only consumer-free modules delete.
+- After the cull: push refactor/engine-doors to the remote for NATE review.

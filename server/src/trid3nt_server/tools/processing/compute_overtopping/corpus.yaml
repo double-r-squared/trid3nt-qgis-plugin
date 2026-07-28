@@ -1,9 +1,0 @@
-compute_overtopping:
-- how much water overtops this seawall given the wave height and crest freeboard?
-- compute the EurOtop mean wave overtopping discharge over the levee
-- what is the overtopping rate for a 2 m wave on a 1:2 dike slope with 3 m freeboard?
-- is the crest of this revetment high enough to limit overtopping?
-- estimate overtopping discharge in litres per second per metre for this coastal structure
-- take the SWAN wave height and period and compute overtopping over the breakwater
-- wave overtopping rate for a rock-armoured sloped seawall with this crest level
-- how much overtopping for these waves over a dike with roughness reduction

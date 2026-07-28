@@ -137,7 +137,6 @@ def test_build_tool_declarations_drops_storage_client_for_zonal_statistics() -> 
         "extract_landcover_class",
         "clip_raster_to_bbox",
         "clip_raster_to_polygon",
-        "clip_vector_to_polygon",
     ]
     for tname in sensitive:
         if tname not in by_name:

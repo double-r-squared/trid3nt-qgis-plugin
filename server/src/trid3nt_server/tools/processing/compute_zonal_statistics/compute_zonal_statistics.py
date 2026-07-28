@@ -18,11 +18,28 @@ Non-zero pixels are "in zone". When ``zone_threshold`` is provided, pixels where
 
 **Vector zone path:**
 
-Each polygon feature is one zone. The tool rasterizes each feature using
-``rasterio.features.rasterize`` onto a grid matching the value raster, then
-computes per-polygon stats. A whole-area aggregate (union of all zones) is also
-computed. Zone IDs default to the feature's ``id`` property if present, else the
-sequential feature index.
+Each polygon feature is one zone. Zones are read via ``geopandas`` and, when
+the zone vector's CRS differs from the value raster's CRS, REPROJECTED onto
+the value raster's CRS (``GeoDataFrame.to_crs``) before rasterizing — this
+is the standard, cheap fix for the case where e.g. EPSG:4326 polygons (WDPA
+protected areas, admin boundaries) are used to zone a UTM/projected raster.
+Reprojection is recorded in the result envelope as
+``zones_reprojected: "<src_crs> -> <dst_crs>"`` (``None`` if not needed). If
+either CRS is missing/invalid so reprojection cannot be attempted at all,
+``CRSMismatchError`` (``error_code="CRS_MISMATCH"``) is raised naming both
+CRSes rather than silently burning zones in the wrong place (which used to
+produce all-null aggregates with 0 zones matched — see ``CRSMismatchError``
+docstring). Each feature is then rasterized with
+``rasterio.features.rasterize`` onto a grid matching the value raster, and
+per-polygon stats are computed. A whole-area aggregate (union of all zones)
+is also computed. Zone IDs default to the feature's ``id`` property if
+present, else the sequential feature index.
+
+The raster-zone path (zone = another raster, non-zero/threshold mask) has
+always reprojected the zone raster onto the value raster's grid+CRS via
+``rasterio.warp.reproject`` when they differ, so it was not affected by this
+defect; it now also records ``zones_reprojected`` when the mismatch was
+CRS-driven.
 
 **No rasterstats dependency:**
 
@@ -41,6 +58,10 @@ the orchestrator wants cleaner code — see Open Questions in report).
   ``source_class="zonal_statistics"``.
 - **Claims carry provenance (Invariant 7): preserves.** Result dict carries
   ``value_raster``, ``zone_input``, ``computed_at`` ISO timestamp.
+- **Honesty floor (adversarial-panel finding): preserves.** A CRS mismatch
+  between the zone input and the value raster either resolves via
+  reprojection or raises a typed ``CRSMismatchError`` — it never silently
+  returns all-null aggregates.
 """
 
 from __future__ import annotations
@@ -48,6 +69,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -66,6 +88,7 @@ from trid3nt_server.tools.cache import CACHE_BUCKET, read_through
 __all__ = [
     "compute_zonal_statistics",
     "ZonalStatisticsError",
+    "CRSMismatchError",
 ]
 
 logger = logging.getLogger("trid3nt_server.tools.processing.compute_zonal_statistics.compute_zonal_statistics")
@@ -84,8 +107,12 @@ class ZonalStatisticsError(RuntimeError):
     Codes:
     - ``RASTER_OPEN_FAILED`` — value or zone raster could not be opened.
     - ``VECTOR_OPEN_FAILED`` — zone vector file could not be opened.
-    - ``ZONE_RASTER_CRS_MISMATCH`` — raster CRS mismatch requiring reprojection
-      (not supported in this version; caller must reproject before calling).
+    - ``CRS_MISMATCH`` — zone CRS differs from the value raster's CRS and
+      reprojection could not be performed (see ``CRSMismatchError``). Raster
+      zones are auto-reprojected onto the value raster's grid+CRS
+      (``rasterio.warp.reproject``); vector zones are auto-reprojected via
+      ``geopandas.GeoDataFrame.to_crs``. This code is only raised when
+      reprojection is impossible (missing/invalid CRS on either side).
     - ``DOWNLOAD_FAILED`` — GCS download for a URI failed.
     - ``NO_VALID_PIXELS`` — the masked zone contains no valid pixels to aggregate.
     """
@@ -93,6 +120,25 @@ class ZonalStatisticsError(RuntimeError):
     def __init__(self, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code
+
+
+class CRSMismatchError(ZonalStatisticsError):
+    """Raised when the zone input's CRS cannot be reconciled with the value
+    raster's CRS (job-adversarial-panel: honesty-floor fix).
+
+    Prior behavior silently burned vector zones onto the value raster's pixel
+    grid using the zones' RAW (un-reprojected) coordinates whenever the
+    zones' CRS differed from the raster's CRS (e.g. EPSG:4326 WDPA polygons
+    over a UTM flood-depth COG) — this produced all-null aggregates (0 zones
+    matched) instead of either working or failing honestly. The fix
+    reprojects zones to the value raster's CRS by default (cheap for
+    vectors); this error is raised ONLY when reprojection cannot be
+    attempted at all because a CRS is missing or invalid on one/both sides.
+    Always constructed with ``error_code="CRS_MISMATCH"``.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__("CRS_MISMATCH", message)
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +332,7 @@ def _zonal_stats_raster_zone(
         and zone_transform == val_transform
         and zone_crs == val_crs
     )
+    zones_reprojected: str | None = None
     if not grids_match:
         logger.info(
             "compute_zonal_statistics: zone raster grid differs from value raster "
@@ -315,6 +362,8 @@ def _zonal_stats_raster_zone(
                 "RASTER_OPEN_FAILED",
                 f"Could not reproject zone raster to value raster grid: {exc}",
             ) from exc
+        if zone_crs is not None and val_crs is not None and zone_crs != val_crs:
+            zones_reprojected = f"{zone_crs} -> {val_crs}"
     else:
         zone_data = zone_raw
 
@@ -327,7 +376,6 @@ def _zonal_stats_raster_zone(
     # Mask out nodata in the value raster.
     if val_nodata is not None:
         # Handle NaN nodata (common for float rasters).
-        import math
         if isinstance(val_nodata, float) and math.isnan(val_nodata):
             valid_mask = ~np.isnan(val_data)
         else:
@@ -354,6 +402,7 @@ def _zonal_stats_raster_zone(
         "by_zone": {},
         "aggregate": aggregate,
         "units": val_units,
+        "zones_reprojected": zones_reprojected,
     }
 
 
@@ -384,6 +433,7 @@ def _zonal_stats_vector_zone(
             val_data = val_src.read(1).astype(np.float64)
             val_nodata = nodata_value if nodata_value is not None else val_src.nodata
             val_transform = val_src.transform
+            val_crs = val_src.crs
             val_shape = (val_src.height, val_src.width)
             val_units = (
                 val_src.tags().get("units")
@@ -396,23 +446,17 @@ def _zonal_stats_vector_zone(
         ) from exc
 
     # Nodata mask for value raster: True = valid.
-    import math as _math
-    if val_nodata is not None and not (isinstance(val_nodata, float) and _math.isnan(val_nodata)):
+    if val_nodata is not None and not (isinstance(val_nodata, float) and math.isnan(val_nodata)):
         val_valid = (val_data != val_nodata) & ~np.isnan(val_data)
     else:
         # nodata is NaN or None: just mask NaN pixels.
         val_valid = ~np.isnan(val_data)
 
-    # Read vector features.
-    try:
-        features = _read_vector_features(zone_path)
-    except ZonalStatisticsError:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise ZonalStatisticsError(
-            "VECTOR_OPEN_FAILED",
-            f"Could not open zone vector {zone_path!r}: {exc}",
-        ) from exc
+    # Read vector features, reprojecting them onto the value raster's CRS if
+    # they differ (adversarial-panel finding: burning zones in a mismatched
+    # CRS onto the value grid used to silently produce all-null aggregates
+    # instead of working or failing honestly — see CRSMismatchError).
+    features, zones_reprojected = _read_vector_zones_reprojected(zone_path, val_crs)
 
     by_zone: dict[str, dict[str, float | int | None]] = {}
     all_in_zone_pixels: list[np.ndarray] = []
@@ -463,109 +507,97 @@ def _zonal_stats_vector_zone(
         "by_zone": by_zone,
         "aggregate": aggregate,
         "units": val_units,
+        "zones_reprojected": zones_reprojected,
     }
 
 
-def _read_vector_features(path: str) -> list[tuple[str | int, Any]]:
-    """Read vector features from a local file path.
+def _read_vector_zones_reprojected(
+    zone_path: str,
+    val_crs: Any,
+) -> tuple[list[tuple[str | int, Any]], str | None]:
+    """Read zone vector features via geopandas, reprojected to ``val_crs``.
 
-    Returns a list of ``(zone_id, geometry_dict)`` tuples where
-    ``geometry_dict`` is a GeoJSON-style dict suitable for
-    ``rasterio.features.rasterize``.
+    This is the fix for the silent-null-aggregates defect: zones used to be
+    rasterized using their RAW coordinates regardless of whether the zone
+    vector's CRS matched the value raster's CRS, so e.g. EPSG:4326 WDPA
+    polygons burned onto a UTM flood-depth COG's grid landed nowhere near
+    the actual data and produced all-null aggregates with no error. Standard,
+    cheap fix: reproject the vector zones to the raster's CRS before burning
+    (``geopandas.GeoDataFrame.to_crs``) — consistent with the reprojection
+    pattern already used by ``clip_raster_to_polygon`` and
+    ``compute_flood_depth_damage`` elsewhere in this tool package.
 
-    Supports GeoJSON and FlatGeobuf natively via rasterio's vector reading
-    path; any OGR-readable format works.
+    Returns ``(features, zones_reprojected)`` where ``features`` is a list of
+    ``(zone_id, shapely_geometry)`` tuples already in ``val_crs`` (shapely
+    geometries implement ``__geo_interface__`` so they pass directly to
+    ``rasterio.features.rasterize``), and ``zones_reprojected`` is a
+    ``"<src_crs> -> <dst_crs>"`` note (``None`` if no reprojection was
+    needed, i.e. the zones were already in the value raster's CRS).
 
-    The ``id`` property of each feature is used as the zone ID when available;
-    otherwise the sequential feature index is used.
+    The ``id`` property of each feature is used as the zone ID when present
+    and non-null; otherwise the sequential (0-based) feature index is used —
+    same convention as the prior hand-rolled reader.
+
+    Raises:
+        ZonalStatisticsError: (``VECTOR_OPEN_FAILED``) the zone vector could
+            not be opened, or geopandas is unavailable.
+        CRSMismatchError: (``CRS_MISMATCH``) the zone vector's CRS or the
+            value raster's CRS is missing/invalid, so reprojection cannot be
+            attempted safely; or the reprojection attempt itself failed.
     """
-    # Try reading as a JSON/GeoJSON file first (common for synthetic + test cases).
-    if path.endswith(".geojson") or path.endswith(".json"):
+    try:
+        import geopandas as gpd  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise ZonalStatisticsError(
+            "VECTOR_OPEN_FAILED",
+            f"geopandas is not available to read zone vector {zone_path!r}: {exc}",
+        ) from exc
+
+    try:
+        gdf = gpd.read_file(zone_path)
+    except Exception as exc:  # noqa: BLE001
+        raise ZonalStatisticsError(
+            "VECTOR_OPEN_FAILED",
+            f"Could not open zone vector {zone_path!r}: {exc}",
+        ) from exc
+
+    zone_crs = gdf.crs
+    zones_reprojected: str | None = None
+
+    if val_crs is None or zone_crs is None:
+        val_crs_desc = str(val_crs) if val_crs is not None else "MISSING"
+        zone_crs_desc = str(zone_crs) if zone_crs is not None else "MISSING"
+        raise CRSMismatchError(
+            f"Cannot reproject zone vector {zone_path!r} onto the value "
+            "raster's CRS -- one or both CRSes are missing/undeterminable: "
+            f"value_raster_crs={val_crs_desc}, zone_vector_crs={zone_crs_desc}. "
+            "Both a valid raster CRS and a valid zone vector CRS are "
+            "required to reproject zones onto the value raster's grid."
+        )
+
+    if zone_crs != val_crs:
         try:
-            return _read_geojson_features(path)
+            gdf = gdf.to_crs(val_crs)
         except Exception as exc:  # noqa: BLE001
-            raise ZonalStatisticsError(
-                "VECTOR_OPEN_FAILED",
-                f"Could not parse GeoJSON {path!r}: {exc}",
+            raise CRSMismatchError(
+                f"Could not reproject zone vector {zone_path!r} from "
+                f"{zone_crs} to the value raster's CRS {val_crs}: {exc}"
             ) from exc
+        zones_reprojected = f"{zone_crs} -> {val_crs}"
 
-    # Fall back to rasterio Dataset (supports .fgb, .gpkg, .shp, etc.).
-    return _read_ogr_features(path)
+    features_out: list[tuple[str | int, Any]] = []
+    has_id_col = "id" in gdf.columns
+    for idx, row in gdf.iterrows():
+        zone_id: str | int = idx
+        if has_id_col:
+            raw_id = row["id"]
+            if raw_id is not None and not (
+                isinstance(raw_id, float) and math.isnan(raw_id)
+            ):
+                zone_id = raw_id
+        features_out.append((zone_id, row["geometry"]))
 
-
-def _read_geojson_features(path: str) -> list[tuple[str | int, Any]]:
-    """Read features from a GeoJSON file."""
-    with open(path) as f:
-        fc = json.load(f)
-
-    features_out = []
-    feats = fc.get("features", [fc]) if fc.get("type") == "FeatureCollection" else [fc]
-
-    for idx, feat in enumerate(feats):
-        geom = feat.get("geometry") if feat.get("type") == "Feature" else feat
-        props = feat.get("properties") or {}
-        zone_id = props.get("id", idx)
-        features_out.append((zone_id, geom))
-
-    return features_out
-
-
-def _read_ogr_features(path: str) -> list[tuple[str | int, Any]]:
-    """Read features from an OGR-compatible vector file via rasterio."""
-    # Use rasterio's built-in vector support (GDAL/OGR).
-    import rasterio.features
-
-    try:
-        with rasterio.open(path) as src:
-            # rasterio can open vector files in some configurations; if not,
-            # fall through to the shapefile/gpkg manual path.
-            pass
-    except Exception:  # noqa: BLE001
-        pass
-
-    # Use GDAL via osgeo if available, else raise.
-    try:
-        from osgeo import ogr  # type: ignore[import-not-found]
-        ds = ogr.Open(path)
-        if ds is None:
-            raise ZonalStatisticsError(
-                "VECTOR_OPEN_FAILED",
-                f"GDAL/OGR could not open {path!r}",
-            )
-        layer = ds.GetLayer(0)
-        features_out = []
-        for idx in range(layer.GetFeatureCount()):
-            feat = layer.GetFeature(idx)
-            geom_json = feat.GetGeometryRef().ExportToJson()
-            geom = json.loads(geom_json)
-            props = {
-                feat.GetFieldDefnRef(i).GetName(): feat.GetField(i)
-                for i in range(feat.GetFieldCount())
-            }
-            zone_id = props.get("id", idx)
-            features_out.append((zone_id, geom))
-        return features_out
-    except ImportError:
-        pass
-
-    # Last resort: try fiona if available.
-    try:
-        import fiona  # type: ignore[import-not-found]
-        features_out = []
-        with fiona.open(path) as src:
-            for idx, feat in enumerate(src):
-                props = dict(feat.get("properties") or {})
-                zone_id = props.get("id", idx)
-                features_out.append((zone_id, feat["geometry"]))
-        return features_out
-    except ImportError:
-        pass
-
-    raise ZonalStatisticsError(
-        "VECTOR_OPEN_FAILED",
-        f"No vector reading backend available for {path!r}. "
-        "Install osgeo.ogr (GDAL) or fiona to read non-GeoJSON vector formats.",
-    )
+    return features_out, zones_reprojected
 
 
 # ---------------------------------------------------------------------------
@@ -666,11 +698,19 @@ def compute_zonal_statistics(
     Returns:
         ``{"by_zone": {<zone_id>: {<stat>: value}}, ...} (vector zones
         only, empty for raster zones), "aggregate": {<stat>: value},
-        "value_raster", "zone_input", "computed_at", "units"}``.
+        "value_raster", "zone_input", "computed_at", "units",
+        "zones_reprojected"}``. ``zones_reprojected`` is a
+        ``"<zone_crs> -> <value_raster_crs>"`` note when the zone input's
+        CRS differed from the value raster's CRS and was auto-reprojected
+        to match before aggregation; ``None`` when no reprojection was
+        needed.
 
     Raises:
         ZonalStatisticsError: raster/vector read failure, download
             failure, or incompatible inputs.
+        CRSMismatchError: (``error_code="CRS_MISMATCH"``) the zone input's
+            CRS or the value raster's CRS is missing/invalid, so the zone
+            could not be safely reprojected onto the value raster's grid.
     """
     effective_bucket = _bucket or CACHE_BUCKET
 
@@ -732,6 +772,7 @@ def compute_zonal_statistics(
             "zone_input": zone_input_uri,
             "computed_at": computed_at,
             "units": partial["units"],
+            "zones_reprojected": partial.get("zones_reprojected"),
         }
         return json.dumps(result, default=str).encode("utf-8")
 

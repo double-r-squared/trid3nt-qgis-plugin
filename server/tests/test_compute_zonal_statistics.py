@@ -15,6 +15,15 @@ Coverage:
 7.  ``test_nodata_pixels_excluded`` — nodata pixels in value raster are excluded.
 8.  ``test_empty_zone_returns_none_stats`` — zone that contains no value pixels returns
     None for all stats rather than raising.
+9.  ``test_vector_zone_crs_mismatch_reprojects_to_real_numbers`` — adversarial-panel
+    honesty-floor fix: UTM value raster (EPSG:32617) + EPSG:4326 vector zones →
+    zones are reprojected to the raster's CRS before burning and the aggregate
+    matches the known matching-CRS quadrant stats exactly (was silently all-null).
+10. ``test_vector_zone_missing_zone_crs_raises_typed_error`` — zone vector with no
+    CRS metadata → typed ``CRSMismatchError`` (``error_code="CRS_MISMATCH"``),
+    not a silent all-null result.
+11. ``test_vector_zone_missing_raster_crs_raises_typed_error`` — value raster with
+    no CRS metadata → typed ``CRSMismatchError``.
 """
 
 from __future__ import annotations
@@ -32,6 +41,7 @@ from rasterio.transform import from_bounds
 
 from trid3nt_server.tools import TOOL_REGISTRY
 from trid3nt_server.tools.processing.compute_zonal_statistics.compute_zonal_statistics import (
+    CRSMismatchError,
     ZonalStatisticsError,
     _compute_stats,
     _detect_zone_type,
@@ -602,3 +612,194 @@ def test_detect_zone_type_by_extension():
     assert _detect_zone_type("path/to/file.fgb") == "vector"
     assert _detect_zone_type("path/to/file.geojson") == "vector"
     assert _detect_zone_type("path/to/file.gpkg") == "vector"
+
+
+# ---------------------------------------------------------------------------
+# CRS-mismatch honesty-floor fix (adversarial-panel finding)
+#
+# Prior behavior: a vector zone in a different CRS than the value raster was
+# burned onto the value raster's grid using its RAW (un-reprojected)
+# coordinates, so e.g. EPSG:4326 WDPA polygons over a UTM flood-depth COG
+# landed nowhere near the real data -> silent all-null aggregates, 0 zones
+# matched, no error. Fix: reproject vector zones to the value raster's CRS
+# before burning; raise a typed CRSMismatchError only when reprojection is
+# impossible (missing/invalid CRS on either side).
+# ---------------------------------------------------------------------------
+
+
+def _write_utm_ramp_raster(
+    path: str,
+    width: int = 10,
+    height: int = 10,
+    west: float = 500000.0,
+    south: float = 2960000.0,
+    east: float = 500100.0,
+    north: float = 2960100.0,
+    crs: str = "EPSG:32617",
+) -> None:
+    """Write a width x height GeoTIFF in a PROJECTED (UTM) CRS.
+
+    Same row-major 1..N ramp pattern as ``_write_ramp_raster`` (1-indexed,
+    row*width + col + 1) but on a metric UTM grid instead of EPSG:4326, so
+    the known top-right-quadrant stats from ``test_raster_zone_ramp_quadrant``
+    (count=25, sum=700, mean=28.0, max=50.0) apply unchanged.
+    """
+    data = np.arange(1, width * height + 1, dtype=np.float32).reshape(height, width)
+    transform = from_bounds(west, south, east, north, width, height)
+    profile = {
+        "driver": "GTiff",
+        "dtype": "float32",
+        "width": width,
+        "height": height,
+        "count": 1,
+        "crs": crs,
+        "transform": transform,
+    }
+    with rasterio.open(path, "w", **profile) as dst:
+        dst.write(data, 1)
+
+
+def _write_utm_ramp_raster_no_crs(path: str, **kwargs) -> None:
+    """Same as ``_write_utm_ramp_raster`` but with NO CRS metadata at all."""
+    width = kwargs.get("width", 10)
+    height = kwargs.get("height", 10)
+    west = kwargs.get("west", 500000.0)
+    south = kwargs.get("south", 2960000.0)
+    east = kwargs.get("east", 500100.0)
+    north = kwargs.get("north", 2960100.0)
+    data = np.arange(1, width * height + 1, dtype=np.float32).reshape(height, width)
+    transform = from_bounds(west, south, east, north, width, height)
+    profile = {
+        "driver": "GTiff",
+        "dtype": "float32",
+        "width": width,
+        "height": height,
+        "count": 1,
+        "transform": transform,
+        # no "crs" key -> rasterio writes with crs=None.
+    }
+    with rasterio.open(path, "w", **profile) as dst:
+        dst.write(data, 1)
+
+
+def _write_4326_quadrant_polygon_over_utm(
+    path: str,
+    utm_bbox: tuple[float, float, float, float],
+    utm_crs: str = "EPSG:32617",
+    zone_id: str = "quad",
+) -> None:
+    """Write a single-feature EPSG:4326 GeoJSON polygon covering ``utm_bbox``.
+
+    ``utm_bbox`` is reprojected (UTM -> 4326) with ``pyproj`` so the written
+    polygon, once the tool reprojects it BACK to the raster's UTM CRS, lands
+    on (to sub-millimeter precision, far below a 10m pixel) the exact same
+    ground footprint as ``utm_bbox`` -- giving hand-checkable expected stats
+    identical to the matching-CRS quadrant test.
+    """
+    import geopandas as gpd
+    from pyproj import Transformer
+    from shapely.geometry import box
+
+    fwd = Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True)
+    minx, miny, maxx, maxy = utm_bbox
+    lon0, lat0 = fwd.transform(minx, miny)
+    lon1, lat1 = fwd.transform(maxx, maxy)
+    poly = box(min(lon0, lon1), min(lat0, lat1), max(lon0, lon1), max(lat0, lat1))
+    gdf = gpd.GeoDataFrame([{"id": zone_id, "geometry": poly}], geometry="geometry", crs="EPSG:4326")
+    gdf.to_file(path, driver="GeoJSON")
+
+
+def _write_4326_polygon_no_crs(path: str, bbox: tuple[float, float, float, float], zone_id: str = "nocrs") -> None:
+    """Write a single-feature vector polygon (FlatGeobuf) with NO CRS metadata."""
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    gdf = gpd.GeoDataFrame([{"id": zone_id, "geometry": box(*bbox)}], geometry="geometry", crs=None)
+    gdf.to_file(path, driver="FlatGeobuf")
+
+
+def test_vector_zone_crs_mismatch_reprojects_to_real_numbers():
+    """UTM (EPSG:32617) value raster + EPSG:4326 zone polygon -> REAL numbers.
+
+    This is the exact failing case from the adversarial-panel finding (UTM
+    flood COG + EPSG:4326 WDPA-style polygons). The zone polygon is the
+    top-right quadrant of the UTM raster's extent, reprojected to 4326; once
+    the tool reprojects it back to EPSG:32617 the burned mask is identical
+    to the matching-CRS quadrant case, so the expected stats are the SAME
+    known values as ``test_raster_zone_ramp_quadrant``: count=25, sum=700,
+    mean=28.0, max=50.0 -- previously this returned all-None/0-count.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        val_path = os.path.join(tmpdir, "value_utm.tif")
+        zone_path = os.path.join(tmpdir, "zone_4326.geojson")
+
+        west, south, east, north = 500000.0, 2960000.0, 500100.0, 2960100.0
+        _write_utm_ramp_raster(val_path, west=west, south=south, east=east, north=north)
+        # Top-right quadrant in raster space = north half, east half in ground coords.
+        quadrant_bbox = (west + 50.0, south + 50.0, east, north)
+        _write_4326_quadrant_polygon_over_utm(zone_path, quadrant_bbox, utm_crs="EPSG:32617")
+
+        fake_sc = FakeStorageClient()
+        result = compute_zonal_statistics(
+            value_raster_uri=val_path,
+            zone_input_uri=zone_path,
+            statistics=["count", "sum", "mean", "max"],
+            _bucket="test-bucket",
+        )
+
+    agg = result["aggregate"]
+    assert agg["count"] == 25, f"Expected 25 pixels, got {agg['count']} (result={result})"
+    assert abs(agg["sum"] - 700.0) < 1.0, f"Expected sum~=700, got {agg['sum']}"
+    assert abs(agg["mean"] - 28.0) < 0.1, f"Expected mean~=28.0, got {agg['mean']}"
+    assert agg["max"] == 50.0, f"Expected max=50, got {agg['max']}"
+
+    # by_zone should also carry the real per-polygon numbers (same as aggregate;
+    # only one zone).
+    assert "quad" in result["by_zone"]
+    assert result["by_zone"]["quad"]["count"] == 25
+
+    # Reprojection is recorded in the envelope.
+    assert result["zones_reprojected"] == "EPSG:4326 -> EPSG:32617", result["zones_reprojected"]
+
+
+def test_vector_zone_missing_zone_crs_raises_typed_error():
+    """Zone vector with NO CRS metadata -> typed CRSMismatchError, not a silent null result."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        val_path = os.path.join(tmpdir, "value_utm.tif")
+        zone_path = os.path.join(tmpdir, "zone_nocrs.fgb")
+
+        _write_utm_ramp_raster(val_path)
+        _write_4326_polygon_no_crs(zone_path, (0.0, 0.0, 1.0, 1.0))
+
+        fake_sc = FakeStorageClient()
+        with pytest.raises(CRSMismatchError) as exc_info:
+            compute_zonal_statistics(
+                value_raster_uri=val_path,
+                zone_input_uri=zone_path,
+                statistics=["count", "mean"],
+                _bucket="test-bucket",
+            )
+        assert exc_info.value.error_code == "CRS_MISMATCH"
+        assert isinstance(exc_info.value, ZonalStatisticsError)
+
+
+def test_vector_zone_missing_raster_crs_raises_typed_error():
+    """Value raster with NO CRS metadata -> typed CRSMismatchError."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        val_path = os.path.join(tmpdir, "value_nocrs.tif")
+        zone_path = os.path.join(tmpdir, "zone_4326.geojson")
+
+        _write_utm_ramp_raster_no_crs(val_path)
+        _write_4326_quadrant_polygon_over_utm(
+            zone_path, (500050.0, 2960050.0, 500100.0, 2960100.0), utm_crs="EPSG:32617"
+        )
+
+        fake_sc = FakeStorageClient()
+        with pytest.raises(CRSMismatchError) as exc_info:
+            compute_zonal_statistics(
+                value_raster_uri=val_path,
+                zone_input_uri=zone_path,
+                statistics=["count", "mean"],
+                _bucket="test-bucket",
+            )
+        assert exc_info.value.error_code == "CRS_MISMATCH"

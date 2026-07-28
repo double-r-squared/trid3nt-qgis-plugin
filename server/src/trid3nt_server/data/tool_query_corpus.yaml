@@ -41,15 +41,6 @@ run_model_conservation_priority:
 - stack the habitat and biodiversity layers for this watershed for a conservation plan
 - show imperiled-species richness, vegetation greenness, and threatened ranges together
 - make the SC-DNR style priority map for this preserve with species occurrence points
-run_model_flood_habitat_scenario:
-- model a 100-year flood in Big Cypress and show Florida panther occurrences with it
-- combine flood depth with protected-area boundaries and species records over this bbox
-- how does a design-storm flood affect the protected areas and wildlife here
-- run the flood plus habitat exposure case with WDPA polygons and GBIF species
-- flood inundation overlaid with park boundaries and threatened species in this preserve
-- compute flood impact within the national preserve and list the species occurrences
-- model the storm flood, clip it to Apalachicola National Forest, and add the species layers
-- give me flood depth, protected lands, and biodiversity impact metrics in one run
 # engine-door refactor (SFINCS slice): the run_model_flood_scenario corpus block
 # migrated OUT of this main index. Hazard-common flood phrasings now live in the
 # run_sfincs door corpus (tools/simulation/sfincs/run_sfincs/corpus.yaml, DOOR

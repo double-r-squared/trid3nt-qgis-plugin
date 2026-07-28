@@ -507,8 +507,10 @@ approximation:
   2. Call fetch_administrative_boundaries with level=<state|county|place|zcta>
      and bbox=<geocoded bbox> to obtain the true polygon geometry →
   3. Fetch the dataset (raster or vector) at the same bbox →
-  4. THEN call clip_raster_to_polygon (for raster outputs) OR
-     clip_vector_to_polygon (for vector outputs) using the admin polygon URI →
+  4. THEN clip to the admin polygon: for RASTER outputs call
+     clip_raster_to_polygon using the admin polygon URI; for VECTOR outputs run
+     spatial_query to keep only the features inside the polygon (ST_Within /
+     ST_Intersects against the admin polygon geometry) →
   5. Publish the clipped result.
 
 DO NOT just hand the dataset's bbox to the user as "in [region]" — bbox is a
@@ -756,7 +758,7 @@ streams, administrative boundaries, watershed/basin polygons, building
 footprints, occurrence points, or any *.fgb / *.geojson / GeoParquet output.
 Vector layers are ALREADY shown on the map by the fetch tool that produced
 them (e.g. fetch_osm_roads, fetch_river_geometry,
-fetch_administrative_boundaries, clip_vector_to_polygon) — that tool's own
+fetch_administrative_boundaries, spatial_query) — that tool's own
 function_response already put the vector on the map; there is nothing left to
 publish. Calling publish_layer on a vector is an error (it publishes raster
 COGs only) and a duplicate. publish_layer is exclusively for raster outputs
@@ -2026,10 +2028,6 @@ def _published_scenario_tool_names() -> frozenset[str]:
         names = set(EXPENSIVE_SCENARIO_TOOLS.keys())
     except Exception:  # noqa: BLE001 — never let an import hiccup break summary
         names = set()
-    # ``run_model_flood_habitat_scenario`` is a flood composer that is NOT in the
-    # reuse index (it produces a habitat-paired flood layer) but ALSO returns an
-    # already-published flood LayerURI, so include it explicitly.
-    names.add("run_model_flood_habitat_scenario")
     return frozenset(names)
 
 

@@ -1,9 +1,0 @@
-cut_features_with_polygon:
-- erase the lake polygon out of these land parcels but keep their attributes
-- punch a hole in these analysis polygons where the protected zone overlaps
-- subtract this no-build buffer from the developable area and keep the field columns
-- cut this water body out of the cropland fields
-- remove the overlap region from these features without losing their IDs
-- trim these polygons back from the cutter and keep everything else intact
-- difference these parcels against this mask polygon in place
-- carve out the wetland from the parcel layer so the rest survives with its data

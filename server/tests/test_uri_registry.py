@@ -954,7 +954,7 @@ class TestDemHintInventoryText:
             "compute_slope",
             "compute_aspect",
             "compute_contours",
-            "compute_terrain_profile",
+            "compute_cross_section",
         ):
             with pytest.raises(UriResolutionError) as exc_info:
                 reg.resolve_params(

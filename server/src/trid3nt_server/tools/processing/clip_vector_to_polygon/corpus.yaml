@@ -1,6 +1,0 @@
-clip_vector_to_polygon:
-- clip these GBIF occurrence points to the Florida state boundary
-- I need to trim nationwide NWS alerts to just this state polygon
-- clip the building footprints to the flood zone polygon
-- filter these national dam points down to those inside this watershed
-- clip the road network to the hurricane impact zone polygon

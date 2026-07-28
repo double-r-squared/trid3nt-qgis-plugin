@@ -120,10 +120,6 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "location_name": "location_query",
         "location": "location_query",
     },
-    "run_model_flood_habitat_scenario": {
-        "place": "place_label",
-        "location_name": "place_label",
-    },
     # -----------------------------------------------------------------------
     # NWS alert tools (job-0261): the LLM names the state freely ("state",
     # "state_code", "location", "region") — all land on the canonical "area"

@@ -1,8 +1,0 @@
-analyze_affected_fields:
-- which farm fields does the contamination plume reach?
-- tell me which agricultural fields the groundwater plume affects and how badly
-- rank the affected farm fields by peak concentration in this contaminant plume
-- which crops are hit by the spill plume and how much of each field is over the threshold?
-- intersect the plume with the field boundaries and show the worst-hit fields
-- how many fields does the contaminant reach above the detection threshold?
-- which fields are contaminated by this groundwater plume, with the peak mg/L in each?

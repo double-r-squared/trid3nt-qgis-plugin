@@ -1110,7 +1110,6 @@ SOLVER_CONFIRM_TOOLS: set[str] = {
     # sfincs_flood template (the door run_sfincs executes no solve; the TEMPLATE
     # submits the solver, so the gate keys on the template - RISK-8 parity).
     "sfincs_flood",
-    "run_model_flood_habitat_scenario",
     # #154 granularity gate (sprint-16): the SWMM urban-flood solver joins the
     # confirm set with an ENRICHED card carrying a GranularitySuggestion (the
     # autoscaler's pre-run resolution ladder + estimated cells / solve time /
@@ -9683,8 +9682,7 @@ async def _gate_on_solver_confirm(
             envelope = _build_confirmation_envelope(
                 derived, MODFLOWRunArgs(**kwargs)
             )
-        elif tool_name in ("sfincs_flood",
-                           "run_model_flood_habitat_scenario"):
+        elif tool_name == "sfincs_flood":
             # job-0256 (live finding: a flood solver ran in a sandbox-only
             # session): a ~10-20 min SFINCS solve is a consequence — show the
             # user what is about to run. Combined run-settings gate (sprint-16):

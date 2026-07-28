@@ -306,7 +306,6 @@ def test_flood_solvers_in_confirm_set() -> None:
     from trid3nt_server import server
 
     assert "sfincs_flood" in server.SOLVER_CONFIRM_TOOLS
-    assert "run_model_flood_habitat_scenario" in server.SOLVER_CONFIRM_TOOLS
 
 
 # NATE 2026-06-26: the OpenQuake classical-PSHA solver is gated like the others.

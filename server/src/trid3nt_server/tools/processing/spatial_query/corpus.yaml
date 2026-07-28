@@ -22,3 +22,26 @@ spatial_query:
 - sum the losses over the features in each zone
 - aggregate the population attribute within each zone
 - summary statistics of the flood layer attributes
+# cull pass 2 (2026-07-27): vector clip/dissolve/difference/gap phrasings re-homed
+# from clip_vector_to_polygon / merge_features / cut_features_with_polygon / fill_gaps
+# (cut on live replication proof; spatial_query is the surviving SQL surface).
+- clip these GBIF occurrence points to the Florida state boundary
+- I need to trim nationwide NWS alerts to just this state polygon
+- clip the building footprints to the flood zone polygon
+- filter these national dam points down to those inside this watershed
+- clip the road network to the hurricane impact zone polygon
+- dissolve these adjacent polygons into one shape
+- merge the selected parcels into a single AOI
+- combine these touching field boundaries into one field
+- fuse the fragmented flood-zone polygons together
+- union these features into one combined geometry
+- collapse all the features in this layer into a single dissolved polygon
+- erase the lake polygon out of these land parcels but keep their attributes
+- punch a hole in these analysis polygons where the protected zone overlaps
+- subtract this no-build buffer from the developable area
+- cut this water body out of the cropland fields
+- carve out the wetland from the parcel layer so the rest survives with its data
+- find the sliver gaps between these adjacent parcels and turn them into polygons
+- fill the courtyards and slivers trapped between these adjacent OSM buildings
+- show me the enclosed empty spaces between these polygons as new features
+- generate the backfill polygons for the gaps in this parcel coverage

@@ -35,23 +35,12 @@ Workflows authored under this package (job-0042 lands the M5 capstone):
   validation gate (``LULC_MAPPING_MISMATCH``) fires inside
   ``build_sfincs_model`` (``sfincs_builder.py``) before HydroMT's roughness
   component runs.
-
-- ``model_flood_habitat_scenario(bbox, species_keys?, rainfall_event?,
-   protected_area_designation?, place_clip_polygon_uri?, place_label?,
-   *, pipeline_emitter?, project_id?, session_id?) → CaseOneResult`` —
-  Case 1 higher-order composer (Everglades / Big Cypress / Apalachicola
-  flood + habitat exposure). Sequences fetch_wdpa_protected_areas → per-species
-  fetch_gbif_occurrences → model_flood_scenario → compute_zonal_statistics →
-  (optional) clip_raster_to_polygon + clip_vector_to_polygon →
-  deterministic case_summary_text. LLM exposure as
-  ``run_model_flood_habitat_scenario`` (workflow_dispatch metadata).
 """
 
 from __future__ import annotations
 
 # Import the workflow modules so their @register_tool decorators fire at
 # package import time and the LLM-facing wrappers land in TOOL_REGISTRY.
-from .sfincs.model_flood_habitat_scenario import model_flood_habitat_scenario as _model_flood_habitat_scenario  # noqa: F401
 from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  — engine-door refactor (SFINCS slice): the run_model_flood_scenario wrapper is now the sfincs_flood template (engine=sfincs, tier=template); the run_sfincs door is imported in tools/__init__.py
 from .modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as _model_groundwater_contamination_scenario  # noqa: F401  — job-0228 Case 2 composer (news → MODFLOW → plume)
 # engine-door refactor: run_model_contamination_affected_fields is CUT (composer

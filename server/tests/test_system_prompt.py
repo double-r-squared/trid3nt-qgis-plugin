@@ -79,10 +79,12 @@ def test_system_prompt_has_geographic_clipping_section() -> None:
 
 
 def test_system_prompt_names_admin_polygon_clip_tools() -> None:
-    """A5 fix must reference the admin-boundary fetcher + both clip tools."""
+    """A5 fix must reference the admin-boundary fetcher + the raster clip tool +
+    the vector clip surface. cull pass 2 (2026-07-27): clip_vector_to_polygon was
+    CUT; vector clipping re-homes to spatial_query (ST_Within/ST_Intersects)."""
     assert "fetch_administrative_boundaries" in SYSTEM_PROMPT
     assert "clip_raster_to_polygon" in SYSTEM_PROMPT
-    assert "clip_vector_to_polygon" in SYSTEM_PROMPT
+    assert "spatial_query" in SYSTEM_PROMPT
 
 
 def test_system_prompt_lists_admin_region_kinds() -> None:

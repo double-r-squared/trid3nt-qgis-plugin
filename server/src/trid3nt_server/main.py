@@ -136,8 +136,6 @@ def _import_tools_registry() -> int:
     from .workflows.pelicun.damage_assessment.damage_assessment import pelicun_damage_assessment  # noqa: F401
     # job-0102: register fetch_nexrad_reflectivity (Iowa Mesonet NEXRAD WMS passthrough).
     from .tools.fetchers.weather.fetch_nexrad_reflectivity import fetch_nexrad_reflectivity  # noqa: F401
-    # job-0107: register clip_vector_to_polygon (vector clip-to-polygon utility).
-    from .tools.processing.clip_vector_to_polygon import clip_vector_to_polygon  # noqa: F401
     # job-0104: register fetch_goes_satellite (GOES-16/17/18/19 satellite imagery via NOAA Big-Data S3).
     from .tools.fetchers.imagery.fetch_goes_satellite import fetch_goes_satellite  # noqa: F401
     # job-0103: register fetch_mrms_qpe (NOAA MRMS gauge-corrected QPE precipitation; SFINCS Harvey reference).

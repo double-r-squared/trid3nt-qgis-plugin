@@ -103,7 +103,6 @@ class TestScenarioPublishedSignal:
         for tool in (
             "sfincs_flood",
             "run_model_nws_flood_event_scenario",
-            "run_model_flood_habitat_scenario",
             "run_model_groundwater_contamination_scenario",
             "modflow_contaminant_plume",
         ):

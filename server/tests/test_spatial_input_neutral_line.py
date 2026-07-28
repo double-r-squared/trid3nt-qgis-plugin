@@ -185,12 +185,14 @@ def test_response_barrier_flow_has_no_line_keys():
 
 
 # --------------------------------------------------------------------------- #
-# 3. The surfaced line geometry resolves in compute_terrain_profile.
+# 3. The surfaced line geometry resolves in compute_cross_section.
+# (cull pass 2 2026-07-27: compute_terrain_profile CUT; compute_cross_section is
+#  the surviving generic sample-along-line tool and carries _resolve_line_coords.)
 # --------------------------------------------------------------------------- #
 
 
-def test_surfaced_line_feeds_compute_terrain_profile():
-    from trid3nt_server.tools.processing.compute_terrain_profile.compute_terrain_profile import _resolve_line_coords
+def test_surfaced_line_feeds_compute_cross_section():
+    from trid3nt_server.tools.processing.compute_cross_section.compute_cross_section import _resolve_line_coords
 
     resp = SpatialInputResponsePayload(
         request_id=new_ulid(),

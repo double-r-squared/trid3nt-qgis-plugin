@@ -63,7 +63,6 @@ from trid3nt_server.tools import TOOL_REGISTRY
 # at module level must appear here so the registry is fully populated.
 # ---------------------------------------------------------------------------
 import trid3nt_server.workflows.sfincs.flood.flood  # noqa: F401 — side-effect import
-import trid3nt_server.workflows.sfincs.model_flood_habitat_scenario.model_flood_habitat_scenario  # noqa: F401
 import trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest  # noqa: F401
 # PELICUN fold: pelicun_damage_with_buildings folded into the
 # pelicun_damage_assessment template's bbox AUTO-FETCH input mode.
@@ -170,10 +169,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "raster_uri": _SAMPLE_RASTER_URI,
         "polygon_uri": _SAMPLE_VECTOR_URI,
     },
-    "clip_vector_to_polygon": {
-        "vector_uri": _SAMPLE_VECTOR_URI,
-        "polygon_uri": _SAMPLE_VECTOR_URI,
-    },
     "compute_aspect": {"dem_uri": _SAMPLE_DEM_URI},
     "compute_building_density": {"bbox": _SAMPLE_BBOX},
     "compute_colored_relief": {"dem_uri": _SAMPLE_DEM_URI},
@@ -255,7 +250,6 @@ _MINIMAL_VALID_PARAMS: dict[str, dict[str, Any]] = {
         "algorithm": "native:buffer",
         "params": {"DISTANCE": 1000},
     },
-    "run_model_flood_habitat_scenario": {"bbox": _SAMPLE_BBOX},
     "sfincs_flood": {},
     "run_model_news_event_ingest": {
         "sources": [{"url": "https://example.com/flood", "type": "news"}]

@@ -1,9 +1,0 @@
-fill_gaps:
-- find the sliver gaps between these adjacent parcels and turn them into polygons
-- there are little voids between the FTW field boundaries, fill them in
-- what areas are uncovered between these building footprints that should tile cleanly
-- harvest the enclosed gaps between my digitized polygons so the coverage has no holes
-- clean up the topology of these ML-derived field outlines and emit the missing interstitial polygons
-- fill the courtyards and slivers trapped between these adjacent OSM buildings
-- generate the backfill polygons for the gaps in this parcel coverage
-- show me the enclosed empty spaces between these polygons as new features

@@ -344,7 +344,6 @@ _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
     # engine-door refactor (SFINCS slice): the flood family is now door + template.
     "run_sfincs": "SFINCS",
     "sfincs_flood": "SFINCS",
-    "run_model_flood_habitat_scenario": "SFINCS",
     # engine-door refactor: the MODFLOW family is now door + templates. The door
     # and the contaminant-plume template are the MODFLOW-flow anchors; the news
     # composer stays cross-listed.

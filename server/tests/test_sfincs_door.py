@@ -51,7 +51,7 @@ def test_old_flood_name_gone_and_door_template_registered():
 
 def test_setter_and_consumers_stay_general():
     reg = agent_tools.TOOL_REGISTRY
-    for name in ("set_sfincs_parameters", "run_model_flood_habitat_scenario",
+    for name in ("set_sfincs_parameters",
                  "run_model_nws_flood_event_scenario"):
         m = reg[name].metadata
         assert m.tier == "general", f"{name} must stay tier=general"

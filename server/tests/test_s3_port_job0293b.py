@@ -295,47 +295,11 @@ def test_postprocess_pelicun_tool_unlinks_s3_staged_file(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 5. clip_vector_to_polygon
+# 5. clip_vector_to_polygon — RETIRED by cull pass 2 (2026-07-27). The tool was
+# fully removed (live replication proof: spatial_query reproduces the whole-
+# feature clip via ST_Intersects/ST_Within), so its s3-resolution helper tests
+# (_resolve_layer_to_local_path) are removed with the module.
 # ---------------------------------------------------------------------------
-
-
-def test_clip_vector_resolve_s3_returns_temp_path_tuple(monkeypatch):
-    from trid3nt_server.tools.processing.clip_vector_to_polygon.clip_vector_to_polygon import (
-        _resolve_layer_to_local_path,
-    )
-
-    calls = _bind_fake_reader(monkeypatch, b"FGB-BYTES")
-    path, is_temp = _resolve_layer_to_local_path(
-        "s3://bkt/occurrences.fgb",
-        None,
-        ".fgb",
-        not_found_code="UNKNOWN_VECTOR_URI",
-    )
-    try:
-        assert is_temp is True
-        assert calls == ["s3://bkt/occurrences.fgb"]
-        assert path.endswith(".fgb")
-        with open(path, "rb") as f:
-            assert f.read() == b"FGB-BYTES"
-    finally:
-        os.unlink(path)
-
-
-def test_clip_vector_resolve_s3_failure_raises_typed_error(monkeypatch):
-    from trid3nt_server.tools.processing.clip_vector_to_polygon.clip_vector_to_polygon import (
-        ClipVectorError,
-        _resolve_layer_to_local_path,
-    )
-
-    _bind_failing_reader(monkeypatch, RuntimeError("AccessDenied"))
-    with pytest.raises(ClipVectorError, match="S3 download failed") as ei:
-        _resolve_layer_to_local_path(
-            "s3://bkt/occurrences.fgb",
-            None,
-            ".fgb",
-            not_found_code="UNKNOWN_VECTOR_URI",
-        )
-    assert ei.value.error_code == "DOWNLOAD_FAILED"
 
 
 # ---------------------------------------------------------------------------

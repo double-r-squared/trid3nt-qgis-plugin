@@ -201,7 +201,7 @@ _DEM_CONSUMING_TOOLS: frozenset[str] = frozenset(
         "compute_slope",
         "compute_aspect",
         "compute_contours",
-        "compute_terrain_profile",
+        "compute_cross_section",
     }
 )
 

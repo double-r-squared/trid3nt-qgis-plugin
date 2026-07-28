@@ -248,7 +248,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # surfaced only by the run_sfincs door's gate expansion). The DOOR carries the
     # category membership so hazard_modeling widening surfaces the flood entry.
     "run_sfincs": "hazard_modeling",
-    "run_model_flood_habitat_scenario": "hazard_modeling",
     "run_model_news_event_ingest": "hazard_modeling",
     "run_model_nws_flood_event_scenario": "hazard_modeling",
     # fire-animation demos (GOES geostationary + JPSS/VIIRS polar): the
@@ -510,23 +509,9 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # 1/9 arc-sec + USGS 3DEP land) - the bathymetric input the coastal SFINCS
     # bed needs (fetch_dem alone is land-only). EPSG:32616 NAVD88 positive-up.
     "fetch_topobathy": "coastal",
-    # AWS / Australian-Water-School "Making Waves" SWAN-lecture post-processors:
-    # two pure-analytic coastal-wave tools (no fetch, no solver). The nomograph
-    # is the wind+fetch -> Hs/Tp pre-flight sanity bound on a SWAN run; the
-    # EurOtop tool turns a nearshore Hs/Tp + structure crest into a mean
-    # overtopping discharge. Both sit in the coastal lane next to the run_swan door.
-    "compute_wave_nomograph": "coastal",
-    "compute_overtopping": "coastal",
     # ---- 9. damage_assessment ---------------------------------------------
     "compute_impact_envelope": "damage_assessment",
     "postprocess_pelicun": "damage_assessment",
-    # ftw-affected-fields demo: which farm fields a MODFLOW plume reaches +
-    # how badly (peak/mean concentration, affected cropland area, ranked). It is
-    # the agricultural-impact analogue of compute_impact_envelope (per-feature ->
-    # ranked aggregate -> headline), so it is PRIMARY-filed under damage_assessment;
-    # secondary cross-lists below put it in hazard_modeling (it scores a MODFLOW
-    # plume) and land_cover_development (it scores FTW agricultural fields).
-    "analyze_affected_fields": "damage_assessment",
     # ---- 10. flood_infrastructure -----------------------------------------
     "fetch_fema_nfhl_zones": "flood_infrastructure",
     "fetch_usace_levees": "flood_infrastructure",
@@ -536,13 +521,6 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "fetch_administrative_boundaries": "geographic_primitives",
     "clip_raster_to_bbox": "geographic_primitives",
     "clip_raster_to_polygon": "geographic_primitives",
-    "clip_vector_to_polygon": "geographic_primitives",
-    # QGIS-wrapping backlog (DigitizingTools + Profile tool) -- clean-room GEOS
-    # reimplementations via shapely/rasterio (GPL-clean), siblings of clip/cross-section.
-    "merge_features": "geographic_primitives",
-    "cut_features_with_polygon": "geographic_primitives",
-    "fill_gaps": "geographic_primitives",
-    "compute_terrain_profile": "geographic_primitives",
     "compute_zonal_statistics": "geographic_primitives",
     # compute_model_residuals: an analysis primitive over an existing raster +
     # an existing/fetched vector layer -- same lane as compute_zonal_statistics
@@ -683,11 +661,6 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     # damage_assessment membership; its templates are pool-EXCLUDED (no membership).
     "run_pelicun": ("damage_assessment",),
     "fetch_usace_nsi": ("damage_assessment",),
-    # ftw-affected-fields demo: the affected-field analysis is PRIMARY-filed in
-    # damage_assessment (the impact-readout analogue) and materially belongs to
-    # hazard_modeling (it scores a MODFLOW plume) AND land_cover_development (it
-    # scores FTW/fiboa agricultural fields next to fetch_field_boundaries).
-    "analyze_affected_fields": ("hazard_modeling", "land_cover_development"),
     # habitat-impact batch (2026-07-20): the affected-habitats analysis is PRIMARY
     # conservation_ecology (the ecology impact readout) and materially belongs to
     # hazard_modeling (it scores a hazard/flood/plume footprint) AND
@@ -851,10 +824,10 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 # Hot set - always-on tools surfaced before any category has been opened.
 # Picked to span the most-common entry points to a session:
 #
-# - run_sfincs (SFINCS flood door), run_model_flood_habitat_scenario - the two
-#   top-level flood entry points a user is likely to invoke first (engine-door
-#   refactor: the door replaces run_model_flood_scenario as the always-on flood
-#   hot-path so the pool-excluded sfincs_flood template stays reachable).
+# - run_sfincs (SFINCS flood door) - the top-level flood entry point a user is
+#   likely to invoke first (engine-door refactor: the door replaces
+#   run_model_flood_scenario as the always-on flood hot-path so the
+#   pool-excluded sfincs_flood template stays reachable).
 # - geocode_location, fetch_dem, fetch_nws_alerts_conus, fetch_nws_event -
 #   the most commonly cited "before you can do anything else" tools
 #   (fetch_nws_event added by job-0261 - see inline comment).
@@ -868,7 +841,6 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 HOT_SET_TOOLS: frozenset[str] = frozenset(
     {
         "run_sfincs",
-        "run_model_flood_habitat_scenario",
         "geocode_location",
         "fetch_dem",
         "fetch_nws_alerts_conus",

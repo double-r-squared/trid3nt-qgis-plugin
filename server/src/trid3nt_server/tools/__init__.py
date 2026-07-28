@@ -341,10 +341,8 @@ from .fetchers.soil.fetch_statsgo_soils import fetch_statsgo_soils  # noqa: E402
 
 # -- processing (compute / clip / extract / vector-edit / charts) --
 from .processing.aggregate_claims_across_sources import aggregate_claims_across_sources  # noqa: E402,F401
-from .processing.analyze_affected_fields import analyze_affected_fields  # noqa: E402,F401
 from .processing.clip_raster_to_bbox import clip_raster_to_bbox  # noqa: E402,F401
 from .processing.clip_raster_to_polygon import clip_raster_to_polygon  # noqa: E402,F401
-from .processing.clip_vector_to_polygon import clip_vector_to_polygon  # noqa: E402,F401
 from .processing.compute_aspect import compute_aspect  # noqa: E402,F401
 from .processing.compute_blended_composite import compute_blended_composite  # noqa: E402,F401
 from .processing.compute_building_density import compute_building_density  # noqa: E402,F401
@@ -365,16 +363,12 @@ from .processing.compute_layer_bounds import compute_layer_bounds  # noqa: E402,
 from .processing.compute_model_residuals import compute_model_residuals  # noqa: E402,F401
 from .processing.compute_movement_trajectory import compute_movement_trajectory  # noqa: E402,F401
 from .processing.compute_ndvi import compute_ndvi  # noqa: E402,F401
-from .processing.compute_overtopping import compute_overtopping  # noqa: E402,F401
 from .processing.compute_sediment_yield import compute_sediment_yield  # noqa: E402,F401
 # V&V wave (ADR 0021, lane B): model-fit skill-metrics wrap (spotpy).
 from .processing.compute_skill_metrics import compute_skill_metrics  # noqa: E402,F401
 from .processing.compute_slope import compute_slope  # noqa: E402,F401
-from .processing.compute_terrain_profile import compute_terrain_profile  # noqa: E402,F401
 from .processing.compute_urban_heat_island import compute_urban_heat_island  # noqa: E402,F401
-from .processing.compute_wave_nomograph import compute_wave_nomograph  # noqa: E402,F401
 from .processing.compute_zonal_statistics import compute_zonal_statistics  # noqa: E402,F401
-from .processing.cut_features_with_polygon import cut_features_with_polygon  # noqa: E402,F401
 from .processing.delineate_watershed import delineate_watershed  # noqa: E402,F401
 from .processing.digitize_water_body import digitize_water_body  # noqa: E402,F401
 from .processing.enhance_satellite_image import enhance_satellite_image  # noqa: E402,F401
@@ -383,12 +377,10 @@ from .processing.extract_landcover_class import extract_landcover_class  # noqa:
 from .processing.extract_model_at_observations import extract_model_at_observations  # noqa: E402,F401
 from .processing.extract_stream_network import extract_stream_network  # noqa: E402,F401
 from .processing.extract_timeseries_at_point import extract_timeseries_at_point  # noqa: E402,F401
-from .processing.fill_gaps import fill_gaps  # noqa: E402,F401
-from .processing.generate_choropleth_legend import generate_choropleth_legend  # noqa: E402,F401
-from .processing.generate_damage_distribution import generate_damage_distribution  # noqa: E402,F401
-from .processing.generate_histogram import generate_histogram  # noqa: E402,F401
-from .processing.generate_time_series import generate_time_series  # noqa: E402,F401
-from .processing.merge_features import merge_features  # noqa: E402,F401
+from .processing.charts.generate_choropleth_legend import generate_choropleth_legend  # noqa: E402,F401
+from .processing.charts.generate_damage_distribution import generate_damage_distribution  # noqa: E402,F401
+from .processing.charts.generate_histogram import generate_histogram  # noqa: E402,F401
+from .processing.charts.generate_time_series import generate_time_series  # noqa: E402,F401
 from .processing.query_point_hazard import query_point_hazard  # noqa: E402,F401
 # DuckDB spatial-query fold (Phase B): ONE read-only SQL surface replaces the
 # three analytical Q&A tools (summarize_layer_statistics /

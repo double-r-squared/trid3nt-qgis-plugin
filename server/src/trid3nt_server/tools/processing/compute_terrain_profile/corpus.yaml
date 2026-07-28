@@ -1,9 +1,0 @@
-compute_terrain_profile:
-- show the elevation profile across this ridge
-- plot the terrain profile along the road I drew
-- what does the ground look like along this transect, height versus distance
-- give me a long profile of the valley floor from the DEM
-- draw an elevation cross-section of the hillside along this line
-- overlay the bare-earth DEM and the topo-bathy elevation along this section
-- sample the 3DEP elevation along this path and chart it
-- how does the ground rise and fall along this drawn line
