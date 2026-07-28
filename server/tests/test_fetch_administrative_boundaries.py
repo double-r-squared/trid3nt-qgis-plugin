@@ -28,8 +28,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
     AdminBoundaryEmptyError,
     AdminBoundaryError,
     AdminBoundaryLevelError,
@@ -312,7 +312,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -351,10 +351,10 @@ def test_cache_miss_invokes_fetch_fn_and_writes_store():
         return fake_bytes
 
     with patch(
-        "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
+        "trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
         side_effect=lambda level, bbox: fake_fetch(),
     ), patch(
-        "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries.read_through",
+        "trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_administrative_boundaries(level="county", bbox=_FORT_MYERS_BBOX)
@@ -376,10 +376,10 @@ def test_cache_hit_skips_fetch_fn():
         return fake_bytes
 
     with patch(
-        "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
+        "trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
         side_effect=lambda level, bbox: fake_fetch(),
     ), patch(
-        "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries.read_through",
+        "trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         r1 = fetch_administrative_boundaries(level="county", bbox=_FORT_MYERS_BBOX)
@@ -406,10 +406,10 @@ def test_layer_uri_shape(level: str, expected_label_fragment: str):
     fake_bytes = _fake_fgb_bytes(level.upper())
 
     with patch(
-        "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
+        "trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries._fetch_admin_boundaries_bytes",
         return_value=fake_bytes,
     ), patch(
-        "trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries.read_through",
+        "trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries.read_through",
         side_effect=_make_read_through_injector(fake_gcs),
     ):
         result = fetch_administrative_boundaries(level=level, bbox=_FORT_MYERS_BBOX)
@@ -442,7 +442,7 @@ def test_live_county_fort_myers_returns_lee_county():
     """
     import geopandas as gpd
 
-    from trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
+    from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
         _fetch_admin_boundaries_bytes,
     )
 
@@ -480,7 +480,7 @@ def test_live_place_fort_myers_returns_fort_myers_cdp():
     """
     import geopandas as gpd
 
-    from trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
+    from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
         _fetch_admin_boundaries_bytes,
     )
 
@@ -514,7 +514,7 @@ def test_live_state_returns_at_least_one_feature():
     """LIVE: bbox over a single state returns ≥1 feature (state level)."""
     import geopandas as gpd
 
-    from trid3nt_server.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
+    from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
         _fetch_admin_boundaries_bytes,
     )
 

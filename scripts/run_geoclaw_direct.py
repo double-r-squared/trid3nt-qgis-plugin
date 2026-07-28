@@ -112,7 +112,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.workflows.geoclaw.model_dambreak_geoclaw_scenario.model_dambreak_geoclaw_scenario import (
+    from trid3nt_server.agent.workflows.geoclaw.model_dambreak_geoclaw_scenario.model_dambreak_geoclaw_scenario import (
         model_dambreak_geoclaw_scenario,
     )
     from trid3nt_contracts.geoclaw_contracts import GeoClawRunArgs

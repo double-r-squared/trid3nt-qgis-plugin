@@ -131,7 +131,7 @@ Legend: KIND = what reaches the map/UI. V = verdict (CLEAR-DUPLICATE / COMPOSABL
 
 The composer (`workflows/sfincs/model_flood_habitat_scenario`) is orchestration sugar over already-registered SURVIVING tools; each underlying tool paints its own layer via its own `LayerURI`, so no bespoke envelope is needed:
 
-1. `model_flood_scenario(bbox, rainfall_event)` -> flood-depth `LayerURI` (the surviving modeling workflow; paints the depth raster itself).
+1. `sfincs_flood(bbox, rainfall_event)` -> flood-depth `LayerURI` (the surviving modeling workflow; paints the depth raster itself).
 2. `fetch_wdpa_protected_areas(bbox, designation_filter?)` -> habitat/protected-area polygon layer (paints itself). Optionally `fetch_gbif_occurrences(species_key, bbox)` per species for occurrence points.
 3. `compute_zonal_statistics(value_raster=<flood depth layer>, zone_input=<wdpa layer>, statistics=["mean","max","count"])` -> per-polygon flood-depth impact dict (the "flood result x habitat-polygon intersection" step; SURVIVING raster-zonal tool). The LLM narrates worst-hit habitats from this dict.
 4. Optional place clip: `clip_raster_to_polygon(<flood layer>, place_polygon)` and `clip_vector_to_polygon(<wdpa/species layers>, place_polygon)`.

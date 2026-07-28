@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from trid3nt_server.workflows.sfincs.flood.flood import (
+from trid3nt_server.agent.workflows.sfincs.flood.flood import (
     _drive_presolver_phase_progress,
 )
 
@@ -26,7 +26,7 @@ class _FakeEmitter:
 async def test_driver_emits_frequent_frames_during_silent_build(monkeypatch):
     # Tight tick so the test is fast; the real default is 7s.
     monkeypatch.setattr(
-        "trid3nt_server.workflows.sfincs.flood.flood._PRESOLVER_PROGRESS_TICK_S",
+        "trid3nt_server.agent.workflows.sfincs.flood.flood._PRESOLVER_PROGRESS_TICK_S",
         0.1,
     )
     em = _FakeEmitter()

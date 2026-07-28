@@ -25,9 +25,9 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.shared.model_conservation_priority import model_conservation_priority as cp_mod
-from trid3nt_server.workflows.shared.model_conservation_priority.model_conservation_priority import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.workflows.shared.model_conservation_priority import model_conservation_priority as cp_mod
+from trid3nt_server.agent.workflows.shared.model_conservation_priority.model_conservation_priority import (
     ConservationPriorityInputError,
     ConservationPriorityResult,
     model_conservation_priority,

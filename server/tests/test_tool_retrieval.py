@@ -12,15 +12,15 @@ from __future__ import annotations
 
 import pytest
 
-import trid3nt_server.tools.discovery.search_tools.search_tools as dd
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.discovery import tool_retrieval as trmod
-from trid3nt_server.tools.discovery.tool_retrieval import (
+import trid3nt_server.agent.tools.search.search_tools.search_tools as dd
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.search import tool_retrieval as trmod
+from trid3nt_server.agent.tools.search.tool_retrieval import (
     DEFAULT_K,
     MAX_K,
     retrieve_visible_tools,
 )
-from trid3nt_server.categories import (
+from trid3nt_server.agent.categories import (
     HOT_SET_TOOLS,
     AllowedToolSet,
     tools_for_category,
@@ -168,7 +168,7 @@ def _template_names() -> set[str]:
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY as _full
+    from trid3nt_server.agent.tools import TOOL_REGISTRY as _full
 
     return {
         n for n, e in _full.items()
@@ -286,7 +286,7 @@ def _full_registry_names() -> set[str]:
     import trid3nt_server.main as _m
 
     _m._import_tools_registry()
-    from trid3nt_server.tools import TOOL_REGISTRY as _full
+    from trid3nt_server.agent.tools import TOOL_REGISTRY as _full
 
     return set(_full)
 

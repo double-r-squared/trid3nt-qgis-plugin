@@ -22,7 +22,7 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.meta.list_run_frames.list_run_frames import (
+from trid3nt_server.agent.tools.meta.list_run_frames.list_run_frames import (
     ListRunFramesError,
     list_run_frames,
 )
@@ -58,7 +58,7 @@ def _patch_manifest(monkeypatch):
     manifest from an in-memory body (no network)."""
 
     def _install(manifest_text: str | None):
-        from trid3nt_server.tools.simulation.solver import solver
+        from trid3nt_server.agent.tools.simulation.solver import solver
 
         monkeypatch.setattr(solver, "_get_runs_bucket", lambda: "runs-bucket")
         if manifest_text is None:
@@ -152,7 +152,7 @@ def test_missing_run_id_raises() -> None:
 
 def test_list_run_frames_is_registered() -> None:
     """The tool is wired into the registry (import-time @register_tool)."""
-    import trid3nt_server.tools as tools
+    import trid3nt_server.agent.tools as tools
 
     assert "list_run_frames" in tools.TOOL_REGISTRY
 

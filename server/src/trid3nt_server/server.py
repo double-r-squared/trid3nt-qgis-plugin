@@ -99,7 +99,7 @@ from trid3nt_contracts.ws import (
 
 from .main import MAX_TURNS_PER_SESSION
 
-from .runaway_guard import (
+from .agent.gates.runaway_guard import (
     ABORT_LOOP_WATCHDOG,
     ABORT_STEP_CAP,
     ABORT_WALL_CLOCK,
@@ -109,7 +109,7 @@ from .runaway_guard import (
     step_cap_for_model,
 )
 
-from .adapter import (
+from .agent.adapters.adapter import (
     CompactionCompleteEvent,
     CompactionStartEvent,
     FunctionCallEvent,
@@ -136,7 +136,7 @@ from .adapter import (
     summarize_tool_result,
     classify_result_usable,
 )
-from .auth_handshake import (
+from .credentials.auth_handshake import (
     AuthResult,
     authenticate_token,
     build_auth_ack,
@@ -145,32 +145,32 @@ from .auth_handshake import (
     verify_access_token,
 )
 from .case_lifecycle import CaseLifecycleError, ensure_case_qgs
-from .context_budget import (
+from .agent.gates.context_budget import (
     FABRICATION_CAVEAT,
     ContextWindowExceededError,
     build_context_window_abort_note,
     looks_like_fabricated_action_claim,
 )
-from .credential_registry import (
+from .credentials.credential_registry import (
     CredentialProvider,
     generic_provider_for_tool,
     is_credential_error,
     is_credential_shaped_error,
     provider_for_tool,
 )
-from .layer_uri_emit import emit_layer_uri
-from .lessons import (
+from .emission.layer_uri_emit import emit_layer_uri
+from .agent.lessons import (
     lessons_appendix,
     lessons_enabled,
     observe_turn as observe_lessons_turn,
     register_lesson,
 )
-from .mode2_classifier import (
+from .agent.gates.mode2_classifier import (
     Mode2CandidateEnvelope,
     classify_for_mode2,
 )
 from .persistence import Persistence
-from .pipeline_emitter import (
+from .emission.pipeline_emitter import (
     _FLOOD_FRAME_NAME_RE,
     PipelineEmitter,
     _json_for_tool_io,
@@ -179,7 +179,7 @@ from .pipeline_emitter import (
     current_turn_case,
     mint_compaction_card,
 )
-from .secrets_handler import (
+from .credentials.secrets_handler import (
     SecretError,
     handle_secret_add,
     handle_secret_revoke,
@@ -191,12 +191,12 @@ from .telemetry import (
     emit_tool_call_event,
     emit_turn_telemetry,
 )
-from .tool_arg_normalizer import (
+from .agent.tool_arg_normalizer import (
     autofill_missing_bbox,
     coerce_bbox_value,
     normalize_args,
 )
-from .uri_registry import (
+from .emission.uri_registry import (
     activate_registry,
     deactivate_registry,
     get_uri_registry,
@@ -210,23 +210,23 @@ from .scenario_reuse import (
     scenario_signature,
     scenario_type_for_tool,
 )
-from .spatial_input import (
+from .agent.gates.spatial_input import (
     SpatialInputParseError,
     parse_spatial_input_features,
 )
-from .tools import TOOL_REGISTRY
-from .tools.processing.charts_common import is_chart_emission_result
-from .tools.meta.code_exec_tool.code_exec_tool import (
+from .agent.tools import TOOL_REGISTRY
+from .agent.tools.processing.charts_common import is_chart_emission_result
+from .agent.tools.meta.code_exec_tool.code_exec_tool import (
     CODE_EXEC_RESULT_KEY,
     is_code_exec_result,
 )
-from .categories import (
+from .agent.categories import (
     AllowedToolSet,
     OutOfAllowedSetError,
     validate_function_call,
 )
-from .circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
-from .tool_gating import BenchBlockedError
+from .agent.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
+from .agent.gates.tool_gating import BenchBlockedError
 
 # job-0122: auth-token envelope (Appendix H.5 connect handshake).
 from trid3nt_contracts.auth import AuthTokenEnvelope
@@ -274,7 +274,7 @@ def _tool_retrieval_k() -> int:
     """Resolve TRID3NT_TOOL_RETRIEVAL_K (default 25); fall back to the default on
     any parse error. Read per-call so a test can override via the env without a
     module reload."""
-    from .tools.discovery.tool_retrieval import DEFAULT_K
+    from .agent.tools.search.tool_retrieval import DEFAULT_K
 
     raw = os.environ.get("TRID3NT_TOOL_RETRIEVAL_K")
     if raw is None:
@@ -930,7 +930,7 @@ async def _handle_catalog_addition_response(
         return
 
     try:
-        from .tools.discovery.catalog_common import append_user_catalog_entry
+        from .agent.tools.search.catalog_common import append_user_catalog_entry
 
         await asyncio.to_thread(append_user_catalog_entry, entry)
     except Exception:  # noqa: BLE001 -- append fault must not break the loop
@@ -1370,7 +1370,7 @@ def _tool_search_tool_names() -> frozenset[str]:
     """
     names: set[str] = set()
     try:
-        from .tools.discovery.search_tools.search_tools import _SEARCH_TOOLS_METADATA
+        from .agent.tools.search.search_tools.search_tools import _SEARCH_TOOLS_METADATA
 
         if getattr(_SEARCH_TOOLS_METADATA, "name", None):
             names.add(_SEARCH_TOOLS_METADATA.name)
@@ -3247,7 +3247,7 @@ async def _maybe_emit_tool_candidates(
     if mode != "ask" and threshold <= 0.0:
         return None, []
 
-    from .tools.discovery.tool_retrieval import retrieve_ranked_tools
+    from .agent.tools.search.tool_retrieval import retrieve_ranked_tools
 
     ranked = retrieve_ranked_tools(user_text, k=8)
     if exclude_tools:
@@ -3532,7 +3532,7 @@ async def _stream_gemini_reply(
     # build_client() requires GCP ADC, which run-local and the AWS deploy do not
     # have. stream_events_with_contents' bedrock branch ignores ``client``.
     # Provider resolved once here and reused by the cache guard below.
-    from .bedrock_adapter import model_provider as _model_provider
+    from .agent.adapters.bedrock_adapter import model_provider as _model_provider
 
     _provider = _model_provider()
     # #225 per-model telemetry: resolve the EFFECTIVE model that actually
@@ -3545,10 +3545,10 @@ async def _stream_gemini_reply(
     # the turn, so fall back to the raw selection.
     try:
         if _provider == "openai":
-            from . import openai_adapter as _oa  # noqa: WPS433
+            from .agent.adapters import openai_adapter as _oa  # noqa: WPS433
             _effective_model = _oa.openai_model(bedrock_model)
         elif _provider == "bedrock":
-            from .bedrock_adapter import bedrock_model_id as _bmid  # noqa: WPS433
+            from .agent.adapters.bedrock_adapter import bedrock_model_id as _bmid  # noqa: WPS433
             _effective_model = bedrock_model or _bmid()
         else:
             _effective_model = bedrock_model
@@ -3586,7 +3586,7 @@ async def _stream_gemini_reply(
     _retrieval_mode = _tool_retrieval_mode()
     if _retrieval_mode in ("shadow", "enforce"):
         try:
-            from .tools.discovery.tool_retrieval import retrieve_visible_tools
+            from .agent.tools.search.tool_retrieval import retrieve_visible_tools
 
             _retrieval_k = _tool_retrieval_k()
             _visible = retrieve_visible_tools(
@@ -3674,14 +3674,14 @@ async def _stream_gemini_reply(
     # index / empty ranking / any fault (see tool_gating.gate_tool_registry).
     if _provider == "openai":
         try:
-            from .tool_gating import (
+            from .agent.gates.tool_gating import (
                 WIDEN_K,
                 gate_tool_registry,
                 gating_topk,
                 gating_widen_threshold,
                 should_widen_for_poor_fit,
             )
-            from .tools.discovery.tool_retrieval import retrieve_ranked_tools
+            from .agent.tools.search.tool_retrieval import retrieve_ranked_tools
 
             _gate_k = gating_topk()
             if _gate_k > 0:
@@ -8523,7 +8523,7 @@ async def _build_telemac_mesh_envelope(
         GranularitySuggestion,
         PayloadWarningEnvelopePayload,
     )
-    from .workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
+    from .agent.workflows.telemac.model_river_dye_release_scenario.model_river_dye_release_scenario import (
         MESH_H_FLOOR_M,
         MESH_NODE_CAP,
         plausible_release_coords,
@@ -8661,17 +8661,17 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
         PayloadWarningEnvelopePayload,
     )
     from trid3nt_contracts.swmm_contracts import SWMMRunArgs
-    from .tool_arg_normalizer import coerce_bbox_value
-    from .tools.simulation.solver.solver import (
+    from .agent.tool_arg_normalizer import coerce_bbox_value
+    from .agent.tools.simulation.solver.solver import (
         AWS_BATCH_COMPUTE_CLASS_SIZING,
         select_compute_class,
     )
-    from .workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (
+    from .agent.workflows.swmm.model_urban_flood_swmm.model_urban_flood_swmm import (
         _enforce_min_urban_aoi,
         _fetch_dem_for_urban,
     )
-    from .workflows.swmm.run_swmm import is_local_mode
-    from .workflows.swmm.swmm_mesh_builder import (
+    from .agent.workflows.swmm.run_swmm import is_local_mode
+    from .agent.workflows.swmm.swmm_mesh_builder import (
         SWMM_RES_LADDER,
         estimate_swmm_solve_seconds,
         suggest_swmm_resolution,
@@ -8775,7 +8775,7 @@ def _local_compute_lane() -> bool:
     confirm-card wording (compute labels / "cloud solve" prose); it never
     changes dispatch. Cloud wording stays byte-identical when this is False.
     """
-    from .tools.simulation.solver.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
+    from .agent.tools.simulation.solver.solver import SOLVER_BACKEND_LOCAL_DOCKER, solver_backend
 
     return solver_backend() == SOLVER_BACKEND_LOCAL_DOCKER
 
@@ -8913,8 +8913,8 @@ async def _build_fetch_resolution_envelope(
     )
     from types import SimpleNamespace
 
-    from .tool_arg_normalizer import coerce_bbox_value
-    from .tools.fetchers.imagery._pc_stac import bbox_pixel_dims
+    from .agent.tool_arg_normalizer import coerce_bbox_value
+    from .agent.tools.fetchers.imagery._pc_stac import bbox_pixel_dims
 
     coerced = coerce_bbox_value(params.get("bbox"))
     if coerced is None or len(coerced) != 4:
@@ -9076,13 +9076,13 @@ async def _build_flood_run_settings_envelope(
         PayloadWarningEnvelopePayload,
         TimeScaleSuggestion,
     )
-    from .tool_arg_normalizer import coerce_bbox_value
-    from .workflows.sfincs.flood.flood import (
+    from .agent.tool_arg_normalizer import coerce_bbox_value
+    from .agent.workflows.sfincs.flood.flood import (
         _estimate_frame_count,
         _resolve_output_interval_min,
     )
-    from .workflows.sfincs.postprocess_flood import MAX_FLOOD_FRAMES
-    from .workflows.sfincs.sfincs_builder import (
+    from .agent.workflows.sfincs.postprocess_flood import MAX_FLOOD_FRAMES
+    from .agent.workflows.sfincs.sfincs_builder import (
         SFINCS_RES_LADDER,
         suggest_sfincs_resolution_from_bbox,
     )
@@ -9284,7 +9284,7 @@ def _build_psha_confirm_envelope(params: dict) -> Any:
     import math
 
     from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
-    from .tool_arg_normalizer import coerce_bbox_value
+    from .agent.tool_arg_normalizer import coerce_bbox_value
 
     imt = str(params.get("imt", "PGA"))
     try:
@@ -9383,8 +9383,8 @@ def _build_fire_confirm_envelope(params: dict) -> Any:
     """
     from trid3nt_contracts.elmfire_contracts import FUEL_MOISTURE_PRESETS
     from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
-    from .tool_arg_normalizer import coerce_bbox_value
-    from .workflows.elmfire.run_elmfire import (
+    from .agent.tool_arg_normalizer import coerce_bbox_value
+    from .agent.workflows.elmfire.run_elmfire import (
         estimate_elmfire_grid,
         estimate_elmfire_runtime_s,
     )
@@ -9485,7 +9485,7 @@ def _build_geoclaw_confirm_envelope(params: dict) -> Any:
     import math
 
     from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
-    from .tool_arg_normalizer import coerce_bbox_value
+    from .agent.tool_arg_normalizer import coerce_bbox_value
 
     scenario = str(params.get("scenario", "dam_break")).strip().lower() or "dam_break"
     try:
@@ -9653,7 +9653,7 @@ async def _gate_on_solver_confirm(
     flood_override_offered: bool = False
     try:
         if tool_name == "run_model_groundwater_contamination_scenario":
-            from .workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
+            from .agent.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
                 _build_confirmation_envelope,
                 extract_spill_parameters,
             )
@@ -10034,7 +10034,7 @@ async def _gate_on_solver_confirm(
         used_real_clamp = False
         if swmm_dem_path:
             try:
-                from .workflows.swmm.swmm_mesh_builder import (
+                from .agent.workflows.swmm.swmm_mesh_builder import (
                     clamp_swmm_resolution_to_real_cap,
                 )
 
@@ -10655,7 +10655,7 @@ def _build_region_candidates(
         import geopandas as gpd  # type: ignore[import-not-found]
         from io import BytesIO
 
-        from .tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
+        from .agent.tools.fetchers.socioeconomic.fetch_administrative_boundaries.fetch_administrative_boundaries import (
             _fetch_admin_boundaries_bytes,
         )
     except ImportError:
@@ -10742,7 +10742,7 @@ def _build_region_choice_request_payload(
     Returns ``None`` when the state cannot be resolved or the result is not a
     valid state-snap shape — the caller then leaves the state bbox unchanged.
     """
-    from .tools.fetchers.us_states import resolve_state_code, state_display_name
+    from .agent.tools.fetchers.us_states import resolve_state_code, state_display_name
 
     bbox = geocode_result.get("bbox")
     if not (isinstance(bbox, (list, tuple)) and len(bbox) == 4):
@@ -11737,7 +11737,7 @@ async def _invoke_tool_via_emitter(
     # (the actual fetch / solve) is never reached: airtight before any fetch,
     # unlike the racy v1 client-side cancel this replaces.
     if state.bench_block_config is not None:
-        from .tool_gating import BenchBlockedError, bench_block_decision
+        from .agent.gates.tool_gating import BenchBlockedError, bench_block_decision
 
         _bench_class = bench_block_decision(state.bench_block_config, tool_name)
         if _bench_class is not None:
@@ -12089,7 +12089,7 @@ async def _invoke_tool_via_emitter(
     if tool_name == "publish_layer" and not params.get("layer_id"):
         _pl_uri = params.get("layer_uri")
         if isinstance(_pl_uri, str) and _pl_uri:
-            from .tools.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
+            from .agent.tools.publish_layer.publish_layer import derive_layer_id as _derive_layer_id
 
             params = dict(params)
             params["layer_id"] = _derive_layer_id(_pl_uri, uri_registry)
@@ -12597,7 +12597,7 @@ async def _invoke_tool_via_emitter(
                     # name (params carries it even though publish_layer's own
                     # signature only uses it for logging), else the resolved
                     # style_preset, else the published URI's path segment.
-                    from .tools.publish_layer.publish_layer import derive_readable_layer_name
+                    from .agent.tools.publish_layer.publish_layer import derive_readable_layer_name
 
                     _layer_name = derive_readable_layer_name(
                         params.get("name"),
@@ -14644,7 +14644,7 @@ def _make_handler(settings: GeminiSettings):
                         # returns a notice we log; the turn then runs on the default
                         # rather than crashing.
                         if um.model_id is not None:
-                            from .bedrock_adapter import (
+                            from .agent.adapters.bedrock_adapter import (
                                 resolve_selected_model as _resolve_selected_model,
                             )
 
@@ -15100,7 +15100,7 @@ def _make_handler(settings: GeminiSettings):
                             # Bench-only: a normal client never sends this key,
                             # so the field stays None and dispatch pays nothing.
                             if "bench_tool_block" in payload_dict:
-                                from .tool_gating import parse_bench_block_config
+                                from .agent.gates.tool_gating import parse_bench_block_config
 
                                 _bench_cfg = parse_bench_block_config(payload_dict)
                                 state.bench_block_config = _bench_cfg
@@ -15317,7 +15317,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     if _tool_retrieval_mode() != "off":
         async def _warm_discover_index() -> None:
             try:
-                from .tools.discovery.search_tools import search_tools as _dd_warm
+                from .agent.tools.search.search_tools import search_tools as _dd_warm
                 await asyncio.to_thread(_dd_warm._get_index)
                 logger.info("tool_retrieval: discover index warmed at startup")
             except Exception:  # noqa: BLE001 -- warm is best-effort

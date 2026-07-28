@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     REHYDRATE_HISTORY_CAP,
     build_layers_present_note,
     rehydrate_history_from_case,

@@ -31,16 +31,16 @@ import pytest
 
 # Trigger full tool surface registration so the index includes a realistic
 # universe of candidates (mirrors test_search_tools.py setup).
-from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401
-from trid3nt_server.tools.publish_layer import publish_layer  # noqa: F401 — registration side-effect
-from trid3nt_server.tools.discovery.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
-from trid3nt_server.tools.discovery.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
-from trid3nt_server.tools.discovery.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
-from trid3nt_server.tools.discovery.search_tools import search_tools as discover_module
-from trid3nt_server.tools.simulation.solver import solver  # noqa: F401 — registration side-effect
-from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
+from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: F401
+from trid3nt_server.agent.tools.publish_layer import publish_layer  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.search_tools import search_tools as discover_module
+from trid3nt_server.agent.tools.simulation.solver import solver  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
 
-from trid3nt_server.tools.discovery.search_tools.search_tools import (
+from trid3nt_server.agent.tools.search.search_tools.search_tools import (
     _build_cooccurrence_from_docs,
     _reset_cooccurrence_cache_for_tests,
     _reset_hot_set_cache_for_tests,
@@ -149,7 +149,7 @@ def test_co_occurrence_boost_when_mongo_bound() -> None:
 
     persistence = _make_mock_persistence(docs)
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=persistence,
     ):
         boosted_result = asyncio.run(
@@ -184,7 +184,7 @@ def test_co_occurrence_boost_when_mongo_bound() -> None:
 def test_falls_back_to_3_channel_when_mongo_unavailable() -> None:
     """No Persistence → search_tools returns 3-channel results, no crash."""
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=None,
     ):
         result = asyncio.run(search_tools("show me flood zones", top_k=5))
@@ -200,7 +200,7 @@ def test_falls_back_when_persistence_mcp_raises() -> None:
     persistence._mcp = MagicMock()
     persistence._mcp.call_tool = AsyncMock(side_effect=RuntimeError("conn refused"))
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=persistence,
     ):
         result = asyncio.run(search_tools("flood zones", top_k=3))
@@ -226,7 +226,7 @@ def test_index_refresh_within_5min_window() -> None:
     persistence = _make_mock_persistence(docs)
 
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=persistence,
     ):
         asyncio.run(search_tools("fetch_dem terrain", top_k=5))
@@ -250,7 +250,7 @@ def test_index_refresh_within_5min_window() -> None:
 
     # Past the window: simulate by manually setting the cache's built_at far
     # in the past, then verify a third call DOES refresh.
-    from trid3nt_server.tools.discovery.search_tools import search_tools as discover_mod
+    from trid3nt_server.agent.tools.search.search_tools import search_tools as discover_mod
 
     with discover_mod._COOCCURRENCE_LOCK:
         cached = discover_mod._COOCCURRENCE_INDEX
@@ -259,7 +259,7 @@ def test_index_refresh_within_5min_window() -> None:
     cached.built_at -= 10 * 60
 
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=persistence,
     ):
         asyncio.run(search_tools("fetch_dem terrain", top_k=5))
@@ -307,7 +307,7 @@ def test_get_dynamic_hot_set_returns_top_k() -> None:
     persistence = _make_mock_persistence(docs)
 
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=persistence,
     ):
         hot_set = asyncio.run(get_dynamic_hot_set(top_k=3))
@@ -324,7 +324,7 @@ def test_get_dynamic_hot_set_filters_by_user_id() -> None:
     persistence = _make_mock_persistence(docs)
 
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=persistence,
     ):
         asyncio.run(get_dynamic_hot_set(user_id="01USR0000000000000000000XX", top_k=5))
@@ -342,10 +342,10 @@ def test_get_dynamic_hot_set_filters_by_user_id() -> None:
 
 def test_get_dynamic_hot_set_falls_back_to_static() -> None:
     """Persistence unbound → static HOT_SET_TOOLS is returned verbatim."""
-    from trid3nt_server.categories import HOT_SET_TOOLS as STATIC
+    from trid3nt_server.agent.categories import HOT_SET_TOOLS as STATIC
 
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=None,
     ):
         result = asyncio.run(get_dynamic_hot_set())
@@ -354,14 +354,14 @@ def test_get_dynamic_hot_set_falls_back_to_static() -> None:
 
 def test_get_dynamic_hot_set_falls_back_when_mcp_raises() -> None:
     """An MCP find error falls through to the static set, not an exception."""
-    from trid3nt_server.categories import HOT_SET_TOOLS as STATIC
+    from trid3nt_server.agent.categories import HOT_SET_TOOLS as STATIC
 
     persistence = MagicMock()
     persistence._mcp = MagicMock()
     persistence._mcp.call_tool = AsyncMock(side_effect=RuntimeError("boom"))
 
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=persistence,
     ):
         result = asyncio.run(get_dynamic_hot_set())
@@ -370,11 +370,11 @@ def test_get_dynamic_hot_set_falls_back_when_mcp_raises() -> None:
 
 def test_get_dynamic_hot_set_falls_back_when_no_telemetry_rows() -> None:
     """Persistence bound but the find returns no rows → static fallback."""
-    from trid3nt_server.categories import HOT_SET_TOOLS as STATIC
+    from trid3nt_server.agent.categories import HOT_SET_TOOLS as STATIC
 
     persistence = _make_mock_persistence([])  # empty docs
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=persistence,
     ):
         result = asyncio.run(get_dynamic_hot_set())
@@ -399,7 +399,7 @@ def test_existing_unit_tests_still_pass_smoke() -> None:
 
     # Canonical routing answer (no Persistence; pure 3-channel path).
     with patch(
-        "trid3nt_server.tools.discovery.search_tools.search_tools._get_persistence_safe",
+        "trid3nt_server.agent.tools.search.search_tools.search_tools._get_persistence_safe",
         return_value=None,
     ):
         out = asyncio.run(search_tools("show me flood zones", top_k=5))

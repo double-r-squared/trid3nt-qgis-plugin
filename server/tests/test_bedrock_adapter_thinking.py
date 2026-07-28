@@ -31,8 +31,8 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server import bedrock_adapter as ba
-from trid3nt_server.adapter import TextDeltaEvent
+from trid3nt_server.agent.adapters import bedrock_adapter as ba
+from trid3nt_server.agent.adapters.adapter import TextDeltaEvent
 
 
 # --------------------------------------------------------------------------- #

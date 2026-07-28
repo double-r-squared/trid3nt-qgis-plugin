@@ -15,7 +15,7 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.pipeline_emitter import (
+from trid3nt_server.emission.pipeline_emitter import (
     PipelineEmitter,
     bind_turn_case,
     current_turn_case,

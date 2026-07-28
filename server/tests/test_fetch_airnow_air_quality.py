@@ -26,8 +26,8 @@ from unittest.mock import patch
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality.fetch_airnow_air_quality import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.weather.fetch_airnow_air_quality.fetch_airnow_air_quality import (
     AQI_CATEGORY_NAMES,
     PRESERVED_PROPERTIES,
     VALID_PARAMETERS,
@@ -138,7 +138,7 @@ def test_tool_is_registered():
 
 
 def test_metadata_invariants():
-    from trid3nt_server.tools.fetchers.weather.fetch_airnow_air_quality.fetch_airnow_air_quality import _METADATA
+    from trid3nt_server.agent.tools.fetchers.weather.fetch_airnow_air_quality.fetch_airnow_air_quality import _METADATA
 
     assert _METADATA.name == "fetch_airnow_air_quality"
     assert _METADATA.ttl_class == "dynamic-1h"
@@ -177,7 +177,7 @@ def test_auth_error_not_retryable():
 def test_missing_key_error_is_credential_shaped():
     """The generic credential pipeline must recognise the missing-key error
     by suffix (no per-provider registry entry required)."""
-    from trid3nt_server import credential_registry as cr
+    from trid3nt_server.credentials import credential_registry as cr
 
     assert cr.is_credential_shaped_error(
         "fetch_airnow_air_quality", AirNowMissingKeyError("x")

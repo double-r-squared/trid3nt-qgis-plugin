@@ -26,10 +26,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools.fetchers.biodiversity.fetch_mobi import fetch_mobi as mobi_mod
-from trid3nt_server.tools.fetchers.biodiversity.fetch_mobi.fetch_mobi import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.cache import compute_cache_key
+from trid3nt_server.agent.tools.fetchers.biodiversity.fetch_mobi import fetch_mobi as mobi_mod
+from trid3nt_server.agent.tools.fetchers.biodiversity.fetch_mobi.fetch_mobi import (
     MOBI_LAYERS,
     MoBIBboxError,
     MoBIEmptyError,
@@ -52,7 +52,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,
@@ -142,7 +142,7 @@ def test_layer_aliases_map_to_pc_asset_keys() -> None:
 
 
 def test_style_preset_is_in_titiler_registry() -> None:
-    from trid3nt_server.tools.publish_layer.publish_layer import _registry_style_params
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import _registry_style_params
 
     params = _registry_style_params("mobi_biodiversity")
     assert params is not None

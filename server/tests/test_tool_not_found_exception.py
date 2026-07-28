@@ -35,7 +35,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     GeminiSettings,
     summarize_tool_result,
     _classify_error,

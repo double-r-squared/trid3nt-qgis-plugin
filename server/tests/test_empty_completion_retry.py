@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 import pytest
 from unittest.mock import MagicMock, patch
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
     GeminiSettings,
     TextDeltaEvent,

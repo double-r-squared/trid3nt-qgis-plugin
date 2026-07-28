@@ -1060,7 +1060,7 @@ class Persistence:
         # one-way edge (no circular import), but keep it local so importing
         # persistence stays cheap and the emitter's heavy deps load only when a
         # cross-case vector actually needs resolving.
-        from .pipeline_emitter import _read_vector_uri_as_geojson
+        from .emission.pipeline_emitter import _read_vector_uri_as_geojson
 
         count = 0
         for layer in layers:
@@ -1324,7 +1324,7 @@ class Persistence:
         # Only carry wms_url separately when it is a genuine WMS GetMap face —
         # ``_looks_like_wms`` is the same predicate ``observe_published_layer``
         # uses to route a display URL into the wms slot.
-        from .uri_registry import _looks_like_wms
+        from .emission.uri_registry import _looks_like_wms
 
         wms_url = display if (display and _looks_like_wms(display)) else None
         try:
@@ -1949,7 +1949,7 @@ class Persistence:
         """
         # Local import — avoids a circular dependency between persistence
         # and secrets_handler (which imports Persistence).
-        from .secrets_handler import SecretRevokedError, read_secret_value
+        from .credentials.secrets_handler import SecretRevokedError, read_secret_value
 
         if not secret_ref.is_active:
             raise SecretRevokedError(

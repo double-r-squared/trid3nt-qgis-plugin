@@ -28,7 +28,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from google.genai import types as genai_types
 
-from trid3nt_server.context_budget import (
+from trid3nt_server.agent.gates.context_budget import (
     CompactionResult,
     CONTEXT_WINDOW_ABORT_NOTE,
     ContextWindowExceededError,
@@ -389,7 +389,7 @@ class TestStillOverAfterStepABug:
         huge_note = case_state_note_content("s" * 50_000)
         current_question = user_content("small question")
         contents = [huge_note, current_question]
-        with caplog.at_level("WARNING", logger="trid3nt_server.context_budget"):
+        with caplog.at_level("WARNING", logger="trid3nt_server.agent.gates.context_budget"):
             result = compact_contents(contents, budget_tokens=200, target_ratio=1.0)
         assert any(
             "protected content alone exceeds target" in r.message

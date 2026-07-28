@@ -29,7 +29,7 @@ from unittest.mock import patch
 
 import pytest
 
-from trid3nt_server.tools.simulation.solver.solver import (
+from trid3nt_server.agent.tools.simulation.solver.solver import (
     AWS_BATCH_COMPUTE_CLASS_SIZING,
     COMPUTE_CLASS_FALLBACK,
     COMPUTE_CLASS_LARGE_MAX_ELEMENTS,
@@ -169,7 +169,7 @@ def _flood_mocks(monkeypatch):
     """Patch the flood workflow's fetcher chain + downstream so only the
     run_solver compute_class hand-off is under test. Returns the captured
     run_solver kwargs holder."""
-    from trid3nt_server.workflows.sfincs.flood import flood as mod
+    from trid3nt_server.agent.workflows.sfincs.flood import flood as mod
     from trid3nt_contracts import new_ulid
     from trid3nt_contracts.execution import ExecutionHandle, LayerURI, RunResult
 
@@ -263,7 +263,7 @@ def _flood_mocks(monkeypatch):
 async def test_flood_workflow_passes_computed_large_class(monkeypatch) -> None:
     """A large estimated_active_cells -> run_solver gets 'large', NOT the
     caller's 'medium' default."""
-    from trid3nt_server.workflows.sfincs.flood import flood as mod
+    from trid3nt_server.agent.workflows.sfincs.flood import flood as mod
 
     captured, patches = _flood_mocks(monkeypatch)
     big_setup = _model_setup_with_autoscale(500_000)  # in the LARGE band
@@ -288,7 +288,7 @@ async def test_flood_workflow_passes_computed_large_class(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_flood_workflow_passes_computed_xlarge_class(monkeypatch) -> None:
     """A very large estimate reaches the new xlarge tier."""
-    from trid3nt_server.workflows.sfincs.flood import flood as mod
+    from trid3nt_server.agent.workflows.sfincs.flood import flood as mod
 
     captured, patches = _flood_mocks(monkeypatch)
     huge_setup = _model_setup_with_autoscale(3_000_000)
@@ -311,7 +311,7 @@ async def test_flood_workflow_passes_computed_xlarge_class(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_flood_workflow_falls_back_when_no_estimate(monkeypatch) -> None:
     """No autoscale estimate -> the caller's compute_class is used (no crash)."""
-    from trid3nt_server.workflows.sfincs.flood import flood as mod
+    from trid3nt_server.agent.workflows.sfincs.flood import flood as mod
 
     captured, patches = _flood_mocks(monkeypatch)
     setup_no_estimate = _model_setup_with_autoscale(None)
@@ -347,7 +347,7 @@ async def test_swmm_workflow_passes_computed_class_on_out_of_process_lane(
     awaits wait_for_completion and postprocesses from the Batch download."""
     from trid3nt_contracts.swmm_contracts import SWMMDepthLayerURI, SWMMRunArgs
 
-    from trid3nt_server.workflows.swmm.model_urban_flood_swmm import model_urban_flood_swmm as mod
+    from trid3nt_server.agent.workflows.swmm.model_urban_flood_swmm import model_urban_flood_swmm as mod
 
     # Build-result stub with a LARGE active-cell count (-> 'large' tier).
     build = SimpleNamespace(
@@ -416,9 +416,9 @@ async def test_swmm_workflow_passes_computed_class_on_out_of_process_lane(
         ),
         patch.object(mod, "_cleanup_deck_dir", return_value=None),
         patch.object(mod, "postprocess_swmm", return_value=([peak], {})),
-        patch("trid3nt_server.tools.simulation.solver.solver.run_solver", side_effect=_fake_run_solver),
+        patch("trid3nt_server.agent.tools.simulation.solver.solver.run_solver", side_effect=_fake_run_solver),
         patch(
-            "trid3nt_server.tools.simulation.solver.solver.wait_for_completion", side_effect=_fake_wait
+            "trid3nt_server.agent.tools.simulation.solver.solver.wait_for_completion", side_effect=_fake_wait
         ),
     ):
         result = await mod.model_urban_flood_swmm(

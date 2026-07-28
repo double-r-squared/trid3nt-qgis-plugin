@@ -20,11 +20,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.adapter import GeminiSettings
-from trid3nt_server.categories import HOT_SET_TOOLS
-from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.uri_registry import reset_uri_registries_for_tests
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.adapters.adapter import GeminiSettings
+from trid3nt_server.agent.categories import HOT_SET_TOOLS
+from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
@@ -162,7 +162,7 @@ async def _drive_with_trimmed_gate(state, monkeypatch, decl_registries):
     monkeypatch.setenv("TRID3NT_TOOL_RETRIEVAL", "enforce")
     visible = set(HOT_SET_TOOLS) | {"search_tools"}
     monkeypatch.setattr(
-        "trid3nt_server.tools.discovery.tool_retrieval.retrieve_visible_tools",
+        "trid3nt_server.agent.tools.search.tool_retrieval.retrieve_visible_tools",
         lambda *_a, **_k: set(visible),
     )
 

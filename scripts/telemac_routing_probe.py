@@ -58,16 +58,16 @@ import trid3nt_server.main as _main  # noqa: E402
 
 _main._import_tools_registry()
 
-from trid3nt_server.adapter import (  # noqa: E402
+from trid3nt_server.agent.adapters.adapter import (  # noqa: E402
     SYSTEM_PROMPT,
     build_contents_from_history,
     build_tool_declarations,
 )
-from trid3nt_server.lessons import lessons_appendix, lessons_enabled  # noqa: E402
-from trid3nt_server.openai_adapter import stream_openai, FunctionCallEvent  # noqa: E402
-from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.tools.discovery.search_tools import search_tools as _dd  # noqa: E402
-from trid3nt_server.tools.discovery.tool_retrieval import retrieve_visible_tools  # noqa: E402
+from trid3nt_server.agent.lessons import lessons_appendix, lessons_enabled  # noqa: E402
+from trid3nt_server.agent.adapters.openai_adapter import stream_openai, FunctionCallEvent  # noqa: E402
+from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.agent.tools.search.search_tools import search_tools as _dd  # noqa: E402
+from trid3nt_server.agent.tools.search.tool_retrieval import retrieve_visible_tools  # noqa: E402
 
 RETRIEVAL_K = int(os.environ.get("TRID3NT_TOOL_RETRIEVAL_K", "8"))
 

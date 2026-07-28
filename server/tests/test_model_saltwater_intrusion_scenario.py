@@ -35,9 +35,9 @@ import pytest
 
 from trid3nt_contracts.modflow_contracts import SaltwaterWedgeLayerURI
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.modflow.saltwater_intrusion import saltwater_intrusion as si_mod
-from trid3nt_server.workflows.modflow.saltwater_intrusion.saltwater_intrusion import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.workflows.modflow.saltwater_intrusion import saltwater_intrusion as si_mod
+from trid3nt_server.agent.workflows.modflow.saltwater_intrusion.saltwater_intrusion import (
     SaltwaterIntrusionInputError,
     SaltwaterIntrusionResult,
     SaltwaterIntrusionScenarioError,
@@ -134,7 +134,7 @@ async def test_composer_full_chain(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["run_args"] = run_args
         return fake_layer
 
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
+    import trid3nt_server.agent.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -176,7 +176,7 @@ async def test_composer_assembles_correct_run_args(
         captured["run_args"] = run_args
         return fake_layer
 
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
+    import trid3nt_server.agent.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -205,7 +205,7 @@ async def test_composer_emits_chart_payload(monkeypatch: pytest.MonkeyPatch) -> 
     async def _fake_run(run_args: Any, **_kw: Any) -> SaltwaterWedgeLayerURI:
         return fake_layer
 
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
+    import trid3nt_server.agent.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -239,7 +239,7 @@ async def test_composer_no_chart_emit_when_none(
     async def _fake_run(run_args: Any, **_kw: Any) -> SaltwaterWedgeLayerURI:
         return fake_layer
 
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
+    import trid3nt_server.agent.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _fake_run)
 
@@ -277,7 +277,7 @@ async def test_composer_surfaces_run_error_dict(
             "error_message": "BUY variable-density solve failed",
         }
 
-    import trid3nt_server.tools.simulation.run_modflow_archetype_tool as _tool
+    import trid3nt_server.agent.tools.simulation.run_modflow_archetype_tool as _tool
 
     monkeypatch.setattr(_tool, "run_modflow_archetype_job", _err_run)
 
@@ -325,7 +325,7 @@ async def test_wrapper_invalid_transect_shape_returns_user_input_required() -> N
 
 
 def test_saltwater_intrusion_registered_uncacheable() -> None:
-    import trid3nt_server.tools  # noqa: F401 - fires registration side-effects
+    import trid3nt_server.agent.tools  # noqa: F401 - fires registration side-effects
 
     entry = TOOL_REGISTRY.get("modflow_saltwater_intrusion")
     assert entry is not None, (

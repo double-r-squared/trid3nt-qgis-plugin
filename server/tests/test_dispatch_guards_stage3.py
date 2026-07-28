@@ -31,15 +31,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.adapter import GeminiSettings
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.adapters.adapter import GeminiSettings
 from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
-from trid3nt_server.tool_arg_normalizer import (
+from trid3nt_server.agent.tool_arg_normalizer import (
     fuzzy_correct_enum_args,
     normalize_args,
 )
-from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.uri_registry import reset_uri_registries_for_tests
+from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata

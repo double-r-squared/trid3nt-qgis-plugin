@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.processing.compute_exposure_summary import compute_exposure_summary as exposure_mod
-from trid3nt_server.tools.meta.compose_case_report.compose_case_report import (
+from trid3nt_server.agent.tools.processing.compute_exposure_summary import compute_exposure_summary as exposure_mod
+from trid3nt_server.agent.tools.meta.compose_case_report.compose_case_report import (
     CaseReportInputError,
     CaseReportNotFoundError,
     compose_case_report,
@@ -286,7 +286,7 @@ async def test_no_case_typed_error(monkeypatch, case_layers) -> None:
 
 
 def test_registered_in_tool_registry() -> None:
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     entry = TOOL_REGISTRY.get("compose_case_report")
     assert entry is not None

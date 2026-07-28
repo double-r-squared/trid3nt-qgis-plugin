@@ -27,7 +27,7 @@ import logging
 
 import pytest
 
-from trid3nt_server.categories import (
+from trid3nt_server.agent.categories import (
     HOT_SET_TOOLS,
     AllowedToolSet,
     OutOfAllowedSetError,
@@ -125,7 +125,7 @@ def test_auto_widen_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
     """The auto-widen path logs at WARNING so telemetry / hot-set tuning can
     see which real tools keep landing outside the hot set."""
     allowed = AllowedToolSet()
-    with caplog.at_level(logging.WARNING, logger="trid3nt_server.categories"):
+    with caplog.at_level(logging.WARNING, logger="trid3nt_server.agent.categories"):
         validate_function_call("compute_colored_relief", allowed)
     messages = [r.getMessage() for r in caplog.records]
     assert any(

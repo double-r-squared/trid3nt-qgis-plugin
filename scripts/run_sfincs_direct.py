@@ -110,7 +110,7 @@ log.info("pre-run MinIO run prefixes: %s", sorted(pre_prefixes))
 # ---------------------------------------------------------------------------
 
 try:
-    from trid3nt_server.workflows.sfincs.flood.flood import sfincs_flood
+    from trid3nt_server.agent.workflows.sfincs.flood.flood import sfincs_flood
 except ImportError as exc:
     log.error("import failed -- is PYTHONPATH set? %s", exc)
     sys.exit(1)

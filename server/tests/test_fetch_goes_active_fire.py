@@ -18,17 +18,17 @@ from datetime import datetime, timezone
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.imagery.fetch_goes_active_fire import fetch_goes_active_fire as afmod
-from trid3nt_server.tools.fetchers.imagery.fetch_goes_archive_animation import fetch_goes_archive_animation as archmod
-from trid3nt_server.tools.fetchers.imagery.fetch_goes_active_fire.fetch_goes_active_fire import fetch_goes_active_fire
-from trid3nt_server.tools.fetchers.imagery.fetch_goes_archive_animation.fetch_goes_archive_animation import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_active_fire import fetch_goes_active_fire as afmod
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_archive_animation import fetch_goes_archive_animation as archmod
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_active_fire.fetch_goes_active_fire import fetch_goes_active_fire
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_archive_animation.fetch_goes_archive_animation import (
     FIRE_BT_C07_MIN_K,
     FIRE_BT_DIFF_MIN_K,
     GOESArchiveEmptyError,
     GOESArchiveInputError,
 )
-from trid3nt_server.tools.fetchers.imagery.fetch_goes_satellite.fetch_goes_satellite import GOESInputError
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_satellite.fetch_goes_satellite import GOESInputError
 
 _UT_BBOX = (-114.05, 37.0, -109.04, 42.0)
 
@@ -60,7 +60,7 @@ def test_tool_is_registered():
 
 
 def test_tool_categorized_under_fire():
-    from trid3nt_server.categories import PRIMARY_CATEGORY
+    from trid3nt_server.agent.categories import PRIMARY_CATEGORY
 
     assert PRIMARY_CATEGORY.get("fetch_goes_active_fire") == "fire"
 
@@ -70,7 +70,7 @@ def test_tool_in_query_corpus():
 
     import yaml
 
-    from trid3nt_server.tools.discovery.search_tools.search_tools import _load_corpus
+    from trid3nt_server.agent.tools.search.search_tools.search_tools import _load_corpus
 
     corpus = _load_corpus()
     assert "fetch_goes_active_fire" in corpus
@@ -81,7 +81,7 @@ def test_tool_in_query_corpus():
 
 
 def test_bbox_none_raises():
-    from trid3nt_server.tools.fetchers.imagery.fetch_goes_archive_animation.fetch_goes_archive_animation import (
+    from trid3nt_server.agent.tools.fetchers.imagery.fetch_goes_archive_animation.fetch_goes_archive_animation import (
         GOESArchiveBboxRequiredError,
     )
 

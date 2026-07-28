@@ -24,10 +24,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.cache import ReadThroughResult
-import trid3nt_server.tools.fetchers.climate.fetch_chirps_precipitation.fetch_chirps_precipitation as mod
-from trid3nt_server.tools.fetchers.climate.fetch_chirps_precipitation.fetch_chirps_precipitation import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.cache import ReadThroughResult
+import trid3nt_server.agent.tools.fetchers.climate.fetch_chirps_precipitation.fetch_chirps_precipitation as mod
+from trid3nt_server.agent.tools.fetchers.climate.fetch_chirps_precipitation.fetch_chirps_precipitation import (
     CHIRPSEmptyError,
     CHIRPSInputError,
     CHIRPSNotAvailableError,

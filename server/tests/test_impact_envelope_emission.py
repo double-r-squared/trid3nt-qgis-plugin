@@ -122,7 +122,7 @@ async def test_compute_impact_envelope_dispatch_emits_impact_envelope():
     """compute_impact_envelope with valid raw_envelope triggers extra WS send."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import GeminiSettings
 
     # Turn 1: Gemini calls compute_impact_envelope.
     turn1_chunk = _make_fake_chunk_with_function_call(
@@ -202,7 +202,7 @@ async def test_non_impact_tool_does_not_emit_impact_envelope():
     """Dispatching fetch_dem (or any non-impact tool) emits no impact-envelope."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import GeminiSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "fetch_dem",
@@ -248,7 +248,7 @@ async def test_impact_envelope_emission_without_raw_envelope():
     """No impact-envelope when result lacks the raw_envelope key."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import GeminiSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "compute_impact_envelope",
@@ -294,7 +294,7 @@ async def test_impact_envelope_emission_raw_envelope_missing_n_structures_total(
     """No impact-envelope when raw_envelope lacks n_structures_total."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import GeminiSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "compute_impact_envelope",

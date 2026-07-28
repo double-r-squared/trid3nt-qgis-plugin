@@ -30,7 +30,7 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.execution import LayerURI
 

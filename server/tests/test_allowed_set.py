@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.categories import (
+from trid3nt_server.agent.categories import (
     HOT_SET_TOOLS,
     AllowedToolSet,
     tools_for_category,
@@ -42,7 +42,7 @@ def test_fresh_allowed_set_equals_hot_set() -> None:
 
 def test_hot_set_tools_pass_validation() -> None:
     """Every hot-set tool must validate against a fresh AllowedToolSet."""
-    from trid3nt_server.categories import validate_function_call
+    from trid3nt_server.agent.categories import validate_function_call
 
     allowed = AllowedToolSet()
     for name in HOT_SET_TOOLS:

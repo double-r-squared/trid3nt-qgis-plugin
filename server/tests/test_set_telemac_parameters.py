@@ -41,12 +41,12 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY  # noqa: E402
-from trid3nt_server.tools.simulation._setter_envelope import (  # noqa: E402
+from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: E402
+from trid3nt_server.agent.tools.simulation._setter_envelope import (  # noqa: E402
     BoundsViolation,
     SetterInputError,
 )
-from trid3nt_server.tools.simulation.telemac.set_telemac_parameters.set_telemac_parameters import (  # noqa: E402
+from trid3nt_server.agent.tools.simulation.telemac.set_telemac_parameters.set_telemac_parameters import (  # noqa: E402
     set_telemac_parameters,
 )
 

@@ -46,7 +46,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
     GeminiSettings,
     MAX_TURN_ITERATIONS,
@@ -366,7 +366,7 @@ async def test_stream_gemini_reply_failed_retry_caps_at_max_iterations():
     """
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.circuit_breaker import ToolCircuitBreaker
+    from trid3nt_server.agent.gates.circuit_breaker import ToolCircuitBreaker
 
     def _always_retry():
         i = 0

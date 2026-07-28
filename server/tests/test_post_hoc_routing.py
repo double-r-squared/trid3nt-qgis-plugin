@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.adapter import summarize_tool_result
-from trid3nt_server.categories import (
+from trid3nt_server.agent.adapters.adapter import summarize_tool_result
+from trid3nt_server.agent.categories import (
     AllowedToolSet,
     OutOfAllowedSetError,
     list_tools_in_category,
@@ -142,7 +142,7 @@ def test_unknown_category_routes_to_typed_envelope() -> None:
     UnknownCategoryError propagates as a structured envelope so Gemini can
     retry with a valid id (after re-reading list_categories)."""
     # Simulate: Gemini called list_tools_in_category with a typo.
-    from trid3nt_server.categories import (
+    from trid3nt_server.agent.categories import (
         UnknownCategoryError,
         list_tools_in_category as _impl,
     )

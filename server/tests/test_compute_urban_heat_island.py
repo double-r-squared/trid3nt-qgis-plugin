@@ -34,8 +34,8 @@ from rasterio.transform import from_bounds
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing.compute_urban_heat_island.compute_urban_heat_island import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.processing.compute_urban_heat_island.compute_urban_heat_island import (
     UhiAoiTooLargeError,
     UhiInputError,
     UrbanHeatIslandLayerURI,
@@ -236,8 +236,8 @@ def test_bad_daynight_raises(split_city, tmp_path) -> None:
 def test_category_and_corpus() -> None:
     import yaml
 
-    from trid3nt_server import categories
-    from trid3nt_server.tools.discovery.search_tools import search_tools as dd
+    from trid3nt_server.agent import categories
+    from trid3nt_server.agent.tools.search.search_tools import search_tools as dd
 
     assert (
         categories.PRIMARY_CATEGORY["compute_urban_heat_island"]

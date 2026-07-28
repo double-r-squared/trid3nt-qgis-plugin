@@ -34,14 +34,14 @@ from trid3nt_server.server import (
     _maybe_handle_credential_error,
     _resolve_pending_credential,
 )
-from trid3nt_server import credential_registry as cr
-from trid3nt_server.tools import (
+from trid3nt_server.credentials import credential_registry as cr
+from trid3nt_server.agent.tools import (
     TOOL_REGISTRY,
     RegisteredTool,
     clear_registry_for_tests,
 )
-from trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire as firms_mod
-from trid3nt_server.tools.fetchers.hazard.fetch_firms_active_fire.fetch_firms_active_fire import (
+from trid3nt_server.agent.tools.fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire as firms_mod
+from trid3nt_server.agent.tools.fetchers.hazard.fetch_firms_active_fire.fetch_firms_active_fire import (
     FirmsArgError,
     FirmsAuthError,
     FirmsMissingKeyError,
@@ -150,7 +150,7 @@ def test_firms_cache_key_omits_raw_key():
 
     def _fake_read_through(*, metadata, params, ext, fetch_fn):  # noqa: ANN001
         captured["params"] = params
-        from trid3nt_server.tools.cache import ReadThroughResult
+        from trid3nt_server.agent.tools.cache import ReadThroughResult
 
         return ReadThroughResult(
             uri="gs://bucket/cache/dynamic-1h/firms_active_fire/x.fgb",

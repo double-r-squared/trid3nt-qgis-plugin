@@ -41,7 +41,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
     GeminiSettings,
     MAX_TURN_ITERATIONS,
@@ -539,7 +539,7 @@ async def test_stream_gemini_reply_caps_runaway_loop():
     # tool+args (identical fetch_dem), so the LOOP WATCHDOG trips at
     # loop_repeat_n() rounds - well before the historical MAX_TURN_ITERATIONS
     # cap. (A varied-tool runaway hits the step cap instead - next test.)
-    from trid3nt_server.runaway_guard import loop_repeat_n
+    from trid3nt_server.agent.gates.runaway_guard import loop_repeat_n
 
     assert dispatch_count <= loop_repeat_n(), (
         f"identical-repeat runaway not watchdog-capped: {dispatch_count} "

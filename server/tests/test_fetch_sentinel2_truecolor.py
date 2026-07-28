@@ -30,10 +30,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.cache import compute_cache_key
-from trid3nt_server.tools.fetchers.imagery.fetch_sentinel2_truecolor import fetch_sentinel2_truecolor as s2_mod
-from trid3nt_server.tools.fetchers.imagery.fetch_sentinel2_truecolor.fetch_sentinel2_truecolor import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.cache import compute_cache_key
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_sentinel2_truecolor import fetch_sentinel2_truecolor as s2_mod
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_sentinel2_truecolor.fetch_sentinel2_truecolor import (
     S2TrueColorBboxError,
     S2TrueColorNoImageryError,
     _truecolor_from_bands,
@@ -54,7 +54,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         ReadThroughResult,
         cache_path,
@@ -120,7 +120,7 @@ def test_tool_is_registered() -> None:
 def test_style_preset_is_multiband_passthrough_token() -> None:
     """``s2_truecolor`` must NOT resolve in the single-band registry  --  RGB COGs
     go through the multiband passthrough (baked colors render directly)."""
-    from trid3nt_server.tools.publish_layer.publish_layer import _registry_style_params
+    from trid3nt_server.agent.tools.publish_layer.publish_layer import _registry_style_params
 
     assert _registry_style_params("s2_truecolor") is None
 

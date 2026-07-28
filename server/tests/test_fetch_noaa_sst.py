@@ -29,9 +29,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.ocean.fetch_noaa_sst import fetch_noaa_sst as sst_mod
-from trid3nt_server.tools.fetchers.ocean.fetch_noaa_sst.fetch_noaa_sst import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.ocean.fetch_noaa_sst import fetch_noaa_sst as sst_mod
+from trid3nt_server.agent.tools.fetchers.ocean.fetch_noaa_sst.fetch_noaa_sst import (
     _METADATA,
     SSTInputError,
     SSTNoDataError,
@@ -119,7 +119,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,
@@ -410,7 +410,7 @@ def test_repeat_call_hits_cache_and_skips_fetch() -> None:
 
 
 def test_distinct_inputs_distinct_cache_keys() -> None:
-    from trid3nt_server.tools.cache import compute_cache_key
+    from trid3nt_server.agent.tools.cache import compute_cache_key
 
     def k(params):
         return compute_cache_key(

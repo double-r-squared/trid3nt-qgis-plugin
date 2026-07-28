@@ -21,7 +21,7 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.pipeline_emitter import (
+from trid3nt_server.emission.pipeline_emitter import (
     PipelineEmitter,
     _frame_series_key,
 )

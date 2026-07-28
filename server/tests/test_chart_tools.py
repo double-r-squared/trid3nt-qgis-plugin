@@ -28,11 +28,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.processing.charts_common import ChartToolError, _MAX_ROWS, build_chart_payload, is_chart_emission_result
-from trid3nt_server.tools.processing.charts.generate_choropleth_legend.generate_choropleth_legend import generate_choropleth_legend
-from trid3nt_server.tools.processing.charts.generate_damage_distribution.generate_damage_distribution import generate_damage_distribution
-from trid3nt_server.tools.processing.charts.generate_histogram.generate_histogram import generate_histogram
-from trid3nt_server.tools.processing.charts.generate_time_series.generate_time_series import generate_time_series
+from trid3nt_server.agent.tools.processing.charts_common import ChartToolError, _MAX_ROWS, build_chart_payload, is_chart_emission_result
+from trid3nt_server.agent.tools.processing.charts.generate_choropleth_legend.generate_choropleth_legend import generate_choropleth_legend
+from trid3nt_server.agent.tools.processing.charts.generate_damage_distribution.generate_damage_distribution import generate_damage_distribution
+from trid3nt_server.agent.tools.processing.charts.generate_histogram.generate_histogram import generate_histogram
+from trid3nt_server.agent.tools.processing.charts.generate_time_series.generate_time_series import generate_time_series
 from trid3nt_contracts.chart_contracts import (
     ChartEmissionPayload,
     is_structurally_valid_vega_lite_spec,
@@ -204,7 +204,7 @@ class TestGenerateHistogram:
 
     def test_raster_sampling_cap_path(self, tmp_path, monkeypatch):
         """Large raster path: cap the sample, still produce 10 bins."""
-        import trid3nt_server.tools.processing.charts_common as ct
+        import trid3nt_server.agent.tools.processing.charts_common as ct
 
         # Shrink the cap so a small raster exercises the sampling branch.
         monkeypatch.setattr(ct, "_RASTER_SAMPLE_CAP", 50)
@@ -444,7 +444,7 @@ class TestChartEmissionDiscriminator:
 
 class TestSummarizeChartEmission:
     def test_spec_stripped_for_chart(self, tmp_path):
-        from trid3nt_server.adapter import summarize_tool_result
+        from trid3nt_server.agent.adapters.adapter import summarize_tool_result
 
         records = [{"x": 0.1 * i, "y": 0.1 * i, "v": float(i)} for i in range(30)]
         path = _make_geojson_points(tmp_path, records)
@@ -466,7 +466,7 @@ class TestSummarizeChartEmission:
         assert res["chart_type"] == "bar"
 
     def test_ordinary_dict_preserved(self):
-        from trid3nt_server.adapter import summarize_tool_result
+        from trid3nt_server.agent.adapters.adapter import summarize_tool_result
 
         # spatial_query (the Phase-B analytical fold) returns an ordinary
         # data dict - it must pass through summarize_tool_result unstripped.
@@ -624,7 +624,7 @@ def test_dispatch_detection_signal(tmp_path):
     spatial_query rows dict - the Phase-B fold of the analytical_qa surface)
     does not — this is the exact branch condition in _stream_gemini_reply.
     """
-    from trid3nt_server.tools.processing.spatial_query.spatial_query import spatial_query
+    from trid3nt_server.agent.tools.processing.spatial_query.spatial_query import spatial_query
 
     arr = np.arange(16, dtype=np.float32).reshape(4, 4)
     path = _make_raster(tmp_path, arr)
@@ -655,13 +655,13 @@ class TestRegistration:
     )
 
     def test_all_in_tool_registry(self):
-        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
         for name in self._TOOLS:
             assert name in TOOL_REGISTRY, name
 
     def test_metadata(self):
-        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
         for name in self._TOOLS:
             m = TOOL_REGISTRY[name].metadata
@@ -670,7 +670,7 @@ class TestRegistration:
             assert m.read_only_hint is True
 
     def test_category_membership(self):
-        from trid3nt_server.categories import PRIMARY_CATEGORY
+        from trid3nt_server.agent.categories import PRIMARY_CATEGORY
 
         for name in self._TOOLS:
             assert PRIMARY_CATEGORY[name] == "geographic_primitives"

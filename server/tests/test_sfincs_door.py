@@ -23,10 +23,10 @@ No network: the door reads the live registry; the index is rebuilt in-process.
 from __future__ import annotations
 
 from trid3nt_server import server as agent_server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.tools.discovery.search_tools import search_tools as st
-from trid3nt_server.tools.discovery import tool_retrieval as tr
-from trid3nt_server.tools.simulation.sfincs.run_sfincs.run_sfincs import run_sfincs
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.tools.search.search_tools import search_tools as st
+from trid3nt_server.agent.tools.search import tool_retrieval as tr
+from trid3nt_server.agent.tools.simulation.sfincs.run_sfincs.run_sfincs import run_sfincs
 
 _DOOR = "run_sfincs"
 _TEMPLATE = "sfincs_flood"

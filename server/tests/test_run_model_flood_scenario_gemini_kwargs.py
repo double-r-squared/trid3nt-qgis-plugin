@@ -22,11 +22,11 @@ import asyncio
 
 import pytest
 
-from trid3nt_server.tool_arg_normalizer import normalize_args
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tool_arg_normalizer import normalize_args
+from trid3nt_server.agent.tools import TOOL_REGISTRY
 
 # Import the workflow module so it registers.
-import trid3nt_server.workflows.sfincs.flood.flood  # noqa: F401
+import trid3nt_server.agent.workflows.sfincs.flood.flood  # noqa: F401
 
 
 def _invoke_via_normalizer(tool_name: str, raw: dict) -> object:

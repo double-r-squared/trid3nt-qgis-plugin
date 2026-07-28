@@ -1,6 +1,6 @@
 """Unit tests for the SFINCS forcing ADAPTER (P0 — COASTAL SFINCS North Star).
 
-The adapter (``trid3nt_server.workflows.sfincs.sfincs_forcing_adapter``) is the seam that
+The adapter (``trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter``) is the seam that
 turns the forcing FETCHER outputs (GTSM / CO-OPS water-level FlatGeobufs, NWM
 streamflow FlatGeobufs, CaMa-Flood discharge COGs) into the SFINCS ``bzs`` / ``dis``
 timeseries CSV + bnd/src locations files the deck-emission seam
@@ -37,8 +37,8 @@ import os
 
 import pytest
 
-from trid3nt_server.workflows.sfincs import sfincs_forcing_adapter as A
-from trid3nt_server.workflows.sfincs.sfincs_forcing_adapter import (
+from trid3nt_server.agent.workflows.sfincs import sfincs_forcing_adapter as A
+from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import (
     SFINCS_TIME_FMT,
     SFINCS_TREF,
     SFINCSForcingAdapterError,
@@ -404,7 +404,7 @@ def test_end_to_end_through_yaml_emitter_and_real_build(tmp_path):
     pytest.importorskip("hydromt_sfincs")
     import yaml
 
-    from trid3nt_server.workflows.sfincs.sfincs_builder import (
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
         ForcingSpec,
         WaterlevelForcing,
         _emit_surge_forcing_blocks,
@@ -495,7 +495,7 @@ def test_build_surge_forcing_no_source_raises():
 
 
 def test_resolve_surge_forcing_materialises_raw_fetch_uri(tmp_path):
-    from trid3nt_server.workflows.sfincs.flood.flood import (
+    from trid3nt_server.agent.workflows.sfincs.flood.flood import (
         _resolve_surge_forcing_from_fetchers,
     )
 
@@ -523,7 +523,7 @@ def test_resolve_surge_forcing_materialises_raw_fetch_uri(tmp_path):
 
 
 def test_resolve_surge_forcing_leaves_premade_dict_untouched():
-    from trid3nt_server.workflows.sfincs.flood.flood import (
+    from trid3nt_server.agent.workflows.sfincs.flood.flood import (
         _resolve_surge_forcing_from_fetchers,
     )
 
@@ -541,7 +541,7 @@ def test_resolve_surge_forcing_leaves_premade_dict_untouched():
 
 
 def test_resolve_surge_forcing_none_passthrough():
-    from trid3nt_server.workflows.sfincs.flood.flood import (
+    from trid3nt_server.agent.workflows.sfincs.flood.flood import (
         _resolve_surge_forcing_from_fetchers,
     )
 
@@ -552,7 +552,7 @@ def test_resolve_surge_forcing_none_passthrough():
 def test_resolve_surge_forcing_bad_fetch_uri_raises_typed():
     """A raw fetch_uri that can't be materialised raises a typed adapter error
     (the workflow lifts it into a failed envelope — NOT a silent pluvial degrade)."""
-    from trid3nt_server.workflows.sfincs.flood.flood import (
+    from trid3nt_server.agent.workflows.sfincs.flood.flood import (
         _resolve_surge_forcing_from_fetchers,
     )
 
@@ -577,7 +577,7 @@ def test_pluvial_path_unaffected_by_adapter_import():
     """
     import yaml
 
-    from trid3nt_server.workflows.sfincs.sfincs_builder import (
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
         BuildOptions,
         ForcingSpec,
         _generate_hydromt_yaml_config,
@@ -682,11 +682,11 @@ def test_three_driver_compound_deck_emits_all_blocks(tmp_path):
     import pandas as pd
     import yaml
 
-    from trid3nt_server.workflows.sfincs.flood.flood import (
+    from trid3nt_server.agent.workflows.sfincs.flood.flood import (
         _build_surge_forcing_members,
         _resolve_surge_forcing_from_fetchers,
     )
-    from trid3nt_server.workflows.sfincs.sfincs_builder import (
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
         BuildOptions,
         ForcingSpec,
         _generate_hydromt_yaml_config,

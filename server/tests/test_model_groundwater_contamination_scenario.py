@@ -30,21 +30,21 @@ import pytest
 from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs, PlumeLayerURI
 from trid3nt_contracts.payload_warning import PayloadWarningEnvelopePayload
 
-from trid3nt_server.tools import RegisteredTool, TOOL_REGISTRY
+from trid3nt_server.agent.tools import RegisteredTool, TOOL_REGISTRY
 # engine-door refactor: run_modflow_job is DELETED (folded into the
 # modflow_contaminant_plume template). The news composer now calls the
 # modflow_contaminant_plume COMPOSER FUNCTION directly (not via the registry), so
 # the plume is mocked by patching that function (see _patch_plume) rather than by
 # installing a fake registered tool.
-from trid3nt_server.workflows.modflow.contaminant_plume import (
+from trid3nt_server.agent.workflows.modflow.contaminant_plume import (
     contaminant_plume as _cp_mod,
 )
-from trid3nt_server.workflows.modflow.contaminant_plume.contaminant_plume import (
+from trid3nt_server.agent.workflows.modflow.contaminant_plume.contaminant_plume import (
     ContaminantPlumeResult,
     ContaminantPlumeScenarioError,
 )
-from trid3nt_server.workflows.modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as gw
-from trid3nt_server.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
+from trid3nt_server.agent.workflows.modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as gw
+from trid3nt_server.agent.workflows.modflow.model_groundwater_contamination_scenario.model_groundwater_contamination_scenario import (
     Case2Result,
     ConfirmationDeniedError,
     DURATION_MAX_DAYS,
@@ -415,7 +415,7 @@ def test_solver_error_dict_surfaces_as_typed_error(
 
 def test_composer_registered_with_fr_dc6_metadata() -> None:
     """The LLM-facing wrapper is registered with workflow_dispatch metadata."""
-    import trid3nt_server.workflows  # noqa: F401 — fire registration
+    import trid3nt_server.agent.workflows  # noqa: F401 — fire registration
 
     entry = TOOL_REGISTRY.get("run_model_groundwater_contamination_scenario")
     assert entry is not None
@@ -425,7 +425,7 @@ def test_composer_registered_with_fr_dc6_metadata() -> None:
 
 
 def test_composer_in_hazard_modeling_category() -> None:
-    from trid3nt_server.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
+    from trid3nt_server.agent.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
 
     assert (
         PRIMARY_CATEGORY["run_model_groundwater_contamination_scenario"]

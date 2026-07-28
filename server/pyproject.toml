@@ -244,7 +244,7 @@ where = ["src"]
 # loaded via Path(__file__).parent (2026-06-30).
 [tool.setuptools.package-data]
 trid3nt_server = [
-    "workflows/manning_mapping.csv",
-    "data/tool_query_corpus.yaml",
-    "tools/README.md",
+    "agent/workflows/manning_mapping.csv",
+    "agent/data/tool_query_corpus.yaml",
+    "agent/tools/README.md",
 ]

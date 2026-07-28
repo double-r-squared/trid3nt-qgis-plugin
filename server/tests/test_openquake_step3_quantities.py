@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.workflows.openquake import postprocess_openquake as oq
-from trid3nt_server.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import (
+from trid3nt_server.agent.workflows.openquake import postprocess_openquake as oq
+from trid3nt_server.agent.workflows.openquake.model_seismic_hazard_scenario.model_seismic_hazard_scenario import (
     OpenQuakeWorkflowError,
     assemble_build_spec,
 )

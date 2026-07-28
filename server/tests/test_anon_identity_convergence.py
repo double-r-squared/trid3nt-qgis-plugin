@@ -27,7 +27,7 @@ from typing import Any
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
+from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID, authenticate_token
 from trid3nt_server.persistence import Persistence
 from trid3nt_contracts.auth import AuthTokenEnvelope
 from trid3nt_contracts.case import CaseSummary
@@ -384,7 +384,7 @@ async def test_token_path_ignores_anon_registry_and_hint() -> None:
 # These tests run on the REAL local substrate (FileMCPClient) for fidelity.
 # --------------------------------------------------------------------------- #
 
-from trid3nt_server import auth_handshake
+from trid3nt_server.credentials import auth_handshake
 from trid3nt_server.persistence import FileMCPClient
 
 

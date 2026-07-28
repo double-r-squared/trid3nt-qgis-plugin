@@ -15,9 +15,9 @@ import pathlib
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks import fetch_high_water_marks as hwm_mod
-from trid3nt_server.tools.fetchers.hydrology.fetch_high_water_marks.fetch_high_water_marks import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.hydrology.fetch_high_water_marks import fetch_high_water_marks as hwm_mod
+from trid3nt_server.agent.tools.fetchers.hydrology.fetch_high_water_marks.fetch_high_water_marks import (
     HighWaterMarksLayerURI,
     HwmEventNotFoundError,
     HwmInputError,
@@ -37,7 +37,7 @@ _EVENTS = [{"event_id": 287, "event_name": "2018 Michael"}]
 
 
 def _make_read_through_injector(store):
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path,
         compute_cache_key as ck, is_cacheable,
     )

@@ -106,7 +106,7 @@ def record(step: str, ok: bool, detail: str) -> None:
 def _read_bytes_any(uri: str) -> bytes:
     """Read raster/file bytes from s3:// or a local/file:// path."""
     if uri.startswith("s3://"):
-        from trid3nt_server.tools.cache import read_object_bytes_s3
+        from trid3nt_server.agent.tools.cache import read_object_bytes_s3
 
         return read_object_bytes_s3(uri)
     path = uri[len("file://"):] if uri.startswith("file://") else uri
@@ -323,7 +323,7 @@ REQUIRED_SETTER_KEYS = {
 
 
 def step_diagnostics(run_handle: str) -> dict[str, Any]:
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["read_run_diagnostics"].fn
     env = fn(run_handle=run_handle)
@@ -338,7 +338,7 @@ def step_diagnostics(run_handle: str) -> dict[str, Any]:
 
 
 def step_pairing(model_uri: str, obs_path: Path) -> Any:
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["extract_model_at_observations"].fn
     paired = fn(model_layer_uri=model_uri, observations_layer_uri=str(obs_path))
@@ -353,7 +353,7 @@ def step_pairing(model_uri: str, obs_path: Path) -> Any:
 
 
 def step_skill(paired_table_uri: str) -> dict[str, Any]:
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["compute_skill_metrics"].fn
     m = fn(paired_table_uri=paired_table_uri, variable="generic")
@@ -366,7 +366,7 @@ def step_skill(paired_table_uri: str) -> dict[str, Any]:
 
 
 def step_setter(parent_model_uri: str) -> dict[str, Any]:
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["set_sfincs_parameters"].fn
     watch_files = ["sfincs.man", "sfincs.inp"]
@@ -413,7 +413,7 @@ MINTED_RUN_IDS: list[str] = []
 
 
 async def run_baseline(rain_mm: float, tag: str) -> Any:
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     fn = TOOL_REGISTRY["run_model_flood_scenario"].fn
     with tempfile.TemporaryDirectory(prefix="l2_smoke_forcing_") as tmp:
@@ -597,7 +597,7 @@ async def main_smoke() -> int:
         try:
             model_root = model_root_from_child_setup(setter_env["child_setup_uri"])
             manifest_path = build_rerun_manifest(model_root)
-            from trid3nt_server.tools import TOOL_REGISTRY
+            from trid3nt_server.agent.tools import TOOL_REGISTRY
 
             run_solver = TOOL_REGISTRY["run_solver"].fn
             wait_for_completion = TOOL_REGISTRY["wait_for_completion"].fn
@@ -632,7 +632,7 @@ async def main_smoke() -> int:
                 )
             else:
                 child_run_id = handle.run_id
-                from trid3nt_server.workflows.sfincs.postprocess_flood import postprocess_flood
+                from trid3nt_server.agent.workflows.sfincs.postprocess_flood import postprocess_flood
 
                 layers, _metrics = postprocess_flood(child_result.output_uri, run_id=child_run_id)
                 child_peak_uri = layers[0].uri
@@ -1059,7 +1059,7 @@ def build_observed_forcing(
         plan["hours"] = [h.strftime("%Y-%m-%dT%H:00:00Z") for h in hours]
         return {"forcing_raster_uri": None, "source": "dry-run(plan-only)", **plan}
 
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     _OQ6_COLLAPSE_NOTE = (
         "OQ-6 area-mean netamt: the forcing_raster_uri contract COLLAPSES "
@@ -1299,7 +1299,7 @@ async def main_live(args: argparse.Namespace) -> int:
     # This code path is fully written (reuses the same TOOL_REGISTRY /
     # step_* helpers as smoke) but is NEVER invoked by this harness's own
     # automation -- executing it live is exclusively NATE's call.
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     log.info("LIVE: baseline flood run (forcing=%s) bbox=%s", args.forcing, aoi_bbox)
     # NOTE (discovered live in smoke mode): AssessmentEnvelope.project_id /
@@ -1415,7 +1415,7 @@ async def main_live(args: argparse.Namespace) -> int:
     if child_result.status != "complete":
         record("live-8-rerun-child", False, f"status={child_result.status} error={child_result.error_message}")
     else:
-        from trid3nt_server.workflows.sfincs.postprocess_flood import postprocess_flood
+        from trid3nt_server.agent.workflows.sfincs.postprocess_flood import postprocess_flood
 
         layers, _m = postprocess_flood(child_result.output_uri, run_id=handle.run_id)
         paired_held_after = step_pairing(layers[0].uri, held_path)

@@ -1,4 +1,4 @@
-"""Unit + integration tests for ``trid3nt_server.secrets_handler`` (file vault).
+"""Unit + integration tests for ``trid3nt_server.credentials.secrets_handler`` (file vault).
 
 TRID3NT is the local product: the cloud vaults (GCP Secret Manager, AWS SSM
 Parameter Store) are removed. Secrets are stored one-per-file under the
@@ -49,7 +49,7 @@ from trid3nt_server.persistence import (
     SECRETS_COLLECTION,
     Persistence,
 )
-from trid3nt_server.secrets_handler import (
+from trid3nt_server.credentials.secrets_handler import (
     FILE_VAULT_SCHEME,
     SecretError,
     SecretNotFoundError,

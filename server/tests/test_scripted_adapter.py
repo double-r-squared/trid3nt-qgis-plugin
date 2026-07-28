@@ -15,13 +15,13 @@ import json
 
 import pytest
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
     TextDeltaEvent,
     UsageMetadataEvent,
     stream_events_with_contents,
 )
-from trid3nt_server import scripted_adapter as sa
+from trid3nt_server.agent.adapters import scripted_adapter as sa
 
 
 @pytest.fixture(autouse=True)

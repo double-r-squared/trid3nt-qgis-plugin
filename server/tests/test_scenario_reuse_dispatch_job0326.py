@@ -21,10 +21,10 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
+from trid3nt_server.agent import tools as agent_tools
 from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
-from trid3nt_server.tools import RegisteredTool
-from trid3nt_server.uri_registry import reset_uri_registries_for_tests
+from trid3nt_server.agent.tools import RegisteredTool
+from trid3nt_server.emission.uri_registry import reset_uri_registries_for_tests
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.modflow_contracts import PlumeLayerURI
 from trid3nt_contracts.tool_registry import AtomicToolMetadata

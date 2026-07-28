@@ -33,7 +33,7 @@ from __future__ import annotations
 import yaml
 
 from trid3nt_server.server import _maybe_default_solver_bbox_to_pinned_aoi
-from trid3nt_server.workflows.sfincs.sfincs_builder import (
+from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
     WaterlevelForcing,

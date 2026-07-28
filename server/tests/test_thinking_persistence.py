@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     NEVER_REHYDRATE_FIELDS,
     FunctionCallEvent,
     GeminiSettings,

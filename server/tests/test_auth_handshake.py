@@ -1,4 +1,4 @@
-"""Unit + integration tests for ``trid3nt_server.auth_handshake`` (local build).
+"""Unit + integration tests for ``trid3nt_server.credentials.auth_handshake`` (local build).
 
 The local build has NO token verification (no identity provider): every
 connection resolves through the anonymous path (H.3) or, in local-docker
@@ -31,7 +31,7 @@ import json
 
 import pytest
 
-from trid3nt_server.auth_handshake import (
+from trid3nt_server.credentials.auth_handshake import (
     AuthResult,
     authenticate_token,
     build_auth_ack,

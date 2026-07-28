@@ -42,12 +42,12 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.processing.spatial_query.spatial_query import (
+from trid3nt_server.agent.tools.processing.spatial_query.spatial_query import (
     SpatialQueryError,
     SpatialQueryLayerURI,
     spatial_query,
 )
-from trid3nt_server.tools.processing.spatial_query import spatial_query as sq_module
+from trid3nt_server.agent.tools.processing.spatial_query import spatial_query as sq_module
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ def zone_path(tmp_path: Path) -> str:
 
 class TestRegistration:
     def test_registered_with_metadata(self):
-        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
         assert "spatial_query" in TOOL_REGISTRY
         entry = TOOL_REGISTRY["spatial_query"]
@@ -135,7 +135,7 @@ class TestRegistration:
 
     def test_folded_tools_are_gone(self):
         """The fold removes the three analytical Q&A registrations."""
-        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
 
         for name in (
             "summarize_layer_statistics",
@@ -148,7 +148,7 @@ class TestRegistration:
         """Order-robust replacement for the brittle count pin: other test files
         import workflow modules that grow the module-global registry (191 -> 195
         in full-suite order), so assert MEMBERSHIP not cardinality."""
-        from trid3nt_server.tools import TOOL_REGISTRY
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
         assert "spatial_query" in TOOL_REGISTRY
         for retired in ("summarize_layer_statistics", "count_features_above_threshold",
                         "aggregate_property_within_zone"):
@@ -157,14 +157,14 @@ class TestRegistration:
 
 
     def test_primary_category(self):
-        from trid3nt_server.categories import PRIMARY_CATEGORY
+        from trid3nt_server.agent.categories import PRIMARY_CATEGORY
 
         assert PRIMARY_CATEGORY["spatial_query"] == "geographic_primitives"
 
     def test_hot_set_floor_slot(self):
         """spatial_query inherits the layer-analysis floor slot the folded
         summarize_layer_statistics held."""
-        from trid3nt_server.categories import HOT_SET_TOOLS
+        from trid3nt_server.agent.categories import HOT_SET_TOOLS
 
         assert "spatial_query" in HOT_SET_TOOLS
         assert "summarize_layer_statistics" not in HOT_SET_TOOLS
@@ -427,7 +427,7 @@ class TestS3StagingFallback:
     def test_s3_ref_stages_via_shared_reader(self, points_path, monkeypatch):
         """With httpfs unavailable, an s3:// ref stages through the shared
         boto3 reader (cache.read_object_bytes_s3) and still queries."""
-        from trid3nt_server.tools import cache as cache_module
+        from trid3nt_server.agent.tools import cache as cache_module
 
         payload = Path(points_path).read_bytes()
         calls: list[str] = []
@@ -449,7 +449,7 @@ class TestS3StagingFallback:
         assert result["layer_views"] == {"pts": "s3://bkt/points.geojson"}
 
     def test_s3_reader_failure_is_download_failed(self, monkeypatch):
-        from trid3nt_server.tools import cache as cache_module
+        from trid3nt_server.agent.tools import cache as cache_module
 
         def _boom(uri: str) -> bytes:
             raise RuntimeError("AccessDenied")
@@ -581,7 +581,7 @@ class TestResultMaterialization:
         """Without _output_dir the FGB uploads to
         s3://trid3nt-runs/spatial_query/<ulid>.fgb via the solver's shared
         boto3 seam (in-memory S3 double - no network)."""
-        from trid3nt_server.tools.simulation.solver import solver
+        from trid3nt_server.agent.tools.simulation.solver import solver
 
         monkeypatch.setattr(solver, "_S3_CLIENT", None)
         monkeypatch.setattr(solver, "_RUNS_BUCKET", None)
@@ -670,7 +670,7 @@ class TestResultMaterialization:
         """ADR-0014: register_tool_result on the returned model mints the
         layer_id <-> uri pair so the NEXT spatial_query can reference the
         result layer by handle."""
-        from trid3nt_server.uri_registry import SessionUriRegistry
+        from trid3nt_server.emission.uri_registry import SessionUriRegistry
 
         out_dir = tmp_path / "out"
         out_dir.mkdir()
@@ -699,7 +699,7 @@ class TestHandleResolution:
         before the tool body; layer_refs is in NESTED_REF_PARAMS so every
         string VALUE resolves handle -> uri. Prove the seam end-to-end with a
         real SessionUriRegistry + the real tool."""
-        from trid3nt_server.uri_registry import SessionUriRegistry
+        from trid3nt_server.emission.uri_registry import SessionUriRegistry
 
         reg = SessionUriRegistry(session_id="test-spatial-query")
         reg.record("nsi-buildings-layer", uri=points_path, tool_name="fetch_usace_nsi")
@@ -718,7 +718,7 @@ class TestHandleResolution:
 
     def test_short_handle_resolves(self, points_path):
         """The ADR-0014 L<n> short handle (what the LLM actually sees)."""
-        from trid3nt_server.uri_registry import SessionUriRegistry
+        from trid3nt_server.emission.uri_registry import SessionUriRegistry
 
         reg = SessionUriRegistry(session_id="test-spatial-query-short")
         reg.record("layer-a", uri=points_path)
@@ -732,7 +732,7 @@ class TestHandleResolution:
         assert resolved["layer_refs"] == {"pts": points_path}
 
     def test_unknown_handle_raises_typed_resolution_error(self):
-        from trid3nt_server.uri_registry import (
+        from trid3nt_server.emission.uri_registry import (
             SessionUriRegistry,
             UriResolutionError,
         )
@@ -766,7 +766,7 @@ _RETRIEVAL_PHRASINGS = [
 
 @pytest.fixture(scope="module")
 def fresh_index():
-    import trid3nt_server.tools.discovery.search_tools.search_tools as dd
+    import trid3nt_server.agent.tools.search.search_tools.search_tools as dd
 
     dd._reset_index_for_tests()
     dd._get_index()
@@ -777,7 +777,7 @@ def fresh_index():
 class TestRetrieval:
     @pytest.mark.parametrize("phrase", _RETRIEVAL_PHRASINGS)
     def test_search_tools_top5(self, fresh_index, phrase):
-        import trid3nt_server.tools.discovery.search_tools.search_tools as dd
+        import trid3nt_server.agent.tools.search.search_tools.search_tools as dd
 
         res = asyncio.run(dd.search_tools(query=phrase, top_k=5))
         names = [r["tool_name"] for r in res["results"]]
@@ -785,7 +785,7 @@ class TestRetrieval:
 
     def test_retrieve_visible_tools_always_carries_spatial_query(self, fresh_index):
         """Hot-set floor membership: the model-free visibility check."""
-        from trid3nt_server.tools.discovery.tool_retrieval import (
+        from trid3nt_server.agent.tools.search.tool_retrieval import (
             retrieve_visible_tools,
         )
 
@@ -793,7 +793,7 @@ class TestRetrieval:
             assert "spatial_query" in retrieve_visible_tools(phrase, None, 8)
 
     def test_corpus_has_spatial_query_and_not_folded_tools(self):
-        import trid3nt_server.tools.discovery.search_tools.search_tools as dd
+        import trid3nt_server.agent.tools.search.search_tools.search_tools as dd
 
         corpus = dd._load_corpus()
         assert "spatial_query" in corpus

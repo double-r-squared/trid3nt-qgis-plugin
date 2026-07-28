@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import GeminiSettings
 from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 

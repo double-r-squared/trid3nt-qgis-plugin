@@ -39,9 +39,9 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
+from trid3nt_server.agent import tools as agent_tools
 from trid3nt_server.persistence import make_file_persistence
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.case import CaseCommandEnvelopePayload, CaseSummary
 from trid3nt_contracts.common import new_ulid, now_utc
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
@@ -616,7 +616,7 @@ async def test_e2e_full_turn_replays_complete_stream(
 # --------------------------------------------------------------------------- #
 
 
-from trid3nt_server.adapter import (  # noqa: E402 — grouped with the job-0315 test
+from trid3nt_server.agent.adapters.adapter import (  # noqa: E402 — grouped with the job-0315 test
     FunctionCallEvent,
     GeminiSettings,
     TextDeltaEvent,

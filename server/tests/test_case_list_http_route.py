@@ -116,7 +116,7 @@ def test_route_served_when_backend_env_unset(monkeypatch):
     payload = _body(out)
     assert [c["case_id"] for c in payload["cases"]] == [case.case_id]
     # Scoped to the fixed local single user without any env arming.
-    from trid3nt_server.auth_handshake import LOCAL_SINGLE_USER_ID
+    from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
 
     assert fake.calls == [LOCAL_SINGLE_USER_ID]
 
@@ -162,7 +162,7 @@ def test_case_list_happy_path_newest_first(monkeypatch):
     assert payload["cases"][1]["bbox"] is None
     assert payload["cases"][0]["updated_at"].startswith("2026-07-08")
     # Scoped to the local single fixed user, not a per-client hint.
-    from trid3nt_server.auth_handshake import LOCAL_SINGLE_USER_ID
+    from trid3nt_server.credentials.auth_handshake import LOCAL_SINGLE_USER_ID
 
     assert fake.calls == [LOCAL_SINGLE_USER_ID]
 

@@ -21,9 +21,9 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapter import GeminiSettings
-from trid3nt_server.scripted_adapter import set_script
-from trid3nt_server.tools.discovery import tool_retrieval as tr
+from trid3nt_server.agent.adapters.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.scripted_adapter import set_script
+from trid3nt_server.agent.tools.search import tool_retrieval as tr
 from trid3nt_contracts import new_ulid
 
 

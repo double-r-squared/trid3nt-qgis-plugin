@@ -32,7 +32,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.uri_registry import (
+from trid3nt_server.emission.uri_registry import (
     RESOLVABLE_URI_PARAMS,
     SessionUriRegistry,
     UriResolutionError,
@@ -229,7 +229,7 @@ class TestResolutionBranches:
     def test_branch3_close_match_substituted_with_warning(self, caplog) -> None:
         reg = make_registry()
         reg.record(NSI_LAYER_ID, uri=REAL_NSI_FGB, tool_name="fetch_usace_nsi")
-        with caplog.at_level("WARNING", logger="trid3nt_server.uri_registry"):
+        with caplog.at_level("WARNING", logger="trid3nt_server.emission.uri_registry"):
             out = reg.resolve_params(
                 "pelicun_damage_assessment",
                 {"assets_uri": MANGLED_NSI_LAYERID_BASENAME_0253},
@@ -596,7 +596,7 @@ class MockWebSocket:
 def _dummy_uri_tool():
     """Register two dummy tools: a producer (returns LayerURI) + a consumer."""
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
-    from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
+    from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
 
     captured: dict[str, Any] = {}
 
@@ -659,7 +659,7 @@ def test_invoke_seam_registers_then_resolves(_dummy_uri_tool) -> None:
 def test_invoke_seam_unresolved_raises_typed_error(_dummy_uri_tool) -> None:
     """The remaining branch-4 raise (display-face URL, no recoverable data
     URI) propagates as a typed retryable error the loop summarizes."""
-    from trid3nt_server.adapter import summarize_tool_result
+    from trid3nt_server.agent.adapters.adapter import summarize_tool_result
     from trid3nt_server.server import SessionState, _invoke_tool_via_emitter
 
     from trid3nt_contracts.common import new_ulid
@@ -757,7 +757,7 @@ class TestPlaceholderResolution:
 
     def test_placeholder_resolution_logs_info_telemetry(self, caplog) -> None:
         reg = self._registry_with_dem()
-        with caplog.at_level("INFO", logger="trid3nt_server.uri_registry"):
+        with caplog.at_level("INFO", logger="trid3nt_server.emission.uri_registry"):
             reg.resolve_params(
                 "publish_layer", {"layer_uri": "LayerURI_from_fetch_dem"}
             )

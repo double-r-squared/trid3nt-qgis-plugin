@@ -24,9 +24,9 @@ WebSocket server in ``server.run_server``, NOT in its own process — single
 process, single asyncio loop, no thread sharing.
 
 Backed entirely by:
-- ``trid3nt_server.categories.CATEGORIES`` / ``PRIMARY_CATEGORY`` /
+- ``trid3nt_server.agent.categories.CATEGORIES`` / ``PRIMARY_CATEGORY`` /
   ``SECONDARY_CATEGORIES`` — the 12 categories landed by job-B5.
-- ``trid3nt_server.tools.TOOL_REGISTRY`` — every registered tool's
+- ``trid3nt_server.agent.tools.TOOL_REGISTRY`` — every registered tool's
   ``AtomicToolMetadata`` carries the MCP annotation hints
   (``read_only_hint``, ``open_world_hint``, ``destructive_hint``,
   ``idempotent_hint``) + ``supports_global_query`` +
@@ -85,7 +85,7 @@ def _default_corpus_path() -> Path:
     if env_path:
         return Path(env_path).expanduser().resolve()
     here = Path(__file__).resolve()
-    return here.parent / "data" / "tool_query_corpus.yaml"
+    return here.parent / "agent" / "data" / "tool_query_corpus.yaml"
 
 
 def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
@@ -113,11 +113,11 @@ def _compose_corpus_from_tree() -> dict[str, list[str]]:
     pre-restructure monolith (flat composition, no tiers).
     """
     here = Path(__file__).resolve()
-    tools_dir = here.parent / "tools"
+    tools_dir = here.parent / "agent" / "tools"
     composed: dict[str, list[str]] = {}
     for cpath in sorted(tools_dir.rglob("corpus.yaml")):
         composed.update(_read_corpus_yaml(cpath))
-    composed.update(_read_corpus_yaml(here.parent / "data" / "tool_query_corpus.yaml"))
+    composed.update(_read_corpus_yaml(here.parent / "agent" / "data" / "tool_query_corpus.yaml"))
     return composed
 
 
@@ -209,12 +209,12 @@ def build_catalog_payload(
     # Importing categories at module load time is fine, but we want the
     # payload to reflect whatever the registry holds AT BUILD TIME, so we
     # snapshot here.
-    from .categories import (
+    from .agent.categories import (
         CATEGORIES,
         PRIMARY_CATEGORY,
         SECONDARY_CATEGORIES,
     )
-    from .tools import TOOL_REGISTRY
+    from .agent.tools import TOOL_REGISTRY
 
     global _PAYLOAD_CACHE
     if use_cache and _PAYLOAD_CACHE is not None:
@@ -1379,8 +1379,8 @@ def _read_tags_from_sidecars(fid: str) -> dict[str, Any] | None:
     try:
         import boto3
 
-        from .tools.cache import CACHE_BUCKET, cache_path
-        from .tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings import BUILDINGS_TAGS_SIDECAR_EXT, _FETCH_BUILDINGS_METADATA
+        from .agent.tools.cache import CACHE_BUCKET, cache_path
+        from .agent.tools.fetchers.socioeconomic.fetch_buildings.fetch_buildings import BUILDINGS_TAGS_SIDECAR_EXT, _FETCH_BUILDINGS_METADATA
     except Exception:  # noqa: BLE001 -- import wiring fault -> live fallback
         logger.warning("building-detail: sidecar import wiring failed", exc_info=True)
         return None
@@ -1508,7 +1508,7 @@ class _ExportQgisNotFound(Exception):
 def _export_qgis_fn():
     """Lazy-import seam for the export tool (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .tools.meta.export_case_to_qgis.export_case_to_qgis import export_case_to_qgis
+    from .agent.tools.meta.export_case_to_qgis.export_case_to_qgis import export_case_to_qgis
 
     return export_case_to_qgis
 
@@ -1584,7 +1584,7 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
     # A same-name model must re-discover its num_ctx (the provider/num_ctx
     # switch invalidates the process-lifetime cache).
     try:
-        from .context_budget import reset_num_ctx_cache
+        from .agent.gates.context_budget import reset_num_ctx_cache
 
         reset_num_ctx_cache()
     except Exception:  # noqa: BLE001 -- cache reset is best-effort, never fatal
@@ -1674,7 +1674,7 @@ class _CaseListPersistenceUnavailable(Exception):
 def _case_list_route_enabled() -> bool:
     """The route exists only under the local single-user seam (see above)."""
     try:
-        from .auth_handshake import _is_local_single_user_mode
+        from .credentials.auth_handshake import _is_local_single_user_mode
 
         return _is_local_single_user_mode()
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1708,7 +1708,7 @@ async def build_case_list_payload() -> dict[str, Any]:
     (the dispatcher maps that to an honest 503) -- never a fabricated empty
     list.
     """
-    from .auth_handshake import LOCAL_SINGLE_USER_ID
+    from .credentials.auth_handshake import LOCAL_SINGLE_USER_ID
     from .server import get_persistence
 
     persistence = get_persistence()
@@ -1757,7 +1757,7 @@ def _ingest_layer_route_enabled() -> bool:
     """The routes exist only under the local single-user seam (mirrors
     ``_case_list_route_enabled``)."""
     try:
-        from .auth_handshake import _is_local_single_user_mode
+        from .credentials.auth_handshake import _is_local_single_user_mode
 
         return _is_local_single_user_mode()
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1767,14 +1767,14 @@ def _ingest_layer_route_enabled() -> bool:
 def _ingest_layer_fn():
     """Lazy-import seam for the ingest core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .tools.meta.import_user_layer.import_user_layer import ingest_user_layer
+    from .agent.tools.meta.import_user_layer.import_user_layer import ingest_user_layer
 
     return ingest_user_layer
 
 
 def _upload_layer_file_fn():
     """Lazy-import seam for the staging-upload helper (monkeypatchable)."""
-    from .tools.meta.import_user_layer.import_user_layer import upload_layer_file
+    from .agent.tools.meta.import_user_layer.import_user_layer import upload_layer_file
 
     return upload_layer_file
 
@@ -1853,7 +1853,7 @@ def _probe_point_route_enabled() -> bool:
     """The route exists only under the local single-user seam (mirrors
     ``_ingest_layer_route_enabled`` / ``_case_list_route_enabled``)."""
     try:
-        from .auth_handshake import _is_local_single_user_mode
+        from .credentials.auth_handshake import _is_local_single_user_mode
 
         return _is_local_single_user_mode()
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -1863,7 +1863,7 @@ def _probe_point_route_enabled() -> bool:
 def _probe_point_fn():
     """Lazy-import seam for the probe core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .tools.meta.probe_point import probe_point_at
+    from .agent.tools.meta.probe_point import probe_point_at
 
     return probe_point_at
 
@@ -1922,7 +1922,7 @@ async def _handle_probe_point_post(raw_body: bytes) -> bytes:
 def _local_models_route_enabled() -> bool:
     """The route exists only for the OpenAI-compatible (local) provider."""
     try:
-        from .bedrock_adapter import model_provider
+        from .agent.adapters.bedrock_adapter import model_provider
 
         return model_provider() == "openai"
     except Exception:  # noqa: BLE001 -- import fault -> route absent
@@ -2021,7 +2021,7 @@ def _fetch_openrouter_models(base_url: str) -> bytes:
 
     import httpx
 
-    from .openai_adapter import openai_api_key
+    from .agent.adapters.openai_adapter import openai_api_key
 
     now = time.monotonic()
     cached = _OPENROUTER_MODELS_CACHE.get(base_url)
@@ -2230,7 +2230,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .tools.meta.export_case_to_qgis.export_case_to_qgis import CaseNotFoundError, ExportCaseError
+        from .agent.tools.meta.export_case_to_qgis.export_case_to_qgis import CaseNotFoundError, ExportCaseError
 
         try:
             body = await _handle_export_qgis_post(raw_body)
@@ -2281,7 +2281,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .tools.meta.import_user_layer.import_user_layer import MAX_INGEST_BYTES
+        from .agent.tools.meta.import_user_layer.import_user_layer import MAX_INGEST_BYTES
 
         if content_length <= 0:
             writer.write(
@@ -2307,7 +2307,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .tools.meta.import_user_layer.import_user_layer import ImportLayerError, ObjectTooLargeError
+        from .agent.tools.meta.import_user_layer.import_user_layer import ImportLayerError, ObjectTooLargeError
 
         try:
             filename = _parse_ingest_layer_filename(proxy_qs)
@@ -2380,7 +2380,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .tools.meta.import_user_layer.import_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
+        from .agent.tools.meta.import_user_layer.import_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
 
         try:
             body = await _handle_ingest_layer_post(raw_body)
@@ -2439,7 +2439,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .tools.meta.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
+        from .agent.tools.meta.probe_point import ProbePointCaseNotFoundError, ProbePointInputError
 
         try:
             body = await _handle_probe_point_post(raw_body)

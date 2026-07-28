@@ -42,7 +42,7 @@ from trid3nt_server.persistence import (
     FileMCPClient,
     Persistence,
 )
-from trid3nt_server.pipeline_emitter import PipelineEmitter
+from trid3nt_server.emission.pipeline_emitter import PipelineEmitter
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.case import CaseSummary
 from trid3nt_contracts.collections import CASES_ANON_TTL_SECONDS

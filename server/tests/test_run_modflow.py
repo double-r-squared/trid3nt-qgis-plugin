@@ -29,8 +29,8 @@ import pytest
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.modflow_contracts import MODFLOWRunArgs
 
-from trid3nt_server.workflows.modflow import run_modflow as rm
-from trid3nt_server.workflows.modflow import postprocess_modflow as pp
+from trid3nt_server.agent.workflows.modflow import run_modflow as rm
+from trid3nt_server.agent.workflows.modflow import postprocess_modflow as pp
 
 
 # --------------------------------------------------------------------------- #
@@ -146,7 +146,7 @@ def test_submit_modflow_run_dispatch_failure_is_typed(
     """A local-exec dispatch failure (no runs bucket) surfaces MODFLOW_DISPATCH_FAILED."""
     monkeypatch.setenv("TRID3NT_SOLVER_BACKEND", "local-docker")
     monkeypatch.delenv("TRID3NT_RUNS_BUCKET", raising=False)
-    from trid3nt_server.tools.simulation.solver import solver as _solver
+    from trid3nt_server.agent.tools.simulation.solver import solver as _solver
 
     monkeypatch.setattr(_solver, "_RUNS_BUCKET", None, raising=False)
     run_id = new_ulid()

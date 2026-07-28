@@ -38,8 +38,8 @@ import pytest
 
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.layer_uri_emit import emit_layer_uri
-from trid3nt_server.uri_registry import (
+from trid3nt_server.emission.layer_uri_emit import emit_layer_uri
+from trid3nt_server.emission.uri_registry import (
     SHORT_HANDLE_RE,
     SessionUriRegistry,
     UriResolutionError,
@@ -459,7 +459,7 @@ def _function_response_payloads(contents_per_turn):
 @pytest.mark.asyncio
 async def test_emit_seam_llm_sees_handle_not_uri() -> None:
     from trid3nt_server import server as agent_server
-    from trid3nt_server.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import GeminiSettings
     from trid3nt_server.main import _import_tools_registry
     from trid3nt_server.server import SessionState
 

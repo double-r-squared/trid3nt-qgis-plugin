@@ -17,11 +17,11 @@ import pytest
 import rasterio
 from rasterio.io import MemoryFile
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.hydrology.fetch_flood_extent_observation import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.hydrology.fetch_flood_extent_observation import (
     fetch_flood_extent_observation as fe_mod,
 )
-from trid3nt_server.tools.fetchers.hydrology.fetch_flood_extent_observation.fetch_flood_extent_observation import (
+from trid3nt_server.agent.tools.fetchers.hydrology.fetch_flood_extent_observation.fetch_flood_extent_observation import (
     FloodExtentInputError,
     FloodExtentLayerURI,
     FloodExtentNoCoverageError,
@@ -37,7 +37,7 @@ _REAL_FIXTURE = (
 
 
 def _make_read_through_injector(store):
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET, ReadThroughResult, cache_path,
         compute_cache_key as ck, is_cacheable,
     )

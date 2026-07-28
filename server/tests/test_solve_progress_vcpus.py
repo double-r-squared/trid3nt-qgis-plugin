@@ -21,7 +21,7 @@ import os
 
 import pytest
 
-from trid3nt_server.tools.simulation.solver.solver import (
+from trid3nt_server.agent.tools.simulation.solver.solver import (
     AWS_BATCH_COMPUTE_CLASS_SIZING,
     solve_progress_vcpus,
 )

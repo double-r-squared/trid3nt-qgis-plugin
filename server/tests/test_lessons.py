@@ -1,6 +1,6 @@
 """Lessons loop v1 (track 4, local-roadmap-2026-07-06) -- unit coverage.
 
-Covers the four halves of ``trid3nt_server.lessons`` plus the server envelope
+Covers the four halves of ``trid3nt_server.agent.lessons`` plus the server envelope
 handler:
 
 - WRITE side: template distillation from a synthetic failed-then-corrected
@@ -27,8 +27,8 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server import lessons
-from trid3nt_server.lessons import (
+from trid3nt_server.agent import lessons
+from trid3nt_server.agent.lessons import (
     LessonStore,
     get_lesson_store,
     lessons_appendix,

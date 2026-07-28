@@ -38,9 +38,9 @@ from typing import Any
 import pytest
 
 import trid3nt_server.server as server
-from trid3nt_server import tools as agent_tools
+from trid3nt_server.agent import tools as agent_tools
 from trid3nt_server.persistence import make_file_persistence
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.case import CaseCommandEnvelopePayload, CaseSummary
 from trid3nt_contracts.common import new_ulid, now_utc
 from trid3nt_contracts.execution import LayerURI

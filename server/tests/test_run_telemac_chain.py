@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.tools.simulation.solver.solver import (
+from trid3nt_server.agent.tools.simulation.solver.solver import (
     LOCAL_DOCKER_WORKFLOW_NAME,
     LOCAL_SOLVER_SPEC_REGISTRY,
     SOLVER_WORKFLOW_REGISTRY,
 )
-from trid3nt_server.workflows.telemac import run_telemac as T
+from trid3nt_server.agent.workflows.telemac import run_telemac as T
 
 
 def test_telemac_registered_in_solver_workflow_registry():

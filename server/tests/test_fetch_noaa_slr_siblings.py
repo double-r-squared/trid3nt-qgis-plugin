@@ -13,11 +13,11 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.ocean import _noaa_slr_raster as slr
-from trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_confidence import fetch_noaa_slr_confidence as confmod
-from trid3nt_server.tools.fetchers.ocean.fetch_noaa_slr_marsh import fetch_noaa_slr_marsh as marshmod
-from trid3nt_server.tools.fetchers.ocean._noaa_slr_raster import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.ocean import _noaa_slr_raster as slr
+from trid3nt_server.agent.tools.fetchers.ocean.fetch_noaa_slr_confidence import fetch_noaa_slr_confidence as confmod
+from trid3nt_server.agent.tools.fetchers.ocean.fetch_noaa_slr_marsh import fetch_noaa_slr_marsh as marshmod
+from trid3nt_server.agent.tools.fetchers.ocean._noaa_slr_raster import (
     NOAASLRRasterInputError,
     NOAASLRRasterUpstreamError,
     round_bbox,
@@ -84,7 +84,7 @@ def test_registered(name, source):
 
 
 def test_categories():
-    from trid3nt_server.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
+    from trid3nt_server.agent.categories import PRIMARY_CATEGORY, SECONDARY_CATEGORIES
 
     assert PRIMARY_CATEGORY["fetch_noaa_slr_confidence"] == "coastal"
     assert PRIMARY_CATEGORY["fetch_noaa_slr_marsh"] == "coastal"
@@ -96,7 +96,7 @@ def test_corpus():
 
     import yaml
 
-    from trid3nt_server.tools.discovery.search_tools.search_tools import _load_corpus
+    from trid3nt_server.agent.tools.search.search_tools.search_tools import _load_corpus
 
     corpus = _load_corpus()
     for n in ("fetch_noaa_slr_confidence", "fetch_noaa_slr_marsh"):

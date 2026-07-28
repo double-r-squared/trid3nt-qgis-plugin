@@ -1,6 +1,6 @@
 """Worker-side GeoClaw fort.q AMR frames -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``trid3nt_server.workflows.geoclaw.postprocess_geoclaw``. Runs
+Byte-faithful port of ``trid3nt_server.agent.workflows.geoclaw.postprocess_geoclaw``. Runs
 inside the Batch worker AFTER ``xgeoclaw`` / ``python setrun.py`` has produced
 its ``_output/fort.q*`` frames; rasterizes each frame's water depth onto a
 regular EPSG:4326 grid (finest-wins AMR coverage), writes peak + per-frame

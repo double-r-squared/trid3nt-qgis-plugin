@@ -30,8 +30,8 @@ import tempfile
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.socioeconomic.fetch_lehd_jobs.fetch_lehd_jobs import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.socioeconomic.fetch_lehd_jobs.fetch_lehd_jobs import (
     FIPS_TO_ABBR,
     LODES_SEGMENTS,
     LehdJobsInputError,

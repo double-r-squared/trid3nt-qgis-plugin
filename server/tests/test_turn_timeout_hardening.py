@@ -42,8 +42,8 @@ from unittest.mock import patch
 import pytest
 from botocore.exceptions import ClientError, ReadTimeoutError
 
-from trid3nt_server import bedrock_adapter as ba
-from trid3nt_server.adapter import TextDeltaEvent, UpstreamProviderError
+from trid3nt_server.agent.adapters import bedrock_adapter as ba
+from trid3nt_server.agent.adapters.adapter import TextDeltaEvent, UpstreamProviderError
 
 
 # --------------------------------------------------------------------------- #
@@ -419,7 +419,7 @@ async def test_solve_tool_path_unaffected_by_model_bound(monkeypatch):
     terminal with the live-turn registry cleared."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.adapter import FunctionCallEvent
+    from trid3nt_server.agent.adapters.adapter import FunctionCallEvent
     from trid3nt_contracts import new_ulid
 
     settings = agent_server.GeminiSettings(

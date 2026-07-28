@@ -21,7 +21,7 @@ import json
 
 import pytest
 
-from trid3nt_server.tools.fetchers.hazard.fetch_openfema_disasters import fetch_openfema_disasters as m
+from trid3nt_server.agent.tools.fetchers.hazard.fetch_openfema_disasters import fetch_openfema_disasters as m
 
 
 # ---------------------------------------------------------------------------

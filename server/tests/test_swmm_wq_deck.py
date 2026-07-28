@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.workflows.swmm import swmm_mesh_builder as mb
+from trid3nt_server.agent.workflows.swmm import swmm_mesh_builder as mb
 
 swmm_api = pytest.importorskip("swmm_api")
 pyswmm = pytest.importorskip("pyswmm")

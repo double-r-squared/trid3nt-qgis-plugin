@@ -68,7 +68,7 @@ async def _drive_decision(server, decision, revised=None):
 # 1) The SFINCS bbox-area suggestion is loop-safe + ladder/cap-correct.
 # --------------------------------------------------------------------------- #
 def test_sfincs_suggest_from_bbox_is_loop_safe_and_capped() -> None:
-    from trid3nt_server.workflows.sfincs.sfincs_builder import (
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
         SFINCS_RES_LADDER,
         suggest_sfincs_resolution_from_bbox,
     )
@@ -87,7 +87,7 @@ def test_sfincs_suggest_from_bbox_is_loop_safe_and_capped() -> None:
 
 
 def test_sfincs_suggest_huge_aoi_coarsens() -> None:
-    from trid3nt_server.workflows.sfincs.sfincs_builder import (
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
         suggest_sfincs_resolution_from_bbox,
     )
 
@@ -143,7 +143,7 @@ async def test_coastal_gate_emits_combined_run_settings(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_coastal_proceed_pins_both(monkeypatch) -> None:
     from trid3nt_server import server
-    from trid3nt_server.workflows.sfincs.sfincs_builder import (
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
         suggest_sfincs_resolution_from_bbox,
     )
 
@@ -197,7 +197,7 @@ async def test_coastal_narrow_scope_pins_both_overrides(monkeypatch) -> None:
 async def test_coastal_narrow_scope_partial_override(monkeypatch) -> None:
     """Override ONLY the cadence; the resolution falls back to the suggestion."""
     from trid3nt_server import server
-    from trid3nt_server.workflows.sfincs.sfincs_builder import (
+    from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
         suggest_sfincs_resolution_from_bbox,
     )
 

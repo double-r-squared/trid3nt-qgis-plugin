@@ -25,7 +25,7 @@ from typing import Any
 import pytest
 
 from trid3nt_contracts import new_ulid
-from trid3nt_server.tool_arg_normalizer import autofill_missing_bbox
+from trid3nt_server.agent.tool_arg_normalizer import autofill_missing_bbox
 
 ACTIVE_AOI = [-91.7, 41.9, -91.6, 42.0]
 CASE_BBOX = [-92.0, 41.5, -91.0, 42.5]
@@ -132,7 +132,7 @@ class TestAutofillHelper:
         assert out["bbox"] == ACTIVE_AOI
 
     def test_logs_one_line_when_it_fires(self, caplog) -> None:
-        with caplog.at_level("INFO", logger="trid3nt_server.tool_arg_normalizer"):
+        with caplog.at_level("INFO", logger="trid3nt_server.agent.tool_arg_normalizer"):
             autofill_missing_bbox(
                 "fetch_dem", {}, _tool_required_bbox,
                 active_aoi=ACTIVE_AOI, case_bbox=None,
@@ -206,7 +206,7 @@ class MockWebSocket:
 def _dummy_bbox_tool():
     """Register a dummy fetch tool whose bbox is REQUIRED."""
     from trid3nt_contracts.tool_registry import AtomicToolMetadata
-    from trid3nt_server.tools import TOOL_REGISTRY, RegisteredTool
+    from trid3nt_server.agent.tools import TOOL_REGISTRY, RegisteredTool
 
     captured: dict[str, Any] = {}
 

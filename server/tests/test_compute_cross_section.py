@@ -27,8 +27,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from trid3nt_server.tools.processing.charts_common import is_chart_emission_result
-from trid3nt_server.tools.processing.compute_cross_section.compute_cross_section import (
+from trid3nt_server.agent.tools.processing.charts_common import is_chart_emission_result
+from trid3nt_server.agent.tools.processing.compute_cross_section.compute_cross_section import (
     CrossSectionError,
     _resolve_line_coords,
     compute_cross_section,
@@ -461,7 +461,7 @@ def test_registered_via_package_import_path():
     import sys
 
     code = (
-        "import trid3nt_server.tools as t; "
+        "import trid3nt_server.agent.tools as t; "
         "import sys; "
         "sys.exit(0 if 'compute_cross_section' in t.TOOL_REGISTRY else 1)"
     )
@@ -474,7 +474,7 @@ def test_registered_via_package_import_path():
 
 
 def test_registered_in_tool_registry():
-    from trid3nt_server.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
 
     assert "compute_cross_section" in TOOL_REGISTRY
     md = TOOL_REGISTRY["compute_cross_section"].metadata
@@ -487,7 +487,7 @@ def test_registered_in_tool_registry():
 
 
 def test_in_geographic_primitives_category():
-    from trid3nt_server.categories import PRIMARY_CATEGORY, tools_for_category
+    from trid3nt_server.agent.categories import PRIMARY_CATEGORY, tools_for_category
 
     assert PRIMARY_CATEGORY.get("compute_cross_section") == "geographic_primitives"
     assert "compute_cross_section" in tools_for_category("geographic_primitives")

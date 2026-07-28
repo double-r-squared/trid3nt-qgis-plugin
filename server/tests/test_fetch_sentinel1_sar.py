@@ -28,9 +28,9 @@ import numpy as np
 import pytest
 import rasterio
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.imagery.fetch_sentinel1_sar import fetch_sentinel1_sar as s1_mod
-from trid3nt_server.tools.fetchers.imagery.fetch_sentinel1_sar.fetch_sentinel1_sar import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_sentinel1_sar import fetch_sentinel1_sar as s1_mod
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_sentinel1_sar.fetch_sentinel1_sar import (
     _METADATA,
     _NODATA,
     _STYLE_PRESET,
@@ -59,7 +59,7 @@ class _FakeStore:
 
 
 def _make_read_through_injector(fake):
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key as ck,

@@ -32,12 +32,12 @@ import pathlib
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 _SRC = pathlib.Path(server.__file__).resolve().parent
-_WORKFLOWS = _SRC / "workflows"
+_WORKFLOWS = _SRC / "agent" / "workflows"
 _FLOOD = _WORKFLOWS / "sfincs" / "flood" / "flood.py"  # engine-door rollout renamed/moved
 # model_flood_scenario -> sfincs_flood (tier=template) under workflows/sfincs/flood/.
 _GEOCLAW = _WORKFLOWS / "geoclaw" / "model_dambreak_geoclaw_scenario" / "model_dambreak_geoclaw_scenario.py"

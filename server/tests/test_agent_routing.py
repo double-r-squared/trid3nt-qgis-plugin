@@ -22,8 +22,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.adapter import (
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
     SYSTEM_PROMPT,
     TextDeltaEvent,
@@ -42,8 +42,8 @@ def test_sfincs_door_and_template_in_registry():
     run_model_flood_scenario name is GONE (engine-door refactor, no alias)."""
     # The workflow module is imported eagerly by main._import_tools_registry();
     # in tests we trigger the same import chain via the inflight job-0042 path.
-    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
-    import trid3nt_server.tools  # noqa: F401 -- door registration side-effect
+    from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
+    import trid3nt_server.agent.tools  # noqa: F401 -- door registration side-effect
     assert "run_sfincs" in agent_tools.TOOL_REGISTRY, "the SFINCS flood door must be registered"
     assert "sfincs_flood" in agent_tools.TOOL_REGISTRY, "the sfincs_flood template must be registered"
     assert "run_model_flood_scenario" not in agent_tools.TOOL_REGISTRY, (
@@ -59,8 +59,8 @@ def test_sfincs_door_and_template_in_registry():
 def test_build_tool_declarations_includes_flood_door():
     """Tool declaration list must include the run_sfincs door (the retrievable
     flood entry; the sfincs_flood template is pool-excluded, door-surfaced)."""
-    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
-    import trid3nt_server.tools  # noqa: F401 -- door registration side-effect
+    from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
+    import trid3nt_server.agent.tools  # noqa: F401 -- door registration side-effect
 
     decls = build_tool_declarations(agent_tools.TOOL_REGISTRY)
     names = [d.name for d in decls]
@@ -180,8 +180,8 @@ def test_system_prompt_mentions_flood_routing():
 
 def test_sfincs_flood_docstring_covers_user_intent():
     """Docstring must mention '100-year' to match the failing demo prompt."""
-    from trid3nt_server.tools import TOOL_REGISTRY
-    from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401
+    from trid3nt_server.agent.tools import TOOL_REGISTRY
+    from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401
 
     entry = TOOL_REGISTRY.get("sfincs_flood")
     assert entry is not None

@@ -93,15 +93,15 @@ def _gen_prompt(name: str, desc: str) -> str:
 
 def build_specs() -> list[dict]:
     import importlib as il, pkgutil
-    import trid3nt_server.tools as pkg
-    from trid3nt_server.tools import get_registered_tools
+    import trid3nt_server.agent.tools as pkg
+    from trid3nt_server.agent.tools import get_registered_tools
     for m in pkgutil.iter_modules(pkg.__path__):
-        il.import_module(f"trid3nt_server.tools.{m.name}")
+        il.import_module(f"trid3nt_server.agent.tools.{m.name}")
     try:
-        import trid3nt_server.workflows as wpkg
+        import trid3nt_server.agent.workflows as wpkg
         for m in pkgutil.iter_modules(wpkg.__path__):
             try:
-                il.import_module(f"trid3nt_server.workflows.{m.name}")
+                il.import_module(f"trid3nt_server.agent.workflows.{m.name}")
             except Exception:
                 pass
     except ImportError:

@@ -34,7 +34,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import GeminiSettings
 from trid3nt_contracts import new_ulid
 
 

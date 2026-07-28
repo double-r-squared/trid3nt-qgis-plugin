@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.imagery._satellite_slider import ts_int_to_iso
-from trid3nt_server.tools.fetchers.imagery.fetch_viirs_day_fire.fetch_viirs_day_fire import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.imagery._satellite_slider import ts_int_to_iso
+from trid3nt_server.agent.tools.fetchers.imagery.fetch_viirs_day_fire.fetch_viirs_day_fire import (
     DAY_FIRE_PRODUCT_SLUG,
     VIIRSDayFireBboxRequiredError,
     VIIRSDayFireInputError,

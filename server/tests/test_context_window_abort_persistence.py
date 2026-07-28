@@ -36,15 +36,15 @@ import logging
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.adapter import GeminiSettings, TextDeltaEvent, FunctionCallEvent
-from trid3nt_server import tools as agent_tools
-from trid3nt_server.context_budget import (
+from trid3nt_server.agent.adapters.adapter import GeminiSettings, TextDeltaEvent, FunctionCallEvent
+from trid3nt_server.agent import tools as agent_tools
+from trid3nt_server.agent.gates.context_budget import (
     CONTEXT_WINDOW_ABORT_NOTE,
     ContextWindowExceededError,
     FABRICATION_CAVEAT,
 )
 from trid3nt_server.persistence import make_file_persistence
-from trid3nt_server.tools import RegisteredTool
+from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_contracts.case import CaseCommandEnvelopePayload
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.tool_registry import AtomicToolMetadata

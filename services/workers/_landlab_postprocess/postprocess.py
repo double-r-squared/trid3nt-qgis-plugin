@@ -1,6 +1,6 @@
 """Worker-side Landlab field -> EPSG:4326 COG postprocess.
 
-Byte-faithful port of ``trid3nt_server.workflows.landlab.postprocess_landlab`` (probability
+Byte-faithful port of ``trid3nt_server.agent.workflows.landlab.postprocess_landlab`` (probability
 and overland-flow paths). Runs inside the Batch worker AFTER the component chain
 writes ``landlab_field.tif`` to the scratch directory; rewrites it as an
 EPSG:4326 COG and builds the typed ``publish_manifest.json`` dict.

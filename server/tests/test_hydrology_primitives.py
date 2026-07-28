@@ -38,10 +38,10 @@ from shapely.ops import unary_union
 
 from trid3nt_contracts.execution import LayerURI
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing._hydrology_common import HydrologyAoiTooLargeError, HydrologyInputError
-from trid3nt_server.tools.processing.delineate_watershed.delineate_watershed import WatershedLayerURI, _auto_bbox, delineate_watershed
-from trid3nt_server.tools.processing.extract_stream_network.extract_stream_network import NoStreamsError, StreamNetworkLayerURI, extract_stream_network
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.processing._hydrology_common import HydrologyAoiTooLargeError, HydrologyInputError
+from trid3nt_server.agent.tools.processing.delineate_watershed.delineate_watershed import WatershedLayerURI, _auto_bbox, delineate_watershed
+from trid3nt_server.agent.tools.processing.extract_stream_network.extract_stream_network import NoStreamsError, StreamNetworkLayerURI, extract_stream_network
 
 # Synthetic geographic grid: 60x60 cells of 0.001 deg.
 N = 60

@@ -20,12 +20,12 @@ from __future__ import annotations
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-from trid3nt_server.tools.meta.passthroughs import passthroughs
+from trid3nt_server.agent.tools.meta.passthroughs import passthroughs
 
-from trid3nt_server.tools.discovery.qgis_discovery import qgis_discovery
-from trid3nt_server.tools.discovery.qgis_discovery.qgis_discovery import (
+from trid3nt_server.agent.tools.search.qgis_discovery import qgis_discovery
+from trid3nt_server.agent.tools.search.qgis_discovery.qgis_discovery import (
     CURATED_ALLOWLIST,
     MAX_LIST_RESULTS,
     SOURCE_CLASS,
@@ -175,7 +175,7 @@ def fake_storage(monkeypatch: pytest.MonkeyPatch) -> _FakeStorageClient:
     implementation that mints ``s3://`` URIs and reads/writes ``fake._store``
     (keyed by object KEY), so the cache hit/miss/write assertions hold.
     """
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -438,7 +438,7 @@ def test_qgis_process_raises_runtime_error_when_no_backend(monkeypatch) -> None:
     """
     import shutil
 
-    from trid3nt_server.tools.meta.passthroughs.passthroughs import qgis_process
+    from trid3nt_server.agent.tools.meta.passthroughs.passthroughs import qgis_process
 
     monkeypatch.setenv("TRID3NT_QGIS_ONBOX_DOCKER", "on")
     monkeypatch.delenv("TRID3NT_QGIS_DOCKER_IMAGE", raising=False)

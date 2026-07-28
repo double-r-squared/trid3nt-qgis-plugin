@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.adapter import GeminiSettings, MAX_TURN_ITERATIONS
+from trid3nt_server.agent.adapters.adapter import GeminiSettings, MAX_TURN_ITERATIONS
 from trid3nt_server.server import (
     SessionState,
     _POST_DELIVERABLE_WRAPUP_ROUNDS,

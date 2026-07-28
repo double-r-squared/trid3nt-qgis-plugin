@@ -24,16 +24,16 @@ import pytest
 
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
-from trid3nt_server.adapter import GeminiSettings, TextDeltaEvent
-from trid3nt_server.categories import HOT_SET_TOOLS
-from trid3nt_server.tool_gating import (
+from trid3nt_server.agent.adapters.adapter import GeminiSettings, TextDeltaEvent
+from trid3nt_server.agent.categories import HOT_SET_TOOLS
+from trid3nt_server.agent.gates.tool_gating import (
     META_TOOL_FLOOR,
     TOOL_GATING_TOPK_DEFAULT,
     gate_tool_registry,
     gating_topk,
     named_tools_in_text,
 )
-from trid3nt_server.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools import TOOL_REGISTRY
 from trid3nt_contracts import new_ulid
 
 # The gating tests rank/keep REAL registry names -- make sure the full
@@ -204,7 +204,7 @@ async def _fake_stream(*_a, **_k):
 async def _drive_turn_and_capture_registry(monkeypatch) -> dict:
     """Run one no-tool turn and capture the registry handed to
     build_tool_declarations."""
-    from trid3nt_server.tools.discovery import tool_retrieval as tr
+    from trid3nt_server.agent.tools.search import tool_retrieval as tr
 
     monkeypatch.setattr(
         tr, "retrieve_ranked_tools", lambda text, k=25: _ranked(30)[: max(k, 2)]
@@ -253,7 +253,7 @@ async def test_openai_provider_gate_disabled_by_env(monkeypatch):
 async def test_scripted_provider_turn_is_never_gated(monkeypatch):
     # bedrock/scripted/vertex paths byte-unchanged: full registry always.
     monkeypatch.setenv("MODEL_PROVIDER", "scripted")
-    from trid3nt_server.scripted_adapter import set_script
+    from trid3nt_server.agent.adapters.scripted_adapter import set_script
 
     set_script([{"text": "ok"}])
     try:
@@ -267,7 +267,7 @@ async def test_scripted_provider_turn_is_never_gated(monkeypatch):
 async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     monkeypatch.delenv("TRID3NT_TOOL_GATING_TOPK", raising=False)
-    from trid3nt_server.tools.discovery import tool_retrieval as tr
+    from trid3nt_server.agent.tools.search import tool_retrieval as tr
 
     monkeypatch.setattr(tr, "retrieve_ranked_tools", lambda text, k=25: [])
 
@@ -306,7 +306,7 @@ def test_default_declarations_exclude_templates_but_door_expansion_declares():
     """DEFAULT declarations exclude every tier=template engine template; a
     simulated door expansion (adding a template back into the per-turn
     registry, exactly as the door-expand block does) makes it declarable."""
-    from trid3nt_server.adapter import build_tool_declarations
+    from trid3nt_server.agent.adapters.adapter import build_tool_declarations
 
     templates = _template_names()
     assert templates, "expected registered tier=template engine templates"

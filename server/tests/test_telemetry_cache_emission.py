@@ -26,7 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trid3nt_server.adapter import UsageMetadataEvent
+from trid3nt_server.agent.adapters.adapter import UsageMetadataEvent
 from trid3nt_server.server import SessionState, _emit_cache_status
 from trid3nt_server.telemetry import compute_args_hash, emit_tool_call_event
 

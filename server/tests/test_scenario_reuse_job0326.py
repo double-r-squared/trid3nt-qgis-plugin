@@ -18,7 +18,7 @@ tests cover the deterministic backstop:
 
 from __future__ import annotations
 
-from trid3nt_server.adapter import build_layers_present_note
+from trid3nt_server.agent.adapters.adapter import build_layers_present_note
 from trid3nt_server.scenario_reuse import (
     ScenarioResultIndex,
     layer_id_scenario_type,

@@ -50,11 +50,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.simulation.postprocess_pelicun.postprocess_pelicun import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.simulation.postprocess_pelicun.postprocess_pelicun import (
     PelicunPostprocessEmptyError,
 )
-from trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope import (
+from trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope import (
     ComputeImpactEnvelopeError,
     ComputeImpactEnvelopeGeocodeError,
     ComputeImpactEnvelopeInputError,
@@ -237,11 +237,11 @@ async def test_chains_geocode_then_inventory_then_pelicun_then_postprocess() -> 
             },
         ),
         patch(
-            "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.geocode_location",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.geocode_location",
             return_value=geocode_result,
         ) as geocode_mock,
         patch(
-            "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -328,7 +328,7 @@ async def test_custom_fragility_set_threads_to_postprocess() -> None:
             },
         ),
         patch(
-            "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -380,7 +380,7 @@ async def test_handles_postprocess_pelicun_error_propagates() -> None:
             },
         ),
         patch(
-            "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -432,7 +432,7 @@ async def test_narrative_string_contains_count_and_dollar() -> None:
             },
         ),
         patch(
-            "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -474,7 +474,7 @@ async def test_narrative_omits_population_when_ms_buildings() -> None:
     with (
         patch.dict(TOOL_REGISTRY, {"pelicun_damage_assessment": fake_ms}),
         patch(
-            "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -547,7 +547,7 @@ async def test_extra_kwargs_swallowed() -> None:
             },
         ),
         patch(
-            "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):
@@ -634,7 +634,7 @@ async def test_ms_buildings_path_routes_through_pelicun_autofetch() -> None:
     with (
         patch.dict(TOOL_REGISTRY, {"pelicun_damage_assessment": fake_ms}),
         patch(
-            "trid3nt_server.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
+            "trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope.postprocess_pelicun",
             new=postprocess_mock,
         ),
     ):

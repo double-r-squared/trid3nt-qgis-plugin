@@ -26,8 +26,8 @@ import os
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.weather.fetch_hrrr_smoke.fetch_hrrr_smoke import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.weather.fetch_hrrr_smoke.fetch_hrrr_smoke import (
     HRRRSmokeEmptyError,
     HRRRSmokeError,
     HRRRSmokeInputError,
@@ -330,7 +330,7 @@ def test_live_fetch_norcal_near_surface_smoke(tmp_path, monkeypatch):
     Zarr read, the LCC → EPSG:4326 reprojection, the bbox clip, and the
     COG write — that's the whole upstream-facing surface.
     """
-    from trid3nt_server.tools.fetchers.weather.fetch_hrrr_smoke import fetch_hrrr_smoke as mod
+    from trid3nt_server.agent.tools.fetchers.weather.fetch_hrrr_smoke import fetch_hrrr_smoke as mod
 
     captured: dict[str, bytes] = {}
 
@@ -340,7 +340,7 @@ def test_live_fetch_norcal_near_surface_smoke(tmp_path, monkeypatch):
         captured["bytes"] = data
         out = tmp_path / "live.tif"
         out.write_bytes(data)
-        from trid3nt_server.tools.cache import ReadThroughResult
+        from trid3nt_server.agent.tools.cache import ReadThroughResult
 
         return ReadThroughResult(
             uri=f"file://{out}", data=data, hit=False

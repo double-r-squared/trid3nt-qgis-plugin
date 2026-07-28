@@ -237,7 +237,7 @@ def test_snapshot_without_inline_is_exact_case_open_payload() -> None:
 
 
 def test_snapshot_merges_density_tag_like_emit_session_state() -> None:
-    from trid3nt_server.tools.vector_tiles import DensifyMeta
+    from trid3nt_server.agent.tools.vector_tiles import DensifyMeta
 
     p, case_id, vector_layer_id, inline = _seed_case_with_vector_layer()
     fake = _FakeS3()

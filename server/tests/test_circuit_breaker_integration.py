@@ -24,12 +24,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from trid3nt_server.adapter import (
+from trid3nt_server.agent.adapters.adapter import (
     GeminiSettings,
     MAX_TURN_ITERATIONS,
     summarize_tool_result,
 )
-from trid3nt_server.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
+from trid3nt_server.agent.gates.circuit_breaker import CircuitBreakerError, ToolCircuitBreaker
 from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 

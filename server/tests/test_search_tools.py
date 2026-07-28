@@ -31,16 +31,16 @@ from typing import Any
 import pytest
 
 # Force the full tool + workflow surface to register before the index builds.
-from trid3nt_server.tools import TOOL_REGISTRY  # noqa: F401
-from trid3nt_server.tools.publish_layer import publish_layer  # noqa: F401 — registration side-effect
-from trid3nt_server.tools.discovery.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
-from trid3nt_server.tools.discovery.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
-from trid3nt_server.tools.discovery.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
-from trid3nt_server.tools.discovery.search_tools import search_tools as discover_module
-from trid3nt_server.tools.simulation.solver import solver  # noqa: F401 — registration side-effect
-from trid3nt_server.workflows.sfincs.flood import flood  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools import TOOL_REGISTRY  # noqa: F401
+from trid3nt_server.agent.tools.publish_layer import publish_layer  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.fetch_from_catalog import fetch_from_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.search_data_catalog import search_data_catalog  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.qgis_discovery import qgis_discovery  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.tools.search.search_tools import search_tools as discover_module
+from trid3nt_server.agent.tools.simulation.solver import solver  # noqa: F401 — registration side-effect
+from trid3nt_server.agent.workflows.sfincs.flood import flood  # noqa: F401 — registration side-effect
 
-from trid3nt_server.tools.discovery.search_tools.search_tools import (
+from trid3nt_server.agent.tools.search.search_tools.search_tools import (
     _LEX_REINFORCE_GATE_DOOR,
     _LEX_REINFORCE_GATE_GENERAL,
     _close_vocab_matches,

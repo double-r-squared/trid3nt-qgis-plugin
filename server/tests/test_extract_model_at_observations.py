@@ -22,9 +22,9 @@ from rasterio.transform import from_bounds
 from shapely.geometry import Point
 
 from trid3nt_contracts.execution import LayerURI
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.processing.extract_model_at_observations import extract_model_at_observations as exmod
-from trid3nt_server.tools.processing.extract_model_at_observations.extract_model_at_observations import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.processing.extract_model_at_observations import extract_model_at_observations as exmod
+from trid3nt_server.agent.tools.processing.extract_model_at_observations.extract_model_at_observations import (
     PairedObsLayerURI,
     PairingDatumMismatchError,
     PairingInputError,

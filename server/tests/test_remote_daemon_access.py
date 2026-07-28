@@ -31,7 +31,7 @@ from trid3nt_contracts.auth import AdvertisedEndpoints, AuthAckEnvelope
 from trid3nt_contracts.common import new_ulid, now_utc
 from trid3nt_contracts.user import User
 
-from trid3nt_server.auth_handshake import (
+from trid3nt_server.credentials.auth_handshake import (
     ADVERTISED_DATA_PORT,
     ADVERTISED_HTTP_PORT_DEFAULT,
     AuthResult,

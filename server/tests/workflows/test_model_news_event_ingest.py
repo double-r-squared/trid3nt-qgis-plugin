@@ -39,8 +39,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.workflows.shared.model_news_event_ingest.model_news_event_ingest import (
     EventIngestInputError,
     SUPPORTED_EVENT_TYPES,
     _claim_targets_for_event_type,
@@ -127,7 +127,7 @@ async def test_workflow_aggregates_mixed_source_types() -> None:
             clear=False,
         ),
         patch(
-            "trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
+            "trid3nt_server.agent.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
         ) as mock_registry_fn,
     ):
         # Build a dispatcher that returns the right fake per tool name.
@@ -240,7 +240,7 @@ async def test_single_url_source_workflow() -> None:
     sources = [{"type": "url", "identifier": "https://news.example.com/spill"}]
 
     with patch(
-        "trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
+        "trid3nt_server.agent.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
     ) as mock_registry_fn:
 
         def _dispatch(name: str):
@@ -309,7 +309,7 @@ async def test_provenance_includes_all_source_urls() -> None:
         {"type": "url", "identifier": "https://news.example.com/b"},
     ]
     with patch(
-        "trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
+        "trid3nt_server.agent.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
     ) as mock_registry_fn:
 
         def _dispatch(name: str):
@@ -493,7 +493,7 @@ async def test_geocode_is_fed_exact_derived_location() -> None:
     geocode_call_args: list[Any] = []
 
     with patch(
-        "trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
+        "trid3nt_server.agent.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
     ) as mock_registry_fn:
 
         def _capture_geocode(*args, **kwargs):
@@ -605,7 +605,7 @@ async def test_workflow_stops_before_solver_dispatch() -> None:
     dispatched_tools: list[str] = []
 
     with patch(
-        "trid3nt_server.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
+        "trid3nt_server.agent.workflows.shared.model_news_event_ingest.model_news_event_ingest._registry_fn"
     ) as mock_registry_fn:
 
         def _dispatch(name: str):

@@ -34,8 +34,8 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from trid3nt_server.tools import TOOL_REGISTRY
-from trid3nt_server.tools.fetchers.ocean.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge import (
+from trid3nt_server.agent.tools import TOOL_REGISTRY
+from trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge.fetch_gtsm_tide_surge import (
     GTSMAuthError,
     GTSMEmptyError,
     GTSMInputError,
@@ -119,7 +119,7 @@ def _make_read_through_injector(fake_gcs):
     ``read_through`` off an in-memory S3 store (``fake_gcs.store``, keyed by
     object KEY), minting ``s3://`` URIs and honoring cache hit/miss/write.
     """
-    from trid3nt_server.tools.cache import (
+    from trid3nt_server.agent.tools.cache import (
         CACHE_BUCKET,
         cache_path,
         compute_cache_key,
@@ -620,7 +620,7 @@ def test_end_to_end_mocked_happy_path(tmp_path, monkeypatch):
     zip_bytes = _make_zip_with_ncs([nc_path])
 
     # Patch the CDS retrieve at module level.
-    from trid3nt_server.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge as mod
+    from trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge as mod
 
     monkeypatch.setattr(
         mod, "_cds_retrieve_with_timeout", _fake_cds_retrieve_factory(zip_bytes)
@@ -676,7 +676,7 @@ def test_cache_hit_on_second_identical_call(tmp_path, monkeypatch):
     )
     zip_bytes = _make_zip_with_ncs([nc_path])
 
-    from trid3nt_server.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge as mod
+    from trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge as mod
 
     call_count = {"n": 0}
 
@@ -731,7 +731,7 @@ def test_output_flavor_distinct_cache_keys(tmp_path, monkeypatch):
     )
     zip_sr = _make_zip_with_ncs([nc_path_sr])
 
-    from trid3nt_server.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge as mod
+    from trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge as mod
 
     def selective_retrieve(api_url, api_key, request, out_path, timeout_s=300):
         var_list = request["variable"]
@@ -789,7 +789,7 @@ def test_live_florida_coast_hurricane_ian(tmp_path):
     # Inject the fake GCS so the live test does not require live cache-bucket
     # write permission. The CDS retrieve is real.
     fake_gcs = FakeStorageClient()
-    from trid3nt_server.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge as mod
+    from trid3nt_server.agent.tools.fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge as mod
 
     patched_rt = _make_read_through_injector(fake_gcs)
     orig_rt = mod.read_through
