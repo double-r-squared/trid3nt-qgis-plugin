@@ -438,7 +438,7 @@ class ChartsPanel(QWidget):
         self._card: Optional[QWidget] = None  # the canvas / fallback label
         self.caption_label = QLabel("")
         self.caption_label.setWordWrap(True)
-        self.caption_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.caption_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         if block_style:
             self.caption_label.setStyleSheet(block_style)
         self.caption_label.setVisible(False)
@@ -557,7 +557,7 @@ class ChartsPanel(QWidget):
         figure = Figure(figsize=(4.0, _CANVAS_HEIGHT / 100.0), dpi=100)
         canvas = FigureCanvasQTAgg(figure)
         canvas.setFixedHeight(_CANVAS_HEIGHT)
-        canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         spec = chart.get("vega_lite_spec") or {}
         self.last_render_summary = render_spec(figure, spec)
         canvas.draw()

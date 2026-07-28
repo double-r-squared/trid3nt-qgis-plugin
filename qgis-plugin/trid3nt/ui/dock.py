@@ -443,20 +443,20 @@ class Trid3ntDock(QDockWidget):
         # -> setWindowTitle), freeing this vertical space.
 
         line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
         outer.addWidget(line)
 
         # Message list
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         # E1 (NATE 2026-07-20): the transcript NEVER grows a horizontal
         # scrollbar -- error text (and every other chat line) must reflow with
         # the resizable chat panel, not pin it wide. AlwaysOff (was the default
         # ScrollBarAsNeeded, which a long unbroken error token could trip);
         # wrapped labels cap their minimum width to 1 so content reflows.
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.messages_host = QWidget()
         self.messages_layout = QVBoxLayout(self.messages_host)
         self.messages_layout.setContentsMargins(2, 2, 2, 2)
@@ -484,9 +484,9 @@ class Trid3ntDock(QDockWidget):
         self.probe_results_toggle.clicked.connect(self._toggle_probe_results)
         probe_lay.addWidget(self.probe_results_toggle)
         self.probe_result_label = _WrapLabel("")
-        self.probe_result_label.setTextFormat(Qt.PlainText)
+        self.probe_result_label.setTextFormat(Qt.TextFormat.PlainText)
         self.probe_result_label.setTextInteractionFlags(
-            Qt.TextSelectableByMouse
+            Qt.TextInteractionFlag.TextSelectableByMouse
         )
         self.probe_result_label.setStyleSheet(_THINKING_BLOCK_STYLE)
         probe_lay.addWidget(self.probe_result_label)
@@ -548,8 +548,8 @@ class Trid3ntDock(QDockWidget):
         lay = QHBoxLayout(container)
         lay.setContentsMargins(40, 2, 0, 2)
         lbl = _WrapLabel(text)
-        lbl.setTextFormat(Qt.PlainText)
-        lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        lbl.setTextFormat(Qt.TextFormat.PlainText)
+        lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lbl.setStyleSheet(_USER_BUBBLE_STYLE)
         # BUG 1 (live-feedback 2026-07-12): the bare QSizePolicy(h, v) ctor
         # DROPS the height-for-width flag QLabel.setWordWrap had set, which
@@ -558,10 +558,10 @@ class Trid3ntDock(QDockWidget):
         # wrapped text is; _WrapLabel's min-height re-assert covers the
         # layout paths that still ignore height-for-width. Horizontal
         # Maximum + AlignRight keep the hug-the-text right-aligned look.
-        policy = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        policy = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
         policy.setHeightForWidth(True)
         lbl.setSizePolicy(policy)
-        lay.addWidget(lbl, 0, Qt.AlignRight)
+        lay.addWidget(lbl, 0, Qt.AlignmentFlag.AlignRight)
         self.messages_layout.insertWidget(self.messages_layout.count() - 1, container)
         self._scroll_to_bottom()
 
@@ -976,7 +976,7 @@ class Trid3ntDock(QDockWidget):
         so the ring is transformed 4326 -> canvas CRS via QgsCoordinateTransform
         exactly like ``layers.zoom_to_bbox4326`` (never hand-rolled). A single
         reused ``QgsRubberBand`` (built lazily -- it needs a live canvas) holds
-        the geometry; a subtle blue accent, Qt.DotLine pen, transparent fill so
+        the geometry; a subtle blue accent, Qt.PenStyle.DotLine pen, transparent fill so
         it reads as an EXTENT, not a filled feature. Headless-safe: no canvas
         (or any construction failure) is a silent no-op, never a crash -- the
         state (``_case_bbox``) is still authoritative for the agent.
@@ -1016,7 +1016,7 @@ class Trid3ntDock(QDockWidget):
                 # Outline-only: a fully transparent fill leaves just the ring.
                 self._aoi_rubber.setFillColor(QColor(0, 0, 0, 0))
                 try:
-                    self._aoi_rubber.setLineStyle(Qt.DotLine)
+                    self._aoi_rubber.setLineStyle(Qt.PenStyle.DotLine)
                 except Exception:  # noqa: BLE001 -- older builds lack it
                     pass
             self._aoi_rubber.setToGeometry(QgsGeometry.fromRect(rect), None)
@@ -1110,8 +1110,8 @@ class Trid3ntDock(QDockWidget):
         if (
             getattr(self, "_aoi_key_filter_on", False)
             and self.aoi_btn.isChecked()
-            and event.type() == QEvent.KeyPress
-            and event.key() in (Qt.Key_Backspace, Qt.Key_Delete)
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete)
         ):
             self._clear_aoi()
             return True
@@ -1283,7 +1283,7 @@ class Trid3ntDock(QDockWidget):
             on_connect=self.connect_agent,
             connected=self.bridge.running,
         )
-        dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
+        dlg.exec()
         # Item 4: the AOI toggles live only in Settings. Item R3 (2026-07-18):
         # no pinned status line to repaint anymore -- the next send recomputes
         # the AOI and notes any CHANGED notice inline in the transcript.
@@ -1307,7 +1307,7 @@ class Trid3ntDock(QDockWidget):
         if not self._cases or not self._connected:
             self._load_cold_case_list(dlg)
         try:
-            dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
+            dlg.exec()
         finally:
             self._cases_dialog = None
 
@@ -1535,12 +1535,12 @@ class Trid3ntDock(QDockWidget):
         box = QMessageBox(self)
         box.setWindowTitle("Push layer")
         box.setText(f"Send '{layer.name()}' to the current case?")
-        box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-        box.setDefaultButton(QMessageBox.Ok)
+        box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Ok)
         aoi_checkbox = QCheckBox("Set as case AOI")
         aoi_checkbox.setChecked(False)
         box.setCheckBox(aoi_checkbox)
-        if box.exec_() != QMessageBox.Ok:
+        if box.exec() != QMessageBox.StandardButton.Ok:
             return
         make_aoi = aoi_checkbox.isChecked()
 

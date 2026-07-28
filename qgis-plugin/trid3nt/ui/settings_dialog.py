@@ -157,7 +157,7 @@ class SettingsDialog(QDialog):
         form.addRow("Remote agent URL", self.remote_url_edit)
 
         self.token_edit = QLineEdit(settings.token)
-        self.token_edit.setEchoMode(QLineEdit.Password)
+        self.token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.token_edit.setPlaceholderText(
             "optional shared token (tailnet) / bearer token (remote)"
         )
@@ -209,7 +209,7 @@ class SettingsDialog(QDialog):
         # never sent over the WS (no per-message carrier, and a live key must
         # not leak onto the wire).
         self.provider_key_edit = QLineEdit(settings.openrouter_api_key)
-        self.provider_key_edit.setEchoMode(QLineEdit.Password)
+        self.provider_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.provider_key_edit.setPlaceholderText(
             "provider API key (OpenRouter / OpenAI / Groq)"
         )
@@ -326,7 +326,7 @@ class SettingsDialog(QDialog):
 
         self._refresh_version_indicator()
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)

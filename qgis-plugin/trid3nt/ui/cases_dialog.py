@@ -64,7 +64,7 @@ class CasesDialog(QDialog):
         self.listw.itemClicked.connect(self._open_item)
         self.listw.itemDoubleClicked.connect(self._open_item)
         self.listw.itemChanged.connect(self._commit_rename)
-        self.listw.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.listw.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.listw.customContextMenuRequested.connect(self._show_context_menu)
         lay.addWidget(self.listw, 1)
 
@@ -92,7 +92,7 @@ class CasesDialog(QDialog):
         selected = None
         current = self.listw.currentItem()
         if current is not None:
-            selected = current.data(Qt.UserRole)
+            selected = current.data(Qt.ItemDataRole.UserRole)
         # R1: guard the itemChanged rename slot while we rebuild the list, so a
         # programmatic clear/add never looks like a user rename commit.
         self._populating = True
@@ -104,10 +104,10 @@ class CasesDialog(QDialog):
             if case.updated_at:
                 label += f"  ({case.updated_at[:10]})"
             item = QListWidgetItem(label)
-            item.setData(Qt.UserRole, case.case_id)
-            item.setData(Qt.UserRole + 1, case.title)
+            item.setData(Qt.ItemDataRole.UserRole, case.case_id)
+            item.setData(Qt.ItemDataRole.UserRole + 1, case.title)
             # R1: inline-editable for rename (double-click / F2 / context menu).
-            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
             self.listw.addItem(item)
             if case.case_id == selected:
                 self.listw.setCurrentItem(item)
@@ -129,8 +129,8 @@ class CasesDialog(QDialog):
         self.accept()
 
     def _open_item(self, item: QListWidgetItem) -> None:
-        case_id = item.data(Qt.UserRole)
-        title = item.data(Qt.UserRole + 1) or item.text()
+        case_id = item.data(Qt.ItemDataRole.UserRole)
+        title = item.data(Qt.ItemDataRole.UserRole + 1) or item.text()
         if isinstance(case_id, str) and case_id:
             # Item d (live-feedback 2026-07-09): the cold-list open path
             # rides the SAME single-click action -- ``open_case`` itself
@@ -143,8 +143,8 @@ class CasesDialog(QDialog):
         item = self.listw.itemAt(pos)
         if item is None:
             return
-        case_id = item.data(Qt.UserRole)
-        title = item.data(Qt.UserRole + 1) or item.text()
+        case_id = item.data(Qt.ItemDataRole.UserRole)
+        title = item.data(Qt.ItemDataRole.UserRole + 1) or item.text()
         if not isinstance(case_id, str) or not case_id:
             return
         menu = QMenu(self)
@@ -152,7 +152,7 @@ class CasesDialog(QDialog):
         export_action = menu.addAction("Export GeoTIFFs")
         delete_action = menu.addAction("Delete")
         global_pos = self.listw.viewport().mapToGlobal(pos)
-        chosen = menu.exec_(global_pos) if hasattr(menu, "exec_") else menu.exec(global_pos)
+        chosen = menu.exec(global_pos)
         if chosen is rename_action:
             self._begin_rename(item)
         elif chosen is export_action:
@@ -166,7 +166,7 @@ class CasesDialog(QDialog):
         the decorated label (title + optional ``[status]`` + ``(date)``); swap
         it to the PLAIN title first so the user edits just the name, then open
         the editor. ``_populating`` guards this programmatic setText."""
-        plain = item.data(Qt.UserRole + 1) or item.text()
+        plain = item.data(Qt.ItemDataRole.UserRole + 1) or item.text()
         self._populating = True
         item.setText(str(plain))
         self._populating = False
@@ -181,8 +181,8 @@ class CasesDialog(QDialog):
         text changes (``set_cases`` / ``_begin_rename``)."""
         if self._populating:
             return
-        case_id = item.data(Qt.UserRole)
-        old_title = item.data(Qt.UserRole + 1)
+        case_id = item.data(Qt.ItemDataRole.UserRole)
+        old_title = item.data(Qt.ItemDataRole.UserRole + 1)
         new_title = item.text().strip()
         if not isinstance(case_id, str) or not case_id:
             return
@@ -195,7 +195,7 @@ class CasesDialog(QDialog):
         # Optimistic local update (the refresh below re-authoritatively repaints
         # the decorated label once the server confirms).
         self._populating = True
-        item.setData(Qt.UserRole + 1, new_title)
+        item.setData(Qt.ItemDataRole.UserRole + 1, new_title)
         item.setText(new_title)
         self._populating = False
         self._dock.rename_case(case_id, new_title)
@@ -206,8 +206,8 @@ class CasesDialog(QDialog):
             self,
             "Delete case",
             f"Delete case '{title}'? This cannot be undone from the plugin.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self._dock.delete_case(case_id, title)

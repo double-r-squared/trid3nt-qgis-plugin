@@ -222,7 +222,7 @@ def zoom_to_bbox4326(
 def _temporal_qdt(dt) -> QDateTime:
     """An aware-UTC ``datetime`` -> ``QDateTime`` (ISO round trip -- the
     trailing Z parses as UTC on both Qt5 and Qt6)."""
-    return QDateTime.fromString(dt.strftime("%Y-%m-%dT%H:%M:%SZ"), Qt.ISODate)
+    return QDateTime.fromString(dt.strftime("%Y-%m-%dT%H:%M:%SZ"), Qt.DateFormat.ISODate)
 
 
 def _fixed_temporal_mode(props):
