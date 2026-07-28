@@ -7,7 +7,7 @@ This module registers one atomic tool that computes elevation contour lines
 
 The result is a vector contour layer — ``LineString`` features each carrying an
 ``elev`` (elevation, metres) attribute — at a fixed contour INTERVAL. It is
-emitted as a FlatGeobuf in EPSG:4326 so the job-0175 inline-GeoJSON vector path
+emitted as a FlatGeobuf in EPSG:4326 so the inline-GeoJSON vector path
 ships the parsed FeatureCollection to the client and the web vector renderer
 paints it as a line layer (``style_preset="contours"``). The artifact is stored
 under the FR-DC-3 cache shim at:
@@ -69,7 +69,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import CACHE_BUCKET, read_through
 
-# Reuse the job-0257 PROJ/GDAL data-dir env fix from compute_hillshade — without
+# Reuse the PROJ/GDAL data-dir env fix from compute_hillshade - without
 # it the conda-env GDAL binaries cannot find proj.db and reprojection /
 # CRS-tagging silently degrade (same failure class hillshade hit live).
 from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _download_dem_bytes, _gdaldem_subprocess_env
@@ -334,7 +334,7 @@ def _run_gdal_contour(
             capture_output=True,
             check=False,
             timeout=300,  # 5-min ceiling; contours of any reasonable DEM are seconds
-            env=_gdaldem_subprocess_env(gdal_contour),  # job-0257 PROJ/GDAL dirs
+            env=_gdaldem_subprocess_env(gdal_contour),  # PROJ/GDAL dirs
         )
     except FileNotFoundError as exc:
         raise ContourComputeError(
@@ -364,7 +364,7 @@ def _run_gdal_contour(
 def _reproject_fgb_to_4326(input_path: str, output_path: str) -> None:
     """Reproject a FlatGeobuf contour vector to EPSG:4326.
 
-    The inline-GeoJSON vector path (job-0175) reads the artifact server-side and
+    The inline-GeoJSON vector path reads the artifact server-side and
     ships it to MapLibre, which expects WGS84 coordinates — so the contours must
     be in EPSG:4326. If the input is already in 4326, this is effectively a copy.
 
@@ -505,7 +505,7 @@ def compute_contours(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

@@ -215,12 +215,12 @@ async def authenticate_token(
 
     1. **Local single-user mode** (``TRID3NT_SOLVER_BACKEND=local-docker`` --
        the live local default). Every connection, regardless of token or
-       hint, resolves to the ONE fixed local user (F1).
+       hint, resolves to the ONE fixed local user.
 
     2. **No / empty token, anonymous hint provided.** When the envelope
        carries ``anonymous_user_id`` and the lookup finds an existing
        ``UserDocument`` with ``is_anonymous=True``, re-bind the same User
-       (job-0172 Part C). This is the sticky anonymous path that prevents
+       (Part C). This is the sticky anonymous path that prevents
        page-refresh from minting a fresh user every reconnect -- the
        persisted Cases stay reachable across browser reloads.
 
@@ -306,7 +306,7 @@ async def authenticate_token(
 
 
 def _is_local_single_user_mode() -> bool:
-    """True when auth must collapse to the ONE fixed local user (F1).
+    """True when auth must collapse to the ONE fixed local user.
 
     The canonical is-local seam (same one ``secrets_handler`` and
     ``server._local_compute_lane`` use): ``TRID3NT_SOLVER_BACKEND=local-docker``
@@ -322,9 +322,9 @@ def _is_local_single_user_mode() -> bool:
 async def _resolve_local_single_user(
     persistence: Persistence | None,
 ) -> AuthResult:
-    """Resolve EVERY local-mode connection to ``LOCAL_SINGLE_USER_ID`` (F1).
+    """Resolve EVERY local-mode connection to ``LOCAL_SINGLE_USER_ID``.
 
-    NATE 2026-07-09: "persistent cases ... I want to accumulate test cases".
+    "persistent cases ... I want to accumulate test cases".
     Pre-fix, each client (desktop browser, phone, QGIS plugin, test driver)
     presented its own sticky ``anonymous_user_id``, so every device forked its
     own owner-scoped case list (log 01:23:14: "hint ... not found; minting
@@ -421,7 +421,7 @@ async def _provision_anonymous_user(
         created_at=now_utc(),
         is_active=True,
         prefs={},
-        is_anonymous=True,  # job-0172 Part C: pin the H.3 fallback as anonymous.
+        is_anonymous=True,  # Part C: pin the H.3 fallback as anonymous.
     )
     if persistence is not None:
         try:
@@ -444,7 +444,7 @@ async def _try_reuse_anonymous_user(
 ) -> User | None:
     """Look up the User by ULID and reuse iff it's an anonymous record.
 
-    job-0172 Part C: the sticky-anonymous path. Returns the existing User
+    Part C: the sticky-anonymous path. Returns the existing User
     only when (a) a record exists for ``anonymous_user_id`` and (b) that
     record is marked ``is_anonymous=True``. Returns ``None`` to fall
     through to fresh-user provisioning when either condition fails.

@@ -1,6 +1,6 @@
 """``model_river_seepage_scenario`` — MODFLOW river-seepage composer (J9).
 
-The end-to-end higher-order workflow for the sprint-17 MODFLOW river-seepage
+The end-to-end higher-order workflow for the MODFLOW river-seepage
 North Star: it turns a place + a contaminant + a release into a rendered
 gaining/losing river-seepage layer (where the river leaks into the aquifer vs
 draws baseflow out of it) plus the contaminant plume that entered with the
@@ -80,7 +80,7 @@ DEFAULT_AOI_HALF_DEG: float = 0.012
 
 
 class RiverSeepageResult(GraceModel):
-    """Return type for ``model_river_seepage_scenario`` (sprint-17 J9).
+    """Return type for ``model_river_seepage_scenario`` (J9).
 
     Bundles the river-seepage composer output: the published seepage layer (the
     gaining/losing river<->aquifer exchange) + the contaminant plume + the
@@ -208,7 +208,7 @@ async def model_river_seepage_scenario(
             f"(got location={has_loc}, spill_location_latlon={has_point})."
         )
 
-    # task-168: declare the planned internal-tool count up front so the parent
+    # declare the planned internal-tool count up front so the parent
     # workflow card's live breadcrumb can render "k/total". The plan is the
     # user-meaningful atomic-tool calls only: geocode (only when a place string
     # was supplied) + fetch_river_geometry (always) + fetch_dem (only when
@@ -285,7 +285,7 @@ async def model_river_seepage_scenario(
     from trid3nt_server.agent.tools.simulation.modflow.run_river_seepage_tool.run_river_seepage_tool import (
         run_river_seepage_job as run_fn,
     )
-    # task-168: wrap the solve as a nested child row. The failed-but-RETURNED
+    # wrap the solve as a nested child row. The failed-but-RETURNED
     # validation lives INSIDE the substep so a non-SeepageLayerURI result raises
     # here, marking the CHILD red (honesty floor: a failed solve never reads
     # green) before the error re-raises through the composer's existing path. The
@@ -431,7 +431,7 @@ async def modflow_river_seepage(
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """GROUNDWATER <-> river seepage EXCHANGE: is a reach gaining or losing, how much leaks between aquifer and river.

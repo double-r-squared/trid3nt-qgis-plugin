@@ -533,10 +533,6 @@ def observe_turn(user_text: str, calls: list[dict]) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def _estimate_tokens(text: str) -> int:
-    return max(1, len(text) // _CHARS_PER_TOKEN)
-
-
 def lessons_appendix(user_text: str, *, top_k: int = MAX_INJECT_LESSONS) -> str | None:
     """The system-prompt appendix for this turn, or ``None``.
 

@@ -43,11 +43,13 @@ import numpy as np
 import pytest
 
 from trid3nt_server import server
+from trid3nt_server.agent.gates.cards.spatial_input import (
+    _spatial_response_to_result,
+)
 from trid3nt_server.server import (
     SessionState,
     _emit_spatial_input_and_wait,
     _resolve_pending_spatial_input,
-    _spatial_response_to_result,
 )
 from trid3nt_server.agent.gates.spatial_input import (
     ParsedSpatialInput,

@@ -1,4 +1,4 @@
-"""``fetch_nhdplus_nldi_navigate`` atomic tool — NHDPlus NLDI navigation (job A11).
+"""``fetch_nhdplus_nldi_navigate`` atomic tool - NHDPlus NLDI navigation.
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -378,7 +378,7 @@ def fetch_nhdplus_nldi_navigate(
     comid: int | None = None,
     direction: Literal["UM", "UT", "DM", "DD"] = "DM",
     distance_km: float = _DEFAULT_DISTANCE_KM,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -442,7 +442,7 @@ def fetch_nhdplus_nldi_navigate(
             seed. Range ``[0, 1000]``; default ``50.0``. Larger values
             risk hitting the ``_MAX_FLOWLINES=5000`` cap on the response
             (especially with UT) — the payload estimator gates this via
-            the Wave-1.5 chat warning.
+            the chat warning.
 
     Returns:
         ``LayerURI`` pointing at a FlatGeobuf in the cache bucket

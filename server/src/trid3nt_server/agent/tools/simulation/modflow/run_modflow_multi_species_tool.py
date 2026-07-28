@@ -1,11 +1,11 @@
-"""Atomic tool ``run_modflow_multi_species_job``  -  MODFLOW Wave-3 N-species engine.
+"""Atomic tool ``run_modflow_multi_species_job`` - MODFLOW N-species engine.
 
-The internal engine surface for the sprint-18 Wave-3 multi_species archetype: ONE
+The internal engine surface for the multi_species archetype: ONE
 shared GWF flow field driving N ModflowGwt solute-transport models (one per
 species) + N ModflowGwfgwt flow<->transport exchanges, authored in ONE mf6 run by
 ``services/workers/modflow/gwt_adapter.build_modflow_deck(archetype="multi_species",
-species=[...])`` (the Wave-3 DECK-AUTHOR landing). It is the multi_species analogue
-of ``run_modflow_archetype_job`` (the Wave-1/2 archetype surface) and
+species=[...])``. It is the multi_species analogue
+of ``run_modflow_archetype_job`` (the archetype surface) and
 ``modflow_contaminant_plume`` (the single-species spill surface), differing only in:
 
   * it threads the per-species ``species`` list into the adapter's multi_species

@@ -39,7 +39,7 @@ builds its tool declarations directly from this snapshot; there is no ADK
 wrapper (``google-adk`` was dropped in the GCP decommission).
 
 Importing the package triggers ``@register_tool`` decorators in submodules
-(``.passthroughs`` for M4 job-0032; ``.fetchers`` etc. for M4 job-0033+).
+(``.passthroughs`` for M4; ``.fetchers`` etc. for M4).
 We import them eagerly here so any registration-time ``ValidationError`` or
 ``ToolRegistrationError`` surfaces at startup (FR-CE-8 fail-fast).
 """
@@ -108,7 +108,7 @@ def register_tool(
                                           source_class="x"))
         def x(...): ...
 
-    Wave 1.5 (job-0114) added two metadata flags. They may be set either
+     added two metadata flags. They may be set either
     on the constructed ``AtomicToolMetadata`` directly OR passed as
     decorator-level kwargs (kwargs win and produce a new metadata via
     ``model_copy(update=...)``)::
@@ -116,7 +116,7 @@ def register_tool(
         @register_tool(_BASE_META, supports_global_query=True)
         def fetch_nws_alerts_conus(bbox=None): ...
 
-    Wave 4.10 (job-B12) added four MCP annotation hints as decorator-level
+     added four MCP annotation hints as decorator-level
     kwargs using the same pattern::
 
         @register_tool(_BASE_META, read_only_hint=True, open_world_hint=True,
@@ -131,7 +131,7 @@ def register_tool(
     (``supports_global_query=False``, ``payload_mb_estimator_name=None``,
     ``read_only_hint=True``, ``open_world_hint=False``,
     ``destructive_hint=False``, ``idempotent_hint=True``)
-    preserve pre-Wave-4.10 behaviour.
+    preserve the earlier behaviour.
 
     Fail-fast invariants (FR-CE-8):
 
@@ -150,7 +150,7 @@ def register_tool(
             f"register_tool expects AtomicToolMetadata, got {type(metadata).__name__}"
         )
 
-    # If the caller passed Wave-1.5 / Wave-4.10 flags at the decorator level,
+    # If the caller passed flags at the decorator level,
     # fold them into a fresh metadata. ``model_copy(update=...)`` re-runs
     # validators because pydantic v2 ``GraceModel`` has
     # ``validate_assignment=True``, so a bad combination still fails fast at
@@ -466,8 +466,8 @@ from .search.search_spatial_functions import search_spatial_functions  # noqa: E
 # -- meta (web fetch, code exec, passthroughs, case utilities) --
 from .meta.code_exec_tool import code_exec_tool  # noqa: E402,F401
 from .meta.compose_case_report import compose_case_report  # noqa: E402,F401
-from .meta.export_case_to_qgis import export_case_to_qgis  # noqa: E402,F401
-from .meta.import_user_layer import import_user_layer  # noqa: E402,F401
+from .meta.open_case_in_qgis import open_case_in_qgis  # noqa: E402,F401
+from .meta.register_case_layer import register_case_layer  # noqa: E402,F401
 from .meta.list_run_frames import list_run_frames  # noqa: E402,F401
 from .meta.passthroughs import passthroughs  # noqa: E402,F401
 from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401
@@ -484,7 +484,7 @@ from .publish_layer import publish_layer as _publish_layer_reg  # noqa: E402,F40
 # the 12-category registry meta-tools. Comments preserved from the original
 # registration list.
 # ---------------------------------------------------------------------------
-from ..workflows.pelicun.compute_impact_envelope import compute_impact_envelope as _compute_impact_envelope_workflow  # noqa: E402,F401 - Wave 4.11 P3: registers compute_impact_envelope (composes NSI/MS → Pelicun → postprocess into one envelope tool)
+from ..workflows.pelicun.compute_impact_envelope import compute_impact_envelope as _compute_impact_envelope_workflow  # noqa: E402,F401 - P3: registers compute_impact_envelope (composes NSI/MS → Pelicun → postprocess into one envelope tool)
 # engine-door refactor (MODFLOW pilot): the MODFLOW composer family is now a set
 # of engine TEMPLATES (engine="modflow", tier="template"), one folder per template
 # under workflows/modflow/<template>/<template>.py. Importing each module fires its
@@ -595,7 +595,7 @@ from ..workflows.shared.model_goes_fire_animation import model_goes_fire_animati
 # and publishes a scrubbable baked loop + a separable transparent GED overlay.
 from ..workflows.shared.model_glm_lightning_animation import model_glm_lightning_animation as _model_glm_lightning_animation  # noqa: E402,F401 - GLM lightning demo: registers run_model_glm_lightning_animation (DIRECT AOI+window -> GLM GED purple overlay baked over GOES-19 C02 visible base, 1-min frames; NO news step)
 
-# job-B5 (Wave 4.10 Stage 2): the 12-category registry + the two meta-tools
+# the 12-category registry + the two meta-tools
 # (``list_categories`` + ``list_tools_in_category``) live alongside the rest
 # of the tool surface. Importing the module fires its two ``@register_tool``
 # decorators so the meta-tools are in TOOL_REGISTRY at startup; the hot set,

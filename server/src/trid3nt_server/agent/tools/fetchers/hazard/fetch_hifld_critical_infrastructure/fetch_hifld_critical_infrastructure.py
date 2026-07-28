@@ -190,7 +190,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -526,7 +526,7 @@ def _fetch_infra_bytes(
 def fetch_hifld_critical_infrastructure(
     facility_type: str,
     bbox: tuple[float, float, float, float],
-    # Wave 4.10 convention: absorb LLM-invented kwargs.
+    # convention: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """HIFLD critical-infrastructure points by facility type as a FlatGeobuf layer.

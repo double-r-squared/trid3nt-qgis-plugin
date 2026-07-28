@@ -1,4 +1,4 @@
-"""Python sandbox executor harness (sprint-13 Stage 2 / job-0232).
+"""Python sandbox executor harness (Stage 2).
 
 This module is the entrypoint baked into the legacy cloud-sandbox
 Job image. It receives a job payload — a ``python_code`` string plus a
@@ -84,8 +84,8 @@ MAX_DATAFRAME_ROWS = int(os.environ.get("TRID3NT_SANDBOX_MAX_DF_ROWS", "5000"))
 # matplotlib figure; above this we emit a descriptor without the inline PNG.
 MAX_FIGURE_PNG_BYTES = int(os.environ.get("TRID3NT_SANDBOX_MAX_FIG_BYTES", str(2 * 1024 * 1024)))
 
-# Total serialized-byte ceiling for the RESULT DESCRIPTOR's payload (job-0233
-# FINDING 1). The per-kind caps above bound DataFrame ROWS, array SIZE, and PNG
+# Total serialized-byte ceiling for the RESULT DESCRIPTOR's payload.
+# The per-kind caps above bound DataFrame ROWS, array SIZE, and PNG
 # BYTES — but NOT the total serialized bytes of a JSON-native str/list/dict
 # (e.g. ``result = "x" * 9_000_000`` or a deeply-nested dict). Without this cap a
 # multi-megabyte JSON-native result would balloon the envelope, blow the host
@@ -115,7 +115,7 @@ NET_ALLOW_SUFFIXES = tuple(
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
 
 # --------------------------------------------------------------------------- #
-# Envelope marker (Cloud Logging readback transport — sprint-13.5 job-0265)
+# Envelope marker (Cloud Logging readback transport)
 # --------------------------------------------------------------------------- #
 #
 # In CLOUD mode the executor's stdout lands in Cloud Run logs, NOT a GCS object
@@ -364,8 +364,8 @@ def convert_result(result: Any) -> dict[str, Any]:
       - anything else                 -> {"kind": "repr", "value": repr(result)}
 
     Every descriptor is passed through :func:`_bound_result_descriptor` before
-    return so its total serialized size is ``<= MAX_RESULT_BYTES`` (job-0233
-    FINDING 1): an oversized JSON-native / repr result is HONESTLY truncated with
+    return so its total serialized size is ``<= MAX_RESULT_BYTES``: an
+    oversized JSON-native / repr result is HONESTLY truncated with
     a ``truncated=true`` marker rather than silently corrupting the envelope.
     """
     descriptor = _convert_result_inner(result)
@@ -508,8 +508,8 @@ def _convert_figure(fig: Any) -> dict[str, Any]:
     """Render a matplotlib Figure to PNG and wrap it as a chart descriptor.
 
     If ``trid3nt_contracts.chart_contracts`` is importable we emit a
-    ChartEmissionPayload-shaped dict (soft import per kickoff — job-0223 finalizes
-    that schema concurrently; drift is reconciled by job-0233). The PNG is a
+    ChartEmissionPayload-shaped dict (soft import per kickoff — finalizes
+    that schema concurrently; drift is reconciled separately). The PNG is a
     fallback the client can render directly when a Vega-Lite spec isn't
     available (a raw matplotlib figure has no Vega-Lite spec — it's a rasterized
     image, so the "chart payload" here is the PNG-fallback path the kickoff
@@ -536,7 +536,7 @@ def _convert_figure(fig: Any) -> dict[str, Any]:
     # Soft import: shape a ChartEmissionPayload-compatible dict if the contract
     # is importable. We DON'T construct the pydantic model (a raw figure has no
     # Vega-Lite spec; ChartEmissionPayload requires a structurally-valid spec), so
-    # we emit the descriptor fields the agent (job-0233) maps onto the envelope:
+    # we emit the descriptor fields the agent maps onto the envelope:
     # title + a PNG image mark wrapped in a minimal Vega-Lite image spec so the
     # payload is structurally valid if the agent forwards it verbatim.
     try:

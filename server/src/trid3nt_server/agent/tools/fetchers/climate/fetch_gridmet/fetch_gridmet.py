@@ -1,4 +1,4 @@
-"""``fetch_gridmet`` atomic tool — gridMET CONUS gridded meteorology (job A8).
+"""``fetch_gridmet`` atomic tool - gridMET CONUS gridded meteorology.
 """
 
 from __future__ import annotations
@@ -141,7 +141,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -152,7 +152,7 @@ def estimate_payload_mb(
     end_date: str | None = None,
     **_kw: Any,
 ) -> float:
-    """Estimate output COG size in MB for a given call (Wave 1.5 surface).
+    """Estimate output COG size in MB for a given call (surface).
 
     gridMET native res is 4 km (~0.0417°). A 1° square × 1 day at float32
     is 24 × 24 cells × 4 bytes = ~2.3 KB. The time-mean collapse means the
@@ -165,7 +165,7 @@ def estimate_payload_mb(
 
     The OPeNDAP wire fetch is larger than the cached COG (we pull a
     time-stack to compute the mean) but bounded by ``_MAX_DATE_RANGE_DAYS``
-    and the bbox. For the warning UX we surface the OUTPUT size — Wave 1.5
+    and the bbox. For the warning UX we surface the OUTPUT size -
     treats user-facing payload as what lands client-side.
     """
     if bbox is None:
@@ -440,7 +440,7 @@ def _open_thredds_subset(
         # orientation, so leaving it alone keeps the COG bounds correct
         # (bounds.top > bounds.bottom). Sorting ascending would produce a
         # south-up COG that fails rasterio's standard orientation checks
-        # (the job-0086 lesson, applied to this fetcher).
+        # (the lesson, applied to this fetcher).
 
         # Sanity: at least one finite pixel.
         arr = np.asarray(da.values, dtype=np.float32)
@@ -469,7 +469,7 @@ def _da_to_cog_bytes(da, variable: str) -> bytes:
         da_out = da.astype("float32")
         # Re-assert CRS on the typed copy — astype + sortby can drop the
         # rioxarray accessor's CRS attribute. Belt-and-suspenders for the
-        # geographic-correctness gate (job-0086 codified lesson).
+        # geographic-correctness gate (codified lesson).
         da_out = da_out.rio.write_crs("EPSG:4326")
         # Ensure x/y spatial dims are named per rioxarray convention so the
         # driver writes a north-up GeoTIFF with the expected transform.
@@ -566,7 +566,7 @@ def fetch_gridmet(
     variable: str,
     start_date: str,
     end_date: str,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

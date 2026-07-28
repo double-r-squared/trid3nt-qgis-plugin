@@ -1,5 +1,5 @@
 """Atlas-14 NESTED (alternating-block) design-storm hyetograph builder
-(sprint-16 P1, PySWMM quasi-2D urban-flood engine).
+(P1, PySWMM quasi-2D urban-flood engine).
 
 Produces a centered-peak design-storm hyetograph as a SWMM TIMESERIES from a
 total storm depth + duration + interval. This is the cross-check improvement the

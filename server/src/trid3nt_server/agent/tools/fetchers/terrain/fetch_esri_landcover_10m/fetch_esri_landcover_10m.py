@@ -140,7 +140,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -702,7 +702,7 @@ def _fetch_landcover_cog_bytes(
 def fetch_esri_landcover_10m(
     bbox: tuple[float, float, float, float],
     year: int | str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Global 10 m land cover (Esri / Impact Observatory land-use land-cover) for a bbox -- trees, crops, built area, water, worldwide.

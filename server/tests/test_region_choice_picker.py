@@ -33,10 +33,13 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.server import (
-    SessionState,
+from trid3nt_server.agent.gates.cards import region_choice
+from trid3nt_server.agent.gates.cards.region_choice import (
     _build_region_candidates,
     _build_region_choice_request_payload,
+)
+from trid3nt_server.server import (
+    SessionState,
     _maybe_handle_region_choice,
     _resolve_pending_region_choice,
 )
@@ -143,7 +146,7 @@ async def _drive_region_choice(
     state.emitter = _EMITTER_SENTINEL  # type: ignore[assignment]
 
     cand = _florida_counties() if candidates is None else candidates
-    with patch.object(server, "_build_region_candidates", return_value=cand):
+    with patch.object(region_choice, "_build_region_candidates", return_value=cand):
         handler = asyncio.create_task(
             _maybe_handle_region_choice(ws, state, geocode_result)
         )
@@ -222,7 +225,7 @@ def test_precise_geocode_does_not_trigger_region_choice():
         state.emitter = _EMITTER_SENTINEL  # type: ignore[assignment]
         # If the builder were called, it would be a bug — patch it to explode.
         with patch.object(
-            server,
+            region_choice,
             "_build_region_candidates",
             side_effect=AssertionError("must NOT build candidates for a precise geocode"),
         ):
@@ -332,7 +335,7 @@ def test_region_choice_timeout_keeps_state_bbox(monkeypatch):
         state = SessionState(session_id=new_ulid())
         state.emitter = _EMITTER_SENTINEL  # type: ignore[assignment]
         with patch.object(
-            server, "_build_region_candidates", return_value=_florida_counties()
+            region_choice, "_build_region_candidates", return_value=_florida_counties()
         ), patch.object(server, "CODE_EXEC_CONFIRM_TIMEOUT_SECONDS", 0.01):
             await _maybe_handle_region_choice(ws, state, geocode_result)
         return geocode_result
@@ -406,7 +409,7 @@ def test_request_payload_built_from_state_snap_result():
     """_build_region_choice_request_payload derives state name/code/bbox + prompt."""
     geocode_result = _florida_state_snap_result()
     with patch.object(
-        server, "_build_region_candidates", return_value=_florida_counties()
+        region_choice, "_build_region_candidates", return_value=_florida_counties()
     ):
         payload = _build_region_choice_request_payload(
             request_id=new_ulid(), geocode_result=geocode_result

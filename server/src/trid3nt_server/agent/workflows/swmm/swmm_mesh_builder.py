@@ -1,4 +1,4 @@
-"""DEM -> quasi-2D node-link SWMM mesh builder (sprint-16 P2, PySWMM urban-flood
+"""DEM -> quasi-2D node-link SWMM mesh builder (P2, PySWMM urban-flood
 engine, Path A — confirmed by NATE's PCSWMM screenshot: animated depth around
 BUILDING OBSTRUCTIONS + a SOUND BARRIER with RED walls / GREEN flap gates).
 
@@ -387,7 +387,7 @@ def suggest_swmm_resolution(
     dem_path: str,
     requested_resolution_m: float,
 ) -> SWMMAutoscaleResult:
-    """Pre-run granularity suggestion for the #154 gate — DEM read + autoscale ONLY.
+    """Pre-run granularity suggestion for the gate - DEM read + autoscale ONLY.
 
     Reads the staged DEM at ``requested_resolution_m``, counts active (finite)
     cells with the EXACT same ``_read_and_resample_dem`` + ``np.isfinite(...).sum()``
@@ -466,7 +466,7 @@ def clamp_swmm_resolution_to_real_cap(
 ) -> SWMMRealCapClampResult:
     """Clamp a user-chosen SWMM resolution against the REAL build cell count.
 
-    The #154 ``narrow_scope`` override gate previously inverted the AREA model
+    The ``narrow_scope`` override gate previously inverted the AREA model
     ``cells = base_cells * (base/res)**2`` to find the finest resolution that
     "fits" the cap, then built with ``enable_autoscale=False`` (no downstream
     cap re-check). But :func:`build_swmm_mesh` re-reads the DEM at the clamped

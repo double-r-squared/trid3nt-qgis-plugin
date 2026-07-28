@@ -83,7 +83,7 @@ def fetch_goes_active_fire(
     end_utc: str | None = None,
     bt_c07_min_k: float | None = None,
     bt_diff_min_k: float | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> list[LayerURI]:
     """Detect ACTIVE FIRE in an AOI from raw GOES ABI via the Matson-Dozier split-window discriminator.

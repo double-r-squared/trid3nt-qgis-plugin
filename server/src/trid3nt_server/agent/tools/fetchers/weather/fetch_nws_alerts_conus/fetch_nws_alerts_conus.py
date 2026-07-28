@@ -139,7 +139,7 @@ _PRESERVED_PROPERTIES = (
 # ---------------------------------------------------------------------------
 # AtomicToolMetadata — registered once at import time.
 #
-# supports_global_query=True (resolves OQ-0105-GLOBAL-QUERY-FIELD): the
+# supports_global_query=True (resolves): the
 # natural use of this tool IS the unscoped nationwide sweep
 # (``/alerts/active``) — "show me current warnings across America". The raw
 # alert LIST is small (~500 active alerts, ~200KB) regardless of scope; after
@@ -148,8 +148,7 @@ _PRESERVED_PROPERTIES = (
 # 25 MB payload-warning threshold and paid once per 1h cache, so a no-bbox
 # global query remains both meaningful and payload-safe. The optional ``area``
 # param narrows to a single state when supplied; omitting it is the CONUS-wide
-# default, not an error. (Field landed via the Wave 1.5 schema amendment,
-# job-0114.)
+# default, not an error.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -172,7 +171,7 @@ _METADATA = AtomicToolMetadata(
 def _build_nws_conus_url(status: str, area_code: str | None = None) -> str:
     """Build the api.weather.gov/alerts/active URL for the sweep.
 
-    ``area_code`` (job-0261): a resolved 2-letter NWS area code ("TX"). When
+    ``area_code``: a resolved 2-letter NWS area code ("TX"). When
     provided, NWS filters server-side via ``?area={code}`` — the precise
     state-scoped query that prevents a named state's alerts from spilling
     into neighbors. When ``None``, the original unscoped CONUS sweep URL is
@@ -655,7 +654,7 @@ def _fetch_nws_alerts_conus_bytes(
     """End-to-end fetcher: build URL → GET GeoJSON → client-side filter →
     convert to FlatGeobuf bytes.
 
-    ``area_code`` (job-0261): resolved 2-letter NWS code for the precise
+    ``area_code``: resolved 2-letter NWS code for the precise
     server-side state filter; ``None`` keeps the unscoped CONUS sweep.
 
     Wrapped in a single try so we never leak an httpx exception past the typed
@@ -694,7 +693,7 @@ def fetch_nws_alerts_conus(
     event_types: list[str] | None = None,
     status: str = "actual",
     area: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -770,7 +769,7 @@ def fetch_nws_alerts_conus(
             f"status={status!r} not in {sorted(_VALID_STATUSES)}"
         )
 
-    # Resolve the state scope (job-0261). None → nationwide sweep; "Texas" /
+    # Resolve the state scope. None → nationwide sweep; "Texas" /
     # "TX" → server-side ?area=TX filter; garbage → typed input error.
     area_code = _resolve_area_or_raise(area)
 

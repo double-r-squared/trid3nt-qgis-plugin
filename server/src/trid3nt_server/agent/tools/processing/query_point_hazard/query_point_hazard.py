@@ -7,7 +7,7 @@ per-layer values (layer name, sampled value, units when known).
 
 Case layers come from the persisted ``CaseSummary.loaded_layer_summaries``
 (``ProjectLayerSummary`` dicts) via the app-level ``Persistence`` singleton --
-the exact enumeration path ``export_case_to_qgis`` uses. The Case defaults to
+the exact enumeration path ``open_case_in_qgis`` uses. The Case defaults to
 the turn's bound Case (``pipeline_emitter.current_turn_case``) so the LLM does
 not need to thread a case_id through.
 
@@ -165,7 +165,7 @@ def resolve_point(
 
 
 # ---------------------------------------------------------------------------
-# Case-layer enumeration (the export_case_to_qgis persistence seam).
+# Case-layer enumeration (the open_case_in_qgis persistence seam).
 # ---------------------------------------------------------------------------
 
 
@@ -195,7 +195,7 @@ async def layers_from_case(
 
     Layers come from the Case doc's persisted ``loaded_layer_summaries``
     (``ProjectLayerSummary`` dicts) via ``telemetry.get_persistence`` -- the
-    exact seam ``export_case_to_qgis._layers_from_case`` uses (and the same
+    exact seam ``open_case_in_qgis._layers_from_case`` uses (and the same
     monkeypatch point for tests). Shared with ``extract_timeseries_at_point``
     and ``compose_case_report``.
     """
@@ -227,10 +227,10 @@ def stage_layer_local(uri: str, tmpdir: str, label: str) -> str:
     """Materialize a layer uri locally (s3:// via boto3, else a local path).
 
     TiTiler display tile templates are unwrapped to the underlying COG first
-    (the export_case_to_qgis convention). Raises on failure -- callers convert
+    (the open_case_in_qgis convention). Raises on failure -- callers convert
     to a per-layer honest entry.
     """
-    from trid3nt_server.agent.tools.meta.export_case_to_qgis.export_case_to_qgis import _strip_query, _unwrap_tile_template
+    from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import _strip_query, _unwrap_tile_template
 
     resolved = _unwrap_tile_template(uri)
     if resolved.startswith("s3://"):
@@ -307,7 +307,7 @@ async def query_point_hazard(
     lat: float | None = None,
     place: str | None = None,
     case_id: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Sample every raster layer in the current Case at one point.

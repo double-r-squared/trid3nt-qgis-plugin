@@ -1,7 +1,7 @@
-"""ELMFIRE postprocess: raw solver rasters -> fire-spread COG layer set (FIRE-3).
+"""ELMFIRE postprocess: raw solver rasters -> fire-spread COG layer set.
 
 The ELMFIRE analogue of ``postprocess_geoclaw.py`` / ``postprocess_flood.py``.
-ELMFIRE (``CONVERT_TO_GEOTIFF=.FALSE.`` — the FIRE-2 namelist) writes ESRI BIL
+ELMFIRE (``CONVERT_TO_GEOTIFF=.FALSE.`` - the namelist) writes ESRI BIL
 rasters into ``outputs/``::
 
     time_of_arrival_<ens>_<t>.bil   seconds from ignition (THE headline layer)
@@ -10,7 +10,7 @@ rasters into ``outputs/``::
     flin_<ens>_<t>.bil              fireline intensity, kW/m
 
 The BILs carry the grid geotransform in their ``.hdr`` sidecars but NO CRS —
-the FIRE-1 proof stamped it with ``gdal_translate -a_srs``. Here the stamp is
+the proof stamped it with ``gdal_translate -a_srs``. Here the stamp is
 done in code: the deck's known EPSG (the deck-builder grid, default 5070) is
 asserted onto the read when the file carries none (:func:`read_fire_raster` —
 never a guessed CRS; the EPSG comes from the deck manifest).
@@ -148,7 +148,7 @@ def discover_elmfire_rasters(out_dir: str | Path) -> dict[str, Path | None]:
 
 
 # --------------------------------------------------------------------------- #
-# Raster read with the CRS stamp (the FIRE-1 gdal_translate -a_srs step).
+# Raster read with the CRS stamp (the gdal_translate -a_srs step).
 # --------------------------------------------------------------------------- #
 def read_fire_raster(
     path: str | Path, *, epsg: int
@@ -157,7 +157,7 @@ def read_fire_raster(
 
     The array is float64 with the -9999 nodata (and any recorded nodata)
     mapped to NaN. When the file carries NO CRS (the BIL case) the deck's
-    known ``epsg`` is stamped on — in-code equivalent of the FIRE-1 proof's
+    known ``epsg`` is stamped on - in-code equivalent of the proof's
     ``gdal_translate -a_srs EPSG:<epsg>`` step. A file that DOES carry a CRS
     keeps it (never silently overridden).
     """

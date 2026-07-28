@@ -382,7 +382,7 @@ def compute_flood_depth_damage(
     depth_units: str = "m",
     *,
     _output_dir: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> FloodDepthDamageLayerURI:
     """Screen flood damage per structure from a depth raster (HAZUS-style curve).

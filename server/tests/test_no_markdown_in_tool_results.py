@@ -25,7 +25,7 @@ Files whose markdown-bearing strings are legitimately markdown because they
 build a USER-FACING document, never an LLM-bound result:
 
 - ``tools/meta/compose_case_report.py`` -- writes a markdown situation-report
-  FILE to the case artifacts dir (the export_case_to_qgis convention); its
+  FILE to the case artifacts dir (the open_case_in_qgis convention); its
   registered tool returns a markdown-free JSON dict (path + counts). Verified
   by ``test_compose_case_report_llm_result_is_markdown_free`` below so the
   allowlist entry cannot silently start leaking markdown to the LLM.

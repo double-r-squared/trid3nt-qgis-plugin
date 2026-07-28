@@ -1,4 +1,4 @@
-"""SnapWave wave-field postprocessing (sprint-17 wave-animation).
+"""SnapWave wave-field postprocessing (wave-animation).
 
 ``postprocess_waves(run_outputs_uri) -> (list[LayerURI], dict)`` reads a SFINCS
 quadtree+SnapWave run's ``sfincs_map.nc`` and extracts the TIME-RESOLVED

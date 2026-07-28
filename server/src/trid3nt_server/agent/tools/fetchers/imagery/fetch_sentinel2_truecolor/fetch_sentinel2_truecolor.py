@@ -126,7 +126,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -415,7 +415,7 @@ def fetch_sentinel2_truecolor(
     start_date: str | None = None,
     end_date: str | None = None,
     max_cloud_cover: float = _DEFAULT_MAX_CLOUD,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch a recent Sentinel-2 true-color (natural-color) RGB image for a bbox.

@@ -127,7 +127,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# FR-DC-9 / Wave-1.5 payload-MB estimator hook.
+# FR-DC-9 payload-MB estimator hook.
 # ---------------------------------------------------------------------------
 
 
@@ -136,7 +136,7 @@ def estimate_payload_mb(**args: Any) -> float:
 
     Wetland polygon density is high in coastal/riverine areas, low in arid
     uplands. We use a conservative ~1.0 MB / square degree heuristic clipped to
-    [0.05, 50] MB. ``**args`` matches the Wave-1.5 estimator convention (the
+    [0.05, 50] MB. ``**args`` matches the estimator convention (the
     chat-warning gate passes the tool kwargs unchanged).
     """
     bbox = args.get("bbox")
@@ -498,7 +498,7 @@ def _fetch_nwi_bytes(bbox: tuple[float, float, float, float]) -> bytes:
 )
 def fetch_nwi_wetlands(
     bbox: tuple[float, float, float, float],
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

@@ -130,7 +130,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -497,7 +497,7 @@ def fetch_sentinel1_sar(
     end_date: str | None = None,
     polarization: str = _DEFAULT_POLARIZATION,
     collection: str = _DEFAULT_COLLECTION,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch a Sentinel-1 C-band SAR backscatter (dB) image for a bbox.

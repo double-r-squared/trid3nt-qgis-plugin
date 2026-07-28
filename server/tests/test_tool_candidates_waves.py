@@ -147,7 +147,7 @@ def test_stage_label_from_candidate_categories_plurality():
     assert slc([("fetch_dem", 1.0), ("fetch_landcover", 0.9), ("clip_raster_to_bbox", 0.8)]) == "acquisition"
     assert slc([("clip_raster_to_bbox", 1.0), ("cut_features_with_polygon", 0.9), ("compute_slope", 0.8)]) == "preprocessing"
     assert slc([("compute_slope", 1.0), ("run_swmm", 0.9), ("code_exec_request", 0.8)]) == "analysis"
-    assert slc([("publish_layer", 1.0), ("generate_chart", 0.9), ("export_case_to_qgis", 0.8)]) == "visualization"
+    assert slc([("publish_layer", 1.0), ("generate_chart", 0.9), ("open_case_in_qgis", 0.8)]) == "visualization"
 
 
 def test_stage_label_ties_break_to_earliest_stage():

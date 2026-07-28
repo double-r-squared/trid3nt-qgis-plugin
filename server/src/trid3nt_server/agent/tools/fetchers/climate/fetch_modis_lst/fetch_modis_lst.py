@@ -134,7 +134,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -514,7 +514,7 @@ def fetch_modis_lst(
     end_date: str | None = None,
     product: str = _DEFAULT_PRODUCT,
     daynight: str = _DEFAULT_DAYNIGHT,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch a MODIS 8-day land-surface-temperature (LST) grid in degrees C.

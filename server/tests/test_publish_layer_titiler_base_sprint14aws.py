@@ -16,7 +16,7 @@ previously pinned the tile-base derivation) now pins the swapped contract:
     NO separate display face (the raw COG IS the envelope uri);
   - LEGACY republish: an old persisted case's ``/cog/tiles/...?url=<cog>``
     template handed back to publish_layer is UNWRAPPED to its embedded s3
-    COG (the ``export_case_to_qgis._unwrap_tile_template`` trick) and flows
+    COG (the ``open_case_in_qgis._unwrap_tile_template`` trick) and flows
     through the normal raster path -> the NEW raw-s3 envelope shape; a
     template with no recoverable COG is returned verbatim (degraded);
   - a non-s3 raster URI still raises the typed LAYER_URI_NOT_FOUND error.

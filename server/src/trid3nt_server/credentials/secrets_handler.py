@@ -1,4 +1,4 @@
-"""Per-Case secret lifecycle handler (FR-AS-4 + F.3, job-0124; local-only).
+"""Per-Case secret lifecycle handler (FR-AS-4 + F.3, local-only).
 
 Wires the three WebSocket envelope payloads from
 ``trid3nt_contracts.secrets`` (``secret-add``, ``secret-revoke``,
@@ -23,7 +23,7 @@ as "missing key" -- the credential-request card flow re-prompts the user
 and the retry stores a fresh ``file-vault://`` secret. Never a crash,
 never a silent empty value.
 
-Design notes (unchanged from job-0124 where vault-agnostic):
+Design notes (unchanged from where vault-agnostic):
 
 - The raw key value (``SecretAddEnvelopePayload.key_value``) is the only
   place a key ever appears on the wire. This handler writes that value to
@@ -141,21 +141,6 @@ VAULT_SUBDIR: Final[str] = "secrets"
 #: email-shaped user ids all fall inside this set; ``/`` is the separator
 #: and is excluded, so a segment can never traverse.
 _SEGMENT_RE: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9@._-]+")
-
-
-def _default_ssm_client():
-    """Legacy-compat seam: there is no SSM client on the local build.
-
-    ``Persistence.get_secret_value`` (call-time import) still constructs
-    this for ``aws-ssm://`` refs when no client is injected. Raising the
-    typed missing-secret error here converts an unresolvable legacy cloud
-    ref into the credential-card re-prompt path instead of a boto3 crash.
-    Remove together with persistence.py's ``aws-ssm://`` branch.
-    """
-    raise SecretNotFoundError(
-        "legacy aws-ssm:// vault ref cannot be resolved on the local build; "
-        "re-add the key via the credential card"
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -459,8 +444,7 @@ async def handle_secret_revoke(
         secret_id: the ULID of the ``SecretRecord`` to revoke.
         user_id: the caller's user_id (audit only -- the persistence layer
             doesn't currently enforce caller-owns-secret because the
-            storage schema doesn't denormalize the ownership link.
-            Surfaced as OQ-0124-SECRET-OWNER-CHECK).
+            storage schema doesn't denormalize the ownership link).
         persistence: the agent-side persistence wrapper.
     """
     if not secret_id:

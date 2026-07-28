@@ -1,11 +1,11 @@
-"""Tests for the ``export_case_to_qgis`` mesh (MDAL phase 1) additive field.
+"""Tests for the ``open_case_in_qgis`` mesh (MDAL phase 1) additive field.
 
 Every SFINCS flood-depth layer (``style_preset == "continuous_flood_depth"``)
 whose ``uri`` lives under a runs-bucket ``s3://<bucket>/<run_id>/...`` prefix
 is checked for a sibling ``<run_id>/sfincs_map.nc``; when found, ONE entry per
 distinct ``run_id`` is appended to the result's ``mesh`` list. No network / no
 real S3: a fake boto3-shaped client is monkeypatched onto
-``export_case_to_qgis._s3_client`` (the export tool's own local S3 seam).
+``open_case_in_qgis._s3_client`` (the export tool's own local S3 seam).
 
 Coverage:
 1. a runs-bucket flood-depth layer with a mesh sibling -> one mesh entry,
@@ -29,14 +29,14 @@ import pytest
 pytest.importorskip("xarray")
 pytest.importorskip("pyproj")
 
-from trid3nt_server.agent.tools.meta.export_case_to_qgis import export_case_to_qgis as export_mod
-from trid3nt_server.agent.tools.meta.export_case_to_qgis.export_case_to_qgis import export_case_to_qgis
+from trid3nt_server.agent.tools.meta.open_case_in_qgis import open_case_in_qgis as export_mod
+from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import open_case_in_qgis
 
 pytestmark = pytest.mark.asyncio
 
 
 # --------------------------------------------------------------------------- #
-# Fake S3 client (module-local seam: export_case_to_qgis._s3_client)
+# Fake S3 client (module-local seam: open_case_in_qgis._s3_client)
 # --------------------------------------------------------------------------- #
 
 
@@ -192,7 +192,7 @@ async def test_mesh_entry_added_with_resolved_crs(tmp_path: Path, monkeypatch) -
         nc_source=nc_path,
     )
 
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[_flood_layer("Peak flood depth", run_id)],
         output_dir=str(tmp_path / "export"),
     )
@@ -220,7 +220,7 @@ async def test_no_mesh_sibling_yields_no_entry(tmp_path: Path, monkeypatch) -> N
     _patch_raster_read(monkeypatch, tmp_path)
     fake = _install_fake_s3(monkeypatch, existing=set())  # HeadObject always misses
 
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[_flood_layer("Peak flood depth", run_id)],
         output_dir=str(tmp_path / "export"),
     )
@@ -261,7 +261,7 @@ async def test_non_flood_case_mesh_stays_empty(tmp_path: Path, monkeypatch) -> N
     ) as ds:
         ds.write(data, 1)
 
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[
             {
                 "name": "Digital Elevation Model",
@@ -295,7 +295,7 @@ async def test_peak_and_frame_layers_dedup_to_one_mesh_entry(tmp_path: Path, mon
         nc_source=nc_path,
     )
 
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[
             _flood_layer("Peak flood depth", run_id, filename="flood_depth_peak.tif"),
             _flood_layer("Flood depth step 1", run_id, filename="flood_depth_frame_01.tif"),
@@ -332,7 +332,7 @@ async def test_titiler_tile_template_uri_resolves_to_mesh_entry(tmp_path: Path, 
         nc_source=nc_path,
     )
 
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[_titiler_flood_layer("Peak flood depth", run_id)],
         output_dir=str(tmp_path / "export"),
     )
@@ -357,7 +357,7 @@ async def test_unreadable_mesh_netcdf_lists_entry_with_null_crs(tmp_path: Path, 
         nc_source=garbage,
     )
 
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[_flood_layer("Peak flood depth", run_id)],
         output_dir=str(tmp_path / "export"),
     )
@@ -386,7 +386,7 @@ async def test_modflow_mesh_entry_added_with_resolved_crs(tmp_path: Path, monkey
         nc_source=nc_path,
     )
 
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[_plume_layer("Contaminant Plume (peak concentration)", run_id)],
         output_dir=str(tmp_path / "export"),
     )
@@ -407,7 +407,7 @@ async def test_modflow_and_flood_style_presets_probe_distinct_filenames(tmp_path
     fake = _install_fake_s3(monkeypatch, existing=set())  # every HeadObject misses
     _patch_raster_read(monkeypatch, tmp_path)
 
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[_plume_layer("Contaminant Plume (peak concentration)", run_id)],
         output_dir=str(tmp_path / "export"),
     )

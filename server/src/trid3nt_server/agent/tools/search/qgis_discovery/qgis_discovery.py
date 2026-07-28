@@ -1,7 +1,7 @@
 """QGIS capability discovery atomic tools — Level 1a (FR-AS-9, FR-TA-2).
 
 This module registers the two algorithm-discovery tools that, together with
-the ``qgis_process`` pass-through (job-0032 ``passthroughs.py``), implement
+the ``qgis_process`` pass-through (``passthroughs.py``), implement
 the *capability discovery Level 1a* loop described in SRS FR-AS-9::
 
     list_qgis_algorithms  →  describe_qgis_algorithm  →  qgis_process
@@ -15,14 +15,14 @@ out-of-scope; the discovery loop is the substitute.
 Both tools are cacheable under the FR-DC-2 ``static-30d`` class with
 ``source_class="qgis_algorithms_catalog"``. The catalog rarely changes — only
 on a QGIS install / container image rebuild (~1× per quarter at most). When
-the QGIS substrate rotates, the lifecycle policy (job-0031) will evict the
+the QGIS substrate rotates, the lifecycle policy will evict the
 cache within 30 days and the next call re-fetches.
 
 Substrate (local qgis_process)
 ------------------------------
 
 The substrate seam is the ``_WORKER_SUBMITTER`` module variable in
-``passthroughs.py`` (job-0032's DI hook), bound at agent startup via
+``passthroughs.py`` (DI hook), bound at agent startup via
 ``set_worker_submitter`` (see ``main._default_qgis_process_submitter``). The
 submitter runs ``qgis_process`` as a subprocess — a locally installed
 ``qgis_process`` binary, or the ``TRID3NT_QGIS_DOCKER_IMAGE`` docker container
@@ -116,7 +116,7 @@ MAX_LIST_RESULTS = 50
 SOURCE_CLASS = "qgis_algorithms_catalog"
 
 # ---------------------------------------------------------------------------
-# Curated allowlist (job-0308 Q-discovery lane).
+# Curated allowlist (Q-discovery lane).
 #
 # A bare ``qgis_process list`` on the QGIS substrate surfaces ~695
 # algorithms across native QGIS + GDAL + GRASS + SAGA. Handing all 695 to the
@@ -669,7 +669,7 @@ def list_qgis_algorithms(
     category_filter: str | None = None,
     search_terms: str | None = None,
     include_all: bool = False,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> list[QGISAlgorithmSummary]:

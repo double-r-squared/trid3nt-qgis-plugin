@@ -1,9 +1,9 @@
 """Shared core of the data fetchers (split from the original multi-tool
-``data_fetch`` module, job-0033): the typed fetch-error hierarchy
+``data_fetch`` module): the typed fetch-error hierarchy
 (``FetchError`` / ``UpstreamAPIError`` / ``BboxInvalidError``), the Nominatim
 usage-policy User-Agent, and the bbox validation / resolution-quantization
 helpers every fetcher pre-applies before handing params to the FR-DC-3 cache
-shim (OQ-32-QUANTIZATION-LOCATION: engine-side quantize).
+shim (engine-side quantize).
 
 Tool-specific error subclasses (``GeocodeNoMatchError``, ``DemPartialCoverageError``,
 ``PrecipForcingUnavailableError``, ...) live next to their tool module.
@@ -60,7 +60,7 @@ _DEFAULT_USER_AGENT = (
 )
 
 # ---------------------------------------------------------------------------
-# bbox helpers (FR-DC-3 / OQ-32-QUANTIZATION-LOCATION: engine-side quantize).
+# bbox helpers (FR-DC-3: engine-side quantize).
 # ---------------------------------------------------------------------------
 
 
@@ -108,7 +108,7 @@ def round_bbox_to_resolution(
         A quantized bbox tuple. Always slightly larger than the input bbox
         (snaps mins down and maxes up) so the requested area is covered.
 
-    Surfaced as the engine-side resolution of OQ-32-QUANTIZATION-LOCATION:
+    Engine-side resolution of the quantization-location question:
     the cache shim's contract is canonicalize+hash; per-source quantization
     is engine-owned domain knowledge.
     """

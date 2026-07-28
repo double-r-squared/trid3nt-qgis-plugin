@@ -1,4 +1,4 @@
-"""Per-session tool circuit breaker (job-B8, Wave 4.10 Stage 3).
+"""Per-session tool circuit breaker (Stage 3).
 
 Defends the multi-turn agent loop against unstable upstreams (STAC, ERDDAP,
 THREDDS, ArcGIS Hub, etc.) that enter a repeated-failure mode.  When a single
@@ -33,7 +33,7 @@ Wire points (server.py):
 ``ToolNotFoundError`` and every ``fetch_*`` error class: ``error_code`` is a
 SCREAMING_SNAKE_CASE string, ``retryable=False`` (the LLM cannot retry its way
 out of a cooldown).  ``summarize_tool_result`` in ``adapter.py`` harvests these
-attributes and emits the full Wave 4.9 structured envelope so Gemini reads the
+attributes and emits the full structured envelope so Gemini reads the
 signal and narrates the cooldown honestly.
 """
 
@@ -112,7 +112,7 @@ class CircuitBreakerError(RuntimeError):
     should narrate honestly that the tool is temporarily unavailable and
     suggest the user try again after the cooldown expires.
 
-    ``error_code="CIRCUIT_BREAKER_TRIPPED"`` follows the Wave 4.9
+    ``error_code="CIRCUIT_BREAKER_TRIPPED"`` follows the
     SCREAMING_SNAKE_CASE convention; ``summarize_tool_result`` harvests it.
     """
 

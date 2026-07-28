@@ -7,7 +7,7 @@ async-iterators of strings). This is **containment, not abstraction** — no
 FR-AS-1: Gemini-only. The deferred multi-provider future (§5) is not
 foreclosed cheaply because the seam exists, but no abstraction is paid for now.
 
-Model selection (job-0015):
+Model selection:
   TRID3NT_GEMINI_MODEL env override, defaulting to ``GEMINI_DEFAULT_MODEL``
   below. As of 2026-06-05 Gemini 3 (``gemini-3-pro*``) is not yet GA on Vertex
   for this project (verified 404 from generate_content); ``gemini-2.5-pro`` is
@@ -15,9 +15,9 @@ Model selection (job-0015):
   the env override path — flips with no other code change.
 
 Auth: ADC via ``GOOGLE_GENAI_USE_VERTEXAI=True`` + ``GOOGLE_CLOUD_PROJECT`` +
-``GOOGLE_CLOUD_LOCATION``. No API key path. (job-0014 substrate.)
+``GOOGLE_CLOUD_LOCATION``. No API key path. (substrate.)
 
-job-0154: tool-dispatch fix.  ``stream_reply`` sent Gemini no function
+tool-dispatch fix. ``stream_reply`` sent Gemini no function
 declarations and no system prompt, so Gemini had no knowledge of any tool and
 responded with a prose refusal.  The new ``stream_events`` replaces it: it
 passes the tool catalog (``FunctionDeclaration`` from each registered tool's
@@ -27,7 +27,7 @@ then demultiplexes each chunk into either a ``TextDeltaEvent`` or a
 (``stream_reply`` -- the old text-only shim -- was removed in the offline-pivot
 cleanup; the live text path is ``stream_events_with_contents`` -> dispatch.)
 
-job-0169: multi-turn function_call → function_response loop.  job-0154 stopped
+multi-turn function_call → function_response loop. stopped
 after the first function_call (single-shot dispatch) — every multi-tool prompt
 ("Show me protected areas in Fort Myers" → geocode_location → fetch_wdpa) hung
 because Gemini never saw the result of its first call and so never decided to
@@ -76,7 +76,7 @@ GEMINI_DEFAULT_MODEL = "gemini-2.5-pro"
 
 
 # ---------------------------------------------------------------------------
-# Typed stream events (job-0154)
+# Typed stream events
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -130,7 +130,7 @@ class FunctionCallEvent:
 class UsageMetadataEvent:
     """Per-turn usage metadata harvested from Gemini's ``response.usage_metadata``.
 
-    Job-B6 (Wave 4.10): the multi-turn driver needs ``cached_content_token_count``
+    Job-B6: the multi-turn driver needs ``cached_content_token_count``
     + ``total_token_count`` on every Gemini call so it can:
 
       1. Verify the 90% cache discount actually lands in production
@@ -171,7 +171,7 @@ class CompactionStartEvent:
     CLIP_RETRY_NOTE)`` narration seam. ``server.py``'s dispatch loop mints a
     durable running card ("Compacting conversation...") the instant this
     arrives (``pipeline_emitter.mint_compaction_card``) instead of gluing a
-    disclaimer sentence onto the model's own reply -- the F10 running-tool-
+    disclaimer sentence onto the model's own reply -- the running-tool-
     card treatment, animated on the wire, persisted so it survives a Case
     reopen. Carries no fields: the token counts are not yet final (the
     compacted-side count is only known once ``compact_contents`` returns),
@@ -375,7 +375,7 @@ def classify_provider_error_class(exc: BaseException) -> str:
 
 
 # ---------------------------------------------------------------------------
-# System prompt builder (job-0154)
+# System prompt builder
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """\
@@ -863,7 +863,7 @@ chain-of-thought internal; emit only the final, user-facing narration.
 
 
 # ---------------------------------------------------------------------------
-# Tool declaration builder (job-0154)
+# Tool declaration builder
 # ---------------------------------------------------------------------------
 
 def _is_union_type(annotation: Any) -> bool:
@@ -921,7 +921,7 @@ def _simplify_annotation(annotation: Any) -> Any:
     Handles both ``typing.Union``/``Optional`` (Python 3.9) and the new
     ``X | Y`` union syntax (Python 3.10+, ``types.UnionType``).
 
-    B11 (Wave 4.10): centralised in the adapter so no tool file needs touching.
+    B11: centralised in the adapter so no tool file needs touching.
     """
     if annotation is inspect.Parameter.empty:
         return annotation
@@ -1032,8 +1032,8 @@ def _normalize_callable_for_gemini(fn: Any) -> Any:
     The wrapper delegates all calls to the original function unchanged —
     behaviour is unaffected; only the schema-generation surface is altered.
 
-    B11 (Wave 4.10): centralised in the adapter so no individual tool file
-    needs to be touched.  The OQ-0154-DECL-FALLBACK open question is resolved
+    B11: centralised in the adapter so no individual tool file
+    needs to be touched. The open question is resolved
     by this function — all 55 registered tools now pass ``from_callable``.
     """
     import typing as _typing
@@ -1075,7 +1075,7 @@ def _normalize_callable_for_gemini(fn: Any) -> Any:
 def _strip_private_params(decl: genai_types.FunctionDeclaration) -> genai_types.FunctionDeclaration:
     """Remove underscore-prefixed parameters from a generated FunctionDeclaration.
 
-    job-0163 finding: 16+ atomic tools (``compute_zonal_statistics``,
+     finding: 16+ atomic tools (``compute_zonal_statistics``,
     ``compute_impervious_surface``, ``extract_landcover_class``,
     ``clip_raster_to_*``, ``compute_hillshade``/``slope``/``aspect``, etc.)
     accept underscore-prefixed test-injection kwargs such as
@@ -1123,7 +1123,7 @@ def build_tool_declarations(
     sole source of Gemini's tool-selection signal — the same text that a
     human reviewer sees is exactly what Gemini reasons over.
 
-    B11 (Wave 4.10) compliance fix: before calling ``from_callable``, every
+    B11 compliance fix: before calling ``from_callable``, every
     tool's callable is passed through ``_normalize_callable_for_gemini`` which
     replaces Gemini-incompatible annotations with schematisable equivalents:
 
@@ -1140,7 +1140,7 @@ def build_tool_declarations(
     registry; logged at WARNING, not DEBUG, to make regressions visible).
 
     Every generated declaration is post-processed through
-    ``_strip_private_params`` to remove underscore-prefixed kwargs (job-0163;
+    ``_strip_private_params`` to remove underscore-prefixed kwargs (
     see that helper's docstring for the Vertex 400 trace).
     """
     declarations: list[genai_types.FunctionDeclaration] = []
@@ -1188,7 +1188,7 @@ class GeminiSettings:
 def load_settings() -> GeminiSettings:
     """Resolve Gemini settings from the environment.
 
-    Required env (job-0014 substrate):
+    Required env (substrate):
     - ``GOOGLE_GENAI_USE_VERTEXAI=True``
     - ``GOOGLE_CLOUD_PROJECT`` (no default -- the GCP project is gone;
       this dormant Vertex path requires it set explicitly)
@@ -1226,7 +1226,7 @@ def build_client(settings: GeminiSettings) -> genai.Client:
 
 
 # ---------------------------------------------------------------------------
-# Content / function_response builders (job-0169)
+# Content / function_response builders
 # ---------------------------------------------------------------------------
 
 # Hard upper bound on chars we send back to Gemini per function_response.
@@ -1237,10 +1237,10 @@ _FUNCTION_RESPONSE_CHAR_BUDGET = 4_000
 
 # Maximum loop iterations for the multi-turn driver.  Each iteration is one
 # Gemini stream + (optionally) one dispatched tool call.  Raised from 8 to 12
-# for Wave 4.10 (job-B9) to accommodate the added chain depth from new
+# for to accommodate the added chain depth from new
 # fetchers (STAC, ERDDAP, THREDDS, gridMET, CO-OPS, etc.) plus the
 # allowed-set discovery overhead (list_categories → list_tools_in_category →
-# actual fetch → publish) that Wave 4.10 category routing introduces.
+# actual fetch → publish) that category routing introduces.
 # Per the research survey (project_wave_4_10_research_findings.md): 10-12 is
 # the validated range; 12 provides headroom for the longest realistic chains.
 # If Gemini somehow loops past 12, that's a runaway and the fail-stop +
@@ -1432,7 +1432,7 @@ def build_contents_from_history(
 
 
 # Default cap on the number of persisted chat rows rehydrated into the live
-# Gemini context on a Case reopen (F17 / ux-batch-1 J8). A long-running Case
+# Gemini context on a Case reopen (J8). A long-running Case
 # can accumulate hundreds of user/agent/tool rows; replaying all of them every
 # reopen turn would blow the context window (and the per-turn cost). We keep
 # the MOST RECENT rows (the tail carries the relevant recent state — what the
@@ -1445,7 +1445,7 @@ REHYDRATE_HISTORY_CAP = 40
 def _summarize_tool_row_for_history(content: str, tool_card: Any) -> str:
     """Collapse a persisted ``role="tool"`` row into one model-side text line.
 
-    F17: the persisted store keeps tool turns as a ``ToolCardRecord`` (typed
+    the persisted store keeps tool turns as a ``ToolCardRecord`` (typed
     ``tool_card`` + a JSON-string mirror in ``content``); the full-fidelity
     function_call / function_response Parts are NOT persisted, so we cannot
     rebuild a real tool turn. A short text transcript line is enough to stop
@@ -1453,7 +1453,7 @@ def _summarize_tool_row_for_history(content: str, tool_card: Any) -> str:
     came out. Shape: ``[tool <name> completed]`` / ``[tool <name> failed]``.
 
     Falls back to parsing ``content`` (the JSON mirror) when the typed
-    ``tool_card`` is absent (pre-job-0267 / non-contract consumers).
+    ``tool_card`` is absent (non-contract consumers).
     """
     name: str | None = None
     state: str | None = None
@@ -1481,7 +1481,7 @@ def _summarize_tool_row_for_history(content: str, tool_card: Any) -> str:
 
 
 def _format_layer_bbox(bbox: Any) -> str | None:
-    """Compact ``[lon_min, lat_min, lon_max, lat_max]`` for a layer line (job-0326).
+    """Compact ``[lon_min, lat_min, lon_max, lat_max]`` for a layer line.
 
     Returns a short rounded string for a valid 4-tuple bbox, else ``None`` (most
     persisted ``ProjectLayerSummary`` rows carry no bbox, so the line simply
@@ -1497,7 +1497,7 @@ def _format_layer_bbox(bbox: Any) -> str | None:
 
 
 def _format_aoi_bbox_line(case_bbox: Any) -> str | None:
-    """Format the Case AOI bbox as a single durable instruction line (F17/F20).
+    """Format the Case AOI bbox as a single durable instruction line.
 
     ``case_bbox`` is the Case's persisted ``[lon_min, lat_min, lon_max,
     lat_max]`` (``CaseSummary.bbox``). Returns ``None`` for missing / malformed
@@ -1524,7 +1524,7 @@ def build_layers_present_note(
     loaded_layers: list[dict] | None,
     case_bbox: Any = None,
 ) -> str | None:
-    """Build the compact "Case state" model turn (F17): layers + AOI bbox.
+    """Build the compact "Case state" model turn: layers + AOI bbox.
 
     ``loaded_layers`` is the persisted ``CaseSessionState.loaded_layers`` —
     a list of ``ProjectLayerSummary`` ``model_dump(mode="json")`` dicts. We
@@ -1535,11 +1535,11 @@ def build_layers_present_note(
     ``compute_blended_composite`` base/overlay, or any ``*_uri`` input)
     instead of re-fetching or recomputing it (F54). ``case_bbox``
     (``CaseSummary.bbox``) is appended as a durable AOI anchor so the extent
-    survives history capping (F20: follow-ups reuse the original AOI).
+    survives history capping (follow-ups reuse the original AOI).
     Returns ``None`` only when there is neither a layer nor a usable bbox.
     Kept deliberately short.
     """
-    # job-0326: enrich each line with enough IDENTITY that the model can
+    # enrich each line with enough IDENTITY that the model can
     # recognize an existing RESULT (so it never re-runs the solver that made it):
     #   - role: RESULT (a primary simulation / analysis output) vs INPUT
     #     (a fetched / context layer used as a solver input);
@@ -1633,10 +1633,10 @@ def rehydrate_history_from_case(
     cap: int = REHYDRATE_HISTORY_CAP,
     case_bbox: Any = None,
 ) -> tuple[list[dict], int]:
-    """Convert a Case's persisted chat into the ``chat_history`` dict shape (F17).
+    """Convert a Case's persisted chat into the ``chat_history`` dict shape.
 
     On a Case reopen the server resets ``state.chat_history = []`` (the
-    job-0245 cross-case clean-slate). Without rehydration the model has no
+     cross-case clean-slate). Without rehydration the model has no
     memory of prior work and recomputes (e.g. a follow-up hillshade ask in the
     Fort Myers flood Case re-runs the whole flood). This converts the PERSISTED
     PER-CASE messages — the same data that drives the visible chat replay —
@@ -1660,7 +1660,7 @@ def rehydrate_history_from_case(
         ``model`` turn) and ``dropped`` is how many head rows were elided by
         the cap (for the caller to log).
 
-    Guardrail (job-0245): this function ONLY ever sees ONE Case's persisted
+    Guardrail: this function ONLY ever sees ONE Case's persisted
     messages (the caller passes ``session_state.chat_history`` for the opened
     ``case_id``). The persisted store is keyed by Case, so this is inherently
     case-correct and cannot reintroduce the in-memory cross-case leak.
@@ -1802,7 +1802,7 @@ def _coerce_to_summary_value(value: Any, depth: int = 0) -> Any:
 def _classify_error(error: BaseException) -> tuple[str, bool]:
     """Derive ``(error_code, retryable)`` for a tool-dispatch exception.
 
-    job-0177: typed tool exceptions across the registry already declare
+    typed tool exceptions across the registry already declare
     ``error_code`` (str) and ``retryable`` (bool) class attributes
     (``WDPAError``, ``HRSLError``, ``MTBSError``, ``MRMSError``,
     ``INatError``, ``IUCNError``, ``FIRMSError``, ``GTSMError``,
@@ -1850,7 +1850,7 @@ def _classify_error(error: BaseException) -> tuple[str, bool]:
 
 
 def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
-    """Compact summary for a chart-emission tool result (job-0230).
+    """Compact summary for a chart-emission tool result.
 
     The full ``vega_lite_spec`` (with inline data rows) is intentionally
     DROPPED here — it already went to the client on the ``chart-emission`` WS
@@ -1900,7 +1900,7 @@ def _summarize_chart_emission(tool_name: str, result: dict[str, Any]) -> dict[st
 def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str:
     """Extract the threaded failure code from a failed "modeled" envelope dict.
 
-    job-0327 (HONESTY FLOOR). A ``_build_failed_envelope`` exit threads its
+     (HONESTY FLOOR). A ``_build_failed_envelope`` exit threads its
     error code into TWO seams so it survives ``_coerce_to_summary_value``'s
     depth>=2 dict-collapse:
 
@@ -1938,7 +1938,7 @@ def _failed_modeled_envelope_error_code(result: dict[str, Any]) -> str:
 def _modeled_envelope_is_failure_tagged(result: dict[str, Any]) -> bool:
     """True if a "modeled" envelope carries an explicit failure marker.
 
-    job-0327 R2 (MUST-FIX 1/2a). Two seams mark a deterministically-failed
+     R2 (MUST-FIX 1/2a). Two seams mark a deterministically-failed
     composer run, regardless of whether a ``solver_run_id`` was already
     appended before the failure (SOLVER_FAILED/SOLVER_TIMEOUT append at
     model_flood_scenario.py:777 BEFORE failing; POSTPROCESS_FAILED likewise):
@@ -1966,7 +1966,7 @@ def _modeled_envelope_is_failure_tagged(result: dict[str, Any]) -> bool:
 def _extract_flood_metrics_phrase(result: dict[str, Any]) -> str:
     """Render whatever flood metrics exist into an honest narration fragment.
 
-    job-0327 R2 (MUST-FIX 2b). On a solve-succeeded-but-publish/render-dropped
+     R2 (MUST-FIX 2b). On a solve-succeeded-but-publish/render-dropped
     run the LLM gets ``status="error"`` with ``error_code=NO_RENDERABLE_LAYER``
     but the simulation DID produce real numbers — surface them so the agent can
     still narrate the flood honestly ("flooded area X, max depth Y") even though
@@ -2100,7 +2100,7 @@ def summarize_tool_result(
 
     Conventions enforced:
 
-    * Errors (job-0177) become
+    * Errors become
       ``{"status": "error", "error_code": str, "message": str, "retryable": bool, "error_type": str}``.
       ``error_code`` + ``retryable`` are harvested from the tool's typed
       exception class (FR-AS-11 surface) when present, else derived
@@ -2170,7 +2170,7 @@ def summarize_tool_result(
     ):
         return _summarize_published_scenario_layer(tool_name, result)
 
-    # job-0230 (sprint-13 Stage 2): chart-emission results carry a full
+    # chart-emission results carry a full
     # Vega-Lite spec with INLINE data rows (up to ~2000). Gemini must narrate
     # from the chart's numbers, not re-read the inline rows — and the spec
     # could blow the char budget. Strip ``vega_lite_spec`` and surface a
@@ -2185,7 +2185,7 @@ def summarize_tool_result(
     ):
         return _summarize_chart_emission(tool_name, result)
 
-    # job-0233 (sprint-13 Stage 2): code_exec_request returns a COMPACT summary
+    # code_exec_request returns a COMPACT summary
     # (status / result descriptor / stdout tail / truncated / duration) PLUS the
     # full ``code-exec-result`` wire payload under ``_code_exec_result`` (which
     # carries the larger 16-KiB stdout/stderr fields). The full payload already
@@ -2201,14 +2201,14 @@ def summarize_tool_result(
             "result": _coerce_to_summary_value(compact),
         }
 
-    # job-0327 (HONESTY FLOOR): a "modeled" composer result MUST NOT be stamped
+    # a "modeled" composer result MUST NOT be stamped
     # status="ok" while carrying an EMPTY ``layers`` list — a modeled run with
     # no renderable layer is exactly NATE's "no flood layer but said ok"
     # symptom. This classifier lives at the single chokepoint every tool result
     # passes through and keys off the STRUCTURE of the result (not on whether an
     # exception was raised), so it is root-cause-agnostic.
     #
-    # NET GUARANTEE (job-0327 R2): envelope_type=="modeled" AND empty layers ->
+    # NET GUARANTEE (R2): envelope_type=="modeled" AND empty layers ->
     # NEVER status="ok". Two sub-cases:
     #
     #   (a) FAILURE-TAGGED — the depth-0 ``workflow_name`` carries ":FAILED:" OR
@@ -2326,7 +2326,7 @@ def summarize_tool_result(
 
 
 # --------------------------------------------------------------------------- #
-# result_usability classifier (tool-accuracy panel — NATE 2026-06-17)
+# result_usability classifier (tool-accuracy panel)
 # --------------------------------------------------------------------------- #
 #
 # ``success`` (did the tool return without raising / without a failure-tagged
@@ -2536,7 +2536,7 @@ def build_user_text_content(text: str) -> genai_types.Content:
 
 
 # ---------------------------------------------------------------------------
-# stream_events — tool-aware streaming (job-0154, root fix)
+# stream_events - tool-aware streaming (root fix)
 # ---------------------------------------------------------------------------
 
 async def stream_events(
@@ -2652,9 +2652,9 @@ async def stream_events_with_contents(
     bedrock_model: str | None = None,
     show_thinking: bool = False,
 ) -> AsyncIterator[StreamEvent]:
-    """Stream one Gemini turn from a fully-built ``contents`` list (job-0169).
+    """Stream one Gemini turn from a fully-built ``contents`` list.
 
-    ``show_thinking`` (local build, NATE 2026-07-08): forwarded to the OpenAI
+    ``show_thinking`` (local build): forwarded to the OpenAI
     adapter only. When True the adapter omits the ``/no_think`` system suffix
     (TRID3NT_OPENAI_EXTRA_SYSTEM) for this round so the model's reasoning
     channel is generated and surfaced as ``ThinkingDeltaEvent``s. Ignored by
@@ -2672,7 +2672,7 @@ async def stream_events_with_contents(
     Cancellation: ``asyncio.CancelledError`` cancels the underlying producer
     thread and re-raises.
 
-    Job-B6 (Wave 4.10) — CachedContent integration:
+    Job-B6 - CachedContent integration:
         When ``cached_content_name`` is provided, the request is built
         WITHOUT ``tools[]`` and WITHOUT ``tool_config``. The cache carries
         the full catalog + system instruction; sending either field
@@ -2690,7 +2690,7 @@ async def stream_events_with_contents(
         PipelineEmitter, and pipe ``cached_content_token_count`` into the
         tool-call telemetry record.
     """
-    # sprint-14-aws (job-0286): model-provider switch. When MODEL_PROVIDER=bedrock,
+    # model-provider switch. When MODEL_PROVIDER=bedrock,
     # delegate to the Bedrock Converse adapter -- it converts the genai contents +
     # tool declarations at the boundary and yields the SAME StreamEvent union, so
     # the server.py dispatch loop, validator, emitter, and UI are untouched.

@@ -52,7 +52,7 @@ class CaMaFloodUpstreamError(CaMaFloodError):
 class CaMaFloodUnreachableError(CaMaFloodError):
     """The legacy no-auth URL returned an HTML migration page instead of netCDF.
 
-    Surfaces the OQ-0133-CAMA-DATA-SOURCE-MIGRATION reality: the kickoff
+    Surfaces the reality: the kickoff
     URL no longer serves data. The agent surface uses this to route a
     "data source migrated; supply a mirror or use the Dropbox fetcher"
     message via the secrets/data-source panel.
@@ -75,7 +75,7 @@ class CaMaFloodEmptyError(CaMaFloodError):
 
 # Kickoff-named default (legacy U.Tokyo Hydra server). As of 2026-02-12 this
 # URL returns an HTML migration page — see module docstring for the
-# OQ-0133-CAMA-DATA-SOURCE-MIGRATION trade-off.
+# trade-off.
 _LEGACY_BASE_URL = (
     "https://hydro.iis.u-tokyo.ac.jp/~yamadai/cama-flood/CaMa-Flood_v4/data/runoff/"
 )
@@ -125,7 +125,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -242,7 +242,7 @@ def _validate_date_range(start_date: str, end_date: str) -> tuple[_dt.date, _dt.
 
 
 # ---------------------------------------------------------------------------
-# Base-URL resolution (kickoff-extended for OQ-0133-CAMA-DATA-SOURCE-MIGRATION).
+# Base-URL resolution.
 # ---------------------------------------------------------------------------
 
 
@@ -561,7 +561,7 @@ def _netcdf_to_cog_bytes(
         # a south-up COG (rasterio's BoundingBox.bottom > top). We re-sort
         # descending here so the written COG is north-up — the convention
         # QGIS Server, MapLibre, and the rest of the raster pipeline
-        # expect (job-0086 codified lesson: geographic correctness).
+        # expect (codified lesson: geographic correctness).
         if "latitude" in da.dims and len(da["latitude"]) > 1:
             lat_vals = da["latitude"].values
             if lat_vals[0] < lat_vals[-1]:
@@ -727,7 +727,7 @@ def fetch_cama_flood_discharge(
     end_date: str,
     version: str = "v4.0.1",
     base_url: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -739,7 +739,7 @@ def fetch_cama_flood_discharge(
     a CRS-tagged Cloud-Optimized GeoTIFF (EPSG:4326, float32, nodata=NaN) at the
     model's native 0.1° (~10 km) resolution. Normalises longitudes 0–360° to
     -180–180° and sorts latitude ascending before clipping (geographic-correctness
-    gate per job-0086). v4.0.1 is the default; v4.20 and v4.30 also supported.
+    gate). v4.0.1 is the default; v4.20 and v4.30 also supported.
 
     **When to use:**
 
@@ -760,7 +760,7 @@ def fetch_cama_flood_discharge(
     - Sub-10km river networks — for finer hydrography use ``fetch_river_geometry``
       + a routing model on NHDPlus sub-grid channels.
 
-    **KNOWN MIGRATION (OQ-0133-CAMA-DATA-SOURCE-MIGRATION):** The kickoff names
+    **KNOWN MIGRATION:** The kickoff names
     a no-auth U.Tokyo Hydra URL that as of 2026-02-12 returns an HTML redirect
     to https://global-hydrodynamics.github.io/. New distribution is gated
     (Google-Form + Dropbox password). Set ``TRID3NT_CAMA_FLOOD_BASE_URL`` or pass
@@ -797,7 +797,7 @@ def fetch_cama_flood_discharge(
       ``fetch_era5_reanalysis`` (atmospheric forcing) for a complete SFINCS
       compound-flood forcing stack outside CONUS.
     - Consumed by: ``build_sfincs_model`` (river inflow boundary) and
-      ``model_compound_flood_global`` (compound-flood composer, Wave 2+).
+      ``model_compound_flood_global`` (compound-flood composer).
     - For CONUS rivers, ``fetch_noaa_nwm_streamflow`` is preferred (gauged,
       higher resolution); this tool activates when NWM coverage ends.
 

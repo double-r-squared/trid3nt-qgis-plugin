@@ -1,4 +1,4 @@
-"""``fetch_noaa_nwm_streamflow`` atomic tool — NOAA National Water Model streamflow (job A3).
+"""``fetch_noaa_nwm_streamflow`` atomic tool - NOAA National Water Model streamflow.
 """
 
 from __future__ import annotations
@@ -143,7 +143,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -704,7 +704,7 @@ def fetch_noaa_nwm_streamflow(
     product: Literal["analysis_assim", "short_range"] = "analysis_assim",
     valid_time: str | None = None,
     forecast_hour: int = 0,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

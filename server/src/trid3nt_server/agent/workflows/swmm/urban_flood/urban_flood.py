@@ -18,7 +18,7 @@ Like the other templates it declares ``cacheable=False`` +
 ``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (FR-DC-6 -
 workflow exposure surface; never touches the cache shim). Confirmation before
 consequence (Invariant 9 - a solver run) is enforced by the server confirmation
-hook around this tool (the #154 granularity gate), not re-implemented here.
+hook around this tool (the granularity gate), not re-implemented here.
 
 The urban engine runs pyswmm IN-PROCESS (the dev primary path - pyswmm 2.1.0 is
 in the agent venv and SWMM5 is fully headless), so unlike SFINCS/MODFLOW it
@@ -123,7 +123,7 @@ async def swmm_urban_flood(
     washoff_model: str = "exp",
     compute_class: str = "standard",
     enable_autoscale: bool = True,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> SWMMDepthLayerURI | dict[str, Any]:
@@ -208,7 +208,7 @@ async def swmm_urban_flood(
         enable_autoscale: True (default) lets the adaptive-mesh budget
             COARSEN ``target_resolution_m`` so a large AOI fits the cell
             cap. False honours ``target_resolution_m`` exactly — set only
-            by the server-side #154 granularity gate; LLMs should leave
+            by the server-side granularity gate; LLMs should leave
             unset.
 
     Returns:

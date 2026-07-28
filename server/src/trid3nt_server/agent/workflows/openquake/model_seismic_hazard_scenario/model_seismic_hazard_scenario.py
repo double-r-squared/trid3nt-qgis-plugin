@@ -1,4 +1,4 @@
-"""OpenQuake probabilistic-seismic-hazard (PSHA) composer (sprint-17).
+"""OpenQuake probabilistic-seismic-hazard (PSHA) composer.
 
 The OpenQuake analogue of ``model_urban_flood_swmm`` (SWMM) /
 ``model_groundwater_contamination_scenario`` (MODFLOW) / ``model_flood_scenario``
@@ -83,7 +83,7 @@ __all__ = [
 #: The registry key + handle ``solver`` tag for the seismic-hazard engine.
 OPENQUAKE_SOLVER_NAME: str = "openquake"
 
-#: task #199: a FINER default site-grid spacing for the real-fault case. The
+#: a FINER default site-grid spacing for the real-fault case. The
 #: synthetic area-source default (``DEFAULT_SITE_GRID_SPACING_KM`` == 5 km) is a
 #: coarse uniform smear; a real-fault hazard map should resolve the sharp
 #: gradient AROUND the fault trace, so we drop to 2 km when faults drive the
@@ -133,7 +133,7 @@ def assemble_build_spec(
     (bbox + IMT + poe + grid spacing + max distance + GMPE + the G-R source
     params) plus the output globs for the worker's upload step.
 
-    task #199 real-fault wiring: when ``fault_sources`` (the records
+    real-fault wiring: when ``fault_sources`` (the records
     ``fetch_fault_sources`` emits for the AOI) is a NON-empty list, it is attached
     to the build_spec under ``"fault_sources"`` so the worker's
     ``render_openquake_deck`` builds a physics-based ``simpleFaultSource`` model
@@ -211,7 +211,7 @@ def assemble_build_spec(
 
 
 # --------------------------------------------------------------------------- #
-# task #199: real-fault source resolution (the SYNC fetch wrapper).
+# real-fault source resolution (the SYNC fetch wrapper).
 #
 # Calls the ``fetch_fault_sources`` atomic tool for the AOI and returns
 # ``(fault_records, narration_note)``. This is a SYNC function (it does network
@@ -266,7 +266,7 @@ def resolve_fault_sources(
     # what the engine runs. (We do NOT import the worker's job_ini agent-side: it
     # is not in the agent bundle, and an ImportError would wrongly force the
     # synthetic fallback on the deployed agent.)
-    # task #207: ``fetch_fault_sources`` now returns a ``FaultSourcesResult``
+    # ``fetch_fault_sources`` now returns a ``FaultSourcesResult``
     # (a renderable ``LayerURI`` subclass) on a NON-empty fetch and a plain dict
     # on the empty degrade -- read the records + note off EITHER shape.
     if isinstance(result, dict):
@@ -301,7 +301,7 @@ def resolve_fault_sources(
 
 
 # --------------------------------------------------------------------------- #
-# task #207: surface the resolved fault traces as a renderable INPUT layer.
+# surface the resolved fault traces as a renderable INPUT layer.
 #
 # The fault sources are resolved in-memory (lon/lat traces) and baked into the
 # OpenQuake XML, then DISCARDED -- no artifact was kept, so the user could never
@@ -450,7 +450,7 @@ def stage_openquake_build_spec(
     returned URI STRAIGHT to ``run_solver(solver='openquake',
     model_setup_uri=<this>, ...)``.
 
-    task #199: ``fault_sources`` (when non-empty) is threaded into
+    ``fault_sources`` (when non-empty) is threaded into
     ``assemble_build_spec`` so the staged build_spec carries the real-fault source
     model. ``None`` => synthetic area source (unchanged).
 
@@ -567,7 +567,7 @@ def _download_batch_hazard_csv(run_result: Any, run_id: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# task-198: download the NON-RASTER curve products (hazard CURVE + UHS) for the
+# download the NON-RASTER curve products (hazard CURVE + UHS) for the
 # chart producers. Best-effort: these are charts, not the headline layer - a
 # missing/unreadable curve CSV yields no chart (NOT a workflow failure).
 # --------------------------------------------------------------------------- #
@@ -727,7 +727,7 @@ async def model_seismic_hazard_scenario(
     # publish). No-op when no emitter is bound (verify/CI direct-call path).
     begin_substeps(current_emitter(), 5)
 
-    # 0) task #199: resolve REAL active-fault sources for the AOI (sync fetch off
+    # 0): resolve REAL active-fault sources for the AOI (sync fetch off
     #    the loop). Non-empty => build the fault source model + narrate
     #    "real-fault"; empty => honest synthetic-area fallback. NEVER fails the
     #    run (resolve_fault_sources degrades to [] on any fetch error).
@@ -746,7 +746,7 @@ async def model_seismic_hazard_scenario(
         source_model_note,
     )
 
-    # 0.5) task #207: surface the resolved fault traces as a renderable INPUT
+    # 0.5): surface the resolved fault traces as a renderable INPUT
     #      layer so the user can SEE the fault lines the hazard peaks on (they
     #      were previously baked into the OpenQuake XML and discarded). GATED on
     #      ``used_real_faults`` (no traces -> nothing to draw). The serialize +
@@ -891,7 +891,7 @@ async def model_seismic_hazard_scenario(
             details={"run_id": batch_run_id, **getattr(exc, "details", {})},
         ) from exc
 
-    # task #199 honesty floor: stamp the source-model provenance onto the typed
+    # honesty floor: stamp the source-model provenance onto the typed
     # layer so the agent narrates real-vs-fallback from a TYPED field, never a
     # free claim. ``source_model_kind`` reflects the path THIS run actually took
     # (postprocess builds the layer with the synthetic-area default; we flip it to
@@ -903,7 +903,7 @@ async def model_seismic_hazard_scenario(
         }
     )
 
-    # task-198: wire the NON-RASTER PSHA products (hazard CURVE + UHS) to charts.
+    # wire the NON-RASTER PSHA products (hazard CURVE + UHS) to charts.
     # The documented FOLLOW-UP (postprocess_openquake.py:524-531): the chart
     # producers consume the parsed curve arrays, not a layer URI. Best-effort -
     # a missing curve emits no chart (the honesty floor); never fails the run.

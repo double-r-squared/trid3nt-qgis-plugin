@@ -171,7 +171,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -496,7 +496,7 @@ def fetch_soilgrids(
     bbox: tuple[float, float, float, float],
     soil_property: Literal["clay", "sand", "silt", "soc", "bdod", "phh2o"] = "clay",
     depth: str = "0-5cm",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """ISRIC SoilGrids 2.0 global soil-property raster (clay/sand/silt/soc/bdod/pH).

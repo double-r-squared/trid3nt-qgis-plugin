@@ -1,4 +1,4 @@
-"""``fetch_mrms_qpe`` atomic tool — NOAA MRMS QPE precipitation fetcher (job-0103 + sprint-13 job-0226).
+"""``fetch_mrms_qpe`` atomic tool - NOAA MRMS QPE precipitation fetcher.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ _VALID_ACCUMULATIONS: frozenset[str] = frozenset(
     {"01H", "03H", "06H", "12H", "24H", "48H", "72H"}
 )
 
-#: sprint-13 job-0226: lowercase alias map from the user-facing accumulation
+#: lowercase alias map from the user-facing accumulation
 #: values (``"1h"``, ``"6h"``, ``"24h"``, ``"72h"``) to the S3 canonical
 #: product-key tokens. The LLM-facing docstring advertises the lowercase form
 #: as the preferred short-hand; the normalizer accepts both.
@@ -116,7 +116,7 @@ _ACCUM_ALIAS_MAP: dict[str, str] = {
 def _normalize_accumulation(accumulation: str) -> str:
     """Normalize a user-supplied accumulation string to the canonical S3 token.
 
-    Accepts both the sprint-13 lowercase short-hand (``"1h"``, ``"6h"``,
+    Accepts both the lowercase short-hand (``"1h"``, ``"6h"``,
     ``"24h"``, ``"72h"``) and the original uppercase form (``"01H"`` etc.).
     Raises ``MRMSQPEInputError`` for unknown values.
     """
@@ -131,7 +131,7 @@ def _normalize_accumulation(accumulation: str) -> str:
 
 #: We default to the Pass2 (gauge-corrected, delayed ~2 h) product because
 #: the SFINCS Harvey reference (GMD 2025) uses gauge-corrected forcing. Pass1
-#: is real-time radar-only. Surfaced as OQ-0103-MRMS-PASS-CHOICE.
+#: is real-time radar-only. Surfaced.
 _QPE_PASS = "Pass2"
 
 #: CONUS bounding box (EPSG:4326) — the native MRMS QPE grid extent.
@@ -159,10 +159,10 @@ _DOWNLOAD_TIMEOUT = 180.0
 # ---------------------------------------------------------------------------
 
 # Build AtomicToolMetadata DEFENSIVELY against the parallel
-# job-0114-schema sibling that adds ``supports_global_query``. If the schema
+# -schema sibling that adds ``supports_global_query``. If the schema
 # job lands first we want this tool to carry the field; if it doesn't, we
 # fall back to a kwarg-free construction so registration still succeeds.
-# This keeps Wave 1.5 cleanly parallel — see OQ-0103-METADATA-FIELD.
+# This keeps the metadata wiring cleanly parallel.
 
 def _build_metadata() -> AtomicToolMetadata:
     common = dict(
@@ -185,7 +185,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system, sprint-13 job-0226).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -194,7 +194,7 @@ def estimate_payload_mb(
     accumulation: str | None = None,
     **_kw: Any,
 ) -> float:
-    """Estimate output GeoTIFF size in MB for a given call (Wave 1.5 surface).
+    """Estimate output GeoTIFF size in MB for a given call (surface).
 
     MRMS QPE at 0.01° (~1 km) CONUS resolution: the full CONUS grid is
     3500 × 7000 pixels ≈ 49M pixels × 4 bytes = ~196 MB uncompressed.
@@ -651,7 +651,7 @@ def fetch_mrms_qpe(
     bbox: tuple[float, float, float, float] | None = None,
     accumulation: str = "24h",
     valid_time: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -678,7 +678,7 @@ def fetch_mrms_qpe(
     - Near-real-time precipitation context: omit ``valid_time`` to fetch the
       most recently published file (~2 h behind current).
     - Feeding ``model_flood_scenario(forcing_raster_uri=mrms_uri)`` as the real-
-      precip forcing branch for Case 3 (sprint-13 job-0225/0229 composers).
+      precip forcing branch for Case 3 (composers).
 
     **When NOT to use:**
 
@@ -698,7 +698,7 @@ def fetch_mrms_qpe(
       is raised. ``supports_global_query=True`` is retained for the CONUS-wide
       path (``bbox=None``).
     - ``accumulation``: preferred values ``"1h"``, ``"6h"``, ``"24h"``
-      (default), ``"72h"`` — the standard sprint-13 Case 3 window. Also accepts
+      (default), ``"72h"`` - the standard Case 3 window. Also accepts
       ``"3h"``, ``"12h"``, ``"48h"`` and the original uppercase S3 tokens
       (``"01H"``, ``"06H"``, ``"24H"``, ``"72H"``, etc.) for backward
       compatibility. Unknown values raise ``MRMSQPEInputError``.
@@ -716,7 +716,7 @@ def fetch_mrms_qpe(
     nodata=−9999. Band 1 description ``"precipitation_mm"``; GeoTIFF tags
     ``units="mm"``, ``valid_time``, ``source="NOAA MRMS MultiSensor QPE Pass2"``.
     ``layer_type="raster"``, ``role="primary"``, ``units="mm"``.
-    The ``name`` field embeds ``valid_time=<ISO-timestamp>`` (sprint-13
+    The ``name`` field embeds ``valid_time=<ISO-timestamp>`` (
     provenance requirement) since LayerURI has no freeform metadata dict
     (schema extra="forbid").
 
@@ -737,9 +737,9 @@ def fetch_mrms_qpe(
 
     Cache: ``ttl_class="dynamic-1h"``; key = SHA-256 of
     ``(bbox-6dp, accumulation-canonical, valid_time-or-LATEST, pass)``.
-    Payload estimate: ``estimate_payload_mb(bbox, accumulation)`` (Wave 1.5).
+    Payload estimate: ``estimate_payload_mb(bbox, accumulation)``.
     """
-    # Normalize accumulation (accepts "24h", "24H", "01H", etc.) — sprint-13
+    # Normalize accumulation (accepts "24h", "24H", "01H", etc.) -
     canonical_accumulation = _normalize_accumulation(accumulation)
 
     # Validate bbox (None means CONUS-wide per supports_global_query=True)
@@ -796,7 +796,7 @@ def fetch_mrms_qpe(
         layer_bbox = q_bbox
     vt_tag = valid_time if valid_time is not None else "latest"
 
-    # sprint-13 job-0226: record the resolved provenance valid_time so
+    # record the resolved provenance valid_time so
     # downstream composers (Case 3 NWS→MRMS→SFINCS) can narrate which
     # QPE timestamp was used in the forcing. LayerURI has no freeform
     # metadata dict (schema extra="forbid"), so we embed the timestamp

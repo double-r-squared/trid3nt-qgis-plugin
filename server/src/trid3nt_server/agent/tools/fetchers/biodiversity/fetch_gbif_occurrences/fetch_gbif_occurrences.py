@@ -404,7 +404,7 @@ def _records_to_flatgeobuf_bytes(
     skip any record missing them — GBIF *should* not return such records given
     ``hasCoordinate=true`` but we are defensive).
 
-    Also enforces a geographic-correctness check (job-0086 codified lesson):
+    Also enforces a geographic-correctness check (codified lesson):
     every emitted point must lie WITHIN the requested bbox. GBIF occasionally
     returns points slightly outside due to coordinate-uncertainty bbox-tests;
     we hard-filter to keep the contract clean.
@@ -444,7 +444,7 @@ def _records_to_flatgeobuf_bytes(
         if not (math.isfinite(lon_f) and math.isfinite(lat_f)):
             skipped_missing_coords += 1
             continue
-        # Geographic-correctness gate (job-0086 codified lesson): every point
+        # Geographic-correctness gate (codified lesson): every point
         # must fall in the requested bbox. GBIF should respect the spatial
         # filter, but we double-check.
         if not (west <= lon_f <= east and south <= lat_f <= north):
@@ -559,7 +559,7 @@ def fetch_gbif_occurrences(
     bbox: tuple[float, float, float, float],
     year_range: tuple[int, int] | None = None,
     max_records: int = 5000,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

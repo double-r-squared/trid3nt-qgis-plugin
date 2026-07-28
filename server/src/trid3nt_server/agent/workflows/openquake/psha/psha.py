@@ -118,7 +118,7 @@ async def openquake_psha(
     min_magnitude: float = 5.0,
     max_magnitude: float = 7.5,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> SeismicHazardLayerURI | dict[str, Any]:

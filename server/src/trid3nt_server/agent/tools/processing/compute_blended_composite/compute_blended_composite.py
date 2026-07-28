@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_blended_composite`` — bake two rasters into ONE COG (job-0319).
+"""Atomic tool ``compute_blended_composite`` - bake two rasters into ONE COG.
 
 This module registers one atomic tool that **server-side blends two raster
 layers into a single composite Cloud-Optimized GeoTIFF**:
@@ -84,7 +84,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import read_through
-# job-0319: reuse the hillshade COG writer (tiled + overviews) verbatim so the
+# reuse the hillshade COG writer (tiled + overviews) verbatim so the
 # composite renders fast over WMS/TiTiler exactly like every other derived COG.
 from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _translate_to_cog, _get_gdaldem_bin
 
@@ -155,7 +155,7 @@ def _stage_uri_to_local(
     Raises ``BlendedCompositeError(error_code, …)`` on any download failure.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws: s3:// staging via the shared boto3 reader.
+    # s3:// staging via the shared boto3 reader.
     if uri.startswith("s3://"):
         try:
             from trid3nt_server.agent.tools.cache import read_object_bytes_s3
@@ -214,7 +214,7 @@ def _read_base_rgb(base_path: str):
     A single-band base with an **embedded GDAL color table** (e.g. the NLCD
     land-cover palette-index COG) is colorized through that table — each index
     is mapped to its palette RGB(A) so the composite carries the real land-cover
-    colors (job-0323 fix). A single-band base with NO color table is broadcast
+    colors. A single-band base with NO color table is broadcast
     to grayscale (R=G=B) — the historical behavior for true-grayscale bases such
     as a hillshade used as the base. 3/4-band inputs use the first 3 bands as
     RGB; a 4th band (if present) is treated as alpha for the valid-mask. Returns
@@ -233,7 +233,7 @@ def _read_base_rgb(base_path: str):
             rgb = src.read([1, 2, 3]).astype(np.float32)
         else:
             band = src.read(1)
-            # job-0323: a single-band base may be a palette-INDEX raster whose
+            # a single-band base may be a palette-INDEX raster whose
             # colors live in an embedded GDAL color table (e.g. NLCD land
             # cover). Colorize through that table so the blend keeps the real
             # palette hues instead of a flat grayscale broadcast. Fall back to
@@ -428,7 +428,7 @@ def _run_blend(
                 rasterio.enums.ColorInterp.alpha,
             ]
 
-        # job-0319: serve a real tiled COG with overviews (same writer the
+        # serve a real tiled COG with overviews (same writer the
         # hillshade / colored-relief COGs use). Falls back to flat bytes only
         # if gdal_translate is unavailable.
         try:
@@ -485,7 +485,7 @@ def compute_blended_composite(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

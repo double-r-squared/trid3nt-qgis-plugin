@@ -526,7 +526,7 @@ def fetch_inaturalist_observations(
     quality_grade: str = "research",
     days_back: int | None = None,
     max_records: int = _DEFAULT_MAX_RECORDS,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

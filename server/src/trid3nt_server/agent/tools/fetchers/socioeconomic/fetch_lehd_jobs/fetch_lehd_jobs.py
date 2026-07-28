@@ -592,7 +592,7 @@ def fetch_lehd_jobs(
     bbox: tuple[float, float, float, float],
     segment: str = "total",
     year: int = _DEFAULT_YEAR,
-    # Wave 4.10 convention: absorb LLM-invented kwargs.
+    # convention: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Census LEHD LODES workplace employment as a tract choropleth FlatGeobuf.

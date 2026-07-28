@@ -159,7 +159,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -487,7 +487,7 @@ def _fetch_transmission_bytes(
 def fetch_hifld_transmission_lines(
     bbox: tuple[float, float, float, float],
     min_voltage_kv: float | None = None,
-    # Wave 4.10 convention: absorb LLM-invented kwargs.
+    # convention: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """HIFLD electric power transmission lines within a bbox as a FlatGeobuf layer.

@@ -394,7 +394,7 @@ def compute_urban_heat_island(
     landcover_uri: str | None = None,
     *,
     _output_dir: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> UrbanHeatIslandLayerURI:
     """Quantify the urban heat island: MODIS LST stratified by land-cover class.

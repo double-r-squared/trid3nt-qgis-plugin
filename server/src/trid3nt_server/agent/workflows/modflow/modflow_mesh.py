@@ -1,6 +1,6 @@
 """MODFLOW UGRID CF-mesh NetCDF emitter (MDAL phase 2, additive).
 
-Extends the SFINCS ``sfincs_map.nc`` mesh seam (``export_case_to_qgis`` /
+Extends the SFINCS ``sfincs_map.nc`` mesh seam (``open_case_in_qgis`` /
 ``postprocess_flood``, MDAL phase 1) to the groundwater engine. Unlike SFINCS
 -- whose native cht_sfincs quadtree solve already writes a UGRID-conformant
 NetCDF the QGIS MDAL provider opens as-is -- MF6 writes NO mesh file at all
@@ -39,9 +39,9 @@ for dry/inactive cells).
 is authoritative and known at WRITE time -- no CRS inference is needed. It is
 ALSO written into a scalar ``crs`` data variable using the SAME encoding
 SFINCS's writer uses (``crs.attrs["epsg_code"]``), so
-``export_case_to_qgis._resolve_mesh_crs`` (which calls
+``open_case_in_qgis._resolve_mesh_crs`` (which calls
 ``postprocess_flood._read_crs_from_dataset`` -- SFINCS's parser) resolves it
-without any MODFLOW-specific CRS-reading code; the ``export_case_to_qgis``
+without any MODFLOW-specific CRS-reading code; the ``open_case_in_qgis``
 mesh entry's ``crs_authid`` is populated by that SAME shared reader for both
 engines.
 
@@ -66,14 +66,14 @@ future work, not needed for the flagship spill/plume path).
 ``None``, never sinks the plume COG result. The GWF-only archetype postprocess
 functions (drawdown / dewatering / mounding / ASR / hydroperiod / river-
 seepage) do NOT call this yet -- wiring them in later needs ZERO
-``export_case_to_qgis`` changes (the discovery side probes by run_id, not by
+``open_case_in_qgis`` changes (the discovery side probes by run_id, not by
 which postprocess function ran); it is a follow-up, not attempted here.
 
 The uploaded object lands at ``s3://<runs_bucket>/<run_id>/modflow_mesh.nc``
 (via ``cog_io.upload_cog`` -- generically named but scheme/content-type
 agnostic, the SAME uploader every other MODFLOW COG uses) -- a SIBLING of
 ``plume_concentration_4326.tif``, discovered by
-``export_case_to_qgis._mesh_entry_for_layer`` exactly like SFINCS's
+``open_case_in_qgis._mesh_entry_for_layer`` exactly like SFINCS's
 ``sfincs_map.nc`` sibling.
 """
 

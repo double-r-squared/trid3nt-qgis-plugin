@@ -1,4 +1,4 @@
-"""``fetch_usace_nsi`` atomic tool — USACE National Structure Inventory (job A6).
+"""``fetch_usace_nsi`` atomic tool - USACE National Structure Inventory.
 """
 
 from __future__ import annotations
@@ -127,7 +127,7 @@ _PRESERVED_PROPERTIES: tuple[str, ...] = (
     "source",
 )
 
-# Pelicun / Wave 2 contract: the consumer reads ``component_type`` (HAZUS
+# Pelicun contract: the consumer reads ``component_type`` (HAZUS
 # occupancy class). NSI's ``occtype`` IS that vocabulary, so we duplicate it
 # onto a ``component_type`` column so the downstream Pelicun tool's
 # ``"component_type" in gdf.columns`` branch fires without remapping.
@@ -148,7 +148,7 @@ _USER_AGENT = (
 # the larger upper-bound queries can take ~30 s.
 _HTTP_TIMEOUT_S = 60.0
 
-# Estimated payload MB per the FR-DC-9 / Wave-1.5 estimator hook. Empirically
+# Estimated payload MB per the FR-DC-9 estimator hook. Empirically
 # the Fort Myers ~0.02-degree bbox returns ~50-100 KB; a 1-degree bbox can
 # push 20-50 MB in dense urban areas. We report a conservative upper bound for
 # the typical 0.1-degree city-scale query.
@@ -156,7 +156,7 @@ _ESTIMATED_PAYLOAD_MB_PER_DEG2: float = 50.0
 
 
 def estimate_payload_mb(**args: Any) -> float:
-    """FR-DC-9 / Wave-1.5 payload estimator hook (called by chat-warning gate).
+    """FR-DC-9 payload estimator hook (called by chat-warning gate).
 
     Estimates output size from the bbox area (square degrees), assuming a
     typical CONUS structure density. NSI for urban CONUS bboxes can run
@@ -165,7 +165,7 @@ def estimate_payload_mb(**args: Any) -> float:
     conservatively trips for queries that could blow past the 25 MB chat
     threshold.
 
-    Signature matches the Wave-1.5 estimator convention (kwargs from the
+    Signature matches the estimator convention (kwargs from the
     tool call site).
     """
     bbox = args.get("bbox")
@@ -180,7 +180,7 @@ def estimate_payload_mb(**args: Any) -> float:
 # ---------------------------------------------------------------------------
 # AtomicToolMetadata — registered once at import time.
 #
-# ``supports_global_query=False`` (Wave 1.5 schema amendment, job-0114): NSI
+# ``supports_global_query=False`` (schema amendment): NSI
 # only covers the United States and rejects requests > ~1-2 degrees. The
 # catalog/discovery layer must always supply a bbox.
 # ---------------------------------------------------------------------------
@@ -464,7 +464,7 @@ def _fetch_nsi_bytes(
 )
 def fetch_usace_nsi(
     bbox: tuple[float, float, float, float],
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -584,7 +584,7 @@ def fetch_usace_nsi(
     surface decides whether to retry, clarify, or fall back.
 
 
-    Payload estimation (FR-DC-9 / Wave-1.5 hook): see ``estimate_payload_mb``
+    Payload estimation (FR-DC-9 hook): see ``estimate_payload_mb``
     — bbox-area-driven, with the dense-urban upper bound (~50 MB / deg²).
     Typical city-scale ~0.1-degree queries land in single-digit MB; the
     full 1-degree max can push past 25 MB and trip the chat-warning gate.

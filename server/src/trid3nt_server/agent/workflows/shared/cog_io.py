@@ -438,7 +438,7 @@ def upload_cog(
 ) -> str:
     """Upload a COG to ``{scheme}://<runs_bucket>/<run_id>/<dest_filename>``.
 
-    Scheme-aware via ``cache.storage_scheme()`` (the job-0291/0292b lesson):
+    Scheme-aware via ``cache.storage_scheme()`` (the lesson):
 
     - ``s3``: upload via boto3 through the solver module's shared S3 client. The
       runs bucket MUST come from ``TRID3NT_RUNS_BUCKET`` / the explicit

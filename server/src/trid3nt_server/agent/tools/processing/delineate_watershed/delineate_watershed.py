@@ -176,7 +176,7 @@ def delineate_watershed(
     snap_threshold: int = _SNAP_THRESHOLD_CELLS,
     *,
     _output_dir: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> WatershedLayerURI:
     """Delineate the watershed (drainage basin) upstream of a pour point (D8 flow analysis via pysheds).

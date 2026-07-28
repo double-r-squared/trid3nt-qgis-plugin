@@ -1,4 +1,4 @@
-"""``model_news_event_ingest`` workflow — Case 2 partial composer (job-0119).
+"""``model_news_event_ingest`` workflow - Case 2 partial composer.
 
 This module implements the **Case 2 partial composer**:
 
@@ -7,12 +7,12 @@ This module implements the **Case 2 partial composer**:
       → geocode_location("<derived location>") → bbox
       → compose presentation envelope (derived params + provenance + confidence)
       → EventIngestResult
-    STOP — sprint-13 picks up with MODFLOW
+    STOP - picks up with MODFLOW
 
 Per the kickoff, this is a REVIEW-GATED workflow: it produces the typed
 result envelope (``EventIngestResult``) BUT does not dispatch any downstream
 solver. The web UI renders the result as a ``case2-event-ingest-result``
-review modal; the user approves the derived params; sprint-13's MODFLOW
+review modal; the user approves the derived params; MODFLOW
 consumes the approved envelope to start its solve.
 
 Implementation discipline:
@@ -43,7 +43,7 @@ Cross-cutting principles in force:
 - **Invariant 9 (Confirmation before consequence): preserves.** The
   workflow STOPS BEFORE solver dispatch; the returned envelope is what
   the agent surface shows to the user for review/approval.
-- **Geographic-correctness gate (job-0086): preserves.** The geocoded
+- **Geographic-correctness gate: preserves.** The geocoded
   bbox is anchored to the actual claim-aggregator's location value —
   not URL/render consistency. A unit test asserts the geocode is fed
   the exact derived ``location`` string (algebraic identity, not just
@@ -158,7 +158,7 @@ def _source_authority_tier(source_type: str, final_url: str | None) -> int | Non
     Tier 1 — federal agency (NWS, NOAA Storm Events DB, .gov news pages
         with agency authoritative provenance).
     Tier 2 — major news outlet (.com news domains; v0.1 doesn't yet
-        distinguish further — surfaced as OQ-0119-NEWS-SOURCE-TIERING).
+        distinguish further).
     """
     if source_type in ("nws_alert", "storm_event"):
         return 1
@@ -226,7 +226,7 @@ async def _fetch_nws_alert_source(
     The identifier is interpreted as the ``area`` argument: a 2-letter state
     code or a 5-digit FIPS county (the only string forms ``fetch_nws_event``
     accepts; a bbox would need a tuple, which the source dict shape doesn't
-    carry — surfaced as OQ-0119-NWS-IDENTIFIER-SHAPE).
+    carry).
     """
     if pipeline_emitter is not None:
         step_id = await pipeline_emitter.add_step(
@@ -330,10 +330,10 @@ def _extract_text_for_aggregator(
       (e.g. ``"NWS Active Alerts — State FL"``); a richer extraction would
       open the FlatGeobuf and read each feature's ``description``/``headline``
       properties, but per the kickoff scope we keep this MVP and surface the
-      layer-name as the text body (OQ-0119-NWS-DESCRIPTION-EXTRACTION).
+      layer-name as the text body.
     - ``storm_event`` — same shape as ``nws_alert``; the FGB carries
       ``EPISODE_NARRATIVE`` per feature, surfaced as a layer-name fallback
-      for v0.1 (OQ-0119-STORM-NARRATIVE-EXTRACTION).
+      for v0.1.
     """
     if source_type == "url":
         title = fetched.get("title")
@@ -427,7 +427,7 @@ def _validate_sources(sources: Any) -> list[dict[str, Any]]:
             raise EventIngestInputError(
                 f"sources[{i}] must be a dict; got {type(item).__name__}"
             )
-        # job-0295: the LLM naturally emits richer, type-specific source dicts
+        # the LLM naturally emits richer, type-specific source dicts
         # (e.g. storm_event as ``{type, year, state, event_types}``, url as
         # ``{type, url}``) rather than the canonical ``{type, identifier}``.
         # Synthesize ``identifier`` from those keys so the natural shape works
@@ -506,7 +506,7 @@ async def model_news_event_ingest(
     """Compose news/alert ingest → claim aggregation → derived event params.
 
     This is the Case 2 partial composer. It STOPS BEFORE any solver dispatch
-    (sprint-13 picks up with MODFLOW). The returned envelope is the review
+    (picks up with MODFLOW). The returned envelope is the review
     substrate the user approves before any downstream modeling.
 
     Args:
@@ -712,7 +712,7 @@ _RUN_MODEL_NEWS_EVENT_INGEST_METADATA = AtomicToolMetadata(
 async def run_model_news_event_ingest(
     sources: list[dict[str, Any]],
     target_event_type: str = "spill",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
@@ -775,7 +775,7 @@ async def run_model_news_event_ingest(
 
     FR-DC-6: This wrapper declares ``cacheable=False`` +
     ``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` —
-    the same shape as job-0042's ``sfincs_flood``.
+    the same shape as ``sfincs_flood``.
 
     Cross-tool dependencies:
         Upstream (step chain):

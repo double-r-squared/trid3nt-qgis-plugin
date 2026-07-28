@@ -16,7 +16,7 @@ legend/style fields, so the publish emits the raw ``s3://`` URI itself:
 1. Guard against unresolved layer handles / placeholder URIs (typed,
    retryable errors that name the case's real handles).
 2. Vectors: benign no-op (they already render inline via their producing
-   fetch tool's GeoJSON), OR a durable per-Case GeoJSON asset (#165 P0),
+   fetch tool's GeoJSON), OR a durable per-Case GeoJSON asset (P0),
    OR - when ``TRID3NT_QGIS_WMS_BASE`` is exported - a styled QGIS Server
    WMS GetMap face.
 3. Rasters: enforce COG overviews (F33; auto-translate when missing),
@@ -32,7 +32,7 @@ TiTiler EXIT (2026-07): the tool no longer mints
 ``{tile_base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}`` XYZ templates and no
 longer reads ``TRID3NT_TILE_SERVER_BASE``. Old persisted cases still carry
 legacy tile-template URIs; a re-publish of one is UNWRAPPED to its embedded
-``url=`` s3 COG (the ``export_case_to_qgis._unwrap_tile_template`` trick)
+``url=`` s3 COG (the ``open_case_in_qgis._unwrap_tile_template`` trick)
 and flows through the normal raster path, and the plugin unwraps legacy
 templates it rehydrates on its own. No worker round-trip, no ``.qgs``
 mutation on the raster path.
@@ -99,7 +99,7 @@ class PublishLayerError(RuntimeError):
 
     The ``error_code`` attribute carries a SCREAMING_SNAKE_CASE code so the
     agent surface can render a useful failure narration and the pipeline strip
-    shows ``UPSTREAM_API_ERROR``. ``retryable`` (job-0177 contract; harvested
+    shows ``UPSTREAM_API_ERROR``. ``retryable`` (contract; harvested
     by ``adapter._classify_error``) tells Gemini whether re-issuing the call
     with corrected args can succeed.
 
@@ -150,7 +150,7 @@ def _parse_qgs_key(qgs_uri: str) -> str:
 
     Used to build the MAP= parameter in the WMS URL. Both schemes share the
     ``<scheme>://<bucket>/<key>`` shape, so the key extraction is identical.
-    On the GCP path the .qgs lives at ``gs://...``; on AWS (job-0308) it lives
+    On the GCP path the .qgs lives at ``gs://...``; on AWS it lives
     at ``s3://...``; the AWS QGIS-vector WMS branch (TRID3NT_QGIS_WMS_BASE set)
     must accept the s3:// form or the branch fails.
 
@@ -185,7 +185,7 @@ def _parse_qgs_key(qgs_uri: str) -> str:
 #: Env var that, WHEN SET, activates the s3-branch QGIS-vector publish route.
 #: It is the base URL of the AWS QGIS Server WMS endpoint (e.g.
 #: ``https://<cloudfront>/ogc/wms``). The route lands ahead of the AWS QGIS
-#: infra (sprint-16 job-0308): until ``TRID3NT_QGIS_WMS_BASE`` is exported the
+#: infra: until ``TRID3NT_QGIS_WMS_BASE`` is exported the
 #: s3 branch keeps the existing ``_benign_vector_noop`` (vectors already render
 #: inline via their producing fetch tool's GeoJSON), so LIVE behavior is
 #: UNCHANGED. Once the QGIS Server is stood up, exporting this var flips
@@ -235,7 +235,7 @@ def _build_vector_wms_url(
     )
 
 
-#: job-0269b: token vocabulary marking TERRAIN-family rasters. These are
+#: token vocabulary marking TERRAIN-family rasters. These are
 #: RGBA (colored relief) or single-band grayscale/Float32 (hillshade, slope,
 #: aspect, raw DEM) products - QGIS DEFAULT rendering visualizes them
 #: correctly, while the flood-depth pseudocolor ramp clamps them to a
@@ -260,7 +260,7 @@ _SLOPE_ASPECT_PRESET_BY_TOKEN: dict[str, str] = {
 
 
 def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
-    """Family-aware default style preset (job-0269b).
+    """Family-aware default style preset.
 
     Returns the slope/aspect colormap preset for those families (tools-backlog
     #3), ``""`` (no preset → QGIS default rendering) for the remaining terrain
@@ -299,7 +299,7 @@ def _infer_style_preset(layer_uri: str, layer_id: str) -> str:
 # a single-band rescale/colormap (the HIGH-severity terrain/RGBA regression a
 # rescale would otherwise introduce):
 #   - categorical / paletted COG (NLCD land cover) -> "" (embedded GDAL color
-#     table wins, job-0324);
+# table wins);
 #   - RGB(A) / multiband COG (colored relief, blended landcover + hillshade
 #     composite - NATE's Toutle demo) -> "" (TiTiler renders the baked colors
 #     directly);
@@ -321,7 +321,7 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # Hydrology (UNCHANGED - pre-F51 behavior pinned by tests).
     "continuous_flood_depth": ("0,3", "ylgnbu"),
     "continuous_plume_concentration": ("0,10", "reds"),
-    # SnapWave significant wave height (m) - sprint-17 wave animation. A
+    # SnapWave significant wave height (m) - wave animation. A
     # CYAN/BLUE ramp (gnbu) over 0..6 m, visibly DISTINCT from depth's ylgnbu so
     # the wave layer group never looks identical to the flood-depth group on the
     # Mexico Beach North Star. ADDITIVE - depth/plume stay byte-identical.
@@ -352,7 +352,7 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     "goes_visible": ("0,1", "gray"),
     "goes_ir": ("180,330", "gray_r"),
     "goes_wv": ("180,330", "gray_r"),
-    # sprint-17 NEW engines (parallel lanes) - ADDITIVE; flood/plume/wave above
+    # NEW engines (parallel lanes) - ADDITIVE; flood/plume/wave above
     # stay byte-identical. River<->aquifer seepage is SIGNED (gaining vs losing
     # reach) -> a diverging rdbu ramp centered on 0; seismic PGA in [0,1] g -> a
     # perceptually-uniform magma ramp; landslide susceptibility/probability in
@@ -404,7 +404,7 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # band so the gradient reads as a potentiometric surface. (The plume
     # timeseries reuses continuous_plume_concentration above -- not a new key.)
     "continuous_head_m": ("0,50", "viridis"),
-    # MODFLOW archetype products (sprint-18 Wave-1/Wave-2): distinct semantic ramps
+    # MODFLOW archetype products: distinct semantic ramps
     # so drawdown (water DECLINE) and mounding (water RISE) never render with the
     # same colormap. Registered so the OUTPUT_QUANTITIES style_preset specs validate.
     "continuous_drawdown_m": ("0,10", "reds"),  # head decline under pumping
@@ -450,13 +450,13 @@ _TITILER_STYLE_REGISTRY: dict[str, tuple[str, str]] = {
     # hue at 0 and 360. To reach these, "slope"/"aspect" were removed from
     # _TERRAIN_STYLE_TOKENS (the terrain passthrough now keeps ONLY dem/relief/
     # hillshade/terrain/elevation grayscale; hillshade SHOULD stay grayscale as
-    # shaded relief). NATE 2026-06-24: the backend colormaps land HERE; the
+    # shaded relief). the backend colormaps land HERE; the
     # Orchestrator finishes by wiring the frontend legends + substrate.
     "impervious_surface_pct": ("0,100", "reds"),
     "population_density": ("0,250", "magma"),
     "slope_angle_deg": ("0,60", "ylorrd"),
     "aspect_compass_deg": ("0,360", "hsv"),
-    # FIRE-3 (ELMFIRE wildfire spread) -- ADDITIVE; entries above stay
+    # (ELMFIRE wildfire spread) -- ADDITIVE; entries above stay
     # byte-identical. Time-of-arrival is HOURS from ignition over a typical
     # scenario window (<= 24 h band; early arrival = dark, the advancing front
     # = bright) -> the perceptually-uniform inferno "fire" ramp; flame length
@@ -663,7 +663,7 @@ def _resolve_titiler_style_params(
 
     1. CATEGORICAL GUARD - if the COG carries an embedded band-1 GDAL color
        table (NLCD land cover etc.), return ``""`` so TiTiler colorizes from the
-       EMBEDDED palette and is NEVER washed out by a rescale (job-0324).
+       EMBEDDED palette and is NEVER washed out by a rescale.
     2. RGBA / MULTIBAND PASSTHROUGH - if the COG is RGB(A) / >=3 bands (colored
        relief, blended landcover + hillshade composite), return ``""``: TiTiler
        renders the baked colors directly; a single-band rescale/colormap would
@@ -1067,7 +1067,7 @@ def pop_legend_for_uri(display_uri: str) -> "LegendKey | None":
 # --------------------------------------------------------------------------- #
 
 #: Vector artifact extensions. ``publish_layer`` is RASTER-ONLY (see the module
-#: docstring + the Wave 4.9 inline-GeoJSON path). A vector reaching this tool is
+#: docstring + the inline-GeoJSON path). A vector reaching this tool is
 #: ALREADY on the map via its producing fetch tool (``add_loaded_layer`` inline
 #: GeoJSON), so a publish is unnecessary - and routing it through the raster tile
 #: path mints HANGING tiles that freeze the map. Token-tail matched against the
@@ -1093,7 +1093,7 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
 
     The agent keeps calling ``publish_layer`` on vector layers (roads/rivers)
     that ALREADY rendered inline via their producing fetch tool's GeoJSON
-    (Wave 4.9 ``add_loaded_layer`` path). Pre-F32 this RAISED
+    (``add_loaded_layer`` path). Pre-F32 this RAISED
     ``PUBLISH_LAYER_VECTOR_NOT_RASTER`` → a scary red "Publishing layer… failed"
     card on a layer the user can already see.
 
@@ -1119,7 +1119,7 @@ def _benign_vector_noop(layer_uri: str, layer_id: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# DATA-ISLAND #165 PHASE 0: durable browser-readable GeoJSON for every vector.
+# DATA-ISLAND PHASE 0: durable browser-readable GeoJSON for every vector.
 #
 # Vectors are produced as FlatGeobuf (``.fgb``) which the browser CANNOT read,
 # and today the agent delivers them INLINE (it reads the .fgb back, parses to
@@ -1157,7 +1157,7 @@ DURABLE_CASE_DATA_PREFIX: str = "case-data"
 def durable_vector_geojson_key(case_id: str, layer_id: str) -> str:
     """Return the runs-bucket object key for a Case's durable vector GeoJSON.
 
-    Frozen #165 Phase-0 contract: ``case-data/<case_id>/<layer_id>.geojson``.
+    Frozen Phase-0 contract: ``case-data/<case_id>/<layer_id>.geojson``.
     One seam so the writer (here) and any later reader name it identically.
     """
     return f"{DURABLE_CASE_DATA_PREFIX}/{case_id}/{layer_id}.geojson"
@@ -1237,7 +1237,7 @@ def _vector_uri_to_geojson_bytes(layer_uri: str) -> bytes | None:
 def _write_durable_vector_geojson(
     layer_uri: str, layer_id: str, case_id: str
 ) -> str | None:
-    """Materialize a vector layer's GeoJSON to the DURABLE runs bucket (#165 P0).
+    """Materialize a vector layer's GeoJSON to the DURABLE runs bucket (P0).
 
     Reads ``layer_uri`` (FlatGeobuf / GeoJSON) to a GeoJSON FeatureCollection,
     writes it to ``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.geojson``
@@ -1333,7 +1333,7 @@ def _read_band1_colormap(src) -> dict | None:
     NLCD land cover (and other categorical rasters) ship a single-band
     palette-index COG with an EMBEDDED GDAL color table; TiTiler colorizes from
     it. The F33 overview-enforcement re-write must carry that table forward or
-    the layer renders solid grey (job-0324). rasterio raises ``ValueError`` when
+    the layer renders solid grey. rasterio raises ``ValueError`` when
     band 1 has no color table - the normal case for continuous rasters (DEM,
     hillshade, flood depth) - and we return ``None`` so callers do NOT fabricate
     one.
@@ -1445,7 +1445,7 @@ def _build_cog_with_overviews_rasterio(raster_bytes: bytes) -> bytes | None:
     # Detect a band-1 palette color table up front. When present (NLCD land
     # cover), SKIP the rio-cogeo path - its colormap forwarding is
     # version-dependent - and fall through to the manual build below, which
-    # explicitly re-stamps the table (job-0324). Non-paletted rasters keep the
+    # explicitly re-stamps the table. Non-paletted rasters keep the
     # rio-cogeo fast path unchanged.
     with MemoryFile(raster_bytes) as probe_mem, probe_mem.open() as probe:
         has_colormap = _read_band1_colormap(probe) is not None
@@ -1484,7 +1484,7 @@ def _build_cog_with_overviews_rasterio(raster_bytes: bytes) -> bytes | None:
         data = src.read()
         # Preserve a band-1 palette color table (e.g. NLCD land cover) across
         # the overview-enforcement re-write. None for non-paletted rasters
-        # (DEM/hillshade/flood depth) - a pure no-op there (job-0324).
+        # (DEM/hillshade/flood depth) - a pure no-op there.
         cmap = _read_band1_colormap(src)
         # Palette rasters must downsample by NEAREST, never average - averaging
         # class indices produces meaningless in-between codes that map to wrong
@@ -1918,7 +1918,7 @@ def publish_layer(
     project_qgs_uri: str | None = None,
     case_id: str | None = None,
     name: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> str:
@@ -2042,17 +2042,17 @@ def publish_layer(
     # TRID3NT_TILE_SERVER_BASE, no XYZ template mint. The COG itself is the
     # published artifact; no .qgs mutation, no worker round-trip.
     #
-    # LEGACY republish (was the sprint-14-aws job-0294c IDEMPOTENT guard):
+    # LEGACY republish (was the IDEMPOTENT guard):
     # old persisted cases (and pre-swap composer registrations) carry TiTiler
     # tile-TEMPLATE display URLs. A re-publish of one is NOT an error - UNWRAP
     # the embedded ``url=`` s3 COG (the same trick
-    # ``export_case_to_qgis._unwrap_tile_template`` uses) and flow it through
+    # ``open_case_in_qgis._unwrap_tile_template`` uses) and flow it through
     # the normal raster path below, so the envelope comes out in the NEW raw
     # ``s3://`` shape with a fresh legend stash. A template with no
     # recoverable COG is returned verbatim (degraded legacy behavior; the
     # plugin unwraps templates it rehydrates on its own).
     if layer_uri.startswith(("http://", "https://")) and "/cog/tiles/" in layer_uri:
-        from ..meta.export_case_to_qgis.export_case_to_qgis import _unwrap_tile_template
+        from ..meta.open_case_in_qgis.open_case_in_qgis import _unwrap_tile_template
 
         unwrapped = _unwrap_tile_template(layer_uri)
         if unwrapped != layer_uri and unwrapped.startswith("s3://"):
@@ -2073,7 +2073,7 @@ def publish_layer(
     # F32 (2026-06-16): publish_layer is RASTER-ONLY (see module docstring)
     # but is repeatedly handed VECTOR artifacts (roads/rivers .fgb/.geojson)
     # that ALREADY rendered inline via their producing fetch tool's GeoJSON
-    # (Wave 4.9 ``add_loaded_layer`` path). Pre-F32 this RAISED a typed
+    # (``add_loaded_layer`` path). Pre-F32 this RAISED a typed
     # terminal error → a scary red "Publishing layer… failed" card on a
     # layer the user can already see, AND TiTiler cannot read a FlatGeobuf
     # as a raster so wrapping it in a /cog tile template mints HANGING tiles
@@ -2083,7 +2083,7 @@ def publish_layer(
     # calm function_response so the agent narrates honestly and never
     # re-calls publish_layer for the vector.
     if _is_vector_uri(layer_uri):
-        # job-0308 forward seam: WHEN the AWS QGIS Server is stood up and
+        # forward seam: WHEN the AWS QGIS Server is stood up and
         # TRID3NT_QGIS_WMS_BASE is exported, route the vector through a
         # styled WMS GetMap face (mirrors the GCP ``_build_wms_url`` shape
         # MAP=<.qgs key>&LAYERS=<id>&... but pointed at the AWS WMS base).
@@ -2112,7 +2112,7 @@ def publish_layer(
                 layer_id, gcs_uri=layer_uri, wms_url=wms_url
             )
             return wms_url
-        # DATA-ISLAND #165 PHASE 0: when no QGIS WMS base is configured
+        # DATA-ISLAND PHASE 0: when no QGIS WMS base is configured
         # (the live stack TODAY) write a DURABLE, browser-readable GeoJSON
         # for this vector so the box-off cold path can paint it. The .fgb is
         # the browser-unreadable DATA face; the GeoJSON asset is the DISPLAY
@@ -2166,14 +2166,14 @@ def publish_layer(
     # (TiTiler exit), it feeds the stashed LEGEND the plugin renders from.
     # _resolve_titiler_style_params is the single resolution point:
     #   - flood depths keep the blue ramp over 0-3 m; plume concentrations
-    #     (job-0292b) keep the red ramp over 0-10 mg/L (byte-for-byte);
+    # keep the red ramp over 0-10 mg/L (byte-for-byte);
     #   - precip / temperature / wind / drought / fuel-moisture / satellite
     #     resolve to physically-correct registry bands;
     #   - anything unknown gets a band-1 2nd/98th-percentile auto-rescale
     #     (viridis) read from the COG bytes already in hand, with a SAFE
     #     non-empty default if the stats read fails;
     #   - CATEGORICAL guard: a COG with an embedded GDAL color table (NLCD
-    #     land cover) gets NO rescale so the palette colorizes it (job-0324)
+    # land cover) gets NO rescale so the palette colorizes it
     #     - never washed out; the legend carries the palette classes.
     # _infer_style_preset is applied here for the auto/None case so the
     # raster path keeps the same default selection as before.
@@ -2210,7 +2210,7 @@ def publish_layer(
         layer_uri,
         style_params,
     )
-    # job-0304: register the published layer in the session URI registry so
+    # register the published layer in the session URI registry so
     # the ``flood-depth-peak-<id>``-style handle resolves to a consumable
     # DATA uri for downstream tools (Pelicun, zonal stats). With the TiTiler
     # exit there is no separate display face: the raw s3:// COG IS both the

@@ -402,7 +402,7 @@ async def model_contaminant_plume(
         species, contaminant=contaminant, release_rate_kg_s=release_rate_kg_s
     )
 
-    # task-168: declare the planned internal-tool count: geocode (only when a
+    # declare the planned internal-tool count: geocode (only when a
     # place string was supplied) + run_modflow_multi_species_job (always).
     _planned = 1
     has_loc = bool(location and location.strip())
@@ -547,7 +547,7 @@ async def modflow_contaminant_plume(
     porosity: float | None = None,
     duration_days: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a groundwater contaminant plume (spill spread + peak concentration), single OR multi species.

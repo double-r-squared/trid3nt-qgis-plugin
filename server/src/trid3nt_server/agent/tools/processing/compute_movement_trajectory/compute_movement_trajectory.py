@@ -29,7 +29,7 @@ and each segment also carries its individual's whole-track **summary**:
     net_displacement_m  geodesic distance first-fix -> last-fix
     straightness        net_displacement_m / path_length_m  (0..1; 1 = a straight line)
 
-The output is a FlatGeobuf of LineString segments in EPSG:4326 (the job-0175
+The output is a FlatGeobuf of LineString segments in EPSG:4326 (the
 inline-GeoJSON vector render path ships it to MapLibre). The per-individual
 summary statistics are ALSO written to the layer ``metadata`` so a downstream
 reader gets the headline numbers without re-aggregating the segments.
@@ -597,7 +597,7 @@ def _build_trajectory_fgb(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (FR-DC-9 / Wave-1.5 chat-warning gate)
+# Payload estimator (FR-DC-9 chat-warning gate)
 # ---------------------------------------------------------------------------
 
 #: A LineString segment FlatGeobuf feature with ~12 scalar attrs is small;
@@ -612,7 +612,7 @@ def estimate_payload_mb(**args: Any) -> float:
     reading the layer; the estimator is advisory only. We return a small fixed
     estimate (the output is geometry-light: one short LineString + ~12 numeric
     attributes per segment, and a typical animal track is hundreds-to-low-tens-
-    of-thousands of fixes). The signature accepts ``**args`` per the Wave-1.5
+    of-thousands of fixes). The signature accepts ``**args`` per the
     convention (the gate passes the tool kwargs unchanged).
     """
     # Assume a generous ~50k segments worst case before the user would ever be
@@ -644,7 +644,7 @@ def compute_movement_trajectory(
     timestamp_field: str | None = None,
     *,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

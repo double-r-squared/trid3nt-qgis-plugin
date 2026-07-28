@@ -1,5 +1,5 @@
 """Shared chart-emission core (split from the original multi-tool
-``chart_tools`` module, job-0230): ``build_chart_payload`` (the single
+``chart_tools`` module): ``build_chart_payload`` (the single
 Vega-Lite chart-envelope builder every chart tool + engine postprocessor
 routes through), ``is_chart_emission_result``, the ``ChartToolError`` typed
 error, layer staging/read helpers, and the engine-facing ``build_*_chart``
@@ -111,8 +111,8 @@ def _download_uri_bytes(uri: str, storage_client: object | None = None) -> bytes
     but is ignored.
     """
     del storage_client  # GCP decommissioned - S3/local only.
-    # sprint-14-aws (job-0293b): s3:// staging via the shared boto3 reader
-    # (NOT s3fs - instance-role lesson, job-0289).
+    # s3:// staging via the shared boto3 reader
+    # (NOT s3fs - instance-role lesson).
     if uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
 
@@ -134,7 +134,7 @@ def _download_uri_bytes(uri: str, storage_client: object | None = None) -> bytes
 
 def _materialize_uri(uri: str, tmpdir: str, label: str, storage_client: object | None = None) -> str:
     """Return a local file path for the given URI (downloads ``s3://`` to tmpdir)."""
-    # sprint-14-aws (job-0293b): s3:// URIs are staged via the shared reader.
+    # s3:// URIs are staged via the shared reader.
     if uri.startswith("s3://"):
         name = uri.rstrip("/").rsplit("/", 1)[-1] or f"{label}.bin"
         local_path = os.path.join(tmpdir, f"{label}_{name}")
@@ -358,7 +358,7 @@ def is_chart_emission_result(result: Any) -> bool:
     )
 
 # ---------------------------------------------------------------------------
-# Engine-output chart builders (task-198: wire non-raster engine values).
+# Engine-output chart builders (wire non-raster engine values).
 #
 # These differ from the four LLM-facing tools above: they do NOT read a layer
 # URI and are NOT registered tools. A composer that has the already-parsed
@@ -913,7 +913,7 @@ def build_saltwater_wedge_chart(
     source_layer_uri: str | None = None,
     created_turn_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Build a vertical cross-section heatmap of the saltwater wedge (Wave-5).
+    """Build a vertical cross-section heatmap of the saltwater wedge.
 
     Turns the GWT ``(nlay, ncol)`` salinity grid from the Henry-style BUY
     variable-density run into a Vega-Lite v5 layered chart:
@@ -1074,7 +1074,7 @@ def build_head_series_chart(
 ) -> dict[str, Any] | None:
     """Build a head-vs-time line chart from a MODFLOW transient head series.
 
-    The general sibling of ``build_head_decline_chart`` for the Wave-2 MODFLOW
+    The general sibling of ``build_head_decline_chart`` for the MODFLOW
     archetypes: the MAR mounding-vs-time (head rise at the basin), the ASR
     inject/recover sawtooth (well head over the cycle), and the wetland
     hydroperiod seasonal rise/fall (water table under the wetland). Each is a

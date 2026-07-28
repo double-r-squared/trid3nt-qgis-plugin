@@ -1,4 +1,4 @@
-"""``fetch_fema_nfhl_zones`` atomic tool — FEMA NFHL regulatory flood zones (job A1).
+"""``fetch_fema_nfhl_zones`` atomic tool - FEMA NFHL regulatory flood zones.
 """
 
 from __future__ import annotations
@@ -182,7 +182,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# FR-DC-9 / Wave-1.5 payload-MB estimator hook.
+# FR-DC-9 payload-MB estimator hook.
 # ---------------------------------------------------------------------------
 
 
@@ -195,7 +195,7 @@ def estimate_payload_mb(**args: Any) -> float:
     We use a conservative ~0.5 MB / square degree heuristic, clipped to
     [0.05, 50] MB to keep both the tiny-bbox lower bound and the
     huge-bbox warning gate well-calibrated. The signature accepts ``**args``
-    to match the Wave-1.5 estimator convention (the chat-warning gate passes
+    to match the estimator convention (the chat-warning gate passes
     the tool's kwargs unchanged).
 
     Args (read from kwargs):
@@ -609,7 +609,7 @@ def fetch_fema_nfhl_zones(
     bbox: tuple[float, float, float, float],
     sfha_only: bool = False,
     zone_filter: list[str] | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

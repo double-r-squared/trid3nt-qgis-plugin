@@ -1,4 +1,4 @@
-"""Per-provider credential registry — the agent-side credential pipeline (job: VAULT-READ).
+"""Per-provider credential registry — the agent-side credential pipeline.
 
 When a keyed tool dispatch hits a missing or invalid credential, the server
 pauses the tool and emits a ``credential-request`` envelope
@@ -268,7 +268,7 @@ _CREDENTIAL_TEXT_PHRASES: tuple[str, ...] = (
     "not authorized",
     # Config-missing family — a credential-shaped failure whose message names a
     # missing/incomplete credentials CONFIG rather than the literal words "api
-    # key" (LIVE BUG NATE 2026-06-18: ERA5's no-key path surfaced
+    # key" (LIVE BUG ERA5's no-key path surfaced
     # "Missing/incomplete configuration file: /root/.cdsapirc", which matched
     # NONE of the phrases above, so no credential card fired). Kept narrow +
     # specific so a generic upstream/outage message does NOT trip the gate.
@@ -345,7 +345,7 @@ def provider_for_tool(tool_name: str) -> CredentialProvider | None:
 def is_credential_error(tool_name: str, error: BaseException) -> bool:
     """True when ``error`` from ``tool_name`` is a missing/invalid-credential signal.
 
-    Generic across ALL keyed tools (NATE 2026-06-17: "it should not just be
+    Generic across ALL keyed tools ("it should not just be
     FIRMS but ANY gate where the agent gets back a body that says you need an
     api key"). Matches on ANY of:
 

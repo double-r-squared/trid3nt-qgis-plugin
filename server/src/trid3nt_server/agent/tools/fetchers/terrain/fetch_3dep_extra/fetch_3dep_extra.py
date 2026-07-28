@@ -1,4 +1,4 @@
-"""``fetch_3dep_extra`` atomic tool — USGS 3DEP non-default DEM paths (job A11).
+"""``fetch_3dep_extra`` atomic tool - USGS 3DEP non-default DEM paths.
 """
 
 from __future__ import annotations
@@ -129,7 +129,7 @@ _METADATA = AtomicToolMetadata(
     cacheable=True,
     supports_global_query=False,
     payload_mb_estimator_name="estimate_payload_mb",
-    # Deterministic auto-publish opt-OUT (NATE 2026-06-26): the 3DEP-extra
+    # Deterministic auto-publish opt-OUT: the 3DEP-extra
     # derivative grids (role="input") are pure intermediates that feed terrain
     # analysis / solver setup, not standalone products the user asks to view.
     auto_publish=False,
@@ -137,7 +137,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -157,7 +157,7 @@ def estimate_payload_mb(
     - 5 meter               → ~200 MB / sq-deg
 
     The estimator scales linearly with bbox area in square degrees and
-    is intentionally conservative (over-estimates) so the Wave-1.5
+    is intentionally conservative (over-estimates) so the
     payload-warning gate fires before users dispatch huge LiDAR mosaics.
     """
     if bbox is None:
@@ -342,7 +342,7 @@ def fetch_3dep_extra(
     ] = "1 arc-second",
     max_tiles: int = _DEFAULT_MAX_TILES,
     timeout_s: float = _DEFAULT_TIMEOUT_S,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

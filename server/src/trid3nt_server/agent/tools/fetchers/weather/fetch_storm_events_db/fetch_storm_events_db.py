@@ -113,7 +113,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 2 chat-warning system).
+# Payload estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -733,7 +733,7 @@ def fetch_storm_events_db(
     bbox: tuple[float, float, float, float] | list[float] | None = None,
     begin_date: str | None = None,
     end_date: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

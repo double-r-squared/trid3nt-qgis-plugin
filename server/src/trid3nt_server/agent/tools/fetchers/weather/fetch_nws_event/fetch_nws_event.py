@@ -105,7 +105,7 @@ _VALID_MESSAGE_TYPES = frozenset({"alert", "update", "cancel"})
 
 # 2-letter US state codes (50 + DC + 5 territories + marine zones) accepted
 # by /alerts/active. Shared with fetch_nws_alerts_conus via us_states
-# (job-0261) so the two NWS tools can never diverge.
+# so the two NWS tools can never diverge.
 _VALID_STATE_CODES = NWS_AREA_CODES
 
 # 5-digit FIPS code pattern.
@@ -151,7 +151,7 @@ def _bbox_to_point_center(
         lat_center = (min_lat + max_lat) / 2
         lon_center = (min_lon + max_lon) / 2
 
-    Per the codified job-0086 lesson, the GEOGRAPHIC correctness of this
+    Per the codified lesson, the GEOGRAPHIC correctness of this
     function is what unit tests assert — NOT just "did the bytes survive".
     """
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -206,7 +206,7 @@ def _canonicalize_area(
             return {"kind": "fips", "value": s}
         if s in _VALID_STATE_CODES:
             return {"kind": "state", "value": s}
-        # job-0261: accept full state/territory names ("Texas", "state of
+        # accept full state/territory names ("Texas", "state of
         # texas") — the LLM passes location text verbatim more often than it
         # abbreviates, and rejecting "Texas" pushed the live agent into the
         # unscoped CONUS sweep (alerts spilled beyond the named state).
@@ -462,7 +462,7 @@ def fetch_nws_event(
     event_types: list[str] | None = None,
     status: str = "actual",
     message_type: str = "alert",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

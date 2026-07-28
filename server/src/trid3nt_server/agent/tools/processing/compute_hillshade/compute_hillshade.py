@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_hillshade`` — hillshade raster from DEM (job-0079, FR-CE-8, FR-DC).
+"""Atomic tool ``compute_hillshade`` - hillshade raster from DEM (FR-CE-8, FR-DC).
 
 This module registers one atomic tool that computes a hillshade raster from a DEM
 by wrapping GDAL's ``gdaldem hillshade`` command:
@@ -158,7 +158,7 @@ def _conda_grace2_gdaldem() -> str | None:
 def _gdaldem_subprocess_env(gdaldem_bin: str) -> dict[str, str]:
     """Build the subprocess env for ``gdaldem``, wiring PROJ/GDAL data dirs.
 
-    job-0257 root-cause fix (hillshade broken CRS): when the conda-env
+     root-cause fix (hillshade broken CRS): when the conda-env
     ``gdaldem`` binary is invoked via a bare ``subprocess.run`` (no conda
     activation), ``PROJ_LIB``/``PROJ_DATA`` are unset, GDAL cannot find
     ``proj.db``, and the output GeoTIFF's CRS silently degrades from the
@@ -186,12 +186,12 @@ def _gdaldem_subprocess_env(gdaldem_bin: str) -> dict[str, str]:
 
 
 def _translate_to_cog(input_path: str, gdaldem_bin: str) -> bytes:
-    """Convert a flat GTiff to Cloud-Optimized GeoTIFF bytes (job-0271).
+    """Convert a flat GTiff to Cloud-Optimized GeoTIFF bytes.
 
     ``gdaldem`` writes strip-organized GTiffs with no tiling and no
     overviews. QGIS Server rendering one over ``/vsigs/`` issues a range
     request per strip (1788 strips for a city-scale relief) — slow enough
-    to trip cold-load open timeouts (the layer-poison class the job-0270
+    to trip cold-load open timeouts (the layer-poison class the
     verifier isolated) and the 60 s WMS gateway limit. The GDAL COG driver
     tiles + builds overviews in one pass; flood products already go
     through an equivalent step in ``postprocess_flood``, which is why they
@@ -238,7 +238,7 @@ def _translate_to_cog(input_path: str, gdaldem_bin: str) -> bytes:
 
 
 def _ensure_output_crs_matches_dem(dem_path: str, output_path: str) -> None:
-    """Stamp the DEM's CRS onto the gdaldem output if it degraded (job-0257).
+    """Stamp the DEM's CRS onto the gdaldem output if it degraded.
 
     Belt-and-suspenders for environments where the PROJ wiring above is not
     enough (or a future gdal build regresses differently): the hillshade is
@@ -293,7 +293,7 @@ def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> b
     Raises ``HillshadeComputeError`` on any failure so callers get a typed error.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws (job-0290b): s3:// staging via the shared boto3 reader.
+    # s3:// staging via the shared boto3 reader.
     if dem_uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
         try:
@@ -384,7 +384,7 @@ def _run_gdaldem_hillshade(
             capture_output=True,
             check=False,
             timeout=300,  # 5-min ceiling; hillshade of any reasonable DEM is seconds
-            env=_gdaldem_subprocess_env(gdaldem),  # job-0257: PROJ/GDAL data dirs
+            env=_gdaldem_subprocess_env(gdaldem),  # PROJ/GDAL data dirs
         )
     except FileNotFoundError as exc:
         raise HillshadeComputeError(
@@ -537,8 +537,8 @@ def _make_fetch_fn(
                 blend_tmp = blend_f.name
             os.unlink(blend_tmp)
             _multiply_blend_hillshades(out_tmp, out_tmp_b, blend_tmp)
-            _ensure_output_crs_matches_dem(in_tmp, blend_tmp)  # job-0257
-            # job-0271: serve a real COG — see _translate_to_cog.
+            _ensure_output_crs_matches_dem(in_tmp, blend_tmp)
+            # serve a real COG - see _translate_to_cog.
             return _translate_to_cog(blend_tmp, _get_gdaldem_bin())
 
         elif style == "multidirectional":
@@ -572,8 +572,8 @@ def _make_fetch_fn(
                 algorithm=algorithm,
             )
 
-        _ensure_output_crs_matches_dem(in_tmp, out_tmp)  # job-0257
-        # job-0271: serve a real COG (tiled + overviews) — see _translate_to_cog.
+        _ensure_output_crs_matches_dem(in_tmp, out_tmp)
+        # serve a real COG (tiled + overviews) - see _translate_to_cog.
         return _translate_to_cog(out_tmp, _get_gdaldem_bin())
 
     finally:
@@ -610,7 +610,7 @@ def compute_hillshade(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

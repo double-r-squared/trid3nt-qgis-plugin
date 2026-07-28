@@ -122,7 +122,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -268,7 +268,7 @@ def _resolve_api_key(
 
     1. Explicit ``api_key`` kwarg.
     2. ``secret_ref`` (a ``SecretRecord``) → ``Persistence.get_secret_value``
-       (the per-Case path landed by Wave 2 sibling job-0124).
+       (the per-Case path landed by sibling).
     3. ``TRID3NT_COPERNICUS_CDS_API_KEY`` env var.
     4. ``None`` — cdsapi falls back to ``~/.cdsapirc`` on instantiation.
 
@@ -329,8 +329,8 @@ _PERSISTENCE_FOR_SECRETS: Any | None = None
 def set_persistence_for_secrets(persistence: Any | None) -> None:
     """Bind the agent-service ``Persistence`` for secret materialization.
 
-    Mirrors the sibling Tier-2 binding (``fetch_era5_reanalysis`` job-0131,
-    ``fetch_ebird_observations`` job-0128). Called once at startup by the
+    Mirrors the sibling Tier-2 binding (``fetch_era5_reanalysis``,
+    ``fetch_ebird_observations``). Called once at startup by the
     agent service; tests inject a mock.
     """
     global _PERSISTENCE_FOR_SECRETS
@@ -439,8 +439,7 @@ def _cds_retrieve_with_timeout(
 
     Note: a timed-out request leaves an orphan CDS job server-side; the
     client cannot cancel it. The user will see it in their CDS dashboard
-    queue history. Documented in the docstring; surfaced as
-    ``OQ-0132-CDS-ORPHAN-JOB``.
+    queue history. Documented in the docstring.
     """
     import threading
 
@@ -950,7 +949,7 @@ def fetch_gtsm_tide_surge(
     output: str = "water_level",
     api_key: str | None = None,
     secret_ref: Any | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -1016,7 +1015,7 @@ def fetch_gtsm_tide_surge(
 
     - Consumed by: ``build_sfincs_model`` (parses ``time_series_csv`` to
       populate ``bnd.bzs`` coastal boundary); ``model_compound_flood_global``
-      (compound-flood composer, Wave 2+).
+      (compound-flood composer).
     - Pair with: ``fetch_era5_reanalysis`` (atmospheric + wave forcing for
       the same event window); ``fetch_cama_flood_discharge`` (fluvial inflow
       boundary); ``fetch_mrms_qpe`` / ERA5 precip (rainfall forcing).

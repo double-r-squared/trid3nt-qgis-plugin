@@ -27,9 +27,11 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server
+from trid3nt_server.agent.gates.cards.credential import (
+    _build_credential_request_payload,
+)
 from trid3nt_server.server import (
     SessionState,
-    _build_credential_request_payload,
     _invoke_tool_via_emitter,
     _maybe_handle_credential_error,
     _resolve_pending_credential,

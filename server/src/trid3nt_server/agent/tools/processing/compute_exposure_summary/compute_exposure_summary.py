@@ -348,7 +348,7 @@ def compute_exposure_summary(
     hazard_layer_uri: str,
     threshold: float | None = None,
     population_dataset: str = "worldpop_2020",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Summarize exposure (population, buildings, area) inside a hazard footprint.

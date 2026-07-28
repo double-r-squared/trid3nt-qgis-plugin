@@ -117,7 +117,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -493,7 +493,7 @@ def _copernicus_dem_impl(
 )
 def fetch_copernicus_dem(
     bbox: tuple[float, float, float, float],
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """DEPRECATED alias of ``fetch_dem`` with ``source="copernicus"``.

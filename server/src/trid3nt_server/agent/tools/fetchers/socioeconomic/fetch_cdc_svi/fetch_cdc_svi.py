@@ -154,7 +154,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -475,7 +475,7 @@ _METADATA_REGISTERED = _METADATA
 )
 def fetch_cdc_svi(
     bbox: tuple[float, float, float, float],
-    # Wave 4.10 convention: absorb LLM-invented kwargs
+    # convention: absorb LLM-invented kwargs
     **_extra_ignored: Any,
 ) -> LayerURI:
     """CDC/ATSDR Social Vulnerability Index (SVI 2022) census-tract choropleth.

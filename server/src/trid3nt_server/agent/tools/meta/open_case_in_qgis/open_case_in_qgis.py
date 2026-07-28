@@ -1,4 +1,4 @@
-"""Atomic tool ``export_case_to_qgis`` -- local-first QGIS bridge (v1).
+"""Atomic tool ``open_case_in_qgis`` -- local-first QGIS bridge (v1).
 
 Given a ``case_id`` (or an explicit ``layers`` list), export the case's layers
 into a self-contained folder a user can open directly in desktop QGIS 3.x:
@@ -106,14 +106,14 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.agent.tools import register_tool
 
 __all__ = [
-    "export_case_to_qgis",
+    "open_case_in_qgis",
     "ExportCaseError",
     "ExportInputError",
     "CaseNotFoundError",
     "NoExportableLayersError",
 ]
 
-logger = logging.getLogger("trid3nt_server.agent.tools.meta.export_case_to_qgis.export_case_to_qgis")
+logger = logging.getLogger("trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis")
 
 
 # --------------------------------------------------------------------------- #
@@ -156,8 +156,8 @@ class NoExportableLayersError(ExportCaseError):
 # Metadata -- writes local files (side effect) => not cacheable (FR-DC-6).
 # --------------------------------------------------------------------------- #
 
-_EXPORT_CASE_TO_QGIS_METADATA = AtomicToolMetadata(
-    name="export_case_to_qgis",
+_OPEN_CASE_IN_QGIS_METADATA = AtomicToolMetadata(
+    name="open_case_in_qgis",
     ttl_class="live-no-cache",
     source_class=None,
     cacheable=False,
@@ -321,7 +321,7 @@ def _resolve_mesh_crs(bucket: str, mesh_key: str) -> str | None:
                 pass
     except Exception as exc:  # noqa: BLE001 -- CRS is a nicety, never a gate
         logger.warning(
-            "export_case_to_qgis: could not resolve mesh CRS for s3://%s/%s (%s)",
+            "open_case_in_qgis: could not resolve mesh CRS for s3://%s/%s (%s)",
             bucket,
             mesh_key,
             exc,
@@ -349,7 +349,7 @@ def _resolve_telemac_mesh_crs(bucket: str, run_id: str) -> str | None:
         return f"EPSG:{int(epsg)}"
     except Exception as exc:  # noqa: BLE001 -- CRS is a nicety, never a gate
         logger.warning(
-            "export_case_to_qgis: could not resolve TELEMAC mesh CRS for "
+            "open_case_in_qgis: could not resolve TELEMAC mesh CRS for "
             "s3://%s/%s (%s)",
             bucket,
             run_id,
@@ -525,7 +525,7 @@ def _colormap_stops(cmap_name: str, vmin: float, vmax: float, n: int = 5) -> lis
             cmap = colormaps[match]
         else:
             logger.warning(
-                "export_case_to_qgis: unknown colormap %r -- falling back to viridis",
+                "open_case_in_qgis: unknown colormap %r -- falling back to viridis",
                 cmap_name,
             )
             cmap = colormaps["viridis"]
@@ -657,7 +657,7 @@ def _build_qgs_xml(
             "projectname": project_name,
             "version": "3.28.0-Firenze",
             "saveUser": "trid3nt",
-            "saveUserFull": "TRID3NT export_case_to_qgis",
+            "saveUserFull": "TRID3NT open_case_in_qgis",
         },
     )
     ET.SubElement(root, "homePath", {"path": ""})
@@ -812,7 +812,7 @@ def _raster_bounds_4326(path: str) -> tuple[float, float, float, float] | None:
                 return tuple(float(v) for v in transform_bounds(ds.crs, "EPSG:4326", *b))  # type: ignore[return-value]
             return (float(b.left), float(b.bottom), float(b.right), float(b.top))
     except Exception as exc:  # noqa: BLE001
-        logger.warning("export_case_to_qgis: raster bounds probe failed for %s: %s", path, exc)
+        logger.warning("open_case_in_qgis: raster bounds probe failed for %s: %s", path, exc)
         return None
 
 
@@ -867,7 +867,7 @@ async def _layers_from_case(case_id: str) -> tuple[list[dict[str, Any]], list[fl
 
 
 @register_tool(
-    _EXPORT_CASE_TO_QGIS_METADATA,
+    _OPEN_CASE_IN_QGIS_METADATA,
     # Writes files into the local export dir => not read-only / not
     # idempotent-free of side effects, but re-running with the same inputs
     # rewrites the same folder contents (idempotent), destroys nothing that
@@ -877,7 +877,7 @@ async def _layers_from_case(case_id: str) -> tuple[list[dict[str, Any]], list[fl
     destructive_hint=False,
     idempotent_hint=True,
 )
-async def export_case_to_qgis(
+async def open_case_in_qgis(
     case_id: str | None = None,
     layers: list[dict] | None = None,
     output_dir: str | None = None,
@@ -1019,7 +1019,7 @@ async def export_case_to_qgis(
                     qml_paths.append(str(qml_path))
                 except OSError as exc:
                     logger.warning(
-                        "export_case_to_qgis: could not write style sidecar "
+                        "open_case_in_qgis: could not write style sidecar "
                         "for %r (%s) -- raster exported unstyled",
                         name,
                         exc,
@@ -1037,7 +1037,7 @@ async def export_case_to_qgis(
             used_names.add(safe)
         except Exception as exc:  # noqa: BLE001 -- per-layer skip, not a hard fail
             logger.warning(
-                "export_case_to_qgis: skipping layer %r (%s: %s)",
+                "open_case_in_qgis: skipping layer %r (%s: %s)",
                 name,
                 type(exc).__name__,
                 exc,
@@ -1071,7 +1071,7 @@ async def export_case_to_qgis(
     try:
         mesh_entries = _collect_mesh_entries(raw_layers)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("export_case_to_qgis: mesh discovery failed (%s)", exc)
+        logger.warning("open_case_in_qgis: mesh discovery failed (%s)", exc)
         mesh_entries = []
 
     result = {
@@ -1087,7 +1087,7 @@ async def export_case_to_qgis(
         "exported_at": datetime.now(timezone.utc).isoformat(),
     }
     logger.info(
-        "export_case_to_qgis: exported %d vector + %d raster layer(s) to %s "
+        "open_case_in_qgis: exported %d vector + %d raster layer(s) to %s "
         "(%d skipped, %d mesh)",
         n_vec,
         n_ras,

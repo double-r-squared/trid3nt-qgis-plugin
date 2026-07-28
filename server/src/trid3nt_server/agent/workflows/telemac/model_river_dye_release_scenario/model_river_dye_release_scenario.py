@@ -19,13 +19,13 @@ into a rendered, ANIMATED river-dye plume:
         the SELAFIN mesh sibling the plugin animates)
       -> publish the peak COG through publish_layer (render chokepoint)
       -> return the TelemacDyeLayerURI (a LayerURI subtype so the emit_tool_call
-        add_loaded_layer gate fires + export_case_to_qgis discovers the mesh).
+        add_loaded_layer gate fires + open_case_in_qgis discovers the mesh).
 
 The DELIBERATE difference from the flood engines: the primary deliverable is the
 engine's NATIVE time-stepped SELAFIN mesh (MDAL opens .slf directly and animates
 its DYE dataset group with zero new render infra). So this composer emits ONE
 peak-concentration COG as the map anchor + narration carrier and lets the mesh
-sibling (discovered by ``export_case_to_qgis`` next to the COG in the runs
+sibling (discovered by ``open_case_in_qgis`` next to the COG in the runs
 bucket) carry the animation -- NO per-frame COGs.
 
 Determinism boundary (Invariant 1): every dye number the agent narrates comes
@@ -101,7 +101,7 @@ DEFAULT_DYE_CONC_MGL: float = 100.0
 DEFAULT_SIM_DURATION_S: float = 3600.0
 
 # --------------------------------------------------------------------------- #
-# Mesh granularity autoscaler (BK-3c) - resolution is a USER/LLM lever, NEVER a
+# Mesh granularity autoscaler - resolution is a USER/LLM lever, NEVER a
 # hardcoded constant. The worker meshes a channel ribbon of length L (the reach)
 # x width W with a single uniform gmsh target edge length ``h`` (mesh_size_m).
 # Two physics/cost constraints bound ``h``:
@@ -150,7 +150,7 @@ TIMESTEP_REF_S: float = 1.0
 MESH_TIMESTEP_REF_M: float = 20.0
 #: floor on the coupled timestep (a runaway-fine mesh can't drive dt to zero).
 TIMESTEP_FLOOR_S: float = 0.2
-#: wall-clock target for the SUGGESTED mesh's solve (NATE 2026-07-18: solves
+#: wall-clock target for the SUGGESTED mesh's solve (solves
 #: land well under an hour at the default; the ladder still offers finer rungs
 #: whose honest estimates the user can knowingly accept).
 SOLVE_TIME_BUDGET_S: float = 2700.0
@@ -276,7 +276,7 @@ def plausible_release_coords(
 
 
 def suggest_time_step_s(mesh_size_m: float) -> float:
-    """CFL-safe TELEMAC timestep for a given mesh edge length (BK-3c / OPEN-27).
+    """CFL-safe TELEMAC timestep for a given mesh edge length (OPEN-27).
 
     dt scales with the edge length (constant Courant), capped at the proven-stable
     1 s for meshes >= 14 m so the default is unchanged, floored so a very fine mesh
@@ -325,7 +325,7 @@ def suggest_mesh_size_m(
     resolution: str = "auto",
     override_m: float | None = None,
 ) -> tuple[float, int, str]:
-    """Pick the mesh target edge length ``h`` (BK-3c). Returns ``(h, est_nodes, label)``.
+    """Pick the mesh target edge length ``h``. Returns ``(h, est_nodes, label)``.
 
     ``resolution`` is a preset ("auto"/"medium"/"fine"/"coarse"); ``override_m`` is
     an explicit edge length that wins outright (still budget-clamped). Never
@@ -583,7 +583,7 @@ def _stage_manifest(
     """Write the ``telemac_river_dye`` worker manifest to the cache bucket and
     return its ``s3://`` URI (``run_solver`` downloads it to the rundir).
 
-    ``mesh_only=True`` (BK-3b approve-mesh gate) flags the worker's fast
+    ``mesh_only=True`` (approve-mesh gate) flags the worker's fast
     mesh-preview mode: build the mesh, write ``river.slf`` + the EPSG:4326
     ``mesh_preview.geojson`` wireframe + gate-stat metrics, skip the solve."""
     from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
@@ -748,7 +748,7 @@ async def model_river_dye_release_scenario(
     ``river_geometry_uri`` (an already-fetched ``fetch_river_geometry`` flowline) to
     reuse it for the seed instead of re-fetching. Returns the published
     ``TelemacDyeLayerURI`` (a ``LayerURI`` subtype) so the emit_tool_call
-    ``add_loaded_layer`` gate fires and ``export_case_to_qgis`` discovers the
+    ``add_loaded_layer`` gate fires and ``open_case_in_qgis`` discovers the
     SELAFIN mesh sibling for animation.
 
     Raises ``TelemacDyeScenarioError`` (typed error_code) on any fatal step and
@@ -826,7 +826,7 @@ async def model_river_dye_release_scenario(
     seed_lon, seed_lat = seed
 
     # --- Stage 3: stage the worker manifest (ReachConfig overrides) ----------- #
-    # BK-3c: mesh resolution is derived from the reach geometry + the chosen lever
+    # mesh resolution is derived from the reach geometry + the chosen lever
     # (auto/preset/explicit override), NEVER the hardcoded default. Surfaced on the
     # returned layer so the agent narrates it and the approve-mesh gate can show it.
     mesh_size_m, mesh_node_estimate, mesh_resolution_label = suggest_mesh_size_m(
@@ -915,10 +915,10 @@ async def model_river_dye_release_scenario(
     # (nearest flowline to the RELEASE, not the geocode center) is the
     # release_seeds_reach tri-state. None = no gate ran (raw dispatch) ->
     # call-provided coords seed the reach; the approve-mesh decision tail pins
-    # False for a gate-picked click so it moves the SOURCE only (BK-3b: the
+    # False for a gate-picked click so it moves the SOURCE only (the
     # approved solve must reproduce the previewed mesh).
     release_pair = plausible_release_coords(release_lon, release_lat)
-    # BK-3b decouple: when the gate click overwrote release_lon/release_lat,
+    # decouple: when the gate click overwrote release_lon/release_lat,
     # the decision tail threads the ORIGINAL call coords separately so the
     # reach still seeds from the pair the preview meshed from - the click
     # moves the SOURCE only. Absent (the common case) the release coords
@@ -978,7 +978,7 @@ async def model_river_dye_release_scenario(
         "mesh_size_m": mesh_size_m,
         "time_step_s": time_step_s,
         "dye_conc_mgl": float(dye_concentration_mgl),
-        # BK-6: user-picked release point overrides spill_frac (worker snaps to
+        # user-picked release point overrides spill_frac (worker snaps to
         # the nearest interior mesh node, validated within 2 channel widths).
         **({"release_lon": round(release_pair[0], 6),
             "release_lat": round(release_pair[1], 6)}
@@ -1251,12 +1251,12 @@ def _publish_peak_layer(
 ) -> TelemacDyeLayerURI:
     """Publish the peak dye COG through publish_layer (render chokepoint) and
     enrich the narration. On publish failure the raw peak is returned UNCHANGED
-    (the raw s3:// COG still lets export_case_to_qgis discover the mesh sibling;
+    (the raw s3:// COG still lets open_case_in_qgis discover the mesh sibling;
     the dispatch-level emit_layer_uri guardrail handles the map honesty).
 
-    The three mesh_* params are the composer's chosen granularity (BK-3c),
+    The three mesh_* params are the composer's chosen granularity,
     threaded explicitly - referencing composer locals here was a NameError that
-    crashed every publish (caught by the BK-3b seam audit)."""
+    crashed every publish (caught by the seam audit)."""
     surrogate = ""
     if substance and substance != "dye":
         surrogate = (
@@ -1273,7 +1273,7 @@ def _publish_peak_layer(
         f"plays from the native SELAFIN mesh. Not a calibrated site study."
         + surrogate
     )
-    # BK-3c: the chosen mesh granularity travels on every return branch so the
+    # the chosen mesh granularity travels on every return branch so the
     # agent can narrate it and the approve-mesh gate can display it.
     mesh_meta = {
         "mesh_size_m": mesh_size_m,
@@ -1320,7 +1320,7 @@ def _publish_peak_layer(
 
 
 # --------------------------------------------------------------------------- #
-# BK-3b: fast mesh-only preview for the approve-mesh gate
+# fast mesh-only preview for the approve-mesh gate
 # --------------------------------------------------------------------------- #
 async def preview_telemac_mesh(
     params: dict[str, Any], *, emitter: Any = None
@@ -1328,7 +1328,7 @@ async def preview_telemac_mesh(
     """Build (only) the TELEMAC mesh for the approve-mesh gate - no solve.
 
     Called by the server's ``_build_telemac_mesh_envelope`` (the ``run_telemac``
-    solver-confirm gate builder, mirror of the SWMM #154 builder) BEFORE the tool
+    solver-confirm gate builder, mirror of the SWMM builder) BEFORE the tool
     dispatches: resolves the same seed the composer will, stages a ``mesh_only``
     worker manifest, runs the fast mesh-only container (~10-25 s: gmsh, no DEM,
     no solve), emits the resulting triangle-wireframe GeoJSON as a role="input"
@@ -1436,7 +1436,7 @@ async def preview_telemac_mesh(
         seed = (center_lon, center_lat)
     seed_lon, seed_lat = seed
 
-    # --- Granularity (BK-3c) + reach dict (mirror of Stage 3) ---------------- #
+    # --- Granularity + reach dict (mirror of Stage 3) ---------------- #
     mesh_size_m, mesh_node_estimate, mesh_resolution_label = suggest_mesh_size_m(
         reach_length_km=reach_length_km,
         channel_width_m=channel_width_m,
@@ -1516,7 +1516,7 @@ async def preview_telemac_mesh(
         if attempt == 1:
             # Re-clamp the SUGGESTED h from the MEASURED node count against
             # BOTH budgets: the node cap (OPEN-29) and a wall-clock target
-            # (NATE 2026-07-18: any rung the user picks should solve fast;
+            # (any rung the user picks should solve fast;
             # the suggestion itself must land under ~45 min). nodes ~ 1/h^2.
             h_needed = mesh_size_m
             if npoin > MESH_NODE_CAP * 1.15:

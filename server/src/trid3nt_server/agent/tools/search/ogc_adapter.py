@@ -1,8 +1,8 @@
-"""Generic OGC Tier-2 adapter (job-0047, sprint-08 Stage B).
+"""Generic OGC Tier-2 adapter (Stage B).
 
 Single implementation that any §F.1.1 Tier 2 catalog entry (WMS / WMTS / WCS /
 WFS) routes through. Mirrors the live-verified WCS 1.0.0 surgery landed by
-job-0044 against MRLC NLCD (canonical class integers via `GetCoverage` rather
+ against MRLC NLCD (canonical class integers via `GetCoverage` rather
 than palette indices via `GetMap`) — extracted here so:
 
 - `fetch_landcover` (NLCD MRLC) shares the adapter (single source of truth);
@@ -17,10 +17,10 @@ Service flavors supported (per §F.1.1 Tier 2):
 - ``WCS`` (Web Coverage Service): the raster-bytes surface for OGC catalogs —
   returns the source raster's actual byte values (canonical classes for NLCD,
   elevation in meters for 3DEP, etc.). Version 1.0.0 (most reliable on
-  GeoServer); WCS 1.1.1 / 2.0.1 surface specific bugs (see job-0044 report).
+  GeoServer); WCS 1.1.1 / 2.0.1 surface specific bugs (see report).
 - ``WMS`` (Web Map Service): the rendered-pixel surface — useful for
   visualization layers but NOT for raw model-input bytes (the palette-index
-  trap job-0044 closed). Used by `fetch_from_catalog` for Tier-2 visualization-
+  trap closed). Used by `fetch_from_catalog` for Tier-2 visualization-
   intent catalog entries (FEMA NFHL flood zones rendered as a map layer).
 - ``WFS`` (Web Feature Service): vector feature retrieval; the catalog-entry
   path for ArcGIS REST FeatureServer-flavored services as well (via the
@@ -189,7 +189,7 @@ def _build_wcs_params(
 
     Version-specific shape: 1.0.0 uses ``Coverage`` + ``CRS`` + ``WIDTH/HEIGHT``;
     1.1.x / 2.0.1 use ``identifier`` / ``coverageId`` + ``boundingbox`` and have
-    GeoServer-specific projection-mapping bugs (see job-0044 report — WCS
+    GeoServer-specific projection-mapping bugs (see report - WCS
     1.0.0 is the only reliable surface on MRLC's GeoServer instance). The
     adapter defaults to 1.0.0; caller passes a different version explicitly
     when they have probe evidence it works.
@@ -322,7 +322,7 @@ def fetch_ogc_layer(
         image_format: WMS ``format`` / WCS ``FORMAT``. Default ``image/geotiff``
             (raster); WMS-rendered surfaces typically want ``image/png``.
         version: OGC service version string. Defaults to ``"1.0.0"`` (WCS
-            sweet spot per job-0044); WMS callers typically pass ``"1.1.1"``;
+            sweet spot); WMS callers typically pass ``"1.1.1"``;
             WFS callers ``"2.0.0"`` or ``"1.1.0"``.
         width_px, height_px: pixel dimensions for raster responses (WMS / WCS /
             ImageServer). Ignored for WFS / ArcGIS REST (MapServer query).

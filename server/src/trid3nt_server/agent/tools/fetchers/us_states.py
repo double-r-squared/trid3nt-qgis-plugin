@@ -1,4 +1,4 @@
-"""US state / NWS area-code resolution shared by the NWS alert tools (job-0261).
+"""US state / NWS area-code resolution shared by the NWS alert tools.
 
 Why this exists: the live demo "show me weather alerts in texas" rendered
 alerts in surrounding states because the request fell through to the

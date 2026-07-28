@@ -82,7 +82,7 @@ class ReachConfig:
     # rather than the old continuous upstream-inflow injection saturating the
     # whole reach. Clean flow (inflow->outflow) still drives it.
     spill_frac: float = 0.25            # along-channel position of the spill (0=up,1=down)
-    # BK-6 release-point picker: explicit spill location (EPSG:4326). When BOTH
+    # release-point picker: explicit spill location (EPSG:4326). When BOTH
     # are set they OVERRIDE spill_frac - the source snaps to the nearest
     # interior mesh node to this point (validated within 2 channel widths).
     release_lon: float = None           # type: ignore[assignment]
@@ -94,21 +94,21 @@ class ReachConfig:
     # meshed the Cowlitz instead of the Columbia, and the built mesh did not
     # even contain the requested release point). The composer arms it ONLY
     # for CALL-provided coords; a gate-picked map click moves the SOURCE,
-    # never the reach (BK-3b: the approved solve must reproduce the previewed
+    # never the reach (the approved solve must reproduce the previewed
     # mesh). See resolve_centerline_seed.
     seed_from_release: bool = False
-    # 2026-07-18 BK-3b decouple: when the approve-mesh gate click moved the
+    # 2026-07-18 decouple: when the approve-mesh gate click moved the
     # SOURCE (overwriting release_lon/release_lat), the manifest threads the
     # ORIGINAL call coords here so the reach seed still follows the pair the
     # preview meshed from - the click moves the source only, never the reach.
     # Absent (the common case) the release coords seed as before.
     seed_release_lon: float = None      # type: ignore[assignment]
     seed_release_lat: float = None      # type: ignore[assignment]
-    # BK-7 real-bank meshing: "auto" samples USGS NHDArea river polygons for
+    # real-bank meshing: "auto" samples USGS NHDArea river polygons for
     # per-station left/right bank offsets (mesh follows the REAL river);
     # "constant" keeps the legacy fixed-width ribbon.
     bank_source: str = "auto"
-    # OPEN-26 wrong-watercourse fix: when the prompt NAMES the river, re-seed
+    # wrong-watercourse fix: when the prompt NAMES the river, re-seed
     # onto the NAMED GNIS mainstem before the NLDI position-snap. A raw
     # geocode-point snap near a confluence (Longview = Columbia x Cowlitz)
     # routinely lands on the tributary or a slough; the named-flowline query
@@ -298,7 +298,7 @@ def resolve_centerline_seed(
     byte-for-byte, so the proven location-seeded paths are unchanged.
     ``kind`` is ``"position"`` (geocode seed kept) or ``"release-position"``.
 
-    2026-07-18 BK-3b decouple: ``seed_release_lon``/``seed_release_lat`` are
+    2026-07-18 decouple: ``seed_release_lon``/``seed_release_lat`` are
     the ORIGINAL call coords the preview meshed from, threaded separately
     when an approve-mesh gate click overwrote ``release_lon``/``release_lat``
     (the click moves the SOURCE only). When armed they take precedence for
@@ -419,7 +419,7 @@ def process_centerline(ll: np.ndarray, cfg: ReachConfig):
 
 
 # ---------------------------------------------------------------------------
-# 2b. BK-7: real river banks from USGS NHDArea polygons
+# 2b. real river banks from USGS NHDArea polygons
 # ---------------------------------------------------------------------------
 _NHDAREA_URL = (
     "https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/"
@@ -668,7 +668,7 @@ def _banks_valid(left: np.ndarray, right: np.ndarray) -> bool:
 def _water_polygon_domain(cl: np.ndarray, cfg: ReachConfig, ms: float):
     """The TRUE water-polygon mesh domain, or None to fall back to the ribbon.
 
-    NATE 2026-07-18: the ribbon outline (smoothed sampled half-widths +
+    the ribbon outline (smoothed sampled half-widths +
     curvature clamps + straight caps) visibly mismatches the river. Instead of
     approximating, mesh the NHDArea water polygon DIRECTLY: clip the water
     union to a corridor around the reach, take the component under the
@@ -690,7 +690,7 @@ def _water_polygon_domain(cl: np.ndarray, cfg: ReachConfig, ms: float):
         return None
     half_max = float(np.max((np.asarray(offsets[0]) + np.asarray(offsets[1])) / 2.0))
     # The corridor exists ONLY to cut the reach at its two ends - laterally it
-    # must never cut water (NATE 2026-07-18: the back-channels behind Fisher
+    # must never cut water (the back-channels behind Fisher
     # and Cottonwood islands were clipped off at ~1.3x the sampled half-width).
     W = 2.0 * max(4.0 * half_max, 2500.0)
     left, right = _offset_banks(cl, W, None)
@@ -722,7 +722,7 @@ def _water_polygon_domain(cl: np.ndarray, cfg: ReachConfig, ms: float):
     # end-cap lines = the corridor's end edges (transects at cl[0] / cl[-1])
     cap_in = (tuple(left[0]), tuple(right[0]))
     cap_out = (tuple(left[-1]), tuple(right[-1]))
-    # COVERAGE GUARD (NATE 2026-07-18, after the amputated back-channels): the
+    # COVERAGE GUARD (after the amputated back-channels): the
     # meshed domain must account for ~all of the RIVER'S OWN water between the
     # end transects. Reference = the connected water component under the
     # centerline, clipped by a laterally-UNBOUNDED slab (20 km half-width) so
@@ -812,7 +812,7 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
     banks_ok = _banks_valid(left, right)
     ms = cfg.mesh_size_m
 
-    # TRUE water-polygon domain (NATE 2026-07-18: the ribbon outline mismatches
+    # TRUE water-polygon domain (the ribbon outline mismatches
     # the river). When it resolves, the mesh boundary IS the NHDArea bank line
     # and holes are the real islands; the ribbon below stays as the fallback.
     domain = None
@@ -1039,7 +1039,7 @@ def build_channel_mesh(cl: np.ndarray, cfg: ReachConfig):
 # ---------------------------------------------------------------------------
 # 4. DEM bed onto mesh nodes + enforced gentle downstream slope
 # ---------------------------------------------------------------------------
-# OPEN-25b DEM retry ladder knobs. 2026-07-18 the Planetary Computer STAC
+# DEM retry ladder knobs. 2026-07-18 the Planetary Computer STAC
 # endpoint served Azure Front Door 503 HTML and the old one-shot fetch killed
 # runs outright; the data-source norm is primary -> fallback -> honest typed
 # error. Module-level so tests (and a hot ops fix) can shrink the ladder.
@@ -1142,7 +1142,7 @@ def _sample_dem_3dep(lon, lat, bbox):
 
 
 def _fetch_dem_samples(lon, lat, bbox):
-    """OPEN-25b DEM ladder: STAC x3 (5/20/60 s backoff) -> 3DEP -> typed error.
+    """DEM ladder: STAC x3 (5/20/60 s backoff) -> 3DEP -> typed error.
 
     Returns (z_raw, dem_source). Both rungs exhausted raises the plain
     RuntimeError the pipeline already surfaces as a typed metrics error
@@ -1209,7 +1209,7 @@ def fetch_dem_bed(mesh: dict, cfg: ReachConfig, tr):
     bbox = [float(lon.min() - pad), float(lat.min() - pad),
             float(lon.max() + pad), float(lat.max() + pad)]
 
-    # OPEN-25b: retry ladder + 3DEP fallback (never a one-shot fetch)
+    # retry ladder + 3DEP fallback (never a one-shot fetch)
     z_raw, dem_source = _fetch_dem_samples(lon, lat, bbox)
 
     # along-channel distance s: project each node onto the centerline polyline
@@ -1320,7 +1320,7 @@ def spill_point(mesh, cfg):
     anyway; we pre-snap so the reported coordinate is an actual wet node.
     """
     cl = mesh["centerline"]
-    # BK-6: an explicit user-picked release point (set as UTM by run_pipeline
+    # an explicit user-picked release point (set as UTM by run_pipeline
     # from cfg.release_lon/lat) overrides the spill_frac walk - but only when
     # it lands within 2 channel widths of the mesh (else fall back + note).
     rel = getattr(cfg, "release_utm", None)

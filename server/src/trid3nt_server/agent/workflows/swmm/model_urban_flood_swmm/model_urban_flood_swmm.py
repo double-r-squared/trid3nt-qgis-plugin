@@ -1,4 +1,4 @@
-"""PySWMM quasi-2D urban-flood composer (sprint-16 P4, Path A - the LOCAL lane).
+"""PySWMM quasi-2D urban-flood composer (P4, Path A - the LOCAL lane).
 
 The SWMM analogue of ``model_flood_scenario`` (SFINCS) /
 ``model_groundwater_contamination_scenario`` (MODFLOW). A deterministic
@@ -246,7 +246,7 @@ def _fetch_buildings_for_urban(
         logger.info("fetch_buildings(osm) failed (%s); proceeding without footprints", exc)
         return None
     # The footprints come back as an inline GeoJSON FeatureCollection on the
-    # LayerURI (job-0175 inline-GeoJSON convention) or as a cache URI; the mesh
+    # LayerURI (inline-GeoJSON convention) or as a cache URI; the mesh
     # builder accepts the FeatureCollection dict directly.
     fc = getattr(layer, "inline_geojson", None) or getattr(layer, "geojson", None)
     if isinstance(fc, dict) and fc.get("type") == "FeatureCollection":
@@ -260,7 +260,7 @@ def make_buildings_input_layer_uri(
     run_id: str,
     runs_bucket: str | None = None,
 ) -> LayerURI | None:
-    """task #207: upload the OSM building footprints + return a role="input" vector.
+    """upload the OSM building footprints + return a role="input" vector.
 
     The urban-flood deck consumes building footprints as obstructions, but the
     fetched ``FeatureCollection`` was only ever passed to the mesh builder and
@@ -356,7 +356,7 @@ def _record_swmm_batch_solve_telemetry(
     session_id: str | None = None,
     case_id: str | None = None,
 ) -> dict | None:
-    """Record ONE SOLVE row for the SWMM off-box Batch lane (task-153).
+    """Record ONE SOLVE row for the SWMM off-box Batch lane.
 
     Merges the Spot instance + timing breakdown the wait-loop captured onto
     ``run_result.batch_compute_meta`` (best-effort, may be ``None``) with the
@@ -424,7 +424,7 @@ async def model_urban_flood_swmm(
             inspect the deck.
         enable_autoscale: when True (default) the mesh builder's adaptive budget
             may COARSEN ``run_args.target_resolution_m`` to fit the cell cap.
-            When False (the #154 granularity gate's ``narrow_scope`` path) the
+            When False (the granularity gate's ``narrow_scope`` path) the
             builder honours the user-chosen resolution EXACTLY (the gate already
             clamped it under the cap).
 
@@ -444,8 +444,8 @@ async def model_urban_flood_swmm(
     )
     emitter = current_emitter()
 
-    # --- Zoom-on-area-first (job-0160): the map zooms before the solve runs. ---
-    # AUTHORITATIVE AOI (job AGENT-AOI / #159): every AOI the user sees and the
+    # --- Zoom-on-area-first: the map zooms before the solve runs. ---
+    # AUTHORITATIVE AOI: every AOI the user sees and the
     # sim consumes is the SAME ``bbox`` - the FLOORED value from
     # _enforce_min_urban_aoi above, not the raw geocoded ``run_args.bbox``. A
     # collapsed single-building geocode emits an early competing zoom-to to its
@@ -471,7 +471,7 @@ async def model_urban_flood_swmm(
     # so a plain to_thread wrap is correct (no run_coroutine_threadsafe marshaling
     # is required). The async frame still emits around (before/after) the wrap.
     deck_dir_to_clean: str | None = None
-    # task-168: declare the planned internal-operation count so the parent card's
+    # declare the planned internal-operation count so the parent card's
     # live breadcrumb can show "k/total". The fetches are conditional (a synthetic
     # dem_path / pre-supplied footprints skip them), so the plan counts only the
     # operations that will actually run for THIS invocation. Degrades gracefully:
@@ -546,7 +546,7 @@ async def model_urban_flood_swmm(
             )
         deck_dir_to_clean = str(Path(staging.inp_path).parent)
 
-        # --- Computational-mesh layer (NATE task #156) ----------------------
+        # --- Computational-mesh layer (NATE) ----------------------
         # Auto-emit the quasi-2D SWMM uniform quad-cell mesh as a clickable
         # "mesh_grid" vector layer so the user can SEE the true mesh structure
         # (where the cells are) over the AOI - the same grid the solver runs on.
@@ -582,7 +582,7 @@ async def model_urban_flood_swmm(
                 exc,
             )
 
-        # --- task #207: surface the building footprints as an INPUT layer ----
+        # ---: surface the building footprints as an INPUT layer ----
         # The OSM footprints fed the mesh as obstructions but were never shown.
         # Surface them as a role="input" vector (bbox=None) alongside the mesh so
         # the user sees the buildings the model treated as obstacles. SYNC FC
@@ -603,7 +603,7 @@ async def model_urban_flood_swmm(
                 exc,
             )
 
-        # --- Auto vertical scaling per case (NATE 2026-06-17) ----------------
+        # --- Auto vertical scaling per case ----------------
         # Size the Batch compute_class from the built mesh's active-cell count
         # (the adaptive-mesh budget already coarsened the grid to fit a cap;
         # n_active_cells IS the element count) instead of the caller's blind
@@ -639,7 +639,7 @@ async def model_urban_flood_swmm(
         # (run_solver -> wait_for_completion -> Batch output) instead. Zero
         # regression until the env is set.
         #
-        # LIVE solve-progress heartbeat (NATE 2026-06-17): the solve emits
+        # LIVE solve-progress heartbeat: the solve emits
         # nothing for minutes (off-loop thread OR remote Batch job), so the
         # running card is a silent spinner. Drive the shared solve-progress
         # envelope ON the loop (the emitter is loop-bound) alongside the solve -
@@ -669,7 +669,7 @@ async def model_urban_flood_swmm(
             )
 
             manifest_uri = await asyncio.to_thread(stage_swmm_manifest, staging)
-            # task-168: surface the off-box solve as ONE nested "run_solver" child
+            # surface the off-box solve as ONE nested "run_solver" child
             # row under the parent workflow card. The substep spans the dispatch ->
             # wait -> non-complete guard so a cancel/non-complete solve marks the
             # child red (honesty floor); a complete solve exits the child green.
@@ -682,7 +682,7 @@ async def model_urban_flood_swmm(
                     model_setup_uri=manifest_uri,
                     compute_class=effective_compute_class,
                 )
-                # --- Two-card sim observability (task-149) ------------------
+                # --- Two-card sim observability ------------------
                 # Mint the TWO cards the off-box lane shows: a "Dispatch" tool
                 # card (records the submit -- solver, queue, Batch jobId) that
                 # lands complete immediately, and a "Sim" compute card bound to
@@ -741,14 +741,14 @@ async def model_urban_flood_swmm(
                         pass
                     set_emitter_binding(None)
 
-                # task-149: route the SIM compute card to its terminal state from
+                # route the SIM compute card to its terminal state from
                 # the RunResult (complete -> green, non-complete -> red) before the
                 # workflow's own non-complete guard re-raises.
                 await route_sim_terminal(
                     emitter, _sim_step_id, run_result=run_result
                 )
 
-                # --- SOLVE telemetry (task-153): Batch instance + size + timing -
+                # --- SOLVE telemetry: Batch instance + size + timing -
                 # Record ONE solve row merging run_result.batch_compute_meta (the
                 # Spot instance + queue/compute/total timing the wait-loop
                 # captured) with the SWMM mesh size descriptor (n_active_cells +
@@ -909,7 +909,7 @@ async def model_urban_flood_swmm(
             # id. Fall back to staging.run_id only if the RunResult carries no
             # run_id (defensive).
             batch_run_id = getattr(run_result, "run_id", None) or staging.run_id
-            # task-168: the Batch-output download + rasterize-to-COG postprocess is
+            # the Batch-output download + rasterize-to-COG postprocess is
             # ONE user-meaningful "postprocess_swmm" child row. A download miss
             # (SWMM_BATCH_OUTPUT_MISSING) or a postprocess failure raises inside the
             # substep and marks the child red; a clean run exits it green.
@@ -946,7 +946,7 @@ async def model_urban_flood_swmm(
             # added later, switch to run_coroutine_threadsafe(loop) inside the
             # worker. (Mirrors model_flood_scenario's asyncio.to_thread
             # off-loading of its blocking fetcher/solve stages.)
-            # task-168: surface the in-process pyswmm solve as a "run_solver" child
+            # surface the in-process pyswmm solve as a "run_solver" child
             # row (engine-agnostic raw label the web humanizes to "Running the
             # solver"). The substep spans the heartbeat-wrapped solve so a cancel /
             # solve failure marks the child red; the live solve heartbeat is
@@ -1017,7 +1017,7 @@ async def model_urban_flood_swmm(
 
     # --- Step 7 (BREAK A): publish the PEAK COG through publish_layer ---------
     # postprocess_swmm returns the peak + frame COGs as RAW s3:// object URIs.
-    # A raw object-store URI NEVER renders in MapLibre and the job-0254 emission
+    # A raw object-store URI NEVER renders in MapLibre and the emission
     # guardrail (layer_uri_emit) DROPS a renderable raster carrying s3:// - so
     # without publishing, the peak silently vanishes from the map and persists no
     # renderable loaded_layer (BREAK A). Mirror the SFINCS model_flood_scenario
@@ -1031,7 +1031,7 @@ async def model_urban_flood_swmm(
     # guardrail drops the dead raster from the map (honest - no broken row) while
     # the typed narration scalars (max_depth_m / flooded_area_km2 /
     # n_buildings_affected) still reach the LLM so the failure is narrated and the
-    # job-0177 retry loop can re-attempt. The wrapper REQUIRES a SWMMDepthLayerURI
+    # retry loop can re-attempt. The wrapper REQUIRES a SWMMDepthLayerURI
     # return, so we never drop the whole layer - only its renderability.
     # BREAK B, post-solve: _publish_peak_layer drives publish_layer (the COG
     # rasterize/reproject/upload + the publish-status time.sleep polls) - all
@@ -1043,7 +1043,7 @@ async def model_urban_flood_swmm(
     async with substep(emitter, "publish_layer"):
         peak = await asyncio.to_thread(_publish_peak_layer, raw_peak, staging.run_id)
 
-    # --- AUTHORITATIVE AOI stamp (job AGENT-AOI / #159) ----------------------
+    # --- AUTHORITATIVE AOI stamp ----------------------
     # Stamp the returned peak's ``bbox`` to the SAME floored AOI the sim/DEM/
     # buildings/mesh consumed (``bbox`` == _enforce_min_urban_aoi(run_args.bbox)),
     # NOT the COG-derived extent that may drift from the floor by a mesh-cell snap.
@@ -1168,7 +1168,7 @@ async def model_urban_flood_swmm(
     if cleanup_deck and deck_dir_to_clean:
         _cleanup_deck_dir(deck_dir_to_clean)
 
-    # --- AUTHORITATIVE LAST zoom-to (job AGENT-AOI / #159) -------------------
+    # --- AUTHORITATIVE LAST zoom-to -------------------
     # Re-assert the floored AOI as the FINAL composer-side zoom-to so it
     # SUPERSEDES the early competing geocode snap (a collapsed single-building
     # bbox) regardless of whether the peak published renderably. The dispatch
@@ -1200,7 +1200,7 @@ def _publish_peak_layer(
     ``_resolve_titiler_style_params`` render seam) and returns a NEW
     ``SWMMDepthLayerURI`` carrying the published /tiles or WMS URL plus the
     narration scalars + echoed barriers. On publish failure (e.g. QGIS-on-AWS not
-    yet landed - job-0308) the raw peak is returned UNCHANGED: the dispatch-level
+    yet landed) the raw peak is returned UNCHANGED: the dispatch-level
     ``emit_layer_uri`` guardrail then drops the dead raw-s3:// raster from the map
     (honest - no broken layer row) while the typed metrics still narrate. The
     wrapper requires a ``SWMMDepthLayerURI`` return, so we never drop the layer
@@ -1258,7 +1258,7 @@ async def _emit_frame_layers(
 
     Each frame COG is routed through ``publish_layer`` (BREAK A render chokepoint)
     so it carries a renderable /tiles or WMS URL before ``add_loaded_layer``;
-    without this every frame is a raw s3:// COG the job-0254 guardrail drops, so
+    without this every frame is a raw s3:// COG the guardrail drops, so
     the scrubber group never forms on the map. The "Flood depth step N" name token
     is preserved so the web ``detectSequentialGroups`` groups them. A frame that
     fails to publish is HONESTLY DROPPED (its raw uri never renders) - the

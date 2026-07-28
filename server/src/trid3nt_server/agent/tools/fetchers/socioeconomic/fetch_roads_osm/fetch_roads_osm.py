@@ -351,7 +351,7 @@ def _extract_way_records(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Bbox clipping (F39 — job-0178).
+# Bbox clipping (F39).
 #
 # Overpass ``out geom`` returns the FULL geometry of every way that has at
 # least one node inside the requested bbox, so road LineStrings spill outside
@@ -578,7 +578,7 @@ def _fetch_osm_roads_bytes(
 def fetch_roads_osm(
     bbox: tuple[float, float, float, float],
     road_classes: list[str] | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

@@ -1,6 +1,6 @@
-"""``compute_impact_envelope`` workflow composer — Wave 4.11 P3.
+"""``compute_impact_envelope`` workflow composer - P3.
 
-This module chains the Wave 4.11 P2 ``postprocess_pelicun`` atomic tool with
+This module chains the P2 ``postprocess_pelicun`` atomic tool with
 the existing structure-inventory fetch + Pelicun damage assessment chain into
 a single LLM-visible composer. The result is a single tool call that the
 agent can invoke to go from "flood layer URI" → portfolio-level
@@ -223,7 +223,7 @@ async def compute_impact_envelope(
     location_query: str | None = None,
     structure_inventory_source: Literal["USACE_NSI", "MS_BUILDINGS"] = "USACE_NSI",
     fragility_set: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (Tool argument normalizer ratchet).
+    # absorb LLM-invented kwargs (Tool argument normalizer ratchet).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Compose flood-layer → structure inventory → Pelicun → ImpactEnvelope.

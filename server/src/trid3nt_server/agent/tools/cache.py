@@ -2,15 +2,15 @@
 
 This module owns the agent-side cache shim that mediates every external-API
 atomic-tool fetch (FR-CE-8). The shim is the SOLE writer of the ``cache/``
-prefix on the production cache bucket provisioned by job-0031:
+prefix on the production cache bucket provisioned:
 
     s3://<cache-bucket>/cache/<ttl-class>/<source-class>/<hash>.<ext>
 
 (the bucket is ``CACHE_BUCKET`` below, overridable via ``TRID3NT_CACHE_BUCKET``
 -- locally that points at the MinIO ``trid3nt-cache`` bucket)
 
-Note the layout follows the LIVE substrate from job-0031, NOT the FR-DC-1
-literal (``cache/<source-class>/<hash>.<ext>``). job-0031 nested TTL class
+Note the layout follows the LIVE substrate, NOT the FR-DC-1
+literal (``cache/<source-class>/<hash>.<ext>``). nested TTL class
 above source class so the bucket's GCS Object Lifecycle Management policy
 can run on FOUR rules forever instead of one-per-source-class. The
 ``OQ-INFRA-31-FR-DC-1`` schema-pushback proposes the matching SRS amendment.
@@ -94,7 +94,7 @@ def _canonicalize_params(params: dict[str, Any]) -> str:
     specific transformations the CALLER applies before handing the params
     dict to the shim — the shim only canonicalizes whatever it receives. This
     keeps the shim engine-agnostic; the bbox-resolution table and the date-
-    quantization rules belong in the engine-owned fetcher modules (job-0033),
+    quantization rules belong in the engine-owned fetcher modules,
     not in the agent's cache surface.
     """
     pruned = {k: v for k, v in params.items() if v is not None}
@@ -167,7 +167,7 @@ def compute_cache_key(
 def cache_path(source_class: str, ttl_class: TTLClass, key: str, ext: str) -> str:
     """Construct the object path under the cache bucket.
 
-    Matches the job-0031 LIVE bucket layout:
+    Matches the LIVE bucket layout:
         ``cache/<ttl-class>/<source-class>/<key>.<ext>``
 
     NOT the FR-DC-1 literal (``cache/<source-class>/<hash>.<ext>``); see
@@ -237,11 +237,11 @@ def _split_s3_uri(uri: str) -> tuple[str, str]:
 
 
 def read_object_bytes_s3(uri: str) -> bytes:
-    """Read an ``s3://`` object fully into memory via boto3 (sprint-14-aws).
+    """Read an ``s3://`` object fully into memory via boto3.
 
     Shared by every tool download-helper so the per-tool ``gs://`` staging
     paths gain s3 support with a one-line guard. boto3 (NOT s3fs) per the
-    job-0289 lesson: s3fs/aiobotocore falls back to anonymous on the EC2
+     lesson: s3fs/aiobotocore falls back to anonymous on the EC2
     instance role."""
     import boto3
 
@@ -253,11 +253,11 @@ def read_object_bytes_s3(uri: str) -> bytes:
 def _read_through_s3(
     uri: str, fetch_fn: Any, force_refresh: bool, metadata: Any, key: str, ext: str
 ) -> "ReadThroughResult":
-    """S3 read-through via **boto3** (sprint-14-aws job-0289).
+    """S3 read-through via **boto3**.
 
     boto3 reliably resolves the EC2 instance-role credentials via IMDS; s3fs/
     aiobotocore fell back to anonymous here ("No AWSAccessKey was presented").
-    Best-effort like the GCS path (job-0288c): any storage failure degrades to
+    Best-effort like the GCS path: any storage failure degrades to
     fetch-fresh-uncached. S3 TTL eviction is a bucket lifecycle rule, so no
     per-object customTime is written."""
     import boto3
@@ -347,7 +347,7 @@ def read_through(
         ``ReadThroughResult(uri, data, hit)``.
     """
     del storage_client  # GCP decommissioned — S3-only read-through.
-    # sprint-14-aws (job-0290b): the env override WINS over caller-supplied
+    # the env override WINS over caller-supplied
     # buckets — several tools pass the legacy CACHE_BUCKET constant explicitly,
     # which on AWS named a nonexistent GCP bucket and silently degraded every
     # cache write (observed live: hillshade COG upload). Tests run with the

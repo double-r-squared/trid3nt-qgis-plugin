@@ -1,4 +1,4 @@
-"""SFINCS run-output postprocessing (job-0042).
+"""SFINCS run-output postprocessing.
 
 ``postprocess_flood(run_outputs_uri) → list[LayerURI]`` reads the SFINCS run's
 raw output (NetCDF ``sfincs_map.nc`` carrying water depth time-series, plus
@@ -16,10 +16,10 @@ when those land.
 Style preset: ``continuous_flood_depth`` (a new preset name for the M5
 substrate). The actual QML file lives in ``styles/`` (FROZEN under this job
 per the kickoff), so the style_preset string here references a name that the
-engine's styles follow-up job will author. See OQ-42-FLOOD-DEPTH-PRESET-QML.
+engine's styles follow-up job will author.
 
 Tier separation (Invariant 5): the COG is written under
-``s3://trid3nt-runs/<run_id>/`` (the runs bucket from job-0040).
+``s3://trid3nt-runs/<run_id>/`` (the runs bucket).
 The agent service doesn't re-render — QGIS Server picks up the URI from the
 AssessmentEnvelope's ``ResultLayer`` and serves WMS/WMTS tiles.
 
@@ -68,16 +68,15 @@ RUNS_BUCKET_DEFAULT: str = "trid3nt-runs"
 
 #: QML style preset name the workflow attaches to the postprocessed flood-depth COG.
 #: The styles/ package is FROZEN under this job; engine styles follow-up
-#: authors the matching ``continuous_flood_depth.qml``. Surfaced as
-#: OQ-42-FLOOD-DEPTH-PRESET-QML.
+#: authors the matching ``continuous_flood_depth.qml``.
 FLOOD_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 
 #: Minimum depth threshold below which cells are masked to NaN (treated as dry).
 #: 5 cm is the physically meaningful wet-cell threshold — matches the
-#: ``flooded_cell_count`` reporting convention (job-0058 evidence) and the
+#: ``flooded_cell_count`` reporting convention (evidence) and the
 #: lowest QML colour stop (``continuous_flood_depth.qml`` alpha=0 at 0.05 m).
 #: Belt-and-suspenders: the QML renderer also hides values < 0.05 m (alpha=0),
-#: so the two layers reinforce each other (job-0071 transparency fix).
+#: so the two layers reinforce each other (transparency fix).
 NODATA_DEPTH_M: float = 0.05
 
 #: ``MAX_FLOOD_FRAMES`` now lives in ``frames.py`` and is imported + re-exported
@@ -102,14 +101,12 @@ class PostprocessError(RuntimeError):
     - ``COG_WRITE_FAILED`` — rasterio could not write the COG (encoder
       error, disk full).
     - ``COG_UPLOAD_FAILED`` — the GCS upload of the staged COG failed.
-    - ``CRS_TAG_MISMATCH`` — belt-and-suspenders guard (job-0071 /
-      research-workflow recommendation 2026-06-07): the CRS tag written to
+    - ``CRS_TAG_MISMATCH`` - belt-and-suspenders guard: the CRS tag written to
       the COG does not match what rasterio reads back, OR the tag's
       geographic/projected classification is inconsistent with the actual
       coordinate magnitudes (geographic → |x| ≤ 360; projected → |x| > 1000).
       Raised before the COG is uploaded to the runs bucket so a mistagged
-      raster never lands in production. Closes the broader bug class around
-      OQ-59 / OQ-69.
+      raster never lands in production.
     """
 
     error_code: str = "POSTPROCESS_FAILED"
@@ -134,9 +131,9 @@ def _resolve_run_output_to_local(run_outputs_uri: str) -> Path:
     points at a directory or prefix we look for that filename inside it. If it
     points at a single file we use that.
 
-    job-0291 (sprint-14-aws): ``s3://`` run outputs (the local-docker solver
+    ``s3://`` run outputs (the local-docker solver
     backend's runs prefix) download via **boto3** through the solver module's
-    shared S3 client seam — boto3 NOT s3fs (job-0289 instance-role lesson).
+    shared S3 client seam - boto3 NOT s3fs (instance-role lesson).
     """
     if run_outputs_uri.startswith("s3://"):
         from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
@@ -177,7 +174,7 @@ def _resolve_run_output_to_local(run_outputs_uri: str) -> Path:
 
 
 def _read_crs_from_dataset(ds: Any) -> str:
-    """Read CRS from a SFINCS netCDF dataset; CF-convention compliant (OQ-59 fix).
+    """Read CRS from a SFINCS netCDF dataset; CF-convention compliant.
 
     SFINCS stores the CRS in a **data variable** named ``crs``, not in
     ``ds.attrs``.  The variable carries EPSG information either in its
@@ -279,7 +276,7 @@ def _orient_array_for_cog(arr: Any, ds: Any) -> Any:
     """
     import numpy as np  # type: ignore[import-not-found]
 
-    # --- Rotation fix (job-0071) ---
+    # --- Rotation fix ---
     # SFINCS netCDF convention: ds["x"].dims = ("m",), ds["y"].dims = ("n",)
     # where m=x-cols, n=y-rows. If the depth array's last two dims are
     # (x_dim, y_dim) instead of (y_dim, x_dim), transpose to (y_rows, x_cols).
@@ -306,7 +303,7 @@ def _orient_array_for_cog(arr: Any, ds: Any) -> Any:
     except Exception:  # noqa: BLE001 — dim inspection failure falls through to identity
         pass
 
-    # --- Y-orientation guard (job-0086) ---
+    # --- Y-orientation guard ---
     # SFINCS often emits y ascending along rows (row 0 = south). COG transforms
     # declare row 0 = north, so flip rows when y ascends.
     try:
@@ -320,7 +317,7 @@ def _orient_array_for_cog(arr: Any, ds: Any) -> Any:
     except Exception:  # noqa: BLE001 — defensive; bad y → identity, no harm
         logger.warning("postprocess_flood: y-orientation probe failed; not flipping")
 
-    # --- X-orientation guard (job-0086, belt-and-suspenders) ---
+    # --- X-orientation guard (belt-and-suspenders) ---
     # Curvilinear grids can have x descending along columns (col 0 = east). COG
     # from_bounds always produces west-to-east, so flip cols when x descends.
     try:
@@ -583,7 +580,7 @@ def _write_verified_cog(
       regular coords).
 
     Sub-threshold values (< ``nodata_threshold_m``) are masked to NaN so the COG
-    is dry/no-data aware (job-0071). Returns ``(tmp_cog_path, metrics_summary)``
+    is dry/no-data aware. Returns ``(tmp_cog_path, metrics_summary)``
     with the field aggregates (max/mean/p95/flooded_cell_count) + ``crs`` +
     ``units``.
     """
@@ -647,7 +644,7 @@ def _write_verified_cog(
 
     arr = _orient_array_for_cog(arr, ds)
 
-    # Mask sub-threshold depths to NaN so the COG is dry-cell-aware (job-0071).
+    # Mask sub-threshold depths to NaN so the COG is dry-cell-aware.
     arr_masked = np.where(arr > nodata_threshold_m, arr, np.nan)
     flooded = arr_masked[~np.isnan(arr_masked)]
     if flooded.size == 0:
@@ -665,7 +662,7 @@ def _write_verified_cog(
             "flooded_cell_count": int(flooded.size),
         }
 
-    # CRS + transform from the dataset (CF-convention 'crs' variable; OQ-59 fix).
+    # CRS + transform from the dataset (CF-convention 'crs' variable; fix).
     try:
         _x = ds["x"].values
         _y = ds["y"].values
@@ -726,7 +723,7 @@ def _finalize_cog(
             details={"netcdf_path": str(netcdf_path)},
         ) from exc
 
-    # --- CRS_TAG_MISMATCH guard (job-0071 / research-workflow 2026-06-07) ---
+    # --- CRS_TAG_MISMATCH guard (research-workflow) ---
     # Re-open the COG and verify the CRS tag round-trips BEFORE any upload. This
     # is also the per-frame VALID-COG assertion (a frame that can't be re-opened
     # or carries a bad CRS tag raises here, never reaching the runs bucket).
@@ -991,8 +988,8 @@ def _upload_cog_to_runs_bucket(
     ``_layer_identity_key`` (no dedup collision; the sequential group keeps all
     its members).
 
-    GCP is decommissioned (job-0291 / GCP-teardown): the upload always goes via
-    **boto3** (job-0289 lesson) and the runs bucket MUST come from
+    GCP is decommissioned (GCP-teardown): the upload always goes via
+    **boto3** and the runs bucket MUST come from
     ``TRID3NT_RUNS_BUCKET`` / the explicit ``runs_bucket`` arg.
     """
     bucket = runs_bucket or (os.environ.get("TRID3NT_RUNS_BUCKET") or "").strip()

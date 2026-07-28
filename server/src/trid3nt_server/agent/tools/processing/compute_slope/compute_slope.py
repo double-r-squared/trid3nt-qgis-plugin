@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_slope`` — terrain slope raster from DEM (job-0081, FR-CE-8, FR-DC).
+"""Atomic tool ``compute_slope`` - terrain slope raster from DEM (FR-CE-8, FR-DC).
 
 This module registers one atomic tool that computes a slope raster from a DEM
 by wrapping GDAL's ``gdaldem slope`` command:
@@ -50,10 +50,10 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import CACHE_BUCKET, read_through
 
-# job-0269: the job-0257 PROJ/GDAL data-dir env fix (without it, conda-env
+# the PROJ/GDAL data-dir env fix (without it, conda-env
 # gdaldem silently degrades the output CRS to LOCAL_CS — same failure class
 # hillshade hit live; slope was never wired).
-# job-0271: + COG conversion (flat gdaldem GTiffs render too slowly via WMS).
+# + COG conversion (flat gdaldem GTiffs render too slowly via WMS).
 from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _gdaldem_subprocess_env, _translate_to_cog
 
 __all__ = [
@@ -158,7 +158,7 @@ def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> b
     Raises ``SlopeComputeError`` on any failure so callers get a typed error.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws (job-0290b): s3:// staging via the shared boto3 reader.
+    # s3:// staging via the shared boto3 reader.
     if dem_uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
         try:
@@ -223,7 +223,7 @@ def _run_gdaldem_slope(
             capture_output=True,
             check=False,
             timeout=300,  # 5-min ceiling; slope of any reasonable DEM completes in seconds
-            env=_gdaldem_subprocess_env(gdaldem),  # job-0257 PROJ/GDAL dirs
+            env=_gdaldem_subprocess_env(gdaldem),  # PROJ/GDAL dirs
         )
     except FileNotFoundError as exc:
         raise SlopeComputeError(
@@ -270,7 +270,7 @@ def compute_slope(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -320,7 +320,7 @@ def compute_slope(
             # 3. Run gdaldem slope.
             _run_gdaldem_slope(in_tmp, out_tmp, output_unit, algorithm)
 
-            # 4. job-0271: return real COG bytes — see _translate_to_cog.
+            # 4. return real COG bytes - see _translate_to_cog.
             return _translate_to_cog(out_tmp, _get_gdaldem_bin())
         finally:
             for path in (in_tmp, out_tmp):
@@ -358,7 +358,7 @@ def compute_slope(
         name=f"Slope ({output_unit}, {algorithm}) [{unit_label}]",
         layer_type="raster",
         uri=result.uri,
-        style_preset="slope_angle_deg",  # tools-backlog #3: slope-angle ylorrd ramp (deg). Backend colormap here; the Orchestrator wires the frontend legend (NATE 2026-06-24).
+        style_preset="slope_angle_deg",  # tools-backlog: slope-angle ylorrd ramp (deg). Backend colormap here; the Orchestrator wires the frontend legend.
         role="context",
         units=output_unit,
     )

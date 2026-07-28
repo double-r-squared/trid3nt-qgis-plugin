@@ -614,7 +614,7 @@ def compute_change_detection(
     imagery_b_uri: str | None = None,
     *,
     _output_dir: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> ChangeDetectionLayerURI:
     """Detect surface change between two dates by differencing Sentinel-2 NDVI/NDWI.

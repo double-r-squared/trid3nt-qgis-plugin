@@ -1,6 +1,6 @@
 """``model_wetland_hydroperiod_scenario``  -  MODFLOW wetland-hydroperiod composer.
 
-The end-to-end higher-order workflow for the sprint-18 Wave-2 MODFLOW
+The end-to-end higher-order workflow for the MODFLOW
 ``wetland_hydroperiod`` archetype: it turns a place (or AOI point) + a wetland
 footprint into a rendered seasonal-water-table-range layer  -  how much the wetland
 water table swings across the recharge / evapotranspiration seasons (the
@@ -74,7 +74,7 @@ __all__ = [
 
 
 class WetlandHydroperiodResult(GraceModel):
-    """Return type for ``model_wetland_hydroperiod_scenario`` (sprint-18 Wave-2).
+    """Return type for ``model_wetland_hydroperiod_scenario``.
 
     Bundles the hydroperiod layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``hydroperiod_layer``
@@ -336,7 +336,7 @@ async def modflow_wetland_hydroperiod(
     porosity: float | None = None,
     specific_yield: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a wetland's seasonal water-table range (hydroperiod).

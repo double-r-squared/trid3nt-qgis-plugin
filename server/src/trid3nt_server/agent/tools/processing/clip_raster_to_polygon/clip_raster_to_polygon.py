@@ -1,6 +1,6 @@
-"""Atomic tool ``clip_raster_to_polygon`` — clip a raster to an arbitrary polygon (job-0106).
+"""Atomic tool ``clip_raster_to_polygon`` - clip a raster to an arbitrary polygon.
 
-Sibling to ``clip_raster_to_bbox`` (job-0085) but accepts an arbitrary vector
+Sibling to ``clip_raster_to_bbox`` but accepts an arbitrary vector
 polygon instead of a rectangular bbox. This is the enabler for the "in [place]"
 geographic-clipping pattern (per feedback-geographic-clipping-pattern memory
 rule). Typical composition::
@@ -126,9 +126,9 @@ def _get_source_crs(raster_uri: str) -> Any:
     try:
         import rasterio  # type: ignore[import-not-found]
 
-        # sprint-14-aws (job-0293b): s3:// header-read.
+        # s3:// header-read.
         if raster_uri.startswith("s3://"):
-            # sprint-14-aws (job-0293c): GDAL's /vsis3/ credential chain does
+            # GDAL's /vsis3/ credential chain does
             # not resolve the EC2 instance role in this env (boto3 does) —
             # observed live: "does not exist" on an existing object. Stage the
             # bytes via the shared boto3 reader and open in-memory.
@@ -164,7 +164,7 @@ def _download_raster_bytes(raster_uri: str, storage_client: Any | None = None) -
     but is ignored.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws (job-0290b): s3:// staging via the shared boto3 reader.
+    # s3:// staging via the shared boto3 reader.
     if raster_uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
         try:
@@ -204,7 +204,7 @@ def _download_polygon_bytes(polygon_uri: str, storage_client: Any | None = None)
         reading from the materialized temp file.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws (job-0290b): s3:// staging via the shared boto3 reader.
+    # s3:// staging via the shared boto3 reader.
     if polygon_uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
         _name = polygon_uri.rstrip("/").rsplit("/", 1)[-1]
@@ -469,7 +469,7 @@ def clip_raster_to_polygon(
     *,
     _storage_client: Any | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -479,7 +479,7 @@ def clip_raster_to_polygon(
     (state, county, watershed, protected area, parcel) -- mask a flood/
     slope/DEM raster to that boundary before aggregation. Do NOT use for:
     rectangular bbox clips (``clip_raster_to_bbox`` -- faster, no vector
-    read); vector-to-vector clips (``clip_vector_to_polygon``).
+    read); vector-to-vector clips.
 
     Params:
         raster_uri: source raster (``gs://``/``s3://`` or local path).

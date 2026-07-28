@@ -187,7 +187,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -533,7 +533,7 @@ def digitize_water_body(
     ndwi_threshold: float = _DEFAULT_NDWI_THRESHOLD,
     max_cloud_cover: float = _DEFAULT_MAX_CLOUD,
     min_area_m2: float = _DEFAULT_MIN_AREA_M2,
-    # Wave 4.10 convention: absorb LLM-invented kwargs.
+    # convention: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Digitize open surface-water bodies (NDWI) for a bbox + recent window.

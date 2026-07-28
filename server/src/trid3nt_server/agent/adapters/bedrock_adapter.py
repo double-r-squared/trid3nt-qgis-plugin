@@ -1,4 +1,4 @@
-"""Bedrock Converse adapter (sprint-14-aws job-0286) — the agent's AWS brain.
+"""Bedrock Converse adapter - the agent's AWS brain.
 
 This service was built on Vertex AI / Gemini via ``adapter.py``. The AWS migration
 swaps the model provider to **Amazon Bedrock** (Claude Sonnet 4.6 by default)
@@ -205,7 +205,7 @@ def bedrock_model_id() -> str:
 def _prompt_cache_enabled() -> bool:
     """Bedrock prompt caching (``cachePoint``) ON by default; env off-switch.
 
-    The sprint-14 Gemini->Bedrock swap DEFERRED prompt caching, so every turn
+    The Gemini->Bedrock swap DEFERRED prompt caching, so every turn
     re-sent the full static system prompt + 94-tool catalog UNCACHED — the #1
     Bedrock cost driver (the Gemini path had cachedContent ~90% discount). We
     restore it with ``cachePoint`` markers. Gated by ``BEDROCK_PROMPT_CACHE`` so

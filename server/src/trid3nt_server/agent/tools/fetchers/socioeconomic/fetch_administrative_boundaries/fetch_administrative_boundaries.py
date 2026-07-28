@@ -599,7 +599,7 @@ def _fetch_admin_boundaries_bytes(
 def fetch_administrative_boundaries(
     level: Literal["state", "county", "place", "zcta"],
     bbox: tuple[float, float, float, float],
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

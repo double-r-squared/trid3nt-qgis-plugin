@@ -1,4 +1,4 @@
-"""Tests for ``import_user_layer`` -- the bidirectional layer push core.
+"""Tests for ``register_case_layer`` -- the bidirectional layer push core.
 
 Mirrors ``test_export_qgis_http_route.py`` / ``test_case_list_http_route.py``
 in spirit: real geopandas/rasterio round trips (no fakes for the artifact
@@ -27,7 +27,7 @@ import json
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.agent.tools.meta.import_user_layer import import_user_layer as iul
+from trid3nt_server.agent.tools.meta.register_case_layer import register_case_layer as iul
 from trid3nt_contracts.case import CaseSummary
 from trid3nt_contracts.common import new_ulid
 
@@ -390,14 +390,14 @@ async def test_ingest_merges_alongside_existing_layers(monkeypatch, fake_persist
 
 
 # ---------------------------------------------------------------------------
-# LLM tool wrapper (import_user_layer): thin wrapper around the core.
+# LLM tool wrapper (register_case_layer): thin wrapper around the core.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_tool_wrapper_requires_case_id(fake_persistence):
     with pytest.raises(iul.CaseNotFoundError):
-        await iul.import_user_layer(
+        await iul.register_case_layer(
             s3_uri="s3://b/k.geojson", name="x", kind="vector", case_id=None
         )
 
@@ -409,7 +409,7 @@ async def test_tool_wrapper_happy_path(monkeypatch, fake_persistence):
     data = _geojson_bytes()
     _mock_s3_object(monkeypatch, data)
 
-    result = await iul.import_user_layer(
+    result = await iul.register_case_layer(
         s3_uri="s3://b/aoi.geojson",
         name="AOI from chat",
         kind="vector",

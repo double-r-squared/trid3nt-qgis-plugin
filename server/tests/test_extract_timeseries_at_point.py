@@ -1,6 +1,6 @@
 """Tests for ``extract_timeseries_at_point`` (point series over frame stacks).
 
-No network / no DynamoDB: fake persistence (the export_case_to_qgis seam),
+No network / no DynamoDB: fake persistence (the open_case_in_qgis seam),
 tiny local GeoTIFF frames whose names carry the web LayerPanel frame tokens.
 Also unit-tests the ``parse_frame_token`` port against the web patterns.
 """

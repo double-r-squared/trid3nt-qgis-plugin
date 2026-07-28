@@ -1,7 +1,7 @@
 """``compose_case_report`` atomic tool -- markdown situation report for a Case.
 
 Generates a plain-markdown situation report for the current Case and writes it
-into the case artifacts dir (the ``export_case_to_qgis`` output convention:
+into the case artifacts dir (the ``open_case_in_qgis`` output convention:
 ``${TRID3NT_EXPORT_DIR or ~/trid3nt-exports}/<case>-<hash>/``). Sections:
 
     1. Title + generation date + Case id.
@@ -144,7 +144,7 @@ def _layer_stats_line(layer: dict[str, Any], tmpdir: str) -> str:
         _summarize_raster,
         _summarize_vector,
     )
-    from trid3nt_server.agent.tools.meta.export_case_to_qgis.export_case_to_qgis import _strip_query, _unwrap_tile_template
+    from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import _strip_query, _unwrap_tile_template
 
     uri = str(layer.get("uri") or "")
     if not uri:
@@ -206,7 +206,7 @@ def _simulation_parameters(case: Any) -> dict[str, Any]:
 
 
 def _resolve_output_dir(case_id: str, title: str, output_dir: str | None) -> Path:
-    """The case artifacts dir -- the export_case_to_qgis convention."""
+    """The case artifacts dir -- the open_case_in_qgis convention."""
     if output_dir:
         out = Path(output_dir).expanduser()
     else:
@@ -235,7 +235,7 @@ async def compose_case_report(
     case_id: str | None = None,
     output_dir: str | None = None,
     include_layer_stats: bool = True,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Generate a markdown situation report for the current Case.
@@ -255,7 +255,7 @@ async def compose_case_report(
 
     **When NOT to use:**
     - A desktop-GIS bundle of the layers themselves -- use
-      ``export_case_to_qgis``.
+      ``open_case_in_qgis``.
     - A single number ("how many people are flooded") -- use
       ``compute_exposure_summary`` / ``compute_zonal_statistics`` directly.
 

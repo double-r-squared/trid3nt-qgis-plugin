@@ -239,7 +239,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -669,7 +669,7 @@ def _fetch_ejscreen_bytes(
 def fetch_epa_ejscreen(
     bbox: tuple[float, float, float, float],
     indicator: str = "pm25",
-    # Wave 4.10 convention: absorb LLM-invented kwargs.
+    # convention: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """EPA EJScreen environmental-justice indices by census block group.

@@ -675,7 +675,7 @@ def test_elmfire_fire_spread_in_solver_confirm_tools():
 
 
 def test_fire_confirm_envelope_carries_cells_and_runtime():
-    from trid3nt_server.server import _build_fire_confirm_envelope
+    from trid3nt_server.agent.gates.cards.solver_confirm import _build_fire_confirm_envelope
 
     env = _build_fire_confirm_envelope(
         {

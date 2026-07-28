@@ -2,8 +2,8 @@
 
 This package is the worker-side LIFT of the pure ``numpy`` / ``scipy`` /
 ``rasterio`` / ``pyproj`` / ``xarray`` postprocess code that used to run on the
-always-on agent box after a SFINCS Batch solve finished (job-0042
-``postprocess_flood`` + sprint-17 ``postprocess_waves``). Moving it INTO the
+always-on agent box after a SFINCS Batch solve finished
+(``postprocess_flood`` + ``postprocess_waves``). Moving it INTO the
 Batch worker — which already has the raw ``sfincs_map.nc`` local, the geo stack
 in-image, and a big c7i box to parallelize frames — is the scale-to-zero island
 pattern: the agent collapses to "read a thin manifest, build the TiTiler URL,

@@ -7,7 +7,7 @@ verbatim copy of the proven SFINCS inline driver in
 duplication is deliberate so the proven SFINCS path is not touched), and the
 SWMM / MODFLOW local solves import ``drive_live_solve_progress`` from here.
 
-NATE 2026-06-17 (LIVE big-sim telemetry): the long local solves (SWMM, MODFLOW)
+the long local solves (SWMM, MODFLOW)
 run off-loop in ``asyncio.to_thread`` and emit nothing for minutes, so the
 running tool/pipeline card shows a silent spinner. This driver runs as a side
 task **on the event loop** (the emitter is loop-bound) alongside the off-loop

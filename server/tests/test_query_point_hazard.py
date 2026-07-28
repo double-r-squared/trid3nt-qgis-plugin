@@ -1,7 +1,7 @@
 """Tests for ``query_point_hazard`` (sample every case raster at a point).
 
 No network / no DynamoDB: persistence is a fake monkeypatched onto
-``trid3nt_server.telemetry.get_persistence`` (the export_case_to_qgis seam) and
+``trid3nt_server.telemetry.get_persistence`` (the open_case_in_qgis seam) and
 the geocoder seam (``_geocode_place``) is stubbed. Layers are tiny local
 GeoTIFFs referenced from synthetic ``loaded_layer_summaries`` dicts.
 """

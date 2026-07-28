@@ -1,4 +1,4 @@
-"""``pelicun_damage_assessment`` — Pelicun-backed fragility damage assessment (job-0120).
+"""``pelicun_damage_assessment`` - Pelicun-backed fragility damage assessment.
 
 Engine template (engine-door refactor - PELICUN slice; was
 ``run_pelicun_damage_assessment``). Tagged ``engine="pelicun", tier="template"``:
@@ -6,9 +6,9 @@ EXCLUDED from the default retrieval pool and surfaced only by the ``run_pelicun`
 door's gate expansion (SELECT-THEN-CALL). Metadata (``source_class="pelicun_damage"``,
 ``cacheable=True``, ``ttl_class="static-30d"``) is unchanged from the rename.
 
-**Wave 2 composer** — replaces the job-0098 stub with the real Pelicun-backed
+** composer** - replaces the stub with the real Pelicun-backed
 runtime. The LLM-visible API contract (name, parameters, allowed enums, return
-type) is unchanged from Wave 1; only the body is swapped.
+type) is unchanged; only the body is swapped.
 
 **PELICUN fold (engine-door refactor)** — ONE template, two input modes
 (functional-sameness fold of the former ``pelicun_damage_with_buildings``
@@ -58,10 +58,10 @@ loss-function outputs. The aleatory dispersion ``σ_lnD = 0.4`` is the
 standard HAZUS depth-damage dispersion (see HAZUS Flood Technical Manual §3.3,
 also Tate et al. 2015, Wing et al. 2020).
 
-**OQ-8-RESOLVED-V0.1**: bundled HAZUS curves it is. FEMA P-58 swap (component-
-level fragility for seismic + finer-grain flood) is sprint-13+ work.
+**.1**: bundled HAZUS curves it is. FEMA P-58 swap (component-
+level fragility for seismic + finer-grain flood) is + work.
 
-**Geographic-correctness gate (codified lesson from job-0086)**
+**Geographic-correctness gate (codified lesson)**
 
 Damage states MUST be monotonically non-decreasing with sampled hazard
 intensity. Test ``test_geographic_correctness_higher_depth_higher_damage``
@@ -80,11 +80,11 @@ realization_count)`` calls reuse the cached FlatGeobuf for 30 days.
 
 **Live verification gate**
 
-Acceptance run (``TRID3NT_TEST_LIVE_PELICUN=1``): job-0086 Y-flip-fixed flood
+Acceptance run (``TRID3NT_TEST_LIVE_PELICUN=1``): Y-flip-fixed flood
 COG (``s3://trid3nt-runs/01KTJX71NKGDMXB9TN0DV75JWK/flood_depth_peak_0086.tif``)
 + Fort Myers place polygons from ``fetch_administrative_boundaries(level='place', bbox=...)``
 → FlatGeobuf with populated ``ds_mean``/``repair_cost_mean`` per asset,
-saved to ``reports/inflight/job-0120-engine-20260608/evidence/``.
+saved to ``reports/inflight/-engine-20260608/evidence/``.
 
 FR-TA-2 / FR-AS-3 / FR-CE-8 / FR-DC-3/4 invariants honored as documented in
 the per-section comments below.
@@ -414,7 +414,7 @@ def _autofetch_building_assets(
 
 
 # ---------------------------------------------------------------------------
-# Allowed enum values — locked at Wave 1, preserved here.
+# Allowed enum values - locked, preserved here.
 # ---------------------------------------------------------------------------
 
 FragilitySet = Literal["hazus_flood_v6", "fema_hazus_eq_2020"]
@@ -506,7 +506,7 @@ _HAZUS_FLOOD_LOSS_CAP = 0.6
 # (Table 16-1 General Building Stock Replacement Costs) scaled to 2024 USD
 # using BLS construction-cost CPI factor ~1.45 from 2018 base.
 #
-# Surfaced as OQ-0120-REPLACEMENT-VALUE for sprint-13+ refinement: real
+# Replacement value: real
 # parcel data carries per-asset replacement value; v0.1 falls back to
 # class defaults so the tool produces a populated repair_cost field even
 # when the asset layer lacks the property.
@@ -583,7 +583,7 @@ TEMPLATE_CARD = TemplateCard(
 
 
 # ---------------------------------------------------------------------------
-# Input-validation helpers (unchanged from Wave 1 — same typed errors).
+# Input-validation helpers (unchanged - same typed errors).
 # ---------------------------------------------------------------------------
 
 
@@ -676,7 +676,7 @@ def _validate_realization_count(realization_count: object) -> int:
 #   - one_floor, no_basement, a_zone (the most common SFD configuration for
 #     RES1 in FEMA flood-hazard mapping)
 #   - FIA depth-damage methodology (the FEMA-issued standard, not Modified)
-# This is documented as OQ-0120-CURVE-VARIANT — a sprint-13+ refinement could
+# This is documented - a + refinement could
 # infer foundation type from building footprint attrs.
 # ---------------------------------------------------------------------------
 
@@ -917,9 +917,9 @@ def _download_uri_to_local(uri: str, suffix: str, storage_client: Any | None = N
     """
     del storage_client  # GCP decommissioned — S3/local only.
     if uri.startswith(("http://", "https://")) and "LAYERS=" in uri:
-        # job-0255 (OQ-0255-PELICUN-WMS-URI): the LLM copies the published
+        # the LLM copies the published
         # layer's QGIS WMS GetMap URL verbatim — which IS the LayerURI.uri
-        # field per OQ-62 (the s3:// COG never appears in its context).
+        # field per (the s3:// COG never appears in its context).
         # Reverse-map the WMS layer id back to the runs-bucket COG:
         # LAYERS=flood-depth-peak-<run_id>  ->  s3://<runs>/<run_id>/flood_depth_peak.tif
         # LAYERS=plume-concentration-<run_id> -> .../plume_concentration_4326.tif
@@ -950,9 +950,9 @@ def _download_uri_to_local(uri: str, suffix: str, storage_client: Any | None = N
             f"({uri!r}); pass the s3:// COG URI from the producing tool"
         )
 
-    # sprint-14-aws (job-0293b): s3:// staging via the shared boto3 reader
-    # (NOT s3fs — instance-role lesson, job-0289). Stage to a
-    # NamedTemporaryFile the caller unlinks, with the job-0253 last-two-segment
+    # s3:// staging via the shared boto3 reader
+    # (NOT s3fs - instance-role lesson). Stage to a
+    # NamedTemporaryFile the caller unlinks, with the last-two-segment
     # retry for LLM path-mangled URIs.
     if uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
@@ -1224,7 +1224,7 @@ def _assess_assets(
                 component_used.append(ctype)
                 curve_ids.append(curve.curve_id)
 
-                # Determine replacement value. Invariant 7 (job-0300): record when
+                # Determine replacement value. Invariant 7: record when
                 # we fall back to a HAZUS class default (NSI lacked a usable
                 # val_struct) so the envelope can surface how many loss figures
                 # rest on defaults rather than measured per-asset values.
@@ -1372,7 +1372,7 @@ def _fetch_pelicun_damage_bytes(
 
     hazard_local: str | None = None
     assets_local: str | None = None
-    # sprint-14-aws (job-0293b): s3:// staging also lands in a temp file the
+    # s3:// staging also lands in a temp file the
     # finally-block must unlink — remote means either object-store scheme.
     hazard_was_remote = hazard_raster_uri.startswith(("gs://", "s3://"))
     assets_was_remote = assets_uri.startswith(("gs://", "s3://"))
@@ -1431,7 +1431,7 @@ def pelicun_damage_assessment(
     component_types: list[str] | None = None,
     realization_count: int = 100,
     cell_size_m: float = 100.0,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI | dict[str, Any]:

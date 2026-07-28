@@ -1,4 +1,4 @@
-"""GeoClaw (Clawpack) run-output postprocessing (sprint-17).
+"""GeoClaw (Clawpack) run-output postprocessing.
 
 ``postprocess_geoclaw(out_dir, run_args, *, run_id, ...) -> (layers, metrics)``
 reads the GeoClaw ``fort.q`` AMR ASCII frames from a solved run's ``_output/``

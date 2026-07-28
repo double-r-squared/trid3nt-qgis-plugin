@@ -245,7 +245,7 @@ _MAX_TOTAL_FEATURES = 50_000
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator hook (Wave 1.5 / FR-DC-9).
+# Payload estimator hook (FR-DC-9).
 # ---------------------------------------------------------------------------
 
 # Empirical sizing: each NID feature serializes to ~1 KB of FlatGeobuf
@@ -261,13 +261,13 @@ _CONUS_FEATURE_COUNT_ESTIMATE = 91_000
 
 
 def estimate_payload_mb(**args: Any) -> float:
-    """FR-DC-9 / Wave-1.5 payload estimator (called by chat-warning gate).
+    """FR-DC-9 payload estimator (called by chat-warning gate).
 
     Scales the estimate by bbox area relative to CONUS. A None / missing
     bbox returns the CONUS sweep estimate (~90 MB before pagination cap,
     reported as ~50 MB to reflect the ``_MAX_TOTAL_FEATURES`` cap).
 
-    The signature accepts ``**args`` to match the Wave-1.5 estimator
+    The signature accepts ``**args`` to match the estimator
     convention (the chat-warning gate passes the tool's kwargs unchanged).
     """
     bbox = args.get("bbox")
@@ -295,7 +295,7 @@ def estimate_payload_mb(**args: Any) -> float:
 # AtomicToolMetadata — registered once at import time.
 #
 # ``supports_global_query=True`` because the bbox=None semantics genuinely
-# return the CONUS+AK+HI dam population. The Wave-1.5 chat-warning gate
+# return the CONUS+AK+HI dam population. The chat-warning gate
 # uses ``estimate_payload_mb`` to warn the user before a large sweep is
 # committed.
 # ---------------------------------------------------------------------------
@@ -1047,7 +1047,7 @@ def fetch_usace_dams(
     min_height_ft: float | int | None = None,
     token: str | None = None,
     secret_ref: Any | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -1095,7 +1095,7 @@ def fetch_usace_dams(
             on each axis. Example: ``(-82.5, 26.0, -81.0, 27.0)`` for the
             Fort Myers / Cape Coral area returns ~10-20 dam features.
             When None, the tool sweeps the full CONUS+AK+HI dam population
-            (capped at 50k features); the Wave-1.5 chat-warning gate uses
+            (capped at 50k features); the chat-warning gate uses
             ``estimate_payload_mb`` to warn the user before a global sweep
             commits.
         hazard_potential: Optional NID hazard-potential filter. A single value

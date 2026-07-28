@@ -1,4 +1,4 @@
-"""Landlab surface-process engine — solver name + deck staging (sprint-17).
+"""Landlab surface-process engine - solver name + deck staging.
 
 The Landlab analogue of ``run_swmm`` / ``run_modflow``'s staging half. Landlab
 is a NEW engine and runs OFF-BOX ONLY (the scale-to-zero island norm: heavy /

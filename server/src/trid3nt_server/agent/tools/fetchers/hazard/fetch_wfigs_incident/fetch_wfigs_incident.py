@@ -511,7 +511,7 @@ def fetch_wfigs_incident(
     incident_name: str,
     state: str | None = None,
     bbox_pad_deg: float = _DEFAULT_BBOX_PAD_DEG,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Resolve a NAMED wildfire incident (NIFC/WFIGS) -> authoritative point + bbox + discovery time.

@@ -2,7 +2,7 @@
 
 User-driven QGIS export (NATE 2026-07-06): the web's per-case "Export to
 QGIS" kebab item POSTs a case_id here; the route awaits the
-``export_case_to_qgis`` tool and returns its result dict. A sibling GET
+``open_case_in_qgis`` tool and returns its result dict. A sibling GET
 serves the produced .qgz/.gpkg bytes, path-traversal guarded to the export
 root (TRID3NT_EXPORT_DIR, default ~/trid3nt-exports).
 
@@ -23,7 +23,7 @@ import asyncio
 import json
 
 from trid3nt_server import tool_catalog_http
-from trid3nt_server.agent.tools.meta.export_case_to_qgis.export_case_to_qgis import (
+from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import (
     CaseNotFoundError,
     NoExportableLayersError,
 )

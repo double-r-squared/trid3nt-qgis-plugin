@@ -1,15 +1,15 @@
-"""ELMFIRE wildfire-spread engine: inputs, deck build, staging, dispatch (FIRE-3).
+"""ELMFIRE wildfire-spread engine: inputs, deck build, staging, dispatch.
 
 The ELMFIRE analogue of ``run_geoclaw.py`` / ``run_swmm.py``. This module owns:
 
   1. **Input acquisition** (``fetch_elmfire_inputs``): the 8 fuels/topography
-     rasters the FIRE-2 deck builder consumes — LANDFIRE fbfm40/cbh/cbd/cc/ch
-     via ``fetch_landfire_fuels`` (all five layers shipped by FIRE-2), the DEM
+     rasters the deck builder consumes - LANDFIRE fbfm40/cbh/cbd/cc/ch
+     via ``fetch_landfire_fuels`` (all five layers), the DEM
      via ``fetch_dem`` (USGS 3DEP), and slope/aspect derived from that SAME DEM
      via ``compute_slope`` / ``compute_aspect`` (degrees — the ELMFIRE
      convention). Every fetcher's typed error propagates honestly (CONUS-only
      LANDFIRE coverage fails typed, never hallucinated fuels).
-  2. **Deck build** (``build_elmfire_deck``): drives the FIRE-2 deck builder
+  2. **Deck build** (``build_elmfire_deck``): drives the deck builder
      (``services/workers/elmfire/deck_builder.py`` — imported by path because
      ``services/workers/`` is not on the agent import path, mirroring how the
      Landlab/OpenQuake specs reach ``services.workers.*`` from the repo root)
@@ -21,18 +21,18 @@ The ELMFIRE analogue of ``run_geoclaw.py`` / ``run_swmm.py``. This module owns:
      exactly like the sfincs_builder local-manifest fallback). Under the
      ``aws-batch`` backend the deck files + manifest are uploaded to the cache
      bucket (mirrors ``stage_geoclaw_manifest``) — that lane stays INERT until
-     FIRE-4 provisions the ECR image + Batch job definition
+      provisions the ECR image + Batch job definition
      (``TRID3NT_AWS_BATCH_JOB_DEF_ELMFIRE`` / ``ELMFIRE_BATCH_JOB_DEF_NAME``).
   4. **Solver registration**: ``'elmfire'`` in ``SOLVER_WORKFLOW_REGISTRY``
-     (AWS-Batch sentinel, the FIRE-4 seam) + a ``LocalSolverSpec`` docker
-     runner for the FIRE-1 proven image ``trid3nt/elmfire:dev`` (rootless
+     (AWS-Batch sentinel, the seam) + a ``LocalSolverSpec`` docker
+     runner for the proven image ``trid3nt/elmfire:dev`` (rootless
      docker via DOCKER_HOST, deck dir mounted, ``--cpus`` capped).
   5. **Gate arithmetic** (``estimate_elmfire_grid`` /
      ``estimate_elmfire_runtime_s``): PURE approximations backing the server
      solver-confirm card (cell count + estimated runtime) — no rasterio, no
      network, safe to call from the gate.
 
-Cloud/Batch wiring is FIRE-4: this module only leaves the clean seam (the
+Cloud/Batch wiring is: this module only leaves the clean seam (the
 solver-registry key + the pinned job-definition name constant). Nothing here
 touches AWS at import time.
 """
@@ -78,15 +78,15 @@ __all__ = [
 #: The solver-registry key (``run_solver(solver='elmfire', ...)``).
 ELMFIRE_SOLVER_NAME: str = "elmfire"
 
-#: FIRE-4 seam: the canonical AWS Batch job-definition NAME the infra job will
+#: seam: the canonical AWS Batch NAME the infra job will
 #: register (per-solver env override ``TRID3NT_AWS_BATCH_JOB_DEF_ELMFIRE`` is
 #: the activation switch — ``_resolve_batch_job_def`` reads it; we deliberately
 #: do NOT seed ``SOLVER_BATCH_JOBDEF_REGISTRY`` so the Batch lane stays inert
-#: until FIRE-4 provisions the ECR image + job def). Nothing in FIRE-3 touches
+#: until provisions the ECR image + job def). Nothing in touches
 #: AWS Batch.
 ELMFIRE_BATCH_JOB_DEF_NAME: str = "grace2-elmfire"
 
-#: The FIRE-1 proven local image (env ``TRID3NT_ELMFIRE_IMAGE`` overrides).
+#: The proven local image (env ``TRID3NT_ELMFIRE_IMAGE`` overrides).
 DEFAULT_ELMFIRE_IMAGE: str = "trid3nt/elmfire:dev"
 
 #: The solver binary inside the image (release-pinned name; env
@@ -98,7 +98,7 @@ DEFAULT_ELMFIRE_BINARY: str = "elmfire_2025.0526"
 DEFAULT_ELMFIRE_CPUS: str = "4"
 
 #: Output globs the solver supervisor uploads from the rundir. ELMFIRE with
-#: ``CONVERT_TO_GEOTIFF=.FALSE.`` (the FIRE-2 namelist) writes ESRI BIL rasters
+#: ``CONVERT_TO_GEOTIFF=.FALSE.`` (the namelist) writes ESRI BIL rasters
 #: (.bil + .hdr sidecars) into ``outputs/``; .tif is included so a future
 #: CONVERT_TO_GEOTIFF flip keeps working, .csv catches fire-size stats dumps.
 ELMFIRE_OUTPUT_GLOBS: list[str] = [
@@ -109,7 +109,7 @@ ELMFIRE_OUTPUT_GLOBS: list[str] = [
 ]
 
 #: Runtime heuristic (s) per cell-simulated-hour for the confirm-gate estimate.
-#: Calibrated on the FIRE-1 evidence: tutorial 01 = 160k cells x 6.17 h in
+#: Calibrated on the evidence: tutorial 01 = 160k cells x 6.17 h in
 #: 4.3 s (~4.4e-6); verification 01 = 5.76M cells x 7 h in 67 s (~1.7e-6).
 #: 5e-6 is deliberately conservative; ``_ELMFIRE_RUNTIME_FLOOR_S`` covers
 #: container start + deck I/O overhead. A HINT for the confirm card, never a
@@ -150,7 +150,7 @@ class ElmfireStaging:
 
 
 # --------------------------------------------------------------------------- #
-# FIRE-2 deck-builder import seam.
+# deck-builder import seam.
 #
 # ``services/workers/`` is NOT on the agent's import path (a pattern the deleted cloud qgis proxy
 # note), so the deck builder is loaded by file path from the repo root —
@@ -166,7 +166,7 @@ _deck_builder_module: Any = None
 
 
 def load_deck_builder() -> Any:
-    """Load ``services/workers/elmfire/deck_builder.py`` (FIRE-2) by path.
+    """Load ``services/workers/elmfire/deck_builder.py`` by path.
 
     Prefers a regular ``services.workers.elmfire.deck_builder`` import when the
     repo root happens to be on ``sys.path`` (worker containers), else falls
@@ -215,7 +215,7 @@ _LANDFIRE_DECK_LAYERS: tuple[str, ...] = ("fbfm40", "cbh", "cbd", "cc", "ch")
 def _uri_to_deck_input(name: str, uri: str) -> str:
     """Normalize a fetcher LayerURI ``uri`` into a deck-builder input ref.
 
-    The FIRE-2 deck builder accepts local paths and ``s3://`` URIs. ``file://``
+    The deck builder accepts local paths and ``s3://`` URIs. ``file://``
     is stripped to a local path; anything else (gs:// etc.) is a typed error —
     never a silently unreadable input.
     """
@@ -318,7 +318,7 @@ def fetch_elmfire_inputs(
 def build_elmfire_deck_spec(
     run_args: ElmfireRunArgs, inputs: dict[str, str]
 ) -> dict[str, Any]:
-    """Map ``ElmfireRunArgs`` + fetched inputs onto the FIRE-2 deck-spec shape.
+    """Map ``ElmfireRunArgs`` + fetched inputs onto the deck-spec shape.
 
     Pure translation (unit-testable, no I/O): the fuel-moisture PRESET expands
     into the concrete m1/m10/m100/lh/lw percentages
@@ -354,7 +354,7 @@ def build_elmfire_deck(
     inputs: dict[str, str],
     deck_dir: str | Path,
 ) -> dict[str, Any]:
-    """Build the run-ready deck via the FIRE-2 deck builder; return its manifest.
+    """Build the run-ready deck via the deck builder; return its manifest.
 
     SYNCHRONOUS (warping + raster writes) — offload via ``asyncio.to_thread``.
     Deck-builder typed errors (grid mismatch, missing input, no coverage,
@@ -397,7 +397,7 @@ def estimate_elmfire_grid(
 
 
 def estimate_elmfire_runtime_s(n_cells: int, duration_s: float) -> float:
-    """Heuristic solver runtime (s) for the confirm card (FIRE-1 calibrated).
+    """Heuristic solver runtime (s) for the confirm card (calibrated).
 
     ``5e-6 s`` per cell-simulated-hour + a 15 s container/deck-I/O floor. A
     coarse HINT shown on the confirm card — never narrated as a measurement.
@@ -429,7 +429,7 @@ def stage_elmfire_manifest(
 
     The manifest is written to ``<deck_dir>/manifest.json`` with ``file://``
     input refs. ``launch_local_solver`` copies each input into the rundir by
-    scheme and the docker spec runs the FIRE-1 image against the mounted rundir.
+    scheme and the docker spec runs the image against the mounted rundir.
     No object store is touched at staging time. (The AWS Batch staging lane was
     removed with the batch arm; local-docker is the only backend.)
 
@@ -491,14 +491,14 @@ def stage_elmfire_manifest(
 
 
 # --------------------------------------------------------------------------- #
-# LocalSolverSpec — the FIRE-1 proven container via docker run.
+# LocalSolverSpec - the proven container via docker run.
 # --------------------------------------------------------------------------- #
 def _resolve_docker_host() -> str | None:
     """Resolve the DOCKER_HOST override for the ELMFIRE local runs.
 
     Order: ``TRID3NT_ELMFIRE_DOCKER_HOST`` env -> the ambient ``DOCKER_HOST``
     (no override needed) -> the per-user ROOTLESS docker socket when it exists
-    (``unix:///run/user/<uid>/docker.sock`` — the FIRE-1 proof environment,
+    (``unix:///run/user/<uid>/docker.sock`` - the proof environment,
     where the rootful daemon socket is not readable by this user) -> ``None``
     (inherit the environment unchanged).
     """
@@ -518,7 +518,7 @@ def _resolve_docker_host() -> str | None:
 
 
 def elmfire_local_spec() -> Any:
-    """Build the ELMFIRE ``LocalSolverSpec`` (docker runner, FIRE-1 image).
+    """Build the ELMFIRE ``LocalSolverSpec`` (docker runner, image).
 
     ``launch_local_solver`` stages the deck's ``inputs/`` into the rundir,
     then this spec launches::

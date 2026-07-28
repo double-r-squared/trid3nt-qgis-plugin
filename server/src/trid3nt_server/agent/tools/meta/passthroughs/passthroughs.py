@@ -1,8 +1,8 @@
-"""Registry pass-through atomic tool (job-0032, M4 substrate).
+"""Registry pass-through atomic tool (M4 substrate).
 
 This module registers ``qgis_process``: a pass-through to the PyQGIS worker
-invocation path established by job-0021 (Cloud Run Jobs submission, later the
-job-0308 AWS docker stage-then-mount path). Solver dispatch is
+invocation path established by (Cloud Run Jobs submission, later the
+ AWS docker stage-then-mount path). Solver dispatch is
 uncacheable-by-construction per FR-DC-6 — results land under
 ``gs://<bucket>/runs/<run_id>/`` per FR-CE-4, not under ``cache/``.
 
@@ -42,7 +42,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.meta.passthroughs.passthr
 # directly ON the shared agent box -- heavy CPU/RAM work that competes with
 # every other session on the single EC2 box and that cannot run at all on a
 # future Fargate/AgentCore task (no docker socket, no QGIS binary). Until the
-# job-0308 QGIS-on-AWS-Batch lift lands, on-box execution is DISABLED by
+# QGIS-on-AWS-Batch lift lands, on-box execution is DISABLED by
 # default: the tool returns an HONEST typed "offloaded, did not run" result
 # (honesty floor -- never a fabricated success, never a spawned container).
 #
@@ -105,7 +105,7 @@ def set_worker_submitter(submitter: Any) -> None:
     """Bind the Cloud Run Jobs submitter used by ``qgis_process`` at call time.
 
     The submitter is a callable matching the worker-side API established by
-    job-0021; binding it here keeps Cloud Run Jobs SDK imports out of this
+    the worker; binding it here keeps Cloud Run Jobs SDK imports out of this
     module's import graph (so tests can exercise the registry without GCP
     libs installed).
     """
@@ -114,7 +114,7 @@ def set_worker_submitter(submitter: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# qgis_process RUN substrate (job-0308, sprint-16, Decision Q).
+# qgis_process RUN substrate (Decision Q).
 #
 # Execution mirrors the SFINCS solver's local-docker stage-then-mount pattern:
 # stage s3:// input params into a host rundir, mount it into the grace2-qgis
@@ -255,7 +255,7 @@ def _run_qgis_process_docker(
 def qgis_process(
     algorithm: str,
     params: dict[str, Any],
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
@@ -294,7 +294,7 @@ def qgis_process(
         "qgis_process algorithm=%s param_keys=%s", algorithm, sorted(params.keys())
     )
 
-    # ON-BOX EXECUTION GATE (default OFF): until the job-0308 QGIS-on-Batch lift
+    # ON-BOX EXECUTION GATE (default OFF): until the QGIS-on-Batch lift
     # lands, do NOT run heavy QGIS Processing on the shared agent box. Return an
     # honest typed "offloaded, did not run" result instead of spawning a
     # container / subprocess. The docker + local paths below stay intact behind
@@ -308,7 +308,7 @@ def qgis_process(
         )
         return _qgis_offloaded_result(algorithm, params)
 
-    # AWS path (Decision Q / job-0308): run inside the grace2-qgis container via
+    # AWS path (Decision Q): run inside the grace2-qgis container via
     # stage-then-mount. Engages when an image is configured OR when no local
     # qgis_process exists but docker + the image are present (the EC2 box).
     image = os.environ.get("TRID3NT_QGIS_DOCKER_IMAGE")

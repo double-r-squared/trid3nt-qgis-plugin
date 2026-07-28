@@ -153,8 +153,8 @@ def openai_api_key() -> str:
 
 
 def openai_default_headers() -> dict[str, str] | None:
-    """Optional per-provider request headers (OpenRouter model extensibility,
-    NATE 2026-07-19). OpenRouter accepts an ``HTTP-Referer`` + ``X-Title`` for
+    """Optional per-provider request headers (OpenRouter model extensibility).
+    OpenRouter accepts an ``HTTP-Referer`` + ``X-Title`` for
     app attribution/ranking; other OpenAI-compatible providers ignore them.
     Both env-driven and OMITTED entirely when unset, so the local-ollama and
     every existing provider path is byte-unchanged (returns None -> AsyncOpenAI
@@ -576,7 +576,7 @@ def contents_to_openai_messages(
 # ---------------------------------------------------------------------------
 
 
-#: 429 retry policy (NATE 2026-07-19): OpenRouter free-tier models are a
+#: 429 retry policy: OpenRouter free-tier models are a
 #: shared, transiently rate-limited pool - a single 429 mid multi-round tool
 #: turn would otherwise kill the whole turn. The request-time 429 lands BEFORE
 #: any token, so a bounded retry honoring the provider's ``retry_after`` makes
@@ -684,7 +684,7 @@ _TRANSIENT_UPSTREAM_SIGNATURES: tuple[str, ...] = (
 def _is_transient_upstream(exc: Any) -> bool:
     """True if ``exc`` is a TRANSIENT upstream error worth retrying with backoff.
 
-    Retry policy (NATE 2026-07-20, extended LANE CORE 2026-07-22):
+    Retry policy (extended):
       (a) a 429 ``RateLimitError`` (kept - honors Retry-After via caller);
       (b) any ``APIStatusError`` whose HTTP status is >= 500 (upstream 5xx);
       (c) any ``APIError`` whose message matches a transient-upstream signature

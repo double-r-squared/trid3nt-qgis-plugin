@@ -1,4 +1,4 @@
-"""Tool-argument normalizer — kwargs cleanup at the call site (job-0164).
+"""Tool-argument normalizer - kwargs cleanup at the call site.
 
 Gemini routinely invents kwargs the tool doesn't actually accept
 (``run_name``, ``scenario_id``, ``description``, ``rainfall_event``,
@@ -121,7 +121,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "location": "location_query",
     },
     # -----------------------------------------------------------------------
-    # NWS alert tools (job-0261): the LLM names the state freely ("state",
+    # NWS alert tools: the LLM names the state freely ("state",
     # "state_code", "location", "region") — all land on the canonical "area"
     # param so the precise server-side ?area= filter engages instead of the
     # unscoped CONUS sweep.
@@ -143,7 +143,7 @@ _TOOL_SPECIFIC_ALIASES: dict[str, dict[str, str]] = {
         "county_fips": "area",
     },
     # -----------------------------------------------------------------------
-    # Wave 4.10 endpoint aliases (job B13).
+    # endpoint aliases.
     # For each new tool: param-name variants Gemini is likely to invent based
     # on (a) common GIS/API terminology, (b) naming patterns in adjacent tools,
     # (c) docstring prose that names related concepts.
@@ -573,7 +573,7 @@ def coerce_latlon(value: Any) -> list[float]:
     """Coerce an LLM-emitted lat/lon point into ``[lat, lon]`` (two floats).
 
     Bedrock Claude (and other providers) routinely pass a coordinate *point*
-    parameter as a STRING rather than a JSON array — observed live (job-0317)
+    parameter as a STRING rather than a JSON array - observed live
     on ``modflow_contaminant_plume``'s ``spill_location_latlon``::
 
         "40.8088861,-96.7077751"   "40.81, -96.71"
@@ -583,7 +583,7 @@ def coerce_latlon(value: Any) -> list[float]:
     The naive ``tuple(float(v) for v in value)`` iterates the STRING'S
     CHARACTERS, so ``float('.')`` raises "could not convert string to float:
     '.'" and the whole run dies as ``MODFLOW_PARAMS_INVALID`` (non-retryable).
-    Same coercion class as the job-0295 news-ingest fix.
+    Same coercion class as the news-ingest fix.
 
     Accepts ALL of:
       * a real 2-element list/tuple of numbers (passed through as floats);
@@ -972,7 +972,7 @@ def normalize_args(
     # telemac_river_dye combined-coordinate alias (live 2026-07-18, 3x): qwen
     # packs the release point into ONE string field 'spill_location_latlon'
     # ("lat,lon") instead of release_lat/release_lon. This MUST normalize
-    # HERE - the BK-3b gate preview reads normalized args before the tool
+    # HERE - the gate preview reads normalized args before the tool
     # function runs, and the approve-click later injects release_* so a
     # tool-level parse guarded on "coords absent" never fires (proven live:
     # the preview meshed the wrong river while the coords sat unread).

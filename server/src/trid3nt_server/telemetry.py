@@ -286,7 +286,7 @@ async def emit_tool_call_event(
             this call.  ``None`` when the field is absent or the stream did
             not report usage metadata (e.g. mid-stream chunks).
         result_usable: Whether the call produced a USABLE result, distinct
-            from ``success`` (tool-accuracy panel, NATE 2026-06-17). ``False``
+            from ``success`` (tool-accuracy panel). ``False``
             for a layer-producing tool whose result carried no renderable
             layer (the honesty-floor NO_RENDERABLE_LAYER case) even when
             ``success=True``; ``True`` for a real renderable / non-empty data
@@ -546,7 +546,7 @@ def now_iso_utc() -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Solve-time telemetry (sprint-16 — SFINCS per-job autoscale)
+# Solve-time telemetry (— SFINCS per-job autoscale)
 #
 # At solve completion we accumulate real (active_cells, vCPU, wall_clock) data
 # so the adaptive-grid cell cap can be re-tuned from logged measurements
@@ -674,7 +674,7 @@ def emit_solve_telemetry(
 
 
 # --------------------------------------------------------------------------- #
-# SOLVE completion telemetry — Batch instance + problem size + timing (task-153)
+# SOLVE completion telemetry — Batch instance + problem size + timing
 #
 # A richer sibling to ``emit_solve_telemetry`` (above). Where that record carries
 # the autoscale provenance for re-tuning the adaptive cell cap, THIS record folds
@@ -789,7 +789,7 @@ def record_solve_telemetry(record: dict) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# PER-TURN telemetry (LANE CORE, 2026-07-22).
+# PER-TURN telemetry.
 #
 # One record per user-message turn, persisted BESIDE the tool-call telemetry
 # (its own JSONL sink -- follows ``record_solve_telemetry``'s own-sink pattern)
@@ -1075,7 +1075,7 @@ def build_live_solve_progress(
 ) -> dict:
     """Build the LIVE big-sim progress payload (server -> web; pure, no I/O).
 
-    Shape (the SHARED WIRE CONTRACT, tool-accuracy panel NATE 2026-06-17)::
+    Shape (the SHARED WIRE CONTRACT, tool-accuracy panel)::
 
         {run_id, solver, grid_resolution_m, active_cell_count, vcpus,
          elapsed_seconds, eta_seconds|null}
@@ -1084,7 +1084,7 @@ def build_live_solve_progress(
     grid resolution / active-cell count / vCPU / elapsed / ETA tick on the live
     card (rather than a silent multi-minute spinner). ``eta_seconds`` comes from
     the perf model (the autoscale ``estimated_solve_seconds``) when available,
-    else ``None``. Reuses the job-0359 solve-telemetry field names so the live
+    else ``None``. Reuses the solve-telemetry field names so the live
     envelope and the at-completion record speak the same vocabulary.
 
     Split out (like ``build_solve_telemetry_record``) so the wire shape can be
@@ -1112,7 +1112,7 @@ __all__ = [
     "build_solve_telemetry_record",
     "record_solve_telemetry",
     "build_live_solve_progress",
-    # per-turn telemetry (LANE CORE 2026-07-22)
+    # per-turn telemetry
     "TURN_RECORD_TYPE",
     "build_turn_telemetry_record",
     "emit_turn_telemetry",

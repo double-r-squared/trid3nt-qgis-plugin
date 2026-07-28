@@ -119,6 +119,7 @@ def test_fetch_tools_in_fetch_confirm_set() -> None:
 )
 async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -> None:
     from trid3nt_server import server
+    from trid3nt_server.agent.gates.cards import solver_confirm
 
     ws, state = _FakeWS(), _FakeState()
     approver = asyncio.create_task(_drive_decision(server, "proceed"))
@@ -144,7 +145,9 @@ async def test_gate_emits_fetch_granularity_block(tool_name: str, engine: str) -
     assert g["spot_label"] is None
     # fetch_dem carries its own 4000 px/axis budget (2026-07-10, matching the
     # tool's own auto-coarsen); other fetchers fall back to the generic bound.
-    expected_max_px = server._FETCH_MAX_PX_BY_TOOL.get(tool_name, server.MAX_FETCH_PX)
+    expected_max_px = solver_confirm._FETCH_MAX_PX_BY_TOOL.get(
+        tool_name, solver_confirm.MAX_FETCH_PX
+    )
     assert g["cell_cap"] == expected_max_px ** 2
     # narrow_scope must be offered so the user can override the rung.
     assert "narrow_scope" in card["payload"]["options"]

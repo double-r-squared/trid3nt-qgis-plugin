@@ -1,6 +1,6 @@
 """``model_mar_scenario``  -  MODFLOW managed-aquifer-recharge (MAR) composer.
 
-The end-to-end higher-order workflow for the sprint-18 Wave-2 MODFLOW ``MAR``
+The end-to-end higher-order workflow for the MODFLOW ``MAR``
 archetype: it turns a place (or AOI point) + an infiltration-basin footprint into
 a rendered groundwater-mounding layer  -  how high the water table rises under a
 recharge basin and how much water is banked. It mirrors the chain shape of
@@ -73,7 +73,7 @@ __all__ = [
 
 
 class MARResult(GraceModel):
-    """Return type for ``model_mar_scenario`` (sprint-18 Wave-2).
+    """Return type for ``model_mar_scenario``.
 
     Bundles the mounding layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``mounding_layer``
@@ -330,7 +330,7 @@ async def modflow_managed_recharge(
     porosity: float | None = None,
     aquifer_sy: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a managed-aquifer-recharge (MAR) groundwater mound under a basin.

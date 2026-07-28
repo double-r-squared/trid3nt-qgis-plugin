@@ -185,7 +185,7 @@ _USER_AGENT = (
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator hook (Wave 1.5 / FR-DC-9).
+# Payload estimator hook (FR-DC-9).
 # ---------------------------------------------------------------------------
 
 # Empirical sizing: each (station, parameter) point serializes to ~0.3 KB of
@@ -203,7 +203,7 @@ _FEATURES_PER_SQ_DEG_ESTIMATE = 4.0
 
 
 def estimate_payload_mb(**args: Any) -> float:
-    """FR-DC-9 / Wave-1.5 payload estimator (called by the chat-warning gate).
+    """FR-DC-9 payload estimator (called by the chat-warning gate).
 
     Scales by bbox area. A None / missing / malformed bbox returns a modest
     default (the tool requires a bbox, so this path is advisory only). The
@@ -637,7 +637,7 @@ def _assemble_measurement_rows(
     For each station, for each latest sensor reading, cross-reference the
     sensor's parameter/units via the station's sensor map, filter to the
     requested ``parameters`` set, hard-filter the point to the requested bbox
-    (geographic-correctness gate — job-0086 codified lesson), and emit one row.
+    (geographic-correctness gate - codified lesson), and emit one row.
 
     Returns ``(rows, geoms)`` parallel lists; ``geoms`` are ``(lon, lat)``.
     """
@@ -880,7 +880,7 @@ def fetch_openaq_measurements(
     parameters: str | list[str] | None = None,
     api_key: str | None = None,
     secret_ref: Any | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

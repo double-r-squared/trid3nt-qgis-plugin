@@ -29,10 +29,10 @@ Manifest schema (the ``telemac_river_dye`` worker contract):
       "reach": {                       # ReachConfig field overrides (all optional)
         "name": "snake_river_twin_falls",
         "seed_lon": -114.307, "seed_lat": 42.579,
-        "release_lon": -122.934, "release_lat": 46.106,  # BK-6 source picker
+        "release_lon": -122.934, "release_lat": 46.106, # source picker
         "seed_from_release": true,     # call-provided release seeds the reach
         "seed_release_lon": -122.934, "seed_release_lat": 46.106,
-        # ^ BK-3b decouple: ORIGINAL call coords the reach seed follows when a
+        # ^ decouple: ORIGINAL call coords the reach seed follows when a
         #   gate click overwrote release_lon/release_lat (source moves only)
         "nav_direction": "DM", "distance_km": 6.0,
         "channel_width_m": 60.0, "mesh_size_m": 14.0,
@@ -212,7 +212,7 @@ def run_pipeline(
     tr = pmeta.pop("lonlat_transformer")
     LOG.info("centerline processed: %s", pmeta)
 
-    # 2b. BK-7: real river banks from NHDArea polygons (honest fallback to the
+    # 2b. real river banks from NHDArea polygons (honest fallback to the
     # constant-width ribbon when the fetch/sampling cannot see water).
     bank_source = "constant"
     bank_stats = {}
@@ -288,11 +288,11 @@ def run_pipeline(
              mesh["npoin"], len(mesh["ikle"]), mesh["nptfr"], mesh["n_in"],
              mesh["n_out"], mesh["banks_ok"], mesh["smooth_tries"])
 
-    # MESH_ONLY (BK-3b approve-mesh gate): stop after the mesh is built. The DEM
+    # MESH_ONLY (approve-mesh gate): stop after the mesh is built. The DEM
     # bed is SKIPPED entirely - bed elevation only sets node Z (BOTTOM), never
     # connectivity, so npoin/nelem/edge stats shown at the gate are EXACT for the
     # eventual solve mesh - and skipping it sidesteps the untimed DEM fetch
-    # (OPEN-25) plus ~30 s wall. Writes river.slf (Z=0) + river.cli +
+    # plus ~30 s wall. Writes river.slf (Z=0) + river.cli +
     # mesh_preview.geojson (triangle edges, EPSG:4326) + gate-stat metrics.
     if mesh_only:
         import numpy as _np  # noqa: WPS433 -- local alias for clarity
@@ -318,7 +318,7 @@ def run_pipeline(
         bbox4326 = [float(lon.min()), float(lat.min()),
                     float(lon.max()), float(lat.max())]
         # Wireframe budget: past the edge cap SUBSAMPLE interior edges rather
-        # than dropping to boundary-only (NATE 2026-07-18: the hollow preview
+        # than dropping to boundary-only (the hollow preview
         # read as "less detailed / wrong mesh"). Boundary rings (banks +
         # island walls, one closed linestring per ring) are ALWAYS complete;
         # interior edges take whatever budget remains at a uniform stride.
@@ -423,7 +423,7 @@ def run_pipeline(
     mesh["bed_z"] = Z  # oil release snaps to the local thalweg (deepest node)
     LOG.info("dem bed: %s", bed)
 
-    # BK-6: project the user-picked release point (lonlat) into the mesh UTM
+    # project the user-picked release point (lonlat) into the mesh UTM
     # so spill_point can honor it (validated there within 2 channel widths).
     if getattr(cfg, "release_lon", None) is not None \
             and getattr(cfg, "release_lat", None) is not None:

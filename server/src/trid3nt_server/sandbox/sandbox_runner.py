@@ -1,7 +1,7 @@
-"""Host-side dispatch shim for the Python sandbox (job-0232).
+"""Host-side dispatch shim for the Python sandbox.
 
 ``submit_sandbox_job(python_code, layer_refs)`` is the agent-side entry point the
-``code_exec_request`` tool (job-0233) calls. On the AWS stack it has a single
+``code_exec_request`` tool calls. On the AWS stack it has a single
 mode:
 
 * **Local-subprocess execution.** Runs the ``executor.py`` harness in a child
@@ -59,7 +59,7 @@ class SandboxCloudModeUnavailable(RuntimeError):
 
     Retained as an importable typed error after the GCP decommission removed the
     cloud sandbox path (the Cloud Run Job dispatch + the Cloud Logging result
-    readback, OQ-SANDBOX-3 option (b)). The EC2 stack has no Cloud Run / Cloud
+    readback, option (b)). The EC2 stack has no Cloud Run / Cloud
     Logging, so the only executor is the local-subprocess path
     (:func:`run_sandbox_local`), which reads the child's stdout directly and
     returns a complete result envelope synchronously.
@@ -107,17 +107,6 @@ MAX_ENVELOPE_BYTES = int(os.environ.get("TRID3NT_SANDBOX_MAX_ENVELOPE_BYTES", st
 # it to tolerate the prefix on the child's stdout envelope line. A drift would
 # break the prefix tolerance, so a unit test asserts the two literals match.
 SANDBOX_ENVELOPE_MARKER = "TRID3NT_SANDBOX_ENVELOPE_V1"
-
-
-def _is_local_mode() -> bool:
-    """True — the sandbox always dispatches via the local-subprocess path.
-
-    The GCP decommission removed the cloud sandbox path (Cloud Run Job dispatch +
-    Cloud Logging readback), so local-subprocess is the only executor. Retained as
-    a function (and always ``True``) so the historical ``TRID3NT_SANDBOX_LOCAL`` env
-    knob and callers/tests that reference it still resolve to the live behaviour.
-    """
-    return True
 
 
 def _executor_path() -> Path:
@@ -424,7 +413,7 @@ def run_sandbox_local(
         _cleanup_workdir(workdir)
 
     # The executor prints exactly one JSON envelope line on stdout. We do NOT
-    # blind-slice ``out`` to MAX_ENVELOPE_BYTES (job-0233 FINDING 2): a raw byte
+    # blind-slice ``out`` to MAX_ENVELOPE_BYTES (FINDING 2): a raw byte
     # slice through a JSON document corrupts it (cuts mid-token / mid-escape) and
     # yields an un-parseable envelope. Instead we PARSE the full stdout, then
     # bound the string fields INSIDE the parsed envelope with honest markers
@@ -510,7 +499,7 @@ def _parse_envelope(stdout: str, stderr: str, returncode: int | None) -> dict[st
     envelope is always valid JSON with honestly-marked truncation — never a
     corrupt slice of a JSON document.
 
-    job-0265: the executor now prefixes the envelope line with
+    the executor now prefixes the envelope line with
     ``ENVELOPE_MARKER`` (``TRID3NT_SANDBOX_ENVELOPE_V1 {...}``) so the cloud
     Cloud-Logging readback can pin it. We tolerate that prefix here by extracting
     the JSON from the first ``{`` on the line — a marker-prefixed line and a bare
@@ -568,7 +557,7 @@ def submit_sandbox_job(
     ENVELOPE dict directly (the run is already complete). The GCP cloud path (a
     pending :class:`SandboxExecutionHandle` to poll) was removed in the GCP
     decommission; the return-type union + handle class are retained for back-compat
-    with callers (job-0233) that ``isinstance``-branch on the result.
+    with callers that ``isinstance``-branch on the result.
     """
     return run_sandbox_local(python_code, layer_refs, timeout_seconds=timeout_seconds)
 
@@ -585,7 +574,7 @@ def read_sandbox_result(
     The GCP cloud sandbox transport (the executor printing a marker-prefixed
     envelope to stdout -> Cloud Logging, read back via ``logging.Client``) was
     removed in the GCP decommission; the EC2 stack has no Cloud Logging. Retained
-    as an importable symbol so callers (job-0233 ``code_exec_tool``) that branch on
+    as an importable symbol so callers (``code_exec_tool``) that branch on
     a cloud :class:`SandboxExecutionHandle` still resolve — but the live dispatch
     always runs the local-subprocess path (:func:`run_sandbox_local`) and returns a
     finished envelope dict directly, so this function is never reached in product

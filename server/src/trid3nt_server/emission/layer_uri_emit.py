@@ -5,18 +5,17 @@ THE ONE PLACE a ``LayerURI`` destined for the client passes through before
 carries it to the browser. Every site that hands a ``LayerURI`` to
 ``add_loaded_layer`` routes it through :func:`emit_layer_uri` first.
 
-Why this exists (job-0254, Decision 11 — ``reports/sprints/sprint-13-5-decisions.md``)
-======================================================================================
-The original sprint-13.5 plan ("sign every client-bound LayerURI via
+Why this exists (Decision 11)
+=============================
+The original plan ("sign every client-bound LayerURI via
 ``mint_signed_url``") assumed the browser fetches GCS objects directly. The
-job-0254 design scout (2026-06-11, file:line inventory) proved no such surface
-exists today:
+design inventory proved no such surface exists today:
 
   * Rasters reach the client as QGIS Server **WMS run.app URLs** (locked down by
-    job-0255's invoker-only QGIS + the agent ``/qgis-proxy`` route). A WMS URL is
+    invoker-only QGIS + the agent ``/qgis-proxy`` route). A WMS URL is
     not a ``gs://`` object, so ``mint_signed_url`` structurally cannot sign it
     (``parse_layer_uri`` rejects non-``gs://``).
-  * Vectors reach the client as **inline GeoJSON** (job-0175): the ``LayerURI.uri``
+  * Vectors reach the client as **inline GeoJSON**: the ``LayerURI.uri``
     legitimately stays ``gs://`` while ``PipelineEmitter`` reads it server-side
     (``pipeline_emitter.py`` ``_read_vector_uri_as_geojson``) and ships the parsed
     FeatureCollection inline in ``session-state.loaded_layers[].inline_geojson``.
@@ -25,7 +24,7 @@ exists today:
   * Charts embed their data inline; ImpactPanel shows ``gs://`` as text only.
 
 The single client-reaching raw ``gs://`` is the publish-FAILURE degraded path in
-``workflows/model_flood_scenario.py`` (job-0254 §1): when ``publish_layer`` fails,
+``workflows/model_flood_scenario.py`` (§1): when ``publish_layer`` fails,
 the composer used to fall back to emitting the raw ``gs://`` COG in
 ``LayerURI.uri`` — which never renders (MapLibre cannot fetch ``gs://``); it only
 paints a broken, dead layer row in the LayerPanel. §1 drops that emission at the
@@ -38,15 +37,15 @@ The guardrail
 that is a **renderable raster carrying a genuinely un-renderable uri** (``gs://``,
 ``file://``, or empty) -- the client cannot fetch those, so the only honest
 outcome is to keep the layer off the map and let the narration/tool-card carry
-the failure (the LLM-visible tool result stays truthful so the job-0177
+the failure (the LLM-visible tool result stays truthful so the
 retry-on-failure loop can act). Everything else passes untouched:
 
   * raster + ``s3://`` (raw COG; the QGIS plugin reads it via /vsicurl/) -> PASS
-    (TiTiler exit / QGIS-native swap 2026-07: this REVERSES the job-0290c
+    (TiTiler exit / QGIS-native swap: this REVERSES the
     browser-era drop -- on the local build the plugin, not MapLibre, renders
     rasters, and it fetches the COG directly)
   * raster + ``http(s)`` (a WMS/tile URL) -> PASS
-  * vector + ``gs://`` / ``s3://`` (inline-GeoJSON path, job-0175) -> PASS
+  * vector + ``gs://`` / ``s3://`` (inline-GeoJSON path) -> PASS
     (do NOT break it)
   * vector + ``http(s)`` -> PASS
 
@@ -104,10 +103,10 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
     Returns the ``LayerURI`` unchanged when it is safe to deliver to the client,
     or ``None`` when it must be DROPPED (kept off the map). Callers MUST treat a
     ``None`` return as "do not call ``add_loaded_layer``"; the tool result the LLM
-    sees is unaffected, so the failure is narrated honestly and the job-0177
+    sees is unaffected, so the failure is narrated honestly and the
     retry-on-failure loop can act.
 
-    Guardrail (the §1 fix promoted to an invariant -- job-0254, Decision 11;
+    Guardrail (the §1 fix promoted to an invariant -- Decision 11;
     relaxed for ``s3://`` rasters by the TiTiler exit / QGIS-native swap):
         * Renderable RASTER carrying a genuinely un-renderable uri (``gs://``,
           ``file://`` local paths the plugin cannot reach, or EMPTY) -> DROP
@@ -116,7 +115,7 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
         * RASTER carrying a raw ``s3://`` COG uri -> PASS. The QGIS plugin
           loads it via /vsicurl/ (publish_layer's raster SUCCESS shape).
         * VECTOR carrying ``gs://`` / ``s3://`` -> PASS. Vectors are delivered
-          as inline GeoJSON (job-0175); the uri is read server-side by the
+          as inline GeoJSON; the uri is read server-side by the
           emitter and never fetched by the client. Do NOT break this path.
         * Anything with an ``http(s)`` uri (a WMS/tile URL) -> PASS.
 
@@ -142,11 +141,11 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
     # The guardrail: renderable raster + a genuinely un-renderable uri -> drop.
     # This is the publish-failure degraded-path leak (§1) turned into an
     # invariant. Vectors carrying gs:// / s3:// are the inline-GeoJSON path
-    # (job-0175) and pass untouched.
+    # and pass untouched.
     #
-    # TiTiler exit / QGIS-native swap (2026-07): raster s3:// now PASSES --
+    # TiTiler exit / QGIS-native swap: raster s3:// now PASSES --
     # publish_layer returns the raw s3:// COG uri and the QGIS plugin reads it
-    # via /vsicurl/, so the job-0290c browser-era s3 drop is REVERSED. Still
+    # via /vsicurl/, so the browser-era s3 drop is REVERSED. Still
     # dropped (nothing can render them): gs:// (no reachable face on this
     # stack), file:// local paths the plugin cannot reach, and EMPTY uris.
     if layer.layer_type == "raster" and (
@@ -173,7 +172,7 @@ async def publish_input_layer(
 ) -> bool:
     """BEST-EFFORT: surface an engine INPUT layer on the map (role="input").
 
-    NATE task #207 (surface engine inputs): every engine run consumes renderable
+    Surface engine inputs: every engine run consumes renderable
     inputs (OpenQuake fault traces, SFINCS DEM / rivers / landcover, SWMM
     building footprints) but historically only the RESULT layer was published.
     This is the ONE reusable seam composers call to also surface those inputs:
@@ -198,7 +197,7 @@ async def publish_input_layer(
     or a raw ``s3://`` COG (the QGIS plugin reads it via /vsicurl/; TiTiler
     exit). A ``gs://`` / ``file://`` / empty-uri raster is correctly DROPPED
     here by the ``emit_layer_uri`` guardrail (nothing can render it); VECTORS
-    carrying ``s3://`` inline server-side and pass straight through (job-0175),
+    carrying ``s3://`` inline server-side and pass straight through,
     so they need no round-trip.
     """
     if emitter is None or layer_uri is None:

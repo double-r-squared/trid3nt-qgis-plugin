@@ -10,7 +10,7 @@ near X" runs), runs the deterministic geocode -> river-reach -> stage -> solve -
 postprocess chain (``workflows/telemac/model_river_dye_release_scenario/``), and
 returns a ``TelemacDyeLayerURI`` the emitter loads onto the map (it subclasses
 ``LayerURI`` so the ``emit_tool_call`` ``add_loaded_layer`` gate fires AND
-``export_case_to_qgis`` discovers the SELAFIN mesh sibling for animation).
+``open_case_in_qgis`` discovers the SELAFIN mesh sibling for animation).
 
 This is the TELEMAC analogue of ``modflow_contaminant_plume`` (MODFLOW),
 ``sfincs_flood`` (SFINCS), and ``swmm_urban_flood`` (SWMM). It is a registered
@@ -20,7 +20,7 @@ expansion (SELECT-THEN-CALL). Like the other templates it declares
 ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
 ``source_class="workflow_dispatch"`` (FR-DC-6 - workflow exposure surface; never
 touches the cache shim). Confirmation before consequence (Invariant 9 - a solver
-run) is enforced by the server confirmation hook around this template (the BK-3b
+run) is enforced by the server confirmation hook around this template (the
 approve-mesh gate, keyed on ``telemac_river_dye``), not re-implemented here.
 
 TELEMAC is LOCAL-DOCKER / BATCH ONLY (the opentelemac engine lives in the worker
@@ -139,13 +139,13 @@ async def telemac_river_dye(
     # never relocate the previewed reach); None = no gate ran - auto
     # (plausible coords seed the reach).
     _release_seeds_reach: bool | None = None,
-    # BK-3b decouple, also set ONLY by the approve-mesh decision tail: the
+    # decouple, also set ONLY by the approve-mesh decision tail: the
     # ORIGINAL call-provided release coords the preview meshed from, preserved
     # separately because the gate click overwrites release_lon/release_lat.
     # The reach seeds from THESE; the click moves the source only.
     _seed_release_lon: float | None = None,
     _seed_release_lat: float | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> TelemacDyeLayerURI | dict[str, Any]:
@@ -356,7 +356,7 @@ async def telemac_river_dye(
     # LLM-invented compute_class hardening (live 2026-07-17: the model passed
     # compute_class='dye_spill' and the dispatch crashed AFTER the geocode +
     # river fetch). Coerce anything outside the known ladder to 'medium' -
-    # same job-0164 family as the **_extra_ignored absorption above.
+    # same family as the **_extra_ignored absorption above.
     _ALLOWED_COMPUTE = {"small", "medium", "standard", "large", "xlarge", "gpu"}
     if str(compute_class).strip().lower() not in _ALLOWED_COMPUTE:
         logger.warning(

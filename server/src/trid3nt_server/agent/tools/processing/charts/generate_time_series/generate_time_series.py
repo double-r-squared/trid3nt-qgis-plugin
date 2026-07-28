@@ -1,7 +1,7 @@
 """``generate_time_series``: time-vs-value line chart from a raster stack's
 band dimension or a vector layer's time column -> chart-emission payload.
 
-Carved out of the original multi-tool ``chart_tools`` module (job-0230) in the
+Carved out of the original multi-tool ``chart_tools`` module in the
 tools/ reorg; behavior and the registered tool surface are unchanged. The
 shared chart-emission core lives in
 ``trid3nt_server.agent.tools.processing.charts_common``.

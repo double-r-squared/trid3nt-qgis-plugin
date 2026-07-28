@@ -22,7 +22,7 @@ JPSS/VIIRS polar). It chains:
       -> STOP at a bbox/window REVIEW gate (review-gated, like
          model_news_event_ingest): return the AOI bbox + the planned frame list
          + a human-readable summary so the user can SEE + ADJUST the bbox and the
-         window BEFORE all frames are fetched (the #154 confirm / granularity-
+         window BEFORE all frames are fetched (the confirm / granularity-
          gate philosophy, applied at the workflow layer).
     -- on confirm=True --
       -> dispatch the RIGHT imagery fetcher per path via the TOOL_REGISTRY, each
@@ -697,7 +697,7 @@ async def model_satellite_fire_animation(
         raise SatelliteFireAnimationInputError(
             f"incident_name must be a non-empty string; got {incident_name!r}"
         )
-    # NATE 2026-06-26: animation frames never rendered because the registered
+    # animation frames never rendered because the registered
     # wrapper passes pipeline_emitter=None, so the per-frame add_loaded_layer
     # emit (the step the working flood composer does) never ran. Bind the LIVE
     # current_emitter() here, exactly like model_flood_scenario.py, so confirm
@@ -814,7 +814,7 @@ async def model_satellite_fire_animation(
     start_iso = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     end_iso = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # --- Review gate: STOP unless confirmed (Invariant 9; the #154 philosophy). ---
+    # --- Review gate: STOP unless confirmed (Invariant 9; the philosophy). ---
     if not confirm:
         display_name = str(
             (incident.get("incident_name") if incident else None) or incident_name
@@ -908,7 +908,7 @@ async def model_satellite_fire_animation(
     # --- Stage 5 (confirmed): publish every layer via TiTiler (to_thread). ---
     published = await _publish_layers(all_layers + overlay_layers, pipeline_emitter)
 
-    # NATE 2026-06-26: EMIT each published frame into session-state loaded_layers
+    # EMIT each published frame into session-state loaded_layers
     # (mirrors model_flood_scenario.py ~3774). _publish_layers returns
     # {layer_id: published uri} for the frames it could publish; build a NEW
     # LayerURI copy with uri=<published uri> and add_loaded_layer it so the map
@@ -1261,7 +1261,7 @@ async def run_model_satellite_fire_animation(
     confirm: bool = False,
     overlay_firms: bool = True,
     overlay_perimeters: bool = True,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Recreate a CIRA-style satellite fire animation (GOES or JPSS/VIIRS), review-gated.

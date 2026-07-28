@@ -1,4 +1,4 @@
-"""Pure, deterministic OpenQuake classical-PSHA deck templating (sprint-17).
+"""Pure, deterministic OpenQuake classical-PSHA deck templating.
 
 This module owns the OpenQuake *deck authoring* — turning a ``build_spec`` dict
 into the three text files the OpenQuake Engine CLI consumes for a classical PSHA:
@@ -131,7 +131,7 @@ def render_source_model_xml(
     distribution gives a simple vertical strike-slip demo geometry.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
-    # NATE 2026-06-26: OQ's area-source gml:posList parser (sourceconverter
+    # OQ's area-source gml:posList parser (sourceconverter
     # split_coords_2d) reads pairs as LON LAT, not lat lon. The old "lat lon"
     # order made the engine read a longitude as a latitude ("latitude -122.45 <
     # -90") - proven by a real local oq run. Emit LON LAT going around the bbox.
@@ -141,7 +141,7 @@ def render_source_model_xml(
         f"{max_lon} {max_lat} "
         f"{min_lon} {max_lat}"
     )
-    # NATE 2026-06-26: the area-source body (areaSource directly under
+    # the area-source body (areaSource directly under
     # sourceModel + truncGutenbergRichterMFD) is the NRML 0.4 schema. The engine
     # (oq 3.20) REJECTS this content under an xmlns nrml/0.5 declaration
     # ("InvalidFile: ... should be xmlns=.../nrml/0.4") - proven by a real local
@@ -507,7 +507,7 @@ def render_job_ini(
     ladder, which is injected when enabled).
     """
     min_lon, min_lat, max_lon, max_lat = bbox
-    # NATE 2026-06-26: OpenQuake's [geometry] region_grid_spacing is in KM, NOT
+    # OpenQuake's [geometry] region_grid_spacing is in KM, NOT
     # degrees. The old km->deg conversion wrote ~0.18 (deg for 20 km) which OQ
     # then read as 0.18 KM -> a ~100x-too-fine site grid (12477 sites for a 0.2deg
     # AOI vs the intended ~4) - proven by a real local oq run (absurdly slow +
@@ -616,7 +616,7 @@ def render_openquake_deck(build_spec: dict[str, Any]) -> OpenQuakeDeck:
     min_mag = float(build_spec.get("min_magnitude", 5.0))
     max_mag = float(build_spec.get("max_magnitude", 7.5))
 
-    # task #199: REAL-fault source model. When the agent composer attached
+    # REAL-fault source model. When the agent composer attached
     # ``fault_sources`` (the records ``fetch_fault_sources`` emits for the AOI),
     # build a physics-based ``simpleFaultSource`` model so the hazard PEAKS ON the
     # actual fault traces. ADDITIVE: a build_spec with no (or an empty)

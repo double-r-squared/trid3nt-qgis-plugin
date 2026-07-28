@@ -1,6 +1,6 @@
 """MODFLOW 6 solver-worker entrypoint — thin shim around the `mf6` binary.
 
-Sprint-13 / MOD-1 / job-0220 / FR-CE-1/2/3. The MODFLOW-6 analogue of
+Sprint-13 / MOD-1 / / FR-CE-1/2/3. The MODFLOW-6 analogue of
 services/workers/sfincs/entrypoint.py. Same OBJECT-STORE-IN -> RUN ->
 OBJECT-STORE-OUT envelope; SCHEME-AWARE like the SFINCS shim (``s3://`` via
 boto3 when ``TRID3NT_OBJECT_STORE=s3``, ``gs://`` via google-cloud-storage
@@ -71,7 +71,7 @@ Contract:
                   "finished_at": "<ISO8601 Z>",
                   "error": "<message>" | null
                 }
-            The agent's wait-for-completion (job-0227) polls this object; its
+            The agent's wait-for-completion polls this object; its
             presence with status="ok" or status="error" is the terminal
             signal. Truthful: NOT in this image's scope to assert the run is
             physically meaningful — only that mf6 executed and the list file
@@ -84,7 +84,7 @@ Design notes:
       SCHEME (boto3 for ``s3://`` on AWS Batch; google-cloud-storage for
       ``gs://`` on the legacy Cloud Run path). Same reasoning as the SFINCS
       shim — outputs are bounded; explicit upload is auditable; no gcsfuse /
-      s3fs complexity. job-0289 lesson: boto3 for S3, NOT s3fs/anonymous.
+      s3fs complexity. lesson: boto3 for S3, NOT s3fs/anonymous.
     - The smoke-pattern (kickoff verification): the fixtures/ deck under this
       package is a minimal 10x10 single-layer GWF model; staged into the cache
       bucket with a manifest pointing at it, the entrypoint reproduces the
@@ -134,7 +134,7 @@ def _utc_now() -> str:
 # Job AND AWS Batch). MIRRORS services/workers/sfincs/entrypoint.py verbatim:
 # the SFINCS shim is already scheme-aware and is the reference. We dispatch the
 # I/O BY URI SCHEME: ``gs://`` via google-cloud-storage (lazy import — a pure-S3
-# Batch image never pays for the GCP SDK), ``s3://`` via boto3 (job-0289 lesson:
+# Batch image never pays for the GCP SDK), ``s3://`` via boto3 (lesson:
 # boto3, NOT s3fs/anonymous). The runs-bucket OUTPUT scheme follows
 # ``TRID3NT_OBJECT_STORE`` (``s3`` -> ``s3://``, default ``gcs`` -> ``gs://``) so
 # completion.json + outputs land in the same store the agent polls. The GCS
@@ -594,7 +594,7 @@ def main(argv: list[str] | None = None) -> int:
     started_at = _utc_now()
 
     # Best-effort completion writing: even on hard error we attempt to write
-    # completion.json so wait-for-completion (job-0227) sees a terminal state
+    # completion.json so wait-for-completion sees a terminal state
     # instead of polling forever.
     output_uris: list[str] = []
     stdout_uri: str | None = None

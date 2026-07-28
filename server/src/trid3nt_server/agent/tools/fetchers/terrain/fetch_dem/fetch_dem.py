@@ -42,7 +42,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.terrain.fetch_de
 class DemPartialCoverageError(UpstreamAPIError):
     """3DEP returned a DEM that materially under-covers the requested bbox.
 
-    LANE-C (#159 follow-up #4): the live case fetched a DEM SHORT on the south
+    the live case fetched a DEM SHORT on the south
     edge, so a correctly-bboxed hillshade re-fetch still under-covered (79% of the
     requested height). 3DEP coverage gaps / edge clipping leave the returned raster
     smaller than the requested extent; without a check we silently mesh / hillshade
@@ -137,7 +137,7 @@ _FETCH_DEM_METADATA = AtomicToolMetadata(
     ttl_class="static-30d",
     source_class="dem",
     cacheable=True,
-    # Deterministic auto-publish opt-OUT (NATE 2026-06-26): the raw DEM is a
+    # Deterministic auto-publish opt-OUT: the raw DEM is a
     # pure INTERMEDIATE input that feeds compute_hillshade / compute_slope /
     # compute_aspect / SFINCS setup. The user normally wants the DERIVED terrain
     # product painted, not the bare elevation grid, so do NOT auto-render it.
@@ -147,7 +147,7 @@ _FETCH_DEM_METADATA = AtomicToolMetadata(
 )
 
 # ---------------------------------------------------------------------------
-# F16 pattern extended to fetch_dem (2026-07-10): state-scale auto-coarsen.
+# pattern extended to fetch_dem: state-scale auto-coarsen.
 # ---------------------------------------------------------------------------
 # Live failure this fixes: "show me the hillshade in the bounding box" over
 # Washington state -> fetch_dem(bbox=<WA state, ~230,638 km^2>, source="3dep",
@@ -182,7 +182,7 @@ _DEM_CONTINENT_CEILING_KM2 = 5_000_000.0
 # and hold in memory -- 4000 px/axis keeps it tractable. Kept in step with
 # server.py's ``_FETCH_MAX_PX_BY_TOOL["fetch_dem"]`` so the resolution-gate's
 # suggested rung matches what this tool will actually deliver (server.py
-# point 5 of the F16-for-DEM extension).
+# point 5 of the extension).
 _DEM_PIXEL_BUDGET_PX = 4000
 
 # Absolute floor on the coarsen math: 3DEP's finest tiles (lidar-derived) run
@@ -210,7 +210,7 @@ def _fetch_3dep_dem_bytes(
     except Exception as exc:  # noqa: BLE001
         raise UpstreamAPIError(f"py3dep / rioxarray unavailable: {exc}") from exc
 
-    # job-0306: py3dep reads the USGS 3DEP seamless DEM from the PUBLIC bucket
+    # py3dep reads the USGS 3DEP seamless DEM from the PUBLIC bucket
     # ``prd-tnm.s3.amazonaws.com`` via GDAL ``/vsicurl/``. On the AWS box the
     # instance-role AWS creds are in the environment, so GDAL tried to SIGN the
     # request (and to readdir-list the bucket) — both fail on a public,
@@ -240,7 +240,7 @@ def _fetch_3dep_dem_bytes(
             f"py3dep.get_dem failed for bbox={bbox} resolution={resolution_m}: {exc}"
         ) from exc
 
-    # LANE-C (#159 follow-up #4): coverage gate. 3DEP can return a DEM SHORT on an
+    # coverage gate. 3DEP can return a DEM SHORT on an
     # edge (the live south-edge clip -> 79% height hillshade). Reproject the
     # returned raster's bounds back to WGS84 and assert they span the requested
     # bbox within a small tolerance; a material shortfall raises the typed
@@ -386,7 +386,7 @@ def fetch_dem(
     bbox: tuple[float, float, float, float],
     resolution_m: int = 10,
     source: str = "auto",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -478,7 +478,7 @@ def fetch_dem(
     # default, or an unrecognized spelling) is the 3DEP-primary auto-ladder.
     pinned_3dep = src in _DEM_SOURCE_3DEP_PIN_ALIASES
 
-    # Continent ceiling (F16-for-DEM, 2026-07-10): mirrors fetch_landcover's
+    # Continent ceiling: mirrors fetch_landcover's
     # 5,000,000 km^2 hard cap. Below this, auto-coarsen instead of hard-fail
     # -- see the module-level comment above _DEM_CONTINENT_CEILING_KM2.
     requested_res = int(resolution_m)
@@ -598,7 +598,7 @@ def fetch_dem(
         # run_elmfire, model_landslide_scenario, model_dambreak_geoclaw_
         # scenario, model_urban_flood_swmm) plus 50+ tests depending on
         # fetch_dem returning a bare LayerURI -- unlike fetch_landcover (few
-        # callers, already dict-shaped pre-F16), converting fetch_dem to a
+        # callers, already dict-shaped), converting fetch_dem to a
         # dict-sidecar return here would be a wide, high-risk blast radius for
         # no functional gain: LayerURI IS fully JSON-serialized back to the
         # LLM (see server.py result handling), so folding the effective /
@@ -618,7 +618,7 @@ def fetch_dem(
         style_preset="continuous_dem",
         role="input",
         units="meters",
-        # LANE-C (#159 follow-up #4): declare the requested extent on the layer.
+        # declare the requested extent on the layer.
         # The coverage gate in ``_fetch_3dep_dem_bytes`` guarantees the raster
         # spans this bbox (or raised), so stamping it lets the AOI-pin reuse
         # short-circuit + the post-result zoom-to know the DEM's intended extent.

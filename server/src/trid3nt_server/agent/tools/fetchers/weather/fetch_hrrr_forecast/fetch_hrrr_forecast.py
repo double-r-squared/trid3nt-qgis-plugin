@@ -1,4 +1,4 @@
-"""``fetch_hrrr_forecast`` atomic tool — NOAA HRRR short-term forecast (Wave 4.10 job-A2).
+"""``fetch_hrrr_forecast`` atomic tool - NOAA HRRR short-term forecast.
 """
 
 from __future__ import annotations
@@ -145,7 +145,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -155,7 +155,7 @@ def estimate_payload_mb(
     forecast_hour: int | None = None,
     **_kw: Any,
 ) -> float:
-    """Estimate output GeoTIFF size in MB for a given call (Wave 1.5 surface).
+    """Estimate output GeoTIFF size in MB for a given call (surface).
 
     HRRR native resolution is 3 km; the CONUS LCC grid is 1799 × 1059
     = ~1.9 M cells at float32 (≈7.6 MB raw, ~3 MB DEFLATE-compressed) for
@@ -163,7 +163,7 @@ def estimate_payload_mb(
 
     We scale by the bbox fraction of CONUS area. A full-CONUS slice lands
     around 5 MB; a 1° × 1° bbox lands around 0.05 MB. Used by the
-    tool-payload-warning envelope (Wave 1.5 chat-warning system).
+    tool-payload-warning envelope (chat-warning system).
 
     A bbox of ``None`` is illegal here (this tool declares
     ``supports_global_query=False``) but we still return a sane number so
@@ -660,7 +660,7 @@ def fetch_hrrr_forecast(
     variable: str = "2m_temperature",
     forecast_hour: int = 1,
     cycle: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

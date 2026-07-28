@@ -61,7 +61,7 @@ _FETCH_BUILDINGS_METADATA = AtomicToolMetadata(
 # in the kickoff) at planetarycomputer.microsoft.com wraps this same data under
 # a STAC API.
 #
-# KNOWN LIMITATION (job-0331): the Planetary Computer ``ms-buildings``
+# KNOWN LIMITATION: the Planetary Computer ``ms-buildings``
 # collection typically returns a single whole-country item whose only asset is
 # an ``abfs://`` (Azure Blob Filesystem) GeoParquet store — ``requests.get`` on
 # an ``abfs://`` URL cannot work, so this branch frequently fails to download.
@@ -72,7 +72,7 @@ _FETCH_BUILDINGS_METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# OSM Overpass building-footprint fetcher (job-0331).
+# OSM Overpass building-footprint fetcher.
 #
 # ROOT CAUSE (live 2026-06-16): the ``source="msft"`` path queries the
 # Planetary Computer ``ms-buildings`` STAC collection, whose only asset is an
@@ -287,7 +287,7 @@ def _extract_building_features(
     Ways become ``Polygon``s; multipolygon relations become ``(Multi)Polygon``s.
     Non-areal / malformed elements are skipped.
 
-    INLINE payload is SLIM (frontend-perf fix, NATE 2026-06-27 "footprint layers
+    INLINE payload is SLIM (frontend-perf fix, "footprint layers
     store too much in the frontend GeoJSON"): each feature carries ONLY id props
     -- ``osm_id``, ``osm_type``, and a stable composite ``fid`` (e.g. ``"w123456"``)
     -- and DROPS ``building`` + ``name`` from the inline properties. The full tag
@@ -584,7 +584,7 @@ def _write_buildings_tags_sidecar(
 ) -> None:
     """Persist the ``{fid -> full tags}`` sidecar next to the buildings ``.fgb``.
 
-    Best-effort (NATE 2026-06-27 click-to-enrich): a write failure must NOT fail
+    Best-effort (click-to-enrich): a write failure must NOT fail
     the fetch -- the slim layer still renders; the popup enrich path degrades to a
     live Overpass-by-id query when the sidecar is absent. The sidecar key is the
     SAME ``<key>`` as the ``.fgb`` with a ``.tags.json`` suffix
@@ -628,7 +628,7 @@ def _write_buildings_tags_sidecar(
 def fetch_buildings(
     bbox: tuple[float, float, float, float],
     source: str = "osm",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -702,7 +702,7 @@ def fetch_buildings(
     def _fetch_for_source(src: str) -> LayerURI:
         params = {"bbox": list(quantized), "source": src}
         if src == "osm":
-            # Click-to-enrich (NATE 2026-06-27): the OSM fetcher surfaces the
+            # Click-to-enrich: the OSM fetcher surfaces the
             # full per-fid tag bag so we can persist the sidecar under the SAME
             # cache key as the .fgb. Best-effort -- _write_..._sidecar swallows
             # its own failures so the fetch never fails on a sidecar write.

@@ -49,9 +49,7 @@ _SEARCH_DATA_CATALOG_METADATA = AtomicToolMetadata(
 def _score_entry(entry: CatalogEntry, topic: str) -> float:
     """Compute a topic-relevance score for a catalog entry.
 
-    Simple lowercase substring + token-overlap heuristic. Surfaced as
-    OQ-47-CATALOG-SEARCH-RANKER for a follow-up that lands BM25 or an
-    embedding-based search.
+    Simple lowercase substring + token-overlap heuristic.
     """
     if not topic:
         return 1.0
@@ -126,8 +124,7 @@ def _bbox_overlaps_world(
     apply a coarse rule: entries naming "global" or "world" or matching
     international ISO terms always include international bboxes; entries
     naming "US" / "CONUS" / "L48" / "national" cover the CONUS envelope; the
-    rest are treated as plausibly relevant (recall over precision). Captured
-    as OQ-47-CATALOG-COVERAGE-INDEX for the Mode 2 schema follow-up.
+    rest are treated as plausibly relevant (recall over precision).
     """
     if bbox is None:
         return True
@@ -167,7 +164,7 @@ def search_data_catalog(
     topic: str,
     location: tuple[float, float, float, float] | None = None,
     source_filter: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> list[dict[str, Any]]:
@@ -190,7 +187,7 @@ def search_data_catalog(
         location: optional ``(min_lon, min_lat, max_lon, max_lat)`` bbox in
             EPSG:4326. When provided, the ranker uses a coverage heuristic to
             drop entries that the bbox cannot plausibly hit (CONUS-only
-            entries vs an international bbox). See OQ-47-CATALOG-COVERAGE-INDEX.
+            entries vs an international bbox).
         source_filter: optional ``source_class`` filter ("dem", "landcover",
             "flood_zone", …). When set, only entries matching this
             source_class are returned.

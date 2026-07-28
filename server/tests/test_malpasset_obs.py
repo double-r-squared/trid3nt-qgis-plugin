@@ -13,7 +13,7 @@ from pathlib import Path
 import geopandas as gpd
 import pytest
 
-from trid3nt_server.cases import malpasset_obs as M
+from trid3nt_server.agent.cases import malpasset_obs as M
 
 
 # A minimal, self-contained slice of observations.json (values transcribed

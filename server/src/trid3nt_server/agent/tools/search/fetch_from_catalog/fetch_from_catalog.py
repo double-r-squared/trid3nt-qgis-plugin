@@ -74,7 +74,7 @@ def _layer_uri_from_entry(
     ``categorical_landcover`` for landcover; ``continuous_dem`` for DEM /
     elevation; ``affected_buildings`` for buildings; everything else falls
     back to ``continuous_dem`` as a placeholder (the catalog-driven preset
-    routing is OQ-47-CATALOG-STYLE-PRESET-ROUTING).
+    routing).
     """
     preset = "continuous_dem"
     sc = entry.source_class.lower()
@@ -121,7 +121,7 @@ def _tier1_stac_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[byte
     Implementing a full STAC search + COG windowed read here would duplicate
     `fetch_dem` / `fetch_landcover`'s logic; v0.1 surfaces the access pattern
     inferred from the entry's URLs and routes through the OGC adapter as a
-    raw HTTPS GET. Captured as OQ-47-CATALOG-TIER1-STAC for a follow-up.
+    raw HTTPS GET.
     """
     raise NotImplementedError(
         f"Tier-1 STAC dispatch via fetch_from_catalog is reserved for a follow-up "
@@ -254,8 +254,7 @@ def _tier3_https_fetch(entry: CatalogEntry, params: dict[str, Any]) -> tuple[byt
 
     v0.1 substrate: issues a single HTTPS GET for the entry's primary URL and
     returns the body. Range-aware windowed reads for COG-shaped responses
-    live in the dedicated fetchers (`fetch_dem` / `fetch_landcover`) for v0.1;
-    captured as OQ-47-CATALOG-TIER3-RANGE for the follow-up.
+    live in the dedicated fetchers (`fetch_dem` / `fetch_landcover`) for v0.1.
     """
     import requests as _rq
 
@@ -294,7 +293,7 @@ def _tier4_region_fetch(
     uses ISO3 country files; HydroSHEDS uses continental files). The existing
     fetchers (``fetch_river_geometry`` for NHDPlus HR; ``fetch_population``
     for WorldPop) already implement Tier-4 per source. Catalog-driven Tier-4
-    dispatch is OQ-47-CATALOG-TIER4-REGION for the follow-up.
+    dispatch is a follow-up.
     """
     raise NotImplementedError(
         f"Tier-4 region-download dispatch via fetch_from_catalog is reserved for a "

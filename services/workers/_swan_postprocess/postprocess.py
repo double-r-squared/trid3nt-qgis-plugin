@@ -1,4 +1,4 @@
-"""Worker-side SWAN wave-field mat -> EPSG:4326 COG postprocess.
+"""Worker-side SWAN mat -> EPSG:4326 COG postprocess.
 
 Byte-faithful port of ``trid3nt_server.agent.workflows.swan.postprocess_swan``. Runs inside
 the Batch worker AFTER ``swan.exe`` has written ``swan_out.mat``; rasterizes the

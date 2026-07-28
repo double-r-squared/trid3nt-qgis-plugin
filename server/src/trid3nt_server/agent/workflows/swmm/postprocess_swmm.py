@@ -1,4 +1,4 @@
-"""PySWMM quasi-2D urban-flood run-output postprocessing (sprint-16 P3, Path A).
+"""PySWMM quasi-2D urban-flood run-output postprocessing (P3, Path A).
 
 ``postprocess_swmm(run, build, *, run_id, ...) -> (layers, metrics)`` reads the
 per-timestep node ``INVERT_DEPTH`` from a solved SWMM ``.out`` (via the pyswmm

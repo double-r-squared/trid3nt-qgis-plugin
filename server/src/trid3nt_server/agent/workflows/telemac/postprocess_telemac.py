@@ -14,7 +14,7 @@ group with ZERO new render code. So this postprocess emits ONLY the PEAK
 concentration COG (``layers[0]``, role ``"primary"``, style preset
 ``continuous_dye_concentration``) as the map anchor + narration carrier; the
 time animation is played from the SELAFIN mesh SIBLING that
-``export_case_to_qgis`` discovers next to this COG in the runs bucket (its
+``open_case_in_qgis`` discovers next to this COG in the runs bucket (its
 ``_MESH_SIBLING_BY_STYLE_PRESET`` maps this style preset to ``r2d_river.slf``).
 No per-frame COGs are written -- the mesh already carries every frame.
 
@@ -235,7 +235,7 @@ def _pick_dye_var(varnames: list[str], *, prefer_sediment: bool = False) -> str 
 
     ``prefer_sediment=True`` (GAIA sediment coupled run): the suspended sediment
     concentration rides as a SECOND telemac2d tracer that the in-image smoke
-    (2026-07-19) showed lands in ``r2d_river.slf`` as ``NCOH SEDIMENT1`` (g/l ==
+     showed lands in ``r2d_river.slf`` as ``NCOH SEDIMENT1`` (g/l ==
     kg/m3) alongside the required DYE companion. Pick that sediment tracer (a name
     carrying SEDIMENT / NCOH / COH), so the concentration COG is the SEDIMENT
     ribbon, not the conservative dye reference. Falls back to the dye pick when no
@@ -372,7 +372,7 @@ def postprocess_telemac(
     rasterizes the peak onto an adaptive 4326 grid clipped to the channel, writes
     + uploads ONE COG (``telemac_dye_peak.tif``) to the runs bucket, and returns
     ``([TelemacDyeLayerURI], metrics)``. The time animation is served separately
-    from the SELAFIN mesh sibling that ``export_case_to_qgis`` discovers next to
+    from the SELAFIN mesh sibling that ``open_case_in_qgis`` discovers next to
     this COG (this postprocess writes NO per-frame COGs).
 
     Args:

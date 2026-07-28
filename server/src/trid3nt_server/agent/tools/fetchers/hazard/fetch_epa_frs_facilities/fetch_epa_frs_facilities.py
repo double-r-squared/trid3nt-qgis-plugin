@@ -213,7 +213,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -687,7 +687,7 @@ def _fetch_frs_bytes(
 def fetch_epa_frs_facilities(
     bbox: tuple[float, float, float, float],
     facility_program: str = "frs",
-    # Wave 4.10 convention: absorb LLM-invented kwargs.
+    # convention: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """EPA regulated-facility points by program as a FlatGeobuf layer.

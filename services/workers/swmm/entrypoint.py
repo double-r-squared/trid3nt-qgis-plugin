@@ -1,13 +1,13 @@
-"""SWMM AWS Batch worker entrypoint — thin shim around pyswmm (sprint-16 P7).
+"""SWMM AWS Batch worker entrypoint — thin shim around pyswmm (P7).
 
 Near-verbatim copy of ``services/workers/sfincs/entrypoint.py`` (the worker
 contract is solver-agnostic): accept ``--run-id`` / ``--manifest-uri`` (env
 fallback), read the manifest by URI SCHEME, download every ``inputs[]`` into a
 scratch dir, run pyswmm on the staged ``.inp``, glob + upload ``outputs[]``, and
 ALWAYS write ``completion.json`` in the SAME schema so the agent's
-``wait_for_completion`` (job-0041) reuses its S3 completion poll verbatim.
+``wait_for_completion`` reuses its S3 completion poll verbatim.
 
-This is the SWMM CLOUD LANE (sprint-16 P7) — the scale-beyond-local path. The
+This is the SWMM CLOUD LANE (P7) — the scale-beyond-local path. The
 dev primary path is pyswmm IN-PROCESS in the agent venv
 (``workflows/run_swmm.run_swmm_local``); this image is for AWS Batch (and any
 out-of-process worker lane), and runs the SAME pyswmm solve the local-exec
@@ -402,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
     started_at = _utc_now()
 
     # Best-effort completion writing: even on hard error we attempt to write
-    # completion.json so wait_for_completion (job-0041) sees a terminal state
+    # completion.json so wait_for_completion sees a terminal state
     # instead of polling forever.
     output_uris: list[str] = []
     stdout_uri: str | None = None

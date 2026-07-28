@@ -99,7 +99,7 @@ async def elmfire_fire_spread(
     duration_hours: float = 6.0,
     cellsize_m: float = 30.0,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders). Also absorbs the
     # server confirm gate's injected ``confirmed=True``.
     **_extra_ignored: Any,

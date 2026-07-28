@@ -196,7 +196,7 @@ class LoopWatchdog:
     Text-only rounds (no tool calls) also reset -- the model is narrating, which
     is progress toward a terminal turn. Cheap to call; O(1) state.
 
-    PROGRESS-AWARE RESET (job-186 reconciliation): a round that MADE PROGRESS
+    PROGRESS-AWARE RESET (reconciliation): a round that MADE PROGRESS
     also resets the streak even when its signature repeats. ``made_progress`` is
     the per-round witness the driver passes after dispatch:
 

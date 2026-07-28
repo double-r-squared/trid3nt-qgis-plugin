@@ -247,7 +247,7 @@ def _read_fetcher_bytes(uri_or_bytes: str | bytes) -> bytes:
 
     Mirrors sfincs_builder's scheme handling so the adapter consumes whatever
     the fetchers emit. Bytes are passed through (test path). GCP is
-    decommissioned: ``s3://`` uses the shared boto3 reader (the job-0293c
+    decommissioned: ``s3://`` uses the shared boto3 reader (the
     instance-role lesson — NOT s3fs/vsis3); local/``file://`` paths read
     directly.
     """
@@ -1073,7 +1073,7 @@ def discharge_forcing_from_cama_cog(
 
 
 # --------------------------------------------------------------------------- #
-# Tsunami waveform synthesizer (NATE 2026-06-26)
+# Tsunami waveform synthesizer
 # --------------------------------------------------------------------------- #
 
 
@@ -1090,7 +1090,7 @@ def synthesize_tsunami_bzs(
 ) -> dict[str, Any]:
     """Synthesize a TSUNAMI water-level (``bzs``) timeseries on the waterlevel seam.
 
-    NATE 2026-06-26: a pure synthesizer PARALLEL to
+    a pure synthesizer PARALLEL to
     ``model_flood_scenario._synthesize_parametric_surge_forcing`` -- it does NOT
     reuse the storm raised-cosine. Two waveforms, both anchored at ``tref`` and
     driven onto the SAME 4-edge boundary points the surge synth uses (HydroMT

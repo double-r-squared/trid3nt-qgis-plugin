@@ -512,7 +512,7 @@ async def model_glm_lightning_animation(
         message}``. Raises ``GLMAnimEmptyError`` when NO bucket had in-AOI lightning
         (the honesty floor).
     """
-    # NATE 2026-06-26: lightning animation frames never rendered because the
+    # lightning animation frames never rendered because the
     # registered wrapper passes pipeline_emitter=None, so the per-frame
     # add_loaded_layer emit (the step the working flood composer does) never
     # ran. Bind the LIVE current_emitter() here, exactly like
@@ -645,7 +645,7 @@ async def model_glm_lightning_animation(
     all_layers = baked_layers + overlay_layers
     published = await _publish_layers(all_layers, pipeline_emitter)
 
-    # NATE 2026-06-26: EMIT each published frame into session-state loaded_layers
+    # EMIT each published frame into session-state loaded_layers
     # (mirrors model_flood_scenario.py ~3774). _publish_layers returns
     # {layer_id: published uri} for the frames it could publish; build a NEW
     # LayerURI copy with uri=<published uri> and add_loaded_layer it so the map
@@ -833,7 +833,7 @@ async def run_model_glm_lightning_animation(
     base_band: str = "visible",
     storm_name: str | None = None,
     overlay_standalone_ged: bool = True,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Animate a GOES-19 GLM lightning loop DIRECT from an AOI + UTC window -- NO news step.

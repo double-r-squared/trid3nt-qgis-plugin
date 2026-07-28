@@ -244,7 +244,7 @@ def _register_one_layer(
             exc,
         )
 
-    # Register the published COG (job-0304): with the TiTiler exit there is no
+    # Register the published COG: with the TiTiler exit there is no
     # separate display face - the raw s3:// COG IS both the consumable DATA uri
     # and the envelope uri the plugin renders (mirrors publish_layer). A NO-OP
     # outside an active dispatch ContextVar - which is exactly why registration

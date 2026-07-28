@@ -1,4 +1,4 @@
-"""Atomic tool ``clip_raster_to_bbox`` — clip a raster to a bounding box (job-0085, FR-CE-8, FR-DC).
+"""Atomic tool ``clip_raster_to_bbox`` - clip a raster to a bounding box (FR-CE-8, FR-DC).
 
 This module registers one atomic tool that clips a raster to a bounding box,
 optionally reprojecting the output:
@@ -180,11 +180,11 @@ def _get_source_crs(raster_uri: str) -> object:
     try:
         import rasterio  # type: ignore[import-not-found]
 
-        # sprint-14-aws (job-0293b): s3:// header-read via GDAL /vsis3/ —
+        # s3:// header-read via GDAL /vsis3/ -
         # mirrors the /vsigs/ style; the EC2 instance-role creds resolve
         # through GDAL's AWS credential chain.
         if raster_uri.startswith("s3://"):
-            # sprint-14-aws (job-0293c): GDAL's /vsis3/ credential chain does
+            # GDAL's /vsis3/ credential chain does
             # not resolve the EC2 instance role in this env (boto3 does) —
             # observed live: "does not exist" on an existing object. Stage the
             # bytes via the shared boto3 reader and open in-memory.
@@ -227,7 +227,7 @@ def _download_raster_bytes(raster_uri: str, storage_client: object | None = None
         ClipRasterError: on any failure so callers get a typed error.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws (job-0290b): s3:// staging via the shared boto3 reader.
+    # s3:// staging via the shared boto3 reader.
     if raster_uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
         try:
@@ -465,7 +465,7 @@ def clip_raster_to_bbox(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -475,8 +475,7 @@ def clip_raster_to_bbox(
     (national DEM -> city/county extent) or you need clip + CRS
     reprojection in one step, before passing to ``compute_slope`` /
     ``compute_hillshade`` / ``compute_zonal_statistics``. Do NOT use for:
-    irregular polygon clips (``clip_raster_to_polygon``); vector clipping
-    (``clip_vector_to_polygon``).
+    irregular polygon clips (``clip_raster_to_polygon``); vector clipping.
 
     Params:
         raster_uri: source raster (``gs://``/``s3://`` or local path).

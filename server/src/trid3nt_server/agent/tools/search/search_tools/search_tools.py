@@ -1,16 +1,16 @@
-"""``search_tools`` atomic tool — hybrid BM25 + dense retrieval (Wave 4.10 job-B7).
+"""``search_tools`` atomic tool - hybrid BM25 + dense retrieval.
 
 §F.1.2 Mode 1 routing assist: given a free-text user query, return the top-k
 matching atomic tools ranked by hybrid lexical (BM25) + semantic (dense-
 embedding) similarity over a corpus built from each tool's audited docstring
-plus the Wave 4.10 ``tool_query_corpus.yaml`` synthetic example queries.
+plus the ``tool_query_corpus.yaml`` synthetic example queries.
 
 Goal: when the LLM sees a free-text need like "show me flood zones" or
 "national parks polygons", a single ``search_tools`` call returns the
 top-k tool names + short snippets, narrowing the function-calling search
 space without forcing the LLM to scan all 70+ atomic tools.
 
-Implementation choices (Wave 4.10 stage 2):
+Implementation choices (stage 2):
 - **BM25** via `rank_bm25.BM25Okapi`. Whitespace + lowercase tokenization;
   no stemming (the corpus and queries are English natural language + a few
   domain terms that don't stem well — "USGS", "WDPA", "NWS", etc).
@@ -38,7 +38,7 @@ both of which are import-time-frozen, but caching the result through the
 GCS read_through shim would be wasteful for a sub-millisecond CPU lookup.
 
 Hot-set hook: tagged ``supports_global_query=False`` (the query is the
-search input; bbox-less is the only mode). The Wave 4.10 B5 per-turn
+search input; bbox-less is the only mode). The B5 per-turn
 filter will add this tool to the agent's hot set so it appears even when
 the rest of the catalog is hidden.
 """
@@ -109,7 +109,7 @@ _INDEX: "_DiscoverIndex | None" = None
 
 
 # ---------------------------------------------------------------------------
-# Co-occurrence index state (Wave 4.11 M5).
+# Co-occurrence index state (M5).
 #
 # The co-occurrence index is rebuilt from the ``tool_call_telemetry`` Mongo
 # collection on a ~5-minute cadence so that the RRF boost reflects recent
@@ -725,7 +725,7 @@ def _reset_index_for_tests() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Co-occurrence + dynamic hot-set (Wave 4.11 M5).
+# Co-occurrence + dynamic hot-set (M5).
 # ---------------------------------------------------------------------------
 
 
@@ -1208,7 +1208,7 @@ def _match_synthetic_queries(
 #: Generic operator/shape tokens that appear in many utility tool names but
 #: that the LLM uses descriptively in queries. Skipped by the name-substring
 #: ranker so e.g. "national parks polygons" doesn't over-boost
-#: ``clip_vector_to_polygon`` or ``clip_raster_to_polygon`` over the
+#: ``clip_raster_to_polygon`` over the
 #: data-intent target ``fetch_wdpa_protected_areas``.
 _NAME_RANKER_GENERICS: set[str] = {
     "polygon",
@@ -1305,7 +1305,7 @@ async def search_tools(
     parks polygons in Yosemite", "fetch hurricane wind probabilities") and wants
     a narrow shortlist of atomic tools to call next, rather than scanning the
     full 70+ tool surface. Hybrid retrieval ranks tools by BM25 over the
-    audited docstring + Wave 4.10 synthetic example-query corpus, fused with a
+    audited docstring + synthetic example-query corpus, fused with a
     dense-embedding similarity (sentence-transformers all-MiniLM-L6-v2 or
     Vertex text-embedding-005 when available, else hashed token vector as a
     deterministic fallback) via reciprocal rank fusion (RRF, k=60).
@@ -1412,7 +1412,7 @@ async def search_tools(
     # (optionally de-suffixed) form is a substring of the tool name.
     # Generic operator words ("polygon", "raster", "clip", "compute", "run",
     # "fetch", "vector") are filtered so e.g. "national parks polygons"
-    # doesn't over-boost ``clip_vector_to_polygon``.
+    # doesn't over-boost ``clip_raster_to_polygon``.
     name_substr_ranking: list[int] = []
     q_content_tokens = [
         t
@@ -1439,7 +1439,7 @@ async def search_tools(
         scored_names.sort(key=lambda pair: pair[0], reverse=True)
         name_substr_ranking = [i for _, i in scored_names]
 
-    # Co-occurrence ranking (Wave 4.11 M5 — 4th channel).
+    # Co-occurrence ranking (M5 - 4th channel).
     # When telemetry is available, tools that frequently co-occur with tools
     # the user explicitly named in the query get boosted.  Cache-backed so
     # subsequent calls within the 5-min window don't hit Mongo.

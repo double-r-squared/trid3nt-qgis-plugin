@@ -1,4 +1,4 @@
-"""Solver dispatch atomic tools (job-0041, M5 Stage C).
+"""Solver dispatch atomic tools (M5 Stage C).
 
 This module registers two atomic tools that drive the solver-execution
 substrate. GCP Cloud Workflows AND the AWS Batch arm are both
@@ -17,7 +17,7 @@ implement the **FR-TA-2 solver-dispatch surface**:
        -> RunResult`` — polls the run backing ``handle`` every
       ``poll_interval_s`` seconds, emits a ``pipeline-state`` progress update
       on every poll via ``PipelineEmitter.update_progress`` (the opt-in seam
-      job-0035 surfaced for M5+ solvers), and on success reads
+       surfaced for M5+ solvers), and on success reads
       ``completion.json`` from the runs bucket and returns a populated
       ``RunResult``. On failure or cancellation the matching terminal
       ``RunResult`` is returned.
@@ -66,7 +66,7 @@ Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
   ``cacheable=False`` + ``ttl_class="live-no-cache"`` + a new source class
   ``"solver_dispatch"``. The kickoff explicitly enumerates them.
 
-Dependency-injection seams (mirrors job-0032's ``passthroughs.py`` pattern):
+Dependency-injection seams (mirrors ``passthroughs.py`` pattern):
 
 - ``_EMITTER_BINDING`` / ``set_emitter_binding(emitter, step_id)`` — the
   active ``PipelineEmitter`` + the step_id this ``wait_for_completion``
@@ -83,7 +83,7 @@ Dependency-injection seams (mirrors job-0032's ``passthroughs.py`` pattern):
 
 - ``_S3_CLIENT`` / ``set_s3_client(client)`` — the boto3 S3 client used for
   ALL S3 staging / completion I/O. Lazily-default to the EC2 instance-role
-  client (job-0289 boto3-not-s3fs lesson).
+  client (boto3-not-s3fs lesson).
 
 Run id generation: the agent service generates a ULID per ``run_solver``
 call. The same id is used to compose the runs-bucket completion path
@@ -132,19 +132,19 @@ touching call sites):
 
   ``TRID3NT_RUNS_BUCKET`` has NO default under local-docker (a missing value
   raises ``SolverDispatchError``). boto3 is used for ALL S3 I/O (s3fs falls
-  back to anonymous credentials on the EC2 instance role — job-0289 lesson).
+  back to anonymous credentials on the EC2 instance role - lesson).
 
-Generalized local backend (job-0292b, sprint-14-aws)
+Generalized local backend
 ----------------------------------------------------
 
-job-0292b extends the job-0291 machinery to MODFLOW without forking it. The
+ extends the machinery to MODFLOW without forking it. The
 staging → detached launch → supervisor → completion.json → S3-poll envelope is
 solver-agnostic; the solver-specific knobs are bundled into a
 ``LocalSolverSpec`` (manifest argv key, launch argv builder, stdout/stderr
 artifact names, completion-manifest field names, an optional post-exit
 classifier for solver-specific status resolution, and the cancel kind):
 
-- SFINCS keeps the job-0291 ``docker run`` path verbatim
+- SFINCS keeps the ``docker run`` path verbatim
   (``_run_solver_local_docker`` builds the SFINCS spec; the completion.json
   is byte-identical to ``services/workers/sfincs/entrypoint.py``).
 - MODFLOW (``workflows/run_modflow.py``) launches the **mf6 binary directly**
@@ -156,7 +156,7 @@ classifier for solver-specific status resolution, and the cancel kind):
   ``mf6_stderr_uri`` / ``converged`` / ``model_crs``).
 
 Cancel kinds: ``"docker"`` → ``docker kill <run_id>`` (container name ==
-run_id, job-0291); ``"exec"`` → ``os.killpg`` on the detached process group
+run_id); ``"exec"`` → ``os.killpg`` on the detached process group
 (``start_new_session=True`` makes pgid == pid). Both terminal ≤30 s
 (Invariant 8). ``wait_for_completion`` dispatches on the handle's
 ``workflow_name`` ∈ {``local-docker``, ``local-exec``} — the poll loop is
@@ -233,7 +233,7 @@ NFR_P_4_TARGET_SECONDS: float = 900.0
 DEFAULT_POLL_INTERVAL_S: int = 10
 
 #: Default overall timeout (30 min — mirrors the Cloud Run Job task_timeout
-#: from job-0040, gives 2× headroom over NFR-P-4). Env-overridable via
+#: gives 2× headroom over NFR-P-4). Env-overridable via
 #: ``TRID3NT_SOLVER_TIMEOUT_S`` so a legitimately long run (a large coastal
 #: quadtree + SnapWave solve exceeds the 30-min pluvial budget this constant was
 #: sized for) can be given more headroom on the box WITHOUT touching the call
@@ -267,10 +267,10 @@ PROGRESS_TERMINAL: int = 100
 #: value. SWMM + MODFLOW self-register at import (``setdefault`` to a backend
 #: sentinel); GeoClaw also self-registers (``register_geoclaw_solver()``), but
 #: because the static literal below is evaluated FIRST its ``setdefault`` is a
-#: no-op, so the sprint-17 composer-name value here wins.
+#: no-op, so the composer-name value here wins.
 SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {
     "sfincs": "model_flood_scenario",
-    # sprint-17 NEW engines (parallel lanes) — orchestrator-wired per the lane
+    # NEW engines (parallel lanes) - orchestrator-wired per the lane
     # handoff. GeoClaw's value supersedes its own import-time ``setdefault``
     # (static literal wins).
     "geoclaw": "model_dambreak_geoclaw_scenario",
@@ -292,7 +292,7 @@ SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {
 }
 
 
-# --- Solver backend seam (job-0291, sprint-14-aws) --- #
+# --- Solver backend seam --- #
 
 #: AWS EC2 backend — plain upstream ``deltares/sfincs-cpu`` via ``docker run``
 #: on the same instance; staging/upload envelope lives in this module.
@@ -304,7 +304,7 @@ SOLVER_BACKEND_LOCAL_DOCKER: str = "local-docker"
 LOCAL_DOCKER_WORKFLOW_NAME: str = "local-docker"
 
 #: ``ExecutionHandle.workflow_name`` sentinel for image-less local runs that
-#: exec a solver binary directly (job-0292b — MODFLOW's mf6 has no public
+#: exec a solver binary directly (MODFLOW's mf6 has no public
 #: image; the USGS static binary runs on the instance). Same poll loop as
 #: local-docker; the cancel chain kills the detached process group instead
 #: of a container.
@@ -317,7 +317,7 @@ LOCAL_EXEC_WORKFLOW_NAME: str = "local-exec"
 #: maps FR-CE-3 names onto the schema literal, so ``medium`` (== standard)
 #: resolves to the 8-vCPU bucket.
 #:
-#: ``xlarge`` is the higher-powered vertical-scale tier (NATE 2026-06-17 — auto
+#: ``xlarge`` is the higher-powered vertical-scale tier (auto
 #: vertical scaling per case so a big AOI/mesh can grab MORE compute). 48 vCPU /
 #: 96 GiB at the 2 GB/vCPU ratio is a clean fit for a single c7i.12xlarge (48
 #: vCPU / 96 GiB) or m7i.12xlarge — both real, SPOT-eligible, x86_64 instances
@@ -371,7 +371,7 @@ def solve_progress_vcpus(
 ) -> int | None:
     """Deployment-aware CPU count for the LIVE solve-progress readout (A6).
 
-    Local-cloud fingerprint seam (NATE 2026-07-08): the live solve-progress
+    Local-cloud fingerprint seam: the live solve-progress
     envelope used to carry the AWS Batch tier's vCPU count even when the solve
     ran on the local machine (``TRID3NT_SOLVER_BACKEND=local-docker``), so the
     local build's card read "... 8 vCPU ..." mid-solve. This helper is the
@@ -406,7 +406,6 @@ def solve_progress_vcpus(
 #: (``Literal["small", "standard", "large", "gpu"]``). FR-CE-3 names the
 #: middle class ``medium`` but the schema-side contract chose ``standard``;
 #: rather than break the kickoff parameter surface we pin a mapping here.
-#: Surfaced as OQ-41-COMPUTE-CLASS-NAMING for schema to reconcile.
 _COMPUTE_CLASS_ALIAS: dict[str, str] = {
     "small": "small",
     "medium": "standard",  # FR-CE-3 medium == schema-side standard
@@ -418,7 +417,7 @@ _COMPUTE_CLASS_ALIAS: dict[str, str] = {
 
 
 # --------------------------------------------------------------------------- #
-# Auto vertical scaling per case (NATE 2026-06-17)
+# Auto vertical scaling per case
 # --------------------------------------------------------------------------- #
 #
 # The Batch CE already right-sizes the EC2 instance per job + scales to zero; the
@@ -482,7 +481,7 @@ COMPUTE_CLASS_FALLBACK: str = "standard"
 def select_compute_class(estimated_elements: int | float | None) -> str:
     """Pick the per-case Batch ``compute_class`` from the estimated ELEMENT count.
 
-    Auto vertical scaling per case (NATE 2026-06-17): the mesh builders already
+    Auto vertical scaling per case: the mesh builders already
     estimate the active-cell/element count; this maps that estimate onto the
     vertical vCPU ladder so a big AOI/mesh grabs more compute and a small one
     stays cheap. The ladder (low → high) is::
@@ -543,7 +542,7 @@ class SolverNotRegisteredError(ValueError):
     """Raised by ``run_solver`` when ``solver`` is not in
     ``SOLVER_WORKFLOW_REGISTRY``. Distinct from a tool-params-invalid error
     so the agent surface can render a useful "solver X not supported in v0.1
-    (sprint-07 ships sfincs only — TELEMAC / MODFLOW / HEC-HMS land in
+    (ships sfincs only - TELEMAC / MODFLOW / HEC-HMS land in
     their respective milestones)" message."""
 
 
@@ -570,8 +569,8 @@ class EmitterBinding:
     The integration site (``server.py``'s ``emit_tool_call`` wrapper) is
     responsible for binding this around each ``wait_for_completion`` call;
     until that follow-up job lands, the smoke harness binds it directly per
-    the kickoff TENTATIVE recommendation. Surfaced as
-    OQ-41-EMITTER-BINDING-SITE."""
+    the kickoff TENTATIVE recommendation.
+    """
 
     emitter: Any
     step_id: str
@@ -599,11 +598,11 @@ def set_runs_bucket(name: str | None) -> None:
 
 
 def set_s3_client(client: Any) -> None:
-    """Bind the boto3 S3 client used for ALL local-docker S3 I/O (job-0291).
+    """Bind the boto3 S3 client used for ALL local-docker S3 I/O.
 
     Production wiring leaves this ``None`` (the lazy default builds
     ``boto3.client("s3", region_name=$AWS_REGION)``, which resolves the EC2
-    instance-role credentials via IMDS — the job-0289 boto3-not-s3fs lesson).
+    instance-role credentials via IMDS - the boto3-not-s3fs lesson).
     Tests inject a tmpdir-backed fake exposing ``get_object`` /
     ``put_object``. ``None`` restores the lazy default.
 
@@ -619,7 +618,7 @@ def _get_s3_client() -> Any:
     """Return the bound S3 client or lazily construct the boto3 default.
 
     boto3 (NOT s3fs) for all S3 I/O — s3fs falls back to anonymous
-    credentials on the EC2 instance role (job-0289). Lazy import so
+    credentials on the EC2 instance role. Lazy import so
     GCP-only / CI environments never pay for boto3 at module load.
     """
     if _S3_CLIENT is not None:
@@ -666,7 +665,7 @@ def _get_local_runs_bucket() -> str:
 
 
 # --------------------------------------------------------------------------- #
-# local-docker backend (job-0291, sprint-14-aws)
+# local-docker backend
 #
 # The GCS-IN → sfincs → GCS-OUT envelope from
 # ``services/workers/sfincs/entrypoint.py`` ported into the agent: staging,
@@ -699,7 +698,7 @@ def _split_object_uri(uri: str) -> tuple[str, str, str]:
 
 
 def _read_object_bytes(uri: str) -> bytes:
-    """Read one object's bytes, resolved BY SCHEME (job-0291 kickoff):
+    """Read one object's bytes, resolved BY SCHEME (kickoff):
     ``s3://`` via boto3, ``file://`` / local path via the filesystem (the
     sfincs_builder local-manifest fallback)."""
     if uri.startswith("file://"):
@@ -715,7 +714,7 @@ def _download_object(uri: str, dest: Path) -> None:
     """Download one staged input to ``dest``, resolved by scheme.
 
     The manifest's input entries keep the LEGACY field name ``gs_uri`` but
-    the VALUE is an ``s3://`` URI (the job-0289 storage backend) — we dispatch
+    the VALUE is an ``s3://`` URI (the storage backend) - we dispatch
     on the URI scheme, never the field name. GCP is decommissioned, so only
     ``s3://`` (and ``file://`` / local paths) are resolved.
     """
@@ -742,9 +741,9 @@ def _upload_file_s3(s3: Any, src: Path, bucket: str, key: str) -> str:
 
 @dataclass(frozen=True)
 class LocalSolverSpec:
-    """Solver-specific knobs for the shared local backend (job-0292b).
+    """Solver-specific knobs for the shared local backend.
 
-    The job-0291 staging → detached launch → supervisor → completion.json
+    The staging → detached launch → supervisor → completion.json
     envelope is solver-agnostic; this spec carries everything that is not:
 
     Fields:
@@ -800,7 +799,7 @@ class LocalSolverSpec:
 
 
 def _sfincs_local_spec() -> LocalSolverSpec:
-    """The job-0291 SFINCS local-docker spec — behavior verbatim."""
+    """The SFINCS local-docker spec - behavior verbatim."""
     image = os.environ.get("TRID3NT_SFINCS_IMAGE") or DEFAULT_SFINCS_IMAGE
 
     def build_argv(run_id: str, rundir: Path, args: list[str]) -> list[str]:
@@ -859,7 +858,7 @@ def _expand_local_outputs(patterns: list[str], rundir: Path) -> list[Path]:
     """Glob-expand the manifest ``outputs[]`` in the rundir — mirrors the
     entrypoints' ``_expand_outputs`` (files only, de-duplicated, sorted).
     ``recursive=True`` so ``**`` patterns behave like the SFINCS/MODFLOW
-    worker entrypoints (job-0292b — the MODFLOW manifest carries
+    worker entrypoints (the MODFLOW manifest carries
     ``**/gwt_model.ucn`` / ``**/*.lst`` belt-and-suspenders nets)."""
     seen: set[Path] = set()
     for pat in patterns:
@@ -890,11 +889,11 @@ def _write_local_completion(
     """Write ``s3://<runs_bucket>/<run_id>/completion.json`` — EXACT
     worker-entrypoint schema (the ``wait_for_completion`` terminal signal).
 
-    job-0292b: the stdout/stderr field names + an ``extra`` field dict are
+    the stdout/stderr field names + an ``extra`` field dict are
     spec-driven so the MODFLOW completion carries ``mf6_stdout_uri`` /
     ``mf6_stderr_uri`` / ``converged`` / ``model_crs`` exactly like
     ``services/workers/modflow/entrypoint.py``; the SFINCS defaults are
-    byte-identical to job-0291.
+    byte-identical.
 
     V&V wave (ADR 0021): ``solver`` is the lowercase engine identifier
     (``run.spec.solver``) recorded so ``read_run_diagnostics`` can resolve the
@@ -947,9 +946,9 @@ def _supervise_local_run(run: _LocalRun) -> None:
 
     try:
         exit_code = run.proc.wait()
-        # Solver-specific post-exit classification first (job-0292b — the
+        # Solver-specific post-exit classification first (the
         # MODFLOW spec's mfsim.lst convergence guard); the plain exit-code
-        # rule otherwise (SFINCS, byte-identical to job-0291). A user cancel
+        # rule otherwise (SFINCS). A user cancel
         # overrides either verdict below.
         if run.spec.classify_exit is not None:
             try:
@@ -1060,7 +1059,7 @@ def launch_local_solver(
     run_id: str | None = None,
     compute_class: str = "medium",
 ) -> ExecutionHandle:
-    """Generic local-backend launcher (job-0291 envelope, job-0292b spec seam).
+    """Generic local-backend launcher (envelope, spec seam).
 
     Non-blocking — mirrors the Cloud Workflows submit semantics: stage the
     manifest's inputs from the object store, launch the solver detached
@@ -1259,7 +1258,7 @@ def _run_solver_local_docker(
                 f"{type(exc).__name__}: {exc}"
             ) from exc
         return launch_local_solver(spec, model_setup_uri, compute_class=compute_class)
-    # Default: SFINCS docker path (byte-identical to job-0291).
+    # Default: SFINCS docker path.
     return launch_local_solver(
         _sfincs_local_spec(),
         model_setup_uri,
@@ -1325,7 +1324,7 @@ def _docker_kill(run_id: str) -> None:
 
 def _killpg_local_run(run: _LocalRun) -> None:
     """Best-effort SIGKILL to the detached process group of an exec-kind run
-    (``start_new_session=True`` at launch makes pgid == pid). job-0292b."""
+    (``start_new_session=True`` at launch makes pgid == pid)."""
     try:
         os.killpg(run.proc.pid, signal.SIGKILL)
         logger.info("killpg(%d) issued for run_id=%s", run.proc.pid, run.run_id)
@@ -1338,7 +1337,7 @@ def _killpg_local_run(run: _LocalRun) -> None:
 
 
 def _kill_local_run(run_id: str) -> None:
-    """Kind-aware best-effort kill (job-0292b): exec-kind runs get a
+    """Kind-aware best-effort kill: exec-kind runs get a
     process-group SIGKILL; docker-kind (and unknown — e.g. after an agent
     restart, where ``docker kill`` against the container name is the only
     remaining lever) get ``docker kill <run_id>``."""
@@ -1358,7 +1357,7 @@ def _kill_local_run(run_id: str) -> None:
 
 def _request_local_cancel(run_id: str) -> None:
     """Invariant-8 local cancel: flag the run cancelled, then kill the
-    container / process group (kind-aware, job-0292b). The supervisor wakes
+    container / process group (kind-aware). The supervisor wakes
     on process exit and writes the status="cancelled" completion.json —
     terminal within ≤30 s."""
     run = _LOCAL_RUNS.get(run_id)
@@ -1465,7 +1464,7 @@ async def _wait_for_completion_local(
 ) -> RunResult:
     """``wait_for_completion`` body for local-docker handles: poll the
     completion.json object on S3 with the same cadence/timeout/progress-ramp
-    semantics as the Cloud Workflows poll (job-0291)."""
+    semantics as the Cloud Workflows poll."""
     runs_bucket = _get_local_runs_bucket()
     deadline = handle.submitted_at.timestamp() + float(timeout_s)
     loop = asyncio.get_running_loop()
@@ -1508,7 +1507,7 @@ async def _wait_for_completion_local(
                 # Timeout ≠ user cancel: kill WITHOUT the cancelled flag so the
                 # supervisor records status="error" (mirrors the GCP path's
                 # best-effort cancel + SOLVER_TIMEOUT result). Kind-aware
-                # (job-0292b): docker kill or process-group kill.
+                #: docker kill or process-group kill.
                 await loop.run_in_executor(None, _kill_local_run, handle.run_id)
                 return RunResult(
                     run_id=handle.run_id,
@@ -1570,7 +1569,7 @@ def run_solver(
     solver: str,
     model_setup_uri: str,
     compute_class: str = "medium",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> ExecutionHandle:
@@ -1671,7 +1670,7 @@ def _progress_percent(handle_submitted_at: datetime, now: datetime) -> int:
     an LLM estimate. The ramp is intentionally simple and conservative —
     a real per-step progress signal would require teaching the SFINCS
     entrypoint to write running progress to ``progress.json`` between
-    timesteps, which is a follow-up job (OQ-41-PROGRESS-CURVE).
+    timesteps, which is a follow-up job.
     """
     elapsed = max(0.0, (now - handle_submitted_at).total_seconds())
     raw = (elapsed / NFR_P_4_TARGET_SECONDS) * 100.0
@@ -1708,7 +1707,7 @@ async def wait_for_completion(
     handle: ExecutionHandle,
     poll_interval_s: int = DEFAULT_POLL_INTERVAL_S,
     timeout_s: int = DEFAULT_TIMEOUT_S,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> RunResult:
@@ -1759,11 +1758,11 @@ async def wait_for_completion(
             f"timeout_s must be positive; got {timeout_s!r}"
         )
 
-    # --- job-0291 backend seam: a handle pins its backend (the handle's
+    # --- backend seam: a handle pins its backend (the handle's
     # workflow_name, not the env, decides — env churn between submit and wait
-    # cannot mis-route the poll). ``local-docker`` / ``local-exec`` (job-0292b,
+    # cannot mis-route the poll). ``local-docker`` / ``local-exec`` (
     # MODFLOW direct-binary) share the S3 completion poll; ``aws-batch``
-    # (sprint-16) polls the SAME S3 completion.json + consults
+    # polls the SAME S3 completion.json + consults
     # batch.describe_jobs. GCP Cloud Workflows is decommissioned. ---
     if handle.workflow_name in _LOCAL_WORKFLOW_NAMES:
         return await _wait_for_completion_local(handle, poll_interval_s, timeout_s)
@@ -1816,7 +1815,7 @@ def _solver_error_code(manifest: dict[str, Any]) -> str:
     """Map a completion-manifest error to an open-set A.6 SCREAMING_SNAKE_CASE
     error code. Keep narrow; the catch-all bucket is ``SOLVER_FAILED``.
 
-    Surfaced as OQ-41-ERROR-CODE-REGISTRY — when sprint-08 lands more
+    Surfaced - when lands more
     solver-specific failure modes (SFINCS_MASS_BALANCE_DIVERGED,
     MODEL_DECK_INVALID, etc.) the registry expands here.
 

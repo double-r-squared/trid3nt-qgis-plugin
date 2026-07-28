@@ -1,10 +1,10 @@
-"""Atomic tool ``run_modflow_archetype_job``  -  MODFLOW Wave-1/2/3/4 GWF-only engines.
+"""Atomic tool ``run_modflow_archetype_job`` - MODFLOW GWF-only engines.
 
-The shared LLM-facing exposure of all sprint-18 MODFLOW archetypes:
-  Wave-1: ``sustainable_yield`` / ``mine_dewatering`` / ``regional_water_budget``
-  Wave-2: ``MAR`` / ``ASR`` / ``wetland_hydroperiod``
-  Wave-3: ``multi_species``
-  Wave-4: ``capture_zone`` / ``wellhead_protection`` (PRT backward particle tracking)
+The shared LLM-facing exposure of all MODFLOW archetypes:
+  ``sustainable_yield`` / ``mine_dewatering`` / ``regional_water_budget``
+  ``MAR`` / ``ASR`` / ``wetland_hydroperiod``
+  ``multi_species``
+  ``capture_zone`` / ``wellhead_protection`` (PRT backward particle tracking)
 
 All archetypes REUSE the live MODFLOW solver path (``workflows/run_modflow.py``
 deck-build -> submit/local-run, the ``modflow`` Batch job-def, the GWF-only
@@ -34,7 +34,7 @@ Chain (mirrors ``modflow_contaminant_plume`` with the archetype branch):
   3. Postprocess the head / cbc into the archetype's headline LayerURI.
   4. Return it so the emitter's ``add_loaded_layer`` gate loads it onto the map.
 
-Wave-4 PRT archetypes (``capture_zone`` / ``wellhead_protection``) run a
+ PRT archetypes (``capture_zone`` / ``wellhead_protection``) run a
 two-simulation sequence: a GWF flow solve followed by an MF6 PRT
 backward-particle-tracking solve. These archetypes are LOCAL-ONLY (PRT track
 files are small and fast; the Batch path is never used). After the GWF run,
@@ -109,8 +109,8 @@ class RunMODFLOWArchetypeError(RuntimeError):
 
 #: archetype -> (postprocess callable, headline-scalar attr the logger reads).
 #: The callable signature is uniform (run_outputs_uri, *, run_id, model_crs,
-#: deck_dir) so the dispatch below is one branchless lookup. The Wave-2 trio
-#: (MAR / ASR / wetland_hydroperiod) extends it additively. Wave-4 adds the
+#: deck_dir) so the dispatch below is one branchless lookup. The trio
+#: (MAR / ASR / wetland_hydroperiod) extends it additively. adds the
 #: two PRT capture-zone archetypes; both share ``postprocess_capture_zone``
 #: with ``capture_zone_area_km2`` as the headline scalar.
 ARCHETYPE_POSTPROCESS: dict[str, Any] = {
@@ -123,11 +123,11 @@ ARCHETYPE_POSTPROCESS: dict[str, Any] = {
         postprocess_wetland_hydroperiod,
         "seasonal_head_range_m",
     ),
-    # Wave-4 PRT backward particle tracking (LOCAL-ONLY; see PRT_ARCHETYPES below).
+    # PRT backward particle tracking (LOCAL-ONLY; see PRT_ARCHETYPES below).
     # The headline is the outer envelope area; a zero-area zone is an empty result.
     "capture_zone": (postprocess_capture_zone, "capture_zone_area_km2"),
     "wellhead_protection": (postprocess_capture_zone, "capture_zone_area_km2"),
-    # Wave-5 Henry-style variable-density GWF+GWT saltwater intrusion (LOCAL-ONLY:
+    # Henry-style variable-density GWF+GWT saltwater intrusion (LOCAL-ONLY:
     # the Henry demo grid is small + fast; Batch is never used). The headline is the
     # bottom-layer 50%-isochlor toe penetration in metres (a positive scalar; the
     # > 0 floor applies). NOT in PRT_ARCHETYPES (no PRT sim; standard GWF+GWT run).
@@ -156,7 +156,7 @@ _NON_SCALAR_HEADLINES: frozenset[str] = frozenset(
     {"regional_water_budget", "ASR"}
 )
 
-#: Wave-4 PRT archetypes run a two-simulation sequence (GWF + PRT backward
+#: PRT archetypes run a two-simulation sequence (GWF + PRT backward
 #: tracking). They are LOCAL-ONLY: PRT track files are small and fast; the
 #: Batch submit/wait path is deliberately bypassed for these archetypes. The
 #: ``run_modflow_archetype_job`` function has a contained branch for them that
@@ -183,7 +183,7 @@ async def run_modflow_archetype_job(
     the postprocess by ``run_args.archetype`` and returns the archetype's typed
     headline LayerURI.
 
-    Wave-4 PRT archetypes (``capture_zone`` / ``wellhead_protection``) run a
+     PRT archetypes (``capture_zone`` / ``wellhead_protection``) run a
     two-simulation sequence (GWF + PRT) and are LOCAL-ONLY: regardless of the
     ``TRID3NT_MODFLOW_LOCAL`` env var or ``compute_class``, these archetypes always
     execute locally via ``run_modflow_local`` + ``gwt_adapter.build_and_run_prt_from_gwf``.

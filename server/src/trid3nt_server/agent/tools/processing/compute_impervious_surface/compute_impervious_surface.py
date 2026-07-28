@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_impervious_surface`` — NLCD impervious-fraction raster (job-0095, FR-CE-8, FR-DC).
+"""Atomic tool ``compute_impervious_surface`` - NLCD impervious-fraction raster (FR-CE-8, FR-DC).
 
 This module registers one atomic tool that computes an impervious-surface
 fraction raster (float32, range 0.0-1.0) from either:
@@ -45,7 +45,7 @@ Cache layout:
 - **NFR-R-1 (resilience):** failures surface as ``ImperviousSurfaceError`` with
   typed ``error_code``; GCS-read errors and rasterio-open errors are wrapped.
 
-**Codified job-0086 lesson check:** the input/output share grid + transform +
+**Codified lesson check:** the input/output share grid + transform +
 CRS; the tool does not emit new geometry. The unit tests verify pixel-value
 correctness against known synthetic landcover (class 22 → 0.3, etc.), and the
 live test verifies the developed-class mapping produces sensible mean-fraction
@@ -143,7 +143,7 @@ def _download_raster_bytes(uri: str, storage_client: object | None = None) -> by
     error.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws (job-0290b): s3:// staging via the shared boto3 reader.
+    # s3:// staging via the shared boto3 reader.
     if uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
         try:
@@ -457,7 +457,7 @@ def compute_impervious_surface(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

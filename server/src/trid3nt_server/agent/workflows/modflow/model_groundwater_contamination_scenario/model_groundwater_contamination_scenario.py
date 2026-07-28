@@ -1,9 +1,9 @@
-"""``model_groundwater_contamination_scenario`` — Case 2 composer (job-0228).
+"""``model_groundwater_contamination_scenario`` - Case 2 composer.
 
 The Case 2 end-to-end higher-order workflow: it turns a news article about a
 chemical / solvent spill into a rendered groundwater-contaminant plume layer.
 It is the MODFLOW analogue of ``model_flood_habitat_scenario`` (Case 1) and the
-downstream half of ``model_news_event_ingest`` (the sprint-12 review-gated
+downstream half of ``model_news_event_ingest`` (the review-gated
 front half stopped before any solver; this composer picks up and runs the
 solver after a confirmation gate).
 
@@ -44,7 +44,7 @@ Chain:
          ``run_modflow_job`` is the independent fail-closed backstop.
 
     3. RUN + PUBLISH
-       - ``run_modflow_job`` (job-0227) builds the GWF+GWT deck, runs mf6
+       - ``run_modflow_job`` builds the GWF+GWT deck, runs mf6
          (Cloud Workflows, or local ``mf6`` when ``TRID3NT_MODFLOW_LOCAL=1``),
          postprocesses the UCN concentration output into an EPSG:4326 plume COG,
          publishes it, and returns a ``PlumeLayerURI`` carrying the two
@@ -73,8 +73,7 @@ Invariants:
   duration are EXTRACTED, and the aquifer K / porosity are demo defaults from
   the contract — the user supplies none of them.
 
-Confirmation seam (TENTATIVE per kickoff — surfaced as
-OQ-0228-CONFIRM-ENVELOPE-CHOICE): the composer reuses the
+Confirmation seam (TENTATIVE per kickoff): the composer reuses the
 ``tool-payload-warning`` / ``tool-payload-confirmation`` pair rather than the
 A.4 ``confirmation-request`` / ``confirm-response`` pair, because the kickoff
 says "same pattern as the payload-warning user-pause" AND the payload-warning
@@ -139,11 +138,11 @@ __all__ = [
 # contract scope for this job is agent-only. If a future job needs this shape on
 # the wire it can be promoted to ``case_results.py`` by ``schema`` then — for
 # now it carries only typed fields the LLM-facing wrapper dumps with
-# ``model_dump(mode="json")``. Surfaced as OQ-0228-CASE2RESULT-PROMOTION.
+# ``model_dump(mode="json")``. Surfaced.
 
 
 class Case2Result(GraceModel):
-    """Return type for ``model_groundwater_contamination_scenario`` (job-0228).
+    """Return type for ``model_groundwater_contamination_scenario``.
 
     Bundles the Case 2 composer output: the published plume layer + the derived
     forcing params (with explicit unit conversions + any clamps) + a narration
@@ -997,11 +996,11 @@ async def run_model_groundwater_contamination_scenario(
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     compute_class: str = "standard",
-    # job-0241: server-managed confirmation flag. The solver-confirm gate in
+    # server-managed confirmation flag. The solver-confirm gate in
     # server.py strips any LLM-supplied value and injects True only after the
     # user approves the derived parameters. Default False = fail-closed.
     confirmed: bool = False,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
@@ -1053,7 +1052,7 @@ async def run_model_groundwater_contamination_scenario(
 
     Confirmation-before-consequence (Invariant 9): the MODFLOW run is gated
     behind a user-confirm. The server's solver-confirm gate
-    (``server.SOLVER_CONFIRM_TOOLS`` → ``_gate_on_solver_confirm``, job-0241)
+    (``server.SOLVER_CONFIRM_TOOLS`` → ``_gate_on_solver_confirm``)
     runs the pure extraction, shows the user the derived forcing on a
     ``tool-payload-warning`` card, and injects ``confirmed=True`` only on an
     explicit proceed. Without that injection this wrapper fails closed.
@@ -1067,12 +1066,12 @@ async def run_model_groundwater_contamination_scenario(
         ``geocode_location`` (location -> spill point), ``run_modflow_job``
         (deck build -> mf6 -> postprocess -> publish -> ``PlumeLayerURI``).
     """
-    # job-0241 (Stage 3 live-gate fix): ``confirmed`` is injected as True by the
+    # ``confirmed`` is injected as True by the
     # server-side solver-confirm gate (server.SOLVER_CONFIRM_TOOLS) ONLY after
     # the user approves the derived parameters on the tool-payload-warning
     # card. Default False = fail-closed — the previous hardcoded
     # ``confirmed=True`` relied on a "server hook around run_modflow_job" that
-    # never existed, and the live Case 2 acceptance (job-0235) proved the
+    # never existed, and the live Case 2 acceptance proved the
     # solver ran with zero user confirmation. The server also STRIPS any
     # LLM-supplied ``confirmed`` before gating, so Gemini cannot self-approve.
     result = await model_groundwater_contamination_scenario(

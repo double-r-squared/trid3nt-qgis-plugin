@@ -131,7 +131,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -371,7 +371,7 @@ def _nc_to_cog_bytes(
             # Rename to the rioxarray x/y convention and set CRS. CRW lat
             # DESCENDS (north-up) already, so do NOT sortby -- a north-up COG
             # needs row 0 = northernmost (negative y-step), matching the
-            # job-0086 geographic-correctness lesson.
+            # geographic-correctness lesson.
             rename: dict[str, str] = {}
             if lat_dim != "y":
                 rename[lat_dim] = "y"
@@ -468,7 +468,7 @@ def fetch_noaa_sst(
     bbox: tuple[float, float, float, float],
     date: str | None = None,
     variable: str | None = "sst",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch a daily NOAA sea-surface-temperature (SST) COG for a bbox.

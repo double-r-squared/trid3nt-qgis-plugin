@@ -238,7 +238,7 @@ _USER_AGENT = (
 # model in contracts/tool_registry.py does not yet carry that
 # field. The 4 existing fields (name, ttl_class, source_class, cacheable)
 # are what AtomicToolMetadata accepts today. Surfaced as
-# OQ-0104-CONTRACT-SUPPORTS-GLOBAL-QUERY for the schema specialist; the
+# for the schema specialist; the
 # semantic guard is enforced at call time via BBOX_REQUIRED below.
 # ---------------------------------------------------------------------------
 
@@ -717,7 +717,7 @@ def fetch_goes_satellite(
     band: str = "visible",
     satellite: str = "goes-19",
     target_res_deg: float | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

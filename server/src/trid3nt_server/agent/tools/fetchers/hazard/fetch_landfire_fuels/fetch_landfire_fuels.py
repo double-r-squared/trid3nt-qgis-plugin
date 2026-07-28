@@ -77,19 +77,18 @@ _LF_BASE = "https://lfps.usgs.gov/arcgis/rest/services/Landfire_LF2022"
 
 #: LANDFIRE vintage pinned by this v0.1 substrate. Year is included in the
 #: cache key so a future year upgrade (e.g. LF2023 / 2024 / 2025) is a
-#: cache-key bump, not a silent staleness. Surfaced as
-#: ``OQ-0111-LANDFIRE-YEAR-AUTO-ADVANCE``.
+#: cache-key bump, not a silent staleness.
 _LANDFIRE_YEAR = "2022"
 
 #: Mapping from caller-facing layer code to the LF2022 ImageServer name.
 #: CONUS-only at v0.1 — AK / HI / PRVI mosaics also exist but bbox-driven
-#: regional dispatch is parked as ``OQ-0111-LANDFIRE-REGION-DISPATCH``.
+#: regional dispatch is not yet implemented.
 _LAYER_SERVICE: dict[str, str] = {
     "fbfm40": "LF2022_FBFM40_CONUS",
     "fbfm13": "LF2022_FBFM13_CONUS",
     "cbh": "LF2022_CBH_CONUS",
     "cbd": "LF2022_CBD_CONUS",
-    # FIRE-2 (ELMFIRE engine design 2026-07-07): canopy cover + canopy height —
+    # canopy cover + canopy height -
     # the two remaining rasters of the ELMFIRE fuels stack (cc.tif / ch.tif).
     # Same LF2022 CONUS ImageServer family as the four layers above.
     "cc": "LF2022_CC_CONUS",
@@ -122,8 +121,7 @@ _LAYER_UNITS: dict[str, str | None] = {
 #: Per-layer QML style preset. Until the engine adds dedicated LANDFIRE
 #: presets, fuel-model categorical layers reuse ``categorical_landcover``
 #: (the existing palette is broadly category-friendly) and the continuous
-#: canopy layers reuse ``continuous_dem`` (gradient ramp). Surfaced as
-#: ``OQ-0111-LANDFIRE-QML-PRESETS``.
+#: canopy layers reuse ``continuous_dem`` (gradient ramp).
 _LAYER_STYLE_PRESET: dict[str, str] = {
     "fbfm40": "categorical_landcover",
     "fbfm13": "categorical_landcover",
@@ -164,12 +162,11 @@ _NODATA_S16 = -32768
 # ---------------------------------------------------------------------------
 # AtomicToolMetadata — registered once at import time.
 #
-# Built DEFENSIVELY against the parallel job-0114-schema sibling that adds
+# Built DEFENSIVELY against the parallel -schema sibling that adds
 # ``supports_global_query`` and ``estimate_payload_mb`` to AtomicToolMetadata.
 # If the schema job lands first we want this tool to carry the field; if it
 # doesn't, we fall back to a kwarg-free construction so registration still
-# succeeds. This keeps Wave 1.5 cleanly parallel. See
-# OQ-0111-METADATA-FIELDS.
+# succeeds. This keeps the two construction paths parallel.
 # ---------------------------------------------------------------------------
 
 
@@ -347,7 +344,7 @@ def _fetch_landfire_bytes(
         len(body),
     )
 
-    # Empty-raster gate (codified lesson job-0086, geographic-correctness):
+    # Empty-raster gate (codified lesson, geographic-correctness):
     # if every pixel in the returned raster is the ESRI ``S16`` nodata
     # sentinel, the bbox is outside CONUS coverage (open ocean, off-shelf).
     # Surface that as a typed empty-error rather than caching a useless blob.
@@ -422,7 +419,7 @@ def _is_all_nodata(tiff_bytes: bytes) -> bool:
 def fetch_landfire_fuels(
     bbox: tuple[float, float, float, float],
     layer: Literal["fbfm40", "fbfm13", "cbh", "cbd", "cc", "ch"] = "fbfm40",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -457,7 +454,7 @@ def fetch_landfire_fuels(
       use ``fetch_mrms_qpe``, ``fetch_hrrr_forecast``, or
       ``fetch_raws_weather`` for meteorological inputs.
     - DO NOT use outside CONUS at v0.1 — AK/HI/PRVI LANDFIRE mosaics exist
-      but regional dispatch is deferred (``OQ-0111-LANDFIRE-REGION-DISPATCH``).
+      but regional dispatch is deferred.
 
     **Parameters:**
     - ``bbox`` (tuple[float, float, float, float]): ``(min_lon, min_lat,
@@ -489,8 +486,7 @@ def fetch_landfire_fuels(
     FR-CE-8: Routed through ``read_through`` so identical ``(bbox, layer)``
     calls reuse the cached GeoTIFF. Cache key includes ``(layer,
     bbox-rounded-to-6dp, year="2022")`` so a future year upgrade (e.g.
-    LF2023) is a cache-key change, not a silent staleness
-    (``OQ-0111-LANDFIRE-YEAR-AUTO-ADVANCE``).
+    LF2023) is a cache-key change, not a silent staleness.
     """
     # Defensive validations on the registered surface.
     if layer not in _VALID_LAYERS:

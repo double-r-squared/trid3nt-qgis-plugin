@@ -160,7 +160,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -515,7 +515,7 @@ def _fetch_usdm_bytes(
 def fetch_us_drought_monitor(
     bbox: tuple[float, float, float, float],
     date: str | None = None,
-    # Wave 4.10 convention: absorb LLM-invented kwargs.
+    # convention: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """US Drought Monitor weekly drought-category polygons as a FlatGeobuf layer.

@@ -303,7 +303,7 @@ def fetch_viirs_day_fire(
     start_utc: str | None = None,
     end_utc: str | None = None,
     day_only: bool = True,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> list[LayerURI]:
     """Build a VIIRS Day Fire JPSS polar animation (ordered per-overpass RGB COGs) over a multi-day window.

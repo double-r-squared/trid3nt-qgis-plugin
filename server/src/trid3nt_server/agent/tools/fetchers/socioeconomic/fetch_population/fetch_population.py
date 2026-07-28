@@ -70,7 +70,7 @@ _FETCH_POPULATION_METADATA = AtomicToolMetadata(
 # 100m file remotely — and downloading 4 GB per cache miss is impractical.
 # The 1km file is tractable as a one-shot download and is sufficient for
 # exposure analysis at M5/Fort-Myers-class bbox scales. Surfaced as
-# OQ-37-WORLDPOP-RESOLUTION-VS-RANGE: revisit when a range-request-capable
+# revisit when a range-request-capable
 # mirror lands, or when an official STAC catalog with native COGs is
 # published (the kickoff suggested Microsoft Planetary Computer's
 # ``worldpop-100m`` collection — that collection does not exist on PC at
@@ -157,8 +157,8 @@ def _worldpop_url_for(iso3: str, year: int, resolution_m: int = 1000) -> str:
     is ~50MB per country (USA), vs the 100m UN-adjusted product at ~4GB.
     The 1km default is used because the WorldPop server does not support HTTP
     range requests, so a 4GB whole-country download per cache miss is costly
-    even with the 30-day cache window (see OQ-37-WORLDPOP-RESOLUTION-VS-RANGE
-    for the resolution-vs-tractability trade-off; the 1km product is
+    even with the 30-day cache window (the resolution-vs-tractability
+    trade-off; the 1km product is
     sufficient for exposure analysis at the bbox scales typical of
     M5/Fort-Myers-class demos).
 
@@ -455,7 +455,7 @@ def fetch_population(
     bbox: tuple[float, float, float, float],
     dataset: str = "worldpop_2020",
     target_resolution_m: int = 1000,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -494,8 +494,7 @@ def fetch_population(
             product); a year outside that window raises ``UpstreamAPIError``
             at parse time rather than 404ing on a non-existent path. Newer
             vintages (e.g. ``"worldpop_2024"``) are NOT available until the
-            v2024B file URLs stabilize and the range is widened here (tracked
-            as OQ-37-WORLDPOP-VINTAGE-YEAR).
+            v2024B file URLs stabilize and the range is widened here.
         target_resolution_m: ground cell size for the WorldPop branch.
             Default ``1000`` (the 1km-aggregated product, ~50MB per country —
             unchanged). Pass ``100`` (or any value ``<= 100``) to opt into the
@@ -552,7 +551,7 @@ def fetch_population(
 
     if dataset.startswith("acs_"):
         # Tier-2 opt-in: US Census ACS B01003 tract-level. Census API key is
-        # required for non-trivial volumes (OQ-36-CENSUS-API-KEY-REQUIRED);
+        # required for non-trivial volumes;
         # the substrate works for small CONUS queries without a key.
         quantized = round_bbox_to_resolution(bbox, 100)
         params = {"bbox": list(quantized), "dataset": dataset}

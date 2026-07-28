@@ -1,4 +1,4 @@
-"""``fetch_statsgo_soils`` atomic tool — STATSGO soils (job A11).
+"""``fetch_statsgo_soils`` atomic tool - STATSGO soils.
 """
 
 from __future__ import annotations
@@ -121,7 +121,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -335,7 +335,7 @@ def fetch_statsgo_soils(
     bbox: tuple[float, float, float, float],
     field: Literal["KFFACT", "THICK"] = "KFFACT",
     timeout_s: float = _DEFAULT_TIMEOUT_S,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -380,7 +380,7 @@ def fetch_statsgo_soils(
             intersect ``(-125, 24, -66.5, 49.5)`` CONUS envelope or
             ``STATSGOSoilsInputError`` is raised. Recommended scale:
             watershed / county sized (≤1° × 1°) — larger bboxes still
-            work but emit MB-scale COGs; the Wave-1.5 payload-warning gate
+            work but emit MB-scale COGs; the payload-warning gate
             uses ``estimate_payload_mb`` to flag big requests.
             Example for Fort Myers watershed: ``(-82.0, 26.4, -81.7, 26.7)``.
         field: One of:

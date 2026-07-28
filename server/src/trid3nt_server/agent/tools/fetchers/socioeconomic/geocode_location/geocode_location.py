@@ -781,8 +781,8 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
     agent surface emits a ``location-resolved`` WebSocket message when this
     tool returns so the client auto-snaps the map. The emission seam is
     in the agent's server.py M1 module — surfaced as
-    OQ-33-LOCATION-RESOLVED-EMISSION-SEAM for the agent job that owns
-    envelope emission this sprint (job-0035) to wire up.
+     for the agent job that owns
+    envelope emission this sprint to wire up.
 
     Nominatim usage policy: User-Agent is sent on every request; the
     ``dynamic-1h`` cache class naturally throttles repeat queries (one

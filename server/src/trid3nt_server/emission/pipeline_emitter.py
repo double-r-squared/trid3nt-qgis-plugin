@@ -1,4 +1,4 @@
-"""PipelineEmitter — real pipeline-state + session-state emission (job-0035, M4).
+"""PipelineEmitter — real pipeline-state + session-state emission (M4).
 
 Owns the current ``PipelineSnapshot`` for one session and broadcasts a fresh
 ``pipeline-state`` envelope on every step state transition (Appendix A.4 +
@@ -6,7 +6,7 @@ A.7 replace-not-reconcile). Also owns the session-scoped ``loaded_layers``
 accumulator and re-emits ``session-state`` whenever a tool returns a
 ``LayerURI``.
 
-Closes **OQ-T-28-SIM-WS-BOUNDARY** (sprint-05 job-0028): the M3 client
+Closes **OQ-T-28-SIM-WS-BOUNDARY**: the M3 client
 PipelineStrip + cancel button can now be driven by the real agent path
 instead of the ``window.__grace2Inject*`` dev seam.
 
@@ -27,7 +27,7 @@ Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
   catches it and calls ``mark_cancelled``. The cancelled step persists in
   the snapshot; a fresh ``pipeline-state`` is emitted with the step's
   ``state == "cancelled"`` (yellow chip), distinct from ``failed`` (red).
-- **FR-CE-8 / D.6 field discipline (job-0030):** ``progress_percent``
+- **FR-CE-8 / D.6 field discipline:** ``progress_percent``
   populated only when the tool reports it (atomic tools usually leave it
   ``None``); ``error_code`` + ``error_message`` populated only on
   ``failed``. No fabrication.
@@ -108,7 +108,7 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Per-turn Case binding for envelope tagging (job-0277)
+# Per-turn Case binding for envelope tagging
 # --------------------------------------------------------------------------- #
 #
 # The dispatch wrappers (server._dispatch_gemini_and_persist /
@@ -118,7 +118,7 @@ __all__ = [
 # ``Envelope.case_id`` (proposed A.1 amendment), so the client routes
 # live streaming envelopes to the OWNING Case's stream even when the user
 # has switched Cases and a concurrent turn re-pointed submit-time routing.
-# A ContextVar is per-task: concurrent turns (job-0269) cannot cross-tag.
+# A ContextVar is per-task: concurrent turns cannot cross-tag.
 
 _TURN_CASE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "trid3nt_turn_case", default=None
@@ -136,7 +136,7 @@ def current_turn_case() -> str | None:
 
 
 # --------------------------------------------------------------------------- #
-# Active-emitter ContextVar (job-0160)
+# Active-emitter ContextVar
 # --------------------------------------------------------------------------- #
 #
 # ``emit_tool_call`` binds the active ``PipelineEmitter`` into a ContextVar
@@ -170,7 +170,7 @@ def current_emitter() -> "PipelineEmitter | None":
 
 @asynccontextmanager
 async def substep(emitter: "PipelineEmitter | None", raw_name: str):
-    """Module-level no-op-safe wrapper over ``PipelineEmitter.substep`` (task-168).
+    """Module-level no-op-safe wrapper over ``PipelineEmitter.substep``.
 
     The single call shape composers SHOULD use to surface an internal atomic-tool
     call as a nested child row:
@@ -196,7 +196,7 @@ async def substep(emitter: "PipelineEmitter | None", raw_name: str):
 def begin_substeps(emitter: "PipelineEmitter | None", total: int | None) -> None:
     """Module-level no-op-safe wrapper over ``PipelineEmitter.begin_substeps``.
 
-    task-168 companion to ``substep`` so a composer can declare the planned child
+    companion to ``substep`` so a composer can declare the planned child
     count (for the "k/total" breadcrumb) without a None-check at the call site:
 
         begin_substeps(current_emitter(), 7)
@@ -211,7 +211,7 @@ async def emit_chart_payloads(payloads: Any) -> None:
     """Side-emit one or more chart-emission payloads via the current emitter.
 
     The single call shape a composer body uses to wire an engine quantity to a
-    chart (task-198):
+    chart:
 
         from trid3nt_server.emission.pipeline_emitter import emit_chart_payloads
         from trid3nt_server.agent.tools.processing.charts_common import build_budget_partition_chart
@@ -265,7 +265,7 @@ except Exception:  # pragma: no cover — websockets absent in a minimal env
 
 
 # --------------------------------------------------------------------------- #
-# Layer dedup-by-identity (job duplicate-flood-layer, SAFETY NET)
+# Layer dedup-by-identity (SAFETY NET)
 # --------------------------------------------------------------------------- #
 #
 # ``add_loaded_layer`` historically deduped by the DISPLAY ``uri`` only. That is
@@ -287,7 +287,7 @@ except Exception:  # pragma: no cover — websockets absent in a minimal env
 # ``uri`` key (== the prior behavior), so nothing that did NOT previously dedup
 # starts collapsing unexpectedly. In particular the QGIS WMS ``LAYERS=`` param is
 # NOT used as a key — it carries a GENERIC layer name (e.g. ``LAYERS=wdpa``) that
-# is shared across genuinely-distinct fetches (F97), so collapsing on it would
+# is shared across genuinely-distinct fetches, so collapsing on it would
 # wrongly merge two independent map layers.
 
 def _layer_identity_key(uri: str) -> str:
@@ -356,7 +356,7 @@ def _frame_series_key(summary: "ProjectLayerSummary") -> str | None:
 
 
 # --------------------------------------------------------------------------- #
-# Terminal-on-RETURN detector (job — terminal-pipeline-card hardening)
+# Terminal-on-RETURN detector
 # --------------------------------------------------------------------------- #
 #
 # A tool/workflow can FAIL or be CANCELLED yet still RETURN a value rather than
@@ -366,7 +366,7 @@ def _frame_series_key(summary: "ProjectLayerSummary") -> str | None:
 # RETURNS a ``RunResult`` with ``status != "complete"`` instead of raising. The
 # flood composer then returns a typed *failed* ``AssessmentEnvelope`` (via
 # ``_build_failed_envelope``) whose only honesty signal is the ``:FAILED:<CODE>``
-# infix on ``workflow_name`` (job-0327) — a NORMAL return. The MODFLOW tool
+# infix on ``workflow_name`` — a NORMAL return. The MODFLOW tool
 # returns a raw ``{"status": "error", ...}`` dict on the same path.
 #
 # Without inspecting the RETURN value, ``emit_tool_call`` falls through to
@@ -475,7 +475,7 @@ class ErrorCodeRegistry:
     currently-known set and so a typo at a ``mark_failed`` call site surfaces
     via ``register`` rather than silently inventing a new code. The
     ``PipelineStepSummary`` field validator already enforces the regex shape
-    at schema-construction time (job-0030's ``_validate_error_code_shape``).
+    at schema-construction time (``_validate_error_code_shape``).
 
     TENTATIVE per kickoff: in M6 we may tighten to a closed ``Literal[...]``;
     for now the open set matches Decision G / A.6 prose.
@@ -536,13 +536,13 @@ class StepNotFoundError(EmitterError):
 #: capture closure wrapped in an async lambda.
 EmissionSink = Callable[[str], Awaitable[None]]
 
-#: task-198: type of the optional chart-persistence hook ``server`` wires into
+#: type of the optional chart-persistence hook ``server`` wires into
 #: the emitter so a composer-side ``emit_chart`` persists a SessionChartRecord
 #: through the SAME ``server._persist_chart_record(state, payload)`` the tool
 #: path uses (the hook closes over ``state``; the emitter does not hold it).
 ChartPersistHook = Callable[[dict], Awaitable[None]]
 
-#: task-208 (sim-card durability): type of the optional sim/compute-card
+#: (sim-card durability): type of the optional sim/compute-card
 #: persistence hook ``server`` wires into the emitter so a terminal ``compute``
 #: card (the Batch-bound SIM card minted by ``mint_dispatch_and_sim_cards``)
 #: persists a ``role="tool"`` ``CaseChatMessage`` through the SAME
@@ -567,7 +567,7 @@ def _now() -> datetime:
 
 
 def _elapsed_ms(started_at: datetime | None, completed_at: datetime | None) -> int | None:
-    """Compute wall-clock elapsed time in whole milliseconds (job-0264).
+    """Compute wall-clock elapsed time in whole milliseconds.
 
     Returns ``None`` when either endpoint is missing (can't attribute a
     duration without both). Clamped at 0 so a clock-skew / non-monotonic
@@ -617,7 +617,7 @@ def _json_for_tool_io(value: Any) -> tuple[str, bool, int]:
 
 
 # --------------------------------------------------------------------------- #
-# Vector layer inline-GeoJSON helper (job-0175)
+# Vector layer inline-GeoJSON helper
 # --------------------------------------------------------------------------- #
 
 
@@ -703,7 +703,7 @@ async def _read_vector_uri_as_geojson(uri: str) -> dict[str, Any] | None:
     def _read_and_parse() -> dict[str, Any] | None:
         try:
             if uri.startswith("s3://"):
-                # sprint-14-aws (job-0289): boto3 resolves the EC2 instance role
+                # boto3 resolves the EC2 instance role
                 # (s3fs falls back to anonymous here).
                 import boto3
                 rest = uri[len("s3://"):]
@@ -743,7 +743,7 @@ async def _read_vector_uri_as_geojson(uri: str) -> dict[str, Any] | None:
                 ext, uri,
             )
             return None
-        # F94 + WS-30s fix: the densify is CPU-heavy (topology-preserving
+        # + WS-30s fix: the densify is CPU-heavy (topology-preserving
         # simplify + feature cap over thousands of footprints) and session-resume
         # re-inlines + re-densifies the active-case layers on EVERY ~30s
         # reconnect. It MUST run here in the executor thread, NOT back on the
@@ -789,7 +789,7 @@ def _densify_off_loop(geojson_obj: Any, uri: str) -> Any:
         geojson_obj, _density_meta = densify_if_needed(geojson_obj, layer_id=uri)
         if _density_meta is not None:
             # Bound this module-global side-table so the always-on agent
-            # process never grows it without limit (F94 verifier: the
+            # process never grows it without limit (verifier: the
             # per-emitter table is pruned on reset, but this URI-keyed one
             # was not). FIFO-evict the oldest entry past the cap; dict
             # preserves insertion order.
@@ -807,7 +807,7 @@ def _densify_off_loop(geojson_obj: Any, uri: str) -> Any:
     return geojson_obj
 
 
-#: F94: side-table of the most-recent dense-vector ``DensifyMeta`` keyed by the
+#: side-table of the most-recent dense-vector ``DensifyMeta`` keyed by the
 #: vector artifact URI. ``_read_vector_uri_as_geojson`` is a module function (not
 #: a method), so it stashes the meta here; ``add_loaded_layer`` /
 #: ``reinline_vector_layers`` lift it into the per-emitter
@@ -907,11 +907,11 @@ class _StepState:
     progress_percent: int | None = None
     error_code: str | None = None
     error_message: str | None = None
-    #: Authoritative wall-clock elapsed time in milliseconds (job-0264).
+    #: Authoritative wall-clock elapsed time in milliseconds.
     #: Stamped on the terminal transition from ``started_at``→``completed_at``;
     #: ``None`` while pending/running. Deterministic — never an LLM estimate.
     duration_ms: int | None = None
-    #: Two-card sim observability (task-149): card-kind discriminator + Batch
+    #: Two-card sim observability: card-kind discriminator + Batch
     #: binding. ``role`` defaults to ``"tool"`` (the on-box atomic-tool card —
     #: every existing step); ``"compute"`` is the off-box solver card bound to an
     #: AWS Batch job. ``batch_job_id`` is the Batch ``jobId`` the compute card
@@ -929,7 +929,7 @@ class _StepState:
     #: ``None`` for a plain tool card (which persists once, at terminal, with a
     #: fresh appended id).
     card_message_id: str | None = None
-    #: Nested sub-step timeline (task-168). ``parent_step_id`` is set on a CHILD
+    #: Nested sub-step timeline. ``parent_step_id`` is set on a CHILD
     #: step (a composer's internal atomic-tool call surfaced as a nested row);
     #: when set, the client nests this step under the parent and never renders it
     #: as a top-level card. ``substep_label`` / ``substep_index`` /
@@ -998,14 +998,14 @@ class PipelineEmitter:
         self.session_id = session_id
         self._sink = sink
 
-        #: task-198: optional async hook ``server`` wires at construction so a
+        #: optional async hook ``server`` wires at construction so a
         #: composer-side ``emit_chart`` persists a ``SessionChartRecord`` exactly
         #: like the tool-result chart path (``_maybe_emit_chart`` ->
         #: ``_persist_chart_record``), keeping the persist logic in ONE place.
         #: ``None`` on the verify/CI/direct-call paths (send-only, no persist).
         self._chart_persist: "ChartPersistHook | None" = chart_persist
 
-        #: task-208 (sim-card durability): optional async hook ``server`` wires
+        #: (sim-card durability): optional async hook ``server`` wires
         #: at construction so a terminal SIM ``compute`` card persists a
         #: ``role="tool"`` ``CaseChatMessage`` through the SAME
         #: ``server._persist_tool_card`` path the on-box atomic-tool cards use.
@@ -1044,13 +1044,13 @@ class PipelineEmitter:
         #: never collides with a persisted slot.
         self._next_z: int = 0
 
-        #: Inline GeoJSON side-table for vector layers (job-0175).
+        #: Inline GeoJSON side-table for vector layers.
         #: Keyed by ``layer_id``; merged into ``loaded_layers`` wire payload
         #: in ``emit_session_state`` as additive ``inline_geojson`` field.
         #: Preserves ``ProjectLayerSummary`` extra="forbid" strictness.
         self._inline_geojson_by_layer_id: dict[str, dict[str, Any]] = {}
 
-        #: F94: dense-vector density tag side-table, keyed by ``layer_id``.
+        #: dense-vector density tag side-table, keyed by ``layer_id``.
         #: When a vector layer crossed ``DENSE_VECTOR_THRESHOLD`` and was
         #: simplified/capped, its ``DensifyMeta`` is stored here and merged into
         #: ``emit_session_state`` as the additive ``vector_density`` field so the
@@ -1058,8 +1058,8 @@ class PipelineEmitter:
         #: inline side-table (same lifecycle).
         self._density_meta_by_layer_id: dict[str, Any] = {}
 
-        #: job-0267: terminal summary of the most recent ``emit_tool_call``
-        #: step. Carries the AUTHORITATIVE job-0264 stamps (``started_at`` /
+        #: terminal summary of the most recent ``emit_tool_call``
+        #: step. Carries the AUTHORITATIVE stamps (``started_at`` /
         #: ``duration_ms``) so the tool-card persistence hook in
         #: ``server._invoke_tool_via_emitter`` records exactly the duration
         #: the live card displayed — no second clock. Set on every terminal
@@ -1067,7 +1067,7 @@ class PipelineEmitter:
         #: read-only everywhere else.
         self.last_tool_step: PipelineStepSummary | None = None
 
-        #: task-168 (read-only persistence): the ordered CHILD substeps of the
+        #: (read-only persistence): the ordered CHILD substeps of the
         #: most-recent ``emit_tool_call`` parent step, as ``PersistedSubStepRecord``
         #: rows. Captured at the SAME terminal points as ``last_tool_step`` (while
         #: the children still exist in ``_steps`` -- ``server.close_pipeline``
@@ -1075,10 +1075,10 @@ class PipelineEmitter:
         #: durable copy). ``server._persist_tool_card`` reads it onto the
         #: ``ToolCardRecord.children`` so a Case reopen (warm) AND the box-off cold
         #: view rebuild the nested timeline READ-ONLY. ``[]`` for a plain top-level
-        #: dispatch with no children (every pre-task-168 path).
+        #: dispatch with no children (every pre-path).
         self.last_tool_children: list[PersistedSubStepRecord] = []
 
-        #: task-168: the step_id of the top-level workflow step currently
+        #: the step_id of the top-level workflow step currently
         #: bracketing an ``emit_tool_call`` invocation. ``substep(...)`` mints its
         #: child against THIS id (the running parent) and stamps the parent's
         #: live breadcrumb fields. ``None`` outside an ``emit_tool_call`` body.
@@ -1093,13 +1093,13 @@ class PipelineEmitter:
         self._last_terminal_pipeline_payload: PipelineStatePayload | None = None
 
     # ------------------------------------------------------------------ #
-    # Session-state seeding (#147 reconnect-resync)
+    # Session-state seeding (reconnect-resync)
     # ------------------------------------------------------------------ #
 
     def seed_chat_history(self, history: list[dict]) -> None:
         """Replace the chat-history mirror this emitter ships in session-state.
 
-        #147 reconnect-resync: the next ``emit_session_state`` snapshot carries
+        reconnect-resync: the next ``emit_session_state`` snapshot carries
         ``list(self._chat_history)``, so seeding this mirror with a rehydrated
         per-Case history lets a reconnecting client resync its transcript from
         the server's authoritative copy. A defensive ``list(...)`` copy is taken
@@ -1112,13 +1112,13 @@ class PipelineEmitter:
         self._chat_history = list(history or [])
 
     # ------------------------------------------------------------------ #
-    # Sink rebinding (job-SOLVE-SURVIVE: WS-disconnect survival)
+    # Sink rebinding (WS-disconnect survival)
     # ------------------------------------------------------------------ #
 
     def rebind_sink(self, sink: EmissionSink) -> None:
         """Swap the wire sink this emitter pushes frames to.
 
-        job-SOLVE-SURVIVE: a long-running solver turn (``sfincs_flood``
+        a long-running solver turn (``sfincs_flood``
         -> ``wait_for_completion``) is driven by ONE ``PipelineEmitter`` instance
         whose ``_sink`` closes over the WebSocket that LAUNCHED the turn. The web
         client opens multiple sockets per session (StrictMode double-mount +
@@ -1234,7 +1234,7 @@ class PipelineEmitter:
     def inline_geojson_by_layer_id(self) -> dict[str, dict[str, Any]]:
         """Return a defensive shallow copy of the inline-GeoJSON side-table.
 
-        Lane A1 (pen=agent / paper=case): the materialized case-view snapshot
+        The materialized case-view snapshot
         written to S3 on every mutation needs the inline vector GeoJSON so a
         cold view (agent box OFF) paints vectors. That side-table is in-memory
         only on this emitter (``add_loaded_layer`` / ``reinline_vector_layers``
@@ -1262,7 +1262,7 @@ class PipelineEmitter:
     def reset_loaded_layers(self, layers: list[dict] | None) -> None:
         """Replace the in-memory ``_loaded_layers`` from a persisted snapshot.
 
-        job-0172 Part B: called on ``case-open`` to seed the per-connection
+        Part B: called on ``case-open`` to seed the per-connection
         accumulator with whatever ``CaseSessionState.loaded_layers`` held.
         Each input dict is validated through ``ProjectLayerSummary`` so a
         malformed entry doesn't corrupt the in-memory state. Malformed
@@ -1278,9 +1278,9 @@ class PipelineEmitter:
             self._loaded_layers = []
             # z-index-fix: a flush (new Case) restarts the stacking counter.
             self._next_z = 0
-            # job-0175: flush inline side-table alongside loaded_layers.
+            # flush inline side-table alongside loaded_layers.
             self._inline_geojson_by_layer_id.clear()
-            # F94: flush the dense-vector density tags too.
+            # flush the dense-vector density tags too.
             self._density_meta_by_layer_id.clear()
             return
         seeded: list[ProjectLayerSummary] = []
@@ -1300,12 +1300,12 @@ class PipelineEmitter:
         # z_index. Pre-fix snapshots seeded all-``None`` -> counter restarts at 0.
         _seeded_z = [s.z_index for s in seeded if s.z_index is not None]
         self._next_z = (max(_seeded_z) + 1) if _seeded_z else 0
-        # job-0175: keep only inline entries that match a still-loaded layer.
+        # keep only inline entries that match a still-loaded layer.
         active_ids = {layer.layer_id for layer in seeded}
         self._inline_geojson_by_layer_id = {
             k: v for k, v in self._inline_geojson_by_layer_id.items() if k in active_ids
         }
-        # F94: prune density tags to the still-loaded layers too.
+        # prune density tags to the still-loaded layers too.
         self._density_meta_by_layer_id = {
             k: v for k, v in self._density_meta_by_layer_id.items() if k in active_ids
         }
@@ -1313,7 +1313,7 @@ class PipelineEmitter:
     def merge_loaded_layers_from(self, other: "PipelineEmitter") -> int:
         """Union ``other``'s in-memory loaded layers into THIS emitter.
 
-        job-FLOOD-TERMINAL-SURVIVE (mid-solve reconnect loses the depth layer):
+        (mid-solve reconnect loses the depth layer):
         a long SFINCS solve is driven by ONE emitter whose sink closes over the
         socket that LAUNCHED the turn. When that socket dies and a NEW socket
         reconnects, ``server._rebind_live_turns`` points the live turn's emitter
@@ -1365,10 +1365,10 @@ class PipelineEmitter:
     async def reinline_vector_layers(self) -> int:
         """Rebuild ``_inline_geojson_by_layer_id`` for persisted vector layers.
 
-        sprint-14-aws (job-0290d): the inline-GeoJSON side-table is in-memory
+        the inline-GeoJSON side-table is in-memory
         only — a Case reopen seeds ``_loaded_layers`` from the persisted
         snapshot via ``reset_loaded_layers`` but the inline payloads are gone,
-        so the browser (which never fetches gs://"/s3:// directly, job-0175)
+        so the browser (which never fetches gs://"/s3:// directly)
         rehydrates vector layers it cannot render. Re-read each vector layer's
         object-store artifact and repopulate the side-table; the caller emits
         a fresh ``session-state`` so the wire carries ``inline_geojson`` again.
@@ -1396,7 +1396,7 @@ class PipelineEmitter:
                 continue
             if geojson_obj is not None:
                 self._inline_geojson_by_layer_id[layer.layer_id] = geojson_obj
-                # F94: lift any dense-vector density tag from the module-level
+                # lift any dense-vector density tag from the module-level
                 # stash (keyed by uri) into the per-emitter map (keyed by
                 # layer_id) so the wire layer is stamped on re-inline too.
                 _meta = _LAST_DENSITY_META_BY_URI.get(uri)
@@ -1525,12 +1525,12 @@ class PipelineEmitter:
         await self._emit_pipeline_state()
 
     # ------------------------------------------------------------------ #
-    # Nested sub-step timeline (task-168) -- composer-internal atomic-tool
+    # Nested sub-step timeline -- composer-internal atomic-tool
     # calls surfaced as CHILD rows nested under the parent workflow card.
     # ------------------------------------------------------------------ #
 
     def begin_substeps(self, total: int | None) -> None:
-        """Declare the planned child count for the live breadcrumb (task-168).
+        """Declare the planned child count for the live breadcrumb.
 
         Sets ``substep_total`` on the CURRENT top-level parent step (the one
         ``emit_tool_call`` is bracketing) so the breadcrumb can render "k/total".
@@ -1571,7 +1571,7 @@ class PipelineEmitter:
 
         On exit it marks the child ``complete`` (clean) or ``failed`` (on an
         exception, threading the classified ``error_code`` / message) with an
-        authoritative job-0264 ``duration_ms``; a CHILD failure NEVER turns the
+        authoritative ``duration_ms``; a CHILD failure NEVER turns the
         parent green/red -- the parent's own terminal transition owns that. The
         exception is RE-RAISED after marking the child failed so the composer's
         control flow is unchanged.
@@ -1622,7 +1622,7 @@ class PipelineEmitter:
             await self.mark_complete(child_id)
 
     # ------------------------------------------------------------------ #
-    # Two-card sim observability (task-149) — the off-box compute card
+    # Two-card sim observability — the off-box compute card
     # ------------------------------------------------------------------ #
 
     async def add_compute_step(
@@ -1636,7 +1636,7 @@ class PipelineEmitter:
         """Append a ``role="compute"`` step bound to an AWS Batch job; emit.
 
         Thin helper over ``add_step`` + ``mark_running`` that mints the SECOND
-        of the two sim cards (task-149): the off-box solver card the composer
+        of the two sim cards: the off-box solver card the composer
         opens right BEFORE ``wait_for_completion``. The first card is a plain
         ``add_step`` → ``mark_complete`` recording the submit; this one tracks
         the live Batch job. The step lands in ``running`` state immediately
@@ -1712,7 +1712,7 @@ class PipelineEmitter:
     ) -> None:
         """Patch a compute step's ``batch_status`` and re-emit; best-effort.
 
-        task-149 sibling of ``update_current_progress``: the agent-side solver
+        sibling of ``update_current_progress``: the agent-side solver
         wait-loop calls this each poll tick with the latest ``DescribeJobs``
         status so the off-box compute card reflects the Batch control-plane
         (SUBMITTED / RUNNABLE / STARTING / RUNNING / SUCCEEDED / FAILED) verbatim
@@ -1732,7 +1732,7 @@ class PipelineEmitter:
         await self._emit_pipeline_state()
 
     def _clear_parent_breadcrumb(self, step: _StepState) -> None:
-        """task-168: clear the live-breadcrumb fields on a PARENT's terminal
+        """clear the live-breadcrumb fields on a PARENT's terminal
         transition so the collapsed card no longer shows "fetching X 2/7".
 
         No-op for a step that never ran substeps (the breadcrumb fields were
@@ -1751,7 +1751,7 @@ class PipelineEmitter:
         step.state = "complete"
         step.completed_at = self._now_fn()
         self._clear_parent_breadcrumb(step)
-        # job-0264: stamp authoritative wall-clock duration on the terminal
+        # stamp authoritative wall-clock duration on the terminal
         # transition (started_at→completed_at). Deterministic; the client
         # locks its cosmetic ticker to this number once it arrives.
         step.duration_ms = _elapsed_ms(step.started_at, step.completed_at)
@@ -1779,7 +1779,7 @@ class PipelineEmitter:
         step.state = "failed"
         step.completed_at = self._now_fn()
         self._clear_parent_breadcrumb(step)
-        # job-0264: failed cards show the final duration too (mm:ss of how
+        # failed cards show the final duration too (mm:ss of how
         # long the tool ran before failing). started_at may be None if the
         # step failed before mark_running — _elapsed_ms returns None then.
         step.duration_ms = _elapsed_ms(step.started_at, step.completed_at)
@@ -1797,7 +1797,7 @@ class PipelineEmitter:
         step.state = "cancelled"
         step.completed_at = self._now_fn()
         self._clear_parent_breadcrumb(step)
-        # job-0264: cancelled is terminal — stamp duration so the yellow card
+        # cancelled is terminal — stamp duration so the yellow card
         # locks to the elapsed-before-cancel time rather than ticking forever.
         step.duration_ms = _elapsed_ms(step.started_at, step.completed_at)
         # J-B-part-i: terminal emit is best-effort on a dead socket + snapshots
@@ -1810,7 +1810,7 @@ class PipelineEmitter:
         """Persist ``step_id``'s tool-card row through the ``_tool_card_persist``
         hook IFF its current state is in ``states``.
 
-        Shared substrate for the durable two-card sim lifecycle (task-208 +
+        Shared substrate for the durable two-card sim lifecycle (+
         the running-durability extension). Routes through the
         ``_tool_card_persist`` hook ``server`` wired at construction, which
         closes over ``state`` and calls ``server._persist_tool_card`` -> a
@@ -1858,7 +1858,7 @@ class PipelineEmitter:
         """Persist the SIM ``compute`` card the MOMENT it is minted (running).
 
         Durability extension (NATE "nothing about the chat is transient"):
-        task-208 persisted the SIM card only at TERMINAL, so a reconnect/reopen
+        persisted the SIM card only at TERMINAL, so a reconnect/reopen
         WHILE the solve was still running replayed an empty pipeline and the
         running solve card VANISHED (the user kept only the durable input
         layers). Persisting the ``running`` card here — keyed by the step's
@@ -1869,7 +1869,7 @@ class PipelineEmitter:
         await self._persist_step_card(step_id, states=("running",))
 
     async def persist_terminal_compute_card(self, step_id: str) -> None:
-        """task-208 + durability: drive the SIM ``compute`` card's persisted row
+        """+ durability: drive the SIM ``compute`` card's persisted row
         to its TERMINAL state.
 
         Called by ``route_sim_terminal`` AFTER the terminal ``mark_complete`` /
@@ -1919,7 +1919,7 @@ class PipelineEmitter:
         and append to the session's ``loaded_layers``, then emit a fresh
         ``session-state`` envelope (A.7 replace-not-reconcile).
 
-        Dedup policy (job duplicate-flood-layer, SAFETY NET): by the underlying
+        Dedup policy (SAFETY NET): by the underlying
         COG/run IDENTITY (``_layer_identity_key``), NOT by the display ``uri``
         alone. The workflow's internal publish and a redundant LLM re-publish of
         the SAME COG arrive with different display URLs (distinct TiTiler tile
@@ -1993,7 +1993,7 @@ class PipelineEmitter:
             # top of the stack (highest z_index) is the most-recently-added.
             summary.z_index = self._alloc_z()
             self._loaded_layers.append(summary)
-        # Vector inline-GeoJSON (job-0175). Best-effort; failure is non-fatal.
+        # Vector inline-GeoJSON. Best-effort; failure is non-fatal.
         # Logs loudly so the audit can grep for "inlined GeoJSON layer_id=...".
         if layer.layer_type == "vector":
             try:
@@ -2013,7 +2013,7 @@ class PipelineEmitter:
                         "add_loaded_layer: inlined GeoJSON layer_id=%s features=%d",
                         layer.layer_id, feat_count,
                     )
-                    # F94: lift any dense-vector density tag (keyed by uri in the
+                    # lift any dense-vector density tag (keyed by uri in the
                     # module stash) into the per-emitter map (keyed by layer_id)
                     # so the wire layer carries the honest simplified/capped tag.
                     _meta = _LAST_DENSITY_META_BY_URI.get(layer.uri)
@@ -2022,7 +2022,7 @@ class PipelineEmitter:
                     else:
                         self._density_meta_by_layer_id.pop(layer.layer_id, None)
         await self.emit_session_state()
-        # Emit zoom-to map-command when the LayerURI carries a bbox (job-0068).
+        # Emit zoom-to map-command when the LayerURI carries a bbox.
         if layer.bbox is not None:
             await self.emit_map_command(
                 "zoom-to",
@@ -2034,7 +2034,7 @@ class PipelineEmitter:
         whenever the integration site wants to refresh the client's view of
         ``current_pipeline``.
 
-        Vector inline-GeoJSON merge (job-0175): for any vector layer whose
+        Vector inline-GeoJSON merge: for any vector layer whose
         ``layer_id`` has an inline GeoJSON entry, the field ``inline_geojson``
         is appended to the wire dict (additive to the strict schema).
         """
@@ -2046,7 +2046,7 @@ class PipelineEmitter:
             _inline = self._inline_geojson_by_layer_id.get(_layer.layer_id)
             if _inline is not None:
                 _d["inline_geojson"] = _inline
-            # F94: stamp the dense-vector density tag (additive, like
+            # stamp the dense-vector density tag (additive, like
             # inline_geojson) so the client can surface "simplified for
             # performance" honestly. Best-effort; a malformed meta is skipped.
             _meta = self._density_meta_by_layer_id.get(_layer.layer_id)
@@ -2066,7 +2066,7 @@ class PipelineEmitter:
         await self._send("session-state", payload)
 
     async def emit_map_command(self, command: str, args: dict) -> None:
-        """Emit a ``map-command`` envelope (job-0068).
+        """Emit a ``map-command`` envelope.
 
         Used for transient verbs that are not pure state — primarily ``zoom-to``
         after a layer lands. Layer-CRUD verbs are conveyed via ``session-state``
@@ -2093,7 +2093,7 @@ class PipelineEmitter:
         await self._send("solve-progress", payload)
 
     async def emit_chart(self, chart_payload: dict) -> None:
-        """Emit a ``chart-emission`` envelope from a workflow body (task-198).
+        """Emit a ``chart-emission`` envelope from a workflow body.
 
         The composer-side complement of the tool-result chart path
         (``server._maybe_emit_chart``): a composer that built a chart-emission
@@ -2241,17 +2241,17 @@ class PipelineEmitter:
         """
         step_id = await self.add_step(name=name, tool_name=tool_name)
         await self.mark_running(step_id)
-        # task-168: this dispatch's children accumulate fresh -- reset so a prior
+        # this dispatch's children accumulate fresh -- reset so a prior
         # dispatch's substeps never leak onto this card's persisted children. Set
         # to the real snapshot at each terminal point below (while the children
         # still exist in ``_steps`` -- ``server.close_pipeline`` clears them).
         self.last_tool_children = []
         # Bind self as the active emitter for the lifetime of the invoke so
-        # workflow bodies can fire transient map-command verbs (job-0160 —
+        # workflow bodies can fire transient map-command verbs (—
         # zoom-on-area-first UX). reset_token ensures the binding is unwound
         # exactly once, even on cancellation / exception paths.
         token = _CURRENT_EMITTER.set(self)
-        # task-168: remember the previous parent so nested emit_tool_call
+        # remember the previous parent so nested emit_tool_call
         # invocations restore it (defensive -- workflow bodies normally hold a
         # single top-level step). ``substep(...)`` mints children against this id.
         _prev_parent = self._current_parent_step_id
@@ -2263,11 +2263,11 @@ class PipelineEmitter:
                     result = await result
             except asyncio.CancelledError:
                 await self.mark_cancelled(step_id)
-                # job-0267: record the terminal step even on cancel — the
+                # record the terminal step even on cancel — the
                 # persistence hook skips cancelled cards, but the accessor
                 # must never carry a STALE prior step past this dispatch.
                 self.last_tool_step = self._to_summary(step_id)
-                # task-168: snapshot the children too (the cancelled parent card
+                # snapshot the children too (the cancelled parent card
                 # is not persisted, but the accessor must never carry STALE prior
                 # children either).
                 self.last_tool_children = self._collect_children(step_id)
@@ -2275,8 +2275,8 @@ class PipelineEmitter:
             except Exception as exc:  # noqa: BLE001 — classify-and-re-raise
                 code, message = self._classify_exception(exc)
                 await self.mark_failed(step_id, error_code=code, error_message=message)
-                self.last_tool_step = self._to_summary(step_id)  # job-0267
-                # task-168: a FAILED parent card IS persisted -- snapshot the
+                self.last_tool_step = self._to_summary(step_id)
+                # a FAILED parent card IS persisted -- snapshot the
                 # children (e.g. a successful fetch then a failed solve) so the
                 # replayed failed card still nests its sub-step timeline.
                 self.last_tool_children = self._collect_children(step_id)
@@ -2293,7 +2293,7 @@ class PipelineEmitter:
             # have add_loaded_layer's session-state snapshot reflect the
             # terminal state.
             #
-            # job (terminal-pipeline-card hardening): a tool can FAIL or be
+            # Terminal-card hardening: a tool can FAIL or be
             # CANCELLED yet still RETURN (the solver poll path — a docker-killed
             # / timed-out run returns a RunResult or a failed AssessmentEnvelope
             # rather than raising). Inspect the return value: if it carries a
@@ -2319,8 +2319,8 @@ class PipelineEmitter:
                 )
             else:
                 await self.mark_complete(step_id)
-            self.last_tool_step = self._to_summary(step_id)  # job-0267
-            # task-168: snapshot the ordered children of this top-level card
+            self.last_tool_step = self._to_summary(step_id)
+            # snapshot the ordered children of this top-level card
             # (a composer's internal fetch/build/solve/postprocess/publish
             # substeps) BEFORE close_pipeline clears _steps in the server's
             # finally block. ``server._persist_tool_card`` reads this onto the
@@ -2330,11 +2330,11 @@ class PipelineEmitter:
             # Honor LayerURI return shape — append to loaded_layers + emit
             # session-state. This runs AFTER the terminal frame above so the
             # session-state snapshot captures the step as complete/failed, never
-            # "running" (the stuck-card bug). job-0254: route through the single
+            # "running" (the stuck-card bug). route through the single
             # emission seam first. The seam drops (returns None) a renderable
             # raster carrying a raw gs:// uri (the publish-failure degraded path)
             # so it never paints a broken layer row; vector inline-GeoJSON
-            # LayerURIs (job-0175) and WMS-URL rasters pass untouched. The tool
+            # LayerURIs and WMS-URL rasters pass untouched. The tool
             # result is unaffected — a dropped layer is still narrated honestly
             # and the retry loop can act.
             if isinstance(result, LayerURI):
@@ -2344,7 +2344,7 @@ class PipelineEmitter:
             return result
         finally:
             _CURRENT_EMITTER.reset(token)
-            # task-168: restore the previous parent pointer. On the normal
+            # restore the previous parent pointer. On the normal
             # single-top-level-step path this returns it to None.
             self._current_parent_step_id = _prev_parent
 
@@ -2411,12 +2411,12 @@ class PipelineEmitter:
             completed_at=s.completed_at,
             progress_percent=s.progress_percent,
             duration_ms=s.duration_ms,
-            # task-149: carry the two-card discriminator + Batch binding onto the
+            # carry the two-card discriminator + Batch binding onto the
             # wire (defaults keep a plain tool card byte-identical).
             role=s.role,  # type: ignore[arg-type]
             batch_job_id=s.batch_job_id,
             batch_status=s.batch_status,
-            # task-168: carry the nested sub-step fields. ``parent_step_id`` on a
+            # carry the nested sub-step fields. ``parent_step_id`` on a
             # child; the live-breadcrumb trio on the parent (None when idle).
             parent_step_id=s.parent_step_id,
             substep_label=s.substep_label,
@@ -2437,12 +2437,12 @@ class PipelineEmitter:
             error_code=s.error_code,
             error_message=s.error_message,
             duration_ms=s.duration_ms,
-            # task-149: mirror the card-kind fields onto the persisted/replayed
+            # mirror the card-kind fields onto the persisted/replayed
             # summary so the compute card survives a reconnect / cold-case view.
             role=s.role,  # type: ignore[arg-type]
             batch_job_id=s.batch_job_id,
             batch_status=s.batch_status,
-            # task-168: mirror the nested sub-step fields so a persisted/replayed
+            # mirror the nested sub-step fields so a persisted/replayed
             # snapshot + cold-case rehydration carry the nested timeline.
             parent_step_id=s.parent_step_id,
             substep_label=s.substep_label,
@@ -2451,7 +2451,7 @@ class PipelineEmitter:
         )
 
     def _collect_children(self, parent_step_id: str) -> list[PersistedSubStepRecord]:
-        """Snapshot the TERMINAL child substeps of ``parent_step_id`` (task-168).
+        """Snapshot the TERMINAL child substeps of ``parent_step_id``.
 
         Walks ``_step_order`` (chronological start order) and builds one
         ``PersistedSubStepRecord`` per CHILD step (``parent_step_id`` matches)
@@ -2574,7 +2574,7 @@ class PipelineEmitter:
         env = Envelope(
             type=message_type,
             session_id=self.session_id,
-            # job-0277: stamp the owning Case so the web routes this to the
+            # stamp the owning Case so the web routes this to the
             # right stream even after a mid-turn Case switch.
             case_id=current_turn_case(),
             payload=payload,
@@ -2591,7 +2591,7 @@ class PipelineEmitter:
 
 
 # --------------------------------------------------------------------------- #
-# Two-card sim observability composer helpers (task-149)
+# Two-card sim observability composer helpers
 # --------------------------------------------------------------------------- #
 #
 # Shared by BOTH off-box-solver composers (model_urban_flood_swmm /
@@ -2612,7 +2612,7 @@ async def mint_dispatch_and_sim_cards(
 ) -> str | None:
     """Mint the Dispatch (tool) + Sim (compute) cards for an off-box solve.
 
-    task-149: ``handle`` is the ``ExecutionHandle`` from ``run_solver`` /
+    ``handle`` is the ``ExecutionHandle`` from ``run_solver`` /
     ``submit_sfincs_quadtree`` — its ``workflows_execution_id`` is the AWS Batch
     ``jobId`` the sim card binds to and the wait-loop describes. Card 1 is a
     plain tool step (``add_step`` -> ``mark_complete``) recording the submit;
@@ -2673,7 +2673,7 @@ async def route_sim_terminal(
     *,
     run_result: Any,
 ) -> None:
-    """Drive the SIM compute card to its terminal state (task-149).
+    """Drive the SIM compute card to its terminal state.
 
     ``run_result`` is the ``RunResult`` from ``wait_for_completion`` (or ``None``
     on a cancel): ``status == "complete"`` -> ``mark_complete`` (green),
@@ -2703,7 +2703,7 @@ async def route_sim_terminal(
             await emitter.persist_terminal_compute_card(sim_step_id)
         elif status == "complete":
             await emitter.mark_complete(sim_step_id)
-            # task-208: persist the green SIM compute card so it replays on a
+            # persist the green SIM compute card so it replays on a
             # WS reconnect / Case reopen like an on-box tool card (best-effort).
             await emitter.persist_terminal_compute_card(sim_step_id)
         else:
@@ -2718,7 +2718,7 @@ async def route_sim_terminal(
             await emitter.mark_failed(
                 sim_step_id, error_code=str(error_code), error_message=str(error_message)
             )
-            # task-208: persist the red SIM compute card too (honesty floor: a
+            # persist the red SIM compute card too (honesty floor: a
             # terminal solve FAILURE must SURFACE across a socket cycle).
             await emitter.persist_terminal_compute_card(sim_step_id)
     except Exception as exc:  # noqa: BLE001 — observability, never break the solve

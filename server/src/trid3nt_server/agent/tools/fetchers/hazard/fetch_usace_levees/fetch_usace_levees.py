@@ -1,4 +1,4 @@
-"""``fetch_usace_levees`` atomic tool — USACE National Levee Database (NLD) fetcher (job A4, Wave 4.10).
+"""``fetch_usace_levees`` atomic tool - USACE National Levee Database (NLD) fetcher.
 """
 
 from __future__ import annotations
@@ -191,7 +191,7 @@ CONUS_BBOX: tuple[float, float, float, float] = (-180.0, 13.0, -65.0, 72.0)
 
 
 # ---------------------------------------------------------------------------
-# Payload estimation (FR-DC-9 / Wave-1.5).
+# Payload estimation (FR-DC-9).
 # ---------------------------------------------------------------------------
 
 # Rough NLD payload size envelopes (verified 2026-06-09 against a NOLA bbox + a
@@ -213,7 +213,7 @@ _APPROX_NATIONAL_COUNT: dict[str, int] = {
 
 
 def estimate_payload_mb(**args: Any) -> float:
-    """FR-DC-9 / Wave-1.5 payload estimator hook (called by chat-warning gate).
+    """FR-DC-9 payload estimator hook (called by chat-warning gate).
 
     Conservatively estimates the FlatGeobuf payload size in MB based on
     ``layer`` and bbox area. The chat-warning gate uses this to surface a
@@ -572,7 +572,7 @@ def _fetch_nld_bytes(
 def fetch_usace_levees(
     bbox: tuple[float, float, float, float] | None = None,
     layer: Literal["leveed_areas", "system_routes", "embankments"] = "leveed_areas",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

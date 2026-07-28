@@ -1,6 +1,6 @@
 """``model_regional_water_budget_scenario``  -  MODFLOW zonal-budget composer.
 
-The end-to-end higher-order workflow for the sprint-18 Wave-1 MODFLOW
+The end-to-end higher-order workflow for the MODFLOW
 ``regional_water_budget`` archetype: it turns a place (or AOI point) into a
 narrated regional water-budget partition  -  where the regional groundwater goes
 (CHD inflow / outflow across the gradient, storage, any wells). It mirrors the
@@ -76,7 +76,7 @@ __all__ = [
 
 
 class RegionalWaterBudgetResult(GraceModel):
-    """Return type for ``model_regional_water_budget_scenario`` (sprint-18 Wave-1).
+    """Return type for ``model_regional_water_budget_scenario``.
 
     Bundles the budget-partition layer + the derived args + a narration summary.
     Invariant 1: the narrated budget is the typed ``budget_layer
@@ -193,7 +193,7 @@ async def model_regional_water_budget_scenario(
         scenario_error=RegionalWaterBudgetScenarioError,
     )
 
-    # task-198: wire the CBC budget partition to a signed inflow/outflow bar
+    # wire the CBC budget partition to a signed inflow/outflow bar
     # chart. Real solver terms (BudgetPartitionLayerURI.budget_partition_m3_day,
     # FLOW-JA-FACE already excluded upstream) - the builder emits nothing when
     # the partition is empty (the honesty floor).
@@ -261,7 +261,7 @@ async def modflow_regional_water_budget(
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a regional groundwater water-budget partition (where the water goes).

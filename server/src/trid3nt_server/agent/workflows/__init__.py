@@ -16,7 +16,7 @@ invocable tool that triggers the workflow. The wrapper:
 
 - declares ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
   ``source_class="workflow_dispatch"`` (a new FR-DC-6 source class for the
-  workflow exposure surface — same shape as job-0041's ``solver_dispatch``);
+  workflow exposure surface - same shape as ``solver_dispatch``);
 - forwards its arguments verbatim to the workflow body;
 - returns the workflow's ``AssessmentEnvelope`` shape directly.
 
@@ -25,13 +25,13 @@ Python composing atomic tools in tested sequences. Same inputs → byte-identica
 SFINCS deck per the HydroMT determinism cited in
 ``docs/decisions/oq-4-hydromt-depth.md`` §3.
 
-Workflows authored under this package (job-0042 lands the M5 capstone):
+Workflows authored under this package (lands the M5 capstone):
 
 - ``model_flood_scenario(bbox?, location_query?, event_id?, return_period_yr=100,
    duration_hr=24, compute_class="medium") → AssessmentEnvelope`` — composes
   geocode → fetch_dem → fetch_landcover → fetch_river_geometry →
   lookup_precip_return_period → build_sfincs_model → run_solver →
-  wait_for_completion → postprocess_flood. The OQ-4 §4 Invariant-7 NLCD
+  wait_for_completion → postprocess_flood. The §4 Invariant-7 NLCD
   validation gate (``LULC_MAPPING_MISMATCH``) fires inside
   ``build_sfincs_model`` (``sfincs_builder.py``) before HydroMT's roughness
   component runs.
@@ -42,12 +42,12 @@ from __future__ import annotations
 # Import the workflow modules so their @register_tool decorators fire at
 # package import time and the LLM-facing wrappers land in TOOL_REGISTRY.
 from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  — engine-door refactor (SFINCS slice): the run_model_flood_scenario wrapper is now the sfincs_flood template (engine=sfincs, tier=template); the run_sfincs door is imported in tools/__init__.py
-from .modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as _model_groundwater_contamination_scenario  # noqa: F401  — job-0228 Case 2 composer (news → MODFLOW → plume)
+from .modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as _model_groundwater_contamination_scenario  # noqa: F401 - Case 2 composer (news → MODFLOW → plume)
 # engine-door refactor: run_model_contamination_affected_fields is CUT (composer
 # removed). Its plume half IS modflow_contaminant_plume; the zonal field-scoring
 # half re-homes to a playground recipe (docs/playbooks/modflow-affected-fields-recipe.md).
-from .shared.model_news_event_ingest import model_news_event_ingest as _model_news_event_ingest  # noqa: F401  — job-0119 Case 2 composer
-from .sfincs.model_nws_flood_event_scenario import model_nws_flood_event_scenario as _model_nws_flood_event_scenario  # noqa: F401  — job-0229 Case 3 composer
+from .shared.model_news_event_ingest import model_news_event_ingest as _model_news_event_ingest  # noqa: F401 - Case 2 composer
+from .sfincs.model_nws_flood_event_scenario import model_nws_flood_event_scenario as _model_nws_flood_event_scenario  # noqa: F401 - Case 3 composer
 # PELICUN fold: the former pelicun_damage_with_buildings composer folded into the
 # pelicun_damage_assessment template's bbox AUTO-FETCH input mode; the template is
 # registered via tools/__init__.py's import of

@@ -1,7 +1,7 @@
 """``generate_damage_distribution``: Pelicun damage-state distribution bar
 chart from a per-asset damage vector layer -> chart-emission payload.
 
-Carved out of the original multi-tool ``chart_tools`` module (job-0230) in the
+Carved out of the original multi-tool ``chart_tools`` module in the
 tools/ reorg; behavior and the registered tool surface are unchanged. The
 shared chart-emission core lives in
 ``trid3nt_server.agent.tools.processing.charts_common``.

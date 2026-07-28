@@ -68,7 +68,7 @@ async def modflow_wellhead_protection(
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Delineate an EPA-style wellhead protection area (WHPA) for a pumping well.

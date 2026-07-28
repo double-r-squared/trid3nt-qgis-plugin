@@ -169,7 +169,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -633,7 +633,7 @@ def fetch_landsat_imagery(
     band_combo: str = _DEFAULT_BAND_COMBO,
     max_cloud_cover: float = _DEFAULT_MAX_CLOUD,
     include_legacy_landsat: bool = False,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch a Landsat Collection-2 Level-2 image (true / false-color / thermal).

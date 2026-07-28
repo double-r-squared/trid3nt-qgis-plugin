@@ -1,4 +1,4 @@
-"""OpenQuake PSHA hazard-map postprocessing (sprint-17).
+"""OpenQuake PSHA hazard-map postprocessing.
 
 ``postprocess_openquake(hazard_map_csv, *, run_id, run_args, ...) ->
 SeismicHazardLayerURI`` reads OpenQuake's exported hazard-MAP CSV (one
@@ -172,7 +172,7 @@ def rasterize_hazard_sites(
 ) -> tuple[Any, tuple[float, float, float, float], float]:
     """Place the OpenQuake site values onto a regular EPSG:4326 raster grid.
 
-    NATE 2026-06-26: OpenQuake's ``region_grid_spacing`` is in KM, so the site
+    OpenQuake's ``region_grid_spacing`` is in KM, so the site
     grid is NOT a clean lat/lon lattice - the lon of each row is offset slightly
     by latitude (km->deg for lon depends on lat), giving ~3e-5 deg jitter within a
     column. The old ``round(., 6)`` treated those jittered near-duplicates as

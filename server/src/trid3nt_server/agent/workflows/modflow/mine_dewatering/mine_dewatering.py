@@ -1,6 +1,6 @@
 """``model_mine_dewatering_scenario``  -  MODFLOW mine-pit-dewatering composer.
 
-The end-to-end higher-order workflow for the sprint-18 Wave-1 MODFLOW
+The end-to-end higher-order workflow for the MODFLOW
 ``mine_dewatering`` archetype: it turns a place (or AOI point) + a pit footprint
 polygon into a rendered dewatering-rate layer  -  the per-cell drain outflow over
 the pit and the total pump-to-dewater rate the pit needs to stay dry. It mirrors
@@ -74,7 +74,7 @@ __all__ = [
 
 
 class MineDewateringResult(GraceModel):
-    """Return type for ``model_mine_dewatering_scenario`` (sprint-18 Wave-1).
+    """Return type for ``model_mine_dewatering_scenario``.
 
     Bundles the dewatering layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``dewater_layer``
@@ -304,7 +304,7 @@ async def modflow_mine_dewatering(
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model an open-pit mine's dewatering rate (groundwater inflow to the pit).

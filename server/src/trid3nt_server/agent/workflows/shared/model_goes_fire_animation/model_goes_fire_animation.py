@@ -762,7 +762,7 @@ async def run_model_goes_fire_animation(
     discovery_iso: str | None = None,
     overlay_firms: bool = True,
     firms_date: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Animate a GOES fire loop UNATTENDED (auto-snap the window, fetch, publish -- NO confirm gate).

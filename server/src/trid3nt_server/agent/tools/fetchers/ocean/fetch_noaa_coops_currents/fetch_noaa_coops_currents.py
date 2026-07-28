@@ -141,7 +141,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -651,7 +651,7 @@ def _fetch_coops_currents_bytes(
 def fetch_noaa_coops_currents(
     bbox: tuple[float, float, float, float],
     product: str = "currents",
-    # job-0164 / Wave 4.10 convention: absorb LLM-invented kwargs
+    # convention: absorb LLM-invented kwargs
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch NOAA CO-OPS tidal-current stations + latest current as a FlatGeobuf.

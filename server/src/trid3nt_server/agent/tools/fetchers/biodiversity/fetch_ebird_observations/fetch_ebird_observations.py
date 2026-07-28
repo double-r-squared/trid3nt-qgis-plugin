@@ -56,7 +56,7 @@ class EBirdMissingKeyError(EBirdError):
     """No API key resolved via any of the three lookup paths.
 
     Raised BEFORE any network call. The agent surface uses this to prompt
-    the user to add an eBird key via the secrets panel (sprint-12 Case-UX).
+    the user to add an eBird key via the secrets panel (Case-UX).
     """
 
     error_code = "EBIRD_MISSING_KEY"
@@ -280,7 +280,7 @@ def _resolve_api_key(
 
     1. Explicit ``api_key`` kwarg.
     2. ``secret_ref`` (a ``SecretRecord``) → ``Persistence.get_secret_value``
-       (the per-Case path landed by Wave 2 sibling job-0124).
+       (the per-Case path landed by sibling).
     3. ``TRID3NT_EBIRD_API_KEY`` env var (dev convenience).
 
     Raises:
@@ -565,7 +565,7 @@ def _records_to_flatgeobuf_bytes(
 ) -> bytes:
     """Convert eBird observation dicts to a FlatGeobuf with the documented schema.
 
-    Geographic-correctness gate (job-0086 codified lesson): every emitted
+    Geographic-correctness gate (codified lesson): every emitted
     point must lie WITHIN the requested bbox. eBird's radius queries return
     points along the circle perimeter; the corner circles in our tile cover
     overlap the bbox edge by design, so a real-edge sighting may also land
@@ -728,7 +728,7 @@ def fetch_ebird_observations(
     days_back: int = _DEFAULT_DAYS_BACK,
     api_key: str | None = None,
     secret_ref: Any | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -765,7 +765,7 @@ def fetch_ebird_observations(
 
     eBird does NOT expose a bbox query — only radius queries around a
     ``(lat, lng)`` point. We tile the bbox into ~50 km circles (eBird's max
-    radius) and dedupe by ``subId``. Per audit.md, sprint-13 will replace
+    radius) and dedupe by ``subId``. Per audit.md, will replace
     the row/col grid with a proper hex-tile cover; the v0.1 grid intentionally
     overlaps tiles so we don't miss slivers between rows/cols.
 

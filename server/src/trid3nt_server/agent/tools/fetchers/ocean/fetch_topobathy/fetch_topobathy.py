@@ -221,7 +221,7 @@ _METADATA = AtomicToolMetadata(
     cacheable=True,
     supports_global_query=False,
     payload_mb_estimator_name="estimate_payload_mb",
-    # Deterministic auto-publish opt-OUT (NATE 2026-06-26): topobathy is a pure
+    # Deterministic auto-publish opt-OUT: topobathy is a pure
     # INPUT raster (role="input") that feeds SFINCS / wave model setup, not a
     # product the user asks to see on its own. The flood/wave result is what
     # auto-renders; this raw merged topo-bathy surface does not.
@@ -269,7 +269,7 @@ class TopobathyResult(LayerURI):
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -282,7 +282,7 @@ def estimate_payload_mb(
     CUDEM 1/9 arc-second (~3 m) merged with 3DEP and re-tiled to a
     LZW-compressed COG runs ~400 MB / sq-deg of merged land+water (coastal
     AOIs are mostly water, which compresses well, so this is conservative).
-    Scales linearly with bbox area; floored so the Wave-1.5 payload-warning
+    Scales linearly with bbox area; floored so the payload-warning
     gate never under-reports.
     """
     if bbox is None:
@@ -1363,7 +1363,7 @@ def fetch_topobathy(
     force_bathy_base: bool = False,
     include_regional_fine: bool = False,
     min_pixel_m: float | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> TopobathyResult:

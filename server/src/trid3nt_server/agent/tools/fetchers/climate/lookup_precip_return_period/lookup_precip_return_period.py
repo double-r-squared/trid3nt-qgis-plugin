@@ -37,7 +37,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.climate.lookup_p
 
 
 class PrecipForcingUnavailableError(FetchError):
-    """No design-storm precip source covers the requested point (job-0327).
+    """No design-storm precip source covers the requested point.
 
     Raised when BOTH NOAA Atlas 14 AND the NOAA Atlas 2 (Western US) fallback
     miss the location — a genuinely-uncovered AOI. This is an HONEST,
@@ -52,7 +52,7 @@ class PrecipForcingUnavailableError(FetchError):
     retryable = False
 
 # ---------------------------------------------------------------------------
-# lookup_precip_return_period — NOAA Atlas 14 PFDS (sprint-07 Stage B, job-0039).
+# lookup_precip_return_period - NOAA Atlas 14 PFDS (Stage B).
 # ---------------------------------------------------------------------------
 #
 # Access pattern tier — LIVE-VERIFIED matches kickoff inference (2026-06-07):
@@ -220,7 +220,7 @@ def _fetch_atlas14_pfds_bytes(lat: float, lon: float) -> bytes:
     return body.encode("utf-8")
 
 # --------------------------------------------------------------------------- #
-# NOAA Atlas 2 (Western US) design-storm fallback  (job-0327)
+# NOAA Atlas 2 (Western US) design-storm fallback
 # --------------------------------------------------------------------------- #
 #
 # WHY THIS EXISTS. The Pacific Northwest (WA / OR / ID) and most of the
@@ -230,7 +230,7 @@ def _fetch_atlas14_pfds_bytes(lat: float, lon: float) -> bytes:
 # endpoint answers ``Error 3.0: ... not within a project area`` for these
 # points (live-confirmed for the Toutle / Mount St. Helens point lat=46.325
 # lon=-122.733). Before this fallback existed the workflow died in 1-3s at the
-# precip fetcher and the agent silently reported "ok" (job-0327 root cause).
+# precip fetcher and the agent silently reported "ok".
 #
 # WHAT IT DOES. NOAA Atlas 2 is a 1973 isopluvial-MAP atlas — there is no clean
 # machine-readable lat/lon point CSV endpoint comparable to the Atlas-14 PFDS
@@ -346,7 +346,7 @@ def _fetch_atlas2_precip_bytes(
 ) -> bytes:
     """Synthesize an Atlas-2 (Western US) precip-frequency depth for a point.
 
-    job-0327 fallback for the WHY-IT-FAILS Toutle die. Returns a small CSV-like
+     fallback for the WHY-IT-FAILS Toutle die. Returns a small CSV-like
     body in the SAME shape ``_parse_atlas14_csv`` consumes (a ``NOAA Atlas 2``
     header line, a ``Project area:`` line, and one duration row of comma-
     separated depths across the fixed ARI columns) so the existing parser path
@@ -450,7 +450,7 @@ def lookup_precip_return_period(
     location: tuple[float, float],
     return_period_years: int,
     duration_hours: float,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
@@ -550,7 +550,7 @@ def lookup_precip_return_period(
     }
 
     # --- PRIMARY: NOAA Atlas 14 PFDS (CONUS + PR/USVI). ---
-    # job-0327: the Atlas-14 fetch+parse+matrix-lookup is wrapped so an
+    # the Atlas-14 fetch+parse+matrix-lookup is wrapped so an
     # out-of-project-area die (the data_fetch.py out-of-area raise) OR a
     # matrix-miss raise falls through to the NOAA Atlas 2 (Western US) fallback
     # — implementing the MEMORY "Atlas-14 -> Atlas-2 first" norm that was

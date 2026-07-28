@@ -103,12 +103,12 @@ _USER_AGENT = (
 # ---------------------------------------------------------------------------
 # AtomicToolMetadata — registered once at import time.
 #
-# NOTE on supports_global_query (kickoff): the Wave 1.5 schema amendment
-# (job-0114) is adding ``supports_global_query: bool = False`` to
+# NOTE on supports_global_query (kickoff): the schema amendment
+# is adding ``supports_global_query: bool = False`` to
 # AtomicToolMetadata. As of this job's authoring, that field does NOT exist
 # in trid3nt_contracts.tool_registry.AtomicToolMetadata yet — passing it would
 # raise pydantic ValidationError at import time and break the agent service.
-# Surfaced as OQ-0109-GLOBAL-QUERY-FIELD. Once job-0114 lands, a one-line
+# Surfaced. Once lands, a one-line
 # follow-up adds ``supports_global_query=False`` to this metadata literal.
 # ---------------------------------------------------------------------------
 
@@ -194,8 +194,8 @@ def _build_where_clause(year_range: tuple[int, int] | None) -> str:
 
     When ``year_range`` is None, returns ``"1=1"`` (no year filter).
     Otherwise returns ``"YEAR >= {start} AND YEAR <= {end}"`` (the live
-    EDW_MTBS_v1 schema uses ``YEAR``, not the kickoff's older ``Ig_Year``;
-    see OQ-0109-MTBS-URL-CORRECTED). Inclusive on both endpoints.
+    EDW_MTBS_v1 schema uses ``YEAR``, not the kickoff's older ``Ig_Year``).
+    Inclusive on both endpoints.
     """
     if year_range is None:
         return "1=1"
@@ -430,7 +430,7 @@ def _fetch_mtbs_bytes(
 def fetch_mtbs_burn_severity(
     bbox: tuple[float, float, float, float],
     year_range: tuple[int, int] | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

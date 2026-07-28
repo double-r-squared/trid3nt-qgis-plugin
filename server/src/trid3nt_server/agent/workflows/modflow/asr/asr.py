@@ -1,6 +1,6 @@
 """``model_asr_scenario``  -  MODFLOW aquifer-storage-&-recovery (ASR) composer.
 
-The end-to-end higher-order workflow for the sprint-18 Wave-2 MODFLOW ``ASR``
+The end-to-end higher-order workflow for the MODFLOW ``ASR``
 archetype: it turns a place (or AOI point) + an ASR well (location + injection /
 recovery rates + cycle schedule) into a rendered ASR head layer  -  the cyclic
 inject-rise / recover-fall sawtooth at the well and the recovery efficiency (the
@@ -71,7 +71,7 @@ __all__ = [
 
 
 class ASRResult(GraceModel):
-    """Return type for ``model_asr_scenario`` (sprint-18 Wave-2).
+    """Return type for ``model_asr_scenario``.
 
     Bundles the ASR layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``asr_layer`` carries
@@ -320,7 +320,7 @@ async def modflow_asr(
     porosity: float | None = None,
     aquifer_sy: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model aquifer storage & recovery (ASR): seasonal inject/recover at a well.

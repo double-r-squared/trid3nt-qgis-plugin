@@ -131,7 +131,7 @@ _USER_AGENT = (
 
 # ---------------------------------------------------------------------------
 # AtomicToolMetadata — built defensively against the parallel
-# job-0114-schema sibling that adds ``supports_global_query``. If the schema
+# -schema sibling that adds ``supports_global_query``. If the schema
 # job lands first we want this tool to carry the field; if it doesn't, we
 # fall back to a kwarg-free construction so registration still succeeds.
 # Mirrors the sibling pattern in fetch_mrms_qpe / fetch_hrsl_population /
@@ -431,7 +431,7 @@ def _fetch_gcn250_bytes(
 def fetch_gcn250_curve_numbers(
     bbox: tuple[float, float, float, float],
     antecedent_moisture: Literal["dry", "average", "wet"] = "average",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

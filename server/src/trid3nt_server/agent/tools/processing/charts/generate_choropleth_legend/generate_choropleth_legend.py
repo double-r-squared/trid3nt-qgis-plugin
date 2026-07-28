@@ -1,7 +1,7 @@
 """``generate_choropleth_legend``: quantile class-break legend chart for a
 vector layer's numeric property -> chart-emission payload.
 
-Carved out of the original multi-tool ``chart_tools`` module (job-0230) in the
+Carved out of the original multi-tool ``chart_tools`` module in the
 tools/ reorg; behavior and the registered tool surface are unchanged. The
 shared chart-emission core lives in
 ``trid3nt_server.agent.tools.processing.charts_common``.

@@ -28,13 +28,15 @@ import pytest
 from pydantic import ValidationError
 
 from trid3nt_server import server
+from trid3nt_server.agent.gates.cards.spatial_input import (
+    _spatial_response_to_result,
+)
 from trid3nt_server.server import (
     SessionState,
     SpatialInputInvalidResponseError,
     _emit_spatial_input_and_wait,
     _fail_pending_spatial_input,
     _handle_request_spatial_input,
-    _spatial_response_to_result,
 )
 from trid3nt_contracts.common import new_ulid
 from trid3nt_contracts.ws import (

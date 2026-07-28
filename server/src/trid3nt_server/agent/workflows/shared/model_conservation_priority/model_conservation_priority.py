@@ -440,7 +440,7 @@ async def run_model_conservation_priority(
     mobi_layer: str = "species_richness",
     start_date: str | None = None,
     end_date: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Build the SC-DNR-style conservation-priority stack for a region.

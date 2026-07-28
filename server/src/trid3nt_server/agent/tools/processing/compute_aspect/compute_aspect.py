@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_aspect`` — terrain aspect raster from DEM (job-0082, FR-CE-8, FR-DC).
+"""Atomic tool ``compute_aspect`` - terrain aspect raster from DEM (FR-CE-8, FR-DC).
 
 This module registers one atomic tool that computes an aspect raster from a DEM
 by wrapping GDAL's ``gdaldem aspect`` command:
@@ -52,10 +52,10 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import CACHE_BUCKET, read_through
 
-# job-0269: the job-0257 PROJ/GDAL data-dir env fix (without it, conda-env
+# the PROJ/GDAL data-dir env fix (without it, conda-env
 # gdaldem silently degrades the output CRS to LOCAL_CS — same failure class
 # hillshade hit live; aspect was never wired).
-# job-0271: + COG conversion (flat gdaldem GTiffs render too slowly via WMS).
+# + COG conversion (flat gdaldem GTiffs render too slowly via WMS).
 from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _gdaldem_subprocess_env, _translate_to_cog
 
 __all__ = [
@@ -160,7 +160,7 @@ def _download_dem_bytes(dem_uri: str, storage_client: object | None = None) -> b
     Raises ``AspectComputeError`` on any failure so callers get a typed error.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws (job-0290b): s3:// staging via the shared boto3 reader.
+    # s3:// staging via the shared boto3 reader.
     if dem_uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
         try:
@@ -227,7 +227,7 @@ def _run_gdaldem_aspect(
             capture_output=True,
             check=False,
             timeout=300,  # 5-min ceiling; aspect of any reasonable DEM completes in seconds
-            env=_gdaldem_subprocess_env(gdaldem),  # job-0257 PROJ/GDAL dirs
+            env=_gdaldem_subprocess_env(gdaldem),  # PROJ/GDAL dirs
         )
     except FileNotFoundError as exc:
         raise AspectComputeError(
@@ -274,7 +274,7 @@ def compute_aspect(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -326,7 +326,7 @@ def compute_aspect(
             # 3. Run gdaldem aspect.
             _run_gdaldem_aspect(in_tmp, out_tmp, algorithm, zero_for_flat)
 
-            # 4. job-0271: return real COG bytes — see _translate_to_cog.
+            # 4. return real COG bytes - see _translate_to_cog.
             return _translate_to_cog(out_tmp, _get_gdaldem_bin())
         finally:
             for path in (in_tmp, out_tmp):
@@ -364,7 +364,7 @@ def compute_aspect(
         name=f"Aspect ({algorithm}, {'zero-flat' if zero_for_flat else 'nodata-flat'})",
         layer_type="raster",
         uri=result.uri,
-        style_preset="aspect_compass_deg",  # tools-backlog #3: cyclic compass-aspect hsv ramp (deg). Backend colormap here; the Orchestrator wires the frontend compass legend (NATE 2026-06-24).
+        style_preset="aspect_compass_deg",  # tools-backlog: cyclic compass-aspect hsv ramp (deg). Backend colormap here; the Orchestrator wires the frontend compass legend.
         role="context",
         units="degrees",
     )

@@ -1,4 +1,4 @@
-"""Tests for the ``export_case_to_qgis`` tool (QGIS bridge v1).
+"""Tests for the ``open_case_in_qgis`` tool (QGIS bridge v1).
 
 No network / no S3: synthetic vector (geopandas -> GeoJSON file) + synthetic
 raster (rasterio 10x10 GeoTIFF) in ``tmp_path``, passed through the explicit
@@ -13,11 +13,11 @@ from pathlib import Path
 
 import pytest
 
-from trid3nt_server.agent.tools.meta.export_case_to_qgis.export_case_to_qgis import (
+from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import (
     ExportCaseError,
     ExportInputError,
     NoExportableLayersError,
-    export_case_to_qgis,
+    open_case_in_qgis,
 )
 
 # --------------------------------------------------------------------------- #
@@ -93,7 +93,7 @@ async def test_export_vector_and_raster_full_bundle(
     out_dir = tmp_path / "export"
     # Raster uri carries the TiTiler style params so the QML translation
     # (rescale=0,3 & colormap_name=Blues) is exercised end-to-end.
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[
             {
                 "name": "Flood Extent",
@@ -181,7 +181,7 @@ async def test_raster_style_params_translate_to_pseudocolor(
 ) -> None:
     """rescale=0,3 & colormap_name=Blues -> singleband pseudocolor renderer
     with classification min 0 / max 3 and 5 Blues-sampled stops."""
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[
             {
                 "name": "depth",
@@ -220,7 +220,7 @@ async def test_qml_sidecar_carries_ramp_and_zero_transparency(
     a 0-value transparency entry when the ramp starts at 0 (flood depth: dry
     cells transparent, never black)."""
     out_dir = tmp_path / "qml"
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[
             {
                 "name": "depth",
@@ -278,7 +278,7 @@ async def test_qml_zero_transparency_only_for_zero_min_ramps(
     """A ramp that does NOT start at 0 (e.g. a DEM rescale=100,500) must not
     punch a transparency hole at value 0."""
     out_dir = tmp_path / "dem"
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[
             {
                 "name": "dem",
@@ -301,7 +301,7 @@ async def test_lowercase_titiler_colormap_resolves_case_insensitively(
     """TiTiler carries lowercase colormap names (ylgnbu); matplotlib registers
     YlGnBu. The translation must resolve case-insensitively instead of
     silently degrading every real flood-depth export to viridis."""
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[
             {
                 "name": "depth",
@@ -327,7 +327,7 @@ async def test_lowercase_titiler_colormap_resolves_case_insensitively(
 async def test_raster_without_style_params_falls_back_to_viridis(
     tmp_path: Path, raster_path: Path
 ) -> None:
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[{"name": "plain", "layer_type": "raster", "uri": str(raster_path)}],
         output_dir=str(tmp_path / "plain"),
     )
@@ -357,7 +357,7 @@ async def test_titiler_tile_template_unwraps_url_param(
         "https://example.test/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png"
         f"?url={quote(str(raster_path), safe='')}&rescale=0,3&colormap_name=Blues"
     )
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[{"name": "tiled depth", "layer_type": "raster", "uri": template}],
         output_dir=str(tmp_path / "tiled"),
     )
@@ -382,7 +382,7 @@ async def test_inline_geojson_vector(tmp_path: Path) -> None:
             }
         ],
     }
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[{"name": "gauges", "layer_type": "vector", "inline_geojson": fc}],
         output_dir=str(tmp_path / "inline"),
     )
@@ -401,11 +401,11 @@ async def test_inline_geojson_vector(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_exactly_one_of_case_id_or_layers_required(tmp_path: Path) -> None:
     with pytest.raises(ExportInputError) as exc_info:
-        await export_case_to_qgis()
+        await open_case_in_qgis()
     assert exc_info.value.error_code == "INVALID_INPUT"
 
     with pytest.raises(ExportInputError):
-        await export_case_to_qgis(
+        await open_case_in_qgis(
             case_id="01ARZ3NDEKTSV4RRFFQ69G5FAV",
             layers=[{"name": "x", "layer_type": "vector", "uri": "y"}],
         )
@@ -415,7 +415,7 @@ async def test_exactly_one_of_case_id_or_layers_required(tmp_path: Path) -> None
 async def test_unreadable_layer_is_a_skip_not_a_hard_fail(
     tmp_path: Path, vector_path: Path
 ) -> None:
-    result = await export_case_to_qgis(
+    result = await open_case_in_qgis(
         layers=[
             {"name": "good", "layer_type": "vector", "uri": str(vector_path)},
             {
@@ -440,7 +440,7 @@ async def test_unreadable_layer_is_a_skip_not_a_hard_fail(
 @pytest.mark.asyncio
 async def test_all_layers_skipped_raises_no_exportable_layers(tmp_path: Path) -> None:
     with pytest.raises(NoExportableLayersError) as exc_info:
-        await export_case_to_qgis(
+        await open_case_in_qgis(
             layers=[
                 {
                     "name": "ghost",
@@ -456,7 +456,7 @@ async def test_all_layers_skipped_raises_no_exportable_layers(tmp_path: Path) ->
 @pytest.mark.asyncio
 async def test_empty_layers_list_raises(tmp_path: Path) -> None:
     with pytest.raises(NoExportableLayersError):
-        await export_case_to_qgis(layers=[], output_dir=str(tmp_path / "none"))
+        await open_case_in_qgis(layers=[], output_dir=str(tmp_path / "none"))
 
 
 # --------------------------------------------------------------------------- #
@@ -467,7 +467,7 @@ async def test_empty_layers_list_raises(tmp_path: Path) -> None:
 def test_tool_is_registered() -> None:
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-    entry = TOOL_REGISTRY.get("export_case_to_qgis")
+    entry = TOOL_REGISTRY.get("open_case_in_qgis")
     assert entry is not None
     assert entry.metadata.cacheable is False
     assert entry.metadata.ttl_class == "live-no-cache"

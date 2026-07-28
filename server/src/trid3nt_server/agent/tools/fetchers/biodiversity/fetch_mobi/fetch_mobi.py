@@ -120,7 +120,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -320,7 +320,7 @@ def _fetch_mobi_cog_bytes(
 def fetch_mobi(
     bbox: tuple[float, float, float, float],
     layer: str = "species_richness",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch NatureServe Map of Biodiversity Importance (MoBI) for a US bbox.

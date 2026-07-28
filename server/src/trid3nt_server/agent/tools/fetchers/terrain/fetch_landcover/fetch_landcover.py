@@ -39,13 +39,13 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.terrain.fetch_la
 
 
 # ---------------------------------------------------------------------------
-# fetch_landcover — NLCD (MRLC) / ESA WorldCover (sprint-07 Stage B, job-0039;
-# job-0044 hotfix: WMS → WCS 1.0.0 to fix palette encoding).
+# fetch_landcover - NLCD (MRLC) / ESA WorldCover (Stage B;
+# hotfix: WMS → WCS 1.0.0 to fix palette encoding).
 # ---------------------------------------------------------------------------
 #
 # Access pattern tier — LIVE-VERIFIED THROUGH TWO ROUNDS:
 #
-# Round 1 (job-0039, 2026-06-07):
+# Round 1:
 #
 #   * The MRLC direct file mirror (``s3-us-west-2.amazonaws.com/mrlc/
 #     Annual_NLCD_LndCov_<YEAR>_CU_C1V0.tif``) returned an HTTP 200 with a
@@ -60,13 +60,13 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.terrain.fetch_la
 #     ``GetMap?format=image/geotiff`` — Tier 2 (OGC service) byte materialized.
 #     Substrate landed against WMS GetMap.
 #
-# Round 2 (job-0044, 2026-06-07 — THE PALETTE-ENCODING HOTFIX):
+# Round 2 (THE PALETTE-ENCODING HOTFIX):
 #
 #   * Job-0042's NLCD validation gate (Invariant 7 mitigation) fired on a real
 #     Fort Myers smoke run: the WMS GetMap GeoTIFF returns raster bytes that
 #     are **palette indices** (1, 3, 4, 5, ..., 21) NOT canonical NLCD class
-#     integers (11, 21, 22, 23, ..., 95) — surfaced as
-#     OQ-42-NLCD-WMS-PALETTE-ENCODING. The Manning's mapping CSV is keyed by
+#     integers (11, 21, 22, 23, ..., 95).
+#     The Manning's mapping CSV is keyed by
 #     canonical integers; SFINCS dispatch was blocked end-to-end.
 #   * Live-probed both candidate fix paths per §F.1.1 live-verification discipline:
 #
@@ -100,15 +100,12 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.terrain.fetch_la
 #     vendor sub-protocol switches from WMS GetMap to WCS GetCoverage.
 #
 # Job-0044 cache-migration policy: cache key now includes ``source: "mrlc-wcs"``
-# (the palette-encoded ``mrlc-wms`` entries from job-0039's evidence land
+# (the palette-encoded ``mrlc-wms`` entries from evidence land
 # under a different cache prefix and naturally evict on the 30-day TTL — no
 # explicit invalidation needed). Job-0039's evidence COGs at
 # ``cache/static-30d/landcover/56bad09bfa8a71d502ed61badc785a00.tif`` will
 # remain until TTL eviction; the new canonical-bytes COGs land at a new key.
 #
-# Round 1 deviation (job-0039) is still recorded as OQ-39-NLCD-TIER-DEVIATION
-# (kickoff inferred Tier 3 → live Tier 2). Round 2 hotfix (job-0044) closes
-# OQ-42-NLCD-WMS-PALETTE-ENCODING.
 #
 # Vintage discipline: NLCD vintages 2019, 2021 (default), and 2023 are most-
 # relevant. The Annual NLCD Collection 1.0 (2023 release) is published as the
@@ -121,10 +118,10 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.terrain.fetch_la
 # ``esa-worldcover``) opt-in via ``dataset="esa_worldcover_2021"``.
 #
 # Manning's mapping validation gate (per docs/decisions/oq-4-hydromt-depth.md
-# §4 "Immediate (job-0039)"): the NLCD vintage year is returned as sidecar
-# metadata alongside the LayerURI so job-0042 ``build_sfincs_model`` can
+# §4 "Immediate "): the NLCD vintage year is returned as sidecar
+# metadata alongside the LayerURI so ``build_sfincs_model`` can
 # verify the Manning's mapping CSV covers the vintage's class encoding. This
-# is the Invariant 7 (no silent wrong answers) mitigation OQ-4 demanded.
+# is the Invariant 7 (no silent wrong answers) mitigation demanded.
 #
 # Sidecar shape — return-value design: ``LayerURI`` (in
 # ``trid3nt_contracts.execution``) is a FROZEN contract with
@@ -140,8 +137,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.terrain.fetch_la
 #     }
 #
 # This is the same dict-return pattern as ``geocode_location`` (also no
-# contract for its shape) and ``lookup_precip_return_period`` below — see
-# OQ-39-LANDCOVER-RETURN-SHAPE-CONTRACT-PROMOTION.
+# contract for its shape) and ``lookup_precip_return_period`` below.
 
 
 _FETCH_LANDCOVER_METADATA = AtomicToolMetadata(
@@ -151,11 +147,11 @@ _FETCH_LANDCOVER_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-# Landcover-ONLY cache-version salt (job-0324 follow-up — STALE-CACHE fix).
+# Landcover-ONLY cache-version salt (STALE-CACHE fix).
 # -------------------------------------------------------------------------
 # The "bake NLCD land cover into hillshade" demo rendered grey because the
 # read-through cache (static-30d, 30-day TTL) was serving NLCD COGs written
-# BEFORE deploy #3's palette-preservation fix (job-0324). Those stale COGs
+# BEFORE deploy palette-preservation fix. Those stale COGs
 # dropped their embedded GDAL color table, so blending them produced a flat
 # grayscale base instead of the NLCD class colors.
 #
@@ -168,13 +164,13 @@ _FETCH_LANDCOVER_METADATA = AtomicToolMetadata(
 # into the shared ``compute_cache_key`` salt, so no other tool's cache key
 # changes (a recursive cache wipe was deliberately avoided). Bump the integer
 # whenever a landcover-COG-generation fix must force a clean regenerate.
-_LANDCOVER_CACHE_VERSION = 3  # v3 = F26 background(0)->nodata transparency; v2 = post-job-0324 palette-preserving COGs
+_LANDCOVER_CACHE_VERSION = 3  # v3 = background(0)->nodata transparency; v2 = palette-preserving COGs
 
-# MRLC WCS 1.0.0 GeoServer endpoint (Tier 2 OGC service, live-verified
-# 2026-06-07 in job-0044). WCS 1.0.0 GetCoverage returns canonical NLCD class
-# integers in the raster band — the WMS GetMap path job-0039 landed against
-# returned palette-encoded indices (the OQ-42-NLCD-WMS-PALETTE-ENCODING
-# blocker job-0042's validation gate caught). WCS 1.0.0 was chosen over
+# MRLC WCS 1.0.0 GeoServer endpoint (Tier 2 OGC service, live-verified).
+# WCS 1.0.0 GetCoverage returns canonical NLCD class
+# integers in the raster band - the WMS GetMap path landed against
+# returned palette-encoded indices (the
+# blocker validation gate caught). WCS 1.0.0 was chosen over
 # WCS 1.1.1 / 2.0.1: 2.0.1 hits a GeoServer projection-mapping bug ("Unable
 # to map projection Popular Visualisation Pseudo Mercator") on its own
 # native EPSG:3857; 1.1.1 rejects bbox-only requests; 1.0.0 with explicit
@@ -202,7 +198,7 @@ def _read_band1_colormap(src) -> dict | None:
     NLCD land cover ships a single-band palette-index COG with an EMBEDDED GDAL
     color table; TiTiler colorizes from it. Every COG re-write (clip, COG
     translate, overview enforcement) must carry that table forward or the layer
-    renders solid grey (job-0324 regression). rasterio raises ``ValueError``
+    renders solid grey (regression). rasterio raises ``ValueError``
     when band 1 has no color table — that is the normal, expected case for
     continuous rasters (DEM, hillshade, flood depth), and we return ``None`` so
     the caller does NOT fabricate one.
@@ -391,7 +387,7 @@ def _landcover_bytes_to_cog(
 ) -> bytes:
     """Clip NLCD bytes to the exact bbox and emit a tiled COG WITH overviews.
 
-    job-0271-class fix for fetch_landcover: the MRLC WCS GetCoverage returns a
+    -class fix for fetch_landcover: the MRLC WCS GetCoverage returns a
     flat strip-organized GeoTIFF with NO overviews, so TiTiler 404s the
     zoomed-out tiles and the layer renders spotty / never paints when panned
     out. This routes the raster through ``_translate_to_cog`` (the
@@ -556,8 +552,8 @@ def _fetch_nlcd_landcover_bytes(
     Tier 2 access pattern (per §F.1.1) — MRLC WCS 1.0.0 ``GetCoverage`` with
     ``FORMAT=GeoTIFF`` returns the canonical NLCD class integers (11, 21, 22,
     23, 24, 31, 41, 42, 43, 51, 52, 71, 72, 73, 74, 81, 82, 90, 95) in the
-    raster band — NOT palette indices. This is the job-0044 hotfix that
-    unblocks job-0042's NLCD validation gate. The returned GeoTIFF carries a
+    raster band - NOT palette indices. This is the hotfix that
+    unblocks NLCD validation gate. The returned GeoTIFF carries a
     proper geo-header (EPSG:4326 in this request shape) so HydroMT's
     ``setup_manning_roughness`` consumes the bytes directly without a
     client-side palette decode.
@@ -604,14 +600,14 @@ def _fetch_nlcd_landcover_bytes(
     width_px = max(16, min(_MRLC_MAX_PX, int(round(width_m / _res))))
     height_px = max(16, min(_MRLC_MAX_PX, int(round(height_m / _res))))
 
-    # WCS 1.0.0 GetCoverage via the shared generic OGC adapter (job-0047
-    # refactor — single source of truth for §F.1.1 Tier 2 retrieval). The
+    # WCS 1.0.0 GetCoverage via the shared generic OGC adapter: the single
+    # source of truth for §F.1.1 Tier 2 retrieval. The
     # adapter handles the WCS request shape (Coverage, CRS, BBOX, WIDTH,
     # HEIGHT, FORMAT), surfaces OGC exception XMLs as typed errors, and
     # validates the GeoTIFF content-type so a misconfigured GeoServer
     # response (HTML error page, ExceptionReport XML) doesn't poison the
     # cache. The MRLC WCS sub-protocol (1.0.0 over 1.1.1/2.0.1) was
-    # established in job-0044's live-verification rounds and is preserved.
+    # established in live-verification rounds and is preserved.
     from trid3nt_server.agent.tools.search.ogc_adapter import OGCAdapterError, fetch_ogc_layer
 
     try:
@@ -649,7 +645,7 @@ def _fetch_nlcd_landcover_bytes(
     # pipeline so the fixed table is what gets clipped/tiled/cached.
     fixed = _fix_nlcd_background_transparency(ogc_resp.content)
 
-    # job-0271-class fix (F33/F39): the MRLC WCS GetCoverage GeoTIFF is a flat
+    # -class fix (F33/F39): the MRLC WCS GetCoverage GeoTIFF is a flat
     # strip-organized raster with NO overviews, so TiTiler 404s the zoomed-out
     # tiles and NLCD renders spotty / vanishes when panned out. Clip to the
     # exact bbox and re-emit a tiled COG WITH overviews before caching.
@@ -664,7 +660,7 @@ def _fetch_esa_worldcover_bytes(
     (Tier 1 per §F.1.1). The implementation is reserved as a forward-looking
     branch; the v0.1 substrate raises ``UpstreamAPIError`` so the agent's
     FR-AS-11 surface can decide whether to fall back to NLCD or surface to
-    the user. Surface as OQ-39-ESA-WORLDCOVER-SUBSTRATE.
+    the user. Surface.
     """
     raise UpstreamAPIError(
         "ESA WorldCover branch is not implemented in the v0.1 substrate "
@@ -700,14 +696,14 @@ def fetch_landcover(
     bbox: tuple[float, float, float, float],
     dataset: str = _DEFAULT_NLCD_DATASET,
     resolution_m: int = 30,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Fetch landcover classification raster (NLCD or ESA WorldCover) for a bbox.
 
     Access pattern: Tier 2 (OGC service — MRLC WCS/WMS endpoint per §F.1.1; live
-    verification 2026-06-07 found NLCD is Tier 2, see OQ-39-NLCD-TIER-DEVIATION).
+    verification found NLCD is Tier 2).
 
     **What it does:** Downloads an NLCD or ESA WorldCover landcover GeoTIFF
     clipped to the requested bbox via the MRLC WCS 1.0.0 GeoServer endpoint.
@@ -730,7 +726,7 @@ def fetch_landcover(
       in the v0.1 substrate.
     - Global landcover -- pass ``dataset="esa_worldcover_2021"`` to opt into
       the ESA WorldCover branch, but that branch currently raises
-      ``UpstreamAPIError`` (forward-looking, OQ-39-ESA-WORLDCOVER-SUBSTRATE).
+      ``UpstreamAPIError`` (forward-looking).
     - Single-point landcover classification -- this tool returns a raster;
       use ``extract_landcover_class`` for point lookups once it lands.
     - Continent-scale bboxes (> 5,000,000 km^2) -- the tool raises
@@ -842,11 +838,11 @@ def fetch_landcover(
         # Quantize to the effective resolution grid for cache-key stability.
         quantized = round_bbox_to_resolution(bbox, effective_res)
 
-        # Cache-key source tag is ``mrlc-wcs`` after job-0044's hotfix; the
-        # palette-encoded ``mrlc-wms`` entries from job-0039 land under a
+        # Cache-key source tag is ``mrlc-wcs`` after hotfix; the
+        # palette-encoded ``mrlc-wms`` entries from land under a
         # different key and naturally evict on the 30-day TTL -- no explicit
         # invalidation needed (cached COG migration is a no-op).
-        # STALE-CACHE fix (job-0324 follow-up): the ``cache_version`` salt makes
+        # STALE-CACHE fix: the ``cache_version`` salt makes
         # the post-fix key differ from the pre-fix (palette-less) entry, so this
         # fetch MISSES the stale COG and regenerates a colored, palette-
         # preserving one. Landcover-only -- see _LANDCOVER_CACHE_VERSION.

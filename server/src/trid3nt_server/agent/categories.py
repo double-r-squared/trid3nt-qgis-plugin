@@ -1,6 +1,6 @@
-"""12-category tool registry + post-hoc allowed-set validator (Wave 4.10 job-B5).
+"""12-category tool registry + post-hoc allowed-set validator.
 
-This module implements the Wave 4.10 CachedContent Option A architecture from
+This module implements the CachedContent Option A architecture from
 ``project_wave_4_10_research_findings.md``:
 
 - The agent caches the FULL tool catalog via Gemini ``CachedContent.tools[]``
@@ -12,13 +12,13 @@ This module implements the Wave 4.10 CachedContent Option A architecture from
   per-session ``AllowedToolSet`` BEFORE dispatch. If the call name IS a real
   registered tool (present in ``TOOL_REGISTRY``) but outside the allowed set,
   the validator AUTO-WIDENS the set with that name and lets the dispatch
-  proceed (job-0270 - Gemini saw the full catalog via CachedContent, so a
+  proceed (Gemini saw the full catalog via CachedContent, so a
   registry-valid call is correct routing, not a hallucination). Only names
   that do NOT exist in the registry raise ``OutOfAllowedSetError`` - a typed
   exception with ``error_code='OUT_OF_ALLOWED_SET'`` and ``retryable=False``.
   ``summarize_tool_result`` in ``adapter.py`` then renders this as the
-  canonical Wave 4.9 ``{status: error, error_code, retryable, message}``
-  envelope, which Gemini reads on its next turn and retries (per Wave 4.9
+  canonical ``{status: error, error_code, retryable, message}``
+  envelope, which Gemini reads on its next turn and retries (per
   retry-on-failure).
 
 Twelve categories (from ``project_generic_endpoint_architecture.md``):
@@ -43,8 +43,8 @@ Twelve categories (from ``project_generic_endpoint_architecture.md``):
 The hot set (always-on at session start, before any category has been opened)
 is defined in ``HOT_SET_TOOLS`` - ten tools that span the most common entry
 points to a session: the two top-level workflow composers, geocoding, terrain,
-weather alerts (CONUS sweep + state/county-scoped - job-0261), code-exec
-(job-0247), and the meta-tools (list_categories, list_tools_in_category,
+weather alerts (CONUS sweep + state/county-scoped), code-exec
+and the meta-tools (list_categories, list_tools_in_category,
 search_tools).
 """
 
@@ -283,7 +283,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # run_pelicun door's gate expansion; the with-buildings composer folded into its
     # bbox auto-fetch input mode). The DOOR carries the hazard_modeling membership.
     "run_pelicun": "hazard_modeling",
-    # sprint-17 NEW engines (parallel lanes) - all are run_* hazard solvers /
+    # NEW engines (parallel lanes) - all are run_* hazard solvers /
     # composers, filed alongside the other engines above.
     # engine-door refactor: run_river_seepage_job + run_model_river_seepage_scenario
     # folded into the modflow_river_seepage template (tier=template, not categorized).
@@ -321,12 +321,12 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # The QGIS bridge exporter: a case-product utility, not a modeling engine.
     # geographic_primitives is the general-purpose/utility lane; reached from
     # "take this into QGIS / export my project".
-    "export_case_to_qgis": "geographic_primitives",
+    "open_case_in_qgis": "geographic_primitives",
     # The reverse seam: register an already-uploaded QGIS layer (vector or
     # raster) onto a case as a first-class input layer. Filed alongside
-    # export_case_to_qgis -- same general-purpose/utility lane, same
+    # open_case_in_qgis -- same general-purpose/utility lane, same
     # "bridge between the case and the user's desktop QGIS project" family.
-    "import_user_layer": "geographic_primitives",
+    "register_case_layer": "geographic_primitives",
     # case-analysis batch: point/series sampling + the case situation report are
     # general-purpose case utilities (the conversational-analysis surface);
     # exposure-in-footprint is an impact/exposure product, so it files under
@@ -335,7 +335,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "query_point_hazard": "geographic_primitives",
     "extract_timeseries_at_point": "geographic_primitives",
     "compose_case_report": "geographic_primitives",
-    # engine-door refactor: the sprint-18 MODFLOW GWF-only archetype composers +
+    # engine-door refactor: the MODFLOW GWF-only archetype composers +
     # Waves 4-5 (PRT capture-zone / WHPA + BUY saltwater) are now engine TEMPLATES
     # (tier=template, engine=modflow) under workflows/modflow/<template>/. They are
     # deliberately NOT categorized: templates are excluded from the retrieval pool
@@ -536,7 +536,7 @@ PRIMARY_CATEGORY: dict[str, str] = {
     "compute_skill_metrics": "geographic_primitives",
     "compute_flood_extent_skill": "geographic_primitives",
     "extract_model_at_observations": "geographic_primitives",
-    # NATE 2026-06-17: fast layer-extent + fit-the-map tool. Replaces the
+    # fast layer-extent + fit-the-map tool. Replaces the
     # sandbox bbox-math anti-pattern and drives the zoom-to map-command.
     "compute_layer_bounds": "geographic_primitives",
     # FR-AS-10 / FR-WC-16: pause-the-turn and ask the user to DRAW on the map
@@ -544,11 +544,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # barriers feed swmm_urban_flood; cross-cutting view/input action.
     "request_spatial_input": "geographic_primitives",
     # DuckDB spatial-query fold (Phase B): ONE read-only SQL surface replaces
-    # the three job-0224 analytical Q&A tools (summarize_layer_statistics /
+    # the three analytical Q&A tools (summarize_layer_statistics /
     # count_features_above_threshold / aggregate_property_within_zone) - same
     # lane, same conversational-analysis surface.
     "spatial_query": "geographic_primitives",
-    # job-0230 (sprint-13 Stage 2): chart-generation tools - visual companions
+    # chart-generation tools - visual companions
     # to the analytical Q&A tools above (conversational data-analysis layer).
     "generate_histogram": "geographic_primitives",
     "generate_choropleth_legend": "geographic_primitives",
@@ -559,11 +559,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # stations along a drawn-or-derived line; multi-layer overlay). Filed in the
     # same conversational-analysis surface as the other chart-emission tools.
     "compute_cross_section": "geographic_primitives",
-    # job-0233 (sprint-13 Stage 2): user-confirmed Python sandbox - the ad-hoc
+    # user-confirmed Python sandbox - the ad-hoc
     # computation escape hatch behind the conversational data-analysis layer.
     # The kickoff named a "data_analysis" category; no such category exists, so
     # this is filed under geographic_primitives alongside the analytical Q&A +
-    # chart tools (the conversational-analysis surface). See job-0233 report
+    # chart tools (the conversational-analysis surface). See report
     # OQ-CODE-EXEC-CATEGORY.
     "code_exec_request": "geographic_primitives",
     # sandbox-staging: lists a completed run's ordered animation-frame COG URIs
@@ -674,7 +674,7 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
     "run_model_news_event_ingest": ("news_events",),
     # Case 2 groundwater composer spans hazard_modeling (it runs MODFLOW) AND
     # news_events (it's driven by a spill news article - the canonical "model
-    # the spill from this article" entry point). job-0228.
+    # the spill from this article" entry point).
     "run_model_groundwater_contamination_scenario": ("news_events",),
     # Case 3 composer spans hazard_modeling (it runs SFINCS) AND
     # weather_atmosphere (it's driven by an active NWS flood warning + MRMS
@@ -830,11 +830,11 @@ SECONDARY_CATEGORIES: dict[str, tuple[str, ...]] = {
 #   pool-excluded sfincs_flood template stays reachable).
 # - geocode_location, fetch_dem, fetch_nws_alerts_conus, fetch_nws_event -
 #   the most commonly cited "before you can do anything else" tools
-#   (fetch_nws_event added by job-0261 - see inline comment).
+# (fetch_nws_event added - see inline comment).
 # - list_categories, list_tools_in_category, search_tools - the three
 #   meta-tools that let Gemini surface anything else when the hot set
 #   isn't enough.
-# - code_exec_request - cross-cutting capability (job-0247).
+# - code_exec_request - cross-cutting capability.
 # ---------------------------------------------------------------------------
 
 
@@ -847,16 +847,16 @@ HOT_SET_TOOLS: frozenset[str] = frozenset(
         "list_categories",
         "list_tools_in_category",
         "search_tools",
-        # job-0247 (OQ-0247-CODE-EXEC-NOT-IN-HOT-SET): code-exec is a
+        # code-exec is a
         # cross-cutting capability like the meta-tools, not a geographic
         # primitive the agent should have to discover via category listing.
         # Round-4 live: Gemini called it CORRECTLY on the first turn, the
         # post-hoc validator rejected it (OutOfAllowedSetError), and the
         # agent narrated a false "I am unable to run Python code" instead
-        # of widening. Always reachable; the user-confirm gate (job-0233)
+        # of widening. Always reachable; the user-confirm gate
         # remains the safety boundary.
         "code_exec_request",
-        # job-0261: same failure mode as job-0247, worse outcome. Live demo
+        # same failure mode, worse outcome. Live demo
         # "show me weather alerts in texas": Gemini called
         # fetch_nws_event(area='TX') CORRECTLY on the first turn, the
         # validator rejected it, and Gemini fell back to the in-hot-set
@@ -864,25 +864,25 @@ HOT_SET_TOOLS: frozenset[str] = frozenset(
         # alerts rendered far beyond the named state. The state-scoped NWS
         # tool must be as reachable as its CONUS sibling.
         "fetch_nws_event",
-        # NATE 2026-06-17: fit/zoom/resize-to-encompass-all-features is a
+        # fit/zoom/resize-to-encompass-all-features is a
         # cross-cutting view action a user invokes at any point ("resize the box
         # to encompass all the buildings"). It must be reachable WITHOUT a
         # category-open round-trip - same rationale as code_exec_request above.
         # Critically, this keeps the agent from falling back to the Python
         # sandbox for bbox math when compute_layer_bounds isn't in the allowed
-        # set (the job-0247 / job-0261 failure mode).
+        # set (the failure mode).
         "compute_layer_bounds",
         # FR-AS-10 / FR-WC-16: request_spatial_input is a cross-cutting user-
         # input action the agent invokes at any point ("let me draw the flood
         # walls"). Same hot-set rationale as code_exec_request / compute_layer_
         # bounds - it must be reachable WITHOUT a category-open round-trip so the
         # urban-flood draw flow does not stall on the post-hoc allowed-set
-        # validator (the job-0247 / job-0261 failure mode).
+        # validator (the failure mode).
         "request_spatial_input",
-        # tool-retrieval STEP 0 (NATE 2026-06-23): the render + core-analysis
+        # tool-retrieval STEP 0: the render + core-analysis
         # surface that must NEVER be retrieved-out when the catalog is trimmed.
         # publish_layer survives today ONLY via validate_function_call's
-        # auto-widen (job-0270) -- a latent gap that breaks the instant
+        # auto-widen -- a latent gap that breaks the instant
         # retrieve_visible_tools subsets the declarations. The analysis tools are
         # the universal "answer a question about a layer" surface a user reaches
         # for at any point ("what's the population below 3m / chart it"), so they
@@ -929,13 +929,13 @@ class OutOfAllowedSetError(RuntimeError):
     """Raised when Gemini emits a ``function_call`` for a name that is not in
     the current turn's allowed set AND not a registered tool.
 
-    Per the Wave 4.10 CachedContent Option A architecture: every Gemini
+    Per the CachedContent Option A architecture: every Gemini
     function_call is validated against the per-session ``AllowedToolSet``
-    BEFORE dispatch. Since job-0270, a registry-valid name outside the
+    BEFORE dispatch. Since, a registry-valid name outside the
     allowed set auto-widens the set instead of raising - this exception is
     now the HALLUCINATION GUARD: it fires only for names that exist nowhere
     in ``TOOL_REGISTRY``. ``summarize_tool_result`` (adapter.py) renders it
-    as the canonical Wave 4.9 structured error envelope with
+    as the canonical structured error envelope with
     ``error_code='OUT_OF_ALLOWED_SET'`` and ``retryable=False``. Gemini
     reads the envelope on its next turn and retries - typically by calling
     ``list_tools_in_category`` / ``search_tools`` to find a real tool.
@@ -993,7 +993,7 @@ class AllowedToolSet:
     leave. A new session (new WebSocket connection / new ``SessionState``)
     starts with a fresh ``AllowedToolSet`` seeded from the hot set.
 
-    Wave 4.11 M6 extension: the optional ``user_id`` field carries the
+     M6 extension: the optional ``user_id`` field carries the
     authenticated user identity so ``get_dynamic_hot_set`` can filter
     telemetry per-user.  When ``None`` the global (all-users) tallying path
     is used.  The ``TRID3NT_DYNAMIC_HOT_SET=1`` feature flag must also be set
@@ -1149,19 +1149,19 @@ def tools_for_category(category_id: str) -> tuple[str, ...]:
 def validate_function_call(call_name: str, allowed: AllowedToolSet) -> None:
     """Validate a Gemini ``function_call`` name; raise only for non-tools.
 
-    Per Wave 4.10 CachedContent Option A: every Gemini-emitted ``function_call``
+    Per CachedContent Option A: every Gemini-emitted ``function_call``
     must be validated against the current turn's allowed set BEFORE we hand
     it off to ``_invoke_tool_via_emitter``. The hot set is always present; the
     allowed set widens monotonically through the session as the LLM opens
     categories (``list_tools_in_category``) or dispatches tools.
 
-    job-0270 (auto-widen for REAL tools): when ``call_name`` IS a registered
+    when ``call_name`` IS a registered
     tool (in the live ``TOOL_REGISTRY``) but outside the current allowed set,
     do NOT raise - Gemini saw the full catalog via CachedContent, so a
     registry-valid call is a correct routing decision, not a hallucination.
     The set auto-widens with that name (same monotonic explicit-tools growth
     path used by category pre-warm) and the dispatch proceeds; a WARNING log
-    records the widening. Live evidence (job-0247, job-0261, agent_demo7/8):
+    records the widening. Live evidence (agent_demo7/8):
     rejecting registry-valid first calls to ``compute_colored_relief`` /
     ``compute_hillshade`` / ``publish_layer`` burned 2-4 detour iterations
     per turn while Gemini guessed category names, and once left a computed

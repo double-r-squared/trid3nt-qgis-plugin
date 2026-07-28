@@ -53,7 +53,7 @@ from typing import Any
 # SFINCS_TREF is the deck reference instant (2026-01-01) that
 # ``_generate_hydromt_yaml_config`` writes as the deck ``tref``/``tstart``. The
 # spw TIME lines MUST be minutes-since-this-instant or the wind silently clips
-# out of the simulation window (job-0248 class). Import the ONE canonical value.
+# out of the simulation window. Import the ONE canonical value.
 from trid3nt_server.agent.workflows.sfincs.sfincs_forcing_adapter import SFINCS_TREF
 
 logger = logging.getLogger(__name__)
@@ -582,7 +582,7 @@ def build_spiderweb_from_fixes(
     simulated. An explicit ``window_hr`` is still honoured, but then the landfall
     assert below hard-fails if it would push landfall out of the deck window.
 
-    DECK-WINDOW ASSERTS (job-0248 class): the re-anchored spw spans
+    DECK-WINDOW ASSERTS: the re-anchored spw spans
     ``[0, span_min]`` and the deck runs ``[0, deck_sim_hours*60]``. We raise a
     typed ``SpiderwebError`` (rather than emit a dead deck) if (a) the spw does
     not overlap the deck window at all, OR (b) the landfall minute falls outside

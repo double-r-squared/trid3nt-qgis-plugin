@@ -1,4 +1,4 @@
-"""``fetch_noaa_coops_tides`` atomic tool — NOAA CO-OPS tide-station observations and predictions (job A9).
+"""``fetch_noaa_coops_tides`` atomic tool - NOAA CO-OPS tide-station observations and predictions.
 """
 
 from __future__ import annotations
@@ -155,7 +155,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -653,7 +653,7 @@ def fetch_noaa_coops_tides(
     start_date: str,
     end_date: str,
     product: str = "water_level",
-    # job-0164 / Wave 4.10 convention: absorb LLM-invented kwargs
+    # convention: absorb LLM-invented kwargs
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch NOAA CO-OPS tide-station observations or predictions as a FlatGeobuf.

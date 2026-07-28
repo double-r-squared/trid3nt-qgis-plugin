@@ -1,4 +1,4 @@
-"""``compute_building_density`` atomic tool — Microsoft Global ML Building Footprints density raster (job-0096).
+"""``compute_building_density`` atomic tool - Microsoft Global ML Building Footprints density raster.
 
 Fetches building footprints from Microsoft's Global ML Building Footprints
 dataset and rasterizes building centroids onto a regular grid in EPSG:3857
@@ -29,7 +29,7 @@ Format: ``Location,QuadKey,Url,Size,UploadDate`` per row. Each tile URL points
 at a gzipped CSV file whose rows are raw GeoJSON Feature strings (the same
 ``geojsonl`` format despite the ``.csv.gz`` extension Microsoft chose).
 
-International coverage (OQ-96-INTL-COVERAGE):
+International coverage:
     The index covers >200 ``Location`` entries globally (Africa, Asia, Europe,
     Oceania, Americas). For a non-CONUS bbox we still emit quadkeys and look
     them up — the index returns whatever region(s) the quadkey lives under
@@ -37,7 +37,7 @@ International coverage (OQ-96-INTL-COVERAGE):
     matches a requested quadkey we treat that tile as "0 buildings" rather
     than erroring out — coverage gaps are legitimately empty.
 
-Codified job-0086 lesson (geographic correctness):
+Codified lesson (geographic correctness):
     The acceptance test for this tool MUST assert the density signal is high
     where Fort Myers actually has dense buildings and low over the river/ocean
     pixels in the same COG — not merely that the COG round-trips bytes.
@@ -573,7 +573,7 @@ def _fetch_building_density_bytes(
     """Fetch tiles, rasterize centroids, return COG bytes for the bbox.
 
     Single source supported for v0.1 (``"ms_footprints"``). Surfaces:
-    - OQ-96-INTL-COVERAGE if the bbox falls fully outside Microsoft's coverage.
+    - if the bbox falls fully outside Microsoft's coverage.
     - BuildingDensityUpstreamError for index / tile network failures.
 
     Returns the raw bytes of a CRS-tagged, LZW-compressed, tiled GeoTIFF
@@ -705,7 +705,7 @@ def compute_building_density(
     bbox: tuple[float, float, float, float],
     cell_size_m: float = 100.0,
     source: str = "ms_footprints",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

@@ -1,4 +1,4 @@
-"""Atomic tool ``extract_landcover_class`` — NLCD binary-mask extractor (job-0094, FR-TA-2, FR-CE-8, FR-DC).
+"""Atomic tool ``extract_landcover_class`` - NLCD binary-mask extractor (FR-TA-2, FR-CE-8, FR-DC).
 
 This module registers one atomic tool that filters an NLCD landcover raster to a
 set of requested class codes and returns a binary mask raster:
@@ -206,7 +206,7 @@ def _open_source(landcover_uri: str) -> Any:
     GCP is decommissioned: ``s3://`` URIs are staged via boto3 and opened
     in-memory; local paths open natively.
 
-    job-0305: this is a CONTEXT MANAGER (was a plain return-the-dataset
+    this is a CONTEXT MANAGER (was a plain return-the-dataset
     function). For the s3:// in-memory path the prior code did
     ``MemoryFile(...).open()`` and returned the dataset, ORPHANING the
     MemoryFile — Python could GC it (freeing the /vsimem/ buffer) mid-read, so
@@ -215,7 +215,7 @@ def _open_source(landcover_uri: str) -> Any:
     the dataset's whole lifetime (the same bug + fix as the NLCD validation
     gate in sfincs_builder). The sole caller already uses ``with``.
     """
-    # sprint-14-aws (job-0293b): s3:// reads via boto3 stage-then-open —
+    # s3:// reads via boto3 stage-then-open -
     # GDAL's /vsis3/ creds don't resolve the EC2 instance role in this env
     # (see clip modules), so we open from staged bytes in-memory. NOTE: only
     # the OPEN is wrapped in the RASTER_OPEN_FAILED try; ``yield src`` (the
@@ -433,7 +433,7 @@ def extract_landcover_class(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

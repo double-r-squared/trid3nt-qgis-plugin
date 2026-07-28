@@ -119,7 +119,7 @@ _USER_AGENT = (
 
 # ---------------------------------------------------------------------------
 # AtomicToolMetadata — built defensively against the parallel
-# job-0114-schema sibling that adds ``supports_global_query``. If the schema
+# -schema sibling that adds ``supports_global_query``. If the schema
 # job lands first we want this tool to carry the field; if it doesn't, we
 # fall back to a kwarg-free construction so registration still succeeds.
 # Mirrors the sibling pattern in fetch_mrms_qpe / fetch_goes_satellite.
@@ -221,7 +221,7 @@ def _fetch_hrsl_bytes(
     # ``year`` is informational for v0.1 (the HRSL "latest" VRT is a single
     # generation; per-year HRSL releases are not separated on the bucket).
     # We accept the kwarg so the signature is stable when per-year tiles
-    # become available; surfaced as OQ-0112-YEAR.
+    # become available; surfaced.
     del year  # currently unused; preserved for forward-compat
 
     if not _bbox_intersects_coverage(bbox):
@@ -400,7 +400,7 @@ def fetch_hrsl_population(
     bbox: tuple[float, float, float, float],
     year: int = 2020,
     source: str = "meta_hrsl",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

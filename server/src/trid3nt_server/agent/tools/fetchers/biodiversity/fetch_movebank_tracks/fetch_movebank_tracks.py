@@ -495,8 +495,7 @@ def _records_to_flatgeobuf_bytes(
         - For linestrings: ONLY individuals whose ENTIRE track lies within
           bbox produce a linestring (a conservative interpretation that keeps
           the geographic-correctness gate strict — a track that exits/enters
-          the bbox is dropped rather than truncated). This is one OQ-worth
-          surfacing: see OQ-0130-MOVEBANK-LINESTRING-BBOX-CLIPPING.
+          the bbox is dropped rather than truncated).
     """
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
@@ -687,7 +686,7 @@ def fetch_movebank_tracks(
     time_range: tuple[datetime, datetime] | None = None,
     max_records: int = 500_000,
     geometry_type: GeometryType = "linestring",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -729,7 +728,7 @@ def fetch_movebank_tracks(
     then trimmed. For linestrings the filter is conservative: ALL vertices of
     an individual's track must lie within the bbox or the individual is
     dropped (avoids truncated/broken tracks). See
-    OQ-0130-MOVEBANK-LINESTRING-BBOX-CLIPPING for the alternative considered.
+     for the alternative considered.
 
     Params:
         study_id: Movebank ``study_id`` (int). Example: ``1259686571`` is the

@@ -1,6 +1,6 @@
-"""``model_capture_zone_scenario``  -  MODFLOW Wave-4 PRT capture-zone composer.
+"""``model_capture_zone_scenario`` - MODFLOW PRT capture-zone composer.
 
-The end-to-end higher-order workflow for the sprint-18 Wave-4 MODFLOW
+The end-to-end higher-order workflow for the MODFLOW
 ``capture_zone`` and ``wellhead_protection`` archetypes: it turns a place (or
 AOI point) + a pumping well location into a rendered capture-zone polygon  -
 the zone of contribution delineated by backward particle tracking (MF6 PRT).
@@ -106,7 +106,7 @@ WELLHEAD_PROTECTION_DEFAULT_TIERS: list[float] = [2.0, 5.0, 10.0]
 
 
 class CaptureZoneResult(GraceModel):
-    """Return type for ``model_capture_zone_scenario`` (sprint-18 Wave-4).
+    """Return type for ``model_capture_zone_scenario``.
 
     Bundles the capture-zone vector layer + the derived args + a narration
     summary dict. Invariant 1: every narrated number is a typed field  -
@@ -228,7 +228,7 @@ async def model_capture_zone_scenario(
                 f"got {travel_time_years!r}."
             )
 
-    # task-168: declare the planned internal-tool count up front: geocode (only
+    # declare the planned internal-tool count up front: geocode (only
     # when a place string was supplied) + run_modflow_archetype_job (always).
     _planned = 1
     has_loc = bool(location and location.strip())
@@ -357,7 +357,7 @@ async def modflow_capture_zone(
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Delineate the capture zone (zone of contribution) for a pumping well.

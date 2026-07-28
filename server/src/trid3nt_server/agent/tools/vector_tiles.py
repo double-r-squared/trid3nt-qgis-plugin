@@ -1,8 +1,8 @@
 """Dense-vector handling for the inline-GeoJSON emit path (F94).
 
-ROOT CAUSE (NATE 2026-06-17, confirmed): OSM building footprints — thousands of
+OSM building footprints - thousands of
 polygons — were attached to ``session-state`` as a single raw inline-GeoJSON
-``FeatureCollection`` (the Wave 4.9 ``pipeline_emitter.add_loaded_layer`` path).
+``FeatureCollection`` (the ``pipeline_emitter.add_loaded_layer`` path).
 The browser then (a) downloaded the whole FC over the WebSocket, (b) parsed it,
 and (c) handed every full-resolution polygon to MapLibre, which re-tiles the
 ENTIRE collection on the main thread. With dense footprints this made the app
@@ -142,7 +142,7 @@ class DensifyMeta:
     def as_wire_tag(self) -> dict[str, Any]:
         """Additive dict merged onto the wire layer dict (extra-tolerant on TS).
 
-        Mirrors the inline-GeoJSON additive-field pattern (job-0175): the strict
+        Mirrors the inline-GeoJSON additive-field pattern: the strict
         ``ProjectLayerSummary`` is dumped first, then this is merged in.
         """
         return {

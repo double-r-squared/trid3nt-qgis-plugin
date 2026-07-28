@@ -1,6 +1,6 @@
 """Atomic tool ``run_river_seepage_job`` — MODFLOW river-seepage engine (J9).
 
-The LLM-facing exposure of the sprint-17 MODFLOW 6 RIVER-SEEPAGE extension: a
+The LLM-facing exposure of the MODFLOW 6 RIVER-SEEPAGE extension: a
 RIV head-dependent river<->aquifer flux boundary draped onto the structured GWF
 grid, plus an along-river SRC solute source, on top of the existing
 ``modflow_contaminant_plume`` GWF+GWT engine. It REUSES the live MODFLOW solver path
@@ -101,7 +101,7 @@ async def run_river_seepage_job(
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> SeepageLayerURI | dict[str, Any]:

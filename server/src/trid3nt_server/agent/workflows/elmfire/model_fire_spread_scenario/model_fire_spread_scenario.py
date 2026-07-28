@@ -1,4 +1,4 @@
-"""ELMFIRE wildfire-spread composer (FIRE-3).
+"""ELMFIRE wildfire-spread composer.
 
 The fire analogue of ``model_dambreak_geoclaw_scenario`` (GeoClaw) /
 ``model_flood_scenario`` (SFINCS). A deterministic orchestrator-style workflow
@@ -6,10 +6,10 @@ The fire analogue of ``model_dambreak_geoclaw_scenario`` (GeoClaw) /
 end-to-end:
 
     fetch LANDFIRE fuels (fbfm40/cbh/cbd/cc/ch) + DEM + derived slope/aspect
-      -> FIRE-2 deck builder (same-grid EPSG:5070 deck + elmfire.data)
+      -> deck builder (same-grid EPSG:5070 deck + elmfire.data)
       -> stage manifest -> run_solver('elmfire') -> wait_for_completion
-         (local-docker: the FIRE-1 proven trid3nt/elmfire:dev image;
-          aws-batch: the FIRE-4 seam, inert until the job def exists)
+         (local-docker: the proven trid3nt/elmfire:dev image;
+          aws-batch: the seam, inert until the job def exists)
       -> download the solver's .bil outputs
       -> postprocess_elmfire (CRS stamp -> ToA COG + hourly burned-extent
          animation frames + flame-length/spread-rate COGs)
@@ -335,7 +335,7 @@ async def model_fire_spread_scenario(
     async with substep(emitter, "fetch_elmfire_inputs"):
         inputs = await asyncio.to_thread(fetch_elmfire_inputs, bbox)
 
-    # --- Step 2: the FIRE-2 same-grid deck (off-loop warping + writes). ------
+    # --- Step 2: the same-grid deck (off-loop warping + writes). ------
     deck_dir = tempfile.mkdtemp(prefix="elmfire-deck-")
     try:
         async with substep(emitter, "build_elmfire_deck"):

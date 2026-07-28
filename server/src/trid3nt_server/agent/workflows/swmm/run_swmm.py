@@ -1,4 +1,4 @@
-"""PySWMM quasi-2D urban-flood deck build + run orchestration (sprint-16 P4,
+"""PySWMM quasi-2D urban-flood deck build + run orchestration (P4,
 Path A — the LOCAL lane, the end-to-end wiring).
 
 The SWMM analogue of ``run_modflow.py`` (the MODFLOW deck-build + submit +
@@ -202,7 +202,7 @@ def build_and_stage_swmm_deck(
         workdir: optional scratch base; a temp dir is used otherwise.
         enable_autoscale: when True (default) the mesh builder runs its adaptive
             budget and may COARSEN ``run_args.target_resolution_m`` to fit the
-            cell cap. When False (the #154 gate's ``narrow_scope`` path) the
+            cell cap. When False (the gate's ``narrow_scope`` path) the
             builder honours ``target_resolution_m`` EXACTLY — the gate already
             clamped it under the cap, so the user's chosen rung is final.
 

@@ -1,7 +1,7 @@
-"""Atomic tool ``import_user_layer`` -- bidirectional layer push (QGIS -> case).
+"""Atomic tool ``register_case_layer`` -- bidirectional layer push (QGIS -> case).
 
 Every existing layer seam flows agent -> QGIS (``publish_layer``,
-``export_case_to_qgis``). This module is the REVERSE seam: the TRID3NT QGIS
+``open_case_in_qgis``). This module is the REVERSE seam: the TRID3NT QGIS
 plugin's user has an ACTIVE layer in their desktop project (vector or raster)
 they want to bring INTO the current case as a first-class input layer.
 
@@ -12,7 +12,7 @@ Two entry points share ONE core (``ingest_user_layer``):
    directly, cold (no WS session required), mirroring the ``/api/export-qgis``
    + ``/api/case-list`` route conventions (local-single-user gated, typed
    errors -> honest 4xx bodies).
-2. The LLM-visible tool ``import_user_layer`` -- so a conversational request
+2. The LLM-visible tool ``register_case_layer`` -- so a conversational request
    ("use the file I uploaded as the AOI") can drive the SAME core once the
    file already lives in object storage.
 
@@ -31,7 +31,7 @@ produced as FlatGeobuf"). The canonical FGB lands at
 ``s3://<runs_bucket>/case-data/<case_id>/<layer_id>.fgb`` (DATA face); the
 existing ``publish_layer._write_durable_vector_geojson`` helper is reused
 UNCHANGED to materialize the browser-readable GeoJSON DISPLAY face at the
-SAME #165 Phase-0 key (``durable_vector_geojson_key``).
+SAME Phase-0 key (``durable_vector_geojson_key``).
 
 **Raster path:** the uploaded GeoTIFF is validated readable via rasterio,
 then handed to the existing ``publish_layer`` atomic tool VERBATIM -- it
@@ -67,7 +67,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import register_tool
 
-logger = logging.getLogger("trid3nt_server.agent.tools.meta.import_user_layer.import_user_layer")
+logger = logging.getLogger("trid3nt_server.agent.tools.meta.register_case_layer.register_case_layer")
 
 __all__ = [
     "ImportLayerError",
@@ -80,7 +80,7 @@ __all__ = [
     "USER_UPLOAD_PREFIX",
     "ingest_user_layer",
     "upload_layer_file",
-    "import_user_layer",
+    "register_case_layer",
 ]
 
 #: Size cap for a pushed layer (raw upload OR the object being ingested).
@@ -101,7 +101,7 @@ _KINDS = (_VECTOR_KIND, _RASTER_KIND)
 
 
 # --------------------------------------------------------------------------- #
-# Typed errors (mirrors export_case_to_qgis.ExportCaseError shape)
+# Typed errors (mirrors open_case_in_qgis.ExportCaseError shape)
 # --------------------------------------------------------------------------- #
 
 
@@ -241,7 +241,7 @@ def upload_layer_file(filename: str, data: bytes) -> str:
     s3_uri = f"s3://{bucket}/{key}"
     _put_object_bytes(s3_uri, data)
     logger.info(
-        "import_user_layer: staged upload filename=%s bytes=%d -> %s",
+        "register_case_layer: staged upload filename=%s bytes=%d -> %s",
         filename,
         len(data),
         s3_uri,
@@ -325,8 +325,8 @@ def _read_uploaded_vector_to_gdf(raw_bytes: bytes, ext: str, crs_authid: str | N
 
 def _write_fgb_bytes(gdf) -> bytes:
     """GeoDataFrame -> FlatGeobuf bytes (the DATA-face format every other
-    vector case layer uses; matches ``compute_contours``/``clip_vector_to_polygon``
-    etc's ``to_file(..., driver="FlatGeobuf", engine="pyogrio")`` convention)."""
+    vector case layer uses; matches ``compute_contours`` etc's
+    ``to_file(..., driver="FlatGeobuf", engine="pyogrio")`` convention)."""
     tmp_path: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -373,7 +373,7 @@ async def _ingest_vector(
         _put_object_bytes, fgb_uri, fgb_bytes, content_type="application/octet-stream"
     )
 
-    # Reuse the #165 Phase-0 durable-vector-GeoJSON writer UNCHANGED -- it
+    # Reuse the Phase-0 durable-vector-GeoJSON writer UNCHANGED -- it
     # re-reads the fgb we just wrote and materializes the browser-readable
     # DISPLAY face at the frozen key. Fail-open (None) is honored: the layer
     # still registers, just without a cold-view display asset (the live
@@ -616,7 +616,7 @@ async def _notify_live_sessions(case_id: str) -> None:
                 except Exception:  # noqa: BLE001 -- one dead socket must not
                     continue  # block notifying the rest
     except Exception:  # noqa: BLE001 -- best-effort, never break the ingest
-        logger.debug("import_user_layer: live-session nudge skipped", exc_info=True)
+        logger.debug("register_case_layer: live-session nudge skipped", exc_info=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -635,7 +635,7 @@ async def ingest_user_layer(
 ) -> dict[str, Any]:
     """Validate + register an already-uploaded vector/raster as a Case input
     layer. The shared core behind both ``POST /api/ingest-layer`` and the
-    ``import_user_layer`` LLM tool -- see the module docstring for the full
+    ``register_case_layer`` LLM tool -- see the module docstring for the full
     contract.
 
     Raises: ``ImportLayerInputError`` (bad kind / empty case_id or s3_uri),
@@ -695,7 +695,7 @@ async def ingest_user_layer(
     await _notify_live_sessions(case_id)
 
     logger.info(
-        "import_user_layer: ingested case=%s layer_id=%s kind=%s make_aoi=%s",
+        "register_case_layer: ingested case=%s layer_id=%s kind=%s make_aoi=%s",
         case_id,
         layer_id,
         kind,
@@ -719,8 +719,8 @@ async def ingest_user_layer(
 # already lives in object storage).
 # --------------------------------------------------------------------------- #
 
-_IMPORT_USER_LAYER_METADATA = AtomicToolMetadata(
-    name="import_user_layer",
+_REGISTER_CASE_LAYER_METADATA = AtomicToolMetadata(
+    name="register_case_layer",
     ttl_class="live-no-cache",
     source_class=None,
     cacheable=False,
@@ -728,7 +728,7 @@ _IMPORT_USER_LAYER_METADATA = AtomicToolMetadata(
 
 
 @register_tool(
-    _IMPORT_USER_LAYER_METADATA,
+    _REGISTER_CASE_LAYER_METADATA,
     # Writes a new object to the runs bucket + mutates the Case document --
     # not read-only. Reaches object storage (open world). Not destructive
     # (never overwrites another layer's data; a same-layer_id collision is
@@ -741,7 +741,7 @@ _IMPORT_USER_LAYER_METADATA = AtomicToolMetadata(
     destructive_hint=False,
     idempotent_hint=False,
 )
-async def import_user_layer(
+async def register_case_layer(
     s3_uri: str,
     name: str,
     kind: str,
@@ -785,7 +785,7 @@ async def import_user_layer(
     """
     if not case_id:
         raise CaseNotFoundError(
-            "no active case -- import_user_layer requires a case_id "
+            "no active case -- register_case_layer requires a case_id "
             "(open or create a case first)"
         )
     return await ingest_user_layer(

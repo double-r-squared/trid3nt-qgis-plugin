@@ -100,7 +100,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -296,7 +296,7 @@ def _fetch_naip_cog_bytes(bbox: tuple[float, float, float, float]) -> bytes:
 )
 def fetch_naip(
     bbox: tuple[float, float, float, float],
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch NAIP high-resolution aerial imagery (RGB) for a US bbox.

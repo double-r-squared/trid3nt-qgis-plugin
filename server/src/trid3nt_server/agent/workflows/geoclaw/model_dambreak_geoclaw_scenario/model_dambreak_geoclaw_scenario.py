@@ -1,4 +1,4 @@
-"""GeoClaw (Clawpack) shallow-water inundation composer (sprint-17).
+"""GeoClaw (Clawpack) shallow-water inundation composer.
 
 The GeoClaw analogue of ``model_urban_flood_swmm`` (SWMM) /
 ``model_flood_scenario`` (SFINCS) / ``model_groundwater_contamination_scenario``
@@ -379,7 +379,7 @@ async def model_dambreak_geoclaw_scenario(
                 "model_dambreak_geoclaw_scenario: zoom-to emit failed: %s", exc
             )
 
-    # --- Sub-step plan (task-168): fetch DEM -> stage -> solve -> postprocess
+    # --- Sub-step plan: fetch DEM -> stage -> solve -> postprocess
     #     -> publish peak. begin_substeps stamps the parent breadcrumb cap; it is
     #     a no-op outside emit_tool_call (current_emitter() is None).
     begin_substeps(emitter, 5)
@@ -624,7 +624,7 @@ async def model_dambreak_geoclaw_scenario(
         )
     )
     run_result = None
-    # task-168: surface the solve as a child "run_solver" row in the parent
+    # surface the solve as a child "run_solver" row in the parent
     # timeline. The Sim card (mint_dispatch_and_sim_cards) STILL owns the live
     # Batch readout (hard invariant); this child is the timeline entry that goes
     # green/red/yellow with the solve. No-op outside emit_tool_call. The original

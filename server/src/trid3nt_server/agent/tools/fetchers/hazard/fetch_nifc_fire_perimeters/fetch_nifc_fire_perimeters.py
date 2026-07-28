@@ -134,7 +134,7 @@ _VALID_STATUSES = frozenset({"active", "controlled", "out", "all"})
 # ---------------------------------------------------------------------------
 # AtomicToolMetadata — registered once at import time.
 #
-# ``supports_global_query=True`` (Wave 1.5 schema amendment, job-0114): the
+# ``supports_global_query=True`` (schema amendment): the
 # tool genuinely supports a global CONUS+AK+HI sweep when ``bbox=None``, so
 # the catalog/discovery layer can route "show me every active wildfire in
 # the US" queries here without forcing a bbox.
@@ -382,7 +382,7 @@ def _fetch_nifc_bytes(
     ``status`` is currently a no-op on the wire (NIFC's "Current" service
     only exposes active perimeters) but is preserved in the function
     signature + cache key so a future status-aware variant remains
-    forward-compatible. See OQ-0110-STATUS-FILTER-NO-OP.
+    forward-compatible.
     """
     del status  # Reserved for future status-aware variant; see module docstring.
     url, params = _build_nifc_url(bbox)
@@ -405,7 +405,7 @@ def _fetch_nifc_bytes(
 def fetch_nifc_fire_perimeters(
     bbox: tuple[float, float, float, float] | None = None,
     status: str = "active",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -442,7 +442,7 @@ def fetch_nifc_fire_perimeters(
       California.
     - ``status`` (str): ``"active"`` (default). Accepted: ``active``,
       ``controlled``, ``out``, ``all``. Note: v0.1 always queries the NIFC
-      "Current" service regardless of value (OQ-0110-STATUS-FILTER-NO-OP).
+      "Current" service regardless of value.
 
     **Returns:**
     ``LayerURI(layer_type="vector", role="primary", units=None)`` pointing at a

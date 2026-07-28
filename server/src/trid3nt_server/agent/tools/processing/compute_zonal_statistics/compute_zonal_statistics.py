@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_zonal_statistics`` — hazard-analysis primitive (job-0083, FR-TA-2, FR-CE-8, FR-DC).
+"""Atomic tool ``compute_zonal_statistics`` - hazard-analysis primitive (FR-TA-2, FR-CE-8, FR-DC).
 
 This module registers one atomic tool that computes zonal statistics: aggregating
 values from a raster within zones defined by either a raster mask or vector polygons.
@@ -252,7 +252,7 @@ def _download_uri_bytes(uri: str, storage_client: object | None = None) -> bytes
     but is ignored.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws (job-0290b): s3:// staging via the shared boto3 reader.
+    # s3:// staging via the shared boto3 reader.
     if uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
         try:
@@ -667,7 +667,7 @@ def compute_zonal_statistics(
     *,
     _storage_client: object | None = None,
     _bucket: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
@@ -800,7 +800,7 @@ def _materialize_uri(
     If the URI is already a local path (does not start with ``gs://``), return
     it directly without copying. Otherwise download to a temp file.
     """
-    # sprint-14-aws (job-0290b): s3:// staging — download to a temp file.
+    # s3:// staging - download to a temp file.
     if uri.startswith("s3://"):
         import tempfile as _tf
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3

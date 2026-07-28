@@ -1,5 +1,5 @@
 """GeoClaw (Clawpack) deck-build + staging + Batch-dispatch orchestration
-(sprint-17 — the GeoClaw analogue of ``run_swmm.py`` / ``run_modflow.py``).
+(the GeoClaw analogue of ``run_swmm.py`` / ``run_modflow.py``).
 
 One module owns the GeoClaw engine's solver-dispatch surface. Unlike SWMM (whose
 pyswmm runs IN-PROCESS in the agent venv) GeoClaw is a Fortran solver that lives
@@ -251,7 +251,7 @@ def build_geoclaw_build_spec(
 # Offshore-domain planning + bathymetry-aware Okada source placement.
 #
 # The two physics-setup fixes that turn a zero-inundation coastal tsunami run into
-# a real run-up (sprint-17 follow-up):
+# a real run-up:
 #
 #   1. DOMAIN EXTENT. ``plan_geoclaw_domain`` extends the computational domain
 #      offshore so it SPANS the Okada source -> the AOI coast. A source-at-center,

@@ -1,4 +1,4 @@
-"""Landlab run-output postprocessing (sprint-17 — NEW engine).
+"""Landlab run-output postprocessing (NEW engine).
 
 ``postprocess_landlab(field_cog_path, *, run_id, analysis, result, ...) ->
 (layers, metrics)`` takes the worker-produced field COG (the LandslideProbability

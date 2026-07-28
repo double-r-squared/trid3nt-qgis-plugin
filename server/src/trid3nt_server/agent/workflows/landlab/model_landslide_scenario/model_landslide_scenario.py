@@ -1,4 +1,4 @@
-"""Landlab landslide-susceptibility composer (sprint-17 — NEW engine).
+"""Landlab landslide-susceptibility composer (NEW engine).
 
 The Landlab analogue of ``model_urban_flood_swmm`` (SWMM) /
 ``model_groundwater_contamination_scenario`` (MODFLOW). A deterministic
@@ -353,7 +353,7 @@ async def model_landslide_scenario(
         except Exception as exc:  # noqa: BLE001 - non-fatal UX hint
             logger.warning("model_landslide_scenario: zoom-to emit failed: %s", exc)
 
-    # --- Declare the planned child count for the live breadcrumb (task-168) -
+    # --- Declare the planned child count for the live breadcrumb -
     # The composer's user-meaningful internal operations surfaced as nested
     # child rows: (fetch_dem if not supplied) -> stage_landlab_manifest ->
     # run_solver (the Batch solve) -> download_landlab_outputs ->

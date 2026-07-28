@@ -1,6 +1,6 @@
 """``model_sustainable_yield_scenario``  -  MODFLOW pumping-drawdown composer.
 
-The end-to-end higher-order workflow for the sprint-18 Wave-1 MODFLOW
+The end-to-end higher-order workflow for the MODFLOW
 ``sustainable_yield`` archetype: it turns a place (or AOI point) + a pumping
 well (location + extraction rate) into a rendered drawdown-cone layer  -  the cone
 of depression a sustained extraction draws down around the well. It mirrors the
@@ -85,7 +85,7 @@ __all__ = [
 
 
 class SustainableYieldResult(GraceModel):
-    """Return type for ``model_sustainable_yield_scenario`` (sprint-18 Wave-1).
+    """Return type for ``model_sustainable_yield_scenario``.
 
     Bundles the drawdown layer + the derived args + a narration summary dict.
     Invariant 1: every narrated number is a typed field  -  ``drawdown_layer``
@@ -300,7 +300,7 @@ async def model_sustainable_yield_scenario(
             "question, not both. Pick one."
         )
 
-    # task-168: declare the planned internal-tool count up front: geocode (only
+    # declare the planned internal-tool count up front: geocode (only
     # when a place string was supplied) + run_modflow_archetype_job (always).
     _planned = 1
     has_loc = bool(location and location.strip())
@@ -403,7 +403,7 @@ async def model_sustainable_yield_scenario(
         scenario_error=SustainableYieldScenarioError,
     )
 
-    # task-198: wire the at-well head-decline series to a value-vs-time line
+    # wire the at-well head-decline series to a value-vs-time line
     # chart. Real parsed engine output (DrawdownLayerURI.head_decline_timeseries)
     # - the builder returns None (emits nothing) when the series is absent.
     await _emit_head_decline_chart(layer, sim_years=sim_years, n_periods=n_periods)
@@ -443,7 +443,7 @@ async def model_sustainable_yield_scenario(
 
 
 # --------------------------------------------------------------------------- #
-# Engine-output chart (task-198): head-decline value-vs-time line
+# Engine-output chart: head-decline value-vs-time line
 # --------------------------------------------------------------------------- #
 
 
@@ -746,7 +746,7 @@ async def _run_subsidence(
 
 
 # --------------------------------------------------------------------------- #
-# Shared archetype-run helper (re-used by all three Wave-1 composers' shape)
+# Shared archetype-run helper (re-used by all three composers' shape)
 # --------------------------------------------------------------------------- #
 
 
@@ -851,7 +851,7 @@ async def modflow_sustainable_yield(
     couple_subsidence: bool = False,
     inelastic_storage_override: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a pumping well's drawdown cone, OR its impact on a river, OR the land subsidence it causes.

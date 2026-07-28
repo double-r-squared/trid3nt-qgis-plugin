@@ -16,7 +16,7 @@ In a single AWS Batch job this worker:
      dir (no S3 round-trip), then writes ``sfincs_map.nc`` + a UNION
      ``completion.json`` the agent's ``wait_for_completion`` polls identically.
 
-This collapses the former two Batch job-defs (a separate GPL deck-builder + a
+This collapses the former two Batch (a separate GPL deck-builder + a
 separate MIT solve shim) into one job-def
 (``TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE``): one submit, one poll, no deck
 round-trip.

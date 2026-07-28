@@ -201,12 +201,12 @@ _CONUS_FEATURE_COUNT_ESTIMATE = 8000
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator hook (Wave 1.5 / FR-DC-9).
+# Payload estimator hook (FR-DC-9).
 # ---------------------------------------------------------------------------
 
 
 def estimate_payload_mb(**args: Any) -> float:
-    """FR-DC-9 / Wave-1.5 payload estimator (called by chat-warning gate).
+    """FR-DC-9 payload estimator (called by chat-warning gate).
 
     Scales by bbox area relative to CONUS. A missing/garbage bbox returns a
     nominal small estimate (the tool will error on a None bbox anyway, since
@@ -744,7 +744,7 @@ def fetch_airnow_air_quality(
     monitor_type: int = 0,
     api_key: str | None = None,
     secret_ref: Any | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

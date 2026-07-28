@@ -190,7 +190,7 @@ _PLACEHOLDER_HALF_DEGREES = 1.0
 _PLACEHOLDER_CENTROID = (0.0, 0.0)
 
 
-# Estimated payload MB per the kickoff (FR-DC-9 Wave 1.5 payload estimator).
+# Estimated payload MB per the kickoff (FR-DC-9 payload estimator).
 # IUCN species info is single-record JSON → tiny FlatGeobuf (<10 KB). Even
 # when the Spatial Data ingest lands a typical multi-polygon range may be
 # ~0.5 MB; we report the kickoff-specified upper bound so the
@@ -199,10 +199,10 @@ _ESTIMATED_PAYLOAD_MB = 0.5
 
 
 def estimate_payload_mb(**args: Any) -> float:
-    """FR-DC-9 / Wave-1.5 payload estimator hook (called by chat-warning gate).
+    """FR-DC-9 payload estimator hook (called by chat-warning gate).
 
     Returns the kickoff-specified ~0.5 MB upper bound per species range. The
-    signature accepts ``**args`` to match the Wave-1.5 estimator convention
+    signature accepts ``**args`` to match the estimator convention
     (the chat-warning gate passes the tool's kwargs unchanged).
     """
     return _ESTIMATED_PAYLOAD_MB
@@ -509,7 +509,7 @@ def _payload_to_flatgeobuf_bytes(
     to surface that as ``IUCNNotFoundError`` or as a "data-deficient"
     placeholder.
 
-    The geometry is the OQ-0129-RANGE-SPATIAL placeholder square. The
+    The geometry is the placeholder square. The
     ``is_placeholder_geometry`` property is True at v0.1 for every feature;
     the Spatial Data swap-in will flip it.
     """
@@ -573,7 +573,7 @@ def _payload_to_flatgeobuf_bytes(
         "published_year": _g("published_year"),
         "assessment_date": _g("assessment_date", ""),
         "region": region,
-        "is_placeholder_geometry": True,  # OQ-0129-RANGE-SPATIAL
+        "is_placeholder_geometry": True,
     }
 
     geom = _placeholder_polygon(_PLACEHOLDER_CENTROID)
@@ -648,7 +648,7 @@ def fetch_iucn_red_list_range(
     secret_ref: SecretRecord | None = None,
     *,
     persistence: Any | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -660,8 +660,7 @@ def fetch_iucn_red_list_range(
     mammal, or building a "species of concern within X km" overlay layer.
     Returns a single-feature FlatGeobuf carrying the IUCN assessment payload
     (category, criteria, population trend, habitat systems, elevation bounds)
-    keyed on a placeholder square polygon — see ``OQ-0129-RANGE-SPATIAL``
-    for the v0.2 Spatial Data swap-in plan.
+    keyed on a placeholder square polygon.
 
     Do NOT use this for: GBIF/iNaturalist OCCURRENCE POINTS (use
     ``fetch_gbif_occurrences`` or ``fetch_inaturalist_observations``),
@@ -680,8 +679,7 @@ def fetch_iucn_red_list_range(
 
     1. ``api_key="<str>"`` — explicit (CLI / direct invocation).
     2. ``secret_ref=<SecretRecord>`` — looked up via
-       ``Persistence.get_secret_value(secret_ref)`` (per-Case keyed path,
-       per job-0124).
+       ``Persistence.get_secret_value(secret_ref)`` (per-Case keyed path).
     3. ``TRID3NT_IUCN_RED_LIST_API_KEY`` env var — local dev fallback.
 
     If none of the three resolve a non-empty key, ``IUCNAuthError`` is

@@ -448,7 +448,7 @@ def compute_cross_section(
     extra_layer_uris: list[str] | None = None,
     *,
     _created_turn_id: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:

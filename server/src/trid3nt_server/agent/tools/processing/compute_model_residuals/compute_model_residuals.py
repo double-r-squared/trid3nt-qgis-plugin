@@ -544,7 +544,7 @@ def compute_model_residuals(
     observed_value_field: str | None = None,
     *,
     _output_dir: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> ModelResidualsLayerURI:
     """Observed-vs-modeled residuals: sample a MODEL raster at OBSERVATION points.

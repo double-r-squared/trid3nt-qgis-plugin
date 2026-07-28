@@ -144,7 +144,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# FR-DC-9 / Wave-1.5 payload-MB estimator hook.
+# FR-DC-9 payload-MB estimator hook.
 # ---------------------------------------------------------------------------
 
 
@@ -152,7 +152,7 @@ def estimate_payload_mb(**args: Any) -> float:
     """Estimate the FlatGeobuf payload size (MB) for an NHD waterbody fetch.
 
     ~0.4 MB / square degree, clipped to [0.05, 50] MB. ``**args`` matches the
-    Wave-1.5 estimator convention.
+     estimator convention.
     """
     bbox = args.get("bbox")
     if not bbox or len(bbox) != 4:
@@ -448,7 +448,7 @@ def _fetch_nhd_bytes(bbox: tuple[float, float, float, float]) -> bytes:
 )
 def fetch_nhd_waterbodies(
     bbox: tuple[float, float, float, float],
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

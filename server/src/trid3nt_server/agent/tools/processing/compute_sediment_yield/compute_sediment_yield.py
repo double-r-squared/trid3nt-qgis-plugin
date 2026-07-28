@@ -636,7 +636,7 @@ def compute_sediment_yield(
     landcover_uri: str | None = None,
     *,
     _output_dir: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> SedimentYieldLayerURI:

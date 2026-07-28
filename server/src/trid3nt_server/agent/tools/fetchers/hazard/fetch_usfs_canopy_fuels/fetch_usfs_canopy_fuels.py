@@ -394,7 +394,7 @@ def fetch_usfs_canopy_fuels(
     bbox: tuple[float, float, float, float],
     layer: Literal["cbh", "cbd"] = "cbh",
     # Absorb LLM-invented kwargs (centralized at server.py via
-    # tool_arg_normalizer, but kept as belt-and-suspenders per job-0164).
+    # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch USFS canopy base height (CBH) or canopy bulk density (CBD) raster for a CONUS bbox.

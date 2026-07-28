@@ -171,7 +171,7 @@ def _resolve_latlon(location: Any) -> tuple[float, float]:
 def compute_idf_curve(
     location: tuple[float, float],
     y_axis: str = "intensity",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Chart the full NOAA Atlas 14 IDF (intensity-duration-frequency) curve for a point.

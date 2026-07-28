@@ -1,4 +1,4 @@
-"""model_nws_flood_event_scenario — Case 3 composer (sprint-13 job-0229).
+"""model_nws_flood_event_scenario - Case 3 composer.
 
 The **Case 3 demo composer**: a live NWS active flood warning drives an
 observed-precip SFINCS inundation run over the warning area, producing a
@@ -12,7 +12,7 @@ three-layer accumulation the UI renders together:
     2. fetch_mrms_qpe(bbox=warning_polygon_bbox, accumulation="24h")
          → observed accumulated precip raster (MRMS QPE Pass2 COG)
     3. model_flood_scenario(bbox=warning_bbox, forcing_raster_uri=mrms_uri)
-         → SFINCS flood-depth COG (the job-0225 v2 area-mean netamt branch)
+         → SFINCS flood-depth COG (the v2 area-mean netamt branch)
     4. return the 3-layer accumulation contract so the client renders the
        warning polygon, the precip raster, AND the flood-depth layer together.
 
@@ -425,7 +425,7 @@ async def model_nws_flood_event_scenario(
            Flash Flood Warning with a usable polygon; extract its bbox.
         3. Fetch MRMS accumulated QPE over the warning-polygon bbox.
         4. Run ``model_flood_scenario(forcing_raster_uri=mrms_uri)`` over the
-           warning area (the job-0225 v2 observed-precip area-mean netamt
+           warning area (the v2 observed-precip area-mean netamt
            branch).
         5. Return the 3-layer accumulation contract.
 
@@ -777,7 +777,7 @@ def _detect_flood_failure(envelope: Any) -> tuple[bool, str | None]:
     """Inspect a ``model_flood_scenario`` envelope for partial-failure markers.
 
     The partial-failure envelope encodes the error code into
-    ``flood.metrics.solver_version`` as ``"failed:<CODE>"`` (per job-0042).
+    ``flood.metrics.solver_version`` as ``"failed:<CODE>"``.
     Returns ``(failed, error_code)``.
     """
     flood = getattr(envelope, "flood", None)
@@ -871,7 +871,7 @@ async def run_model_nws_flood_event_scenario(
     return_period_yr: int = 100,
     duration_hr: int | None = None,
     compute_class: str = "medium",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:

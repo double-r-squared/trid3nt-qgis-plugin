@@ -1,4 +1,4 @@
-"""``fetch_fault_sources`` atomic tool -- real active-fault seismic sources (task #199).
+"""``fetch_fault_sources`` atomic tool -- real active-fault seismic sources.
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ FAULT_LINE_STYLE_PRESET = "fault_line"
 
 # ---------------------------------------------------------------------------
 # Result type -- a renderable fault-trace ``LayerURI`` that ALSO carries the
-# source-model records (task #207 auto-publish fix).
+# source-model records (auto-publish fix).
 #
 # Before this, ``fetch_fault_sources`` returned a bare ``dict``, so the
 # ``emit_tool_call`` ``add_loaded_layer`` gate -- which fires only on an
@@ -154,7 +154,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 

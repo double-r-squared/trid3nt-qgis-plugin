@@ -1,4 +1,4 @@
-"""``aggregate_claims_across_sources`` atomic tool — cross-source claim aggregation (job-0093).
+"""``aggregate_claims_across_sources`` atomic tool - cross-source claim aggregation.
 
 This tool sits at the centre of the FR-HEP news/event-ingest pipeline (FR-HEP-6):
 the agent fetches multiple news articles, agency pages, or similar texts about the
@@ -17,10 +17,10 @@ call's output is a function of the (possibly fresh) ``sources`` list passed in
 and cannot be reused across different source lists. The tool body itself does
 NOT touch GCS or the cache shim.
 
-Per the audit (job-0093 audit.md), v0.1 uses deterministic regex + keyword
+Per the audit (audit.md), v0.1 uses deterministic regex + keyword
 extraction for "date" / "scale" / "casualties" and naive title-case sweeps for
-"location" / "contaminant". The OQ-93-NEEDS-LLM-EXTRACTION proposes upgrading
-"location" + "contaminant" to LLM-routed extraction in sprint-13 so the agent
+"location" / "contaminant". A follow-up would upgrade
+"location" + "contaminant" to LLM-routed extraction so the agent
 can resolve ambiguous mentions (e.g. "the spill near Longview", town vs county,
 chemical-family names) the way a human would.
 
@@ -38,13 +38,13 @@ Typed errors (FR-AS-11):
     - ``ClaimAggError(retryable=False)`` — bad input shape (non-list sources,
       missing required keys, unknown claim target).
 
-Geographic-correctness check (job-0086 codified lesson):
+Geographic-correctness check (codified lesson):
 
 This tool DOES NOT emit geometry; it returns a structured claims dict. The
 "location" target's ``value`` is a place-name STRING (reverse-geocoding to a
 bbox is deferred to a downstream ``geocode_event_location`` call, per engine.md
 scope). A round-trip-only acceptance check is therefore sufficient for v0.1;
-when LLM extraction lands in sprint-13 and the tool optionally produces a bbox,
+when LLM extraction lands in and the tool optionally produces a bbox,
 the acceptance test must add a "is the bbox actually around the named place"
 geographic check.
 
@@ -118,7 +118,7 @@ SUPPORTED_TARGETS: tuple[str, ...] = (
 
 # Common chemical / contaminant tokens. Not exhaustive — designed to cover the
 # vinyl-chloride / benzene / ammonia / chlorine class of incidents the v0.1
-# FR-HEP demo cases target. The OQ-93-NEEDS-LLM-EXTRACTION upgrade path swaps
+# FR-HEP demo cases target. The upgrade path swaps
 # this regex bag for an LLM-routed entity-extraction call.
 _CONTAMINANT_KEYWORDS = (
     "vinyl chloride",
@@ -361,7 +361,7 @@ def _extract_contaminants(text: str) -> list[tuple[str, str]]:
     """Return [(raw_substring, normalized_lowercase_name), ...] from text.
 
     Uses the curated _CONTAMINANT_KEYWORDS list — TENTATIVE deterministic
-    approach, OQ-93-NEEDS-LLM-EXTRACTION proposes LLM upgrade for sprint-13.
+    approach, proposes LLM upgrade.
     """
     results: list[tuple[str, str]] = []
     text_lower = text.lower()
@@ -544,7 +544,7 @@ def _validate_sources(sources: Any) -> list[dict[str, Any]]:
             raise ClaimAggInputError(
                 f"sources[{i}] must be a dict; got {type(item).__name__}"
             )
-        # job-0295: ``url`` and ``fetched_at`` are provenance metadata the LLM
+        # ``url`` and ``fetched_at`` are provenance metadata the LLM
         # cannot always supply (it doesn't know the fetch timestamp, and may
         # only have the source text). Default them so a direct agent call with
         # ``{text, ...}`` succeeds — only ``text`` (the substance claims are
@@ -616,7 +616,7 @@ def aggregate_claims_across_sources(
     sources: list[dict[str, Any]],
     claim_targets: list[str],
     confidence_threshold: float = 0.6,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:

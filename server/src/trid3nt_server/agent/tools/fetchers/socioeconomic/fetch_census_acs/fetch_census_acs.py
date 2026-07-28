@@ -691,7 +691,7 @@ def fetch_census_acs(
     bbox: tuple[float, float, float, float],
     variable: str = "median_income",
     year: int = _DEFAULT_YEAR,
-    # Wave 4.10 convention: absorb LLM-invented kwargs.
+    # convention: absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """US Census ACS 5-year demographics as a census-tract choropleth FlatGeobuf.

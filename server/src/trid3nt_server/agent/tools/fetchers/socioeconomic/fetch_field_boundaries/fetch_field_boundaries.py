@@ -473,7 +473,7 @@ def _fetch_fields_bytes(
 def fetch_field_boundaries(
     bbox: tuple[float, float, float, float],
     dataset: str | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

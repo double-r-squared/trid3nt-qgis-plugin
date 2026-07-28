@@ -39,7 +39,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.hydrology.fetch_
 
 
 # ---------------------------------------------------------------------------
-# fetch_river_geometry — NHDPlus HR (USGS) (sprint-07 Stage B, job-0039).
+# fetch_river_geometry - NHDPlus HR (USGS) (Stage B).
 # ---------------------------------------------------------------------------
 #
 # Access pattern tier — LIVE-VERIFIED matches kickoff inference (2026-06-07):
@@ -70,17 +70,16 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.hydrology.fetch_
 # implementation does NOT use the two-stage cache in v0.1 — the kickoff calls
 # for a single ``read_through`` write per call, and the GDB download is
 # inside the fetcher (so the HUC4 region is fetched fresh on every cache
-# miss). The two-stage optimization is captured as
-# OQ-39-NHDPLUSHR-TWO-STAGE-CACHE for a follow-up job.
+# miss).
 #
 # HUC4 routing: a bbox in EPSG:4326 must be mapped to a HUC4 region code.
 # Per the kickoff's per-source bbox quantization rule: "NHDPlus HR: HUC4-
 # scoped (region-download Tier 4); cache key includes HUC4 region per §F.1.1
 # Tier-4 discipline." The v0.1 substrate uses a small **bbox → HUC4
 # heuristic envelope table** (mirrors the ``_state_fips_for_lonlat``
-# heuristic from job-0033 — Fort Myers / Caloosahatchee = HUC4 ``0309``);
+# heuristic - Fort Myers / Caloosahatchee = HUC4 ``0309``);
 # replacement with a real point-in-polygon over the WBD HUC4 dataset is a
-# tracked follow-up. Surface as OQ-39-NHDPLUSHR-HUC4-ROUTING-HEURISTIC.
+# tracked follow-up.
 
 
 _FETCH_RIVER_GEOMETRY_METADATA = AtomicToolMetadata(
@@ -99,8 +98,7 @@ _NHDPLUSHR_BASE = (
 # Heuristic bbox → HUC4 region code. Each entry is (HUC4 code, envelope bbox).
 # CONUS-centric for v0.1; HUC4 0309 covers the Fort Myers / Caloosahatchee
 # region (the M5 demo target). Replacement with a real point-in-polygon over
-# the WBD HUC4 dataset is a tracked follow-up — see
-# OQ-39-NHDPLUSHR-HUC4-ROUTING-HEURISTIC.
+# the WBD HUC4 dataset is a tracked follow-up.
 _HUC4_BBOX_ENVELOPES: list[tuple[str, tuple[float, float, float, float]]] = [
     # Florida — South Florida (Caloosahatchee, Big Cypress, Everglades)
     ("0309", (-82.0, 25.0, -80.0, 27.5)),
@@ -125,8 +123,8 @@ def _huc4_for_bbox(bbox: tuple[float, float, float, float]) -> str | None:
 
     Returns ``None`` if no envelope matches. A future enrichment job replaces
     this with a real point-in-polygon over the WBD HUC4 dataset cached in the
-    cache bucket. Same shape/role as the job-0033 ``_state_fips_for_lonlat``
-    heuristic and the job-0037 ``_iso3_for_lonlat`` heuristic.
+    cache bucket. Same shape/role as the ``_state_fips_for_lonlat``
+    heuristic and the ``_iso3_for_lonlat`` heuristic.
     """
     mid_lon = 0.5 * (bbox[0] + bbox[2])
     mid_lat = 0.5 * (bbox[1] + bbox[3])
@@ -144,7 +142,7 @@ def _huc4_for_bbox(bbox: tuple[float, float, float, float]) -> str | None:
 # region" and the tool dead-ends (data-source-fallback norm violation). OSM
 # Overpass exposes a true per-bbox waterway query that fills the WHOLE bbox
 # (not just a seed-connected sub-network), is global, and serializes to the
-# same FlatGeobuf -> inline-GeoJSON render path the Wave 4.9 vector pipeline
+# same FlatGeobuf -> inline-GeoJSON render path the vector pipeline
 # already drives (``add_loaded_layer`` reads the .fgb, converts to GeoJSON).
 #
 # Overpass QL shape (mirrors fetch_roads_osm, but for waterways):
@@ -374,7 +372,7 @@ def _waterway_records_to_clipped_fgb_bytes(
     Builds a GeoDataFrame of LineStrings (EPSG:4326), clips it to the exact
     requested bbox so the layer fills the whole bbox without spilling outside
     it, and writes FlatGeobuf bytes (the same `.fgb` -> inline-GeoJSON render
-    path Wave 4.9 drives via ``add_loaded_layer``). An empty record list still
+    path drives via ``add_loaded_layer``). An empty record list still
     produces a valid (empty) FlatGeobuf — never a sentinel (cache.py poison
     contract).
     """
@@ -546,7 +544,7 @@ def _fetch_nhdplushr_geometry_bytes(
     ``UpstreamAPIError`` on any download / extraction failure.
 
     Implementation note: the substrate downloads the full HUC4 GDB on every
-    cache miss; the two-stage region-cache optimization is OQ-39-NHDPLUSHR-
+    cache miss; the two-stage region-cache optimization is
     TWO-STAGE-CACHE. For the Fort Myers demo path the per-bbox cache miss is
     a one-time ~144 MB transfer, cached for 30 days.
     """
@@ -680,14 +678,14 @@ def fetch_river_geometry(
     bbox: tuple[float, float, float, float],
     source: str = "nhdplus_hr",
     waterway_type: str | list[str] | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch river and stream flowline geometry for a bbox (OSM + NHDPlus HR).
 
     **What it does:** Returns river/stream/canal LineStrings that fill the
-    requested bbox, as a FlatGeobuf that renders inline on the map (Wave 4.9
+    requested bbox, as a FlatGeobuf that renders inline on the map (
     vector path). Access pattern: Tier 2/Tier 4 with an internal fallback
     chain (data-source-fallback norm):
 
@@ -746,7 +744,7 @@ def fetch_river_geometry(
     A ``LayerURI`` pointing at a FlatGeobuf of river/stream LineStrings in the
     cache bucket (``s3://trid3nt-cache/cache/static-30d/river_geometry/<key>.fgb``).
     ``layer_type="vector"``, ``role="input"``. The FlatGeobuf renders inline
-    on the map via the Wave 4.9 GeoJSON path (``add_loaded_layer``) — it is
+    on the map via the GeoJSON path (``add_loaded_layer``) - it is
     NOT published through ``publish_layer`` (that path is raster-only).
 
     **Cross-tool dependencies:**
@@ -755,7 +753,7 @@ def fetch_river_geometry(
       ``delineate_watershed``, stream-network display in map panel.
     """
     if isinstance(source, str) and source.strip().lower() in ("nhdplus", "nhd"):
-        # F25-class alias: the model's natural label for the NHDPlus family.
+        # -class alias: the model's natural label for the NHDPlus family.
         # The fallback chain is OSM-primary regardless, so aliasing is safe.
         source = "nhdplus_hr"
     if source not in ("nhdplus_hr", "osm"):

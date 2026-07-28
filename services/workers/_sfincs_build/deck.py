@@ -6,7 +6,7 @@ hydromt-SFINCS model BUILD that used to run IN the always-on agent process (the
 16 GB Chattanooga-OOM driver) now runs HERE, inside the tear-down ``grace2-sfincs``
 Batch worker, alongside the solve + the raster postprocess.
 
-The pure build functions below (dataclasses, Manning mapping loader + the OQ-4 §4
+The pure build functions below (dataclasses, Manning mapping loader + the §4
 NLCD validation gate, the adaptive-grid autoscale, the HydroMT YAML config
 generator + surge/physics emitters) are VENDORED VERBATIM from the agent's
 ``server/src/trid3nt_server/workflows/sfincs_builder.py`` — that module
@@ -147,7 +147,7 @@ class SFINCSSetupError(RuntimeError):
           "mapping_csv_path": str,
         }
 
-    Open-set codes used by this module (per OQ-4 §5 OQ-4c):
+    Open-set codes used by this module (per §5):
     - ``LULC_MAPPING_MISMATCH`` — the **headline**; gate fired before HydroMT
       ran the roughness component.
     - ``DEM_COVERAGE_GAP`` — DEM bytes were not readable or had no spatial
@@ -156,7 +156,7 @@ class SFINCSSetupError(RuntimeError):
       precipitation depth.
     - ``HYDROMT_UNAVAILABLE`` — ``import hydromt_sfincs`` failed in the
       runtime (container missing the dep — surfaces as schema-pushback to
-      infra job-0040).
+      infra).
     - ``HYDROMT_BUILD_FAILED`` — HydroMT itself raised during the build (any
       uncaught underlying error is re-raised wrapped in this code).
     """
@@ -296,7 +296,7 @@ class SpiderwebForcing:
 class InfiltrationForcing:
     """Soil-infiltration LOSS term (SFINCS ``scsfile`` / ``qinffile`` / ``qinf``).
 
-    NATE 2026-06-26: the missing forcing archetype. Infiltration is a loss, not
+    the missing forcing archetype. Infiltration is a loss, not
     a driver, so it is emitted whenever set but is NOT counted by
     ``has_surge_forcing`` (a pure-infiltration deck still needs a precip/surge
     driver to flood). Three mutually-exclusive emission paths, in precedence:
@@ -349,7 +349,7 @@ class ForcingSpec:
     - ``forcing_type`` — drives the SFINCS forcing component(s) HydroMT
       configures (``"pluvial_synthetic"`` → uniform rainfall hyetograph from
       an Atlas 14 design storm; ``"pluvial_observed"`` → uniform rainfall
-      hyetograph from an OBSERVED precip raster (job-0225 v2, area-mean
+      hyetograph from an OBSERVED precip raster (v2, area-mean
       netamt fallback); ``"storm_surge"`` → wind/pressure/water-level series;
       future).
     - ``precip_inches`` — total depth from Atlas 14 (design-storm path).
@@ -359,14 +359,14 @@ class ForcingSpec:
     - ``return_period_years`` — ARI (Atlas 14 column; ``None`` for observed
       forcing — observed precip has no ARI).
     - ``precip_magnitude_mm_per_hr`` — pre-computed uniform-rain rate in mm/hr
-      (job-0225 v2 ``pluvial_observed`` netamt path). When set, the YAML
+      (v2 ``pluvial_observed`` netamt path). When set, the YAML
       emitter uses it VERBATIM as the SFINCS ``setup_precip_forcing``
       ``magnitude`` (mm/hr) — bypassing the Atlas 14
       ``precip_inches / duration_hours`` arithmetic. This is the seam where
       the area-mean of a real precip raster (MRMS QPE, ERA5, gridMET …)
       enters the deck. ``None`` for the design-storm path (where magnitude is
       derived from ``precip_inches``). See ``model_flood_scenario``'s
-      ``forcing_raster_uri`` branch + OQ-6 (area-mean netamt v0.1; spw
+      ``forcing_raster_uri`` branch + (area-mean netamt v0.1; spw
       upgrade path documented there).
     - ``provenance`` — free-form dict echoed into ``ForcingSummary.parameters``
       so the AssessmentEnvelope carries the Atlas 14 volume / project_area /
@@ -382,7 +382,7 @@ class ForcingSpec:
     # COASTAL SFINCS surge / compound-flood members (None → block not emitted).
     waterlevel: WaterlevelForcing | None = None
     discharge: DischargeForcing | None = None
-    # NATE 2026-06-26: ``breach`` is an INTERIOR levee-breach point source (reuses
+    # ``breach`` is an INTERIOR levee-breach point source (reuses
     # DischargeForcing with timeseries_uri+locations_uri set at the breach point,
     # rivers_uri/hydrography_uri left None). Distinct from ``discharge`` (a
     # domain-EDGE river inflow) so a compound run can carry BOTH; emitted as a
@@ -393,7 +393,7 @@ class ForcingSpec:
     # SPIDERWEB (2026-07-19): parametric hurricane wind+pressure (cloud mirror).
     # XOR with wind/pressure (emitter). IS the surge driver -> counts.
     wind_spiderweb: SpiderwebForcing | None = None
-    # NATE 2026-06-26: infiltration is a LOSS term (scsfile/qinffile/qinf), not a
+    # infiltration is a LOSS term (scsfile/qinffile/qinf), not a
     # driver -> emitted when set but NOT counted by has_surge_forcing().
     infiltration: InfiltrationForcing | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
@@ -401,7 +401,7 @@ class ForcingSpec:
     def has_surge_forcing(self) -> bool:
         """True iff any non-precip (surge/tide/discharge/breach/wind/pressure/spiderweb) member is set.
 
-        NATE 2026-06-26: ``breach`` is a DRIVER (an interior discharge jet) so it
+        ``breach`` is a DRIVER (an interior discharge jet) so it
         joins the any(); ``infiltration`` is a loss term and is deliberately
         excluded (it never drives a flood on its own). SPIDERWEB is the wind
         driver so it counts.
@@ -433,7 +433,7 @@ class BuildOptions:
       projected metric CRS; we use EPSG:3857 (Web Mercator) as a generic
       default for the v0.1 smoke. A production-grade default would route to
       the appropriate UTM zone per bbox center — captured as
-      OQ-42-MODEL-CRS-AUTO-UTM (TENTATIVE: EPSG:3857 for v0.1 smoke).
+      (TENTATIVE: EPSG:3857 for v0.1 smoke).
     - ``output_setup_uri`` — explicit override for the staged deck's gs:// URI.
       When ``None`` we derive one inside the cache bucket.
     - ``compute_class`` — FR-CE-3 compute class the solve will run on; feeds the
@@ -441,7 +441,7 @@ class BuildOptions:
       passes the same class it hands ``run_solver``. Provenance only otherwise.
     - ``autoscale_grid`` — when ``True`` (default), ``build_sfincs_model`` snaps
       ``grid_resolution_m`` UP the resolution ladder so the estimated active-cell
-      count fits the solve budget (sprint-16). Set ``False`` to pin
+      count fits the solve budget. Set ``False`` to pin
       ``grid_resolution_m`` verbatim (tests / explicit overrides).
     - ``enable_subgrid`` — emit a ``setup_subgrid`` block. Subgrid tables let
       SFINCS run on a COARSE computational grid while still resolving local
@@ -486,7 +486,7 @@ class BuildOptions:
     subgrid_nr_subgrid_pixels: int = 20
     building_obstacle_uri: str | None = None
     building_obstacle_mode: str = "exclude"
-    # NATE 2026-06-26: advanced-physics overrides (advection/theta/alpha/huthresh
+    # advanced-physics overrides (advection/theta/alpha/huthresh
     # /coriolis_latitude/wind_drag) resolved via physics_registry.
     # validate_and_resolve_physics('sfincs', overrides). The composer passes the
     # RESOLVED dict (single resolve point); ``_emit_physics_config`` writes each
@@ -605,7 +605,7 @@ def validate_nlcd_vintage_against_mapping(
     mapping_version: str = MANNING_MAPPING_VERSION,
     mapping_csv_path: str | None = None,
 ) -> None:
-    """The **OQ-4 §4 Invariant-7 mitigation gate**.
+    """The **§4 Invariant-7 mitigation gate**.
 
     Verifies that every NLCD class integer observed in the fetched landcover
     raster is present in the Manning's mapping. If any class is missing, raises
@@ -679,7 +679,7 @@ def _to_vsigs(uri: str) -> str:
     converted ``/vsis3/`` paths are idempotent. Anything else is treated as a
     local path (the caller's resolver layer is the gate).
 
-    WARNING (job-0293c live observation): GDAL's ``/vsis3/`` credential chain
+    WARNING (live observation): GDAL's ``/vsis3/`` credential chain
     does NOT resolve the EC2 instance role in this environment — it falls back
     to anonymous and reports "does not exist" / AccessDenied on an existing
     private object. boto3 DOES resolve the instance role. Therefore any caller
@@ -769,13 +769,13 @@ def _write_hydromt_reclass_table_csv(
 ) -> Path:
     """Write a reclass-table CSV in the **hydromt-sfincs 1.2.x** expected format.
 
-    OQ-52 hotfix (job-0053). ``_parse_datasets_rgh`` reads the reclass table
+    hotfix. ``_parse_datasets_rgh`` reads the reclass table
     via ``data_catalog.get_dataframe(reclass_table, index_col=0)`` then
     indexes ``df_map[["N"]]`` — i.e. the first column must be the LULC class
     integer (used as the index), and there must be a column literally named
     ``N`` carrying the Manning's roughness value. Our authored
     ``manning_mapping.csv`` uses ``nlcd_class,manning_n,description`` columns
-    (load-bearing for ``load_manning_mapping`` + the OQ-4 §4 validation gate);
+    (load-bearing for ``load_manning_mapping`` + the §4 validation gate);
     here we rewrite the in-memory mapping into the v1.2.x-shaped CSV that
     HydroMT will actually consume during ``setup_manning_roughness``.
 
@@ -824,7 +824,7 @@ _MASK_FALLBACK_ZMAX: float = 9000.0
 def _compute_active_mask_bounds(dem_read_path: str) -> tuple[float, float, bool]:
     """Compute domain-adaptive ``setup_mask_active`` ``zmin``/``zmax`` (metres).
 
-    job-0318 (CONFIRMED BUG): the active-cell mask was previously hardcoded to
+    (CONFIRMED BUG): the active-cell mask was previously hardcoded to
     ``zmin: -10.0`` / ``zmax: 10.0`` — an *elevation window* in metres. Only
     DEM cells whose elevation fell inside ``[-10, 10]`` became ACTIVE. For any
     inland / elevated terrain (Asheville sits at ~650 m) every cell exceeds
@@ -944,13 +944,13 @@ def _compute_active_mask_bounds(dem_read_path: str) -> tuple[float, float, bool]
 
 
 # --------------------------------------------------------------------------- #
-# Adaptive grid-resolution autoscale (sprint-16 — SFINCS per-job autoscale)
+# Adaptive grid-resolution autoscale (— SFINCS per-job autoscale)
 #
 # The immediate win (applies on the CURRENT local-docker / gcp-workflows path,
 # NOT just AWS Batch): coarsen the SFINCS grid resolution for big AOIs so the
 # solve fits a configurable wall-clock budget. SFINCS solve cost scales roughly
 # super-linearly in the ACTIVE-cell count N (the cells inside the
-# ``setup_mask_active`` elevation window — NOT the raw bbox area; see job-0318).
+# ``setup_mask_active`` elevation window — NOT the raw bbox area).
 # We:
 #
 #   1. estimate the ACTIVE cell count at a candidate grid resolution from the
@@ -1175,8 +1175,8 @@ def _estimate_active_cells_at_native(
     """Count DEM cells inside the active elevation window + return native res (m).
 
     Reads the staged (LOCAL) DEM, masks nodata, counts cells whose elevation is
-    within ``[zmin, zmax]`` (the ``setup_mask_active`` window — mirrors
-    job-0318's active-domain definition), and returns ``(active_count,
+    within ``[zmin, zmax]`` (the ``setup_mask_active`` window — mirrors the
+    active-domain definition), and returns ``(active_count,
     native_resolution_m)``. The native resolution is derived from the DEM
     transform; if the DEM is geographic (degrees) we convert the pixel size to
     metres at the DEM centre latitude (matching ``_bbox_area_km2``).
@@ -1287,7 +1287,7 @@ def autoscale_grid_resolution(
     Args:
         dem_read_path: LOCAL staged DEM path (``_stage_gcs_local`` ran already).
         bbox: WGS84 bbox — the fallback area source when the DEM is unreadable.
-        zmin/zmax: the ``setup_mask_active`` elevation window (job-0318) — the
+        zmin/zmax: the ``setup_mask_active`` elevation window — the
             same window the solve will actually mask to, so the estimate counts
             the cells SFINCS will really solve, not the raw bbox.
         compute_class: FR-CE-3 class → vCPU via ``resolve_solve_vcpus``.
@@ -1393,7 +1393,7 @@ def suggest_sfincs_resolution_from_bbox(
 ) -> GridAutoscaleResult:
     """Lightweight SFINCS resolution suggestion from the AOI bbox alone (no DEM).
 
-    The combined run-settings gate (sprint-16) surfaces a SUGGESTED SFINCS grid
+    The combined run-settings gate surfaces a SUGGESTED SFINCS grid
     resolution + active-cell count + estimated solve time BEFORE the run so the
     user can override the spatial resolution. The full :func:`autoscale_grid_resolution`
     reads a staged DEM to count cells inside the active elevation window — too
@@ -1499,8 +1499,8 @@ def _emit_surge_forcing_blocks(
 
     Every input URI is staged to a local path via ``_stage_gcs_local`` first
     (HydroMT's data adapter stats catalog paths with fsspec's LOCAL filesystem
-    before GDAL opens them — a ``gs://``/``s3://`` URI would fail that stat;
-    job-0248). All steps funnel surge/discharge series through
+    before GDAL opens them — a ``gs://``/``s3://`` URI would fail that stat).
+    All steps funnel surge/discharge series through
     ``set_forcing_1d``, which the module-level pandas guard keeps callable on
     pandas >= 3.0.
     """
@@ -1577,7 +1577,7 @@ def _emit_surge_forcing_blocks(
                 f"  locations: '{_stage_gcs_local(dq.locations_uri)}'"
             )
 
-    # --- 2b. Levee-breach INTERIOR point source (NATE 2026-06-26) ---
+    # --- 2b. Levee-breach INTERIOR point source ---
     # An interior breach hydrograph injected via setup_discharge_forcing with an
     # explicit ``locations`` Point at the breach cell (ARBITRARY interior cell --
     # NOT a domain-edge inflow, so NO setup_river_inflow). ``merge: true`` lets
@@ -1615,7 +1615,7 @@ def _emit_surge_forcing_blocks(
         if press.fill_value is not None:
             components.append(f"  fill_value: {press.fill_value}")
 
-    # --- 5. Infiltration LOSS term (NATE 2026-06-26) ---
+    # --- 5. Infiltration LOSS term ---
     # CN (scsfile) WINS over a constant: hydromt's setup_cn_infiltration pops the
     # default ``qinf`` config, so emitting both is ambiguous. A bare scalar
     # constant has NO setup_* method (setup_constant_infiltration REQUIRES a
@@ -1687,7 +1687,7 @@ def _emit_physics_config(
 ) -> None:
     """Append advanced-physics + bare-constant-infiltration lines into setup_config.
 
-    NATE 2026-06-26: ``setup_config`` is a HydroMT passthrough (any key -> a
+    ``setup_config`` is a HydroMT passthrough (any key -> a
     ``key = value`` line in sfincs.inp), so each resolved physics override lands
     directly in the deck. ``physics`` is the dict resolved by
     ``physics_registry.validate_and_resolve_physics('sfincs', overrides)`` (keys
@@ -1749,13 +1749,13 @@ def _generate_hydromt_yaml_config(
 ) -> str:
     """Compose a HydroMT-SFINCS YAML build config string.
 
-    Per OQ-4 §3 + §4: the YAML drives ``hydromt build sfincs`` (or the
+    Per §3 + §4: the YAML drives ``hydromt build sfincs`` (or the
     equivalent Python API call). Generated programmatically from the typed
     inputs — never user-input.
 
     The component list is the v0.1 pluvial-flood capstone shape, with every
     step matched to a hydromt-sfincs 1.2.2 live ``inspect.signature`` cite
-    (job-0054 comprehensive migration audit):
+    (comprehensive migration audit):
 
       * setup_config — config-file passthrough (``SfincsModel.setup_config``
         takes ``**cfdict`` per inheritance from ``hydromt.Model``). Time
@@ -1766,7 +1766,6 @@ def _generate_hydromt_yaml_config(
         ``utils.parse_datetime`` uses the same format. ISO 8601 strings
         raise ``ValueError: time data '...' does not match format '%Y%m%d
         %H%M%S'`` inside ``setup_precip_forcing → get_model_time()``.
-        (Discovered and fixed in job-0055.)
       * setup_grid_from_region — defines the SFINCS grid. Live sig:
         ``(region: dict, res: float = 100, crs: Union[str, int] = "utm", ...)``.
         We pass ``region: {bbox: [...]}`` + ``res``; ``crs`` left at the
@@ -1780,7 +1779,7 @@ def _generate_hydromt_yaml_config(
       * setup_manning_roughness — Manning's grid via NLCD + the reclass CSV.
         Live sig: ``(datasets_rgh: List[dict] = [], manning_land=0.04,
         manning_sea=0.02, rgh_lev_land=0)`` — NO top-level ``map_fn``
-        (OQ-52). The reclass table lives INSIDE each ``datasets_rgh`` entry
+. The reclass table lives INSIDE each ``datasets_rgh`` entry
         under key ``reclass_table`` (per ``_parse_datasets_rgh``: each dict
         supports ``manning`` (gridded n) OR ``lulc`` + ``reclass_table``);
         the CSV must be ``index_col=0`` + column literally ``N`` —
@@ -1800,14 +1799,14 @@ def _generate_hydromt_yaml_config(
         BEFORE ``setup_discharge_forcing`` (order matters — inflow makes the src
         points, discharge attaches the series). These funnel through HydroMT's
         ``set_forcing_1d``, which the module-level pandas guard keeps callable on
-        pandas >= 3.0 (the old job-0055 blocker that forced river inflow OFF).
+        pandas >= 3.0 (the old blocker that forced river inflow OFF).
         A pure-pluvial deck (no surge members) emits NONE of these, so it stays
         byte-identical to the v0.1 deck.
       * setup_precip_forcing — uniform precip forcing. Live sig:
         ``(timeseries=None, magnitude=None)`` — accepts EITHER a tabulated
         timeseries CSV OR a single ``magnitude`` float in ``mm/hr``
         (constant rate over the simulation window, then projected onto a
-        10-minute time grid). OQ-54 fix: we previously emitted ``precip``
+        10-minute time grid). fix: we previously emitted ``precip``
         + ``duration_hr`` (neither is a 1.2.x parameter); we now emit
         ``magnitude: <mm_per_hr>`` derived from Atlas 14 depth ÷ duration.
         The Atlas 14 depth + duration are still echoed via the inline YAML
@@ -1823,7 +1822,7 @@ def _generate_hydromt_yaml_config(
     components.append(f"  crs: {crs}")
     # Time values MUST be in SFINCS format "YYYYMMDD HHMMSS" — sfincs_input.py
     # parses them with strptime(val, "%Y%m%d %H%M%S"). ISO 8601 format raises
-    # ValueError inside setup_precip_forcing -> get_model_time() (job-0055).
+    # ValueError inside setup_precip_forcing -> get_model_time.
     #
     # ``tstop`` is ``tstart + simulation_hours`` at SUB-DAY precision (datetime
     # arithmetic), NOT a whole-day rounding. The old ``sim_days =
@@ -1875,7 +1874,7 @@ def _generate_hydromt_yaml_config(
     # SPIDERWEB (2026-07-19): parametric-hurricane spwfile/utmzone/baro (cloud
     # mirror). No-op + XOR-checked when no wind_spiderweb member is set.
     _emit_spiderweb_config(components, forcing)
-    # NATE 2026-06-26: advanced-physics overrides + a bare-constant infiltration
+    # advanced-physics overrides + a bare-constant infiltration
     # qinf land in THIS setup_config block (HydroMT passthrough -> sfincs.inp).
     # ``None`` advanced_physics + no bare-constant infiltration emit nothing, so a
     # plain pluvial deck stays byte-identical.
@@ -1887,19 +1886,19 @@ def _generate_hydromt_yaml_config(
         f"  region: {{ bbox: [{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}] }}"
     )
     components.append(f"  res: {grid_res}")
-    # job-0248 (supersedes the job-0170 /vsigs/ rewrite FOR THE CATALOG PATH
+    # (supersedes the /vsigs/ rewrite FOR THE CATALOG PATH
     # ONLY): HydroMT's data adapter stats catalog paths with fsspec's LOCAL
     # filesystem before GDAL ever opens them, so a /vsigs/ GDAL-ism raises
     # "No such file found" even when the GCS object exists (proven live,
     # round-5 Stage 3). gs:// inputs are therefore STAGED to a local cache
     # via google-cloud-storage (ADC) and HydroMT receives a real local path
-    # — which also keeps gcsfs out of the read path (job-0170's segfault
+    # — which also keeps gcsfs out of the read path (the gcsfs segfault
     # avoidance holds). Direct rasterio reads elsewhere still use /vsigs/.
     dem_read_path = _stage_gcs_local(dem_local_path)
     landcover_read_path = _stage_gcs_local(landcover_local_path)
     components.append("setup_dep:")
     components.append(f"  datasets_dep: [{{ elevtn: '{dem_read_path}' }}]")
-    # job-0318: DOMAIN-ADAPTIVE active-cell mask. ``setup_mask_active``'s
+    # DOMAIN-ADAPTIVE active-cell mask. ``setup_mask_active``'s
     # zmin/zmax is an ELEVATION WINDOW (metres) — only cells whose DEM
     # elevation falls inside it become ACTIVE. The previous HARDCODED
     # ``zmin: -10 / zmax: 10`` only ever worked for near-sea-level / coastal
@@ -1970,7 +1969,7 @@ def _generate_hydromt_yaml_config(
             )
     # --- COASTAL SFINCS — surge / tide / discharge / wind / pressure forcing ---
     #
-    # HISTORICAL NOTE (job-0055): for the v0.1 PLUVIAL deck ``setup_river_inflow``
+    # HISTORICAL NOTE: for the v0.1 PLUVIAL deck ``setup_river_inflow``
     # was intentionally NOT emitted, partly because hydromt-sfincs 1.2.2's
     # ``set_forcing_1d`` (sfincs.py:1858) calls ``pd.Index.is_integer()`` which
     # pandas removed in 3.0. That blocker is now neutralised by the module-level
@@ -1992,14 +1991,14 @@ def _generate_hydromt_yaml_config(
     #   1. ``pluvial_synthetic`` (Atlas 14 design storm, M5 v0.1): the
     #      magnitude is DERIVED here from ``precip_inches`` over
     #      ``duration_hours`` (depth → rate arithmetic).
-    #   2. ``pluvial_observed`` (job-0225 v2, real precip raster): the
+    # 2. ``pluvial_observed`` (v2, real precip raster): the
     #      magnitude is PRE-COMPUTED by ``model_flood_scenario``'s
     #      ``forcing_raster_uri`` branch (area-mean of the precip raster over
     #      the model domain, in mm, divided by the accumulation window) and
     #      carried on ``forcing.precip_magnitude_mm_per_hr``. We emit it
-    #      verbatim — this is the netamt fallback locked by OQ-6 (see below).
+    # verbatim — this is the netamt fallback locked by (see below).
     #
-    # OQ-6 (manifest, TENTATIVE → LOCKED here): SFINCS accepts precipitation
+    # (manifest, TENTATIVE → LOCKED here): SFINCS accepts precipitation
     # as ``netamt`` (uniform mm/hr — what ``setup_precip_forcing``'s
     # ``magnitude`` produces) OR ``spw`` (spatially-variable precip via
     # NetCDF). v0.1 maps a precip raster to a SINGLE area-mean ``magnitude``
@@ -2012,12 +2011,12 @@ def _generate_hydromt_yaml_config(
     # ``precip_2d.nc`` (spw). That keeps the raster's spatial gradient (e.g.
     # an MRMS QPE band crossing the domain) instead of flattening to a mean.
     # The container-support finding for spw is recorded in this job's
-    # report.md (job-0225).
+    # report.md.
     if (
         forcing.forcing_type == "pluvial_observed"
         and forcing.precip_magnitude_mm_per_hr is not None
     ):
-        # job-0225 v2 — area-mean netamt path. The magnitude was computed
+        # v2 — area-mean netamt path. The magnitude was computed
         # upstream from a real precip raster (MRMS QPE / ERA5 / gridMET); we
         # do NOT re-derive it from depth here. ``precip_inches`` may be None
         # on this path (observed forcing has no Atlas 14 depth).
@@ -2032,7 +2031,7 @@ def _generate_hydromt_yaml_config(
             "OQ-6 — spw spatial path is the documented upgrade)"
         )
     elif forcing.forcing_type == "pluvial_synthetic" and forcing.precip_inches is not None:
-        # OQ-54 fix (job-0054): the live 1.2.x signature is
+        # fix: the live 1.2.x signature is
         # ``setup_precip_forcing(timeseries=None, magnitude=None)``; ``precip``
         # / ``duration_hr`` (what we previously emitted) are NOT accepted
         # kwargs and would raise ``TypeError: got an unexpected keyword
@@ -2386,7 +2385,7 @@ def build_sfincs_deck(
             message="pluvial_observed forcing requires positive precip_magnitude_mm_per_hr",
         )
 
-    # --- Manning mapping + the OQ-4 §4 NLCD validation gate (defensive; the
+    # --- Manning mapping + the §4 NLCD validation gate (defensive; the
     #     agent already ran it pre-submit, but a clean solve must never dispatch
     #     silently-wrong roughness) ---
     mapping = load_manning_mapping()

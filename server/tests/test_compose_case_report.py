@@ -1,6 +1,6 @@
 """Tests for ``compose_case_report`` (markdown case situation report).
 
-No network / no DynamoDB: fake persistence (the export_case_to_qgis seam),
+No network / no DynamoDB: fake persistence (the open_case_in_qgis seam),
 tiny local raster/vector artifacts, report written into ``tmp_path``. The
 exposure section is fed through ``compute_exposure_summary``'s session store
 directly (no fetches).

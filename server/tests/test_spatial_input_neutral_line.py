@@ -30,7 +30,7 @@ from typing import Any
 
 import pytest
 
-from trid3nt_server.server import _spatial_response_to_result
+from trid3nt_server.agent.gates.cards.spatial_input import _spatial_response_to_result
 from trid3nt_server.agent.gates.spatial_input import (
     SpatialInputParseError,
     parse_spatial_input_features,

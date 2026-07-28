@@ -1,12 +1,12 @@
-"""MODFLOW 6 deck-build + submit orchestration (sprint-13 Stage 2, job-0227).
+"""MODFLOW 6 deck-build + submit orchestration (Stage 2).
 
 The MODFLOW analogue of the SFINCS ``build_sfincs_model`` + ``run_solver`` +
-``wait_for_completion`` chain (job-0041 / job-0042). One module owns three
+``wait_for_completion`` chain. One module owns three
 things for the groundwater-contamination ("spill") engine:
 
   1. **Deck build + S3 staging** (``build_and_stage_modflow_deck``). Calls the
      engine's ``services/workers/modflow/gwt_adapter.build_modflow_deck`` (a
-     FloPy GWF+GWT deck builder, FROZEN under job-0221), reorganises the FLAT
+     FloPy GWF+GWT deck builder, FROZEN under), reorganises the FLAT
      deck FloPy writes into the ``gwf/`` + ``gwt/`` subdirectory layout the
      solver entrypoint reconstructs (design-doc § 6 / entrypoint.py), composes
      the worker-contract ``manifest.json`` (populating the OQ-MOD-3
@@ -58,7 +58,7 @@ CRITICAL handoff fixes (Stage-1 Open Questions, resolved here):
 Determinism boundary (Invariant 1 / 2): no LLM call anywhere in this module.
 Deck build is deterministic FloPy; submission is a thin Cloud Workflows call;
 the local path is a subprocess run of the mf6 binary. Progress emission goes
-through the active ``PipelineEmitter`` (job-0035 seam) exactly like the SFINCS
+through the active ``PipelineEmitter`` exactly like the SFINCS
 path - a wall-clock-keyed ramp, never an estimate.
 
 Cancellation (Invariant 8): the cloud path returns an ``ExecutionHandle`` whose
@@ -66,18 +66,18 @@ Cancellation (Invariant 8): the cloud path returns an ``ExecutionHandle`` whose
 the WS ``cancel`` chain. The local path is a foreground subprocess - cancel
 terminates the process group.
 
-AWS local backend (job-0292b, sprint-14-aws)
+AWS local backend
 --------------------------------------------
 
-``TRID3NT_SOLVER_BACKEND=local-docker`` (the job-0291 seam) routes MODFLOW
+``TRID3NT_SOLVER_BACKEND=local-docker`` (the seam) routes MODFLOW
 through the solver module's shared local machinery instead of Cloud Workflows:
 
   * ``build_and_stage_modflow_deck`` becomes scheme-aware: under
     ``TRID3NT_STORAGE_BACKEND=s3`` the deck + manifest upload to
     ``s3://$TRID3NT_CACHE_BUCKET/modflow/<run_id>/`` via **boto3** (the
-    job-0289 s3fs-anonymous lesson; shared ``tools.simulation.solver`` S3 client seam).
+     s3fs-anonymous lesson; shared ``tools.simulation.solver`` S3 client seam).
     The manifest keeps the LEGACY ``gs_uri`` field NAME with ``s3://`` VALUES
-    - staging resolves by scheme (job-0291 convention). The default ``gs://``
+    - staging resolves by scheme (convention). The default ``gs://``
     fsspec path is byte-identical.
   * ``submit_modflow_run`` dispatches to ``tools.simulation.solver.launch_local_solver``
     with a MODFLOW ``LocalSolverSpec``: stage the deck back down from S3 into
@@ -132,7 +132,7 @@ __all__ = [
     "set_cache_bucket",
     "set_runs_bucket",
     "set_mf6_binary",
-    "build_modflow_deck",  # re-exported adapter alias (engine, job-0221)
+    "build_modflow_deck",  # re-exported adapter alias (engine)
     # Heavy-compute offload (reports/design/heavy-compute-offload-2026-07-02.md).
     "compose_and_upload_modflow_build_spec",
     "read_modflow_build_manifest",
@@ -175,7 +175,7 @@ NORMAL_TERMINATION_MARKER = "Normal termination of simulation"
 
 
 # --------------------------------------------------------------------------- #
-# Cross-package adapter import (engine, job-0221, FROZEN)
+# Cross-package adapter import (engine, FROZEN)
 # --------------------------------------------------------------------------- #
 #
 # ``gwt_adapter`` lives in ``services/workers/modflow/`` which is NOT an
@@ -191,7 +191,7 @@ _MODFLOW_WORKER_DIR = (
 
 
 def _import_gwt_adapter() -> Any:
-    """Import and return the engine's ``gwt_adapter`` module (job-0221).
+    """Import and return the engine's ``gwt_adapter`` module.
 
     Adds the modflow worker dir to ``sys.path`` if needed. Raises
     ``MODFLOWWorkflowError`` with a typed code if the import fails so the
@@ -219,7 +219,7 @@ def build_modflow_deck(*args: Any, **kwargs: Any) -> Any:
 
     Importing the adapter lazily (it pulls in flopy). Returns the engine's
     typed ``DeckManifest``. Kept as a module-level callable so tests and the
-    Case-2 composer (job-0228) can monkeypatch the build at this seam.
+    Case-2 composer can monkeypatch the build at this seam.
     """
     return _import_gwt_adapter().build_modflow_deck(*args, **kwargs)
 
@@ -433,7 +433,7 @@ def _reorganize_into_subdirs(
 
 
 # --------------------------------------------------------------------------- #
-# River-geometry resolution (sprint-17 J9) - FGB/GeoJSON URI -> lon/lat vertices
+# River-geometry resolution (J9) - FGB/GeoJSON URI -> lon/lat vertices
 # --------------------------------------------------------------------------- #
 
 
@@ -570,11 +570,11 @@ class DeckStaging:
     spill_lon: float
     output_globs: list[str]
     manifest_inputs: list[dict[str, str]] = field(default_factory=list)
-    # sprint-17 J9 river-coupling: True iff a RIV package was written (the tool
+    # J9 river-coupling: True iff a RIV package was written (the tool
     # wrapper then runs postprocess_river_seepage in addition to the plume).
     river_coupled: bool = False
     river_cell_count: int = 0
-    # sprint-18 Wave-1 archetype: None = the spill/seepage GWF+GWT deck; the
+    # archetype: None = the spill/seepage GWF+GWT deck; the
     # three GWF-only archetypes carry their name + the field the archetype tool
     # reads to pick the right postprocess (drawdown / dewatering / budget).
     archetype: str | None = None
@@ -760,7 +760,7 @@ def build_and_stage_modflow_deck(
     flat_dir.mkdir(parents=True, exist_ok=True)
     deck_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- 1a. River-coupling (sprint-17 J9): resolve the polyline -------------
+    # --- 1a. River-coupling (J9): resolve the polyline -------------
     # When run_args carries a river_geometry_uri, read the flowline into the
     # (lon, lat) vertices the adapter drapes onto the grid. A resolution failure
     # is typed + fatal (the user asked for a river-coupled run) rather than a
@@ -779,7 +779,7 @@ def build_and_stage_modflow_deck(
             along_river_source=bool(getattr(run_args, "along_river_source", False)),
         )
 
-    # --- 1a'. Archetype branch (sprint-18 Wave-1): thread the per-archetype
+    # --- 1a'. Archetype branch: thread the per-archetype
     # forcing into the adapter's GWF-only archetype dispatch. ``archetype is
     # None`` => the kwargs stay empty and the spill/seepage deck is byte-
     # identical. The adapter raises a ValueError when a required per-archetype
@@ -805,7 +805,7 @@ def build_and_stage_modflow_deck(
                 run_args, "well_pumping_rate_m3_day", None
             ),
             zone_partition=getattr(run_args, "zone_partition", None),
-            # --- Wave-2 archetype fields (sprint-18 Wave-2) ---
+            # --- archetype fields ---
             # MAR (managed aquifer recharge -> RCH mounding)
             basin_footprint_lonlat=getattr(run_args, "basin_footprint_lonlat", None),
             infiltration_rate_m_day=getattr(run_args, "infiltration_rate_m_day", None),
@@ -905,7 +905,7 @@ def build_and_stage_modflow_deck(
     gwt_name = manifest_obj.gwt_name
     river_coupled = bool(getattr(manifest_obj, "river_coupled", False))
     river_cell_count = int(getattr(manifest_obj, "river_cell_count", 0))
-    # sprint-18 Wave-1: a GWF-only archetype deck (sustainable_yield /
+    # a GWF-only archetype deck (sustainable_yield /
     # mine_dewatering / regional_water_budget) carries no GWT model (gwt_name="")
     # and writes head + cbc only (no UCN concentration).
     archetype = getattr(manifest_obj, "archetype", None)
@@ -960,11 +960,11 @@ def build_and_stage_modflow_deck(
         "*.csub.compaction.bin",
         "*.csub.obs.csv",
     ]
-    # job-0292b: scheme-aware deck prefix. ``cache.storage_scheme()`` returns
-    # ``"gs"`` by default (byte-identical pre-job-0292b URI) and ``"s3"``
+    # scheme-aware deck prefix. ``cache.storage_scheme()`` returns
+    # ``"gs"`` by default (byte-identical URI) and ``"s3"``
     # under TRID3NT_STORAGE_BACKEND=s3 - the manifest's input VALUES then carry
     # s3:// so the local-backend staging resolves them by scheme (the field
-    # NAME stays the legacy ``gs_uri``, job-0291 convention).
+    # NAME stays the legacy ``gs_uri``, convention).
     from trid3nt_server.agent.tools.cache import storage_scheme
 
     deck_base_uri = f"{storage_scheme()}://{_cache_bucket()}/modflow/{rid}/"
@@ -978,7 +978,7 @@ def build_and_stage_modflow_deck(
     # --- 4. Stage to the object store (cloud / AWS-local-backend path) ------
     if stage_to_gcs and not is_local_mode():
         if deck_base_uri.startswith("s3://"):
-            # job-0292b: boto3 (NOT fsspec/s3fs - the job-0289 anonymous-
+            # boto3 (NOT fsspec/s3fs - the anonymous-
             # credentials lesson) through the solver module's shared S3
             # client seam, mirroring sfincs_builder's deck upload.
             try:
@@ -1091,7 +1091,7 @@ def _run_args_to_deck_kwargs(run_args: MODFLOWRunArgs) -> dict[str, Any]:
         "porosity": float(run_args.porosity),
     }
 
-    # --- River-coupling (sprint-17 J9): resolve the flowline to lon/lat verts. --
+    # --- River-coupling (J9): resolve the flowline to lon/lat verts. --
     river_uri = getattr(run_args, "river_geometry_uri", None)
     if river_uri:
         kwargs["river_polyline_lonlat"] = [
@@ -1109,7 +1109,7 @@ def _run_args_to_deck_kwargs(run_args: MODFLOWRunArgs) -> dict[str, Any]:
             getattr(run_args, "along_river_source", False)
         )
 
-    # --- Archetype threading (sprint-18): thread every present per-archetype field.
+    # --- Archetype threading: thread every present per-archetype field.
     archetype = getattr(run_args, "archetype", None)
     if archetype is not None:
         kwargs["archetype"] = archetype
@@ -1524,7 +1524,7 @@ def read_modflow_archetype_manifest(
 def _modflow_local_spec(staging: DeckStaging) -> Any:
     """Build the MODFLOW ``LocalSolverSpec`` for the shared local backend.
 
-    job-0292b solver-binary decision: **image-less local-exec** - there is no
+     solver-binary decision: **image-less local-exec** - there is no
     maintained public MODFLOW docker image (the GCP Dockerfile itself built
     from python:3.11-slim + the SHA-pinned USGS 6.5.0 static binary), so the
     simplest contract-preserving path runs the same pinned ``mf6`` binary
@@ -1850,7 +1850,7 @@ def run_modflow_local(staging: DeckStaging) -> str:
 async def emit_modflow_progress(percent: int) -> None:
     """Best-effort progress emission via the active PipelineEmitter step.
 
-    Reads ``current_emitter()`` (job-0160 ContextVar) and pushes a clamped
+    Reads ``current_emitter()`` (ContextVar) and pushes a clamped
     progress update on the emitter's most-recent step (the one the bracketing
     ``emit_tool_call`` created for the ``run_modflow_job`` invocation). Outside
     an ``emit_tool_call`` scope (direct call / smoke / unit test) the emitter is
@@ -1868,7 +1868,7 @@ async def emit_modflow_progress(percent: int) -> None:
             return
         # The bracketing ``emit_tool_call`` created (and is running) the
         # most-recent step; push progress onto it. ``_step_order`` is the
-        # emitter's ordered step-id list (job-0035 internal).
+        # emitter's ordered step-id list (internal).
         order = getattr(emitter, "_step_order", None)
         if order:
             await emitter.update_progress(order[-1], max(0, min(100, percent)))

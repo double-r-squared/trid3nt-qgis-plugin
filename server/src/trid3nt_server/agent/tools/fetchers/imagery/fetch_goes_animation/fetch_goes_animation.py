@@ -383,7 +383,7 @@ def fetch_goes_animation(
     start_utc: str | None = None,
     end_utc: str | None = None,
     step_minutes: int = 5,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> list[LayerURI]:
     """Build a GOES GeoColor / Fire Temperature / BLENDED satellite animation (ordered per-frame RGB COGs) over a time window.
@@ -615,7 +615,7 @@ def _blend_animation_impl(
     start_utc: str | None = None,
     end_utc: str | None = None,
     step_minutes: int = 5,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> list[LayerURI]:
     """Build a BLENDED GeoColor + Fire Temperature animation (ONE composite scrubber group).
@@ -804,7 +804,7 @@ def fetch_goes_blend_animation(
     start_utc: str | None = None,
     end_utc: str | None = None,
     step_minutes: int = 5,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> list[LayerURI]:
     """DEPRECATED alias of ``fetch_goes_animation`` with ``band="blend"``.

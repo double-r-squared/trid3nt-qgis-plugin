@@ -15,7 +15,7 @@ Reuses two existing seams rather than re-deriving them:
 - ``query_point_hazard``'s case-layer enumeration
   (``layers_from_case``) + point-sampling primitives
   (``stage_layer_local`` -- which already unwraps a TiTiler tile TEMPLATE to
-  its underlying COG via ``export_case_to_qgis._unwrap_tile_template`` --
+  its underlying COG via ``open_case_in_qgis._unwrap_tile_template`` --
   and ``sample_raster_at_point``, nearest-neighbour via rasterio).
 - ``extract_timeseries_at_point``'s frame-sequence classifier
   (``detect_frame_sequences`` / ``parse_frame_token``) -- the SAME stem/token

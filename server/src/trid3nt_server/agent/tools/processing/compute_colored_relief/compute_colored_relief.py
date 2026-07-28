@@ -1,4 +1,4 @@
-"""``compute_colored_relief`` atomic tool — wraps ``gdaldem color-relief`` (job-0080).
+"""``compute_colored_relief`` atomic tool - wraps ``gdaldem color-relief``.
 
 Color-tints a DEM by elevation using one of four built-in ramp presets. The
 result is a single-band-per-channel RGB GeoTIFF (3-band) cached under
@@ -9,7 +9,7 @@ FR-CE-8 / FR-DC-3/4: routed through ``read_through`` so identical
 ``(dem_uri, ramp)`` calls reuse the cached artifact.
 
 ``gdaldem color-relief`` is already present in the deployment environment
-(job-0063 confirmed GDAL availability in ``.venv-agent``).
+(confirmed GDAL availability in ``.venv-agent``).
 
 Ramp definitions live inline as Python dicts and are written to a temp file
 (the CSV format ``gdaldem color-relief`` requires). Each ramp entry is a
@@ -37,12 +37,12 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 from trid3nt_server.agent.tools import register_tool
 from trid3nt_server.agent.tools.cache import read_through
 
-# job-0269: single source for the binary resolution + PROJ/GDAL data-dir env
-# (the job-0257 CRS fix). compute_colored_relief shipped with a bare
+# single source for the binary resolution + PROJ/GDAL data-dir env
+# (the CRS fix). compute_colored_relief shipped with a bare
 # ``"gdaldem"`` argv — FileNotFoundError in any env where gdaldem is not on
 # PATH (live failure 2026-06-10, Boulder colored relief) — and no PROJ env,
 # which silently degrades the output CRS to LOCAL_CS exactly as hillshade did.
-# job-0271: + COG conversion (flat gdaldem GTiffs render too slowly via WMS).
+# + COG conversion (flat gdaldem GTiffs render too slowly via WMS).
 from trid3nt_server.agent.tools.processing.compute_hillshade.compute_hillshade import _gdaldem_subprocess_env, _translate_to_cog
 
 __all__ = ["compute_colored_relief"]
@@ -67,7 +67,7 @@ class ColoredReliefError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
-# gdaldem binary resolution (job-0269 — mirrors compute_slope/_aspect)
+# gdaldem binary resolution (mirrors compute_slope/_aspect)
 # --------------------------------------------------------------------------- #
 
 _GDALDEM_BIN: str | None = None
@@ -109,13 +109,13 @@ def _conda_grace2_gdaldem() -> str | None:
 def _download_dem_to_local(dem_uri: str) -> str:
     """Stage an ``s3://`` DEM to a local temp file; pass local paths through.
 
-    job-0269: replaces the ``/vsis3/`` input path — the subprocess gdaldem
+    replaces the ``/vsis3/`` input path - the subprocess gdaldem
     has no guaranteed object-store auth context, while the agent process holds
     the EC2 instance-role credentials boto3 resolves via IMDS. Mirrors the
     compute_slope/_aspect staging pattern. Caller owns cleanup of the returned
     temp file (only when it differs from ``dem_uri``).
     """
-    # sprint-14-aws (job-0290b): s3:// staging — download to a local temp file.
+    # s3:// staging - download to a local temp file.
     if dem_uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
         try:
@@ -247,7 +247,7 @@ def _write_ramp_file(ramp: str, path: str) -> None:
 def _write_normalized_ramp_file(
     ramp: str, path: str, dem_min: float, dem_max: float
 ) -> None:
-    """Write ``ramp`` rescaled to the DEM's actual elevation span (job-0273b).
+    """Write ``ramp`` rescaled to the DEM's actual elevation span.
 
     The preset ramps span a canonical 0–9000 m domain. An inland scene like
     Boulder (~1600–2800 m) lands entirely in one band of that domain, so the
@@ -336,7 +336,7 @@ def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
     out_file: str | None = None
 
     try:
-        # job-0269: stage gs:// DEMs to a local temp file (agent-process ADC)
+        # stage gs:// DEMs to a local temp file (agent-process ADC)
         # instead of /vsigs/ — the gdaldem subprocess has no guaranteed GCS
         # auth. Local paths (tests / dev) pass straight through.
         gdal_dem_path = _download_dem_to_local(dem_uri)
@@ -344,7 +344,7 @@ def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
             dem_local = gdal_dem_path  # mark for cleanup in finally
 
         # Write ramp to a named temp file — gdaldem needs a real path.
-        # job-0273b: rescale the ramp anchors onto the DEM's actual span so
+        # rescale the ramp anchors onto the DEM's actual span so
         # inland scenes use the full color progression (Boulder rendered as
         # one near-uniform brown band of the canonical 0-9000m ramp).
         with tempfile.NamedTemporaryFile(
@@ -382,7 +382,7 @@ def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
             capture_output=True,
             timeout=180,
             check=False,
-            env=_gdaldem_subprocess_env(gdaldem_bin),  # job-0257 PROJ/GDAL dirs
+            env=_gdaldem_subprocess_env(gdaldem_bin),  # PROJ/GDAL dirs
         )
         if result.returncode != 0:
             stderr_txt = result.stderr.decode("utf-8", errors="replace").strip()
@@ -390,10 +390,10 @@ def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
                 f"gdaldem color-relief failed (rc={result.returncode}): {stderr_txt}"
             )
 
-        # job-0271: serve a real COG (tiled + overviews). The flat
+        # serve a real COG (tiled + overviews). The flat
         # strip-organized gdaldem output rendered slower than the 60s WMS
         # gateway limit over /vsigs/ and triggered the cold-load layer
-        # poisoning the job-0270 verifier isolated.
+        # poisoning the verifier isolated.
         return _translate_to_cog(out_file, gdaldem_bin)
 
     except ColoredReliefError:
@@ -428,7 +428,7 @@ def _run_colored_relief(dem_uri: str, ramp: str) -> bytes:
 def compute_colored_relief(
     dem_uri: str,
     ramp: Literal["terrain", "elevation_blue_green", "grayscale", "viridis"] = "terrain",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

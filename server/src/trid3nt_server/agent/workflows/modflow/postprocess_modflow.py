@@ -1,4 +1,4 @@
-"""MODFLOW GWT run-output postprocessing (sprint-13 Stage 2, job-0227).
+"""MODFLOW GWT run-output postprocessing (Stage 2).
 
 ``postprocess_modflow(run_outputs_uri, *, run_id, model_crs) -> PlumeLayerURI``
 reads the MF6-GWT concentration output (``gwt_model.ucn``, a binary
@@ -8,7 +8,7 @@ the deck's projected (UTM) grid to an EPSG:4326 Cloud-Optimized GeoTIFF,
 computes the two narration scalars (``max_concentration_mgl`` +
 ``plume_area_km2``), uploads the COG, and returns a typed ``PlumeLayerURI``.
 
-This is the MODFLOW analogue of ``postprocess_flood`` (job-0042). Differences:
+This is the MODFLOW analogue of ``postprocess_flood``. Differences:
 
   * The source is a UCN concentration array, not a SFINCS NetCDF depth field.
   * The grid georegistration (origin / cell size / CRS) is read from the
@@ -117,7 +117,7 @@ PLUME_DETECTION_FLOOR_MGL: float = 0.001
 #: Concentration output filename the GWT OC package writes (gwt_adapter).
 GWT_UCN_FILENAME: str = "gwt_model.ucn"
 
-#: multi_species (Wave-3): the per-species GWT OC writes ``gwt_<species>.ucn``
+#: multi_species: the per-species GWT OC writes ``gwt_<species>.ucn``
 #: (e.g. ``gwt_tce.ucn`` / ``gwt_cis_dce.ucn``) - one CONCENTRATION HeadFile per
 #: solute. The single-species deck writes the bare ``gwt_model.ucn`` (above); the
 #: postprocess globs ``gwt_*.ucn`` and EXCLUDES the single-species stem so a
@@ -134,37 +134,37 @@ GWT_SINGLE_SPECIES_STEM: str = "gwt_model"
 GWF_CBC_FILENAME: str = "gwf_model.cbc"
 
 #: TiTiler style preset for the diverging gaining/losing river-seepage COG
-#: (sprint-17 J9). Registered in publish_layer._TITILER_STYLE_REGISTRY by the
+#: (J9). Registered in publish_layer._TITILER_STYLE_REGISTRY by the
 #: orchestrator's shared-appends merge as ("-2,2", "rdbu").
 SEEPAGE_STYLE_PRESET: str = "diverging_river_seepage"
 
-#: TiTiler style preset for the sustainable-yield drawdown (head-decline) COG
-#: (sprint-18 Wave-1). Matches the output_quantities registry "drawdown" spec.
+#: TiTiler style preset for the sustainable-yield drawdown (head-decline) COG.
+#: Matches the output_quantities registry "drawdown" spec.
 DRAWDOWN_STYLE_PRESET: str = "continuous_drawdown_m"
 
-#: TiTiler style preset for the mine-dewatering DRN-outflow COG (sprint-18
-#: Wave-1). Matches the output_quantities registry "dewatering-rate" spec.
+#: TiTiler style preset for the mine-dewatering DRN-outflow COG.
+#: Matches the output_quantities registry "dewatering-rate" spec.
 DEWATERING_STYLE_PRESET: str = "continuous_dewatering_rate"
 
-#: TiTiler style preset for the MAR groundwater-mounding (head-RISE) COG
-#: (sprint-18 Wave-2). Mounding renders on a distinct BLUE (rising-water) ramp so
+#: TiTiler style preset for the MAR groundwater-mounding (head-RISE) COG.
+#: Mounding renders on a distinct BLUE (rising-water) ramp so
 #: it never reads like the red drawdown (declining-water) layer; the key is
 #: registered in publish_layer._TITILER_STYLE_REGISTRY and matches OUTPUT_QUANTITIES.
 MOUNDING_STYLE_PRESET: str = "continuous_mounding_m"
 
-#: TiTiler style preset for the ASR representative-head COG (sprint-18 Wave-2).
+#: TiTiler style preset for the ASR representative-head COG.
 #: The ASR layer carries the well-head sawtooth as the deliverable; the spatial
 #: carrier is the final-step water-table head (continuous head ramp).
 ASR_STYLE_PRESET: str = "continuous_head_m"
 
-#: TiTiler style preset for the wetland-hydroperiod seasonal-head-range COG
-#: (sprint-18 Wave-2). The range is a non-negative magnitude (max minus min head
+#: TiTiler style preset for the wetland-hydroperiod seasonal-head-range COG.
+#: The range is a non-negative magnitude (max minus min head
 #: over the transient periods); its dedicated key is registered in
 #: publish_layer._TITILER_STYLE_REGISTRY and matches OUTPUT_QUANTITIES.
 HYDROPERIOD_STYLE_PRESET: str = "continuous_hydroperiod_m"
 
-#: Vector style preset for the PRT backward-particle-tracking capture-zone polygon
-#: (Wave-4). The capture zone is a FlatGeobuf polygon; the client's vector renderer
+#: Vector style preset for the PRT backward-particle-tracking capture-zone polygon.
+#: The capture zone is a FlatGeobuf polygon; the client's vector renderer
 #: applies ``presetColorFor("capture_zone")`` -> violet so it reads as a protection
 #: boundary, distinct from the blue water, red alert, and amber roads layers.
 #: ``publish_layer`` is RASTER-ONLY and must NOT be called for this vector; the
@@ -172,7 +172,7 @@ HYDROPERIOD_STYLE_PRESET: str = "continuous_hydroperiod_m"
 #: ``_read_vector_uri_as_geojson``) renders it over WS.
 CAPTURE_ZONE_STYLE_PRESET: str = "capture_zone"
 
-#: Vector style preset for the saltwater intrusion transect + toe point (Wave-5).
+#: Vector style preset for the saltwater intrusion transect + toe point.
 #: Two features in one FlatGeobuf: a LINE (coastal transect A->B) and a POINT
 #: (the 50%-isochlor toe). The client's vector renderer applies
 #: ``presetColorFor("saltwater_intrusion")`` -> teal (#1ABC9C) so it reads as a
@@ -601,7 +601,7 @@ def _read_cbc_term_grid(
 ) -> Any:
     """Read ONE CBC budget term (e.g. DRN / WEL / RCH) into a 2D signed grid.
 
-    Generalization of ``_read_riv_seepage_grid`` for the sprint-18 archetypes:
+    Generalization of ``_read_riv_seepage_grid`` for the archetypes:
     the mine-dewatering DRN term, an RCH/EVT recharge term, etc. Resolves the
     term name case-insensitively against the file's unique record names and
     scatters the last-timestep flux onto the grid.
@@ -818,8 +818,8 @@ def _resolve_ucn_path(run_outputs_uri: str) -> Path:
 
     Local (``file://`` or a bare path): search the dir tree for the UCN file.
     gs:// : fetch via fsspec into a temp dir (mirrors postprocess_flood).
-    s3:// (job-0292b - the local-backend runs prefix): fetch via **boto3**
-    through the solver module's shared S3 client seam (job-0289 lesson). The
+    s3:// (the local-backend runs prefix): fetch via **boto3**
+    through the solver module's shared S3 client seam. The
     local-mode live-evidence path always passes a local dir.
     """
     if run_outputs_uri.startswith("s3://"):
@@ -944,7 +944,7 @@ def _read_final_concentration(ucn_path: Path) -> Any:
 def _grid_georegistration_from_deck(deck_dir: str | None) -> dict[str, Any] | None:
     """Read grid origin + cell size from the deck via flopy (for the COG transform).
 
-    The deck dir holds the GWT (or, for a GWF-only Wave-1 archetype deck, the
+    The deck dir holds the GWT (or, for a GWF-only archetype deck, the
     GWF) DIS package; flopy's modelgrid gives the lower-left origin
     (xorigin/yorigin) + cell widths (delr/delc). Returns None if the deck cannot
     be loaded (the caller then falls back to identity, which still yields valid
@@ -1103,7 +1103,7 @@ def _upload_cog(
     Thin shim over ``cog_io.upload_cog`` (STEP 1 dedupe; byte-identical):
     scheme-aware per ``cache.storage_scheme()``. ``s3`` via boto3
     (``ContentType=image/tiff``) FAILS TYPED on a missing ``TRID3NT_RUNS_BUCKET`` /
-    upload error (job-0241 / job-0292b: a silent file:// on AWS is the
+    upload error (a silent file:// on AWS is the
     debug-invisible no-render failure). The ``gs`` branch keeps its best-effort
     ``file://`` fallback (the loud ImportError classification for a missing
     ``fsspec[gcs]`` is preserved by cog_io) for the offline-dev / local-mode path.
@@ -1138,15 +1138,15 @@ def _dispatch_publish_layer(
     COG URI so the rest of the envelope is usable. Skips publish entirely for
     non-object-store URIs (local mode has nothing for a tile server to read).
 
-    job-0292b: ``s3://`` COGs pass through too - on the AWS deployment
+    ``s3://`` COGs pass through too - on the AWS deployment
     ``publish_layer`` returns a TiTiler XYZ tile TEMPLATE for them (the
-    job-0290 ``TRID3NT_TILE_SERVER_BASE`` path), which closes the job-0254
+     ``TRID3NT_TILE_SERVER_BASE`` path), which closes the
     PlumeLayerURI rendering gap on AWS the same way flood-depth COGs publish.
     """
     if not (cog_uri.startswith("gs://") or cog_uri.startswith("s3://")):
-        # job-0241: loud, not silent - a non-object-store URI here means the
+        # loud, not silent - a non-object-store URI here means the
         # upload fell back (stale venv / auth / network) and the plume will
-        # NOT appear on the map. The Case 2 live gate (job-0235) burned on
+        # NOT appear on the map. The Case 2 live gate burned on
         # exactly this as a debug-invisible skip.
         logger.warning(
             "publish_layer SKIPPED for %s: COG URI is not gs:// or s3:// (%s); "
@@ -1278,7 +1278,7 @@ def postprocess_modflow(
 
 
 # --------------------------------------------------------------------------- #
-# multi_species postprocess (sprint-18 Wave-3) - N per-species UCN -> N plumes
+# multi_species postprocess - N per-species UCN -> N plumes
 #
 # A multi_species run writes ONE ``gwt_<species>.ucn`` per solute (the adapter's
 # per-species OC, gwt_adapter._build_multi_species_deck). This path globs those
@@ -1512,7 +1512,7 @@ def _species_slug(species_label: str, idx: int) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# River-seepage postprocess (sprint-17 J9) - GWF cbc RIV budget -> seepage COG
+# River-seepage postprocess (J9) - GWF cbc RIV budget -> seepage COG
 # --------------------------------------------------------------------------- #
 
 
@@ -2203,7 +2203,7 @@ def publish_modflow_quantities(
 
 
 # --------------------------------------------------------------------------- #
-# sprint-18 Wave-1 archetype postprocess (GWF-only: head + cbc readers).
+# archetype postprocess (GWF-only: head + cbc readers).
 #
 # Each reuses the EXISTING resolve/write/upload/publish seams above and the new
 # pure metric math. drawdown reads the transient .hds head decline; dewatering
@@ -2818,7 +2818,7 @@ def postprocess_budget_partition(
 
 
 # --------------------------------------------------------------------------- #
-# sprint-18 Wave-2 archetype postprocess (GWF-only: head + cbc readers).
+# archetype postprocess (GWF-only: head + cbc readers).
 #
 # MAR (RCH mounding), ASR (seasonal WEL inject/recover), wetland_hydroperiod
 # (RCH-schedule + EVT seasonal water-table range). Each reuses the EXISTING
@@ -3102,7 +3102,7 @@ def postprocess_wetland_hydroperiod(
 
 
 # --------------------------------------------------------------------------- #
-# PRT capture-zone postprocess (Wave-4)
+# PRT capture-zone postprocess
 #
 # MF6 PRT backward-particle-tracking produces a ``prtmodel.trk.csv`` under the
 # PRT working directory.  ``build_and_run_prt_from_gwf`` (in gwt_adapter) builds
@@ -4086,7 +4086,7 @@ def postprocess_stream_reaches(
 
 
 # --------------------------------------------------------------------------- #
-# Saltwater intrusion postprocess (Wave-5)
+# Saltwater intrusion postprocess
 #
 # A GWF+GWT single-sim on a nrow=1 vertical cross-section with ModflowGwfbuy
 # variable-density coupling.  The UCN output is ``gwt_model.ucn`` (same stem as
@@ -4189,7 +4189,7 @@ def _resolve_si_ucn_path(run_outputs_uri: str) -> Path:
     Delegates to ``_resolve_ucn_path`` (the single-species stem ``gwt_model.ucn``
     is the same for the BUY deck).  Raises
     ``PostprocessMODFLOWError("SALTWATER_OUTPUT_READ_FAILED")`` when the file is
-    absent, mapping the error code to the Wave-5 surface.
+    absent, mapping the error code to the surface.
     """
     try:
         return _resolve_ucn_path(run_outputs_uri)
@@ -4649,7 +4649,7 @@ def postprocess_saltwater_intrusion(
         )
     except PostprocessMODFLOWError as exc:
         # Remap the _upload_fgb error code (CAPTURE_ZONE_WRITE_FAILED) to the
-        # Wave-5 surface for clean error narration.
+        # surface for clean error narration.
         raise PostprocessMODFLOWError(
             "SALTWATER_WRITE_FAILED",
             message=exc.args[0] if exc.args else str(exc),

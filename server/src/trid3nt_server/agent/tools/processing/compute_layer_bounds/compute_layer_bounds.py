@@ -1,4 +1,4 @@
-"""Atomic tool ``compute_layer_bounds`` — fast layer-extent + fit-the-map primitive (NATE 2026-06-17).
+"""Atomic tool ``compute_layer_bounds`` - fast layer-extent + fit-the-map primitive.
 
 ONE atomic tool that answers "what is this layer's geographic extent?" and
 "fit/zoom/resize the map so all of <these features> are in view" WITHOUT the
@@ -8,13 +8,13 @@ Python sandbox.
 
 **Why this tool exists (the bug it fixes):**
 
-Live finding (NATE 2026-06-17): when the user asked to "resize the bounding box
+Live finding: when the user asked to "resize the bounding box
 to encompass all the <features>", the agent reached for the PYTHON SANDBOX
 (``code_exec_request``) to compute ``gdf.total_bounds`` — which is slow, gated
 behind a user-confirm, frequently orphaned, and (worst of all) the computed
 extent was never applied, so the AOI stayed a tiny box "around a random house".
 The agent also wrongly claimed "I cannot pan/zoom your map" even though a
-``zoom-to`` map-command (Map.tsx ``fitBounds``) has existed since job-0068.
+``zoom-to`` map-command (Map.tsx ``fitBounds``) has existed since.
 
 This tool replaces both failure modes:
 
@@ -25,7 +25,7 @@ This tool replaces both failure modes:
 2. It EMITS a ``map-command(zoom-to, bbox=<computed bbox>)`` so the VIEW
    actually fits all features. The emission goes through the same
    ``current_emitter()`` ContextVar + ``emit_map_command`` seam that
-   ``model_flood_scenario`` (job-0160) uses for zoom-on-area-first, so it is
+   ``model_flood_scenario`` uses for zoom-on-area-first, so it is
    server→client consistent with the existing zoom-to envelope.
 
 **Auto-detection (vector vs raster):**
@@ -112,8 +112,8 @@ _VECTOR_EXTENSIONS = {".fgb", ".geojson", ".json", ".gpkg", ".shp", ".gml", ".km
 
 
 # ---------------------------------------------------------------------------
-# URI → local path materialization (gs:// / s3:// / local), mirrors the
-# clip_vector_to_polygon pattern (boto3 for s3, GCS client for gs).
+# URI → local path materialization (gs:// / s3:// / local): boto3 for s3,
+# GCS client for gs.
 # ---------------------------------------------------------------------------
 
 
@@ -134,7 +134,7 @@ def _resolve_layer_to_local_path(
     """Resolve ``uri`` to a local file path.
 
     Returns ``(path, is_temp)`` — caller deletes the path iff ``is_temp``.
-    Supports ``s3://`` (boto3, EC2 instance-role — job-0289 lesson) and local
+    Supports ``s3://`` (boto3, EC2 instance-role - lesson) and local
     paths. GCP is decommissioned, so ``storage_client`` is ignored. Raises
     ``ComputeLayerBoundsError`` on failure.
     """
@@ -319,7 +319,7 @@ async def compute_layer_bounds(
     *,
     fit_map: bool = True,
     _storage_client: object | None = None,
-    # job-0164: absorb any LLM-invented kwargs (also centralized at server.py
+    # absorb any LLM-invented kwargs (also centralized at server.py
     # via tool_arg_normalizer, but kept here belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
@@ -384,7 +384,7 @@ async def compute_layer_bounds(
     min_lon, min_lat, max_lon, max_lat = bbox
 
     # --- Fit the map: emit a zoom-to map-command via the existing seam.
-    # Mirrors model_flood_scenario (job-0160): read the active emitter from the
+    # Mirrors model_flood_scenario: read the active emitter from the
     # _CURRENT_EMITTER ContextVar (bound by PipelineEmitter.emit_tool_call) and
     # fire ``map-command(zoom-to)``. Outside an emit_tool_call scope (direct
     # call, smoke harness, unit test without an emitter) current_emitter()

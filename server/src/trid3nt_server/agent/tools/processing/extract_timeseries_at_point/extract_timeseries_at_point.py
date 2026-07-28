@@ -228,7 +228,7 @@ async def extract_timeseries_at_point(
     place: str | None = None,
     layer: str | None = None,
     case_id: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Extract a time series at a point from the Case's animation-frame stack.

@@ -151,12 +151,11 @@ _RETAINED_COLUMNS = (
 # ---------------------------------------------------------------------------
 
 # Build AtomicToolMetadata DEFENSIVELY against the parallel
-# job-0114-schema sibling that adds ``supports_global_query`` to the contract.
+# -schema sibling that adds ``supports_global_query`` to the contract.
 # If the schema job lands first, this tool's metadata will carry the field
 # (advertising ``False`` — FIRMS requires a bbox). If the schema field hasn't
 # landed yet, fall back to construction without it so registration still works.
-# Same pattern used by job-0103/0105 (fetch_mrms_qpe, fetch_nws_alerts_conus).
-# See OQ-0108-METADATA-FIELD.
+# Same pattern used by (fetch_mrms_qpe, fetch_nws_alerts_conus).
 
 def _build_metadata() -> AtomicToolMetadata:
     common = dict(
@@ -295,7 +294,7 @@ def _resolve_map_key(
     3. ``TRID3NT_FIRMS_MAP_KEY`` env var (local dev convenience).
     4. The literal ``"demo"`` (which the upstream rejects — surfaces as a typed
        ``FirmsAuthError`` rather than a silent no-fires result an LLM could
-       narrate as "no fires found"). See OQ-0108-MAP-KEY-AUTH.
+       narrate as "no fires found").
 
     A vault lookup failure (revoked secret, vault unreachable) does NOT crash
     the resolution — it logs and falls through to env / demo so the dispatch
@@ -618,14 +617,14 @@ def fetch_firms_active_fire(
     # When supplied, queries exactly that one acquisition day (day_range forced
     # to 1) so a SPECIFIC PAST date works in addition to the rolling days_back.
     date: str | None = None,
-    # job VAULT-READ: per-Case MAP_KEY resolution. ``map_key`` is the explicit
+    # per-Case MAP_KEY resolution. ``map_key`` is the explicit
     # override (dev/tests); ``secret_ref`` is the per-Case ``SecretRecord`` the
     # server threads at call time so the user's vault key is resolved first.
     # Both are underscore-free so they survive the schema strip ONLY if exposed;
     # the server injects ``secret_ref`` programmatically (not via the LLM).
     map_key: str | None = None,
     secret_ref: Any | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:
@@ -662,8 +661,8 @@ def fetch_firms_active_fire(
       Required; global queries rejected. Example: ``(-124.0, 32.5, -114.0, 42.0)``
       for California.
     - ``days_back`` (int): 1–10 days back from FIRMS "today". Default 1. Higher
-      values accumulate more detections; note FIRMS upstream rejects >5 as of
-      2026-06-08 (surfaces as ``FirmsUpstreamError`` — see OQ-0108-DAYS-RANGE).
+      values accumulate more detections; note FIRMS upstream rejects >5
+      (surfaces as ``FirmsUpstreamError``).
     - ``source`` (str): ``"VIIRS_SNPP_NRT"`` (default; Suomi NPP, 375m),
       ``"VIIRS_NOAA20_NRT"`` (NOAA-20, 375m), or ``"MODIS_NRT"``
       (Terra/Aqua, 1km).
@@ -712,7 +711,7 @@ def fetch_firms_active_fire(
     #    depend on the secret value — two callers with different valid keys
     #    still hit the same artifact. A short SHA-256 prefix prevents accidental
     #    cross-key blob reuse if FIRMS ever segments responses by key.
-    #    job VAULT-READ: the user's per-Case vault key (via ``secret_ref``) wins
+    # the user's per-Case vault key (via ``secret_ref``) wins
     #    over the env var; ``map_key`` kwarg (dev/test) wins over both.
     resolved_map_key = _resolve_map_key(map_key=map_key, secret_ref=secret_ref)
     import hashlib as _hashlib

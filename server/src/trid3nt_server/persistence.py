@@ -9,7 +9,7 @@ This is the **LLM-facing DB path** per FR-AS-4 and Decision F. Worker-side
 direct-driver writes (``engine``'s solver result inserts, see FR-MP-3) are a
 separate seam that does NOT route through this module.
 
-Job-0115 scope (sprint-12-mega Wave 1.5):
+Job-0115 scope (Wave 1.5):
 - ``CaseSummary`` round-trip: get / upsert / list / archive / delete
 - ``CaseChatMessage`` append + ``CaseSessionState`` hydration
 - ``User`` round-trip: ``get_user_by_firebase_uid`` / ``upsert_user``
@@ -70,7 +70,7 @@ import os
 
 DEFAULT_DATABASE = os.environ.get("TRID3NT_MONGO_DB", "trid3nt_dev")
 
-# Lane A1 (pen=agent / paper=case): the durable runs bucket holds the
+# The durable runs bucket holds the
 # materialized case-view SNAPSHOT (``case-views/{case_id}.json``) that the
 # view-without-agent path serves via a pre-signed S3 GET (the agent box may be
 # asleep). The bucket already holds solver decks/results and the agent already
@@ -82,7 +82,7 @@ CASE_VIEWS_BUCKET = os.environ.get(
 #: Object-key prefix for materialized case-view snapshots (PRIVATE objects).
 CASE_VIEWS_PREFIX = "case-views"
 
-#: Object-key prefix for THIN per-case manifests (#165 data-island index).
+#: Object-key prefix for THIN per-case manifests (data-island index).
 #: Written ALONGSIDE the fat snapshot (dual-write) in the SAME durable runs
 #: bucket so a future cold path can list cases + their layers from S3 with the
 #: agent box asleep, WITHOUT downloading the fat snapshot per Case. Mirrors the
@@ -110,7 +110,7 @@ def case_view_snapshot_key(case_id: str) -> str:
 
 
 def case_manifest_key(case_id: str) -> str:
-    """Return the S3 object key for a Case's thin manifest (#165 data-island).
+    """Return the S3 object key for a Case's thin manifest (data-island).
 
     Single seam so the writer (here) and the future cold-serve reader name the
     object identically: ``case-manifests/{case_id}.json``. Mirrors
@@ -150,7 +150,7 @@ class MCPClientProtocol(Protocol):
 
 
 # --------------------------------------------------------------------------- #
-# Live-server surface translation (job-0203 / Wave 4.11 M4)
+# Live-server surface translation (Wave 4.11 M4)
 # --------------------------------------------------------------------------- #
 #
 # FINDING (2026-06-09, live protocol smoke against mongodb-mcp-server@latest):
@@ -267,7 +267,7 @@ class MCPSurfaceTranslator:
     #: Explicit limit injected when the logical ``find`` has none. The
     #: real server also caps responses at ``responseBytesLimit`` (1 MiB
     #: default) — we raise it for chat-history reads; documents beyond
-    #: either cap surface as OQ-0203-FIND-PAGINATION.
+    #: either cap are not paginated.
     DEFAULT_FIND_LIMIT = 1000
     RESPONSE_BYTES_LIMIT = 8 * 1024 * 1024
 
@@ -418,7 +418,7 @@ class Persistence:
 
         Strips ``_id`` (rewires to ``case_id``), drops user-link fields the
         schema doesn't know, and drops any other storage-only fields the
-        denormalized envelope doesn't carry — including the #147 ephemeral-case
+        denormalized envelope doesn't carry — including the ephemeral-case
         ``expires_at`` TTL stamp, which is storage-only and must NEVER reach the
         wire ``CaseSummary`` (the ``k not in allowed`` filter below already
         drops it, since ``expires_at`` is not a ``CaseSummary`` field).
@@ -451,7 +451,7 @@ class Persistence:
         Uses MCP ``update-one`` with ``upsert=True`` so a fresh Case lands and
         an existing one is overwritten in a single round-trip.
 
-        job-0252 (sprint-13.5, OQ-0115-CASE-USER-LINK): when ``owner_user_id``
+        when ``owner_user_id``
         is provided, it is stamped onto the document's ``user_id`` field so the
         Case belongs to its creator. ``CaseSummary`` itself carries no owner
         field (it is a UI denormalization), so ownership lives only at the
@@ -467,7 +467,7 @@ class Persistence:
         clears an already-stamped owner (the ``user_id`` key is simply absent
         from the ``$set``).
 
-        #147 ephemeral-cases track: ``ephemeral=True`` (only ever passed for
+        ephemeral-cases track: ``ephemeral=True`` (only ever passed for
         ANONYMOUS / pre-Auth Cases) stamps a NUMERIC epoch-seconds
         ``expires_at`` (``int(now + CASES_ANON_TTL_SECONDS)``) so DynamoDB-native
         TTL can reap the Case after the window. This is intentionally a Number
@@ -565,7 +565,7 @@ class Persistence:
     async def migrate_preauth_cases(self, anon_uid: str) -> int:
         """One-time, idempotent: stamp pre-Auth Cases with ``anon_uid``.
 
-        OQ-0115-CASE-USER-LINK (job-0252, sprint-13.5): Cases written before
+        Cases written before
         the Auth track carry no ``user_id`` field. The old
         ``{"user_id": {"$exists": False}}`` clause in ``list_cases_for_user``
         leaked every such Case to every signed-in user. This migration
@@ -660,9 +660,9 @@ class Persistence:
         currently carry a ``user_id`` field (FR-MP-5 was specified pre-Auth).
         We pass the filter anyway — once the Auth/Users track adds the field
         the query starts narrowing; until then it returns the full Case list
-        for the deployment. Surfaced as OQ-0115-CASE-USER-LINK.
+        for the deployment.
 
-        job-0267 (server-side case-list hardening): soft-deleted and archived
+        (server-side case-list hardening): soft-deleted and archived
         Cases are excluded HERE, in the query AND a post-validation guard —
         the user saw a deleted ghost in the left rail because exclusion was
         previously a client-side concern. The ``$nin`` filter still matches
@@ -671,7 +671,7 @@ class Persistence:
         Python guard is the belt-and-suspenders for MCP backends whose filter
         dialect quietly ignores the operator.
 
-        job-0252 (sprint-13.5, OQ-0115-CASE-USER-LINK): the
+        the
         ``{"user_id": {"$exists": False}}`` backward-compat clause is GONE.
         It used to leak every pre-Auth Case (no ``user_id``) to every
         signed-in user. The one-time startup migration
@@ -688,7 +688,7 @@ class Persistence:
                         {"user_id": user_id},
                         {"owner_user_id": user_id},
                     ],
-                    # job-0267: tombstones never reach the wire.
+                    # tombstones never reach the wire.
                     "status": {"$nin": ["deleted", "archived"]},
                 },
             },
@@ -710,7 +710,7 @@ class Persistence:
                 logger.warning("skipping malformed Case doc: %s", d)
                 continue
             if case.status in ("deleted", "archived"):
-                # job-0267 guard: backend ignored/mangled the $nin filter.
+                # guard: backend ignored/mangled the $nin filter.
                 continue
             cases.append(case)
         return cases
@@ -913,21 +913,21 @@ class Persistence:
             except Exception:  # noqa: BLE001
                 logger.warning("skipping malformed CaseChatMessage doc: %s", d)
                 continue
-        # job-0267: deterministic replay order regardless of backend sort
+        # deterministic replay order regardless of backend sort
         # support — the full stream (user turns, tool cards, agent narration)
         # interleaves by ``created_at``; ULID ``message_id`` breaks ties in
         # write order. Python's sort is stable, so backends that already
         # honored the ``created_at`` sort are untouched.
         chat.sort(key=lambda m: (m.created_at, m.message_id))
-        # job-0172 Part B: hydrate ``loaded_layers`` from the persisted
+        # Part B: hydrate ``loaded_layers`` from the persisted
         # ``Case.loaded_layer_summaries`` so a Case re-open repopulates the
         # LayerPanel deterministically. The PipelineEmitter holds these in
         # memory per-connection; without this hydration step a browser
         # refresh (new WS, new emitter) shows an empty LayerPanel even
         # though the layers are still published on the per-Case ``.qgs``.
         loaded_layers = list(case.loaded_layer_summaries)
-        # job-0294b (sprint-14-aws): hydrate persisted charts so a Case re-open
-        # replays them WITHOUT a re-run. job-0230 ``$push``es SessionChartRecords
+        # hydrate persisted charts so a Case re-open
+        # replays them WITHOUT a re-run. ``$push``es SessionChartRecords
         # onto the ``sessions`` doc (keyed by case_id == sessions._id) but the
         # read side was never wired. Pull the array, unwrap each record's
         # ``payload`` (the ChartEmissionPayload the client rehydrates), in
@@ -956,7 +956,7 @@ class Persistence:
             case=case, chat_history=chat, loaded_layers=loaded_layers, charts=charts,
         )
 
-    # ----- Materialized case-view snapshot (Lane A1: view-without-agent) ---- #
+    # ----- Materialized case-view snapshot (view-without-agent) ---- #
 
     async def build_case_view_snapshot(
         self,
@@ -981,7 +981,7 @@ class Persistence:
         entries here — byte-for-byte the same merge ``emit_session_state``
         performs on the live wire (additive ``inline_geojson`` / density fields).
 
-        Cross-case inline (job-0372 FIX B): the explicit
+        Cross-case inline (FIX B): the explicit
         ``inline_geojson_by_layer_id`` is only ever populated by the OPEN-case
         emitter, so a snapshot for a NON-open case (a cross-case mutation - e.g.
         rename Case B while Case A is open) would otherwise strand its vectors as
@@ -1251,7 +1251,7 @@ class Persistence:
         Runs the synchronous boto3 ``put_object`` in a worker thread so the
         async turn loop is never blocked (the same off-thread discipline the
         DynamoDB backend uses). boto3 resolves creds + region from the standard
-        chain (env / ~/.aws / EC2 instance role — job-0289 lesson).
+        chain (env / ~/.aws / EC2 instance role — lesson).
 
         ``metadata`` is the S3 OBJECT METADATA dict (the owner-gate carrier:
         ``{"owner-user-id": <owner>}`` or ``{}`` / ``None`` when the Case has no
@@ -1281,7 +1281,7 @@ class Persistence:
 
         await asyncio.to_thread(_put)
 
-    # ----- Thin per-case manifest (#165 data-island cold-serve index) ------ #
+    # ----- Thin per-case manifest (data-island cold-serve index) ------ #
     #
     # SIBLINGS of the case-view snapshot writers above. Written ALONGSIDE the
     # fat snapshot (dual-write) at the SAME Case mutation call-sites; the
@@ -1374,7 +1374,7 @@ class Persistence:
     async def write_case_manifest(
         self, case_id: str, *, s3_put: Any = None
     ) -> bool:
-        """Materialize the thin Case manifest to S3 (#165 data-island index).
+        """Materialize the thin Case manifest to S3 (data-island index).
 
         Writes ``s3://{CASE_VIEWS_BUCKET}/case-manifests/{case_id}.json``
         (PRIVATE; ``content-type: application/json``) ALONGSIDE the fat
@@ -1469,10 +1469,10 @@ class Persistence:
 
     # ----- Session records (D.6 ``sessions`` collection) ------------------- #
     #
-    # job-0203 (Wave 4.11 M4): the agent's own session record goes live. The
+    # (Wave 4.11 M4): the agent's own session record goes live. The
     # ``sessions`` document is the TTL-cleaned activity header (D.6 +
     # ``SESSIONS_TTL``): who/when, which Cases were touched, and — since
-    # job-0230 — the append-only ``charts`` array that chart-emission
+    # — the append-only ``charts`` array that chart-emission
     # ``$push``es onto. Chat content canonically lives in
     # ``case_chat_messages`` (FR-MP-6); ``SessionDocument.chat_history``
     # stays empty at v0.1 so the two stores never diverge.
@@ -1516,7 +1516,7 @@ class Persistence:
           deduped, so per-turn touches stay idempotent.
 
         Fire-and-forget discipline at call sites (same as telemetry M3 and
-        chart persistence job-0230): callers wrap in ``try/except`` or a
+        chart persistence): callers wrap in ``try/except`` or a
         task; a persistence hiccup never takes down the user's turn.
         """
         from trid3nt_contracts.collections import SESSIONS_TTL
@@ -1553,7 +1553,7 @@ class Persistence:
             },
         )
         # Header repair: a session doc created by an earlier bare ``$push``
-        # (chart-emission upserts before any touch — job-0230 ordering) has
+        # (chart-emission upserts before any touch — ordering) has
         # no ``created_at``/``schema_version``, and ``$setOnInsert`` above
         # can never backfill an EXISTING doc (real Mongo semantics too).
         # Detect and repair once; ``created_at=now`` is the best available
@@ -1591,7 +1591,7 @@ class Persistence:
         *,
         ttl_seconds: int | None = None,
     ) -> None:
-        """Slide the TTL window on an EPHEMERAL (anonymous) Case (#147).
+        """Slide the TTL window on an EPHEMERAL (anonymous) Case.
 
         Activity heartbeat for an anonymous Case: ``$set`` a fresh NUMERIC
         epoch-seconds ``expires_at`` (``int(now) + ttl``) on the case doc so a
@@ -1632,13 +1632,13 @@ class Persistence:
     async def set_session_active_case(
         self, session_id: str, case_id: str | None
     ) -> None:
-        """Persist the session's active-Case pointer (job-CASE-AUTHORITY).
+        """Persist the session's active-Case pointer.
 
         Writes a storage-only ``last_active_case_id`` field onto the session
         record so the active-Case pointer survives an EC2 auto-stop/restart
         (the in-memory ``_SESSION_ACTIVE_CASE`` dict in server.py is wiped on
         process death). ``SessionDocument`` deliberately does NOT carry this
-        field — it is storage-only, exactly like the job-0230 ``charts`` array;
+        field — it is storage-only, exactly like the ``charts`` array;
         ``get_session_record`` drops unknown fields before validation, so the
         contract model stays narrow while the storage doc accretes.
 
@@ -1675,7 +1675,7 @@ class Persistence:
         )
 
     async def get_session_active_case(self, session_id: str) -> str | None:
-        """Read back the persisted active-Case pointer (job-CASE-AUTHORITY).
+        """Read back the persisted active-Case pointer.
 
         Returns the ``last_active_case_id`` written by
         ``set_session_active_case``, or ``None`` when the session has no
@@ -1703,7 +1703,7 @@ class Persistence:
         """Read one session record back as a typed ``SessionDocument``.
 
         Tolerant normalization (same discipline as ``_doc_to_case_summary``):
-        storage-only extras — notably the job-0230 ``charts`` array — are
+        storage-only extras — notably the ``charts`` array — are
         dropped before validation so the contract model stays narrow while
         the storage document accretes.
         """
@@ -1774,7 +1774,7 @@ class Persistence:
     async def get_user_by_id(self, user_id: str) -> User | None:
         """Find a user by ULID. Returns ``None`` if not found.
 
-        job-0172 Part C: the anonymous-fallback path needs an id-based lookup
+        Part C: the anonymous-fallback path needs an id-based lookup
         so a reconnecting browser can re-bind to the same ephemeral User via
         the ``AuthTokenEnvelope.anonymous_user_id`` hint. Mirrors the shape
         of ``get_user_by_firebase_uid`` so the call site stays symmetric.
@@ -1823,8 +1823,8 @@ class Persistence:
         filt: dict[str, Any] = {"is_active": True}
         if case_id is not None:
             filt["case_id"] = case_id
-        # user_id linking is enforced once Auth lands. job-0252
-        # (sprint-13.5): the ``{"user_id": {"$exists": False}}`` backward-
+        # user_id linking is enforced once Auth lands.
+        #: the ``{"user_id": {"$exists": False}}`` backward-
         # compat clause is GONE — it leaked pre-Auth secret records to every
         # user. A secret record belongs only to its owner.
         if user_id:
@@ -1913,7 +1913,7 @@ class Persistence:
         )
 
     async def get_secret_value(self, secret_ref: "SecretRecord") -> str:
-        """Read the live key value from the local file vault (job-0124).
+        """Read the live key value from the local file vault.
 
         Called by Tier-2 fetchers (FIRMS / eBird / ERA5 / etc.) at
         tool-invocation time to materialize the raw key for the outbound
@@ -1986,7 +1986,7 @@ class Persistence:
 
 
 # --------------------------------------------------------------------------- #
-# Local-dev file-backed MCP client (job-0161, Wave 4.6)
+# Local-dev file-backed MCP client (Wave 4.6)
 # --------------------------------------------------------------------------- #
 #
 # The MongoDB Atlas MCP server is the production LLM-facing DB seam (FR-AS-4).
@@ -2028,8 +2028,8 @@ def _default_dev_persistence_dir() -> _Path:
     """Resolve the on-disk directory for the file-backed dev substrate.
 
     Override via ``TRID3NT_DEV_PERSISTENCE_DIR`` (used by tests + CI to point
-    at a tmpdir). Default is ``~/.trid3nt/dev_persistence/`` per the job-0161
-    kickoff so a fresh clone gets a stable, user-scoped location.
+    at a tmpdir). Default is ``~/.trid3nt/dev_persistence/`` so a fresh
+    clone gets a stable, user-scoped location.
     """
     override = _os_for_file.environ.get(DEV_PERSISTENCE_DIR_ENV)
     if override:
@@ -2124,7 +2124,7 @@ class FileMCPClient:
         """Atomic JSON write: tmp file + os.replace (POSIX-atomic rename)."""
         tmp = path.with_suffix(path.suffix + ".tmp")
         with tmp.open("w", encoding="utf-8") as fh:
-            # OPEN-28: default=str so a raw datetime in any document (e.g. the
+            # default=str so a raw datetime in any document (e.g. the
             # shadow-telemetry ``called_at_utc``) serializes instead of raising
             # ``TypeError: Object of type datetime is not JSON serializable`` -
             # which was silently dropping the model-tagged shadow rows on the
@@ -2161,7 +2161,7 @@ class FileMCPClient:
             if isinstance(v, dict) and "$nin" in v:
                 # Mongo-faithful: a MISSING field matches $nin (the doc's
                 # value, None, is "not in" the exclusion list unless None is
-                # listed). job-0267 uses this for the case-list status filter
+                # listed). uses this for the case-list status filter
                 # so pre-status Case docs stay listed.
                 if doc.get(k) in v["$nin"]:
                     return False
@@ -2171,7 +2171,7 @@ class FileMCPClient:
         return True
 
     # ------------------------------------------------------------------ #
-    # Update-operator application (job-0203 / M4)
+    # Update-operator application (M4)
     # ------------------------------------------------------------------ #
 
     @staticmethod
@@ -2183,8 +2183,8 @@ class FileMCPClient:
         ``$push`` (appends; creates the array if missing), ``$addToSet``
         (appends iff not already present — dict values compared by equality).
 
-        Before job-0203 only ``$set`` was honored, which silently DROPPED the
-        job-0230 chart ``$push`` on the dev substrate (the upsert created a
+        Before only ``$set`` was honored, which silently DROPPED the
+        chart ``$push`` on the dev substrate (the upsert created a
         bare ``{_id}`` doc and the chart vanished). Unknown operators now
         raise so the next gap fails loudly instead.
         """
@@ -2277,7 +2277,7 @@ class FileMCPClient:
                 return {"matchedCount": matched, "modifiedCount": modified}
 
         if name == "update-many":
-            # job-0252 (sprint-13.5): the pre-Auth case migration uses the
+            # the pre-Auth case migration uses the
             # real-server ``update-many`` surface directly (the translator
             # passes it through). On the dev/file substrate there is no
             # translator, so we honor it here: apply the update to EVERY

@@ -154,7 +154,7 @@ def extract_stream_network(
     dem_uri: str | None = None,
     *,
     _output_dir: str | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> StreamNetworkLayerURI:
     """Extract the stream network from a DEM by D8 flow accumulation (pysheds).

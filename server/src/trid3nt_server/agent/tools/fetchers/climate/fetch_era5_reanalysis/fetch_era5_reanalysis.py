@@ -93,7 +93,7 @@ _RETRIEVE_TIMEOUT_S = 300
 # (UPSTREAM). When the cdsapi Client constructor cannot find any key it raises
 # ``Exception("Missing/incomplete configuration file: <path>/.cdsapirc")``;
 # these phrases catch that and the close variants WITHOUT over-matching a
-# generic upstream error (LIVE BUG NATE 2026-06-18 — the missing-config
+# generic upstream error (LIVE BUG - the missing-config
 # message previously fell through to ERA5UpstreamError and no credential card
 # fired). Matched case-insensitively against the lower-cased message.
 _MISSING_KEY_CDS_PHRASES: tuple[str, ...] = (
@@ -163,7 +163,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -174,7 +174,7 @@ def estimate_payload_mb(
     end_date: str | None = None,
     **_kw: Any,
 ) -> float:
-    """Estimate output COG size in MB for a given call (Wave 1.5 surface).
+    """Estimate output COG size in MB for a given call (surface).
 
     Per audit.md: ~0.5 MB per variable per day per 1° square at 0.25° native
     res. We treat ``bbox=None`` as global (360° × 180°).
@@ -299,7 +299,7 @@ def _resolve_api_key(
 
     1. Explicit ``api_key`` kwarg.
     2. ``secret_ref`` (a ``SecretRecord``) → ``Persistence.get_secret_value``
-       (the per-Case path landed by Wave 2 sibling job-0124).
+       (the per-Case path landed by sibling).
     3. ``TRID3NT_COPERNICUS_CDS_API_KEY`` env var.
     4. ``None`` — cdsapi falls back to ``~/.cdsapirc`` on instantiation.
 
@@ -360,7 +360,7 @@ _PERSISTENCE_FOR_SECRETS: Any | None = None
 def set_persistence_for_secrets(persistence: Any | None) -> None:
     """Bind the agent-service ``Persistence`` for secret materialization.
 
-    Mirrors the eBird Tier-2 binding (``fetch_ebird_observations`` job-0128).
+    Mirrors the eBird Tier-2 binding (``fetch_ebird_observations``).
     Called once at startup by the agent service; tests inject a mock.
     """
     global _PERSISTENCE_FOR_SECRETS
@@ -471,8 +471,7 @@ def _cds_retrieve_with_timeout(
 
     Note: a timed-out request leaves an orphan CDS job server-side; the
     client cannot cancel it. The user will see it in their CDS dashboard
-    queue history. Documented in the docstring; surfaced as
-    ``OQ-0131-CDS-ORPHAN-JOB``.
+    queue history. Documented in the docstring.
     """
     import threading
 
@@ -519,7 +518,7 @@ def _cds_retrieve_with_timeout(
         # The NO-KEY case is what fires when none of the four key-resolution
         # paths produced a key AND there is no ``~/.cdsapirc``: cdsapi's own
         # Client constructor raises ``Exception("Missing/incomplete
-        # configuration file: <path>/.cdsapirc")`` (LIVE BUG NATE 2026-06-18:
+        # configuration file: <path>/.cdsapirc")`` (LIVE BUG:
         # a Mexico Beach run hit exactly this and got NO secret-entry card
         # because the message matched neither the auth nor the old missing-key
         # heuristic, so it fell through to ``ERA5UpstreamError`` and the
@@ -756,7 +755,7 @@ def _netcdf_to_cog_bytes(
     (The derived ``10m_wind_speed`` is handled upstream in ``_fetch_era5_bytes``
     via ``_combine_wind_components_to_cog_bytes`` since it spans two NetCDFs.)
 
-    Geographic-correctness gate (job-0086): we clip the output to the
+    Geographic-correctness gate: we clip the output to the
     requested bbox after reprojection (ERA5 ships on a 0.25° grid with
     longitudes 0..360 OR -180..180 depending on the variable family; we
     normalize to -180..180 with rioxarray before clipping).
@@ -913,7 +912,7 @@ def fetch_era5_reanalysis(
     end_date: str,
     api_key: str | None = None,
     secret_ref: Any | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

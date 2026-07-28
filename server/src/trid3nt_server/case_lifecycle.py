@@ -1,7 +1,7 @@
-"""Per-Case ``.qgs`` lazy-init helpers (job-0121, FR-MP-6 + OQ-62-QGS-MUTATION-CONFLICT).
+"""Per-Case ``.qgs`` lazy-init helpers (FR-MP-6).
 
 This module is the single home for the lazy-init policy that resolves
-OQ-62-QGS-MUTATION-CONFLICT: rather than every Case mutating a single
+rather than every Case mutating a single
 shared canonical ``.qgs`` (a hidden global), each Case would get its own
 ``{case_id}.qgs``, copied from the template on first publish.
 
@@ -47,7 +47,7 @@ Invariants:
   needs a ``.qgs`` URI per Case; it does NOT special-case any hazard or
   engine. The seam is engine-agnostic — a future ``publish_vector_layer``
   uses the same resolver.
-- **MongoDB MCP canonical persistence (job-0115).** All Case reads here go
+- **MongoDB MCP canonical persistence.** All Case reads here go
   through ``Persistence`` — no custom Mongo wrapper, no direct driver.
 """
 

@@ -149,7 +149,7 @@ _METADATA = AtomicToolMetadata(
 
 
 # ---------------------------------------------------------------------------
-# Payload estimator (Wave 1.5 chat-warning gate).
+# Payload estimator (chat-warning gate).
 # ---------------------------------------------------------------------------
 
 
@@ -453,7 +453,7 @@ def _fetch_ghsl_pop_bytes(
 def fetch_ghsl_population(
     bbox: tuple[float, float, float, float],
     epoch: int = _DEFAULT_EPOCH,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch JRC GHSL GHS-POP gridded population (persons/cell) for a bbox.

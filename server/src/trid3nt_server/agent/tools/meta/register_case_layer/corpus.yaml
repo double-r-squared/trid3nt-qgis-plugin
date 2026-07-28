@@ -1,4 +1,4 @@
-import_user_layer:
+register_case_layer:
 - I uploaded a shapefile, register it as a layer
 - add the GeoTIFF I pushed from QGIS as an input layer
 - I have a GeoJSON of parcels, bring it into this case

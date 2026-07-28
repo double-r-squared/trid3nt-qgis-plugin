@@ -3,7 +3,7 @@
 The DuckDB spatial-query fold (NATE option 1, Phase B): ONE SQL surface
 replaces the three fixed-shape analytical Q&A tools
 (``summarize_layer_statistics`` / ``count_features_above_threshold`` /
-``aggregate_property_within_zone``, job-0224). Their fixed result shapes were
+``aggregate_property_within_zone``). Their fixed result shapes were
 each a single SQL query; folding them into a general read-only SELECT surface
 covers the same questions plus every group-by / spatial-join / multi-layer
 variant the old trio could not express, while shrinking the LLM-visible
@@ -22,7 +22,7 @@ How it works:
    ``s3://`` URIs try DuckDB httpfs against the MinIO env block first
    (AWS_ENDPOINT_URL / key env vars, the offline-first object store), then
    fall back to staging bytes locally through the shared boto3 reader
-   (``cache.read_object_bytes_s3`` - the job-0289 instance-role-correct
+   (``cache.read_object_bytes_s3`` - the instance-role-correct
    path). Local paths are read in place.
 3. The user SQL runs under a READ-ONLY guard: exactly one statement, first
    keyword ``SELECT`` (or ``WITH``), and no write/side-effect keywords
@@ -104,7 +104,7 @@ _MAX_CELL_CHARS = 300
 #: result set lives in the FlatGeobuf layer; the wire stays compact).
 _PREVIEW_ROWS = 10
 
-#: Generic vector style preset (same one ``clip_vector_to_polygon`` uses).
+#: Generic vector style preset.
 _RESULT_STYLE_PRESET = "affected_buildings"
 
 #: Extensions treated as raster (out of scope v1 - typed error).

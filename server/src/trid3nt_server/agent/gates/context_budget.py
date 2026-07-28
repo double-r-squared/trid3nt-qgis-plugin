@@ -793,7 +793,7 @@ def compact_contents(
 # yields typed ``adapter.CompactionStartEvent`` / ``CompactionCompleteEvent``
 # instead; ``server.py``'s dispatch loop mints/completes a durable pipeline
 # card through ``pipeline_emitter.mint_compaction_card`` /
-# ``complete_compaction_card`` (the F10 running-tool-card treatment, animated
+# ``complete_compaction_card`` (the running-tool-card treatment, animated
 # live, persisted so it survives a Case reopen) using the two labels below.
 # No new envelope type: the card rides the EXISTING ``PipelineStep`` /
 # ``ToolCardRecord`` wire shape every atomic-tool card already uses.

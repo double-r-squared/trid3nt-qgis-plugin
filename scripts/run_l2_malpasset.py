@@ -165,7 +165,7 @@ def stage_case(case_dir: Path, cas_name: str, friction_k: float) -> dict[str, An
     ``malpasset_transformers.fgb`` / ``malpasset_gauges.fgb`` there, and writes a
     bundled-deck ``manifest.json``. Nothing is solved here.
     """
-    from trid3nt_server.cases.malpasset_obs import build_malpasset_obs_layers
+    from trid3nt_server.agent.cases.malpasset_obs import build_malpasset_obs_layers
 
     run_tag = f"{CASE_TAG}-stage-{uuid.uuid4().hex[:6]}"
     MINTED_RUN_IDS.append(run_tag)
@@ -314,7 +314,7 @@ def resolve_result(stage: dict[str, Any], *, run_solves: bool, run_tag: str) -> 
 
 
 def step_wse(result_slf: Path, run_id: str, out_dir: Path) -> Any:
-    from trid3nt_server.cases.malpasset_obs import (
+    from trid3nt_server.agent.cases.malpasset_obs import (
         MALPASSET_MESH_EPSG,
         MALPASSET_VERTICAL_DATUM,
         MALPASSET_CRS_CAVEAT,
@@ -540,7 +540,7 @@ def main(argv: list[str] | None = None) -> int:
         step_diagnostics(base_run_id if is_real else base_run_id)
 
         # 4. PAIR vs police points.
-        from trid3nt_server.cases.malpasset_obs import MALPASSET_VERTICAL_DATUM
+        from trid3nt_server.agent.cases.malpasset_obs import MALPASSET_VERTICAL_DATUM
 
         paired = step_pairing(wse.uri, stage["obs"]["police_fgb"],
                               MALPASSET_VERTICAL_DATUM, str(out_dir))

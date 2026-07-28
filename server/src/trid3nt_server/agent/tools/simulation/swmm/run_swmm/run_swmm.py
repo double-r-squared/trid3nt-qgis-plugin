@@ -49,7 +49,7 @@ _ENGINE = "swmm"
 #: Signature params that are plumbing, not a real user input, and MUST NOT be
 #: surfaced as a template's ``required_inputs`` / ``knobs``. ``compute_class`` is
 #: the workflow-dispatch compute-tier selector; ``enable_autoscale`` is set by
-#: the server-side #154 granularity gate (LLMs leave it unset); underscore-
+#: the server-side granularity gate (LLMs leave it unset); underscore-
 #: prefixed params (``_extra_ignored`` etc.) are absorbed kwargs.
 _IGNORED_PARAMS = frozenset(
     {"compute_class", "enable_autoscale", "project_id", "session_id"}

@@ -136,7 +136,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -432,7 +432,7 @@ def fetch_chirps_precipitation(
     bbox: tuple[float, float, float, float] | None = None,
     date: str | None = None,
     period: Literal["monthly", "daily"] = "monthly",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI:
     """Fetch UCSB CHIRPS quasi-global rainfall as a single-band mm COG.

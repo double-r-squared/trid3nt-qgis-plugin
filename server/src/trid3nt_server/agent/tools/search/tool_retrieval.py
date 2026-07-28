@@ -1,7 +1,7 @@
 """``retrieve_visible_tools`` -- case-stable, monotonic-grow tool selection.
 
-The tools-session half of the tool-retrieval feature (tool-retrieval kickoff,
-NATE 2026-06-23). This is the PURE selection function the orchestrator wraps with
+The tools-session half of the tool-retrieval feature.
+This is the PURE selection function the orchestrator wraps with
 shadow telemetry + a recall@k dashboard; it decides WHICH subset of the ~122-tool
 catalog is made visible to the model for a turn, so the per-turn tool list (and its
 ~41-46k tokens) can be trimmed once recall proves out (target recall@k >= 0.99).

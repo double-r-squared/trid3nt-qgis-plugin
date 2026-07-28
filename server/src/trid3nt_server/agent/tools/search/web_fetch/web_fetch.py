@@ -1,4 +1,4 @@
-"""``web_fetch`` atomic tool — generic web page ingest with extraction modes (job-0092).
+"""``web_fetch`` atomic tool - generic web page ingest with extraction modes.
 
 This module registers a single atomic tool ``web_fetch`` that fetches an
 arbitrary URL and returns a structured dict with one of four extraction modes:
@@ -32,8 +32,7 @@ Output shape (returned as dict; also persisted as JSON blob in the cache):
         "content_length": int,
     }
 
-Robots.txt: NOT honored in v0.1 (surfaced as OQ-0092-WEB-FETCH-ROBOTS for
-sprint-13 — a future revision adds a per-host robots cache + allow-check).
+Robots.txt: NOT honored in v0.1 (a future revision adds a per-host robots cache + allow-check).
 
 Typed errors (FR-AS-11):
     - ``WebFetchInputError(retryable=False)`` — bad URL (no scheme, malformed)
@@ -359,7 +358,7 @@ def web_fetch(
     extract: Literal["full_html", "main_text", "json", "metadata"] = "main_text",
     timeout_s: float = 30.0,
     user_agent: str = _DEFAULT_USER_AGENT,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:

@@ -153,13 +153,6 @@ def load_query_corpus(path: Path | None = None) -> dict[str, list[str]]:
     return _CORPUS_CACHE
 
 
-def _reset_caches_for_tests() -> None:
-    """Drop module-level caches. ONLY for tests."""
-    global _CORPUS_CACHE, _PAYLOAD_CACHE
-    _CORPUS_CACHE = None
-    _PAYLOAD_CACHE = None
-
-
 def build_catalog_payload(
     *,
     corpus: dict[str, list[str]] | None = None,
@@ -374,7 +367,7 @@ def _normalize_record(rec: dict[str, Any]) -> dict[str, Any]:
     out["error_code"] = rec.get("error_code")
     out["retry_attempt"] = int(rec.get("retry_attempt") or 0)
     out["cached_content_token_count"] = rec.get("cached_content_token_count")
-    # Tool-accuracy panel (NATE 2026-06-17). ``result_usable`` is bool|None
+    # Tool-accuracy panel. ``result_usable`` is bool|None
     # (None = the notion doesn't apply, e.g. a meta tool); ``routed_ok`` is
     # bool|None and is the per-record carrier of the routing-quality heuristic.
     # Both substrates use the same key names, so a plain get suffices.
@@ -382,7 +375,7 @@ def _normalize_record(rec: dict[str, Any]) -> dict[str, Any]:
     out["routed_ok"] = rec.get("routed_ok")
     # Timestamp: prefer the Mongo field name; fall back to the file form.
     out["called_at_utc"] = rec.get("called_at_utc") or rec.get("ts") or ""
-    # In-chat model selector dimension (NATE 2026-06-17). None when the record
+    # In-chat model selector dimension. None when the record
     # predates the feature; _aggregate_records buckets it as "unknown".
     out["model_id"] = rec.get("model_id")
     # turn_id (the per-user-message dispatch / pipeline id) -- the recall@k join
@@ -413,7 +406,7 @@ def _empty_summary() -> dict[str, Any]:
         "error_rate_overall": 0.0,
         "cache_hit_rate": 0.0,
         "average_latency_ms": 0.0,
-        # Tool-accuracy panel additions (WIRE CONTRACT, NATE 2026-06-17).
+        # Tool-accuracy panel additions (WIRE CONTRACT).
         "success_rate": 0.0,
         "result_usability_rate": None,
         "routing_accuracy_rate": None,
@@ -662,7 +655,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     usability_rate_overall = _rate_over_bools(all_usable)
     routing_rate_overall = _rate_over_bools(all_routed)
 
-    # Per-model breakdown (in-chat model selector, NATE 2026-06-17).
+    # Per-model breakdown (in-chat model selector).
     # Shape: list of {model_id, count, success_rate, result_usability_rate,
     #                 routing_accuracy_rate, latency_p50_ms, latency_p95_ms}
     # Sorted descending by count; "unknown" last.
@@ -698,7 +691,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         "error_rate_overall": round(error_rate_overall, 4),
         "cache_hit_rate": round(cache_hit_rate, 4),
         "average_latency_ms": round(avg_latency_ms, 2),
-        # Tool-accuracy panel additions (WIRE CONTRACT, NATE 2026-06-17).
+        # Tool-accuracy panel additions (WIRE CONTRACT).
         "success_rate": round(success_rate, 4),
         "result_usability_rate": (
             round(usability_rate_overall, 4)
@@ -716,7 +709,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         "dispatches_by_source": by_source_count,
         "error_rate_by_tool": error_rate_by_tool,
         "top_routing_chains": chains_out,
-        # Model dimension (in-chat model selector, NATE 2026-06-17).
+        # Model dimension (in-chat model selector).
         # The accuracy panel UI can compare success_rate / usability / routing
         # across model choices without a UI redesign in this job.
         "by_model": by_model_sorted,
@@ -732,7 +725,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# solve_telemetry section (live big-sim panel — NATE 2026-06-17).
+# solve_telemetry section (live big-sim panel).
 #
 # The solve-telemetry record is written to the SAME file+structured-log dual
 # sink as before (telemetry.emit_solve_telemetry); we read its JSONL here to
@@ -1286,7 +1279,7 @@ async def build_telemetry_summary(
         logger.warning("telemetry summary: recall@k read failed", exc_info=True)
         summary["recall_at_k"] = _empty_recall_at_k()
 
-    # Fold in the live big-sim solve_telemetry section (NATE 2026-06-17). Read
+    # Fold in the live big-sim solve_telemetry section. Read
     # from the solve-telemetry JSONL the solve writer maintains; best-effort so
     # a missing/unreadable sink leaves the zero-state section _aggregate_records
     # already seeded. Independent of the tool-call source above — solves are
@@ -1298,7 +1291,7 @@ async def build_telemetry_summary(
         logger.warning("telemetry summary: solve telemetry read failed", exc_info=True)
         summary["solve_telemetry"] = _empty_solve_telemetry()
 
-    # Fold in the PER-TURN per-model aggregates (LANE CORE 2026-07-22): turns,
+    # Fold in the PER-TURN per-model aggregates: turns,
     # mean token counts, mean wall ms, upstream_error_count per model_id. Read
     # from the turn-telemetry JSONL sink the server's turn loop writes
     # (telemetry.emit_turn_telemetry -- its own sink, like solve telemetry);
@@ -1318,7 +1311,7 @@ async def build_telemetry_summary(
 
 
 # ---------------------------------------------------------------------------
-# Building click-to-enrich detail endpoint (NATE 2026-06-27).
+# Building click-to-enrich detail endpoint.
 #
 # The building footprint inline GeoJSON now carries ID-only props (osm_id /
 # osm_type / a composite fid). The full tag bag (building / height / levels /
@@ -1480,11 +1473,11 @@ async def _handle_building_detail(query_string: str) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# /api/export-qgis -- user-driven QGIS case export (NATE 2026-07-06)
+# /api/export-qgis -- user-driven QGIS case export
 # ---------------------------------------------------------------------------
 #
 # Two routes back the web's per-case "Export to QGIS" kebab item:
-#   POST /api/export-qgis {"case_id": "..."}  -> run the export_case_to_qgis
+#   POST /api/export-qgis {"case_id": "..."}  -> run the open_case_in_qgis
 #     tool in-process; 200 with its result dict, typed tool errors -> 4xx
 #     with {"error": <honest message>} (never a traceback).
 #   GET  /api/export-qgis/file?path=<abs>     -> serve the produced .qgz/.gpkg
@@ -1508,15 +1501,15 @@ class _ExportQgisNotFound(Exception):
 def _export_qgis_fn():
     """Lazy-import seam for the export tool (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .agent.tools.meta.export_case_to_qgis.export_case_to_qgis import export_case_to_qgis
+    from .agent.tools.meta.open_case_in_qgis.open_case_in_qgis import open_case_in_qgis
 
-    return export_case_to_qgis
+    return open_case_in_qgis
 
 
 async def _handle_export_qgis_post(raw_body: bytes) -> bytes:
     """Resolve the JSON body for ``POST /api/export-qgis``.
 
-    Validates ``{"case_id": "..."}``, awaits the ``export_case_to_qgis`` tool,
+    Validates ``{"case_id": "..."}``, awaits the ``open_case_in_qgis`` tool,
     and returns its encoded result dict. Raises ``_ExportQgisBadRequest``
     (-> 400) on malformed input; the tool's own typed ``ExportCaseError``
     subclasses propagate for the dispatcher to map to honest 4xx bodies.
@@ -1600,7 +1593,7 @@ def _apply_provider_config(raw_body: bytes) -> bytes:
 
 def _export_qgis_root() -> Path:
     """The only directory the file route may serve from: the export tool's
-    output root (same default as ``export_case_to_qgis``)."""
+    output root (same default as ``open_case_in_qgis``)."""
     raw = os.environ.get("TRID3NT_EXPORT_DIR") or str(Path.home() / "trid3nt-exports")
     return Path(raw).expanduser().resolve()
 
@@ -1739,7 +1732,7 @@ async def build_case_list_payload() -> dict[str, Any]:
 #   POST /api/ingest-layer {"case_id", "name", "kind", "s3_uri",
 #     "crs_authid"?, "make_aoi"?}  -- registers an ALREADY-uploaded object
 #     (normally the s3_uri from the call above) onto the case. Runs the
-#     ingest_user_layer core (import_user_layer.py): validates the object
+#     ingest_user_layer core (register_case_layer.py): validates the object
 #     exists + is within the size cap, converts/validates the artifact,
 #     merges it into the case's durable loaded_layer_summaries, and
 #     best-effort-pins the AOI when make_aoi is true.
@@ -1767,14 +1760,14 @@ def _ingest_layer_route_enabled() -> bool:
 def _ingest_layer_fn():
     """Lazy-import seam for the ingest core (heavy geo deps load on first
     call, not at listener start; monkeypatchable in tests)."""
-    from .agent.tools.meta.import_user_layer.import_user_layer import ingest_user_layer
+    from .agent.tools.meta.register_case_layer.register_case_layer import ingest_user_layer
 
     return ingest_user_layer
 
 
 def _upload_layer_file_fn():
     """Lazy-import seam for the staging-upload helper (monkeypatchable)."""
-    from .agent.tools.meta.import_user_layer.import_user_layer import upload_layer_file
+    from .agent.tools.meta.register_case_layer.register_case_layer import upload_layer_file
 
     return upload_layer_file
 
@@ -2219,8 +2212,8 @@ async def _handle_http(
     proxy_path, _, proxy_qs = path.partition("?")
 
     if method == "POST" and proxy_path == "/api/export-qgis":
-        # User-driven QGIS export (NATE 2026-07-06): run the
-        # export_case_to_qgis tool for a case_id. Typed tool errors map to
+        # User-driven QGIS export: run the
+        # open_case_in_qgis tool for a case_id. Typed tool errors map to
         # honest 4xx {"error": message} bodies -- never a traceback.
         raw_body = b""
         if content_length > 0:
@@ -2230,7 +2223,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .agent.tools.meta.export_case_to_qgis.export_case_to_qgis import CaseNotFoundError, ExportCaseError
+        from .agent.tools.meta.open_case_in_qgis.open_case_in_qgis import CaseNotFoundError, ExportCaseError
 
         try:
             body = await _handle_export_qgis_post(raw_body)
@@ -2281,7 +2274,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .agent.tools.meta.import_user_layer.import_user_layer import MAX_INGEST_BYTES
+        from .agent.tools.meta.register_case_layer.register_case_layer import MAX_INGEST_BYTES
 
         if content_length <= 0:
             writer.write(
@@ -2307,7 +2300,7 @@ async def _handle_http(
             await writer.drain()
             writer.close()
             return
-        from .agent.tools.meta.import_user_layer.import_user_layer import ImportLayerError, ObjectTooLargeError
+        from .agent.tools.meta.register_case_layer.register_case_layer import ImportLayerError, ObjectTooLargeError
 
         try:
             filename = _parse_ingest_layer_filename(proxy_qs)
@@ -2380,7 +2373,7 @@ async def _handle_http(
                 )
             except (asyncio.TimeoutError, asyncio.IncompleteReadError):
                 raw_body = b""
-        from .agent.tools.meta.import_user_layer.import_user_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
+        from .agent.tools.meta.register_case_layer.register_case_layer import CaseNotFoundError, ImportLayerError, ObjectNotFoundError
 
         try:
             body = await _handle_ingest_layer_post(raw_body)
@@ -2603,7 +2596,7 @@ async def _handle_http(
                     _format_response(500, b'{"error":"local models failed"}')
                 )
     elif proxy_path == "/api/building-detail":
-        # Click-to-enrich (NATE 2026-06-27): the building footprint inline
+        # Click-to-enrich: the building footprint inline
         # GeoJSON is now SLIM (id-only props). The popup fetches the full tag
         # bag on demand by (osm_type, osm_id) here. Cold/box-off friendly + off
         # the event loop (S3 + Overpass run via asyncio.to_thread).

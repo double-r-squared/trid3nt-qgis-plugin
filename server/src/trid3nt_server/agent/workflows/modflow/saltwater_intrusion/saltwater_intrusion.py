@@ -1,7 +1,7 @@
-"""``model_saltwater_intrusion_scenario``  -  MODFLOW Wave-5 BUY saltwater-intrusion
+"""``model_saltwater_intrusion_scenario`` - MODFLOW BUY saltwater-intrusion
 composer.
 
-The end-to-end higher-order workflow for the sprint-18 Wave-5 MODFLOW
+The end-to-end higher-order workflow for the MODFLOW
 ``saltwater_intrusion`` archetype: it turns a coastal AOI point + a user-supplied
 cross-section transect (two lat/lon endpoints, A=seaward -> B=inland) into a
 rendered saltwater-wedge cross-section chart + a map transect line + toe point.
@@ -95,7 +95,7 @@ __all__ = [
 
 
 class SaltwaterIntrusionResult(GraceModel):
-    """Return type for ``model_saltwater_intrusion_scenario`` (sprint-18 Wave-5).
+    """Return type for ``model_saltwater_intrusion_scenario``.
 
     Bundles the saltwater-wedge vector layer + the derived args + a narration
     summary dict. Invariant 1: every narrated number is a typed field --
@@ -226,7 +226,7 @@ async def model_saltwater_intrusion_scenario(
             f"invalid saltwater_intrusion parameter: {exc}"
         ) from exc
 
-    # task-168: declare the planned internal-tool count up front.
+    # declare the planned internal-tool count up front.
     _planned = 1
     has_loc = bool(location and location.strip())
     if has_loc:
@@ -353,7 +353,7 @@ async def modflow_saltwater_intrusion(
     aquifer_k_ms: float | None = None,
     porosity: float | None = None,
     compute_class: str = "standard",
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Model a coastal saltwater intrusion wedge (Henry-style variable-density BUY).

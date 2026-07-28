@@ -1,7 +1,7 @@
-"""``code_exec_request`` — user-confirmed Python sandbox atomic tool (job-0233).
+"""``code_exec_request`` - user-confirmed Python sandbox atomic tool.
 
 This is the LLM-facing entry point to the egress-denied Python sandbox
-(``infra/python-sandbox/``, job-0232). It lets the agent run **ad-hoc Python over
+(``infra/python-sandbox/``). It lets the agent run **ad-hoc Python over
 layers already on the map** — "compute the 95th-percentile flood depth over the
 city polygon", "cross-tabulate damage by land-cover class" — when no existing
 atomic tool fits, then narrate the structured result (Decision H / Invariant 1).
@@ -309,7 +309,7 @@ def code_exec_request(
 
     # Dispatch through the sandbox runner. In local mode this returns a finished
     # envelope dict synchronously; in cloud mode it returns a pending handle whose
-    # result envelope is read back from Cloud Logging (job-0265 — the executor
+    # result envelope is read back from Cloud Logging (the executor
     # prints a marker-prefixed envelope to stdout -> Cloud Logging, read under the
     # agent's identity). A genuine readback failure surfaces a typed error which
     # we convert to an honest error envelope (never a fabricated result).
@@ -317,7 +317,7 @@ def code_exec_request(
 
     if isinstance(dispatch, sandbox_runner.SandboxExecutionHandle):
         # Cloud dispatch: the executor printed its result envelope to stdout,
-        # which Cloud Run ships to Cloud Logging. read_sandbox_result (job-0265)
+        # which Cloud Run ships to Cloud Logging. read_sandbox_result
         # polls Cloud Logging for the marker line and returns the parsed envelope.
         # On a genuine readback failure (envelope not ingested in time, or the
         # logging client can't be built) it raises a typed error — we convert

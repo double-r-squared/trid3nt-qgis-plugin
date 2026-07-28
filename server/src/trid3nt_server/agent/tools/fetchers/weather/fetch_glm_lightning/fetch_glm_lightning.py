@@ -474,7 +474,7 @@ def fetch_glm_lightning(
     start_utc: str | None = None,
     end_utc: str | None = None,
     accumulation_window_s: int | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> LayerURI | list[LayerURI]:
     """Fetch GOES GLM optical-lightning GROUP-ENERGY-DENSITY as a transparent purple raster overlay.

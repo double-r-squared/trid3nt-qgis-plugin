@@ -1370,7 +1370,7 @@ def fetch_goes_archive_animation(
     bt_c07_min_k: float = FIRE_BT_C07_MIN_K,
     bt_diff_min_k: float = FIRE_BT_DIFF_MIN_K,
     true_color_res_deg: float | None = None,
-    # job-0164: absorb LLM-invented kwargs.
+    # absorb LLM-invented kwargs.
     **_extra_ignored: Any,
 ) -> list[LayerURI]:
     """Build a HISTORICAL GOES Fire Temperature animation from the RAW noaa-goes18 S3 archive (any past date).

@@ -1,4 +1,4 @@
-"""``postprocess_pelicun`` — aggregate Pelicun per-feature damage FGB → ImpactEnvelope (Wave 4.11 P2).
+"""``postprocess_pelicun`` - aggregate Pelicun per-feature damage FGB → ImpactEnvelope (P2).
 
 This tool consumes the FlatGeobuf returned by ``pelicun_damage_assessment``
 (a per-asset damage layer) and produces an aggregate ``ImpactEnvelope`` —
@@ -10,7 +10,7 @@ hazard values, or make any network calls beyond the GCS read of the damage
 FlatGeobuf.  Every numeric field on the returned envelope is a deterministic
 aggregate computed from the source layer (Invariant 1).
 
-Design reference: ``reports/inflight/wave-4-11-p2-postprocess-pelicun-design-20260609/design.md``
+Design reference: ``reports/inflight/-11-p2-postprocess-pelicun-design-20260609/design.md``
 
 **Inputs**
 
@@ -225,8 +225,8 @@ def _download_uri_to_local(
         ``PelicunPostprocessIOError`` on download / read failure.
     """
     del storage_client  # GCP decommissioned — S3/local only.
-    # sprint-14-aws (job-0293b): s3:// staging via the shared boto3 reader
-    # (NOT s3fs — instance-role lesson, job-0289). Stage to a
+    # s3:// staging via the shared boto3 reader
+    # (NOT s3fs - instance-role lesson). Stage to a
     # NamedTemporaryFile the caller unlinks.
     if uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
@@ -298,7 +298,7 @@ def _damage_state_distribution(
     the total feature count — this is the design § 2.1 closure check.
     """
     arr = np.asarray(ds_mean, dtype=np.float64)
-    # Invariant 7 (job-0300): a non-finite ds_mean (NaN/inf — only possible from a
+    # Invariant 7: a non-finite ds_mean (NaN/inf - only possible from a
     # malformed/foreign damage FGB) would survive .clip() and become INT64_MIN under
     # .astype(int), then index out of _DS_LABELS with a raw IndexError. Refuse to
     # fabricate a damage-state distribution from bad input — fail honestly instead.
@@ -459,7 +459,7 @@ def _pelicun_run_id_from_inputs(
 ) -> str:
     """Derive a stable ULID-string from the input URIs.
 
-    Per design § 6 + OQ-1: take sha256(damage_uri + flood_uri)[:16] as a
+    Per design § 6 +: take sha256(damage_uri + flood_uri)[:16] as a
     16-byte ULID seed.  ``ulid.ULID.from_bytes`` accepts arbitrary 16-byte
     sequences (the timestamp prefix is just the first 6 bytes; we treat the
     full payload as the random component so identical inputs produce identical
@@ -544,7 +544,7 @@ def _aggregate_gdf(
         damage_layer_uri, flood_layer_uri
     )
 
-    # Invariant 7 (job-0300): count assets whose loss figure rests on a HAZUS
+    # Invariant 7: count assets whose loss figure rests on a HAZUS
     # class-default replacement value (NSI lacked a usable val_struct, or the
     # MS-buildings path which is default-by-design) so the envelope surfaces how
     # much of expected_loss_usd is default-based rather than measured. Column
@@ -675,7 +675,7 @@ def _damaged_centroids(
 async def postprocess_pelicun(
     damage_layer_uri: str,
     flood_layer_uri: str | None = None,
-    # sprint-14-aws (M5.5): provenance threading. When the composer knows the
+    # provenance threading. When the composer knows the
     # fragility set / realization count it actually ran upstream, it passes
     # them through so the envelope's provenance reflects the run that happened
     # rather than the hardcoded defaults. Default to None -> _aggregate_gdf's
@@ -683,7 +683,7 @@ async def postprocess_pelicun(
     # the LLM-facing surface are unchanged.
     fragility_set: str | None = None,
     realization_count: int | None = None,
-    # job-0164: absorb LLM-invented kwargs (Tool argument normalizer ratchet).
+    # absorb LLM-invented kwargs (Tool argument normalizer ratchet).
     **_extra_ignored: Any,
 ) -> dict[str, Any]:
     """Aggregate a Pelicun per-asset damage FlatGeobuf into an ImpactEnvelope.
@@ -742,7 +742,7 @@ async def postprocess_pelicun(
         ) from exc
 
     local_path: str | None = None
-    # sprint-14-aws (job-0293b): s3:// staging also lands in a temp file the
+    # s3:// staging also lands in a temp file the
     # finally-block must unlink — remote means either object-store scheme.
     was_remote = damage_uri.startswith(("gs://", "s3://"))
     try:
@@ -756,7 +756,7 @@ async def postprocess_pelicun(
                 f"geopandas failed to read FlatGeobuf {damage_uri!r}: {exc}"
             ) from exc
 
-        # sprint-14-aws (M5.5): forward the run-provenance overrides only when
+        # forward the run-provenance overrides only when
         # the caller actually supplied them; otherwise _aggregate_gdf's
         # back-compatible defaults (hazus_flood_v6 / 100) apply unchanged.
         agg_kwargs: dict[str, Any] = {}

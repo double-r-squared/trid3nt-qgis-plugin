@@ -1,6 +1,6 @@
 """SFINCS Cloud Run Job entrypoint — thin shim around the upstream binary.
 
-Contract (sprint-07 / M5 / FR-CE-1/2/3):
+Contract (M5 / FR-CE-1/2/3):
 
     Input  (env or CLI):
         --run-id RUN_ID
@@ -40,7 +40,7 @@ Contract (sprint-07 / M5 / FR-CE-1/2/3):
                   "finished_at": "<ISO8601 Z>",
                   "error": "<message>" | null
                 }
-            The agent's `wait_for_completion` (job-0041) polls this object;
+            The agent's `wait_for_completion` polls this object;
             its presence with status="ok" or status="error" is the terminal
             signal. Truthful: NOT in this image's scope to assert the SFINCS
             run is physically valid — only that the binary executed.
@@ -90,7 +90,7 @@ def _utc_now() -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Object-store abstraction (sprint-16 — same image on Cloud Run Job AND AWS
+# Object-store abstraction (— same image on Cloud Run Job AND AWS
 # Batch). The legacy Cloud Run path is GCS-only; AWS Batch runs the SAME image
 # against S3. We dispatch the I/O BY URI SCHEME (mirroring the agent's
 # tools/solver.py ``_read_object_bytes`` scheme dispatch): ``gs://`` via
@@ -98,7 +98,7 @@ def _utc_now() -> str:
 # GCP SDK), ``s3://`` via boto3. The runs-bucket OUTPUT scheme follows
 # ``TRID3NT_OBJECT_STORE`` (``s3`` → ``s3://``, default ``gcs`` → ``gs://``) so
 # completion.json + outputs land in the same store the agent polls. The GCS
-# behavior is byte-identical to the pre-sprint-16 path.
+# behavior is byte-identical to the pre-path.
 # --------------------------------------------------------------------------- #
 
 
@@ -510,7 +510,7 @@ def main(argv: list[str] | None = None) -> int:
     started_at = _utc_now()
 
     # Best-effort completion writing: even on hard error we attempt to write
-    # completion.json so wait_for_completion (job-0041) sees a terminal state
+    # completion.json so wait_for_completion sees a terminal state
     # instead of polling forever.
     result: dict = {
         "status": "error",

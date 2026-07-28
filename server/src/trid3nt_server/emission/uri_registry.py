@@ -1,10 +1,10 @@
-"""Session-scoped layer-URI registry — layer-handle indirection (job-0263).
+"""Session-scoped layer-URI registry — layer-handle indirection.
 
 Kills the LLM-URI-mangling incident class observed live in Stage 3 / the
 user's Tampa demo run. Gemini is structurally bad at echoing long opaque
 URIs between turns — five distinct live incidents proved it:
 
-1. **runs/ prefix mangle** (job-0253, agent_restart_0253.log:475): the real
+1. **runs/ prefix mangle**: the real
    COG ``s3://trid3nt-runs/01KTS5W9GTE7A7WPC3BNBE10EQ/
    flood_depth_peak.tif`` came back as ``s3://trid3nt-runs/
    runs/01KTS5W9.../flood_depth_peak.tif`` (doubled path segment) → 404.
@@ -12,18 +12,18 @@ URIs between turns — five distinct live incidents proved it:
    ``gs://…/usace_nsi/usace-nsi--81.9126-26.5476--81.7511-26.6892.fgb`` —
    Gemini grafted the *layer_id* onto the cache directory instead of the
    real hash basename ``852a6cc379b18c865bf9d99ec1acaa35.fgb``.
-3. **hash-tail hallucination ×3** (job-0257 report, /tmp/agent_demo_ready.log):
+3. **hash-tail hallucination ×3**:
    ``090a4ff8d9a083f67c0b355caf40241a.tif`` echoed as
    ``090a4ff8d9a083b28499252309d12999.tif`` — first ~14 hex chars preserved,
    tail invented. Three out of three publishes.
-4. **WMS-URL-as-hazard** (job-0255, agent_log_p5_turn.txt:170): the QGIS
+4. **WMS-URL-as-hazard**: the QGIS
    display URL ``https://…/ogc/wms?MAP=…&LAYERS=flood-depth-peak-01KTS8H8…``
    passed as ``hazard_raster_uri`` to Pelicun (which needs the gs:// COG).
 5. **invented cache hash** (same call): ``assets_uri`` =
    ``gs://…/usace_nsi/20240516140505.fgb`` — a timestamp-shaped basename
    that never existed.
 
-Prompt-engineering patches (job-0252 / job-0255 SYSTEM_PROMPT clauses) only
+Prompt-engineering patches (SYSTEM_PROMPT clauses) only
 lowered the rate. THIS module removes the failure mode architecturally:
 
 * Every tool result that carries URIs gets **registered** as
@@ -60,7 +60,7 @@ untouched — they keep the real uri the plugin renders from.
 Scoping rules:
 
 * The registry is **session-scoped** and lives in a module-level store keyed
-  by ``session_id`` (the ``_SESSION_ACTIVE_CASE`` pattern from job-0259) so
+  by ``session_id`` (the ``_SESSION_ACTIVE_CASE`` pattern) so
   it survives WebSocket reconnects and is shared across the client's
   sibling connections.
 * Unknown storage URIs pass through untouched (fail-open): user-supplied
@@ -137,8 +137,8 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
         "vector_uri",
         "polygon_uri",
         "dem_uri",
-        "base_layer_uri",  # job-0319: compute_blended_composite base raster
-        "overlay_layer_uri",  # job-0319: compute_blended_composite overlay raster
+        "base_layer_uri",  # compute_blended_composite base raster
+        "overlay_layer_uri",  # compute_blended_composite overlay raster
         "landcover_uri",
         "hazard_uri",
         "model_setup_uri",
@@ -176,7 +176,7 @@ SHORT_HANDLE_RE = re.compile(r"^[Ll](\d+)$")
 _SHORT_HANDLES_CAP = 4096
 
 #: Minimum shared basename-stem prefix (chars) for the hash-prefix fuzzy
-#: branch. The job-0257 evidence shows ~14 hex chars survive before the tail
+#: branch. The evidence shows ~14 hex chars survive before the tail
 #: hallucination starts; 12 keeps headroom while staying collision-safe for
 #: 32-hex cache keys.
 _HASH_PREFIX_MIN = 12
@@ -189,7 +189,7 @@ _WALK_MAX_ITEMS = 64
 _ANNOUNCE_CAP = 8
 _ERROR_HANDLES_CAP = 10
 
-#: F32: tools that consume a DEM as their primary input. When the branch-4
+#: tools that consume a DEM as their primary input. When the branch-4
 #: "no layers yet" fallback fires for one of these, suggest ``fetch_dem`` —
 #: the generic ``sfincs_flood`` example was actively misleading
 #: for a terrain-derivative ask (live incident: a reconnect-empty registry +
@@ -306,7 +306,7 @@ def _is_tile_template(value: str) -> bool:
     renderable face — it carries ``{z}/{x}/{y}`` placeholders and cannot be
     opened by an analytical tool (Pelicun, zonal stats). It must route to the
     ``wms_url`` slot so it never displaces the registered ``s3://`` COG that
-    downstream ``*_uri`` params resolve to (job-0304: live Pelicun read the
+    downstream ``*_uri`` params resolve to (live Pelicun read the
     template instead of the COG and failed). ``_looks_like_wms`` misses it
     (no ``service=wms`` / ``/wms`` / ``layers=``), hence this companion.
     """
@@ -384,7 +384,7 @@ def _common_prefix_len(a: str, b: str) -> int:
 
 @dataclass
 class SessionUriRegistry:
-    """Handle → URI indirection table for ONE session (job-0263).
+    """Handle → URI indirection table for ONE session.
 
     Registration is additive (latest non-None face wins; a gs:// data URI is
     never clobbered by ``None``). Resolution implements the four branches
@@ -704,7 +704,7 @@ class SessionUriRegistry:
             logger.exception("uri_registry[%s]: seed failed", self.session_id)
 
     def clear(self) -> None:
-        """Drop every registered handle/URI/pending-announcement (F32).
+        """Drop every registered handle/URI/pending-announcement.
 
         ADR 0014: the short-handle map + its counter clear too — shorts are
         PER-CASE state; a case-switch reseeds them from the new Case's
@@ -721,7 +721,7 @@ class SessionUriRegistry:
     def replace_from_layers(
         self, layers: Any, short_handles: dict[str, str] | None = None
     ) -> None:
-        """Reset this registry to EXACTLY ``layers`` (F32 case-switch seed).
+        """Reset this registry to EXACTLY ``layers`` (case-switch seed).
 
         The registry is keyed by ``session_id``, not by Case — a session that
         switches Cases (or a fresh connection that opens an existing Case)
@@ -732,7 +732,7 @@ class SessionUriRegistry:
         the correct Case B one). Case-open / case-switch call sites clear
         first so the registry reflects ONLY the now-active Case's persisted
         layers, mirroring the emitter's ``reset_loaded_layers`` (replace, not
-        reconcile — job-0245's rule applied here too).
+        reconcile — the same rule applied here too).
 
         ADR 0014: ``short_handles`` is the Case's PERSISTED ``{L<n>: uri}``
         map — imported BEFORE the layer seed so already-announced handles
@@ -864,7 +864,7 @@ class SessionUriRegistry:
             raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
         # Branch 3-titiler — a TiTiler tile-template DISPLAY URL: the underlying
-        # data COG is the unquoted ``url=`` query param (job-0304 /
+        # data COG is the unquoted ``url=`` query param (
         # _is_tile_template). Recover it so a display URL handed to a *_uri param
         # resolves to the s3 COG instead of failing open as an unreadable
         # https:// string (the compute_layer_bounds UNKNOWN_LAYER_URI incident).
@@ -1063,12 +1063,12 @@ class SessionUriRegistry:
     def _inventory_text(self, tool_name: str | None = None) -> str:
         """Compact handle inventory for the branch-4 error message.
 
-        F32: when the registry genuinely has no layers, the "run the
+        when the registry genuinely has no layers, the "run the
         producing tool first" example is tool-aware — a DEM-consuming tool
         (``_DEM_CONSUMING_TOOLS``) is told to ``fetch_dem`` for this AOI
         instead of the generic ``sfincs_flood`` example, which
         was actively misleading (and factually irrelevant) for a terrain
-        derivative ask. When the registry DOES have layers (the common F32
+        derivative ask. When the registry DOES have layers (the common
         reconnect-repair case — the registry was simply unseeded, not
         genuinely empty) this branch never fires; the handle listing below
         does, now capped at ``_ERROR_HANDLES_CAP`` (10, was 5).
@@ -1171,8 +1171,8 @@ def lookup_handle_for_uri(
 def ambient_layer_handle_inventory(limit: int = 8) -> list[str]:
     """Most-recent-first LAYER handles of the ambient (dispatch) registry.
 
-    Used by ``publish_layer``'s unknown-handle guard (2026-07-13, OPEN-17
-    class): when a small model passes a placeholder like
+    Used by ``publish_layer``'s unknown-handle guard: when a small model
+    passes a placeholder like
     ``'LayerURI_from_previous_step'``, the typed error NAMES the handles that
     actually exist in this case so the retry is self-correcting. Minted
     ``uri:<basename>`` records are fuzzy-match plumbing, not real layer ids,

@@ -1,7 +1,7 @@
 """Mode 2 ``.gov``/``.edu`` offer-to-add classifier (FR-DS-* Mode 2; SRS §F.1.2).
 
-job-0101 (sprint-12-mega Wave 1) — When the agent fetches a web page (via the
-``web_fetch`` atomic tool, job-0092) AND the page is on a ``.gov`` / ``.edu`` /
+When the agent fetches a web page (via the
+``web_fetch`` atomic tool) AND the page is on a ``.gov`` / ``.edu`` /
 ``.mil`` / ``.int`` top-level domain AND it carries patterns consistent with
 *structured* data (JSON-LD, an OpenAPI / Swagger spec link, a REST endpoint
 pattern, a "Download CSV / GeoJSON" link, or a tabular dataset listing), this
@@ -16,29 +16,28 @@ Why this is a separate module (not a tool)
   registry would tempt the LLM into calling it directly; the design point is
   that the agent surfaces candidates *automatically* during research.
 - The wire envelope ``Mode2CandidateEnvelope`` it produces is rendered by a
-  forthcoming web modal (sprint-12-mega Wave 2/3) — the modal is the place
+  forthcoming web modal - the modal is the place
   where the user accepts / rejects the suggested catalog entry. That modal
   work is a separate job; this module just emits the candidate envelope and
   the audit-log line.
 
 Relationship to the existing ``offer-catalog-addition`` envelope
-(``packages/contracts/src/trid3nt_contracts/ws.py``, sprint-08): the heavier
+(``packages/contracts/src/trid3nt_contracts/ws.py``): the heavier
 ``offer-catalog-addition`` flow expects a full agent-side conformity probe
 (``ProbeFindings``) + a drafted ``SuggestedCatalogEntry``. The ``mode2-candidate``
 envelope here is intentionally lighter — it's a *low-friction*, fire-and-forget
 preview that says "hey, this page looks like it might host structured data, do
 you want to enrich it?" without committing the agent to running the full probe.
-The forthcoming Wave 2/3 modal renders ``mode2-candidate``; when the user clicks
+The forthcoming modal renders ``mode2-candidate``; when the user clicks
 "yes, enrich this", the agent runs the heavier ``offer-catalog-addition`` flow
-on top. The two envelopes coexist; the lighter one feeds the heavier one. This
-overlap is surfaced as OQ-0101-MODE2-ENVELOPE-OVERLAP for orchestrator review.
+on top. The two envelopes coexist; the lighter one feeds the heavier one.
 
 Audit log
 ~~~~~~~~~
 
 Every emitted candidate is appended to the MongoDB MCP ``audit_log``
 collection (D.15) via ``Persistence.append_audit("mode2-candidate", ...)``
-at the server.py call site (job-0203 / Wave 4.11 M4) — persistent across
+at the server.py call site (M4) - persistent across
 sessions so the user can later review "what did the classifier flag this
 week?" without scrolling back through chat. The earlier bespoke JSONL file
 writer was removed (remove-don't-shim).
@@ -64,10 +63,10 @@ and returns a ``Mode2Candidate`` if the page qualifies, else ``None``. The
 classification is deterministic — the same page always produces the same
 candidate envelope (modulo the freshly-generated ``candidate_id``).
 
-FROZEN boundary notes (sprint-12-mega Wave 1)
+FROZEN boundary notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This module does NOT modify ``web_fetch.py`` (sibling job-0092, FROZEN).
+This module does NOT modify ``web_fetch.py`` (sibling, FROZEN).
 The integration site is ``server.py``'s ``_invoke_tool_via_emitter`` wrapper
 where every tool result passes through anyway — we hook the
 ``mode2_candidate_check`` there post-result (≤ 20 lines per kickoff).
@@ -157,7 +156,7 @@ class Mode2Candidate:
 
     Constructed by ``classify_for_mode2``; carried inside
     ``Mode2CandidateEnvelope`` and rendered by the web "offer to add" modal
-    (Wave 2/3 work).
+    (work).
 
     Fields:
         candidate_id: ULID identifying this candidate emission. Unique per
@@ -206,9 +205,6 @@ class Mode2CandidateEnvelope:
 
     Serialized via ``to_wire_dict`` because ``packages/contracts/`` is FROZEN
     for this job — we emit raw JSON rather than introducing a contract model.
-    Wave 2/3 (or a follow-up schema job) may promote this to a real pydantic
-    envelope under ``trid3nt_contracts.ws``; OQ-0101-MODE2-ENVELOPE-OVERLAP
-    surfaces that decision.
     """
 
     candidate: Mode2Candidate
@@ -415,7 +411,7 @@ def classify_for_mode2(page_dict: dict[str, Any]) -> Mode2Candidate | None:
 
 
 # ---------------------------------------------------------------------------
-# Audit log — REMOVED (job-0203 / Wave 4.11 M4, remove-don't-shim).
+# Audit log - REMOVED (M4, remove-don't-shim).
 #
 # The bespoke JSONL file writer (``append_audit_log`` +
 # ``default_audit_log_path``, ``~/.trid3nt/mode2_audit.log``) was the last

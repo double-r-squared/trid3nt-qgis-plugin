@@ -1,4 +1,4 @@
-"""``fetch_noaa_slr_scenarios`` atomic tool — NOAA Sea Level Rise scenario inundation polygons (job A10).
+"""``fetch_noaa_slr_scenarios`` atomic tool - NOAA Sea Level Rise scenario inundation polygons.
 """
 
 from __future__ import annotations
@@ -162,7 +162,7 @@ _METADATA = _build_metadata()
 
 
 # ---------------------------------------------------------------------------
-# Payload-MB estimator (Wave 1.5 chat-warning system).
+# Payload-MB estimator (chat-warning system).
 # ---------------------------------------------------------------------------
 
 
@@ -578,7 +578,7 @@ _METADATA_REGISTERED = _METADATA
 def fetch_noaa_slr_scenarios(
     bbox: tuple[float, float, float, float],
     scenario_ft: float | list[float] | None = None,
-    # Wave 4.10 convention: absorb LLM-invented kwargs
+    # convention: absorb LLM-invented kwargs
     **_extra_ignored: Any,
 ) -> LayerURI:
     """NOAA Sea Level Rise scenario inundation polygons as a FlatGeobuf vector layer.

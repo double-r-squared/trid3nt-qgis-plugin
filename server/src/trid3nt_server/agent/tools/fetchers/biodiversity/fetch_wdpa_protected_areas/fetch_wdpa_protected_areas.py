@@ -60,7 +60,7 @@ class WDPADesignationError(WDPAError):
     ``desig_eng`` value nor a known alias. This makes the "goes18 vs goes-18"
     class of silent-mismatch fail LOUD with a list of accepted forms rather
     than silently filtering every feature out and returning a 0-feature
-    FlatGeobuf (the OQ-0089-DESIGNATION-FILTER-SEMANTICS hazard).
+    FlatGeobuf (the hazard).
     """
 
     error_code = "WDPA_DESIGNATION_INVALID"
@@ -93,7 +93,7 @@ _WDPA_NAME_FIELD = "name_eng"
 
 
 # ---------------------------------------------------------------------------
-# Designation vocabulary + alias table (OQ-0089-DESIGNATION-FILTER-SEMANTICS).
+# Designation vocabulary + alias table.
 #
 # The WDPA ``desig_eng`` field is a free-text English phrase (e.g.
 # "National Park", "National Wildlife Refuge"), NOT a short code. Humans and
@@ -469,7 +469,7 @@ def _fetch_wdpa_features(
     # tokens by ``_normalize_designation_filter``; we casefold BOTH sides of the
     # membership test so the comparison is robust to any live-casing drift and a
     # canonical token never silently misses on a case variant
-    # (OQ-0089-DESIGNATION-FILTER-SEMANTICS; same class as "goes18 vs goes-18").
+    # (same class as "goes18 vs goes-18").
     if designation_filter:
         filter_set = {d.casefold() for d in designation_filter}
         filtered = [
@@ -621,7 +621,7 @@ def _fetch_wdpa_bytes(
 def fetch_wdpa_protected_areas(
     bbox: tuple[float, float, float, float],
     designation_filter: list[str] | None = None,
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

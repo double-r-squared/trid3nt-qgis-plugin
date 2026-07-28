@@ -2,7 +2,7 @@
 """COMBINED coastal quadtree worker — BUILD + SOLVE in ONE Batch job.
 
 This worker fuses what used to be two separate one-shot Batch workers into a
-single image + a single job-definition:
+single image + a single
 
   1. the GPL deck-builder (``cht_sfincs`` authors a refined multi-level quadtree
      + SnapWave deck from a build-spec JSON), and
@@ -16,7 +16,7 @@ them). The combined worker eliminates the round-trip: after ``build_deck()``
 populates a LOCAL deck dir, the same process invokes the SFINCS binary directly
 on that dir (no download), uploads ``sfincs_map.nc`` + stdout/stderr, and writes
 ONE ``completion.json``. The agent collapses to ONE submit + ONE poll against
-ONE new job-def (``TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE``).
+ONE new (``TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_QUADTREE``).
 
 What the combined worker adds on top of the deck-build half:
 
@@ -1588,7 +1588,7 @@ def build_deck(spec: dict, scratch: Path) -> tuple[Path, dict]:
     provenance["snapwave_active_cells"] = sw_active
     provenance["snapwave_wavebnd_cells"] = sw_wavebnd
 
-    # FIX: wave-boundary repair. If no cell was flagged as the wave boundary
+    # FIX: repair. If no cell was flagged as the wave boundary
     # (wavebnd=0) but incident-wave boundary POINTS are present, the wave field
     # has nowhere to inject from and hm0 stays flat at 0. This happens whenever
     # the spec carries snapwave_boundary points but no open-boundary polygon URI
@@ -2072,7 +2072,7 @@ def _spec_bbox_4326(spec: dict) -> tuple[float, float, float, float] | None:
 #: Substring SnapWave prints when an offshore boundary point sits in < 5 m of
 #: water (the incident wave dissipates AT the boundary -> a near-empty hm0 field).
 _SNAPWAVE_SHALLOW_BND_MARKER = "dropped below 5 m"
-#: Minimum wave-field coverage as a FRACTION of the depth-field coverage. The live
+#: Minimum coverage as a FRACTION of the depth-field coverage. The live
 #: degenerate run had wave ~0.76% vs depth ~40.6% valid pixels (ratio ~1.9%); a
 #: genuine nearshore wave field is a large fraction of the wetted area. Below this
 #: the "modeled" wave layer is degenerate and must NOT read status=ok.

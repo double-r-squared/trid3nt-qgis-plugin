@@ -79,7 +79,7 @@ _PRODUCT_WMS_LAYER: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # AtomicToolMetadata — registered once at import time.
 #
-# See module docstring OQ-0102-CACHEABLE-FLAG-CONTRADICTION for the kickoff
+# See module docstring for the kickoff
 # vs validator reconciliation. Body-text intent is "does NOT cache pixels",
 # so cacheable=False.
 # ---------------------------------------------------------------------------
@@ -89,7 +89,7 @@ _METADATA = AtomicToolMetadata(
     ttl_class="live-no-cache",
     source_class=None,
     cacheable=False,
-    # OQ-0102-METADATA-FIELDS resolved: the schema model now exposes this flag,
+    # resolved: the schema model now exposes this flag,
     # so the long-parked intent is folded into the live metadata. bbox=None
     # returns the CONUS-wide WMS GetMap URL; this tool transfers only a service
     # URL (~0.1MB), never pixels, so a no-bbox global query is bounded + safe.
@@ -176,7 +176,7 @@ def _build_wms_url(
 def fetch_nexrad_reflectivity(
     bbox: tuple[float, float, float, float] | None = None,
     product: Literal["n0r", "n0q", "vil"] = "n0r",
-    # job-0164: absorb LLM-invented kwargs (centralized at server.py via
+    # absorb LLM-invented kwargs (centralized at server.py via
     # tool_arg_normalizer, but kept as belt-and-suspenders).
     **_extra_ignored: Any,
 ) -> LayerURI:

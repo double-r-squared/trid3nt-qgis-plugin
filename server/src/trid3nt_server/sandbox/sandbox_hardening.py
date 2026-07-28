@@ -1,4 +1,4 @@
-"""AWS isolation hardening for the local-subprocess Python sandbox (sprint-14-aws).
+"""AWS isolation hardening for the local-subprocess Python sandbox.
 
 On the GCP stack the real containment boundary for ``code_exec_request`` was the
 Cloud Run Job's VPC connector + egress-deny firewall + read-only runtime SA
@@ -367,7 +367,7 @@ def preexec_resource_limits(*, jailed: bool = False):  # noqa: ANN201 — callab
 def _bwrap_mode() -> str:
     """``auto`` | ``1`` (require) | ``0`` (disabled).
 
-    Invariant 5 (job-0301): on the AWS deploy (``TRID3NT_STORAGE_BACKEND`` in
+    Invariant 5: on the AWS deploy (``TRID3NT_STORAGE_BACKEND`` in
     {s3, aws}) the host carries the agent's instance-role creds + reachable IMDS,
     so the kernel netns jail is the ONLY real boundary — the default there is
     ``1`` (REQUIRE, fail-closed): if ``bwrap`` is missing the sandbox refuses to
