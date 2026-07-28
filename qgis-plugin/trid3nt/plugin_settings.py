@@ -225,6 +225,25 @@ class PluginSettings:
         self._set("openrouter_api_key", value.strip())
 
     @property
+    def repo_path(self) -> str:
+        """Update button (v1, local mode): the source checkout the Update
+        button runs ``git fetch`` + ``git pull --ff-only`` +
+        ``install_plugin.sh`` against. The INSTALLED profile copy is a
+        disconnected COPY of the repo (see scripts/install_plugin.sh), so
+        this cannot be derived from ``__file__`` at runtime -- defaults to
+        the known dev-machine path (``update.DEFAULT_REPO_PATH``), always
+        editable here."""
+        from .update import DEFAULT_REPO_PATH
+
+        return self._get("repo_path", DEFAULT_REPO_PATH) or DEFAULT_REPO_PATH
+
+    @repo_path.setter
+    def repo_path(self, value: str) -> None:
+        from .update import DEFAULT_REPO_PATH
+
+        self._set("repo_path", value.strip() or DEFAULT_REPO_PATH)
+
+    @property
     def anonymous_user_id(self) -> str:
         """Server-assigned anonymous user id, replayed on reconnect so the
         same local User record re-binds (mirrors the web client).
