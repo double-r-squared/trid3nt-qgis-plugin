@@ -1,4 +1,4 @@
-"""``fetch_gbif_occurrences`` atomic tool — GBIF species occurrence point fetcher.
+"""``fetch_gbif_occurrences`` atomic tool -- GBIF species occurrence point fetcher.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ _PAGE_SIZE = 300
 # pad generously for global-coverage queries.
 _TIMEOUT_S = 30.0
 
-# Cap on max_records per call (defensive — a runaway caller asking for 10M
+# Cap on max_records per call (defensive -- a runaway caller asking for 10M
 # records would saturate disk + memory; the tool docstring documents this).
 _MAX_RECORDS_HARD_CAP = 100_000
 
@@ -91,7 +91,7 @@ _USER_AGENT = (
 _ACCEPTED_MATCH_TYPES = frozenset({"EXACT"})
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -217,13 +217,13 @@ def _resolve_species_name_to_taxon_key(
                 f"(matchType={match_type if match_type is not None else '?'!r})"
             )
 
-        # NORMALIZE-then-VALIDATE (job-fetcher-id-hazard): GBIF will happily
-        # return a usageKey for a FUZZY near-spelling or a HIGHERRANK parent
-        # taxon. Accepting it would drive the search off the WRONG taxon and
-        # return plausible-but-wrong points -- a hallucinated success. Fail LOUD
-        # with the match GBIF *did* find so the caller can confirm or correct,
-        # naming the accepted forms (an EXACT name match, or pass the numeric
-        # taxonKey directly for a deliberate higher-taxon query).
+        # NORMALIZE-then-VALIDATE: GBIF will happily return a usageKey for a
+        # FUZZY near-spelling or a HIGHERRANK parent taxon. Accepting it would
+        # drive the search off the WRONG taxon and return plausible-but-wrong
+        # points -- a hallucinated success. Fail LOUD with the match GBIF
+        # *did* find so the caller can confirm or correct, naming the
+        # accepted forms (an EXACT name match, or pass the numeric taxonKey
+        # directly for a deliberate higher-taxon query).
         matched_name = (
             payload.get("scientificName")
             or payload.get("canonicalName")
@@ -288,7 +288,7 @@ def _fetch_all_occurrence_pages(
 
     Raises:
         ``GBIFUpstreamError``: network failure or 5xx after the call.
-        ``GBIFInputError``: 4xx (typically caller error — bad taxonKey).
+        ``GBIFInputError``: 4xx (typically caller error -- bad taxonKey).
     """
     west, south, east, north = bbox
 
@@ -367,7 +367,7 @@ def _fetch_all_occurrence_pages(
             if len(all_records) >= max_records:
                 break
             if not results:
-                # Defensive: empty page without endOfRecords — bail out so we
+                # Defensive: empty page without endOfRecords -- bail out so we
                 # don't loop forever on a misbehaving response.
                 break
 
@@ -401,7 +401,7 @@ def _records_to_flatgeobuf_bytes(
     """Convert GBIF occurrence dicts to a FlatGeobuf with the documented schema.
 
     For each record, requires ``decimalLongitude`` and ``decimalLatitude`` (we
-    skip any record missing them — GBIF *should* not return such records given
+    skip any record missing them -- GBIF *should* not return such records given
     ``hasCoordinate=true`` but we are defensive).
 
     Also enforces a geographic-correctness check (codified lesson):
@@ -411,7 +411,7 @@ def _records_to_flatgeobuf_bytes(
 
     Returns FlatGeobuf bytes (empty FlatGeobuf if no records).
     """
-    # Lazy imports — test environments without geopandas/shapely can still
+    # Lazy imports -- test environments without geopandas/shapely can still
     # import the module.
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
@@ -473,7 +473,7 @@ def _records_to_flatgeobuf_bytes(
         )
 
     if not rows:
-        # Empty result — build an empty FlatGeobuf with the right column schema
+        # Empty result -- build an empty FlatGeobuf with the right column schema
         # so downstream readers see a well-formed file rather than a parse error.
         # geopandas needs at least one column to write; we synthesize an empty
         # GeoDataFrame with the schema and write it.
@@ -575,7 +575,7 @@ def fetch_gbif_occurrences(
 
     **When to use:**
     - Agent needs species occurrence points for ecological or biodiversity
-      analysis — e.g. mapping Florida panther sightings over a flood risk layer.
+      analysis -- e.g. mapping Florida panther sightings over a flood risk layer.
     - Workflow requires a broad multi-source occurrence dataset (GBIF aggregates
       museum specimens, citizen science, eDNA, and research datasets globally).
     - Year-range filter needed to study pre/post-disturbance species presence.
@@ -587,7 +587,7 @@ def fetch_gbif_occurrences(
       cannot be filtered to that source cleanly here).
     - Historical species range polygons or SDM outputs (use Maxent or a
       published raster SDM).
-    - Live animal tracking (Movebank/Argos telemetry — different tool).
+    - Live animal tracking (Movebank/Argos telemetry -- different tool).
 
     **Parameters:**
     - ``species_key`` (int or str): GBIF ``taxonKey`` integer (e.g. ``7193927``
@@ -596,7 +596,7 @@ def fetch_gbif_occurrences(
     - ``bbox`` (tuple): ``(west, south, east, north)`` in EPSG:4326. Example:
       ``(-82.5, 25.0, -80.0, 27.0)`` for South Florida.
     - ``year_range`` (tuple or None): ``(start_year, end_year)`` inclusive; valid
-      range 1500–2100. ``None`` returns all years.
+      range 1500-2100. ``None`` returns all years.
     - ``max_records`` (int): cap on returned features; default 5000, hard cap
       100 000.
 

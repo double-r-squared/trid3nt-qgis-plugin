@@ -20,32 +20,29 @@ Non-zero pixels are "in zone". When ``zone_threshold`` is provided, pixels where
 
 Each polygon feature is one zone. Zones are read via ``geopandas`` and, when
 the zone vector's CRS differs from the value raster's CRS, REPROJECTED onto
-the value raster's CRS (``GeoDataFrame.to_crs``) before rasterizing — this
+the value raster's CRS (``GeoDataFrame.to_crs``) before rasterizing -- this
 is the standard, cheap fix for the case where e.g. EPSG:4326 polygons (WDPA
 protected areas, admin boundaries) are used to zone a UTM/projected raster.
 Reprojection is recorded in the result envelope as
 ``zones_reprojected: "<src_crs> -> <dst_crs>"`` (``None`` if not needed). If
 either CRS is missing/invalid so reprojection cannot be attempted at all,
 ``CRSMismatchError`` (``error_code="CRS_MISMATCH"``) is raised naming both
-CRSes rather than silently burning zones in the wrong place (which used to
-produce all-null aggregates with 0 zones matched — see ``CRSMismatchError``
-docstring). Each feature is then rasterized with
+CRSes rather than silently burning zones in the wrong place (see
+``CRSMismatchError`` docstring). Each feature is then rasterized with
 ``rasterio.features.rasterize`` onto a grid matching the value raster, and
 per-polygon stats are computed. A whole-area aggregate (union of all zones)
 is also computed. Zone IDs default to the feature's ``id`` property if
 present, else the sequential feature index.
 
-The raster-zone path (zone = another raster, non-zero/threshold mask) has
-always reprojected the zone raster onto the value raster's grid+CRS via
-``rasterio.warp.reproject`` when they differ, so it was not affected by this
-defect; it now also records ``zones_reprojected`` when the mismatch was
-CRS-driven.
+The raster-zone path (zone = another raster, non-zero/threshold mask)
+reprojects the zone raster onto the value raster's grid+CRS via
+``rasterio.warp.reproject`` when they differ, and also records
+``zones_reprojected`` when the mismatch was CRS-driven.
 
 **No rasterstats dependency:**
 
-We roll our own aggregation with ``rasterio`` + ``numpy``. The venv does not include
-``rasterstats`` (not in pyproject.toml; ``rasterstats`` is an acceptable addition if
-the orchestrator wants cleaner code — see Open Questions in report).
+We roll our own aggregation with ``rasterio`` + ``numpy`` (``rasterstats`` is
+not a dependency).
 
 **Cache:** result dict serialized as JSON in the cache bucket at
     ``cache/dynamic-1h/zonal_statistics/<key>.json``
@@ -60,7 +57,7 @@ the orchestrator wants cleaner code — see Open Questions in report).
   ``value_raster``, ``zone_input``, ``computed_at`` ISO timestamp.
 - **Honesty floor (adversarial-panel finding): preserves.** A CRS mismatch
   between the zone input and the value raster either resolves via
-  reprojection or raises a typed ``CRSMismatchError`` — it never silently
+  reprojection or raises a typed ``CRSMismatchError`` -- it never silently
   returns all-null aggregates.
 """
 
@@ -105,16 +102,16 @@ class ZonalStatisticsError(RuntimeError):
     pipeline strip (NFR-R-1 typed-error requirement).
 
     Codes:
-    - ``RASTER_OPEN_FAILED`` — value or zone raster could not be opened.
-    - ``VECTOR_OPEN_FAILED`` — zone vector file could not be opened.
-    - ``CRS_MISMATCH`` — zone CRS differs from the value raster's CRS and
+    - ``RASTER_OPEN_FAILED`` -- value or zone raster could not be opened.
+    - ``VECTOR_OPEN_FAILED`` -- zone vector file could not be opened.
+    - ``CRS_MISMATCH`` -- zone CRS differs from the value raster's CRS and
       reprojection could not be performed (see ``CRSMismatchError``). Raster
       zones are auto-reprojected onto the value raster's grid+CRS
       (``rasterio.warp.reproject``); vector zones are auto-reprojected via
       ``geopandas.GeoDataFrame.to_crs``. This code is only raised when
       reprojection is impossible (missing/invalid CRS on either side).
-    - ``DOWNLOAD_FAILED`` — GCS download for a URI failed.
-    - ``NO_VALID_PIXELS`` — the masked zone contains no valid pixels to aggregate.
+    - ``DOWNLOAD_FAILED`` -- GCS download for a URI failed.
+    - ``NO_VALID_PIXELS`` -- the masked zone contains no valid pixels to aggregate.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -124,14 +121,9 @@ class ZonalStatisticsError(RuntimeError):
 
 class CRSMismatchError(ZonalStatisticsError):
     """Raised when the zone input's CRS cannot be reconciled with the value
-    raster's CRS (job-adversarial-panel: honesty-floor fix).
+    raster's CRS.
 
-    Prior behavior silently burned vector zones onto the value raster's pixel
-    grid using the zones' RAW (un-reprojected) coordinates whenever the
-    zones' CRS differed from the raster's CRS (e.g. EPSG:4326 WDPA polygons
-    over a UTM flood-depth COG) — this produced all-null aggregates (0 zones
-    matched) instead of either working or failing honestly. The fix
-    reprojects zones to the value raster's CRS by default (cheap for
+    Zones are reprojected to the value raster's CRS by default (cheap for
     vectors); this error is raised ONLY when reprojection cannot be
     attempted at all because a CRS is missing or invalid on one/both sides.
     Always constructed with ``error_code="CRS_MISMATCH"``.
@@ -222,7 +214,7 @@ def _detect_zone_type(uri: str) -> str:
 
     Detection order:
     1. Extension lookup (fast, deterministic for known formats).
-    2. Try rasterio.open() — if it succeeds, raster.
+    2. Try rasterio.open() -- if it succeeds, raster.
     3. Else: vector.
     """
     ext = os.path.splitext(uri.split("?")[0].rstrip("/"))[-1].lower()
@@ -251,7 +243,7 @@ def _download_uri_bytes(uri: str, storage_client: object | None = None) -> bytes
     ``storage_client`` is retained for backward-compatible call signatures
     but is ignored.
     """
-    del storage_client  # GCP decommissioned — S3/local only.
+    del storage_client  # GCP decommissioned -- S3/local only.
     # s3:// staging via the shared boto3 reader.
     if uri.startswith("s3://"):
         from trid3nt_server.agent.tools.cache import read_object_bytes_s3
@@ -453,9 +445,7 @@ def _zonal_stats_vector_zone(
         val_valid = ~np.isnan(val_data)
 
     # Read vector features, reprojecting them onto the value raster's CRS if
-    # they differ (adversarial-panel finding: burning zones in a mismatched
-    # CRS onto the value grid used to silently produce all-null aggregates
-    # instead of working or failing honestly — see CRSMismatchError).
+    # they differ (see CRSMismatchError for the CRS-mismatch contract).
     features, zones_reprojected = _read_vector_zones_reprojected(zone_path, val_crs)
 
     by_zone: dict[str, dict[str, float | int | None]] = {}
@@ -517,13 +507,8 @@ def _read_vector_zones_reprojected(
 ) -> tuple[list[tuple[str | int, Any]], str | None]:
     """Read zone vector features via geopandas, reprojected to ``val_crs``.
 
-    This is the fix for the silent-null-aggregates defect: zones used to be
-    rasterized using their RAW coordinates regardless of whether the zone
-    vector's CRS matched the value raster's CRS, so e.g. EPSG:4326 WDPA
-    polygons burned onto a UTM flood-depth COG's grid landed nowhere near
-    the actual data and produced all-null aggregates with no error. Standard,
-    cheap fix: reproject the vector zones to the raster's CRS before burning
-    (``geopandas.GeoDataFrame.to_crs``) — consistent with the reprojection
+    Reprojects the vector zones to the raster's CRS before burning
+    (``geopandas.GeoDataFrame.to_crs``), consistent with the reprojection
     pattern already used by ``clip_raster_to_polygon`` and
     ``compute_flood_depth_damage`` elsewhere in this tool package.
 
@@ -535,8 +520,7 @@ def _read_vector_zones_reprojected(
     needed, i.e. the zones were already in the value raster's CRS).
 
     The ``id`` property of each feature is used as the zone ID when present
-    and non-null; otherwise the sequential (0-based) feature index is used —
-    same convention as the prior hand-rolled reader.
+    and non-null; otherwise the sequential (0-based) feature index is used.
 
     Raises:
         ZonalStatisticsError: (``VECTOR_OPEN_FAILED``) the zone vector could
@@ -615,7 +599,7 @@ def _derive_cache_key(
     """Derive a stable 32-hex-char SHA-256 cache key for this call.
 
     Independent of the TTL shim's ``compute_cache_key`` because this tool
-    caches a computed result (dict) rather than a downloaded artifact —
+    caches a computed result (dict) rather than a downloaded artifact --
     the key encodes ALL parameters that affect the output.
     """
     payload = json.dumps(
@@ -810,7 +794,7 @@ def _materialize_uri(
             _f.write(read_object_bytes_s3(uri))
             return _f.name
     if not uri.startswith("gs://"):
-        # Local path — use directly (test / dev convenience).
+        # Local path -- use directly (test / dev convenience).
         return uri
 
     # Determine a safe filename from the URI's last path component.

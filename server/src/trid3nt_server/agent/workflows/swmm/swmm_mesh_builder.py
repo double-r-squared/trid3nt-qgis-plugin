@@ -1,5 +1,5 @@
 """DEM -> quasi-2D node-link SWMM mesh builder (P2, PySWMM urban-flood
-engine, Path A — confirmed by NATE's PCSWMM screenshot: animated depth around
+engine, Path A -- confirmed by NATE's PCSWMM screenshot: animated depth around
 BUILDING OBSTRUCTIONS + a SOUND BARRIER with RED walls / GREEN flap gates).
 
 This module turns an AOI DEM (+ building footprints + tagged barrier lines) into
@@ -12,7 +12,7 @@ args / output layer shapes are the P1 ``swmm_contracts`` (``SWMMRunArgs`` /
 ``SWMMDepthLayerURI``).
 
 Quasi-2D representation (PROVEN by the P0 GO/NO-GO spike,
-``services/workers/swmm/spike_quasi2d.py`` — every swmm-api signature here is
+``services/workers/swmm/spike_quasi2d.py`` -- every swmm-api signature here is
 reused from it):
 
 - One STORAGE node per ACTIVE cell. Invert = the resampled DEM elevation; a
@@ -27,9 +27,9 @@ reused from it):
   active boundary cell. P0 carry-forward: a SWMM outfall takes EXACTLY ONE inlet
   link (ERROR 141/145 otherwise), so we never make a cell itself the outfall.
 
-Building obstruction (``building_representation`` PARAM — never hardcoded):
+Building obstruction (``building_representation`` PARAM -- never hardcoded):
 - ``"drop"``      (DEFAULT, matches the screenshot): building cells get NO node
-  and NO link — a hole in the mesh; water routes AROUND the obstruction.
+  and NO link -- a hole in the mesh; water routes AROUND the obstruction.
 - ``"raise"``     building cells stay but their invert is lifted ``+raise_m`` so
   they dam flow (a solid pad).
 - ``"roughness"`` building cells stay but their incident overland conduits get a
@@ -39,7 +39,7 @@ Barriers (tagged-LineString FeatureCollection snapped to cell-pair edges):
 - RED ``wall``      = OMIT the overland conduit between the two cells (a hard
   dam). P0-proven: omitting the conduit ponds water upstream.
 - GREEN ``flap_gate`` = an ORIFICE with ``has_flap_gate=True`` (the ONLY element
-  that takes a flap-gate kwarg in swmm-api 0.4.73 — a Conduit does NOT). The
+  that takes a flap-gate kwarg in swmm-api 0.4.73 -- a Conduit does NOT). The
   orifice is oriented from the PROTECTED side to the wet side so SWMM's flap
   blocks reverse flow into the protected area. P0-proven one-way: a flap orifice
   passed 0.000 CMS on the reverse gradient vs 18.191 for a plain conduit.
@@ -85,7 +85,7 @@ from typing import Any
 
 from trid3nt_server.agent.workflows.swmm.swmm_hyetograph import HyetographResult, build_nested_hyetograph
 
-try:  # numpy/rasterio are agent-venv deps (SFINCS chain) — but stay defensive.
+try:  # numpy/rasterio are agent-venv deps (SFINCS chain) -- but stay defensive.
     import numpy as np
 except Exception:  # pragma: no cover - numpy is a hard dep in practice
     np = None  # type: ignore[assignment]
@@ -124,9 +124,9 @@ DEFAULT_OVERLAND_N: float = 0.03
 
 # A tall RECT_OPEN overland conduit so it never surcharges shut (spike value).
 _COND_HEIGHT_M: float = 3.0
-# Storage max depth (m) — generous so a cell never caps and loses mass (spike).
+# Storage max depth (m) -- generous so a cell never caps and loses mass (spike).
 _DEPTH_MAX_M: float = 5.0
-# NLCD "Developed, High Intensity" — used to bump roughness for the
+# NLCD "Developed, High Intensity" -- used to bump roughness for the
 # ``building_representation="roughness"`` mode when no class raster is present.
 _BUILDING_ROUGHNESS_N: float = 0.20
 
@@ -140,16 +140,16 @@ class SWMMMeshError(RuntimeError):
     ``error_code`` is the A.6 open-set code surfaced to the WS error frame and
     threaded into the final envelope. Codes used by this module:
 
-    - ``SWMM_MASS_BALANCE_EXCEEDED`` — the **headline** honesty gate: the run's
+    - ``SWMM_MASS_BALANCE_EXCEEDED`` -- the **headline** honesty gate: the run's
       Flow Routing Continuity error exceeded ``mass_balance_tolerance_pct``;
       ``details`` carries ``{continuity_error_pct, tolerance_pct, rpt_path}``.
-    - ``SWMM_EMPTY_MESH`` — the DEM produced zero active cells (all nodata, or
-      every cell dropped as a building) — nothing to solve.
-    - ``SWMM_DEM_UNREADABLE`` — the DEM bytes could not be read.
-    - ``SWMM_DEPENDENCY_MISSING`` — pyswmm / swmm-api not importable in the
+    - ``SWMM_EMPTY_MESH`` -- the DEM produced zero active cells (all nodata, or
+      every cell dropped as a building) -- nothing to solve.
+    - ``SWMM_DEM_UNREADABLE`` -- the DEM bytes could not be read.
+    - ``SWMM_DEPENDENCY_MISSING`` -- pyswmm / swmm-api not importable in the
       runtime (lazy import failed); surfaces as an honest typed error.
-    - ``SWMM_RUN_FAILED`` — pyswmm raised during the headless solve.
-    - ``SWMM_CONTINUITY_UNREADABLE`` — the .rpt produced no Flow Routing
+    - ``SWMM_RUN_FAILED`` -- pyswmm raised during the headless solve.
+    - ``SWMM_CONTINUITY_UNREADABLE`` -- the .rpt produced no Flow Routing
       Continuity error line (the run did not complete as expected).
     """
 
@@ -166,28 +166,18 @@ class SWMMMeshError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
-# Adaptive-mesh budget — lifted from sfincs_builder + RE-FIT for SWMM.
+# Adaptive-mesh budget -- lifted from sfincs_builder, re-fit for SWMM.
 #
-# RE-FIT (BREAK D): the model is now anchored to the FIRST LIVE urban run, NOT
-# the synthetic P0 spike. The spike (400 ACTIVE cells -> 19.022 s) turned out to
-# be ~16x optimistic relative to a real urban DEM: the live run logged 1190
-# ACTIVE cells taking 983 s (16.4 min) single-thread, where the old fit
-# (A=2.604e-2, p=1.10) predicted only ~62.9 s. So the autoscaler UNDER-coarsened
-# (it thought fine resolution fit the budget when it did not). We re-fit so the
-# model REPRODUCES the live anchor and slightly OVER-estimates everywhere else.
+# The model is anchored to a live urban run (1190 ACTIVE cells -> 983 s
+# single-thread), not a synthetic spike. We keep the near-linear exponent
+# p=1.10 (p slightly > 1 to stay conservative against super-linear
+# trial/Jacobian growth in DYNWAVE as the network widens - a HIGHER p
+# coarsens MORE, the safe direction) and pin A from the live anchor.
 #
-# DYNWAVE overland cost scales ~ cells * steps; with a fixed dt+duration the
-# step count is fixed, so wall time is ~LINEAR in the active-cell count at fixed
-# routing-step. We KEEP the near-linear exponent p=1.10 (p slightly > 1 to stay
-# conservative against super-linear trial/Jacobian growth in DYNWAVE as the
-# network widens - a HIGHER p coarsens MORE, the safe direction) and re-pin A
-# from the LIVE anchor (1190 cells -> 983 s). This is the env-overridable retune
-# the original comments anticipated as real (cells, time) telemetry landed.
-#
-# Every coefficient is an env-overridable module constant so the cap re-tunes
-# from logged solve-telemetry as MORE real (cells, time) records land. We NEVER
-# produce a degenerate/empty grid — resolution is clamped to the coarsest rung
-# and the cap floored.
+# Every coefficient is an env-overridable module constant so the cap
+# re-tunes from logged solve-telemetry as MORE real (cells, time) records
+# land. We NEVER produce a degenerate/empty grid -- resolution is clamped
+# to the coarsest rung and the cap floored.
 # --------------------------------------------------------------------------- #
 def _env_float(name: str, default: float) -> float:
     raw = os.environ.get(name)
@@ -290,7 +280,7 @@ def compute_swmm_cell_cap() -> int:
 
 @dataclass(frozen=True)
 class SWMMAutoscaleResult:
-    """Outcome of ``autoscale_swmm_resolution`` — the chosen resolution + why."""
+    """Outcome of ``autoscale_swmm_resolution`` -- the chosen resolution + why."""
 
     resolution_m: float
     estimated_active_cells: int
@@ -393,7 +383,7 @@ def suggest_swmm_resolution(
     cells with the EXACT same ``_read_and_resample_dem`` + ``np.isfinite(...).sum()``
     that :func:`build_swmm_mesh` uses for its inline autoscale prelude, then runs
     :func:`autoscale_swmm_resolution` on that count. This is the ONLY thing it
-    does — no deck authoring, no building rasterization, no run. Reusing the same
+    does -- no deck authoring, no building rasterization, no run. Reusing the same
     read+count guarantees the gate card and the real build cannot diverge: the
     suggested resolution / active-cell estimate the user SEES is what the build
     would compute given the same DEM + requested resolution.
@@ -406,7 +396,7 @@ def suggest_swmm_resolution(
     Args:
         dem_path: an on-disk DEM (GeoTIFF) path the mesh builder reads (the
             composer localizes the cache URI to a local path before calling).
-        requested_resolution_m: the user-requested overland cell size, m (> 0) —
+        requested_resolution_m: the user-requested overland cell size, m (> 0) --
             the base resolution the ladder snaps UP from.
 
     Returns:
@@ -466,23 +456,17 @@ def clamp_swmm_resolution_to_real_cap(
 ) -> SWMMRealCapClampResult:
     """Clamp a user-chosen SWMM resolution against the REAL build cell count.
 
-    The ``narrow_scope`` override gate previously inverted the AREA model
-    ``cells = base_cells * (base/res)**2`` to find the finest resolution that
-    "fits" the cap, then built with ``enable_autoscale=False`` (no downstream
-    cap re-check). But :func:`build_swmm_mesh` re-reads the DEM at the clamped
-    resolution and counts active cells via the REAL ``ceil(extent/res)`` grid
-    (the same ``_read_and_resample_dem`` + ``np.isfinite().sum()`` the build
-    uses), which OVERSHOOTS the area model (~6% for a square fully-active AOI,
-    worse for sparse AOIs) -- so an over-fine override could still solve OVER cap.
-
-    This helper closes that breach by clamping against the AUTHORITATIVE count:
-    it probes the real grid at the SWMM resolution ladder (the same rungs the
-    proceed-path autoscaler walks), ASCENDING from the chosen resolution, and
-    returns the FINEST rung whose REAL active-cell count is at or under the cap.
-    A coarser-than-cap choice is honoured unchanged (its real count already
-    fits). The walk never degenerates: it stops at the coarsest rung even if the
-    cap is still exceeded (a huge AOI solves coarse but non-empty), mirroring
-    :func:`autoscale_swmm_resolution`.
+    Clamps against the AUTHORITATIVE count rather than the AREA model
+    (``cells = base_cells * (base/res)**2``), which can overshoot the real
+    ``ceil(extent/res)`` grid count by ~6%+ (worse for sparse AOIs) -- an
+    over-fine override on the area model alone could still solve OVER cap.
+    This probes the real grid at the SWMM resolution ladder (the same rungs
+    the proceed-path autoscaler walks), ASCENDING from the chosen resolution,
+    and returns the FINEST rung whose REAL active-cell count is at or under
+    the cap. A coarser-than-cap choice is honoured unchanged (its real count
+    already fits). The walk never degenerates: it stops at the coarsest rung
+    even if the cap is still exceeded (a huge AOI solves coarse but
+    non-empty), mirroring :func:`autoscale_swmm_resolution`.
 
     Probing reads the DEM at candidate resolutions via the SAME
     :func:`_read_and_resample_dem` the build uses, so the returned
@@ -589,7 +573,7 @@ def _utm_crs_for_lonlat(lon: float, lat: float):
 def _read_and_resample_dem(dem_path: str, target_res_m: float) -> _Grid:
     """Read the DEM, reproject to a metres CRS, resample to ``target_res_m``.
 
-    Uses ``Resampling.average`` (mean elevation per coarse cell — the right
+    Uses ``Resampling.average`` (mean elevation per coarse cell -- the right
     aggregation for an overland invert). Returns a ``_Grid`` whose ``elev`` has
     ``nan`` at nodata. Raises ``SWMMMeshError("SWMM_DEM_UNREADABLE")`` on read
     failure.
@@ -775,7 +759,7 @@ def _snap_barriers_to_edges(
     through (Bresenham-style on the grid) and, for every 4-adjacent transition
     between two ACTIVE cells, emit a ``_BarrierEdge``. The PROTECTED side is read
     from the feature's ``properties.protected_side`` ("left"|"right" relative to
-    the segment direction) — defaulting to the higher-elevation cell as
+    the segment direction) -- defaulting to the higher-elevation cell as
     "protected" (water comes from the lower/wet side) when unspecified.
     """
     out: list[_BarrierEdge] = []
@@ -943,7 +927,7 @@ def _add_infiltration_obj(inp, sections, scname: str, method: str, *, curve_numb
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class BuildResult:
-    """Result of ``build_swmm_mesh`` — the deck path + mesh provenance."""
+    """Result of ``build_swmm_mesh`` -- the deck path + mesh provenance."""
 
     inp_path: str
     n_active_cells: int
@@ -963,7 +947,7 @@ class BuildResult:
     # Water-quality provenance (sprint-WQ): (name, unit) per authored pollutant,
     # in [POLLUTANTS] / out.pollutants ORDER, so the postprocess maps each
     # POLLUT_CONC index -> name/unit WITHOUT re-parsing the deck. Empty when the
-    # run authored no WQ sections (hydraulics-only) — the byte-identical default.
+    # run authored no WQ sections (hydraulics-only) -- the byte-identical default.
     pollutants: list[tuple[str, str]] = field(default_factory=list)
 
 
@@ -1003,7 +987,7 @@ def build_swmm_mesh(
 
     Returns a :class:`BuildResult`. Raises :class:`SWMMMeshError` with a typed
     code on any structural failure (unreadable DEM, empty mesh, missing dep).
-    The deck is NOT run here — call :func:`run_swmm_deck` to solve it and apply
+    The deck is NOT run here -- call :func:`run_swmm_deck` to solve it and apply
     the mass-balance honesty gate.
 
     The mesh follows the P0 spike exactly: one STORAGE node per active cell,
@@ -1177,7 +1161,7 @@ def build_swmm_mesh(
 
     # WQ antecedent dry-buildup lever: DRY_DAYS lets buildup accumulate over N
     # antecedent dry days before the storm. Only overridden when WQ is active AND
-    # a non-zero value is requested — an unset/0 WQ run keeps the historical 0
+    # a non-zero value is requested -- an unset/0 WQ run keeps the historical 0
     # (so the OPTIONS block stays byte-identical on the hydraulics-only path).
     if wq_specs and int(dry_buildup_days) > 0:
         inp[OPTIONS]["DRY_DAYS"] = int(dry_buildup_days)
@@ -1438,7 +1422,7 @@ def _lowest_active_cell(active, cell_elev):
 # --------------------------------------------------------------------------- #
 #: The single uniform land use for v1. We have NO per-cell land-use raster, so
 #: one "urban" class at 100% coverage is the honest demo minimum (never fake
-#: sub-block residential/commercial precision — the NLCD split is the deferred
+#: sub-block residential/commercial precision -- the NLCD split is the deferred
 #: upgrade). Kept as a constant so the Coverage loop + [LANDUSES] agree.
 _WQ_LAND_USE: str = "urban"
 
@@ -1501,7 +1485,7 @@ def _author_wq_sections(
 ) -> list[tuple[str, str]]:
     """Author [POLLUTANTS]/[LANDUSES]/[BUILDUP]/[WASHOFF] onto the deck ONCE.
 
-    Returns the ``(name, unit)`` list in authored ([POLLUTANTS]) ORDER — the SAME
+    Returns the ``(name, unit)`` list in authored ([POLLUTANTS]) ORDER -- the SAME
     order SWMM's ``out.pollutants`` reports, so the postprocess maps each
     POLLUT_CONC index -> name/unit without re-parsing the deck. Semantics PINNED
     by the Phase-1 in-image smoke:
@@ -1615,7 +1599,7 @@ def read_quality_routing_continuity(
 
     SWMM's ``.rpt`` Quality Routing Continuity block carries ONE column per
     pollutant, in ``[POLLUTANTS]`` order (the header row shows the per-column
-    UNITS — ``kg`` / ``LogN`` — not the names, so the mapping is POSITIONAL:
+    UNITS -- ``kg`` / ``LogN`` -- not the names, so the mapping is POSITIONAL:
     ``pollutant_index`` is the 0-based position in ``BuildResult.pollutants``).
     The block's ``Continuity Error (%) .....  <err_p0>  <err_p1> ...`` line has
     one signed percentage per pollutant; this returns the value at
@@ -1671,7 +1655,7 @@ def run_swmm_deck(
 
     Tracks the PEAK-volume depth grid (the meaningful wet state) and returns a
     :class:`RunResult`. Raises :class:`SWMMMeshError("SWMM_MASS_BALANCE_EXCEEDED")`
-    if the Flow Routing Continuity error exceeds the tolerance — the honesty gate
+    if the Flow Routing Continuity error exceeds the tolerance -- the honesty gate
     that turns a silently-wrong layer into a typed failure.
     """
     import time

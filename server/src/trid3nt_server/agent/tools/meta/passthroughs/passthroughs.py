@@ -1,9 +1,8 @@
 """Registry pass-through atomic tool (M4 substrate).
 
 This module registers ``qgis_process``: a pass-through to the PyQGIS worker
-invocation path established by (Cloud Run Jobs submission, later the
- AWS docker stage-then-mount path). Solver dispatch is
-uncacheable-by-construction per FR-DC-6 — results land under
+invocation path (AWS docker stage-then-mount). Solver dispatch is
+uncacheable-by-construction per FR-DC-6 -- results land under
 ``gs://<bucket>/runs/<run_id>/`` per FR-CE-4, not under ``cache/``.
 
 The tool declares:
@@ -13,11 +12,6 @@ The tool declares:
     source_class = None  # uncacheable; no bucket prefix
 
 per FR-DC-6's "Solver dispatchers and their result fetches" enumeration entry.
-
-(A ``mongo_query`` pass-through formerly lived here for the MongoDB Atlas/MCP
-path. Atlas was torn down; the tool was an unbound stub that only ever raised
-"MCP client not bound", so it was removed to stop the model from picking a
-dead tool.)
 """
 
 from __future__ import annotations
@@ -268,7 +262,7 @@ def qgis_process(
     ``gs://<bucket>/runs/<run_id>/`` per FR-CE-4.
 
     Do NOT use this for: solver runs that have a dedicated workflow
-    (``run_sfincs_solver``, ``run_pelicun_impact``, etc. — those go through
+    (``run_sfincs_solver``, ``run_pelicun_impact``, etc. -- those go through
     their own dispatchers); render-only requests (use the layer-style /
     map-command path).
 

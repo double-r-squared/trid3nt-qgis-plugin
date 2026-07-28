@@ -116,14 +116,13 @@ def _fetch_bathy_for_swan(
     REQUIRES REAL BATHYMETRY: a coastal wave model run on a LAND-ONLY DEM (all
     positive NAVD88 elevations) renders an ALL-DRY SWAN bottom grid (every cell
     above the still-water level -> depth < DEPMIN -> inactive), so SWAN "prepares
-    computation", runs zero sweeps, and writes no swan_out.mat -- the live
-    2026-06-23 Mexico Beach 33 ms no-op. ``fetch_topobathy`` degrades to a
-    land-only 3DEP fallback and signals it via ``bathymetry_present=False``; the
-    older code only checked ``.uri`` and so SILENTLY fed that all-dry DEM to the
-    worker. We now REJECT a bathymetry-absent result up front with an honest typed
-    error rather than launch a guaranteed no-op solve. The old direct ``fetch_dem``
-    (3DEP, land-only) fallback is REMOVED: it can never carry below-sea-level
-    depths, so it would always produce an all-dry deck for a coastal AOI.
+    computation", runs zero sweeps, and writes no swan_out.mat. ``fetch_topobathy``
+    degrades to a land-only 3DEP fallback and signals it via
+    ``bathymetry_present=False``; we REJECT a bathymetry-absent result up front
+    with an honest typed error rather than launch a guaranteed no-op solve. A
+    direct ``fetch_dem`` (3DEP, land-only) fallback is intentionally NOT used
+    here: it can never carry below-sea-level depths, so it would always produce
+    an all-dry deck for a coastal AOI.
 
     Returns the DEM cache/runs ``s3://`` URI (staged BY REFERENCE -- the worker
     downloads it directly). Raises ``SwanComposerError`` when the fetch fails OR

@@ -6,8 +6,8 @@ WITHOUT touching the multi-turn loop, the 57-tool catalog, the envelope
 emission, or the client. The seam is deliberately narrow:
 
   * This module accepts the SAME inputs ``adapter.stream_events_with_contents``
-    accepts — a ``list[genai_types.Content]`` history + a list of
-    ``genai_types.FunctionDeclaration`` tool specs + a system prompt — and
+    accepts -- a ``list[genai_types.Content]`` history + a list of
+    ``genai_types.FunctionDeclaration`` tool specs + a system prompt -- and
     converts them to the Bedrock Converse shapes at the boundary.
   * It yields the SAME ``StreamEvent`` union (``TextDeltaEvent`` /
     ``FunctionCallEvent`` / ``UsageMetadataEvent``) the Gemini path yields, so
@@ -16,9 +16,9 @@ emission, or the client. The seam is deliberately narrow:
 
 Provider selection is ``MODEL_PROVIDER`` (``vertex`` default; ``bedrock`` to
 engage this path). ``adapter.stream_events_with_contents`` branches here when
-the flag is ``bedrock`` — see that function. The Gemini ``cached_content``
+the flag is ``bedrock`` -- see that function. The Gemini ``cached_content``
 fast-path does not apply (Bedrock has its own ``cachePoint`` prompt-caching;
-deferred to a follow-up) — ``cached_content_name`` is ignored here.
+deferred to a follow-up) -- ``cached_content_name`` is ignored here.
 
 Keeping the genai types as the internal lingua franca means the migration is
 reversible and the Gemini path stays bit-for-bit intact while Bedrock is
@@ -56,11 +56,11 @@ logger = logging.getLogger("trid3nt_server.agent.adapters.bedrock_adapter")
 BEDROCK_DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-6"
 
 # ---------------------------------------------------------------------------
-# Model registry — single source of truth for selectable Bedrock models.
+# Model registry -- single source of truth for selectable Bedrock models.
 #
 # ``supportsPromptCache=True`` means cachePoint markers are safe to include
 # in the Converse request.  Any model that does NOT support the cachePoint
-# extension (e.g. DeepSeek-R1) MUST be listed here with False — sending
+# extension (e.g. DeepSeek-R1) MUST be listed here with False -- sending
 # cachePoint to an unsupporting model causes a Bedrock validation error.
 # ---------------------------------------------------------------------------
 
@@ -68,16 +68,10 @@ BEDROCK_DEFAULT_MODEL = "us.anthropic.claude-sonnet-4-6"
 #: needs at dispatch time (id + cache capability); the richer set (label,
 #: accentColor, provider) lives on the web side in ``modelRegistry.ts``.
 #:
-#: ONLY models PROVEN (probed live 2026-06-17 in account 226996537797/us-west-2)
-#: to be invokable AND to support the Converse ``toolConfig`` the agent loop
-#: needs are listed.  MUST stay in sync with web ``modelRegistry.ts``.
-#:   - ``us.anthropic.claude-haiku-4-5-20251001-v1:0``: valid id but ACCESS NOT
-#:     ENABLED; add here + in the web registry once Bedrock model access is
-#:     granted (it is the strongest cheap+agentic Anthropic option).
-#:   - ``us.deepseek.r1-v1:0``: REJECTS toolConfig on Bedrock -> cannot drive
-#:     the tool loop; intentionally OMITTED (the malformed short-form
-#:     ``us.anthropic.claude-haiku-4-5`` that previously shipped here was the
-#:     root cause of the "provided model identifier is invalid" error).
+#: Only models PROVEN invokable AND supporting the Converse ``toolConfig``
+#: the agent loop needs are listed; MUST stay in sync with web
+#: ``modelRegistry.ts``. ``us.deepseek.r1-v1:0`` REJECTS toolConfig on
+#: Bedrock (cannot drive the tool loop) and is intentionally OMITTED.
 SELECTABLE_MODELS: list[dict[str, Any]] = [
     {
         "id": "us.anthropic.claude-sonnet-4-6",
@@ -93,7 +87,7 @@ SELECTABLE_MODELS: list[dict[str, Any]] = [
         "supportsPromptCache": True,
     },
     {
-        # Nova/DeepSeek reject cachePoint — supportsPromptCache False; the
+        # Nova/DeepSeek reject cachePoint -- supportsPromptCache False; the
         # Anthropic-only model_supports_cache() gate enforces this server-side.
         "id": "us.amazon.nova-pro-v1:0",
         "label": "Amazon Nova Pro",
@@ -129,7 +123,7 @@ def model_supports_cache(model_id: str) -> bool:
 
     On Bedrock the ``cachePoint`` block is an ANTHROPIC-family feature. Amazon
     Nova and DeepSeek-R1 REJECT a request that carries cachePoint in the system
-    block or toolConfig — proven live by NATE's "extraneous key [cachePoint] is
+    block or toolConfig -- proven live by NATE's "extraneous key [cachePoint] is
     not permitted, #/toolConfig/tools/93" error when he selected Nova Pro. So
     this is an ALLOWLIST (Anthropic only), NOT the earlier "unknown -> assume
     supported" default that wrongly enabled cachePoint for Nova and broke every
@@ -153,7 +147,7 @@ def resolve_selected_model(requested: str | None) -> tuple[str | None, str | Non
         invalid id reach ConverseStream (which throws a raw ValidationException).
 
     ``requested is None`` is the normal "no explicit choice" case and returns
-    ``(None, None)`` — silent default, no notice.
+    ``(None, None)`` -- silent default, no notice.
 
     MODEL_PROVIDER=openai (the TRID3NT local build -- F2, live-feedback
     2026-07-08): the selectable set is whatever the local runtime serves (the
@@ -163,7 +157,7 @@ def resolve_selected_model(requested: str | None) -> tuple[str | None, str | Non
     ``TRID3NT_OPENAI_MODEL``), and a model the runtime does not have raises the
     runtime's own honest error rather than a fabricated success. The legacy
     ``"local-default"`` placeholder id (the pre-F2 web registry entry, possibly
-    persisted in localStorage) maps to ``None`` — "use the server default".
+    persisted in localStorage) maps to ``None`` -- "use the server default".
     The cloud (bedrock) validation path below is byte-identical.
     """
     if requested is None:
@@ -191,8 +185,8 @@ def model_provider() -> str:
     """Resolve the active model provider (``bedrock`` default).
 
     GCP/Vertex is decommissioned: the agent runs on Amazon Bedrock. The
-    ``MODEL_PROVIDER`` seam is retained — only the default flips from ``vertex``
-    to ``bedrock`` — so an explicit override is still honored. Read at call time
+    ``MODEL_PROVIDER`` seam is retained -- only the default flips from ``vertex``
+    to ``bedrock`` -- so an explicit override is still honored. Read at call time
     so an ECS / systemd env injection takes effect without re-import.
     """
     return (os.environ.get("MODEL_PROVIDER") or "bedrock").strip().lower()
@@ -206,7 +200,7 @@ def _prompt_cache_enabled() -> bool:
     """Bedrock prompt caching (``cachePoint``) ON by default; env off-switch.
 
     The Gemini->Bedrock swap DEFERRED prompt caching, so every turn
-    re-sent the full static system prompt + 94-tool catalog UNCACHED — the #1
+    re-sent the full static system prompt + 94-tool catalog UNCACHED -- the #1
     Bedrock cost driver (the Gemini path had cachedContent ~90% discount). We
     restore it with ``cachePoint`` markers. Gated by ``BEDROCK_PROMPT_CACHE`` so
     ops can disable without a redeploy if a model ever rejects cachePoint blocks.
@@ -223,7 +217,7 @@ def _build_converse_kwargs(
     system_prompt: str | None,
     model: str | None,
 ) -> dict[str, Any]:
-    """Build the boto3 ``converse_stream`` kwargs (pure — unit-testable).
+    """Build the boto3 ``converse_stream`` kwargs (pure -- unit-testable).
 
     Inserts Bedrock ``cachePoint`` markers (when enabled AND supported by the
     model) at the END of the system block AND the tool list.  Caching is
@@ -235,11 +229,11 @@ def _build_converse_kwargs(
 
     cachePoint GATING (prod-critical): cachePoint is only safe for models that
     support it.  ``DeepSeek-R1`` (``us.deepseek.r1-v1:0``) does NOT support
-    cachePoint — Bedrock returns a validation error if cachePoint blocks are
+    cachePoint -- Bedrock returns a validation error if cachePoint blocks are
     included in a request to that model.  The gate is a two-condition AND:
 
-        ``_prompt_cache_enabled()``    — global env off-switch (ops safety valve)
-        ``model_supports_cache(id)``   — per-model capability check
+        ``_prompt_cache_enabled()``    -- global env off-switch (ops safety valve)
+        ``model_supports_cache(id)``   -- per-model capability check
 
     Both must be True for any cachePoint block to be added.
     """
@@ -523,7 +517,7 @@ def tool_declarations_to_bedrock_tools(
 
 
 def _coalesce(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Merge consecutive same-role messages — Bedrock rejects two assistant (or
+    """Merge consecutive same-role messages -- Bedrock rejects two assistant (or
     two user) messages in a row, but the codebase emits one Content per part
     (text turn + function_call turn are both ``model``)."""
     merged: list[dict[str, Any]] = []
@@ -607,7 +601,7 @@ def contents_to_bedrock_messages(
 # --------------------------------------------------------------------------- #
 #
 # The tags we suppress are ``<thinking>`` / ``</thinking>`` (case-insensitive,
-# whitespace-tolerant — see ``_ThinkingStripper._match_tag``).  The amount of
+# whitespace-tolerant -- see ``_ThinkingStripper._match_tag``).  The amount of
 # trailing text held back across a delta boundary is NOT a fixed length: the
 # matcher recognises a partial tag from any prefix and holds exactly that
 # prefix, so an arbitrarily-padded tag (``< thinking >``) is still buffered
@@ -622,27 +616,27 @@ class _ThinkingStripper:
     ``delta['text']`` and would otherwise stream straight to chat as visible
     narration.  Claude, by contrast, emits reasoning in a SEPARATE
     ``reasoningContent`` block (dropped explicitly in the producer), so this
-    stripper is a no-op for Claude — but it is robust per-model, not a Nova
+    stripper is a no-op for Claude -- but it is robust per-model, not a Nova
     special-case.
 
     The tags arrive SPLIT across deltas (a per-delta ``re.sub`` would fail to
     match a tag straddling a chunk boundary), so this maintains state across
     ``feed`` calls:
 
-      * ``_in_think`` — currently inside a ``<thinking>`` span (suppress).
-      * ``_buf`` — a small TAIL of trailing text we have not yet emitted
+      * ``_in_think`` -- currently inside a ``<thinking>`` span (suppress).
+      * ``_buf`` -- a small TAIL of trailing text we have not yet emitted
         because it could be the start of a partial ``<thinking>`` /
         ``</thinking>`` tag spanning into the next delta.
 
     Matching is case-insensitive and tolerates whitespace immediately after
     ``<thinking``/``</thinking`` and before the closing ``>`` (e.g.
     ``< thinking >``); ATTRIBUTES are also tolerated
-    (``<thinking foo="bar">``) — any span up to the first ``>`` after the body
-    is swallowed — see ``_match_tag``.  ``feed`` returns the text that is safe
+    (``<thinking foo="bar">``) -- any span up to the first ``>`` after the body
+    is swallowed -- see ``_match_tag``.  ``feed`` returns the text that is safe
     to emit NOW; ``flush`` returns whatever post-thinking narration remains at
     end-of-stream (an unclosed ``<thinking>`` span is dropped rather than
     leaked as raw tags, but a buffered partial that is NOT actually a
-    thinking-tag prefix — e.g. a lone trailing ``<`` of genuine narration — is
+    thinking-tag prefix -- e.g. a lone trailing ``<`` of genuine narration -- is
     emitted, and real text after a closed span is never swallowed).
     """
 
@@ -673,7 +667,7 @@ class _ThinkingStripper:
             i += 1
         if closing:
             if i >= n:
-                return -1  # '<' (+ws) only so far — could still become '</...'
+                return -1  # '<' (+ws) only so far -- could still become '</...'
             if text[i] != "/":
                 return None
             i += 1
@@ -692,7 +686,7 @@ class _ThinkingStripper:
         # After the body, the tag closes either immediately at '>', or after a
         # whitespace-introduced attribute span (e.g. ``<thinking foo="bar">``).
         # A non-whitespace, non-'>' char immediately after the body means this
-        # is a DIFFERENT tag (e.g. ``<thinkingx>``) — not a thinking tag.
+        # is a DIFFERENT tag (e.g. ``<thinkingx>``) -- not a thinking tag.
         if i < n and not text[i].isspace() and text[i] != ">":
             return None
         # consume the (possibly attribute-bearing) remainder up to the first '>'
@@ -742,11 +736,11 @@ class _ThinkingStripper:
                     continue
                 if kind == "partial":
                     # Could be the start of a real tag spanning into the next
-                    # delta — hold the remainder and wait for more text.
+                    # delta -- hold the remainder and wait for more text.
                     self._buf = work[i:]
                     i = n
                     break
-                # Not a tag — a literal '<'. Emit it (if outside thinking).
+                # Not a tag -- a literal '<'. Emit it (if outside thinking).
                 if not self._in_think:
                     out.append(ch)
                 i += 1
@@ -770,11 +764,11 @@ class _ThinkingStripper:
         ``_buf`` is only ever set from ``feed``'s ``partial`` branch, so it
         always begins with ``<`` and could-in-principle still grow into a tag.
         But "could grow" includes the trivial case of a LONE ``<`` (optionally
-        followed by whitespace) which has not yet committed to anything — that
+        followed by whitespace) which has not yet committed to anything -- that
         is far more likely to be genuine narration (a trailing ``<`` of real
         text) than the start of a thinking tag.  This returns ``True`` only
         when *buf* has progressed PAST the bare ``<`` (+ optional whitespace)
-        into actual tag content — a ``/`` (closing) or the first letter of the
+        into actual tag content -- a ``/`` (closing) or the first letter of the
         case-insensitive body ``thinking``.  Such a prefix is dropped at EOS
         (an unfinished/unclosed thinking tag); everything else is emitted.
         """
@@ -785,10 +779,10 @@ class _ThinkingStripper:
         while i < n and buf[i].isspace():
             i += 1
         if i >= n:
-            return False  # '<' (+ whitespace) only — not committed to a tag
+            return False  # '<' (+ whitespace) only -- not committed to a tag
         ch = buf[i]
         if ch == "/":
-            return True  # '</...' — a closing-tag prefix
+            return True  # '</...' -- a closing-tag prefix
         return ch.lower() == "t"  # first body char of "thinking"
 
     def flush(self) -> str:
@@ -797,13 +791,13 @@ class _ThinkingStripper:
         Returns whatever narration is safe to emit at end-of-stream:
 
           * If a ``<thinking>`` span is still OPEN, the trailing suppressed
-            content was thinking — emit nothing (the span never closed).
+            content was thinking -- emit nothing (the span never closed).
           * ``self._buf`` is set ONLY in ``feed``'s ``partial`` branch, so a
             non-empty buffer is a held ``<...`` that never disambiguated.  If it
             is a genuine thinking-tag prefix (``"<thin"``, ``"</th"``, ...) it
             is an unfinished tag and is DROPPED (no raw partial-tag leak).  If
             it is merely a lone trailing ``<`` (+ optional whitespace) of real
-            narration — ``feed(["done<"]) -> "done"`` then ``flush() -> "<"`` —
+            narration -- ``feed(["done<"]) -> "done"`` then ``flush() -> "<"`` --
             it is genuine text and is EMITTED rather than lost.
 
         Real post-thinking narration is emitted by ``feed`` the moment the span
@@ -812,10 +806,10 @@ class _ThinkingStripper:
         buf = self._buf
         self._buf = ""
         if self._in_think:
-            # Unclosed thinking span — buffered partial is suppressed content.
+            # Unclosed thinking span -- buffered partial is suppressed content.
             return ""
         if self._buf_is_thinking_prefix(buf):
-            return ""  # unfinished thinking tag — drop rather than leak
+            return ""  # unfinished thinking tag -- drop rather than leak
         return buf  # genuine trailing narration (e.g. a lone '<')
 
 
@@ -954,12 +948,12 @@ async def stream_bedrock(
     function_response Contents and re-calls until no tool calls remain.
 
     boto3's ``converse_stream`` is synchronous and returns an EventStream; we
-    run it in an executor thread feeding an ``asyncio.Queue`` — exactly the
-    producer/consumer pattern the Gemini path uses — so cancellation and
+    run it in an executor thread feeding an ``asyncio.Queue`` -- exactly the
+    producer/consumer pattern the Gemini path uses -- so cancellation and
     back-pressure behave identically.
     """
     loop = asyncio.get_running_loop()
-    # Bedrock prompt-caching restored here (job — bill fix): caches the static
+    # Bedrock prompt-caching restored here (job -- bill fix): caches the static
     # system prompt + 94-tool catalog across turns via cachePoint markers.
     kwargs = _build_converse_kwargs(contents, tool_declarations, system_prompt, model)
 
@@ -979,8 +973,8 @@ async def stream_bedrock(
             # Per-turn inline <thinking> stripper: Amazon Nova writes its
             # chain-of-thought as literal <thinking>...</thinking> INSIDE the
             # normal text block (so it arrives under delta['text']); the tags
-            # split across deltas, so a streaming state machine — not a
-            # per-delta re.sub — is required to suppress them.  Claude routes
+            # split across deltas, so a streaming state machine -- not a
+            # per-delta re.sub -- is required to suppress them.  Claude routes
             # reasoning through a separate reasoningContent block (dropped
             # below), so this is a no-op for Claude.
             stripper = _ThinkingStripper()
@@ -1004,7 +998,7 @@ async def stream_bedrock(
                         # Claude emits chain-of-thought in a SEPARATE
                         # reasoningContent block (reasoningText / redactedContent
                         # / signature sub-keys).  This is model THINKING, not
-                        # user-facing narration — drop it outright.  Documenting
+                        # user-facing narration -- drop it outright.  Documenting
                         # the branch explicitly (rather than letting it fall
                         # through) makes the intent unmistakable.
                         pass
@@ -1059,7 +1053,7 @@ async def stream_bedrock(
                     queue.put_nowait, TextDeltaEvent(delta=trailing)
                 )
             loop.call_soon_threadsafe(queue.put_nowait, None)
-        except BaseException as exc:  # noqa: BLE001 — surface to caller
+        except BaseException as exc:  # noqa: BLE001 -- surface to caller
             # Upstream-provider discipline: a MID-STREAM transient failure
             # (throttling / read-timeout / connection drop AFTER events began
             # flowing) is still an UPSTREAM failure -- classify it as such

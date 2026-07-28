@@ -1,5 +1,5 @@
 """PySWMM quasi-2D urban-flood deck build + run orchestration (P4,
-Path A — the LOCAL lane, the end-to-end wiring).
+Path A -- the LOCAL lane, the end-to-end wiring).
 
 The SWMM analogue of ``run_modflow.py`` (the MODFLOW deck-build + submit +
 local-exec quintet) and ``tools/solver.py``'s ``run_solver`` dispatch path. One
@@ -7,14 +7,14 @@ module owns the urban-flood engine's solver-dispatch surface:
 
   1. **Deck build + staging** (``build_and_stage_swmm_deck``). Calls the engine
      core's ``swmm_mesh_builder.build_swmm_mesh`` (a DEM -> quasi-2D node/link
-     SWMM ``.inp`` deck; FROZEN, landed b5013cf) and returns a ``SWMMStaging``
+     SWMM ``.inp`` deck) and returns a ``SWMMStaging``
      carrying the local ``.inp`` path + the ``BuildResult`` provenance the
      run + postprocess paths read. No cloud staging is required for the dev
-     primary path — the deck is solved in-process where it was built.
+     primary path -- the deck is solved in-process where it was built.
 
-  2. **LOCAL EXECUTION (``run_swmm_local``)** — the DEV PRIMARY PATH. Runs the
+  2. **LOCAL EXECUTION (``run_swmm_local``)** -- the DEV PRIMARY PATH. Runs the
      built deck headless via pyswmm IN-PROCESS (``swmm_mesh_builder.run_swmm_deck``)
-     — no container, no Cloud Workflows, no Batch. This is BOTH the dev/test
+     -- no container, no Cloud Workflows, no Batch. This is BOTH the dev/test
      seam AND the live-evidence path: pyswmm 2.1.0 + swmm-api 0.4.73 are in the
      agent venv and SWMM5 is fully headless, so the urban engine needs no
      external solver substrate to produce a real solved ``.out``. The
@@ -30,15 +30,15 @@ module owns the urban-flood engine's solver-dispatch surface:
      (``services/workers/swmm/run_inp.py``): ``exec_kind="exec"`` (there is no
      public SWMM image; pyswmm is a pip dep, not a container), the completion
      manifest carries ``swmm_stdout_uri`` / ``swmm_stderr_uri`` + a ``continuity``
-     post-exit classifier. The dev primary path (2) does NOT touch this — it
-     runs pyswmm directly on the in-memory ``BuildResult`` — but the spec keeps
+     post-exit classifier. The dev primary path (2) does NOT touch this -- it
+     runs pyswmm directly on the in-memory ``BuildResult`` -- but the spec keeps
      the SWMM engine's dispatch surface symmetric with SFINCS/MODFLOW.
 
 Determinism boundary (Invariant 1 / 2): no LLM call anywhere in this module.
 The deck build is deterministic ``swmm_mesh_builder``; the run is an in-process
 pyswmm solve; the local-exec path is a subprocess run of the same builder. Every
 number the agent narrates comes from the typed ``SWMMDepthLayerURI`` fields the
-postprocess computed — never free-generated.
+postprocess computed -- never free-generated.
 """
 
 from __future__ import annotations
@@ -90,13 +90,13 @@ class SWMMWorkflowError(RuntimeError):
     error frame (the emitter's ``_classify_exception`` reads ``error_code`` off
     the exception). Codes:
 
-    - ``SWMM_PARAMS_INVALID`` — the run args could not be coerced.
-    - ``SWMM_DECK_BUILD_FAILED`` — ``build_swmm_mesh`` raised (wraps the typed
+    - ``SWMM_PARAMS_INVALID`` -- the run args could not be coerced.
+    - ``SWMM_DECK_BUILD_FAILED`` -- ``build_swmm_mesh`` raised (wraps the typed
       ``SWMMMeshError`` codes: SWMM_EMPTY_MESH / SWMM_DEM_UNREADABLE /
       SWMM_DEPENDENCY_MISSING).
-    - ``SWMM_LOCAL_RUN_FAILED`` — the in-process pyswmm solve raised (wraps
+    - ``SWMM_LOCAL_RUN_FAILED`` -- the in-process pyswmm solve raised (wraps
       SWMM_RUN_FAILED / SWMM_CONTINUITY_UNREADABLE).
-    - ``SWMM_MASS_BALANCE_EXCEEDED`` — the honesty gate: Flow Routing Continuity
+    - ``SWMM_MASS_BALANCE_EXCEEDED`` -- the honesty gate: Flow Routing Continuity
       error exceeded the tolerance (re-raised verbatim from ``run_swmm_deck``).
     """
 
@@ -115,7 +115,7 @@ class SWMMWorkflowError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
-# Staging result — the local-lane handoff (mirrors DeckStaging).
+# Staging result -- the local-lane handoff (mirrors DeckStaging).
 # --------------------------------------------------------------------------- #
 @dataclass
 class SWMMStaging:
@@ -124,7 +124,7 @@ class SWMMStaging:
     Carries the on-disk ``.inp`` path + the full ``BuildResult`` provenance
     (grid_shape / crs / transform / resolution_m / barriers / dropped-building
     count) the run + postprocess paths read. For the dev primary path nothing
-    is uploaded — the deck is solved in-process where it was built, and the
+    is uploaded -- the deck is solved in-process where it was built, and the
     ``BuildResult`` IS the local-lane handoff (analogue of ``DeckStaging``).
 
     Fields:
@@ -158,7 +158,7 @@ def is_local_mode() -> bool:
     The urban engine is headless-pyswmm by nature, so unlike SFINCS/MODFLOW the
     LOCAL lane is the DEFAULT (``TRID3NT_SWMM_LOCAL`` unset -> local). Set
     ``TRID3NT_SWMM_LOCAL=0`` to force the out-of-process staged-manifest dispatch
-    (``run_solver(solver='swmm')`` via the local-exec spec) instead — used only
+    (``run_solver(solver='swmm')`` via the local-exec spec) instead -- used only
     when a sandboxed worker lane is wired. The default in-process path needs no
     external substrate.
     """
@@ -184,7 +184,7 @@ def build_and_stage_swmm_deck(
 
     The SWMM analogue of ``build_and_stage_modflow_deck``. Calls the engine
     core ``build_swmm_mesh`` (FROZEN) with every ``SWMMRunArgs`` field threaded
-    through (return-period / storm depth handling is the COMPOSER's job — by the
+    through (return-period / storm depth handling is the COMPOSER's job -- by the
     time this is called ``run_args.total_rain_depth_mm`` is populated, or the
     builder's hyetograph default is used). The deck + its run outputs live in a
     scratch dir the caller cleans up after postprocess.
@@ -195,7 +195,7 @@ def build_and_stage_swmm_deck(
             composer resolves ``fetch_3dep_extra`` / ``fetch_dem`` cache URIs to
             a local path before calling this; tests pass a synthetic GeoTIFF.
         building_footprints: optional GeoJSON FeatureCollection of building
-            footprints (``fetch_buildings(source=osm)`` shape) — drives the
+            footprints (``fetch_buildings(source=osm)`` shape) -- drives the
             building obstruction mode AND the postprocess ``n_buildings_affected``
             count. ``None`` for a plain run.
         run_id: optional ULID; minted if absent.
@@ -203,7 +203,7 @@ def build_and_stage_swmm_deck(
         enable_autoscale: when True (default) the mesh builder runs its adaptive
             budget and may COARSEN ``run_args.target_resolution_m`` to fit the
             cell cap. When False (the gate's ``narrow_scope`` path) the
-            builder honours ``target_resolution_m`` EXACTLY — the gate already
+            builder honours ``target_resolution_m`` EXACTLY -- the gate already
             clamped it under the cap, so the user's chosen rung is final.
 
     Returns:
@@ -325,7 +325,7 @@ def build_and_stage_swmm_deck(
 
 
 # --------------------------------------------------------------------------- #
-# Out-of-process (Batch / local-exec) staging — upload the .inp + a manifest.
+# Out-of-process (Batch / local-exec) staging -- upload the .inp + a manifest.
 # --------------------------------------------------------------------------- #
 def stage_swmm_manifest(staging: SWMMStaging) -> str:
     """Upload the built ``.inp`` + a worker-contract ``manifest.json`` to S3.
@@ -338,8 +338,8 @@ def stage_swmm_manifest(staging: SWMMStaging) -> str:
 
     Writes:
 
-      - ``.../mesh.inp``     — the built deck (``staging.inp_path``).
-      - ``.../manifest.json`` — the manifest the SWMM worker entrypoint reads
+      - ``.../mesh.inp``     -- the built deck (``staging.inp_path``).
+      - ``.../manifest.json`` -- the manifest the SWMM worker entrypoint reads
         (``services/workers/swmm/entrypoint.py``): ``inputs[]`` carry the legacy
         ``gs_uri`` field NAME with an ``s3://`` VALUE (resolved by scheme in the
         worker), ``dest='mesh.inp'``; ``swmm_args=['mesh.inp']``; ``outputs``
@@ -350,13 +350,13 @@ def stage_swmm_manifest(staging: SWMMStaging) -> str:
             ``.inp`` on disk + the ``run_id`` the staged objects are keyed under).
 
     Returns:
-        The ``s3://`` URI of the uploaded ``manifest.json`` — feed it STRAIGHT to
+        The ``s3://`` URI of the uploaded ``manifest.json`` -- feed it STRAIGHT to
         ``run_solver(solver='swmm', model_setup_uri=<this>, ...)``.
 
     Raises:
         SWMMWorkflowError("SWMM_STAGING_FAILED"): the upload could not complete
             (the out-of-process lane cannot dispatch without a reachable
-            manifest — fail loudly, never a silent dead-end).
+            manifest -- fail loudly, never a silent dead-end).
     """
     from trid3nt_server.agent.tools.cache import CACHE_BUCKET, storage_scheme
     from trid3nt_server.agent.tools.simulation.solver.solver import _get_s3_client
@@ -422,12 +422,12 @@ def stage_swmm_manifest(staging: SWMMStaging) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# LOCAL EXECUTION — the dev primary path (pyswmm in-process).
+# LOCAL EXECUTION -- the dev primary path (pyswmm in-process).
 # --------------------------------------------------------------------------- #
 def run_swmm_local(staging: SWMMStaging) -> RunResult:
     """Run the staged deck headless via pyswmm IN-PROCESS (the dev primary path).
 
-    No container, no Cloud Workflows, no Batch — pyswmm is in the agent venv and
+    No container, no Cloud Workflows, no Batch -- pyswmm is in the agent venv and
     SWMM5 is fully headless, so the deck built by ``build_and_stage_swmm_deck``
     is solved right here. Delegates to the engine core ``run_swmm_deck`` (which
     owns the mass-balance honesty gate: it raises ``SWMM_MASS_BALANCE_EXCEEDED``
@@ -436,7 +436,7 @@ def run_swmm_local(staging: SWMMStaging) -> RunResult:
 
     Returns:
         The ``swmm_mesh_builder.RunResult`` (``out_path`` + ``rpt_path`` +
-        ``continuity_error_pct`` + ``peak_depth_grid`` + ``n_steps``) — the
+        ``continuity_error_pct`` + ``peak_depth_grid`` + ``n_steps``) -- the
         postprocess reads ``run.out_path`` for the per-timestep node depths.
 
     Raises:
@@ -489,7 +489,7 @@ def run_swmm_local(staging: SWMMStaging) -> RunResult:
 
 
 # --------------------------------------------------------------------------- #
-# SWMM LocalSolverSpec — the out-of-process staged-manifest lane (symmetry with
+# SWMM LocalSolverSpec -- the out-of-process staged-manifest lane (symmetry with
 # SFINCS/MODFLOW). ``exec_kind="exec"`` (pyswmm is a pip dep, no public image);
 # the worker shim runs pyswmm against the staged .inp.
 # --------------------------------------------------------------------------- #
@@ -513,7 +513,7 @@ def swmm_local_spec() -> Any:
     """Build the SWMM ``LocalSolverSpec`` for the shared local backend.
 
     Mirrors ``run_modflow._modflow_local_spec``: ``exec_kind="exec"`` (there is
-    no public SWMM container image — pyswmm is a pip dep, so we run the
+    no public SWMM container image -- pyswmm is a pip dep, so we run the
     in-repo CLI shim ``services/workers/swmm/run_inp.py`` with the venv python),
     a ``swmm_args`` manifest key carrying the ``.inp`` filename, ``swmm.stdout`` /
     ``swmm.stderr`` artifacts, ``swmm_stdout_uri`` / ``swmm_stderr_uri``
@@ -521,7 +521,7 @@ def swmm_local_spec() -> Any:
     Continuity error from the ``.rpt`` (the mass-balance honesty gate, mirroring
     MODFLOW's mfsim.lst convergence guard).
 
-    This is the symmetry path — the DEV PRIMARY path (``run_swmm_local``) runs
+    This is the symmetry path -- the DEV PRIMARY path (``run_swmm_local``) runs
     pyswmm in-process and never touches this. It exists so ``'swmm'`` is a
     first-class entry in ``SOLVER_WORKFLOW_REGISTRY`` and ``run_solver(
     solver='swmm', model_setup_uri=...)`` dispatches correctly under

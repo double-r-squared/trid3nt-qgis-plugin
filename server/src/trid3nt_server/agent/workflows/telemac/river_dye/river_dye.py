@@ -291,12 +291,9 @@ async def telemac_river_dye(
         river_geometry_uri = None
 
     has_loc = bool(location and str(location).strip())
-    # OPEN-24 (2026-07-16): need AT LEAST one of location/bbox. The old guard
-    # demanded EXACTLY one and errored when BOTH were given - but the model,
-    # having just geocoded the place, naturally passes BOTH the place name AND
-    # the resulting bbox, so a correct natural-prompt call was rejected. When
-    # both are present prefer the explicit bbox (drop the redundant location);
-    # only a genuinely empty AOI is an error.
+    # Need AT LEAST one of location/bbox. When both are present prefer the
+    # explicit bbox (drop the redundant location); only a genuinely empty AOI
+    # is an error.
     if not has_loc and coerced_bbox is None:
         return {
             "status": "error",

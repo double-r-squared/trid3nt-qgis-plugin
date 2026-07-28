@@ -1,4 +1,4 @@
-"""``fetch_gtsm_tide_surge`` atomic tool — Global Tide and Surge Model v3.0 Tier-2 fetcher.
+"""``fetch_gtsm_tide_surge`` atomic tool -- Global Tide and Surge Model v3.0 Tier-2 fetcher.
 """
 
 from __future__ import annotations
@@ -104,13 +104,13 @@ _OUTPUT_TO_CDS_VARIABLE: dict[str, str] = {
 }
 
 # Sanity cap on date range. GTSM hourly time series at every station are
-# big — a 1-year window already crosses the gauge × hours × bytes back-
+# big -- a 1-year window already crosses the gauge × hours × bytes back-
 # of-the-envelope into the hundreds of MB for a regional bbox.
 _MAX_DATE_RANGE_DAYS = 366
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -136,7 +136,7 @@ def estimate_payload_mb(
     """Estimate output FlatGeobuf size in MB for a given call.
 
     Per audit.md: ~0.1 MB per day per coastal bbox. We treat ``bbox=None``
-    as a (mis-)global call (360° × 180°) — the tool declares
+    as a (mis-)global call (360° × 180°) -- the tool declares
     ``supports_global_query=False`` so this should not happen in practice,
     but the estimator stays defensive.
 
@@ -267,10 +267,9 @@ def _resolve_api_key(
     Priority (per audit.md, mirrors the sibling fetch_era5_reanalysis pattern):
 
     1. Explicit ``api_key`` kwarg.
-    2. ``secret_ref`` (a ``SecretRecord``) → ``Persistence.get_secret_value``
-       (the per-Case path landed by sibling).
+    2. ``secret_ref`` (a ``SecretRecord``) -> ``Persistence.get_secret_value``.
     3. ``TRID3NT_COPERNICUS_CDS_API_KEY`` env var.
-    4. ``None`` — cdsapi falls back to ``~/.cdsapirc`` on instantiation.
+    4. ``None`` -- cdsapi falls back to ``~/.cdsapirc`` on instantiation.
 
     A return value of ``None`` means "let cdsapi find its own key via the
     library's default discovery path (``~/.cdsapirc``)". We do NOT raise
@@ -395,7 +394,7 @@ def _build_cds_request(
     - ``year``/``month``: lists of zero-padded strings.
     - ``temporal_aggregation``: "hourly" (we pin hourly for SFINCS boundary
       forcing; "10_min" is finer than the SFINCS step typically needs).
-    - ``format``: "zip" — the dataset packages monthly NetCDF files into a
+    - ``format``: "zip" -- the dataset packages monthly NetCDF files into a
       ZIP archive.
 
     GTSM is global per file (no bbox in the request); we filter to the
@@ -977,19 +976,19 @@ def fetch_gtsm_tide_surge(
 
     **When NOT to use:**
 
-    - CONUS with operating CO-OPS tide gauges — use ``fetch_noaa_coops_tides``
+    - CONUS with operating CO-OPS tide gauges -- use ``fetch_noaa_coops_tides``
       for real observational records; GTSM is a model, not a gauge measurement.
-    - Forecasted tide/surge — GTSM v3.0 reanalysis is historical only (1950 to
+    - Forecasted tide/surge -- GTSM v3.0 reanalysis is historical only (1950 to
       ~2024); use ECMWF/NHC tools for future surge forecasts.
-    - Sub-hourly boundary timesteps — output is pinned to hourly; the GTSM CDS
+    - Sub-hourly boundary timesteps -- output is pinned to hourly; the GTSM CDS
       dataset supports 10-min aggregation but SFINCS rarely needs finer steps.
-    - Gridded water-level fields — output is a sparse gauge network; composers
+    - Gridded water-level fields -- output is a sparse gauge network; composers
       interpolate to the SFINCS grid via ``bnd.bzs`` boundary handler.
 
     **Parameters:**
 
     - ``bbox``: ``(west, south, east, north)`` in EPSG:4326. Required;
-      ``supports_global_query=False`` — global time-series is GB-scale.
+      ``supports_global_query=False`` -- global time-series is GB-scale.
     - ``start_date``: ISO YYYY-MM-DD inclusive. GTSM coverage: 1950 → ~2024.
     - ``end_date``: ISO YYYY-MM-DD inclusive. Hard cap 366 days from start.
     - ``output``: ``"water_level"`` (default, tide + surge; canonical SFINCS
@@ -1023,7 +1022,7 @@ def fetch_gtsm_tide_surge(
       ``fetch_era5_reanalysis`` (both use the Copernicus CDS key).
 
     FR-CE-8: ``read_through`` with ``ttl_class="static-30d"``; cache key =
-    SHA-256 of ``(bbox-6dp, start_date, end_date, output)`` — api_key
+    SHA-256 of ``(bbox-6dp, start_date, end_date, output)`` -- api_key
     excluded (FR-DC-4 dedup).
     """
     # ---- Input validation ----
@@ -1033,7 +1032,7 @@ def fetch_gtsm_tide_surge(
 
     # ---- API-key resolution (pre-network; cheap fail) ----
     resolved_key = _resolve_api_key(api_key=api_key, secret_ref=secret_ref)
-    # NOTE: resolved_key may be None — that is intentional. cdsapi falls
+    # NOTE: resolved_key may be None -- that is intentional. cdsapi falls
     # back to ~/.cdsapirc; the auth error surfaces from the call site.
 
     # ---- Cache-key params (key omits api_key by design) ----

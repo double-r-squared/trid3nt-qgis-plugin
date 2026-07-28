@@ -5,7 +5,7 @@ catalog), workflows are **orchestrator-style Python functions** that compose
 the engine's atomic tools (defined under ``server/src/trid3nt_server/
 tools/``) into deterministic chains.
 
-Workflows are **not atomic tools** — they don't use ``@register_tool`` and they
+Workflows are **not atomic tools** -- they don't use ``@register_tool`` and they
 don't have an ``AtomicToolMetadata`` of their own. The cache shim
 (``tools/cache.py``) only mediates atomic-tool calls; workflows compose
 already-cached + already-emitted atomic tools.
@@ -25,10 +25,10 @@ Python composing atomic tools in tested sequences. Same inputs → byte-identica
 SFINCS deck per the HydroMT determinism cited in
 ``docs/decisions/oq-4-hydromt-depth.md`` §3.
 
-Workflows authored under this package (lands the M5 capstone):
+Workflows authored under this package:
 
 - ``model_flood_scenario(bbox?, location_query?, event_id?, return_period_yr=100,
-   duration_hr=24, compute_class="medium") → AssessmentEnvelope`` — composes
+   duration_hr=24, compute_class="medium") → AssessmentEnvelope`` -- composes
   geocode → fetch_dem → fetch_landcover → fetch_river_geometry →
   lookup_precip_return_period → build_sfincs_model → run_solver →
   wait_for_completion → postprocess_flood. The §4 Invariant-7 NLCD
@@ -41,7 +41,7 @@ from __future__ import annotations
 
 # Import the workflow modules so their @register_tool decorators fire at
 # package import time and the LLM-facing wrappers land in TOOL_REGISTRY.
-from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  — engine-door refactor (SFINCS slice): the run_model_flood_scenario wrapper is now the sfincs_flood template (engine=sfincs, tier=template); the run_sfincs door is imported in tools/__init__.py
+from .sfincs.flood.flood import sfincs_flood as _sfincs_flood  # noqa: F401  -- engine-door refactor (SFINCS slice): the run_model_flood_scenario wrapper is now the sfincs_flood template (engine=sfincs, tier=template); the run_sfincs door is imported in tools/__init__.py
 from .modflow.model_groundwater_contamination_scenario import model_groundwater_contamination_scenario as _model_groundwater_contamination_scenario  # noqa: F401 - Case 2 composer (news → MODFLOW → plume)
 # engine-door refactor: run_model_contamination_affected_fields is CUT (composer
 # removed). Its plume half IS modflow_contaminant_plume; the zonal field-scoring

@@ -830,15 +830,16 @@ def style_params_from_band_stats(
 
 #: Module-level side-table of the most-recent published-raster ``LegendKey``
 #: keyed by the layer's ENVELOPE uri - the raw ``s3://`` COG the atomic
-#: ``publish_layer`` returns (TiTiler exit; formerly the tile TEMPLATE; the
-#: register-only manifest seam now keys by the same raw ``cog_uri``, so both
-#: producers share one key shape). ``publish_layer`` returns a bare URI string, so the
-#: server wrap-site rebuilds a ``LayerURI`` from it WITHOUT a legend; the pipeline
-#: emitter's ``add_loaded_layer`` lifts the legend back out of this stash by
-#: ``layer.uri``. Mirrors ``_LAST_DENSITY_META_BY_URI`` exactly (module scope is
-#: safe -- the legend is a pure function of the content-addressed COG + preset, so
-#: two sessions publishing the same layer compute the identical key). FIFO-bounded
-#: at the write site so the always-on agent process never grows it without limit.
+#: ``publish_layer`` returns (TiTiler exit); the register-only manifest seam
+#: keys by the same raw ``cog_uri``, so both producers share one key shape.
+#: ``publish_layer`` returns a bare URI string, so the server wrap-site
+#: rebuilds a ``LayerURI`` from it WITHOUT a legend; the pipeline emitter's
+#: ``add_loaded_layer`` lifts the legend back out of this stash by
+#: ``layer.uri``. Mirrors ``_LAST_DENSITY_META_BY_URI`` exactly (module scope
+#: is safe -- the legend is a pure function of the content-addressed COG +
+#: preset, so two sessions publishing the same layer compute the identical
+#: key). FIFO-bounded at the write site so the always-on agent process never
+#: grows it without limit.
 _MAX_LEGEND_ENTRIES: int = 256
 _LAST_LEGEND_BY_URI: dict[str, Any] = {}
 
@@ -1668,7 +1669,7 @@ def _looks_like_unresolved_handle(layer_uri: str) -> bool:
     the tool raises a typed, self-correcting error that NAMES the actually
     available handles instead.
 
-    Conservative by construction — everything a valid caller passes today is
+    Conservative by construction -- everything a valid caller passes today is
     accepted: registered handles are already server-resolved to real URIs
     before the tool body runs; composers pass ``s3://``/``gs://``/tile-template
     URLs; ``/vsi*`` GDAL paths and absolute filesystem paths pass through.
@@ -1769,7 +1770,7 @@ def _looks_like_ulid(value: str) -> bool:
     """True for a 26-char Crockford-base32 ULID shape (case-insensitive).
 
     Matches ``new_ulid()``'s output shape without importing the ``ulid``
-    package here — a cheap regex is enough to recognize "this is not a
+    package here -- a cheap regex is enough to recognize "this is not a
     human name, it's an identifier" for the OPEN-9 name-derivation guard.
     """
     import re as _re
@@ -1860,15 +1861,15 @@ def derive_readable_layer_name(
     Local 8B models routinely omit ``publish_layer``'s ``name``, and when
     ``layer_id`` ALSO degrades to a bare ULID (``derive_layer_id``'s last
     resort), the published layer showed up in the UI as e.g.
-    ``'01KX5TEZ20BK86EE6DG8PSVFJK'`` — meaningless to the user. Precedence:
+    ``'01KX5TEZ20BK86EE6DG8PSVFJK'`` -- meaningless to the user. Precedence:
 
     1. an explicit, non-empty ``name`` that is not ITSELF a bare-ULID shape
-       — returned VERBATIM, no disambiguator appended (the caller already
+       -- returned VERBATIM, no disambiguator appended (the caller already
        chose it deliberately; second-guessing it would be surprising).
     2. ``style_preset`` mapped to a human label (e.g. ``"standard_hillshade"``
        -> ``"Hillshade"``).
     3. a human segment of the source ``layer_uri`` path (the parent
-       directory / product-family segment — the file stem is typically a
+       directory / product-family segment -- the file stem is typically a
        cache hash or a ULID).
     4. a generic ``"Layer"`` fallback.
 
@@ -1935,7 +1936,7 @@ def publish_layer(
     Use this after ``postprocess_flood``, ``compute_hillshade``,
     ``compute_slope``, ``compute_colored_relief``, ``compute_aspect``, or any
     tool that returns a ``LayerURI`` with an ``s3://`` COG, when the user
-    needs the layer displayed on the map — the COG is not visible until this
+    needs the layer displayed on the map -- the COG is not visible until this
     runs; it's the final step of any raster-producing workflow.
 
     Do NOT use for: publishing vector layers (FlatGeobuf/GeoJSON already
@@ -1943,32 +1944,32 @@ def publish_layer(
     data (side-effect tool, cache shim not invoked).
 
     Params:
-        layer_uri: the producing tool's ``layer_id`` HANDLE (PREFERRED — the
+        layer_uri: the producing tool's ``layer_id`` HANDLE (PREFERRED -- the
             server resolves it to the exact ``s3://`` COG it recorded), or
             the ``s3://`` URI copied VERBATIM from the producing tool's
             result. NEVER construct or re-type an s3:// path from memory.
         layer_id: layer name for the published layer; stable + unique within
-            the Case (e.g. ``"flood-depth-peak-<run_id>"``). OPTIONAL — when
+            the Case (e.g. ``"flood-depth-peak-<run_id>"``). OPTIONAL -- when
             omitted, DERIVED from the producing tool's registered
             ``layer_id`` if resolvable, else the URI basename stem
             (sanitized), else a fresh ``layer-<ulid>``.
         style_preset: style preset name, or omit for AUTO selection
             (recommended): flood/plume depth COGs get the
             ``"continuous_flood_depth"`` ramp; terrain products (colored
-            relief, hillshade, raw DEM) get default rendering — correct for
+            relief, hillshade, raw DEM) get default rendering -- correct for
             RGBA/grayscale rasters (the flood ramp paints them invisible).
         project_qgs_uri: legacy ``.qgs`` project URI; consumed only by the
             dormant ``TRID3NT_QGIS_WMS_BASE`` vector-WMS seam. Omit.
         case_id: optional Case identifier. When passed, the server wrapper
             resolves the case-scoped ``.qgs`` URI BEFORE invoking this tool;
-            transport-only carrier — the atomic tool body does no
+            transport-only carrier -- the atomic tool body does no
             Persistence I/O. Defaults to ``None`` (single-tenant demo path).
         name: OPTIONAL human-readable display name for the UI's layer list.
             When given, used verbatim. When omitted (or an unadorned copy of
             ``layer_id``), a readable name is DERIVED server-side
             (``style_preset`` -> label, else a ``layer_uri`` path segment,
             else a generic fallback) so a bare ULID never reaches the layer
-            summary. Transport-only carrier — this function returns a bare
+            summary. Transport-only carrier -- this function returns a bare
             URL string, not a ``LayerURI``; the server-side wrap-site
             (``derive_readable_layer_name``) applies the same precedence
             when constructing the client-rendered ``LayerURI``.
@@ -1976,7 +1977,7 @@ def publish_layer(
     Returns:
         The published raster's raw ``s3://`` COG URI string (overview-
         enforced COG when auto-translated). Suitable for direct use as a
-        ``LayerURI.uri`` value — the QGIS plugin opens it via GDAL
+        ``LayerURI.uri`` value -- the QGIS plugin opens it via GDAL
         ``/vsicurl/`` and styles it from the envelope legend.
 
     Raises:
@@ -1987,7 +1988,7 @@ def publish_layer(
     FR-DC-6: uncacheable-by-construction (side-effect tool that registers
     per-Case layer state). Cache shim NOT invoked.
 
-    Invariant 4 (Rendering): this tool IS the publish bridge — the
+    Invariant 4 (Rendering): this tool IS the publish bridge -- the
     ``s3://`` COG reaches the map only after this call registers it and
     stashes its render legend.
 

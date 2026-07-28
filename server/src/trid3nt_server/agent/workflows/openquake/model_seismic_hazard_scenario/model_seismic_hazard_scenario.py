@@ -13,7 +13,7 @@ the chain) that composes the seismic-hazard engine end-to-end:
       -> postprocess_openquake (rasterize site values -> hazard COG + publish)
 
 Unlike SWMM (in-process pyswmm) OpenQuake is CLOUD-ONLY: the engine is RAM-hungry
-(~2 GB/thread) and ships as a containerized CLI, so there is NO in-process lane —
+(~2 GB/thread) and ships as a containerized CLI, so there is NO in-process lane --
 the composer always dispatches to the OpenQuake AWS Batch worker
 (``services/workers/openquake/entrypoint.py``) through the SAME generic
 run_solver / wait_for_completion seam SFINCS/SWMM use, routed to the openquake
@@ -98,10 +98,10 @@ class OpenQuakeWorkflowError(RuntimeError):
     Carries an open-set A.6 ``error_code`` so the agent emitter renders a typed
     error frame. Codes:
 
-    - ``OQ_PARAMS_INVALID`` — the run args could not be coerced.
-    - ``OQ_STAGING_FAILED`` — the build_spec could not be staged to S3.
-    - ``OQ_SOLVE_FAILED`` — the Batch solve did not complete.
-    - ``OQ_BATCH_OUTPUT_MISSING`` — a completed run produced no hazard-map CSV.
+    - ``OQ_PARAMS_INVALID`` -- the run args could not be coerced.
+    - ``OQ_STAGING_FAILED`` -- the build_spec could not be staged to S3.
+    - ``OQ_SOLVE_FAILED`` -- the Batch solve did not complete.
+    - ``OQ_BATCH_OUTPUT_MISSING`` -- a completed run produced no hazard-map CSV.
     """
 
     error_code: str = "OPENQUAKE_WORKFLOW_FAILED"
@@ -119,7 +119,7 @@ class OpenQuakeWorkflowError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
-# build_spec assembly (PURE — unit-tested in isolation).
+# build_spec assembly (PURE -- unit-tested in isolation).
 # --------------------------------------------------------------------------- #
 def assemble_build_spec(
     run_args: OpenQuakeRunArgs,
@@ -434,7 +434,7 @@ def make_fault_sources_layer_uri(
 
 
 # --------------------------------------------------------------------------- #
-# build_spec staging (S3) — mirror of stage_swmm_manifest.
+# build_spec staging (S3) -- mirror of stage_swmm_manifest.
 # --------------------------------------------------------------------------- #
 def stage_openquake_build_spec(
     run_args: OpenQuakeRunArgs,
@@ -487,7 +487,7 @@ def stage_openquake_build_spec(
 
 
 # --------------------------------------------------------------------------- #
-# Batch hazard-map download — mirror of _download_batch_swmm_outputs.
+# Batch hazard-map download -- mirror of _download_batch_swmm_outputs.
 # --------------------------------------------------------------------------- #
 def _pick_hazard_map_uri(output_uris: list[str]) -> str | None:
     """Pick the hazard-MAP CSV from the uploaded output URIs (agent-side mirror
@@ -700,7 +700,7 @@ async def model_seismic_hazard_scenario(
             for a larger site grid).
 
     Returns:
-        ``SeismicHazardLayerURI`` (a ``LayerURI`` subtype) — the emitter appends
+        ``SeismicHazardLayerURI`` (a ``LayerURI`` subtype) -- the emitter appends
         it to ``session-state.loaded_layers`` and the map renders the hazard COG.
 
     Raises:
@@ -747,9 +747,8 @@ async def model_seismic_hazard_scenario(
     )
 
     # 0.5): surface the resolved fault traces as a renderable INPUT
-    #      layer so the user can SEE the fault lines the hazard peaks on (they
-    #      were previously baked into the OpenQuake XML and discarded). GATED on
-    #      ``used_real_faults`` (no traces -> nothing to draw). The serialize +
+    #      layer so the user can SEE the fault lines the hazard peaks on.
+    #      GATED on ``used_real_faults`` (no traces -> nothing to draw). The serialize +
     #      S3 upload is SYNC boto3, OFFLOADED off the loop; the emit is BEST-
     #      EFFORT (publish_input_layer never raises) so a failure to surface the
     #      faults can NEVER fail the solve. role="input" + bbox=None: the traces
@@ -867,7 +866,7 @@ async def model_seismic_hazard_scenario(
 
     # 3) Download the hazard-map CSV from the worker's run_id prefix (the Batch
     #    dispatch mints a fresh run_id; the worker writes under run_result.run_id,
-    #    NOT the composer's run_id — mirror the SWMM/SFINCS Batch lesson).
+    #    NOT the composer's run_id -- mirror the SWMM/SFINCS Batch lesson).
     async with substep(current_emitter(), "_download_batch_hazard_csv"):
         hazard_csv_text = await asyncio.to_thread(
             _download_batch_hazard_csv, run_result, batch_run_id

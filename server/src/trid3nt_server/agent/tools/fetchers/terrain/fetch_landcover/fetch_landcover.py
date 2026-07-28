@@ -39,105 +39,41 @@ logger = logging.getLogger("trid3nt_server.agent.tools.fetchers.terrain.fetch_la
 
 
 # ---------------------------------------------------------------------------
-# fetch_landcover - NLCD (MRLC) / ESA WorldCover (Stage B;
-# hotfix: WMS → WCS 1.0.0 to fix palette encoding).
+# fetch_landcover - NLCD (MRLC) / ESA WorldCover
 # ---------------------------------------------------------------------------
 #
-# Access pattern tier — LIVE-VERIFIED THROUGH TWO ROUNDS:
+# MRLC WCS 1.0.0 GetCoverage returns canonical NLCD class integers directly
+# in the raster band; MRLC WMS GetMap returns re-indexed palette indices that
+# do NOT match manning_mapping.csv's canonical NLCD encoding. WCS 1.0.0 is
+# used over WCS 2.0.1 (GeoServer "Unable to map projection Popular
+# Visualisation Pseudo Mercator" bug on its own native EPSG:3857) and WCS
+# 1.1.1 (rejects bbox-only requests); WCS 1.0.0 needs explicit
+# CRS=EPSG:4326 + WIDTH/HEIGHT + FORMAT=GeoTIFF. The DescribeCoverage XML
+# calls the band "PALETTE_INDEX" but the integers ARE the canonical codes.
 #
-# Round 1:
+# Cache key includes ``source: "mrlc-wcs"`` so it never collides with a
+# palette-indexed WMS-sourced cache entry.
 #
-#   * The MRLC direct file mirror (``s3-us-west-2.amazonaws.com/mrlc/
-#     Annual_NLCD_LndCov_<YEAR>_CU_C1V0.tif``) returned an HTTP 200 with a
-#     **42-byte placeholder TIFF** (a 1×1 IFD with two ``0xFFFFFFFF`` strip
-#     offsets — not a real raster). 2019 and 2021 file URLs at the same path
-#     return HTTP 403. The "direct HTTPS + Range" path the kickoff inferred is
-#     NOT a real surface for NLCD bytes.
-#   * The MRLC WCS endpoint (`/geoserver/mrlc_display/wcs`) timed out on
-#     GetCapabilities in the first probe.
-#   * MRLC's **WMS** GeoServer at ``www.mrlc.gov/geoserver/mrlc_display/wms``
-#     serves NLCD year layers (``NLCD_2021_Land_Cover_L48`` etc.) and supports
-#     ``GetMap?format=image/geotiff`` — Tier 2 (OGC service) byte materialized.
-#     Substrate landed against WMS GetMap.
+# Vintage: NLCD 2019/2021(default)/2023 via ``dataset="nlcd_<year>"``; ESA
+# WorldCover (Planetary Computer ``esa-worldcover``) opt-in via
+# ``dataset="esa_worldcover_2021"``.
 #
-# Round 2 (THE PALETTE-ENCODING HOTFIX):
-#
-#   * Job-0042's NLCD validation gate (Invariant 7 mitigation) fired on a real
-#     Fort Myers smoke run: the WMS GetMap GeoTIFF returns raster bytes that
-#     are **palette indices** (1, 3, 4, 5, ..., 21) NOT canonical NLCD class
-#     integers (11, 21, 22, 23, ..., 95).
-#     The Manning's mapping CSV is keyed by
-#     canonical integers; SFINCS dispatch was blocked end-to-end.
-#   * Live-probed both candidate fix paths per §F.1.1 live-verification discipline:
-#
-#     - **Path A (palette decode):** the WMS GeoTIFF carries a 256-entry
-#       ColorTable in its IFD; the index→RGB→canonical NLCD mapping is fixed
-#       (idx 1 = open-water = (71,107,160) = NLCD 11; idx 3 = developed-open
-#       = (221,201,201) = NLCD 21; …). Decoding via the embedded ColorTable
-#       and an inverse RGB→class table is feasible but adds a fragile
-#       client-side translation step (one MRLC palette reorder breaks us).
-#     - **Path B (WCS 1.0.0 GetCoverage):** ``mrlc_display:NLCD_2021_Land_
-#       Cover_L48`` coverage served by the WCS 1.0.0 endpoint with
-#       ``REQUEST=GetCoverage&CRS=EPSG:4326&BBOX=...&WIDTH=...&HEIGHT=...&FORMAT=GeoTIFF``
-#       returns canonical NLCD class integers DIRECTLY (verified: unique band1
-#       values for Fort Myers bbox = [11, 21, 22, 23, 24, 31, 41, 42, 43, 52,
-#       71, 81, 82, 90, 95, 255-nodata] — every value cleanly mapped to
-#       manning_mapping.csv v1.0.0). The DescribeCoverage XML calls the band
-#       "PALETTE_INDEX" but the integers ARE the canonical NLCD codes — WCS
-#       1.0.0 emits the source dataset's raw byte values whereas WMS GetMap
-#       emits the rendered (re-indexed) palette indices.
-#     - **WCS 2.0.1 / 1.1.1:** also tried; both fail in different ways. WCS
-#       2.0.1 hits a GeoServer "Unable to map projection Popular Visualisation
-#       Pseudo Mercator" exception (GeoServer projection-mapping bug on its
-#       own native CRS). WCS 1.1.1 rejects bbox-only requests as "less than a
-#       pixel would be read." WCS 1.0.0 with explicit WIDTH/HEIGHT is the
-#       reliable byte surface.
-#
-#   * **Path B chosen.** Canonical bytes from the server is a clean win over
-#     client-side palette decoding: no RGB→class lookup to maintain, no
-#     fragility to MRLC palette reorders, no Round-3 silent-wrong-answer risk.
-#     Both paths are §F.1.1 Tier 2 (OGC service) — substrate stays Tier 2,
-#     vendor sub-protocol switches from WMS GetMap to WCS GetCoverage.
-#
-# Job-0044 cache-migration policy: cache key now includes ``source: "mrlc-wcs"``
-# (the palette-encoded ``mrlc-wms`` entries from evidence land
-# under a different cache prefix and naturally evict on the 30-day TTL — no
-# explicit invalidation needed). Job-0039's evidence COGs at
-# ``cache/static-30d/landcover/56bad09bfa8a71d502ed61badc785a00.tif`` will
-# remain until TTL eviction; the new canonical-bytes COGs land at a new key.
-#
-#
-# Vintage discipline: NLCD vintages 2019, 2021 (default), and 2023 are most-
-# relevant. The Annual NLCD Collection 1.0 (2023 release) is published as the
-# ``Annual_NLCD_LndCov_<YEAR>_CU_C1V0`` family; the WMS GeoServer lists
-# discrete-year layers up through **NLCD_2021_Land_Cover_L48**. 2023 is the
-# newest release but its WMS layer name was not present in the MRLC
-# GetCapabilities at probe time (2026-06-07); the substrate defaults to 2021
-# and the dataset string parameter supports ``"nlcd_2019"`` and (forward-
-# looking) ``"nlcd_2023"`` once it lands. ESA WorldCover (Planetary Computer
-# ``esa-worldcover``) opt-in via ``dataset="esa_worldcover_2021"``.
-#
-# Manning's mapping validation gate (per docs/decisions/oq-4-hydromt-depth.md
-# §4 "Immediate "): the NLCD vintage year is returned as sidecar
-# metadata alongside the LayerURI so ``build_sfincs_model`` can
-# verify the Manning's mapping CSV covers the vintage's class encoding. This
-# is the Invariant 7 (no silent wrong answers) mitigation demanded.
-#
-# Sidecar shape — return-value design: ``LayerURI`` (in
-# ``trid3nt_contracts.execution``) is a FROZEN contract with
-# ``extra="forbid"`` — we cannot add a ``metadata`` field. The kickoff's
-# example syntax ``LayerURI.metadata["nlcd_vintage_year"] = 2021`` was
-# illustrative; the actual seam is a structured ``dict`` return shape:
+# Manning's mapping validation gate (docs/decisions/oq-4-hydromt-depth.md
+# §4): ``LayerURI`` is a FROZEN contract with ``extra="forbid"``, so the NLCD
+# vintage year cannot live on it. fetch_landcover instead returns a
+# structured dict:
 #
 #     {
 #       "layer": LayerURI(...),
 #       "nlcd_vintage_year": 2021,
 #       "dataset": "nlcd_2021",
-#       "source": "mrlc-wms",
+#       "source": "mrlc-wcs",
 #     }
 #
-# This is the same dict-return pattern as ``geocode_location`` (also no
-# contract for its shape) and ``lookup_precip_return_period`` below.
+# so ``build_sfincs_model`` can verify the Manning's mapping CSV covers the
+# vintage's class encoding (Invariant 7: no silent wrong answers). Same
+# dict-return pattern as ``geocode_location`` and
+# ``lookup_precip_return_period`` below.
 
 
 _FETCH_LANDCOVER_METADATA = AtomicToolMetadata(
@@ -147,34 +83,18 @@ _FETCH_LANDCOVER_METADATA = AtomicToolMetadata(
     cacheable=True,
 )
 
-# Landcover-ONLY cache-version salt (STALE-CACHE fix).
+# Landcover-ONLY cache-version salt.
 # -------------------------------------------------------------------------
-# The "bake NLCD land cover into hillshade" demo rendered grey because the
-# read-through cache (static-30d, 30-day TTL) was serving NLCD COGs written
-# BEFORE deploy palette-preservation fix. Those stale COGs
-# dropped their embedded GDAL color table, so blending them produced a flat
-# grayscale base instead of the NLCD class colors.
-#
-# Bumping this salt changes the canonicalized ``params`` dict that drives the
-# landcover cache key (``compute_cache_key`` hashes ``source_id || params ||
-# vintage``), so a post-fix fetch for the SAME bbox now computes a DIFFERENT
-# key than the pre-fix entry — i.e. it MISSES the stale palette-less COG and
-# regenerates a colored (palette-preserving) COG. This is scoped to
-# fetch_landcover ONLY: it is folded into the landcover ``params`` dict, never
-# into the shared ``compute_cache_key`` salt, so no other tool's cache key
-# changes (a recursive cache wipe was deliberately avoided). Bump the integer
-# whenever a landcover-COG-generation fix must force a clean regenerate.
+# Folded into the landcover ``params`` dict (never the shared
+# ``compute_cache_key`` salt), so bumping it changes the landcover cache key
+# only -- a post-bump fetch for the SAME bbox computes a DIFFERENT key and
+# regenerates instead of serving a stale COG, with no other tool's cache
+# affected. Bump the integer whenever a landcover-COG-generation fix must
+# force a clean regenerate.
 _LANDCOVER_CACHE_VERSION = 3  # v3 = background(0)->nodata transparency; v2 = palette-preserving COGs
 
-# MRLC WCS 1.0.0 GeoServer endpoint (Tier 2 OGC service, live-verified).
-# WCS 1.0.0 GetCoverage returns canonical NLCD class
-# integers in the raster band - the WMS GetMap path landed against
-# returned palette-encoded indices (the
-# blocker validation gate caught). WCS 1.0.0 was chosen over
-# WCS 1.1.1 / 2.0.1: 2.0.1 hits a GeoServer projection-mapping bug ("Unable
-# to map projection Popular Visualisation Pseudo Mercator") on its own
-# native EPSG:3857; 1.1.1 rejects bbox-only requests; 1.0.0 with explicit
-# CRS=EPSG:4326 + WIDTH/HEIGHT + FORMAT=GeoTIFF is the reliable surface.
+# MRLC WCS 1.0.0 GeoServer endpoint (returns canonical NLCD class integers
+# directly; used over WMS/WCS 1.1.1/WCS 2.0.1 -- see module header).
 _MRLC_WCS_URL = "https://www.mrlc.gov/geoserver/mrlc_display/wcs"
 
 # NLCD year → WCS coverage ID in the MRLC GeoServer catalog. WCS uses the
@@ -199,24 +119,24 @@ def _read_band1_colormap(src) -> dict | None:
     color table; TiTiler colorizes from it. Every COG re-write (clip, COG
     translate, overview enforcement) must carry that table forward or the layer
     renders solid grey (regression). rasterio raises ``ValueError``
-    when band 1 has no color table — that is the normal, expected case for
+    when band 1 has no color table -- that is the normal, expected case for
     continuous rasters (DEM, hillshade, flood depth), and we return ``None`` so
     the caller does NOT fabricate one.
     """
     try:
         return src.colormap(1)
     except ValueError:
-        # rasterio raises ValueError when band 1 has no color table — the
+        # rasterio raises ValueError when band 1 has no color table -- the
         # normal case for continuous rasters (DEM/hillshade/flood depth).
         return None
-    except Exception as exc:  # noqa: BLE001 — any other read failure: no-op
+    except Exception as exc:  # noqa: BLE001 -- any other read failure: no-op
         logger.debug("colormap read skipped (%s: %s)", type(exc).__name__, exc)
         return None
 
 def _apply_band1_colormap(dst, cmap: dict | None, colorinterp=None) -> None:
     """Write a preserved band-1 color table + palette colorinterp onto ``dst``.
 
-    No-op when ``cmap`` is ``None`` (non-paletted raster — we never fabricate a
+    No-op when ``cmap`` is ``None`` (non-paletted raster -- we never fabricate a
     color table). When a table is present, stamp it on band 1 and set band 1's
     color interpretation to ``palette`` so downstream readers/TiTiler treat the
     integer pixels as indices into the table.
@@ -231,9 +151,9 @@ def _apply_band1_colormap(dst, cmap: dict | None, colorinterp=None) -> None:
             interp = list(dst.colorinterp)
             interp[0] = ColorInterp.palette
             dst.colorinterp = tuple(interp)
-        except Exception:  # noqa: BLE001 — colorinterp set is best-effort
+        except Exception:  # noqa: BLE001 -- colorinterp set is best-effort
             pass
-    except Exception as exc:  # noqa: BLE001 — colormap copy is best-effort
+    except Exception as exc:  # noqa: BLE001 -- colormap copy is best-effort
         logger.warning(
             "colormap preservation failed (%s: %s); output may render grey",
             type(exc).__name__,
@@ -248,9 +168,9 @@ def _clip_raster_bytes_to_bbox(
     The MRLC WCS GetCoverage already returns the requested BBOX server-side,
     but pixel snapping can leave a fringe row/column outside the AOI. This
     reprojects the bbox into the raster's CRS, computes the pixel window, and
-    writes the cropped raster — guaranteeing the output extent matches the
+    writes the cropped raster -- guaranteeing the output extent matches the
     requested bbox to within one pixel. Best-effort: returns the input bytes
-    unchanged on any failure (never raises — clipping is a precision nicety,
+    unchanged on any failure (never raises -- clipping is a precision nicety,
     not a correctness gate).
     """
     in_tmp: str | None = None
@@ -282,7 +202,7 @@ def _clip_raster_bytes_to_bbox(
             full = rasterio.windows.Window(0, 0, src.width, src.height)
             window = window.intersection(full).round_offsets().round_lengths()
             if window.width < 1 or window.height < 1:
-                # Degenerate intersection — keep the original (don't blank it out).
+                # Degenerate intersection -- keep the original (don't blank it out).
                 return tif_bytes
             data = src.read(window=window)
             transform = src.window_transform(window)
@@ -294,7 +214,7 @@ def _clip_raster_bytes_to_bbox(
             )
             # Preserve a band-1 palette color table (e.g. NLCD land cover) so
             # the cropped output still colorizes. None when the source has no
-            # color table (DEM/hillshade/flood depth) — a pure no-op there.
+            # color table (DEM/hillshade/flood depth) -- a pure no-op there.
             cmap = _read_band1_colormap(src)
             with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as of:
                 out_tmp = of.name
@@ -303,7 +223,7 @@ def _clip_raster_bytes_to_bbox(
                 _apply_band1_colormap(dst, cmap)
         with open(out_tmp, "rb") as f:
             return f.read()
-    except Exception as exc:  # noqa: BLE001 — clip is best-effort precision
+    except Exception as exc:  # noqa: BLE001 -- clip is best-effort precision
         logger.warning(
             "fetch_landcover: bbox clip failed (%s: %s); returning unclipped raster",
             type(exc).__name__,
@@ -324,7 +244,7 @@ def _rasterio_translate_to_cog(tif_bytes: bytes) -> bytes:
     Used as the fallback when the GDAL CLI binaries that ``_translate_to_cog``
     (compute_hillshade) shells out to are not on PATH (e.g. the agent .venv
     without gdal-bin). The rasterio ``COG`` driver builds internal overviews
-    and 512x512 tiling automatically — the exact properties TiTiler needs to
+    and 512x512 tiling automatically -- the exact properties TiTiler needs to
     avoid the zoomed-out 404s that made NLCD render spotty. Best-effort:
     returns the input bytes unchanged on any failure.
     """
@@ -353,7 +273,7 @@ def _rasterio_translate_to_cog(tif_bytes: bytes) -> bytes:
                 profile["nodata"] = src.nodata
             data = src.read()
             # Preserve a band-1 palette color table (NLCD land cover) across the
-            # COG translate — TiTiler colorizes from this embedded table. None
+            # COG translate -- TiTiler colorizes from this embedded table. None
             # for non-paletted rasters (DEM/hillshade/flood depth): a no-op.
             cmap = _read_band1_colormap(src)
             colorinterp = src.colorinterp
@@ -366,7 +286,7 @@ def _rasterio_translate_to_cog(tif_bytes: bytes) -> bytes:
                 _apply_band1_colormap(dst, cmap, colorinterp)
         with open(out_tmp, "rb") as f:
             return f.read()
-    except Exception as exc:  # noqa: BLE001 — COG translate is best-effort
+    except Exception as exc:  # noqa: BLE001 -- COG translate is best-effort
         logger.warning(
             "fetch_landcover: rasterio COG translate failed (%s: %s); returning "
             "flat GeoTIFF bytes",
@@ -393,7 +313,7 @@ def _landcover_bytes_to_cog(
     out. This routes the raster through ``_translate_to_cog`` (the
     compute_hillshade COG translator that writes a tiled COG with overviews)
     when the GDAL CLI is available, and falls back to the pure-rasterio COG
-    driver otherwise — so overviews are present in BOTH environments.
+    driver otherwise -- so overviews are present in BOTH environments.
 
     Also clips to the EXACT requested bbox first (precision nicety; the WCS
     already honors BBOX server-side but pixel snapping can leave a fringe).
@@ -426,7 +346,7 @@ def _landcover_bytes_to_cog(
                     os.unlink(in_tmp)
                 except OSError:
                     pass
-    except Exception as exc:  # noqa: BLE001 — GDAL CLI not available / failed
+    except Exception as exc:  # noqa: BLE001 -- GDAL CLI not available / failed
         logger.info(
             "fetch_landcover: GDAL-CLI COG translate unavailable (%s); using "
             "rasterio COG driver fallback",
@@ -461,36 +381,28 @@ def _has_overviews(tif_bytes: bytes) -> bool:
 # pixels outside the classified CONUS extent (open ocean, international
 # waters, etc). It is NEVER a legitimate NLCD land-cover class (real classes
 # are 11-95); the MRLC WCS 1.0.0 GetCoverage's embedded color table maps it
-# to OPAQUE BLACK ((0, 0, 0, 255)) rather than transparent -- confirmed via a
-# live probe of the real endpoint (bbox off the Washington coast, 2026-07-09).
-# The raster's DECLARED ``nodata`` tag is 255 (a separate sentinel that DOES
-# render transparent), so 0 slips through as an undeclared second nodata
-# value. City/county-scale fetches (always fully on land) never hit index 0
-# and never surfaced this; the state-scale auto-coarsen resolution-gate path
-# (commit 21cd123) is what first requested a bbox large enough to include
-# real open ocean, live-exposing an opaque black rectangle over the nodata
-# region. See _fix_nlcd_background_transparency.
+# to OPAQUE BLACK ((0, 0, 0, 255)) rather than transparent. The raster's
+# DECLARED ``nodata`` tag is 255 (a separate sentinel that DOES render
+# transparent), so 0 slips through as an undeclared second nodata value.
+# City/county-scale fetches (always fully on land) never hit index 0; the
+# state-scale auto-coarsen resolution-gate path is what first requests a
+# bbox large enough to include real open ocean, exposing an opaque black
+# rectangle over the nodata region. See _fix_nlcd_background_transparency.
 _NLCD_BACKGROUND_CLASS = 0
 
 def _fix_nlcd_background_transparency(tif_bytes: bytes) -> bytes:
     """Fold NLCD's ``0`` (Background/no-coverage) pixels into the declared nodata.
 
-    Root cause (live-verified against the real MRLC WCS endpoint 2026-07-09,
-    and against GDAL's actual GTiff behavior -- NOT just the embedded table):
     GDAL's GTiff driver forces alpha=0 ONLY for the color-table entry whose
     index equals the band's DECLARED ``nodata`` value; every other entry's
     alpha is silently forced back to 255 (opaque) when the color table is
-    flushed to disk, regardless of what alpha ``write_colormap`` was given.
-    (Confirmed empirically: writing ``cmap[0] = (0, 0, 0, 0)`` while
-    ``nodata`` stays 255 round-trips back as ``(0, 0, 0, 255)`` -- opaque --
-    every time; rewriting the colormap alone can never fix this.) So the only
-    reliable fix is at the PIXEL level: remap every ``0``-valued pixel to the
-    raster's existing declared ``nodata`` (255 for MRLC WCS NLCD), which
-    already renders transparent correctly. Class 0 is never a legitimate NLCD
-    code (real codes are 11-95), so this remap can never destroy real data.
-    If the raster has no declared nodata at all, ``0`` is promoted to be the
-    declared nodata directly (no remap needed; GDAL's forcing behavior then
-    makes index 0 transparent on its own).
+    flushed to disk, regardless of what alpha ``write_colormap`` was given --
+    rewriting the colormap alone can never fix this. The only reliable fix is
+    at the PIXEL level: remap every ``0``-valued pixel to the raster's
+    existing declared ``nodata`` (255 for MRLC WCS NLCD). Class 0 is never a
+    legitimate NLCD code (real codes are 11-95), so this remap can never
+    destroy real data. If the raster has no declared nodata at all, ``0`` is
+    promoted to be the declared nodata directly.
 
     Best-effort: returns ``tif_bytes`` unchanged (never raises) if the raster
     has no embedded colormap, has no ``0``-valued pixels, or the rewrite
@@ -549,7 +461,7 @@ def _fetch_nlcd_landcover_bytes(
 ) -> bytes:
     """Fetch NLCD landcover for ``bbox`` at the given vintage year via MRLC WCS 1.0.0.
 
-    Tier 2 access pattern (per §F.1.1) — MRLC WCS 1.0.0 ``GetCoverage`` with
+    Tier 2 access pattern (per §F.1.1) -- MRLC WCS 1.0.0 ``GetCoverage`` with
     ``FORMAT=GeoTIFF`` returns the canonical NLCD class integers (11, 21, 22,
     23, 24, 31, 41, 42, 43, 51, 52, 71, 72, 73, 74, 81, 82, 90, 95) in the
     raster band - NOT palette indices. This is the hotfix that
@@ -681,7 +593,7 @@ def _round_bbox_to_30m_nlcd(
 
     Per the per-source bbox quantization rule (acceptance criterion 3 of
     the kickoff): NLCD's native cell is 30 m. We reuse
-    ``round_bbox_to_resolution(bbox, 30)`` — same semantics as ``fetch_dem``
+    ``round_bbox_to_resolution(bbox, 30)`` -- same semantics as ``fetch_dem``
     at 30 m, so dedup-via-quantization works the same way.
     """
     return round_bbox_to_resolution(bbox, 30)
@@ -702,19 +614,19 @@ def fetch_landcover(
 ) -> dict[str, Any]:
     """Fetch landcover classification raster (NLCD or ESA WorldCover) for a bbox.
 
-    Access pattern: Tier 2 (OGC service — MRLC WCS/WMS endpoint per §F.1.1; live
+    Access pattern: Tier 2 (OGC service -- MRLC WCS/WMS endpoint per §F.1.1; live
     verification found NLCD is Tier 2).
 
     **What it does:** Downloads an NLCD or ESA WorldCover landcover GeoTIFF
     clipped to the requested bbox via the MRLC WCS 1.0.0 GeoServer endpoint.
     Returns a dict containing a ``LayerURI`` plus a ``nlcd_vintage_year``
     sidecar field that downstream SFINCS setup uses to validate Manning's
-    roughness mappings before HydroMT invocation (Invariant 7 — no silent
+    roughness mappings before HydroMT invocation (Invariant 7 -- no silent
     wrong answers).
 
     **When to use:**
     - ``build_sfincs_model`` requires landcover for Manning's roughness
-      assignment — this is the canonical supply tool.
+      assignment -- this is the canonical supply tool.
     - User asks "what land cover exists in this area?" for a CONUS location.
     - Exposure analysis: intersect a hazard footprint with impervious-surface
       or developed-land classes.

@@ -13,19 +13,19 @@ Implements the M1 hello-world subset of Appendix A:
     - pipeline-state          for cancel; also a one-step "thinking" snapshot
     - error                   A.6 codes
 
-Every wire envelope is validated through ``trid3nt_contracts.ws.Envelope`` —
+Every wire envelope is validated through ``trid3nt_contracts.ws.Envelope`` --
 NEVER hand-roll JSON. Per Invariant 8 cancellation is first-class: any
 in-flight Gemini stream is cancelled via asyncio task cancellation; the LLM
 side of the chain completes within 30s. Cloud Workflows ``terminate`` is the
 v0.2/M5 side of the chain (no solver yet in M1).
 
 FR-WC-15 ``research_mode``: pass-through pinned. For job-0015 v0.1 the field is
-logged and forwarded as-is — there is no second pipeline strategy yet.
+logged and forwarded as-is -- there is no second pipeline strategy yet.
 
 FR-AS-8 confirmation hooks: scaffolded as ``CONFIRMATION_TRIGGERS`` (empty in
 M1). Session-record writes (Appendix D.6) are explicitly carved out per FR-AS-8.
 
-OQ-1 (Cloud Run WS vs Agent Engine) — see report's Open Questions section.
+OQ-1 (Cloud Run WS vs Agent Engine) -- see report's Open Questions section.
 """
 
 from __future__ import annotations
@@ -131,7 +131,7 @@ from .agent.adapters.adapter import (
     load_settings,
     rehydrate_history_from_case,
     REHYDRATE_HISTORY_CAP,
-    stream_events,  # noqa: F401 — retained for tests / direct text-only callers
+    stream_events,  # noqa: F401 -- retained for tests / direct text-only callers
     stream_events_with_contents,
     summarize_tool_result,
     classify_result_usable,
@@ -256,12 +256,12 @@ logger = logging.getLogger("trid3nt_server.server")
 
 # Confirmation triggers (FR-AS-8). Empty for M1: solver runs and non-session
 # Mongo writes will populate this when those code paths land. Session-record
-# writes (Appendix D.6) are NOT a trigger — that carveout is documented in
+# writes (Appendix D.6) are NOT a trigger -- that carveout is documented in
 # the report, not represented as data here.
 CONFIRMATION_TRIGGERS: set[str] = set()
 
 # ---------------------------------------------------------------------------
-# Tool-retrieval mode (tool-retrieval kickoff — orchestrator half).
+# Tool-retrieval mode (tool-retrieval kickoff -- orchestrator half).
 #
 # Three modes, read once at import time following the TRID3NT_DYNAMIC_HOT_SET /
 # TRID3NT_SYNC_TOOL_OFFLOAD env idiom (NO code change to flip):
@@ -313,29 +313,22 @@ def _tool_retrieval_mode() -> str:
     mode = os.environ.get("TRID3NT_TOOL_RETRIEVAL", "off").strip().lower()
     return mode if mode in _TOOL_RETRIEVAL_VALID_MODES else "off"
 
-# job-0233: the ``code_exec_request`` confirm gate validity window (seconds).
-# Running arbitrary Python is a deliberate user decision; the gate gets the same
-# 300s read-decision TTL as the payload-warning gate. On expiry the gate fails
-# closed (CONFIRMATION_TIMEOUT) and the sandbox does not run.
-# NOTE (live-feedback 2026-07-22): the code-exec gate itself no longer waits on
-# this constant -- see ``_code_exec_approval_timeout_s`` below. It is retained
-# because the credential / region-choice / solver-confirm gates borrow it as
-# their default wait window.
+# The ``code_exec_request`` confirm gate validity window (seconds). Running
+# arbitrary Python is a deliberate user decision; on expiry the gate fails
+# closed (CONFIRMATION_TIMEOUT) and the sandbox does not run. The code-exec
+# gate itself no longer waits on this constant (see
+# ``_code_exec_approval_timeout_s``); it is retained because the credential /
+# region-choice / solver-confirm gates borrow it as their default wait window.
 CODE_EXEC_CONFIRM_TIMEOUT_SECONDS: int = int(
     os.environ.get("TRID3NT_CODE_EXEC_CONFIRM_TIMEOUT", "300")
 )
 
-# Live-feedback fix (2026-07-22): honest timeout on unanswered code-exec
-# approvals. The QGIS plugin (the only client of this local build) had ZERO
-# handling for the ``code-exec-request`` card, and the F6 local-lane gate wait
-# (``_gate_wait_timeout`` -> 24h) meant the parked tool call effectively never
-# resolved -- the turn hung ("it just stopped") with an empty tool card. The
-# code-exec gate therefore gets its OWN bounded approval window that applies in
-# EVERY lane (it deliberately bypasses the F6 24h local override): when no
-# confirmation envelope answers the card in time, the gate raises the typed
-# ``CodeExecApprovalTimeoutError`` so the LLM receives a structured
-# function_response, narrates honestly, and the TURN COMPLETES. Read LIVE (not
-# an import-time snapshot) so tests / runtime flips are honored.
+# Honest timeout on unanswered code-exec approvals: the code-exec gate gets its
+# OWN bounded approval window that applies in EVERY lane (deliberately bypassing
+# the F6 24h local override). When no confirmation envelope answers the card in
+# time, the gate raises the typed ``CodeExecApprovalTimeoutError`` so the LLM
+# receives a structured function_response, narrates honestly, and the TURN
+# COMPLETES. Read LIVE (not an import-time snapshot) so runtime flips are honored.
 CODE_EXEC_APPROVAL_TIMEOUT_DEFAULT_S: float = 180.0
 
 
@@ -567,10 +560,10 @@ def _geocode_drift_note(
 
 
 # --------------------------------------------------------------------------- #
-# ADR 0018 -- pending tool-choice registry (mirrors the job-0243 session-
-# scoped confirmation registry: module-level, keyed by the unguessable ULID
-# request_id + owning session_id, so a reply arriving on a sibling WebSocket
-# connection of the same session still resolves the paused turn).
+# ADR 0018 -- pending tool-choice registry: module-level, keyed by the
+# unguessable ULID request_id + owning session_id, so a reply arriving on a
+# sibling WebSocket connection of the same session still resolves the paused
+# turn.
 # --------------------------------------------------------------------------- #
 
 _PENDING_TOOL_CHOICES: dict[str, tuple[str, "asyncio.Future"]] = {}
@@ -973,10 +966,10 @@ async def _handle_catalog_addition_response(
 
 
 # ---------------------------------------------------------------------------
-# Routing-layer typed exceptions (B-rev job, FR-AS-11 surface).
+# Routing-layer typed exceptions (FR-AS-11 surface).
 #
 # These live here rather than in a shared exceptions module because they are
-# raised exclusively inside ``_invoke_tool_via_emitter`` — the server-side
+# raised exclusively inside ``_invoke_tool_via_emitter`` -- the server-side
 # routing layer. They follow the same FR-AS-11 contract as the tool-level
 # typed exceptions (``WDPAError``, ``HRSLError``, etc.): ``error_code`` is a
 # SCREAMING_SNAKE_CASE string and ``retryable`` is False for both (the LLM
@@ -984,9 +977,9 @@ async def _handle_catalog_addition_response(
 # function-call decision).
 #
 # ``summarize_tool_result`` in ``adapter.py`` harvests ``error_code`` +
-# ``retryable`` from any exception that carries them (job-0177 logic), so
-# these propagate as a full structured error envelope to Gemini — the same
-# shape as any ``fetch_*`` / ``compute_*`` typed exception.
+# ``retryable`` from any exception that carries them, so these propagate as
+# a full structured error envelope to the model -- the same shape as any
+# ``fetch_*`` / ``compute_*`` typed exception.
 # ---------------------------------------------------------------------------
 
 
@@ -995,7 +988,7 @@ class ToolNotFoundError(RuntimeError):
     not registered in ``TOOL_REGISTRY``.
 
     ``retryable=False``: Gemini cannot retry its way to a registration it
-    invented — it must revise its call (use a different tool, narrate that
+    invented -- it must revise its call (use a different tool, narrate that
     it cannot help, or ask for clarification).
 
     The ``valid_tools`` attribute carries the first 20 registered names so
@@ -1038,11 +1031,11 @@ class PayloadWarningCancelledError(RuntimeError):
 
 
 class CodeExecConfirmationCancelledError(RuntimeError):
-    """Raised when the ``code_exec_request`` confirm gate denies the run because
-    the user chose ``cancel`` or the gate timed out (job-0233).
+    """Raised when the ``code_exec_request`` confirm gate denies the run
+    because the user chose ``cancel`` or the gate timed out.
 
     Running arbitrary Python is a consequential action; the gate fails closed.
-    ``retryable=False``: the user explicitly declined to run THIS code — Gemini
+    ``retryable=False``: the user explicitly declined to run THIS code -- Gemini
     should narrate the decline honestly and not re-issue the identical snippet
     without the user changing course.
     """
@@ -1059,13 +1052,12 @@ class CodeExecConfirmationCancelledError(RuntimeError):
 
 
 class CodeExecApprovalTimeoutError(RuntimeError):
-    """Raised when the ``code-exec-request`` approval card was never answered
-    (live-feedback fix 2026-07-22).
+    """Raised when the ``code-exec-request`` approval card was never answered.
 
-    Distinct from :class:`CodeExecConfirmationCancelledError` (an explicit user
-    decision): here NOBODY answered the card within the approval window --
-    the client may not render it at all (the incident: the QGIS plugin had no
-    handler for the envelope, so the parked tool call waited forever).
+    Distinct from :class:`CodeExecConfirmationCancelledError` (an explicit
+    user decision): here NOBODY answered the card within the approval
+    window -- e.g. a client with no handler for the envelope leaves the
+    parked tool call waiting forever.
 
     ``retryable=False``: re-issuing the identical snippet would just park on
     another unanswered card; the LLM should narrate that the approval card was
@@ -1090,7 +1082,7 @@ class CodeExecApprovalTimeoutError(RuntimeError):
 
 
 class SolverConfirmationCancelledError(RuntimeError):
-    """Raised when a solver confirm gate denies the dispatch (job-0241).
+    """Raised when a solver confirm gate denies the dispatch.
 
     A solver run is a consequence (FR-AS-8 / Invariant 9): the user must
     approve the derived forcing parameters before the model executes. Cancel,
@@ -1110,92 +1102,82 @@ class SolverConfirmationCancelledError(RuntimeError):
 
 
 # Tools whose dispatch is a consequence (a solver run, FR-AS-8 / Invariant 9)
-# and MUST pass a parameter-confirmation gate on the LLM path (job-0241 — the
-# Stage 3 live gate caught run_model_groundwater_contamination_scenario
-# dispatching MODFLOW with zero user confirmation). The gate runs the
-# composer's PURE extraction to build the confirm card, blocks on the same
-# pending_payload_warnings future seam as payload-warning/code-exec, and
-# injects confirmed=True only after the user approves. Extensible: the flood
-# composers join once they grow confirm-envelope builders (OQ-FIXWAVE-FLOOD-GATE).
+# and MUST pass a parameter-confirmation gate on the LLM path. The gate runs
+# the composer's PURE extraction to build the confirm card, blocks on the
+# same pending_payload_warnings future seam as payload-warning/code-exec,
+# and injects confirmed=True only after the user approves.
 SOLVER_CONFIRM_TOOLS: set[str] = {
     "run_model_groundwater_contamination_scenario",
-    # engine-door refactor: run_model_contamination_affected_fields is CUT (its
-    # zonal field-analysis half re-homed to a playground recipe). The MODFLOW
-    # plume templates (modflow_contaminant_plume et al.) were NOT confirm-gated
-    # before the fold (run_modflow_job was absent from this set), so gating parity
-    # is preserved by NOT adding them here (RISK-8).
-    # job-0256: flood solvers gated too — a live sandbox-only session was
-    # observed running an unrequested SFINCS solve (~10-20 min). The card is
-    # built from the call args (location/return period/duration).
-    # engine-door refactor (SFINCS slice): run_model_flood_scenario is now the
-    # sfincs_flood template (the door run_sfincs executes no solve; the TEMPLATE
-    # submits the solver, so the gate keys on the template - RISK-8 parity).
+    # engine-door refactor: run_model_contamination_affected_fields is CUT
+    # (its zonal field-analysis half re-homed to a playground recipe). The
+    # MODFLOW plume templates were NOT confirm-gated before the fold, so
+    # gating parity is preserved by NOT adding them here.
+    # Flood solvers are gated too: an unrequested SFINCS solve must not run
+    # without confirmation. The card is built from the call args
+    # (location/return period/duration).
+    # engine-door refactor (SFINCS slice): run_model_flood_scenario is now
+    # the sfincs_flood template (the door run_sfincs executes no solve; the
+    # TEMPLATE submits the solver, so the gate keys on the template).
     "sfincs_flood",
-    # #154 granularity gate (sprint-16): the SWMM urban-flood solver joins the
-    # confirm set with an ENRICHED card carrying a GranularitySuggestion (the
+    # The granularity gate: the SWMM urban-flood solver joins the confirm
+    # set with an ENRICHED card carrying a GranularitySuggestion (the
     # autoscaler's pre-run resolution ladder + estimated cells / solve time /
-    # compute class). The user can override the rung before the heavy solve via
-    # the existing tool-payload-confirmation ``narrow_scope`` path. Same gate
-    # machinery, no new WS envelope type.
+    # compute class). The user can override the rung before the heavy solve
+    # via the existing tool-payload-confirmation ``narrow_scope`` path.
     # engine-door refactor (SWMM slice): run_swmm_urban_flood is now the
     # swmm_urban_flood template (the door run_swmm executes no solve; the
-    # TEMPLATE submits the solver, so the gate keys on the template - RISK-8
-    # parity).
+    # TEMPLATE submits the solver, so the gate keys on the template).
     "swmm_urban_flood",
-    # NATE 2026-06-26: the OpenQuake classical-PSHA solver joins the confirm set
-    # (Invariant 9 — a consequential long Batch run must be user-confirmed). It
-    # dispatches an area-source PSHA over the whole bbox via run_solver
-    # ('openquake'), so it is a solve like SFINCS/SWMM/MODFLOW, not a fetch — it
-    # belongs in SOLVER_CONFIRM_TOOLS so the gate fires. The gate emits a simple
-    # proceed/cancel card (no granularity picker): the area source spans the
-    # whole AOI, so no rupture/incident-area user input is needed for classical
-    # PSHA (that is scenario mode, which is not built).
-    # engine-door refactor (OPENQUAKE slice): re-keyed run_seismic_hazard_psha ->
-    # openquake_psha (the template that submits the solver; the run_openquake door
-    # runs no solve). Confirm-gate parity preserved.
+    # The OpenQuake classical-PSHA solver joins the confirm set (Invariant 9
+    # -- a consequential long Batch run must be user-confirmed). It dispatches
+    # an area-source PSHA over the whole bbox via run_solver ('openquake'),
+    # so it is a solve like SFINCS/SWMM/MODFLOW, not a fetch. The gate emits
+    # a simple proceed/cancel card (no granularity picker): the area source
+    # spans the whole AOI, so no rupture/incident-area user input is needed
+    # for classical PSHA (that is scenario mode, which is not built).
+    # engine-door refactor (OPENQUAKE slice): re-keyed run_seismic_hazard_psha
+    # -> openquake_psha (the template that submits the solver; the
+    # run_openquake door runs no solve).
     "openquake_psha",
-    # BK-3b approve-mesh gate (2026-07-17): the TELEMAC river-dye solver joins
-    # the confirm set with the RICHEST card yet: the builder runs the FAST
-    # mesh-only worker (gmsh, no DEM, no solve, ~10-25 s), emits the actual
-    # triangle-wireframe mesh onto the map as a role="input" vector layer, and
-    # the card carries a GranularitySuggestion (mesh_resolution_m ladder + REAL
-    # node/element counts + CFL-coupled dt + conservative solve estimate). The
-    # user SEES the mesh before approving the expensive solve; narrow_scope
-    # re-runs with a different edge length. Keyed on the TEMPLATE that submits the
-    # solver (engine-door refactor, TELEMAC slice: the run_telemac name is now the
-    # read-only door, which runs no solve; the telemac_river_dye template is the
-    # tool the gate must intercept).
+    # The TELEMAC river-dye solver joins the confirm set with the richest
+    # card yet: the builder runs the fast mesh-only worker (gmsh, no DEM, no
+    # solve, ~10-25 s), emits the actual triangle-wireframe mesh onto the
+    # map as a role="input" vector layer, and the card carries a
+    # GranularitySuggestion (mesh_resolution_m ladder + real node/element
+    # counts + CFL-coupled dt + conservative solve estimate). The user sees
+    # the mesh before approving the expensive solve; narrow_scope re-runs
+    # with a different edge length. Keyed on the TEMPLATE that submits the
+    # solver (the run_telemac name is now the read-only door, which runs no
+    # solve; telemac_river_dye is the tool the gate must intercept).
     "telemac_river_dye",
-    # FIRE-3: the ELMFIRE wildfire-spread solver joins the confirm set
-    # (Invariant 9 — a consequential solver run: LANDFIRE fetches + a
-    # containerized level-set solve). The card is built by
-    # _build_fire_confirm_envelope from the call args: approximate grid cell
-    # count + a FIRE-1-calibrated runtime estimate + the scenario weather, so
-    # the user confirms the actual run about to dispatch. Simple
-    # proceed/cancel (no granularity picker at v1 — cellsize_m is an explicit
-    # tool arg the LLM can restate).
+    # The ELMFIRE wildfire-spread solver joins the confirm set (Invariant 9
+    # -- a consequential solver run: LANDFIRE fetches + a containerized
+    # level-set solve). The card is built by _build_fire_confirm_envelope
+    # from the call args: approximate grid cell count + a calibrated runtime
+    # estimate + the scenario weather, so the user confirms the actual run
+    # about to dispatch. Simple proceed/cancel (no granularity picker at v1
+    # -- cellsize_m is an explicit tool arg the LLM can restate).
     # engine-door refactor (ELMFIRE slice): re-keyed model_fire_spread ->
-    # elmfire_fire_spread (the template that submits the solver; the run_elmfire
-    # door runs no solve). Confirm-gate parity preserved.
+    # elmfire_fire_spread (the template that submits the solver; the
+    # run_elmfire door runs no solve).
     "elmfire_fire_spread",
-    # NATE 2026-07-27: the GeoClaw shallow-water inundation solver joins the
-    # confirm set (Invariant 9 gap the panel flagged — a consequential solver
-    # run: DEM/topobathy fetch + a containerized Clawpack solve). Mirrors the
-    # psha/fire wiring: a SIMPLE proceed/cancel card built inline by
-    # _build_geoclaw_confirm_envelope from the call args (AOI area + scenario +
-    # sim window + AMR levels). No granularity picker at v1 (amr_levels /
-    # sim_duration_s are explicit tool args the LLM can restate). Keyed on the
-    # geoclaw_inundation TEMPLATE that submits the solver; the run_geoclaw door
-    # runs no solve.
+    # The GeoClaw shallow-water inundation solver joins the confirm set
+    # (Invariant 9 -- a consequential solver run: DEM/topobathy fetch + a
+    # containerized Clawpack solve). Mirrors the psha/fire wiring: a simple
+    # proceed/cancel card built inline by _build_geoclaw_confirm_envelope
+    # from the call args (AOI area + scenario + sim window + AMR levels). No
+    # granularity picker at v1 (amr_levels / sim_duration_s are explicit
+    # tool args the LLM can restate). Keyed on the geoclaw_inundation
+    # TEMPLATE that submits the solver; the run_geoclaw door runs no solve.
     "geoclaw_inundation",
 }
 
 
-# NATE 2026-06-26: the #154 granularity gate widened to the two HEAVY raster
-# FETCHERS (DEM + topobathy) so the user controls fetch resolution before a big
-# download/merge — same confirm machinery, same GranularitySuggestion card. Kept
-# a SEPARATE set from SOLVER_CONFIRM_TOOLS on purpose: a fetch is NOT a solve.
-# The gate-trigger below fires for the UNION; the solver-only
+# The granularity gate widened to the two HEAVY raster FETCHERS (DEM +
+# topobathy) so the user controls fetch resolution before a big
+# download/merge -- same confirm machinery, same GranularitySuggestion card.
+# Kept a SEPARATE set from SOLVER_CONFIRM_TOOLS on purpose: a fetch is NOT
+# a solve. The gate-trigger below fires for the UNION; the solver-only
 # confirmed/enable_autoscale injection stays guarded to SOLVER_CONFIRM_TOOLS.
 FETCH_CONFIRM_TOOLS: set[str] = {
     "fetch_dem",
@@ -1207,7 +1189,7 @@ FETCH_CONFIRM_TOOLS: set[str] = {
 #: (vs terrain / land-cover / plume / generic rasters). Used at the publish_layer
 #: wrap-site so a re-publish of a flood-depth COG that arrives with an EMPTY
 #: style_preset is defaulted to ``continuous_flood_depth`` (white->blue->green)
-#: instead of "" — an empty preset makes TiTiler fall back to viridis and paints
+#: instead of "" -- an empty preset makes TiTiler fall back to viridis and paints
 #: a redundant styleless flood layer (the exact duplicate-flood-layer symptom).
 #: Token-boundary matched (not substring) so e.g. ``demo`` never trips ``dem``.
 _FLOOD_DEPTH_STYLE_TOKENS: frozenset[str] = frozenset(
@@ -1239,7 +1221,7 @@ def _resolve_publish_wrap_style_preset(
     When it resolves EMPTY, default a flood/depth COG to
     ``continuous_flood_depth`` so a redundant re-publish is never styleless
     (which TiTiler renders as viridis). Non-flood rasters keep ``""`` (QGIS /
-    TiTiler default) exactly as before — terrain auto-scales, paletted COGs use
+    TiTiler default) exactly as before -- terrain auto-scales, paletted COGs use
     their embedded color table."""
     preset = (style_preset or "").strip()
     if preset:
@@ -1252,14 +1234,14 @@ def _resolve_publish_wrap_style_preset(
 def _is_droppable_object_store_raster(value: Any) -> bool:
     """True iff ``value`` is exactly the LayerURI class ``emit_layer_uri`` DROPS.
 
-    The deterministic auto-publish (NATE 2026-06-26) targets precisely the
-    LayerURIs that ``layer_uri_emit.emit_layer_uri`` refuses to deliver: a
-    RENDERABLE RASTER carrying a raw object-store uri (``s3://`` / ``gs://``),
-    which MapLibre cannot fetch. Those must be converted to an http(s) tile URL
-    via publish_layer before they can render. A vector (inline-GeoJSON path), an
-    http(s)-uri raster (already renderable), or any non-LayerURI return is NOT a
-    candidate. ``PlumeLayerURI`` / ``SeepageLayerURI`` are LayerURI subclasses,
-    so ``isinstance(..., LayerURI)`` covers them.
+    The deterministic auto-publish targets precisely the LayerURIs that
+    ``layer_uri_emit.emit_layer_uri`` refuses to deliver: a RENDERABLE
+    RASTER carrying a raw object-store uri (``s3://`` / ``gs://``), which
+    MapLibre cannot fetch. Those must be converted to an http(s) tile URL
+    via publish_layer before they can render. A vector (inline-GeoJSON path),
+    an http(s)-uri raster (already renderable), or any non-LayerURI return
+    is NOT a candidate. ``PlumeLayerURI`` / ``SeepageLayerURI`` are LayerURI
+    subclasses, so ``isinstance(..., LayerURI)`` covers them.
     """
     if not isinstance(value, LayerURI):
         return False
@@ -1271,12 +1253,12 @@ def _is_droppable_object_store_raster(value: Any) -> bool:
 
 #: Result keys that mark a dispatch as having PRODUCED a real artifact -- a
 #: published / registered layer, a stored object, a feature set. Used by the
-#: loop-watchdog progress witness (job-186): a round that produces one of these
-#: is ADVANCING the Case (a new layer/handle appears) even if the model
-#: pathologically repeats the same call, so it is allowed to run to the step cap
-#: / loop-exhausted envelope rather than being watchdog-aborted. The bare-ack
-#: wedge shape from the incident (``{"ok": True}`` re-issued forever) carries
-#: none of these and so loads the no-progress streak.
+#: loop-watchdog progress witness: a round that produces one of these is
+#: ADVANCING the Case (a new layer/handle appears) even if the model
+#: pathologically repeats the same call, so it is allowed to run to the step
+#: cap / loop-exhausted envelope rather than being watchdog-aborted. A
+#: bare-ack wedge shape (``{"ok": True}`` re-issued forever) carries none of
+#: these and so loads the no-progress streak.
 _PROGRESS_RESULT_KEYS: tuple[str, ...] = (
     "layer_id",
     "wms_url",
@@ -1287,7 +1269,7 @@ _PROGRESS_RESULT_KEYS: tuple[str, ...] = (
 
 
 def _dispatch_made_progress(result: Any) -> bool:
-    """True iff a single tool dispatch produced a real artifact (job-186).
+    """True iff a single tool dispatch produced a real artifact.
 
     A ``LayerURI`` return (any subclass) is always progress -- a renderable
     layer was produced. A dict carrying a layer/handle/feature signal
@@ -1305,23 +1287,22 @@ def _dispatch_made_progress(result: Any) -> bool:
     return False
 
 
-#: How many CONSECUTIVE no-progress model rounds we tolerate AFTER a terminal
-#: composer has delivered its artifact before concluding the turn cleanly (NATE
-#: 2026-06-29). Symptom: a SFINCS flood publishes its depth layer
-#: (``sfincs_flood`` -> ``layers=1``) and the model, having nothing
-#: left to do, keeps emitting unproductive function calls until it trips the
-#: ``MAX_TURN_ITERATIONS`` cap and emits a (harmless but sloppy)
-#: ``loop_exhausted`` frame. Once the deliverable is in hand we (a) stamp the
-#: composer's function_response with a one-time wrap-up directive so a
-#: well-behaved model just summarizes and stops, and (b) keep this small
-#: SAFETY budget: if the model spins ``_POST_DELIVERABLE_WRAPUP_ROUNDS`` rounds
-#: in a row WITHOUT producing anything new, we conclude the turn cleanly (the
-#: accumulated narration finalizes as a normal final turn) instead of letting
-#: it run to the cap. A round that produces genuine follow-up work (a new
-#: layer/handle/feature -> ``_dispatch_made_progress``) RESETS the streak, so
-#: legitimate multi-deliverable flows (flood -> impact envelope -> buildings)
-#: are never cut off. This is NOT the runaway guard: a turn that NEVER produced
-#: a terminal deliverable still runs to the cap / watchdog exactly as before.
+#: How many CONSECUTIVE no-progress model rounds we tolerate AFTER a
+#: terminal composer has delivered its artifact before concluding the turn
+#: cleanly. Symptom without this: a SFINCS flood publishes its depth layer
+#: and the model, having nothing left to do, keeps emitting unproductive
+#: function calls until it trips ``MAX_TURN_ITERATIONS`` and emits a
+#: (harmless but sloppy) ``loop_exhausted`` frame. Once the deliverable is
+#: in hand we (a) stamp the composer's function_response with a one-time
+#: wrap-up directive so a well-behaved model just summarizes and stops, and
+#: (b) keep this small safety budget: if the model spins
+#: ``_POST_DELIVERABLE_WRAPUP_ROUNDS`` rounds in a row without producing
+#: anything new, we conclude the turn cleanly instead of letting it run to
+#: the cap. A round that produces genuine follow-up work
+#: (``_dispatch_made_progress``) RESETS the streak, so legitimate
+#: multi-deliverable flows are never cut off. This is NOT the runaway
+#: guard: a turn that never produced a terminal deliverable still runs to
+#: the cap / watchdog exactly as before.
 _POST_DELIVERABLE_WRAPUP_ROUNDS: int = 2
 
 #: The one-time wrap-up directive stamped onto a terminal composer's
@@ -1334,16 +1315,14 @@ _DELIVERABLE_COMPLETE_DIRECTIVE: str = (
     "and stop. Calling further tools now will not improve the answer."
 )
 
-#: OPEN-16 EMPTY-COMPLETION RETRY (live 2026-07-19): the local qwen3 model
-#: occasionally returns a round with ZERO tool calls AND ZERO non-whitespace
-#: text (log: "gemini loop terminal ... text_chunks=0"). This is NOT context
-#: overflow (that is the OPEN-14 compaction/clip guard) -- the model has room
-#: and simply emits nothing, so the turn used to die silently and the user
-#: request never ran. Instead of breaking, the loop RETRIES the round with a
+#: EMPTY-COMPLETION RETRY: the local qwen3 model occasionally returns a
+#: round with ZERO tool calls AND ZERO non-whitespace text. This is NOT
+#: context overflow (that is the compaction/clip guard) -- the model has
+#: room and simply emits nothing. The loop RETRIES the round with a
 #: corrective user-role nudge appended (production tool-runner pattern:
-#: OpenAI tool-runner / LangChain retry-with-nudge, NOT a blind resend),
-#: BOUNDED by this cap so an always-empty model can never loop forever (same
-#: safety discipline as the loop watchdog). Scoped to the LOCAL
+#: OpenAI tool-runner / LangChain retry-with-nudge, not a blind resend),
+#: BOUNDED by this cap so an always-empty model can never loop forever
+#: (same safety discipline as the loop watchdog). Scoped to the LOCAL
 #: (MODEL_PROVIDER=openai) path only -- a legitimately empty Bedrock round
 #: must NOT change.
 _EMPTY_COMPLETION_RETRY_CAP: int = 2
@@ -1482,7 +1461,7 @@ def _tool_names_from_search_result(result: Any) -> list[str]:
 
 
 def _is_terminal_composer(tool_name: str) -> bool:
-    """True iff ``tool_name`` is a top-level run-a-model composer (NATE 2026-06-29).
+    """True iff ``tool_name`` is a top-level run-a-model composer.
 
     A terminal composer is a ``run_*`` workflow-dispatch tool (the
     ``run_model_*`` / ``run_*_job`` / ``swmm_urban_flood`` /
@@ -1509,24 +1488,15 @@ def _is_terminal_composer(tool_name: str) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Session-scoped confirmation registry (job-0243)
+# Session-scoped confirmation registry
 # --------------------------------------------------------------------------- #
 #
-# The Stage 3 re-verify (job-0242) proved the per-connection seam structurally
-# broken on the live path: ``pending_payload_warnings`` lived on the
-# per-CONNECTION ``SessionState``, but the client opens MULTIPLE WebSocket
-# connections per browser session (React StrictMode double-mount + reconnect —
-# four "connection open" events observed in one session). A gate registered on
-# connection A could never be resolved by the Proceed click arriving on
-# connection B: the lookup hit a different, empty dict and the click was
-# dropped ("unknown/closed warning_id"). EVERY confirmation gate — payload
-# warning, code-exec, solver — shared the hole.
-#
-# Fix: ONE module-level registry keyed on the (globally unique, unguessable
-# ULID) warning_id, tagged with the owning session_id. Any connection's
-# inbound ``tool-payload-confirmation`` handler can resolve a pending gate as
-# long as the session matches — reconnects mid-gate now work instead of
-# soft-locking the gate until timeout.
+# One module-level registry keyed on the (globally unique, unguessable ULID)
+# warning_id, tagged with the owning session_id. Any connection's inbound
+# ``tool-payload-confirmation`` handler can resolve a pending gate as long as
+# the session matches, since the client can open multiple WebSocket
+# connections per browser session. Shared by every confirmation gate --
+# payload warning, code-exec, solver.
 
 _PENDING_CONFIRMATIONS: dict[str, tuple[str, asyncio.Future]] = {}
 
@@ -1548,7 +1518,7 @@ def _resolve_pending_confirmation(
 
     Returns True when a live future was resolved. False when the warning_id is
     unknown/already-resolved, or when the confirming session is not the owner
-    (cross-session confirmation is refused loudly — the warning_id is an
+    (cross-session confirmation is refused loudly -- the warning_id is an
     unguessable ULID, but defense-in-depth costs one string compare).
     """
     entry = _PENDING_CONFIRMATIONS.get(conf.warning_id)
@@ -1573,19 +1543,18 @@ def _resolve_pending_confirmation(
 
 
 # --------------------------------------------------------------------------- #
-# Session-scoped pending-CREDENTIAL registry (job VAULT-READ)
+# Session-scoped pending-CREDENTIAL registry
 # --------------------------------------------------------------------------- #
 #
 # Mirrors ``_PENDING_CONFIRMATIONS`` (the payload-warning / code-exec / solver
 # gate registry) but for the credential-request flow: when a keyed tool
-# dispatch hits a missing/invalid credential the dispatch coroutine pauses on a
-# future keyed by the credential ``request_id``, having emitted a
-# ``credential-request`` envelope. The inbound ``credential-provided`` handler
-# (which may arrive on a DIFFERENT WebSocket connection of the same session —
-# StrictMode double-mount / reconnect, exactly as for confirmations) resolves
-# the future, and the paused dispatch retries the tool (which now reads the
-# user's freshly-saved vault key). Tagged with the owning session_id so a
-# cross-session credential-provided is refused.
+# dispatch hits a missing/invalid credential the dispatch coroutine pauses on
+# a future keyed by the credential ``request_id``, having emitted a
+# ``credential-request`` envelope. The inbound ``credential-provided``
+# handler (which may arrive on a different WebSocket connection of the same
+# session) resolves the future, and the paused dispatch retries the tool
+# (which now reads the user's freshly-saved vault key). Tagged with the
+# owning session_id so a cross-session credential-provided is refused.
 _PENDING_CREDENTIALS: dict[str, tuple[str, asyncio.Future]] = {}
 
 
@@ -1606,7 +1575,7 @@ def _resolve_pending_credential(
 
     Returns True when a live future was resolved. False when the request_id is
     unknown/already-resolved, or when the answering session is not the owner
-    (refused loudly — the request_id is an unguessable ULID, but the string
+    (refused loudly -- the request_id is an unguessable ULID, but the string
     compare is cheap defense-in-depth, matching ``_resolve_pending_confirmation``).
     """
     entry = _PENDING_CREDENTIALS.get(provided.request_id)
@@ -1664,11 +1633,10 @@ def _coerce_bbox4(value: Any) -> tuple[float, float, float, float] | None:
 def _aoi_zoom_to_bbox(
     result: Any, current_turn_map_commands: list[dict]
 ) -> tuple[float, float, float, float] | None:
-    """SNAP-TO-AOI INDEPENDENT OF GEOLOCATE (NATE 2026-06-24).
+    """Return the bbox the camera should snap to for a tool ``result``.
 
-    Return the bbox the camera should snap to for a tool ``result`` that SET an
-    AOI/bbox - so the snap fires whenever an AOI is established, not only on a
-    ``geocode_location`` result. The user giving coordinates DIRECTLY skips
+    Fires whenever an AOI/bbox is established, not only on a
+    ``geocode_location`` result -- the user giving coordinates directly skips
     geocode, so without this the map never moved to "where we are" until a
     downstream layer with a bbox landed.
 
@@ -1719,7 +1687,7 @@ def _last_zoom_to_bbox(commands: list[dict]) -> list | None:
 # dispatch coroutine emits a ``region-choice-request`` envelope (whole-state
 # default + candidate counties) and pauses on a future keyed by the choice
 # ``request_id``. The inbound ``region-choice-provided`` handler (which may
-# arrive on a DIFFERENT WebSocket connection of the same session — StrictMode
+# arrive on a DIFFERENT WebSocket connection of the same session -- StrictMode
 # double-mount / reconnect) resolves the future, and the paused dispatch either
 # narrows the geocode bbox to the picked region or keeps the whole-state bbox.
 # Fail-open: on timeout / no client the whole-state bbox (already the geocode
@@ -1745,7 +1713,7 @@ def _resolve_pending_region_choice(
 
     Returns True when a live future was resolved. False when the request_id is
     unknown/already-resolved, or when the answering session is not the owner
-    (refused loudly — mirrors ``_resolve_pending_credential``).
+    (refused loudly -- mirrors ``_resolve_pending_credential``).
     """
     entry = _PENDING_REGION_CHOICES.get(provided.request_id)
     if entry is None:
@@ -1778,11 +1746,11 @@ def _resolve_pending_region_choice(
 # ``spatial-input-request`` envelope (point / bbox / vector_draw) and pauses on a
 # future keyed by the request ``request_id``. The inbound
 # ``spatial-input-response`` handler (which may arrive on a DIFFERENT WebSocket
-# connection of the same session — StrictMode double-mount / reconnect) resolves
+# connection of the same session -- StrictMode double-mount / reconnect) resolves
 # the future with the drawn ``FeatureCollection`` (or a cancellation). Tagged
 # with the owning session_id so a cross-session response is refused. Fail-open:
 # on timeout / no client the gate resolves to ``None`` and the caller surfaces a
-# typed "no geometry drawn" result (honest — never a fabricated AOI/barriers).
+# typed "no geometry drawn" result (honest -- never a fabricated AOI/barriers).
 _PENDING_SPATIAL_INPUTS: dict[str, tuple[str, asyncio.Future]] = {}
 
 
@@ -1803,7 +1771,7 @@ def _resolve_pending_spatial_input(
 
     Returns True when a live future was resolved. False when the request_id is
     unknown/already-resolved, or when the answering session is not the owner
-    (refused loudly — mirrors ``_resolve_pending_region_choice``).
+    (refused loudly -- mirrors ``_resolve_pending_region_choice``).
     """
     entry = _PENDING_SPATIAL_INPUTS.get(response.request_id)
     if entry is None:
@@ -1858,7 +1826,7 @@ def _fail_pending_spatial_input(
     wakes immediately with a typed error result rather than hanging until the
     read TTL expires. Returns True when a live future was failed; False when the
     request_id is unknown/already-resolved, or the answering session is not the
-    owner (refused loudly — mirrors ``_resolve_pending_spatial_input``).
+    owner (refused loudly -- mirrors ``_resolve_pending_spatial_input``).
     """
     entry = _PENDING_SPATIAL_INPUTS.get(request_id)
     if entry is None:
@@ -1883,19 +1851,14 @@ def _fail_pending_spatial_input(
     return True
 
 
-# job-0115: app-level Persistence singleton (Wave 1.5).
-#
-# The MongoDB Atlas MCP server is the LLM-facing DB path (FR-AS-4, Decision F).
-# ``Persistence`` wraps it with a typed surface that the agent code calls into
-# (CaseSummary / User / SecretRecord / CaseChatMessage). The singleton is
-# bound at startup if ``TRID3NT_MONGO_MCP_URL`` is set OR a stdio MCP config is
-# resolved (via the existing ``trid3nt_server.mcp.MCPClient``); otherwise it
-# stays ``None`` and callers fall back to in-memory state (the M1 path).
-#
-# Holding a module-level singleton (rather than per-connection) is intentional:
-# - the MCP client is expensive to start (subprocess spawn / TLS handshake);
-# - per-session writes only need a typed wrapper, not connection isolation;
-# - the singleton resets on process restart so the test harness can swap it.
+# App-level Persistence singleton. The MongoDB Atlas MCP server is the
+# LLM-facing DB path (FR-AS-4, Decision F); ``Persistence`` wraps it with a
+# typed surface (CaseSummary / User / SecretRecord / CaseChatMessage). Bound
+# at startup if ``TRID3NT_MONGO_MCP_URL`` is set or a stdio MCP config
+# resolves; otherwise stays ``None`` and callers fall back to in-memory
+# state (the M1 path). Module-level (not per-connection): the MCP client is
+# expensive to start, per-session writes only need a typed wrapper not
+# connection isolation, and it resets on process restart for tests.
 _PERSISTENCE: Persistence | None = None
 
 
@@ -1903,7 +1866,7 @@ def get_persistence() -> Persistence | None:
     """Return the app-level ``Persistence`` singleton, or ``None`` if unbound.
 
     Callers (chiefly the message-dispatch path in this module) MUST handle
-    the ``None`` case gracefully — the M1 in-memory path is still supported
+    the ``None`` case gracefully -- the M1 in-memory path is still supported
     when the MCP environment is not provisioned (e.g. CI without Atlas).
     """
     return _PERSISTENCE
@@ -1918,7 +1881,7 @@ def set_persistence(p: Persistence | None) -> None:
 
     job credential-pipeline-generic: also binds the SAME ``Persistence`` into
     EVERY keyed-tool secret-resolution seam (FIRMS / eBird / ERA5 / GTSM /
-    IUCN — each exposes ``set_persistence_for_secrets``) so a tool dispatched
+    IUCN -- each exposes ``set_persistence_for_secrets``) so a tool dispatched
     with a per-Case ``secret_ref`` can materialize the user's vault key without
     importing the MCP client. (Movebank constructs its own MCP-less Persistence
     inline, so it needs no seam.) Binding here keeps every persistence-set path
@@ -1956,7 +1919,7 @@ def _bind_secret_seams(p: "Persistence | None") -> None:
         try:
             mod = importlib.import_module(f".tools.{mod_name}", __package__)
             mod.set_persistence_for_secrets(p)
-        except Exception:  # noqa: BLE001 — secret-seam binding is best-effort
+        except Exception:  # noqa: BLE001 -- secret-seam binding is best-effort
             logger.debug(
                 "set_persistence: could not bind secret seam for %s",
                 mod_name,
@@ -1968,7 +1931,7 @@ async def init_persistence_from_env() -> Persistence | None:
     """Resolve a ``Persistence`` instance from environment configuration.
 
     GCP is decommissioned: the live MongoDB-MCP (Atlas) bootstrap is GONE
-    (``mcp.py`` deleted — it depended on GCP Secret Manager for the SRV and the
+    (``mcp.py`` deleted -- it depended on GCP Secret Manager for the SRV and the
     ``mongodb-mcp-server`` stdio subprocess). On AWS the prod persistence is
     DynamoDB or the file backend, bound by ``main._maybe_bind_dev_persistence``
     / ``dynamo_backend.make_persistence_for_backend`` before this runs.
@@ -1990,8 +1953,7 @@ async def init_persistence_from_env() -> Persistence | None:
 #: before the Auth track carried no ``user_id`` field). The one-time
 #: idempotent startup migration (``persistence.migrate_preauth_cases``)
 #: stamps these orphan Cases with this constant so they belong to a single
-#: synthetic owner instead of leaking to every user via the old
-#: ``$exists:false`` backward-compat clause (now removed).
+#: synthetic owner instead of leaking to every user.
 #:
 #: Chosen as a fixed, non-ULID, obviously-synthetic sentinel so it is
 #: trivially greppable in logs / the persisted store and can never collide
@@ -2000,13 +1962,12 @@ MIGRATION_ANON_UID = "__preauth_migration_anon__"
 
 
 async def _run_preauth_case_migration() -> None:
-    """One-time idempotent pre-Auth case migration (job-0252, OQ-0115).
+    """One-time idempotent pre-Auth case migration.
 
     Calls ``Persistence.migrate_preauth_cases(MIGRATION_ANON_UID)`` if a
     Persistence singleton is bound. Cases written before the Auth track had
-    no ``user_id`` field and used to leak to every signed-in user via a
-    ``$exists:false`` clause (now removed). This stamps them with the
-    synthetic owner so each Case is visible only to its owner.
+    no ``user_id`` field; this stamps them with the synthetic owner so each
+    Case is visible only to its owner.
 
     Idempotent: the migration's filter is ``{"user_id": {"$exists": False}}``,
     so a second startup matches nothing. Best-effort: a failure is logged at
@@ -2022,7 +1983,7 @@ async def _run_preauth_case_migration() -> None:
     try:
         n = await p.migrate_preauth_cases(MIGRATION_ANON_UID)
         logger.info("pre-Auth case migration complete: %s case(s) stamped", n)
-    except Exception:  # noqa: BLE001 — startup must not abort on migration
+    except Exception:  # noqa: BLE001 -- startup must not abort on migration
         logger.warning("pre-Auth case migration failed (continuing)", exc_info=True)
 
 
@@ -2044,7 +2005,7 @@ async def _run_coldview_backfill() -> None:
 
     CLOSES THE SNAPSHOT-FRESHNESS GAP. The case-view snapshot
     (``case-views/{id}.json``) and thin manifest (``case-manifests/{id}.json``)
-    are only ever (re)written while the daemon is UP — the 4 mutation
+    are only ever (re)written while the daemon is UP -- the 4 mutation
     triggers (create / rename / layer-publish / turn-close) plus case-open. There
     is NO daemon-down materialization path, so a Case that gained layers
     and was then left as the daemon stopped (or whose newest snapshot predates
@@ -2054,10 +2015,10 @@ async def _run_coldview_backfill() -> None:
     Case is re-opened once.
 
     This sweep runs ONCE at every daemon startup and re-materializes the
-    snapshot AND manifest for every live Case — straight off the persisted
+    snapshot AND manifest for every live Case -- straight off the persisted
     ``projects`` doc, no live session / emitter needed (the writers re-source
     the full doc per Case; inline-vector side-tables only exist on the live
-    emitter and are absent here, which is correct — a cold sweep carries the
+    emitter and are absent here, which is correct -- a cold sweep carries the
     URI-only layers, and the next warm open/turn re-inlines vectors). After one
     restart every existing Case has a CURRENT cold face without a warm re-open.
 
@@ -2077,7 +2038,7 @@ async def _run_coldview_backfill() -> None:
         return
     try:
         case_ids = await p.list_all_active_case_ids()
-    except Exception:  # noqa: BLE001 — startup must not abort on enumeration
+    except Exception:  # noqa: BLE001 -- startup must not abort on enumeration
         logger.warning("coldview backfill: case enumeration failed", exc_info=True)
         return
     if not case_ids:
@@ -2096,11 +2057,11 @@ async def _run_coldview_backfill() -> None:
             ok_snap = False
             try:
                 ok_snap = await p.write_case_view_snapshot(cid)
-            except Exception:  # noqa: BLE001 — defensive: writer is best-effort
+            except Exception:  # noqa: BLE001 -- defensive: writer is best-effort
                 logger.warning("coldview backfill: snapshot failed case=%s", cid)
             try:
                 await p.write_case_manifest(cid)
-            except Exception:  # noqa: BLE001 — defensive: writer is best-effort
+            except Exception:  # noqa: BLE001 -- defensive: writer is best-effort
                 logger.warning("coldview backfill: manifest failed case=%s", cid)
             if ok_snap:
                 refreshed += 1
@@ -2116,17 +2077,13 @@ async def _run_coldview_backfill() -> None:
     )
 
 
-# job-0259: session-scoped active-Case registry. The client mounts TWO
-# WebSocket connections per tab (Chat.tsx + App.tsx, both bound to the same
-# localStorage session_id — web/src/ws.ts job-0159 hub). The server builds a
-# fresh ``SessionState`` PER CONNECTION, so any Case context stored on the
-# connection object splits brain: ``case-command`` arrives on one socket,
-# ``user-message`` (and therefore every tool dispatch + persistence write) on
-# the other. This registry keys the active Case by ``session_id`` so all
-# connections of a session — including post-reconnect replacements — observe
-# the same Case context. Bounded: oldest entries evicted past the cap (the
-# value is one short string per browser session; eviction only means a stale
-# session's next case-command re-establishes context).
+# Session-scoped active-Case registry. The client mounts two WebSocket
+# connections per tab (Chat.tsx + App.tsx) sharing one session_id; the
+# server builds a fresh ``SessionState`` per connection, so this registry
+# keys the active Case by ``session_id`` instead, keeping every connection
+# of a session -- including post-reconnect replacements -- on the same Case
+# context. Bounded: oldest entries evicted past the cap (a stale session's
+# next case-command re-establishes context).
 _SESSION_ACTIVE_CASE: dict[str, str | None] = {}
 _SESSION_ACTIVE_CASE_CAP = 4096
 
@@ -2137,12 +2094,12 @@ _SESSION_ACTIVE_CASE_CAP = 4096
 #: here and self-discards via an ``add_done_callback`` once it finishes.
 _BG_SNAPSHOT_TASKS: set[asyncio.Task] = set()
 
-#: COLDVIEW DURABILITY (J1): bounded wall-clock budget for the graceful-shutdown
-#: drain of ``_BG_SNAPSHOT_TASKS``. A SIGTERM unwinds ``run_server`` and waits at
-#: most this long for outstanding detached snapshot/manifest PUTs to flush so a
-#: stale cold ``case-views/{case_id}.json`` is not left behind; if a PUT is
-#: pathologically slow it is abandoned rather than hanging shutdown forever.
-#: Overridable for ops via the env var (seconds).
+#: Bounded wall-clock budget for the graceful-shutdown drain of
+#: ``_BG_SNAPSHOT_TASKS``. A SIGTERM unwinds ``run_server`` and waits at
+#: most this long for outstanding detached snapshot/manifest PUTs to flush
+#: so a stale cold ``case-views/{case_id}.json`` is not left behind; if a
+#: PUT is pathologically slow it is abandoned rather than hanging shutdown
+#: forever. Overridable for ops via the env var (seconds).
 _BG_SNAPSHOT_DRAIN_TIMEOUT_S: float = float(
     os.environ.get("TRID3NT_BG_SNAPSHOT_DRAIN_TIMEOUT_S", "10")
 )
@@ -2184,7 +2141,7 @@ async def _drain_bg_snapshot_tasks(
         logger.exception("bg-snapshot drain: unexpected error")
 
 
-#: Sentinel for ``SessionState.case_context_synced_to`` — distinct from None
+#: Sentinel for ``SessionState.case_context_synced_to`` -- distinct from None
 #: because ``None`` is a legitimate "no active Case" binding.
 _CASE_SYNC_NEVER = "__case-context-never-synced__"
 
@@ -2192,52 +2149,50 @@ _CASE_SYNC_NEVER = "__case-context-never-synced__"
 #: client's ROOT_STREAM_KEY in Chat.tsx).
 _ROOT_STREAM_KEY = "__root__"
 
-#: job-0269: per-task narration-list registry. ``_stream_gemini_reply``
-#: registers its turn's narration list under the running asyncio task (in the
-#: synchronous prefix, so crash/cancel still leaves the entry) and
-#: ``_dispatch_gemini_and_persist`` pops it in its finally — the wrapper then
+#: Per-task narration-list registry. ``_stream_gemini_reply`` registers its
+#: turn's narration list under the running asyncio task (in the synchronous
+#: prefix, so crash/cancel still leaves the entry) and
+#: ``_dispatch_gemini_and_persist`` pops it in its finally -- the wrapper then
 #: joins THIS turn's list even when a concurrent turn has re-pointed
-#: ``state.current_turn_narration``. Weak keys: an entry whose task was never
-#: popped (direct stream callers) vanishes with the task, no leak.
+#: ``state.current_turn_narration``. Weak keys: an entry whose task was
+#: never popped (direct stream callers) vanishes with the task, no leak.
 _TURN_NARRATION_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, list[str]]" = (
     weakref.WeakKeyDictionary()
 )
 
-#: job-0315: per-task OPEN-segment registry. ``_stream_gemini_reply`` registers
-#: the list backing the CURRENTLY OPEN narration segment (the bubble that has
-#: received text but not yet been finalized). On each finalize the in-loop code
-#: ``.clear()``s this same list object (never rebinds it) so the wrapper always
-#: reads the live open buffer. ``_dispatch_gemini_and_persist`` pops it in its
-#: finally and persists the un-finalized remainder as the tail row — exactly the
-#: narration NO ``_finalize_segment`` ever wrote (crash/cancel mid-segment), so
-#: no narration is lost and finalized segments are never double-persisted.
+#: Per-task OPEN-segment registry. ``_stream_gemini_reply`` registers the
+#: list backing the currently open narration segment (received text not yet
+#: finalized). On each finalize the in-loop code ``.clear()``s this same
+#: list object (never rebinds it) so the wrapper always reads the live open
+#: buffer. ``_dispatch_gemini_and_persist`` pops it in its finally and
+#: persists the un-finalized remainder as the tail row, so no narration is
+#: lost and finalized segments are never double-persisted.
 _TURN_OPEN_SEGMENT_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, list[str]]" = (
     weakref.WeakKeyDictionary()
 )
 
-#: job-0315: per-task count of narration SEGMENTS finalized+persisted this turn.
-#: ``_finalize_segment`` increments it only when it actually writes a non-empty
-#: ``role="agent"`` row. The wrapper's finally reads it to decide whether the
-#: legacy single marker row (narration-less completed turn / pre-fix one-row
-#: contract) still needs writing (segments_done == 0) or whether the per-segment
-#: rows already carried the narration (segments_done > 0 -> skip the marker).
+#: Per-task count of narration SEGMENTS finalized+persisted this turn.
+#: ``_finalize_segment`` increments it only when it actually writes a
+#: non-empty ``role="agent"`` row. The wrapper's finally reads it to decide
+#: whether the legacy single marker row (narration-less completed turn)
+#: still needs writing (segments_done == 0) or whether the per-segment rows
+#: already carried the narration (segments_done > 0 -> skip the marker).
 _TURN_SEGMENTS_PERSISTED_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, int]" = (
     weakref.WeakKeyDictionary()
 )
 
-#: job-0315 (contract fix): per-task flag set True ONLY when a row that
-#: snapshotted the turn's zoom-to/layer accumulator was actually persisted —
-#: i.e. the in-loop TERMINAL ``_finalize_segment`` wrote a non-empty
-#: ``role="agent"`` row (``is_terminal=True`` -> ``layer_emissions=None`` ->
-#: ``_persist_chat_turn`` snapshots ``current_turn_layer_ids`` +
-#: ``current_turn_map_commands``). The wrapper's finally reads it to decide
-#: whether a tool-terminal turn (final round ended in tool calls with NO
-#: trailing narration -> no terminal finalize fired -> accumulator orphaned)
-#: still needs a closing accumulator-bearing marker row so the Case-reopen
-#: zoom-snap (job-0280/0281 web ``extractLastZoomTo``) + job-0259 layer
-#: attribution survive. NOT set when the terminal segment was empty/whitespace
-#: (``_finalize_segment`` skips the row) — that turn's accumulator is likewise
-#: unwritten and the marker is needed.
+#: Per-task flag set True ONLY when a row that snapshotted the turn's
+#: zoom-to/layer accumulator was actually persisted -- i.e. the in-loop
+#: TERMINAL ``_finalize_segment`` wrote a non-empty ``role="agent"`` row
+#: (``is_terminal=True`` -> ``layer_emissions=None`` -> ``_persist_chat_turn``
+#: snapshots ``current_turn_layer_ids`` + ``current_turn_map_commands``).
+#: The wrapper's finally reads it to decide whether a tool-terminal turn
+#: (final round ended in tool calls with no trailing narration -> no
+#: terminal finalize fired -> accumulator orphaned) still needs a closing
+#: accumulator-bearing marker row so the Case-reopen zoom-snap
+#: (``extractLastZoomTo``) + layer attribution survive. Not set when the
+#: terminal segment was empty/whitespace -- that turn's accumulator is
+#: likewise unwritten and the marker is needed.
 _TURN_TERMINAL_ACC_PERSISTED_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, bool]" = (
     weakref.WeakKeyDictionary()
 )
@@ -2249,33 +2204,20 @@ def _set_session_active_case(session_id: str, case_id: str | None) -> None:
         session_id not in _SESSION_ACTIVE_CASE
         and len(_SESSION_ACTIVE_CASE) >= _SESSION_ACTIVE_CASE_CAP
     ):
-        # Evict oldest (insertion order) — bounded memory, see note above.
+        # Evict oldest (insertion order) -- bounded memory, see note above.
         _SESSION_ACTIVE_CASE.pop(next(iter(_SESSION_ACTIVE_CASE)))
     _SESSION_ACTIVE_CASE[session_id] = case_id
 
 
-# cases-vanish fix: session-scoped ANON-ID registry. Belt-and-suspenders mirror
-# of ``_SESSION_ACTIVE_CASE`` above for the dual-socket anon-identity race.
-#
-# ROOT CAUSE: the web mounts TWO WebSocket connections per tab (App.tsx +
-# Chat.tsx, one localStorage session_id — web/src/ws.ts job-0159 hub). Each
-# connection runs its OWN auth handshake. The PRIMARY fix is client-side (always
-# replay one stable client-owned ``anonymous_user_id`` from BOTH sockets) +
-# server-side (provision the presented id verbatim, above). But there remains a
-# rare first-ever-connect window where neither socket has a usable hint yet (a
-# brand-new browser, both sockets opening before the id is persisted): without a
-# hint each connection would mint a DIFFERENT random ULID, fork the owner-scoped
-# case-list, and Cases would appear to vanish on the next refresh.
-#
-# This registry collapses that window: when a connection mints OR binds an
-# anonymous user for a ``session_id``, it records ``session_id -> anon_user_id``.
-# A second connection of the SAME ``session_id`` that reaches the no-hint
-# anonymous path reuses the recorded id instead of minting a fresh one — so both
-# sockets converge on ONE anon identity even with zero client hint.
-#
-# Bounded like ``_SESSION_ACTIVE_CASE`` (one short string per browser session;
-# eviction past the cap only means a stale session re-mints on its next connect).
-# Scope discipline: ONLY anonymous ids are recorded here.
+# Session-scoped ANON-ID registry: belt-and-suspenders mirror of
+# ``_SESSION_ACTIVE_CASE`` for the dual-socket anon-identity race. The web
+# mounts two WebSocket connections per tab sharing one session_id, each
+# running its own auth handshake; in the rare first-connect window before a
+# client hint is persisted, each connection would otherwise mint a
+# different random anon ULID and fork the owner-scoped case-list. This
+# registry records ``session_id -> anon_user_id`` on first mint/bind so a
+# sibling connection of the same session reuses it instead. Bounded like
+# ``_SESSION_ACTIVE_CASE``; only anonymous ids are recorded here.
 _SESSION_ANON_ID: dict[str, str] = {}
 _SESSION_ANON_ID_CAP = 4096
 
@@ -2289,7 +2231,7 @@ def _set_session_anon_id(session_id: str, anon_user_id: str) -> None:
     """Record ``anon_user_id`` as the session's anon identity (idempotent).
 
     Bounded + insertion-order eviction, mirroring ``_set_session_active_case``.
-    No-op when ``anon_user_id`` is falsy (defensive — never record an empty id).
+    No-op when ``anon_user_id`` is falsy (defensive -- never record an empty id).
     """
     if not session_id or not anon_user_id:
         return
@@ -2297,7 +2239,7 @@ def _set_session_anon_id(session_id: str, anon_user_id: str) -> None:
         session_id not in _SESSION_ANON_ID
         and len(_SESSION_ANON_ID) >= _SESSION_ANON_ID_CAP
     ):
-        # Evict oldest (insertion order) — bounded memory, see note above.
+        # Evict oldest (insertion order) -- bounded memory, see note above.
         _SESSION_ANON_ID.pop(next(iter(_SESSION_ANON_ID)))
     _SESSION_ANON_ID[session_id] = anon_user_id
 
@@ -2310,14 +2252,14 @@ def _apply_session_anon_hint(
     cases-vanish fix (belt-and-suspenders). When a connection of ``session_id``
     presents no token AND no ``anonymous_user_id`` hint, but a sibling
     connection of the same session already bound an anon identity this process,
-    return a copy of the envelope carrying that recorded id as the hint — so
+    return a copy of the envelope carrying that recorded id as the hint -- so
     ``authenticate_token`` reuses the SAME anon user instead of minting a fresh
     random ULID. This collapses the (now rare) first-connect no-hint window
     where the App + Chat sockets would otherwise fork the owner-scoped
     case-list.
 
     Strictly additive / non-clobbering:
-    - A client-supplied hint always wins (it is the durable, cross-refresh id) —
+    - A client-supplied hint always wins (it is the durable, cross-refresh id) --
       we only fill when the hint is absent.
     - A non-empty ``token`` is left untouched: a presented token resolves via
       ``authenticate_token``'s own fallback, never diverted to an anon id.
@@ -2330,7 +2272,7 @@ def _apply_session_anon_hint(
     # this connect (authed path unaffected).
     if tok is not None and (tok.token or "").strip():
         return tok
-    # A client-supplied hint is the durable id — never override it.
+    # A client-supplied hint is the durable id -- never override it.
     if tok is not None and tok.anonymous_user_id:
         return tok
     if tok is None:
@@ -2338,27 +2280,21 @@ def _apply_session_anon_hint(
     return tok.model_copy(update={"anonymous_user_id": recorded})
 
 
-# job-SOLVE-SURVIVE: module-level live-turn registry keyed by
-# ``(session_id, turn_key)`` — mirrors ``_SESSION_ACTIVE_CASE``'s session-scoped
-# discipline so an in-flight turn OUTLIVES the per-connection ``SessionState``.
+# Module-level live-turn registry keyed by ``(session_id, turn_key)`` --
+# mirrors ``_SESSION_ACTIVE_CASE``'s session-scoped discipline so an
+# in-flight turn OUTLIVES the per-connection ``SessionState``. Keying the
+# running task by ``session_id`` lets it survive the death of any one
+# socket; a closing connection's handler ``finally`` only drops that
+# connection's references (letting cheap turns finish) instead of
+# cancelling. ``wait_for_completion``'s own 1800s budget bounds a truly
+# stuck solve.
 #
-# ROOT CAUSE this fixes: a SFINCS solve (``sfincs_flood`` ->
-# ``wait_for_completion``, minutes long) was launched detached on the launching
-# connection and stored ONLY in that connection's ``SessionState.inflight_tasks``.
-# The client opens MULTIPLE sockets per session (StrictMode double-mount +
-# reconnect); when the launching socket closed, the handler ``finally`` iterated
-# ``inflight_tasks`` and ``.cancel()``-ed EVERY not-done task — docker-killing the
-# solve ~7s in. By keying the running task here by ``session_id`` the task
-# survives the death of any one socket; the handler ``finally`` now only DROPS
-# this connection's references (and lets cheap turns finish) instead of
-# cancelling. ``wait_for_completion``'s own 1800s budget bounds a truly stuck
-# solve.
-#
-# Each entry carries the running ``asyncio.Task`` AND the ``PipelineEmitter`` the
-# task is driving (so a reconnecting socket can rebind the emitter's sink and
-# receive the live solve's progress + terminal frames — see ``_rebind_live_turns``).
-# A done-callback removes the entry on completion/cancellation (NO leak). Bounded
-# by session-count; the value is one task+emitter pair per live turn.
+# Each entry carries the running ``asyncio.Task`` AND the ``PipelineEmitter``
+# the task is driving (so a reconnecting socket can rebind the emitter's
+# sink and receive the live solve's progress + terminal frames -- see
+# ``_rebind_live_turns``). A done-callback removes the entry on
+# completion/cancellation (no leak). Bounded by session-count; the value is
+# one task+emitter pair per live turn.
 @dataclass
 class _LiveTurn:
     """An in-flight turn that has been detached from its launching connection.
@@ -2393,7 +2329,7 @@ def _register_live_turn(
         and len(_SESSION_LIVE_TURNS) >= _SESSION_LIVE_TURNS_CAP
     ):
         # Evict the oldest session bucket whose turns are ALL done; if none are
-        # fully-done, evict the oldest regardless (bounded memory — a live solve
+        # fully-done, evict the oldest regardless (bounded memory -- a live solve
         # is never silently dropped under normal session counts).
         for sid in list(_SESSION_LIVE_TURNS):
             if all(lt.task.done() for lt in _SESSION_LIVE_TURNS[sid].values()):
@@ -2410,7 +2346,7 @@ def _register_live_turn(
             return
         lt = b.get(turn_key)
         # Only drop if THIS task still owns the slot (a same-stream supersede may
-        # have replaced it with a fresh task — don't evict the newer turn).
+        # have replaced it with a fresh task -- don't evict the newer turn).
         if lt is not None and lt.task is _t:
             b.pop(turn_key, None)
         if not b:
@@ -2427,21 +2363,20 @@ def _rebind_live_turns(
 ) -> int:
     """Rebind live turn(s) of ``session_id`` onto ``emitter``'s sink.
 
-    job-SOLVE-SURVIVE Requirement 2: when a NEW socket for the same session
-    connects, point the still-running turn's emitter at the new socket so its
-    progress + terminal frames reach the live connection. Returns the number of
-    turns rebound. No-op when no live turns exist or ``emitter`` is None.
+    When a new socket for the same session connects, point the
+    still-running turn's emitter at the new socket so its progress +
+    terminal frames reach the live connection. Returns the number of turns
+    rebound. No-op when no live turns exist or ``emitter`` is None.
 
-    The new connection's emitter IS the wire face (its ``_sink`` closes over the
-    live socket's ``send``). We swap the LIVE turn's emitter sink to that same
-    sink. Done/cancelled turns are skipped + pruned. Returns count for telemetry
-    + tests.
+    The new connection's emitter IS the wire face (its ``_sink`` closes over
+    the live socket's ``send``). We swap the LIVE turn's emitter sink to
+    that same sink. Done/cancelled turns are skipped + pruned.
 
-    ``only_turn_key`` restricts the rebind to a single stream — used by the
-    case-open path so opening Case A only rebinds Case A's live solve onto the
-    new socket (a concurrent Case B solve keeps emitting through its own — soon
-    its OWN socket-resume / case-open rebinds it, or it lands fully-detached and
-    its layer rehydrates on the next case-open)."""
+    ``only_turn_key`` restricts the rebind to a single stream -- used by the
+    case-open path so opening Case A only rebinds Case A's live solve onto
+    the new socket (a concurrent Case B solve keeps emitting through its
+    own -- soon its OWN socket-resume / case-open rebinds it, or it lands
+    fully-detached and its layer rehydrates on the next case-open)."""
     bucket = _SESSION_LIVE_TURNS.get(session_id)
     if not bucket or emitter is None:
         return 0
@@ -2457,16 +2392,15 @@ def _rebind_live_turns(
             continue
         if lt.emitter is not None and lt.emitter is not emitter:
             lt.emitter.rebind_sink(emitter._sink)
-            # job-FLOOD-TERMINAL-SURVIVE: pointing the live turn's emitter at the
-            # new sink only recovers FUTURE frames + (via rebind_sink) the pipeline
-            # CARDS — NOT a loaded-layers session-state that was emitted onto the
-            # now-dead launch socket in the window before this reconnect (the
-            # TERMINAL flood-depth layer, published late after the multi-minute
-            # solve). Seed THIS reconnect's (fresh, empty) emitter from the live
-            # turn's accumulated layers so the caller's own emit_session_state
-            # carries the full snapshot — inputs AND any already-published depth
-            # layer — to the new socket. Union-by-identity: no duplicate, and the
-            # live turn's later (superset) emits never regress it.
+            # Rebinding the live turn's emitter onto the new sink only
+            # recovers FUTURE frames + pipeline CARDS -- not a loaded-layers
+            # session-state emitted onto the now-dead launch socket before
+            # this reconnect (e.g. a terminal flood-depth layer published
+            # late after a multi-minute solve). Seed this reconnect's fresh
+            # emitter from the live turn's accumulated layers so the
+            # caller's emit_session_state carries the full snapshot to the
+            # new socket. Union-by-identity: no duplicate, and the live
+            # turn's later (superset) emits never regress it.
             emitter.merge_loaded_layers_from(lt.emitter)
             rebound += 1
     if not bucket:
@@ -2504,29 +2438,27 @@ class SessionState:
     """Per-session in-memory state. M1 keeps everything in-process; Mongo-backed
     session restore (NFR-R-2) lands when the LLM-facing DB seam is wired.
 
-    job-0035 (M4): adds the per-session ``PipelineEmitter`` that owns the
-    current ``PipelineSnapshot`` + ``loaded_layers`` accumulator and broadcasts
-    real ``pipeline-state`` / ``session-state`` envelopes (Appendix A.7
+    Owns the per-session ``PipelineEmitter``, which owns the current
+    ``PipelineSnapshot`` + ``loaded_layers`` accumulator and broadcasts real
+    ``pipeline-state`` / ``session-state`` envelopes (Appendix A.7
     replace-not-reconcile). ``current_pipeline_id`` / ``current_pipeline_steps``
     stay as the M1 mirror for the LLM-streaming reply path (which doesn't go
-    through the emitter — there are no tool calls there)."""
+    through the emitter -- there are no tool calls there)."""
 
     session_id: str
     chat_history: list[dict] = field(default_factory=list)
     current_pipeline_id: str | None = None
     current_pipeline_steps: list[PipelineStep] = field(default_factory=list)
-    # job-0269: in-flight turns keyed by STREAM (case_id, or _ROOT_STREAM_KEY
-    # for the Cases root). The M1 single-slot policy cancelled ANY running
-    # turn on a new user-message — live 2026-06-10 that killed a cloud SFINCS
-    # solve when the user asked a terrain question from the root. Now only a
-    # re-prompt in the SAME stream replaces (cancels) that stream's turn;
-    # turns in other Cases keep running. Their persistence follows the
-    # job-0268 turn pin and their Gemini context is the per-turn captured
-    # history list (see _stream_gemini_reply), so a concurrent turn cannot
-    # re-aim either. KNOWN v0.1 LIMIT (display only): the web routes live
-    # streaming envelopes to the last-submitted stream, so a still-running
-    # turn's late envelopes may PAINT in the newer stream until envelope
-    # case-tagging lands (13.5) — the persisted replay is always correct.
+    # In-flight turns keyed by STREAM (case_id, or _ROOT_STREAM_KEY for the
+    # Cases root). Only a re-prompt in the SAME stream replaces (cancels)
+    # that stream's turn; turns in other Cases keep running. Their
+    # persistence follows the turn-Case pin and their model context is the
+    # per-turn captured history list (see _stream_gemini_reply), so a
+    # concurrent turn cannot re-aim either. Known v0.1 limit (display only):
+    # the web routes live streaming envelopes to the last-submitted stream,
+    # so a still-running turn's late envelopes may paint in the newer
+    # stream until envelope case-tagging lands -- the persisted replay is
+    # always correct.
     inflight_tasks: dict[str, asyncio.Task] = field(default_factory=dict)
     emitter: PipelineEmitter | None = None
     # FR-FR-3 (job-0048): per-session turn counter.  Increments on every
@@ -2535,25 +2467,17 @@ class SessionState:
     # and emits a ``session-state(status="max_turns_reached")`` envelope.
     # New WebSocket connection → new SessionState → fresh counter at 0.
     turn_count: int = 0
-    # job-0259: ``active_case_id`` is now a PROPERTY backed by the module-level
-    # ``_SESSION_ACTIVE_CASE`` registry (keyed by ``session_id``), NOT a
-    # per-connection dataclass field. Root cause of the "Case layers not
-    # rehydrating" bug: the client mounts TWO GraceWs sockets per tab
-    # (Chat.tsx carries ``user-message``; App.tsx carries ``case-command`` —
-    # see web/src/ws.ts job-0159 hub comment). With a per-connection field,
-    # ``case-command(select)`` set the case on App's connection while every
-    # tool dispatch ran on Chat's connection with ``active_case_id=None`` —
-    # so ``_persist_chat_turn`` + ``_persist_case_loaded_layers`` +
-    # ``ensure_case_qgs`` all silently no-opped and a Case re-open came back
-    # empty. Keying by session_id makes the Case context shared across every
-    # connection of the session (and survive reconnects). See
+    # ``active_case_id`` is a PROPERTY backed by the module-level
+    # ``_SESSION_ACTIVE_CASE`` registry (keyed by ``session_id``), not a
+    # per-connection dataclass field, so the Case context is shared across
+    # every connection of the session and survives reconnects. See
     # ``case_context_synced_to`` + ``_sync_case_context`` for the
     # per-connection in-memory catch-up (chat_history / emitter seed).
     #
-    # job-0259: per-connection marker of which Case this connection's
-    # in-memory context (chat_history + emitter loaded_layers) was last
-    # synced to. A string sentinel (never a valid case id) means "never
-    # synced"; ``None`` is a legitimate value (no active Case).
+    # Per-connection marker of which Case this connection's in-memory
+    # context (chat_history + emitter loaded_layers) was last synced to. A
+    # string sentinel (never a valid case id) means "never synced"; ``None``
+    # is a legitimate value (no active Case).
     case_context_synced_to: str | None = _CASE_SYNC_NEVER
     # JOB 2 (active-AOI repair): durable cache of the active Case's persisted
     # AOI bbox (``CaseSummary.bbox`` == ``[lon_min, lat_min, lon_max,
@@ -2565,26 +2489,23 @@ class SessionState:
     # re-fetched, starving the sim/fetch reuse short-circuits of an AOI anchor).
     # ``None`` is legitimate (no active Case, or a Case with no recorded bbox).
     case_bbox: Any = None
-    # ADR 0017 (Lane S): the session's ACTIVE canvas AOI — the structured
-    # ``aoi_bbox`` ([min_lon, min_lat, max_lon, max_lat], EPSG:4326) the
-    # client stamps on the user-message payload. Set/cleared by
-    # ``_set_active_aoi_from_payload`` (a message that carries the key sets or
-    # clears; an absent key — older client — leaves it untouched). Read by the
-    # dispatch-time bbox auto-fill: explicit arg > active AOI > case bbox.
-    # ``None`` = no drawn AOI.
+    # ADR 0017: the session's ACTIVE canvas AOI -- structured ``aoi_bbox``
+    # ([min_lon, min_lat, max_lon, max_lat], EPSG:4326) set/cleared by
+    # ``_set_active_aoi_from_payload``. Read by dispatch-time bbox auto-fill:
+    # explicit arg > active AOI > case bbox. ``None`` = no drawn AOI.
     active_aoi_bbox: list[float] | None = None
     # ADR 0018 (Stage 3): per-session routing-visibility mode ('auto' | 'ask').
     # Set by the ``session-config`` envelope's ``mode`` field; ``None`` falls
     # back to the TRID3NT_MODE env default (see _session_routing_mode). Governs
     # tool-selection VISIBILITY only -- consent gates are never mode-dependent.
     routing_mode: str | None = None
-    # BENCH pre-dispatch block hook (LANE A 2026-07-22): the armed, session-
-    # scoped ``BenchBlockConfig`` set ONLY by the bench harness via the
+    # BENCH pre-dispatch block hook: the armed, session-scoped
+    # ``BenchBlockConfig`` set only by the bench harness via the
     # ``session-config`` path (``bench_tool_block`` key). ``None`` = normal
-    # operation (the common path) -- the dispatch guard is a single
-    # ``is not None`` check with ZERO overhead when unarmed. When armed, the
-    # dispatch site blocks a wrong / block-tier tool pick BEFORE the fn runs
-    # (see tool_gating.bench_block_decision + _invoke_tool_via_emitter).
+    # operation -- the dispatch guard is a single ``is not None`` check with
+    # zero overhead when unarmed. When armed, the dispatch site blocks a
+    # wrong / block-tier tool pick before the fn runs (see
+    # tool_gating.bench_block_decision + _invoke_tool_via_emitter).
     bench_block_config: Any = None
     # job-0121: per-turn layer + map-command emission accumulators. Reset at
     # the start of every dispatch (Gemini stream or /invoke tool). The
@@ -2592,18 +2513,16 @@ class SessionState:
     # can re-bind layers via the same emission sequence.
     current_turn_layer_ids: list[str] = field(default_factory=list)
     current_turn_pipeline_id: str | None = None
-    # job-0281: per-turn zoom-to accumulator — persisted into the closing
+    # job-0281: per-turn zoom-to accumulator -- persisted into the closing
     # agent row's ``map_command_emissions`` so Case reopen can snap the
     # camera back (job-0280 web replays the LAST persisted zoom-to).
     current_turn_map_commands: list[dict] = field(default_factory=list)
-    # job-0267: per-turn narration accumulator. ``_stream_gemini_reply``
-    # resets it at stream start and appends every ``TextDeltaEvent`` delta
-    # (across ALL loop iterations — they share one ``message_id`` bubble on
-    # the wire). ``_dispatch_gemini_and_persist`` joins it at turn close and
-    # persists the agent's narration as a ``CaseChatMessage(role="agent")``
-    # so a Case reopen replays what the agent actually said — round-5 user
-    # evidence showed only user turns survived because this text was never
-    # accumulated (the old code persisted ``content=""`` markers).
+    # Per-turn narration accumulator. ``_stream_gemini_reply`` resets it at
+    # stream start and appends every ``TextDeltaEvent`` delta (across all
+    # loop iterations -- they share one ``message_id`` bubble on the wire).
+    # ``_dispatch_gemini_and_persist`` joins it at turn close and persists
+    # the agent's narration as a ``CaseChatMessage(role="agent")`` so a Case
+    # reopen replays what the agent actually said.
     current_turn_narration: list[str] = field(default_factory=list)
     # BUG 1 (post-OPEN-14 acceptance rerun): set by the ``except
     # ContextWindowExceededError`` handler in ``_stream_gemini_reply`` when a
@@ -2613,22 +2532,19 @@ class SessionState:
     # verdict in the SAME chat row as the (unverified) streamed text, not
     # only in a transient error envelope a dead/detached socket may drop.
     current_turn_context_abort_note: str | None = None
-    # job-0268: the Case this TURN is bound to. Pinned by ``_prepare_user_turn``
-    # at dispatch time (after the auto-create-from-root hand-off, before the
-    # first write). Every turn-scoped persistence write — chat rows, tool
-    # cards, layer attribution, per-Case .qgs routing, charts — targets THIS
+    # The Case this TURN is bound to. Pinned by ``_prepare_user_turn`` at
+    # dispatch time (after the auto-create-from-root hand-off, before the
+    # first write). Every turn-scoped persistence write -- chat rows, tool
+    # cards, layer attribution, per-Case .qgs routing, charts -- targets THIS
     # binding via ``_turn_case_id``, never the live ``active_case_id``, which
-    # a mid-stream ``case-command(select)`` re-points. Pre-fix, Case A's
-    # narration + tool cards persisted into Case B permanently when the user
-    # switched Cases during a long-running turn (job-0267 verifier probes A+B;
-    # the window is minutes-long for SFINCS-class tools).
+    # a mid-stream ``case-command(select)`` can re-point mid-turn.
     current_turn_case_id: str | None = None
-    # job-0122 (Appendix H.5): per-connection authenticated user context.
+    # Per-connection authenticated user context (SRS Appendix H.5).
     #
     # Populated by the connect-handshake (``_perform_auth_handshake``) after
     # the ``auth-token`` envelope verifies (or after the 5-second anonymous
     # fallback timeout). When set, every subsequent envelope for this
-    # connection is scoped to ``authenticated_user_id`` — Case lookups
+    # connection is scoped to ``authenticated_user_id`` -- Case lookups
     # (``Persistence.list_cases_for_user``) filter by it, and Case creation
     # binds it as ``owner_user_id``. ``None`` only between connect and the
     # handshake completion; never ``None`` after handshake.
@@ -2637,86 +2553,62 @@ class SessionState:
     firebase_uid: str | None = None
     tier: str = "free"
     auth_handshake_complete: bool = False
-    # A1 FIX 4 (GATE REPLAY — kills the blink): the web's app-level keepalive
-    # (ws.ts) sends a ``session-resume`` envelope every 25s on the OPEN socket
-    # as a proof-of-life ping (it is the only server-handled type that re-emits
-    # an authoritative ``session-state`` "pong"). The agent cannot tell that
-    # periodic ping apart from a genuine FRESH-SOCKET resume by the envelope
-    # alone — both are empty ``session-resume`` frames. Pre-fix, EVERY 25s ping
-    # ran a Dynamo read + ``_replay_active_case_layers`` + re-asserted layers
-    # (visible=true), which (a) re-painted the active Case's layers every 25s
-    # (the BLINK / un-hid a user-hidden layer) and (b) did a blocking Dynamo
-    # read on the loop. This flag is the gate: a fresh ``SessionState`` is built
-    # per WebSocket connection (handler-local), so the FIRST ``session-resume``
-    # on THIS connection is the real fresh-socket resume (replay layers — job-0356
-    # durability) and every later one is a keepalive ping (skip the layer
-    # replay; still emit the ``session-state`` pong so the client's pong
-    # deadline clears). Reset to False only by a brand-new connection's fresh
-    # SessionState — never within a connection.
+    # The web's keepalive (ws.ts) sends an empty ``session-resume`` envelope
+    # every 25s on the open socket as a proof-of-life ping -- indistinguishable
+    # from a genuine fresh-socket resume by the envelope alone. This flag is
+    # the gate: a fresh ``SessionState`` is built per WebSocket connection, so
+    # the FIRST ``session-resume`` on THIS connection replays layers, and
+    # every later one is a keepalive ping (skip the layer replay; still emit
+    # the ``session-state`` pong so the client's pong deadline clears). Reset
+    # to False only by a brand-new connection's fresh SessionState.
     did_fresh_resume: bool = False
-    # JOB C (active-case flap): per-connection latch for the active-Case REBIND
-    # decision - distinct from ``did_fresh_resume`` (which gates the LAYER
-    # REPLAY and is deliberately left False when a live turn was rebound so a
-    # later keepalive can perform the one-time seed). ROOT CAUSE of the flap: a
-    # session mounts TWO sockets (App.tsx + Chat.tsx), and BOTH send a 25s
-    # keepalive ``session-resume`` stamped with the Case THAT socket believes is
-    # active. Pre-fix every keepalive re-bound the shared ``_SESSION_ACTIVE_CASE``
-    # pointer whenever its stamp differed, so the two sockets ping-ponged the
-    # pointer every 25s and each rebind drove an authoritative layer replay that
-    # clobbered the displayed Case. This flag flips True after the FIRST resume
-    # on THIS connection, so the client-stamp rebind in ``_handle_session_resume``
-    # fires only on a genuine fresh resume - never on a keepalive ping. Explicit
-    # ``case-command(select)`` / ``user-message`` still rebind unconditionally
-    # (those carry a deliberate user intent). Reset to False only by a brand-new
-    # connection's fresh SessionState - never within a connection.
+    # Per-connection latch for the active-Case REBIND decision - distinct
+    # from ``did_fresh_resume`` (which gates the LAYER REPLAY). A session
+    # mounts two sockets (App.tsx + Chat.tsx), each sending its own 25s
+    # keepalive ``session-resume``. This flag flips True after the FIRST
+    # resume on THIS connection, so the client-stamp rebind in
+    # ``_handle_session_resume`` fires only on a genuine fresh resume, never
+    # a keepalive ping. Explicit ``case-command(select)`` / ``user-message``
+    # still rebind unconditionally (deliberate user intent). Reset to False
+    # only by a brand-new connection's fresh SessionState.
     did_first_resume: bool = False
-    # job-0127 (Wave 2): per-session pending payload-warning gates.
-    # Key is the ``warning_id`` ULID; value is an asyncio.Future that the
-    # inbound ``tool-payload-confirmation`` handler completes with the user's
-    # decision payload. ``_invoke_tool_via_emitter`` awaits it before
-    # dispatching (or skipping) the underlying tool.
-    # job-0127 (Wave 2): per-session audit log of payload-warning events.
-    # Each entry is a dict carrying ``warning_id``, ``tool_name``,
-    # ``estimated_mb``, ``threshold_mb``, ``decision`` (set on confirmation),
-    # and the ULID timestamps. Surfaces in tests + post-mortem; persisted
-    # to the active Case as part of the chat turn record (best-effort).
+    # Per-session audit log of payload-warning events. Each entry is a dict
+    # carrying ``warning_id``, ``tool_name``, ``estimated_mb``,
+    # ``threshold_mb``, ``decision`` (set on confirmation), and the ULID
+    # timestamps. Surfaces in tests + post-mortem; persisted to the active
+    # Case as part of the chat turn record (best-effort).
     payload_warning_audit_log: list[dict] = field(default_factory=list)
-    # job-B5 (Wave 4.10 Stage 2): per-session post-hoc allowed-set tracker.
-    #
-    # Under Wave 4.10 CachedContent Option A, the full tool catalog is cached
-    # in the Gemini ``CachedContent.tools[]`` slot at session start and the
-    # ``allowed_function_names`` filter is enforced in OUR code, not in
-    # Gemini's request (Vertex 400s when ``tool_config`` is passed alongside
-    # ``cached_content``). Every Gemini-emitted ``function_call`` is validated
-    # against this set via ``categories.validate_function_call`` before
-    # dispatch. The set is **monotonically growing** within a session — it
-    # starts at the 8-tool hot set and widens as the LLM opens categories
+    # Per-session post-hoc allowed-set tracker. The full tool catalog is
+    # cached in the provider's ``CachedContent.tools[]`` slot at session
+    # start and the ``allowed_function_names`` filter is enforced in our
+    # code, not in the provider request. Every emitted ``function_call`` is
+    # validated against this set via ``categories.validate_function_call``
+    # before dispatch. The set is monotonically growing within a session --
+    # it starts at the hot set and widens as the LLM opens categories
     # (``list_tools_in_category``) or successfully dispatches tools.
     allowed_tool_set: AllowedToolSet = field(default_factory=AllowedToolSet)
     # Per-session prompt-cache reference (legacy field name retained for the
     # ``cache-status`` envelope). GCP is decommissioned: the Vertex-only
     # CachedContent fast-path (``gemini_cache.py``) is REMOVED, so this is always
     # ``None``. Bedrock prompt caching is handled by ``bedrock_adapter`` via its
-    # own ``cachePoint`` markers and reported through ``UsageMetadataEvent`` —
+    # own ``cachePoint`` markers and reported through ``UsageMetadataEvent`` --
     # there is no per-session cache name to track here.
     gemini_cache_name: str | None = None
-    # job-B8 (Wave 4.10 Stage 3): per-session circuit breaker.
-    #
-    # Tracks consecutive failures per tool; trips after TRID3NT_CIRCUIT_THRESHOLD
-    # (default 3) consecutive failures, enforcing a TRID3NT_CIRCUIT_COOLDOWN_S
-    # (default 60s) cooldown.  ``_stream_gemini_reply`` checks ``is_tripped``
-    # before every ``_invoke_tool_via_emitter`` dispatch and records success/
-    # failure after each attempt.  A tripped breaker raises ``CircuitBreakerError``
-    # which ``summarize_tool_result`` surfaces as the Wave 4.9 structured envelope
-    # so Gemini reads the signal and narrates the outage honestly.
+    # Per-session circuit breaker. Tracks consecutive failures per tool;
+    # trips after TRID3NT_CIRCUIT_THRESHOLD (default 3) consecutive failures,
+    # enforcing a TRID3NT_CIRCUIT_COOLDOWN_S (default 60s) cooldown.
+    # ``_stream_gemini_reply`` checks ``is_tripped`` before every
+    # ``_invoke_tool_via_emitter`` dispatch and records success/failure after
+    # each attempt. A tripped breaker raises ``CircuitBreakerError``, which
+    # ``summarize_tool_result`` surfaces as a structured envelope so the
+    # model reads the signal and narrates the outage honestly.
     circuit_breaker: ToolCircuitBreaker = field(default_factory=ToolCircuitBreaker)
-    # job VAULT-READ: per-TURN set of tools that have already surfaced a
-    # credential-request this turn. The credential pipeline pauses + prompts +
-    # retries ONCE per tool per turn: after the single retry the tool either
-    # succeeds (key now in vault) or fails through the normal typed-error
-    # surface. Without this guard a still-invalid key (user pasted a bad MAP_KEY)
-    # would re-trip the auth error and re-prompt forever. Reset at the start of
-    # every ``_stream_gemini_reply`` turn (the prompt is a per-request decision).
+    # Per-TURN set of tools that have already surfaced a credential-request
+    # this turn. The credential pipeline pauses + prompts + retries ONCE per
+    # tool per turn: after the single retry the tool either succeeds (key
+    # now in vault) or fails through the normal typed-error surface. Without
+    # this guard a still-invalid key would re-trip the auth error and
+    # re-prompt forever. Reset at the start of every turn.
     credential_prompted_tools: set[str] = field(default_factory=set)
     # fix (bbox-gate-retry-loop, 2026-07-09): per-TURN memory of solver-confirm
     # / fetch-resolution gate ("tool-payload-warning") decisions, keyed by
@@ -2740,23 +2632,23 @@ class SessionState:
     gate_decisions_this_turn: dict[tuple[str, str], dict[str, Any]] = field(
         default_factory=dict
     )
-    # In-chat model selector (NATE 2026-06-17): the Bedrock model id chosen by
-    # the user for the CURRENT turn.  Updated on every ``user-message`` that
-    # carries a non-None ``model_id``; persists across turns so consecutive
-    # messages without a ``model_id`` inherit the last-chosen model.  ``None``
-    # means "use the server default" (``bedrock_adapter.bedrock_model_id()``).
-    # Only consulted when MODEL_PROVIDER=bedrock; ignored on the Vertex path.
+    # In-chat model selector: the Bedrock model id chosen by the user for
+    # the current turn. Updated on every ``user-message`` that carries a
+    # non-None ``model_id``; persists across turns so consecutive messages
+    # without one inherit the last-chosen model. ``None`` means "use the
+    # server default" (``bedrock_adapter.bedrock_model_id()``). Only
+    # consulted when MODEL_PROVIDER=bedrock; ignored on the Vertex path.
     selected_model: str | None = None
 
     # ------------------------------------------------------------------ #
-    # job-0259: active-Case context — session-scoped, NOT per-connection.
+    # job-0259: active-Case context -- session-scoped, NOT per-connection.
     # ------------------------------------------------------------------ #
 
     @property
     def active_case_id(self) -> str | None:
         """The active Case for this SESSION (shared across its connections).
 
-        ``None`` for fresh sessions (no Case selected yet — the M1 stateless
+        ``None`` for fresh sessions (no Case selected yet -- the M1 stateless
         demo path remains supported). Updated by ``case-command(create|select)``
         on ANY connection of the session; cleared on ``delete`` of the active
         Case. When non-None, the tool-call wrapper
@@ -2774,9 +2666,9 @@ class SessionState:
 def _new_envelope(message_type: str, session_id: str, payload: Any) -> str:
     """Construct + validate an Envelope and return its JSON wire form.
 
-    job-0277: stamps ``case_id`` from the turn's ContextVar binding (set by
-    the dispatch wrappers) so the web routes live envelopes to the OWNING
-    Case's stream. None outside a turn — lifecycle envelopes are untagged.
+    Stamps ``case_id`` from the turn's ContextVar binding so the web routes
+    live envelopes to the owning Case's stream. None outside a turn --
+    lifecycle envelopes are untagged.
     """
     env = Envelope(
         type=message_type,
@@ -2886,30 +2778,8 @@ async def _heartbeat_loop(
             )
 
 
-# ---------------------------------------------------------------------------
-# F1 (live-feedback 2026-07-08 local): mid-turn emission resilience.
-#
-# ROOT CAUSE of "nothing streams during the turn / it all appears at the end":
-# every raw ``await websocket.send(...)`` inside the turn task uses the socket
-# CAPTURED at dispatch time. A browser reload / transport drop mid-turn kills
-# that socket; the turn is detached and kept running (job-SOLVE-SURVIVE), and
-# ``_rebind_live_turns`` re-points the PipelineEmitter sink to the new socket,
-# but the direct sends (agent-message-chunk text deltas, cache-status,
-# loop_exhausted, segment terminators, turn-complete) still target the DEAD
-# socket. Worse, the first such raise inside the stream loop propagated to the
-# ``model stream failed`` handler and ABORTED the whole turn (observed live:
-# the landcover turn died at iter=3 with ConnectionClosedOK 1001, so the
-# fetched landcover was never published).
-#
-# Fix: ``_session_safe_send`` -- try the captured socket, then fall back to
-# any OTHER live socket registered for the session (``_SESSION_WS_CONNECTIONS``
-# is maintained by the resume handshake for exactly this kind of lookup), and
-# NEVER raise. The web side fans message-scoped envelope types across its
-# sibling GraceWs instances (ws.ts SESSION_SCOPED_TYPES), so delivering to
-# either of the session's sockets reaches the right UI handler. When every
-# socket is dead the frame is dropped (logged debug) -- the persisted chat/tool
-# rows remain the durable replay backstop, and the turn KEEPS RUNNING.
-# ---------------------------------------------------------------------------
+# Mid-turn sends must survive a dead captured socket: fall back across any
+# other live socket for the session rather than aborting the turn.
 
 
 async def _session_safe_send(
@@ -2946,12 +2816,12 @@ async def _send_loop_exhausted(
     websocket: ServerConnection,
     session_id: str,
 ) -> None:
-    """Emit the distinct ``loop_exhausted`` envelope (job-B9, Wave 4.10 Stage 3).
+    """Emit the distinct ``loop_exhausted`` envelope.
 
     Fires when the multi-turn loop hits ``MAX_TURN_ITERATIONS`` without a
-    natural termination (no tool-call-free turn).  Sends a raw-JSON envelope
-    typed ``"loop_exhausted"`` — distinct from the generic ``"error"`` type —
-    so the web UI can render "Agent ran out of steps" rather than a generic
+    natural termination (no tool-call-free turn). Raw-JSON envelope typed
+    ``"loop_exhausted"`` -- distinct from the generic ``"error"`` type -- so
+    the UI can render "Agent ran out of steps" rather than a generic
     failure indicator.
 
     Wire shape:
@@ -2966,12 +2836,11 @@ async def _send_loop_exhausted(
           }
         }
 
-    The ``payload.error_code`` key follows the Wave 4.9 SCREAMING_SNAKE_CASE
-    convention but lives in the ``loop_exhausted`` typed envelope, not the
-    ``error`` envelope, so clients can distinguish "tool chain too long" from
-    "Gemini API failed" (LLM_UNAVAILABLE). ``retryable=False`` because the
-    agent already consumed all its turns; the user should rephrase or narrow
-    scope.
+    The ``payload.error_code`` key is SCREAMING_SNAKE_CASE and lives in the
+    ``loop_exhausted`` typed envelope, not the ``error`` envelope, so clients
+    can distinguish "tool chain too long" from an upstream LLM failure.
+    ``retryable=False`` because the agent already consumed all its turns;
+    the user should rephrase or narrow scope.
 
     Best-effort: a wire failure is logged but not re-raised so the terminal
     agent-message-chunk can still fire.
@@ -3005,7 +2874,7 @@ async def _send_loop_exhausted(
             session_id,
             MAX_TURN_ITERATIONS,
         )
-    except Exception:  # noqa: BLE001 — observability; never break the reply path
+    except Exception:  # noqa: BLE001 -- observability; never break the reply path
         logger.exception(
             "loop_exhausted envelope send failed session=%s", session_id
         )
@@ -3017,15 +2886,15 @@ async def _send_agent_abort(
     reason_code: str,
     message: str,
 ) -> None:
-    """Emit the runaway-agent abort envelope (#186, live-down 2026-06-25).
+    """Emit the runaway-agent abort envelope.
 
-    Sent when a per-turn guard fires (step cap, wall-clock, or loop watchdog) to
-    stop a runaway turn BEFORE it can wedge the shared box. Reuses the distinct
-    typed ``loop_exhausted`` wire type (the web UI already renders it as "Agent
-    ran out of steps" rather than a generic failure), but carries the specific
-    guard ``error_code`` + an honest message (honesty floor — we say exactly why
-    the turn stopped, never a fabricated success). Best-effort: a wire failure is
-    logged, never re-raised, so the turn still terminates + releases busy.
+    Sent when a per-turn guard fires (step cap, wall-clock, or loop watchdog)
+    to stop a runaway turn before it can wedge the shared box. Reuses the
+    ``loop_exhausted`` typed wire envelope but carries the specific guard
+    ``error_code`` and an honest message (honesty floor: state exactly why
+    the turn stopped, never a fabricated success). Best-effort: a wire
+    failure is logged, never re-raised, so the turn still terminates and
+    releases busy.
     """
     import json as _json
 
@@ -3049,7 +2918,7 @@ async def _send_agent_abort(
         logger.warning(
             "agent-abort session=%s reason=%s", session_id, reason_code
         )
-    except Exception:  # noqa: BLE001 — observability; never break the reply path
+    except Exception:  # noqa: BLE001 -- observability; never break the reply path
         logger.exception(
             "agent-abort envelope send failed session=%s reason=%s",
             session_id,
@@ -3064,35 +2933,30 @@ async def _emit_turn_complete(
     pipeline_id: str | None = None,
     final_state: str | None = None,
 ) -> None:
-    """C2 (A1 produces, W2 consumes): emit the end-of-turn ``turn-complete``
-    signal so the client force-completes any card still rendering ``running``.
+    """Emit the end-of-turn ``turn-complete`` signal so the client
+    force-completes any card still rendering ``running``.
 
-    The root cause this addresses: a tool/turn's TERMINAL ``pipeline-state``
-    frame can be written onto a just-dropped socket and LOST (the BLINK's
-    sibling symptom — a card spins forever after its tool actually finished).
-    A1 emits this explicit whole-turn idle marker at the END of every turn
-    (``_dispatch_gemini_and_persist`` / ``_dispatch_tool_and_persist`` finally)
-    AND re-emits it on session-resume; W2 settles every still-``running`` card
-    when it arrives so no card hangs past turn end.
+    A tool/turn's terminal ``pipeline-state`` frame can be written onto a
+    just-dropped socket and lost, leaving a card spinning after its tool
+    actually finished. This idle marker is emitted at the end of every turn
+    and re-emitted on session-resume so no card hangs past turn end.
 
-    Wire shape (matches the W2-pinned ``TurnCompletePayload`` exactly — both
-    fields optional, a bare ``{}`` is a valid whole-turn idle):
+    Wire shape (matches ``TurnCompletePayload`` exactly -- both fields
+    optional, a bare ``{}`` is a valid whole-turn idle):
         {"type": "turn-complete", "session_id": ..., "case_id": <turn case>,
          "payload": {"envelope_type": "turn-complete",
                      "pipeline_id": <str|null>, "final_state": <str|null>}}
 
-    Built as a raw-JSON envelope (NOT via ``_new_envelope``) because the typed
-    ``Envelope.payload`` is a ``GraceModel`` with ``extra="forbid"`` and the
-    ``turn-complete`` payload model lives in the schema lane (not yet in this
-    repo's ``trid3nt_contracts``); the same raw-JSON pattern ``_send_loop_exhausted``
-    uses. We still stamp ``case_id`` from the turn's ContextVar tag (set by the
-    dispatch wrappers) so W2 fans it out session-wide and routes by ``case_id``
-    to the owning Case's stream, exactly like ``solve-progress``.
+    Built as a raw-JSON envelope (not via ``_new_envelope``) because the
+    typed ``Envelope.payload`` is a ``GraceModel`` with ``extra="forbid"``
+    and this payload model is not yet in ``trid3nt_contracts``; same
+    raw-JSON pattern ``_send_loop_exhausted`` uses. ``case_id`` is stamped
+    from the turn's ContextVar tag so this fans out session-wide and routes
+    by ``case_id`` to the owning Case's stream, exactly like ``solve-progress``.
 
     Best-effort: a wire failure (the socket may already be half-closed) is
-    logged, never raised — the persisted tool-card terminal state
-    (``_persist_tool_card`` / ``_persist_terminal_failure_card``) is the durable
-    replay backstop, and session-resume re-emits this signal anyway.
+    logged, never raised -- the persisted tool-card terminal state is the
+    durable replay backstop, and session-resume re-emits this signal anyway.
     """
     import json as _json
 
@@ -3117,7 +2981,7 @@ async def _emit_turn_complete(
             pipeline_id,
             final_state,
         )
-    except Exception:  # noqa: BLE001 — idle signal; never break the reply path
+    except Exception:  # noqa: BLE001 -- idle signal; never break the reply path
         logger.debug(
             "turn-complete emit failed session=%s", state.session_id,
             exc_info=True,
@@ -3127,7 +2991,7 @@ async def _emit_turn_complete(
 async def _handle_max_turns_reached(
     websocket: ServerConnection, state: SessionState
 ) -> None:
-    """FR-FR-3 (job-0048): emit the cap-hit envelope sequence.
+    """Emit the cap-hit envelope sequence.
 
     1. Emit ``session-state`` with ``status="max_turns_reached"`` so the
        client knows the session is at its turn limit.
@@ -3187,8 +3051,8 @@ async def _emit_cache_status(
 ) -> None:
     """Emit a ``cache-status`` envelope so the UI can render live cache hit rate.
 
-    Job-B6 (Wave 4.10): forwarded once per Gemini stream after the
-    ``UsageMetadataEvent`` lands. Payload shape:
+    Forwarded once per Gemini stream after the ``UsageMetadataEvent`` lands.
+    Payload shape:
 
         {
             "cache_hit":     bool,
@@ -3199,11 +3063,9 @@ async def _emit_cache_status(
             "cache_name":    str | null   (the cached_content name in use this turn),
         }
 
-    The envelope is intentionally raw-JSON (no contract model) — it is
-    observability surface, not a wire-API contract. Mirrors the existing
-    pattern for ``mode2-candidate`` (server.py line ~1685). A wire-side
-    failure is logged but never raised: cache-status reporting must not
-    break the agent loop.
+    Intentionally raw-JSON (no contract model): observability surface, not
+    a wire-API contract. A wire-side failure is logged but never raised --
+    cache-status reporting must not break the agent loop.
     """
     import json as _json
 
@@ -3225,7 +3087,7 @@ async def _emit_cache_status(
                 }
             )
         )
-    except Exception:  # noqa: BLE001 — observability, never bubble up
+    except Exception:  # noqa: BLE001 -- observability, never bubble up
         logger.exception(
             "cache-status emission failed session=%s", state.session_id
         )
@@ -3408,18 +3270,15 @@ async def _stream_gemini_reply(
     bedrock_model: str | None = None,
     show_thinking: bool = False,
 ) -> None:
-    """Stream one user-message reply with multi-turn tool dispatch (job-0169).
+    """Stream one user-message reply with multi-turn tool dispatch.
 
-    The previous (job-0154) shape dispatched the first function_call but never
-    fed the result back to Gemini, so every multi-tool prompt
-    ("Show me protected areas in Fort Myers" → geocode → fetch_wdpa) stopped
-    after the first call.  The fix is the canonical Gemini agent loop:
+    The canonical agent loop:
 
         contents = history + user_text
         for _ in range(MAX_TURN_ITERATIONS):
             stream Gemini:
-                text deltas → forward as agent-message-chunk
-                function_calls → collect (this turn)
+                text deltas -> forward as agent-message-chunk
+                function_calls -> collect (this turn)
             if no function_calls this turn:
                 break  # final narrative turn
             for each call:
@@ -3439,16 +3298,10 @@ async def _stream_gemini_reply(
         user_text[:80],
     )
 
-    # job-0260 A3 (NATE 2026-07-20 live): name an Untitled Case from its FIRST
-    # user message BEFORE the model dispatch. The prior call site sat at the very
-    # END of the turn (after llm_generation completed), so a failed narration
-    # (LLM_UNAVAILABLE / transient upstream / context-window abort) jumped to an
-    # except handler and NEVER reached the autoname -- the freshly-created case
-    # stayed "Untitled" even though its first prompt was perfectly nameable. Auto-
-    # name is a cheap deterministic HEURISTIC (no LLM call), so running it up here
-    # is safe and independent of whether the turn later succeeds. Best-effort +
-    # never-raise; the end-of-turn call below stays as a no-op fallback (guarded
-    # by _AUTONAMED_CASES) that still covers a mid-stream case switch.
+    # Auto-name an Untitled Case from its FIRST user message BEFORE dispatch
+    # (a failed narration must not skip it). Deterministic heuristic, no LLM
+    # call; best-effort and never-raise. The end-of-turn call below stays as
+    # a no-op fallback covering a mid-stream case switch.
     try:
         if await _maybe_autoname_case(state, user_text):
             await _emit_case_list(websocket, state, force=True)
@@ -3458,34 +3311,27 @@ async def _stream_gemini_reply(
             exc_info=True,
         )
 
-    # job-0315: one bubble per CONTIGUOUS narration run. A fresh message_id is
-    # minted lazily the FIRST time text arrives in a segment (A2); finalized
-    # (done=True + per-segment persist) when the next function-call round is
-    # about to dispatch (A3); a brand-new segment opens for the next text after
-    # that round. ``None`` => no open segment (the "no leading text before the
-    # first tool call -> no empty bubble" edge falls out for free). Do NOT
-    # pre-mint — the first segment's id is minted on first text exactly like
-    # every later segment.
+    # One bubble per CONTIGUOUS narration run: message_id is minted lazily on
+    # the first text of a segment, finalized when the next function-call
+    # round dispatches, and a new segment opens after that round. ``None``
+    # means no open segment (no leading-text-before-first-tool-call bubble).
     current_message_id: str | None = None
     pipeline_id = new_ulid()
     step_id = new_ulid()
     state.current_pipeline_id = pipeline_id
-    # job-0267: fresh narration accumulator for this stream. One stream ==
-    # one ``message_id`` bubble on the wire == one persisted ``role="agent"``
-    # CaseChatMessage at turn close (``_dispatch_gemini_and_persist``).
-    # job-0269: capture BOTH per-turn lists as locals in the coroutine's
-    # synchronous prefix (before any await). With per-Case turn concurrency
-    # a newer turn (or a case-open/deselect) re-points the SessionState
-    # fields mid-stream — this turn must keep appending to ITS OWN lists.
-    # The narration list is also registered under the running task so the
-    # dispatch wrapper's finally joins THIS turn's list (never the live
-    # field) — even on crash/cancel, since registration precedes any await.
+    # Fresh per-stream narration accumulator: one stream == one message_id
+    # bubble == one persisted role="agent" CaseChatMessage at turn close.
+    # Captured as LOCALS in the synchronous prefix (before any await) because
+    # per-Case turn concurrency re-points SessionState fields mid-stream; this
+    # turn must keep appending to ITS OWN lists. Also registered under the
+    # running task so the dispatch wrapper's finally joins THIS turn's list
+    # (never the live field), even on crash/cancel.
     state.current_turn_narration = []
     # BUG 1: reset the per-turn context-window-abort note. A new turn is a
     # fresh request -- any prior turn's abort note must never leak forward.
     state.current_turn_context_abort_note = None
     # job VAULT-READ: reset the per-turn credential-prompt guard. A new user
-    # turn is a fresh request — a tool that prompted for a key last turn may
+    # turn is a fresh request -- a tool that prompted for a key last turn may
     # legitimately prompt again this turn (the key may still be missing).
     state.credential_prompted_tools = set()
     # fix (bbox-gate-retry-loop, 2026-07-09): reset the per-turn
@@ -3495,25 +3341,19 @@ async def _stream_gemini_reply(
     state.gate_decisions_this_turn = {}
     turn_narration = state.current_turn_narration
     turn_history = state.chat_history
-    # job-0315: per-segment buffer for the CURRENTLY OPEN bubble only (reset by
-    # _finalize_segment via .clear() at each boundary — same list object stays
-    # registered). Captured in the synchronous prefix and registered under the
-    # running task so a crash/cancel mid-segment lets the wrapper's finally
-    # persist the un-finalized tail. Counter init at 0 so the wrapper's
-    # ``segments_done`` read is well-defined even on instant death.
+    # Per-segment buffer for the CURRENTLY OPEN bubble only; reset via
+    # .clear() at each boundary (same list object stays registered).
+    # Captured + registered in the synchronous prefix so a crash/cancel
+    # mid-segment lets the wrapper's finally persist the tail.
     _segment_buf: list[str] = []
-    # Thinking persistence (LANE CORE 2026-07-22): per-segment reasoning-text
-    # buffer, filled ONLY while the per-turn ``show_thinking`` toggle is ON
-    # (mirrors the wire gating below). ``_finalize_segment`` persists its
-    # joined text as the ``thinking`` field on the SAME agent row as the
-    # segment's answer (same-bubble contract; the field name "thinking" is the
-    # cross-lane interface the QGIS plugin reads) and clears it. A
-    # thinking-only segment (reasoning streamed, then a tool round with no
-    # answer text) keeps its buffer so the thinking attaches to the turn's
-    # NEXT persisted agent row; a turn that ends with thinking and no text at
-    # all persists nothing (no phantom bubble -- the job-0315 invariant).
-    # NEVER-REHYDRATE: the persisted field is display replay material only --
-    # adapter.build_contents_from_history strips it BY RULE.
+    # Per-segment reasoning-text buffer, filled only when the per-turn
+    # ``show_thinking`` toggle is ON. ``_finalize_segment`` persists it as the
+    # ``thinking`` field on the SAME agent row as the segment's answer
+    # (same-bubble contract; QGIS plugin reads this field) and clears it. A
+    # thinking-only segment keeps its buffer so it attaches to the turn's NEXT
+    # persisted row; thinking with no text anywhere persists no phantom
+    # bubble. NEVER-REHYDRATE: this is display replay material only --
+    # build_contents_from_history strips it BY RULE.
     _thinking_buf: list[str] = []
     _reg_task = asyncio.current_task()
     if _reg_task is not None:
@@ -3542,7 +3382,7 @@ async def _stream_gemini_reply(
         )
     )
 
-    # sprint-14-aws (job-0287): under Bedrock there is no Vertex client to build —
+    # sprint-14-aws (job-0287): under Bedrock there is no Vertex client to build --
     # build_client() requires GCP ADC, which run-local and the AWS deploy do not
     # have. stream_events_with_contents' bedrock branch ignores ``client``.
     # Provider resolved once here and reused by the cache guard below.
@@ -3576,25 +3416,23 @@ async def _stream_gemini_reply(
 
     # Build tool declarations + system prompt for this request.
     #
-    # Tool-retrieval (tool-retrieval kickoff, orchestrator half). Default OFF =
-    # the full flat registry, BYTE-IDENTICAL to the pre-feature behavior (no
-    # retrieval computed). In ``shadow`` we compute the WOULD-BE-visible set and
-    # LOG it for recall@k, but STILL build declarations over the FULL registry
-    # (ZERO behavior change -- the model still sees every tool). In ``enforce``
-    # we subset TOOL_REGISTRY to the visible set BEFORE build_tool_declarations
-    # and UNION the visible set into the Case's monotonic AllowedToolSet so a
-    # once-visible tool never leaves within a Case. ANY retrieval error / empty
-    # result FAILS OPEN to the full registry for that turn (never empty /
-    # core-only), logged. The cachePoint TAIL is inserted downstream by
+    # Tool-retrieval: default OFF = the full flat registry (no retrieval
+    # computed). In ``shadow`` we compute the WOULD-BE-visible set and LOG it
+    # for recall@k, but still build declarations over the FULL registry (zero
+    # behavior change). In ``enforce`` we subset TOOL_REGISTRY to the visible
+    # set before build_tool_declarations and UNION it into the Case's
+    # monotonic AllowedToolSet so a once-visible tool never leaves within a
+    # Case. Any retrieval error / empty result FAILS OPEN to the full
+    # registry, logged. The cachePoint TAIL is inserted downstream by
     # bedrock_adapter (after tools), so subsetting the dict here preserves it.
     #
-    # ENGINE-DOOR default (refactor/engine-doors): the DEFAULT declarable set is
-    # the full registry MINUS tier=template engine templates -- NOT the raw
-    # TOOL_REGISTRY. Templates surface to the model ONLY via their door's gate
-    # expansion (the door-expand block re-adds the specific templates it lists
-    # back into _retrieval_registry). Using the raw registry here re-leaked every
-    # template into DEFAULT declarations in exactly the gating-off / retrieval-off
-    # / fail-open paths, defeating the door architecture. See
+    # ENGINE-DOOR default: the DEFAULT declarable set is the full registry
+    # MINUS tier=template engine templates -- NOT the raw TOOL_REGISTRY.
+    # Templates surface to the model ONLY via their door's gate expansion
+    # (which re-adds the specific templates it lists back into
+    # _retrieval_registry). Using the raw registry here would re-leak every
+    # template into DEFAULT declarations in the gating-off / retrieval-off /
+    # fail-open paths, defeating the door architecture. See
     # _default_declarable_registry.
     _retrieval_registry = _default_declarable_registry()
     _retrieval_mode = _tool_retrieval_mode()
@@ -3622,7 +3460,7 @@ async def _stream_gemini_reply(
                     full_registry_size=len(TOOL_REGISTRY),
                     model_id=_effective_model,
                 )
-            except Exception:  # noqa: BLE001 — telemetry must never break dispatch
+            except Exception:  # noqa: BLE001 -- telemetry must never break dispatch
                 logger.warning(
                     "tool-retrieval: shadow emit failed", exc_info=True
                 )
@@ -3637,7 +3475,7 @@ async def _stream_gemini_reply(
                     _allowed_snapshot = set(
                         state.allowed_tool_set.as_frozenset()
                     )
-                except Exception:  # noqa: BLE001 — never shrink on a snapshot fault
+                except Exception:  # noqa: BLE001 -- never shrink on a snapshot fault
                     logger.warning(
                         "tool-retrieval: allowed-set union failed; "
                         "FAIL-OPEN to full registry",
@@ -3664,7 +3502,7 @@ async def _stream_gemini_reply(
                         "tool-retrieval enforce: empty subset; "
                         "FAIL-OPEN to full registry"
                     )
-        except Exception:  # noqa: BLE001 — any fault FAILS OPEN to the full catalog
+        except Exception:  # noqa: BLE001 -- any fault FAILS OPEN to the full catalog
             logger.warning(
                 "tool-retrieval: selection failed; FAIL-OPEN to full registry "
                 "(mode=%s)",
@@ -3677,15 +3515,14 @@ async def _stream_gemini_reply(
             # expansion. See _default_declarable_registry.
             _retrieval_registry = _default_declarable_registry()
 
-    # Stage 3 TOP-K TOOL GATING (the routing bench's own recommendation): the
-    # openai adapter path was sending ALL ~190 tool schemas every round. Gate
-    # the per-turn tool list to the retrieval top-k (TRID3NT_TOOL_GATING_TOPK,
-    # default 24; 0 disables) PLUS the always-include floors -- the META set
-    # (hot set + catalog pair + web_fetch), every tool already used this
-    # case-session (AllowedToolSet dispatched + explicit), and any tool the
-    # user NAMED in the message. SCOPED to MODEL_PROVIDER=openai: bedrock /
-    # scripted / vertex tool lists are byte-unchanged. FAIL-OPEN on a cold
-    # index / empty ranking / any fault (see tool_gating.gate_tool_registry).
+    # TOP-K TOOL GATING: the openai adapter path was sending ALL ~190 tool
+    # schemas every round. Gate the per-turn tool list to the retrieval
+    # top-k (TRID3NT_TOOL_GATING_TOPK, default 24; 0 disables) PLUS the
+    # always-include floors -- the META set (hot set + catalog pair +
+    # web_fetch), every tool already used this case-session, and any tool
+    # the user NAMED in the message. Scoped to MODEL_PROVIDER=openai:
+    # bedrock/scripted/vertex tool lists are byte-unchanged. FAIL-OPEN on a
+    # cold index / empty ranking / any fault.
     if _provider == "openai":
         try:
             from .agent.gates.tool_gating import (
@@ -3700,13 +3537,11 @@ async def _stream_gemini_reply(
             _gate_k = gating_topk()
             if _gate_k > 0:
                 _gate_ranked = retrieve_ranked_tools(user_text, k=_gate_k)
-                # POOR-FIT WIDENING (task 3): a LOW top-1 retrieval score means
-                # the ranking is uncertain for this ask -- widen the gate k once
-                # (24 -> WIDEN_K) so recall does not silently drop on a vague /
-                # ambiguous turn. Fires at most once per turn, only when the
-                # widened k actually exceeds the current k. Threshold is
-                # env-tunable (TRID3NT_GATING_WIDEN_THRESHOLD); see the
-                # calibration note in tool_gating.py.
+                # POOR-FIT WIDENING: a LOW top-1 retrieval score means the ranking is
+                # uncertain for this ask -- widen the gate k once (24 -> WIDEN_K) so
+                # recall does not silently drop on a vague/ambiguous turn. Fires at most
+                # once per turn, only when the widened k exceeds the current k.
+                # Threshold is env-tunable (TRID3NT_GATING_WIDEN_THRESHOLD).
                 _widen_threshold = gating_widen_threshold()
                 if (
                     WIDEN_K > _gate_k
@@ -3755,18 +3590,17 @@ async def _stream_gemini_reply(
                         len(_gate_ranked),
                         pipeline_id,
                     )
-        except Exception:  # noqa: BLE001 — gating faults FAIL OPEN (all tools)
+        except Exception:  # noqa: BLE001 -- gating faults FAIL OPEN (all tools)
             logger.warning(
                 "tool-gating: fault; FAIL-OPEN to ungated registry",
                 exc_info=True,
             )
 
-    # ADR 0018 (Stage 3): auto/ask tool-candidates gate. May PAUSE here
-    # (bounded -- see _tool_choice_timeout_s) awaiting the user's tool-choice.
-    # A pinned tool is unioned into the visible registry + allowed set BEFORE
-    # declarations are built so the model can actually call it; notes (pin
-    # directive / free-text clarification / timeout note) ride into
-    # ``contents`` after it is built below. Any fault proceeds autonomously.
+    # ADR 0018: auto/ask tool-candidates gate. May PAUSE here (bounded --
+    # see _tool_choice_timeout_s) awaiting the user's tool-choice. A pinned
+    # tool is unioned into the visible registry + allowed set BEFORE
+    # declarations are built so the model can actually call it. Any fault
+    # proceeds autonomously.
     _pin_notes: list[str] = []
     try:
         _pinned_tool, _pin_notes = await _maybe_emit_tool_candidates(
@@ -3777,22 +3611,21 @@ async def _stream_gemini_reply(
         )
     except asyncio.CancelledError:
         raise
-    except Exception:  # noqa: BLE001 — the picker is an optimization
+    except Exception:  # noqa: BLE001 -- the picker is an optimization
         logger.warning(
             "tool-candidates gate failed; proceeding autonomously",
             exc_info=True,
         )
     tool_decls = build_tool_declarations(_retrieval_registry)
 
-    # LESSONS LOOP v1 READ SEAM (track 4, TRID3NT_LESSONS gate -- dark by
-    # default). Same layer the retrieval-visible-tools selection runs at: once
-    # per turn, score the stored failed-then-corrected lessons against
-    # ``user_text`` (BM25, ~200-token budget, top 2) and append the advisory
+    # LESSONS LOOP v1 READ SEAM (TRID3NT_LESSONS gate -- dark by default):
+    # once per turn, score the stored failed-then-corrected lessons against
+    # user_text (BM25, ~200-token budget, top 2) and append the advisory
     # "Past corrections" appendix to the system prompt for THIS turn only.
-    # Advisory text only; any fault falls back to the plain SYSTEM_PROMPT.
-    # NOTE: a non-empty appendix varies the system prompt across turns, which
-    # can reduce Bedrock cachePoint prefix hits -- acceptable while the gate
-    # is dark/off by default; benchmark before arming (A/B via the sweep).
+    # Advisory text only; any fault falls back to the plain SYSTEM_PROMPT. A
+    # non-empty appendix varies the system prompt across turns, which can
+    # reduce Bedrock cachePoint prefix hits -- acceptable while the gate is
+    # dark/off by default; benchmark before arming.
     _turn_system_prompt = SYSTEM_PROMPT
     if lessons_enabled():
         try:
@@ -3810,21 +3643,15 @@ async def _stream_gemini_reply(
     state.gemini_cache_name = None
 
     # Seed the multi-turn contents list with chat history + this user_text.
-    # job-0269: the entry-captured list — a mid-stream case switch rebinds
-    # ``state.chat_history`` to the new Case's list, never mutates this one.
+    # The entry-captured list -- a mid-stream case switch rebinds
+    # state.chat_history, never mutates this one.
     #
-    # JOB 2 (per-turn context note): inject the already-loaded-layers +
-    # reuse-AOI note on EVERY live turn, not just on case reopen. The note
-    # (build_layers_present_note) lists each layer already on the map (RESULT /
-    # INPUT[<kind>] + reusable handle/uri) and the Case AOI bbox with the
-    # "REUSE this exact extent, do NOT re-geocode" instruction. Pre-fix it was
-    # built ONLY on a case reopen (rehydrate_history_from_case), so a long live
-    # turn re-geocoded + re-fetched layers already present. We append it as the
-    # LAST history turn (just before the user message) so the model reads the
-    # current Case state as context, then the user's actual ask. Kept compact;
-    # ``None`` (no layers and no bbox) is a no-op. Built from the LIVE emitter +
-    # the JOB-2 cached Case AOI (``state.case_bbox``) so it reflects this turn's
-    # truth, never mutating the entry-captured ``turn_history`` list.
+    # Inject the already-loaded-layers + reuse-AOI note on EVERY live turn
+    # (lists each layer already on the map plus the Case AOI bbox with a
+    # REUSE instruction) so a long live turn does not re-geocode or re-fetch
+    # layers already present. Appended as the LAST history turn before the
+    # user message; ``None`` (no layers, no bbox) is a no-op. Built from the
+    # LIVE emitter + cached Case AOI so it reflects this turn's current truth.
     turn_history_for_contents = turn_history
     try:
         loaded_layers = (
@@ -3839,7 +3666,7 @@ async def _stream_gemini_reply(
             turn_history_for_contents = list(turn_history) + [
                 {"role": "user", "text": case_state_note}
             ]
-    except Exception:  # noqa: BLE001 — the note is an optimization, never fatal
+    except Exception:  # noqa: BLE001 -- the note is an optimization, never fatal
         logger.debug("per-turn case-state note build failed", exc_info=True)
     contents = build_contents_from_history(user_text, turn_history_for_contents)
 
@@ -3855,43 +3682,39 @@ async def _stream_gemini_reply(
     # so the allowed set is primed with the user's most-dispatched tools before
     # any Gemini function_call arrives.  No-op when ``TRID3NT_DYNAMIC_HOT_SET``
     # is unset (delegates synchronously to the static path).  Failure is silent
-    # — the static fallback is always available inside ``as_frozenset_async``.
+    # -- the static fallback is always available inside ``as_frozenset_async``.
     try:
         await state.allowed_tool_set.as_frozenset_async()
-    except Exception:  # noqa: BLE001 — dynamic hot-set is best-effort
+    except Exception:  # noqa: BLE001 -- dynamic hot-set is best-effort
         pass
 
     # Per-turn usage metadata harvested from the stream (job-B6).
     last_usage: UsageMetadataEvent | None = None
 
-    # RUNAWAY-AGENT GUARD (#186, live-down 2026-06-25). Three independent
-    # per-turn bounds, all routed to a single clean ABORT that terminates the
-    # turn (releasing busy) instead of letting the model<->tool loop run away
-    # and wedge the shared box:
+    # RUNAWAY-AGENT GUARD: three independent per-turn bounds route to a
+    # single clean ABORT that terminates the turn (releasing busy) instead of
+    # letting the model<->tool loop run away and wedge the shared box:
     #   1. STEP CAP -- min of the historical MAX_TURN_ITERATIONS and the
-    #      model-tier step cap (cheap/Nova/Haiku tiers get HALF -- they are the
-    #      loop-prone tier from the incident). Normal full-tier turns are
-    #      UNCHANGED: MAX_TURN_ITERATIONS (12) stays the binding bound.
-    #   2. WALL-CLOCK -- a per-turn deadline aborts a slow turn even under the
-    #      step cap.
-    #   3. LOOP WATCHDOG -- aborts when the SAME tool+args (or identical round
-    #      signature) repeats N rounds in a row with no progress.
-    # ``_agent_abort`` is set to (reason_code, message) the moment a guard fires;
-    # the loop breaks and the post-loop block surfaces the honest typed envelope
-    # (honesty floor) exactly like the loop_exhausted fail-stop.
+    #      model-tier step cap (cheap/Nova/Haiku tiers get HALF).
+    #   2. WALL-CLOCK -- a per-turn deadline aborts a slow turn even under
+    #      the step cap.
+    #   3. LOOP WATCHDOG -- aborts when the SAME tool+args (or identical
+    #      round signature) repeats N rounds in a row with no progress.
+    # ``_agent_abort`` is set to (reason_code, message) the moment a guard
+    # fires; the loop breaks and the post-loop block surfaces the honest
+    # typed envelope (honesty floor) like the loop_exhausted fail-stop.
     _step_cap = min(MAX_TURN_ITERATIONS, step_cap_for_model(bedrock_model))
     _turn_deadline = started_at + max_turn_seconds()
     _watchdog = LoopWatchdog()
     _agent_abort: tuple[str, str] | None = None
 
-    # CRISP-END-AFTER-DELIVERABLE (NATE 2026-06-29). Once a terminal composer
-    # (``run_model_*`` & friends) has produced its artifact, the model should
-    # narrate a short summary and STOP -- not keep emitting unproductive tool
-    # calls until it trips the ``loop_exhausted`` cap. ``_deliverable_done``
-    # latches on the first such delivery; ``_post_deliverable_idle`` counts the
-    # CONSECUTIVE no-progress rounds since, and a genuine producing round resets
-    # it (so multi-deliverable flows are never cut off). See
-    # ``_POST_DELIVERABLE_WRAPUP_ROUNDS``.
+    # CRISP-END-AFTER-DELIVERABLE: once a terminal composer (run_model_* &
+    # friends) has produced its artifact, the model should narrate a short
+    # summary and STOP rather than spin to the loop_exhausted cap.
+    # _deliverable_done latches on first delivery; _post_deliverable_idle
+    # counts consecutive no-progress rounds and resets on a producing round
+    # (multi-deliverable flows are never cut off). See
+    # _POST_DELIVERABLE_WRAPUP_ROUNDS.
     _deliverable_done = False
     _post_deliverable_idle = 0
     _crisp_concluded = False
@@ -3902,16 +3725,14 @@ async def _stream_gemini_reply(
     # failed-then-corrected pair into the lessons store (TRID3NT_LESSONS gate).
     _lessons_turn_calls: list[dict] = []
 
-    # OPEN-14 FABRICATION BACKSTOP (item 4): tracks whether ANY round of this
-    # turn dispatched a tool call. A turn that ends with this still False AND
-    # whose closing narration claims a completed geospatial action (the
-    # incident shape: prompt silently clipped -> model loses its tool
-    # contract -> narrates fabricated success with zero tool calls) gets an
+    # OPEN-14 FABRICATION BACKSTOP: tracks whether ANY round of this turn
+    # dispatched a tool call. A turn that ends with this still False AND
+    # whose closing narration claims a completed geospatial action gets an
     # honest caveat appended -- see the ``not turn_function_calls`` block
-    # below. Never set True by a round that merely REQUESTED calls that later
-    # failed validation -- ``turn_function_calls`` is the model's raw
-    # request, which is exactly the signal we want (a model that TRIED to act
-    # is not fabricating; one that never tried and claims success is).
+    # below. Never set True by a round that merely REQUESTED calls that
+    # later failed validation -- turn_function_calls is the model's raw
+    # request (a model that TRIED to act is not fabricating; one that never
+    # tried and claims success is).
     _turn_ever_called_tool = False
 
     # OPEN-16 EMPTY-COMPLETION RETRY: per-turn counter of empty-round retries
@@ -3920,15 +3741,15 @@ async def _stream_gemini_reply(
     # loop). Local-path only (guarded on ``_provider == "openai"`` below).
     _empty_retries = 0
 
-    # Stage 3 (ADR 0017 mechanism 4) turn-loop invariants + guard (d) tracker:
+    # Turn-loop invariants + guard (d) tracker:
     #   _turn_tools_dispatched -- every tool NAME this turn requested (the
     #       bare-geocode backstop reads it: a turn whose ONLY tool was
     #       geocode_location while the user asked for data gets one nudge).
     #   _continuation_nudged  -- the ONE-per-turn continuation-nudge budget
     #       shared by both invariants (never more than one nudge per turn).
-    #   _turn_geocode_bbox    -- the last successful geocode_location bbox this
-    #       turn; guard (d) appends an advisory drift WARNING to any later
-    #       call whose bbox intersects neither this nor the active AOI.
+    #   _turn_geocode_bbox    -- the last successful geocode_location bbox
+    #       this turn; guard (d) appends an advisory drift WARNING to any
+    #       later call whose bbox intersects neither this nor the active AOI.
     _turn_tools_dispatched: set[str] = set()
     _continuation_nudged = False
     _turn_geocode_bbox: list[float] | None = None
@@ -3947,14 +3768,12 @@ async def _stream_gemini_reply(
     _discovery_expanded: set[str] = set()
     _tool_decls_dirty = False
 
-    # PER-TURN TELEMETRY accumulators (LANE CORE 2026-07-22). Token counts SUM
-    # the adapter's per-round UsageMetadataEvents across the whole turn; a
-    # provider that reports no usage leaves them None (null in the record --
-    # tolerated, never fabricated). ``_turn_error_class`` is stamped by the
-    # exception handlers below (upstream_provider / provider_request /
-    # context_window / cancelled / client_disconnect / internal) and stays
-    # None on a clean turn. The record is emitted in the ``finally`` at the
-    # end of this function -- one record per turn, every outcome.
+    # PER-TURN TELEMETRY accumulators: token counts SUM the adapter's
+    # per-round UsageMetadataEvents across the whole turn; a provider that
+    # reports no usage leaves them None (tolerated, never fabricated).
+    # _turn_error_class is stamped by the exception handlers below and
+    # stays None on a clean turn. The record is emitted in the finally at
+    # the end of this function -- one record per turn, every outcome.
     _turn_prompt_tokens: int | None = None
     _turn_completion_tokens: int | None = None
     _turn_reasoning_tokens: int | None = None
@@ -3976,23 +3795,21 @@ async def _stream_gemini_reply(
             turn_text_parts: list[str] = []
             turn_function_calls: list[FunctionCallEvent] = []
             last_usage = None
-            # Compaction UX (Part A): the step_id of the currently-open
-            # compaction card, if any -- set on CompactionStartEvent, read +
-            # cleared on the matching CompactionCompleteEvent. Local to this
-            # round: the adapter always pairs the two 1:1 within one
-            # ``stream_events_with_contents`` call (see openai_adapter.
-            # stream_openai), and a round can legitimately mint+complete more
-            # than one (proactive, then a later reactive retry).
+            # Compaction UX: the step_id of the currently-open compaction card, if
+            # any -- set on CompactionStartEvent, read + cleared on the matching
+            # CompactionCompleteEvent. Local to this round: the adapter always
+            # pairs the two 1:1 within one stream_events_with_contents call, and a
+            # round can legitimately mint+complete more than one (proactive, then a
+            # later reactive retry).
             _compaction_step_id: str | None = None
 
             # ADR 0018 wave semantics: in ASK mode, surface a pre-dispatch
-            # tool-candidates WAVE before EACH subsequent round (round 1 is
-            # covered by the pre-loop emission above). Excluding this turn's
-            # already-dispatched tools advances the stage label (acquisition ->
-            # preprocessing -> analysis -> visualization) so a multi-step turn
-            # reads as a SEQUENCE of stage-labeled picks, not one blob. AUTO
-            # mode is unchanged (single near-tie emission only). Fail-open: any
-            # fault proceeds; the wave is an optimization, never a wall.
+            # tool-candidates WAVE before EACH subsequent round (round 1 is covered
+            # by the pre-loop emission above). Excluding this turn's
+            # already-dispatched tools advances the stage label so a multi-step
+            # turn reads as a SEQUENCE of stage-labeled picks, not one blob. AUTO
+            # mode is unchanged. Fail-open: the wave is an optimization, never a
+            # wall.
             if iterations > 1 and _session_routing_mode(state) == "ask":
                 try:
                     _w_pinned, _w_notes = await _maybe_emit_tool_candidates(
@@ -4051,32 +3868,28 @@ async def _stream_gemini_reply(
                         _new_envelope("agent-message-chunk", state.session_id, chunk)
                     )
                     turn_text_parts.append(event.delta)
-                    # job-0267: accumulate across ALL iterations — the turn
+                    # job-0267: accumulate across ALL iterations -- the turn
                     # close persists the full narration for Case replay.
                     # job-0269: entry-captured list, never the live field.
                     turn_narration.append(event.delta)
                     # job-0315: also feed the OPEN-segment buffer so the
                     # boundary finalize (A3 / A4) persists exactly this run's
                     # text, and a crash leaves the un-finalized tail for the
-                    # wrapper. Same registered list object — never rebound.
+                    # wrapper. Same registered list object -- never rebound.
                     _segment_buf.append(event.delta)
 
                 elif isinstance(event, ThinkingDeltaEvent):
-                    # F8 (NATE live-feedback 2026-07-08, local build): forward
-                    # the model's reasoning-channel deltas so the web/QGIS
-                    # clients render the greyed foldable thinking block.
-                    # Gated on the per-turn user toggle — with it off the
-                    # /no_think suppressor is armed and the channel is not
-                    # generated, but a model that leaks reasoning anyway must
-                    # not reach a client that asked for it to stay hidden.
-                    # Shares the segment's message_id (contract: the thinking
-                    # block and its answer live in the SAME bubble). Thinking
-                    # PERSISTENCE (LANE CORE 2026-07-22): the deltas also
-                    # accumulate in ``_thinking_buf`` so ``_finalize_segment``
-                    # persists them as the ``thinking`` field on the SAME
-                    # agent row as the answer; a thinking-only segment still
-                    # persists no row of its own (no phantom bubble) — its
-                    # buffered thinking rides the turn's next persisted row.
+                    # F8: forward the model's reasoning-channel deltas so the web/QGIS
+                    # clients render the greyed foldable thinking block. Gated on the
+                    # per-turn user toggle -- with it off the /no_think suppressor is armed
+                    # and the channel is not generated, but a model that leaks reasoning
+                    # anyway must not reach a client that asked for it to stay hidden.
+                    # Shares the segment's message_id (the thinking block and its answer
+                    # live in the SAME bubble). The deltas also accumulate in
+                    # _thinking_buf so _finalize_segment persists them as the ``thinking``
+                    # field on the SAME agent row as the answer; a thinking-only segment
+                    # still persists no row of its own (no phantom bubble) -- its buffered
+                    # thinking rides the turn's next persisted row.
                     if show_thinking:
                         if current_message_id is None:
                             current_message_id = new_ulid()
@@ -4109,12 +3922,10 @@ async def _stream_gemini_reply(
                     turn_function_calls.append(event)
 
                 elif isinstance(event, UsageMetadataEvent):
-                    # job-B6: Gemini surfaces aggregate usage on the terminal
-                    # chunk. Cache the event so the post-turn block can:
-                    #  (a) pipe ``cached_content_token_count`` into the
-                    #      telemetry record for each dispatched tool, and
-                    #  (b) emit a single ``cache-status`` envelope so the
-                    #      web UI can render the live cache hit rate.
+                    # Gemini surfaces aggregate usage on the terminal chunk. Cache the event
+                    # so the post-turn block can pipe cached_content_token_count into
+                    # per-tool telemetry and emit a single cache-status envelope for the
+                    # live cache hit-rate UI.
                     last_usage = event
                     # PER-TURN TELEMETRY (LANE CORE 2026-07-22): sum the
                     # reported counts across the turn's model rounds. A round
@@ -4148,14 +3959,11 @@ async def _stream_gemini_reply(
                     )
 
                 elif isinstance(event, CompactionStartEvent):
-                    # Compaction UX (Part A): mint the durable running
-                    # "Compacting conversation..." card the instant the
-                    # adapter announces compaction is about to run (proactive
-                    # or the reactive clip-guard retry -- see
-                    # openai_adapter.stream_openai). Mirrors the two-card SIM
-                    # observability's running-card mint (see
-                    # pipeline_emitter.mint_dispatch_and_sim_cards); best-
-                    # effort so a mint failure can never block the turn.
+                    # Compaction UX: mint the durable running "Compacting conversation..."
+                    # card the instant the adapter announces compaction is about to run
+                    # (proactive or the reactive clip-guard retry). Mirrors the two-card SIM
+                    # observability's running-card mint; best-effort so a mint failure can
+                    # never block the turn.
                     _compaction_step_id = await mint_compaction_card(
                         emitter=state.emitter
                     )
@@ -4175,34 +3983,25 @@ async def _stream_gemini_reply(
                     _compaction_step_id = None
 
             # Emit a cache-status envelope so the UI can render the cache
-            # hit-rate live. Best-effort — a serialization failure logs but
+            # hit-rate live. Best-effort -- a serialization failure logs but
             # does not break the turn (the envelope is observability, not
             # part of the agent loop's correctness contract).
             if last_usage is not None:
                 await _emit_cache_status(websocket, state, last_usage)
 
             # Turn ended.  If Gemini emitted no function_calls this turn, it
-            # is finished — either narrated the answer or had nothing more to
+            # is finished -- either narrated the answer or had nothing more to
             # do.  Break out of the loop.
             if not turn_function_calls:
-                # OPEN-16 EMPTY-COMPLETION RETRY: a round with ZERO tool calls
-                # (we are in this branch) AND ZERO non-whitespace text is the
-                # qwen3 empty-completion shape -- the model emitted nothing at
-                # all, so the user's request would silently die here. Rather
-                # than break, retry the round with a corrective user nudge,
-                # bounded by ``_EMPTY_COMPLETION_RETRY_CAP``. Ordering: this
-                # runs BEFORE the OPEN-14 fabrication backstop below, but the
-                # two are disjoint -- an EMPTY round has no closing text, so
-                # ``looks_like_fabricated_action_claim("")`` is always False;
-                # the backstop only ever fires on a NON-empty narration round.
-                # Scoped to the LOCAL (MODEL_PROVIDER=openai) path -- ``_provider``
-                # is resolved once above (job-0287) -- so Bedrock's production
-                # narration (a legitimately empty round) is byte-unchanged. The
-                # empty round already incremented ``iterations`` (counts toward
-                # ``_step_cap``) and never set ``_turn_ever_called_tool`` / never
-                # touched the loop watchdog (both live in the tool-dispatch path
-                # below), so a retry cannot escape the step cap nor trip the
-                # runaway guard.
+                # OPEN-16 EMPTY-COMPLETION RETRY: a round with ZERO tool calls and ZERO
+                # non-whitespace text is the qwen3 empty-completion shape -- retry with a
+                # corrective user nudge, bounded by _EMPTY_COMPLETION_RETRY_CAP, rather
+                # than silently dropping the request. Runs BEFORE the OPEN-14 fabrication
+                # backstop (disjoint: an empty round has no closing text to fabricate
+                # from). Scoped to the LOCAL (MODEL_PROVIDER=openai) path only -- Bedrock's
+                # production narration (a legitimately empty round) stays byte-unchanged.
+                # The empty round still counts toward _step_cap and never trips the loop
+                # watchdog, so a retry cannot escape the step cap or the runaway guard.
                 _empty_round = not "".join(turn_text_parts).strip()
                 if (
                     _provider == "openai"
@@ -4228,33 +4027,17 @@ async def _stream_gemini_reply(
                     # inventing a new envelope type is out of scope (NATE is
                     # live) -- the log.warning is the durable retry witness.
                     continue
-                # Stage 3 (ADR 0017 mechanism 4) TURN-LOOP INVARIANTS. ONE
-                # continuation nudge per turn, shared budget, injected as a
-                # user-role content and the round retried:
-                #   (a) NO-SILENT-END -- the turn is terminating with tool
-                #       results but ZERO assistant text since the last tool
-                #       round (this terminal round's text is empty). Skipped
-                #       when OPEN-16 already nudged this turn (that seam owns
-                #       the openai empty-round shape; ``_empty_retries > 0``).
+                # Stage 3 TURN-LOOP INVARIANTS: ONE continuation nudge per turn, shared
+                # budget, injected as user-role content with the round retried:
+                #   (a) NO-SILENT-END -- terminating with tool results but ZERO
+                #       assistant text since the last tool round. Skipped when OPEN-16
+                #       already nudged this turn (_empty_retries > 0).
                 #   (b) BARE-GEOCODE BACKSTOP -- the turn's ONLY tool was
-                #       geocode_location while the user asked for data or
-                #       analysis (the model located the place then stopped).
-                # Kill-switch: TRID3NT_TURN_INVARIANTS=0. Bounded: the nudge
-                # round still counts toward the step cap, and the budget flag
-                # guarantees at most one nudge per turn. The budget is UNIFIED
-                # with OPEN-16: a turn the empty-completion seam already
-                # nudged (``_empty_retries > 0``) gets NO additional invariant
-                # nudge -- corrective nudges never stack past their caps.
-                # Stage-3 invariant OBSERVABILITY (LANE CORE 2026-07-22 / P10
-                # follow-up): the invariants used to fire (one INFO line) or
-                # skip SILENTLY -- when a benched turn ended without a rescue
-                # there was no way to tell heuristic-miss from disabled from
-                # already-spent-budget from "the turn never reached this
-                # terminal branch at all" (the ACTUAL P10 shape: the turn
-                # parked on user-decision gates -- code-exec approval, then the
-                # 24h local-lane solver-confirm -- with the bench client gone,
-                # so this branch never ran). Every terminal round now logs one
-                # INFO line per invariant: FIRED, or SKIPPED with its reason.
+                #       geocode_location while the user asked for data or analysis.
+                # Kill-switch: TRID3NT_TURN_INVARIANTS=0. The nudge round still counts
+                # toward the step cap; the shared budget guarantees at most one nudge per
+                # turn (unified with OPEN-16 -- no stacking). Every terminal round logs
+                # one INFO line per invariant: FIRED, or SKIPPED with its reason.
                 if (
                     not _continuation_nudged
                     and _empty_retries == 0
@@ -4330,20 +4113,15 @@ async def _stream_gemini_reply(
                     iterations,
                     len(turn_text_parts),
                 )
-                # OPEN-14 FABRICATION BACKSTOP (item 4): this is the FIRST
-                # and ONLY tool-call-free round this turn ever had (a turn
-                # only reaches a second iteration by having dispatched calls
-                # in an earlier round, which would have set
-                # ``_turn_ever_called_tool`` below). Conservative: only fires
-                # when the closing text pairs a completed-action verb with a
-                # geospatial-output noun in the same sentence -- see
-                # ``context_budget.looks_like_fabricated_action_claim``.
-                # Ordinary Q&A answers, and any turn that dispatched even one
-                # tool call, never trigger this. Scoped to the LOCAL
-                # (MODEL_PROVIDER=openai) path only -- ``_provider`` is
-                # already resolved once above (job-0287) -- OPEN-14 is a
-                # local-model-path guard and must not vary Bedrock's
-                # production narration.
+                # OPEN-14 FABRICATION BACKSTOP: fires only on the FIRST and ONLY
+                # tool-call-free round this turn ever had. Conservative: only fires when
+                # the closing text pairs a completed-action verb with a geospatial-output
+                # noun in the same sentence -- see
+                # context_budget.looks_like_fabricated_action_claim. Ordinary Q&A
+                # answers, and any turn that dispatched even one tool call, never
+                # trigger this. Scoped to the LOCAL (MODEL_PROVIDER=openai) path only --
+                # a local-model-path guard that must not vary Bedrock's production
+                # narration.
                 if _provider == "openai" and not _turn_ever_called_tool:
                     _closing_text = "".join(turn_text_parts)
                     if looks_like_fabricated_action_claim(_closing_text):
@@ -4374,19 +4152,15 @@ async def _stream_gemini_reply(
             _turn_tools_dispatched.update(c.name for c in turn_function_calls)
 
             # GUARD 3 (loop watchdog): compute THIS round's (tool, args_hash)
-            # signature now, but feed it to the watchdog AFTER dispatch (below)
-            # together with a PROGRESS witness. A no-progress runaway -- the SAME
-            # tool+args (or identical round signature) N rounds in a row that
-            # keeps RETURNING NOTHING NEW (Nova Lite's failure shape) -- trips the
-            # watchdog and aborts. A round that PRODUCES a layer/artifact, or one
-            # the circuit breaker owns (all calls failed / short-circuited), is
-            # NOT counted: a producing loop runs to the step-cap / loop-exhausted
-            # envelope, and the breaker (not the watchdog) handles the failing
-            # tool by delivering CIRCUIT_BREAKER_TRIPPED so the model adapts.
-            # Recording after dispatch (vs before) costs at most ONE extra
-            # identical round before the trip -- still far under the step cap, so
-            # the box stays un-wedgeable while the breaker / loop-exhausted paths
-            # are no longer pre-empted.
+            # signature now, but feed it to the watchdog AFTER dispatch together
+            # with a PROGRESS witness. A no-progress runaway -- the SAME tool+args
+            # (or identical round signature) N rounds in a row that keeps returning
+            # nothing new -- trips the watchdog and aborts. A round that PRODUCES a
+            # layer/artifact, or one the circuit breaker owns (all calls failed /
+            # short-circuited), is NOT counted: a producing loop runs to the
+            # step-cap / loop-exhausted envelope, and the breaker handles the
+            # failing tool. Recording after dispatch (vs before) costs at most ONE
+            # extra identical round before the trip, still far under the step cap.
             _round_sig = [
                 (c.name, compute_args_hash(c.args)) for c in turn_function_calls
             ]
@@ -4398,16 +4172,13 @@ async def _stream_gemini_reply(
             _round_had_failure = False
             _round_had_success = False
 
-            # job-0315: a function-call round is about to dispatch — close the
-            # current narration bubble (if any text was emitted) BEFORE the
-            # tool cards for this round land on the wire / in the chat store, so
-            # the next run of text AFTER the tools opens a fresh bubble that
-            # interleaves AFTER them (its own message_id -> its own client
-            # arrivalSeq -> sorts between the surrounding tool stepOrder seqs).
-            # Fires ONCE per round, before ALL calls dispatch, so multiple
-            # function calls in one generation round close exactly one prior
-            # bubble (not one per call). ``_finalize_segment`` sends the
-            # done=True frame AND persists this segment's own role="agent" row.
+            # A function-call round is about to dispatch -- close the current
+            # narration bubble (if any text was emitted) BEFORE the tool cards for
+            # this round land on the wire, so the next run of text opens a fresh
+            # bubble that interleaves AFTER them. Fires ONCE per round, before ALL
+            # calls dispatch, so multiple function calls in one round close exactly
+            # one prior bubble. _finalize_segment sends done=True AND persists this
+            # segment's own role="agent" row.
             if current_message_id is not None:
                 await _finalize_segment(
                     websocket, state, current_message_id, _segment_buf,
@@ -4418,14 +4189,13 @@ async def _stream_gemini_reply(
             # Otherwise: dispatch each call, then append the call + summarized
             # response back into contents so the next Gemini turn sees them.
             for call in turn_function_calls:
-                # Dispatch through the registry + emitter (Invariant 2 — the
-                # LLM's tool choice IS the classification).  Routing failures
-                # (TOOL_NOT_FOUND, PAYLOAD_WARNING_CANCELLED) now raise typed
-                # exceptions (B-rev) so the except-block below routes them
-                # through summarize_tool_result(error=...) — a structured
-                # {status: "error", error_code: str, retryable: bool} envelope
-                # that Gemini can distinguish from "tool ran and returned
-                # nothing" (FR-AS-11).
+                # Dispatch through the registry + emitter (Invariant 2 -- the LLM's
+                # tool choice IS the classification). Routing failures (TOOL_NOT_FOUND,
+                # PAYLOAD_WARNING_CANCELLED) raise typed exceptions so the except-block
+                # below routes them through summarize_tool_result(error=...) -- a
+                # structured {status: "error", error_code: str, retryable: bool}
+                # envelope Gemini can distinguish from "tool ran and returned nothing"
+                # (FR-AS-11).
                 dispatch_error: BaseException | None = None
                 result: Any = None
                 # CRISP-END (NATE 2026-06-29): set True iff THIS call is a
@@ -4433,39 +4203,34 @@ async def _stream_gemini_reply(
                 _call_is_terminal_deliverable = False
                 _tool_start = asyncio.get_running_loop().time()
                 try:
-                    # job-B8 (Wave 4.10 Stage 3): per-session circuit breaker.
-                    # Short-circuit before allowed-set validation and dispatch
-                    # if the tool has failed repeatedly this session. Raises
-                    # ``CircuitBreakerError`` which the except-block routes
-                    # through ``summarize_tool_result(error=...)`` so Gemini
-                    # reads the structured cooldown signal (not retryable).
+                    # Per-session circuit breaker: short-circuit before allowed-set
+                    # validation and dispatch if the tool has failed repeatedly this
+                    # session. Raises CircuitBreakerError, routed by the except-block below
+                    # through summarize_tool_result(error=...) so Gemini reads the
+                    # structured cooldown signal (not retryable).
                     if state.circuit_breaker.is_tripped(call.name):
                         remaining = state.circuit_breaker.cooldown_remaining_s(call.name)
                         raise CircuitBreakerError(call.name, remaining)
-                    # job-B5 (Wave 4.10): post-hoc allowed-set validation. Per
-                    # the CachedContent Option A architecture, Gemini sees the
-                    # full catalog but our code enforces the per-turn allowed
-                    # set. A function_call outside the allowed set raises
-                    # ``OutOfAllowedSetError``, which the except-block below
-                    # routes through ``summarize_tool_result(error=...)`` as a
-                    # Wave 4.9 structured envelope so Gemini can retry
-                    # (typically by first calling ``list_tools_in_category``).
+                    # Post-hoc allowed-set validation: per the CachedContent Option A
+                    # architecture, Gemini sees the full catalog but our code enforces the
+                    # per-turn allowed set. A function_call outside the allowed set raises
+                    # OutOfAllowedSetError, routed by the except-block below through
+                    # summarize_tool_result(error=...) as a structured envelope so Gemini
+                    # can retry (typically by first calling list_tools_in_category).
                     validate_function_call(call.name, state.allowed_tool_set)
                     result = await _invoke_tool_via_emitter(
                         websocket, state, call.name, call.args
                     )
-                    # FR-AS-10 / FR-WC-16: request_spatial_input PAUSES the turn
-                    # awaiting a user-drawn FeatureCollection. The catalog tool
-                    # returns the SPATIAL_INPUT_SENTINEL_KEY sentinel (it has no
-                    # websocket access); here — where the live socket + the
-                    # session future registry ARE reachable — we emit the
-                    # spatial-input-request, await the drawn reply, and REPLACE
-                    # ``result`` with the parsed, role-split geometry (the clean
-                    # engine-ready ``barriers`` FeatureCollection + ``aoi_bbox`` +
-                    # ``points``). The LLM then calls swmm_urban_flood with
-                    # ``barriers=`` straight from this result. Mirrors the
-                    # geocode_location -> region-choice pause/resume seam.
-                    # Fail-open: timeout / cancel / no client / malformed draw all
+                    # FR-AS-10 / FR-WC-16: request_spatial_input PAUSES the turn awaiting a
+                    # user-drawn FeatureCollection. The catalog tool returns the
+                    # SPATIAL_INPUT_SENTINEL_KEY sentinel (it has no websocket access);
+                    # here -- where the live socket + the session future registry ARE
+                    # reachable -- we emit the spatial-input-request, await the drawn
+                    # reply, and REPLACE result with the parsed, role-split geometry (the
+                    # clean engine-ready barriers FeatureCollection + aoi_bbox + points).
+                    # The LLM then calls swmm_urban_flood with barriers= straight from this
+                    # result. Mirrors the geocode_location -> region-choice pause/resume
+                    # seam. Fail-open: timeout / cancel / no client / malformed draw all
                     # become a TYPED result (honesty floor), never a fabricated
                     # AOI/barriers.
                     if (
@@ -4476,13 +4241,11 @@ async def _stream_gemini_reply(
                         result = await _handle_request_spatial_input(
                             websocket, state, call.args or {}
                         )
-                    # Wave 4.11 Follow-up A: emit ``impact-envelope`` WS envelope
-                    # whenever ``compute_impact_envelope`` returns a result that
-                    # carries a valid ImpactEnvelope (key signal: ``raw_envelope``
-                    # dict with ``n_structures_total`` inside).  Fires IN ADDITION
-                    # to the standard ``function_response`` — the client gets
-                    # both: function_response for Gemini-loop replay,
-                    # impact-envelope for ImpactPanel state.
+                    # Emit an impact-envelope WS envelope whenever compute_impact_envelope
+                    # returns a result carrying a valid ImpactEnvelope (key signal:
+                    # raw_envelope dict with n_structures_total inside). Fires IN ADDITION
+                    # to the standard function_response -- the client gets both: replay for
+                    # the Gemini loop, and impact-envelope for ImpactPanel state.
                     if (
                         call.name == "compute_impact_envelope"
                         and isinstance(result, dict)
@@ -4490,17 +4253,15 @@ async def _stream_gemini_reply(
                         and "n_structures_total" in result["raw_envelope"]
                     ):
                         await _maybe_emit_impact_envelope(websocket, state, result["raw_envelope"])
-                    # region-disambiguation picker: when geocode_location came
-                    # back as a state-bbox-fallback snap (job-0346), offer the
-                    # user a narrower sub-region (default: counties) ON TOP of
-                    # the whole-state default. PAUSES the turn awaiting the
-                    # region-choice-provided reply; on a "region" pick this
-                    # MUTATES ``result["bbox"]`` in place so the immediate
-                    # zoom-to below AND the function_response Gemini reads next
-                    # turn use the narrowed extent. Fail-open: headless client /
-                    # timeout / whole-state pick keeps the state bbox unchanged
-                    # (the honest, already-resolved automated answer). MUST run
-                    # BEFORE the zoom-to so the camera snaps to the final extent.
+                    # Region-disambiguation picker: when geocode_location came back as a
+                    # state-bbox-fallback snap, offer the user a narrower sub-region
+                    # (default: counties) on top of the whole-state default. PAUSES the
+                    # turn awaiting the region-choice-provided reply; on a "region" pick
+                    # this MUTATES result["bbox"] in place so the immediate zoom-to below
+                    # AND the function_response Gemini reads next turn use the narrowed
+                    # extent. Fail-open: headless client / timeout / whole-state pick keeps
+                    # the state bbox unchanged. MUST run BEFORE the zoom-to so the camera
+                    # snaps to the final extent.
                     if (
                         call.name == "geocode_location"
                         and isinstance(result, dict)
@@ -4509,7 +4270,7 @@ async def _stream_gemini_reply(
                             websocket, state, result
                         )
                     # job-0260 (demo UX): snap the map to a geocoded location
-                    # IMMEDIATELY — the user should not wait for a downstream
+                    # IMMEDIATELY -- the user should not wait for a downstream
                     # layer publish to see the map move. Best-effort.
                     if (
                         call.name == "geocode_location"
@@ -4521,31 +4282,24 @@ async def _stream_gemini_reply(
                             await state.emitter.emit_map_command(
                                 "zoom-to", {"bbox": list(result["bbox"])}
                             )
-                            # job-0281: accumulate the turn's zoom-to so the
-                            # closing CaseChatMessage persists it in
-                            # ``map_command_emissions`` — the Case-reopen
-                            # snap-to-location (job-0280 web) replays the
-                            # LAST persisted zoom-to. Field existed since
-                            # job-0099 but never had a writer.
+                            # Accumulate the turn's zoom-to so the closing CaseChatMessage persists
+                            # it in map_command_emissions -- Case-reopen snap-to-location replays
+                            # the LAST persisted zoom-to.
                             state.current_turn_map_commands.append(
                                 {
                                     "command": "zoom-to",
                                     "args": {"bbox": list(result["bbox"])},
                                 }
                             )
-                        except Exception:  # noqa: BLE001 — UX nicety only
+                        except Exception:  # noqa: BLE001 -- UX nicety only
                             logger.debug("geocode zoom-to emit failed", exc_info=True)
-                    # SNAP-TO-AOI INDEPENDENT OF GEOLOCATE (NATE 2026-06-24): the
-                    # camera must snap whenever an AOI/bbox is SET, not only on a
-                    # geocode_location result. When the user gives coordinates
-                    # DIRECTLY the model (correctly) skips geocode_location, so the
-                    # geocode branch above never fires and the map never moved to
-                    # "where we are" until/unless a downstream layer with a bbox
-                    # landed. Here we generalize: ANY tool result that carries a
-                    # usable ``bbox`` / ``aoi_bbox`` snaps the camera (deduped
-                    # against the turn's last zoom-to so a chain of bbox-bearing
-                    # tools does not re-snap to the SAME extent). geocode_location
-                    # already emitted above (skip it here to avoid a double-emit).
+                    # SNAP-TO-AOI INDEPENDENT OF GEOLOCATE: the camera must snap whenever an
+                    # AOI/bbox is SET, not only on a geocode_location result -- when the
+                    # user gives coordinates directly the model skips geocode_location, so
+                    # generalize: ANY tool result carrying a usable bbox / aoi_bbox snaps
+                    # the camera (deduped against the turn's last zoom-to so a chain of
+                    # bbox-bearing tools does not re-snap to the SAME extent).
+                    # geocode_location is emitted above; skip it here to avoid a double-emit.
                     if call.name != "geocode_location" and state.emitter is not None:
                         aoi = _aoi_zoom_to_bbox(
                             result, state.current_turn_map_commands
@@ -4558,53 +4312,45 @@ async def _stream_gemini_reply(
                                 state.current_turn_map_commands.append(
                                     {"command": "zoom-to", "args": {"bbox": list(aoi)}}
                                 )
-                            except Exception:  # noqa: BLE001 — UX nicety only
+                            except Exception:  # noqa: BLE001 -- UX nicety only
                                 logger.debug(
                                     "aoi-set zoom-to emit failed", exc_info=True
                                 )
-                    # job-0230 (sprint-13 Stage 2): emit a ``chart-emission`` WS
-                    # envelope whenever a chart-generation tool returns a
-                    # ChartEmissionPayload-shaped dict (key signal:
-                    # ``envelope_type == "chart-emission"`` + a dict
-                    # ``vega_lite_spec``). Fires IN ADDITION to the standard
-                    # ``function_response`` — the client gets both: the full
-                    # Vega-Lite spec on the chart-emission envelope (for
-                    # vega-embed rendering + the stacked gallery), and a COMPACT
-                    # data summary on the function_response (the spec is stripped
-                    # by ``summarize_tool_result`` so Gemini narrates from the
-                    # numbers, not the inline rows). Also persists a
-                    # SessionChartRecord so the chart replays on Case rehydration.
+                    # Emit a chart-emission WS envelope whenever a chart-generation tool
+                    # returns a ChartEmissionPayload-shaped dict (key signal: envelope_type
+                    # == "chart-emission" + a dict vega_lite_spec). Fires IN ADDITION to the
+                    # standard function_response -- the client gets the full Vega-Lite spec
+                    # on the envelope (vega-embed rendering + stacked gallery), and a
+                    # COMPACT data summary on the function_response (stripped by
+                    # summarize_tool_result so Gemini narrates from numbers, not inline
+                    # rows). Also persists a SessionChartRecord so the chart replays on Case
+                    # rehydration.
                     if is_chart_emission_result(result):
                         await _maybe_emit_chart(websocket, state, result)
-                    # job-0233 (sprint-13 Stage 2): emit a ``code-exec-result`` WS
-                    # envelope whenever ``code_exec_request`` returns a result
-                    # carrying the full code-exec-result payload (key signal:
-                    # ``_code_exec_result`` with ``envelope_type ==
-                    # "code-exec-result"``). Fires IN ADDITION to the standard
-                    # function_response — the client gets the full result
-                    # card via the envelope, and Gemini gets the COMPACT summary
-                    # (the full payload is stripped by ``summarize_tool_result``).
+                    # Emit a code-exec-result WS envelope whenever code_exec_request returns
+                    # a result carrying the full code-exec-result payload (key signal:
+                    # _code_exec_result with envelope_type == "code-exec-result"). Fires IN
+                    # ADDITION to the standard function_response -- the client gets the full
+                    # result card via the envelope, Gemini gets the COMPACT summary (spec
+                    # stripped by summarize_tool_result).
                     if is_code_exec_result(result):
                         await _maybe_emit_code_exec_result(websocket, state, result)
                     # job-B8: record success so the consecutive-failure counter
-                    # resets — a recovered tool should not stay penalised.
+                    # resets -- a recovered tool should not stay penalised.
                     state.circuit_breaker.record_success(call.name)
-                    # job-186 loop-watchdog progress witness: a successful call
-                    # that PRODUCED a real artifact (a layer/handle/feature set)
-                    # advances the Case, so it resets the no-progress streak even
-                    # if the model repeats the same call. A successful bare-ack
-                    # return ({"ok": True}, None, primitive) does NOT -- that is
-                    # the no-op-repeat wedge shape the watchdog exists to catch.
+                    # Loop-watchdog progress witness: a successful call that PRODUCED a real
+                    # artifact (layer/handle/feature set) resets the no-progress streak even
+                    # if the model repeats the same call; a bare-ack return does NOT -- that
+                    # is the no-op-repeat wedge shape the watchdog exists to catch.
                     _round_had_success = True
                     _call_made_progress = _dispatch_made_progress(result)
                     if _call_made_progress:
                         _round_made_progress = True
-                    # CRISP-END (NATE 2026-06-29): a top-level run-a-model
-                    # composer that just produced its artifact IS the answer.
-                    # Latch the deliverable + reset the post-deliverable idle
-                    # streak (this round produced something), and stamp a
-                    # one-time wrap-up directive below so the model summarizes
-                    # and stops instead of spinning to the loop_exhausted cap.
+                    # CRISP-END: a top-level run-a-model composer that just produced its
+                    # artifact IS the answer. Latch the deliverable + reset the
+                    # post-deliverable idle streak, and stamp a one-time wrap-up directive
+                    # below so the model summarizes and stops instead of spinning to the
+                    # loop_exhausted cap.
                     _call_is_terminal_deliverable = (
                         _call_made_progress and _is_terminal_composer(call.name)
                     )
@@ -4616,7 +4362,7 @@ async def _stream_gemini_reply(
                     # refined args without re-opening its category.
                     state.allowed_tool_set.record_dispatch(call.name)
                     # If the call was ``list_tools_in_category``, open the
-                    # requested category (sticky-after-list) — every member
+                    # requested category (sticky-after-list) -- every member
                     # tool of that category is now reachable for the rest of
                     # the session.
                     if (
@@ -4626,18 +4372,16 @@ async def _stream_gemini_reply(
                         cat_id = result.get("category_id")
                         if isinstance(cat_id, str) and cat_id:
                             state.allowed_tool_set.open_category(cat_id)
-                    # DISCOVERY-EXPANDS-GATE (task 2) + ENGINE-DOOR expansion:
-                    # when the tool-search tool OR an engine door returns
-                    # candidate tool names, UNION them into this turn's visible
-                    # gate (and the Case allowed-set, so validation lets the
-                    # model actually call them) for SUBSEQUENT rounds. Search
-                    # results are capped at ``_DISCOVERY_EXPAND_CAP`` (bounds an
-                    # unbounded ranked tail); an engine door lists a CLOSED,
-                    # curated set of its own templates and uses the larger
-                    # ``_DOOR_EXPAND_CAP`` so select-then-call is never truncated.
-                    # Only names that are real, registered, and not already
-                    # visible count toward the cap; the rebuild of ``tool_decls``
-                    # is deferred to once-per-round below.
+                    # DISCOVERY-EXPANDS-GATE + ENGINE-DOOR expansion: when the tool-search
+                    # tool OR an engine door returns candidate tool names, UNION them into
+                    # this turn's visible gate (and the Case allowed-set, so validation
+                    # lets the model actually call them) for SUBSEQUENT rounds. Search
+                    # results are capped at _DISCOVERY_EXPAND_CAP (bounds an unbounded
+                    # ranked tail); an engine door lists a CLOSED, curated set of its own
+                    # templates and uses the larger _DOOR_EXPAND_CAP so select-then-call is
+                    # never truncated. Only names that are real, registered, and not
+                    # already visible count toward the cap; the rebuild of tool_decls is
+                    # deferred to once-per-round below.
                     elif call.name in _gate_expander_tool_names():
                         _hits = _tool_names_from_search_result(result)
                         _is_door = call.name in _engine_door_tool_names()
@@ -4673,49 +4417,42 @@ async def _stream_gemini_reply(
                                 _added_now,
                             )
                 except asyncio.CancelledError:
-                    # Propagate cancel through the loop — handled below.
+                    # Propagate cancel through the loop -- handled below.
                     raise
-                except Exception as exc:  # noqa: BLE001 — surface to Gemini
+                except Exception as exc:  # noqa: BLE001 -- surface to Gemini
                     logger.exception(
                         "tool dispatch raised session=%s tool=%s err=%s",
                         state.session_id,
                         call.name,
                         exc,
                     )
-                    # job-B8 + 2026-06-17 fix: record failure, passing the
-                    # exception so the breaker counts ONLY upstream/transient
-                    # faults toward the trip threshold. Deterministic CLIENT/arg
-                    # errors (*ArgError, BboxInvalidError, ValueError/TypeError
-                    # arg-shape errors) are model-side faults the model can
-                    # self-correct and retry — they must NOT trip a breaker that
-                    # would then BLOCK the corrected-args retry (Oklahoma-tornado
-                    # bug). CircuitBreakerError is excluded entirely: it means
-                    # the breaker already fired and we must not increment again.
-                    # BenchBlockedError is likewise excluded: a bench block is a
-                    # deliberate harness artifact, not a tool fault, and must
-                    # never penalize the tool's breaker.
+                    # Record failure, passing the exception so the breaker counts ONLY
+                    # upstream/transient faults toward the trip threshold. Deterministic
+                    # CLIENT/arg errors (*ArgError, BboxInvalidError, ValueError/TypeError
+                    # arg-shape errors) are model-side faults the model can self-correct and
+                    # retry -- they must NOT trip a breaker that would then block the
+                    # corrected-args retry. CircuitBreakerError is excluded entirely (the
+                    # breaker already fired; do not increment again). BenchBlockedError is
+                    # likewise excluded: a bench block is a harness artifact, not a tool
+                    # fault, and must never penalize the tool's breaker.
                     if not isinstance(exc, (CircuitBreakerError, BenchBlockedError)):
                         state.circuit_breaker.record_failure(call.name, exc)
                     dispatch_error = exc
-                    # BENCH pre-dispatch block hook: a WRONG-pick block ends the
-                    # turn (the "turn-ending note" -- the model must not get to
-                    # pick again; the bench grades the wrong pick and moves on).
-                    # A correct-block does NOT end the turn here (the bench ends
-                    # it client-side after grading CORRECT_BLOCKED). Latched; the
-                    # break happens once this round's calls are all recorded so
-                    # the blocked tool's function-response still reaches the wire.
+                    # BENCH pre-dispatch block hook: a WRONG-pick block ends the turn (the
+                    # model must not get to pick again; the bench grades the wrong pick and
+                    # moves on). A correct-block does NOT end the turn here (the bench ends
+                    # it client-side after grading CORRECT_BLOCKED). Latched; the break
+                    # happens once this round's calls are all recorded so the blocked
+                    # tool's function-response still reaches the wire.
                     if (
                         isinstance(exc, BenchBlockedError)
                         and exc.blocked_class == "wrong_pick"
                     ):
                         _bench_wrong_pick_end = True
-                    # job-186 loop-watchdog: a failed / circuit-broken call is
-                    # the CIRCUIT BREAKER's territory (it delivers
-                    # CIRCUIT_BREAKER_TRIPPED so the model adapts and the turn
-                    # continues). Mark the round so the watchdog does NOT also
-                    # count it -- the breaker, not the watchdog, owns a turn that
-                    # is a stream of failures, so the watchdog cannot pre-empt
-                    # the graceful CIRCUIT_BREAKER_TRIPPED response.
+                    # A failed / circuit-broken call is the CIRCUIT BREAKER's territory (it
+                    # delivers CIRCUIT_BREAKER_TRIPPED so the model adapts and the turn
+                    # continues). Mark the round so the watchdog does NOT also count it --
+                    # the breaker, not the watchdog, owns a stream-of-failures turn.
                     _round_had_failure = True
                 _tool_latency_ms = (asyncio.get_running_loop().time() - _tool_start) * 1000.0
 
@@ -4723,22 +4460,17 @@ async def _stream_gemini_reply(
                     call.name, result, error=dispatch_error
                 )
                 _uri_reg = get_uri_registry(state.session_id)
-                # ADR 0014 EMIT SEAM: the LLM-facing function_response shows
-                # SHORT layer handles (L<n>) wherever a registered layer URI
-                # (data COG or its WMS/tile display face) would appear — the
-                # single biggest hallucination surface (~30 tokens per raw
-                # URI echo). ONLY this LLM surface changes: the plugin-bound
-                # wire envelopes (session-state / layer emissions, built from
-                # the LayerURI objects at emit_layer_uri/add_loaded_layer)
-                # keep carrying the REAL uri the plugin renders from. The
-                # rewrite never raises (falls back to the unrewritten
-                # summary inside rewrite_result_for_llm).
+                # ADR 0014 EMIT SEAM: the LLM-facing function_response shows SHORT
+                # layer handles (L<n>) wherever a registered layer URI would appear --
+                # the single biggest hallucination surface (~30 tokens per raw URI
+                # echo). ONLY this LLM surface changes: the plugin-bound wire envelopes
+                # keep carrying the REAL uri the plugin renders from. The rewrite never
+                # raises (falls back to the unrewritten summary).
                 summary = _uri_reg.rewrite_result_for_llm(summary)
                 # Stage 3 guard (d): geocode drift warning. A successful
-                # geocode_location pins this turn's geocoded bbox; any LATER
-                # call whose bbox arg intersects NEITHER that bbox NOR the
-                # active AOI gets an advisory WARNING appended to its
-                # function_response (never blocks -- the model/user decide).
+                # geocode_location pins this turn's geocoded bbox; any LATER call whose
+                # bbox arg intersects NEITHER that bbox NOR the active AOI gets an
+                # advisory WARNING appended to its function_response (never blocks).
                 # Kill-switch: TRID3NT_GEOCODE_DRIFT_WARN=0.
                 if call.name == "geocode_location":
                     if dispatch_error is None and isinstance(result, dict):
@@ -4762,19 +4494,17 @@ async def _stream_gemini_reply(
                             call.name,
                             _turn_geocode_bbox,
                         )
-                # job-0263 + ADR 0014: surface the layer handles this dispatch
-                # registered so Gemini passes HANDLES — never raw storage
-                # paths — into downstream *_uri params. The announcement maps
-                # ``{layer_id: L<n>}`` (name -> short handle); the server
-                # resolves either form to the exact URIs it recorded
-                # (uri_registry.py).
+                # Surface the layer handles this dispatch registered so Gemini passes
+                # HANDLES -- never raw storage paths -- into downstream *_uri params.
+                # The announcement maps {layer_id: L<n>}; the server resolves either
+                # form to the exact URIs it recorded (uri_registry.py).
                 _new_handles = _uri_reg.drain_announcements()
                 if _new_handles and dispatch_error is None:
                     summary["layer_handles"] = {
                         _layer_id: (_uri_reg.short_for_uri(_uri) or _layer_id)
                         for _layer_id, _uri in _new_handles.items()
                     }
-                    # job-0270: the note must make the publish step explicit —
+                    # job-0270: the note must make the publish step explicit --
                     # a computed/fetched layer is invisible until publish_layer
                     # adds it to the QGIS project (live finding: Gemini ended
                     # the colored-relief turn without publishing).
@@ -4790,12 +4520,10 @@ async def _stream_gemini_reply(
                         "NOT construct or echo gs:// paths, s3:// paths, or "
                         "any other storage URI."
                     )
-                # CRISP-END (NATE 2026-06-29): a top-level run-a-model composer
-                # just delivered its artifact -- stamp a one-time wrap-up
-                # directive on its function_response so the model summarizes and
-                # STOPS rather than emitting more tool calls until the
-                # loop_exhausted cap. Only when the dict summary can carry it
-                # (it always can for a successful composer return).
+                # A top-level run-a-model composer just delivered its artifact -- stamp
+                # a one-time wrap-up directive on its function_response so the model
+                # summarizes and STOPS rather than emitting more tool calls until the
+                # loop_exhausted cap.
                 if _call_is_terminal_deliverable and isinstance(summary, dict):
                     summary["completion_directive"] = _DELIVERABLE_COMPLETE_DIRECTIVE
                 logger.info(
@@ -4806,16 +4534,13 @@ async def _stream_gemini_reply(
                     sorted(summary.keys()),
                 )
 
-                # tool-card-expand-output spec: emit the raw input args + the
-                # raw function_response (the dict Gemini reads) on a ``tool-io``
-                # sidecar keyed by THIS dispatch's pipeline step. The web merges
-                # it into the matching tool card's expander so a server-side /
-                # upstream-API failure the narration hides becomes visible. The
-                # emitter mints the card's step_id inside ``emit_tool_call`` and
-                # records it on ``last_tool_step`` — we read it back here so the
-                # IO lands on the right card. Best-effort: a missing step_id
-                # (e.g. a dispatch that never reached the emitter) skips the
-                # emit; the emitter itself never raises on a bad payload.
+                # tool-card-expand-output: emit the raw input args + the raw
+                # function_response on a tool-io sidecar keyed by THIS dispatch's
+                # pipeline step. The web merges it into the matching tool card's
+                # expander so a server-side / upstream-API failure the narration hides
+                # becomes visible. Best-effort: a missing step_id (a dispatch that
+                # never reached the emitter) skips the emit; the emitter itself never
+                # raises on a bad payload.
                 _io_step = (
                     state.emitter.last_tool_step
                     if state.emitter is not None
@@ -4840,7 +4565,7 @@ async def _stream_gemini_reply(
                             function_response=summary,
                             is_error=_io_is_error,
                         )
-                    except Exception:  # noqa: BLE001 — expander is best-effort
+                    except Exception:  # noqa: BLE001 -- expander is best-effort
                         logger.debug(
                             "tool-io emit failed session=%s tool=%s",
                             state.session_id,
@@ -4848,19 +4573,16 @@ async def _stream_gemini_reply(
                             exc_info=True,
                         )
 
-                # B-tel: fire-and-forget telemetry for this LLM-initiated
-                # function_call. Non-blocking — ``emit_tool_call_event`` wraps
-                # the write in ``asyncio.ensure_future`` so no await is needed
-                # here. A write failure is logged at WARNING by the module and
-                # NEVER raises (telemetry must not break the dispatch loop).
-                # job-0327 R2 (MUST-FIX 3): a workflow that swallowed its own
-                # exception and returned a failed/partial envelope raises NO
-                # ``dispatch_error`` — but ``summarize_tool_result`` stamps the
-                # function_response ``status="error"`` (honesty floor). Derive
-                # the telemetry success flag and error_code from that summary so
-                # a returned-failure is recorded as a FAILURE (with code) in
-                # telemetry/routing, not a silent success. A genuinely-raised
-                # exception (dispatch_error) still wins and keeps its own code.
+                # Fire-and-forget telemetry for this LLM-initiated function_call.
+                # Non-blocking -- emit_tool_call_event wraps the write in
+                # asyncio.ensure_future so no await is needed; a write failure logs at
+                # WARNING and never raises. A workflow that swallowed its own exception
+                # and returned a failed/partial envelope raises NO dispatch_error, but
+                # summarize_tool_result stamps status="error" (honesty floor) -- derive
+                # the telemetry success flag and error_code from that summary so a
+                # returned-failure is recorded as a FAILURE in telemetry/routing, not a
+                # silent success. A genuinely-raised exception still wins and keeps its
+                # own code.
                 _tel_error_code: str | None = None
                 _tel_success = dispatch_error is None
                 if dispatch_error is not None:
@@ -4884,15 +4606,13 @@ async def _stream_gemini_reply(
                     if last_usage is not None
                     else None
                 )
-                # Tool-accuracy panel (NATE 2026-06-17): derive result_usable at
-                # the SAME chokepoint, reusing the honesty-floor signal already
-                # stamped on ``summary`` (NO_RENDERABLE_LAYER / failure-tagged
-                # modeled envelope). A layer-producing tool that returned
+                # Derive result_usable at the SAME chokepoint, reusing the honesty-floor
+                # signal already stamped on summary (NO_RENDERABLE_LAYER / failure-
+                # tagged modeled envelope). A layer-producing tool that returned
                 # status="ok" with an empty layers list is success=True but
-                # result_usable=False. ``routed_ok`` is left None here — the
-                # supersession heuristic is a same-session ADJACENT-chain signal
-                # only computable at aggregation time, so it is derived in
-                # tool_catalog_http._aggregate_records, not at emit time.
+                # result_usable=False. routed_ok stays None here -- the supersession
+                # heuristic is a same-session ADJACENT-chain signal only computable at
+                # aggregation time (tool_catalog_http._aggregate_records).
                 _tel_result_usable = classify_result_usable(
                     call.name, result, summary
                 )
@@ -4927,14 +4647,12 @@ async def _stream_gemini_reply(
                 # PER-TURN TELEMETRY: one dispatched tool call counted at the
                 # same chokepoint the per-tool record is emitted from.
                 _turn_tool_dispatch_count += 1
-                # job-B10: pass the thought_signature harvested off the
-                # function_call Part through to the replayed model turn.
-                # Gemini 3 requires the same opaque byte-blob on the replayed
-                # function_call Part or generate_content_stream errors with
-                # ``thought-signature mismatch``. Gemini 2.5 surfaces None
-                # here (no signatures in 2.5) — the helper treats None as a
-                # no-op, so this is forward-compat with no behavior change
-                # on the current default model.
+                # Pass the thought_signature harvested off the function_call Part
+                # through to the replayed model turn. Gemini 3 requires the same opaque
+                # byte-blob on the replayed function_call Part or
+                # generate_content_stream errors with "thought-signature mismatch".
+                # Gemini 2.5 surfaces None (no signatures), which the helper treats as a
+                # no-op -- forward-compat with no behavior change on the current model.
                 contents.append(
                     build_function_call_content(
                         call.name,
@@ -4962,12 +4680,11 @@ async def _stream_gemini_reply(
                     state.session_id,
                 )
 
-            # BENCH pre-dispatch block hook: a WRONG-pick block this round ends
-            # the turn (the turn-ending note). The blocked tool's typed
-            # function-response is already on the wire above; break to the clean
-            # post-loop finalize so a ``turn-complete`` is emitted and the bench
-            # grades the wrong pick and advances (mirrors the crisp-end break --
-            # a clean conclusion, NOT an ``_agent_abort`` runaway).
+            # BENCH pre-dispatch block hook: a WRONG-pick block this round ends the
+            # turn. The blocked tool's typed function-response is already on the
+            # wire above; break to the clean post-loop finalize so a turn-complete
+            # is emitted and the bench grades the wrong pick and advances (a clean
+            # conclusion, not an _agent_abort runaway).
             if _bench_wrong_pick_end:
                 logger.info(
                     "bench-block: wrong-pick -> ending turn session=%s iter=%d",
@@ -4976,15 +4693,14 @@ async def _stream_gemini_reply(
                 )
                 break
 
-            # GUARD 3 (loop watchdog) -- POST-DISPATCH record. The round counts
-            # toward the no-progress streak ONLY when it had calls, did NOT
-            # produce a real artifact, and was NOT a failure / circuit-broken
-            # round (those are the breaker's territory). A producing round, an
-            # all-failed round, or a short-circuited round resets the streak so
-            # the watchdog never pre-empts the loop-exhausted (MAX_ITERATIONS_
-            # REACHED) envelope at the step cap or the CIRCUIT_BREAKER_TRIPPED
-            # graceful path. A genuine no-op-repeat runaway (same successful call
-            # returning nothing new, N rounds running) trips and aborts.
+            # GUARD 3 (loop watchdog) POST-DISPATCH record: the round counts toward
+            # the no-progress streak ONLY when it had calls, did NOT produce a real
+            # artifact, and was NOT a failure / circuit-broken round (the breaker's
+            # territory). A producing round, an all-failed round, or a
+            # short-circuited round resets the streak so the watchdog never
+            # pre-empts loop-exhausted or CIRCUIT_BREAKER_TRIPPED. A genuine
+            # no-op-repeat runaway (same successful call returning nothing new)
+            # trips and aborts.
             _round_progressed = _round_made_progress or (
                 _round_had_failure and not _round_had_success
             )
@@ -5005,18 +4721,13 @@ async def _stream_gemini_reply(
                 _agent_abort = (_wd_trip, abort_message(_wd_trip))
                 break
 
-            # CRISP-END-AFTER-DELIVERABLE (NATE 2026-06-29). Once a terminal
-            # composer has delivered, a round that produces NOTHING NEW is the
-            # model spinning past a finished answer. The directive stamped on
-            # the composer's function_response asks it to summarize and stop; if
-            # it keeps calling tools anyway, this SAFETY budget concludes the
-            # turn CLEANLY after a couple of idle rounds -- a normal (no-tool)
-            # break, NOT the loop_exhausted cap. A producing round resets the
-            # streak so genuine follow-up work (a second layer, an impact
-            # envelope) is never cut off. ``_agent_abort`` stays None: this is a
-            # clean conclusion, not a runaway abort -- the post-loop finalize /
-            # narration-recovery path closes the turn exactly like a natural
-            # text-terminal exit.
+            # CRISP-END-AFTER-DELIVERABLE: once a terminal composer has delivered, a
+            # round that produces NOTHING NEW is the model spinning past a finished
+            # answer. This SAFETY budget concludes the turn CLEANLY after a couple
+            # of idle rounds -- a normal (no-tool) break, NOT the loop_exhausted
+            # cap. A producing round resets the streak so genuine follow-up work is
+            # never cut off. _agent_abort stays None: this is a clean conclusion,
+            # closed exactly like a natural text-terminal exit.
             if _deliverable_done:
                 if _round_made_progress:
                     _post_deliverable_idle = 0
@@ -5037,25 +4748,20 @@ async def _stream_gemini_reply(
             # Loop: re-stream with the appended call + response so Gemini can
             # decide its next move (another tool call OR a narrative wrap-up).
         else:
-            # Loop fell through the STEP CAP without a clean (no-tool-call) exit:
-            # the ``while`` completed all ``_step_cap`` iterations without
-            # ``break``. job-186: a guard (wall-clock / watchdog) abort instead
-            # ``break``s with ``_agent_abort`` set and is surfaced in the
-            # dedicated block below -- so this ``else`` only handles a natural
+            # Loop fell through the STEP CAP without a clean (no-tool-call) exit. A
+            # guard (wall-clock / watchdog) abort instead breaks with _agent_abort
+            # set and is surfaced below, so this else only handles natural
             # exhaustion of the step cap.
             #
-            # RECONCILE THE STEP CAP WITH MAX_TURN_ITERATIONS (job-186): when the
-            # binding bound is the HISTORICAL ``MAX_TURN_ITERATIONS`` (i.e. the
-            # cap was NOT tightened below it -- full-tier models, where
-            # ``_step_cap >= MAX_TURN_ITERATIONS``), natural exhaustion is the
-            # SAME event the pre-existing ``loop_exhausted`` /
-            # ``MAX_ITERATIONS_REACHED`` envelope has always signalled, so emit
-            # THAT (the user-facing contract the web UI + tests rely on). Only
-            # when the cap was TIGHTENED for a cheap / loop-prone tier
-            # (``_step_cap < MAX_TURN_ITERATIONS``) is this a NEW, tighter
-            # runaway backstop, surfaced as the distinct ``AGENT_STEP_LIMIT_
-            # REACHED`` abort. AGENT_LOOP_DETECTED stays reserved for the
-            # watchdog (a genuine no-progress repeat), never natural exhaustion.
+            # RECONCILE THE STEP CAP WITH MAX_TURN_ITERATIONS: when the binding
+            # bound is the historical MAX_TURN_ITERATIONS (full-tier models, where
+            # _step_cap >= MAX_TURN_ITERATIONS), natural exhaustion emits the
+            # pre-existing loop_exhausted / MAX_ITERATIONS_REACHED envelope (the
+            # user-facing contract the web UI + tests rely on). Only when the cap
+            # was TIGHTENED for a cheap/loop-prone tier (_step_cap <
+            # MAX_TURN_ITERATIONS) is this a NEW, tighter runaway backstop, surfaced
+            # as AGENT_STEP_LIMIT_REACHED. AGENT_LOOP_DETECTED stays reserved for
+            # the watchdog (a genuine no-progress repeat), never natural exhaustion.
             if _agent_abort is None and _step_cap < MAX_TURN_ITERATIONS:
                 _agent_abort = (
                     ABORT_STEP_CAP, abort_message(ABORT_STEP_CAP)
@@ -5087,14 +4793,13 @@ async def _stream_gemini_reply(
                         )
                     )
 
-        # job-186 RUNAWAY-AGENT GUARD: a guard fired (tightened step cap,
-        # wall-clock, or loop watchdog). Surface the honest typed abort envelope
-        # and a stream-closing terminal frame, then fall through to the normal
-        # finalize/pipeline-complete path so the turn TERMINATES cleanly and its
-        # busy/lock state releases (the wrapper's finally + the task done-callback
-        # drop the in-flight marker -- the box never stays wedged). The model
-        # CONTEXT is preserved (contents already hold the partial chain); we just
-        # stop dispatching. NOT a loop continuation -- this only runs on abort.
+        # A guard fired (tightened step cap, wall-clock, or loop watchdog).
+        # Surface the honest typed abort envelope and a stream-closing terminal
+        # frame, then fall through to the normal finalize/pipeline-complete path
+        # so the turn TERMINATES cleanly and its busy/lock state releases. The
+        # model CONTEXT is preserved (contents already hold the partial chain);
+        # we just stop dispatching. NOT a loop continuation -- this only runs on
+        # abort.
         if _agent_abort is not None:
             _abort_code, _abort_msg = _agent_abort
             await _send_agent_abort(
@@ -5115,13 +4820,11 @@ async def _stream_gemini_reply(
                     )
                 )
 
-        # job-0315: terminal frame for the FINAL narration segment. Only fire
-        # if a segment is actually open (text was emitted after the last tool
-        # round). A turn whose final round ended in tool calls with NO trailing
-        # narration, or a turn with zero text, has ``current_message_id is None``
-        # — so no phantom empty bubble + no phantom empty agent row. This is the
-        # de-facto closing row, so ``is_terminal=True`` lets it snapshot the
-        # turn's layer/zoom accumulator (job-0259/0281 attribution).
+        # Terminal frame for the FINAL narration segment. Only fires if a
+        # segment is actually open (text was emitted after the last tool
+        # round); a turn with no trailing narration has current_message_id is
+        # None (no phantom empty bubble). is_terminal=True lets it snapshot the
+        # turn's layer/zoom accumulator.
         if current_message_id is not None:
             await _finalize_segment(
                 websocket,
@@ -5133,35 +4836,23 @@ async def _stream_gemini_reply(
             )
             current_message_id = None
         else:
-            # BUG 3 (missing closing narration): the turn exited with NO open
-            # segment on the wire. Two distinct shapes land here:
-            #
-            #   (a) Some narration segment WAS already streamed+finalized this
-            #       turn (``segments_done > 0``) — the client already received
-            #       the closing summary on those segments' done=True frames; the
-            #       only thing the tool-terminal shape lacks is the layer/zoom
-            #       accumulator marker, which the wrapper's finally writes. Emit
-            #       NOTHING here (re-streaming ``turn_narration`` would DOUBLE
-            #       the text on the wire AND duplicate the chat rows).
-            #
-            #   (b) NO segment was ever streamed (``segments_done == 0``) yet the
-            #       turn accumulated real narration text across iterations (e.g.
-            #       a long solve completes and Gemini's ONLY narration arrived in
-            #       a generation round that ALSO carried the terminating tool
-            #       call, then the next round ended the turn tool-only — so every
-            #       boundary finalize cleared its buffer and the de-facto closing
-            #       summary never reached the wire as its own terminal segment).
-            #       The live symptom NATE reported: "after a long tool/solve
-            #       completes, the agent sends NO closing summary" + the client
-            #       spinner never stops (no terminal done=True agent frame).
+            # The turn exited with NO open segment on the wire. Two distinct shapes:
+            #   (a) A narration segment WAS already streamed+finalized this turn
+            #       (segments_done > 0) -- the client already got the closing
+            #       summary; emit NOTHING here (re-streaming turn_narration would
+            #       DOUBLE the text and duplicate the chat rows).
+            #   (b) NO segment was ever streamed (segments_done == 0) yet the turn
+            #       accumulated real narration text across iterations (e.g. the
+            #       ONLY narration arrived in a round that ALSO carried the
+            #       terminating tool call, so the boundary finalize cleared its
+            #       buffer before it reached the wire as its own terminal segment).
             #
             # Recovery for (b): open ONE fresh terminal segment, replay the full
-            # accumulated ``turn_narration`` as chunks, then finalize it
-            # terminal (done=True wire frame + persisted ``role="agent"`` row
-            # that also snapshots the layer/zoom accumulator). Honesty floor: we
-            # replay EXACTLY what Gemini accumulated — error narration stays
-            # error narration; we NEVER synthesize a success summary. Guarded so
-            # an empty-narration turn emits NO bubble (no job-0315 regression).
+            # accumulated turn_narration as chunks, then finalize it terminal
+            # (done=True wire frame + persisted role="agent" row that also
+            # snapshots the layer/zoom accumulator). Honesty floor: replay EXACTLY
+            # what Gemini accumulated -- never synthesize a success summary. Guarded
+            # so an empty-narration turn emits NO bubble.
             _seg_done = 0
             _cur_task = asyncio.current_task()
             if _cur_task is not None:
@@ -5195,15 +4886,12 @@ async def _stream_gemini_reply(
                     thinking_parts=_thinking_buf,
                 )
             elif _crisp_concluded and _seg_done == 0:
-                # CRISP-END edge case (NATE 2026-06-29): the turn delivered a
-                # composer artifact and concluded via the post-deliverable idle
-                # safety, but emitted ZERO narration anywhere (no segment, no
-                # accumulated text) -- so neither the segment-finalize nor the
-                # recovery branch above sent a stream-closing frame. The client
-                # waits for a done=True to stop spinning, so emit a standalone
-                # terminator with a fresh id (mirrors the loop_exhausted / abort
-                # paths). Honesty floor: no synthesized summary, just the
-                # close-frame.
+                # CRISP-END edge case: the turn delivered a composer artifact and
+                # concluded via the post-deliverable idle safety, but emitted ZERO
+                # narration anywhere -- so neither the segment-finalize nor the
+                # recovery branch above sent a stream-closing frame. Emit a standalone
+                # terminator with a fresh id (mirrors the loop_exhausted / abort paths).
+                # Honesty floor: no synthesized summary, just the close-frame.
                 await _session_safe_send(websocket, state.session_id,
                     _new_envelope(
                         "agent-message-chunk",
@@ -5242,26 +4930,25 @@ async def _stream_gemini_reply(
             except Exception:  # noqa: BLE001 -- advisory, never breaks the turn
                 logger.warning("lessons: end-of-turn observe failed", exc_info=True)
 
-        # job-0269: append to the entry-captured list — after a mid-stream
+        # job-0269: append to the entry-captured list -- after a mid-stream
         # case switch this turn's text must not leak into the NEW Case's
         # LLM context (the carryover class, 74fc0d6).
         turn_history.append({"role": "user", "text": user_text})
-        # job-0260: name an Untitled Case from its first prompt + refresh
-        # the left rail so accumulated demo Cases are distinguishable. A3 moved
-        # the PRIMARY autoname to a pre-dispatch call (so a failed narration does
-        # not lose the name); this tail is now a guarded no-op fallback that only
-        # fires when a mid-stream case switch re-pinned active_case_id to a fresh
-        # Untitled case not yet seen by the pre-dispatch call.
+        # Name an Untitled Case from its first prompt + refresh the left rail.
+        # A3 moved the PRIMARY autoname to a pre-dispatch call; this tail is a
+        # guarded no-op fallback that only fires when a mid-stream case switch
+        # re-pinned active_case_id to a fresh Untitled case not yet seen by the
+        # pre-dispatch call.
         if await _maybe_autoname_case(state, user_text):
             await _emit_case_list(websocket, state, force=True)
 
     except asyncio.CancelledError:
-        # Invariant 8 — distinct cancelled step state, not failed. job-0315: a
+        # Invariant 8 -- distinct cancelled step state, not failed. A
         # partially-open narration segment's done=True is intentionally NOT
-        # sent here (a cancelled stream has no clean terminal). The job-0267
-        # ``current_turn_narration`` still holds the partial text and the
-        # dispatch wrapper's finally persists the un-finalized open-segment tail
-        # best-effort (one row), so no narration is lost.
+        # sent here (a cancelled stream has no clean terminal); current_turn_
+        # narration still holds the partial text and the dispatch wrapper's
+        # finally persists the un-finalized open-segment tail best-effort, so no
+        # narration is lost.
         _turn_error_class = "cancelled"
         cancelled_step = PipelineStep(
             step_id=step_id,
@@ -5278,22 +4965,20 @@ async def _stream_gemini_reply(
                     PipelineStatePayload(pipeline_id=pipeline_id, steps=[cancelled_step]),
                 )
             )
-        except Exception:  # noqa: BLE001 — socket may be down on cancel
+        except Exception:  # noqa: BLE001 -- socket may be down on cancel
             pass
         raise
     except ConnectionClosed as exc:
-        # F2 (live-feedback 2026-07-09 local): the CLIENT transport died
-        # mid-turn. This is NOT a model failure -- the LLM stream rides httpx,
-        # never websockets, so a ConnectionClosed reaching this scope can only
-        # be a residual raw send to the dead client socket. Every known
-        # per-turn send now routes through ``_session_safe_send`` (never
-        # raises; sibling-socket fallback), so this branch is a backstop: log
-        # once and end the turn quietly. NO ``LLM_UNAVAILABLE`` error envelope
-        # and NO terminal-failure card -- reporting a client transport drop as
-        # a model failure was the 01:23 misreport ("Model generation failed:
-        # no close frame received or sent"). The persisted chat/tool rows plus
-        # the session-resume replay carry the turn's results to the client
-        # when it reconnects.
+        # F2: the CLIENT transport died mid-turn. This is NOT a model failure
+        # -- the LLM stream rides httpx, never websockets, so a
+        # ConnectionClosed reaching this scope can only be a residual raw send
+        # to the dead client socket. Every known per-turn send now routes
+        # through _session_safe_send (never raises; sibling-socket fallback),
+        # so this branch is a backstop: log once and end the turn quietly. NO
+        # LLM_UNAVAILABLE error envelope and NO terminal-failure card -- a
+        # client transport drop is not a model failure. The persisted
+        # chat/tool rows plus the session-resume replay carry the turn's
+        # results to the client when it reconnects.
         _turn_error_class = "client_disconnect"
         logger.warning(
             "client websocket closed mid-turn (transport drop, not a model "
@@ -5303,11 +4988,10 @@ async def _stream_gemini_reply(
         )
     except ContextWindowExceededError as exc:
         # OPEN-14 REACTIVE CLIP GUARD: the local (Ollama/OpenAI-compat) model's
-        # prompt was clipped by num_ctx even after one recompaction + retry
-        # (openai_adapter.stream_openai). Distinct typed envelope -- NOT the
-        # generic LLM_UNAVAILABLE bucket -- so the honesty floor tells the
-        # user exactly why the turn stopped (a genuinely oversized Case, not a
-        # transient model outage) and what to do about it. Mirrors the BUG 4b
+        # prompt was clipped by num_ctx even after one recompaction + retry.
+        # Distinct typed envelope -- NOT the generic LLM_UNAVAILABLE bucket --
+        # so the honesty floor tells the user exactly why the turn stopped (a
+        # genuinely oversized Case, not a transient model outage). Mirrors the
         # terminal-failure-card persist so a reconnect / Case-reopen replay
         # shows the failed card rather than a phantom "still running" spinner.
         _turn_error_class = "context_window"
@@ -5317,39 +5001,15 @@ async def _stream_gemini_reply(
             state.session_id,
             exc.num_ctx,
         )
-        # BUG 1 (post-OPEN-14 acceptance rerun, 2x reproduced sessions
-        # 01KXAGEJAAPWDH0YSEGYQK5QVG / 01KXAJ1WKWDC0XS7VW4RY6CVF6): the OLD
-        # order sent the error envelope FIRST and persisted the failure card
-        # SECOND. ROOT CAUSE (confirmed by driving this path against the real
-        # ``trid3nt_contracts.ws.ErrorPayload`` model, not a mock): the
-        # contracts package's ``ErrorCode`` Literal never included
-        # "CONTEXT_WINDOW_EXCEEDED" -- so ``_send_error``'s
-        # ``ErrorPayload(error_code="CONTEXT_WINDOW_EXCEEDED", ...)``
-        # construction raised a pydantic ``ValidationError`` on EVERY call,
-        # unconditionally, before ``_session_safe_send``/``websocket.send``
-        # was ever reached (dead socket or not -- the 2 reproductions' dead
-        # sockets were incidental, not the cause). That raise was uncaught by
-        # the old except-block, so it propagated straight past the
-        # ``_persist_terminal_failure_card`` call below and out of this
-        # except-block entirely -- explaining exactly why NEITHER the
-        # persist's success INFO nor its own internal exception log ever
-        # fired: the persist call was never reached. Fixed in two parts:
-        # (a) ``trid3nt_contracts.ws.ErrorCode`` now includes
-        # "CONTEXT_WINDOW_EXCEEDED" so the envelope actually constructs and
-        # reaches the client; (b) belt-and-suspenders reorder -- persist
-        # FIRST (it never touches the socket or this payload, so it can no
-        # longer be starved by ANY failure in the send path, known or
-        # future), attempt the send SECOND. Both individually try/excepted
-        # with explicit logging so a future change to either helper's
-        # internals can never silently re-open this gap.
+        # Persist the terminal-failure card BEFORE attempting the error-envelope
+        # send (not the reverse) -- persist never touches the socket or this
+        # payload, so it cannot be starved by any failure in the send path.
+        # Both steps are individually try/excepted with explicit logging.
         #
-        # BUG 2: the fabrication backstop (item 4, context_budget) is wired
-        # into the normal zero-tool-call terminal branch above but is skipped
-        # entirely on THIS (exception) path, so an abort mid-fabrication
-        # persisted an unqualified false claim ("The hillshade has been
-        # generated and added to the map"). Same structural gate here: zero
-        # tool calls dispatched this whole turn, AND the accumulated
-        # narration matches the claim regex.
+        # The fabrication backstop (item 4, context_budget) also applies on this
+        # exception path: zero tool calls dispatched this whole turn, AND the
+        # accumulated narration matches the claim regex, appends the same
+        # honest caveat as the normal zero-tool-call terminal branch.
         _aborted_narration = "".join(turn_narration)
         _fabricated_claim = not _turn_ever_called_tool and looks_like_fabricated_action_claim(
             _aborted_narration
@@ -5388,31 +5048,28 @@ async def _stream_gemini_reply(
                 retryable=False,
             )
         except Exception:  # noqa: BLE001 -- _send_error/_session_safe_send
-            # already never raise on an ordinary send failure (they catch
-            # Exception internally); this is defense-in-depth logging only.
-            # NOTE: a genuine ``asyncio.CancelledError`` here is NOT caught
-            # (it is a BaseException, not an Exception) and is intentionally
-            # left to propagate -- cancellation must never be swallowed. The
-            # whole point of the reorder above is that it no longer matters:
-            # the terminal-failure persist has ALREADY completed by the time
-            # we reach this send, so a cancelled/dead-socket send can no
-            # longer suppress it.
+            # _send_error/_session_safe_send already never raise on an ordinary
+            # send failure; this is defense-in-depth logging only. NOTE: a genuine
+            # asyncio.CancelledError here is NOT caught (it is a BaseException, not
+            # an Exception) and is intentionally left to propagate -- cancellation
+            # must never be swallowed. By the time we reach this send the
+            # terminal-failure persist has ALREADY completed, so a cancelled/dead-
+            # socket send can no longer suppress it.
             logger.exception(
                 "context-budget: error-envelope send raised session=%s",
                 state.session_id,
             )
     except UpstreamProviderError as exc:
-        # UPSTREAM-PROVIDER DISCIPLINE (LANE CORE 2026-07-22, NATE hard rule:
-        # never internalize upstream failure). The adapter already retried the
-        # transient provider failure with backoff and exhausted its budget --
-        # this turn ends with an HONEST provider-unavailable narration (typed,
-        # provider NAMED, verbatim detail), never a silent empty turn and
-        # never recorded as an internal error (``error_class=
-        # "upstream_provider"`` on the per-turn telemetry record). The wire
-        # ``error_code`` stays the contract-valid ``LLM_UNAVAILABLE``
-        # (retryable) -- the closed A.6 ErrorCode Literal is a contracts
-        # surface this lane may not widen -- while the free-form failure-card
-        # code carries the DISTINCT ``UPSTREAM_PROVIDER_UNAVAILABLE``.
+        # UPSTREAM-PROVIDER DISCIPLINE (NATE hard rule: never internalize
+        # upstream failure). The adapter already retried the transient provider
+        # failure with backoff and exhausted its budget -- this turn ends with
+        # an HONEST provider-unavailable narration (typed, provider NAMED,
+        # verbatim detail), never a silent empty turn and never recorded as an
+        # internal error (error_class="upstream_provider" on the per-turn
+        # telemetry record). The wire error_code stays the contract-valid
+        # LLM_UNAVAILABLE (retryable) -- the closed A.6 ErrorCode Literal is a
+        # contracts surface this lane may not widen -- while the free-form
+        # failure-card code carries the DISTINCT UPSTREAM_PROVIDER_UNAVAILABLE.
         _turn_error_class = "upstream_provider"
         logger.error(
             "upstream provider unavailable session=%s provider=%s attempts=%d "
@@ -5484,7 +5141,7 @@ async def _stream_gemini_reply(
             f"Upstream provider unavailable ({exc.provider}): {exc.detail}",
             retryable=True,
         )
-    except Exception as exc:  # noqa: BLE001 — surface as A.6 LLM_UNAVAILABLE
+    except Exception as exc:  # noqa: BLE001 -- surface as A.6 LLM_UNAVAILABLE
         # PER-TURN TELEMETRY: a NON-transient provider rejection (auth / bad
         # request) classifies as ``provider_request`` (fail-fast, its own
         # class); anything else is honestly ``internal``. Upstream transients
@@ -5498,24 +5155,20 @@ async def _stream_gemini_reply(
             f"Model generation failed: {exc}",
             retryable=True,
         )
-        # BUG 4b (terminal failure lost on reconnect): the error envelope above
-        # marks the in-memory pipeline failed on THIS live socket, but a WS
-        # reconnect / Case-reopen replays from ``chat_history`` — where nothing
-        # records this terminal failure, so any tool card the user last saw
-        # spinning replays as ``running`` forever. Persist a ``role="tool"``
-        # FAILED tool-card row (mirroring the existing tool-card shape) so the
-        # session-resume replay renders the failed card and the user knows the
-        # turn STOPPED. Honesty floor: this writes a FAILURE — never a success.
+        # The error envelope above marks the in-memory pipeline failed on THIS
+        # live socket, but a WS reconnect / Case-reopen replays from
+        # chat_history, where nothing records this terminal failure -- any tool
+        # card the user last saw spinning would replay as "running" forever.
+        # Persist a role="tool" FAILED tool-card row (mirroring the existing
+        # tool-card shape) so the session-resume replay renders the failed card.
+        # Honesty floor: this writes a FAILURE -- never a success.
         #
-        # EXCEPTION: a ``RuntimeError`` whose ``__cause__`` is ``StopIteration``
-        # is the PEP-479 async-generator-exhaustion artifact — the model stream
-        # generator ran dry / closed, NOT a genuine model failure. (The real
-        # ``stream_events_with_contents`` returns cleanly via StopAsyncIteration
-        # and never surfaces this; it is exclusively the shape a finite mocked
-        # stream produces when the loop requests one more round than it staged.)
-        # Persisting a failed tool card here would inject a phantom failure row
-        # into an otherwise-clean tool-terminal turn (regressing job-0315's
-        # tool-terminal accumulator + no-phantom invariants), so we skip it.
+        # EXCEPTION: a RuntimeError whose __cause__ is StopIteration is the
+        # PEP-479 async-generator-exhaustion artifact -- the model stream
+        # generator ran dry, NOT a genuine model failure (a finite mocked stream
+        # shape only). Persisting a failed tool card here would inject a
+        # phantom failure row into an otherwise-clean tool-terminal turn, so we
+        # skip it.
         if not isinstance(exc.__cause__, StopIteration):
             await _persist_terminal_failure_card(
                 state,
@@ -5524,12 +5177,11 @@ async def _stream_gemini_reply(
                 case_id=_turn_case_id(state),
             )
     finally:
-        # PER-TURN TELEMETRY (LANE CORE 2026-07-22): exactly ONE record per
-        # turn, every outcome (clean / abort / cancel / provider failure).
-        # ``emit_turn_telemetry`` is fire-and-forget + never raises (async
-        # JSONL write off-loop per the no-sync-blocking rule), but the whole
-        # call is still wrapped so a telemetry fault can never mask the turn's
-        # own outcome (including a propagating CancelledError).
+        # PER-TURN TELEMETRY: exactly ONE record per turn, every outcome
+        # (clean / abort / cancel / provider failure). emit_turn_telemetry is
+        # fire-and-forget + never raises, but the whole call is still wrapped
+        # so a telemetry fault can never mask the turn's own outcome (including
+        # a propagating CancelledError).
         try:
             _turn_wall_ms = (
                 asyncio.get_running_loop().time() - started_at
@@ -5560,80 +5212,63 @@ async def _handle_session_resume(
     *,
     client_case_id: str | None = None,
 ) -> None:
-    """Reply with a fresh session-state. M1 in-memory only; Mongo replay lands
-    when the session-records seam is wired.
+    """Reply with a fresh session-state. M1 in-memory only; Mongo replay
+    lands when the session-records seam is wired.
 
-    job-0035: routes through the emitter so the initial ``session-state`` is
-    A.7-snapshot-shaped (current_pipeline mirrors the live emitter state).
+    Routes through the emitter so the initial session-state is
+    A.7-snapshot-shaped. Also emits a case-list so the client renders the
+    left-rail Case list on initial connect; best-effort -- skipped if
+    Persistence is unbound.
 
-    job-0121: also emits a ``case-list`` so the client renders the left-rail
-    Case list on initial connect (FR-MP-6 landing state). Best-effort — if
-    Persistence is unbound the case-list emission is skipped and the M1
-    in-memory path keeps working.
-
-    job-CASE-AUTHORITY: ``client_case_id`` is the Case the CLIENT is currently
-    in (stamped on the ``session-resume`` payload). It is the AUTHORITY: when
-    it differs from the server's ``state.active_case_id`` we RE-BIND the
-    server pointer to it BEFORE the layer replay, so a reconnect replays the
-    Case the user is actually in — never a stale server pointer (THE SNAP: a
-    case-select tapped mid-reconnect never reached the server, and the bare
-    ``session-resume {}`` then replayed the server's stale active Case). A
-    resume that carries NO ``case_id`` (older client) keeps the current
-    behavior untouched. INVARIANT (job-0356): we are correcting WHICH Case the
-    replay targets, not removing replay — a genuine fresh reconnect still
-    replays the active Case's rendered layers."""
+    ``client_case_id`` is the Case the CLIENT is currently in and is the
+    AUTHORITY: when it differs from ``state.active_case_id`` we RE-BIND the
+    server pointer to it BEFORE the layer replay, so a reconnect replays
+    the Case the user is actually in, never a stale server pointer. A
+    resume with NO ``case_id`` (older client) keeps current behavior
+    untouched. We are correcting WHICH Case the replay targets, not
+    removing replay -- a genuine fresh reconnect still replays the active
+    Case's rendered layers.
+    """
     _ensure_emitter(websocket, state)
-    # JOB B (WS connection accumulation): a freshly-opened socket sends
-    # ``session-resume`` first, so this is the moment to (a) record THIS socket
-    # as a live connection of the session and (b) proactively close any PRIOR
-    # socket of the SAME session that is not this one - retiring the zombies a
-    # mobile navigate-out/back leaves behind long before the slow ~20s transport
-    # ping would. The keeper (THIS websocket) is excluded by identity so the
-    # active tab's own socket is never closed. Idempotent: a keepalive resume on
-    # the same socket re-registers (no-op) and reaps any newly-stale sibling.
+    # Record THIS socket as a live connection of the session, then reap any
+    # prior socket of the SAME session. The keeper (THIS websocket) is excluded
+    # by identity so the active tab's own socket is never closed. Idempotent: a
+    # keepalive resume re-registers (no-op) and reaps any newly-stale sibling.
     _register_session_connection(state.session_id, websocket)
     await _reap_prior_session_connections(state.session_id, keeper=websocket)
-    # JOB C (active-case flap): a keepalive resume is any resume AFTER the first
-    # one on THIS connection. Capture the keepalive verdict BEFORE flipping the
-    # per-connection latch so the rebind gate below sees the genuine first/later
-    # distinction. The client's 25s proof-of-life ping and a genuine fresh
-    # reconnect are indistinguishable by the envelope alone, but a fresh
-    # ``SessionState`` is built per connection, so the FIRST resume here is the
-    # real fresh-socket resume and every later one is a keepalive ping.
+    # JOB C (active-case flap): a keepalive resume is any resume AFTER the
+    # first one on THIS connection. Capture the keepalive verdict BEFORE
+    # flipping the per-connection latch: a fresh SessionState is built per
+    # connection, so the FIRST resume here is the real fresh-socket resume
+    # and every later one is a keepalive ping.
     is_keepalive = state.did_first_resume
     state.did_first_resume = True
-    # job-CASE-AUTHORITY: warm the in-memory pointer from the persisted
-    # ``last_active_case_id`` first (a no-op when this session already has a
-    # live pointer this process). After an EC2 auto-stop/restart the
-    # ``_SESSION_ACTIVE_CASE`` cache is empty; without this a bare resume from
-    # an older client (no stamp) would resume to None and lose the Case. The
-    # client stamp below still overrides this seed on any disagreement.
+    # Warm the in-memory pointer from the persisted last_active_case_id
+    # first (no-op if this session already has a live pointer this
+    # process). After an EC2 auto-stop/restart the _SESSION_ACTIVE_CASE
+    # cache is empty; without this a bare resume from an older client would
+    # lose the Case. The client stamp below still overrides this seed on
+    # any disagreement.
     await _reload_session_active_case(state)
-    # job-CASE-AUTHORITY: re-bind the server's active-Case pointer to the
-    # client's current Case BEFORE the replay below resolves it. The client is
-    # the authority; the in-memory ``_SESSION_ACTIVE_CASE`` pointer is a cache
-    # that may be stale (mid-reconnect select dropped) or cold (EC2 restart
-    # wiped it). Only re-bind on a genuine change to a non-None Case so an
-    # older client's bare resume (no stamp) leaves the pointer alone. The
-    # ``state.active_case_id`` setter writes through ``_set_session_active_case``
-    # so EVERY connection of the session observes the corrected Case; we also
-    # persist the pointer so it survives the next restart. A change here also
-    # invalidates this connection's case-context sync marker so the next
-    # ``user-message`` re-syncs (LLM history + layer accumulator) to the
-    # corrected Case via ``_sync_case_context``.
+    # Re-bind the server's active-Case pointer to the client's current Case
+    # BEFORE the replay below resolves it -- the client is the authority;
+    # the in-memory _SESSION_ACTIVE_CASE pointer is a cache that may be
+    # stale or cold (EC2 restart). Only re-bind on a genuine change to a
+    # non-None Case so an older client's bare resume (no stamp) leaves the
+    # pointer alone. The active_case_id setter writes through
+    # _set_session_active_case so EVERY connection observes the corrected
+    # Case; also persist the pointer so it survives the next restart. A
+    # change here invalidates this connection's case-context sync marker so
+    # the next user-message re-syncs to the corrected Case.
     #
-    # JOB C: gate the rebind on ``not is_keepalive`` - the 25s keepalive ping
-    # must NEVER rebind the shared ``_SESSION_ACTIVE_CASE`` pointer. With two
-    # sockets per session each stamping its own Case, an ungated keepalive
-    # rebind made the two sockets ping-pong the pointer every 25s, and each
-    # rebind drove an authoritative layer replay that clobbered the displayed
-    # Case (THE FLAP). The pointer is rebound only on a genuine FIRST resume of
-    # a connection here, and on explicit ``case-command(select)`` /
-    # ``user-message`` (``_prepare_user_turn``) elsewhere - the deliberate
-    # user-intent paths. (A keepalive whose stamp differs is the user having
-    # switched the active Case on the OTHER socket; the explicit select on that
-    # socket already rebound the shared pointer, so this socket's stale stamp
-    # must not clobber it back.)
+    # Gate the rebind on ``not is_keepalive`` -- the 25s keepalive ping must
+    # NEVER rebind the shared _SESSION_ACTIVE_CASE pointer (with two sockets
+    # per session each stamping its own Case, an ungated keepalive rebind
+    # ping-pongs the pointer every 25s and each rebind drives an
+    # authoritative layer replay that clobbers the displayed Case). The
+    # pointer is rebound only on a genuine FIRST resume of a connection
+    # here, and on explicit case-command(select) / user-message elsewhere --
+    # the deliberate user-intent paths.
     if (
         not is_keepalive
         and client_case_id is not None
@@ -5648,12 +5283,11 @@ async def _handle_session_resume(
         state.active_case_id = client_case_id
         state.case_context_synced_to = _CASE_SYNC_NEVER
         await _persist_session_active_case(state, client_case_id)
-    # job-SOLVE-SURVIVE Requirement 2: this is the canonical reconnect entry —
-    # a freshly-opened socket sends ``session-resume`` first. If a turn from a
-    # now-closed socket of this SAME session is still running (a live SFINCS
-    # solve detached on disconnect), rebind its emitter sink onto THIS socket so
-    # its remaining progress + terminal frames (the published flood layer) land
-    # on the user's live connection. No-op when there are no live turns.
+    # Canonical reconnect entry: a freshly-opened socket sends
+    # session-resume first. If a turn from a now-closed socket of this SAME
+    # session is still running (a live SFINCS solve detached on disconnect),
+    # rebind its emitter sink onto THIS socket so its remaining progress +
+    # terminal frames land on the user's live connection.
     rebound = _rebind_live_turns(state.session_id, state.emitter)
     if rebound:
         logger.info(
@@ -5661,72 +5295,52 @@ async def _handle_session_resume(
             rebound,
             state.session_id,
         )
-    # job-0356 (per-Case layer DURABILITY): a BARE reconnect (no live turn for
-    # this session) must STILL re-render every layer the user already had on the
-    # map. job-0355 only rebinds LIVE in-flight turns; a layer that COMPLETED +
-    # rendered before the disconnect has no live turn, so without this the
-    # reconnect replays an EMPTY session-state and the user's layers vanish until
-    # an explicit case-open. NATE hard requirement: a rendered layer survives any
-    # WS reconnect — the user must NEVER exit/re-enter a Case to get layers back.
+    # Per-Case layer DURABILITY: a BARE reconnect (no live turn for this
+    # session) must STILL re-render every layer already on the map -- job-
+    # 0355 only rebinds LIVE in-flight turns, so a layer that completed
+    # before the disconnect has no live turn. NATE hard requirement: a
+    # rendered layer survives any WS reconnect without an explicit
+    # case-open.
     #
-    # Fix: resolve the session's active Case (the session-scoped
-    # ``_SESSION_ACTIVE_CASE`` registry, read through ``state.active_case_id``)
-    # and seed THIS reconnect's emitter from the Case's persisted
-    # ``loaded_layers`` BEFORE emitting — the exact case-open / _sync_case_context
-    # seam (``reset_loaded_layers`` + ``reinline_vector_layers``), so the single
-    # ``emit_session_state`` below carries the full A.7 replace-not-reconcile
-    # snapshot the client already knows how to render. (Layers persist via
-    # job-0259 finally-persist + ``_persist_case_loaded_layers``; this only
-    # REPLAYS them on bare resume — no new write.)
+    # Resolve the session's active Case and seed THIS reconnect's emitter
+    # from the Case's persisted loaded_layers BEFORE emitting (the same
+    # case-open / _sync_case_context seam), so the single
+    # emit_session_state below carries the full A.7 replace-not-reconcile
+    # snapshot the client already knows how to render.
     #
-    # Requirement 2 (dedup): when ``rebound > 0`` a LIVE turn's emitter was just
-    # pointed at THIS socket's sink, so the live turn IS the writer for this
-    # session-state. We must NOT also seed + emit on the new connection's emitter
-    # — that would put TWO emitters on the same sink and deliver duplicate
-    # session-state frames. So the bare-resume replay runs ONLY when nothing was
-    # rebound; the live turn's own (rebound) emitter delivers the terminal A.7
-    # snapshot (which already carries the persisted loaded_layers it seeded at
-    # turn start). One emitter writes the socket either way.
+    # Dedup: when rebound > 0 a LIVE turn's emitter was just pointed at
+    # THIS socket's sink and IS the writer for this session-state -- we
+    # must NOT also seed + emit on the new connection's emitter (that would
+    # put two emitters on the same sink and deliver duplicate frames), so
+    # the bare-resume replay runs ONLY when nothing was rebound.
     #
-    # A1 FIX 4 (GATE REPLAY): replay the active Case's layers ONCE per
-    # connection — on the first BARE (non-rebound) resume — never on the 25s
-    # keepalive ping. job-0356 durability: a rendered layer survives any
-    # reconnect, so a genuine fresh socket must re-seed + re-render the Case's
-    # persisted layers. The client's keepalive sends an identical empty
-    # session-resume on the SAME open socket every 25s; pre-fix each one did a
-    # blocking Dynamo read + re-asserted visible=true, which RE-PAINTED the
-    # active Case's layers every 25s (the BLINK) and un-hid a user-hidden
-    # layer. ``did_fresh_resume`` gates the replay to the first bare resume.
-    #
-    # The flag flips ONLY when we actually seeded this connection's emitter
-    # (the ``rebound == 0`` branch). When ``rebound > 0`` a live turn's emitter
-    # was just rebound onto this socket and IS the writer — we must not double-
-    # seed/emit — but this connection's own emitter stays un-seeded, so we
-    # leave the flag False: a LATER keepalive resume (after the live turn ends
-    # and stops being the writer) then performs the one-time seed+replay so the
-    # Case's layers are restored to this connection's emitter exactly once.
+    # Replay the active Case's layers ONCE per connection -- on the first
+    # BARE (non-rebound) resume, never on the 25s keepalive ping (a
+    # keepalive re-seed on every ping re-painted the active Case's layers
+    # and un-hid a user-hidden layer). did_fresh_resume gates the replay to
+    # the first bare resume; the flag flips ONLY when this connection's
+    # emitter was actually seeded, so a rebound connection performs the
+    # one-time seed+replay later once it stops being a live turn's writer.
     did_replay_now = False
     if rebound == 0 and not state.did_fresh_resume:
         await _replay_active_case_layers(state)
         state.did_fresh_resume = True
         did_replay_now = True
     await state.emitter.emit_session_state()
-    # OPEN-8: force an unconditional emit only on a genuine first (non-
-    # keepalive) resume of THIS connection — the moment a client actually
-    # needs the list (fresh connect / real reconnect). A later keepalive
-    # ping on the same warm socket (or a sibling socket of the same
-    # session independently resuming) goes through the change-guard so an
-    # unchanged ~190-case list is not re-serialized + re-sent every cycle.
+    # OPEN-8: force an unconditional emit only on a genuine first
+    # (non-keepalive) resume of THIS connection. A later keepalive ping (or
+    # a sibling socket independently resuming) goes through the
+    # change-guard so an unchanged ~190-case list is not re-serialized +
+    # re-sent every cycle.
     await _emit_case_list(websocket, state, force=not is_keepalive)
-    # C2 (re-emit on resume): ONLY on the genuine fresh-socket resume (the
-    # first bare resume that just seeded + replayed this connection's layers),
-    # never on a keepalive ping and never on a rebound (a rebound live turn is
-    # still streaming and will emit its OWN terminal frames — a turn-complete
-    # now would prematurely settle that turn's still-running cards). On a real
-    # reconnect the card the user last saw spinning may have finished while the
-    # socket was down; the persisted tool-card row carries its real terminal
-    # state, and this bare whole-turn idle is the belt-and-suspenders that
-    # force-completes any card the client still believes is running.
+    # C2 (re-emit on resume): ONLY on the genuine fresh-socket resume
+    # (first bare resume that just seeded + replayed this connection's
+    # layers), never on a keepalive ping and never on a rebound (a rebound
+    # live turn is still streaming and emits its OWN terminal frames). On a
+    # real reconnect the card the user last saw spinning may have finished
+    # while the socket was down; this bare whole-turn idle is the
+    # belt-and-suspenders that force-completes any card the client still
+    # believes is running.
     if did_replay_now:
         await _emit_turn_complete(websocket, state)
 
@@ -5734,21 +5348,17 @@ async def _handle_session_resume(
 async def _replay_active_case_layers(state: SessionState) -> None:
     """Seed the reconnect emitter from the active Case's persisted layers.
 
-    job-0356: the bare-reconnect half of the per-Case layer DURABILITY
-    requirement. Resolves the session's active Case via ``state.active_case_id``
-    (backed by the session-scoped ``_SESSION_ACTIVE_CASE`` registry) and seeds
-    this connection's emitter ``_loaded_layers`` from the Case's persisted
-    snapshot so the caller's single ``emit_session_state`` re-renders every
-    already-rendered layer WITHOUT a case-open. Reuses the exact case-open /
-    ``_sync_case_context`` rehydration seam (``reset_loaded_layers`` +
-    ``reinline_vector_layers`` + URI-registry seed).
+    The bare-reconnect half of the per-Case layer DURABILITY requirement.
+    Resolves the session's active Case and seeds this connection's emitter
+    from the Case's persisted snapshot so the caller's single
+    emit_session_state re-renders every already-rendered layer WITHOUT a
+    case-open. Reuses the case-open / _sync_case_context rehydration seam.
 
-    No-ops (replays NOTHING, never crashes) when there is no active Case or
-    Persistence is unbound — a fresh session with no Case resumes to the empty
-    snapshot exactly as before. Best-effort: a Persistence failure logs and
-    leaves the emitter as-is so the resume still completes.
+    No-ops (never crashes) when there is no active Case or Persistence is
+    unbound. Best-effort: a Persistence failure logs and leaves the emitter
+    as-is so the resume still completes.
     """
-    if state.emitter is None:  # pragma: no cover — _ensure_emitter always binds
+    if state.emitter is None:  # pragma: no cover -- _ensure_emitter always binds
         return
     case_id = state.active_case_id
     if case_id is None:
@@ -5764,40 +5374,34 @@ async def _replay_active_case_layers(state: SessionState) -> None:
         state.emitter.reset_loaded_layers(session_state.loaded_layers)
         # Repopulate the inline-GeoJSON side-table so the replayed
         # session-state carries renderable vectors (the browser never fetches
-        # object-store uris directly — job-0175). Mirrors the case-open path.
+        # object-store uris directly -- job-0175). Mirrors the case-open path.
         try:
             await state.emitter.reinline_vector_layers()
-        except Exception:  # noqa: BLE001 — re-inline is best-effort
+        except Exception:  # noqa: BLE001 -- re-inline is best-effort
             logger.warning(
                 "session-resume vector re-inline failed session=%s case=%s",
                 state.session_id,
                 case_id,
             )
-        # #147 reconnect-resync (Feature B GAP B1): seed the emitter's
-        # chat-history mirror from the SAME persisted CaseSessionState already
-        # fetched above (do NOT re-fetch) so a BARE reconnect re-renders the
-        # chat bubbles, not just the layers. Without this the replayed
-        # session-state shipped an EMPTY chat_history and a reconnecting client
-        # lost its transcript until an explicit case-open. The persisted
-        # CaseChatMessage list is serialized to the wire dict shape
-        # SessionStatePayload.chat_history carries. Best-effort, mirroring the
-        # adjacent reinline block — a hiccup must not break the resume.
+        # #147 reconnect-resync: seed the emitter's chat-history mirror from the
+        # SAME persisted CaseSessionState already fetched above (do NOT
+        # re-fetch) so a BARE reconnect re-renders the chat bubbles too, not
+        # just the layers. Persisted CaseChatMessage list is serialized to the
+        # wire dict shape SessionStatePayload.chat_history carries. Best-effort.
         try:
             state.emitter.seed_chat_history(
                 [m.model_dump(mode="json") for m in session_state.chat_history]
             )
-        except Exception:  # noqa: BLE001 — chat seed is best-effort
+        except Exception:  # noqa: BLE001 -- chat seed is best-effort
             logger.warning(
                 "session-resume chat-history seed failed session=%s case=%s",
                 state.session_id,
                 case_id,
             )
         # Seed the URI registry so handle-indirection resolves for layers
-        # produced in a PRIOR session of this Case (mirrors _sync_case_context).
-        # F32: REPLACE (not additive-seed) — same rationale as the case-switch
-        # call sites, kept consistent here so a bare reconnect never leaves
-        # stale/evicted records lingering across repeated resumes.
-        # ADR 0014: also restores the Case's persisted L<n> short-handle map.
+        # produced in a PRIOR session of this Case. REPLACE (not
+        # additive-seed) -- same rationale as the case-switch call sites, so a
+        # bare reconnect never leaves stale/evicted records lingering.
         await _seed_registry_for_case(
             state, case_id, session_state.loaded_layers
         )
@@ -5808,7 +5412,7 @@ async def _replay_active_case_layers(state: SessionState) -> None:
             case_id,
             len(session_state.loaded_layers),
         )
-    except Exception:  # noqa: BLE001 — best-effort, never break the resume
+    except Exception:  # noqa: BLE001 -- best-effort, never break the resume
         logger.exception(
             "session-resume layer replay failed session=%s case=%s",
             state.session_id,
@@ -5824,13 +5428,12 @@ async def _replay_active_case_layers(state: SessionState) -> None:
 def _connection_local_host(websocket: "ServerConnection | Any") -> str | None:
     """The server-side socket's local host for THIS connection.
 
-    Used to derive the advertised sibling endpoints (remote-daemon access): a
-    client dialing ``100.x.x.x:8765`` over the tailnet connected TO
-    ``100.x.x.x`` on the server side, so ``local_address`` reflects the exact
-    reachable host to hand back. Defensive: ``websocket.local_address`` is a
-    ``(host, port)`` tuple on a real ``ServerConnection`` but absent on the
-    test fakes -- return ``None`` (env overrides still apply; old tests are
-    unaffected).
+    Used to derive the advertised sibling endpoints (remote-daemon access):
+    a client dialing over the tailnet connected TO that address on the
+    server side, so local_address reflects the exact reachable host to hand
+    back. Defensive: websocket.local_address is a (host, port) tuple on a
+    real ServerConnection but absent on the test fakes -- returns None (env
+    overrides still apply).
     """
     addr = getattr(websocket, "local_address", None)
     if isinstance(addr, (tuple, list)) and addr:
@@ -5867,13 +5470,13 @@ async def _handle_auth_token(
 ) -> None:
     """Process the client's ``auth-token`` envelope and emit ``auth-ack``.
 
-    Per Appendix H.5 (job-0122 scope):
+    Per Appendix H.5:
 
     1. Validate the payload through ``AuthTokenEnvelope``.
-    2. Call ``authenticate_token`` → resolves to a ``User`` via Persistence
+    2. Call ``authenticate_token`` -> resolves to a ``User`` via Persistence
        (or provisions an anonymous fallback).
     3. Bind the resolved ``user_id`` + tier + anonymous-flag into the
-       SessionState — every subsequent envelope is scoped to this user.
+       SessionState -- every subsequent envelope is scoped to this user.
     4. Emit ``auth-ack`` so the client knows its session identity.
     """
     tok: AuthTokenEnvelope | None
@@ -5890,12 +5493,12 @@ async def _handle_auth_token(
         # connection is still usable (per H.3).
         tok = None
 
-    # REMOTE-DAEMON ACCESS (2026-07): optional shared-token gate. When
-    # ``TRID3NT_ACCESS_TOKEN`` is set, the client's presented token MUST match
-    # (constant-time) or the connection is rejected with a typed AUTH_FAILED
-    # close (policy-violation 1008 -- the same close the client classifies as
-    # an auth failure and STOPS its reconnect ladder on). Unset (default) ->
-    # ``verify_access_token`` returns True and behavior is byte-identical anon.
+    # REMOTE-DAEMON ACCESS: optional shared-token gate. When
+    # TRID3NT_ACCESS_TOKEN is set, the client's presented token MUST match
+    # (constant-time) or the connection is rejected with a typed
+    # AUTH_FAILED close (the same close the client classifies as an auth
+    # failure and stops its reconnect ladder on). Unset (default) ->
+    # verify_access_token returns True and behavior is byte-identical anon.
     presented = tok.token if tok is not None else None
     if not verify_access_token(presented):
         logger.info(
@@ -5912,7 +5515,7 @@ async def _handle_auth_token(
     # cases-vanish fix (belt-and-suspenders): if this connection presents NO
     # usable anonymous hint but a sibling connection of the SAME session already
     # bound an anon identity this process, replay that recorded id as the hint so
-    # both sockets converge on ONE anon user. Only fills a MISSING hint — a
+    # both sockets converge on ONE anon user. Only fills a MISSING hint -- a
     # client-supplied hint always wins (it is the durable, cross-refresh id).
     tok = _apply_session_anon_hint(state.session_id, tok)
 
@@ -5945,11 +5548,10 @@ def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
     """Copy the resolved auth identity into the SessionState.
 
     Separate from ``_handle_auth_token`` so tests can drive the bind
-    directly without parsing an envelope.
-
-    Wave 4.11 M6: also propagates the resolved ``user_id`` into
-    ``state.allowed_tool_set.user_id`` so ``get_dynamic_hot_set`` can
-    filter telemetry per-user when ``TRID3NT_DYNAMIC_HOT_SET=1``.
+    directly without parsing an envelope. Also propagates the resolved
+    ``user_id`` into ``state.allowed_tool_set.user_id`` so
+    ``get_dynamic_hot_set`` can filter telemetry per-user when
+    ``TRID3NT_DYNAMIC_HOT_SET=1``.
     """
     state.authenticated_user_id = result.user.user_id
     state.is_anonymous = result.is_anonymous
@@ -5963,16 +5565,16 @@ def _bind_auth_result(state: SessionState, result: AuthResult) -> None:
 async def _touch_session_record(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
-    """D.6 session-record heartbeat (job-0203 / Wave 4.11 M4).
+    """D.6 session-record heartbeat.
 
     Upserts the agent's own ``sessions`` document: ``last_active_at`` +
     ``expires_at`` advance (TTL driver per ``SESSIONS_TTL``), the active
     Case lands in ``project_ids``. Fired on auth bind, Case open/create,
-    and every persisted chat turn — the session-record carveout (FR-AS-8)
-    means none of these touches is a confirmable write.
+    and every persisted chat turn -- none of these touches is a confirmable
+    write (FR-AS-8 session-record carveout).
 
-    Best-effort like telemetry (M3) and chart persistence (job-0230): a
-    persistence hiccup is logged at WARNING and never reaches the caller.
+    Best-effort: a persistence hiccup is logged at WARNING and never
+    reaches the caller.
     """
     p = get_persistence()
     if p is None:
@@ -5983,24 +5585,23 @@ async def _touch_session_record(
             state.session_id,
             case_id=active_case_id,
         )
-    except Exception:  # noqa: BLE001 — side effect, never bubble up
+    except Exception:  # noqa: BLE001 -- side effect, never bubble up
         logger.warning(
             "session-touch failed session=%s", state.session_id, exc_info=True
         )
-    # #147 ephemeral-cases ACTIVITY HEARTBEAT (LOAD-BEARING): an actively-used
-    # ANONYMOUS Case must NEVER be reaped. ``upsert_case(ephemeral=True)`` stamps
-    # a numeric TTL at CREATE time only; without sliding it forward on activity,
-    # an anon Case would be swept one TTL window after creation regardless of
-    # use. This helper already fires on auth bind, Case open/create, and every
-    # persisted chat turn — exactly the activity signal — so slide the Case TTL
-    # here too. Gate STRICTLY on is_anonymous: an authed Case carries no
-    # expires_at and stays durable forever (no TTL write at all). Best-effort:
-    # touch_case already swallows + logs its own failures, but guard the call
-    # anyway so it can never break the turn.
+    # #147 ephemeral-cases ACTIVITY HEARTBEAT (LOAD-BEARING): an
+    # actively-used ANONYMOUS Case must NEVER be reaped.
+    # upsert_case(ephemeral=True) stamps a numeric TTL at CREATE time only;
+    # without sliding it forward on activity an anon Case would be swept one
+    # TTL window after creation regardless of use. This helper fires on
+    # auth bind, Case open/create, and every persisted chat turn -- exactly
+    # the activity signal -- so slide the Case TTL here too. Gated STRICTLY
+    # on is_anonymous: an authed Case carries no expires_at and stays
+    # durable forever.
     if state.is_anonymous and active_case_id is not None:
         try:
             await p.touch_case(active_case_id)
-        except Exception:  # noqa: BLE001 — side effect, never bubble up
+        except Exception:  # noqa: BLE001 -- side effect, never bubble up
             logger.warning(
                 "case-touch failed session=%s case=%s",
                 state.session_id,
@@ -6012,26 +5613,25 @@ async def _touch_session_record(
 async def _persist_session_active_case(
     state: SessionState, case_id: str | None
 ) -> None:
-    """Persist the session's active-Case pointer (job-CASE-AUTHORITY).
+    """Persist the session's active-Case pointer.
 
-    Writes ``last_active_case_id`` onto the ``sessions`` document so the active
-    pointer survives an EC2 auto-stop/restart that wipes the in-memory
-    ``_SESSION_ACTIVE_CASE`` dict. The client-stamped ``case_id`` on
-    ``session-resume`` / ``user-message`` stays the REAL authority; this is the
-    cold-start cache. Fired whenever the server re-binds the pointer to the
-    client's Case (resume re-bind, user-turn re-bind) so a later restart's
-    fresh ``SessionState`` reloads the right Case (see
+    Writes ``last_active_case_id`` onto the ``sessions`` document so the
+    active pointer survives an EC2 auto-stop/restart that wipes the
+    in-memory ``_SESSION_ACTIVE_CASE`` dict. The client-stamped ``case_id``
+    stays the REAL authority; this is only the cold-start cache. Fired
+    whenever the server re-binds the pointer to the client's Case, so a
+    later restart's fresh SessionState reloads the right Case (see
     ``_reload_session_active_case``).
 
-    Best-effort like ``_touch_session_record``: a persistence hiccup is logged
-    at WARNING and never reaches the caller's turn.
+    Best-effort: a persistence hiccup is logged at WARNING and never
+    reaches the caller's turn.
     """
     p = get_persistence()
     if p is None:
         return
     try:
         await p.set_session_active_case(state.session_id, case_id)
-    except Exception:  # noqa: BLE001 — side effect, never bubble up
+    except Exception:  # noqa: BLE001 -- side effect, never bubble up
         logger.warning(
             "persist active-case pointer failed session=%s",
             state.session_id,
@@ -6042,20 +5642,17 @@ async def _persist_session_active_case(
 async def _reload_session_active_case(state: SessionState) -> None:
     """Reload the persisted active-Case pointer into the in-memory registry.
 
-    job-CASE-AUTHORITY: when a fresh ``SessionState`` is built after an EC2
-    restart (or a brand-new process), the session-scoped
-    ``_SESSION_ACTIVE_CASE`` dict is empty — the in-memory cache died with the
-    old process. This reloads the persisted ``last_active_case_id`` for the
-    session so the server's pointer is warm again BEFORE the first replay /
-    turn. The client-stamped ``case_id`` (resume + user-message) still wins on
-    any disagreement; this only seeds a sensible default for a bare resume
-    (older client, no stamp).
+    When a fresh SessionState is built after an EC2 restart (or a
+    brand-new process), the session-scoped ``_SESSION_ACTIVE_CASE`` dict is
+    empty. This reloads the persisted ``last_active_case_id`` so the
+    server's pointer is warm again BEFORE the first replay/turn. The
+    client-stamped ``case_id`` still wins on any disagreement; this only
+    seeds a sensible default for a bare resume (older client, no stamp).
 
-    Idempotent + guarded: only seeds when the registry has NO entry for this
-    session yet (a value already present — set by a case-command or a prior
-    client stamp this process — is the live truth and is never overwritten).
-    Best-effort: a missing record / persistence hiccup leaves the pointer
-    None, exactly as before this fix.
+    Idempotent + guarded: only seeds when the registry has NO entry for
+    this session yet (a value already present is the live truth and is
+    never overwritten). Best-effort: a missing record / persistence hiccup
+    leaves the pointer None.
     """
     if state.session_id in _SESSION_ACTIVE_CASE:
         return
@@ -6064,7 +5661,7 @@ async def _reload_session_active_case(state: SessionState) -> None:
         return
     try:
         persisted = await p.get_session_active_case(state.session_id)
-    except Exception:  # noqa: BLE001 — best-effort, never break resume
+    except Exception:  # noqa: BLE001 -- best-effort, never break resume
         logger.warning(
             "reload active-case pointer failed session=%s",
             state.session_id,
@@ -6088,7 +5685,7 @@ async def _ensure_auth_handshake(
 
     Called when a non-``auth-token`` envelope arrives before the handshake
     has completed (the client either didn't send auth-token, or another
-    envelope raced ahead). Mirrors the 5-second timeout path from H.3 —
+    envelope raced ahead). Mirrors the 5-second timeout path from H.3 --
     instead of waiting 5 seconds we trip the anonymous fallback inline so
     the user is bound before their first real interaction.
 
@@ -6117,7 +5714,7 @@ async def _ensure_auth_handshake(
     # cases-vanish fix: this implicit-anonymous path never saw a client hint
     # (the connection skipped the auth-token envelope). If a sibling connection
     # of this session already bound an anon identity this process, reuse it so
-    # both sockets converge on ONE anon user — otherwise this path would mint a
+    # both sockets converge on ONE anon user -- otherwise this path would mint a
     # fresh random ULID and fork the owner-scoped case-list.
     tok = _apply_session_anon_hint(state.session_id, None)
     result = await authenticate_token(tok, get_persistence())
@@ -6129,7 +5726,7 @@ async def _ensure_auth_handshake(
     ack = build_auth_ack(result, endpoints=endpoints)
     try:
         await websocket.send(_new_envelope("auth-ack", state.session_id, ack))
-    except Exception:  # noqa: BLE001 — socket may be down
+    except Exception:  # noqa: BLE001 -- socket may be down
         pass
     logger.info(
         "auth-ack(implicit-anonymous) session=%s user_id=%s",
@@ -6143,18 +5740,13 @@ async def _ensure_auth_handshake(
 # Case lifecycle handlers (job-0121, FR-MP-6)
 # --------------------------------------------------------------------------- #
 
-#: OPEN-8 (case-list emission storm): the last-emitted case-list content
-#: digest PER SESSION (not per connection — ``SessionState`` is a fresh
-#: per-connection object, and a session can legitimately carry more than one
-#: live socket, e.g. the client's dual-GraceWs tab or a QGIS dock
-#: reconnect racing its own stale socket's teardown). A ``session-resume``
-#: keepalive ping — the client's ~25s proof-of-life, or one of several
-#: concurrent sockets independently resuming — was re-serializing +
-#: re-sending the FULL case list (~190 cases live) even when nothing had
-#: changed since the last emit, observed live as multi-per-minute chatter on
-#: long-lived sessions. Cleared when the session's last live connection
-#: disconnects (mirrors ``_SESSION_WS_CONNECTIONS`` bookkeeping) so a later
-#: reconnect always gets a fresh unconditional emit.
+#: OPEN-8: the last-emitted case-list content digest PER SESSION (not
+#: per connection -- SessionState is a fresh per-connection object, and
+#: a session can carry more than one live socket). A session-resume
+#: keepalive ping was re-serializing + re-sending the FULL case list
+#: even when nothing had changed since the last emit. Cleared when the
+#: session's last live connection disconnects so a later reconnect
+#: always gets a fresh unconditional emit.
 _SESSION_CASE_LIST_HASH: "dict[str, str]" = {}
 
 
@@ -6188,26 +5780,21 @@ async def _emit_case_list(
 ) -> None:
     """Emit the ``case-list`` envelope for the client's left rail.
 
-    Best-effort: if Persistence is unbound (M1 in-memory path) we silently
-    skip. If the listing call fails we log + skip; the case-list is a
-    derivable view, so failing it should not break the chat path.
+    Best-effort: skips silently if Persistence is unbound; logs + skips on
+    a listing failure (the case-list is a derivable view and must not break
+    the chat path).
 
-    job-0252 (OQ-0115-CASE-USER-LINK): the list is now scoped by
-    ``state.authenticated_user_id`` (the resolved Firebase UID, or the
-    sticky-anonymous ULID in dev), matching the owner stamped onto Cases at
-    creation (``upsert_case(owner_user_id=...)``). The old ``$exists:false``
-    leak clause is gone, so a Case is visible only to its owner. We fall back
-    to ``session_id`` only when the handshake hasn't bound a user yet — the
-    same ``authenticated_user_id or session_id`` posture as the secrets /
-    chat-persist paths.
+    The list is scoped by ``state.authenticated_user_id`` (Firebase UID, or
+    the sticky-anonymous ULID in dev), matching the owner stamped onto
+    Cases at creation -- a Case is visible only to its owner. Falls back to
+    ``session_id`` only when the handshake hasn't bound a user yet.
 
-    OPEN-8 change-guard: ``force=False`` (the default) skips the actual send
-    when the list is byte-for-byte the same (by content digest, see
-    ``_case_list_digest``) as the last emit for this SESSION — collapsing
-    repeat keepalive/duplicate-socket resumes into a no-op. Callers that
-    just performed (or may have performed) a mutation — create / rename /
-    archive / delete / a genuine first (non-keepalive) resume — pass
-    ``force=True`` so the client is never left with a stale list.
+    Change-guard: ``force=False`` (default) skips the send when the list is
+    byte-for-byte the same (by content digest, see ``_case_list_digest``)
+    as the last emit for this SESSION, collapsing repeat keepalive/
+    duplicate-socket resumes into a no-op. Callers that just performed (or
+    may have performed) a mutation pass ``force=True`` so the client is
+    never left with a stale list.
     """
     p = get_persistence()
     if p is None:
@@ -6216,7 +5803,7 @@ async def _emit_case_list(
     user_id = state.authenticated_user_id or state.session_id
     try:
         cases = await p.list_cases_for_user(user_id)
-    except Exception:  # noqa: BLE001 — best-effort
+    except Exception:  # noqa: BLE001 -- best-effort
         logger.exception("case-list: list_cases_for_user failed")
         return
     digest = _case_list_digest(cases)
@@ -6244,22 +5831,20 @@ def _rehydrate_case_history(
     session_state: CaseSessionState,
     case_id: str,
 ) -> None:
-    """Refill ``state.chat_history`` from a Case's PERSISTED messages (F17).
+    """Refill ``state.chat_history`` from a Case's PERSISTED messages.
 
     Called right after the ``state.chat_history = []`` reset in both
     ``_emit_case_open`` and ``_sync_case_context``. Converts the per-Case
-    persisted ``CaseChatMessage`` list (oldest-first) into the lightweight
-    TEXT-turn dict shape ``build_contents_from_history`` consumes, appends a
-    compact "layers already present" model turn (built from
-    ``session_state.loaded_layers``), and bounds the replay to the last
+    persisted ``CaseChatMessage`` list into the lightweight TEXT-turn dict
+    shape ``build_contents_from_history`` consumes, appends a compact
+    "layers already present" model turn, and bounds the replay to the last
     ``REHYDRATE_HISTORY_CAP`` rows so a long Case cannot blow the context
-    window. Best-effort: any failure leaves the (empty) reset history intact
-    rather than breaking the Case open / turn.
+    window. Best-effort: any failure leaves the (empty) reset history
+    intact.
 
-    Guardrail (job-0245): ``session_state`` belongs to exactly ONE
-    ``case_id`` (the persisted store is keyed by Case). Switching Cases loads
-    THAT Case's ``session_state``, so this cannot reintroduce the in-memory
-    cross-case leak job-0245 fixed.
+    Guardrail: ``session_state`` belongs to exactly ONE ``case_id`` (the
+    persisted store is keyed by Case), so this cannot reintroduce a
+    cross-case leak.
     """
     try:
         # F20 / panel-fix: pass the Case AOI bbox so the layers-present note
@@ -6273,7 +5858,7 @@ def _rehydrate_case_history(
             session_state.loaded_layers,
             case_bbox=case_bbox,
         )
-        # job-0269: REBIND, never extend the entry-captured list — assigning a
+        # job-0269: REBIND, never extend the entry-captured list -- assigning a
         # fresh object keeps an in-flight turn's captured history untouched.
         state.chat_history = history
         if dropped:
@@ -6286,7 +5871,7 @@ def _rehydrate_case_history(
                 len(history),
                 REHYDRATE_HISTORY_CAP,
             )
-    except Exception:  # noqa: BLE001 — rehydration is best-effort
+    except Exception:  # noqa: BLE001 -- rehydration is best-effort
         logger.exception(
             "case-history-rehydrate failed session=%s case=%s",
             state.session_id,
@@ -6297,23 +5882,21 @@ def _rehydrate_case_history(
 async def _sync_case_context(
     websocket: ServerConnection, state: SessionState
 ) -> None:
-    """Catch this CONNECTION's in-memory context up to the session's active Case.
+    """Catch this CONNECTION's in-memory context up to the session's active
+    Case.
 
-    job-0259: ``active_case_id`` is session-scoped (see ``_SESSION_ACTIVE_CASE``)
-    but ``chat_history`` (the Gemini context) and the emitter's
-    ``loaded_layers`` accumulator are per-connection. When a ``case-command``
-    was handled on a SIBLING connection (the client's App.tsx socket) —
-    or when this is a fresh reconnect — this connection never ran the
-    ``_emit_case_open`` resets. Called at the top of every ``user-message``
-    dispatch: if the connection's context was last synced to a different
-    Case, apply the job-0245 replace-not-reconcile reset (clear LLM history)
-    and seed the emitter from the persisted Case so subsequent
-    ``add_loaded_layer`` dedup + ``_persist_case_loaded_layers`` writes
-    operate on the full persisted truth set.
+    chat_history and the emitter's loaded_layers accumulator are
+    per-connection state, so a case-command on a sibling connection (or a
+    fresh reconnect) leaves them out of sync with the session's active
+    Case. Called at the top of every user-message dispatch: on a Case
+    change, replace (not reconcile) chat_history and reseed the emitter
+    from the persisted Case, so add_loaded_layer dedup and
+    _persist_case_loaded_layers writes operate on the full persisted
+    truth set.
 
-    Best-effort: a Persistence failure logs and leaves the emitter seeded
-    empty — the merge in ``_persist_case_loaded_layers`` prevents an
-    unseeded accumulator from clobbering previously persisted layers.
+    Best-effort: a Persistence failure leaves the emitter seeded empty;
+    the merge in _persist_case_loaded_layers prevents an unseeded
+    accumulator from clobbering previously persisted layers.
     """
     current = state.active_case_id
     if state.case_context_synced_to == current:
@@ -6321,12 +5904,12 @@ async def _sync_case_context(
     state.case_context_synced_to = current
     # Replace-not-reconcile (job-0245, applied cross-connection): this
     # connection's LLM context belongs to whatever Case it was last driving.
-    # job-0269: REBIND, never clear() — an in-flight turn holds the old list
+    # job-0269: REBIND, never clear() -- an in-flight turn holds the old list
     # (captured at its stream entry) and must keep its own context intact.
     state.chat_history = []
     state.turn_count = 1  # count the in-flight turn that triggered the sync
     _ensure_emitter(websocket, state)
-    if state.emitter is None:  # pragma: no cover — _ensure_emitter always binds
+    if state.emitter is None:  # pragma: no cover -- _ensure_emitter always binds
         return
     if current is None:
         # JOB 2: no active Case -> no AOI anchor.
@@ -6355,26 +5938,21 @@ async def _sync_case_context(
             await state.emitter.reinline_vector_layers()
         except Exception:  # noqa: BLE001
             logger.warning("case-context-sync vector re-inline failed")
-        # job-0263: seed the URI registry from the persisted Case layers so
-        # handle-indirection works for layers produced in PRIOR sessions of
-        # this Case (the LLM history was just cleared; the registry is the
-        # only place the layer_id → uri association survives).
-        # F32: REPLACE, not additive-seed — this IS a case-switch point (this
-        # connection's context was synced to a DIFFERENT Case, or none). An
-        # additive seed would leak the previous Case's handles/URIs into this
-        # Case's resolution (a stale Case-A layer_id could satisfy a Case-B
-        # tool call, or out-rank the correct Case-B URI in a fuzzy match).
+        # Seed the URI registry from the persisted Case layers so
+        # handle-indirection works for layers produced in PRIOR sessions of this
+        # Case (the LLM history was just cleared; the registry is the only
+        # place the layer_id -> uri association survives). REPLACE, not
+        # additive-seed -- this IS a case-switch point; an additive seed would
+        # leak the previous Case's handles/URIs into this Case's resolution.
         # ADR 0014: also restores the Case's persisted L<n> short-handle map.
         await _seed_registry_for_case(
             state, current, session_state.loaded_layers
         )
-        # F17 (ux-batch-1 J8): rehydrate this connection's LLM context from the
-        # SAME persisted per-Case store. The ``state.chat_history = []`` above
-        # is the job-0259/0245 cross-connection clean-slate; refilling it from
-        # ``current``'s persisted messages (already fetched into
-        # ``session_state``; do NOT re-fetch) lets a sibling-connection /
-        # reconnect turn see prior work and stop recomputing. Per-Case store
-        # ⇒ case-correct; switching Cases loads THAT Case's history.
+        # F17: rehydrate this connection's LLM context from the SAME persisted
+        # per-Case store. state.chat_history = [] above is the cross-connection
+        # clean-slate; refilling it from current's persisted messages (already
+        # fetched; do NOT re-fetch) lets a sibling-connection / reconnect turn
+        # see prior work and stop recomputing. Per-Case store => case-correct.
         _rehydrate_case_history(state, session_state, current)
         logger.info(
             "case-context-sync session=%s case=%s layers=%d rehydrated=%d",
@@ -6383,7 +5961,7 @@ async def _sync_case_context(
             len(session_state.loaded_layers),
             len(state.chat_history),
         )
-    except Exception:  # noqa: BLE001 — best-effort, never break the turn
+    except Exception:  # noqa: BLE001 -- best-effort, never break the turn
         logger.exception(
             "case-context-sync failed session=%s case=%s",
             state.session_id,
@@ -6407,26 +5985,24 @@ async def _emit_case_open(
     """
     state.active_case_id = case_id
     # job-0259: this connection runs the full case-open reset below, so its
-    # context is (about to be) synced to ``case_id`` — record it so the next
+    # context is (about to be) synced to ``case_id`` -- record it so the next
     # ``user-message`` on THIS connection skips the redundant re-sync.
     # Sibling connections of the same session keep their stale marker and
     # catch up via ``_sync_case_context`` on their next dispatch.
     state.case_context_synced_to = case_id
-    # job-0245 (OQ-0245-CONTEXT-CARRYOVER-MISROUTE): a Case switch must reset
-    # the per-connection LLM conversation, not just the case state — round-3
-    # live testing proved every post-switch prompt re-routed to the PREVIOUS
-    # Case's composer (a Fort Myers flood ask and a numpy ask both got the
-    # Twin Falls groundwater gate) because build_contents_from_history kept
-    # feeding the old turns to Gemini. Clean slate per Case (the Wave 4.8 A.7
-    # replace-not-reconcile rule, applied server-side); the visible chat
-    # replay comes from the persisted Case history, not this list.
-    # job-0269: REBIND, never clear() — see _sync_case_context.
+    # A Case switch must reset the per-connection LLM conversation, not just
+    # the case state -- otherwise build_contents_from_history keeps feeding
+    # old turns to Gemini and prompts misroute to the previous Case's
+    # composer. Clean slate per Case (the replace-not-reconcile rule,
+    # applied server-side); the visible chat replay comes from the
+    # persisted Case history, not this list. REBIND, never clear() -- see
+    # _sync_case_context.
     state.chat_history = []
     state.turn_count = 0
     await _touch_session_record(state, case_id=case_id)  # D.6 heartbeat (M4)
     # job-CASE-AUTHORITY: persist the active-Case pointer on explicit
     # case-open/select so the cold-start cache (``last_active_case_id``) is warm
-    # for a reconnect after an EC2 restart — even for an older client that
+    # for a reconnect after an EC2 restart -- even for an older client that
     # later resumes with no ``case_id`` stamp.
     await _persist_session_active_case(state, case_id)
     p = get_persistence()
@@ -6458,19 +6034,18 @@ async def _emit_case_open(
     payload = CaseOpenEnvelopePayload(session_state=session_state)
     await websocket.send(_new_envelope("case-open", state.session_id, payload))
 
-    # job-0172 Part B: seed the emitter with the persisted loaded_layers
-    # so any subsequent ``session-state`` emission (e.g. from the next
-    # tool call inside this Case) carries them rather than overwriting
-    # with an empty list. The emitter's _loaded_layers is the truth set
-    # the next ``add_loaded_layer`` dedups against; without seeding, a
-    # republish of an existing layer would be treated as a fresh append.
+    # Seed the emitter with the persisted loaded_layers so any subsequent
+    # session-state emission carries them rather than overwriting with an
+    # empty list -- the emitter's _loaded_layers is the truth set the next
+    # add_loaded_layer dedups against; without seeding, a republish of an
+    # existing layer would be treated as a fresh append.
     _ensure_emitter(websocket, state)
-    # job-SOLVE-SURVIVE Requirement 2: opening THIS Case is the user returning
-    # to where a long solve was launched. If a turn keyed to this Case is still
-    # running (detached on a prior socket close), rebind its emitter sink onto
-    # the freshly-opened socket so the in-flight solve's progress + its terminal
-    # session-state (the published flood layer) reach the live connection.
-    # Keyed to ``case_id`` so a concurrent solve in another Case is untouched.
+    # Opening THIS Case is the user returning to where a long solve was
+    # launched. If a turn keyed to this Case is still running (detached on a
+    # prior socket close), rebind its emitter sink onto the freshly-opened
+    # socket so the in-flight solve's progress + terminal session-state
+    # reach the live connection. Keyed to case_id so a concurrent solve in
+    # another Case is untouched.
     rebound = _rebind_live_turns(
         state.session_id, state.emitter, only_turn_key=case_id
     )
@@ -6484,67 +6059,57 @@ async def _emit_case_open(
     if state.emitter is not None:
         state.emitter.reset_loaded_layers(session_state.loaded_layers)
         # F32 (live-reported): seed the URI registry from the SAME persisted
-        # layers the emitter/build_layers_present_note advertise. This was
-        # the missing half of the explicit case-open path — a fresh
-        # connection (e.g. a QGIS dock reconnect) that opens an EXISTING Case
-        # via case-command(select) reaches THIS function directly, never
-        # _sync_case_context / _replay_active_case_layers (which already
-        # seeded the registry for their own paths). The registry is
-        # session-scoped in-memory state, so on a genuinely fresh connection
-        # it starts empty regardless of how many layers the Case has
-        # persisted. Without this seed, the per-turn [Case state] note (built
-        # from these SAME loaded_layers) advertised handles the registry
-        # could not resolve — a tool call using an advertised handle got the
-        # branch-4 "does not match any layer this session produced" error,
-        # which is FALSE (the Case has the layer; only this connection's
-        # registry didn't). REPLACE (not additive) so a Case switch on this
-        # connection never leaks a prior Case's handles (F32 part 2).
-        # ADR 0014: also restores the Case's persisted L<n> short-handle map.
+        # layers the emitter/build_layers_present_note advertise. This is the
+        # missing half of the explicit case-open path -- a fresh connection
+        # (e.g. a QGIS dock reconnect) that opens an EXISTING Case via
+        # case-command(select) reaches THIS function directly, never
+        # _sync_case_context / _replay_active_case_layers. The registry is
+        # session-scoped in-memory state, so on a genuinely fresh connection it
+        # starts empty regardless of how many layers the Case has persisted.
+        # Without this seed, the per-turn [Case state] note advertised handles
+        # the registry could not resolve. REPLACE (not additive) so a Case
+        # switch on this connection never leaks a prior Case's handles. ADR
+        # 0014: also restores the Case's persisted L<n> short-handle map.
         await _seed_registry_for_case(
             state, case_id, session_state.loaded_layers
         )
-        # sprint-14-aws (job-0290d): persisted VECTOR layers carry no inline
-        # GeoJSON (the side-table is in-memory only), so the case-open payload
-        # above rehydrated entries the browser cannot render (it never fetches
-        # object-store uris directly — job-0175). Re-inline from the artifact
-        # and emit one follow-up session-state through the proven merge path;
-        # the client lifts layers from session-state, so vectors repaint.
+        # Persisted VECTOR layers carry no inline GeoJSON (the side-table is
+        # in-memory only), so the case-open payload above rehydrated entries the
+        # browser cannot render. Re-inline from the artifact and emit one
+        # follow-up session-state through the proven merge path so vectors
+        # repaint.
         try:
             _reinlined = await state.emitter.reinline_vector_layers()
             if _reinlined:
                 await state.emitter.emit_session_state()
-        except Exception:  # noqa: BLE001 — rehydration is best-effort
+        except Exception:  # noqa: BLE001 -- rehydration is best-effort
             logger.exception(
                 "case-open vector re-inline failed case=%s", case_id
             )
 
-    # F17 (ux-batch-1 J8): rehydrate the LLM conversation from THIS Case's
-    # persisted messages so a follow-up turn in a reopened Case sees prior
-    # work and stops recomputing (e.g. a hillshade ask in the Fort Myers flood
-    # Case no longer re-runs the whole flood). The ``state.chat_history = []``
-    # reset above is the job-0245 cross-case clean-slate; we refill it from the
-    # PER-CASE persisted store (``session_state`` — already loaded; do NOT
-    # re-fetch). The store is keyed by Case, so this is inherently case-correct
-    # and cannot reintroduce the job-0245 in-memory cross-case leak.
+    # F17: rehydrate the LLM conversation from THIS Case's persisted
+    # messages so a follow-up turn in a reopened Case sees prior work and
+    # stops recomputing. state.chat_history = [] above is the cross-case
+    # clean-slate; refill from the PER-CASE persisted store (session_state
+    # -- already loaded; do NOT re-fetch), which is inherently case-correct.
     _rehydrate_case_history(state, session_state, case_id)
 
-    # cold-raster fix: a pure case-OPEN today writes NO cold snapshot - only the
-    # 4 mutation triggers (create/rename/layer-publish/turn-close) do - so a
-    # freshly-opened or never-recently-mutated Case has a stale-or-missing
-    # ``case-views/{case_id}.json`` until the user takes a mutating action, and
-    # the box-asleep cold view (which fetches that presigned snapshot) cannot
-    # paint its rasters until the agent wakes. Materialize the snapshot (+ thin
-    # manifest) HERE on open so the cold face is warm immediately.
+    # cold-raster fix: a pure case-OPEN writes NO cold snapshot -- only the
+    # 4 mutation triggers (create/rename/layer-publish/turn-close) do -- so
+    # a freshly-opened or never-recently-mutated Case has a
+    # stale-or-missing case-views/{case_id}.json until a mutating action,
+    # and the box-asleep cold view cannot paint its rasters until the agent
+    # wakes. Materialize the snapshot (+ thin manifest) HERE on open so the
+    # cold face is warm immediately.
     #
-    # FIRE-AND-FORGET (mirror the turn-close site): create_task so the Dynamo+S3
-    # round-trips NEVER sit on the open -> rehydrate path (no added latency), and
-    # both persisters swallow their own errors + return without raising (best
-    # effort - see ``_persist_case_view_snapshot`` / ``_persist_case_manifest``),
-    # so the detached task can never break the open. The snapshot sources inline
-    # vectors from the emitter only when ``target_case == open_case`` (guarded
-    # inline at ~8543), and this Case is the one we just opened, so sourcing the
-    # open Case is correct. A reconnect-rebind that re-runs this open just lands
-    # a second identical last-write-wins snapshot, which is harmless.
+    # FIRE-AND-FORGET (mirrors the turn-close site): create_task so the
+    # Dynamo+S3 round-trips never sit on the open -> rehydrate path, and
+    # both persisters swallow their own errors (best-effort), so the
+    # detached task can never break the open. The snapshot sources inline
+    # vectors from the emitter only when target_case == open_case, and this
+    # Case is the one we just opened, so sourcing it is correct. A
+    # reconnect-rebind that re-runs this open just lands a second identical
+    # last-write-wins snapshot, which is harmless.
     _open_snap = asyncio.create_task(
         _persist_case_view_snapshot(state, case_id=case_id)
     )
@@ -6578,17 +6143,17 @@ async def _handle_case_command(
 
     Commands:
 
-    - ``create`` — generate a new ``CaseSummary``, persist via
+    - ``create`` -- generate a new ``CaseSummary``, persist via
       ``Persistence.upsert_case``, set as active, emit ``case-open`` with
       the fresh (empty) session state, then refresh ``case-list``.
-    - ``select`` — load the persisted ``CaseSessionState`` and emit
+    - ``select`` -- load the persisted ``CaseSessionState`` and emit
       ``case-open`` with the full rehydration (chat history, loaded
-      layers, pipeline history — per FR-MP-6 chat-replay default).
-    - ``rename`` — update ``CaseSummary.title``, persist, emit
+      layers, pipeline history -- per FR-MP-6 chat-replay default).
+    - ``rename`` -- update ``CaseSummary.title``, persist, emit
       ``case-list`` updated.
-    - ``archive`` — soft-archive via ``Persistence.archive_case``, emit
+    - ``archive`` -- soft-archive via ``Persistence.archive_case``, emit
       ``case-list`` updated.
-    - ``delete`` — soft-delete via ``Persistence.delete_case``, emit
+    - ``delete`` -- soft-delete via ``Persistence.delete_case``, emit
       ``case-list`` updated. Memory rule: the web UI confirms with the
       user BEFORE firing this command; the server does not double-confirm.
 
@@ -6615,13 +6180,14 @@ async def _handle_case_command(
         title = (cmd.args or {}).get("title") or "Untitled Case"
         if not isinstance(title, str) or not title.strip():
             title = "Untitled Case"
-        # #170 AOI-first: an optional ``args.bbox`` lets the user pin the AOI
-        # extent BEFORE the first prompt (draw-on-map / numeric coords). Coerce
-        # via the shared validator so a None / wrong-length / non-finite value
-        # is dropped silently (current no-bbox behaviour) rather than crashing.
-        # When present it persists on CaseSummary.bbox (-> snapshot/manifest) and
-        # seeds state.case_bbox below so the FIRST turn's _turn_case_bbox returns
-        # the user's extent and the LLM is told to REUSE it (no re-geocode).
+        # AOI-first: an optional ``args.bbox`` lets the user pin the AOI
+        # extent BEFORE the first prompt (draw-on-map / numeric coords).
+        # Coerced via the shared validator so a None / wrong-length /
+        # non-finite value is dropped silently rather than crashing. When
+        # present it persists on ``CaseSummary.bbox`` and seeds
+        # ``state.case_bbox`` so the FIRST turn's ``_turn_case_bbox``
+        # returns the user's extent and the LLM is told to REUSE it (no
+        # re-geocode).
         create_bbox = _coerce_bbox4((cmd.args or {}).get("bbox"))
         now = now_utc()
         case = CaseSummary(
@@ -6633,17 +6199,16 @@ async def _handle_case_command(
             bbox=list(create_bbox) if create_bbox is not None else None,
         )
         try:
-            # job-0252 (OQ-0115-CASE-USER-LINK): stamp the creator as owner so
-            # the Case is visible to them via list_cases_for_user (the
-            # $exists:false leak clause is gone). authenticated_user_id is set
-            # by the auth handshake (real Firebase UID or the sticky-anonymous
+            # Stamp the creator as owner so the Case is visible to them via
+            # ``list_cases_for_user``. ``authenticated_user_id`` is set by
+            # the auth handshake (real Firebase UID or the sticky-anonymous
             # ULID in dev); None only on the M1 unbound-Persistence path.
             #
-            # #147 ephemeral-cases: an ANONYMOUS (pre-Auth) session's Case is
-            # ephemeral -> a numeric TTL ``expires_at`` is stamped so DynamoDB
-            # reaps abandoned scratch Cases. An authed session (is_anonymous
-            # False) passes ephemeral=False -> no ``expires_at`` -> durable
-            # forever (byte-identical to the prior behaviour).
+            # An ANONYMOUS (pre-Auth) session's Case is ephemeral -> a
+            # numeric TTL ``expires_at`` is stamped so DynamoDB reaps
+            # abandoned scratch Cases. An authed session (``is_anonymous``
+            # False) passes ``ephemeral=False`` -> no ``expires_at`` ->
+            # durable forever.
             await p.upsert_case(
                 case,
                 owner_user_id=state.authenticated_user_id,
@@ -6659,24 +6224,22 @@ async def _handle_case_command(
             )
             return
         state.active_case_id = new_case_id
-        # Stale-AOI fix: a fresh Case must NOT inherit the previous Case's AOI
-        # anchor. Reset the in-session bbox to None BEFORE the conditional seed
-        # (mirrors the select/deselect handlers) so a bbox-less create starts
-        # with no anchor -> _turn_case_bbox re-geocodes from the place name in
-        # the first prompt instead of reusing the prior Case's extent. Without
-        # this, creating a fresh Case right after (e.g.) a Chattanooga flood
-        # Case left state.case_bbox pointing at Chattanooga, so a "Twin Falls,
-        # Idaho" prompt ran in Tennessee.
+        # A fresh Case must NOT inherit the previous Case's AOI anchor.
+        # Reset the in-session bbox to None BEFORE the conditional seed
+        # (mirrors the select/deselect handlers) so a bbox-less create
+        # starts with no anchor -> ``_turn_case_bbox`` re-geocodes from the
+        # place name in the first prompt instead of reusing the prior
+        # Case's extent.
         state.case_bbox = None
         # #170 AOI-first: seed the in-session AOI anchor so the FIRST turn's
         # _turn_case_bbox returns the user's pre-set extent (mirrors
         # _pin_case_aoi_from_solve). Absent/invalid bbox => leave as-is (None).
         if create_bbox is not None:
             state.case_bbox = list(create_bbox)
-        # job-0259: see _emit_case_open — this connection is now synced.
+        # job-0259: see _emit_case_open -- this connection is now synced.
         state.case_context_synced_to = new_case_id
         # job-0245: fresh Case = fresh LLM context (see _emit_case_open note).
-        # job-0269: REBIND, never clear() — see _sync_case_context.
+        # job-0269: REBIND, never clear() -- see _sync_case_context.
         state.chat_history = []
         state.turn_count = 0
         await _touch_session_record(state, case_id=new_case_id)  # D.6 (M4)
@@ -6694,16 +6257,16 @@ async def _handle_case_command(
         _ensure_emitter(websocket, state)
         if state.emitter is not None:
             state.emitter.reset_loaded_layers([])
-        # F32: a fresh Case starts with no resolvable handles either — clear
+        # F32: a fresh Case starts with no resolvable handles either -- clear
         # any leftover registrations from whatever Case this connection last
         # drove (mirrors the emitter flush immediately above).
         get_uri_registry(state.session_id).clear()
         # Lane A1: materialize the (empty) view snapshot for the fresh Case so a
-        # view-without-agent link resolves immediately after create — before any
+        # view-without-agent link resolves immediately after create -- before any
         # turn lands. Emitter was just flushed, so no inline vectors to merge.
         await _persist_case_view_snapshot(state, case_id=new_case_id)
         # #165 dual-write: write the thin manifest ALONGSIDE the snapshot so the
-        # data-island cold path lists the fresh Case immediately. Best-effort —
+        # data-island cold path lists the fresh Case immediately. Best-effort --
         # a manifest failure never breaks the snapshot path (own try/except).
         await _persist_case_manifest(state, case_id=new_case_id)
         await _emit_case_list(websocket, state, force=True)
@@ -6728,22 +6291,21 @@ async def _handle_case_command(
         return
 
     if command == "deselect":
-        # job-0269: the client navigated OUT of the active Case to the Cases
-        # root. Without this command the session-scoped active Case silently
-        # kept pointing at the last-opened Case: prompts sent from the root
-        # view skipped auto-create and dispatched INTO the stale Case (live
-        # 2026-06-10: a terrain prompt landed in the flood Case), and
-        # re-selecting that same Case looked like a no-op. Clears the binding
-        # + this connection's LLM context so the next root prompt auto-creates
-        # a fresh Case (job-0262). Does NOT touch any in-flight turn — its
-        # persistence follows the job-0268 turn pin, not this binding.
+        # The client navigated OUT of the active Case to the Cases root.
+        # Without this command the session-scoped active Case silently kept
+        # pointing at the last-opened Case: prompts sent from the root view
+        # skipped auto-create and dispatched INTO the stale Case, and
+        # re-selecting that same Case looked like a no-op. Clears the
+        # binding + this connection's LLM context so the next root prompt
+        # auto-creates a fresh Case. Does NOT touch any in-flight turn -- its
+        # persistence follows the turn pin, not this binding.
         prev = state.active_case_id
         state.active_case_id = None
         state.case_context_synced_to = None
         # JOB 2: clear the cached Case AOI so a root prompt (which auto-creates
         # a FRESH Case) does not reuse the just-exited Case's extent.
         state.case_bbox = None
-        # job-0269: REBIND, never clear() — see _sync_case_context.
+        # job-0269: REBIND, never clear() -- see _sync_case_context.
         state.chat_history = []
         state.turn_count = 0
         if state.emitter is not None:
@@ -6820,16 +6382,17 @@ async def _handle_case_command(
         return
 
     if command == "set-bbox":
-        # Persistent per-case AOI (NATE 2026-07-19, cloud parity): the plugin's
-        # draw/edit tool sends the user's rectangle here so CaseSummary.bbox is
-        # durably the user's chosen extent - not None until a tool happens to
-        # pin it. The agent already injects state.case_bbox into EVERY turn
-        # (_turn_case_bbox -> build_layers_present_note) and snaps fetch bbox
-        # params to it, so a set case bbox is exactly what stops the model
-        # re-deriving/geocoding the area every turn. Clones the rename branch:
-        # write the field, re-snapshot the view + thin manifest, re-emit the
-        # case-list; ALSO update state.case_bbox when this is the OPEN case so
-        # the very next turn's in-prompt AOI line is correct with no reopen.
+        # Persistent per-case AOI: the plugin's draw/edit tool sends the
+        # user's rectangle here so ``CaseSummary.bbox`` is durably the
+        # user's chosen extent -- not None until a tool happens to pin it.
+        # The agent already injects ``state.case_bbox`` into EVERY turn
+        # (``_turn_case_bbox`` -> ``build_layers_present_note``) and snaps
+        # fetch bbox params to it, so a set case bbox is exactly what stops
+        # the model re-deriving/geocoding the area every turn. Clones the
+        # rename branch: write the field, re-snapshot the view + thin
+        # manifest, re-emit the case-list; ALSO update ``state.case_bbox``
+        # when this is the OPEN case so the very next turn's in-prompt AOI
+        # line is correct with no reopen.
         if not cmd.case_id:
             await _send_error(
                 websocket,
@@ -6838,14 +6401,13 @@ async def _handle_case_command(
                 "case-command(set-bbox) requires case_id",
             )
             return
-        # qgis-ux-batch item D (2026-07-19): the "Clear AOI" control sends
-        # set-bbox with an EXPLICIT null/empty bbox to RESET the case AOI. An
-        # explicitly-present-but-empty ``bbox`` (None or []) = CLEAR
-        # (CaseSummary.bbox -> None, state.case_bbox -> None); a MISSING bbox key
-        # or a non-empty-but-malformed bbox stays the honest error below. This
-        # is what lets the plugin's Clear-AOI actually stop the agent anchoring
-        # on the old extent every turn (mirrors the web "reset AOI on Case
-        # exit" behaviour, for an explicit user clear).
+        # The "Clear AOI" control sends set-bbox with an EXPLICIT null/empty
+        # bbox to RESET the case AOI. An explicitly-present-but-empty
+        # ``bbox`` (None or []) = CLEAR (``CaseSummary.bbox`` -> None,
+        # ``state.case_bbox`` -> None); a MISSING bbox key or a
+        # non-empty-but-malformed bbox stays the honest error below. This
+        # lets the plugin's Clear-AOI actually stop the agent anchoring on
+        # the old extent every turn.
         raw_args = cmd.args or {}
         has_bbox_key = "bbox" in raw_args
         raw_bbox = raw_args.get("bbox")
@@ -6948,7 +6510,7 @@ async def _handle_case_command(
                 f"case delete failed: {exc}",
             )
             return
-        # If the deleted Case was the active one, clear the context — any
+        # If the deleted Case was the active one, clear the context -- any
         # subsequent publish will fall through to the single-tenant default
         # rather than mutate a soft-deleted ``.qgs``.
         if state.active_case_id == cmd.case_id:
@@ -6964,7 +6526,7 @@ async def _handle_case_command(
         )
         return
 
-    # Closed enum guard — pydantic should have rejected before we got here.
+    # Closed enum guard -- pydantic should have rejected before we got here.
     await _send_error(
         websocket,
         state.session_id,
@@ -6974,7 +6536,7 @@ async def _handle_case_command(
 
 
 #: job-0260: Cases already auto-named this process (avoid a get_case read
-#: on every user turn — only the first turn per Case checks the title).
+#: on every user turn -- only the first turn per Case checks the title).
 _AUTONAMED_CASES: set[str] = set()
 
 _TITLE_STOPWORDS = frozenset(
@@ -6984,10 +6546,10 @@ _TITLE_STOPWORDS = frozenset(
 
 
 def _derive_case_title(prompt: str) -> str | None:
-    """Heuristic 3-6 word Case title from the first user prompt (job-0260).
+    """Heuristic 3-6 word Case title from the first user prompt.
 
-    v0.1 of the deferred auto-case-name feature: significant tokens,
-    title-cased, capped at ~48 chars. Returns None for degenerate prompts.
+    Significant tokens, title-cased, capped at ~48 chars. Returns None for
+    degenerate prompts.
     """
     words = [
         w.strip(".,!?:;()[]\"'")
@@ -7003,10 +6565,10 @@ def _derive_case_title(prompt: str) -> str | None:
 
 
 async def _maybe_autoname_case(state: SessionState, prompt: str) -> bool:
-    """Name an 'Untitled Case' from its first user prompt (job-0260).
+    """Name an 'Untitled Case' from its first user prompt.
 
-    Demo finding: accumulated untitled Cases are indistinguishable in the
-    left rail. Best-effort, once per Case per process; never raises.
+    Accumulated untitled Cases are otherwise indistinguishable in the left
+    rail. Best-effort, once per Case per process; never raises.
     """
     case_id = state.active_case_id
     if not case_id or case_id in _AUTONAMED_CASES:
@@ -7038,7 +6600,7 @@ async def _maybe_autoname_case(state: SessionState, prompt: str) -> bool:
         _AUTONAMED_CASES.add(case_id)  # mark ONLY after the name actually landed
         logger.info("case auto-named case=%s title=%r", case_id, title)
         return True
-    except Exception:  # noqa: BLE001 — naming is a nicety; TRANSIENT -> unmarked,
+    except Exception:  # noqa: BLE001 -- naming is a nicety; TRANSIENT -> unmarked,
         # so a persistence hiccup does not permanently forfeit the name.
         logger.debug("case auto-name failed case=%s", case_id, exc_info=True)
     return False
@@ -7051,23 +6613,19 @@ async def _auto_create_case_from_root(
 ) -> str | None:
     """Create + activate a Case for a chat prompt arriving with NO active Case.
 
-    job-0262 (AUTO-CREATE CASE FROM ROOT): live demo showed prompts sent from
-    the Cases root ran stateless — no Case, no Case view / layer panel, and
-    orphaned results (chat turns + published layers attributed nowhere).
     When a non-directive ``user-message`` arrives and the session has no
     active Case, mint one server-side BEFORE the turn dispatches so
     ``_persist_chat_turn`` + ``_persist_case_loaded_layers`` +
     ``ensure_case_qgs`` + the ``publish_layer`` case_id injection all land in
     it. The Case is named from the prompt via ``_derive_case_title``
-    (job-0260 heuristic; "Untitled Case" fallback for degenerate prompts).
+    ("Untitled Case" fallback for degenerate prompts).
 
     Deliberately NOT the ``case-command(create)`` reset path: the in-flight
     message IS the Case's first turn, so the per-connection LLM context
-    (``chat_history``) and the FR-FR-3 ``turn_count`` are left untouched
-    (v0.1 of the deferred auto-case-name design, simplified).
+    (``chat_history``) and the FR-FR-3 ``turn_count`` are left untouched.
 
     Returns the new ``case_id``, or ``None`` when Persistence is unbound or
-    the upsert fails — the M1 stateless path keeps working either way.
+    the upsert fails -- the M1 stateless path keeps working either way.
     """
     p = get_persistence()
     if p is None:
@@ -7082,32 +6640,32 @@ async def _auto_create_case_from_root(
         status="active",
     )
     try:
-        # job-0252 (OQ-0115-CASE-USER-LINK): stamp the creator as owner so the
-        # auto-created Case is visible to them via list_cases_for_user.
+        # Stamp the creator as owner so the auto-created Case is visible to
+        # them via ``list_cases_for_user``.
         #
-        # #147 ephemeral-cases: an anonymous root prompt mints an ephemeral
-        # Case (numeric TTL ``expires_at`` so abandoned scratch work is reaped);
-        # an authed session passes ephemeral=False -> durable forever.
+        # An anonymous root prompt mints an ephemeral Case (numeric TTL
+        # ``expires_at`` so abandoned scratch work is reaped); an authed
+        # session passes ``ephemeral=False`` -> durable forever.
         await p.upsert_case(
             case,
             owner_user_id=state.authenticated_user_id,
             ephemeral=state.is_anonymous,
         )
-    except Exception:  # noqa: BLE001 — fall back to the stateless path
+    except Exception:  # noqa: BLE001 -- fall back to the stateless path
         logger.exception(
             "auto-create-case upsert failed session=%s", state.session_id
         )
         return None
     state.active_case_id = case.case_id
     # This connection's in-memory context IS the new Case's context (the
-    # triggering message is its first turn) — mark synced so the next
+    # triggering message is its first turn) -- mark synced so the next
     # dispatch skips the _sync_case_context reset.
     state.case_context_synced_to = case.case_id
-    # The creating prompt already named the Case — skip the job-0260
+    # The creating prompt already named the Case -- skip the job-0260
     # first-turn rename probe (it would be a wasted get_case round-trip).
     _AUTONAMED_CASES.add(case.case_id)
     await _touch_session_record(state, case_id=case.case_id)  # D.6 heartbeat
-    # Fresh Case starts with zero layers — flush the per-connection
+    # Fresh Case starts with zero layers -- flush the per-connection
     # accumulator (replace-not-reconcile server-side; mirrors
     # ``case-command(create)``).
     _ensure_emitter(websocket, state)
@@ -7127,32 +6685,32 @@ async def _emit_auto_case_open(
     state: SessionState,
     case_id: str,
 ) -> None:
-    """Emit ``case-open`` + ``case-list`` for an auto-created Case (job-0262).
+    """Emit ``case-open`` + ``case-list`` for an auto-created Case.
 
     Distinct from ``_emit_case_open``: NO context reset (no ``chat_history``
-    clear, no ``turn_count`` reset, no emitter re-seed) — the in-flight user
+    clear, no ``turn_count`` reset, no emitter re-seed) -- the in-flight user
     message IS the first turn of this Case and
     ``_auto_create_case_from_root`` already established the connection
     context. Must be called AFTER the user turn is persisted so the
     rehydration payload carries it: Chat.tsx's case-open handler is
-    replace-not-reconcile (it flushes the local message buffer and re-renders
-    from ``session_state.chat_history``), so emitting before the persist
-    would blank the just-typed message bubble. The client's ws.ts hub
-    fans ``case-open`` out to App.tsx's socket (SESSION_SCOPED_TYPES), where
-    ``useCases.onCaseOpen`` sets ``activeCaseId`` and the left rail flips
-    from the Cases root into the Case view.
+    replace-not-reconcile (it flushes the local message buffer and
+    re-renders from ``session_state.chat_history``), so emitting before the
+    persist would blank the just-typed message bubble. The client's ws.ts
+    hub fans ``case-open`` out to App.tsx's socket (SESSION_SCOPED_TYPES),
+    where ``useCases.onCaseOpen`` sets ``activeCaseId`` and the left rail
+    flips from the Cases root into the Case view.
 
-    NATE 2026-06-26: when rehydration fails we no longer SKIP case-open. A
-    skipped (or ``session_state=None``) case-open leaves the client's
-    activeCaseId unchanged, so the client never leaves the Cases root — the
-    turn then dispatches with the new case bound and cards flow stamped with a
-    case_id the client never opened, so nothing renders until a reload. On the
-    rehydration-failure branch we now emit a MINIMAL non-null case-open whose
-    ``session_state.case`` is the just-upserted ``CaseSummary`` (re-fetched, or
-    a bare ``CaseSummary(case_id=...)`` if even that read fails).
-    ``CaseSessionState`` only requires ``case`` (other fields default empty),
-    so this guarantees the client flips out of the Cases root even when the
-    richer rehydration momentarily fails.
+    A skipped (or ``session_state=None``) case-open on a rehydration
+    failure would leave the client's ``activeCaseId`` unchanged -- stuck on
+    the Cases root while the turn dispatches with the new case bound, so
+    cards flow stamped with a ``case_id`` the client never opened and
+    nothing renders until a reload. The rehydration-failure branch instead
+    emits a MINIMAL non-null case-open whose ``session_state.case`` is the
+    just-upserted ``CaseSummary`` (re-fetched, or a bare
+    ``CaseSummary(case_id=...)`` if even that read fails).
+    ``CaseSessionState`` only requires ``case`` (other fields default
+    empty), so this guarantees the client flips out of the Cases root even
+    when the richer rehydration momentarily fails.
     """
     p = get_persistence()
     if p is not None:
@@ -7163,7 +6721,7 @@ async def _emit_auto_case_open(
             await websocket.send(
                 _new_envelope("case-open", state.session_id, payload)
             )
-        except Exception:  # noqa: BLE001 — emission is best-effort
+        except Exception:  # noqa: BLE001 -- emission is best-effort
             logger.exception(
                 "auto-case-open emission failed session=%s case=%s",
                 state.session_id,
@@ -7173,7 +6731,7 @@ async def _emit_auto_case_open(
             # client still leaves the Cases root (never a null session_state).
             try:
                 case = await p.get_case(case_id)
-            except Exception:  # noqa: BLE001 — re-fetch is best-effort
+            except Exception:  # noqa: BLE001 -- re-fetch is best-effort
                 case = None
             if case is None:
                 # Last-resort minimal summary so session_state.case is non-null.
@@ -7192,7 +6750,7 @@ async def _emit_auto_case_open(
                 await websocket.send(
                     _new_envelope("case-open", state.session_id, fallback)
                 )
-            except Exception:  # noqa: BLE001 — fallback emit is best-effort
+            except Exception:  # noqa: BLE001 -- fallback emit is best-effort
                 logger.exception(
                     "auto-case-open minimal fallback failed session=%s case=%s",
                     state.session_id,
@@ -7208,40 +6766,39 @@ async def _prepare_user_turn(
     *,
     client_case_id: str | None = None,
 ) -> tuple[str, dict] | None:
-    """Pre-dispatch sequence for one ``user-message`` (job-0262 extraction).
+    """Pre-dispatch sequence for one ``user-message``.
 
-    Runs, in order, BEFORE the turn task is created (so the dispatched turn —
-    Gemini stream or ``/invoke`` directive — observes the final Case
+    Runs, in order, BEFORE the turn task is created (so the dispatched turn --
+    Gemini stream or ``/invoke`` directive -- observes the final Case
     context):
 
-    0. job-CASE-AUTHORITY: re-bind the server's active-Case pointer to the
-       client's stamped ``client_case_id`` (the Case the user is actually in)
-       when it differs from the stale server pointer — BEFORE the sync, the
-       auto-create check, and the turn pin. So e.g. a 'resize bbox' turn runs
-       in the client's current Case, never a Case the server pointer drifted to
-       (mid-reconnect select dropped / restart wiped the cache). A message with
-       NO ``case_id`` (older client) keeps the prior behavior.
-    1. ``_sync_case_context`` — catch this connection up to the (now corrected)
-       session active Case (job-0259 sibling-connection sync).
-    2. job-0262 auto-create: a non-directive prompt with NO active Case
-       mints + activates a prompt-named Case (see
-       ``_auto_create_case_from_root``). ``/invoke`` debug directives stay on
-       the stateless path.
-    3. ``_persist_chat_turn`` — the user turn lands in the (possibly brand
+    0. Re-bind the server's active-Case pointer to the client's stamped
+       ``client_case_id`` (the Case the user is actually in) when it differs
+       from the stale server pointer -- BEFORE the sync, the auto-create
+       check, and the turn pin. So e.g. a 'resize bbox' turn runs in the
+       client's current Case, never a Case the server pointer drifted to
+       (mid-reconnect select dropped / restart wiped the cache). A message
+       with NO ``case_id`` (older client) keeps the prior behavior.
+    1. ``_sync_case_context`` -- catch this connection up to the (now
+       corrected) session active Case.
+    2. Auto-create: a non-directive prompt with NO active Case mints +
+       activates a prompt-named Case (see ``_auto_create_case_from_root``).
+       ``/invoke`` debug directives stay on the stateless path.
+    3. ``_persist_chat_turn`` -- the user turn lands in the (possibly brand
        new) active Case. Best-effort; no Case / no Persistence = no-op.
     4. For an auto-created Case: emit ``case-open`` + ``case-list`` so the
        client switches from the Cases root into the Case view (after the
-       persist — see ``_emit_auto_case_open``).
+       persist -- see ``_emit_auto_case_open``).
 
     Returns the parsed ``/invoke`` directive (``(tool_name, params)``) or
-    ``None`` for the Gemini path — the caller branches on it.
+    ``None`` for the Gemini path -- the caller branches on it.
     """
-    # job-CASE-AUTHORITY (step 0): the client's stamped Case is the authority
-    # for this turn. Re-bind the session-scoped pointer to it before any
-    # sync/auto-create/pin reads ``active_case_id``, so the whole turn (LLM
-    # context sync, AOI bbox, every persistence write) follows the Case the
-    # user is actually viewing — not a server pointer that drifted while the
-    # socket was reconnecting. Invalidate this connection's sync marker so
+    # The client's stamped Case is the authority for this turn: re-bind the
+    # session-scoped pointer to it before any sync/auto-create/pin reads
+    # ``active_case_id``, so the whole turn (LLM context sync, AOI bbox,
+    # every persistence write) follows the Case the user is actually
+    # viewing -- not a server pointer that drifted while the socket was
+    # reconnecting. Invalidate this connection's sync marker so
     # ``_sync_case_context`` below reloads the corrected Case's LLM history +
     # layer accumulator, and persist the pointer so it survives a restart.
     if client_case_id is not None and client_case_id != state.active_case_id:
@@ -7261,7 +6818,7 @@ async def _prepare_user_turn(
         auto_case_id = await _auto_create_case_from_root(
             websocket, state, text
         )
-    # job-0268: pin the turn's Case binding NOW — after the auto-create
+    # job-0268: pin the turn's Case binding NOW -- after the auto-create
     # hand-off, before the first write. Everything this turn persists
     # (user row, tool cards, narration, layers, charts, .qgs routing)
     # follows this pin; a mid-stream case switch must not re-aim it.
@@ -7273,32 +6830,28 @@ async def _prepare_user_turn(
 
 
 def _turn_case_id(state: SessionState) -> str | None:
-    """The Case the current turn is bound to (job-0268).
+    """The Case the current turn is bound to.
 
     Prefers the pin set by ``_prepare_user_turn`` at dispatch time; falls
     back to the live ``active_case_id`` for callers outside a prepared turn
-    (direct tool invocations in tests, legacy paths). The fallback IS the
-    pre-fix behavior — every persistence site read ``active_case_id`` at
-    WRITE time, so a ``case-command(select)`` arriving mid-stream re-aimed
-    in-flight writes at the newly selected Case (job-0267 verifier).
+    (direct tool invocations in tests, legacy paths). Without the pin, every
+    persistence site reading ``active_case_id`` at WRITE time lets a
+    ``case-command(select)`` arriving mid-stream re-aim in-flight writes at
+    the newly selected Case.
     """
     return state.current_turn_case_id or state.active_case_id
 
 
 def _turn_case_bbox(state: SessionState) -> Any:
-    """The current turn's Case AOI bbox (job-0326), or None.
+    """The current turn's Case AOI bbox, or None.
 
     Used by the expensive-simulation reuse guard AND the fetch reuse guard as
     the AOI anchor when a request / persistence-seeded layer has no recorded
     bbox: a bbox-keyed re-run (or a bare follow-up fetch) in a single-result
     Case whose request bbox equals the Case AOI is a clear match.
 
-    JOB 2 (active-AOI repair): reads ``state.case_bbox`` — the durable cache of
-    the active Case's persisted ``CaseSummary.bbox`` (set on case select / sync).
-    The pre-fix body read ``getattr(state, "active_case", None)``, an attribute
-    that NEVER existed on ``SessionState`` (only ``active_case_id`` does), so it
-    ALWAYS returned None — the agent had no active-AOI signal and re-geocoded /
-    re-fetched, starving both reuse short-circuits of an AOI anchor.
+    Reads ``state.case_bbox`` -- the durable cache of the active Case's
+    persisted ``CaseSummary.bbox`` (set on case select / sync).
     """
     case_id = _turn_case_id(state)
     if not case_id:
@@ -7309,15 +6862,16 @@ def _turn_case_bbox(state: SessionState) -> Any:
 def _cache_case_bbox_from_session_state(
     state: SessionState, session_state: Any
 ) -> None:
-    """Cache the active Case's AOI bbox onto ``state.case_bbox`` (JOB 2).
+    """Cache the active Case's AOI bbox onto ``state.case_bbox``.
 
-    Reads ``session_state.case.bbox`` — the persisted ``CaseSummary.bbox`` that
-    the layers-present note already consumes — and stores it so
-    ``_turn_case_bbox`` has a durable active-AOI anchor on every live turn (the
-    reuse short-circuits + the per-turn [Case state] note both read it). Pydantic
-    BBox models serialize to a plain list; we coerce to a list so the value is a
-    cheap, JSON-shaped ``[lon_min, lat_min, lon_max, lat_max]`` (or ``None``).
-    Best-effort: a missing / malformed case leaves the cache untouched-to-None.
+    Reads ``session_state.case.bbox`` -- the persisted ``CaseSummary.bbox``
+    that the layers-present note already consumes -- and stores it so
+    ``_turn_case_bbox`` has a durable active-AOI anchor on every live turn
+    (the reuse short-circuits + the per-turn [Case state] note both read
+    it). Pydantic BBox models serialize to a plain list; coerced to a list
+    so the value is a cheap, JSON-shaped ``[lon_min, lat_min, lon_max,
+    lat_max]`` (or ``None``). Best-effort: a missing / malformed case leaves
+    the cache untouched-to-None.
     """
     try:
         case = getattr(session_state, "case", None)
@@ -7326,20 +6880,13 @@ def _cache_case_bbox_from_session_state(
             state.case_bbox = None
             return
         state.case_bbox = list(bbox)
-    except Exception:  # noqa: BLE001 — best-effort cache, never break the turn
+    except Exception:  # noqa: BLE001 -- best-effort cache, never break the turn
         state.case_bbox = None
 
 
-# job LANE-C (#159 follow-up): the AOI is PINNED to the solve domain.
-#
-# CONFIRMED ROOT CAUSE (case 01KVM4NH7M8BT5HV21JV72MD97): there was NO pinned
-# AOI. ``case.bbox`` stayed None because no ``upsert_case`` caller ever wrote the
-# AOI from a solve, so ``_turn_case_bbox`` returned None and the LLM free-handed a
-# DIFFERENT bbox for every follow-up tool call (5 boxes in one case). The SWMM
-# solve ran on one extent; ``fetch_buildings`` got a narrower+shorter box (87%
-# width / 63% height of the flood domain); rivers/dem/roads each got yet another
-# smaller box. The authoritative extent IS the solve domain (the peak depth /
-# mesh LayerURI bbox the workflow already floors + stamps), so we pin THAT.
+# The AOI is PINNED to the solve domain: the authoritative extent IS the
+# solve domain (the peak depth / mesh LayerURI bbox the workflow already
+# floors + stamps), not a freehand bbox re-derived per follow-up tool call.
 
 
 def _scenario_produces_domain(tool_name: str) -> bool:
@@ -7347,7 +6894,7 @@ def _scenario_produces_domain(tool_name: str) -> bool:
     is the authoritative AOI to pin (SWMM / SFINCS / MODFLOW domains).
 
     Any tool ``scenario_type_for_tool`` recognizes mints a domain-extent layer
-    (flood-depth peak / plume) — the SAME extent ``compute_layer_bounds`` returns
+    (flood-depth peak / plume) -- the SAME extent ``compute_layer_bounds`` returns
     for the produced handle. Reuses that taxonomy so a new solver auto-pins.
     """
     return scenario_type_for_tool(tool_name) is not None
@@ -7359,24 +6906,24 @@ async def _pin_case_aoi_from_solve(
     case_id: str | None,
     bbox: Any,
 ) -> None:
-    """Persist a completed solve's domain ``bbox`` as the Case AOI (LANE-C #1).
+    """Persist a completed solve's domain ``bbox`` as the Case AOI.
 
     Writes ``CaseSummary.bbox`` via ``upsert_case`` AND updates the durable
-    in-session cache ``state.case_bbox`` so ``_turn_case_bbox`` returns the pinned
-    extent for the rest of THIS session (every follow-up fetch defaults to it) and
-    a later Case reopen rehydrates the SAME AOI from persistence. This is the core
-    fix: nothing previously wrote ``case.bbox`` from a solve, so the AOI was never
-    pinned and each follow-up tool re-guessed the extent.
+    in-session cache ``state.case_bbox`` so ``_turn_case_bbox`` returns the
+    pinned extent for the rest of THIS session (every follow-up fetch
+    defaults to it) and a later Case reopen rehydrates the SAME AOI from
+    persistence.
 
-    Best-effort: a missing/tombstoned Case or a Persistence hiccup is logged and
-    never raised — pinning is a side-effect, not the solve's happy path. Idempotent:
-    a re-run at the SAME extent skips the round-trip (the persisted value already
-    matches, within the bbox quantization tolerance).
+    Best-effort: a missing/tombstoned Case or a Persistence hiccup is logged
+    and never raised -- pinning is a side-effect, not the solve's happy
+    path. Idempotent: a re-run at the SAME extent skips the round-trip (the
+    persisted value already matches, within the bbox quantization
+    tolerance).
     """
     coerced = _coerce_bbox4(bbox)
     if coerced is None or not case_id:
         return
-    # Update the in-session anchor first — it drives the fetch default below even
+    # Update the in-session anchor first -- it drives the fetch default below even
     # if the persistence write fails (e.g. an anonymous/ephemeral Case).
     state.case_bbox = list(coerced)
     p = get_persistence()
@@ -7384,7 +6931,7 @@ async def _pin_case_aoi_from_solve(
         return
     try:
         case = await p.get_case(case_id)
-    except Exception:  # noqa: BLE001 — best-effort, never break the turn
+    except Exception:  # noqa: BLE001 -- best-effort, never break the turn
         logger.exception("aoi-pin: get_case failed case=%s", case_id)
         return
     if case is None:
@@ -7404,7 +6951,7 @@ async def _pin_case_aoi_from_solve(
             case_id,
             list(coerced),
         )
-    except Exception:  # noqa: BLE001 — best-effort, never break the turn
+    except Exception:  # noqa: BLE001 -- best-effort, never break the turn
         logger.exception("aoi-pin: upsert failed case=%s", case_id)
 
 
@@ -7412,7 +6959,7 @@ def _bbox_round6(bbox: Any) -> tuple[float, float, float, float] | None:
     """Round a coerced 4-tuple bbox to 6 decimal places (~0.11 m at the
     equator) for a TIGHT change-detection comparison.
 
-    Used only by ``_pin_case_aoi_from_tool_bbox``'s durable-write debounce —
+    Used only by ``_pin_case_aoi_from_tool_bbox``'s durable-write debounce --
     deliberately much tighter than the coarse ~2 km ``_BBOX_QUANT_DEG``
     scenario-reuse quant (``bbox_equivalent``'s default): that quant is
     "close enough to be the same run", whereas here we only want to skip a
@@ -7439,40 +6986,37 @@ async def _pin_case_aoi_from_tool_bbox(
 ) -> None:
     """Durably anchor the Case AOI from an ordinary bbox-taking FETCH call.
 
-    ROOT CAUSE (live-reported): ``_pin_case_aoi_from_solve`` (above) only
-    fires for a domain-producing SOLVER (SWMM / SFINCS / MODFLOW). A Case
-    whose activity so far is plain fetches (``fetch_dem``, ``fetch_landcover``,
-    ...) never triggers it, so ``CaseSummary.bbox`` never gets written at all
-    — every such Case row sits at ``bbox: None`` forever. With no anchor,
-    ``build_layers_present_note`` carries no AOI line, and a follow-up like
-    "show me the hillshade in the bounding box" makes the model reverse-
-    engineer the extent from layer-id strings instead of reading it (the
-    live-reported symptom: a small local model burned its whole thinking
-    budget trying to recover a bbox from a TiTiler URI).
+    Complements ``_pin_case_aoi_from_solve`` (above), which only fires for a
+    domain-producing SOLVER (SWMM / SFINCS / MODFLOW) -- a Case whose
+    activity so far is plain fetches (``fetch_dem``, ``fetch_landcover``,
+    ...) would otherwise never get an AOI anchor, leaving
+    ``build_layers_present_note`` with no AOI line for a follow-up prompt to
+    resolve against.
 
     Fires ONLY for recognized bbox-taking fetchers (``fetched_kind_for_tool``);
-    domain-producing solvers are explicitly excluded — they keep their own
-    post-RESULT pin from the FLOORED solve-domain bbox (``_pin_case_aoi_from_
-    solve``), which must win over a pre-solve REQUEST bbox. Called AFTER both
-    AOI reuse guards have already read ``_turn_case_bbox`` for THIS dispatch
-    (so it never perturbs this call's own reuse comparison) and AFTER
-    ``_maybe_default_fetch_bbox_to_pinned_aoi`` has already snapped a
-    same-area drifted/narrower box onto any existing pin — so this call can
-    only WIDEN (an explicit enclose), MOVE (a disjoint bbox = a genuinely
-    different place — latest-wins, matching the solve-pin's unconditional
-    overwrite semantics), or — the common fix case — SEED (no pin yet) the
-    anchor. It can never silently shrink an already-established AOI.
+    domain-producing solvers are explicitly excluded -- they keep their own
+    post-RESULT pin from the FLOORED solve-domain bbox
+    (``_pin_case_aoi_from_solve``), which must win over a pre-solve REQUEST
+    bbox. Called AFTER both AOI reuse guards have already read
+    ``_turn_case_bbox`` for THIS dispatch (so it never perturbs this call's
+    own reuse comparison) and AFTER ``_maybe_default_fetch_bbox_to_pinned_aoi``
+    has already snapped a same-area drifted/narrower box onto any existing
+    pin -- so this call can only WIDEN (an explicit enclose), MOVE (a
+    disjoint bbox = a genuinely different place -- latest-wins, matching the
+    solve-pin's unconditional overwrite semantics), or -- the common case --
+    SEED (no pin yet) the anchor. It can never silently shrink an
+    already-established AOI.
 
-    Latest-wins in-session: ``state.case_bbox`` is set unconditionally (once a
-    valid bbox is present) so the persisted Case row and the in-session cache
-    stay in lockstep (the invariant: ``_turn_case_bbox`` at turn end ==
-    ``CaseSummary.bbox``). The durable Persistence write is debounced on a
-    tight 6-decimal-place comparison (``_bbox_round6``, NOT the coarse
+    Latest-wins in-session: ``state.case_bbox`` is set unconditionally (once
+    a valid bbox is present) so the persisted Case row and the in-session
+    cache stay in lockstep (the invariant: ``_turn_case_bbox`` at turn end
+    == ``CaseSummary.bbox``). The durable Persistence write is debounced on
+    a tight 6-decimal-place comparison (``_bbox_round6``, NOT the coarse
     scenario-reuse quant) so a repeated identical bbox never round-trips
-    Persistence twice. Best-effort and silent: never raises, never blocks the
-    turn — a missing active Case, an unbound Persistence, or a Persistence
-    hiccup just skips the write (existing bbox-less Cases self-heal on their
-    NEXT turn with any bbox-carrying fetch).
+    Persistence twice. Best-effort and silent: never raises, never blocks
+    the turn -- a missing active Case, an unbound Persistence, or a
+    Persistence hiccup just skips the write (existing bbox-less Cases
+    self-heal on their NEXT turn with any bbox-carrying fetch).
     """
     if fetched_kind_for_tool(tool_name) is None:
         return
@@ -7484,7 +7028,7 @@ async def _pin_case_aoi_from_tool_bbox(
     if coerced is None:
         return
     # Latest-wins: always refresh the in-session anchor first, mirroring
-    # _pin_case_aoi_from_solve — the durable write below is best-effort and
+    # _pin_case_aoi_from_solve -- the durable write below is best-effort and
     # may legitimately no-op (debounce) or fail without undoing this.
     state.case_bbox = list(coerced)
     p = get_persistence()
@@ -7492,7 +7036,7 @@ async def _pin_case_aoi_from_tool_bbox(
         return
     try:
         case = await p.get_case(case_id)
-    except Exception:  # noqa: BLE001 — best-effort, never break the turn
+    except Exception:  # noqa: BLE001 -- best-effort, never break the turn
         logger.exception("aoi-pin[fetch]: get_case failed case=%s", case_id)
         return
     if case is None:
@@ -7511,7 +7055,7 @@ async def _pin_case_aoi_from_tool_bbox(
             list(coerced),
             tool_name,
         )
-    except Exception:  # noqa: BLE001 — best-effort, never break the turn
+    except Exception:  # noqa: BLE001 -- best-effort, never break the turn
         logger.exception("aoi-pin[fetch]: upsert failed case=%s", case_id)
 
 
@@ -7541,13 +7085,13 @@ def _maybe_default_fetch_bbox_to_pinned_aoi(
     params: dict,
     pinned_bbox: Any,
 ) -> dict:
-    """Default a bbox-taking fetch tool to the pinned Case AOI (LANE-C #2).
+    """Default a bbox-taking fetch tool to the pinned Case AOI.
 
-    The LLM free-hands a fresh (and usually NARROWER) bbox for every follow-up
-    fetch even when it means "the same area I just modeled", which is why
-    buildings/rivers/dem/roads under-covered the flood domain. When a domain has
-    been pinned (``state.case_bbox`` set by a solve), force follow-up fetches onto
-    that SAME extent so all layers cover the AOI by construction.
+    The LLM free-hands a fresh (and usually NARROWER) bbox for every
+    follow-up fetch even when it means "the same area I just modeled". When
+    a domain has been pinned (``state.case_bbox`` set by a solve), force
+    follow-up fetches onto that SAME extent so all layers cover the AOI by
+    construction.
 
     PRECISE RULE (honor "a different place", fix "the same place, drifted box"):
       * Only applies to recognized bbox-taking fetchers (``fetched_kind_for_tool``).
@@ -7614,21 +7158,12 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
     params: dict,
     pinned_bbox: Any,
 ) -> dict:
-    """Pin an expensive SOLVER's bbox to the active Case AOI (#183 / #159 lineage).
+    """Pin an expensive SOLVER's bbox to the active Case AOI.
 
-    NATE DIRECTIVE (#183): the SFINCS solve must compute ONLY within the active
-    AOI bbox "unless something requires it to expand". The fetch-default rule
-    (``_maybe_default_fetch_bbox_to_pinned_aoi``) snapped FETCHES onto the pinned
-    AOI, but the expensive AREAL SOLVERS (``sfincs_flood`` /
-    ``run_model_nws_flood_event_scenario`` / ``swmm_urban_flood`` -- the
-    bbox-driven scenario types in ``_BBOX_DRIVEN_SOLVER_SCENARIOS``) were EXEMPT,
-    so a follow-up / re-entry solve still ran on whatever bbox the LLM
-    free-handed. The #159 lineage: the displayed AOI snapped smaller (the pinned
-    ``state.case_bbox``) while the LLM handed the solver a DRIFTED / wider
-    same-area box, so the SFINCS grid (built directly from that bbox via
-    ``setup_grid_from_region: region: { bbox }``, no padding) computed OUTSIDE the
-    displayed AOI. This snaps the SOLVE domain back onto the active AOI by the
-    SAME conservative rule the fetch default uses.
+    The SFINCS solve must compute ONLY within the active AOI bbox unless
+    something requires it to expand. This snaps the SOLVE domain back onto
+    the active AOI by the SAME conservative rule the fetch default
+    (``_maybe_default_fetch_bbox_to_pinned_aoi``) uses.
 
     PRECISE RULE (identical to the fetch default -- honor real expansion, fix the
     drifted same-area box; "required expansion is allowed, only UN-required
@@ -7646,11 +7181,11 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
       * Supplied bbox DISJOINT from the pin (a genuinely different place) ->
         HONOR it.
 
-    Archetype byte-identity (#194): the SFINCS scenario-coverage archetypes
-    (fluvial / compound / wind / infiltration / levee / tsunami) and coastal runs
-    are selected by FORCING FLAGS (``coastal=`` / ``river=`` / ``tsunami=`` ...),
-    NOT by an enclosing-wider bbox, and an explicit enclose / disjoint bbox is
-    always honored -- so none of those decks are clipped by this guard.
+    The SFINCS scenario-coverage archetypes (fluvial / compound / wind /
+    infiltration / levee / tsunami) and coastal runs are selected by FORCING
+    FLAGS (``coastal=`` / ``river=`` / ``tsunami=`` ...), NOT by an
+    enclosing-wider bbox, and an explicit enclose / disjoint bbox is always
+    honored -- so none of those decks are clipped by this guard.
 
     Pure + conservative: returns a NEW dict only when it changes ``bbox``; never
     mutates the input dict in place. Shares the exact tolerance / enclose / overlap
@@ -7692,13 +7227,13 @@ def _maybe_default_solver_bbox_to_pinned_aoi(
 
 @dataclass
 class _ReuseEntry:
-    """A drop-in ``RegisteredTool``-shaped shim for the reuse short-circuit
-    (job-0326).
+    """A drop-in ``RegisteredTool``-shaped shim for the reuse short-circuit.
 
-    Carries the real tool's ``metadata`` (so the tool card / telemetry label is
-    unchanged) but a ``fn`` that returns the EXISTING layer instead of launching
-    the solver. ``_invoke_tool_via_emitter`` swaps the registry entry for this so
-    the SAME ``emit_tool_call`` LayerURI gate fires with the reused layer.
+    Carries the real tool's ``metadata`` (so the tool card / telemetry label
+    is unchanged) but a ``fn`` that returns the EXISTING layer instead of
+    launching the solver. ``_invoke_tool_via_emitter`` swaps the registry
+    entry for this so the SAME ``emit_tool_call`` LayerURI gate fires with
+    the reused layer.
     """
 
     metadata: Any
@@ -7723,7 +7258,7 @@ async def _finalize_segment(
     is_terminal: bool = False,
     thinking_parts: list[str] | None = None,
 ) -> None:
-    """job-0315: close ONE narration bubble + persist it as its own agent row.
+    """Close ONE narration bubble + persist it as its own agent row.
 
     Each contiguous run of agent text between tool-call rounds is a SEGMENT.
     Closing a segment does two things at the boundary "agent text is about to
@@ -7732,7 +7267,7 @@ async def _finalize_segment(
     (1) Send the terminal ``done=True`` ``agent-message-chunk`` for THIS
         bubble's ``message_id`` so the live client marks the bubble complete
         (web ``appendDelta`` sets ``done``). This MUST only fire for an id
-        that already received text — the caller guarantees that by only
+        that already received text -- the caller guarantees that by only
         calling here when ``current_message_id is not None``.
     (2) Persist a ``role="agent"`` ``CaseChatMessage`` carrying ONLY this
         segment's text, so the persisted row order interleaves with the
@@ -7741,27 +7276,28 @@ async def _finalize_segment(
         NOTHING (no phantom bubble on replay; no row-count regression).
 
     ``layer_emissions``: non-terminal segments pass ``[]`` so they do NOT each
-    duplicate the whole-turn ``current_turn_layer_ids`` / ``current_turn_map_commands``
-    accumulators. The TERMINAL segment (``is_terminal=True`` — the final
-    narration run of the turn) passes ``None`` so ``_persist_chat_turn``
-    snapshots the accumulators onto it, keeping job-0259 layer attribution +
-    job-0281 zoom-to on the de-facto closing row.
+    duplicate the whole-turn ``current_turn_layer_ids`` /
+    ``current_turn_map_commands`` accumulators. The TERMINAL segment
+    (``is_terminal=True`` -- the final narration run of the turn) passes
+    ``None`` so ``_persist_chat_turn`` snapshots the accumulators onto it,
+    keeping layer attribution + zoom-to on the de-facto closing row.
 
     Best-effort persist (inherits ``_persist_chat_turn``'s swallow); the wire
     ``done=True`` still fires even if persistence is unbound. Clears the
-    segment buffer and bumps the per-task finalized-count on a non-empty write.
+    segment buffer and bumps the per-task finalized-count on a non-empty
+    write.
 
-    ``thinking_parts`` (LANE CORE 2026-07-22, thinking persistence): the
-    per-segment reasoning-text buffer accumulated while the per-turn
-    ``show_thinking`` toggle was ON. When THIS segment persists a non-empty
-    row, its joined text rides the row's ``thinking`` field (same-bubble
-    contract) and the buffer is cleared. A thinking-only segment (no answer
-    text -> no row, the no-phantom-bubble invariant) KEEPS its buffer so the
-    thinking attaches to the turn's next persisted agent row instead of being
-    dropped. Same clear-not-rebind discipline as ``segment_parts``.
+    ``thinking_parts``: the per-segment reasoning-text buffer accumulated
+    while the per-turn ``show_thinking`` toggle was ON. When THIS segment
+    persists a non-empty row, its joined text rides the row's ``thinking``
+    field (same-bubble contract) and the buffer is cleared. A thinking-only
+    segment (no answer text -> no row, the no-phantom-bubble invariant)
+    KEEPS its buffer so the thinking attaches to the turn's next persisted
+    agent row instead of being dropped. Same clear-not-rebind discipline as
+    ``segment_parts``.
     """
     text = "".join(segment_parts).strip()
-    # (1) wire terminal for this bubble — always fires (id has text).
+    # (1) wire terminal for this bubble -- always fires (id has text).
     await _session_safe_send(websocket, state.session_id,
         _new_envelope(
             "agent-message-chunk",
@@ -7769,7 +7305,7 @@ async def _finalize_segment(
             AgentMessageChunkPayload(message_id=message_id, delta="", done=True),
         )
     )
-    # (2) per-segment persist — only when there is real text.
+    # (2) per-segment persist -- only when there is real text.
     if text:
         thinking_text = (
             "".join(thinking_parts).strip() if thinking_parts else ""
@@ -7785,7 +7321,7 @@ async def _finalize_segment(
             case_id=_turn_case_id(state),
             thinking=thinking_text or None,
         )
-        # Thinking consumed by this row — clear the SAME list object (do not
+        # Thinking consumed by this row -- clear the SAME list object (do not
         # rebind), mirroring the segment-buffer discipline below.
         if thinking_parts:
             thinking_parts.clear()
@@ -7797,7 +7333,7 @@ async def _finalize_segment(
             # job-0315 contract fix: a TERMINAL non-empty segment row just
             # snapshotted the turn's zoom-to/layer accumulator
             # (``layer_emissions=None`` above). Record that so the wrapper's
-            # finally does NOT also write a duplicate closing marker row — the
+            # finally does NOT also write a duplicate closing marker row -- the
             # marker is ONLY for the tool-terminal shape where this never fires.
             if is_terminal:
                 _TURN_TERMINAL_ACC_PERSISTED_BY_TASK[_task] = True
@@ -7822,29 +7358,30 @@ async def _persist_chat_turn(
 
     Best-effort: a missing Persistence binding OR no active Case context
     short-circuits (the M1 in-memory chat keeps working). A failed write
-    is logged but not raised — chat persistence is a side-effect, not the
+    is logged but not raised -- chat persistence is a side-effect, not the
     happy path of message delivery.
 
     Per FR-AS-8 / Decision F the chat-message collection is part of the
     agent's own session record (it is per-turn replay material, not a
-    solver result); the confirmation-hook carveout in ``CONFIRMATION_TRIGGERS``
-    means this write does NOT pause for user approval.
+    solver result); the confirmation-hook carveout in
+    ``CONFIRMATION_TRIGGERS`` means this write does NOT pause for user
+    approval.
 
-    job-0267: ``tool_card`` carries the typed ``ToolCardRecord`` for
-    ``role="tool"`` rows; ``layer_emissions`` overrides the default
-    per-turn accumulator snapshot (tool rows pass ``[]`` so the turn's
-    layer ids stay attributed to the closing agent row, exactly as before).
+    ``tool_card`` carries the typed ``ToolCardRecord`` for ``role="tool"``
+    rows; ``layer_emissions`` overrides the default per-turn accumulator
+    snapshot (tool rows pass ``[]`` so the turn's layer ids stay attributed
+    to the closing agent row).
 
-    job-0268: ``case_id`` pins the target Case explicitly (the dispatch
-    wrappers capture it at task entry so even a cancel-and-redispatch race
-    cannot re-aim the write); when omitted it resolves via ``_turn_case_id``
-    — never the raw write-time ``active_case_id``.
+    ``case_id`` pins the target Case explicitly (the dispatch wrappers
+    capture it at task entry so even a cancel-and-redispatch race cannot
+    re-aim the write); when omitted it resolves via ``_turn_case_id`` --
+    never the raw write-time ``active_case_id``.
 
-    Durable-card lifecycle: ``message_id``, when supplied, pins the row's stable
-    id and routes the write through ``upsert_chat_message`` (insert-or-replace)
-    instead of ``append_chat_message`` — so a SOLVE card persisted ``running`` at
-    mint can be UPDATED IN PLACE to its terminal state without a duplicate row
-    ("nothing about the chat is transient"). Omitted (the default) keeps the
+    Durable-card lifecycle: ``message_id``, when supplied, pins the row's
+    stable id and routes the write through ``upsert_chat_message``
+    (insert-or-replace) instead of ``append_chat_message`` -- so a SOLVE
+    card persisted ``running`` at mint can be UPDATED IN PLACE to its
+    terminal state without a duplicate row. Omitted (the default) keeps the
     append-a-fresh-row behavior every existing caller relies on.
     """
     target_case = case_id if case_id is not None else _turn_case_id(state)
@@ -7871,7 +7408,7 @@ async def _persist_chat_turn(
             else list(layer_emissions)
         ),
         # job-0281: persist the turn's zoom-to emissions (geocode snap) on
-        # rows that snapshot the accumulator (agent/user rows) — the
+        # rows that snapshot the accumulator (agent/user rows) -- the
         # Case-reopen snap-to-location replays the LAST one (job-0280 web).
         # Tool rows pass layer_emissions=[] and get [] here too.
         map_command_emissions=(
@@ -7924,34 +7461,34 @@ async def _persist_tool_card(
     io_is_error: bool = False,
     message_id: str | None = None,
 ) -> None:
-    """Persist one replayable tool-card row for the active Case (job-0267).
+    """Persist one replayable tool-card row for the active Case.
 
     Written by ``_invoke_tool_via_emitter`` on every terminal tool dispatch
-    (complete OR failed; cancelled dispatches persist nothing — Invariant 8).
-    Storage shape: ``CaseChatMessage(role="tool")`` in the SAME chat
+    (complete OR failed; cancelled dispatches persist nothing -- Invariant
+    8). Storage shape: ``CaseChatMessage(role="tool")`` in the SAME chat
     collection as user/agent turns, so the rehydration replay interleaves
     the full stream by ``created_at`` with zero extra queries. The typed
     payload is ``tool_card`` (``ToolCardRecord``); ``content`` carries the
     identical record as a JSON string for non-contract consumers.
 
-    Timing source of truth: the emitter's ``last_tool_step`` (the job-0264
+    Timing source of truth: the emitter's ``last_tool_step`` (the
     authoritative ``started_at`` / ``duration_ms`` stamps the live card
     displayed). The wall-clock fallbacks only engage when the emitter stamp
     is unavailable (e.g. the wire died before the terminal transition).
 
-    C1 (A1 produces, W2 consumes) — tool-card IO persistence: when ``raw_args``
-    / ``function_response`` are supplied, the SAME input args + output response
-    the live ``tool-io`` sidecar carries (``PipelineEmitter.emit_tool_io``) are
-    serialized with the SAME helper (``_json_for_tool_io`` — identical
-    truncation/byte semantics) and populated on the TYPED ``ToolCardRecord``
-    under the EXACT live ``ToolIoPayload`` field names — ``raw_args`` /
-    ``function_response`` / ``args_truncated`` / ``response_truncated`` /
-    ``args_bytes`` / ``response_bytes`` / ``is_error`` (added to the record
-    contract for C1, all optional/nullable). ``get_session_state`` replay carries
-    them on ``m.tool_card``; W2 rehydrates the tool-card expander on Case reopen
-    by reading them off the typed record (the ``content`` JSON twin carries the
-    identical values for non-contract consumers but is no longer the integration
-    path — reading IO off ``content`` was the original blank-chevron bug).
+    Tool-card IO persistence: when ``raw_args`` / ``function_response`` are
+    supplied, the SAME input args + output response the live ``tool-io``
+    sidecar carries (``PipelineEmitter.emit_tool_io``) are serialized with
+    the SAME helper (``_json_for_tool_io`` -- identical truncation/byte
+    semantics) and populated on the TYPED ``ToolCardRecord`` under the EXACT
+    live ``ToolIoPayload`` field names -- ``raw_args`` / ``function_response``
+    / ``args_truncated`` / ``response_truncated`` / ``args_bytes`` /
+    ``response_bytes`` / ``is_error`` (all optional/nullable).
+    ``get_session_state`` replay carries them on ``m.tool_card``; the web
+    renderer rehydrates the tool-card expander on Case reopen by reading
+    them off the TYPED record -- the ``content`` JSON twin carries the
+    identical values for non-contract consumers but is not the integration
+    path.
 
     Best-effort, never raises: record construction is wrapped here and the
     underlying ``_persist_chat_turn`` already swallows write failures.
@@ -7967,19 +7504,16 @@ async def _persist_tool_card(
                 started_at = emitter_step.started_at
             if emitter_step.duration_ms is not None:
                 duration_ms = emitter_step.duration_ms
-        # C1 (the rehydration fix): the persisted IO must ride the TYPED
-        # ``ToolCardRecord`` — ``get_session_state`` replay carries it on
-        # ``m.tool_card`` and the web renderer (W2) reads it off there (NOT off
-        # the row ``content`` JSON, which A1 originally wrote — that was the
-        # blank-chevron bug). Compute the IO ONCE with the SAME
-        # ``_json_for_tool_io`` helper + field names the live ``tool-io`` sidecar
-        # uses, populate the typed record's IO fields, and keep the identical
-        # values on the ``content`` JSON twin (belt-and-suspenders for
-        # non-contract consumers). Only when at least one of
-        # raw_args/function_response was provided (the LLM-dispatch path) — the
-        # /invoke directive path passes neither, so its rows stay IO-less exactly
-        # as before and the typed record's IO fields default to ``None`` (pre-C1
-        # documents validate + replay unchanged).
+        # The persisted IO must ride the TYPED ``ToolCardRecord`` -- replay
+        # reads it off ``m.tool_card``, NOT the row ``content`` JSON.
+        # Compute the IO ONCE with the SAME ``_json_for_tool_io`` helper +
+        # field names the live ``tool-io`` sidecar uses, populate the typed
+        # record's IO fields, and keep the identical values on the
+        # ``content`` JSON twin for non-contract consumers. Only when at
+        # least one of raw_args/function_response was provided (the
+        # LLM-dispatch path) -- the /invoke directive path passes neither,
+        # so its rows stay IO-less and the typed record's IO fields default
+        # to ``None`` (existing documents validate + replay unchanged).
         _io_fields: dict[str, Any] = {}
         if raw_args is not None or function_response is not None:
             args_str, args_trunc, args_bytes = _json_for_tool_io(raw_args)
@@ -7993,17 +7527,15 @@ async def _persist_tool_card(
                 "response_bytes": resp_bytes,
                 "is_error": bool(io_is_error),
             }
-        # task-168 (read-only persistence): carry the ordered CHILD substeps
-        # captured by the emitter at this dispatch's terminal transition. The
-        # emitter snapshots them onto ``last_tool_children`` WHILE the children
-        # still exist in ``_steps`` -- ``close_pipeline`` (run just before this
-        # hook in ``_invoke_tool_via_emitter``'s finally) has already cleared
-        # ``_steps``, so this durable snapshot is the only source. Reading it
-        # here onto ``ToolCardRecord.children`` makes the nested timeline replay
-        # READ-ONLY on a Case reopen (warm) AND ride the case-view snapshot for
-        # the box-off cold view (additive JSON -- a card with no children stays
-        # ``None`` and every prior row loads unchanged). Guard the tool match so
-        # a stale prior-dispatch snapshot can never attach to this row.
+        # Carry the ordered CHILD substeps captured by the emitter at this
+        # dispatch's terminal transition. The emitter snapshots them onto
+        # ``last_tool_children`` WHILE the children still exist in ``_steps``
+        # -- ``close_pipeline`` (run just before this hook) has already
+        # cleared ``_steps``, so this durable snapshot is the only source.
+        # Reading it onto ``ToolCardRecord.children`` makes the nested
+        # timeline replay READ-ONLY on a Case reopen (additive JSON -- a card
+        # with no children stays ``None``). Guard the tool match so a stale
+        # prior-dispatch snapshot can never attach to this row.
         _children: list | None = None
         emitter_children = (
             state.emitter.last_tool_children if state.emitter is not None else None
@@ -8037,7 +7569,7 @@ async def _persist_tool_card(
             case_id=case_id,
             message_id=message_id,
         )
-    except Exception:  # noqa: BLE001 — replay material, never the happy path
+    except Exception:  # noqa: BLE001 -- replay material, never the happy path
         logger.exception(
             "tool-card persist failed session=%s case=%s tool=%s",
             state.session_id,
@@ -8053,33 +7585,27 @@ async def _persist_terminal_failure_card(
     message: str,
     case_id: str | None = None,
 ) -> None:
-    """BUG 4b: persist a ``role="tool"`` FAILED tool-card row for a terminal
-    turn failure that did NOT flow through ``_invoke_tool_via_emitter``'s
-    own failed-card persist.
+    """Persist a ``role="tool"`` FAILED tool-card row for a terminal turn
+    failure that did NOT flow through ``_invoke_tool_via_emitter``'s own
+    failed-card persist.
 
-    Root cause this fixes: when a turn ends in a terminal FAILURE on the
-    model-generation path (the ``LLM_UNAVAILABLE`` / ``_send_error`` branch in
-    ``_stream_gemini_reply``), the error envelope marks the in-memory pipeline
-    failed on the live wire, but NOTHING is persisted to ``chat_history``. So a
-    WS reconnect / Case-reopen replays the last tool card still in its
-    ``running`` state forever (the web replay reads ``tool_card.state`` and a
-    persisted ``failed`` row renders correctly — it just never got written).
-    NATE hard requirement: a terminal solve/tool FAILURE must SURFACE so the
-    user knows it stopped, even across a socket cycle.
+    A terminal solve/tool failure must surface to the user even across a
+    socket cycle -- otherwise a WS reconnect / Case-reopen replays the last
+    tool card stuck in its ``running`` state forever.
 
-    Fix: write the SAME ``role="tool"`` ``CaseChatMessage`` + ``ToolCardRecord``
+    Writes the SAME ``role="tool"`` ``CaseChatMessage`` + ``ToolCardRecord``
     shape ``_persist_tool_card`` produces, with ``state="failed"``. The
-    ``ToolCardRecord`` contract (case.py) has no error_code/message fields, so
-    the A.6 ``error_code`` + human message ride in the row ``content`` (a JSON
-    twin, exactly like the complete-card content) and the ``label`` so the
-    web replay surfaces the failure reason. Honesty floor: this writes ONLY on
-    a real terminal failure — it never fabricates a success.
+    ``ToolCardRecord`` contract (case.py) has no error_code/message fields,
+    so the A.6 ``error_code`` + human message ride in the row ``content`` (a
+    JSON twin, exactly like the complete-card content) and the ``label`` so
+    the web replay surfaces the failure reason. Honesty floor: this writes
+    ONLY on a real terminal failure -- it never fabricates a success.
 
     Prefers the emitter's authoritative ``last_tool_step`` for the failing
     tool's identity + timing (so the persisted failed card matches the live
     card the user last saw spinning); falls back to a synthetic
-    ``llm_generation`` card when no tool step is available (a pure model-stream
-    failure with no in-flight tool). Best-effort, never raises.
+    ``llm_generation`` card when no tool step is available (a pure
+    model-stream failure with no in-flight tool). Best-effort, never raises.
     """
     import json
 
@@ -8090,15 +7616,14 @@ async def _persist_terminal_failure_card(
         emitter_step = (
             state.emitter.last_tool_step if state.emitter is not None else None
         )
-        # Identify the failing operation: the last live tool step (the solve /
-        # tool the user saw running) when present, else the model-generation
-        # step. ``duration_ms`` / ``started_at`` mirror the live card so the
-        # replayed failed card lands where the running one was.
-        # task-168: when the failing operation IS the last live tool step (a
-        # composer the user saw running), carry its captured child substeps so
-        # the replayed failed card still nests its sub-step timeline. The
-        # synthetic ``gemini_generate`` branch (a pure model-stream failure, no
-        # in-flight tool) has no children. Guarded on the same emitter step.
+        # Identify the failing operation: the last live tool step (the solve
+        # / tool the user saw running) when present, else the model-
+        # generation step. ``duration_ms`` / ``started_at`` mirror the live
+        # card so the replayed failed card lands where the running one was.
+        # When the failing operation IS the last live tool step, carry its
+        # captured child substeps so the replayed failed card still nests
+        # its sub-step timeline; the synthetic ``gemini_generate`` branch (a
+        # pure model-stream failure, no in-flight tool) has no children.
         _children: list | None = None
         if emitter_step is not None and emitter_step.tool_name:
             tool_name = emitter_step.tool_name
@@ -8149,7 +7674,7 @@ async def _persist_terminal_failure_card(
             tool_name,
             error_code,
         )
-    except Exception:  # noqa: BLE001 — replay material, never the happy path
+    except Exception:  # noqa: BLE001 -- replay material, never the happy path
         logger.exception(
             "terminal-failure card persist failed session=%s case=%s code=%s",
             state.session_id,
@@ -8173,15 +7698,15 @@ async def _maybe_gate_on_payload_warning(
 
     Returns ``(should_dispatch, effective_params)``:
 
-    - ``(True, params)`` — no warning needed (no estimator, estimate below
+    - ``(True, params)`` -- no warning needed (no estimator, estimate below
       threshold) OR user picked ``proceed``. Dispatch with ``params``.
-    - ``(True, revised_args)`` — user picked ``narrow_scope``. Dispatch with
+    - ``(True, revised_args)`` -- user picked ``narrow_scope``. Dispatch with
       the user's revised args.
-    - ``(False, params)`` — user picked ``cancel`` OR the gate timed out.
+    - ``(False, params)`` -- user picked ``cancel`` OR the gate timed out.
       Skip the dispatch; the caller surfaces a typed failure to chat.
 
     Audit-log entries are appended to ``state.payload_warning_audit_log``
-    on both emission AND decision. Never raises — a gate failure logs +
+    on both emission AND decision. Never raises -- a gate failure logs +
     falls through to dispatch (the gate is a UX nudge, not a hard
     invariant; a broken estimator should not break the tool).
     """
@@ -8196,7 +7721,7 @@ async def _maybe_gate_on_payload_warning(
         return True, params
     try:
         estimated_mb = float(estimator_fn(**params))
-    except Exception:  # noqa: BLE001 — never let the gate kill a tool
+    except Exception:  # noqa: BLE001 -- never let the gate kill a tool
         logger.exception(
             "payload-warning: estimator raised tool=%s name=%s; skipping gate",
             tool_name,
@@ -8329,18 +7854,18 @@ async def _gate_on_code_exec(
     state: SessionState,
     params: dict,
 ) -> tuple[bool, dict]:
-    """Confirm gate for ``code_exec_request`` (job-0233) — MANDATORY, fail-closed.
+    """Confirm gate for ``code_exec_request`` -- MANDATORY, fail-closed.
 
-    Running arbitrary Python is a consequential action; the user MUST approve the
-    exact code before the sandbox runs. This gate emits a ``code-exec-request``
-    confirm card and blocks on the SAME ``pending_payload_warnings`` future seam
-    the payload-warning gate uses (the ``code_exec_id`` is the correlation key,
-    carried back as the ``tool-payload-confirmation.warning_id``) — no new
-    confirm plumbing.
+    Running arbitrary Python is a consequential action; the user MUST approve
+    the exact code before the sandbox runs. This gate emits a
+    ``code-exec-request`` confirm card and blocks on the SAME
+    ``pending_payload_warnings`` future seam the payload-warning gate uses
+    (the ``code_exec_id`` is the correlation key, carried back as the
+    ``tool-payload-confirmation.warning_id``).
 
     Returns ``(should_dispatch, effective_params)``:
 
-    - ``(True, params + {confirmed: True, code_exec_id})`` — user approved
+    - ``(True, params + {confirmed: True, code_exec_id})`` -- user approved
       (``decision="proceed"``). The tool body runs the sandbox.
     - ``(False, params)`` -- user chose ``cancel``. The caller raises
       :class:`CodeExecConfirmationCancelledError` so Gemini sees a typed,
@@ -8349,20 +7874,19 @@ async def _gate_on_code_exec(
     Raises :class:`CodeExecApprovalTimeoutError` when NO confirmation answers
     the card within ``_code_exec_approval_timeout_s()`` (default 180s, env
     ``TRID3NT_CODE_EXEC_APPROVAL_TIMEOUT_S``). This wait deliberately bypasses
-    the F6 24h local-lane ``_gate_wait_timeout`` override: an unanswerable card
-    (live incident 2026-07-22 -- the QGIS plugin had no handler for the
-    envelope) must resolve the parked tool call with a typed error so the turn
+    the 24h local-lane ``_gate_wait_timeout`` override: an unanswerable card
+    must resolve the parked tool call with a typed error so the turn
     completes instead of hanging. The pending-confirmation registry entry is
     popped in the ``finally`` below on EVERY exit -- approve, deny, timeout,
     and task cancellation (session close / turn cancel) -- so nothing leaks.
 
     ``narrow_scope`` is NOT offered for code-exec (you don't "narrow" a code
-    snippet — you cancel and the agent rewrites it); a ``narrow_scope`` reply is
-    treated as a cancel (fail-closed).
+    snippet -- you cancel and the agent rewrites it); a ``narrow_scope``
+    reply is treated as a cancel (fail-closed).
     """
     python_code = params.get("python_code")
     if not isinstance(python_code, str) or not python_code.strip():
-        # No code to confirm — let the tool body raise its own params error.
+        # No code to confirm -- let the tool body raise its own params error.
         return True, params
 
     code_exec_id = new_ulid()
@@ -8516,7 +8040,7 @@ async def _gate_on_solver_confirm(
     params: dict,
     _warning_id_out: dict[str, str] | None = None,
 ) -> tuple[bool, dict]:
-    """Parameter-confirmation gate for solver composers (job-0241) — fail-closed.
+    """Parameter-confirmation gate for solver composers -- fail-closed.
 
     Mirrors :func:`_gate_on_code_exec`: build the confirm card, emit it as a
     ``tool-payload-warning`` (the inline card the client already renders),
@@ -8525,22 +8049,21 @@ async def _gate_on_solver_confirm(
     inject ``confirmed=True`` only after an explicit ``proceed``.
 
     The card is built from the composer's PURE extraction (no emitter, no
-    solver) so the user confirms the actual derived forcing — "12,000 gal TCE
-    over 6 h → 3.07 kg/s at (42.56, -114.47)" — plus the demo-aquifer caveat.
-    The composer re-runs the (cache-backed) extraction after approval; the
+    solver) so the user confirms the actual derived forcing before the
+    composer re-runs the (cache-backed) extraction after approval; the
     confirmed values are deterministic, so card and run cannot diverge.
 
     An extraction failure here falls through to dispatch (``True``) so the
-    composer raises its own typed extraction error — the gate must not mask
+    composer raises its own typed extraction error -- the gate must not mask
     parameter problems behind a confusing confirm card.
 
-    ``_warning_id_out``: optional out-param (fix, 2026-07-09 bbox-gate-retry-
-    loop) - when given, this function stashes the emitted ``warning_id``
-    under key ``"warning_id"`` the moment a REAL gate is sent to the client.
-    It stays unset on every fail-open early return (unknown tool, extraction
-    failure, the landcover no-coarsening skip) since no gate was emitted
-    there. The caller uses this to know whether a proceed/narrow_scope
-    decision is worth memoizing into ``state.gate_decisions_this_turn``.
+    ``_warning_id_out``: optional out-param -- when given, this function
+    stashes the emitted ``warning_id`` under key ``"warning_id"`` the moment
+    a REAL gate is sent to the client. It stays unset on every fail-open
+    early return (unknown tool, extraction failure, the landcover
+    no-coarsening skip) since no gate was emitted there. The caller uses
+    this to know whether a proceed/narrow_scope decision is worth memoizing
+    into ``state.gate_decisions_this_turn``.
     """
     # #154: the SWMM autoscale result + the localized DEM path are captured here
     # so the decision tail can CAP-CLAMP a user-chosen finer resolution on a
@@ -8609,16 +8132,13 @@ async def _gate_on_solver_confirm(
                 derived, MODFLOWRunArgs(**kwargs)
             )
         elif tool_name == "sfincs_flood":
-            # job-0256 (live finding: a flood solver ran in a sandbox-only
-            # session): a ~10-20 min SFINCS solve is a consequence — show the
-            # user what is about to run. Combined run-settings gate (sprint-16):
-            # the card now carries BOTH a GranularitySuggestion (SFINCS grid
-            # resolution) AND a TimeScaleSuggestion (animation cadence + window)
-            # so the user reviews + overrides BOTH in ONE interaction. The
-            # bbox-area resolution estimate + cadence resolve happen in the
-            # helper (off the loop). Coastal/wave -> a fine minute-scale stride
-            # + a time-scale row; pluvial -> hourly (no time-scale row) and the
-            # card degrades to the granularity-only resolution gate.
+            # A SFINCS solve can take ~10-20 min -- show the user what is
+            # about to run before dispatch. The card carries BOTH a
+            # GranularitySuggestion (grid resolution) and a
+            # TimeScaleSuggestion (cadence + window) so the user reviews
+            # both in one interaction, resolved off the loop in the helper.
+            # Coastal/wave gets a fine minute-scale stride + time-scale row;
+            # pluvial degrades to the granularity-only resolution gate.
             (
                 envelope,
                 flood_grid_autoscale,
@@ -8672,34 +8192,31 @@ async def _gate_on_solver_confirm(
             ):
                 return True, params
         elif tool_name == "openquake_psha":
-            # NATE 2026-06-26: OpenQuake classical-PSHA solver-confirm card. A
-            # SIMPLE proceed/cancel confirm (no granularity/resolution picker):
-            # the deck builds an area source over the WHOLE bbox/AOI, so there is
-            # no rupture/incident-area user input to gate (that is scenario mode,
-            # which is not built). The card summarizes the PSHA (AOI area, IMT,
-            # PoE -> return period) so the user confirms the heavy Batch run. No
-            # composer extraction is needed (the run args are the tool args), so
-            # this is built inline rather than via a workflow helper.
+            # OpenQuake classical-PSHA solver-confirm card: SIMPLE proceed/
+            # cancel (no granularity/resolution picker) since the deck builds
+            # an area source over the whole bbox/AOI. The card summarizes the
+            # PSHA (AOI area, IMT, PoE -> return period) so the user confirms
+            # the heavy Batch run; built inline since no composer extraction
+            # is needed (the run args are the tool args).
             envelope = _build_psha_confirm_envelope(params)
         elif tool_name == "elmfire_fire_spread":
-            # FIRE-3: ELMFIRE fire-spread solver-confirm card. Simple
-            # proceed/cancel with the approximate cell count + the
-            # FIRE-1-calibrated runtime estimate + the scenario weather —
-            # PURE arithmetic built inline (no fetch/rasterio), so nothing is
-            # offloaded. A missing ignition point deliberately falls through
+            # ELMFIRE fire-spread solver-confirm card: simple proceed/cancel
+            # with the approximate cell count + calibrated runtime estimate +
+            # scenario weather, built inline (pure arithmetic, no fetch/
+            # rasterio). A missing ignition point deliberately falls through
             # to the tool's typed FIRE_IGNITION_REQUIRED error after approval.
             envelope = _build_fire_confirm_envelope(params)
         elif tool_name == "geoclaw_inundation":
-            # NATE 2026-07-27: GeoClaw shallow-water inundation solver-confirm
-            # card. Simple proceed/cancel with the approximate AOI area +
-            # scenario + simulated window + AMR levels — PURE arithmetic built
-            # inline (no fetch/rasterio), so nothing is offloaded. A missing
-            # bbox deliberately falls through to the tool's typed
-            # GEOCLAW_PARAMS_INCOMPLETE error after approval.
+            # GeoClaw shallow-water inundation solver-confirm card: simple
+            # proceed/cancel with the approximate AOI area + scenario +
+            # simulated window + AMR levels, built inline (pure arithmetic,
+            # no fetch/rasterio). A missing bbox deliberately falls through
+            # to the tool's typed GEOCLAW_PARAMS_INCOMPLETE error after
+            # approval.
             envelope = _build_geoclaw_confirm_envelope(params)
         else:  # unknown gated tool: fail open to the tool's own validation
             return True, params
-    except Exception:  # noqa: BLE001 — never mask param errors with a gate
+    except Exception:  # noqa: BLE001 -- never mask param errors with a gate
         logger.warning(
             "solver-confirm gate could not build the confirm card for %s; "
             "falling through so the tool raises its typed error",
@@ -8803,18 +8320,15 @@ async def _gate_on_solver_confirm(
             )
             return True, approved
 
-        # Combined run-settings override (sprint-16): the flood gate advertises a
-        # GranularitySuggestion (grid_resolution_m) AND a TimeScaleSuggestion
-        # (output_interval_min / duration_hr) — the user can override EITHER (or
-        # both) in ONE revised_args dict. Pin whatever the user changed; fall
-        # back to the suggested value for anything they left alone. Distinct from
-        # the SWMM real-cap-clamp path below (the flood resolution is a bbox-area
-        # ESTIMATE; the real DEM autoscale re-runs at build time, so we honour the
-        # chosen rung directly without a re-probe). This branch is taken for the
-        # flood solvers; the SWMM branch below for swmm_urban_flood. Only
-        # honoured when an override was actually advertised (a pluvial/no-bbox
-        # flood card offers only proceed/cancel -> a narrow_scope reply falls
-        # through to the fail-closed path below).
+        # The flood gate advertises a GranularitySuggestion (grid_resolution_m)
+        # AND a TimeScaleSuggestion (output_interval_min / duration_hr); the
+        # user can override either (or both) in one revised_args dict, pinning
+        # whatever changed and falling back to the suggested value otherwise.
+        # The flood resolution is a bbox-area ESTIMATE (the real DEM autoscale
+        # re-runs at build time), so the chosen rung is honoured directly
+        # without a re-probe -- distinct from the SWMM real-cap-clamp path
+        # below. Only honoured when an override was actually advertised (a
+        # pluvial/no-bbox flood card offers only proceed/cancel).
         if flood_cadence_gated and flood_override_offered:
             revised = decision_payload.revised_args or {}
             approved = dict(params)
@@ -8838,7 +8352,7 @@ async def _gate_on_solver_confirm(
                     approved["enable_autoscale"] = False
             # Cadence override: honour the chosen output_interval_min (floored at
             # 1 min, matching the deck floor); pin the resolved cadence the card
-            # showed when the user left it alone (coastal only — None on pluvial
+            # showed when the user left it alone (coastal only -- None on pluvial
             # leaves the legacy hourly default untouched).
             chosen_interval: float | None = flood_output_interval_min
             if "output_interval_min" in revised and revised["output_interval_min"] is not None:
@@ -8883,12 +8397,11 @@ async def _gate_on_solver_confirm(
             approved = dict(params)
             approved["confirmed"] = True
             approved["mesh_resolution_m"] = chosen_h
-            # 2026-07-18 release-seeding tri-state: pin whether the ORIGINAL
-            # call carried plausible release coords (the builder recorded it)
-            # BEFORE the click override below - call-provided coords seed the
-            # reach (the preview already meshed from them); a gate-picked
-            # click must only move the SOURCE (BK-3b: the approved solve
-            # reproduces the previewed mesh, never relocates it).
+            # Pin whether the ORIGINAL call carried plausible release coords
+            # (the builder recorded it) BEFORE the click override below --
+            # call-provided coords seed the reach (the preview already meshed
+            # from them); a gate-picked click must only move the SOURCE (the
+            # approved solve reproduces the previewed mesh, never relocates it).
             approved["_release_seeds_reach"] = bool(
                 telemac_preview.get("release_seeds_reach")
             )
@@ -8942,19 +8455,16 @@ async def _gate_on_solver_confirm(
         except (TypeError, ValueError):
             chosen_res = float(swmm_autoscale.resolution_m)
 
-        # CAP-CLAMP against the REAL build cell count, NOT the area model. The
-        # area-model clamp (cells = base_cells*(base/res)**2) UNDERSHOOTS the
-        # real ceil(extent/res) grid count that build_swmm_mesh actually counts
-        # (the build re-reads the DEM at the clamped resolution with
-        # enable_autoscale=False and does NO downstream cap re-check), so an
-        # over-fine override could solve OVER the cap. clamp_swmm_resolution_to_
-        # real_cap re-probes the SAME localized DEM at the SWMM ladder rungs and
-        # returns the finest rung whose REAL active-cell count fits the cap. This
-        # is synchronous rasterio/numpy compute -> off the event loop (memory:
-        # no-sync-blocking-on-asyncio-loop). If the real probe is unavailable
-        # (no DEM path) or fails, fall back to the area-model clamp so the gate
-        # never blocks/orphans the override (fail-OPEN-on-error norm), accepting
-        # the (rare) edge that the legacy clamp could still slightly overshoot.
+        # CAP-CLAMP against the REAL build cell count, not the area model: the
+        # area-model clamp (cells = base_cells*(base/res)**2) undershoots the
+        # real ceil(extent/res) grid count build_swmm_mesh actually counts (it
+        # re-reads the DEM at the clamped resolution with enable_autoscale=False
+        # and does no downstream cap re-check), so an over-fine override could
+        # solve over the cap. clamp_swmm_resolution_to_real_cap re-probes the
+        # same localized DEM at the SWMM ladder rungs and returns the finest
+        # rung whose real active-cell count fits the cap (off the event loop).
+        # If the real probe is unavailable or fails, fall back to the
+        # area-model clamp so the gate never blocks/orphans the override.
         clamped_res = chosen_res
         clamped = False
         used_real_clamp = False
@@ -9019,7 +8529,7 @@ async def _gate_on_solver_confirm(
             approved["_granularity_clamped"] = True
         return True, approved
 
-    # NATE 2026-06-26: fetch proceed — pin the SUGGESTED resolution_m the card
+    # NATE 2026-06-26: fetch proceed -- pin the SUGGESTED resolution_m the card
     # showed so the fetch matches what the user approved. Do NOT inject confirmed
     # / enable_autoscale (fetchers do not read them). Returned BEFORE the solver
     # proceed pinning below so a fetch never sets confirmed.
@@ -9049,7 +8559,7 @@ async def _gate_on_solver_confirm(
     # Combined run-settings gate (sprint-16): pin the SUGGESTED SFINCS grid
     # resolution the card showed so the run matches the card the user approved
     # (bbox-area estimate; enable_autoscale stays default so the real DEM
-    # autoscale still refines it at build time — pinning the rung only sets the
+    # autoscale still refines it at build time -- pinning the rung only sets the
     # ladder start). None when the gate had no bbox.
     if flood_cadence_gated and flood_grid_autoscale is not None:
         approved["grid_resolution_m"] = float(
@@ -9072,16 +8582,7 @@ async def _gate_with_turn_memory(
 ) -> tuple[bool, dict]:
     """``_gate_on_solver_confirm`` wrapped with per-turn decision memory.
 
-    Fix (bbox-gate-retry-loop, 2026-07-09): a live drive found a model
-    retrying a gated fetch tool with corrected NON-bbox args after typed
-    errors (``fetch_landcover(dataset='nlcd')`` -> typed error ->
-    ``dataset='nlcd_'`` -> typed error -> ``dataset='nlcd_2021'``). EACH
-    valid-bbox retry re-emitted a NEW ``tool-payload-warning`` confirm gate
-    for the SAME tool + SAME bbox; the user answered only the first one, and
-    local gates have no timeout by design, so the second (unanswered) gate
-    hung the turn forever.
-
-    This wrapper checks ``state.gate_decisions_this_turn`` (keyed by
+    Checks ``state.gate_decisions_this_turn`` (keyed by
     :func:`_gate_memory_key`) BEFORE calling the real gate. A remembered
     "proceed" / "narrow_scope" decision from earlier in the SAME turn is
     auto-applied (its recorded param DELTA is merged onto the current call's
@@ -9136,24 +8637,22 @@ async def _gate_with_turn_memory(
 def _ensure_emitter(websocket: ServerConnection, state: SessionState) -> None:
     """Bind a ``PipelineEmitter`` to this session if one isn't already.
 
-    The emitter's sink is the WebSocket ``send`` — every transition method
+    The emitter's sink is the WebSocket ``send`` -- every transition method
     writes one envelope on the wire (Appendix A.7 replace-not-reconcile)."""
     if state.emitter is not None:
         return
 
     async def _sink(text: str) -> None:
-        # job (terminal-pipeline-card hardening / Gap 1): the WS may be mid-close
-        # when a terminal pipeline-state frame (mark_cancelled / mark_failed) is
-        # emitted on the cancel path — ``websocket.send`` then raises
-        # ConnectionClosed straight out of the emitter, swallowing the terminal
-        # frame AND letting the exception escape the cancel chain. Best-effort:
-        # swallow send failures so the card-state transition is always recorded
-        # server-side and the CancelledError propagates cleanly for any clients
-        # still attached. Mirrors the existing swallow at the outer-loop cancel
-        # emit (the gemini-cancel pipeline-state send).
+        # The WS may be mid-close when a terminal pipeline-state frame
+        # (mark_cancelled / mark_failed) is emitted on the cancel path --
+        # ``websocket.send`` then raises ConnectionClosed straight out of the
+        # emitter, swallowing the terminal frame AND letting the exception
+        # escape the cancel chain. Best-effort: swallow send failures so the
+        # card-state transition is always recorded server-side and the
+        # CancelledError propagates cleanly for any clients still attached.
         try:
             await websocket.send(text)
-        except Exception:  # noqa: BLE001 — socket may be closing on cancel/fail
+        except Exception:  # noqa: BLE001 -- socket may be closing on cancel/fail
             logger.debug(
                 "emitter sink: websocket.send failed (socket closing?); "
                 "frame dropped best-effort (session=%s)",
@@ -9168,16 +8667,11 @@ def _ensure_emitter(websocket: ServerConnection, state: SessionState) -> None:
         await _persist_chart_record(state, payload)
 
     async def _tool_card_persist(**kwargs: Any) -> None:
-        # task-208 (sim-card durability): a terminal SIM ``compute`` card
-        # (the Batch-bound card minted by ``mint_dispatch_and_sim_cards``)
-        # persists through the SAME ``_persist_tool_card`` the on-box atomic
-        # tool cards use, so the green/red solve card replays on a WS reconnect
-        # / Case reopen like any other tool card. The emitter passes the
-        # terminal step's tool_name/label/state/started_at/duration; this
-        # closure supplies ``state`` (which the emitter does not hold). The
-        # Case is pinned via the live turn context (``_turn_case_id`` inside
-        # ``_persist_tool_card``) so a cancel-and-redispatch race cannot
-        # re-aim the write. Best-effort inside ``_persist_tool_card``.
+        # A terminal SIM compute card persists through the same
+        # ``_persist_tool_card`` used by on-box atomic tool cards, so it
+        # replays on a WS reconnect / Case reopen. Case is pinned via the
+        # live turn context so a cancel-and-redispatch race cannot re-aim
+        # the write. Best-effort.
         await _persist_tool_card(state, **kwargs)
 
     state.emitter = PipelineEmitter(
@@ -9208,7 +8702,7 @@ async def _resolve_active_secret_ref(
 
     Best-effort: a Persistence/MCP wobble logs and returns ``None`` so the tool
     falls back to its env path / typed auth-error (which the credential-request
-    flow then acts on) — a vault lookup hiccup must not crash the dispatch.
+    flow then acts on) -- a vault lookup hiccup must not crash the dispatch.
     """
     provider = provider_for_tool(tool_name)
     if provider is None:
@@ -9225,7 +8719,7 @@ async def _resolve_active_secret_ref(
             records = await p.list_secrets_refs(user_id=user_id, case_id=case_id)
         if not records:
             records = await p.list_secrets_refs(user_id=user_id, case_id=None)
-    except Exception:  # noqa: BLE001 — vault lookup is best-effort
+    except Exception:  # noqa: BLE001 -- vault lookup is best-effort
         logger.debug(
             "secret_ref lookup failed tool=%s case=%s", tool_name, case_id,
             exc_info=True,
@@ -9289,7 +8783,7 @@ async def _maybe_handle_credential_error(
 
     Returns:
     - ``dict`` (retry params with a freshly-resolved ``secret_ref``) when the
-      user supplied a key (``credential-provided`` with ``provided=True``) —
+      user supplied a key (``credential-provided`` with ``provided=True``) --
       the caller retries the tool ONCE.
     - ``None`` when the error is NOT credential-shaped, the tool already
       prompted this turn (one-prompt-per-tool-per-turn guard), or the user
@@ -9299,7 +8793,7 @@ async def _maybe_handle_credential_error(
 
     Two paths:
     1. REGISTERED tool (``provider_for_tool`` resolves): emit the real
-       per-provider card (real ``signup_url`` from the registry — the ONLY
+       per-provider card (real ``signup_url`` from the registry -- the ONLY
        source of real URLs) and, on provided=True, re-resolve the per-Case
        ``secret_ref`` so the retry reads the saved key.
     2. UNREGISTERED tool with a credential-SHAPED error (NATE principle 3,
@@ -9320,7 +8814,7 @@ async def _maybe_handle_credential_error(
     if not is_registered_credential and not is_generic_credential:
         return None
 
-    # One prompt per tool per turn — don't loop forever on a still-bad key.
+    # One prompt per tool per turn -- don't loop forever on a still-bad key.
     if tool_name in state.credential_prompted_tools:
         logger.info(
             "credential-request suppressed (already prompted this turn) tool=%s",
@@ -9335,7 +8829,7 @@ async def _maybe_handle_credential_error(
         # best-effort: if the generic ``provider_id`` is not yet a valid wire
         # ``ProviderID`` (schema-owned Literal), ``_emit_credential_request_and_wait``
         # → ``_build_credential_request_payload`` returns None and we surface
-        # the original typed error instead — we still NEVER invent a URL.
+        # the original typed error instead -- we still NEVER invent a URL.
         generic_provider = generic_provider_for_tool(tool_name)
         state.credential_prompted_tools.add(tool_name)
         logger.info(
@@ -9393,7 +8887,7 @@ async def _emit_credential_request_and_wait(
     session-scoped ``_PENDING_CREDENTIALS`` registry so a reply on a sibling
     connection still resolves it). Returns the ``CredentialProvidedEnvelopePayload``
     on reply, or ``None`` on timeout (the gate gets the same 300s read-decision
-    TTL as the payload-warning / code-exec gates — fail-open to the original
+    TTL as the payload-warning / code-exec gates -- fail-open to the original
     typed error so the turn is not hung).
     """
     request_id = new_ulid()
@@ -9407,7 +8901,7 @@ async def _emit_credential_request_and_wait(
     # Build the envelope scoped to the REAL provider (every registered
     # provider_id is now a valid ``ProviderID`` Literal member). If validation
     # fails for an unregistered provider, ``_build_credential_request_payload``
-    # returns ``None`` — we abandon the prompt rather than mis-scope the
+    # returns ``None`` -- we abandon the prompt rather than mis-scope the
     # secret-add (which would save the key where the retry can't re-resolve it).
     # The caller then surfaces the original typed error (honest narration).
     payload = _build_credential_request_payload(
@@ -9470,7 +8964,7 @@ async def _emit_region_choice_and_wait(
     session-scoped ``_PENDING_REGION_CHOICES`` registry so a reply on a sibling
     connection still resolves it). Returns the ``RegionChoiceProvidedEnvelopePayload``
     on reply, or ``None`` on timeout (the gate gets the same read-decision TTL
-    as the credential / payload-warning / code-exec gates — fail-open to the
+    as the credential / payload-warning / code-exec gates -- fail-open to the
     whole-state default so the turn is never hung).
     """
     loop = asyncio.get_running_loop()
@@ -9519,8 +9013,8 @@ async def _maybe_handle_region_choice(
 ) -> None:
     """If ``geocode_result`` is a state-snap, offer + apply a narrower region.
 
-    No-op unless the geocode came back as a state-bbox-fallback (job-0346
-    ``source == "state-bbox-fallback"``). When it did, this:
+    No-op unless the geocode came back as a state-bbox-fallback
+    (``source == "state-bbox-fallback"``). When it did, this:
 
     1. Builds the candidate sub-regions (default: counties of the state) and
        emits a ``region-choice-request`` (whole-state default + candidates +
@@ -9528,16 +9022,16 @@ async def _maybe_handle_region_choice(
     2. PAUSES the turn awaiting ``region-choice-provided`` (fail-open: a
        headless client / timeout keeps the whole-state bbox).
     3. On ``choice == "region"`` MUTATES ``geocode_result`` in place to the
-       picked region's bbox (re-resolved by ``selected_region_id`` against the
-       candidate set — authoritative over a client-sent bbox; falls back to
-       ``selected_bbox`` only when the id is unknown) and stamps narrowing
-       provenance so downstream tools + the function_response Gemini reads use
-       the narrowed extent. On ``choice == "whole_state"`` leaves the state
-       bbox unchanged.
+       picked region's bbox (re-resolved by ``selected_region_id`` against
+       the candidate set -- authoritative over a client-sent bbox; falls
+       back to ``selected_bbox`` only when the id is unknown) and stamps
+       narrowing provenance so downstream tools + the function_response
+       Gemini reads use the narrowed extent. On ``choice == "whole_state"``
+       leaves the state bbox unchanged.
 
-    Best-effort: any failure leaves the whole-state bbox intact (the honest
-    default) — the narrowing is a UX nicety layered ON TOP of an already-correct
-    result, so it must never break the turn. Never raises.
+    Best-effort: any failure leaves the whole-state bbox intact -- the
+    narrowing is a UX nicety layered ON TOP of an already-correct result, so
+    it must never break the turn. Never raises.
     """
     if geocode_result.get("source") != "state-bbox-fallback":
         return
@@ -9553,7 +9047,7 @@ async def _maybe_handle_region_choice(
             return
         provided = await _emit_region_choice_and_wait(websocket, state, payload)
         if provided is None or provided.choice == "whole_state":
-            # Declined / timed out / explicit whole-state — keep the state bbox.
+            # Declined / timed out / explicit whole-state -- keep the state bbox.
             geocode_result["region_choice"] = "whole_state"
             return
         # choice == "region": resolve the picked candidate. Prefer re-resolving
@@ -9578,14 +9072,14 @@ async def _maybe_handle_region_choice(
             new_bbox = provided.selected_bbox
         if new_bbox is None:
             # The client said "region" but supplied neither a known id nor a
-            # bbox — keep the state default rather than guess.
+            # bbox -- keep the state default rather than guess.
             geocode_result["region_choice"] = "whole_state"
             return
         # Mutate the geocode result IN PLACE so the immediate zoom-to AND the
         # function_response Gemini reads (and any downstream bbox consumer) use
         # the narrowed extent.
         geocode_result["bbox"] = list(new_bbox)
-        # The result is no longer a whole-state snap — drop the fallback source
+        # The result is no longer a whole-state snap -- drop the fallback source
         # so a downstream re-trigger does not re-offer the picker, and record
         # honest provenance of the narrowing.
         geocode_result["source"] = "region-choice-narrowed"
@@ -9604,7 +9098,7 @@ async def _maybe_handle_region_choice(
             chosen_name,
             new_bbox,
         )
-    except Exception:  # noqa: BLE001 — narrowing is a best-effort UX layer
+    except Exception:  # noqa: BLE001 -- narrowing is a best-effort UX layer
         logger.warning(
             "region-choice handling failed; keeping whole-state bbox",
             exc_info=True,
@@ -9612,13 +9106,13 @@ async def _maybe_handle_region_choice(
 
 
 # --------------------------------------------------------------------------- #
-# FR-AS-10: request_spatial_input — pause the turn, await the drawn geometry.
+# FR-AS-10: request_spatial_input -- pause the turn, await the drawn geometry.
 # --------------------------------------------------------------------------- #
 #
 # Mirrors the region-choice pause/resume seam (``_emit_region_choice_and_wait``).
 # The LLM-facing ``request_spatial_input`` tool (tools/spatial_input_tool.py)
 # returns a sentinel result that this interception in the turn loop replaces with
-# the parsed, role-split drawn geometry — so the tool surface stays catalog-clean
+# the parsed, role-split drawn geometry -- so the tool surface stays catalog-clean
 # while the actual websocket pause/resume lives here (where the live socket +
 # session future registry are reachable). The drawn barriers FeatureCollection
 # round-trips straight into ``swmm_urban_flood(barriers=...)``.
@@ -9637,9 +9131,9 @@ async def _emit_spatial_input_and_wait(
 
     Blocks on a future keyed by ``payload.request_id`` (registered in the
     session-scoped ``_PENDING_SPATIAL_INPUTS`` registry so a reply on a sibling
-    connection still resolves it — StrictMode double-mount / reconnect). Returns
+    connection still resolves it -- StrictMode double-mount / reconnect). Returns
     the ``SpatialInputResponsePayload`` on reply, or ``None`` on timeout (the gate
-    gets the same read-decision TTL as the credential / region-choice gates —
+    gets the same read-decision TTL as the credential / region-choice gates --
     fail-open to a typed "no geometry drawn" result, never a hung turn).
     """
     loop = asyncio.get_running_loop()
@@ -9671,7 +9165,7 @@ async def _emit_spatial_input_and_wait(
     except SpatialInputInvalidResponseError:
         # The user's reply ARRIVED but failed structural validation (e.g. a
         # barrier missing barrier_type). The inbound handler failed the future
-        # eagerly so we wake here IN-BAND — NOT after the read TTL. Re-raise so
+        # eagerly so we wake here IN-BAND -- NOT after the read TTL. Re-raise so
         # _handle_request_spatial_input surfaces the typed error result.
         logger.info(
             "spatial-input-request invalid-response session=%s request_id=%s; "
@@ -9703,7 +9197,7 @@ async def _handle_request_spatial_input(
 
     Builds the request from the LLM args, emits it, PAUSES the turn awaiting the
     drawn geometry, then parses + role-splits the reply into the engine-ready
-    result. Never raises — every failure path (no client, validation, parse,
+    result. Never raises -- every failure path (no client, validation, parse,
     timeout, cancellation) becomes a typed result the LLM narrates honestly. The
     ``role=="barrier"`` features become the ``barriers`` FeatureCollection that
     feeds ``swmm_urban_flood`` -> ``SWMMRunArgs.barriers`` -> the existing
@@ -9739,8 +9233,8 @@ async def _handle_request_spatial_input(
         raise
     except SpatialInputInvalidResponseError as exc:
         # The reply arrived but was structurally invalid (honesty floor: a
-        # malformed drawn FeatureCollection — e.g. a barrier missing
-        # barrier_type — degrades to a TYPED error result, NOT a silent success
+        # malformed drawn FeatureCollection -- e.g. a barrier missing
+        # barrier_type -- degrades to a TYPED error result, NOT a silent success
         # and NOT a hung turn that drains default_timeout_seconds then reads as
         # SPATIAL_INPUT_TIMEOUT). The user already saw TOOL_PARAMS_INVALID.
         logger.info(
@@ -9757,7 +9251,7 @@ async def _handle_request_spatial_input(
                 f"Ask the user to redraw; do not fabricate barriers or an AOI."
             ),
         }
-    except Exception:  # noqa: BLE001 — degrade to a typed result, never crash
+    except Exception:  # noqa: BLE001 -- degrade to a typed result, never crash
         logger.warning(
             "spatial-input emit/wait failed session=%s request_id=%s",
             state.session_id,
@@ -9808,14 +9302,14 @@ def _running_emitter_step_id(emitter: Any, tool_name: str) -> str | None:
     FIX B (early input-only tool-io frame): ``emit_tool_call`` mints the card's
     step INSIDE itself (``add_step`` + ``mark_running``) and only publishes the
     id on ``last_tool_step`` at the TERMINAL transition. To emit an early
-    input-only ``tool-io`` frame at dispatch START — so the client shows the
+    input-only ``tool-io`` frame at dispatch START -- so the client shows the
     input args immediately + a "Running…" output placeholder before the tool
-    body returns — we need the in-flight step's id from INSIDE the invoke
+    body returns -- we need the in-flight step's id from INSIDE the invoke
     callable (which runs after ``mark_running``). We derive it the SAME way
     ``PipelineEmitter.update_current_progress`` does: the most-recently-added
     step still in ``running`` state. Best-effort + defensive: any missing
     pipeline internals (or no running step) returns ``None`` so the caller skips
-    the early emit — it is a UX nicety, never a correctness gate. We also guard
+    the early emit -- it is a UX nicety, never a correctness gate. We also guard
     on ``tool_name`` so a stale running step from a sibling dispatch never
     mis-keys the frame.
     """
@@ -9830,7 +9324,7 @@ def _running_emitter_step_id(emitter: Any, tool_name: str) -> str | None:
                 if getattr(s, "tool_name", None) != tool_name:
                     return None
                 return step_id
-    except Exception:  # noqa: BLE001 — never break the dispatch on an emit nicety
+    except Exception:  # noqa: BLE001 -- never break the dispatch on an emit nicety
         return None
     return None
 
@@ -9850,7 +9344,7 @@ def _running_emitter_step_id(emitter: Any, tool_name: str) -> str | None:
 # ``emit_tool_call`` wrapper + ``_restamp`` + early-input-frame machinery, which
 # stay on the loop; only the pure ``entry.fn(**params)`` call moves to the
 # thread. ``asyncio.to_thread`` propagates the contextvars Context, so a stray
-# emit WOULD still resolve the ContextVar — hence the armed-only
+# emit WOULD still resolve the ContextVar -- hence the armed-only
 # ``_assert_sync_offload_safe`` startup guard below refuses to arm if any
 # candidate sync tool's source even references the emitter API.
 #
@@ -9866,7 +9360,7 @@ def _running_emitter_step_id(emitter: Any, tool_name: str) -> str | None:
 _SYNC_OFFLOAD_MODE = os.environ.get("TRID3NT_SYNC_TOOL_OFFLOAD", "off").strip().lower()
 _SYNC_OFFLOAD_GLOBAL_VALUES = frozenset({"global", "all", "on", "1", "true", "yes"})
 #: Stage-1 subset: the hand-audited pure-compute / pure-clip tool families that
-#: take no emitter and do CPU-bound GDAL/numpy work — the safest first cohort.
+#: take no emitter and do CPU-bound GDAL/numpy work -- the safest first cohort.
 _SYNC_OFFLOAD_SUBSET_PREFIXES = ("compute_", "clip_")
 #: ALWAYS off-load (regardless of TRID3NT_SYNC_TOOL_OFFLOAD mode). A hand-audited,
 #: TIGHT set of PROVEN-PATHOLOGICAL sync tools whose bodies do multi-second
@@ -10016,8 +9510,8 @@ _ALWAYS_OFFLOAD_SYNC_TOOLS = frozenset(
     }
 )
 #: Loop-bound emitter API names. A sync tool whose CODE (comments + string /
-#: docstring literals EXCLUDED) references any of these — or any ``emit_*``
-#: attribute — is NOT safe to off-load (it would touch the loop from a worker
+#: docstring literals EXCLUDED) references any of these -- or any ``emit_*``
+#: attribute -- is NOT safe to off-load (it would touch the loop from a worker
 #: thread); ``_assert_sync_offload_safe`` refuses to arm in that case.
 _EMITTER_API_NAMES = frozenset(
     {
@@ -10034,11 +9528,11 @@ def _source_references_emitter(src: str) -> bool:
     """True if ``src`` (a tool's source) contains a real CODE reference to the
     loop-bound emitter API.
 
-    Comments and string/docstring literals are ignored (tokenize drops them) so
-    a doc mention like ``# Wave 4.9 drives via add_loaded_layer`` is NOT a false
-    positive — only an actual identifier in code counts. (publish_layer and
-    fetch_river_geometry both only MENTION add_loaded_layer in docstrings; their
-    bodies are emit-free, the surrounding emit_tool_call wrapper does the emit.)
+    Comments and string/docstring literals are ignored (tokenize drops them)
+    so a mention in a comment is NOT a false positive -- only an actual
+    identifier in code counts. (publish_layer and fetch_river_geometry both
+    only MENTION add_loaded_layer in docstrings; their bodies are emit-free,
+    the surrounding emit_tool_call wrapper does the emit.)
     """
     import io
     import textwrap
@@ -10056,7 +9550,7 @@ def _source_references_emitter(src: str) -> bool:
                 return True
         return False
     except (tokenize.TokenError, IndentationError, SyntaxError):
-        # Un-tokenizable (odd indent/decorator/partial): be CONSERVATIVE — fall
+        # Un-tokenizable (odd indent/decorator/partial): be CONSERVATIVE -- fall
         # back to a line scan that skips obvious comment lines and flag on any
         # surviving emitter token (better to refuse-arm than silently break).
         for line in src.splitlines():
@@ -10166,10 +9660,8 @@ async def _invoke_tool_via_emitter(
     tool_name: str,
     params: dict,
 ) -> Any:
-    """Tool-call site (job-0035 integration with the M4 registry).
-
-    Every ``TOOL_REGISTRY[name].fn(...)`` invocation goes through this
-    wrapper so that:
+    """Tool-call site: every ``TOOL_REGISTRY[name].fn(...)`` invocation goes
+    through this wrapper so that:
 
     - the per-session ``PipelineEmitter`` auto-creates a step,
     - emits ``pipeline-state`` on every state transition (Appendix A.7),
@@ -10177,37 +9669,32 @@ async def _invoke_tool_via_emitter(
     - propagates ``asyncio.CancelledError`` (Invariant 8) and classifies
       arbitrary exceptions into the open-set A.6 error-code registry.
 
-    The kickoff scopes this to the M4 tool registry; M5+ solver dispatch
-    keeps the same shape, simply yielding ``progress_percent`` updates
-    through ``emitter.update_progress`` between solver chunks.
+    Solver dispatch keeps the same shape, yielding ``progress_percent``
+    updates through ``emitter.update_progress`` between solver chunks.
     """
     _ensure_emitter(websocket, state)
     if tool_name not in TOOL_REGISTRY:
-        # B-rev: raise ToolNotFoundError so the existing exception handler at
-        # the call site (server.py:500-507) routes through
-        # summarize_tool_result(error=...) which emits the full Wave 4.9
-        # structured envelope — error_code + retryable + message — so Gemini
+        # Raises ToolNotFoundError so the existing exception handler routes
+        # through summarize_tool_result(error=...), which emits the full
+        # structured envelope (error_code + retryable + message) so Gemini
         # can distinguish "tool ran and returned nothing" from "tool name was
-        # never registered". The _send_error side-channel is NOT needed here;
-        # the function_response envelope IS the signal Gemini reads between
-        # turns. (FR-AS-3, FR-AS-11, job B-rev.)
+        # never registered". function_response IS the signal Gemini reads
+        # between turns -- the _send_error side-channel is not needed here.
+        # (FR-AS-3, FR-AS-11.)
         raise ToolNotFoundError(tool_name, list(TOOL_REGISTRY))
     entry = TOOL_REGISTRY[tool_name]
 
-    # BENCH PRE-DISPATCH BLOCK HOOK (LANE A 2026-07-22). Armed ONLY by the
-    # bench harness via session-config (``state.bench_block_config``); ``None``
-    # (the common path) is a single is-not-None check with ZERO overhead and a
-    # byte-identical dispatch below. When armed, decide the tool's fate BEFORE
-    # any gate / fetch runs:
-    #   * wrong_pick     -- a non-member pick: block outright (no arg work).
-    #   * correct_blocked -- a member pick in the block tier: run the SAME arg
-    #       normalizer a real dispatch would (arg validation) then block, so the
-    #       block is graded on the canonicalized args -- but the fn never runs.
-    # Both raise ``BenchBlockedError`` THROUGH the emitter's ``emit_tool_call``
-    # so the tool still surfaces as a (failed) pipeline step -- the bench grades
-    # off the tool-io function-response's typed error_code -- while ``entry.fn``
-    # (the actual fetch / solve) is never reached: airtight before any fetch,
-    # unlike the racy v1 client-side cancel this replaces.
+    # BENCH PRE-DISPATCH BLOCK HOOK. Armed ONLY by the bench harness via
+    # session-config (``state.bench_block_config``); ``None`` (the common
+    # path) is a single is-not-None check with ZERO overhead. When armed,
+    # decides the tool's fate BEFORE any gate/fetch runs:
+    #   * wrong_pick      -- a non-member pick: block outright (no arg work).
+    #   * correct_blocked -- a member pick in the block tier: run the SAME
+    #       arg normalizer a real dispatch would, then block, so the block is
+    #       graded on the canonicalized args, but the fn never runs.
+    # Both raise ``BenchBlockedError`` THROUGH ``emit_tool_call`` so the tool
+    # still surfaces as a (failed) pipeline step while ``entry.fn`` is never
+    # reached -- airtight before any fetch.
     if state.bench_block_config is not None:
         from .agent.gates.tool_gating import BenchBlockedError, bench_block_decision
 
@@ -10240,17 +9727,15 @@ async def _invoke_tool_via_emitter(
 
     # job-0268: bind this dispatch to the turn's Case ONCE, up front. The
     # .qgs routing, tool-card persist, and layer attribution below all use
-    # this capture — a mid-dispatch ``case-command(select)`` must not re-aim
+    # this capture -- a mid-dispatch ``case-command(select)`` must not re-aim
     # them at the newly visible Case (verified contamination, job-0267).
     turn_case_id = _turn_case_id(state)
 
-    # job-0121: per-Case ``.qgs`` lazy-init for ``publish_layer``.
-    #
-    # When invoked inside a Case context (turn bound to a Case) we
-    # resolve (or initialize) the per-Case ``.qgs`` URI BEFORE the tool body
-    # runs, then substitute it into ``project_qgs_uri`` so the worker mutates
-    # the case-scoped file rather than the shared default. This is the
-    # OQ-62-QGS-MUTATION-CONFLICT resolution path.
+    # Per-Case ``.qgs`` lazy-init for ``publish_layer``: when invoked inside a
+    # Case context we resolve (or initialize) the per-Case ``.qgs`` URI
+    # BEFORE the tool body runs, then substitute it into
+    # ``project_qgs_uri`` so the worker mutates the case-scoped file rather
+    # than the shared default.
     if tool_name == "publish_layer" and turn_case_id:
         try:
             case_qgs = await ensure_case_qgs(
@@ -10275,7 +9760,7 @@ async def _invoke_tool_via_emitter(
                 case_qgs,
             )
 
-    # Drop ``case_id`` for tools that don't declare it — defense in depth.
+    # Drop ``case_id`` for tools that don't declare it -- defense in depth.
     # ``publish_layer`` accepts it; other tools do not.
     if tool_name != "publish_layer" and "case_id" in params:
         params = {k: v for k, v in params.items() if k != "case_id"}
@@ -10289,33 +9774,32 @@ async def _invoke_tool_via_emitter(
         websocket, state, tool_name, params
     )
     if not should_dispatch:
-        # B-rev: raise PayloadWarningCancelledError so Gemini sees a structured
-        # envelope ({status: "error", error_code: "PAYLOAD_WARNING_CANCELLED",
-        # retryable: False}) instead of {"status": "no_result"} which it cannot
-        # interpret. retryable=False because the user explicitly cancelled; the
-        # LLM should narrate the cancellation and not re-issue the call unless
-        # the user provides a narrower scope. (FR-AS-11, job B-rev.)
+        # Raises PayloadWarningCancelledError so Gemini sees a structured
+        # envelope ({status: "error", error_code:
+        # "PAYLOAD_WARNING_CANCELLED", retryable: False}) instead of
+        # {"status": "no_result"}, which it cannot interpret. retryable=False
+        # because the user explicitly cancelled. (FR-AS-11.)
         raise PayloadWarningCancelledError(tool_name)
 
-    # job-0233: code_exec_request confirm gate. Running arbitrary Python is a
-    # consequential action — the user MUST approve the exact code first. The gate
-    # emits a ``code-exec-request`` card, blocks on the SAME
-    # ``pending_payload_warnings`` future seam (code_exec_id == warning_id), and
-    # on approval injects ``confirmed=True`` + the minted ``code_exec_id`` into
-    # params so the tool body dispatches the sandbox. A direct programmatic call
-    # that already carries ``confirmed=True`` (a trusted composer / test) is NOT
-    # re-gated — but a LLM-issued call never carries it, so the gate is mandatory
-    # on the LLM path. Fail-closed: cancel / timeout raises a typed, non-retryable
-    # error so Gemini narrates the decline and does not re-run the same snippet.
-    # Invariant 9 (job-0301): STRIP the model-supplied confirmed/code_exec_id
-    # BEFORE gating — the gate is server-owned, exactly like the solver gate below.
-    # The prior `and not params.get("confirmed")` condition let a model that passed
-    # confirmed=True SKIP the gate and self-approve code execution (those params are
-    # NOT underscore-hidden from its tool schema, so it could supply them). Popping
-    # makes the user-confirmation gate MANDATORY on every model-issued code_exec
-    # call; only an explicit user "proceed" inside _gate_on_code_exec re-injects
-    # confirmed + the minted code_exec_id. (Trusted programmatic callers/tests that
-    # must bypass invoke the tool function directly, not via this server gate.)
+    # code_exec_request confirm gate: running arbitrary Python is a
+    # consequential action -- the user MUST approve the exact code first. The
+    # gate emits a ``code-exec-request`` card, blocks on the SAME
+    # ``pending_payload_warnings`` future seam (code_exec_id == warning_id),
+    # and on approval injects ``confirmed=True`` + the minted ``code_exec_id``
+    # into params so the tool body dispatches the sandbox. A direct
+    # programmatic call that already carries ``confirmed=True`` (a trusted
+    # composer/test) is NOT re-gated, but an LLM-issued call never carries it,
+    # so the gate is mandatory on the LLM path. Fail-closed: cancel/timeout
+    # raises a typed, non-retryable error so Gemini narrates the decline and
+    # does not re-run the same snippet.
+    #
+    # Invariant 9: STRIP the model-supplied confirmed/code_exec_id BEFORE
+    # gating -- the gate is server-owned, exactly like the solver gate below,
+    # making the user-confirmation gate MANDATORY on every model-issued
+    # code_exec call; only an explicit user "proceed" inside
+    # _gate_on_code_exec re-injects confirmed + the minted code_exec_id.
+    # (Trusted programmatic callers/tests that must bypass invoke the tool
+    # function directly, not via this server gate.)
     if tool_name == "code_exec_request":
         params.pop("confirmed", None)
         params.pop("code_exec_id", None)
@@ -10325,26 +9809,25 @@ async def _invoke_tool_via_emitter(
                 params.get("code_exec_id", "unknown")
             )
 
-    # job-0164: centralized kwarg sweep. Gemini routinely invents kwargs that
-    # don't exist on our tools (``run_name``, ``scenario_id``,
-    # ``return_period_years`` when the tool accepts ``return_period_yr``, etc.).
-    # ``normalize_args`` inspects ``entry.fn``'s signature and rewrites
-    # bidirectional aliases (``_yr`` ↔ ``_years``, ``_hr`` ↔ ``_hours``,
-    # ``durationHours`` ↔ ``duration_hours``), parses string-form forcing specs
-    # (``forcing="atlas14_100yr"`` → ``return_period_years=100``), absorbs
-    # silent-drop convenience kwargs, and logs+drops the rest — never raises.
-    # See ``tool_arg_normalizer.py``. job-0326: run this BEFORE the solver-confirm
-    # gate AND the reuse guard so both see canonicalized (_yr/_hr) param names.
+    # Centralized kwarg sweep: Gemini routinely invents kwargs that don't
+    # exist on our tools (``run_name``, ``scenario_id``,
+    # ``return_period_years`` when the tool accepts ``return_period_yr``,
+    # etc.). ``normalize_args`` inspects ``entry.fn``'s signature and rewrites
+    # bidirectional aliases (``_yr`` <-> ``_years``, ``_hr`` <-> ``_hours``,
+    # ``durationHours`` <-> ``duration_hours``), parses string-form forcing
+    # specs (``forcing="atlas14_100yr"`` -> ``return_period_years=100``),
+    # absorbs silent-drop convenience kwargs, and logs+drops the rest -- never
+    # raises. See ``tool_arg_normalizer.py``. Runs BEFORE the solver-confirm
+    # gate AND the reuse guard so both see canonicalized param names.
     params = normalize_args(tool_name, params, entry.fn)
 
-    # ADR 0017 (Lane S slice): bbox AUTO-FILL. A tool whose signature REQUIRES
-    # a bbox-like param ('bbox' / 'aoi_bbox') that the model OMITTED gets it
-    # injected here — precedence: explicit arg > active canvas AOI (the
-    # structured user-message ``aoi_bbox``) > Case bbox. Explicit model args
-    # are NEVER overridden (the pinned-AOI snap below owns the provided-bbox
-    # case). Runs AFTER normalize_args so bbox aliases have landed on the
-    # canonical name, and BEFORE the reuse guards / AOI snaps so they all see
-    # the filled value. Logs one line when it fires.
+    # ADR 0017: bbox AUTO-FILL. A tool whose signature REQUIRES a bbox-like
+    # param ('bbox' / 'aoi_bbox') that the model OMITTED gets it injected
+    # here -- precedence: explicit arg > active canvas AOI > Case bbox.
+    # Explicit model args are NEVER overridden (the pinned-AOI snap below
+    # owns the provided-bbox case). Runs AFTER normalize_args so bbox
+    # aliases have landed on the canonical name, and BEFORE the reuse
+    # guards/AOI snaps so they all see the filled value.
     params = autofill_missing_bbox(
         tool_name,
         params,
@@ -10353,51 +9836,47 @@ async def _invoke_tool_via_emitter(
         case_bbox=_turn_case_bbox(state),
     )
 
-    # job LANE-C (#159 follow-up #2): default a bbox-taking FETCH to the pinned
-    # Case AOI. After a solve pins the domain (see the post-result pin below), the
-    # LLM still free-hands a fresh (usually narrower) bbox for every follow-up
-    # fetch, so buildings/rivers/dem/roads under-covered the flood domain. Force a
-    # same-area follow-up onto the pinned extent so all layers cover the SAME AOI
-    # by construction; a genuinely DIFFERENT place (disjoint) or an explicit WIDEN
-    # (encloses the pin) is honored. Runs BEFORE the fetcher reuse guard so the
-    # reuse comparison sees the snapped bbox. No-op when no AOI is pinned.
+    # Default a bbox-taking FETCH to the pinned Case AOI: after a solve pins
+    # the domain, force a same-area follow-up fetch onto the pinned extent so
+    # all layers cover the SAME AOI by construction; a genuinely DIFFERENT
+    # place (disjoint) or an explicit WIDEN (encloses the pin) is honored.
+    # Runs BEFORE the fetcher reuse guard so the reuse comparison sees the
+    # snapped bbox. No-op when no AOI is pinned.
     params = _maybe_default_fetch_bbox_to_pinned_aoi(
         tool_name, params, _turn_case_bbox(state)
     )
 
-    # #183 (NATE compute-domain guard): pin an expensive SOLVER's bbox to the
-    # active Case AOI too. The SFINCS grid is built directly from this bbox via
-    # setup_grid_from_region (no padding), so a follow-up / re-entry solve handed
-    # a drifted / wider same-area box would compute OUTSIDE the displayed AOI (the
-    # #159 lineage). Mirror the fetch rule: solve ONLY within the active AOI,
-    # honoring an explicit WIDEN (encloses the pin) or a DIFFERENT place
-    # (disjoint). No-op on the first solve (no AOI pinned yet) and on archetypes
-    # / coastal (selected by forcing flags, never an enclosing-wider bbox). Runs
-    # BEFORE the scenario reuse guard so the reuse comparison sees the snap.
+    # Pin an expensive SOLVER's bbox to the active Case AOI too: the SFINCS
+    # grid is built directly from this bbox via setup_grid_from_region (no
+    # padding), so a follow-up/re-entry solve handed a drifted/wider
+    # same-area box would compute OUTSIDE the displayed AOI. Mirrors the
+    # fetch rule: solve ONLY within the active AOI, honoring an explicit
+    # WIDEN (encloses the pin) or a DIFFERENT place (disjoint). No-op on the
+    # first solve (no AOI pinned yet) and on archetypes/coastal (selected by
+    # forcing flags, never an enclosing-wider bbox). Runs BEFORE the
+    # scenario reuse guard so the reuse comparison sees the snap.
     params = _maybe_default_solver_bbox_to_pinned_aoi(
         tool_name, params, _turn_case_bbox(state)
     )
 
-    # job-0326: DETERMINISTIC expensive-simulation reuse guard (NATE 2026-06-16).
-    # The F54 prompt steer ("reuse the existing layer; do NOT re-run") was being
-    # IGNORED by the live model, so the agent re-ran ~10-20-minute SFINCS/MODFLOW
-    # solves whose output layer was ALREADY on the map. This guard is the HARD
-    # backstop: before launching an expensive solver composer, it checks the
-    # session's already-produced results (the per-Case loaded_layers + the
-    # in-session scenario index) for a CLEAR match (same scenario family + same
-    # AOI + same key params). On a clear match it SHORT-CIRCUITS — returning the
-    # EXISTING layer instead of launching the solver — and tags a "reusing
+    # DETERMINISTIC expensive-simulation reuse guard: a HARD backstop before
+    # launching an expensive solver composer -- checks the session's
+    # already-produced results (the per-Case loaded_layers + the in-session
+    # scenario index) for a CLEAR match (same scenario family + same AOI +
+    # same key params). On a clear match it SHORT-CIRCUITS, returning the
+    # EXISTING layer instead of launching the solver, and tags a "reusing
     # existing result (not re-running)" note for the model. CONSERVATIVE by
-    # construction: any ambiguity falls through to RUN (see scenario_reuse.py).
-    # ``force_rerun``/``rerun``/``force`` truthy kwargs are the explicit-re-run
-    # escape hatch (user asked to re-run) — stripped before the real dispatch.
+    # construction: any ambiguity falls through to RUN (see
+    # scenario_reuse.py). ``force_rerun``/``rerun``/``force`` truthy kwargs
+    # are the explicit-re-run escape hatch, stripped before the real
+    # dispatch.
     _reuse_note: str | None = None
     if scenario_type_for_tool(tool_name) is not None:
         _force_rerun = any(
             bool(params.get(k))
             for k in ("force_rerun", "rerun", "re_run", "force")
         )
-        # These are guard-control kwargs, never real tool params — strip them so
+        # These are guard-control kwargs, never real tool params -- strip them so
         # the downstream tool body never sees an unexpected kwarg.
         for _k in ("force_rerun", "rerun", "re_run", "force"):
             params.pop(_k, None)
@@ -10414,7 +9893,7 @@ async def _invoke_tool_via_emitter(
                     scenario_index.seed_from_loaded_layers(
                         state.emitter.loaded_layers
                     )
-            except Exception:  # noqa: BLE001 — seeding is best-effort
+            except Exception:  # noqa: BLE001 -- seeding is best-effort
                 logger.debug("scenario_reuse seed failed", exc_info=True)
             request_sig = scenario_signature(tool_name, params)
             case_bbox = _turn_case_bbox(state)
@@ -10446,15 +9925,14 @@ async def _invoke_tool_via_emitter(
                 # (emit_tool_call's LayerURI gate) fires with the reused layer.
                 entry = _ReuseEntry(entry.metadata, _reused_layer)
 
-    # F96: deterministic reuse backstop for FETCHERS (job-0366, mirrors the
-    # run_model_* scenario reuse above). job-0333 only guarded expensive
-    # SIMULATIONS; a fit/resize/re-show follow-up for an already-loaded FETCHED
-    # layer ("resize the bbox to encompass all protected areas" after WDPA is on
-    # the map) would re-fetch and mint a SECOND identical layer. When a same-kind
-    # loaded layer already ENCLOSES the requested AOI, short-circuit to it so the
-    # agent fits/narrates from the existing handle instead of re-fetching. The
-    # find_reusable_fetched_layer helper is pure/conservative (job-0364): any
-    # ambiguity (different kind, larger/unresolvable AOI) falls through to FETCH.
+    # Deterministic reuse backstop for FETCHERS (mirrors the scenario reuse
+    # above, which only guards expensive SIMULATIONS): a fit/resize/re-show
+    # follow-up for an already-loaded FETCHED layer would otherwise re-fetch
+    # and mint a SECOND identical layer. When a same-kind loaded layer
+    # already ENCLOSES the requested AOI, short-circuit to it so the agent
+    # fits/narrates from the existing handle instead of re-fetching.
+    # ``find_reusable_fetched_layer`` is pure/conservative: any ambiguity
+    # (different kind, larger/unresolvable AOI) falls through to FETCH.
     # ``force_refetch``/``refetch``/``force`` truthy kwargs are the explicit
     # re-fetch escape hatch, stripped before the real dispatch.
     if (
@@ -10514,21 +9992,19 @@ async def _invoke_tool_via_emitter(
         state, case_id=turn_case_id, tool_name=tool_name, params=params
     )
 
-    # Confirmation-before-consequence for solver composers (job-0241,
-    # Invariant 9 / FR-AS-8). The LLM-supplied ``confirmed`` is STRIPPED first
-    # — the gate is server-owned; only an explicit user "proceed" injects it.
-    # job-0326: SKIPPED on a reuse short-circuit (``_ReuseEntry``) — there is no
-    # solver to confirm; we are handing back an already-produced layer.
-    # NATE 2026-06-26: the gate now also fires for the heavy raster FETCHERS
-    # (FETCH_CONFIRM_TOOLS) — the SAME gate, building a fetch-resolution card.
-    # confirmed is stripped only for the solver branch (fetchers do not read it);
-    # _gate_on_solver_confirm guards the confirmed/enable_autoscale injection to
-    # SOLVER_CONFIRM_TOOLS, so a fetch's approved params carry resolution_m only.
-    # fix (bbox-gate-retry-loop, 2026-07-09): routed through
+    # Confirmation-before-consequence for solver composers (Invariant 9 /
+    # FR-AS-8). The LLM-supplied ``confirmed`` is STRIPPED first -- the gate
+    # is server-owned; only an explicit user "proceed" injects it. SKIPPED on
+    # a reuse short-circuit (``_ReuseEntry``) -- there is no solver to
+    # confirm. The gate also fires for the heavy raster FETCHERS
+    # (FETCH_CONFIRM_TOOLS) via the SAME gate, building a fetch-resolution
+    # card; ``confirmed`` is stripped only for the solver branch (fetchers do
+    # not read it), and ``_gate_on_solver_confirm`` guards the
+    # confirmed/enable_autoscale injection to SOLVER_CONFIRM_TOOLS so a
+    # fetch's approved params carry resolution_m only. Routed through
     # ``_gate_with_turn_memory`` so a same-tool/same-bbox retry later in this
-    # SAME turn (e.g. a typed-error retry that only fixed a non-bbox arg)
-    # replays the earlier proceed/narrow_scope decision instead of hanging
-    # on an unanswered second gate.
+    # SAME turn replays the earlier proceed/narrow_scope decision instead of
+    # hanging on an unanswered second gate.
     if (
         tool_name in (SOLVER_CONFIRM_TOOLS | FETCH_CONFIRM_TOOLS)
         and not isinstance(entry, _ReuseEntry)
@@ -10541,14 +10017,14 @@ async def _invoke_tool_via_emitter(
         if not should_run:
             raise SolverConfirmationCancelledError(tool_name)
 
-    # job-0263: layer-handle indirection — kill the LLM-URI-mangling class
-    # (5 live incidents: invented cache paths, WMS-URL-as-hazard, hash-tail
-    # hallucination x3, NSI layer_id-as-basename, runs/ prefix mangle).
-    # Every URI-consuming param resolves through the session-scoped registry:
-    # known handle → registered URI; exact known URI → pass; close mangle →
-    # substitute + WARNING; unknown managed-bucket path → typed retryable
-    # URI_HANDLE_UNRESOLVED listing the real handles so Gemini self-corrects
-    # without inventing. See uri_registry.py.
+    # Layer-handle indirection: kills the LLM-URI-mangling class (invented
+    # cache paths, WMS-URL-as-hazard, hash-tail hallucination, NSI
+    # layer_id-as-basename, runs/ prefix mangle). Every URI-consuming param
+    # resolves through the session-scoped registry: known handle -> registered
+    # URI; exact known URI -> pass; close mangle -> substitute + WARNING;
+    # unknown managed-bucket path -> typed retryable URI_HANDLE_UNRESOLVED
+    # listing the real handles so Gemini self-corrects without inventing. See
+    # uri_registry.py.
     uri_registry = get_uri_registry(state.session_id)
     params = uri_registry.resolve_params(tool_name, params)
 
@@ -10587,8 +10063,8 @@ async def _invoke_tool_via_emitter(
     # association even though the composer's envelope only carries the WMS URL.
     _uri_reg_token = activate_registry(uri_registry)
     # job-0267: tool-card persistence bookkeeping. ``_card_state`` stays None
-    # on cancellation (Invariant 8 — no replayable outcome); the wall-clock
-    # pair is only the FALLBACK timing — ``_persist_tool_card`` prefers the
+    # on cancellation (Invariant 8 -- no replayable outcome); the wall-clock
+    # pair is only the FALLBACK timing -- ``_persist_tool_card`` prefers the
     # emitter's authoritative job-0264 ``last_tool_step`` stamps.
     _card_state: str | None = None
     _card_started_at = now_utc()
@@ -10598,7 +10074,7 @@ async def _invoke_tool_via_emitter(
     # was LOST on reopen). ``_card_raw_args`` is the post-resolution params the
     # tool actually ran with; ``_card_response`` is the raw tool RESULT (the
     # closest in-wrapper analogue of the live sidecar's ``function_response``
-    # summary — the summary itself is built downstream in _stream_gemini_reply,
+    # summary -- the summary itself is built downstream in _stream_gemini_reply,
     # which we don't reach from here). ``_persist_tool_card`` serializes both
     # with the SAME ``_json_for_tool_io`` helper + field names the live sidecar
     # uses, so the persisted shape matches the wire shape.
@@ -10619,7 +10095,7 @@ async def _invoke_tool_via_emitter(
     # AFTER this wrapper, so they pick up the minted id).
     #
     # Stability across reconnect/replay: minting happens only on a LIVE fetch.
-    # A Case reopen rehydrates persisted dicts via ``reset_loaded_layers`` —
+    # A Case reopen rehydrates persisted dicts via ``reset_loaded_layers`` --
     # no tool re-runs, so the SAME instance keeps its minted id (per-Case
     # durability holds). The scenario-reuse short-circuit (``_ReuseEntry``)
     # is the deliberate exception: it hands back an ALREADY-loaded layer, so
@@ -10633,17 +10109,15 @@ async def _invoke_tool_via_emitter(
             return value
         if isinstance(value, LayerURI):
             return value.model_copy(update={"layer_id": new_ulid()})
-        # NATE 2026-06-26: true-color / satellite tools return list[LayerURI]
-        # (fetch_goes_animation, fetch_goes_archive_animation,
-        # fetch_goes_active_fire, fetch_glm_lightning, fetch_viirs_day_fire).
-        # The single-LayerURI branch above NEVER re-stamped those, so members
-        # kept source-derived ids that can coincide; add_loaded_layer dedups by
-        # COG-identity (TiTiler url= param), NOT by layer_id, so two layers with
-        # the same id both persist and collide on delete-by-id (deleting one
-        # tore down BOTH). Re-stamp every LayerURI element with a fresh ULID,
-        # passing non-LayerURI elements through, and PRESERVE the sequence type
-        # (list stays list, tuple stays tuple) so downstream isinstance(result,
-        # list) checks (auto-publish loop, uri_registry) are unaffected.
+        # True-color / satellite tools return list[LayerURI] (fetch_goes_
+        # animation, fetch_goes_archive_animation, fetch_goes_active_fire,
+        # fetch_glm_lightning, fetch_viirs_day_fire). add_loaded_layer dedups
+        # by COG-identity (TiTiler url= param), NOT by layer_id, so two
+        # layers sharing a source-derived id both persist and collide on
+        # delete-by-id. Re-stamp every LayerURI element with a fresh ULID,
+        # passing non-LayerURI elements through, and PRESERVE the sequence
+        # type (list stays list, tuple stays tuple) so downstream
+        # isinstance(result, list) checks are unaffected.
         if isinstance(value, (list, tuple)):
             restamped = [
                 el.model_copy(update={"layer_id": new_ulid()})
@@ -10655,13 +10129,13 @@ async def _invoke_tool_via_emitter(
         return value
 
     async def _emit_early_input_frame() -> None:
-        # FIX B (#7 — input immediately + 'Running…'): the live ``tool-io``
+        # FIX B (#7 -- input immediately + 'Running…'): the live ``tool-io``
         # sidecar was emitted ONLY at tool COMPLETION (a single frame carrying
         # BOTH raw_args AND function_response), so the chat card showed no input
         # and no output placeholder until the tool returned. Emit an EARLY
-        # input-only frame at dispatch START — SAME ``ToolIoPayload`` wire shape,
+        # input-only frame at dispatch START -- SAME ``ToolIoPayload`` wire shape,
         # raw_args populated, function_response EMPTY (None -> "null"),
-        # is_error False — keyed on THIS dispatch's running step so the client
+        # is_error False -- keyed on THIS dispatch's running step so the client
         # paints the input + a "Running…" output placeholder immediately. The
         # completion-time emit (server.py ~2090) re-keys the SAME step_id and
         # fills in function_response, so the two frames are idempotent on one
@@ -10678,7 +10152,7 @@ async def _invoke_tool_via_emitter(
                     function_response=None,
                     is_error=False,
                 )
-        except Exception:  # noqa: BLE001 — early frame is a UX nicety
+        except Exception:  # noqa: BLE001 -- early frame is a UX nicety
             logger.debug(
                 "early tool-io emit failed session=%s tool=%s",
                 state.session_id,
@@ -10695,8 +10169,8 @@ async def _invoke_tool_via_emitter(
         # worker thread so a slow tool cannot stall the WS keepalive. The emit
         # machinery stays on the loop (see _should_offload_sync_tool /
         # _assert_sync_offload_safe). Reuse short-circuits return a trivial
-        # already-produced layer synchronously — never worth a thread, and they
-        # are not covered by the startup emit-free scan — so they are excluded.
+        # already-produced layer synchronously -- never worth a thread, and they
+        # are not covered by the startup emit-free scan -- so they are excluded.
         # A tool mis-classified as sync (e.g. an async-callable object that
         # iscoroutinefunction missed) returns a coroutine from the thread; we
         # await it back on the loop so semantics are preserved.
@@ -10715,15 +10189,14 @@ async def _invoke_tool_via_emitter(
         return _restamp(out)
 
     try:
-        # job VAULT-READ: dispatch with a credential-request retry. The first
-        # attempt runs the tool; if it raises a missing/invalid-credential
-        # error for a keyed provider (e.g. FIRMS_AUTH_ERROR) we PAUSE, emit a
-        # ``credential-request`` envelope, and await the user's
-        # ``credential-provided`` reply. On provided=True we re-resolve the
-        # (now-saved) vault key and retry the tool ONCE. The guard is one
-        # prompt per tool per turn (``credential_prompted_tools``) so a
-        # still-bad key fails through the normal typed-error surface instead of
-        # re-prompting forever.
+        # Dispatch with a credential-request retry: the first attempt runs
+        # the tool; if it raises a missing/invalid-credential error for a
+        # keyed provider (e.g. FIRMS_AUTH_ERROR) we PAUSE, emit a
+        # ``credential-request`` envelope, and await
+        # ``credential-provided``. On provided=True we re-resolve the
+        # (now-saved) vault key and retry ONCE. One prompt per tool per turn
+        # (``credential_prompted_tools``) so a still-bad key fails through the
+        # normal typed-error surface instead of re-prompting forever.
         try:
             result = await state.emitter.emit_tool_call(
                 name=entry.metadata.name,
@@ -10732,7 +10205,7 @@ async def _invoke_tool_via_emitter(
             )
         except (asyncio.CancelledError, GeneratorExit):
             raise
-        except BaseException as exc:  # noqa: BLE001 — classify below
+        except BaseException as exc:  # noqa: BLE001 -- classify below
             retry_params = await _maybe_handle_credential_error(
                 websocket, state, tool_name, params, exc, turn_case_id
             )
@@ -10767,10 +10240,9 @@ async def _invoke_tool_via_emitter(
         deactivate_registry(_uri_reg_token)
         state.emitter.close_pipeline()
         state.current_pipeline_id = None
-        # job-0267: persist the replayable tool-card row so a Case reopen
-        # re-renders the inline tool card (user-verified loss: only user
-        # messages survived). Fires for complete AND failed terminal states,
-        # BEFORE the narration row that closes the turn — the chat
+        # Persist the replayable tool-card row so a Case reopen re-renders
+        # the inline tool card. Fires for complete AND failed terminal
+        # states, BEFORE the narration row that closes the turn -- the chat
         # collection's ``created_at`` order IS the replay order. Best-effort,
         # never raises, never masks the original exception.
         if _card_state is not None and turn_case_id:
@@ -10790,14 +10262,12 @@ async def _invoke_tool_via_emitter(
                 function_response=_card_response,
                 io_is_error=_card_io_error,
             )
-        # job-0259: persist the Case layer accumulator in the FINALLY block —
-        # the round-3 plume evidence showed a published layer vanishing from
-        # the reopened Case because the post-invoke ``session-state`` emission
-        # raised on a dying WebSocket, which skipped a persist placed after
-        # the try-block. ``add_loaded_layer`` appends to ``_loaded_layers``
-        # BEFORE it emits, so persisting here captures the layer even when
-        # the wire write failed. Never raises (and never masks the original
-        # exception) — persistence is a side-effect, not the happy path.
+        # Persist the Case layer accumulator in the FINALLY block:
+        # ``add_loaded_layer`` appends to ``_loaded_layers`` BEFORE it emits,
+        # so persisting here captures the layer even when the post-invoke
+        # ``session-state`` emission raises on a dying WebSocket. Never
+        # raises (and never masks the original exception) -- persistence is
+        # a side-effect, not the happy path.
         if turn_case_id and state.emitter is not None:
             # DURABILITY (layer-publish-survives-disconnect, 2026-06-23): run the
             # layer persist UNDER A SHIELD so a cancellation of the (possibly
@@ -10864,30 +10334,22 @@ async def _invoke_tool_via_emitter(
                     turn_case_id,
                 )
 
-    # DETERMINISTIC LAYER AUTO-PUBLISH (NATE 2026-06-26): "we should not have the
-    # LLM enforce publishing of layers -- this should just be done without LLM
-    # intervention." When a tool returns a renderable RASTER LayerURI carrying a
-    # raw object-store uri (s3:// / gs://), the layer_uri_emit seam DROPS it
-    # (MapLibre cannot fetch an object-store uri), so historically it only ever
-    # rendered if the LLM separately called publish_layer to convert the COG to an
-    # http(s) TiTiler tile URL. Here we AUTO-CALL publish_layer server-side -- no
-    # new LLM turn, no LLM action -- and feed the resulting http(s) URL through the
-    # SAME emit_layer_uri -> add_loaded_layer machinery the publish_layer wrap-site
-    # below uses. This is exactly the class of LayerURI emit_layer_uri would drop.
+    # DETERMINISTIC LAYER AUTO-PUBLISH: a tool returning a renderable RASTER
+    # LayerURI with a raw object-store uri (s3://, gs://) gets AUTO-CALLED
+    # through ``_auto_publish_droppable_raster`` (see its docstring) rather
+    # than left for the LLM to publish.
     #
-    # Gating: skip publish_layer itself (it has its own wrap-site just below) and
-    # the reuse short-circuit (the layer is already loaded), and honor the per-tool
+    # Gating: skip ``publish_layer`` itself (its own wrap-site is below) and
+    # the reuse short-circuit (already loaded); honor the per-tool
     # ``auto_publish`` metadata flag (default True; pure intermediates like
-    # fetch_dem / fetch_topobathy / fetch_3dep_extra opt OUT so their raw input
-    # raster is not auto-rendered).
+    # fetch_dem/fetch_topobathy/fetch_3dep_extra opt OUT).
     #
-    # Dedup: add_loaded_layer dedups by underlying-COG identity, so if the LLM ALSO
-    # calls publish_layer for the SAME COG the two rows MERGE (no double-add).
+    # Dedup: add_loaded_layer dedups by COG identity, so an LLM publish of the
+    # SAME COG merges into the same row.
     #
-    # Honesty floor: if the auto publish_layer FAILS (raises, or returns a non-http
-    # value) we DO NOT silently drop the layer and narrate success -- we surface a
-    # typed ``LAYER_AUTO_PUBLISH_FAILED`` error envelope so a failed render is never
-    # a silent green. The LLM-visible tool ``result`` is left UNCHANGED.
+    # Honesty floor: a FAILED auto-publish surfaces a typed
+    # ``LAYER_AUTO_PUBLISH_FAILED`` error rather than silently narrating
+    # success; the LLM-visible tool ``result`` is left unchanged.
     if (
         tool_name != "publish_layer"
         and not isinstance(entry, _ReuseEntry)
@@ -10910,7 +10372,7 @@ async def _invoke_tool_via_emitter(
 
     # job-0263: register every URI the result carries (LayerURI layer_id↔uri
     # pairs + bare object-store strings) so the NEXT tool call can resolve
-    # handles / detect mangles. Best-effort — registration never breaks the
+    # handles / detect mangles. Best-effort -- registration never breaks the
     # dispatch.
     uri_registry.register_tool_result(tool_name, result)
 
@@ -10920,29 +10382,20 @@ async def _invoke_tool_via_emitter(
     # breaks the dispatch).
     await _persist_case_layer_handles(state, case_id=turn_case_id)
 
-    # job AGENT-AOI-RESIDUAL (#159): a composer's LayerURI carries the FINAL
-    # (peak, floored - Wave 1) AOI bbox, and ``emit_tool_call``'s LayerURI gate
-    # fired the live floored zoom-to via ``add_loaded_layer``. But that live
-    # emission was the ONLY writer of the floored extent - it never landed in
-    # ``current_turn_map_commands``. The only writer of that accumulator was
-    # ``geocode_location``'s EARLIER snap to the SMALL collapsed bbox (~2015),
-    # so the closing ``CaseChatMessage.map_command_emissions`` persisted only
-    # the small geocode bbox. Re-entry replays it (web ``extractLastZoomTo``
-    # walks newest-first) and the Case reverts to the old tiny AOI. Append the
-    # floored bbox HERE - after the geocode snap was appended earlier this turn
-    # - so it is the LAST zoom-to and re-entry snaps to the floored AOI.
-    # GUARDS: only a finite 4-number tuple; DEDUPE against the last accumulated
-    # zoom-to bbox so a double-dispatch / repeat does not double-append.
+    # A composer's LayerURI carries the FINAL floored AOI bbox and
+    # ``emit_tool_call``'s LayerURI gate fires the live zoom-to via
+    # ``add_loaded_layer`` -- but that never lands in
+    # ``current_turn_map_commands`` on its own. Append the floored bbox HERE,
+    # after any earlier geocode snap this turn, so it is the LAST zoom-to and
+    # re-entry (``extractLastZoomTo``, newest-first) snaps to the floored AOI.
+    # GUARDS: only a finite 4-number tuple; dedupe against the last
+    # accumulated zoom-to bbox so a repeat dispatch does not double-append.
     #
-    # job LANE-C (#159 follow-up #3): for a DOMAIN-producing solver, emit ONLY the
-    # pinned domain bbox - NOT the geocode-then-domain double rectangle. The
-    # geocode snap appended an EARLIER zoom-to to the small collapsed bbox this
-    # turn; replaying both makes the camera (and the persisted view) flash the
-    # geocode box then the domain box (the #159 double rectangle). PURGE the
-    # earlier zoom-to entries on a domain solve so the closing
-    # ``map_command_emissions`` carries the single authoritative domain extent.
-    # Plain fetches keep the append-only behavior (no purge) so unrelated
-    # multi-layer flows are unaffected.
+    # For a DOMAIN-producing solver, emit ONLY the pinned domain bbox --
+    # PURGE any earlier zoom-to entries so ``map_command_emissions`` carries
+    # a single authoritative domain extent (otherwise the camera flashes the
+    # geocode box then the domain box). Plain fetches keep the append-only
+    # behavior so unrelated multi-layer flows are unaffected.
     if isinstance(result, LayerURI) and _is_finite_bbox4(result.bbox):
         _floored_bbox = list(result.bbox)
         if not isinstance(entry, _ReuseEntry) and _scenario_produces_domain(
@@ -10964,7 +10417,7 @@ async def _invoke_tool_via_emitter(
     # job-0326: record a FRESHLY-PRODUCED expensive-scenario result into the
     # session reuse index so a later identical request short-circuits instead of
     # re-running the solver. Skip when this dispatch WAS the short-circuit (the
-    # _ReuseEntry path) — the layer is already indexed. Only index a real
+    # _ReuseEntry path) -- the layer is already indexed. Only index a real
     # success (a LayerURI return), never a failure dict. Best-effort.
     if (
         not isinstance(entry, _ReuseEntry)
@@ -10980,17 +10433,15 @@ async def _invoke_tool_via_emitter(
                 uri=result.uri,
                 bbox=result.bbox,
             )
-        except Exception:  # noqa: BLE001 — indexing must never break dispatch
+        except Exception:  # noqa: BLE001 -- indexing must never break dispatch
             logger.debug("scenario_reuse record failed", exc_info=True)
 
-    # job LANE-C (#159 follow-up #1): PIN the solve domain as the Case AOI.
-    # A freshly-completed expensive solver (SWMM / SFINCS / MODFLOW) mints a
-    # LayerURI whose ``bbox`` IS the authoritative floored solve domain (the same
-    # extent ``compute_layer_bounds`` returns for the produced handle). Persist it
-    # as ``CaseSummary.bbox`` + cache it onto ``state.case_bbox`` so every
-    # subsequent fetch defaults to this extent (via the fetch-default above) and a
-    # Case reopen rehydrates the SAME AOI. Skip the reuse short-circuit (already
-    # pinned when first produced). Best-effort — never breaks the dispatch.
+    # PIN the solve domain as the Case AOI: a freshly-completed expensive
+    # solver (SWMM/SFINCS/MODFLOW) mints a LayerURI whose ``bbox`` IS the
+    # authoritative floored solve domain. Persist it as ``CaseSummary.bbox``
+    # + cache onto ``state.case_bbox`` so every subsequent fetch defaults to
+    # this extent and a Case reopen rehydrates the SAME AOI. Skip on a reuse
+    # short-circuit (already pinned when first produced). Best-effort.
     if (
         not isinstance(entry, _ReuseEntry)
         and _scenario_produces_domain(tool_name)
@@ -11001,17 +10452,15 @@ async def _invoke_tool_via_emitter(
             await _pin_case_aoi_from_solve(
                 state, case_id=turn_case_id, bbox=result.bbox
             )
-        except Exception:  # noqa: BLE001 — pin is a side-effect, never break
+        except Exception:  # noqa: BLE001 -- pin is a side-effect, never break
             logger.debug("aoi-pin failed", exc_info=True)
 
-    # job-0326: when this dispatch was a reuse short-circuit, the emitter has
-    # ALREADY re-loaded the existing layer onto the map (the emit_tool_call
-    # LayerURI gate fired with the reused LayerURI). What's left is to give
-    # Gemini an UNAMBIGUOUS function_response that says "this is the EXISTING
-    # result, the simulation was NOT re-run" so it narrates honestly and does not
-    # try again. Return a compact dict (summarize_tool_result handles dicts) that
-    # carries both the reuse flag/note and the reused layer's identity. This
-    # REPLACES the bare LayerURI return on the short-circuit path; the map update
+    # When this dispatch was a reuse short-circuit, the emitter has ALREADY
+    # re-loaded the existing layer onto the map. What's left is to give
+    # Gemini an UNAMBIGUOUS function_response -- "this is the EXISTING
+    # result, not re-run" -- so it narrates honestly and does not retry.
+    # Returns a compact dict carrying the reuse flag/note + the reused
+    # layer's identity, replacing the bare LayerURI return; the map update
     # already happened, so nothing renderable is lost.
     if _reuse_note is not None and isinstance(result, LayerURI):
         logger.info("scenario_reuse note=%s", _reuse_note)
@@ -11033,30 +10482,27 @@ async def _invoke_tool_via_emitter(
         lid = params.get("layer_id")
         if isinstance(lid, str) and lid:
             state.current_turn_layer_ids.append(lid)
-            # job-0272: the MISSING LINK between an atomic publish and the
-            # map. ``emit_tool_call`` only feeds ``add_loaded_layer`` (and
-            # thus the ``session-state`` envelope the web renders WMS layers
-            # from) when a tool RETURNS a typed LayerURI — composers do, but
-            # the atomic ``publish_layer`` returns a bare WMS string, so an
-            # LLM-driven fetch→compute→publish chain published server-side
-            # while the map stayed empty (live x3: hillshade Wave 4.8,
-            # Seattle + Boulder reliefs 2026-06-10). Wrap the WMS URL in a
-            # LayerURI here so the existing emission/persistence machinery
-            # announces the layer exactly as composer layers are announced.
+            # The MISSING LINK between an atomic publish and the map:
+            # ``emit_tool_call`` only feeds ``add_loaded_layer`` (and thus the
+            # ``session-state`` envelope the web renders WMS layers from)
+            # when a tool RETURNS a typed LayerURI -- composers do, but the
+            # atomic ``publish_layer`` returns a bare WMS string. Wrap the WMS
+            # URL in a LayerURI here so the existing emission/persistence
+            # machinery announces it exactly as composer layers are
+            # announced.
             #
             # TiTiler exit (QGIS-native swap): publish_layer now returns the
             # raw s3:// COG uri for rasters (the plugin reads it via
-            # /vsicurl/), so s3:// joined http(s) as a SUCCESS shape here.
+            # /vsicurl/), so s3:// joins http(s) as a SUCCESS shape here.
             if isinstance(result, str) and result.startswith(
                 ("http://", "https://", "s3://")
             ):
                 try:
-                    # job-0254: route through the single emission seam. The
-                    # publish return here is http(s) (a WMS/durable-GeoJSON
-                    # face) or a raw s3:// COG (QGIS-native raster publish);
-                    # the seam passes both through and still exists so this
-                    # site can never regress into emitting an un-renderable
-                    # shape (gs://, file://, empty).
+                    # Route through the single emission seam: the publish
+                    # return here is http(s) (WMS/durable-GeoJSON) or a raw
+                    # s3:// COG (QGIS-native raster publish); the seam passes
+                    # both through so this site can never regress into
+                    # emitting an un-renderable shape (gs://, file://, empty).
                     _resolved_style_preset = _resolve_publish_wrap_style_preset(
                         style_preset=params.get("style_preset"),
                         layer_uri=result,
@@ -11065,7 +10511,7 @@ async def _invoke_tool_via_emitter(
                     # OPEN-9: a bare-ULID layer_id (derive_layer_id's last
                     # resort) rendered directly as the UI name is meaningless
                     # ("01KX5TEZ20BK86EE6DG8PSVFJK"). Derive a readable name
-                    # from whatever IS known — an explicit model-supplied
+                    # from whatever IS known -- an explicit model-supplied
                     # name (params carries it even though publish_layer's own
                     # signature only uses it for logging), else the resolved
                     # style_preset, else the published URI's path segment.
@@ -11093,21 +10539,18 @@ async def _invoke_tool_via_emitter(
                     )
                     if _emit_layer is not None:
                         await state.emitter.add_loaded_layer(_emit_layer)
-                        # sprint-14-aws (job-0290c): re-persist AFTER this add.
-                        # The dispatch's finally-persist above ran BEFORE this
-                        # wrap-site emission, so the published tile layer only
-                        # lived in memory — a Case switch + reopen rehydrated
-                        # WITHOUT it (observed live: flood Case kept its layer
-                        # because composers add inside the dispatch; hillshade
-                        # chains lost theirs because publish_layer is the LAST
-                        # tool call and nothing persisted afterwards).
+                        # Re-persist AFTER this add: the dispatch's
+                        # finally-persist above ran BEFORE this wrap-site
+                        # emission, so the published tile layer would
+                        # otherwise only live in memory -- a Case switch +
+                        # reopen would rehydrate WITHOUT it.
                         if turn_case_id:
                             await _persist_case_loaded_layers(
                                 state, case_id=turn_case_id
                             )
                             # Lane A1: this wrap-site add runs AFTER the
                             # dispatch finally-persist, so re-materialize the S3
-                            # snapshot here too — otherwise the published tile
+                            # snapshot here too -- otherwise the published tile
                             # layer (publish_layer is the LAST tool) lands only
                             # in memory and the cold view would miss it.
                             #
@@ -11132,7 +10575,7 @@ async def _invoke_tool_via_emitter(
                             await _persist_case_manifest(
                                 state, case_id=turn_case_id
                             )
-                except Exception:  # noqa: BLE001 — emission is best-effort
+                except Exception:  # noqa: BLE001 -- emission is best-effort
                     logger.exception(
                         "publish_layer loaded-layer emission failed "
                         "layer_id=%s",
@@ -11141,10 +10584,10 @@ async def _invoke_tool_via_emitter(
 
     # job-0172 Part B / job-0259: per-Case layer persistence now happens in
     # the ``finally`` block above so it ALSO fires when the tool (or its
-    # post-invoke envelope emission on a dying WebSocket) raised — the
+    # post-invoke envelope emission on a dying WebSocket) raised -- the
     # emitter's accumulator already contains the layer at that point.
 
-    # job-0101: Mode 2 .gov/.edu classifier — when web_fetch returns a dict
+    # job-0101: Mode 2 .gov/.edu classifier -- when web_fetch returns a dict
     # that looks like a structured-data candidate, emit a `mode2-candidate`
     # envelope and append an audit-log line. Deterministic side-effect; the
     # web modal (Wave 2/3) renders the offer. See mode2_classifier.py.
@@ -11206,28 +10649,23 @@ async def _auto_publish_droppable_raster(
 ) -> None:
     """Deterministically publish + render a droppable object-store raster.
 
-    DETERMINISTIC LAYER AUTO-PUBLISH (NATE 2026-06-26): ``layer`` is exactly the
-    class ``emit_layer_uri`` DROPS -- a renderable raster carrying a raw
-    ``s3://`` / ``gs://`` uri MapLibre cannot fetch. Rather than rely on the LLM
-    separately calling ``publish_layer``, we call it server-side here -- off the
-    asyncio loop (publish_layer is a synchronous tool that polls TiTiler /
-    PyQGIS, so a bare call would stall the WS keepalive; the no-sync-blocking
-    norm) -- and feed the resulting published uri (an http(s) face, or the raw
+    ``layer`` is exactly the class ``emit_layer_uri`` DROPS -- a renderable
+    raster carrying a raw ``s3://``/``gs://`` uri MapLibre cannot fetch. Calls
+    ``publish_layer`` server-side, off the asyncio loop (no-sync-blocking
+    norm), and feeds the resulting published uri (an http(s) face, or the raw
     ``s3://`` COG on the QGIS-native path) through the SAME
     ``emit_layer_uri`` -> ``add_loaded_layer`` -> persist machinery the
-    publish_layer wrap-site uses (so dedup, z-index, snapshot, and manifest all
-    behave identically; if the LLM ALSO publishes the same COG the rows MERGE by
-    COG identity -- no double-add).
+    publish_layer wrap-site uses, so dedup/z-index/snapshot/manifest behave
+    identically (an LLM publish of the SAME COG merges by COG identity -- no
+    double-add).
 
-    Honesty floor: on FAILURE (publish_layer raises, or returns a value that is
-    neither an http(s) URL nor an s3:// COG uri -- empty/None/error strings,
-    gs://, file://) we surface a typed ``LAYER_AUTO_PUBLISH_FAILED`` error
-    envelope -- a failed render is NEVER a silent green. TiTiler exit
-    (QGIS-native swap): the raw ``s3://`` COG uri is now publish_layer's
-    SUCCESS shape for rasters (the plugin reads it via /vsicurl/), so it is
-    accepted alongside http(s). The LLM-visible tool result is left UNCHANGED
-    so the existing retry-on-failure narration can act. Best-effort: this
-    never raises, so it cannot break the dispatch.
+    Honesty floor: on FAILURE (raises, or returns neither an http(s) URL nor
+    an s3:// COG uri) surfaces a typed ``LAYER_AUTO_PUBLISH_FAILED`` error --
+    never a silent green. The raw ``s3://`` COG uri is a SUCCESS shape for
+    rasters (the plugin reads it via /vsicurl/), accepted alongside http(s).
+    The LLM-visible tool result is left UNCHANGED so retry-on-failure
+    narration can act. Best-effort: never raises, so it cannot break the
+    dispatch.
     """
     publish_entry = TOOL_REGISTRY.get("publish_layer")
     if publish_entry is None:  # pragma: no cover - publish_layer always present
@@ -11397,7 +10835,7 @@ async def _persist_case_layer_handles(
     reconnect / Case reopen (``_seed_registry_for_case``) restores the exact
     handles the LLM has already been shown. Skips when nothing new was
     minted since the last write (``shorts_dirty``). Best-effort: any failure
-    is logged and swallowed — the dispatch is never broken, and the registry
+    is logged and swallowed -- the dispatch is never broken, and the registry
     stays dirty so the next dispatch retries the write.
     """
     if not case_id:
@@ -11411,7 +10849,7 @@ async def _persist_case_layer_handles(
     try:
         await p.set_case_layer_handles(case_id, reg.export_short_handles())
         reg.mark_shorts_persisted()
-    except Exception:  # noqa: BLE001 — best-effort, never break the dispatch
+    except Exception:  # noqa: BLE001 -- best-effort, never break the dispatch
         logger.exception(
             "case layer-handle persist failed case=%s", case_id
         )
@@ -11426,7 +10864,7 @@ async def _seed_registry_for_case(
     site: replace-not-merge from the Case's persisted ``loaded_layers`` (the
     F32 contract), importing the Case's persisted ``{L<n>: uri}`` map FIRST
     so already-announced short handles keep their numbers and fresh layers
-    mint past the persisted maximum. Best-effort on the persistence read —
+    mint past the persisted maximum. Best-effort on the persistence read --
     a hiccup degrades to fresh minting (stale L<n> references then reject
     typed with the current inventory, which is honest and retryable).
     """
@@ -11436,7 +10874,7 @@ async def _seed_registry_for_case(
     if p is not None and case_id:
         try:
             persisted = await p.get_case_layer_handles(case_id)
-        except Exception:  # noqa: BLE001 — degrade to fresh minting
+        except Exception:  # noqa: BLE001 -- degrade to fresh minting
             logger.warning(
                 "case layer-handle map read failed case=%s (fresh mint)",
                 case_id,
@@ -11446,14 +10884,13 @@ async def _seed_registry_for_case(
 
 
 def _set_active_aoi_from_payload(state: SessionState, raw: Any) -> None:
-    """ADR 0017 (Lane S): bind/clear the session's active canvas AOI.
+    """ADR 0017: bind/clear the session's active canvas AOI.
 
-    Called when a ``user-message`` payload CARRIES the ``aoi_bbox`` key (the
-    interface contract with the client lane: ``[min_lon, min_lat, max_lon,
-    max_lat]`` EPSG:4326, ``None`` when no AOI is drawn). A valid bbox sets
-    the active AOI; an explicit ``None`` clears it; a malformed value is
-    logged and IGNORED (never blocks the turn, never clobbers a good AOI
-    with garbage).
+    Called when a ``user-message`` payload carries the ``aoi_bbox`` key
+    (``[min_lon, min_lat, max_lon, max_lat]`` EPSG:4326, ``None`` when no AOI
+    is drawn). A valid bbox sets the active AOI; an explicit ``None`` clears
+    it; a malformed value is logged and ignored (never blocks the turn, never
+    clobbers a good AOI with garbage).
     """
     if raw is None:
         if state.active_aoi_bbox is not None:
@@ -11485,19 +10922,18 @@ async def _persist_case_loaded_layers(
 ) -> None:
     """Sync the emitter's ``_loaded_layers`` onto the turn's ``CaseSummary``.
 
-    job-0172 Part B: writes the current ``ProjectLayerSummary[]`` accumulator
-    into ``Case.loaded_layer_summaries`` (full dicts for rehydration) and
-    keeps ``Case.layer_summary`` (the lightweight ``layer_id[]`` projection)
-    in lockstep. Idempotent and dedup-by-uri because the emitter already
-    dedups upstream; the persisted shape mirrors the in-memory shape.
+    Writes the current ``ProjectLayerSummary[]`` accumulator into
+    ``Case.loaded_layer_summaries`` (full dicts for rehydration) and keeps
+    ``Case.layer_summary`` (the lightweight ``layer_id[]`` projection) in
+    lockstep. Idempotent and dedup-by-uri because the emitter already dedups
+    upstream.
 
-    Best-effort: a Persistence failure is logged but never raised. The
-    Case lookup gates the write — if the Case was archived / deleted
-    mid-turn we silently skip (no surprise resurrection of a tombstoned
-    Case via this side-channel).
+    Best-effort: a Persistence failure is logged but never raised. The Case
+    lookup gates the write -- an archived/deleted Case is silently skipped
+    (no surprise resurrection via this side-channel).
 
-    job-0268: ``case_id`` pins the target Case explicitly (callers inside a
-    tool dispatch pass their entry-time capture); default resolves via
+    ``case_id`` pins the target Case explicitly (callers inside a tool
+    dispatch pass their entry-time capture); default resolves via
     ``_turn_case_id`` so a mid-turn Case switch never re-aims attribution.
     """
     target_case = case_id if case_id is not None else _turn_case_id(state)
@@ -11522,13 +10958,11 @@ async def _persist_case_loaded_layers(
     loaded = state.emitter.loaded_layers  # defensive copy from the emitter
     emitter_dicts: list[dict] = [layer.model_dump(mode="json") for layer in loaded]
 
-    # job-0259: MERGE (append + replace-by-layer_id) instead of wholesale
-    # replace. An emitter that was never seeded with the Case's persisted
-    # layers (fresh connection, sync failure, sibling-socket dispatch) must
-    # never CLOBBER previously persisted summaries down to its own partial
-    # view — union them, with the emitter's fresher entry winning on a
-    # layer_id collision. There is no server-side layer-remove flow at v0.1,
-    # so union semantics lose nothing.
+    # MERGE (append + replace-by-layer_id) instead of wholesale replace: an
+    # emitter never seeded with the Case's persisted layers (fresh
+    # connection, sync failure, sibling-socket dispatch) must never CLOBBER
+    # previously persisted summaries down to its own partial view -- union
+    # them, with the emitter's fresher entry winning on a layer_id collision.
     merged: list[dict] = [
         dict(d) for d in case.loaded_layer_summaries if isinstance(d, dict)
     ]
@@ -11612,7 +11046,7 @@ async def _persist_case_view_snapshot(
 ) -> None:
     """Materialize the full case view to S3 (Lane A1: view-without-agent).
 
-    Writes ``s3://$TRID3NT_RUNS_BUCKET/case-views/{case_id}.json`` — the EXACT
+    Writes ``s3://$TRID3NT_RUNS_BUCKET/case-views/{case_id}.json`` -- the EXACT
     ``CaseOpenEnvelopePayload`` the live ``case-open`` ships, PLUS the in-memory
     inline vector GeoJSON merged onto ``loaded_layers`` so vectors paint when
     the agent box is asleep. Called on every Case mutation (layer publish,
@@ -11622,7 +11056,7 @@ async def _persist_case_view_snapshot(
     (``add_loaded_layer`` / ``reinline_vector_layers`` populate them; the
     persisted Case carries URI-only summaries). Source them from
     ``state.emitter`` here so the snapshot captures them durably at the moment
-    of the mutation — exactly when the agent still holds them.
+    of the mutation -- exactly when the agent still holds them.
 
     Best-effort: a missing Persistence binding / no Case / no emitter
     short-circuits; ``write_case_view_snapshot`` itself swallows S3 errors and
@@ -11638,7 +11072,7 @@ async def _persist_case_view_snapshot(
     inline: dict[str, Any] = {}
     density: dict[str, Any] = {}
     # Only source the emitter's in-memory inline-vector side-tables when the
-    # snapshot target IS the Case currently open on THIS connection — the
+    # snapshot target IS the Case currently open on THIS connection -- the
     # emitter holds exactly one Case's accumulator, so merging it into a
     # DIFFERENT Case's snapshot (e.g. renaming Case B while Case A is open)
     # would stamp the wrong Case's vectors. When they differ we still write a
@@ -11656,7 +11090,7 @@ async def _persist_case_view_snapshot(
             inline_geojson_by_layer_id=inline,
             density_meta_by_layer_id=density,
         )
-    except Exception:  # noqa: BLE001 — snapshot is a side-effect, never a gate
+    except Exception:  # noqa: BLE001 -- snapshot is a side-effect, never a gate
         logger.warning(
             "case-view-snapshot: persist failed case=%s", target_case
         )
@@ -11665,25 +11099,24 @@ async def _persist_case_view_snapshot(
 async def _persist_case_manifest(
     state: SessionState, *, case_id: str | None = None
 ) -> None:
-    """Materialize the THIN per-case manifest to S3 (#165 data-island index).
+    """Materialize the THIN per-case manifest to S3 (data-island index).
 
     DUAL-WRITE sibling of ``_persist_case_view_snapshot``: writes
-    ``s3://$TRID3NT_RUNS_BUCKET/case-manifests/{case_id}.json`` — the thin
+    ``s3://$TRID3NT_RUNS_BUCKET/case-manifests/{case_id}.json`` -- the thin
     ``CaseManifest`` (title / bbox / hazard + layer asset URLs) a future cold
     path lists cases + their layers from WITHOUT downloading the fat snapshot.
     Called ALONGSIDE the snapshot at the SAME Case mutation call-sites; the
-    snapshot path is UNCHANGED (this is additive — dual-write only).
+    snapshot path is unchanged (this is additive -- dual-write only).
 
-    The manifest is sourced entirely from the persisted Case doc
-    (``loaded_layer_summaries`` — the same data ``case-list`` marshals); it does
-    NOT need the emitter's in-memory inline-vector side-tables (those are only
-    for the fat snapshot's cold-paint), so this helper is simpler than the
-    snapshot one.
+    Sourced entirely from the persisted Case doc (``loaded_layer_summaries``);
+    it does NOT need the emitter's in-memory inline-vector side-tables (those
+    are only for the fat snapshot's cold-paint), so this helper is simpler
+    than the snapshot one.
 
     Best-effort: a missing Persistence binding / no Case short-circuits;
     ``write_case_manifest`` swallows its own S3 / build errors and returns
-    ``False``. A manifest failure must NOT break the snapshot path or the turn —
-    so this is wrapped and never raises (same discipline as the snapshot).
+    ``False`` -- a manifest failure must never break the snapshot path or the
+    turn.
     """
     target_case = case_id if case_id is not None else _turn_case_id(state)
     if not target_case:
@@ -11693,7 +11126,7 @@ async def _persist_case_manifest(
         return
     try:
         await p.write_case_manifest(target_case)
-    except Exception:  # noqa: BLE001 — manifest is a side-effect, never a gate
+    except Exception:  # noqa: BLE001 -- manifest is a side-effect, never a gate
         logger.warning("case-manifest: persist failed case=%s", target_case)
 
 
@@ -11702,17 +11135,17 @@ async def _maybe_emit_impact_envelope(
     state: SessionState,
     raw_envelope: dict,
 ) -> None:
-    """Emit an ``impact-envelope`` WS envelope for the ImpactPanel (Wave 4.11 Follow-up A).
+    """Emit an ``impact-envelope`` WS envelope for the ImpactPanel.
 
-    Called when ``compute_impact_envelope`` returns a result that contains a
+    Called when ``compute_impact_envelope`` returns a result containing a
     valid ``raw_envelope`` dict (ImpactEnvelope shape, key signal:
     ``n_structures_total`` present at the top level).
 
-    The envelope is emitted IN ADDITION to the standard ``function_response``
-    so the client gets both:
+    Emitted IN ADDITION to the standard ``function_response`` so the client
+    gets both:
 
-    - ``function_response`` → Gemini-loop replay (Gemini reads the summary).
-    - ``impact-envelope``   → ImpactPanel state update (P4 UI surface).
+    - ``function_response`` -> Gemini-loop replay (Gemini reads the summary).
+    - ``impact-envelope``   -> ImpactPanel state update.
 
     Wire shape::
 
@@ -11722,9 +11155,9 @@ async def _maybe_emit_impact_envelope(
           "payload": { ...full ImpactEnvelope dict... }
         }
 
-    Best-effort: a serialization / wire failure is logged but never raised —
-    the ``function_response`` path (and thus the agent loop) must not be
-    interrupted by a side-channel emission failure.
+    Best-effort: a serialization / wire failure is logged but never raised --
+    the ``function_response`` path must not be interrupted by a side-channel
+    emission failure.
     """
     import json as _json
 
@@ -11743,7 +11176,7 @@ async def _maybe_emit_impact_envelope(
             state.session_id,
             raw_envelope.get("n_structures_total"),
         )
-    except Exception:  # noqa: BLE001 — side effect, never bubble up
+    except Exception:  # noqa: BLE001 -- side effect, never bubble up
         logger.exception(
             "impact-envelope emission failed session=%s", state.session_id
         )
@@ -11754,21 +11187,21 @@ async def _maybe_emit_code_exec_result(
     state: SessionState,
     code_exec_result: dict,
 ) -> None:
-    """Emit a ``code-exec-result`` WS envelope (job-0233).
+    """Emit a ``code-exec-result`` WS envelope.
 
     Called when ``code_exec_request`` returns a result carrying the full
     code-exec-result payload under ``_code_exec_result``
-    (``is_code_exec_result(result)`` is True). Fires IN ADDITION to the standard
-    ``function_response``:
+    (``is_code_exec_result(result)`` is True). Fires IN ADDITION to the
+    standard ``function_response``:
 
-    - ``code-exec-result`` → the FULL result payload (status + stdout/stderr
-      tails + the structured result descriptor + truncated flag + duration) for
-      the client to render the result card. The function_response Gemini
-      reads is the COMPACT summary (the full payload is stripped by
+    - ``code-exec-result`` -> the FULL result payload (status + stdout/stderr
+      tails + the structured result descriptor + truncated flag + duration)
+      for the client to render the result card. The function_response Gemini
+      reads is the COMPACT summary (stripped by
       ``adapter.summarize_tool_result`` via the ``_code_exec_result`` key) so
       narration sources the structured ``result``, not the raw logs.
 
-    Wire shape mirrors ``chart-emission`` (the precedent)::
+    Wire shape mirrors ``chart-emission``::
 
         {
           "type": "code-exec-result",
@@ -11776,11 +11209,9 @@ async def _maybe_emit_code_exec_result(
           "payload": { ...full CodeExecResultPayload dict... }
         }
 
-    Best-effort: a serialization / wire failure is logged but never raised — the
-    function_response path (and thus the agent loop) must not be interrupted by a
-    side-channel emission failure. Code-exec results are ephemeral (not persisted
-    to the session ``charts`` array) — a re-opened Case replays the chat + charts,
-    not transient computations.
+    Best-effort: never raised on a serialization/wire failure. Code-exec
+    results are ephemeral (not persisted to the session ``charts`` array) --
+    a re-opened Case replays chat + charts, not transient computations.
     """
     import json as _json
 
@@ -11804,7 +11235,7 @@ async def _maybe_emit_code_exec_result(
             payload.get("status"),
             payload.get("truncated"),
         )
-    except Exception:  # noqa: BLE001 — side effect, never bubble up
+    except Exception:  # noqa: BLE001 -- side effect, never bubble up
         logger.exception(
             "code-exec-result emission failed session=%s", state.session_id
         )
@@ -11815,25 +11246,25 @@ async def _maybe_emit_chart(
     state: SessionState,
     chart_result: dict,
 ) -> None:
-    """Emit a ``chart-emission`` WS envelope + persist the chart (job-0230).
+    """Emit a ``chart-emission`` WS envelope + persist the chart.
 
     Called when a chart-generation tool (``generate_histogram`` /
     ``generate_choropleth_legend`` / ``generate_time_series`` /
-    ``generate_damage_distribution``) returns a ChartEmissionPayload-shaped dict
-    (``is_chart_emission_result(result)`` is True). Fires IN ADDITION to the
-    standard ``function_response``:
+    ``generate_damage_distribution``) returns a ChartEmissionPayload-shaped
+    dict (``is_chart_emission_result(result)`` is True). Fires IN ADDITION to
+    the standard ``function_response``:
 
-    - ``chart-emission`` → the FULL Vega-Lite spec for the client to render
+    - ``chart-emission`` -> the FULL Vega-Lite spec for the client to render
       via vega-embed (inline stacked preview + gallery). The function_response
       Gemini reads is a COMPACT summary with the spec stripped
-      (``adapter.summarize_tool_result``) so narration sources the numbers, not
-      the inline rows.
+      (``adapter.summarize_tool_result``) so narration sources the numbers,
+      not the inline rows.
     - ``SessionChartRecord`` persisted to the ``sessions`` collection so the
       chart replays on Case rehydration.
 
-    The ``created_turn_id`` is stamped here (from the per-turn pipeline id) when
-    the tool did not set one, so the client groups charts emitted in the same
-    turn into one UI stack.
+    ``created_turn_id`` is stamped here (from the per-turn pipeline id) when
+    the tool did not set one, so the client groups charts from the same turn
+    into one UI stack.
 
     Wire shape::
 
@@ -11844,8 +11275,8 @@ async def _maybe_emit_chart(
         }
 
     Best-effort: a serialization / wire / persistence failure is logged but
-    never raised — the ``function_response`` path (and thus the agent loop) must
-    not be interrupted by a side-channel emission failure.
+    never raised -- the ``function_response`` path must not be interrupted by
+    a side-channel emission failure.
     """
     import json as _json
 
@@ -11877,7 +11308,7 @@ async def _maybe_emit_chart(
             payload.get("chart_id"),
             payload.get("title"),
         )
-    except Exception:  # noqa: BLE001 — side effect, never bubble up
+    except Exception:  # noqa: BLE001 -- side effect, never bubble up
         logger.exception(
             "chart-emission emission failed session=%s", state.session_id
         )
@@ -11887,22 +11318,20 @@ async def _maybe_emit_chart(
 
 
 async def _persist_chart_record(state: SessionState, payload: dict) -> None:
-    """Append a ``SessionChartRecord`` to the session document (job-0230).
+    """Append a ``SessionChartRecord`` to the session document.
 
-    Same pattern as the telemetry writer (M3): resolve the ``Persistence``
-    singleton and ``$push`` the record onto the session document's append-only
-    ``charts`` array via the underlying MCP ``update-one`` call (the typed
-    Persistence methods own Case/User/Secret shapes; charts go directly on the
-    MCP client like telemetry, keeping the Persistence public API narrow).
+    Resolves the ``Persistence`` singleton and ``$push``es the record onto the
+    session document's append-only ``charts`` array via the underlying MCP
+    ``update-one`` call (charts go directly on the MCP client like telemetry,
+    keeping the Persistence public API narrow).
 
     Keyed by the active Case id when one is selected (so charts replay on Case
     rehydration via the same document the chat history lives on), else by the
-    session id (the M1 stateless path). ``upsert=True`` so the first chart on a
-    fresh session document creates it.
+    session id. ``upsert=True`` so the first chart on a fresh session document
+    creates it.
 
-    Never raises — a persistence failure is logged at WARNING. Replay (the read
-    side that rehydrates the ``charts`` array) is web/agent-rehydration scope
-    (job-0231 / session-resume); this is the write half of the contract.
+    Never raises -- a persistence failure is logged at WARNING. This is only
+    the write half of the contract; replay is session-resume scope.
     """
     persistence = get_persistence()
     if persistence is None:
@@ -11920,7 +11349,7 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
         )
         from .persistence import DEFAULT_DATABASE, SESSIONS_COLLECTION
 
-        # job-0268: charts are turn-scoped emissions — key them by the Case
+        # job-0268: charts are turn-scoped emissions -- key them by the Case
         # that OWNS the turn, not whatever Case is visible at write time.
         doc_id = _turn_case_id(state) or state.session_id
         record = SessionChartRecord(
@@ -11929,7 +11358,7 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
             emitted_at=now_utc(),
         )
         body = record.model_dump(mode="json")
-        await persistence._mcp.call_tool(  # noqa: SLF001 — telemetry-writer pattern
+        await persistence._mcp.call_tool(  # noqa: SLF001 -- telemetry-writer pattern
             "update-one",
             {
                 "database": DEFAULT_DATABASE,
@@ -11945,7 +11374,7 @@ async def _persist_chart_record(state: SessionState, payload: dict) -> None:
             doc_id,
             payload.get("chart_id"),
         )
-    except Exception:  # noqa: BLE001 — persistence must not break the loop
+    except Exception:  # noqa: BLE001 -- persistence must not break the loop
         logger.warning(
             "chart persistence failed session=%s chart_id=%s",
             state.session_id,
@@ -11959,7 +11388,7 @@ async def _maybe_emit_mode2_candidate(
 ) -> None:
     """Run ``classify_for_mode2`` and emit ``mode2-candidate`` if it lands.
 
-    Best-effort: a classifier or send failure is logged but never raised — the
+    Best-effort: a classifier or send failure is logged but never raised -- the
     caller already returned the tool result and we will not let a side-effect
     take down a perfectly good ``web_fetch`` invocation (FR-AS-7 boundary).
     """
@@ -11989,7 +11418,7 @@ async def _maybe_emit_mode2_candidate(
             envelope.to_wire_dict()["candidate"],
         )
         # job-0203 (M4): Mode-2 candidate audit routes through the MCP
-        # ``audit_log`` collection (D.15) — the bespoke JSONL file writer
+        # ``audit_log`` collection (D.15) -- the bespoke JSONL file writer
         # was deleted (remove-don't-shim). When Persistence is unbound
         # (explicit CI path) the event is logged-and-dropped, same policy
         # as telemetry (M3) and chart persistence (job-0230).
@@ -12003,7 +11432,7 @@ async def _maybe_emit_mode2_candidate(
                         "candidate": envelope.to_wire_dict()["candidate"],
                     },
                 )
-            except Exception:  # noqa: BLE001 — audit is best-effort
+            except Exception:  # noqa: BLE001 -- audit is best-effort
                 logger.warning(
                     "mode2 audit write failed session=%s",
                     state.session_id,
@@ -12021,7 +11450,7 @@ async def _maybe_emit_mode2_candidate(
             candidate.confidence,
             candidate.detected_patterns,
         )
-    except Exception:  # noqa: BLE001 — side effect, never bubble up
+    except Exception:  # noqa: BLE001 -- side effect, never bubble up
         logger.exception("mode2-candidate emission failed")
 
 
@@ -12030,7 +11459,7 @@ def _parse_invoke_directive(text: str) -> tuple[str, dict] | None:
     return ``(tool_name, params)``; else return None.
 
     Used by the M4 live-evidence harness to drive real tool invocations
-    end-to-end through the registry + emitter. NOT the LLM tool-call path —
+    end-to-end through the registry + emitter. NOT the LLM tool-call path --
     that lands when Gemini-side function-calling is wired (M4 follow-up).
     The directive shape is debug-only; intentionally not in Appendix A.
     """
@@ -12077,14 +11506,12 @@ async def _dispatch_gemini_and_persist(
     attempt a best-effort persist of whatever the narration accumulator
     captured before the stream died.
 
-    job-0267 (full-stream persistence): the persisted ``content`` is now the
-    REAL accumulated narration — ``_stream_gemini_reply`` resets
-    ``state.current_turn_narration`` at stream start and appends every
-    ``TextDeltaEvent`` delta across all loop iterations. Pre-fix this wrote
-    ``content=""`` markers, which the web replay (rightly) rendered as
-    nothing — user-verified: only their own messages survived a Case reopen.
+    The persisted ``content`` is the REAL accumulated narration --
+    ``_stream_gemini_reply`` resets ``state.current_turn_narration`` at
+    stream start and appends every ``TextDeltaEvent`` delta across all loop
+    iterations.
     """
-    # job-0268: capture the turn's Case at task entry — the finally-persist
+    # job-0268: capture the turn's Case at task entry -- the finally-persist
     # below must land in the Case that OWNED this turn even when the user
     # switched Cases (or a newer turn re-pinned the binding) mid-stream.
     turn_case_id = _turn_case_id(state)
@@ -12092,12 +11519,11 @@ async def _dispatch_gemini_and_persist(
     # envelope this turn emits (chunks, pipeline-state, session-state, …)
     # carries Envelope.case_id and the web routes it to the right stream.
     bind_turn_case(turn_case_id)
-    # job-0269: per-turn object capture. A concurrent turn (or a case
-    # switch) re-points both SessionState fields mid-stream — this wrapper
-    # must gauge completion against THIS turn's history list, and join the
-    # narration list THIS turn's stream registered under the running task
-    # (mocked streams in tests don't register; the field fallback preserves
-    # their job-0267 contract).
+    # Per-turn object capture: a concurrent turn (or Case switch) re-points
+    # both SessionState fields mid-stream, so this wrapper gauges completion
+    # against THIS turn's history list and joins the narration list
+    # registered under the running task (mocked streams that never
+    # registered fall back to the live field).
     turn_history = state.chat_history
     pre_chat_len = len(turn_history)
     try:
@@ -12107,26 +11533,24 @@ async def _dispatch_gemini_and_persist(
             show_thinking=show_thinking,
         )
     finally:
-        # job-0267 / job-0315: close out the turn's narration persistence.
-        # With job-0315 each FINALIZED narration segment is already persisted
-        # in-loop by ``_finalize_segment`` (interleaved with the mid-turn tool
-        # rows). This wrapper must therefore NOT re-persist finalized segments —
-        # it only owns the un-finalized remainder + the legacy fallbacks:
+        # Close out the turn's narration persistence. Each FINALIZED
+        # narration segment is already persisted in-loop by
+        # ``_finalize_segment`` (interleaved with the mid-turn tool rows), so
+        # this wrapper must NOT re-persist finalized segments -- it only owns
+        # the un-finalized remainder + the legacy fallbacks:
         #
-        #   * ``open_tail``     — text in a segment the stream NEVER finalized
-        #                         (crash/cancel mid-segment). Persist it as ONE
-        #                         agent row so no narration is lost; it is the
-        #                         de-facto terminal row, so layer_emissions=None
-        #                         lets it carry the layer/zoom accumulator.
-        #   * ``segments_done`` — count of finalized agent rows this turn. When
-        #                         it is 0 AND the stream completed cleanly with
+        #   * ``open_tail``     -- text in a segment the stream NEVER finalized
+        #                         (crash/cancel mid-segment). Persisted as ONE
+        #                         agent row (the de-facto terminal row) so no
+        #                         narration is lost; layer_emissions=None lets
+        #                         it carry the layer/zoom accumulator.
+        #   * ``segments_done`` -- count of finalized agent rows this turn.
+        #                         When 0 AND the stream completed cleanly with
         #                         no open tail, write the legacy single marker
-        #                         row (content == joined narration, possibly "")
-        #                         — preserving the narration-LESS completed-turn
-        #                         row count and the pre-fix one-row contract.
+        #                         row (content == joined narration, possibly "").
         #
         # All three per-task registries are popped (mocked-stream tests that
-        # never registered fall back to the live field, preserving job-0267).
+        # never registered fall back to the live field).
         _own_task = asyncio.current_task()
         if _own_task is not None:
             turn_narration = _TURN_NARRATION_BY_TASK.pop(_own_task, None)
@@ -12145,12 +11569,11 @@ async def _dispatch_gemini_and_persist(
         narration = "".join(turn_narration).strip()
         open_tail = "".join(open_segment or []).strip()
         stream_completed = len(turn_history) > pre_chat_len
-        # BUG 1 (post-OPEN-14 acceptance rerun): when the turn aborted on
-        # ``ContextWindowExceededError``, ``_stream_gemini_reply``'s except
-        # handler stashed the honest abort verdict here (already carrying the
-        # BUG 2 fabrication-caveat lead-in when applicable). Read + clear it
-        # once so it lands on exactly the row that carries the (unverified)
-        # streamed text below, and never leaks into a later turn.
+        # When the turn aborted on ``ContextWindowExceededError``,
+        # ``_stream_gemini_reply``'s except handler stashed the honest abort
+        # verdict here. Read + clear it once so it lands on exactly the row
+        # that carries the (unverified) streamed text below, and never leaks
+        # into a later turn.
         _abort_note = state.current_turn_context_abort_note
         state.current_turn_context_abort_note = None
         if turn_case_id:
@@ -12170,7 +11593,7 @@ async def _dispatch_gemini_and_persist(
                 )
             elif segments_done == 0 and (narration or stream_completed or _abort_note):
                 # No segment was finalized AND no open tail: either a clean
-                # narration-LESS completed turn (content="" marker — replay row
+                # narration-LESS completed turn (content="" marker -- replay row
                 # count unchanged from pre-fix), a mocked-stream test that
                 # populated only ``current_turn_narration`` (legacy one-row
                 # contract), or an abort with NO streamed text at all (still
@@ -12187,35 +11610,19 @@ async def _dispatch_gemini_and_persist(
                 not terminal_acc_persisted
                 and (state.current_turn_map_commands or state.current_turn_layer_ids)
             ):
-                # job-0315 contract fix: segments_done > 0 (interleaved rows
-                # already persisted) and no open tail, BUT the turn's FINAL
-                # generation round ended in tool calls with NO trailing
-                # narration (the COMMON flood/publish turn shape — e.g. the
-                # last call is publish_layer, then the stream ends). In that
-                # shape the in-loop terminal finalize never fired
-                # (``current_message_id is None`` at turn close, so
-                # ``terminal_acc_persisted`` stayed False), and NONE of the
-                # persisted segment rows carried the turn's zoom-to/layer
-                # accumulator (each non-terminal segment passed
-                # ``layer_emissions=[]``). Pre-job-0315 the single closing
-                # role="agent" row carried ``layers=[...]`` + the zoom-to;
-                # without this row the web ``extractLastZoomTo(chat_history)``
-                # (case_zoom.ts) finds no zoom-to and a Case reopen does NOT
-                # snap the camera to the AOI — regressing job-0259 (layer
-                # attribution) + job-0280/0281 (zoom-snap). Restore the
-                # invariant: EVERY turn that emitted a zoom-to/layer must
-                # persist at least one chat row carrying it. We write an EMPTY
-                # marker row (content="" — the web renders no phantom bubble
-                # for blank agent text, exactly like the narration-LESS
-                # completed-turn marker) with ``layer_emissions=None`` so
-                # ``_persist_chat_turn`` SNAPSHOTS ``current_turn_layer_ids``
-                # into ``layer_emissions`` and ``current_turn_map_commands``
-                # into ``map_command_emissions``. ``terminal_acc_persisted``
-                # guards against a double-write when the turn DID end in
-                # narration (the terminal segment already carried it); the
-                # NON-EMPTY accumulator guard means an accumulator-less +
-                # text-less tool-terminal turn writes NOTHING (no phantom
-                # empty bubble).
+                # Invariant: EVERY turn that emitted a zoom-to/layer must
+                # persist at least one chat row carrying it. When
+                # segments_done > 0 (interleaved rows already persisted) and
+                # no open tail, but the turn's final round ended in tool
+                # calls with no trailing narration, none of the persisted
+                # segment rows carried the zoom-to/layer accumulator. Write
+                # an EMPTY marker row (content="" -- no phantom bubble) with
+                # layer_emissions=None so ``_persist_chat_turn`` snapshots
+                # ``current_turn_layer_ids``/``current_turn_map_commands``
+                # onto it. ``terminal_acc_persisted`` guards a double-write
+                # when the turn DID end in narration; the non-empty
+                # accumulator guard means an accumulator-less + text-less
+                # turn writes nothing.
                 await _persist_chat_turn(
                     state,
                     role="agent",
@@ -12247,7 +11654,7 @@ async def _dispatch_gemini_and_persist(
             )
             _BG_SNAPSHOT_TASKS.add(_tm)
             _tm.add_done_callback(_BG_SNAPSHOT_TASKS.discard)
-        # C2: whole-turn idle signal — fires on EVERY exit (clean, cancel,
+        # C2: whole-turn idle signal -- fires on EVERY exit (clean, cancel,
         # error) so the client settles any card still spinning ``running`` after
         # the turn ends (its terminal pipeline-state frame may have died on a
         # dropped socket). Outside the ``if turn_case_id`` guard so a root-stream
@@ -12275,18 +11682,18 @@ async def _dispatch_tool_and_persist(
 
     B-rev FIX: ``_invoke_tool_via_emitter`` now raises ``ToolNotFoundError``
     when the directive references an unregistered tool name. This caller is
-    the ``/invoke`` directive path — a manual operator-debug surface dispatched
+    the ``/invoke`` directive path -- a manual operator-debug surface dispatched
     via ``asyncio.create_task`` (no awaiter exists to catch propagated
     exceptions). To prevent the typed exception from surfacing as an
     unhandled-task "exception was never retrieved" warning, we catch it here
     and route it through ``_send_error`` so the operator's chat surface
     receives a structured ``error`` envelope (``TOOL_NOT_FOUND`` /
-    ``retryable=False``) — the same shape Gemini's multi-turn loop produces
+    ``retryable=False``) -- the same shape Gemini's multi-turn loop produces
     via ``summarize_tool_result``. Other typed routing exceptions
     (``PayloadWarningCancelledError``) are also caught so the manual surface
     sees the cancellation reason explicitly instead of disappearing.
     """
-    # job-0268: entry-time Case capture — see _dispatch_gemini_and_persist.
+    # job-0268: entry-time Case capture -- see _dispatch_gemini_and_persist.
     turn_case_id = _turn_case_id(state)
     bind_turn_case(turn_case_id)  # job-0277: envelope tagging
     try:
@@ -12333,7 +11740,7 @@ async def _dispatch_tool_and_persist(
                 pipeline_id=state.current_turn_pipeline_id,
                 case_id=turn_case_id,
             )
-        # C2: end-of-turn idle signal for the /invoke directive path too — same
+        # C2: end-of-turn idle signal for the /invoke directive path too -- same
         # rationale as _dispatch_gemini_and_persist. Best-effort.
         await _emit_turn_complete(
             websocket, state, pipeline_id=state.current_turn_pipeline_id
@@ -12358,7 +11765,7 @@ async def _emit_secrets_list(
     auth-handshake hasn't completed (the in-flight handshake fallback
     elsewhere in the dispatcher ensures this is rare).
 
-    Best-effort on Persistence unbound — emits an empty list rather than
+    Best-effort on Persistence unbound -- emits an empty list rather than
     raising so the client UI can render the "no secrets yet" empty state.
     """
     p = get_persistence()
@@ -12471,16 +11878,14 @@ async def _handle_secret_add(
 ) -> None:
     """Process a ``secret-add`` envelope and emit a refreshed ``secrets-list``.
 
-    Per Decision F the raw ``key_value`` field on the inbound envelope is
-    consumed by the handler (written to GCP Secret Manager) and **never**
-    echoed back. The handler returns a vault-ref-only ``SecretRecord``;
-    we drop it on the floor and re-emit a full ``secrets-list`` so the
-    client renders the full collection (including the new entry).
+    Per Decision F the raw ``key_value`` field is consumed by the handler
+    (written to GCP Secret Manager) and **never** echoed back; the handler
+    returns a vault-ref-only ``SecretRecord`` which we drop, re-emitting a
+    full ``secrets-list`` so the client renders the new entry.
 
-    Per FR-AS-8 this is NOT a confirmation trigger (the user explicitly
-    typed the key into the form — the action itself IS the user's
-    confirmation). The handler proceeds without a ``confirmation-request``
-    pause, matching the Case-lifecycle command pattern.
+    Per FR-AS-8 this is NOT a confirmation trigger -- the user typing the key
+    into the form IS the confirmation -- so the handler proceeds without a
+    ``confirmation-request`` pause, matching the Case-lifecycle pattern.
     """
     p = get_persistence()
     user_id = state.authenticated_user_id or state.session_id
@@ -12527,7 +11932,7 @@ async def _handle_secret_revoke(
 ) -> None:
     """Process a ``secret-revoke`` envelope (soft-revoke + refresh list).
 
-    The GCP Secret Manager entry is intentionally NOT deleted — preserves
+    The GCP Secret Manager entry is intentionally NOT deleted -- preserves
     audit trail. Re-emits a refreshed ``secrets-list`` so the client UI
     drops the revoked entry from its active list.
     """
@@ -12571,23 +11976,19 @@ async def _delete_case_loaded_layer(
 ) -> None:
     """Persist a layer deletion AUTHORITATIVELY (replace, not union).
 
-    job-0325 (F53): the in-memory emitter has already dropped ``layer_id``
-    from its ``_loaded_layers``; this mirrors that onto the persisted
-    ``CaseSummary`` so the layer cannot RESURRECT on the next turn or on a
-    Case reopen.
+    Mirrors the in-memory emitter's drop of ``layer_id`` from
+    ``_loaded_layers`` onto the persisted ``CaseSummary`` so it cannot
+    RESURRECT on the next turn or a Case reopen.
 
-    Deliberately bypasses ``_persist_case_loaded_layers`` — that path UNIONs
-    the emitter view with ``case.loaded_layer_summaries`` (so a partial
-    emitter never clobbers the persisted set), which would re-add the deleted
-    layer from the persisted list. Here we want the opposite: REMOVE the
-    layer_id from both ``loaded_layer_summaries`` (full dicts) and
-    ``layer_summary`` (the layer_id[] projection) and write the result.
+    Deliberately bypasses ``_persist_case_loaded_layers`` (that path UNIONs
+    the emitter view with ``case.loaded_layer_summaries``, which would re-add
+    the deleted layer). Here we REMOVE ``layer_id`` from both
+    ``loaded_layer_summaries`` and ``layer_summary`` and write the result.
 
-    Best-effort: a Persistence failure is logged but never raised. The Case
-    lookup gates the write — a missing / tombstoned Case is silently skipped.
-
-    ``case_id`` pins the target Case explicitly; default resolves via
-    ``_turn_case_id`` (never the raw live ``active_case_id``).
+    Best-effort: a Persistence failure is logged but never raised; a missing
+    / tombstoned Case is silently skipped. ``case_id`` pins the target Case
+    explicitly; default resolves via ``_turn_case_id`` (never the raw live
+    ``active_case_id``).
     """
     target_case = case_id if case_id is not None else _turn_case_id(state)
     p = get_persistence()
@@ -12617,7 +12018,7 @@ async def _delete_case_loaded_layer(
         if isinstance(d.get("layer_id"), str)
     ]
 
-    # Nothing referenced this layer_id in the persisted set — no write needed.
+    # Nothing referenced this layer_id in the persisted set -- no write needed.
     if (
         case.loaded_layer_summaries == surviving_summaries
         and case.layer_summary == surviving_ids
@@ -12652,16 +12053,15 @@ async def _handle_layer_delete(
     state: SessionState,
     payload_dict: Any,
 ) -> None:
-    """Process a ``layer-delete`` envelope (job-0325 F53).
+    """Process a ``layer-delete`` envelope.
 
     Removes ``layer_id`` from the live emitter's ``loaded_layers``, emits a
-    refreshed ``session-state`` (Map.tsx replace-not-reconcile then drops the
-    overlay — no Map.tsx change), and persists the post-deletion list
-    authoritatively. The deletion propagates to the agent's loaded-layers
-    awareness because the layer is now absent from BOTH the emitter's
-    in-memory ``_loaded_layers`` (the mid-session ``build_layers_present_note``
-    source) and the persisted ``loaded_layer_summaries`` (the Case-reopen
-    note source).
+    refreshed ``session-state`` (Map.tsx replace-not-reconcile drops the
+    overlay), and persists the post-deletion list authoritatively. The
+    deletion also propagates to the agent's loaded-layers awareness -- both
+    the emitter's in-memory ``_loaded_layers`` and the persisted
+    ``loaded_layer_summaries`` -- so ``build_layers_present_note`` stops
+    listing it.
 
     The payload is loosely-shaped ``{layer_id: str}`` (read inline for
     forward-compat). A malformed / empty ``layer_id`` surfaces a typed
@@ -12686,7 +12086,7 @@ async def _handle_layer_delete(
     target_case = _turn_case_id(state)
 
     _ensure_emitter(websocket, state)
-    if state.emitter is None:  # pragma: no cover — _ensure_emitter always binds
+    if state.emitter is None:  # pragma: no cover -- _ensure_emitter always binds
         return
 
     # Drop the layer from the live accumulator. reset_loaded_layers also
@@ -12698,17 +12098,15 @@ async def _handle_layer_delete(
     ]
     state.emitter.reset_loaded_layers(survivors)
 
-    # NATE 2026-06-26: re-inline surviving vectors BEFORE emit so a delete never
-    # transiently drops sibling vector layers. emit_session_state only attaches
-    # inline_geojson for ids already in _inline_geojson_by_layer_id; a survivor
-    # whose inline payload is missing on THIS socket would ship without
-    # inline_geojson and the client (never fetches s3:// directly — job-0175)
-    # cannot render it. reinline_vector_layers is idempotent (skips already-
-    # inlined ids) so it is a cheap no-op when the side-table is already full.
-    # Mirrors the session-resume / case-open re-inline (server.py ~3580).
+    # Re-inline surviving vectors BEFORE emit so a delete never transiently
+    # drops sibling vector layers: emit_session_state only attaches
+    # inline_geojson for ids already in _inline_geojson_by_layer_id, and the
+    # client never fetches s3:// directly, so a missing inline payload means
+    # the layer cannot render. ``reinline_vector_layers`` is idempotent, so
+    # this is a cheap no-op when the side-table is already full.
     try:
         await state.emitter.reinline_vector_layers()
-    except Exception:  # noqa: BLE001 — re-inline is best-effort
+    except Exception:  # noqa: BLE001 -- re-inline is best-effort
         logger.warning(
             "layer-delete vector re-inline failed session=%s case=%s",
             state.session_id,
@@ -12721,7 +12119,7 @@ async def _handle_layer_delete(
     # session converges on the new loaded_layers list.
     await state.emitter.emit_session_state()
 
-    # Persist authoritatively (replace, not the union merge — see helper).
+    # Persist authoritatively (replace, not the union merge -- see helper).
     await _delete_case_loaded_layer(state, layer_id, case_id=target_case)
 
     logger.info(
@@ -12734,39 +12132,18 @@ async def _handle_layer_delete(
 
 
 # --------------------------------------------------------------------------- #
-# JOB B (session durability fix): per-session connection registry + eager reap
+# Per-session connection registry: session_id -> set of live ServerConnection.
 # --------------------------------------------------------------------------- #
-#
-# ROOT CAUSE of "active_connections hit ~20 for one session": a mobile
-# navigate-out/back (or any reconnect) opens a NEW WebSocket but the OLD one is
-# not always closed by the browser - a backgrounded mobile socket lingers as a
-# zombie until the ~20s websockets ping-timeout finally reaps it. Across a
-# burst of navigate cycles the zombies pile up far faster than the slow ping
-# reaper clears them, so a single browser session accumulates ~20 live sockets.
-#
-# Fix: track every live connection BY SESSION (``session_id -> set of live
-# ServerConnection``) and, on each session-resume handshake, proactively close
-# any PRIOR socket of the SAME session that is not the resuming connection. A
-# freshly-opened socket sends ``session-resume`` first, so this reaps the
-# session's stale sockets at the moment the replacement arrives - long before
-# the slow transport ping would.
-#
-# CRITICAL invariant: the reap NEVER closes the resuming connection's own live
-# socket (mis-targeting kills the active tab). The keeper is identified by
-# object identity and excluded before any close.
-#
-# Thread-safety: one asyncio loop, one process -> a plain dict/set mutated from
-# coroutine context needs no lock (no preemption between the membership test
-# and the mutation).
-# Keyed by ``session_id``; the value-set is keyed by the connection object
-# (de-duped) so a re-register is a harmless no-op and an empty bucket is pruned
-# so the dict cannot grow unbounded across long-lived sessions.
+# Reap invariant: never close the keeper (the resuming connection) - it is
+# identified by object identity and excluded before any close (mis-targeting
+# kills the active tab). Single asyncio loop, one process -> a plain dict/set
+# mutated from coroutine context needs no lock. The value-set is keyed by the
+# connection object so a re-register is a no-op; an empty bucket is pruned so
+# the dict cannot grow unbounded. See ADR 0027 (session durability).
 
-#: JOB B: application close code for a prior socket reaped because a newer
-#: connection of the SAME session resumed. 4xxx is the WebSocket spec's reserved
-#: application range. The client treats
-#: this like any other close (its reconnect/backoff logic owns recovery), but
-#: the code makes "why did this socket die?" answerable from the journal.
+#: Application close code for a prior socket reaped because a newer connection
+#: of the SAME session resumed. 4xxx is the WebSocket spec's reserved
+#: application range; the client treats it like any other close.
 SESSION_SUPERSEDED_CLOSE_CODE = 4408
 
 _SESSION_WS_CONNECTIONS: "dict[str, set[ServerConnection]]" = {}
@@ -12818,27 +12195,18 @@ async def _reap_prior_session_connections(
 ) -> int:
     """Proactively close every PRIOR socket of ``session_id`` except ``keeper``.
 
-    JOB B: called on each session-resume handshake. A freshly-opened socket
-    sends ``session-resume`` first, so this is the moment to retire the stale
-    sockets the slow ~20s transport ping would otherwise leave piling up. The
-    ``keeper`` (the resuming connection) is excluded by object identity FIRST so
-    its own live socket is never closed (mis-targeting kills the active tab).
-
-    Returns the number of prior sockets closed. Best-effort: a close that
-    raises (already-closing socket) is swallowed; the stale socket is dropped
-    from the registry either way so the count cannot wedge. A genuinely-dead
-    keeper-only session reaps nothing.
+    Called on each session-resume handshake. The ``keeper`` (the resuming
+    connection) is excluded by object identity FIRST so its own live socket is
+    never closed. Returns the number of prior sockets closed; best-effort, a
+    close that raises is swallowed and the stale socket is dropped from the
+    registry either way so the count cannot wedge.
     """
-    # DISABLED 2026-06-22 (turn-killing regression caught live by the coastal
-    # Playwright drive): the eager per-session reap is INCOMPATIBLE with the
-    # dual-socket design (job-0159 runs 2 GraceWs per session, same session_id).
-    # It closed the legitimate SIBLING socket; when that sibling was mid-stream
-    # the turn died with 4408 "superseded by a newer session connection" (2s
-    # after the prompt). The socket pileup this targeted is largely resolved now
-    # that the churn root-causes are fixed (the WS 12s DATA heartbeat + the auth
-    # cold-reload race). Re-enable ONLY with a policy that (a) preserves the
-    # legitimate dual-socket pair and (b) never closes a socket whose session has
-    # an in-flight turn/solve. _register_session_connection stays (cheap, useful).
+    # Reap DISABLED: the eager per-session reap is incompatible with the
+    # dual-socket design (2 sockets per session share a session_id) - it closed
+    # the legitimate sibling and killed its mid-stream turn with 4408. Re-enable
+    # ONLY with a policy that preserves the dual-socket pair and never closes a
+    # socket whose session has an in-flight turn/solve. _register_session_connection
+    # stays (cheap, useful); the code below is retained for that re-enable.
     return 0
     bucket = _SESSION_WS_CONNECTIONS.get(session_id)
     if not bucket:
@@ -12970,19 +12338,18 @@ def _make_handler(settings: GeminiSettings):
                 # Dispatch on message type. Every payload is re-validated
                 # through its concrete trid3nt_contracts model.
                 try:
-                    # job-0122 (Appendix H.5 / H.3): the auth-token envelope
-                    # is the connect-handshake. If we receive it, run the
-                    # full handshake. If we receive anything else and the
-                    # handshake has not completed, trip the anonymous
-                    # fallback inline so the SessionState.authenticated_user_id
-                    # is bound before any user-scoped action runs.
+                    # Appendix H.5/H.3: the auth-token envelope is the
+                    # connect-handshake. Anything else, before the handshake
+                    # completes, trips the anonymous fallback inline so
+                    # ``SessionState.authenticated_user_id`` is bound before
+                    # any user-scoped action runs.
                     if msg_type == "auth-token":
                         await _handle_auth_token(
                             websocket, state, payload_dict
                         )
                         continue
                     # Implicit anonymous fallback when any other envelope
-                    # arrives before the handshake — keeps the legacy
+                    # arrives before the handshake -- keeps the legacy
                     # no-auth-token clients working. Remote-daemon access
                     # (2026-07): when a token gate is set, the implicit path
                     # rejects + closes the socket (returns False) so we must
@@ -13001,7 +12368,7 @@ def _make_handler(settings: GeminiSettings):
                         um = UserMessagePayload.model_validate(payload_dict)
                         # ADR 0017 (Lane S): structured canvas AOI. Read the
                         # optional ``aoi_bbox`` DEFENSIVELY off the raw
-                        # payload dict — the UserMessagePayload contract field
+                        # payload dict -- the UserMessagePayload contract field
                         # lands in the client lane; this seam works the moment
                         # the field arrives and is a no-op for clients that
                         # never send it. Key-present semantics: a bbox SETS
@@ -13011,14 +12378,12 @@ def _make_handler(settings: GeminiSettings):
                             _set_active_aoi_from_payload(
                                 state, payload_dict.get("aoi_bbox")
                             )
-                        # ADR 0018 (Stage 3): routing-visibility mode. The
-                        # contracts lane carries it as the user-message's
-                        # ``tool_choice_mode`` field (the show_thinking /
-                        # model_id precedent). Read DEFENSIVELY off the raw
-                        # dict; a set value updates the session's sticky mode,
-                        # absent/None leaves the prior mode (env default
-                        # otherwise -- see _session_routing_mode). The
-                        # session-config branch below remains as the
+                        # ADR 0018: routing-visibility mode, carried as the
+                        # user-message's ``tool_choice_mode`` field. Read
+                        # defensively off the raw dict; a set value updates
+                        # the session's sticky mode, absent/None leaves the
+                        # prior mode (env default otherwise -- see
+                        # _session_routing_mode). session-config below is the
                         # alternate config path.
                         _tcm = payload_dict.get("tool_choice_mode")
                         if isinstance(_tcm, str) and _tcm.strip().lower() in (
@@ -13026,12 +12391,11 @@ def _make_handler(settings: GeminiSettings):
                             "ask",
                         ):
                             state.routing_mode = _tcm.strip().lower()
-                        # FR-FR-3 (job-0048): check the turn cap BEFORE
-                        # dispatching. Increment first so "26th turn" fires
-                        # on turn_count == MAX_TURNS_PER_SESSION + 1 (i.e.
-                        # the (MAX+1)th call). Sessions that have already hit
-                        # the cap continue to be refused on every subsequent
-                        # user-message with the same cap-hit envelope.
+                        # FR-FR-3: check the turn cap BEFORE dispatching.
+                        # Increment first so "26th turn" fires on turn_count ==
+                        # MAX_TURNS_PER_SESSION + 1. Sessions that already hit
+                        # the cap are refused on every subsequent user-message
+                        # with the same cap-hit envelope.
                         state.turn_count += 1
                         if (
                             MAX_TURNS_PER_SESSION > 0
@@ -13039,49 +12403,42 @@ def _make_handler(settings: GeminiSettings):
                         ):
                             await _handle_max_turns_reached(websocket, state)
                             continue
-                        # job-0121: reset per-turn layer accumulator before
-                        # the dispatch so the CaseChatMessage write captures
-                        # only this turn's emissions. (job-0269 KNOWN LIMIT:
-                        # these two slots are still session-shared — a turn
-                        # running concurrently in ANOTHER Case may interleave
-                        # layer-id/pipeline-id attribution on the closing
-                        # agent row. Case targeting itself is safe via the
-                        # job-0268 pin; full per-turn context is 13.5 scope.)
+                        # Reset the per-turn layer accumulator before dispatch
+                        # so the CaseChatMessage write captures only this
+                        # turn's emissions. KNOWN LIMIT: these slots are still
+                        # session-shared -- a turn running concurrently in
+                        # ANOTHER Case may interleave layer/pipeline-id
+                        # attribution on the closing agent row (Case targeting
+                        # itself stays safe via the turn pin).
                         state.current_turn_layer_ids = []
                         state.current_turn_pipeline_id = None
                         state.current_turn_map_commands = []
-                        # job-0259 + job-0121 + job-0262 pre-dispatch
-                        # sequence (see ``_prepare_user_turn``): sibling-
-                        # connection Case sync, AUTO-CREATE Case for a
-                        # non-directive prompt from the Cases root (named
-                        # via _derive_case_title; case-open + case-list
-                        # emitted so the UI flips into the Case view), and
-                        # the user-turn chat persist — all BEFORE the turn
-                        # task starts so chat + layer attribution land on
-                        # the right (possibly brand-new) Case. Returns the
-                        # parsed ``/invoke`` directive for the M4
-                        # live-evidence path; None streams through Gemini.
+                        # Pre-dispatch sequence (see ``_prepare_user_turn``):
+                        # sibling-connection Case sync, AUTO-CREATE Case for a
+                        # non-directive prompt from the Cases root (named via
+                        # _derive_case_title; case-open + case-list emitted so
+                        # the UI flips into the Case view), and the user-turn
+                        # chat persist -- all BEFORE the turn task starts so
+                        # chat + layer attribution land on the right (possibly
+                        # brand-new) Case. Returns the parsed ``/invoke``
+                        # directive; None streams through Gemini.
                         directive = await _prepare_user_turn(
                             websocket, state, um.text, client_case_id=um.case_id
                         )
-                        # job-0269: stream-scoped cancellation replaces the
-                        # M1 "cancel anything running" policy. Only a
-                        # re-prompt in the SAME stream (Case, or root)
-                        # replaces that stream's in-flight turn; turns in
-                        # other Cases keep running (live 2026-06-10: a root
-                        # terrain prompt cancelled a cloud SFINCS solve).
-                        # The key comes from the job-0268 turn pin set by
-                        # _prepare_user_turn (auto-created Cases get a fresh
-                        # ULID, so they never collide with a running turn).
+                        # Stream-scoped cancellation: only a re-prompt in the
+                        # SAME stream (Case, or root) replaces that stream's
+                        # in-flight turn; turns in other Cases keep running.
+                        # The key comes from the turn pin set by
+                        # _prepare_user_turn (auto-created Cases mint a fresh
+                        # ULID so they never collide with a running turn).
                         turn_key = (
                             state.current_turn_case_id or _ROOT_STREAM_KEY
                         )
-                        # job-SOLVE-SURVIVE: a same-stream re-prompt SUPERSEDES
-                        # (cancels) the prior turn — even if that turn was
-                        # DETACHED to the module-level registry by a prior
-                        # socket close (Requirement 3: a new user-message in the
-                        # SAME stream may still supersede). Check this connection
-                        # first, then the session-scoped live-turn registry.
+                        # A same-stream re-prompt SUPERSEDES (cancels) the
+                        # prior turn, even one DETACHED to the module-level
+                        # registry by a prior socket close. Check this
+                        # connection first, then the session-scoped live-turn
+                        # registry.
                         prior = state.inflight_tasks.get(turn_key)
                         if prior is None or prior.done():
                             prior = _find_live_turn(state.session_id, turn_key)
@@ -13093,12 +12450,11 @@ def _make_handler(settings: GeminiSettings):
                             if t.done()
                         ]:
                             state.inflight_tasks.pop(_done_key, None)
-                        # job-SOLVE-SURVIVE: a fresh socket may have detached a
-                        # prior, still-running turn for THIS session (e.g. a live
-                        # SFINCS solve launched on a now-closed socket). Rebind
-                        # the live turn(s) onto THIS connection's emitter so the
-                        # solve's progress + terminal frames reach the new socket
-                        # (Requirement 2). Harmless when no live turns exist.
+                        # A fresh socket may rebind onto a prior, still-running
+                        # turn for this session (e.g. a live solve launched on
+                        # a now-closed socket) so its progress + terminal
+                        # frames reach the new socket. Harmless when no live
+                        # turns exist.
                         _ensure_emitter(websocket, state)
                         _rebind_live_turns(state.session_id, state.emitter)
                         # In-chat model selector: hot-swap the model per turn.
@@ -13109,7 +12465,7 @@ def _make_handler(settings: GeminiSettings):
                         # VALIDATE before use: a stale client (or a removed /
                         # access-disabled / non-tool-capable id like the old
                         # malformed `us.anthropic.claude-haiku-4-5` or DeepSeek-R1)
-                        # must NEVER reach ConverseStream — an invalid id throws a
+                        # must NEVER reach ConverseStream -- an invalid id throws a
                         # raw ValidationException that surfaced to NATE as
                         # "provided model identifier is invalid". resolve_selected_model
                         # maps an unknown id to None (use the capable default) and
@@ -13152,14 +12508,12 @@ def _make_handler(settings: GeminiSettings):
                                 )
                             )
                         state.inflight_tasks[turn_key] = task
-                        # job-SOLVE-SURVIVE: register this turn in the module
-                        # registry NOW (not only on disconnect) so it is keyed by
-                        # (session_id, turn_key) with a self-removing done-callback
-                        # from the start. A subsequent socket close just drops the
-                        # per-connection ref; the running task is already durable.
-                        # The done-callback removes the entry on completion (NO
-                        # leak). The emitter recorded here is the wire face the
-                        # task drives; a reconnect rebinds its sink.
+                        # Register this turn in the module registry NOW (not
+                        # only on disconnect), keyed by (session_id, turn_key)
+                        # with a self-removing done-callback, so a subsequent
+                        # socket close just drops the per-connection ref while
+                        # the running task stays durable; a reconnect rebinds
+                        # the recorded emitter's sink.
                         _register_live_turn(
                             state.session_id, turn_key, task, state.emitter
                         )
@@ -13169,25 +12523,21 @@ def _make_handler(settings: GeminiSettings):
                         # envelope is validated through the pydantic model
                         # so an unknown command raises ValidationError and
                         # surfaces TOOL_PARAMS_INVALID via the outer block
-                        # (closed enum — see CaseCommand Literal).
+                        # (closed enum -- see CaseCommand Literal).
                         cmd = CaseCommandEnvelopePayload.model_validate(
                             payload_dict
                         )
                         await _handle_case_command(websocket, state, cmd)
 
                     elif msg_type == "layer-delete":
-                        # job-0325 (F53): per-layer delete. The client sends
-                        # ``{layer_id}``; we drop it from the live emitter's
-                        # loaded_layers, emit a fresh session-state (Map.tsx
-                        # replace-not-reconcile removes the overlay), and
-                        # persist the post-deletion list AUTHORITATIVELY
-                        # (replace, NOT the union of _persist_case_loaded_layers
-                        # which would resurrect it). The deletion also leaves
-                        # the agent's loaded-layers awareness — both the
-                        # emitter's _loaded_layers (mid-session note source) and
-                        # the persisted loaded_layer_summaries (reopen note
-                        # source) — so build_layers_present_note stops listing
-                        # it. payload is loosely-shaped; read inline.
+                        # Per-layer delete: drops ``layer_id`` from the live
+                        # emitter's loaded_layers, emits a fresh session-state
+                        # (Map.tsx replace-not-reconcile removes the overlay),
+                        # and persists the post-deletion list AUTHORITATIVELY
+                        # (replace, not the union merge, which would
+                        # resurrect it) -- including the loaded-layers note
+                        # source so ``build_layers_present_note`` stops
+                        # listing it. Payload is loosely-shaped; read inline.
                         await _handle_layer_delete(
                             websocket, state, payload_dict
                         )
@@ -13222,7 +12572,7 @@ def _make_handler(settings: GeminiSettings):
                         # job-0124: explicit list-refresh request. The
                         # envelope payload is loosely-shaped (an empty
                         # object for global list; optional ``case_id`` to
-                        # scope) — kept untyped on the schema side for
+                        # scope) -- kept untyped on the schema side for
                         # forward-compat. We read case_id directly here.
                         req_case_id = None
                         if isinstance(payload_dict, dict):
@@ -13252,13 +12602,12 @@ def _make_handler(settings: GeminiSettings):
                                 if not t.done()
                             ]
                             cancel_task = live[-1] if live else None
-                        # job-SOLVE-SURVIVE: the targeted turn may have been
-                        # DETACHED to the module-level live-turn registry by a
-                        # prior socket close (the disconnect path stops
-                        # CANCELLING but the task keeps running). The explicit
-                        # stop button MUST still reach it (Requirement 3 — genuine
-                        # cancellation, incl. docker-kill, preserved). Try the
-                        # keyed entry, then any live detached turn for the session.
+                        # The targeted turn may have been DETACHED to the
+                        # module-level live-turn registry by a prior socket
+                        # close (disconnect stops cancelling but the task
+                        # keeps running). The explicit stop button must still
+                        # reach it -- try the keyed entry, then any live
+                        # detached turn for the session.
                         if cancel_task is None or cancel_task.done():
                             cancel_task = _find_live_turn(
                                 state.session_id, cancel_key
@@ -13293,7 +12642,7 @@ def _make_handler(settings: GeminiSettings):
                             )
                             continue
                         # job-0243: resolve via the SESSION-scoped module
-                        # registry — the gate may have been registered on a
+                        # registry -- the gate may have been registered on a
                         # DIFFERENT WebSocket connection of this same session
                         # (StrictMode double-mount / reconnect).
                         if not _resolve_pending_confirmation(
@@ -13315,13 +12664,12 @@ def _make_handler(settings: GeminiSettings):
                         )
 
                     elif msg_type == "credential-provided":
-                        # job VAULT-READ: the user saved (or declined) a key the
-                        # agent asked for via ``credential-request``. Resolve the
-                        # paused dispatch coroutine's future so it retries the
-                        # tool (provided=True) or re-raises the original typed
-                        # error (provided=False). The ``secret-add`` that saved
-                        # the key already ran on its own envelope path — this
-                        # carries NO key material (Decision F).
+                        # Resolves the paused dispatch coroutine's future once
+                        # the user saves/declines a requested credential -- the
+                        # tool retries (provided=True) or re-raises the
+                        # original typed error (provided=False). Carries NO
+                        # key material (Decision F); the key itself was saved
+                        # via ``secret-add`` on its own envelope path.
                         try:
                             cp = (
                                 CredentialProvidedEnvelopePayload.model_validate(
@@ -13357,7 +12705,7 @@ def _make_handler(settings: GeminiSettings):
                         # state-bbox-fallback geocode to a sub-region (or kept
                         # the whole state). Resolve the paused dispatch
                         # coroutine's future so it applies the picked bbox (or
-                        # keeps the state bbox). Mirrors credential-provided —
+                        # keeps the state bbox). Mirrors credential-provided --
                         # may arrive on a sibling connection of the session.
                         try:
                             rc = (
@@ -13397,7 +12745,7 @@ def _make_handler(settings: GeminiSettings):
                         # request_spatial_input future so the dispatch coroutine
                         # parses the drawn FeatureCollection into engine-ready
                         # barriers / AOI / points. Mirrors region-choice-provided
-                        # — may arrive on a sibling connection of the session.
+                        # -- may arrive on a sibling connection of the session.
                         try:
                             spatial_resp = (
                                 SpatialInputResponsePayload.model_validate(
@@ -13416,7 +12764,7 @@ def _make_handler(settings: GeminiSettings):
                             # degrading to SPATIAL_INPUT_TIMEOUT. The request_id
                             # is parsed defensively from the raw payload (it may
                             # itself be absent/garbage on a totally malformed
-                            # envelope — then we just notify + continue, no crash).
+                            # envelope -- then we just notify + continue, no crash).
                             err_msg = ve.errors()[0]["msg"]
                             await _send_error(
                                 websocket,
@@ -13471,13 +12819,11 @@ def _make_handler(settings: GeminiSettings):
                         )
 
                     elif msg_type == "tool-choice":
-                        # ADR 0018 (Stage 3): the user's reply to a pending
-                        # ``tool-candidates`` card. Parsed DEFENSIVELY as a
-                        # loose dict (the contracts lane declares the typed
-                        # model; until integration this seam must accept the
-                        # raw payload). Resolves the paused turn's future --
-                        # may arrive on a sibling connection of the session
-                        # (job-0243 registry pattern).
+                        # ADR 0018: the user's reply to a pending
+                        # ``tool-candidates`` card, parsed defensively as a
+                        # loose dict (until the typed contracts model lands).
+                        # Resolves the paused turn's future -- may arrive on a
+                        # sibling connection of the session.
                         if not isinstance(payload_dict, dict) or not isinstance(
                             payload_dict.get("request_id"), str
                         ):
@@ -13564,13 +12910,10 @@ def _make_handler(settings: GeminiSettings):
                                     _cfg_mode,
                                     state.session_id,
                                 )
-                            # BENCH pre-dispatch block hook (LANE A): the same
-                            # defensive session-config branch also arms/disarms
-                            # the bench tool-block config. ``bench_tool_block``
-                            # absent -> leave whatever is armed untouched; a
-                            # dict -> arm; an explicit null/false -> disarm.
-                            # Bench-only: a normal client never sends this key,
-                            # so the field stays None and dispatch pays nothing.
+                            # BENCH pre-dispatch block hook: arms/disarms the
+                            # bench tool-block config (absent=untouched,
+                            # dict=arm, null/false=disarm). Bench-only -- a
+                            # normal client never sends this key.
                             if "bench_tool_block" in payload_dict:
                                 from .agent.gates.tool_gating import parse_bench_block_config
 
@@ -13593,7 +12936,7 @@ def _make_handler(settings: GeminiSettings):
                         "disambiguation-response",
                         "clarification-response",
                     ):
-                        # M1: scaffolding only — no triggers yet. Log and
+                        # M1: scaffolding only -- no triggers yet. Log and
                         # acknowledge without acting.
                         logger.info("noop M1 message_type=%s", msg_type)
 
@@ -13631,17 +12974,16 @@ def _make_handler(settings: GeminiSettings):
         except Exception:
             logger.exception("connection handler crashed")
         finally:
-            # JOB B (WS connection accumulation): drop this socket from the
-            # per-session connection registry on EVERY exit path so the eager
-            # reaper never targets (or counts) a connection that is already gone,
-            # and the registry cannot grow unbounded. Guard on ``state`` - a
-            # connection that closed before its first envelope never bound a
-            # session_id, so it was never registered. Idempotent: a socket
-            # already reaped by a sibling's resume is a harmless discard.
+            # Drop this socket from the per-session connection registry on EVERY
+            # exit path so the reaper never targets a connection already gone and
+            # the registry cannot grow unbounded. Guard on ``state`` - a socket
+            # that closed before its first envelope never bound a session_id.
+            # Idempotent: a socket already reaped by a sibling's resume is a
+            # harmless discard.
             if state is not None:
                 _deregister_session_connection(state.session_id, websocket)
                 # OPEN-8: once the session's LAST live socket is gone, drop the
-                # cached case-list digest too — otherwise a later reconnect
+                # cached case-list digest too -- otherwise a later reconnect
                 # (fresh SessionState, unaware of the stale digest) could
                 # inherit an emit-skip decision from a connection that no
                 # longer exists. ``session_connection_count`` is 0 only when
@@ -13660,44 +13002,28 @@ def _make_handler(settings: GeminiSettings):
                 # CancelledError is the expected clean-stop path; any other error
                 # from the dying task must not mask the disconnect handling below.
                 pass
-            # job-SOLVE-SURVIVE (the #1 SFINCS blocker): a socket close must NOT
-            # kill an in-flight turn. ROOT CAUSE of "no successful SFINCS run
-            # since Fort Myers": this finally used to ``.cancel()`` EVERY not-done
-            # task on ``state.inflight_tasks`` — including a detached
-            # ``sfincs_flood`` -> ``wait_for_completion`` (minutes
-            # long). The client opens MULTIPLE sockets per session (StrictMode
-            # double-mount + reconnect), so a transient socket swap detonated this
-            # and docker-killed the solve ~7s in.
-            #
-            # New policy: DETACH, don't cancel. Each turn was already registered
-            # in the module-level ``_SESSION_LIVE_TURNS`` registry at spawn (keyed
-            # by (session_id, turn_key)) with a self-removing done-callback, so the
-            # running task survives the death of THIS connection — only the
-            # per-connection reference (and this connection's emitter sink) goes
-            # away. A reconnecting socket rebinds the live turn's emitter sink
-            # (Requirement 2) so the solve's progress + terminal frames (the
-            # published flood layer) reach the user; even a FULLY-disconnected
-            # solve still publishes + persists its layer to the Case (the dispatch
-            # path's add_loaded_layer + _persist_case_loaded_layers run regardless
-            # of whether a socket is attached) so it rehydrates on the next
-            # case-open. ``wait_for_completion``'s own 1800s budget bounds a stuck
-            # solve. Genuine cancellation (the stop button) + same-stream supersede
-            # still cancel — only the DISCONNECT path stops cancelling.
-            #
-            # NB: cheap LLM-only turns are simply left to finish (they're short);
-            # their done-callback removes them from the registry. We do NOT cancel
-            # them either — predicting which Gemini turn will dispatch the solver
-            # is impossible (Gemini decides mid-turn), and a short LLM turn
-            # finishing detached is harmless.
+            # A socket close must NOT cancel an in-flight turn: on disconnect,
+            # DETACH rather than cancel. Each turn is registered in the
+            # module-level ``_SESSION_LIVE_TURNS`` registry at spawn (keyed by
+            # (session_id, turn_key)) with a self-removing done-callback, so it
+            # survives the death of this connection; a reconnecting socket
+            # rebinds the live turn's emitter sink so progress + terminal
+            # frames still reach the user, and a fully-disconnected solve
+            # still publishes + persists its layer (rehydrates on the next
+            # case-open). ``wait_for_completion``'s own 1800s budget bounds a
+            # stuck solve. Genuine cancellation (stop button, same-stream
+            # supersede) still cancels -- only the disconnect path stops
+            # cancelling. Cheap LLM-only turns are simply left to finish;
+            # their done-callback removes them from the registry.
             if state:
                 for _turn_key, _t in list(state.inflight_tasks.items()):
                     if _t.done():
                         continue
                     # Ensure the durable registry holds it (it was registered at
                     # spawn for user-message turns; re-assert for any path that
-                    # populated inflight_tasks without registering — defensive,
+                    # populated inflight_tasks without registering -- defensive,
                     # idempotent). NB: this finally DETACHES and KEEPS the turn
-                    # RUNNING — it never sets ``state.emitter = None``. The live
+                    # RUNNING -- it never sets ``state.emitter = None``. The live
                     # turn keeps driving its OWN emitter, whose ``_sink`` still
                     # closes over THIS (now-dead) socket and silently no-ops on
                     # send, until a reconnecting socket rebinds that emitter's
@@ -13720,18 +13046,13 @@ def _make_handler(settings: GeminiSettings):
 async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     """Serve forever. Override port via ``TRID3NT_AGENT_PORT``.
 
-    job-0115: best-effort init of the ``Persistence`` singleton. If the MCP
-    environment is not provisioned (the typical local-dev case), the agent
-    service starts anyway — the M1 in-memory chat/pipeline path keeps
-    working, and any caller that requires persistence raises a clear error.
-
-    Wave 4.10 job-C1: also mounts the read-only HTTP catalog endpoint at
-    ``TRID3NT_AGENT_HTTP_PORT`` (default 8766) so the web Tools page can
-    fetch the full tool catalog without going through the WS path. The
-    HTTP server is a sibling of the WS server (same asyncio loop, same
-    process). A failure to start the HTTP listener logs but does not abort
-    WS startup — the catalog page is a discovery convenience, not a
-    requirement for the chat path.
+    Best-effort inits the ``Persistence`` singleton; without a provisioned
+    MCP environment the agent starts anyway (the M1 in-memory chat/pipeline
+    path keeps working, and any caller requiring persistence raises a clear
+    error). Also mounts the read-only HTTP catalog endpoint at
+    ``TRID3NT_AGENT_HTTP_PORT`` (default 8766) as a sibling of the WS server
+    (same loop, same process); a failure to start it logs but does not abort
+    WS startup.
     """
     if port is None:
         port = int(os.environ.get("TRID3NT_AGENT_PORT", "8765"))
@@ -13755,14 +13076,11 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     _assert_sync_offload_safe()
     try:
         await init_persistence_from_env()
-    except Exception as exc:  # noqa: BLE001 — startup must not abort on MCP issues
+    except Exception as exc:  # noqa: BLE001 -- startup must not abort on MCP issues
         logger.warning("Persistence init failed (continuing without MCP): %s", exc)
-    # job-0252 (sprint-13.5, OQ-0115-CASE-USER-LINK): one-time idempotent
-    # migration — stamp every pre-Auth Case (no ``user_id``) with the
-    # MIGRATION_ANON_UID sentinel so those Cases belong to one synthetic
-    # owner instead of leaking to every signed-in user. Idempotent: a second
-    # run matches nothing. Best-effort: a migration hiccup must not abort
-    # server startup (the same posture as the Persistence init above).
+    # One-time idempotent migration: stamps every pre-Auth Case (no
+    # ``user_id``) with the MIGRATION_ANON_UID sentinel instead of leaking to
+    # every signed-in user. Best-effort -- a hiccup must not abort startup.
     await _run_preauth_case_migration()
     # COLDVIEW FRESHNESS BACKFILL (daemon restart): re-materialize every live
     # Case's cold snapshot+manifest so a daemon-down Case serves a CURRENT cold
@@ -13809,7 +13127,7 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
         from .tool_catalog_http import serve_catalog_http
 
         http_server = await serve_catalog_http(host=host)
-    except Exception:  # noqa: BLE001 — discovery surface, never blocks WS
+    except Exception:  # noqa: BLE001 -- discovery surface, never blocks WS
         logger.exception(
             "tool-catalog HTTP listener failed to start; "
             "continuing without /api/tool-catalog"
@@ -13875,7 +13193,7 @@ __all__ = [
     "_emit_case_open",
     "_handle_case_command",
     "_persist_chat_turn",
-    # Lane A1: view-without-agent — materialize the full case view to S3.
+    # Lane A1: view-without-agent -- materialize the full case view to S3.
     "_persist_case_view_snapshot",
     # #165 data-island: dual-write the THIN per-case manifest to S3.
     "_persist_case_manifest",

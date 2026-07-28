@@ -401,8 +401,8 @@ def _is_state_snap_geocode(geo: Any) -> bool:
     """True when geocode_location fell back to a WHOLE-STATE bbox.
 
     A state-snap centroid is the middle of the state - as a river-reach seed it
-    is ~100+ km of drift (THE root cause of OPEN-25a: 'Snake River near Twin
-    Falls' geocoding to central Idaho). Never seed a reach from one."""
+    is ~100+ km of drift (e.g. 'Snake River near Twin Falls' geocoding to
+    central Idaho). Never seed a reach from one."""
     return isinstance(geo, dict) and (
         geo.get("source") == "state-bbox-fallback"
         or geo.get("fallback_reason") is not None

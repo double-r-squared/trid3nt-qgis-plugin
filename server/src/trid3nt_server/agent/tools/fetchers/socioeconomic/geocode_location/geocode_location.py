@@ -54,22 +54,22 @@ class GeocodeNoMatchError(UpstreamAPIError):
     retryable = False
 
 # ---------------------------------------------------------------------------
-# geocode_location — Nominatim REST
+# geocode_location -- Nominatim REST
 #
 # State-snap fallback (NATE directive 2026-06-17): a vague/regional query like
 # "south Florida" geocodes via Nominatim with no country/region constraint and
-# no sanity check, so an arbitrary first-ranked OSM feature comes back — observed
-# resolving to a random house, or to KANSAS for a Florida query — and the agent
+# no sanity check, so an arbitrary first-ranked OSM feature comes back -- observed
+# resolving to a random house, or to KANSAS for a Florida query -- and the agent
 # loops re-issuing the same query. The fix: detect a US state in the query and,
 # on a wrong-state / failed primary result, snap the bbox to the full state so
 # "our bounding box is closer to right than wrong on second attempt". The
-# north/south sub-region math is explicitly v2 — NOT now.
+# north/south sub-region math is explicitly v2 -- NOT now.
 # ---------------------------------------------------------------------------
 
 # Directional / qualifier words stripped from the FRONT of a query before the
 # state match. "south Florida" -> "florida"; "greater metro Los Angeles, CA"
 # leaves the ", CA" abbreviation intact for the abbreviation matcher. Order does
-# not matter — we strip leading run of these tokens iteratively.
+# not matter -- we strip leading run of these tokens iteratively.
 _STATE_QUALIFIER_PREFIXES: frozenset[str] = frozenset({
     "north", "south", "east", "west", "central",
     "northern", "southern", "eastern", "western",
@@ -110,11 +110,11 @@ def _extract_us_state(query: str) -> str | None:
 
     Matching strategy (all case/punctuation-insensitive):
 
-    1. Try the WHOLE normalized query as a full state name FIRST — this lets
+    1. Try the WHOLE normalized query as a full state name FIRST -- this lets
        "west virginia", "new mexico", "north carolina" win before the leading
        directional word is stripped.
     2. Strip a leading run of directional / qualifier words ("south",
-       "greater", "the", ...) and retry the full-name match — this resolves
+       "greater", "the", ...) and retry the full-name match -- this resolves
        "south florida" -> Florida, "central texas" -> Texas.
     3. Scan tokens for an explicit ``, FL`` / ``FL`` 2-letter USPS abbreviation
        with word boundaries. Guarded so the common word "in" is NOT matched as
@@ -179,7 +179,7 @@ def _extract_us_state(query: str) -> str | None:
 
     # NOTE: an earlier F71 attempt added a "(2c)" step that scanned for a full
     # state NAME at ANY interior position (to catch "the Florida Panhandle").
-    # It was REVERTED — the any-position scan turned the wrong-state sanity
+    # It was REVERTED -- the any-position scan turned the wrong-state sanity
     # guard into a source of WRONG answers: "Kansas City, MO" -> Kansas,
     # "the Washington Monument" -> Washington (snapping a DC AOI to WA state),
     # "the Mississippi River delta near New Orleans" -> Mississippi. The named
@@ -204,7 +204,7 @@ def _extract_us_state(query: str) -> str | None:
         if not toks:
             continue
         # A 2-letter token immediately AFTER a comma (idx>0 and it's the first
-        # token of this part) is the "City, ST" idiom — always trust it.
+        # token of this part) is the "City, ST" idiom -- always trust it.
         first = toks[0]
         if idx > 0 and first in abbr_to_code:
             return STATE_CODE_TO_NAME[abbr_to_code[first]]
@@ -222,7 +222,7 @@ def _extract_us_state(query: str) -> str | None:
     # marine zones (which have no offline bbox) never leak through.
     #
     # GUARD: resolve_state_code has an UNCONDITIONAL 2-letter fast path that
-    # uppercases any 2-char string and matches it as a USPS code — so a bare
+    # uppercases any 2-char string and matches it as a USPS code -- so a bare
     # dangerous English word ("in"->IN, "or"->OR), or a query that strips to
     # one ("the or"->"or"), would false-match a state, bypassing the
     # comma_guarded set built above. Comma-positioned abbreviations were already
@@ -241,7 +241,7 @@ def _extract_us_state(query: str) -> str | None:
     return None
 
 # Census cartographic state extents (EPSG:4326), [min_lon, min_lat, max_lon,
-# max_lat]. Vetted OFFLINE last-resort backstop — _resolve_state_bbox prefers
+# max_lat]. Vetted OFFLINE last-resort backstop -- _resolve_state_bbox prefers
 # the live OSM admin boundingbox and only uses these on failure. Values are the
 # Census TIGER state bounding extents rounded outward to ~0.1 deg so the snap
 # fully covers the state (closer to right than wrong). Alaska is clamped to the
@@ -326,7 +326,7 @@ def _resolve_state_bbox(state_name: str) -> tuple[list[float], float, float, str
     """
     fallback = _US_STATE_BBOX.get(state_name)
     if fallback is None:
-        # Should not happen — _extract_us_state only returns table-backed names.
+        # Should not happen -- _extract_us_state only returns table-backed names.
         raise BboxInvalidError(
             f"no offline bbox for state {state_name!r}"
         )
@@ -388,7 +388,7 @@ def _centroid_in_bbox(
     ``bbox`` is ``[min_lon, min_lat, max_lon, max_lat]``. The margin (default
     1 degree, ~110 km) tolerates a precise match whose centroid sits just
     outside the coarse offline/admin extent (e.g. a coastal city) without
-    admitting a wrong-STATE match — a Kansas-for-Florida result is hundreds of
+    admitting a wrong-STATE match -- a Kansas-for-Florida result is hundreds of
     km out and still fails this check.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -405,34 +405,25 @@ _GEOCODE_LOCATION_METADATA = AtomicToolMetadata(
 )
 
 # ---------------------------------------------------------------------------
-# OPEN-10 (NATE-reported): "downtown Tampa" and similar sub-locality phrasings
-# resolved to a SINGLE BUILDING/POI footprint (bbox tens of meters across), so
-# every layer fetched against the case AOI came back empty -- all of NATE's
-# old Tampa cases were invisible for this reason. Live-confirmed root cause
-# (2026-07-11): Nominatim's ONLY match for "downtown Tampa" is a
-# ``category=railway, type=tram_stop`` node literally named "Downtown Tampa"
-# (a streetcar stop), bbox ~11m x 11m -- there is no competing neighbourhood
-# entity in OSM's Tampa data (compare "downtown Miami" / "midtown Atlanta",
-# which resolve cleanly to ``category=place, type=neighbourhood`` with a
-# proper ~2 km bbox). Two-part fix below:
+# Sub-locality phrasings can resolve to a single building/POI footprint when
+# OSM has no competing neighbourhood entity for that name, producing a bbox
+# too small to be a usable case AOI. Two-part mitigation:
 #
-#   (a) RESULT-CLASS PREFERENCE: with ``limit=1`` the old code could not even
-#       SEE an alternate candidate. Widen the query and, when the top hit is
-#       NOT itself a place/administrative-boundary result, scan the remaining
+#   (a) RESULT-CLASS PREFERENCE: widen the query and, when the top hit is NOT
+#       itself a place/administrative-boundary result, scan the remaining
 #       candidates for the first one that is (city/town/village/hamlet/
 #       suburb/neighbourhood/quarter, or an admin boundary) and promote it.
-#       This is deliberately broad -- rather than an allowlist of "POI
-#       classes" (building/amenity/shop/office, ...), it demotes ANYTHING
-#       that isn't place-class, because the live Tampa failure is a railway
-#       node, not a building. Skipped entirely for queries that clearly name
-#       a POI (street address, named landmark) so a genuine point lookup is
-#       never redirected to the surrounding place.
+#       Deliberately broad -- demotes ANYTHING non-place-class rather than
+#       allowlisting POI classes (building/amenity/shop/office, ...), since
+#       the failure mode is any non-place node, not just buildings. Skipped
+#       for queries that clearly name a POI (street address, named landmark)
+#       so a genuine point lookup is never redirected to the surrounding
+#       place.
 #   (b) MINIMUM AOI FLOOR: whichever candidate wins, a bbox smaller than
-#       ~1 km on its long axis is still unusable as a case AOI (this is what
-#       actually fixes "downtown Tampa" itself -- Nominatim has no better
-#       candidate to promote to). Expand it to a 2 km square centered on the
-#       point and attach an honest ``expansion_note`` so the model narrates
-#       the widening instead of silently handing back an invisible-layers AOI.
+#       ~1 km on its long axis is still unusable as a case AOI. Expand it to
+#       a 2 km square centered on the point and attach an honest
+#       ``expansion_note`` so the model narrates the widening instead of
+#       silently handing back an invisible-layers AOI.
 # ---------------------------------------------------------------------------
 
 #: Nominatim ``category`` values that represent an area/place (as opposed to
@@ -543,7 +534,7 @@ def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
       above this function);
     - ``polygon_geojson=0`` (we just want bbox + lat/lon);
     - one request per cache-bucket window (the ``dynamic-1h`` class naturally
-      throttles repeat queries — see ``read_through``).
+      throttles repeat queries -- see ``read_through``).
 
     Area-intent semantics (OPEN-10): when the top-ranked hit is a point-scale
     POI (not itself a place/administrative-boundary result) and the query
@@ -650,7 +641,7 @@ def _fetch_nominatim_geocode_bytes(query: str) -> bytes:
         "name": top.get("display_name", query),
         "latitude": lat,
         "longitude": lon,
-        # Normalize to (min_lon, min_lat, max_lon, max_lat) — the project
+        # Normalize to (min_lon, min_lat, max_lon, max_lat) -- the project
         # canonical bbox shape (matches LayerURI / Census / py3dep).
         "bbox": [west, south, east, north],
         "source": "nominatim",
@@ -680,7 +671,7 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
 
     **When to use:**
     - User asks to "model flooding in Fort Myers, FL" or "show wildfires near
-      Los Angeles" — convert the place name to a bbox before calling spatial
+      Los Angeles" -- convert the place name to a bbox before calling spatial
       fetch tools.
     - The agent needs to translate a textual event location from the Hazard
       Event Pipeline (``EventMetadata.location_name``) into a usable bbox.
@@ -688,11 +679,11 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
       named geographic feature rather than coordinates.
 
     **When NOT to use:**
-    - Reverse geocoding (coordinates → place name) — Nominatim has a separate
+    - Reverse geocoding (coordinates → place name) -- Nominatim has a separate
       ``/reverse`` endpoint; use ``web_fetch`` or a future dedicated tool.
-    - Routing or turn-by-turn distance queries — Nominatim does not support
+    - Routing or turn-by-turn distance queries -- Nominatim does not support
       them; use a routing API.
-    - High-precision parcel-level address resolution — Nominatim is
+    - High-precision parcel-level address resolution -- Nominatim is
       street-address level at best; use a dedicated geocoding provider for
       sub-parcel accuracy.
     - Queries where bbox coverage matters: the returned bbox reflects OSM's
@@ -709,58 +700,53 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
     A plain dict with keys:
     - ``name`` (str): canonical OSM display name.
     - ``bbox`` (list[float]): ``[min_lon, min_lat, max_lon, max_lat]`` in
-      EPSG:4326 — feeds directly into ``fetch_dem``, ``fetch_buildings``,
+      EPSG:4326 -- feeds directly into ``fetch_dem``, ``fetch_buildings``,
       ``fetch_population``, ``fetch_landcover``, etc. Always at least ~2 km
-      on its long axis (see the AOI floor below) — this bbox is always a
+      on its long axis (see the AOI floor below) -- this bbox is always a
       usable case AOI, never a bare point/building footprint.
     - ``latitude`` / ``longitude`` (float): centroid of the matched feature.
     - ``source`` (str): ``"nominatim"`` on a precise match, or
       ``"state-bbox-fallback"`` when the state-snap fired (see below).
     - ``osm_type``, ``osm_id``, ``place_id`` (str / int): OSM provenance fields
       (``None`` on a state-snap, where there is no single OSM feature).
-    - ``fallback_reason`` (str, ADDITIVE — present ONLY on a state-snap): an
+    - ``fallback_reason`` (str, ADDITIVE -- present ONLY on a state-snap): an
       honest human-readable explanation the agent narrates truthfully, e.g.
       *"No precise match for 'south Florida'; snapped to the full state of
       Florida. Refine the prompt for a smaller area."*
-    - ``expansion_note`` (str, ADDITIVE — present ONLY when the AOI floor
+    - ``expansion_note`` (str, ADDITIVE -- present ONLY when the AOI floor
       fired, see below): an honest note the agent narrates truthfully, e.g.
       *"Geocoder returned a building-scale footprint (~11 m across) for
       'downtown Tampa'; expanded to a 2 km area of interest. Draw an AOI for
       precise control."*
 
-    **State-snap fallback (NATE directive):** vague/regional queries
-    ("south Florida", "protected areas in south Florida") used to geocode to an
-    arbitrary first-ranked OSM feature (observed: a random house, or KANSAS for
-    a Florida query). Now, if a US state is detected in the query, the primary
-    result's centroid is sanity-checked against that state's bounding box; a
-    wrong-state result (or a "no results" / upstream failure) snaps the bbox to
-    the full state (live OSM state admin boundary, with a vetted offline Census
-    extent as last resort) and records an honest ``fallback_reason``. A PRECISE
-    in-state query ("Fort Myers, FL", "Lee County Florida") passes the
-    sanity-check and is returned UNCHANGED — it is never widened. When NO state
-    is detected and the primary geocode fails, the typed error still raises
-    (genuine failures are never swallowed).
+    **State-snap fallback:** vague/regional queries ("south Florida",
+    "protected areas in south Florida") are sanity-checked when a US state is
+    detected in the query: the primary result's centroid is checked against
+    that state's bounding box; a wrong-state result (or a "no results" /
+    upstream failure) snaps the bbox to the full state (live OSM state admin
+    boundary, with a vetted offline Census extent as last resort) and records
+    an honest ``fallback_reason``. A PRECISE in-state query ("Fort Myers,
+    FL", "Lee County Florida") passes the sanity-check and is returned
+    UNCHANGED -- it is never widened. When NO state is detected and the
+    primary geocode fails, the typed error still raises (genuine failures
+    are never swallowed).
 
-    **Area-intent semantics + AOI floor (OPEN-10, NATE-reported):**
-    sub-locality phrasings like "downtown Tampa" used to resolve to a SINGLE
-    BUILDING/POI footprint — e.g. the live top (and only) Nominatim match for
-    "downtown Tampa" is a railway tram-stop node named "Downtown Tampa", bbox
-    ~11 m across — so every layer fetched against the resulting AOI came back
-    empty. Two fixes now run inside the fetch:
-    (a) *result-class preference* — when the top-ranked hit is a point-scale
+    **Area-intent semantics + AOI floor:** two fixes run inside the fetch to
+    keep sub-locality phrasings from resolving to a single building/POI
+    footprint:
+    (a) *result-class preference* -- when the top-ranked hit is a point-scale
     POI (not itself a place or administrative-boundary result) and the query
     does not clearly name a POI (no street-address house number, no landmark
     keyword like "airport" or "stadium"), the first place-class candidate
     among the next few results (city/town/village/suburb/neighbourhood/
-    quarter/admin boundary) is promoted instead — e.g. "downtown Miami" and
-    "midtown Atlanta" already resolve straight to a neighbourhood polygon and
-    are untouched by this rule;
-    (b) *minimum AOI floor* — whichever candidate wins, if its bbox is still
-    smaller than ~1 km on its long axis (the Tampa case: there is no
-    neighbourhood entity to promote to), it is expanded to a 2 km square
+    quarter/admin boundary) is promoted instead -- ordinary neighbourhood
+    queries that already resolve to a neighbourhood polygon are untouched by
+    this rule;
+    (b) *minimum AOI floor* -- whichever candidate wins, if its bbox is still
+    smaller than ~1 km on its long axis, it is expanded to a 2 km square
     centered on the point and the ``expansion_note`` key is set. Bboxes for
     genuine POI queries and ordinary city/county/state matches are returned
-    exactly as Nominatim reports them — this only ever widens a
+    exactly as Nominatim reports them -- this only ever widens a
     building-scale result, never a real area.
 
     **Cross-tool dependencies:**
@@ -780,9 +766,7 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
     Side effect: per FR-TA-2 §"Location-resolved emission" / FR-AS-7, the
     agent surface emits a ``location-resolved`` WebSocket message when this
     tool returns so the client auto-snaps the map. The emission seam is
-    in the agent's server.py M1 module — surfaced as
-     for the agent job that owns
-    envelope emission this sprint to wire up.
+    in the agent's server.py M1 module.
 
     Nominatim usage policy: User-Agent is sent on every request; the
     ``dynamic-1h`` cache class naturally throttles repeat queries (one
@@ -825,11 +809,11 @@ def geocode_location(query: str, **_extra_ignored: Any) -> dict[str, Any]:
 
     # The fetched (or cached) payload is JSON bytes; decode and return as a
     # structured dict. The cache URI is intentionally NOT returned to the LLM
-    # — Tier separation (invariant 5): no gs:// URIs leak into model text.
+    # -- Tier separation (invariant 5): no gs:// URIs leak into model text.
     payload = json.loads(result.data.decode("utf-8"))
 
     # Sanity-check: if a state was detected but the primary result's centroid
-    # lands OUTSIDE that state (with a tolerance margin), the match is wrong —
+    # lands OUTSIDE that state (with a tolerance margin), the match is wrong --
     # e.g. a "south Florida" query that resolved to Kansas. Snap to the state.
     if detected_state is not None:
         state_bbox = _US_STATE_BBOX.get(detected_state)

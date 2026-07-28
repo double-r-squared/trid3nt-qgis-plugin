@@ -164,16 +164,16 @@ def gate_tool_registry(
 
 
 # ===========================================================================
-# POOR-FIT WIDENING (task 3): when a turn's TOP retrieval score is under a
-# calibrated threshold, the ranking is uncertain -- widen that turn's gate k
-# once (24 -> 40) so recall does not silently drop on an ambiguous / vague
-# ask. Over-inclusion is cheap; hiding the needed tool on a hard query is a
+# POOR-FIT WIDENING: when a turn's TOP retrieval score is under a calibrated
+# threshold, the ranking is uncertain -- widen that turn's gate k once
+# (24 -> 40) so recall does not silently drop on an ambiguous / vague ask.
+# Over-inclusion is cheap; hiding the needed tool on a hard query is a
 # silent break (the same asymmetry the whole gate is designed around).
 #
-# CALIBRATION (measured, LANE A 2026-07-22, offline against the ``hashed``
-# deterministic dense fallback -- the local default when sentence-transformers
-# is absent). retrieve_ranked_tools RRF top-1 score distributions over the
-# routing_sweep input prompts + a degenerate poor-fit control set:
+# Calibration (offline, against the ``hashed`` deterministic dense fallback
+# -- the local default when sentence-transformers is absent).
+# retrieve_ranked_tools RRF top-1 score distributions over the routing_sweep
+# input prompts + a degenerate poor-fit control set:
 #
 #   register            min      median   max      (n)
 #   specific (good fit) 0.0376   0.0487   0.0492   (13)

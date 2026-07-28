@@ -5,9 +5,7 @@ Wires the three WebSocket envelope payloads from
 ``secrets-list``) to the key-storage seam: a LOCAL file vault for the raw
 key value, Persistence for the vault-ref-only ``SecretRecord``.
 
-TRID3NT is the local product: the cloud vault backends that used to live
-here (GCP Secret Manager default + AWS SSM Parameter Store SecureString)
-are removed. There is exactly ONE vault:
+TRID3NT is the local product: there is exactly ONE vault:
 
 - Secrets live one-per-file under the file-persistence data root
   (``TRID3NT_DEV_PERSISTENCE_DIR``, default ``~/.trid3nt/dev_persistence``)
@@ -23,7 +21,7 @@ as "missing key" -- the credential-request card flow re-prompts the user
 and the retry stores a fresh ``file-vault://`` secret. Never a crash,
 never a silent empty value.
 
-Design notes (unchanged from where vault-agnostic):
+Design notes:
 
 - The raw key value (``SecretAddEnvelopePayload.key_value``) is the only
   place a key ever appears on the wire. This handler writes that value to

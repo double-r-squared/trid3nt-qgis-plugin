@@ -1,4 +1,4 @@
-"""PipelineEmitter — real pipeline-state + session-state emission (M4).
+"""PipelineEmitter -- real pipeline-state + session-state emission (M4).
 
 Owns the current ``PipelineSnapshot`` for one session and broadcasts a fresh
 ``pipeline-state`` envelope on every step state transition (Appendix A.4 +
@@ -12,9 +12,9 @@ instead of the ``window.__grace2Inject*`` dev seam.
 
 Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
 
-- **Replace-not-reconcile (Appendix A.7) — structurally enforced.** Every
+- **Replace-not-reconcile (Appendix A.7) -- structurally enforced.** Every
   emission carries the full current ``PipelineSnapshot`` / ``SessionState``.
-  This class has NO ``merge``/``update_partial``/``apply_delta`` helper —
+  This class has NO ``merge``/``update_partial``/``apply_delta`` helper --
   the only public mutators are state-transition methods that build the new
   snapshot in place and emit it. Tests guarantee that the wire envelope
   carries the wholesale current state, never a delta.
@@ -45,7 +45,7 @@ emit by calling ``update_progress`` mid-fetch (TENTATIVE: M4 atomic tools
 don't, but the hook is in place for M5+ solvers).
 
 ``loaded_layers`` dedup policy (TENTATIVE per kickoff Open Questions):
-dedup by the ``uri`` field — if a tool re-fetches the same layer, the list
+dedup by the ``uri`` field -- if a tool re-fetches the same layer, the list
 keeps a single entry with the latest metadata. The session-state envelope
 on the wire is a full snapshot per A.7.
 """
@@ -113,8 +113,8 @@ __all__ = [
 #
 # The dispatch wrappers (server._dispatch_gemini_and_persist /
 # _dispatch_tool_and_persist) bind the turn's pinned Case into this
-# ContextVar at task entry. EVERY envelope constructed inside the turn —
-# server._new_envelope AND PipelineEmitter._send — reads it and stamps
+# ContextVar at task entry. EVERY envelope constructed inside the turn --
+# server._new_envelope AND PipelineEmitter._send -- reads it and stamps
 # ``Envelope.case_id`` (proposed A.1 amendment), so the client routes
 # live streaming envelopes to the OWNING Case's stream even when the user
 # has switched Cases and a concurrent turn re-pointed submit-time routing.
@@ -143,7 +143,7 @@ def current_turn_case() -> str | None:
 # for the lifetime of the tool/workflow invocation. Workflow bodies (e.g.
 # ``model_flood_scenario``) read ``current_emitter()`` to fire transient
 # map-command verbs (zoom-to bbox immediately after geocode resolves, BEFORE
-# the long SFINCS solve) — invariant 8's "responsive design" complement.
+# the long SFINCS solve) -- invariant 8's "responsive design" complement.
 #
 # Why a ContextVar, not a module-level binding (cf. ``tools.simulation.solver._EMITTER_BINDING``):
 # multiple sessions may be servicing tool calls concurrently in the same
@@ -162,7 +162,7 @@ def current_emitter() -> "PipelineEmitter | None":
 
     Returns ``None`` outside an ``emit_tool_call`` scope (direct calls, unit
     tests without an emitter, smoke harnesses). Callers MUST handle ``None``
-    gracefully — emitting a transient verb is a UX nice-to-have, not a
+    gracefully -- emitting a transient verb is a UX nice-to-have, not a
     correctness gate.
     """
     return _CURRENT_EMITTER.get()
@@ -250,7 +250,7 @@ logger = logging.getLogger("trid3nt_server.emission.pipeline_emitter")
 # state transition itself always completes. ``websockets`` is a hard agent dep,
 # but we import defensively (empty tuple) so the emitter module is importable in
 # any minimal env / unit-test context that lacks it.
-try:  # pragma: no cover — import shape, not behavior
+try:  # pragma: no cover -- import shape, not behavior
     from websockets.exceptions import (
         ConnectionClosedError,
         ConnectionClosedOK,
@@ -260,35 +260,30 @@ try:  # pragma: no cover — import shape, not behavior
         ConnectionClosedError,
         ConnectionClosedOK,
     )
-except Exception:  # pragma: no cover — websockets absent in a minimal env
+except Exception:  # pragma: no cover -- websockets absent in a minimal env
     _CONNECTION_CLOSED_EXC = ()
 
 
 # --------------------------------------------------------------------------- #
 # Layer dedup-by-identity (SAFETY NET)
 # --------------------------------------------------------------------------- #
-#
-# ``add_loaded_layer`` historically deduped by the DISPLAY ``uri`` only. That is
-# too weak for the duplicate-flood-layer bug: the workflow's INTERNAL publish and
-# a redundant LLM re-publish of the SAME underlying COG arrive with DIFFERENT
-# display URLs (two distinct TiTiler tile templates / WMS LAYERS for one run) and
-# DIFFERENT layer_ids, so the uri-only dedup never merged them — two rows for one
-# flood result. The fix: derive a stable IDENTITY key from the underlying
-# COG/run, not the display URL, so the two publishes of the same COG collide and
-# merge into ONE loaded_layer.
+# ``add_loaded_layer`` dedups by a stable IDENTITY key derived from the
+# underlying COG/run, not the display ``uri`` -- two publishes of the same
+# COG (the workflow's internal publish and a redundant LLM re-publish) can
+# carry different display URLs and layer_ids, and would otherwise never merge.
 #
 # Identity precedence (most-specific first):
 #   1. the COG path carried in a TiTiler tile template's ``url=<quoted s3/gs>``
-#      query param — both publishes of the same COG embed the SAME ``url=`` value
+#      query param -- both publishes of the same COG embed the SAME ``url=`` value
 #      even when the surrounding template (rescale/colormap) differs;
-#   2. otherwise the raw ``uri`` itself (preserves the legacy uri-only behavior
-#      for plain gs:///s3:// COGs, QGIS WMS display URLs, and non-raster vectors).
-# Conservative by construction: an unrecognized display URL degrades to the full
-# ``uri`` key (== the prior behavior), so nothing that did NOT previously dedup
-# starts collapsing unexpectedly. In particular the QGIS WMS ``LAYERS=`` param is
-# NOT used as a key — it carries a GENERIC layer name (e.g. ``LAYERS=wdpa``) that
-# is shared across genuinely-distinct fetches, so collapsing on it would
-# wrongly merge two independent map layers.
+#   2. otherwise the raw ``uri`` itself (plain gs:///s3:// COGs, QGIS WMS
+#      display URLs, and non-raster vectors).
+# Conservative by construction: an unrecognized display URL degrades to the
+# full ``uri`` key, so nothing that did not previously dedup starts
+# collapsing unexpectedly. The QGIS WMS ``LAYERS=`` param is NOT used as a
+# key -- it carries a GENERIC layer name (e.g. ``LAYERS=wdpa``) shared across
+# genuinely-distinct fetches, so collapsing on it would wrongly merge two
+# independent map layers.
 
 def _layer_identity_key(uri: str) -> str:
     """Stable cross-publish identity for a layer's display ``uri``.
@@ -303,23 +298,23 @@ def _layer_identity_key(uri: str) -> str:
         return uri
     try:
         parts = urlsplit(uri)
-    except Exception:  # noqa: BLE001 — a malformed URL degrades to itself
+    except Exception:  # noqa: BLE001 -- a malformed URL degrades to itself
         return uri
     if not parts.query:
         return uri
     qs = parse_qs(parts.query)
-    # TiTiler tile template — the underlying COG is the ``url=`` param. This is
+    # TiTiler tile template -- the underlying COG is the ``url=`` param. This is
     # the SHARED identity across the workflow publish and a redundant LLM
     # re-publish of the same COG (the duplicate-flood-layer mechanism).
     cog = qs.get("url")
     if cog and cog[0]:
         return unquote(cog[0])
-    # Unrecognized — keep the full uri so behavior is unchanged.
+    # Unrecognized -- keep the full uri so behavior is unchanged.
     return uri
 
 
 # --------------------------------------------------------------------------- #
-# Cross-RUN animation-frame identity (D3 — re-run frame accumulation)
+# Cross-RUN animation-frame identity (D3 -- re-run frame accumulation)
 # --------------------------------------------------------------------------- #
 #
 # A re-run of a flood scenario emits the SAME "Flood depth step N" name + role
@@ -360,13 +355,13 @@ def _frame_series_key(summary: "ProjectLayerSummary") -> str | None:
 # --------------------------------------------------------------------------- #
 #
 # A tool/workflow can FAIL or be CANCELLED yet still RETURN a value rather than
-# raising — the solver poll path is the headline case. When the docker
+# raising -- the solver poll path is the headline case. When the docker
 # container is killed (user cancel, transient WS blip, or SOLVER_TIMEOUT), the
 # supervisor writes a terminal completion.json and ``wait_for_completion``
 # RETURNS a ``RunResult`` with ``status != "complete"`` instead of raising. The
 # flood composer then returns a typed *failed* ``AssessmentEnvelope`` (via
 # ``_build_failed_envelope``) whose only honesty signal is the ``:FAILED:<CODE>``
-# infix on ``workflow_name`` — a NORMAL return. The MODFLOW tool
+# infix on ``workflow_name`` -- a NORMAL return. The MODFLOW tool
 # returns a raw ``{"status": "error", ...}`` dict on the same path.
 #
 # Without inspecting the RETURN value, ``emit_tool_call`` falls through to
@@ -383,7 +378,7 @@ def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
     Returns ``None`` when the result is a healthy/success shape (the common
     case → the wrapper marks the card complete unchanged). Otherwise returns
     ``(terminal_state, error_code, error_message)`` where ``terminal_state`` is
-    ``"cancelled"`` or ``"failed"`` — so the wrapper can call ``mark_cancelled``
+    ``"cancelled"`` or ``"failed"`` -- so the wrapper can call ``mark_cancelled``
     or ``mark_failed`` and the UI card reaches a visible terminal state instead
     of spinning forever.
 
@@ -391,9 +386,9 @@ def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
     raised exception):
 
     1. ``RunResult`` (duck-typed: has ``status`` + ``run_id`` + ``handle_id``)
-       with ``status != "complete"`` — the solver poll returned a killed/timed-
+       with ``status != "complete"`` -- the solver poll returned a killed/timed-
        out run. ``status == "cancelled"`` maps to the cancelled card.
-    2. A ``dict`` with ``status`` in {error, failed, cancelled} — the MODFLOW
+    2. A ``dict`` with ``status`` in {error, failed, cancelled} -- the MODFLOW
        tool's ``{"status": "error", "error_code": ..., "error_message": ...}``
        shape (run_modflow_tool.py).
     3. A failed ``AssessmentEnvelope`` (duck-typed via ``workflow_name``, or a
@@ -469,7 +464,7 @@ def _classify_tool_return(result: Any) -> tuple[str, str, str] | None:
 
 class ErrorCodeRegistry:
     """Tracks the open-set SCREAMING_SNAKE_CASE error codes the emitter knows
-    about. Per A.6 the set is OPEN — new codes can be registered at runtime.
+    about. Per A.6 the set is OPEN -- new codes can be registered at runtime.
 
     The registry exists so tests and the orchestrator audit can enumerate the
     currently-known set and so a typo at a ``mark_failed`` call site surfaces
@@ -527,7 +522,7 @@ class StepNotFoundError(EmitterError):
 
 
 # --------------------------------------------------------------------------- #
-# Emission sink — the function the emitter calls to push a frame on the wire
+# Emission sink -- the function the emitter calls to push a frame on the wire
 # --------------------------------------------------------------------------- #
 
 
@@ -603,7 +598,7 @@ def _json_for_tool_io(value: Any) -> tuple[str, bool, int]:
 
     try:
         text = json.dumps(value, indent=2, sort_keys=True, default=str)
-    except Exception:  # noqa: BLE001 — last-resort: never raise on serialization
+    except Exception:  # noqa: BLE001 -- last-resort: never raise on serialization
         text = str(value)
     orig_bytes = len(text.encode("utf-8"))
     cap = ToolIoPayload.MAX_FIELD_BYTES
@@ -747,7 +742,7 @@ async def _read_vector_uri_as_geojson(uri: str) -> dict[str, Any] | None:
         # simplify + feature cap over thousands of footprints) and session-resume
         # re-inlines + re-densifies the active-case layers on EVERY ~30s
         # reconnect. It MUST run here in the executor thread, NOT back on the
-        # asyncio loop after the executor returns — running it on the loop blocked
+        # asyncio loop after the executor returns -- running it on the loop blocked
         # the WS keepalive and contributed to the 30s drop cycle. The read above
         # was already off-loop; the densify is now folded into the same thread so
         # the entire read+densify path is off-loop for both callers
@@ -800,7 +795,7 @@ def _densify_off_loop(geojson_obj: Any, uri: str) -> Any:
                 _LAST_DENSITY_META_BY_URI.pop(
                     next(iter(_LAST_DENSITY_META_BY_URI))
                 )
-    except Exception as exc:  # noqa: BLE001 — never block a vector render
+    except Exception as exc:  # noqa: BLE001 -- never block a vector render
         logger.warning(
             "_read_vector_uri_as_geojson: densify failed uri=%s: %s", uri, exc,
         )
@@ -909,10 +904,10 @@ class _StepState:
     error_message: str | None = None
     #: Authoritative wall-clock elapsed time in milliseconds.
     #: Stamped on the terminal transition from ``started_at``→``completed_at``;
-    #: ``None`` while pending/running. Deterministic — never an LLM estimate.
+    #: ``None`` while pending/running. Deterministic -- never an LLM estimate.
     duration_ms: int | None = None
     #: Two-card sim observability: card-kind discriminator + Batch
-    #: binding. ``role`` defaults to ``"tool"`` (the on-box atomic-tool card —
+    #: binding. ``role`` defaults to ``"tool"`` (the on-box atomic-tool card --
     #: every existing step); ``"compute"`` is the off-box solver card bound to an
     #: AWS Batch job. ``batch_job_id`` is the Batch ``jobId`` the compute card
     #: tracks; ``batch_status`` mirrors the last ``DescribeJobs`` status verbatim
@@ -925,7 +920,7 @@ class _StepState:
     #: Durable-card lifecycle (NATE "nothing transient"): the STABLE persisted
     #: ``message_id`` (a ULID) of this step's tool-card row. Set on an off-box
     #: SOLVE (compute) step at mint so the card persisted ``running`` and the
-    #: later terminal write target the SAME row (upsert in place — no duplicate).
+    #: later terminal write target the SAME row (upsert in place -- no duplicate).
     #: ``None`` for a plain tool card (which persists once, at terminal, with a
     #: fresh appended id).
     card_message_id: str | None = None
@@ -955,7 +950,7 @@ class PipelineEmitter:
     - ``mark_running(step_id, *, progress_percent=None)``: flip to running,
       stamp ``started_at``, optionally seed progress, emit.
     - ``update_progress(step_id, progress_percent)``: bump ``progress_percent``
-      mid-run; emit (subject to the per-tool opt-in — atomic tools simply
+      mid-run; emit (subject to the per-tool opt-in -- atomic tools simply
       never call this).
     - ``mark_complete(step_id)``: flip to ``complete``, stamp ``completed_at``,
       emit.
@@ -968,7 +963,7 @@ class PipelineEmitter:
       ``asyncio.CancelledError`` propagates further.
     - ``add_loaded_layer(layer_uri)``: append a ``ProjectLayerSummary``
       derived from a ``LayerURI``; emit a fresh ``session-state`` envelope.
-      Dedup policy: by ``uri`` (TENTATIVE — kickoff Open Questions).
+      Dedup policy: by ``uri`` (TENTATIVE -- kickoff Open Questions).
     - ``emit_session_state()``: emit the current session-state snapshot
       (``current_pipeline`` set whenever a pipeline is running, plus the
       accumulated ``loaded_layers`` and chat history).
@@ -1029,12 +1024,12 @@ class PipelineEmitter:
         self._pipeline_history: list[dict] = list(pipeline_history or [])
         self._map_view: dict | None = map_view
 
-        #: Accumulated layers — appended each time a tool returns a ``LayerURI``.
+        #: Accumulated layers -- appended each time a tool returns a ``LayerURI``.
         self._loaded_layers: list[ProjectLayerSummary] = []
 
         #: Monotonic stacking-order counter (z-index-fix). Every NEW layer
         #: appended in ``add_loaded_layer`` is stamped with ``self._next_z``,
-        #: which then increments — so layers carry a STABLE, deterministic
+        #: which then increments -- so layers carry a STABLE, deterministic
         #: top-of-stack-is-highest order on the wire (the client no longer has
         #: to invent an order from an all-``None`` ``z_index`` column). An
         #: in-place REPLACE (re-publish / dedup-merge) REUSES the superseded
@@ -1062,7 +1057,7 @@ class PipelineEmitter:
         #: step. Carries the AUTHORITATIVE stamps (``started_at`` /
         #: ``duration_ms``) so the tool-card persistence hook in
         #: ``server._invoke_tool_via_emitter`` records exactly the duration
-        #: the live card displayed — no second clock. Set on every terminal
+        #: the live card displayed -- no second clock. Set on every terminal
         #: transition of ``emit_tool_call`` (complete / failed / cancelled);
         #: read-only everywhere else.
         self.last_tool_step: PipelineStepSummary | None = None
@@ -1122,7 +1117,7 @@ class PipelineEmitter:
         -> ``wait_for_completion``) is driven by ONE ``PipelineEmitter`` instance
         whose ``_sink`` closes over the WebSocket that LAUNCHED the turn. The web
         client opens multiple sockets per session (StrictMode double-mount +
-        reconnect) — when the launching socket closes, its sink silently drops
+        reconnect) -- when the launching socket closes, its sink silently drops
         every subsequent progress / terminal frame. When a NEW socket for the
         SAME session connects, the integration site rebinds this emitter's sink
         to the new socket's ``send`` so the still-running solve's progress and
@@ -1133,7 +1128,7 @@ class PipelineEmitter:
         J-B-part-i (replay-on-reconnect / per-Case durability): if a TERMINAL
         pipeline-state was already emitted (the red/green/yellow card) but the
         launching socket was dead when it went out, the still-running turn may
-        emit NOTHING further — so the next ``emit_*`` never repaints the card and
+        emit NOTHING further -- so the next ``emit_*`` never repaints the card and
         the terminal state is lost on the new socket. To make the terminal card
         survive a WS blip, we REPLAY the last terminal pipeline-state snapshot
         onto the NEW sink here, schedule-and-forget (this method is sync and the
@@ -1152,7 +1147,7 @@ class PipelineEmitter:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            # No running loop (e.g. a sync test rebind) — nothing to schedule.
+            # No running loop (e.g. a sync test rebind) -- nothing to schedule.
             # The snapshot stays stashed; a later emit still carries the full
             # A.7 view, and a loop-bound rebind replays it.
             return
@@ -1204,7 +1199,7 @@ class PipelineEmitter:
     ) -> None:
         """Replay a stashed terminal pipeline-state onto the (rebound) sink.
 
-        J-B-part-i: best-effort — the new sink may also be mid-cycle, so a
+        J-B-part-i: best-effort -- the new sink may also be mid-cycle, so a
         ConnectionClosed* is swallowed (the card replays on the NEXT rebind);
         any other error propagates from ``_send`` as usual."""
         try:
@@ -1250,7 +1245,7 @@ class PipelineEmitter:
     def density_meta_by_layer_id(self) -> dict[str, Any]:
         """Return a defensive shallow copy of the dense-vector tag side-table.
 
-        Companion to ``inline_geojson_by_layer_id`` — ``emit_session_state``
+        Companion to ``inline_geojson_by_layer_id`` -- ``emit_session_state``
         stamps each layer's ``DensifyMeta.as_wire_tag()`` alongside the inline
         GeoJSON, so the materialized snapshot replicates that merge to stay
         byte-identical to the live wire. Keyed by ``layer_id``; values are the
@@ -1266,12 +1261,12 @@ class PipelineEmitter:
         accumulator with whatever ``CaseSessionState.loaded_layers`` held.
         Each input dict is validated through ``ProjectLayerSummary`` so a
         malformed entry doesn't corrupt the in-memory state. Malformed
-        entries are skipped (logged) — partial seeding is preferable to
+        entries are skipped (logged) -- partial seeding is preferable to
         wholesale rollback because the next legitimate emission will
         re-stabilize the wire shape via the existing dedup-by-uri rule.
 
         Pass ``None`` or ``[]`` to flush (used on ``case-command(create)``).
-        Does NOT emit a ``session-state`` — the caller decides when to send
+        Does NOT emit a ``session-state`` -- the caller decides when to send
         the next snapshot.
         """
         if not layers:
@@ -1366,7 +1361,7 @@ class PipelineEmitter:
         """Rebuild ``_inline_geojson_by_layer_id`` for persisted vector layers.
 
         the inline-GeoJSON side-table is in-memory
-        only — a Case reopen seeds ``_loaded_layers`` from the persisted
+        only -- a Case reopen seeds ``_loaded_layers`` from the persisted
         snapshot via ``reset_loaded_layers`` but the inline payloads are gone,
         so the browser (which never fetches gs://"/s3:// directly)
         rehydrates vector layers it cannot render. Re-read each vector layer's
@@ -1387,7 +1382,7 @@ class PipelineEmitter:
                 continue
             try:
                 geojson_obj = await _read_vector_uri_as_geojson(uri)
-            except Exception:  # noqa: BLE001 — per-layer best-effort
+            except Exception:  # noqa: BLE001 -- per-layer best-effort
                 logger.warning(
                     "reinline_vector_layers: read failed layer_id=%s uri=%s",
                     layer.layer_id,
@@ -1509,7 +1504,7 @@ class PipelineEmitter:
         Convenience for workflow bodies that hold a ``current_emitter()`` handle
         but NOT the ``step_id`` (the step is created inside ``emit_tool_call``).
         Targets the most-recently-added step that is in ``running`` state; no-op
-        (best-effort) when no step is running — emitting pre-solver progress is a
+        (best-effort) when no step is running -- emitting pre-solver progress is a
         UX nice-to-have, never a correctness gate. Used by
         ``model_flood_scenario`` to keep the card from sitting silently during
         the multi-second pre-solver fetcher chain + SFINCS build (so a stall is
@@ -1622,7 +1617,7 @@ class PipelineEmitter:
             await self.mark_complete(child_id)
 
     # ------------------------------------------------------------------ #
-    # Two-card sim observability — the off-box compute card
+    # Two-card sim observability -- the off-box compute card
     # ------------------------------------------------------------------ #
 
     async def add_compute_step(
@@ -1645,7 +1640,7 @@ class PipelineEmitter:
         feeds ``batch_status`` via ``update_compute_status``. Returns the new
         ``step_id``.
 
-        ``batch_status`` mirrors the Batch control-plane verbatim — never an LLM
+        ``batch_status`` mirrors the Batch control-plane verbatim -- never an LLM
         estimate (Invariant 1); ``None`` until the first ``DescribeJobs`` tick.
         """
         step_id = await self.add_step(name=name, tool_name=tool_name)
@@ -1671,7 +1666,7 @@ class PipelineEmitter:
         Generalizes ``add_compute_step``'s running-then-upsert-terminal
         lifecycle for a server-internal action that is NOT an AWS-Batch-bound
         solve (e.g. the context-window compaction card, Part A compaction
-        UX) — it must render as an ordinary on-box tool card, never carry the
+        UX) -- it must render as an ordinary on-box tool card, never carry the
         compute-card's ``role="compute"`` / ``batch_job_id`` /
         ``batch_status`` fields (there is no Batch job to bind to). Returns
         the new ``step_id``.
@@ -1689,16 +1684,16 @@ class PipelineEmitter:
         """Patch a step's display ``name`` (label) in place.
 
         Every OTHER step type fixes its label at ``add_step`` /
-        ``add_compute_step`` mint time and never needs this — the running vs.
+        ``add_compute_step`` mint time and never needs this -- the running vs.
         complete phrasing difference the client shows is driven by
         ``PipelineCard.humanizeStepName`` keying off the (unchanging)
         ``name``, not by the server renaming anything. The compaction card
         (Part A) is the first whose terminal label depends on data only
         known AFTER the work completes (the actual before/after token
-        counts) — this flips it from the running "Compacting
+        counts) -- this flips it from the running "Compacting
         conversation..." label to the terminal "Conversation compacted (Nk
         -> Mk tokens)" summary right before ``mark_complete`` emits/persists
-        it. Synchronous (no wire emission of its own — the caller's next
+        it. Synchronous (no wire emission of its own -- the caller's next
         ``mark_*`` / ``persist_*`` call carries the new name). Best-effort
         no-op if ``step_id`` is unknown.
         """
@@ -1716,11 +1711,11 @@ class PipelineEmitter:
         wait-loop calls this each poll tick with the latest ``DescribeJobs``
         status so the off-box compute card reflects the Batch control-plane
         (SUBMITTED / RUNNABLE / STARTING / RUNNING / SUCCEEDED / FAILED) verbatim
-        — never an LLM estimate (Invariant 1). No-op (best-effort) when the
+        -- never an LLM estimate (Invariant 1). No-op (best-effort) when the
         ``step_id`` is unknown OR when nothing changed, so a steady poll does not
         spam an identical frame and a stale binding never raises out of the poll
         loop (live status is a UX signal, not a correctness gate). Does NOT alter
-        the step's ``state`` — the terminal ``mark_complete`` / ``mark_failed``
+        the step's ``state`` -- the terminal ``mark_complete`` / ``mark_failed``
         owns that transition.
         """
         step = self._steps.get(step_id)
@@ -1757,7 +1752,7 @@ class PipelineEmitter:
         step.duration_ms = _elapsed_ms(step.started_at, step.completed_at)
         # Per D.6 discipline: clear progress_percent on terminal states so
         # the client doesn't render a stale "99%" alongside a green chip.
-        # We leave it set when the tool deliberately reported 100 — that's a
+        # We leave it set when the tool deliberately reported 100 -- that's a
         # legitimate workflow signal.
         # J-B-part-i: terminal emit is best-effort on a dead socket + snapshots
         # for replay-on-rebind so the green card survives a WS cycle.
@@ -1781,7 +1776,7 @@ class PipelineEmitter:
         self._clear_parent_breadcrumb(step)
         # failed cards show the final duration too (mm:ss of how
         # long the tool ran before failing). started_at may be None if the
-        # step failed before mark_running — _elapsed_ms returns None then.
+        # step failed before mark_running -- _elapsed_ms returns None then.
         step.duration_ms = _elapsed_ms(step.started_at, step.completed_at)
         step.error_code = error_code
         step.error_message = self._truncate_message(error_message)
@@ -1797,7 +1792,7 @@ class PipelineEmitter:
         step.state = "cancelled"
         step.completed_at = self._now_fn()
         self._clear_parent_breadcrumb(step)
-        # cancelled is terminal — stamp duration so the yellow card
+        # cancelled is terminal -- stamp duration so the yellow card
         # locks to the elapsed-before-cancel time rather than ticking forever.
         step.duration_ms = _elapsed_ms(step.started_at, step.completed_at)
         # J-B-part-i: terminal emit is best-effort on a dead socket + snapshots
@@ -1847,7 +1842,7 @@ class PipelineEmitter:
                 duration_ms_fallback=duration_ms,
                 message_id=step.card_message_id,
             )
-        except Exception as exc:  # noqa: BLE001 — persistence, never break solve
+        except Exception as exc:  # noqa: BLE001 -- persistence, never break solve
             logger.warning(
                 "_persist_step_card failed (non-fatal) step=%s: %s",
                 step_id,
@@ -1861,8 +1856,8 @@ class PipelineEmitter:
         persisted the SIM card only at TERMINAL, so a reconnect/reopen
         WHILE the solve was still running replayed an empty pipeline and the
         running solve card VANISHED (the user kept only the durable input
-        layers). Persisting the ``running`` card here — keyed by the step's
-        stable ``card_message_id`` — means a mid-run reconnect/reopen replays the
+        layers). Persisting the ``running`` card here -- keyed by the step's
+        stable ``card_message_id`` -- means a mid-run reconnect/reopen replays the
         spinning card from ``chat_history``; ``persist_terminal_compute_card``
         later upserts the SAME row to its terminal state. No-op outside the
         ``running`` state."""
@@ -1880,7 +1875,7 @@ class PipelineEmitter:
         PERMANENTLY after the sim finishes.
 
         Now persists ``cancelled`` too (a stopped solve is a finished solve the
-        user must be able to trace — this supersedes Invariant 8's "no row" for
+        user must be able to trace -- this supersedes Invariant 8's "no row" for
         the durable solve card; see ``ToolCardState``). The running row was
         already written at mint, so the cancel upsert simply walks it to its
         yellow terminal rather than leaving an orphaned ``running`` row."""
@@ -1900,7 +1895,7 @@ class PipelineEmitter:
         await self._persist_step_card(step_id, states=("complete", "failed"))
 
     # ------------------------------------------------------------------ #
-    # session-state — current_pipeline + loaded_layers
+    # session-state -- current_pipeline + loaded_layers
     # ------------------------------------------------------------------ #
 
     def _alloc_z(self) -> int:
@@ -1951,7 +1946,7 @@ class PipelineEmitter:
             temporal=layer.temporal is not None,
             legend=_legend,
         )
-        # Dedup by underlying-COG identity — in-place replace if present, else
+        # Dedup by underlying-COG identity -- in-place replace if present, else
         # append. ``_layer_identity_key`` collapses two display URLs of the same
         # COG to one key; for a plain COG it is the uri itself (legacy behavior).
         # D3: animation frames ALSO supersede the prior run's same-step frame via
@@ -1989,7 +1984,7 @@ class PipelineEmitter:
                 self._loaded_layers[i] = summary
                 break
         else:
-            # z-index-fix: a brand-new layer takes the next monotonic slot —
+            # z-index-fix: a brand-new layer takes the next monotonic slot --
             # top of the stack (highest z_index) is the most-recently-added.
             summary.z_index = self._alloc_z()
             self._loaded_layers.append(summary)
@@ -2068,7 +2063,7 @@ class PipelineEmitter:
     async def emit_map_command(self, command: str, args: dict) -> None:
         """Emit a ``map-command`` envelope.
 
-        Used for transient verbs that are not pure state — primarily ``zoom-to``
+        Used for transient verbs that are not pure state -- primarily ``zoom-to``
         after a layer lands. Layer-CRUD verbs are conveyed via ``session-state``
         (layer-emission-contract.md decision).
         """
@@ -2084,10 +2079,10 @@ class PipelineEmitter:
         the running tool/pipeline card so a multi-minute solve shows live
         grid/cells/vCPU/elapsed/ETA rather than a silent spinner. Best-effort:
         a malformed dict is logged + dropped (live telemetry is a UX hint, never
-        a correctness gate — mirrors ``update_current_progress``)."""
+        a correctness gate -- mirrors ``update_current_progress``)."""
         try:
             payload = SolveProgressPayload(**progress)
-        except Exception as exc:  # noqa: BLE001 — never break the solve loop
+        except Exception as exc:  # noqa: BLE001 -- never break the solve loop
             logger.warning("emit_solve_progress: bad payload dropped: %s", exc)
             return
         await self._send("solve-progress", payload)
@@ -2166,14 +2161,14 @@ class PipelineEmitter:
         The sidecar that carries the RAW input args + the RAW
         ``function_response`` for one tool dispatch so the chat tool-card's
         expander can reveal them (keyed by ``step_id`` to the dispatch's card).
-        Both payloads are json-dumped to STRINGS here — a non-serializable value
-        degrades to its ``repr`` rather than breaking the envelope — and
+        Both payloads are json-dumped to STRINGS here -- a non-serializable value
+        degrades to its ``repr`` rather than breaking the envelope -- and
         TRUNCATED to ``ToolIoPayload.MAX_FIELD_BYTES`` (large-payload norm: the
         chat must never ship a multi-MB blob for an expander). The original byte
         length + a truncation flag ride along so the UI renders an honest
         "truncated, N bytes" note.
 
-        Best-effort: a serialization / send failure is logged and dropped — the
+        Best-effort: a serialization / send failure is logged and dropped -- the
         expander is a debugging affordance, never a correctness gate, so it must
         not break the dispatch loop (mirrors ``emit_solve_progress``)."""
         try:
@@ -2190,13 +2185,13 @@ class PipelineEmitter:
                 args_bytes=args_bytes,
                 response_bytes=resp_bytes,
             )
-        except Exception as exc:  # noqa: BLE001 — never break the dispatch loop
+        except Exception as exc:  # noqa: BLE001 -- never break the dispatch loop
             logger.warning("emit_tool_io: bad payload dropped: %s", exc)
             return
         await self._send("tool-io", payload)
 
     # ------------------------------------------------------------------ #
-    # Tool-call wrapper — the integration seam for server.py
+    # Tool-call wrapper -- the integration seam for server.py
     # ------------------------------------------------------------------ #
 
     @contextmanager
@@ -2207,7 +2202,7 @@ class PipelineEmitter:
         for direct unit-test access. Auto-marks ``running`` on entry and
         ``complete`` on clean exit; exceptions are re-raised AFTER marking
         ``failed`` with an inferred error_code. Note: sync context can't
-        await emission — used by tests with a sync sink wrapper.
+        await emission -- used by tests with a sync sink wrapper.
         """
         raise NotImplementedError(
             "use async_emit_tool_call from the WS handler; the sync context "
@@ -2233,9 +2228,9 @@ class PipelineEmitter:
                - Then ``mark_complete`` → emits ``pipeline-state``.
                - Return the original tool result.
             5. On ``asyncio.CancelledError``: ``mark_cancelled`` + re-raise.
-               (Honors Invariant 8 — cancelled is distinct from failed.)
+               (Honors Invariant 8 -- cancelled is distinct from failed.)
             6. On any other exception: classify, ``mark_failed``, re-raise.
-               The classifier is deliberately conservative — anything unknown
+               The classifier is deliberately conservative -- anything unknown
                surfaces as ``INTERNAL_ERROR`` with the exception message
                truncated to 512 chars.
         """
@@ -2247,7 +2242,7 @@ class PipelineEmitter:
         # still exist in ``_steps`` -- ``server.close_pipeline`` clears them).
         self.last_tool_children = []
         # Bind self as the active emitter for the lifetime of the invoke so
-        # workflow bodies can fire transient map-command verbs (—
+        # workflow bodies can fire transient map-command verbs (--
         # zoom-on-area-first UX). reset_token ensures the binding is unwound
         # exactly once, even on cancellation / exception paths.
         token = _CURRENT_EMITTER.set(self)
@@ -2263,7 +2258,7 @@ class PipelineEmitter:
                     result = await result
             except asyncio.CancelledError:
                 await self.mark_cancelled(step_id)
-                # record the terminal step even on cancel — the
+                # record the terminal step even on cancel -- the
                 # persistence hook skips cancelled cards, but the accessor
                 # must never carry a STALE prior step past this dispatch.
                 self.last_tool_step = self._to_summary(step_id)
@@ -2272,7 +2267,7 @@ class PipelineEmitter:
                 # children either).
                 self.last_tool_children = self._collect_children(step_id)
                 raise
-            except Exception as exc:  # noqa: BLE001 — classify-and-re-raise
+            except Exception as exc:  # noqa: BLE001 -- classify-and-re-raise
                 code, message = self._classify_exception(exc)
                 await self.mark_failed(step_id, error_code=code, error_message=message)
                 self.last_tool_step = self._to_summary(step_id)
@@ -2281,26 +2276,19 @@ class PipelineEmitter:
                 # replayed failed card still nests its sub-step timeline.
                 self.last_tool_children = self._collect_children(step_id)
                 raise
-            # TERMINAL FRAME FIRST (stuck-running-card fix): emit the terminal
-            # pipeline-state frame (complete / failed / cancelled) BEFORE the
-            # LayerURI's session-state emission. Previously add_loaded_layer ran
-            # first and emitted a session-state snapshot that captured the step
-            # while it was STILL "running"; that snapshot could arrive at/after
-            # the terminal frame, leaving the tool card stuck "Computing
-            # hillshade..." (running) forever for every compute_*/LayerURI tool.
-            # The terminal classification depends only on the tool RESULT, not
-            # on the layer being added, so we can safely flip the card first and
+            # Emit the terminal pipeline-state frame (complete / failed /
+            # cancelled) BEFORE the LayerURI's session-state emission -- the
+            # terminal classification depends only on the tool RESULT, not on
+            # the layer being added, so the card can safely flip first and
             # have add_loaded_layer's session-state snapshot reflect the
             # terminal state.
             #
-            # Terminal-card hardening: a tool can FAIL or be
-            # CANCELLED yet still RETURN (the solver poll path — a docker-killed
-            # / timed-out run returns a RunResult or a failed AssessmentEnvelope
-            # rather than raising). Inspect the return value: if it carries a
-            # non-success terminal outcome, flip the card to cancelled/failed
-            # instead of green. This kills NATE's "silent green on a cancelled
-            # solve" + "card spins forever then mislabels success" symptom for
-            # BOTH the flood envelope (:FAILED: anchor) and the MODFLOW dict.
+            # A tool can FAIL or be CANCELLED yet still RETURN (the solver
+            # poll path -- a docker-killed / timed-out run returns a RunResult
+            # or a failed AssessmentEnvelope rather than raising). Inspect the
+            # return value: if it carries a non-success terminal outcome, flip
+            # the card to cancelled/failed instead of green. Covers both the
+            # flood envelope (:FAILED: anchor) and the MODFLOW dict.
             terminal = _classify_tool_return(result)
             if terminal is not None:
                 state, error_code, error_message = terminal
@@ -2327,7 +2315,7 @@ class PipelineEmitter:
             # persisted ``ToolCardRecord.children`` so a Case reopen (warm) AND
             # the box-off cold view rebuild the nested timeline READ-ONLY.
             self.last_tool_children = self._collect_children(step_id)
-            # Honor LayerURI return shape — append to loaded_layers + emit
+            # Honor LayerURI return shape -- append to loaded_layers + emit
             # session-state. This runs AFTER the terminal frame above so the
             # session-state snapshot captures the step as complete/failed, never
             # "running" (the stuck-card bug). route through the single
@@ -2335,7 +2323,7 @@ class PipelineEmitter:
             # raster carrying a raw gs:// uri (the publish-failure degraded path)
             # so it never paints a broken layer row; vector inline-GeoJSON
             # LayerURIs and WMS-URL rasters pass untouched. The tool
-            # result is unaffected — a dropped layer is still narrated honestly
+            # result is unaffected -- a dropped layer is still narrated honestly
             # and the retry loop can act.
             if isinstance(result, LayerURI):
                 emit_layer = emit_layer_uri(result)
@@ -2355,18 +2343,18 @@ class PipelineEmitter:
     def _classify_exception(self, exc: Exception) -> tuple[str, str]:
         """Map a tool exception to an ``(error_code, error_message)`` pair.
 
-        Open-set per Appendix A.6 — extend the registry + this map as new
+        Open-set per Appendix A.6 -- extend the registry + this map as new
         failure modes land. Deliberately conservative: ambiguous shapes
         bucket into ``INTERNAL_ERROR`` rather than fabricate a more specific
         code.
         """
         message = str(exc) or exc.__class__.__name__
-        # Subclass-aware bucketing. Order matters — most specific first.
+        # Subclass-aware bucketing. Order matters -- most specific first.
         if isinstance(exc, ValueError) and "bbox" in message.lower():
             return ("BBOX_INVALID", message)
         if isinstance(exc, TimeoutError) or isinstance(
             exc, asyncio.TimeoutError
-        ):  # pragma: no cover — Py3.11+ aliases
+        ):  # pragma: no cover -- Py3.11+ aliases
             return ("UPSTREAM_API_ERROR", f"upstream timeout: {message}")
         if isinstance(exc, ConnectionError):
             return ("UPSTREAM_API_ERROR", message)
@@ -2494,7 +2482,7 @@ class PipelineEmitter:
 
     async def _emit_pipeline_state(self) -> None:
         if self._pipeline_id is None:
-            # Defensive — emit-with-no-pipeline is a programming error from
+            # Defensive -- emit-with-no-pipeline is a programming error from
             # the integration site; we don't paper over it with an empty
             # snapshot.
             raise EmitterError(
@@ -2532,7 +2520,7 @@ class PipelineEmitter:
 
         J-B-part-i: a terminal ``mark_failed`` / ``mark_complete`` /
         ``mark_cancelled`` emits the red/green/yellow card. If the WS is dead or
-        mid-cycling, the underlying ``_send`` raises ConnectionClosed* — that
+        mid-cycling, the underlying ``_send`` raises ConnectionClosed* -- that
         would ABORT the terminal transition and LOSE the card. We:
 
           1. snapshot the terminal payload so ``rebind_sink`` can REPLAY it onto a
@@ -2543,7 +2531,7 @@ class PipelineEmitter:
              real logic/serialization error) still propagates loudly.
         """
         if self._pipeline_id is None:
-            # Same defensive contract as _emit_pipeline_state — a terminal emit
+            # Same defensive contract as _emit_pipeline_state -- a terminal emit
             # with no open pipeline is a programming error at the call site.
             raise EmitterError(
                 "_emit_terminal_pipeline_state called with no open pipeline; "
@@ -2554,12 +2542,12 @@ class PipelineEmitter:
             steps=[self._to_wire_step(sid) for sid in self._step_order],
         )
         # Stash the LAST terminal snapshot so a sink rebind (reconnect) can
-        # replay it — a RENDERED/terminal card stays surfaced across a WS blip.
+        # replay it -- a RENDERED/terminal card stays surfaced across a WS blip.
         self._last_terminal_pipeline_payload = payload
         try:
             await self._send("pipeline-state", payload)
         except _CONNECTION_CLOSED_EXC:  # type: ignore[misc]
-            # Dead / cycling socket — best-effort drop. The terminal STATE is
+            # Dead / cycling socket -- best-effort drop. The terminal STATE is
             # already recorded on the step; the snapshot above replays on the
             # next sink rebind so the card is not lost.
             logger.debug(
@@ -2613,7 +2601,7 @@ async def mint_dispatch_and_sim_cards(
     """Mint the Dispatch (tool) + Sim (compute) cards for an off-box solve.
 
     ``handle`` is the ``ExecutionHandle`` from ``run_solver`` /
-    ``submit_sfincs_quadtree`` — its ``workflows_execution_id`` is the AWS Batch
+    ``submit_sfincs_quadtree`` -- its ``workflows_execution_id`` is the AWS Batch
     ``jobId`` the sim card binds to and the wait-loop describes. Card 1 is a
     plain tool step (``add_step`` -> ``mark_complete``) recording the submit;
     card 2 is the ``role="compute"`` step bound to the jobId, left running.
@@ -2621,7 +2609,7 @@ async def mint_dispatch_and_sim_cards(
     Returns the SIM step's id so the composer can point the solver emitter
     binding at it (so the wait-loop's phase ticks land on the right card) and
     route the terminal there. Best-effort: ``emitter is None`` (direct/smoke/unit
-    call) OR any emit failure returns ``None`` and the solve proceeds unchanged —
+    call) OR any emit failure returns ``None`` and the solve proceeds unchanged --
     the two cards are an observability affordance, never a correctness gate.
     """
     if emitter is None:
@@ -2662,7 +2650,7 @@ async def mint_dispatch_and_sim_cards(
             sim_id,
         )
         return sim_id
-    except Exception as exc:  # noqa: BLE001 — observability, never break the solve
+    except Exception as exc:  # noqa: BLE001 -- observability, never break the solve
         logger.warning("mint_dispatch_and_sim_cards failed (non-fatal): %s", exc)
         return None
 
@@ -2698,7 +2686,7 @@ async def route_sim_terminal(
             await emitter.mark_cancelled(sim_step_id)
             # Durability: the SIM card was persisted ``running`` at mint, so a
             # cancel UPSERTS that SAME row to its terminal ``cancelled`` state
-            # (no orphaned running row). A stopped solve stays traceable —
+            # (no orphaned running row). A stopped solve stays traceable --
             # superseding Invariant 8's "no row" for the durable solve card.
             await emitter.persist_terminal_compute_card(sim_step_id)
         elif status == "complete":
@@ -2721,7 +2709,7 @@ async def route_sim_terminal(
             # persist the red SIM compute card too (honesty floor: a
             # terminal solve FAILURE must SURFACE across a socket cycle).
             await emitter.persist_terminal_compute_card(sim_step_id)
-    except Exception as exc:  # noqa: BLE001 — observability, never break the solve
+    except Exception as exc:  # noqa: BLE001 -- observability, never break the solve
         logger.warning("route_sim_terminal failed (non-fatal): %s", exc)
 
 
@@ -2735,9 +2723,9 @@ async def route_sim_terminal(
 # Mirrors ``mint_dispatch_and_sim_cards`` / ``route_sim_terminal``'s
 # running-then-upsert-terminal shape, collapsed to a SINGLE card: compaction
 # is one atomic local pass, not an off-box submit+solve pair, so it gets one
-# ``role="tool"`` card (never ``"compute"`` — there is no Batch job bound to
+# ``role="tool"`` card (never ``"compute"`` -- there is no Batch job bound to
 # a local compaction) that starts running and is later renamed + completed.
-# No new envelope type — this rides the exact same ``PipelineStep`` /
+# No new envelope type -- this rides the exact same ``PipelineStep`` /
 # ``ToolCardRecord`` wire shape every atomic-tool card already uses.
 
 
@@ -2746,7 +2734,7 @@ async def mint_compaction_card(*, emitter: "PipelineEmitter | None") -> str | No
 
     Best-effort: ``emitter is None`` (direct/verify/CI call with no
     ``_ensure_emitter`` binding) or any emit/persist failure returns ``None``
-    and compaction proceeds unchanged — the card is an observability
+    and compaction proceeds unchanged -- the card is an observability
     affordance, never a correctness gate for the compaction it describes.
     Returns the new step's id so the caller can pass it to
     ``complete_compaction_card`` once the pass finishes.
@@ -2758,12 +2746,12 @@ async def mint_compaction_card(*, emitter: "PipelineEmitter | None") -> str | No
             name=COMPACTING_LABEL, tool_name="context:compact"
         )
         # Durability (NATE "nothing about the chat is transient"): persist
-        # the running card NOW, mirroring ``persist_running_compute_card`` —
+        # the running card NOW, mirroring ``persist_running_compute_card`` --
         # a reconnect/reopen mid-pass replays the spinning card instead of
         # dropping it. ``complete_compaction_card`` upserts the SAME row.
         await emitter.persist_running_compute_card(step_id)
         return step_id
-    except Exception as exc:  # noqa: BLE001 — observability, never break the turn
+    except Exception as exc:  # noqa: BLE001 -- observability, never break the turn
         logger.warning("mint_compaction_card failed (non-fatal): %s", exc)
         return None
 
@@ -2781,9 +2769,9 @@ async def complete_compaction_card(
     Renames the step's label to the "Conversation compacted (Nk -> Mk
     tokens)" summary (``context_budget.compaction_complete_label``) BEFORE
     ``mark_complete`` so both the live terminal emission and the persisted
-    upsert carry the final text — never the stale "Compacting
+    upsert carry the final text -- never the stale "Compacting
     conversation..." running label. No-op when the emitter or ``step_id`` is
-    absent (mint failed, or was never called — e.g. no emitter bound on a
+    absent (mint failed, or was never called -- e.g. no emitter bound on a
     direct/verify/CI call). Best-effort: an emit/persist failure is
     swallowed, same discipline as ``route_sim_terminal``.
     """
@@ -2798,5 +2786,5 @@ async def complete_compaction_card(
         # running (mirrors ``persist_terminal_compute_card``) so the card
         # survives a Case reopen with its final renamed label + state.
         await emitter.persist_terminal_compute_card(step_id)
-    except Exception as exc:  # noqa: BLE001 — observability, never break the turn
+    except Exception as exc:  # noqa: BLE001 -- observability, never break the turn
         logger.warning("complete_compaction_card failed (non-fatal): %s", exc)

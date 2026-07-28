@@ -1,35 +1,15 @@
-"""Session-scoped layer-URI registry — layer-handle indirection.
+"""Session-scoped layer-URI registry -- layer-handle indirection.
 
-Kills the LLM-URI-mangling incident class observed live in Stage 3 / the
-user's Tampa demo run. Gemini is structurally bad at echoing long opaque
-URIs between turns — five distinct live incidents proved it:
-
-1. **runs/ prefix mangle**: the real
-   COG ``s3://trid3nt-runs/01KTS5W9GTE7A7WPC3BNBE10EQ/
-   flood_depth_peak.tif`` came back as ``s3://trid3nt-runs/
-   runs/01KTS5W9.../flood_depth_peak.tif`` (doubled path segment) → 404.
-2. **layer_id-as-basename invention** (same call): ``assets_uri`` was
-   ``gs://…/usace_nsi/usace-nsi--81.9126-26.5476--81.7511-26.6892.fgb`` —
-   Gemini grafted the *layer_id* onto the cache directory instead of the
-   real hash basename ``852a6cc379b18c865bf9d99ec1acaa35.fgb``.
-3. **hash-tail hallucination ×3**:
-   ``090a4ff8d9a083f67c0b355caf40241a.tif`` echoed as
-   ``090a4ff8d9a083b28499252309d12999.tif`` — first ~14 hex chars preserved,
-   tail invented. Three out of three publishes.
-4. **WMS-URL-as-hazard**: the QGIS
-   display URL ``https://…/ogc/wms?MAP=…&LAYERS=flood-depth-peak-01KTS8H8…``
-   passed as ``hazard_raster_uri`` to Pelicun (which needs the gs:// COG).
-5. **invented cache hash** (same call): ``assets_uri`` =
-   ``gs://…/usace_nsi/20240516140505.fgb`` — a timestamp-shaped basename
-   that never existed.
-
-Prompt-engineering patches (SYSTEM_PROMPT clauses) only
-lowered the rate. THIS module removes the failure mode architecturally:
+Gemini is structurally bad at echoing long opaque URIs between turns
+(dropped/doubled path segments, layer_id-as-basename invention, hash-tail
+hallucination, a WMS display URL substituted for the data URI, invented
+cache hashes). Prompt-engineering patches (SYSTEM_PROMPT clauses) only
+lowered the rate; this module removes the failure mode architecturally:
 
 * Every tool result that carries URIs gets **registered** as
   ``handle → exact URI`` where the handle is the ``layer_id`` (or a minted
   stable key for bare URIs). Handles are surfaced to Gemini in the
-  function_response, and the SYSTEM_PROMPT instructs it to pass handles —
+  function_response, and the SYSTEM_PROMPT instructs it to pass handles --
   never raw ``gs://`` paths.
 * Every URI-consuming tool param (``hazard_raster_uri``, ``assets_uri``,
   ``layer_uri``, …) **resolves** through the registry at dispatch:
@@ -46,7 +26,7 @@ lowered the rate. THIS module removes the failure mode architecturally:
      (``URI_HANDLE_UNRESOLVED``) that TELLS the model which handles exist,
      so it self-corrects instead of inventing again. Non-object-store
      strings (external http(s) links, local paths, opaque tokens) still
-     FAIL OPEN — user-supplied sources are never blocked.
+     FAIL OPEN -- user-supplied sources are never blocked.
 
 ADR 0014 (layer handles, not URIs): alongside the ``layer_id`` handles above,
 the registry mints SHORT per-case handles (``L1``, ``L2``, ...) the moment a
@@ -55,7 +35,7 @@ function_response so the model only ever sees ``L<n>`` where a registered URI
 would appear; dispatch resolves ``L<n>`` (case-insensitive) back to the exact
 URI. The ``{L<n>: uri}`` map persists WITH the Case (storage-only field) so a
 reconnect/reopen resolves the same handles. Plugin-bound wire envelopes are
-untouched — they keep the real uri the plugin renders from.
+untouched -- they keep the real uri the plugin renders from.
 
 Scoping rules:
 
@@ -65,9 +45,7 @@ Scoping rules:
   sibling connections.
 * Unknown storage URIs pass through untouched (fail-open): user-supplied
   data must never be blocked, and a stale or invented path fails downstream
-  with the consuming tool's own honest typed error. (The legacy-cloud-era
-  managed-bucket strict-reject died with the cloud decommission -- nothing
-  local mints the old bucket names anymore.)
+  with the consuming tool's own honest typed error.
 * Composer-internal publishes (``sfincs_flood`` →
   ``publish_layer``) are captured via a ``ContextVar`` observation hook:
   ``publish_layer`` calls :func:`observe_published_layer` with the
@@ -76,8 +54,8 @@ Scoping rules:
   carries the WMS URL.
 
 Wired in ``server._invoke_tool_via_emitter`` (resolution before dispatch,
-registration after) — see server.py. Unit coverage in
-``tests/test_uri_registry.py`` replays all five incident shapes with the
+registration after) -- see server.py. Unit coverage in
+``tests/test_uri_registry.py`` replays the known mangle-incident shapes with
 real logged values.
 """
 
@@ -116,7 +94,7 @@ __all__ = [
 # --------------------------------------------------------------------------- #
 
 #: Param names that consume layer/raster/vector URIs and therefore resolve
-#: through the registry at dispatch. Names, not tools — the same param name
+#: through the registry at dispatch. Names, not tools -- the same param name
 #: means the same thing across the catalog. DESTINATION params (where the
 #: tool *writes*) and server-owned params (``project_qgs_uri``) must NOT be
 #: listed: branch 4 would reject a not-yet-existing output path.
@@ -147,12 +125,11 @@ RESOLVABLE_URI_PARAMS: frozenset[str] = frozenset(
         # other *_uri params above.
         "model_layer_uri",
         "observations_layer_uri",
-        # V&V wave (ADR 0021, integration pass): lane B's compute_skill_metrics
-        # (paired obs/sim table, a lane-C extract_model_at_observations output)
-        # and compute_flood_extent_skill (modeled + benchmark wet/dry extent)
-        # take handle/URI params like the ones above; NOTE run_handle
-        # (read_run_diagnostics) is deliberately excluded per build-contract.md
-        # section 2.1 -- it self-resolves and must not be mangled here.
+        # ``compute_skill_metrics`` (paired obs/sim table) and
+        # ``compute_flood_extent_skill`` (modeled + benchmark wet/dry extent)
+        # take handle/URI params like the ones above. ``run_handle``
+        # (read_run_diagnostics) is excluded per build-contract.md section
+        # 2.1 -- it self-resolves and must not be mangled here.
         "paired_table_uri",
         "model_extent_uri",
         "benchmark_extent_uri",
@@ -181,7 +158,7 @@ _SHORT_HANDLES_CAP = 4096
 #: 32-hex cache keys.
 _HASH_PREFIX_MIN = 12
 
-#: Caps — registries per process / records per registry / walk guards.
+#: Caps -- registries per process / records per registry / walk guards.
 _REGISTRY_STORE_CAP = 4096
 _RECORDS_PER_SESSION_CAP = 1024
 _WALK_MAX_DEPTH = 8
@@ -190,7 +167,7 @@ _ANNOUNCE_CAP = 8
 _ERROR_HANDLES_CAP = 10
 
 #: tools that consume a DEM as their primary input. When the branch-4
-#: "no layers yet" fallback fires for one of these, suggest ``fetch_dem`` —
+#: "no layers yet" fallback fires for one of these, suggest ``fetch_dem`` --
 #: the generic ``sfincs_flood`` example was actively misleading
 #: for a terrain-derivative ask (live incident: a reconnect-empty registry +
 #: the generic suggestion steered the model away from the actually-needed
@@ -207,7 +184,7 @@ _DEM_CONSUMING_TOOLS: frozenset[str] = frozenset(
 
 
 # --------------------------------------------------------------------------- #
-# Typed error (branch 4) — adapter._classify_error harvests the class attrs
+# Typed error (branch 4) -- adapter._classify_error harvests the class attrs
 # --------------------------------------------------------------------------- #
 
 
@@ -264,7 +241,7 @@ def _is_object_store(value: str) -> bool:
     """True for the object-store schemes this stack (or its legacy) mints.
 
     ADR 0014: these are exactly the shapes the LLM historically hallucinated
-    (gs:// on the legacy cloud, s3:// on the local MinIO stack) — an UNKNOWN
+    (gs:// on the legacy cloud, s3:// on the local MinIO stack) -- an UNKNOWN
     one in a layer-consuming param is a typed reject, never a pass-through.
     """
     return value.startswith(("gs://", "s3://"))
@@ -292,18 +269,18 @@ def _looks_like_wms(value: str) -> bool:
 
 
 def _is_tile_template(value: str) -> bool:
-    """A TiTiler / XYZ tile-template URL — a DISPLAY face, not a data URI.
+    """A TiTiler / XYZ tile-template URL -- a DISPLAY face, not a data URI.
 
     LEGACY GUARD (TiTiler exit, 2026-07): ``publish_layer`` now emits the raw
     ``s3://`` COG URI and no longer mints tile templates, but OLD persisted
     cases (and the register-only manifest path) still carry template URIs
-    that rehydrate through here — this guard MUST stay so those legacy
+    that rehydrate through here -- this guard MUST stay so those legacy
     display faces keep routing/unwrapping correctly.
 
     The AWS backend published rasters as TiTiler tile templates
     (``https://<cf>/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=s3%3A%2F%2F…``)
     rather than QGIS-Server WMS URLs. Like a WMS URL, the template is the
-    renderable face — it carries ``{z}/{x}/{y}`` placeholders and cannot be
+    renderable face -- it carries ``{z}/{x}/{y}`` placeholders and cannot be
     opened by an analytical tool (Pelicun, zonal stats). It must route to the
     ``wms_url`` slot so it never displaces the registered ``s3://`` COG that
     downstream ``*_uri`` params resolve to (live Pelicun read the
@@ -325,7 +302,7 @@ def _wms_layer_id(value: str) -> str | None:
     """Extract the ``LAYERS=`` value from a WMS-style URL (case-insensitive)."""
     try:
         q = parse_qs(urlparse(value).query)
-    except Exception:  # noqa: BLE001 — malformed URL; treat as opaque
+    except Exception:  # noqa: BLE001 -- malformed URL; treat as opaque
         return None
     for key, vals in q.items():
         if key.lower() == "layers" and vals and vals[0]:
@@ -344,7 +321,7 @@ def _titiler_cog_uri(value: str) -> str | None:
     """
     try:
         q = parse_qs(urlparse(value).query)
-    except Exception:  # noqa: BLE001 — malformed URL; treat as opaque
+    except Exception:  # noqa: BLE001 -- malformed URL; treat as opaque
         return None
     cog = q.get("url")
     return unquote(cog[0]) if cog and cog[0] else None
@@ -389,7 +366,7 @@ class SessionUriRegistry:
     Registration is additive (latest non-None face wins; a gs:// data URI is
     never clobbered by ``None``). Resolution implements the four branches
     documented in the module docstring. All methods are synchronous and
-    in-memory — the registry sits on the hot dispatch path.
+    in-memory -- the registry sits on the hot dispatch path.
     """
 
     session_id: str
@@ -436,7 +413,7 @@ class SessionUriRegistry:
             if _is_render_face(uri):
                 # A renderable display URL (QGIS WMS *or* a TiTiler tile
                 # template) landed in the ``uri`` slot (the flood composer
-                # substitutes it per the layer-emission contract) — keep it on
+                # substitutes it per the layer-emission contract) -- keep it on
                 # the wms face; never displace a real data URI.
                 rec.wms_url = rec.wms_url or uri
                 self._uri_to_handle.setdefault(uri, handle)
@@ -468,12 +445,12 @@ class SessionUriRegistry:
             for u in (evicted.uri, evicted.wms_url):
                 if u and self._uri_to_handle.get(u) == evicted_handle:
                     self._uri_to_handle.pop(u, None)
-            # ADR 0014: short handles deliberately SURVIVE record eviction —
+            # ADR 0014: short handles deliberately SURVIVE record eviction --
             # an already-announced L<n> must keep resolving for the life of
             # the Case (the map is tiny: two strings per layer).
 
     # ------------------------------------------------------------------ #
-    # ADR 0014 — short per-case layer handles (L<n>)
+    # ADR 0014 -- short per-case layer handles (L<n>)
     # ------------------------------------------------------------------ #
 
     def _mint_short(self, uri: str) -> str | None:
@@ -554,7 +531,7 @@ class SessionUriRegistry:
         Returns a REWRITTEN COPY of ``node`` (a function_response summary)
         in which every registered layer URI face (the data COG *and* its
         WMS/tile display URL) is replaced by the layer's short ``L<n>``
-        handle — exact string matches are swapped outright; URIs embedded
+        handle -- exact string matches are swapped outright; URIs embedded
         inside longer strings are substring-replaced (longest face first so
         a display URL that EMBEDS its COG is consumed whole). Unregistered
         strings pass through untouched, so external links the model must
@@ -573,7 +550,7 @@ class SessionUriRegistry:
                 return node
             faces = sorted(mapping, key=len, reverse=True)
             return self._rewrite_node(node, mapping, faces, depth=0)
-        except Exception:  # noqa: BLE001 — the rewrite must never break emit
+        except Exception:  # noqa: BLE001 -- the rewrite must never break emit
             logger.exception(
                 "uri_registry[%s]: rewrite_result_for_llm failed",
                 self.session_id,
@@ -612,13 +589,13 @@ class SessionUriRegistry:
         """Walk a tool result and register every URI-bearing structure.
 
         Returns the ``{handle: uri}`` pairs registered from THIS result
-        (layer-handle registrations only — minted bare-URI handles support
+        (layer-handle registrations only -- minted bare-URI handles support
         fuzzy matching but aren't announced to Gemini).
         """
         before = dict(self._pending_announcements)
         try:
             self._walk(result, tool_name, depth=0, seen=set())
-        except Exception:  # noqa: BLE001 — registration must never break dispatch
+        except Exception:  # noqa: BLE001 -- registration must never break dispatch
             logger.exception(
                 "uri_registry[%s]: register_tool_result failed tool=%s",
                 self.session_id,
@@ -635,7 +612,7 @@ class SessionUriRegistry:
         if hasattr(node, "model_dump") and callable(node.model_dump):
             try:
                 node = node.model_dump(mode="json")
-            except Exception:  # noqa: BLE001 — non-pydantic duck; skip
+            except Exception:  # noqa: BLE001 -- non-pydantic duck; skip
                 return
         if isinstance(node, str):
             self._register_bare_string(node, tool_name)
@@ -665,7 +642,7 @@ class SessionUriRegistry:
         if not value:
             return
         norm = _normalize_gs(value)
-        # ADR 0014: s3:// joins gs:// — the local stack (MinIO) mints s3://
+        # ADR 0014: s3:// joins gs:// -- the local stack (MinIO) mints s3://
         # object keys (run frames, model_setup artifacts, published COGs);
         # they must register so verbatim echoes dual-accept, mangles fuzzy-
         # match, and the emit rewrite can hand the LLM a short handle.
@@ -693,20 +670,20 @@ class SessionUriRegistry:
     def seed_from_layers(self, layers: Any) -> None:
         """Seed from persisted Case ``loaded_layers`` (rehydration path).
 
-        ADDITIVE — merges into whatever this registry already holds. Callers
+        ADDITIVE -- merges into whatever this registry already holds. Callers
         switching the active Case on a connection (case-open / case-switch)
         must use :meth:`replace_from_layers` instead so a prior Case's
         handles don't leak into the new Case's inventory/resolution.
         """
         try:
             self._walk(layers, "case-rehydration", depth=0, seen=set())
-        except Exception:  # noqa: BLE001 — best-effort seam
+        except Exception:  # noqa: BLE001 -- best-effort seam
             logger.exception("uri_registry[%s]: seed failed", self.session_id)
 
     def clear(self) -> None:
         """Drop every registered handle/URI/pending-announcement.
 
-        ADR 0014: the short-handle map + its counter clear too — shorts are
+        ADR 0014: the short-handle map + its counter clear too -- shorts are
         PER-CASE state; a case-switch reseeds them from the new Case's
         persisted map (``replace_from_layers(short_handles=...)``).
         """
@@ -723,7 +700,7 @@ class SessionUriRegistry:
     ) -> None:
         """Reset this registry to EXACTLY ``layers`` (case-switch seed).
 
-        The registry is keyed by ``session_id``, not by Case — a session that
+        The registry is keyed by ``session_id``, not by Case -- a session that
         switches Cases (or a fresh connection that opens an existing Case)
         reuses the SAME ``SessionUriRegistry``. ``seed_from_layers`` alone is
         additive, so a prior Case's handles/URIs would keep resolving after
@@ -732,10 +709,10 @@ class SessionUriRegistry:
         the correct Case B one). Case-open / case-switch call sites clear
         first so the registry reflects ONLY the now-active Case's persisted
         layers, mirroring the emitter's ``reset_loaded_layers`` (replace, not
-        reconcile — the same rule applied here too).
+        reconcile -- the same rule applied here too).
 
         ADR 0014: ``short_handles`` is the Case's PERSISTED ``{L<n>: uri}``
-        map — imported BEFORE the layer seed so already-announced handles
+        map -- imported BEFORE the layer seed so already-announced handles
         keep their numbers and fresh layers mint PAST the persisted maximum.
         """
         self.clear()
@@ -767,7 +744,7 @@ class SessionUriRegistry:
             return params
         out = dict(params)
         for name, value in params.items():
-            # ADR 0014: nested handle/URI mappings (code_exec layer_refs) —
+            # ADR 0014: nested handle/URI mappings (code_exec layer_refs) --
             # every string VALUE resolves; keys (variable names) untouched.
             if name in NESTED_REF_PARAMS and isinstance(value, dict):
                 resolved_refs = self._resolve_ref_mapping(tool_name, name, value)
@@ -831,16 +808,16 @@ class SessionUriRegistry:
     def _resolve_one(self, tool_name: str, param_name: str, value: str) -> str:
         v = _normalize_gs(value.strip())
 
-        # Branch 2a — value IS a registered handle (the desired steady state).
+        # Branch 2a -- value IS a registered handle (the desired steady state).
         rec = self._records.get(v)
         if rec is not None:
             if rec.uri:
                 return rec.uri
             if rec.wms_url:
-                # Only the display face is known — no data URI to hand over.
+                # Only the display face is known -- no data URI to hand over.
                 raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
-        # Branch 1 — exact URI known: pass (data URI) or map back (display URL).
+        # Branch 1 -- exact URI known: pass (data URI) or map back (display URL).
         handle = self._uri_to_handle.get(v)
         if handle is not None:
             rec = self._records[handle]
@@ -852,7 +829,7 @@ class SessionUriRegistry:
                 raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
             return v
 
-        # Branch 2b (ADR 0014) — a SHORT layer handle (L<n>, case-insensitive).
+        # Branch 2b (ADR 0014) -- a SHORT layer handle (L<n>, case-insensitive).
         # The desired steady state after the emit rewrite: the LLM passes the
         # short handle it was shown; an UNKNOWN short handle is a typed reject
         # carrying the real inventory so the retry self-corrects.
@@ -863,7 +840,7 @@ class SessionUriRegistry:
                 return short_uri
             raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
-        # Branch 3-titiler — a TiTiler tile-template DISPLAY URL: the underlying
+        # Branch 3-titiler -- a TiTiler tile-template DISPLAY URL: the underlying
         # data COG is the unquoted ``url=`` query param (
         # _is_tile_template). Recover it so a display URL handed to a *_uri param
         # resolves to the s3 COG instead of failing open as an unreadable
@@ -884,7 +861,7 @@ class SessionUriRegistry:
                     return cog
             raise UriResolutionError(param_name, value, self._inventory_text(tool_name))
 
-        # Branch 3-wms — unknown WMS-style URL: recover the layer_id handle.
+        # Branch 3-wms -- unknown WMS-style URL: recover the layer_id handle.
         if _looks_like_wms(v):
             layer_id = _wms_layer_id(v)
             if layer_id:
@@ -918,24 +895,24 @@ class SessionUriRegistry:
             return resolved_uri
 
         # Non-object-store, non-wms strings (plain https COG, local path,
-        # opaque token): fail-open — external links / user-pasted sources must
+        # opaque token): fail-open -- external links / user-pasted sources must
         # never be blocked; the consuming tool's own typed error follows.
         if not _is_object_store(v):
             return value
 
-        # Branch 3 — unknown object-store URI: fuzzy-match the mangle classes.
+        # Branch 3 -- unknown object-store URI: fuzzy-match the mangle classes.
         substituted = self._fuzzy_match(v)
         if substituted is not None:
             return substituted
 
-        # Branch 4 (ADR 0014) — unknown object-store URI with no plausible
+        # Branch 4 (ADR 0014) -- unknown object-store URI with no plausible
         # match where a LAYER is expected: TYPED REJECT. The session never
         # produced this path, so passing it through can only 404 downstream
-        # (or worse, read the wrong object) — raising here with the handle
+        # (or worse, read the wrong object) -- raising here with the handle
         # inventory makes URI hallucination structurally impossible and feeds
         # the retry loop a self-correcting message. (This supersedes the
-        # post-decommission fail-open: verbatim REGISTERED URIs still pass —
-        # branch 1 — so old cases keep working via the dual-accept.)
+        # post-decommission fail-open: verbatim REGISTERED URIs still pass --
+        # branch 1 -- so old cases keep working via the dual-accept.)
         logger.warning(
             "uri_registry[%s]: rejecting unregistered object-store uri "
             "%s.%s=%r (ADR 0014)",
@@ -993,7 +970,7 @@ class SessionUriRegistry:
         """Match an unknown object-store URI against the registered inventory.
 
         Sub-branches (each requires a UNIQUE winner; ambiguity falls through
-        to branch 4 — never guess between two plausible layers):
+        to branch 4 -- never guess between two plausible layers):
 
         a. basename stem == a registered handle (layer_id-as-basename mangle);
         b. exact basename match (path mangles like the doubled ``runs/``
@@ -1019,7 +996,7 @@ class SessionUriRegistry:
         if rec is not None and rec.uri:
             return rec.uri
 
-        # (b) exact basename elsewhere — path-segment mangle.
+        # (b) exact basename elsewhere -- path-segment mangle.
         same_base = [u for u in gs_uris if _basename(u) == base]
         if len(same_base) == 1:
             return same_base[0]
@@ -1034,7 +1011,7 @@ class SessionUriRegistry:
             second = len(v_segs & set(_path_segments(scored[1])))
             if top > second:
                 return scored[0]
-            return None  # ambiguous — branch 4 lists the handles
+            return None  # ambiguous -- branch 4 lists the handles
 
         # (c) hash-prefix: tail hallucinated past >= _HASH_PREFIX_MIN chars.
         prefixed = [
@@ -1047,7 +1024,7 @@ class SessionUriRegistry:
             prefixed.sort(key=lambda t: t[1], reverse=True)
             if len(prefixed) == 1 or prefixed[0][1] > prefixed[1][1]:
                 return prefixed[0][0]
-            return None  # two equally-plausible hashes — refuse to guess
+            return None  # two equally-plausible hashes -- refuse to guess
 
         # (d) unique same-directory candidate.
         parent = _parent_dir(v)
@@ -1064,12 +1041,12 @@ class SessionUriRegistry:
         """Compact handle inventory for the branch-4 error message.
 
         when the registry genuinely has no layers, the "run the
-        producing tool first" example is tool-aware — a DEM-consuming tool
+        producing tool first" example is tool-aware -- a DEM-consuming tool
         (``_DEM_CONSUMING_TOOLS``) is told to ``fetch_dem`` for this AOI
         instead of the generic ``sfincs_flood`` example, which
         was actively misleading (and factually irrelevant) for a terrain
         derivative ask. When the registry DOES have layers (the common
-        reconnect-repair case — the registry was simply unseeded, not
+        reconnect-repair case -- the registry was simply unseeded, not
         genuinely empty) this branch never fires; the handle listing below
         does, now capped at ``_ERROR_HANDLES_CAP`` (10, was 5).
         """
@@ -1106,7 +1083,7 @@ class SessionUriRegistry:
 
 
 # --------------------------------------------------------------------------- #
-# Module-level session store (the _SESSION_ACTIVE_CASE pattern — survives
+# Module-level session store (the _SESSION_ACTIVE_CASE pattern -- survives
 # reconnects; shared across a session's sibling WebSocket connections)
 # --------------------------------------------------------------------------- #
 
@@ -1125,12 +1102,12 @@ def get_uri_registry(session_id: str) -> SessionUriRegistry:
 
 
 def reset_uri_registries_for_tests() -> None:
-    """Test hook — wipe the module-level store."""
+    """Test hook -- wipe the module-level store."""
     _SESSION_URI_REGISTRIES.clear()
 
 
 # --------------------------------------------------------------------------- #
-# ContextVar observation hook — composer-internal publishes
+# ContextVar observation hook -- composer-internal publishes
 # --------------------------------------------------------------------------- #
 
 _ACTIVE_REGISTRY: ContextVar[SessionUriRegistry | None] = ContextVar(
@@ -1199,7 +1176,7 @@ def observe_published_layer(
     """Record a published layer's BOTH faces (gs:// COG + WMS display URL).
 
     Called from inside ``publish_layer`` (after URI validation/correction)
-    so composer-internal publishes — whose envelopes only carry the WMS URL —
+    so composer-internal publishes -- whose envelopes only carry the WMS URL --
     still register the consumable data URI. No-op outside an active dispatch
     (e.g. direct programmatic tool calls in tests).
     """
@@ -1208,11 +1185,11 @@ def observe_published_layer(
         return
     try:
         reg.record(layer_id, uri=gcs_uri, wms_url=wms_url, tool_name="publish_layer")
-    except Exception:  # noqa: BLE001 — observation must never break the tool
+    except Exception:  # noqa: BLE001 -- observation must never break the tool
         logger.exception("observe_published_layer failed layer_id=%s", layer_id)
 
 
-# Re-exported for completeness — some tests assert the regex contract of
+# Re-exported for completeness -- some tests assert the regex contract of
 # hash-shaped cache stems (32-hex). Not used in resolution (prefix matching
 # is shape-agnostic) but documents the cache-key convention.
 HASH_STEM_RE = re.compile(r"^[0-9a-f]{32}$")

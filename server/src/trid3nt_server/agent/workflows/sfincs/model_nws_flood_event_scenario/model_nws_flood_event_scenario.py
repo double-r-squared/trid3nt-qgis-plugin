@@ -17,13 +17,13 @@ three-layer accumulation the UI renders together:
        warning polygon, the precip raster, AND the flood-depth layer together.
 
 Per Decision G + FR-TA-1 + Invariant 2 this is **deterministic Python
-composition** — there is no LLM in the chain. Alert filtering, severity
+composition** -- there is no LLM in the chain. Alert filtering, severity
 selection, and polygon extraction are pure functions over the NWS GeoJSON.
 
-Graceful degrade (kickoff requirement + Invariant 7 — no silent wrong answer):
+Graceful degrade (kickoff requirement + Invariant 7 -- no silent wrong answer):
 when the queried area has NO active Flood Warning / Flash Flood Warning, the
 workflow returns a STRUCTURED no-op result (``status="no_active_flood_warning"``)
-listing what WAS active (the distinct event types + counts in the response) —
+listing what WAS active (the distinct event types + counts in the response) --
 it never raises, so the agent surface narrates honestly ("there are no active
 flood warnings right now; the active alerts are …") instead of fabricating a
 flood layer.
@@ -34,7 +34,7 @@ but the FGB is opaque to in-process geometry inspection without a read-back.
 For the selection + bbox-extraction step we call the tool module's
 ``_fetch_nws_conus_geojson`` + ``_filter_features_by_event_types`` helpers
 directly to obtain the raw GeoJSON features (geometry + severity + properties)
-— a single shared CONUS sweep feeds both the published layer and the selection.
+-- a single shared CONUS sweep feeds both the published layer and the selection.
 
 Cross-cutting principles in force:
 - **Invariant 1 (Determinism boundary): preserves.** All return fields are
@@ -45,11 +45,11 @@ Cross-cutting principles in force:
 - **Invariant 3 (Engine registration, not modification): preserves.** Reuses
   ``fetch_nws_alerts_conus`` / ``fetch_mrms_qpe`` / ``model_flood_scenario``
   unchanged; no hazard-specific logic in the agent core.
-- **Invariant 7 (no silent wrong answers): EXTENDS — the headline.** The
+- **Invariant 7 (no silent wrong answers): EXTENDS -- the headline.** The
   no-warning degrade path returns a structured no-op instead of fabricating a
   flood scenario over an arbitrary bbox.
 - **Invariant 8 (Cancellation is first-class): preserves.** The workflow
-  awaits ``model_flood_scenario`` — any ``asyncio.CancelledError`` propagates
+  awaits ``model_flood_scenario`` -- any ``asyncio.CancelledError`` propagates
   through unchanged, triggering the cancel chain.
 - **Invariant 10 (Minimal parameter surface): preserves.** The signature
   exposes intent only (a query bbox/state + which warning + accumulation);
@@ -92,12 +92,12 @@ logger = logging.getLogger(
 
 
 # --------------------------------------------------------------------------- #
-# Constants — the flood-warning event-type set + NWS severity ordering
+# Constants -- the flood-warning event-type set + NWS severity ordering
 # --------------------------------------------------------------------------- #
 
 #: NWS event-type strings (Title Case, the NWS canonical form) that count as a
 #: "flood warning" for Case 3. We deliberately keep this to the two WARNING
-#: classes — a Watch is advisory, not an active-impact warning, and Case 3 is
+#: classes -- a Watch is advisory, not an active-impact warning, and Case 3 is
 #: "model the flood that is happening". Surfaced as a tunable constant rather
 #: than a magic literal so the catalog/composer can widen it later.
 FLOOD_WARNING_EVENT_TYPES: tuple[str, ...] = (
@@ -123,7 +123,7 @@ class Case3Error(RuntimeError):
     Most failure modes surface as a structured degrade result (the workflow
     never raises for "no warnings" or an upstream fetch hiccup). ``Case3Error``
     is reserved for genuinely unrecoverable misuse (e.g. a malformed
-    ``warning_index`` type) — the agent surface emits a top-level error frame.
+    ``warning_index`` type) -- the agent surface emits a top-level error frame.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -132,7 +132,7 @@ class Case3Error(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
-# Pure selection + geometry helpers (deterministic — unit-tested directly)
+# Pure selection + geometry helpers (deterministic -- unit-tested directly)
 # --------------------------------------------------------------------------- #
 
 
@@ -176,7 +176,7 @@ def select_flood_warning(
 
     Args:
         features: NWS GeoJSON ``features`` list (each a dict with ``properties``
-            + ``geometry``). Already event-type-filtered or not — this function
+            + ``geometry``). Already event-type-filtered or not -- this function
             re-filters defensively to the flood-warning set.
         warning_index: when given, return the warning at this 0-based index
             into the severity-sorted list (so the agent can offer "the 2nd
@@ -247,7 +247,7 @@ def extract_polygon_bbox(
     """Compute the ``(min_lon, min_lat, max_lon, max_lat)`` bbox of an NWS
     GeoJSON Polygon / MultiPolygon feature.
 
-    Walks the coordinate rings directly (no shapely dependency — keeps the
+    Walks the coordinate rings directly (no shapely dependency -- keeps the
     selector import-light for the unit tests). Longitude/latitude order is the
     GeoJSON convention ``[lon, lat]``.
 
@@ -300,7 +300,7 @@ def extract_polygon_bbox(
 def _accumulation_hours(accumulation: str) -> int:
     """Parse an MRMS accumulation token (``"24h"``, ``"6h"``, ``"01H"`` …) into
     an integer hour count for the SFINCS netamt window. Defaults to 24 on an
-    unparseable value (defensive — fetch_mrms_qpe validates the token itself)."""
+    unparseable value (defensive -- fetch_mrms_qpe validates the token itself)."""
     s = str(accumulation).strip().lower().rstrip("h")
     try:
         return max(1, int(s))
@@ -431,8 +431,8 @@ async def model_nws_flood_event_scenario(
 
     Geographic note: the ``bbox`` / ``state`` parameters scope which alerts to
     CONSIDER (the underlying CONUS sweep is filtered client-side); they do NOT
-    re-bound the SFINCS run — the model runs over the SELECTED warning polygon's
-    bbox so the inundation footprint matches the warning area (kickoff step 3).
+    re-bound the SFINCS run -- the model runs over the SELECTED warning polygon's
+    bbox so the inundation footprint matches the warning area.
 
     Args:
         bbox: optional ``(min_lon, min_lat, max_lon, max_lat)`` to restrict the
@@ -444,7 +444,7 @@ async def model_nws_flood_event_scenario(
             convenience over ``bbox`` for "flood warnings in Idaho".
         warning_index: 0-based index into the severity-sorted flood-warning
             list. ``None`` → the highest-severity warning.
-        accumulation: MRMS QPE accumulation window (``"24h"`` default — the
+        accumulation: MRMS QPE accumulation window (``"24h"`` default -- the
             standard SFINCS pluvial window). Also reused as the SFINCS netamt
             accumulation window when ``duration_hr`` is unset.
         return_period_yr: forwarded to ``model_flood_scenario`` (ignored on the
@@ -456,10 +456,10 @@ async def model_nws_flood_event_scenario(
             ``model_flood_scenario`` invocation.
 
     Returns:
-        On success — a dict carrying the **3-layer accumulation contract**:
+        On success -- a dict carrying the **3-layer accumulation contract**:
             - ``status``: ``"ok"``
             - ``warning_polygon_layer``: the published NWS alerts ``LayerURI``
-              (dict) — the warning polygon(s) the UI renders.
+              (dict) -- the warning polygon(s) the UI renders.
             - ``mrms_precip_layer``: the MRMS QPE ``LayerURI`` (dict).
             - ``flood_depth_layer``: the SFINCS flood-depth ``LayerURI`` (dict),
               or ``None`` if the (mocked/real) SFINCS run produced no layer.
@@ -468,7 +468,7 @@ async def model_nws_flood_event_scenario(
             - ``flood_envelope``: the full ``AssessmentEnvelope`` dict (for the
               determinism-boundary narration metrics).
 
-        On the no-active-flood-warning degrade path — a dict with
+        On the no-active-flood-warning degrade path -- a dict with
         ``status="no_active_flood_warning"`` listing what WAS active (per the
         kickoff degrade requirement); ``mrms_precip_layer`` and
         ``flood_depth_layer`` are ``None``. Never raises for "no warnings".
@@ -501,7 +501,7 @@ async def model_nws_flood_event_scenario(
         warning_polygon_layer = warning_polygon_layer.model_copy(
             update={"role": "context"}
         )
-    except Exception as exc:  # noqa: BLE001 — degrade gracefully
+    except Exception as exc:  # noqa: BLE001 -- degrade gracefully
         logger.warning(
             "model_nws_flood_event_scenario: fetch_nws_alerts_conus (publish) "
             "failed: %s — continuing with raw-GeoJSON selection only",
@@ -517,7 +517,7 @@ async def model_nws_flood_event_scenario(
             "https://api.weather.gov/alerts/active?status=actual"
         )
     except Exception as exc:  # noqa: BLE001
-        # Upstream NWS unavailable — degrade (do NOT loop/retry per kickoff).
+        # Upstream NWS unavailable -- degrade (do NOT loop/retry per kickoff).
         logger.warning(
             "model_nws_flood_event_scenario: NWS GeoJSON fetch failed: %s", exc
         )
@@ -608,7 +608,7 @@ async def model_nws_flood_event_scenario(
             reason_code=getattr(exc, "error_code", "MRMS_FETCH_FAILED"),
             reason_detail=str(exc),
         )
-        # A flood warning WAS selected — surface it so the agent narrates the
+        # A flood warning WAS selected -- surface it so the agent narrates the
         # warning even though precip could not be fetched.
         result["status"] = "mrms_fetch_failed"
         result["selected_warning"] = selected_summary
@@ -703,7 +703,7 @@ def _narrow_candidates(
 def _feature_in_state(feature: dict[str, Any], state_uc: str) -> bool:
     """True iff the feature references the given 2-letter state code.
 
-    Checks NWS UGC geocodes (``properties.geocode.UGC`` — each code's first two
+    Checks NWS UGC geocodes (``properties.geocode.UGC`` -- each code's first two
     chars are the state abbreviation) and falls back to a substring match on
     ``areaDesc`` (e.g. ``", ID"`` / ``"Idaho"`` is harder, so UGC is primary).
     """
@@ -806,7 +806,7 @@ def _format_case3_summary(
 ) -> str:
     """Build the deterministic narration string for a successful Case 3 run.
 
-    Format-string only — no LLM in the chain (Invariant 1). Flood metrics are
+    Format-string only -- no LLM in the chain (Invariant 1). Flood metrics are
     cited from the envelope's ``FloodMetrics`` (the determinism boundary).
     """
     event = selected.get("event") or "Flood Warning"
@@ -881,13 +881,13 @@ async def run_model_nws_flood_event_scenario(
 
     Five-step deterministic composition (zero LLM calls inside):
     1. ``fetch_nws_alerts_conus(event_types=["Flood Warning", "Flash Flood
-       Warning"])`` — active NWS flood-warning polygons, published as a map layer.
+       Warning"])`` -- active NWS flood-warning polygons, published as a map layer.
     2. Select the highest-severity (or ``warning_index``-th) flood warning with
        a usable polygon and extract its bounding box.
-    3. ``fetch_mrms_qpe(bbox=warning_bbox, accumulation)`` — observed accumulated
+    3. ``fetch_mrms_qpe(bbox=warning_bbox, accumulation)`` -- observed accumulated
        radar-gauge precipitation over the warning area.
     4. ``run_sfincs(bbox=warning_bbox,
-       forcing_raster_uri=mrms_uri)`` — SFINCS inundation forced by the OBSERVED
+       forcing_raster_uri=mrms_uri)`` -- SFINCS inundation forced by the OBSERVED
        precip (not a design storm).
     5. Return the warning polygon, the precip raster, AND the flood-depth layer
        (a 3-layer accumulation the client renders together).
@@ -902,9 +902,9 @@ async def run_model_nws_flood_event_scenario(
 
     When NOT to use:
         - A hypothetical / design-storm flood for a named place with no active
-          warning — use ``run_sfincs`` with a
+          warning -- use ``run_sfincs`` with a
           ``return_period_yr`` instead.
-        - Just listing active alerts with no modeling — use
+        - Just listing active alerts with no modeling -- use
           ``fetch_nws_alerts_conus`` or ``fetch_nws_event`` directly.
         - Non-flood hazards.
 
@@ -915,7 +915,7 @@ async def run_model_nws_flood_event_scenario(
             warnings (e.g. "flood warnings in Idaho").
         warning_index: 0-based index into the severity-sorted flood-warning
             list. ``None`` → the highest-severity warning.
-        accumulation: MRMS QPE accumulation window — ``"1h"``, ``"6h"``,
+        accumulation: MRMS QPE accumulation window -- ``"1h"``, ``"6h"``,
             ``"24h"`` (default), ``"72h"``. Also the SFINCS precip-accumulation
             window unless ``duration_hr`` overrides it.
         return_period_yr: forwarded to the flood model (ignored on the
@@ -930,7 +930,7 @@ async def run_model_nws_flood_event_scenario(
               ``mrms_precip_layer`` (LayerURI dict), ``flood_depth_layer``
               (LayerURI dict or None), ``selected_warning``, ``warning_bbox``,
               ``summary_text``, and the full ``flood_envelope`` (for the
-              narration metrics — determinism boundary).
+              narration metrics -- determinism boundary).
             - ``"no_active_flood_warning"`` → a structured no-op listing
               ``active_event_counts`` (what WAS active) so the agent narrates
               honestly; ``mrms_precip_layer`` / ``flood_depth_layer`` are None.
@@ -938,7 +938,7 @@ async def run_model_nws_flood_event_scenario(
               could not be fetched; the warning polygon is still rendered.
 
     FR-DC-6: declares ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
-    ``source_class="workflow_dispatch"`` — same shape as
+    ``source_class="workflow_dispatch"`` -- same shape as
     ``run_sfincs`` / ``run_model_flood_habitat_scenario``. The
     composer runs through cacheable atomic tools, so identical inputs still
     benefit from per-tool cache hits even though the composer itself is uncached.
@@ -950,7 +950,7 @@ async def run_model_nws_flood_event_scenario(
         - ``run_sfincs`` (forcing_raster_uri branch) → step 4
           (SFINCS inundation; itself a 9-step chain)
         Downstream (feeds):
-        - Agent narration — cites ``flood_envelope.flood.metrics`` (max/mean
+        - Agent narration -- cites ``flood_envelope.flood.metrics`` (max/mean
           depth, inundated area) verbatim (Invariant 7).
         - The client renders all three returned ``LayerURI`` dicts as a
           stacked accumulation (warning polygon + precip + flood depth).

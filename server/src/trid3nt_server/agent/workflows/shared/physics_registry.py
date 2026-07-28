@@ -102,12 +102,10 @@ PHYSICS_REGISTRY: dict[str, dict[str, dict[str, Any]]] = {
             "deck_target": "sfincs.inp:huthresh",
             "doc": "Wet/dry threshold water depth (m) for momentum (manual default 0.05).",
         },
-        # SFINCS DOES have a `coriolis` keyword
-        # (default True), but it is INERT while `latitude`==0.0 on a projected CRS
-        # - so `latitude` is the effective lever, not the bool. The old registry
-        # entry was a bool `coriolis` -> "sfincs.inp:coriolis" that we'd narrate as
-        # flipping Coriolis while actually leaving latitude=0.0 (silent no-effect,
-        # Invariant 7). Re-spec to a float `coriolis_latitude` (deg) ->
+        # SFINCS DOES have a `coriolis` keyword (default True), but it is
+        # INERT while `latitude`==0.0 on a projected CRS - so `latitude` is
+        # the effective lever, not the bool (silent no-effect risk,
+        # Invariant 7). Uses a float `coriolis_latitude` (deg) ->
         # sfincs.inp:latitude (the real activation knob; crsgeo=1 is the alt
         # grid-aware-f path, both real keys per hydromt_sfincs SfincsInput).
         "coriolis_latitude": {

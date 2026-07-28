@@ -26,14 +26,14 @@ import os
 import sys
 
 # ---------------------------------------------------------------------------
-# FR-FR-3: agent-side max-turns cap — cheap insurance.
+# FR-FR-3: agent-side max-turns cap -- cheap insurance.
 #
 # ``MAX_TURNS_PER_SESSION`` is the maximum number of user-message / tool-call
 # turns allowed before the agent refuses further dispatch and emits a
 # ``session-state`` envelope with ``status="max_turns_reached"``.
 #
 # Override via the ``TRID3NT_MAX_TURNS_PER_SESSION`` environment variable for
-# ops flexibility (e.g. set to 0 to disable — sentinel value; or raise for
+# ops flexibility (e.g. set to 0 to disable -- sentinel value; or raise for
 # long sessions during demos). TENTATIVE default 25 per OQ-FR-1.
 # ---------------------------------------------------------------------------
 MAX_TURNS_PER_SESSION: int = int(os.environ.get("TRID3NT_MAX_TURNS_PER_SESSION", "25"))
@@ -61,7 +61,7 @@ def _import_tools_registry() -> int:
     imports ``solver`` so the 2 solver-dispatch atomic tools
     (``run_solver`` + ``wait_for_completion``) register at startup. These
     are FR-DC-6 uncacheable (``cacheable=False``, ``ttl_class="live-no-cache"``,
-    ``source_class="solver_dispatch"``) — they drive solver
+    ``source_class="solver_dispatch"``) -- they drive solver
     executions of the SFINCS substrate.
 
     imports ``workflows.sfincs.flood.flood`` so the M5 capstone
@@ -70,7 +70,7 @@ def _import_tools_registry() -> int:
     is deterministic Python (FR-TA-1, Decision G); the wrapper exists so the
     LLM sees a single invocable tool that triggers the whole chain.
     """
-    from .agent import tools  # noqa: F401 — side-effect: registers atomic tools
+    from .agent import tools  # noqa: F401 -- side-effect: registers atomic tools
     # register the 4 data-fetch atomic tools (FROZEN __init__.py).
     from .agent.tools.fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: F401
     from .agent.tools.fetchers.hydrology.fetch_river_geometry import fetch_river_geometry  # noqa: F401
@@ -178,7 +178,7 @@ def _default_qgis_process_submitter():
     (int), and ``duration_s`` (float). Both ``qgis_discovery`` discovery
     tools and the ``qgis_process`` pass-through call this seam.
 
-    The default submitter runs ``qgis_process`` as a local subprocess —
+    The default submitter runs ``qgis_process`` as a local subprocess --
     suitable for the local environment and the M4 discovery loop.
 
     Override via ``TRID3NT_QGIS_PROCESS_BIN`` env var; defaults to
@@ -201,7 +201,7 @@ def _default_qgis_process_submitter():
     # IMAGE) OR when no local qgis_process exists but docker + the image are
     # available. Same (args, timeout_s) -> dict contract; list/describe pass
     # file-free args so a plain `docker run` suffices. (qgis_process RUN with
-    # data I/O uses the separate stage-then-mount path — follow-up.)
+    # data I/O uses the separate stage-then-mount path -- follow-up.)
     _image = os.environ.get("TRID3NT_QGIS_DOCKER_IMAGE")
     _local_bin = os.environ.get("TRID3NT_QGIS_PROCESS_BIN") or shutil.which("qgis_process")
     if _image or (_local_bin is None and shutil.which("docker")):
@@ -267,7 +267,7 @@ def _default_qgis_process_submitter():
 
 
 def _maybe_bind_dev_persistence() -> None:
-    """(Wave 4.6): bind file-backed dev Persistence.
+    """Bind file-backed dev Persistence.
 
     Local-dev fallback for when MongoDB MCP is not provisioned (the typical
     fresh-clone case). Engages a JSON-on-disk substrate so the Case lifecycle
@@ -299,7 +299,7 @@ def _maybe_bind_dev_persistence() -> None:
     if not is_dev_persistence_enabled():
         return
     if get_persistence() is not None:
-        # Already bound (test harness or a prior init pass) — don't trample.
+        # Already bound (test harness or a prior init pass) -- don't trample.
         log.info("dev Persistence: singleton already bound; skipping")
         return
     try:
@@ -313,7 +313,7 @@ def _maybe_bind_dev_persistence() -> None:
             backend,
             _default_dev_persistence_dir(),
         )
-    except Exception as exc:  # noqa: BLE001 — startup must not abort on dev-fallback
+    except Exception as exc:  # noqa: BLE001 -- startup must not abort on dev-fallback
         log.warning("dev Persistence bind failed: %s", exc)
 
 
@@ -336,7 +336,7 @@ def _bind_worker_submitter() -> None:
     try:
         submitter = _default_qgis_process_submitter()
     except RuntimeError as exc:
-        # A missing qgis_process is informational, not fatal — we let the
+        # A missing qgis_process is informational, not fatal -- we let the
         # agent service start so the other tools (data_fetch, passthroughs)
         # keep working, and any actual QGIS discovery call surfaces the
         # RuntimeError.
@@ -348,28 +348,26 @@ def _bind_worker_submitter() -> None:
 
     set_worker_submitter(submitter)
 
-    # (Q-discovery lane): best-effort readiness probe. The submitter
-    # binding above is silent-on-success: a mis-set env flip (e.g. a
-    # TRID3NT_QGIS_DOCKER_IMAGE pointing at a tag that isn't pulled, or a
-    # qgis_process binary that's on PATH but broken) would only surface on the
-    # FIRST discovery call, deep in a user session. Probe ``qgis_process
-    # --version`` once at boot so a broken substrate is visible in the startup
-    # logs.
+    # Best-effort readiness probe. The submitter binding above is
+    # silent-on-success: a mis-set env flip (e.g. a TRID3NT_QGIS_DOCKER_IMAGE
+    # pointing at a tag that isn't pulled, or a qgis_process binary that's on
+    # PATH but broken) would only surface on the FIRST discovery call, deep
+    # in a user session. Probe ``qgis_process --version`` once at boot so a
+    # broken substrate is visible in the startup logs.
     #
-    # COLD-START GUARANTEE (P0 review): on the LIVE box there is no QGIS infra
-    # (TRID3NT_QGIS_DOCKER_IMAGE unset), yet ``submitter(["--version"], 30)`` ran
-    # SYNCHRONOUSLY here at every boot BEFORE ``run_server`` binds the WS port,
-    # so a slow/hung ``qgis_process`` could add up to ~30 s of cold-start. Fix:
-    #   - QGIS infra configured (TRID3NT_QGIS_DOCKER_IMAGE set) -> run the probe
-    #     synchronously so the boot diagnostic is in the startup logs the
-    #     operator is watching.
-    #   - QGIS infra NOT configured (the live box default) -> run the probe in a
-    #     daemon thread so it NEVER delays the WS port bind. Zero added
-    #     cold-start latency on the live box; the diagnostic still lands in the
-    #     logs shortly after boot if anything is wrong.
+    # Cold-start guarantee: the probe must never delay the WS port bind on
+    # the live box (no QGIS infra configured).
+    #   - QGIS infra configured (TRID3NT_QGIS_DOCKER_IMAGE set) -> run the
+    #     probe synchronously so the boot diagnostic is in the startup logs
+    #     the operator is watching.
+    #   - QGIS infra NOT configured (the live box default) -> run the probe
+    #     in a daemon thread so it NEVER delays the WS port bind. Zero added
+    #     cold-start latency; the diagnostic still lands in the logs shortly
+    #     after boot if anything is wrong.
     # Either way the probe is best-effort + non-fatal: any failure (timeout,
-    # non-zero exit, exception) logs a warning and the agent keeps serving; the
-    # real call still raises its own typed error if the substrate is down.
+    # non-zero exit, exception) logs a warning and the agent keeps serving;
+    # the real call still raises its own typed error if the substrate is
+    # down.
     if os.environ.get("TRID3NT_QGIS_DOCKER_IMAGE"):
         _run_readiness_probe(submitter)
     else:

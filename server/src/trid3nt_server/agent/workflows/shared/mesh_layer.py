@@ -229,19 +229,13 @@ def make_swmm_mesh_layer_uri(
 ) -> LayerURI | None:
     """Build the mesh ``FeatureCollection`` + UPLOAD it to S3, return a LayerURI.
 
-    DURABILITY FIX (NATE high-pri, shipped bug): the mesh ``.geojson`` used to be
-    written to the deck STAGING dir (``/tmp/swmm-<run>/...``), which the composer
-    DELETES on deck cleanup. On any session-state re-emit/reconnect the emitter
-    re-reads the LayerURI ``uri`` via ``_read_vector_uri_as_geojson`` and hit
-    'No such file or directory' -> the mesh layer could not re-inline -> it
-    VANISHED + spammed a warning storm. We now UPLOAD ``mesh.geojson`` to the
-    DURABLE runs bucket at
+    Uploads ``mesh.geojson`` to the DURABLE runs bucket at
     ``s3://<runs_bucket>/<run_id>/mesh.geojson`` (the SAME convention every other
     run artifact uses, and the SAME s3:// path
-    :func:`make_sfincs_mesh_layer_uri` relies on) and set ``LayerURI.uri`` to that
-    s3:// path. ``pipeline_emitter.add_loaded_layer`` then inlines from s3://
-    (boto3 instance-role GET, off the event loop) on EVERY re-read - durable like
-    every other vector.
+    :func:`make_sfincs_mesh_layer_uri` relies on) and sets ``LayerURI.uri`` to
+    that s3:// path, so ``pipeline_emitter.add_loaded_layer`` can inline it from
+    s3:// (boto3 instance-role GET, off the event loop) on EVERY re-read -
+    durable like every other vector across a session-state re-emit/reconnect.
 
     Returns ``None`` (best-effort, never fatal) when there are zero features to
     render OR the S3 upload fails (a put failure -> the mesh is simply absent,

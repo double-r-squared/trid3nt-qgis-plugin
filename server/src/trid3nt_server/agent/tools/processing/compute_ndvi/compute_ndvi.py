@@ -117,12 +117,11 @@ _NATIVE_CELL_M = 10.0
 #: typical AOI finds a usable scene; the least-cloudy match is then chosen.
 _DEFAULT_MAX_CLOUD = 30.0
 
-#: bbox area guardrail (deg^2). raised 0.5 -> 1.0. This is NOT a
-#: memory ceiling: the emitted grid is already px-clamped to [16,4096]/axis by
-#: _pc_stac.bbox_pixel_dims, so a ~0.77-1.0 deg^2 AOI clamps to 4096x4096 and
-#: auto-coarsens to ~20-24 m/px -- COG byte size stays bounded regardless of
-#: bbox area. The old 0.5 cap rejected legitimate county-ish AOIs (~0.77 deg^2)
-#: with no recourse. ~1.0 deg^2 ~ a county-ish extent; beyond it we still raise.
+#: bbox area guardrail (deg^2). This is NOT a memory ceiling: the emitted
+#: grid is already px-clamped to [16,4096]/axis by _pc_stac.bbox_pixel_dims,
+#: so an AOI up to this cap clamps to 4096x4096 and auto-coarsens to
+#: ~20-24 m/px -- COG byte size stays bounded regardless of bbox area.
+#: ~1.0 deg^2 ~ a county-ish extent; beyond it we still raise.
 _MAX_BBOX_DEG2 = 1.0
 
 #: Native-10m comfort window (deg^2). Below this an AOI fits the 4096px grid at

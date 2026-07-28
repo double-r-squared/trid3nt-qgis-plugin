@@ -1,4 +1,4 @@
-"""Per-provider credential registry — the agent-side credential pipeline.
+"""Per-provider credential registry -- the agent-side credential pipeline.
 
 When a keyed tool dispatch hits a missing or invalid credential, the server
 pauses the tool and emits a ``credential-request`` envelope
@@ -6,18 +6,18 @@ pauses the tool and emits a ``credential-request`` envelope
 client can surface a just-in-time key-entry affordance. To build that envelope
 the server needs, per provider:
 
-- ``provider_id`` — the closed ``ProviderID`` Literal the ``secret-add`` reply
+- ``provider_id`` -- the closed ``ProviderID`` Literal the ``secret-add`` reply
   is scoped to (so the saved key lands in the right per-Case slot).
-- ``label`` — the human-readable provider name for the prompt UI ("NASA FIRMS").
-- ``signup_url`` — where the user obtains a key.
-- ``secret_key_name`` — the canonical name of the credential the tool wants
+- ``label`` -- the human-readable provider name for the prompt UI ("NASA FIRMS").
+- ``signup_url`` -- where the user obtains a key.
+- ``secret_key_name`` -- the canonical name of the credential the tool wants
   ("FIRMS_MAP_KEY"), surfaced in the prompt so the user pastes the right thing.
 
 This module is the single per-provider map. It is intentionally tiny and
 data-only: each entry is one ``CredentialProvider`` dataclass, keyed by the
 ``ProviderID`` value. ALL keyed atomic-tool data sources are members:
 FIRMS (``fetch_firms_active_fire``), eBird (``fetch_ebird_observations``),
-Copernicus CDS — ERA5 + GTSM share one CDS key
+Copernicus CDS -- ERA5 + GTSM share one CDS key
 (``fetch_era5_reanalysis`` / ``fetch_gtsm_tide_surge``), Movebank
 (``fetch_movebank_tracks``), and the IUCN Red List
 (``fetch_iucn_red_list_range``). Every entry mirrors the same
@@ -26,10 +26,9 @@ pattern, so a provider joins by adding one row here plus its tool-name →
 provider mapping in ``TOOL_PROVIDER`` and its auth/missing error codes in
 ``TOOL_AUTH_ERROR_CODES``.
 
-``ProviderID`` scope: every ``provider_id`` below is now a member of the
-closed ``ProviderID`` Literal in ``trid3nt_contracts.secrets`` (the schema
-amendment landed alongside this job), so the server's envelope builder
-validates each provider_id directly — there is no longer a fallback scope.
+``ProviderID`` scope: every ``provider_id`` below is a member of the closed
+``ProviderID`` Literal in ``trid3nt_contracts.secrets``, so the server's
+envelope builder validates each provider_id directly.
 The saved key therefore lands under the SAME provider scope the
 ``credential-request`` named, which is exactly the scope
 ``_resolve_active_secret_ref`` re-reads on retry, so the round-trip closes.
@@ -38,16 +37,16 @@ stays import-light (it does not import the contracts Literal); the server
 validates it against the live ``ProviderID`` at emit time.
 
 Generic classification: ``is_credential_error`` detects a "needs an API key"
-condition from ANY tool — not just FIRMS — via (a) ``error_code`` patterns
+condition from ANY tool -- not just FIRMS -- via (a) ``error_code`` patterns
 (``*_AUTH_ERROR`` / ``*_MISSING_KEY`` suffixes, or a code containing
 ``API_KEY`` / ``APIKEY`` / ``UNAUTHORIZED``), (b) an HTTP 401/403 surfaced on
 the typed error, and (c) message/body text mentioning "api key" / "key
 required" / "unauthorized" / "invalid key". A credential error from a tool
-with NO registered provider returns ``False`` (the server narrates honestly —
-it cannot request a key for an unknown provider — and never fabricates one).
+with NO registered provider returns ``False`` (the server narrates honestly --
+it cannot request a key for an unknown provider -- and never fabricates one).
 
 Invariant 9 (no cost theater): no quota / cost / spend field anywhere here.
-Decision F (wire isolation): this registry carries NO key material — only the
+Decision F (wire isolation): this registry carries NO key material -- only the
 metadata needed to ASK for a key. The raw key always rides the ``secret-add``
 transport and is read back from the vault by the tool's ``_resolve_*_key``.
 """
@@ -72,12 +71,12 @@ __all__ = [
 
 # Provider-id used for the NAME-ONLY generic credential card emitted when a
 # credential-shaped failure comes from a tool that is NOT in this registry
-# (NATE principle 3, 2026-06-18: still surface a card — a credential NAME + a
-# secret-entry form — rather than letting the LLM free-text a possibly-fake
+# (NATE principle 3, 2026-06-18: still surface a card -- a credential NAME + a
+# secret-entry form -- rather than letting the LLM free-text a possibly-fake
 # signup URL). This id is NOT a real provider scope; it carries no signup_url.
 # The server only emits the generic card when this id is a valid wire
 # ``ProviderID`` (the schema owns that Literal); until then the server falls
-# back to surfacing the original typed error — it NEVER fabricates a URL.
+# back to surfacing the original typed error -- it NEVER fabricates a URL.
 GENERIC_PROVIDER_ID = "generic"
 
 
@@ -89,16 +88,16 @@ class CredentialProvider:
     per-request ``request_id`` / ``message`` / ``tool_name`` the server mints
     at emit time):
 
-    - ``provider_id`` — the value the ``secret-add`` the client emits in
+    - ``provider_id`` -- the value the ``secret-add`` the client emits in
       response is scoped to. Held as a plain string so this registry is
       decoupled from the ``ProviderID`` Literal's enum-rollout cadence (the
       server validates it against the live Literal at envelope-build time).
-    - ``label`` — human-readable provider name for the prompt UI.
-    - ``signup_url`` — where the user obtains a key (``None`` for out-of-band).
-    - ``secret_key_name`` — canonical name of the credential the tool wants
+    - ``label`` -- human-readable provider name for the prompt UI.
+    - ``signup_url`` -- where the user obtains a key (``None`` for out-of-band).
+    - ``secret_key_name`` -- canonical name of the credential the tool wants
       (the same env-var name the tool's ``_resolve_*_key`` reads as its env
       fallback, so the user-facing name and the code path agree).
-    - ``default_message`` — fallback user-facing copy when the server has no
+    - ``default_message`` -- fallback user-facing copy when the server has no
       tool-specific message. Kept short and honest (data-source fallback norm:
       tell the user a key is needed, no silent dead-end).
     """
@@ -111,7 +110,7 @@ class CredentialProvider:
 
 
 # --------------------------------------------------------------------------- #
-# Provider registry — ALL keyed atomic-tool data sources. Every provider_id is
+# Provider registry -- ALL keyed atomic-tool data sources. Every provider_id is
 # a member of the closed ``ProviderID`` Literal in ``trid3nt_contracts.secrets``
 # so the saved key lands under the same scope ``_resolve_active_secret_ref``
 # re-reads on retry. Each ``secret_key_name`` is the SAME env-var name the
@@ -140,7 +139,7 @@ CREDENTIAL_PROVIDERS: dict[str, CredentialProvider] = {
             "Add your eBird API key and I'll retry the fetch."
         ),
     ),
-    # Copernicus CDS — ONE key (TRID3NT_COPERNICUS_CDS_API_KEY) serves BOTH the
+    # Copernicus CDS -- ONE key (TRID3NT_COPERNICUS_CDS_API_KEY) serves BOTH the
     # ERA5 reanalysis tool and the GTSM tide/surge tool. They share this single
     # ``ecmwf_cds`` provider scope so a CDS key saved for either tool resolves
     # for both on retry.
@@ -266,7 +265,7 @@ _CREDENTIAL_TEXT_PHRASES: tuple[str, ...] = (
     "authentication required",
     "authentication failed",
     "not authorized",
-    # Config-missing family — a credential-shaped failure whose message names a
+    # Config-missing family -- a credential-shaped failure whose message names a
     # missing/incomplete credentials CONFIG rather than the literal words "api
     # key" (LIVE BUG ERA5's no-key path surfaced
     # "Missing/incomplete configuration file: /root/.cdsapirc", which matched
@@ -333,7 +332,7 @@ def provider_for_tool(tool_name: str) -> CredentialProvider | None:
     """Return the ``CredentialProvider`` a tool needs a key from (or ``None``).
 
     A ``None`` return means the tool is not key-requiring (or its provider is
-    not yet registered) — the server does NOT emit a credential-request for it
+    not yet registered) -- the server does NOT emit a credential-request for it
     and the dispatch error flows through the normal typed-error surface.
     """
     pid = TOOL_PROVIDER.get(tool_name)
@@ -351,9 +350,9 @@ def is_credential_error(tool_name: str, error: BaseException) -> bool:
 
       1. the exception's ``error_code`` being in the tool's
          ``TOOL_AUTH_ERROR_CODES`` set (the explicit per-tool list), OR
-      2. the ``error_code`` being credential-SHAPED by pattern — ends in
+      2. the ``error_code`` being credential-SHAPED by pattern -- ends in
          ``_AUTH_ERROR`` / ``_MISSING_KEY``, or contains ``API_KEY`` /
-         ``APIKEY`` / ``UNAUTHORIZED`` / ``FORBIDDEN`` — so a tool that
+         ``APIKEY`` / ``UNAUTHORIZED`` / ``FORBIDDEN`` -- so a tool that
          surfaces a 401 under, say, an ``*_UPSTREAM_ERROR`` code with a
          credential-shaped variant still classifies, OR
       3. an HTTP 401/403 attached to the typed error
@@ -366,7 +365,7 @@ def is_credential_error(tool_name: str, error: BaseException) -> bool:
 
     Gating rule (HONEST, NO FABRICATION): only returns True for a tool that has
     a registered provider in ``TOOL_PROVIDER``. A credential-shaped error from a
-    tool with no provider returns ``False`` here — the server then asks
+    tool with no provider returns ``False`` here -- the server then asks
     ``is_credential_shaped_error`` (provider-agnostic) whether to surface a
     NAME-ONLY generic card (NATE principle 3) instead of fabricating a
     provider/URL.
@@ -397,7 +396,7 @@ def is_credential_shaped_error(tool_name: str, error: BaseException) -> bool:
     credential-SHAPED ``error_code`` (``*_AUTH_ERROR`` / ``*_MISSING_KEY`` /
     contains ``API_KEY`` / ``UNAUTHORIZED`` / ``FORBIDDEN``); an HTTP 401/403 on
     the typed error; a message/body that reads like a missing-key signal (incl.
-    the config-missing family — ``.cdsapirc`` / "missing/incomplete
+    the config-missing family -- ``.cdsapirc`` / "missing/incomplete
     configuration" / "credentials not configured"); or a known
     ``*AuthError`` / ``*MissingKeyError`` exception-class family.
     """
@@ -445,7 +444,7 @@ def derive_generic_credential_name(tool_name: str) -> str:
     """Human credential name for a NAME-ONLY generic card (NATE principle 3).
 
     For a credential-shaped failure from a tool NOT in this registry, the server
-    has no real provider label or ``secret_key_name`` to show — and MUST NOT
+    has no real provider label or ``secret_key_name`` to show -- and MUST NOT
     invent a signup URL. This derives an honest, readable credential name from
     the tool name alone (the only thing we reliably know), e.g.::
 
@@ -486,10 +485,10 @@ def generic_provider_for_tool(tool_name: str) -> CredentialProvider:
     Used by the server's generic-fallback path (NATE principle 3) for a
     credential-shaped failure from a tool with NO registered provider. Carries:
 
-    - ``provider_id = GENERIC_PROVIDER_ID`` ("generic") — a non-scoping
+    - ``provider_id = GENERIC_PROVIDER_ID`` ("generic") -- a non-scoping
       sentinel; the server only emits the card if this id is a valid wire
       ``ProviderID`` (schema-owned), else it surfaces the original error.
-    - ``signup_url = None`` — NEVER a fabricated URL. The card shows the
+    - ``signup_url = None`` -- NEVER a fabricated URL. The card shows the
       credential NAME + a secret-entry form only (NATE principle 2: no-URL
       fallback).
     - ``secret_key_name`` / ``label`` derived from the tool name.

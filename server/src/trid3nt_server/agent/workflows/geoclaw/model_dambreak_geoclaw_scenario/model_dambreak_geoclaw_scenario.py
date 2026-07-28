@@ -136,8 +136,7 @@ def _fetch_topo_for_geoclaw(
     ``force_bathy_base`` (tsunami / offshore): pass through to ``fetch_topobathy``
     so the GLOBAL ETOPO 2022 topo-bathy is laid down as the ALWAYS-ON base over
     the FULL (offshore-extended) domain -- guaranteeing the open-ocean portion is
-    genuinely-negative bathymetry rather than a flat land-DEM fill (the GeoClaw
-    flat-ocean root cause).
+    genuinely-negative bathymetry rather than a flat land-DEM fill.
 
     Returns the DEM cache/runs ``s3://`` URI (staged BY REFERENCE - the worker
     downloads it directly). Raises ``GeoClawComposerError`` only when BOTH fail.
@@ -243,17 +242,17 @@ def _rasterize_topo_to_depth_grid(
     ocean (topo < 0) cell-for-cell.
 
     ``dem_uri`` is the primary topo/bathy DEM GeoClaw actually ran on (the
-    ``resolve_offshore_source`` / reproject_dem_to_4326 output — the seamless
+    ``resolve_offshore_source`` / reproject_dem_to_4326 output -- the seamless
     ETOPO-bathy base over the full offshore-extended domain, which covers the AOI).
     We read it with rasterio and reproject/resample it onto the depth grid's
-    ``from_bounds`` transform (north-up, row 0 = north — the SAME orientation
+    ``from_bounds`` transform (north-up, row 0 = north -- the SAME orientation
     ``rasterize_frame_to_grid`` builds), bilinear so the coastline (the topo=0
-    contour) is smooth. Runs off the asyncio loop (blocking S3 read + rasterio) —
+    contour) is smooth. Runs off the asyncio loop (blocking S3 read + rasterio) --
     the caller wraps it in ``asyncio.to_thread``.
 
     Returns the ``(H, W)`` float elevation grid, or ``None`` on ANY failure
     (unreachable DEM, rasterio error) so the run degrades to publishing the
-    unmasked total-depth exactly as before this fix (never a hard failure — the
+    unmasked total-depth exactly as before this fix (never a hard failure -- the
     data-source fallback norm).
     """
     import os
@@ -285,7 +284,7 @@ def _rasterize_topo_to_depth_grid(
                 resampling=Resampling.bilinear,
             )
         return dst
-    except Exception as exc:  # noqa: BLE001 — best-effort; degrade to unmasked depth
+    except Exception as exc:  # noqa: BLE001 -- best-effort; degrade to unmasked depth
         logger.warning(
             "model_dambreak_geoclaw_scenario: could not rasterize staged topo %s "
             "onto the depth grid for the overland mask (%s); publishing UNMASKED "
@@ -789,7 +788,7 @@ async def model_dambreak_geoclaw_scenario(
     # the FULL water column and an offshore AOI renders as ocean, not the coastal
     # flood. Rasterize the STAGED topo/bathy DEM (the one GeoClaw ran on) onto the
     # SAME adaptive depth grid so postprocess masks depth to OVERLAND cells (topo
-    # >= 0). Inland dam_break is excluded (mask_ocean stays False) — its depth is
+    # >= 0). Inland dam_break is excluded (mask_ocean stays False) -- its depth is
     # published in full, unchanged. A None topo_grid (fetch failed) degrades to the
     # unmasked total-depth (same as before this fix).
     mask_ocean = run_args.scenario in _GEOCLAW_OCEAN_MASK_SCENARIOS

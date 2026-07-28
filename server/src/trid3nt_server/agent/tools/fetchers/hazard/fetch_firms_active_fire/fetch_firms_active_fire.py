@@ -1,4 +1,4 @@
-"""``fetch_firms_active_fire`` atomic tool — NASA FIRMS active fire / thermal anomaly fetcher.
+"""``fetch_firms_active_fire`` atomic tool -- NASA FIRMS active fire / thermal anomaly fetcher.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ class FirmsMissingKeyError(FirmsError):
     Distinct from ``FirmsAuthError`` (which fires when a key resolved but the
     upstream rejected it). Reserved for callers that opt out of the
     ``demo``-literal fallback and want a hard pre-network failure when no real
-    key is available — the agent surface treats ``FIRMS_MISSING_KEY`` the same
+    key is available -- the agent surface treats ``FIRMS_MISSING_KEY`` the same
     way it treats ``FIRMS_AUTH_ERROR``: a credential-request prompt, not a
     silent dead-end (data-source fallback norm).
     """
@@ -94,7 +94,7 @@ class FirmsEmptyError(FirmsError):
     """Endpoint succeeded but returned no detections for the window.
 
     Note: per the kickoff "Empty response → 0-feature FlatGeobuf" the
-    fetcher path emits a valid 0-feature FlatGeobuf rather than raising —
+    fetcher path emits a valid 0-feature FlatGeobuf rather than raising --
     this error type is reserved for cases where the empty result is
     actively undesirable (e.g. an explicit assertion in tests). The public
     tool surface never raises this.
@@ -123,12 +123,12 @@ _USER_AGENT = (
     "https://github.com/double-r-squared/trid3nt-qgis-plugin; agent@trid3nt.dev)"
 )
 
-#: Request timeout — FIRMS responds fast (<5s for small bbox) but we leave
+#: Request timeout -- FIRMS responds fast (<5s for small bbox) but we leave
 #: headroom for CONUS-sized queries.
 _REQUEST_TIMEOUT = 60.0
 
 #: Columns emitted in the FlatGeobuf properties (drops `latitude`/`longitude`
-#: from properties since they ARE the geometry — duplicating them in attrs is
+#: from properties since they ARE the geometry -- duplicating them in attrs is
 #: noise).
 _RETAINED_COLUMNS = (
     "brightness",
@@ -150,12 +150,11 @@ _RETAINED_COLUMNS = (
 # Metadata.
 # ---------------------------------------------------------------------------
 
-# Build AtomicToolMetadata DEFENSIVELY against the parallel
-# -schema sibling that adds ``supports_global_query`` to the contract.
-# If the schema job lands first, this tool's metadata will carry the field
-# (advertising ``False`` — FIRMS requires a bbox). If the schema field hasn't
-# landed yet, fall back to construction without it so registration still works.
-# Same pattern used by (fetch_mrms_qpe, fetch_nws_alerts_conus).
+# Build AtomicToolMetadata DEFENSIVELY: ``supports_global_query`` is an
+# optional contract field (advertising ``False`` -- FIRMS requires a bbox)
+# that may not always be present; fall back to construction without it so
+# registration still works either way. Same pattern used by
+# (fetch_mrms_qpe, fetch_nws_alerts_conus).
 
 def _build_metadata() -> AtomicToolMetadata:
     common = dict(
@@ -288,16 +287,16 @@ def _resolve_map_key(
 
     1. Explicit ``map_key`` kwarg (live test path, dev override).
     2. ``secret_ref`` (a ``SecretRecord``) → ``Persistence.get_secret_value``
-       — the per-Case vault path threaded by the server at call time. The
+       -- the per-Case vault path threaded by the server at call time. The
        user's FIRMS MAP_KEY (saved via the secrets panel / credential-request
        flow) lives here.
     3. ``TRID3NT_FIRMS_MAP_KEY`` env var (local dev convenience).
-    4. The literal ``"demo"`` (which the upstream rejects — surfaces as a typed
+    4. The literal ``"demo"`` (which the upstream rejects -- surfaces as a typed
        ``FirmsAuthError`` rather than a silent no-fires result an LLM could
        narrate as "no fires found").
 
     A vault lookup failure (revoked secret, vault unreachable) does NOT crash
-    the resolution — it logs and falls through to env / demo so the dispatch
+    the resolution -- it logs and falls through to env / demo so the dispatch
     still produces a typed upstream error the credential-request flow can act
     on, rather than a hard 500.
     """
@@ -311,7 +310,7 @@ def _resolve_map_key(
             resolved = _materialize_secret(secret_ref)
             if resolved:
                 return resolved
-        except Exception as exc:  # noqa: BLE001 — fall through to env/demo
+        except Exception as exc:  # noqa: BLE001 -- fall through to env/demo
             logger.warning(
                 "fetch_firms_active_fire: secret_ref lookup failed (%s); "
                 "falling back to env/demo",
@@ -421,7 +420,7 @@ def _parse_firms_csv_to_fgb(csv_text: str) -> bytes:
     """Parse FIRMS AREA-endpoint CSV into a FlatGeobuf Point layer (EPSG:4326).
 
     Returns FGB bytes. Empty input (header-only) produces a valid 0-feature
-    FlatGeobuf — callers handle the empty case as "no detections this window".
+    FlatGeobuf -- callers handle the empty case as "no detections this window".
 
     Args:
         csv_text: the raw CSV body from the FIRMS endpoint. First line is the
@@ -431,7 +430,7 @@ def _parse_firms_csv_to_fgb(csv_text: str) -> bytes:
         FirmsUpstreamError: malformed CSV (missing required header columns) or
             geopandas/shapely write failure.
     """
-    # Lazy import — keeps unit tests that don't touch this path lightweight.
+    # Lazy import -- keeps unit tests that don't touch this path lightweight.
     try:
         import geopandas as gpd  # type: ignore[import-not-found]
         import pandas as pd  # type: ignore[import-not-found]
@@ -446,7 +445,7 @@ def _parse_firms_csv_to_fgb(csv_text: str) -> bytes:
 
     try:
         df = pd.read_csv(io.StringIO(csv_text))
-    except Exception as exc:  # noqa: BLE001 — pandas raises many error types
+    except Exception as exc:  # noqa: BLE001 -- pandas raises many error types
         raise FirmsUpstreamError(
             f"FIRMS CSV parse failed: {exc}"
         ) from exc
@@ -460,7 +459,7 @@ def _parse_firms_csv_to_fgb(csv_text: str) -> bytes:
             f"got columns={list(df.columns)}"
         )
 
-    # Drop rows with null lat/lon (defensive — FIRMS shouldn't emit these but
+    # Drop rows with null lat/lon (defensive -- FIRMS shouldn't emit these but
     # we guard against schema drift).
     before = len(df)
     df = df.dropna(subset=["latitude", "longitude"]).copy()
@@ -632,7 +631,7 @@ def fetch_firms_active_fire(
 
     **What it does:** Calls the NASA FIRMS Web Service AREA API
     (``firms.modaps.eosdis.nasa.gov/api/area/csv``) to retrieve satellite
-    thermal-anomaly / active-fire pixel detections for the last 1–10 days over
+    thermal-anomaly / active-fire pixel detections for the last 1-10 days over
     a bounded geographic region. Parses the CSV response into a FlatGeobuf
     Point layer with brightness, FRP (Fire Radiative Power), scan, track,
     acquisition time, satellite, instrument, confidence, and day/night fields.
@@ -651,7 +650,7 @@ def fetch_firms_active_fire(
     - Historical fire perimeters or burned-area polygons (use
       ``fetch_nifc_fire_perimeters`` for current season or
       ``fetch_mtbs_burn_severity`` for 1984-present archives).
-    - Fuel-load / fuel-moisture inputs (LANDFIRE — separate tool, not yet in
+    - Fuel-load / fuel-moisture inputs (LANDFIRE -- separate tool, not yet in
       catalog).
     - Fire spread or behavior forecasts (FIRMS is detection-only, not forecast).
     - Global queries without a bbox (FIRMS AREA API requires a bbox).
@@ -660,7 +659,7 @@ def fetch_firms_active_fire(
     - ``bbox`` (tuple): ``(min_lon, min_lat, max_lon, max_lat)`` in EPSG:4326.
       Required; global queries rejected. Example: ``(-124.0, 32.5, -114.0, 42.0)``
       for California.
-    - ``days_back`` (int): 1–10 days back from FIRMS "today". Default 1. Higher
+    - ``days_back`` (int): 1-10 days back from FIRMS "today". Default 1. Higher
       values accumulate more detections; note FIRMS upstream rejects >5
       (surfaces as ``FirmsUpstreamError``).
     - ``source`` (str): ``"VIIRS_SNPP_NRT"`` (default; Suomi NPP, 375m),
@@ -687,7 +686,7 @@ def fetch_firms_active_fire(
     - Auth dependency: set ``TRID3NT_FIRMS_MAP_KEY`` env var (register free at
       ``firms.modaps.eosdis.nasa.gov/api/map_key/``).
     """
-    # 1. Validate arguments (typed errors, not crashes — invariant: FR-AS-11).
+    # 1. Validate arguments (typed errors, not crashes -- invariant: FR-AS-11).
     if source not in _VALID_SOURCES:
         raise FirmsArgError(
             f"unknown source={source!r}; allowed: {sorted(_VALID_SOURCES)}"
@@ -706,13 +705,13 @@ def fetch_firms_active_fire(
     # 2. Quantize bbox to 4dp for cache-key stability.
     q_bbox = _round_bbox_to_4dp(bbox)
 
-    # 3. Resolve MAP_KEY (vault-first) and a key-fingerprint for the cache. We
-    #    avoid putting the raw key in the cache-key params so cache hits don't
-    #    depend on the secret value — two callers with different valid keys
-    #    still hit the same artifact. A short SHA-256 prefix prevents accidental
-    #    cross-key blob reuse if FIRMS ever segments responses by key.
-    # the user's per-Case vault key (via ``secret_ref``) wins
-    #    over the env var; ``map_key`` kwarg (dev/test) wins over both.
+    # 3. Resolve MAP_KEY (vault-first) and a key-fingerprint for the cache.
+    #    The raw key never enters the cache-key params, so cache hits don't
+    #    depend on the secret value -- two callers with different valid keys
+    #    still hit the same artifact; a short SHA-256 prefix prevents
+    #    accidental cross-key blob reuse if FIRMS ever segments responses by
+    #    key. Priority: the user's per-Case vault key (via ``secret_ref``)
+    #    wins over the env var; ``map_key`` kwarg (dev/test) wins over both.
     resolved_map_key = _resolve_map_key(map_key=map_key, secret_ref=secret_ref)
     import hashlib as _hashlib
     key_fingerprint = _hashlib.sha256(

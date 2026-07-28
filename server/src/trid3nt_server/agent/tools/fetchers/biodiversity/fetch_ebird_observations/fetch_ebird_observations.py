@@ -1,4 +1,4 @@
-"""``fetch_ebird_observations`` atomic tool — Cornell Lab eBird Tier-2 fetcher.
+"""``fetch_ebird_observations`` atomic tool -- Cornell Lab eBird Tier-2 fetcher.
 """
 
 from __future__ import annotations
@@ -64,11 +64,11 @@ class EBirdMissingKeyError(EBirdError):
 
 
 class EBirdAuthError(EBirdError):
-    """eBird API returned 401/403 — key is invalid, revoked, or rate-limited.
+    """eBird API returned 401/403 -- key is invalid, revoked, or rate-limited.
 
     Distinct from ``EBirdMissingKeyError`` (which fires pre-network when no
     key resolves at all). This fires when a key resolved but the API
-    rejected it — typically a revoked or rate-limited key.
+    rejected it -- typically a revoked or rate-limited key.
     """
 
     error_code = "EBIRD_AUTH_ERROR"
@@ -111,7 +111,7 @@ _DAYS_BACK_MAX = 30
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -159,7 +159,7 @@ def _validate_species_code(species_code: str) -> None:
     The 6-character lowercase-letters form is the most common, but eBird
     has historical 4-letter codes (``amro``) and some longer 7-character
     codes for subspecies. We accept any non-empty alphanumeric string of
-    reasonable length — eBird itself returns 404 on an unknown code, which
+    reasonable length -- eBird itself returns 404 on an unknown code, which
     surfaces as ``EBirdInputError`` from the search path.
     """
     if not isinstance(species_code, str):
@@ -206,15 +206,14 @@ def _bbox_to_tile_centers(
     eBird supports radius queries (``dist`` km) only; there is no bbox
     parameter. We tile the bbox into a grid of overlapping circles whose
     radius is ``radius_km`` and whose center-to-center spacing is
-    ``radius_km`` (so adjacent circles overlap by ~50% — guarantees coverage
+    ``radius_km`` (so adjacent circles overlap by ~50% -- guarantees coverage
     of the full bbox interior including any sliver between tiles).
 
     The grid is in geographic coordinates: lon spacing varies with cos(lat)
-    so the metric spacing is honored at the bbox's central latitude.
-    Sprint-13 will replace this with a proper hex-tile cover (which packs
-    more efficiently); the v0.1 row/col grid intentionally over-covers.
+    so the metric spacing is honored at the bbox's central latitude. The
+    row/col grid intentionally over-covers rather than packing tightly.
 
-    Returns a list of ``(lat, lng)`` tuples — eBird's parameter order is
+    Returns a list of ``(lat, lng)`` tuples -- eBird's parameter order is
     ``(lat, lng)``, not ``(lng, lat)``.
     """
     west, south, east, north = bbox
@@ -240,7 +239,7 @@ def _bbox_to_tile_centers(
     n_cols = max(1, math.ceil((east - west) / step_deg_lon))
 
     # If the cover would exceed the hard cap, fall back to a single tile
-    # at the bbox center — the caller is asking for too big an area.
+    # at the bbox center -- the caller is asking for too big an area.
     if n_rows * n_cols > _MAX_TILES_HARD_CAP:
         raise EBirdInputError(
             f"bbox tile cover would require {n_rows * n_cols} tiles "
@@ -279,8 +278,7 @@ def _resolve_api_key(
     Priority (per audit.md):
 
     1. Explicit ``api_key`` kwarg.
-    2. ``secret_ref`` (a ``SecretRecord``) → ``Persistence.get_secret_value``
-       (the per-Case path landed by sibling).
+    2. ``secret_ref`` (a ``SecretRecord``) -> ``Persistence.get_secret_value``.
     3. ``TRID3NT_EBIRD_API_KEY`` env var (dev convenience).
 
     Raises:
@@ -291,13 +289,13 @@ def _resolve_api_key(
         return api_key
 
     # 2. secret_ref via Persistence.get_secret_value (sync wrapping of the
-    #    async coroutine — the tool body is sync because read_through is
+    #    async coroutine -- the tool body is sync because read_through is
     #    sync; tier-2 fetcher convention is to bridge via asyncio.run when
     #    no event loop is running, else await directly).
     if secret_ref is not None:
         try:
             return _materialize_secret(secret_ref)
-        except Exception as exc:  # noqa: BLE001 — surface as missing-key
+        except Exception as exc:  # noqa: BLE001 -- surface as missing-key
             raise EBirdMissingKeyError(
                 f"secret_ref lookup failed: {exc}"
             ) from exc
@@ -327,12 +325,12 @@ def _materialize_secret(secret_ref: Any) -> str:
     Lazy import of Persistence avoids a startup-time dep on MCP.
     """
     # Test-mock shortcut: if the caller passes something that quacks like a
-    # ``str`` already (rare — but the test surface uses this to inject a
+    # ``str`` already (rare -- but the test surface uses this to inject a
     # known key without standing up Persistence), accept it.
     if isinstance(secret_ref, str):
         return secret_ref
 
-    from trid3nt_server.persistence import Persistence  # local — avoid top-level cycles
+    from trid3nt_server.persistence import Persistence  # local -- avoid top-level cycles
 
     persistence = _get_persistence_for_secrets()
     if persistence is None:
@@ -387,7 +385,7 @@ def _run_coro_sync(coro: Any) -> Any:
     if not running:
         return asyncio.run(coro)
 
-    # Already inside a loop — spin up a worker thread with its own loop.
+    # Already inside a loop -- spin up a worker thread with its own loop.
     result_box: dict[str, Any] = {}
     error_box: dict[str, BaseException] = {}
 
@@ -735,16 +733,16 @@ def fetch_ebird_observations(
     """Cornell Lab eBird Tier-2 recent-observations fetcher.
 
     Use this when: the agent needs recent bird sightings for ecological
-    analysis or display — e.g. mapping Bewick's Wren observations over a
+    analysis or display -- e.g. mapping Bewick's Wren observations over a
     wildfire footprint, overlaying recent waterfowl sightings on a flooded
     refuge, or summarizing avian biodiversity within a habitat-restoration
     bbox. Returns one FlatGeobuf point feature per (eBird subId, speciesCode)
     sighting reported in the last ``days_back`` days inside the requested
     bbox. eBird is the world's largest citizen-science bird database
-    (>1B observations to date) — the right tool for "what birds were seen
+    (>1B observations to date) -- the right tool for "what birds were seen
     here recently".
 
-    Do NOT use this for: HISTORICAL (>30 days back) sightings — eBird's API
+    Do NOT use this for: HISTORICAL (>30 days back) sightings -- eBird's API
     caps at 30 days; use GBIF or eBird's bulk-download for longer windows.
     Hot-spot checklists per location (different endpoint:
     ``data/obs/{regionCode}/recent/hotspot``). Rare-bird alerts (eBird has a
@@ -752,7 +750,7 @@ def fetch_ebird_observations(
     deliberately for the dynamic-1h cache). Tier-1 GBIF queries (use
     ``fetch_gbif_occurrences`` for keyless species-occurrence fetch).
     Protected-area POLYGONS (use ``fetch_wdpa_protected_areas``). Tracking
-    data (Movebank — different tool).
+    data (Movebank -- different tool).
 
     eBird requires a free API key (registration at
     ``https://ebird.org/api/keygen``). The tool resolves the key in this
@@ -760,10 +758,10 @@ def fetch_ebird_observations(
     secret via ``Persistence.get_secret_value`` (production path),
     (3) ``TRID3NT_EBIRD_API_KEY`` env var (dev convenience). If none of the
     three resolve a key, raises ``EBirdMissingKeyError`` BEFORE any network
-    call — the agent surface uses this to route a "needs a key" message
+    call -- the agent surface uses this to route a "needs a key" message
     via the secrets panel.
 
-    eBird does NOT expose a bbox query — only radius queries around a
+    eBird does NOT expose a bbox query -- only radius queries around a
     ``(lat, lng)`` point. We tile the bbox into ~50 km circles (eBird's max
     radius) and dedupe by ``subId``. Per audit.md, will replace
     the row/col grid with a proper hex-tile cover; the v0.1 grid intentionally
@@ -777,9 +775,9 @@ def fetch_ebird_observations(
         bbox: ``(west, south, east, north)`` in EPSG:4326 (WGS84 decimal degrees).
         days_back: how many days of recent observations to return (1-30;
             default 30). eBird's API caps this at 30.
-        api_key: optional explicit API key — highest-priority resolution path.
+        api_key: optional explicit API key -- highest-priority resolution path.
         secret_ref: optional ``SecretRecord`` (from per-Case secrets panel)
-            — resolved via ``Persistence.get_secret_value`` at invocation time.
+            -- resolved via ``Persistence.get_secret_value`` at invocation time.
 
     Returns:
         A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket:
@@ -796,7 +794,7 @@ def fetch_ebird_observations(
     FR-CE-8: Routed through ``read_through`` with ``ttl_class="dynamic-1h"``
     so identical ``(species_code, bbox, days_back)`` calls inside the same
     hour reuse the cached FlatGeobuf and a top-of-hour crossing forces a
-    refresh. The cache key intentionally does NOT include the api_key —
+    refresh. The cache key intentionally does NOT include the api_key --
     the underlying observations don't vary by caller.
     """
     # ---- Input validation ----

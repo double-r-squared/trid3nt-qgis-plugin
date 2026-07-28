@@ -19,10 +19,7 @@ NOT touch GCS or the cache shim.
 
 Per the audit (audit.md), v0.1 uses deterministic regex + keyword
 extraction for "date" / "scale" / "casualties" and naive title-case sweeps for
-"location" / "contaminant". A follow-up would upgrade
-"location" + "contaminant" to LLM-routed extraction so the agent
-can resolve ambiguous mentions (e.g. "the spill near Longview", town vs county,
-chemical-family names) the way a human would.
+"location" / "contaminant".
 
 Source-agreement scoring rule (audit-specified):
 
@@ -35,7 +32,7 @@ from agreement alone, since systematic source-bias / shared upstream wire
 services can drive false agreement).
 
 Typed errors (FR-AS-11):
-    - ``ClaimAggError(retryable=False)`` — bad input shape (non-list sources,
+    - ``ClaimAggError(retryable=False)`` -- bad input shape (non-list sources,
       missing required keys, unknown claim target).
 
 Geographic-correctness check (codified lesson):
@@ -43,10 +40,7 @@ Geographic-correctness check (codified lesson):
 This tool DOES NOT emit geometry; it returns a structured claims dict. The
 "location" target's ``value`` is a place-name STRING (reverse-geocoding to a
 bbox is deferred to a downstream ``geocode_event_location`` call, per engine.md
-scope). A round-trip-only acceptance check is therefore sufficient for v0.1;
-when LLM extraction lands in and the tool optionally produces a bbox,
-the acceptance test must add a "is the bbox actually around the named place"
-geographic check.
+scope). A round-trip-only acceptance check is therefore sufficient for v0.1.
 
 FR-TA-3 docstring discipline applies to the public ``aggregate_claims_across_sources``.
 """
@@ -116,7 +110,7 @@ SUPPORTED_TARGETS: tuple[str, ...] = (
 # ---------------------------------------------------------------------------
 
 
-# Common chemical / contaminant tokens. Not exhaustive — designed to cover the
+# Common chemical / contaminant tokens. Not exhaustive -- designed to cover the
 # vinyl-chloride / benzene / ammonia / chlorine class of incidents the v0.1
 # FR-HEP demo cases target. The upgrade path swaps
 # this regex bag for an LLM-routed entity-extraction call.
@@ -201,7 +195,7 @@ _LONG_DATE_RE = re.compile(
 _US_DATE_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
 
 
-# "Longview, Texas", "Palestine, OH" — Title-case word(s) followed by a comma
+# "Longview, Texas", "Palestine, OH" -- Title-case word(s) followed by a comma
 # and a state name or 2-letter abbreviation.
 _US_STATES = {
     "AL": "Alabama",
@@ -360,7 +354,7 @@ def _extract_casualties(text: str) -> list[tuple[str, int]]:
 def _extract_contaminants(text: str) -> list[tuple[str, str]]:
     """Return [(raw_substring, normalized_lowercase_name), ...] from text.
 
-    Uses the curated _CONTAMINANT_KEYWORDS list — TENTATIVE deterministic
+    Uses the curated _CONTAMINANT_KEYWORDS list -- TENTATIVE deterministic
     approach, proposes LLM upgrade.
     """
     results: list[tuple[str, str]] = []
@@ -399,7 +393,7 @@ def _extract_locations(text: str) -> list[tuple[str, str]]:
         elif state_token.lower() in _STATE_NAMES_LOWER:
             state_full = _STATE_NAMES_LOWER[state_token.lower()]
         else:
-            # Not a recognized US state — skip rather than emit a noisy match.
+            # Not a recognized US state -- skip rather than emit a noisy match.
             continue
         normalized = f"{city}, {state_full}"
         results.append((match.group(0), normalized))
@@ -443,16 +437,16 @@ def _aggregate_target(
     """Group extractions for one target across sources, score, return claim dict.
 
     ``source_extractions`` is a list of ``(source_url, [(raw, normalized), ...])``
-    tuples — one entry per input source, each carrying every mention found in
+    tuples -- one entry per input source, each carrying every mention found in
     that source's text.
 
     Strategy:
       1. Per source, collapse to the SET of distinct normalized values found
          (a single article mentioning "Longview, Texas" 5 times is still one
-         vote, not five — avoids over-weighting verbose sources).
+         vote, not five -- avoids over-weighting verbose sources).
       2. Across sources, count how many sources support each value.
       3. Best value = the one with the highest source count (ties broken by
-         insertion order — first-seen-first wins, stable for tests).
+         insertion order -- first-seen-first wins, stable for tests).
       4. Confidence per the audit-specified rule. If below ``confidence_threshold``,
          the value is still returned (caller may still want to inspect it) but
          the threshold is recorded in the result for downstream filtering.
@@ -547,7 +541,7 @@ def _validate_sources(sources: Any) -> list[dict[str, Any]]:
         # ``url`` and ``fetched_at`` are provenance metadata the LLM
         # cannot always supply (it doesn't know the fetch timestamp, and may
         # only have the source text). Default them so a direct agent call with
-        # ``{text, ...}`` succeeds — only ``text`` (the substance claims are
+        # ``{text, ...}`` succeeds -- only ``text`` (the substance claims are
         # extracted from) is genuinely required. The composer already stamps
         # its own ``fetched_at`` sentinel, so this only affects direct callers.
         item.setdefault("url", item.get("source_id") or "")

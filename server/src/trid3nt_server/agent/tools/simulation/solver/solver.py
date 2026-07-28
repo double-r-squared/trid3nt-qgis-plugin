@@ -9,12 +9,12 @@ selected per solver by its ``LocalSolverSpec`` exec spec --
 implement the **FR-TA-2 solver-dispatch surface**:
 
     - ``run_solver(solver, model_setup_uri, compute_class="medium")
-       -> ExecutionHandle`` — submits a solver run on the active backend.
+       -> ExecutionHandle`` -- submits a solver run on the active backend.
       Currently only ``solver="sfincs"`` is supported; other values raise
       ``SolverNotRegisteredError`` (FR-TA-2).
 
     - ``wait_for_completion(handle, poll_interval_s=10, timeout_s=1800)
-       -> RunResult`` — polls the run backing ``handle`` every
+       -> RunResult`` -- polls the run backing ``handle`` every
       ``poll_interval_s`` seconds, emits a ``pipeline-state`` progress update
       on every poll via ``PipelineEmitter.update_progress`` (the opt-in seam
        surfaced for M5+ solvers), and on success reads
@@ -30,7 +30,7 @@ Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
 
 - **Invariant 1 (Determinism boundary): preserves.** Progress estimation is
   a wall-clock linear ramp keyed off ``handle.submitted_at`` and the
-  NFR-P-4 target (900 s for ``≤15 min``) — not an LLM estimate. The ramp
+  NFR-P-4 target (900 s for ``≤15 min``) -- not an LLM estimate. The ramp
   is clamped at 95% until the Workflow returns SUCCEEDED (then jumps to
   100%) so we never falsely advertise completion.
 
@@ -68,20 +68,16 @@ Cross-cutting principles (per CLAUDE.md + agents/AGENTS.md):
 
 Dependency-injection seams (mirrors ``passthroughs.py`` pattern):
 
-- ``_EMITTER_BINDING`` / ``set_emitter_binding(emitter, step_id)`` — the
+- ``_EMITTER_BINDING`` / ``set_emitter_binding(emitter, step_id)`` -- the
   active ``PipelineEmitter`` + the step_id this ``wait_for_completion``
-  invocation is bracketed by. Set by the integration site (``server.py``)
-  in a follow-up job that wires ``emit_tool_call`` to surface its
-  ``step_id`` to the tool body. **TENTATIVE per kickoff Open Questions:**
-  for the M5 smoke run we set the binding explicitly from the smoke
-  harness; the integration with the WS handler lives in a follow-up agent
-  job because ``pipeline_emitter.py`` + ``server.py`` are FROZEN here.
+  invocation is bracketed by, set by the integration site (``server.py``)
+  where ``emit_tool_call`` surfaces its ``step_id`` to the tool body.
 
-- ``_RUNS_BUCKET`` / ``set_runs_bucket(name)`` — overrides the runs bucket
+- ``_RUNS_BUCKET`` / ``set_runs_bucket(name)`` -- overrides the runs bucket
   name. Used by tests to reach a fixture bucket; production wiring leaves it
   at the env-driven default.
 
-- ``_S3_CLIENT`` / ``set_s3_client(client)`` — the boto3 S3 client used for
+- ``_S3_CLIENT`` / ``set_s3_client(client)`` -- the boto3 S3 client used for
   ALL S3 staging / completion I/O. Lazily-default to the EC2 instance-role
   client (boto3-not-s3fs lesson).
 
@@ -96,7 +92,7 @@ Solver backend (local-only; batch decommissioned)
 AWS Batch arm was removed and can be re-woven from git history without
 touching call sites):
 
-- ``local-docker`` — the S3-IN → sfincs → S3-OUT envelope lives INSIDE the
+- ``local-docker`` -- the S3-IN → sfincs → S3-OUT envelope lives INSIDE the
   agent (testable Python); the object store is whatever ``AWS_ENDPOINT_URL``
   points at (locally: MinIO). The container is the PLAIN upstream
   ``deltares/sfincs-cpu`` binary image run via ``docker run`` on this
@@ -109,7 +105,7 @@ touching call sites):
         → launch ``docker run --rm --name <run_id> -v <rundir>:/data -w /data
         $TRID3NT_SFINCS_IMAGE [sfincs_args]`` DETACHED (Popen) → return
         ExecutionHandle immediately (``workflow_name="local-docker"``,
-        ``workflows_execution_id="local-docker:<run_id>"`` — the container
+        ``workflows_execution_id="local-docker:<run_id>"`` -- the container
         name IS the run_id, which is the Invariant-8 cancellation seam).
 
       supervisor (daemon thread): waits on the docker process, expands the
@@ -117,10 +113,10 @@ touching call sites):
         sfincs.stdout/sfincs.stderr to ``s3://$TRID3NT_RUNS_BUCKET/<run_id>/``
         (boto3), and ALWAYS writes ``completion.json`` (exact entrypoint.py
         schema: run_id/status/exit_code/sfincs_stdout_uri/sfincs_stderr_uri/
-        output_uris/started_at/finished_at/error) — even on crash
+        output_uris/started_at/finished_at/error) -- even on crash
         (status="error") or cancel (status="cancelled").
 
-      wait_for_completion: dispatches on ``handle.workflow_name`` — local
+      wait_for_completion: dispatches on ``handle.workflow_name`` -- local
         handles poll the completion.json object on S3 (cadence/timeout/
         progress-ramp semantics) and build the RunResult with
         ``output_uri = s3://<runs_bucket>/<run_id>/``.
@@ -137,7 +133,7 @@ touching call sites):
 Generalized local backend
 ----------------------------------------------------
 
- extends the machinery to MODFLOW without forking it. The
+``LocalSolverSpec`` extends the machinery to MODFLOW without forking it. The
 staging → detached launch → supervisor → completion.json → S3-poll envelope is
 solver-agnostic; the solver-specific knobs are bundled into a
 ``LocalSolverSpec`` (manifest argv key, launch argv builder, stdout/stderr
@@ -148,7 +144,7 @@ classifier for solver-specific status resolution, and the cancel kind):
   (``_run_solver_local_docker`` builds the SFINCS spec; the completion.json
   is byte-identical to ``services/workers/sfincs/entrypoint.py``).
 - MODFLOW (``workflows/run_modflow.py``) launches the **mf6 binary directly**
-  (``exec_kind="exec"`` — no public MODFLOW image exists; the instance gets
+  (``exec_kind="exec"`` -- no public MODFLOW image exists; the instance gets
   the same SHA-pinned USGS 6.5.0 static binary the GCP Dockerfile installs).
   Its spec's ``classify_exit`` reproduces the MODFLOW entrypoint's
   list-file convergence guard, and the completion.json carries the EXACT
@@ -159,7 +155,7 @@ Cancel kinds: ``"docker"`` → ``docker kill <run_id>`` (container name ==
 run_id); ``"exec"`` → ``os.killpg`` on the detached process group
 (``start_new_session=True`` makes pgid == pid). Both terminal ≤30 s
 (Invariant 8). ``wait_for_completion`` dispatches on the handle's
-``workflow_name`` ∈ {``local-docker``, ``local-exec``} — the poll loop is
+``workflow_name`` ∈ {``local-docker``, ``local-exec``} -- the poll loop is
 shared.
 """
 
@@ -229,10 +225,10 @@ logger = logging.getLogger("trid3nt_server.agent.tools.simulation.solver.solver"
 #: Progress is wall-clock linear in (now - submitted_at) / target.
 NFR_P_4_TARGET_SECONDS: float = 900.0
 
-#: Default poll cadence — matches NFR-P-4 ≤15-min budget granularity (≥9 polls).
+#: Default poll cadence -- matches NFR-P-4 ≤15-min budget granularity (≥9 polls).
 DEFAULT_POLL_INTERVAL_S: int = 10
 
-#: Default overall timeout (30 min — mirrors the Cloud Run Job task_timeout
+#: Default overall timeout (30 min -- mirrors the Cloud Run Job task_timeout
 #: gives 2× headroom over NFR-P-4). Env-overridable via
 #: ``TRID3NT_SOLVER_TIMEOUT_S`` so a legitimately long run (a large coastal
 #: quadtree + SnapWave solve exceeds the 30-min pluvial budget this constant was
@@ -250,7 +246,7 @@ def _default_timeout_s() -> int:
 DEFAULT_TIMEOUT_S: int = _default_timeout_s()
 
 #: Highest progress we ever advertise before the Workflow is SUCCEEDED.
-#: Clamp keeps us honest under late runs — the chip never jumps to 100% on
+#: Clamp keeps us honest under late runs -- the chip never jumps to 100% on
 #: estimate alone.
 PROGRESS_CLAMP_MAX: int = 95
 
@@ -261,7 +257,7 @@ PROGRESS_TERMINAL: int = 100
 #: Solver → workflow name registry. The VALUE is the canonical
 #: workflow/composer name for the solver; the registry is consumed purely as a
 #: PRESENCE GATE by ``run_solver`` (an unregistered solver raises
-#: ``SolverNotRegisteredError``) — the live backend routing + the handle's pinned
+#: ``SolverNotRegisteredError``) -- the live backend routing + the handle's pinned
 #: ``workflow_name`` come from ``solver_backend()`` / the backend sentinel
 #: (``LOCAL_DOCKER_WORKFLOW_NAME`` / ``LOCAL_EXEC_WORKFLOW_NAME``), not from this
 #: value. SWMM + MODFLOW self-register at import (``setdefault`` to a backend
@@ -294,11 +290,11 @@ SOLVER_WORKFLOW_REGISTRY: dict[str, str] = {
 
 # --- Solver backend seam --- #
 
-#: AWS EC2 backend — plain upstream ``deltares/sfincs-cpu`` via ``docker run``
+#: AWS EC2 backend -- plain upstream ``deltares/sfincs-cpu`` via ``docker run``
 #: on the same instance; staging/upload envelope lives in this module.
 SOLVER_BACKEND_LOCAL_DOCKER: str = "local-docker"
 
-#: ``ExecutionHandle.workflow_name`` sentinel for local-docker handles —
+#: ``ExecutionHandle.workflow_name`` sentinel for local-docker handles --
 #: ``wait_for_completion`` dispatches on it (the handle pins its backend so
 #: env churn between submit and wait cannot mis-route the poll).
 LOCAL_DOCKER_WORKFLOW_NAME: str = "local-docker"
@@ -320,10 +316,10 @@ LOCAL_EXEC_WORKFLOW_NAME: str = "local-exec"
 #: ``xlarge`` is the higher-powered vertical-scale tier (auto
 #: vertical scaling per case so a big AOI/mesh can grab MORE compute). 48 vCPU /
 #: 96 GiB at the 2 GB/vCPU ratio is a clean fit for a single c7i.12xlarge (48
-#: vCPU / 96 GiB) or m7i.12xlarge — both real, SPOT-eligible, x86_64 instances
-#: in us-west-2 — so the Batch CE can place the whole job on ONE box (no NUMA
+#: vCPU / 96 GiB) or m7i.12xlarge -- both real, SPOT-eligible, x86_64 instances
+#: in us-west-2 -- so the Batch CE can place the whole job on ONE box (no NUMA
 #: fragmentation across instances for the SFINCS/SWMM OpenMP solve). ``gpu`` is
-#: left AS-IS per kickoff (32 vCPU / 64 GiB) — it is a distinct accelerator
+#: left AS-IS per kickoff (32 vCPU / 64 GiB) -- it is a distinct accelerator
 #: bucket, not part of the vCPU vertical ladder ``select_compute_class`` walks.
 AWS_BATCH_COMPUTE_CLASS_SIZING: dict[str, dict[str, int]] = {
     "small": {"vcpus": 4, "mem_mib": 8192, "omp_threads": 4},
@@ -348,7 +344,7 @@ DEFAULT_LOCAL_RUNS_DIR: str = "/opt/grace2/runs"
 #: Default SFINCS image under local-docker (env ``TRID3NT_SFINCS_IMAGE``).
 DEFAULT_SFINCS_IMAGE: str = "deltares/sfincs-cpu:latest"
 
-#: Budget for the ``docker kill`` subprocess on cancel — comfortably inside
+#: Budget for the ``docker kill`` subprocess on cancel -- comfortably inside
 #: the ≤30 s Invariant-8 / NFR-R-3 envelope.
 DOCKER_KILL_TIMEOUT_S: float = 25.0
 
@@ -371,22 +367,20 @@ def solve_progress_vcpus(
 ) -> int | None:
     """Deployment-aware CPU count for the LIVE solve-progress readout (A6).
 
-    Local-cloud fingerprint seam: the live solve-progress
-    envelope used to carry the AWS Batch tier's vCPU count even when the solve
-    ran on the local machine (``TRID3NT_SOLVER_BACKEND=local-docker``), so the
-    local build's card read "... 8 vCPU ..." mid-solve. This helper is the
-    single seam the workflow call sites use instead of reading
-    ``AWS_BATCH_COMPUTE_CLASS_SIZING`` directly:
+    Local-cloud fingerprint seam: this helper is the single seam the
+    workflow call sites use instead of reading
+    ``AWS_BATCH_COMPUTE_CLASS_SIZING`` directly, so the solve-progress card
+    always reports the CPU count for the backend that actually ran the
+    solve:
 
     - **local-docker** -> ``os.cpu_count()`` (the host CPUs actually doing the
       solve; the web/plugin render the local deployment's count with "CPU"
       wording, never "vCPU"). ``None`` if the host count is indeterminate --
       the card then omits the segment entirely (no fabrication).
-    - **aws-batch** (unset/default) -> byte-identical to the callers' prior
-      tier logic: ``cloud_vcpus`` when the caller already resolved a count
-      (e.g. the SFINCS autoscale provenance), else the
+    - **aws-batch** (unset/default) -> ``cloud_vcpus`` when the caller already
+      resolved a count (e.g. the SFINCS autoscale provenance), else the
       ``AWS_BATCH_COMPUTE_CLASS_SIZING[compute_class]["vcpus"]`` lookup
-      (``None`` for an unknown class -- same as the old ``.get(...).get(...)``).
+      (``None`` for an unknown class).
 
     Wording/telemetry only -- NEVER consulted for dispatch sizing (the Batch
     ``resourceRequirements`` path reads the sizing table directly).
@@ -455,7 +449,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-#: Upper bound (exclusive) of the SMALL tier — at/under this many elements a 4
+#: Upper bound (exclusive) of the SMALL tier -- at/under this many elements a 4
 #: vCPU box solves comfortably. Env: ``TRID3NT_COMPUTE_CLASS_SMALL_MAX``.
 COMPUTE_CLASS_SMALL_MAX_ELEMENTS: int = _env_int(
     "TRID3NT_COMPUTE_CLASS_SMALL_MAX", 50_000
@@ -472,7 +466,7 @@ COMPUTE_CLASS_LARGE_MAX_ELEMENTS: int = _env_int(
     "TRID3NT_COMPUTE_CLASS_LARGE_MAX", 1_000_000
 )
 
-#: The class returned when the element estimate is missing / non-positive — the
+#: The class returned when the element estimate is missing / non-positive -- the
 #: 8-vCPU standard bucket (the prior default; never crash, never under-provision
 #: to ``small`` on a blind estimate).
 COMPUTE_CLASS_FALLBACK: str = "standard"
@@ -492,10 +486,10 @@ def select_compute_class(estimated_elements: int | float | None) -> str:
         e >= LARGE_MAX                  → "xlarge"    (48 vCPU / 96 GiB)
 
     A missing / zero / negative / non-numeric estimate falls back to
-    ``"standard"`` (the prior default) — this function NEVER raises, so the
+    ``"standard"`` (the prior default) -- this function NEVER raises, so the
     workflow always has a usable class even when the autoscale provenance is
     absent. ``gpu`` is intentionally NOT reachable here (it is an accelerator
-    bucket, not a vCPU step — selected explicitly by a caller, never by size).
+    bucket, not a vCPU step -- selected explicitly by a caller, never by size).
 
     Args:
         estimated_elements: the estimated active-element count for the run
@@ -503,7 +497,7 @@ def select_compute_class(estimated_elements: int | float | None) -> str:
             non-numeric → the standard fallback.
 
     Returns:
-        One of ``"small"`` / ``"standard"`` / ``"large"`` / ``"xlarge"`` — a key
+        One of ``"small"`` / ``"standard"`` / ``"large"`` / ``"xlarge"`` -- a key
         present in ``AWS_BATCH_COMPUTE_CLASS_SIZING`` and ``_COMPUTE_CLASS_ALIAS``
         (the compute-class sizing table + FR-CE-3 alias map).
     """
@@ -617,7 +611,7 @@ def set_s3_client(client: Any) -> None:
 def _get_s3_client() -> Any:
     """Return the bound S3 client or lazily construct the boto3 default.
 
-    boto3 (NOT s3fs) for all S3 I/O — s3fs falls back to anonymous
+    boto3 (NOT s3fs) for all S3 I/O -- s3fs falls back to anonymous
     credentials on the EC2 instance role. Lazy import so
     GCP-only / CI environments never pay for boto3 at module load.
     """
@@ -645,13 +639,13 @@ def _get_runs_bucket() -> str:
 
 
 def _get_local_runs_bucket() -> str:
-    """Runs bucket under local-docker — NO default to a GCP bucket name.
+    """Runs bucket under local-docker -- NO default to a GCP bucket name.
 
     ``set_runs_bucket`` override wins (test seam); otherwise
     ``TRID3NT_RUNS_BUCKET`` must be set explicitly (on AWS the orchestrator
     provisions e.g. ``trid3nt-runs``). A silent fallback
     to the GCP-named default would make every local run upload to a bucket
-    that does not exist on AWS — fail loudly instead.
+    that does not exist on AWS -- fail loudly instead.
     """
     if _RUNS_BUCKET is not None:
         return _RUNS_BUCKET
@@ -748,20 +742,20 @@ class LocalSolverSpec:
 
     Fields:
         solver: lowercase solver identifier carried on the handle (and used in
-            the generic non-zero-exit error message — ``"sfincs exited with
+            the generic non-zero-exit error message -- ``"sfincs exited with
             non-zero code N"`` stays byte-identical for SFINCS).
-        workflow_name: the ``ExecutionHandle.workflow_name`` sentinel —
+        workflow_name: the ``ExecutionHandle.workflow_name`` sentinel --
             ``"local-docker"`` (container launch) or ``"local-exec"``
             (direct binary launch). ``wait_for_completion`` accepts both.
         args_key: the manifest key carrying the solver argv tail
-            (``"sfincs_args"`` / ``"mf6_args"`` — worker-entrypoint parity).
-        build_argv: ``(run_id, rundir, manifest_args) -> argv`` — the full
+            (``"sfincs_args"`` / ``"mf6_args"`` -- worker-entrypoint parity).
+        build_argv: ``(run_id, rundir, manifest_args) -> argv`` -- the full
             launch command. SFINCS builds the ``docker run --rm --name
             <run_id> ...`` line; MODFLOW returns ``[mf6, *args]``.
         stdout_name / stderr_name: the rundir artifact filenames (and the
-            runs-prefix upload keys) — ``sfincs.stdout`` / ``mf6.stdout`` etc.
+            runs-prefix upload keys) -- ``sfincs.stdout`` / ``mf6.stdout`` etc.
         stdout_uri_field / stderr_uri_field: the completion.json field names
-            (``sfincs_stdout_uri`` vs ``mf6_stdout_uri`` — exact entrypoint
+            (``sfincs_stdout_uri`` vs ``mf6_stdout_uri`` -- exact entrypoint
             schemas).
         exec_kind: ``"docker"`` → cancel via ``docker kill <run_id>``;
             ``"exec"`` → cancel via ``os.killpg`` on the detached group.
@@ -855,7 +849,7 @@ _LOCAL_RUNS: dict[str, _LocalRun] = {}
 
 
 def _expand_local_outputs(patterns: list[str], rundir: Path) -> list[Path]:
-    """Glob-expand the manifest ``outputs[]`` in the rundir — mirrors the
+    """Glob-expand the manifest ``outputs[]`` in the rundir -- mirrors the
     entrypoints' ``_expand_outputs`` (files only, de-duplicated, sorted).
     ``recursive=True`` so ``**`` patterns behave like the SFINCS/MODFLOW
     worker entrypoints (the MODFLOW manifest carries
@@ -886,7 +880,7 @@ def _write_local_completion(
     extra: dict[str, Any] | None = None,
     solver: str | None = None,
 ) -> None:
-    """Write ``s3://<runs_bucket>/<run_id>/completion.json`` — EXACT
+    """Write ``s3://<runs_bucket>/<run_id>/completion.json`` -- EXACT
     worker-entrypoint schema (the ``wait_for_completion`` terminal signal).
 
     the stdout/stderr field names + an ``extra`` field dict are
@@ -933,7 +927,7 @@ def _write_local_completion(
 def _supervise_local_run(run: _LocalRun) -> None:
     """Supervisor body (daemon thread): wait on the solver process, upload
     stdout/stderr + glob-expanded outputs to the S3 runs prefix, and ALWAYS
-    write completion.json — even on crash (status="error") or cancel
+    write completion.json -- even on crash (status="error") or cancel
     (status="cancelled"). Mirrors the entrypoints' best-effort discipline:
     no upload failure may prevent the terminal completion write."""
     status = "error"
@@ -955,7 +949,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
                 status, exit_code, error_msg, completion_extra = (
                     run.spec.classify_exit(run.rundir, exit_code)
                 )
-            except Exception as exc:  # noqa: BLE001 — classifier must not kill the write
+            except Exception as exc:  # noqa: BLE001 -- classifier must not kill the write
                 logger.exception(
                     "local classify_exit failed run_id=%s", run.run_id
                 )
@@ -974,14 +968,14 @@ def _supervise_local_run(run: _LocalRun) -> None:
                 if run.spec.exec_kind == "docker"
                 else "run cancelled (process-group kill via Invariant-8 cancel chain)"
             )
-    except Exception as exc:  # noqa: BLE001 — defensive: wait() itself failed
+    except Exception as exc:  # noqa: BLE001 -- defensive: wait() itself failed
         logger.exception("local-docker supervisor wait failed run_id=%s", run.run_id)
         status = "error"
         error_msg = f"{type(exc).__name__}: {exc}"
 
     try:
         s3 = _get_s3_client()
-    except Exception as exc:  # noqa: BLE001 — no client ⇒ nothing more we can do
+    except Exception as exc:  # noqa: BLE001 -- no client ⇒ nothing more we can do
         logger.error(
             "local-docker supervisor could not build S3 client run_id=%s: %s "
             "— completion.json NOT written (poller will time out)",
@@ -991,7 +985,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
         _LOCAL_RUNS.pop(run.run_id, None)
         return
 
-    # Always upload stdout/stderr (entrypoint parity — evidence even on error).
+    # Always upload stdout/stderr (entrypoint parity -- evidence even on error).
     try:
         if run.stdout_path.exists():
             stdout_uri = _upload_file_s3(
@@ -1007,7 +1001,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
                 run.runs_bucket,
                 f"{run.run_id}/{run.spec.stderr_name}",
             )
-    except Exception as exc:  # noqa: BLE001 — best-effort
+    except Exception as exc:  # noqa: BLE001 -- best-effort
         logger.warning(
             "local-docker stdout/stderr upload failed run_id=%s: %s", run.run_id, exc
         )
@@ -1017,7 +1011,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
             rel = path.relative_to(run.rundir).as_posix()
             uri = _upload_file_s3(s3, path, run.runs_bucket, f"{run.run_id}/{rel}")
             output_uris.append(uri)
-    except Exception as exc:  # noqa: BLE001 — reflect, but still write completion
+    except Exception as exc:  # noqa: BLE001 -- reflect, but still write completion
         logger.exception(
             "local-docker output upload failed run_id=%s: %s", run.run_id, exc
         )
@@ -1042,7 +1036,7 @@ def _supervise_local_run(run: _LocalRun) -> None:
             extra=completion_extra,
             solver=run.spec.solver,
         )
-    except Exception:  # noqa: BLE001 — terminal-signal write failed; log loudly
+    except Exception:  # noqa: BLE001 -- terminal-signal write failed; log loudly
         logger.exception(
             "local-docker completion.json write FAILED run_id=%s — "
             "wait_for_completion will hit its timeout",
@@ -1061,9 +1055,9 @@ def launch_local_solver(
 ) -> ExecutionHandle:
     """Generic local-backend launcher (envelope, spec seam).
 
-    Non-blocking — mirrors the Cloud Workflows submit semantics: stage the
+    Non-blocking -- mirrors the Cloud Workflows submit semantics: stage the
     manifest's inputs from the object store, launch the solver detached
-    (``spec.build_argv`` — a ``docker run`` line or a direct binary), hand the
+    (``spec.build_argv`` -- a ``docker run`` line or a direct binary), hand the
     supervisor to a daemon thread, return the ``ExecutionHandle`` immediately.
 
     Args:
@@ -1072,7 +1066,7 @@ def launch_local_solver(
             worker-contract manifest; input URIs inside resolve by scheme.
         run_id: optional pre-minted run id (the MODFLOW deck is staged under
             ``modflow/<run_id>/`` BEFORE submit, so its run_id must flow
-            through — GCP parity with the ``{run_id, manifest_uri}`` workflow
+            through -- GCP parity with the ``{run_id, manifest_uri}`` workflow
             argument). Minted fresh when ``None`` (the SFINCS path).
         compute_class: FR-CE-3 class, alias-mapped onto the schema literal.
     """
@@ -1161,7 +1155,7 @@ def launch_local_solver(
             ) from exc
 
     # --- Detached launch (docker: container name == run_id is the cancel
-    # seam; exec: the detached process group is — start_new_session=True
+    # seam; exec: the detached process group is -- start_new_session=True
     # makes pgid == pid for os.killpg) ---
     stdout_path = rundir / spec.stdout_name
     stderr_path = rundir / spec.stderr_name
@@ -1178,7 +1172,7 @@ def launch_local_solver(
 
     try:
         with stdout_path.open("wb") as out, stderr_path.open("wb") as err:
-            proc = subprocess.Popen(  # noqa: S603 — argv list, no shell
+            proc = subprocess.Popen(  # noqa: S603 -- argv list, no shell
                 cmd,
                 stdout=out,
                 stderr=err,
@@ -1186,7 +1180,7 @@ def launch_local_solver(
                 start_new_session=True,  # detach from the agent's signal group
                 env=proc_env,  # None = inherit parent env (default / SFINCS / MODFLOW)
             )
-    except Exception as exc:  # noqa: BLE001 — docker/solver binary missing, etc.
+    except Exception as exc:  # noqa: BLE001 -- docker/solver binary missing, etc.
         raise SolverDispatchError(
             f"local-{spec.exec_kind} launch failed ({' '.join(cmd[:6])} ...): {exc}"
         ) from exc
@@ -1306,7 +1300,7 @@ def register_local_solver_spec(solver: str, factory: Any) -> None:
 def _docker_kill(run_id: str) -> None:
     """Best-effort ``docker kill <run_id>`` (container name == run_id)."""
     try:
-        proc = subprocess.run(  # noqa: S603 — argv list, no shell
+        proc = subprocess.run(  # noqa: S603 -- argv list, no shell
             ["docker", "kill", run_id],
             capture_output=True,
             timeout=DOCKER_KILL_TIMEOUT_S,
@@ -1318,7 +1312,7 @@ def _docker_kill(run_id: str) -> None:
             proc.returncode,
             proc.stderr.decode(errors="replace").strip()[:200],
         )
-    except Exception as exc:  # noqa: BLE001 — cancel chain still propagates
+    except Exception as exc:  # noqa: BLE001 -- cancel chain still propagates
         logger.warning("docker kill %s raised %s", run_id, exc)
 
 
@@ -1332,13 +1326,13 @@ def _killpg_local_run(run: _LocalRun) -> None:
         logger.info(
             "killpg for run_id=%s: process group already gone", run.run_id
         )
-    except Exception as exc:  # noqa: BLE001 — cancel chain still propagates
+    except Exception as exc:  # noqa: BLE001 -- cancel chain still propagates
         logger.warning("killpg for run_id=%s raised %s", run.run_id, exc)
 
 
 def _kill_local_run(run_id: str) -> None:
     """Kind-aware best-effort kill: exec-kind runs get a
-    process-group SIGKILL; docker-kind (and unknown — e.g. after an agent
+    process-group SIGKILL; docker-kind (and unknown -- e.g. after an agent
     restart, where ``docker kill`` against the container name is the only
     remaining lever) get ``docker kill <run_id>``."""
     run = _LOCAL_RUNS.get(run_id)
@@ -1358,7 +1352,7 @@ def _kill_local_run(run_id: str) -> None:
 def _request_local_cancel(run_id: str) -> None:
     """Invariant-8 local cancel: flag the run cancelled, then kill the
     container / process group (kind-aware). The supervisor wakes
-    on process exit and writes the status="cancelled" completion.json —
+    on process exit and writes the status="cancelled" completion.json --
     terminal within ≤30 s."""
     run = _LOCAL_RUNS.get(run_id)
     if run is not None:
@@ -1370,7 +1364,7 @@ def _try_get_completion_s3(runs_bucket: str, run_id: str) -> dict[str, Any] | No
     """Poll ``s3://<runs_bucket>/<run_id>/completion.json`` once.
 
     Returns the parsed manifest, ``None`` when the object is not there yet
-    (or on a transient read error — the timeout catches persistent faults,
+    (or on a transient read error -- the timeout catches persistent faults,
     mirroring the Workflows-poll resilience). Malformed JSON raises
     ``SolverDispatchError`` (S3 PUTs are atomic, so a parse failure is real
     corruption, not a partial write).
@@ -1415,7 +1409,7 @@ def _build_local_run_result(
     """Map a local-docker completion manifest onto a ``RunResult``.
 
     ``status="ok"`` → ``complete`` with ``output_uri = s3://<runs_bucket>/
-    <run_id>/`` (the runs PREFIX, kickoff-pinned — ``postprocess_flood``
+    <run_id>/`` (the runs PREFIX, kickoff-pinned -- ``postprocess_flood``
     resolves ``sfincs_map.nc`` inside it); ``"cancelled"`` → ``cancelled``;
     anything else → ``failed`` with the manifest's structured error.
     """
@@ -1556,7 +1550,7 @@ _RUN_SOLVER_METADATA = AtomicToolMetadata(
     _RUN_SOLVER_METADATA,
     # Annotations: readOnlyHint=False (submits a solver run that ultimately
     # writes output artifacts to the runs bucket), openWorldHint=False
-    # (local container / direct binary / AWS Batch — no public external API),
+    # (local container / direct binary / AWS Batch -- no public external API),
     # destructiveHint=False (writes go to a new runs/ prefix; no existing
     # state overwritten), idempotentHint=False (each call creates a new
     # run with a distinct run_id).
@@ -1578,11 +1572,11 @@ def run_solver(
     Use this when: the agent has a staged model (e.g. from
     ``build_sfincs_model``) and needs to actually run the solver. Returns an
     ``ExecutionHandle`` whose ``workflow_name`` pins the backend and which is
-    the Invariant-8 cancellation seam — feed it to ``wait_for_completion`` to
+    the Invariant-8 cancellation seam -- feed it to ``wait_for_completion`` to
     poll progress and obtain the ``RunResult``.
 
     Do NOT use this for: cancelling a running execution (use the WS
-    ``cancel`` envelope — the cancel chain reaches the run automatically via
+    ``cancel`` envelope -- the cancel chain reaches the run automatically via
     ``wait_for_completion``'s cancel handler); polling a running execution
     (use ``wait_for_completion``); inspecting a completed run's outputs
     (those land in ``RunResult.output_uri`` per FR-CE-4).
@@ -1596,13 +1590,13 @@ def run_solver(
             input URIs inside are resolved by scheme. The
             ``model_flood_scenario`` workflow composes this from the atomic
             tool substrate.
-        compute_class: FR-CE-3 compute class — selects the sizing bucket
+        compute_class: FR-CE-3 compute class -- selects the sizing bucket
             (small/standard/large/xlarge/gpu). Default ``"medium"``.
 
     Returns:
         ``ExecutionHandle{handle_id, run_id, solver, compute_class,
         workflows_execution_id, workflow_name, workflow_location,
-        submitted_at}`` — the Invariant-8 cancellation contract. The
+        submitted_at}`` -- the Invariant-8 cancellation contract. The
         ``workflow_name`` pins the backend (``local-docker`` / ``local-exec``
         / ``aws-batch``) so ``wait_for_completion`` routes correctly.
 
@@ -1667,7 +1661,7 @@ def _progress_percent(handle_submitted_at: datetime, now: datetime) -> int:
     ``PROGRESS_CLAMP_MAX`` while the Workflow is still running.
 
     Invariant 1 (Determinism boundary): this is wall-clock arithmetic, not
-    an LLM estimate. The ramp is intentionally simple and conservative —
+    an LLM estimate. The ramp is intentionally simple and conservative --
     a real per-step progress signal would require teaching the SFINCS
     entrypoint to write running progress to ``progress.json`` between
     timesteps, which is a follow-up job.
@@ -1685,14 +1679,14 @@ async def _emit_progress(progress_percent: int) -> None:
         return
     try:
         await binding.emitter.update_progress(binding.step_id, progress_percent)
-    except Exception as exc:  # noqa: BLE001 — emission must never fail the poll
+    except Exception as exc:  # noqa: BLE001 -- emission must never fail the poll
         logger.warning("emitter.update_progress raised: %s", exc)
 
 
 @register_tool(
     _WAIT_FOR_COMPLETION_METADATA,
     # Annotations: readOnlyHint=False (emits pipeline-state progress envelopes
-    # as a side effect on every poll tick — stateful even though it does not
+    # as a side effect on every poll tick -- stateful even though it does not
     # write to the object store directly), openWorldHint=False (polls the S3
     # completion.json + AWS Batch job status; no public external API),
     # destructiveHint=False (reads completion.json from the runs bucket; does
@@ -1716,7 +1710,7 @@ async def wait_for_completion(
     Use this when: the agent has an ``ExecutionHandle`` from ``run_solver``
     and needs the ``RunResult`` (and the ``output_uri``) before continuing
     the pipeline. The tool blocks while the solver runs but is cancellable
-    via the WS ``cancel`` chain (Invariant 8 — see module docstring).
+    via the WS ``cancel`` chain (Invariant 8 -- see module docstring).
 
     Do NOT use this for: starting a new run (use ``run_solver``); short,
     synchronous tool calls (atomic tools are sub-second; this is the
@@ -1726,9 +1720,9 @@ async def wait_for_completion(
         handle: the ``ExecutionHandle`` returned by ``run_solver``. The
             ``workflow_name`` field pins the backend (``local-docker`` /
             ``local-exec`` / ``aws-batch``) so the poll routes correctly.
-        poll_interval_s: seconds between completion polls. Default 10s —
+        poll_interval_s: seconds between completion polls. Default 10s --
             matches NFR-P-4 <=15-min budget granularity (>=9 polls per run).
-        timeout_s: hard ceiling. Defaults to 1800 s (30 min — gives 2×
+        timeout_s: hard ceiling. Defaults to 1800 s (30 min -- gives 2×
             headroom over NFR-P-4). On timeout the tool returns
             ``RunResult{status="failed", error_code="SOLVER_TIMEOUT"}``
             and best-effort cancels the run.
@@ -1736,7 +1730,7 @@ async def wait_for_completion(
     Returns:
         ``RunResult{run_id, handle_id, status, output_uri?, started_at,
         completed_at, duration_seconds, error_code?, error_message?,
-        cancellation_reason?}`` — terminal outcome. ``status="complete"``
+        cancellation_reason?}`` -- terminal outcome. ``status="complete"``
         carries the ``output_uri`` parsed from ``completion.json``;
         ``"failed"`` carries the error code/message; ``"cancelled"``
         carries a ``cancellation_reason``.
@@ -1759,7 +1753,7 @@ async def wait_for_completion(
         )
 
     # --- backend seam: a handle pins its backend (the handle's
-    # workflow_name, not the env, decides — env churn between submit and wait
+    # workflow_name, not the env, decides -- env churn between submit and wait
     # cannot mis-route the poll). ``local-docker`` / ``local-exec`` (
     # MODFLOW direct-binary) share the S3 completion poll; ``aws-batch``
     # polls the SAME S3 completion.json + consults

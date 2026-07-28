@@ -23,16 +23,15 @@ def _build_credential_request_payload(
 ) -> "CredentialRequestEnvelopePayload | None":
     """Build a validated ``CredentialRequestEnvelopePayload``.
 
-    Every registered provider's ``provider_id`` is now a member of the closed
-    ``ProviderID`` Literal (the schema amendment landed with this job), so the
-    payload is scoped to the REAL provider — the same scope the resulting
-    ``secret-add`` writes under and the same scope ``_resolve_active_secret_ref``
-    re-reads on retry, so the round-trip closes (no more
-    ``"openweathermap"`` fallback mis-scoping the saved key).
+    Every registered provider's ``provider_id`` is a member of the closed
+    ``ProviderID`` Literal, so the payload is scoped to the REAL provider --
+    the same scope the resulting ``secret-add`` writes under and the same
+    scope ``_resolve_active_secret_ref`` re-reads on retry, so the
+    round-trip closes (no fallback scope ever mis-scopes the saved key).
 
     If a ``provider.provider_id`` is somehow NOT a valid Literal member (an
     unregistered provider slipped into the registry), we DO NOT fabricate a
-    fallback scope — emitting under the wrong provider would save the key where
+    fallback scope -- emitting under the wrong provider would save the key where
     the retry can't re-resolve it. We log and return ``None`` so the caller
     abandons the prompt and lets the original typed error surface (the agent
     narrates honestly that it cannot request a key for an unknown provider).

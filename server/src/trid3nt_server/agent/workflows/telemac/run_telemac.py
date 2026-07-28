@@ -13,18 +13,13 @@ Structural clone of ``run_geoclaw.geoclaw_local_spec`` /
 registration shape), with two DELIBERATE differences that make it correct on the
 LOCAL seam:
 
-  1. **VOLUME-MOUNT build_argv (SFINCS-canonical), not GeoClaw's
-     ``--network host`` self-S3-I/O.** The tested local-docker envelope
-     (``tools.simulation.solver.launch_local_solver`` + ``_supervise_local_run``, proven in
-     ``test_solver_local_docker.py``) stages the manifest into
-     ``<rundir>/manifest.json``, bind-mounts the rundir at ``/data``, and the
-     AGENT-SIDE supervisor uploads the mounted outputs + writes
-     ``completion.json``. GeoClaw's spec instead mounts NOTHING and has the
-     container do its own MinIO I/O; on the local seam that leaves the
-     supervisor's ``output_uris`` empty (it globs an unmounted rundir). So the
-     TELEMAC worker writes its mesh/result ``.slf`` into the mounted ``/data``
-     and the supervisor uploads them -- the .slf lands in the runs bucket with a
-     real ``output_uris`` entry, and the image needs NO boto3 (leaner).
+  1. **VOLUME-MOUNT build_argv (SFINCS-canonical), unlike GeoClaw's
+     ``--network host`` self-S3-I/O.** The local-docker envelope
+     (``tools.simulation.solver.launch_local_solver`` + ``_supervise_local_run``)
+     bind-mounts the rundir at ``/data`` and the AGENT-SIDE supervisor uploads
+     the mounted outputs + writes ``completion.json``, so the TELEMAC worker
+     writes its mesh/result ``.slf`` into ``/data`` and needs NO boto3
+     (leaner; ``output_uris`` is populated from the mount, not self-uploaded).
 
   2. **A ``classify_exit`` hook (MODFLOW-analogue) that folds the dye metrics
      from ``telemac_metrics.json`` into the run's completion.json.** The worker

@@ -1,11 +1,9 @@
 """AWS isolation hardening for the local-subprocess Python sandbox.
 
-On the GCP stack the real containment boundary for ``code_exec_request`` was the
-Cloud Run Job's VPC connector + egress-deny firewall + read-only runtime SA
-(``infra/python-sandbox.tf``). On the single-EC2 AWS stack there is NO Cloud Run,
-NO VPC sandbox boundary, and the box's instance-role credentials are reachable by
-ANY process via the IMDS endpoint (``169.254.169.254``). Running the existing
-local-subprocess executor naively on the agent box would let untrusted user code:
+The single-EC2 AWS stack has no VPC sandbox boundary, and the box's
+instance-role credentials are reachable by ANY process via the IMDS endpoint
+(``169.254.169.254``). Running the local-subprocess executor naively on the
+agent box would let untrusted user code:
 
   * read ``AWS_*`` / ``AWS_PROFILE`` / ``AWS_CONTAINER_CREDENTIALS_*`` env vars
     that the runner copied verbatim into the child (``dict(os.environ)``),
@@ -14,31 +12,30 @@ local-subprocess executor naively on the agent box would let untrusted user code
   * read the editable install / ``~/.aws`` / systemd ``EnvironmentFile`` secrets,
   * fork-bomb / OOM the shared box (the only cap today is wallclock).
 
-This module is the faithful, cheap AWS analogue of that boundary, built in two
-kernel-enforced + always-on layers (recon Option 1 + Option 2):
+This module closes that gap in two kernel-enforced, always-on layers:
 
-LAYER A — always-on, no host dependency (recon Option 1, the immediate stopgap)
+LAYER A -- always-on, no host dependency
 -------------------------------------------------------------------------------
-* :func:`build_child_env` — an ALLOWLISTED minimal child env. Every ``AWS_*`` /
+* :func:`build_child_env` -- an ALLOWLISTED minimal child env. Every ``AWS_*`` /
   ``GOOGLE_*`` / credential / token var is DROPPED (never the wholesale
   ``dict(os.environ)`` copy), ``AWS_EC2_METADATA_DISABLED=true`` is set so boto3
   inside the child never even attempts IMDS, and proxy vars are stripped.
-* :func:`preexec_resource_limits` — a ``preexec_fn`` that (a) ``os.setsid`` so the
+* :func:`preexec_resource_limits` -- a ``preexec_fn`` that (a) ``os.setsid`` so the
   child is a process-group LEADER (the runner's hard-kill can ``killpg`` the whole
   group, defeating double-fork survivors) and (b) ``setrlimit`` caps on address
-  space, CPU seconds, file size, and process/thread count (kills fork-bombs +
-  unbounded allocations the old wallclock-only path could not).
+  space, CPU seconds, file size, and process/thread count (kills fork-bombs and
+  unbounded allocations that a wallclock-only cap cannot).
 
-LAYER B — kernel-enforced jail (recon Option 2, the REAL boundary)
+LAYER B -- kernel-enforced jail
 ------------------------------------------------------------------
-* :func:`wrap_with_jail` — when a ``bubblewrap`` (``bwrap``) binary is available
+* :func:`wrap_with_jail` -- when a ``bubblewrap`` (``bwrap``) binary is available
   and enabled, wraps the child command in a namespace jail with:
-    - ``--unshare-net`` — a fresh NETWORK namespace with NO interfaces, so IMDS
+    - ``--unshare-net`` -- a fresh NETWORK namespace with NO interfaces, so IMDS
       (169.254.169.254) and ALL egress are unreachable by ANY method (curl,
-      ctypes, a C-extension socket) — kernel-enforced, not the bypassable Python
+      ctypes, a C-extension socket) -- kernel-enforced, not the bypassable Python
       monkeypatch the executor's in-process guard relies on,
     - ``--unshare-pid``/``--unshare-ipc``/``--unshare-uts``/``--unshare-cgroup``
-      — process/IPC isolation,
+      -- process/IPC isolation,
     - read-only binds of only the runtime dirs (interpreter + libs + the agent
       venv + the executor file), a private writable ``tmpfs`` for ``/tmp`` and the
       cwd, and ``--die-with-parent`` so the jail dies if the runner is killed.
@@ -51,13 +48,13 @@ Layer B is added when ``bwrap`` is enabled+present. Tests assert Layer A on any
 box; Layer B is exercised where ``bwrap`` exists (this AMI) and skipped otherwise.
 
 Env seams (read at call time so a deploy / test injection takes effect):
-  * ``TRID3NT_SANDBOX_HARDENED`` — default ON. Set ``0`` ONLY for a controlled
+  * ``TRID3NT_SANDBOX_HARDENED`` -- default ON. Set ``0`` ONLY for a controlled
     local debug; production AWS leaves it unset (== on).
-  * ``TRID3NT_SANDBOX_BWRAP`` — ``auto`` (default; jail iff ``bwrap`` present),
+  * ``TRID3NT_SANDBOX_BWRAP`` -- ``auto`` (default; jail iff ``bwrap`` present),
     ``1`` (require jail; error if absent), ``0`` (Layer A only).
-  * ``TRID3NT_SANDBOX_BWRAP_BIN`` — override the ``bwrap`` binary path.
+  * ``TRID3NT_SANDBOX_BWRAP_BIN`` -- override the ``bwrap`` binary path.
   * ``TRID3NT_SANDBOX_RLIMIT_AS_MB`` / ``_CPU_SECONDS`` / ``_NPROC`` /
-    ``_FSIZE_MB`` — resource caps (sensible defaults below).
+    ``_FSIZE_MB`` -- resource caps (sensible defaults below).
 """
 
 from __future__ import annotations
@@ -77,7 +74,7 @@ LOG = logging.getLogger("trid3nt.agent.sandbox_hardening")
 #: The ONLY host env keys copied verbatim into the sandbox child. Everything else
 #: (notably every credential / cloud / token var) is dropped. Kept deliberately
 #: tiny: the interpreter + locale + the sandbox's own knobs. NB: ``PYTHONPATH`` is
-#: intentionally EXCLUDED — the executor is invoked by absolute file path and must
+#: intentionally EXCLUDED -- the executor is invoked by absolute file path and must
 #: not inherit an import path that could shadow stdlib or leak the agent package.
 _ENV_ALLOW_KEYS: tuple[str, ...] = (
     "PATH",
@@ -92,7 +89,7 @@ _ENV_ALLOW_KEYS: tuple[str, ...] = (
     "GDAL_DATA",  # GDAL support files (needed for rasterio)
 )
 
-#: Env-key PREFIXES that are ALWAYS dropped even if (defensively) allowlisted —
+#: Env-key PREFIXES that are ALWAYS dropped even if (defensively) allowlisted --
 #: the credential/cloud surface untrusted code must never see. Matched
 #: case-insensitively against the FULL key.
 _ENV_DENY_PREFIXES: tuple[str, ...] = (
@@ -160,7 +157,7 @@ _ENV_DENY_SUBSTRINGS: tuple[str, ...] = (
 
 #: Intentional ``AWS_*`` CONTROL knobs the runner SETS in the child to HARDEN it
 #: (disable IMDS, zero its timeout/retries). These match the ``AWS_`` deny prefix
-#: but carry no credential material — they exist to block credential discovery,
+#: but carry no credential material -- they exist to block credential discovery,
 #: so they are explicitly exempt from the deny rule (and from the leak assertion).
 _ENV_INTENTIONAL_AWS_KEYS: frozenset[str] = frozenset(
     {
@@ -173,7 +170,7 @@ _ENV_INTENTIONAL_AWS_KEYS: frozenset[str] = frozenset(
 
 def _key_is_denied(key: str) -> bool:
     up = key.upper()
-    # Intentional IMDS-disable knobs are NOT credentials — allow them through.
+    # Intentional IMDS-disable knobs are NOT credentials -- allow them through.
     if up in _ENV_INTENTIONAL_AWS_KEYS:
         return False
     if key in _ENV_DENY_EXACT or up in {k.upper() for k in _ENV_DENY_EXACT}:
@@ -191,7 +188,7 @@ def hardening_enabled() -> bool:
 
     Default ON: the AWS box leaves it unset and gets the hardened child. A
     developer may set ``0`` for a controlled local debug (the unit tests assert
-    the scrub is on by default — they do NOT depend on this being toggled)."""
+    the scrub is on by default -- they do NOT depend on this being toggled)."""
     raw = os.environ.get("TRID3NT_SANDBOX_HARDENED")
     if raw is None:
         return True
@@ -201,16 +198,15 @@ def hardening_enabled() -> bool:
 def build_child_env(base_env: dict[str, str], *, cap_seconds: int) -> dict[str, str]:
     """Build the ALLOWLISTED, credential-scrubbed env for the sandbox child.
 
-    Replaces the old ``dict(os.environ)`` wholesale copy (the worst exfil hole).
     Only :data:`_ENV_ALLOW_KEYS` survive from ``base_env``, and any of those that
     nonetheless match a deny rule are dropped (defense-in-depth). We then add the
     sandbox's own knobs and, critically, ``AWS_EC2_METADATA_DISABLED=true`` so a
     boto3 inside the child never attempts the IMDS credential mint.
 
     Always-passed sandbox knobs the executor + guard read:
-      * ``TRID3NT_SANDBOX_TIMEOUT`` — pinned to the runner's cap.
-      * ``MPLBACKEND=Agg`` — headless matplotlib.
-      * ``TRID3NT_SANDBOX_NET_ALLOW=""`` — empty allowlist so the in-process guard
+      * ``TRID3NT_SANDBOX_TIMEOUT`` -- pinned to the runner's cap.
+      * ``MPLBACKEND=Agg`` -- headless matplotlib.
+      * ``TRID3NT_SANDBOX_NET_ALLOW=""`` -- empty allowlist so the in-process guard
         (defense-in-depth on top of the netns) blocks ALL non-loopback hosts;
         IMDS/egress is denied at the kernel by the jail, this just makes the
         Python-level guard match the intent.
@@ -282,7 +278,7 @@ def rlimit_spec() -> dict[str, int]:
 
     Defaults sized for an interactive geo-analytical snippet on a shared box:
       * address space 2 GiB (matches the GCP Job's 2 GiB mem cap),
-      * 120 CPU-seconds (a hard CPU bound independent of the wallclock alarm —
+      * 120 CPU-seconds (a hard CPU bound independent of the wallclock alarm --
         kills a busy spin that the SIGALRM might miss in a C extension),
       * 256 processes/threads (kills a fork-bomb; generous enough for numpy/BLAS
         thread pools),
@@ -296,16 +292,16 @@ def rlimit_spec() -> dict[str, int]:
     }
 
 
-def preexec_resource_limits(*, jailed: bool = False):  # noqa: ANN201 — callable|None
+def preexec_resource_limits(*, jailed: bool = False):  # noqa: ANN201 -- callable|None
     """Return a ``preexec_fn`` that sets the process group + resource rlimits.
 
     Runs in the FORKED child between ``fork`` and ``exec`` (POSIX only). It:
-      1. ``os.setsid()`` — make the child a new session + process-group leader so
+      1. ``os.setsid()`` -- make the child a new session + process-group leader so
          the runner's outer hard-kill can ``os.killpg`` the WHOLE group (a
          double-forked grandchild can no longer outlive the wallclock kill). This
          is the always-on backstop for the recon's "outer hard-kill is not
          process-group-wide" hole.
-      2. ``setrlimit`` AS / CPU / FSIZE — hard caps with no soft headroom for the
+      2. ``setrlimit`` AS / CPU / FSIZE -- hard caps with no soft headroom for the
          categories the wallclock-only path left unbounded (address space, CPU
          seconds, single-file write size). These are inherited cleanly by bwrap's
          children inside the jail too.
@@ -317,7 +313,7 @@ def preexec_resource_limits(*, jailed: bool = False):  # noqa: ANN201 — callab
     ... current") and (b) blocks bwrap from forking its own namespace helper. The
     correct fork-bomb containment is therefore the JAIL'S PID namespace
     (``--unshare-pid`` + ``--die-with-parent`` reap the whole tree) when jailed,
-    and the process-group ``SIGKILL`` + wallclock cap on the Layer-A-only path —
+    and the process-group ``SIGKILL`` + wallclock cap on the Layer-A-only path --
     NOT an NPROC rlimit. ``jailed`` is accepted for symmetry but no longer changes
     the rlimit set.
 
@@ -328,8 +324,8 @@ def preexec_resource_limits(*, jailed: bool = False):  # noqa: ANN201 — callab
     if sys.platform == "win32":
         return None
     try:
-        import resource  # noqa: PLC0415 — POSIX-only
-    except ImportError:  # pragma: no cover — non-POSIX
+        import resource  # noqa: PLC0415 -- POSIX-only
+    except ImportError:  # pragma: no cover -- non-POSIX
         return None
 
     spec = rlimit_spec()
@@ -339,7 +335,7 @@ def preexec_resource_limits(*, jailed: bool = False):  # noqa: ANN201 — callab
         ("RLIMIT_FSIZE", spec["fsize_bytes"]),
     ]
 
-    def _apply() -> None:  # pragma: no cover — runs in the forked child
+    def _apply() -> None:  # pragma: no cover -- runs in the forked child
         # New session/process group: killpg from the parent reaches descendants.
         try:
             os.setsid()
@@ -360,7 +356,7 @@ def preexec_resource_limits(*, jailed: bool = False):  # noqa: ANN201 — callab
 
 
 # --------------------------------------------------------------------------- #
-# Bubblewrap namespace jail (Layer B — the real, kernel-enforced boundary)
+# Bubblewrap namespace jail (Layer B -- the real, kernel-enforced boundary)
 # --------------------------------------------------------------------------- #
 
 
@@ -369,7 +365,7 @@ def _bwrap_mode() -> str:
 
     Invariant 5: on the AWS deploy (``TRID3NT_STORAGE_BACKEND`` in
     {s3, aws}) the host carries the agent's instance-role creds + reachable IMDS,
-    so the kernel netns jail is the ONLY real boundary — the default there is
+    so the kernel netns jail is the ONLY real boundary -- the default there is
     ``1`` (REQUIRE, fail-closed): if ``bwrap`` is missing the sandbox refuses to
     run rather than silently degrading to the bypassable Layer-A-only path. An
     operator can still force ``TRID3NT_SANDBOX_BWRAP=0`` to opt out explicitly.
@@ -442,7 +438,7 @@ def _editable_source_roots() -> list[str]:
     ``/opt/grace2`` on the box) and so must be bound read-only into the jail for
     the import to succeed. We resolve them from the already-imported packages'
     ``__file__`` (the dir two levels up from ``<pkg>/__init__.py``), which is
-    exactly what the ``.pth`` lists — robust to repo vs ``/opt/grace2`` layout."""
+    exactly what the ``.pth`` lists -- robust to repo vs ``/opt/grace2`` layout."""
     roots: list[str] = []
     for mod_name in ("trid3nt_contracts", "trid3nt_server"):
         try:
@@ -481,15 +477,15 @@ def wrap_with_jail(
     """Build the bubblewrap-jailed command, or ``None`` when the jail is off/absent.
 
     The jail is the AWS analogue of the GCP VPC egress-deny boundary:
-      * ``--unshare-net`` — fresh netns with NO interfaces => IMDS + all egress
+      * ``--unshare-net`` -- fresh netns with NO interfaces => IMDS + all egress
         unreachable by ANY method (kernel-enforced, defeats the curl/ctypes
         bypass the Python in-process guard cannot),
-      * ``--unshare-pid/ipc/uts/cgroup`` — process/IPC/host isolation,
+      * ``--unshare-pid/ipc/uts/cgroup`` -- process/IPC/host isolation,
       * read-only binds of ONLY the base interpreter + the agent venv +
         ``/usr``//``/lib`` + the executor + the payload file (the child needs to
         READ these and nothing else),
       * a private ``tmpfs`` for ``/tmp`` and the writable ``workdir`` (so the child
-        can write scratch + matplotlib's cache, but sees NONE of the host fs —
+        can write scratch + matplotlib's cache, but sees NONE of the host fs --
         no ``~/.aws``, no ``/opt/grace2`` secrets, no other Cases' payloads),
       * ``--die-with-parent`` so the jail dies if the runner is killed,
       * ``--new-session`` so the child cannot reuse the parent's controlling tty,
@@ -544,7 +540,7 @@ def wrap_with_jail(
             ro_paths.append(val)
 
     # Editable-install source roots (trid3nt_contracts for the executor's chart
-    # shaping, trid3nt_server for the executor dir) — the .pth in site-packages
+    # shaping, trid3nt_server for the executor dir) -- the .pth in site-packages
     # adds these to sys.path, so they must be readable inside the jail.
     editable_roots = _editable_source_roots()
     ro_paths += editable_roots
@@ -553,7 +549,7 @@ def wrap_with_jail(
     # the resolved base interpreter still imports the agent's deps + the TRID3NT
     # packages inside the read-only jail. We put the editable roots DIRECTLY on
     # PYTHONPATH (rather than relying on the venv's .pth files, which are only
-    # processed for site dirs the `site` module discovers — NOT for PYTHONPATH
+    # processed for site dirs the `site` module discovers -- NOT for PYTHONPATH
     # entries) so the import is robust regardless of .pth processing.
     jail_env = dict(child_env)
     pythonpath_parts: list[str] = []

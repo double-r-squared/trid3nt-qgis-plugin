@@ -875,10 +875,9 @@ def _warp_band_to_physical(
 ) -> Any:
     """Read one CMI band, CF-scale + reproject to the EPSG:4326 grid -> physical units.
 
-    The SHARED single-band read/reproject core (extracted from the old inner
-    ``_warp_band`` closure so the Fire-Temp composite AND the C13 fire-detection
-    longwave band reuse the SAME netCDF read + warp + CF-unscale code -- no
-    duplication).
+    The SHARED single-band read/reproject core: the Fire-Temp composite AND
+    the C13 fire-detection longwave band reuse the SAME netCDF read + warp +
+    CF-unscale code (no duplication).
 
       1. Read CF ``scale_factor`` / ``add_offset`` / ``_FillValue`` + the per-band
          ``valid_range`` (netCDF4).
@@ -1553,11 +1552,9 @@ def fetch_goes_archive_animation(
     product_slug = _PRODUCT_ID_SLUGS[band]
     # The hotspots / baked products are threshold-dependent, so the detection
     # thresholds enter the cache key (a different threshold yields a different
-    # COG). Fire-Temp ignores them but they stay constant there, so its key is
-    # unaffected versus the pre-change params (the gamma=1 entry kept the old key
-    # stable; band/thresholds are NEW additive entries -- a fresh cache namespace
-    # for the new products, no collision with the old Fire-Temp objects because
-    # 'product' now carries the band).
+    # COG). Fire-Temp ignores the thresholds, so its cache key is unaffected;
+    # 'product' carries the band, so band/thresholds are additive cache-key
+    # entries with no collision across products.
 
     # 2. Per-frame fetch (one read_through each -> independent cache key).
     layers: list[LayerURI] = []

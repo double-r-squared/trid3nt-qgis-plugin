@@ -13,7 +13,7 @@ so the Phase-1 flood-animation scrubber path consumes it UNCHANGED:
     the three narration scalars (``max_depth_m`` / ``flooded_area_km2`` /
     ``max_inundation_m``) + the echoed scenario.
   - ``layers[1:]`` = up to ``MAX_FLOOD_FRAMES`` per-frame depth COGs, role
-    ``"context"``, names ``"Flood depth step N"`` — the EXACT web
+    ``"context"``, names ``"Flood depth step N"`` -- the EXACT web
     ``parseFrameToken`` / ``detectSequentialGroups`` token so the LayerPanel
     collapses them into one bottom-center-scrubber temporal group. Each frame
     lands at a DISTINCT runs-bucket key (distinct TiTiler url) -> no dedup
@@ -32,11 +32,11 @@ Reuse (do NOT reinvent): the even-subsample frame selector
 wet threshold, the ``continuous_flood_depth`` style preset, and the
 ``RUNS_BUCKET_DEFAULT`` from ``postprocess_flood``. The honesty floor
 (Invariant 1 / FR-AS-7): the depth scalars are computed with plain arithmetic
-from the depth grid — no LLM anywhere; the agent narrates the typed fields, never
+from the depth grid -- no LLM anywhere; the agent narrates the typed fields, never
 invents them.
 
 Tier separation (Invariant 5): the COG lands in the runs bucket (scheme-aware
-via ``cache.storage_scheme()``); the agent does not re-render — ``publish_layer``
+via ``cache.storage_scheme()``); the agent does not re-render -- ``publish_layer``
 / TiTiler serves the tiles from the URI on the envelope.
 """
 
@@ -111,12 +111,12 @@ class PostprocessGeoClawError(RuntimeError):
     ``error_code`` matches the open-set A.6 surface so the agent emitter renders
     a typed error frame. Codes used here:
 
-    - ``GEOCLAW_OUTPUT_READ_FAILED`` — could not read a ``fort.q`` frame.
-    - ``GEOCLAW_OUTPUT_EMPTY`` — no ``fort.q`` frames found / no wet cells.
-    - ``GEOCLAW_DEPENDENCY_MISSING`` — numpy / rasterio not importable.
-    - ``GEOCLAW_COG_WRITE_FAILED`` — rasterio could not write the depth COG.
-    - ``GEOCLAW_CRS_TAG_MISMATCH`` — the COG CRS tag did not round-trip.
-    - ``GEOCLAW_COG_UPLOAD_FAILED`` — the runs-bucket upload of the COG failed.
+    - ``GEOCLAW_OUTPUT_READ_FAILED`` -- could not read a ``fort.q`` frame.
+    - ``GEOCLAW_OUTPUT_EMPTY`` -- no ``fort.q`` frames found / no wet cells.
+    - ``GEOCLAW_DEPENDENCY_MISSING`` -- numpy / rasterio not importable.
+    - ``GEOCLAW_COG_WRITE_FAILED`` -- rasterio could not write the depth COG.
+    - ``GEOCLAW_CRS_TAG_MISMATCH`` -- the COG CRS tag did not round-trip.
+    - ``GEOCLAW_COG_UPLOAD_FAILED`` -- the runs-bucket upload of the COG failed.
     """
 
     error_code: str = "POSTPROCESS_GEOCLAW_FAILED"
@@ -134,7 +134,7 @@ class PostprocessGeoClawError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
-# fort.q AMR ASCII frame parsing (pure numpy — unit-testable on a synthetic frame).
+# fort.q AMR ASCII frame parsing (pure numpy -- unit-testable on a synthetic frame).
 # --------------------------------------------------------------------------- #
 #: A single AMR patch within a fort.q frame.
 class _Patch:
@@ -279,12 +279,12 @@ def compute_geoclaw_grid_shape(
     aspect ratio is honest.
 
     Bounded on both ends:
-      - FLOOR ``min_px_per_side`` — never coarser than the legacy 256; a tiny AOI
+      - FLOOR ``min_px_per_side`` -- never coarser than the legacy 256; a tiny AOI
         gets a FINER-than-target grid, never a coarser one.
       - CAP ``max_px_per_side`` per side AND ``max_total_cells`` overall
         (aspect-preserving downscale) so a huge AOI can't produce a monster COG.
 
-    Pure arithmetic — unit-testable.
+    Pure arithmetic -- unit-testable.
     """
     import math
 
@@ -324,21 +324,20 @@ def rasterize_frame_to_grid(
     """Rasterize a frame's AMR patches onto a regular AOI grid (finest wins).
 
     Builds an ``(H, W)`` depth grid over ``bbox`` (EPSG:4326), row 0 = NORTH (the
-    standard COG orientation). Each AMR patch cell PAINTS its full footprint —
+    standard COG orientation). Each AMR patch cell PAINTS its full footprint --
     every output cell whose centre falls inside that patch cell's ``dx``/``dy``
     extent takes its depth (area/coverage fill), NOT a single nearest-cell
-    scatter. That is what keeps the field GAP-FREE when the output grid is FINER
-    than a coarse AMR patch: at the old resolution a coarse-patch cell mapped to
-    one output cell and left its neighbours NaN (a speckled, holey grid); the
-    coverage fill spans every output cell the patch cell covers instead.
+    scatter. That keeps the field GAP-FREE when the output grid is FINER than a
+    coarse AMR patch: the coverage fill spans every output cell the patch cell
+    covers, instead of leaving neighbouring cells NaN.
 
     Patches are sorted by AMR level ASCENDING so a finer (higher-level) patch is
-    painted LAST and OVERWRITES a coarser one where they overlap (the existing
-    finest-wins semantics). Only wet (>= ``NODATA_DEPTH_M``) patch cells write, so
-    a finer patch's dry cells never erase a coarser patch's wet value (unchanged
-    from the scatter version). Dry / sub-threshold / uncovered cells stay NaN.
-    Fully vectorized per patch (inverse sampling: each output cell -> the patch
-    cell that contains its centre) — unit-testable on a synthetic patch list.
+    painted LAST and OVERWRITES a coarser one where they overlap. Only wet
+    (>= ``NODATA_DEPTH_M``) patch cells write, so a finer patch's dry cells never
+    erase a coarser patch's wet value. Dry / sub-threshold / uncovered cells stay
+    NaN. Fully vectorized per patch (inverse sampling: each output cell -> the
+    patch cell that contains its centre) -- unit-testable on a synthetic patch
+    list.
     """
     import numpy as np
 
@@ -402,7 +401,7 @@ def compute_geoclaw_depth_metrics(
       - ``flooded_area_km2``  (#wet cells) * mean-cell-area (km^2). The cell area
         is computed from the AOI extent + grid shape with a cos(lat) correction.
       - ``max_inundation_m``  max overland depth on DRY-LAND cells (cells whose
-        topography > 0, i.e. above the still-water datum) — the run-up signal.
+        topography > 0, i.e. above the still-water datum) -- the run-up signal.
         When ``topo_grid`` is None we fall back to ``max_depth_m`` (honest: we
         cannot separate ocean depth from land run-up without topo).
 
@@ -448,7 +447,7 @@ def compute_geoclaw_depth_metrics(
                 max_inundation = (
                     float(np.nanmax(land_wet)) if land_wet.size else 0.0
                 )
-        except Exception:  # noqa: BLE001 — metric is best-effort
+        except Exception:  # noqa: BLE001 -- metric is best-effort
             pass
 
     return {
@@ -661,7 +660,7 @@ def _safe_unlink(p: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Upload (scheme-aware) — mirrors postprocess_swmm._upload_cog_to_runs_bucket.
+# Upload (scheme-aware) -- mirrors postprocess_swmm._upload_cog_to_runs_bucket.
 # --------------------------------------------------------------------------- #
 def _upload_cog_to_runs_bucket(
     local_cog: Path,
@@ -763,7 +762,7 @@ def postprocess_geoclaw(
     Args:
         out_dir: directory containing the GeoClaw fort.q frames (or an ``_output/``
             subdir).
-        bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326 — the raster
+        bbox: AOI ``(min_lon, min_lat, max_lon, max_lat)`` EPSG:4326 -- the raster
             extent + zoom-to bbox.
         run_id: the run identifier the COGs are keyed under in the runs bucket.
         scenario: the GeoClaw driver family (echoed onto the layers).
@@ -777,16 +776,16 @@ def postprocess_geoclaw(
             ``max_inundation_m`` land/ocean split AND (with ``mask_ocean``) the
             belt-and-suspenders ``topo < 0`` OR-term of the overland depth mask.
         mask_ocean: when True, mask the published depth (peak + every frame +
-            metrics) to OVERLAND inundation only — set depth to NaN wherever the
+            metrics) to OVERLAND inundation only -- set depth to NaN wherever the
             cell is PERMANENT WATER (ocean). Permanent water is detected by the
             SIMULATION'S OWN INITIAL WATER SURFACE (robust on any coast): any cell
-            WET at ``t=0`` (the earliest fort.q frame ``grids[0]`` — GeoClaw's
+            WET at ``t=0`` (the earliest fort.q frame ``grids[0]`` -- GeoClaw's
             still-water initial condition ``h = max(0, sea_level - B)``) is ocean,
             using a small wet epsilon (``NODATA_DEPTH_M``) so only genuinely-wet sea
             is caught even if an Okada ``dtopo`` perturbs the ``t=0`` surface. This
             replaces the old ``topo < 0`` criterion, which failed on ETOPO coasts
             (no CUDEM) where the nearshore bathymetry reads ~0 m (not negative) and
-            so caught only far-offshore deep cells — the nearshore sea stayed in the
+            so caught only far-offshore deep cells -- the nearshore sea stayed in the
             published COG. When a shape-matching ``topo_grid`` is supplied, ``topo <
             0`` is OR-ed in as a belt-and-suspenders term (a cell that is either
             initially-wet OR below the still-water datum is ocean) so nothing
@@ -805,7 +804,7 @@ def postprocess_geoclaw(
         PostprocessGeoClawError: any read / rasterize / COG-write / upload failure.
     """
     try:
-        import numpy as np  # noqa: F401 — vouch the import path
+        import numpy as np  # noqa: F401 -- vouch the import path
     except Exception as exc:  # noqa: BLE001
         raise PostprocessGeoClawError(
             "GEOCLAW_DEPENDENCY_MISSING",
@@ -860,7 +859,7 @@ def postprocess_geoclaw(
     # t=0 that are wet in a later frame. So the ocean (PERMANENT WATER) is exactly
     # the set of cells WET AT t=0: the earliest fort.q frame (grids[0], sorted by
     # frame number) is GeoClaw's still-water initial condition h=max(0,sea_level-B).
-    # This initial-wet criterion is robust on ANY coast — it replaces the old
+    # This initial-wet criterion is robust on ANY coast -- it replaces the old
     # `topo<0` test that FAILED on ETOPO coasts (no CUDEM) where nearshore bathy
     # reads ~0 m (not negative), leaving the nearshore sea in the published COG.
     # A small wet epsilon (NODATA_DEPTH_M) means only genuinely-wet sea is caught,
@@ -916,7 +915,7 @@ def postprocess_geoclaw(
                     "initial-wet or topo<0 cells (no permanent water) — no-op",
                     run_id,
                 )
-        except Exception as exc:  # noqa: BLE001 — mask is best-effort; never sink the run
+        except Exception as exc:  # noqa: BLE001 -- mask is best-effort; never sink the run
             logger.warning(
                 "postprocess_geoclaw run_id=%s ocean mask failed (%s); publishing "
                 "unmasked total-depth",
@@ -958,7 +957,7 @@ def postprocess_geoclaw(
         metrics["fgmax_used"] = True
 
     # When the depth is masked to overland, the narrated PEAK depth must be the
-    # land run-up too — otherwise the fort.q peak grid is ocean-masked but an fgmax
+    # land run-up too -- otherwise the fort.q peak grid is ocean-masked but an fgmax
     # override could re-inject the deep-ocean max (fgmax's max_depth_m is over ALL
     # points, sea included). Pin max_depth_m to the on-land inundation max so the
     # scalar matches the published overland COG (honest: it is the max depth on dry

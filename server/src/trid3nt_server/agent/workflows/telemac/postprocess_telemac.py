@@ -234,11 +234,11 @@ def _pick_dye_var(varnames: list[str], *, prefer_sediment: bool = False) -> str 
     (mirrors the worker entrypoint's tracer-sanity selection).
 
     ``prefer_sediment=True`` (GAIA sediment coupled run): the suspended sediment
-    concentration rides as a SECOND telemac2d tracer that the in-image smoke
-     showed lands in ``r2d_river.slf`` as ``NCOH SEDIMENT1`` (g/l ==
-    kg/m3) alongside the required DYE companion. Pick that sediment tracer (a name
-    carrying SEDIMENT / NCOH / COH), so the concentration COG is the SEDIMENT
-    ribbon, not the conservative dye reference. Falls back to the dye pick when no
+    concentration rides as a SECOND telemac2d tracer, landing in
+    ``r2d_river.slf`` as ``NCOH SEDIMENT1`` (g/l == kg/m3) alongside the
+    required DYE companion. Pick that sediment tracer (a name carrying
+    SEDIMENT / NCOH / COH), so the concentration COG is the SEDIMENT ribbon,
+    not the conservative dye reference. Falls back to the dye pick when no
     sediment-named var is present (an uncoupled rerun)."""
     if prefer_sediment:
         for v in varnames:

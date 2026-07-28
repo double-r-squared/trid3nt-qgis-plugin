@@ -1,4 +1,4 @@
-"""``fetch_usace_dams`` atomic tool — USACE National Inventory of Dams (job-A5).
+"""``fetch_usace_dams`` atomic tool -- USACE National Inventory of Dams (job-A5).
 """
 
 from __future__ import annotations
@@ -79,9 +79,9 @@ class USACEDAMSUpstreamError(USACEDAMSError):
 
 
 class USACEDAMSEmptyError(USACEDAMSError):
-    """NID returned an empty FeatureCollection — informational, not retryable.
+    """NID returned an empty FeatureCollection -- informational, not retryable.
 
-    NOT raised by the tool body (we serialize an empty FGB instead — an empty
+    NOT raised by the tool body (we serialize an empty FGB instead -- an empty
     bbox over open ocean / Antarctica is LEGITIMATE), but kept available for
     future strict-mode opt-in.
     """
@@ -95,17 +95,17 @@ class USACEDAMSAuthError(USACEDAMSError):
 
     Fired when a token resolved (kwarg / secret_ref / env) but the
     ``geospatial.sec.usace.army.mil`` ArcGIS server returned the ESRI
-    ``code:498 Invalid Token`` envelope (or an HTTP 401/403) — the token is
+    ``code:498 Invalid Token`` envelope (or an HTTP 401/403) -- the token is
     wrong, expired, or revoked. The ``_AUTH_ERROR`` error-code suffix and the
     ``USACEDAMSAuthError`` class name are both recognised by the agent's
     provider-agnostic credential pipeline
     (``credential_registry.is_credential_shaped_error``), so the server
     surfaces a NAME-ONLY credential card (NATE principle 3) prompting the user
-    to re-enter a valid USACE NID token — no per-provider registry entry is
+    to re-enter a valid USACE NID token -- no per-provider registry entry is
     required. ``retryable=False`` because retrying the same bad token is futile;
     the agent waits for a fresh token.
 
-    NOTE: a MISSING token (no token resolves at all) does NOT raise this — the
+    NOTE: a MISSING token (no token resolves at all) does NOT raise this -- the
     tool degrades to the public mirror so a key-less user still gets dam data.
     Only an explicitly-supplied-but-rejected token surfaces the card.
     """
@@ -220,7 +220,7 @@ PRESERVED_PROPERTIES: tuple[str, ...] = (
     "DATA_UPDATED",
 )
 
-# User-Agent — ESRI tracks unauthenticated clients; identify this client clearly
+# User-Agent -- ESRI tracks unauthenticated clients; identify this client clearly
 # so the NID team can attribute traffic.
 _USER_AGENT = (
     "trid3nt/0.1 (Hazard Modeling Agent; "
@@ -272,11 +272,11 @@ def estimate_payload_mb(**args: Any) -> float:
     """
     bbox = args.get("bbox")
     if bbox is None:
-        # CONUS sweep — pagination cap of 50k features × 1KB ≈ 50 MB.
+        # CONUS sweep -- pagination cap of 50k features × 1KB ≈ 50 MB.
         return float(_MAX_TOTAL_FEATURES * _BYTES_PER_FEATURE_ESTIMATE) / (1024 * 1024)
     if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
         # Caller passed garbage; bail out with the CONUS-sweep estimate
-        # rather than raising — the estimator is advisory only.
+        # rather than raising -- the estimator is advisory only.
         return float(_MAX_TOTAL_FEATURES * _BYTES_PER_FEATURE_ESTIMATE) / (1024 * 1024)
     try:
         min_lon, min_lat, max_lon, max_lat = (float(v) for v in bbox)
@@ -292,7 +292,7 @@ def estimate_payload_mb(**args: Any) -> float:
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 #
 # ``supports_global_query=True`` because the bbox=None semantics genuinely
 # return the CONUS+AK+HI dam population. The chat-warning gate
@@ -344,7 +344,7 @@ def _round_bbox_to_6dp(
 def _bbox_to_envelope(bbox: tuple[float, float, float, float]) -> str:
     """Format a bbox as an ArcGIS ``geometryType=esriGeometryEnvelope`` string.
 
-    ArcGIS REST envelope format is the literal ``xmin,ymin,xmax,ymax`` —
+    ArcGIS REST envelope format is the literal ``xmin,ymin,xmax,ymax`` --
     no JSON wrapping when ``geometryType=esriGeometryEnvelope`` is set.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -352,7 +352,7 @@ def _bbox_to_envelope(bbox: tuple[float, float, float, float]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Filter validation + WHERE-clause construction (job-A5 upgrade — activate
+# Filter validation + WHERE-clause construction (job-A5 upgrade -- activate
 # the formerly-inert hazard_potential / state params).
 # ---------------------------------------------------------------------------
 
@@ -554,7 +554,7 @@ _USPS_TO_NAME: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
-# Authoritative-endpoint token resolution (canonical 3-path secret loader —
+# Authoritative-endpoint token resolution (canonical 3-path secret loader --
 # mirrors fetch_ebird_observations / fetch_era5_reanalysis).
 # ---------------------------------------------------------------------------
 
@@ -667,7 +667,7 @@ def _resolve_nid_token(
             resolved = _materialize_secret(secret_ref)
         except USACEDAMSAuthError:
             raise
-        except Exception as exc:  # noqa: BLE001 — surface as auth error
+        except Exception as exc:  # noqa: BLE001 -- surface as auth error
             raise USACEDAMSAuthError(
                 f"USACE NID secret_ref lookup failed: {exc}"
             ) from exc
@@ -700,8 +700,8 @@ def _build_nid_url(
     converted to ``esriGeometryEnvelope`` + ``inSR=4326`` server-side spatial
     filter.
 
-    ``where`` carries the hazard/state ``IN (...)`` filter clause (job-A5
-    upgrade); ``"1=1"`` is the unfiltered tautology. ``base_url`` selects the
+    ``where`` carries the hazard/state ``IN (...)`` filter clause;
+    ``"1=1"`` is the unfiltered tautology. ``base_url`` selects the
     authoritative endpoint (``_NID_AUTHORITATIVE_BASE``) vs the public mirror
     (``_NID_BASE``). ``token``, when set, is appended for the authoritative
     ArcGIS token gate.
@@ -718,7 +718,7 @@ def _build_nid_url(
         "f": "geojson",
         "resultOffset": str(result_offset),
         "resultRecordCount": str(min(result_record_count, _NID_PAGE_SIZE)),
-        # orderByFields gives the pagination a stable cursor — without it,
+        # orderByFields gives the pagination a stable cursor -- without it,
         # ArcGIS occasionally drops rows across page boundaries.
         "orderByFields": "OBJECTID ASC",
     }
@@ -733,7 +733,7 @@ def _build_nid_url(
 
 
 # ---------------------------------------------------------------------------
-# NID HTTP fetch — single page.
+# NID HTTP fetch -- single page.
 # ---------------------------------------------------------------------------
 
 
@@ -885,7 +885,7 @@ def _geojson_to_fgb(geojson: dict[str, Any]) -> bytes:
 
     Preserves ``PRESERVED_PROPERTIES``. Features without a point geometry
     are dropped (NID is by definition a point inventory; null-geom rows
-    are junk for this layer). Always emits a valid FlatGeobuf — an empty
+    are junk for this layer). Always emits a valid FlatGeobuf -- an empty
     input yields a header-only FGB.
     """
     try:
@@ -908,7 +908,7 @@ def _geojson_to_fgb(geojson: dict[str, Any]) -> bytes:
         row_props: dict[str, Any] = {}
         for key in PRESERVED_PROPERTIES:
             v = props.get(key)
-            # Coerce non-scalar values to JSON strings — FlatGeobuf needs
+            # Coerce non-scalar values to JSON strings -- FlatGeobuf needs
             # scalar column types per field.
             if isinstance(v, (dict, list)):
                 v = json.dumps(v)
@@ -986,7 +986,7 @@ def _fetch_nid_bytes(
 
     The hazard/state ``where`` clause is applied to whichever endpoint serves.
     """
-    # 1. Authoritative endpoint — only when a token is present.
+    # 1. Authoritative endpoint -- only when a token is present.
     if token:
         try:
             geojson = _fetch_nid_all_features(
@@ -1002,12 +1002,12 @@ def _fetch_nid_bytes(
             )
             return _geojson_to_fgb(geojson)
         except USACEDAMSAuthError:
-            # A resolved-but-rejected token is a credential signal — do NOT
+            # A resolved-but-rejected token is a credential signal -- do NOT
             # mask it with mirror data; surface the card so the user fixes it.
             raise
         except USACEDAMSError as exc:
             # Non-auth authoritative failure (wrong service path / network /
-            # 5xx) — degrade to the mirror honestly.
+            # 5xx) -- degrade to the mirror honestly.
             logger.warning(
                 "fetch_usace_dams: authoritative endpoint failed (%s); "
                 "falling back to public mirror",
@@ -1055,7 +1055,7 @@ def fetch_usace_dams(
 
     What it does:
         Fetches U.S. Army Corps of Engineers National Inventory of Dams
-        records as point features with full NID attribute payload —
+        records as point features with full NID attribute payload --
         identification, ownership, physical structure (height, length,
         storage, drainage area), hazard potential classification,
         condition assessment, and emergency-action-plan status.
@@ -1079,14 +1079,14 @@ def fetch_usace_dams(
         - Pelicun building / asset analysis needs dam infrastructure context.
 
     When NOT to use:
-        - DO NOT use for levees — use a future ``fetch_usace_nld_levees``
+        - DO NOT use for levees -- use a future ``fetch_usace_nld_levees``
           tool (National Levee Database is a sibling but separate inventory).
-        - DO NOT use for building structures — use ``fetch_usace_nsi``
+        - DO NOT use for building structures -- use ``fetch_usace_nsi``
           (National Structure Inventory) for Pelicun assets.
-        - DO NOT use for downstream hydrologic routing — query NHD via
+        - DO NOT use for downstream hydrologic routing -- query NHD via
           ``fetch_river_geometry`` or NWM streamflow forecasts separately.
-        - DO NOT use for non-US dams — NID is US-only.
-        - DO NOT use for live reservoir operations data — NID is a static
+        - DO NOT use for non-US dams -- NID is US-only.
+        - DO NOT use for live reservoir operations data -- NID is a static
           inventory; CWMS / USGS NWIS handle real-time reservoir levels.
 
     Parameters:
@@ -1130,7 +1130,7 @@ def fetch_usace_dams(
         A ``LayerURI`` pointing at a FlatGeobuf in the cache bucket
         ``s3://trid3nt-cache/cache/static-30d/usace_nid_dams/<key>.fgb``
         containing point geometries (``Point`` in EPSG:4326) and the
-        canonical NID attribute schema — ``NIDID``, ``NAME``, ``STATE``,
+        canonical NID attribute schema -- ``NIDID``, ``NAME``, ``STATE``,
         ``DAM_HEIGHT``, ``NID_STORAGE``, ``HAZARD_POTENTIAL``,
         ``CONDITION_ASSESSMENT``, ``EAP_PREPARED``, ``YEAR_COMPLETED``,
         ``PRIMARY_DAM_TYPE``, ``PRIMARY_PURPOSE``, etc. Downstream tools
@@ -1177,7 +1177,7 @@ def fetch_usace_dams(
     # Authoritative-endpoint token resolution (None => mirror-only path).
     resolved_token = _resolve_nid_token(token=token, secret_ref=secret_ref)
 
-    # Cache-key params. The token is INTENTIONALLY excluded from the key —
+    # Cache-key params. The token is INTENTIONALLY excluded from the key --
     # the underlying dam inventory does not vary by caller/token (the
     # authoritative + mirror return the same regulatory records); per-token
     # keying would needlessly fragment the cache. The filter clause IS part

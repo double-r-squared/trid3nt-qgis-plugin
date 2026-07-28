@@ -1,17 +1,17 @@
-"""HTTP catalog endpoint (Wave 4.10 Stage 3 — job C1).
+"""HTTP catalog endpoint.
 
 Exposes two read-only JSON endpoints:
 
-- ``GET /api/tool-catalog`` — the agent's atomic-tool surface (Wave 4.10 C1).
-- ``GET /api/telemetry/summary`` — aggregated routing-quality stats over the
-  most recent 30 sessions, backing the Wave 4.11 M7 routing-quality
-  dashboard (this module is the only HTTP seam — adding a second endpoint
-  keeps the listener as a single asyncio TCP server).
+- ``GET /api/tool-catalog`` -- the agent's atomic-tool surface.
+- ``GET /api/telemetry/summary`` -- aggregated routing-quality stats over the
+  most recent 30 sessions, backing the routing-quality dashboard (this
+  module is the only HTTP seam -- adding a second endpoint keeps the
+  listener as a single asyncio TCP server).
 
 Why a dedicated HTTP endpoint when the rest of the agent talks WebSockets?
 
 - The catalog is a **discovery surface** for human users browsing what the
-  agent can do. It is not part of the chat envelope contract (Appendix A) —
+  agent can do. It is not part of the chat envelope contract (Appendix A) --
   it does not stream, does not maintain session state, and does not require
   an authenticated user. A plain HTTP GET is the right shape.
 - The catalog payload is small (~71 tools × ~1.5 KB each ≈ 100 KB) and
@@ -20,18 +20,18 @@ Why a dedicated HTTP endpoint when the rest of the agent talks WebSockets?
 
 The endpoint runs on its own asyncio TCP listener (default port 8766;
 override via ``TRID3NT_AGENT_HTTP_PORT``). It is mounted as a sibling of the
-WebSocket server in ``server.run_server``, NOT in its own process — single
+WebSocket server in ``server.run_server``, NOT in its own process -- single
 process, single asyncio loop, no thread sharing.
 
 Backed entirely by:
 - ``trid3nt_server.agent.categories.CATEGORIES`` / ``PRIMARY_CATEGORY`` /
-  ``SECONDARY_CATEGORIES`` — the 12 categories landed by job-B5.
-- ``trid3nt_server.agent.tools.TOOL_REGISTRY`` — every registered tool's
+  ``SECONDARY_CATEGORIES`` -- the 12 tool categories.
+- ``trid3nt_server.agent.tools.TOOL_REGISTRY`` -- every registered tool's
   ``AtomicToolMetadata`` carries the MCP annotation hints
   (``read_only_hint``, ``open_world_hint``, ``destructive_hint``,
   ``idempotent_hint``) + ``supports_global_query`` +
   ``payload_mb_estimator_name``.
-- ``data/tool_query_corpus.yaml`` — example sample-queries keyed by tool name.
+- ``data/tool_query_corpus.yaml`` -- example sample-queries keyed by tool name.
 
 CORS: ``Access-Control-Allow-Origin: *`` so the Vite dev server (5173) and
 production builds on any origin can hit the endpoint without preflight
@@ -95,7 +95,7 @@ def _read_corpus_yaml(p: Path) -> dict[str, list[str]]:
     try:
         with p.open() as fh:
             data = yaml.safe_load(fh) or {}
-    except Exception:  # noqa: BLE001 — best-effort
+    except Exception:  # noqa: BLE001 -- best-effort
         logger.exception("tool_catalog_http: failed to parse corpus YAML at %s", p)
         return {}
     if not isinstance(data, dict):
@@ -132,7 +132,7 @@ def load_query_corpus(path: Path | None = None) -> dict[str, list[str]]:
     residual monolith. An explicit ``path`` or the ``TRID3NT_TOOL_CORPUS_YAML``
     env override reads a single monolithic file instead (legacy pin).
 
-    Missing files / parse errors degrade to fewer/no sample queries — the
+    Missing files / parse errors degrade to fewer/no sample queries -- the
     catalog still renders. Failure to load the corpus must not block the
     discovery surface.
     """
@@ -225,7 +225,7 @@ def build_catalog_payload(
         primary_cat = PRIMARY_CATEGORY.get(name, "geographic_primitives")
         secondaries = list(SECONDARY_CATEGORIES.get(name, ()))
         sample_queries = list(corpus_map.get(name, []))
-        # Cap to 3 sample queries in the payload — the UI shows 2-3; sending
+        # Cap to 3 sample queries in the payload -- the UI shows 2-3; sending
         # all 5-10 wastes bandwidth on a discovery surface.
         sample_queries = sample_queries[:3]
         tools_out.append(
@@ -253,7 +253,7 @@ def build_catalog_payload(
     # Second pass: count tools per category. Counted from PRIMARY_CATEGORY +
     # SECONDARY_CATEGORIES so a cross-listed tool shows up in both. Tools
     # without an explicit primary category fall through to
-    # ``geographic_primitives`` — match the per-tool fallback above.
+    # ``geographic_primitives`` -- match the per-tool fallback above.
     category_counts: dict[str, int] = {c.id: 0 for c in CATEGORIES}
     for name in TOOL_REGISTRY:
         primary = PRIMARY_CATEGORY.get(name, "geographic_primitives")
@@ -309,7 +309,7 @@ def _first_paragraph(doc: str, *, max_chars: int = 400) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Telemetry summary (Wave 4.11 M7 — routing-quality dashboard backend).
+# Telemetry summary (Wave 4.11 M7 -- routing-quality dashboard backend).
 # ---------------------------------------------------------------------------
 
 
@@ -349,10 +349,9 @@ _FLOW_BY_SOLVER_TOOL: dict[str, str] = {
 def _normalize_record(rec: dict[str, Any]) -> dict[str, Any]:
     """Coerce a single telemetry record into the summary's canonical shape.
 
-    The local-file (Wave 4.10) writer uses ``success`` + ``ts``; the MCP
-    writer (Wave 4.11 M3) uses ``result_ok`` + ``called_at_utc``. We accept
-    either form so the summary builder doesn't care which substrate
-    produced the data.
+    The local-file writer uses ``success`` + ``ts``; the MCP writer uses
+    ``result_ok`` + ``called_at_utc``. We accept either form so the summary
+    builder doesn't care which substrate produced the data.
     """
     out: dict[str, Any] = {}
     out["session_id"] = rec.get("session_id") or ""
@@ -429,7 +428,7 @@ def _percentile(values: list[float], q: float) -> float:
 
     Empty input yields ``0.0``. Uses the same "linear" method numpy defaults to
     so the p50/p95 line up with any external numpy-based recompute. Pure-stdlib
-    (no numpy import — telemetry must stay light + always importable).
+    (no numpy import -- telemetry must stay light + always importable).
     """
     if not values:
         return 0.0
@@ -448,7 +447,7 @@ def _rate_over_bools(values: list[bool | None]) -> float | None:
     """Fraction of ``True`` among the non-``None`` entries.
 
     Returns ``None`` when EVERY entry is ``None`` (the notion does not apply to
-    any record — e.g. result_usable for an all-meta-tool slice), so the wire
+    any record -- e.g. result_usable for an all-meta-tool slice), so the wire
     field is an honest null rather than a misleading ``0.0``. This is the
     contract for ``result_usability_rate`` / ``routing_accuracy_rate``.
     """
@@ -465,7 +464,7 @@ def _derive_routed_ok(records: list[dict[str, Any]]) -> dict[int, bool]:
     DEFENSIBLE HEURISTIC, NOT GROUND TRUTH (clearly labelled on the wire as
     ``routing_accuracy_rate``): a tool call is "mis-routed" when it FAILED
     (result_ok=False) and the SAME session's NEXT call (by timestamp) is a
-    DIFFERENT tool — i.e. the model abandoned this tool and reached for another
+    DIFFERENT tool -- i.e. the model abandoned this tool and reached for another
     one for the same logical step. Such a call gets ``routed_ok=False``. Any
     other completed call gets ``routed_ok=True``. We leverage ``retry_attempt``
     too: a call with retry_attempt>0 that itself failed and was followed by a
@@ -473,7 +472,7 @@ def _derive_routed_ok(records: list[dict[str, Any]]) -> dict[int, bool]:
     rule already captures it.
 
     A per-record value the writer ALREADY supplied (``routed_ok`` not None) wins
-    — this only fills the gap for records whose writer left it None (the current
+    -- this only fills the gap for records whose writer left it None (the current
     emit path, where supersession is not yet observable). Keyed by ``id(rec)``
     so two records with identical contents are scored independently.
     """
@@ -482,7 +481,7 @@ def _derive_routed_ok(records: list[dict[str, Any]]) -> dict[int, bool]:
     for r in records:
         sid = r.get("session_id") or ""
         if not sid:
-            # No session context — cannot judge supersession; routed_ok stays
+            # No session context -- cannot judge supersession; routed_ok stays
             # absent (treated as None/unavailable downstream).
             continue
         sess_buckets.setdefault(sid, []).append(r)
@@ -558,7 +557,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
             total_errors += 1
         total_latency += lat
         all_latencies.append(lat)
-        # result_usable (bool|None — meta tools contribute None).
+        # result_usable (bool|None -- meta tools contribute None).
         usable = r.get("result_usable")
         by_tool_usable.setdefault(tool, []).append(usable)
         all_usable.append(usable)
@@ -832,7 +831,7 @@ def _load_recent_records_from_file(
     """Read the JSONL fallback file and return records from the most-recent
     ``last_n_sessions`` distinct sessions (newest first).
 
-    Returns an empty list when the file is missing or unreadable — the
+    Returns an empty list when the file is missing or unreadable -- the
     dashboard renders an empty state in that case.
     """
     if not path.exists():
@@ -911,7 +910,7 @@ def _normalize_shadow_record(rec: dict[str, Any]) -> dict[str, Any]:
     vis = rec.get("visible_tools") or []
     try:
         visible = {str(t) for t in vis}
-    except Exception:  # noqa: BLE001 — a malformed row contributes an empty set
+    except Exception:  # noqa: BLE001 -- a malformed row contributes an empty set
         visible = set()
     return {
         "session_id": rec.get("session_id") or "",
@@ -1129,7 +1128,7 @@ async def _load_shadow_records_from_mongo(
                 "limit": 2000,
             },
         )
-    except Exception:  # noqa: BLE001 — never break the dashboard on MCP error
+    except Exception:  # noqa: BLE001 -- never break the dashboard on MCP error
         logger.warning("recall@k: shadow mongo find failed", exc_info=True)
         return []
     docs: Any = raw
@@ -1181,7 +1180,7 @@ async def _load_recent_records_from_mongo(
                 "limit": 2000,
             },
         )
-    except Exception:  # noqa: BLE001 — never break the dashboard on MCP error
+    except Exception:  # noqa: BLE001 -- never break the dashboard on MCP error
         logger.warning("telemetry summary: mongo find failed", exc_info=True)
         return []
     # Unwrap the MCP result envelope (mirrors Persistence._unwrap_mcp_result).
@@ -1242,7 +1241,7 @@ async def build_telemetry_summary(
     try:
         from .server import get_persistence as _server_get_persistence
         persistence = _server_get_persistence()
-    except Exception:  # noqa: BLE001 — early-startup ImportError tolerated
+    except Exception:  # noqa: BLE001 -- early-startup ImportError tolerated
         persistence = None
 
     records: list[dict[str, Any]] = []
@@ -1275,19 +1274,19 @@ async def build_telemetry_summary(
         if not shadow_records:
             shadow_records = _load_shadow_records_from_file(_get_telemetry_path())
         summary["recall_at_k"] = compute_recall_at_k(records, shadow_records)
-    except Exception:  # noqa: BLE001 — never break the dashboard on recall read
+    except Exception:  # noqa: BLE001 -- never break the dashboard on recall read
         logger.warning("telemetry summary: recall@k read failed", exc_info=True)
         summary["recall_at_k"] = _empty_recall_at_k()
 
     # Fold in the live big-sim solve_telemetry section. Read
     # from the solve-telemetry JSONL the solve writer maintains; best-effort so
     # a missing/unreadable sink leaves the zero-state section _aggregate_records
-    # already seeded. Independent of the tool-call source above — solves are
+    # already seeded. Independent of the tool-call source above -- solves are
     # logged on their own sink.
     try:
         solve_records = _load_solve_records_from_file(_get_solve_telemetry_path())
         summary["solve_telemetry"] = _aggregate_solve_telemetry(solve_records)
-    except Exception:  # noqa: BLE001 — never break the dashboard on solve read
+    except Exception:  # noqa: BLE001 -- never break the dashboard on solve read
         logger.warning("telemetry summary: solve telemetry read failed", exc_info=True)
         summary["solve_telemetry"] = _empty_solve_telemetry()
 
@@ -1302,7 +1301,7 @@ async def build_telemetry_summary(
         from .telemetry import build_turn_summary, load_turn_records
 
         summary["turns_by_model"] = build_turn_summary(load_turn_records())
-    except Exception:  # noqa: BLE001 — never break the dashboard on turn read
+    except Exception:  # noqa: BLE001 -- never break the dashboard on turn read
         logger.warning("telemetry summary: turn telemetry read failed", exc_info=True)
         from .telemetry import empty_turn_summary
 
@@ -1636,15 +1635,13 @@ def _resolve_export_qgis_file(query_string: str) -> tuple[Path, str]:
 
 
 # ---------------------------------------------------------------------------
-# /api/case-list -- cold (no WS session) case list for the QGIS local dock
-# (live-feedback 2026-07-09).
+# /api/case-list -- cold (no WS session) case list for the QGIS local dock.
 #
-# The QGIS plugin's Cases dialog previously could not show ANY cases until
-# the user pressed Connect, because the case-list envelope only ever arrives
-# over the WS session (``_emit_case_list`` in ``server.py``, sent on connect
-# + after every case mutation). This route mirrors that envelope's data +
-# user-scoping over plain HTTP so the dock can populate the dialog BEFORE a
-# WS connection exists.
+# The case-list envelope otherwise only arrives over the WS session
+# (``_emit_case_list`` in ``server.py``, sent on connect + after every case
+# mutation). This route mirrors that envelope's data + user-scoping over
+# plain HTTP so the dock can populate the dialog BEFORE a WS connection
+# exists.
 #
 # User scoping mirrors ``_emit_case_list``: the WS path resolves
 # ``state.authenticated_user_id or state.session_id`` from the live
@@ -2134,7 +2131,7 @@ def _format_response(
     headers = {
         "Content-Type": content_type,
         "Content-Length": str(len(body)),
-        # CORS — see module docstring. POST is scoped to /api/export-qgis.
+        # CORS -- see module docstring. POST is scoped to /api/export-qgis.
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
@@ -2162,7 +2159,7 @@ async def _handle_http(
 ) -> None:
     """Handle one HTTP request.
 
-    The wire-protocol implementation is intentionally minimal — we only need
+    The wire-protocol implementation is intentionally minimal -- we only need
     to serve GET ``/api/tool-catalog`` and respond to CORS preflights. Any
     other path returns 404; any other method returns 405. Body is read until
     Content-Length OR end-of-stream so a stray POST doesn't hang.
@@ -2695,7 +2692,7 @@ async def serve_catalog_http(
     """Start the catalog HTTP listener and return the server handle.
 
     Designed to be mounted alongside the WebSocket server in
-    ``server.run_server`` — same asyncio loop, single process, no threads.
+    ``server.run_server`` -- same asyncio loop, single process, no threads.
 
     Reads ``TRID3NT_AGENT_HTTP_PORT`` if ``port`` is not passed (default
     ``DEFAULT_HTTP_PORT``).

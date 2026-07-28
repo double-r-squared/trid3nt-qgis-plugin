@@ -24,7 +24,7 @@ each returned ``LayerURI`` exactly as the flood-habitat composer does (so the
 emitter's ``isinstance(result, LayerURI)`` gate auto-loads each layer when an
 emitter is supplied).
 
-Honesty floor (NATE render/honesty norm): a run that produced NO layers reports
+Honesty floor: a run that produced NO layers reports
 ``status="error"`` (never ``"ok"``) with the per-step failure reasons; a run
 that produced some-but-not-all layers reports ``status="partial"`` and names
 which sources failed. We never claim a conservation stack we did not build.

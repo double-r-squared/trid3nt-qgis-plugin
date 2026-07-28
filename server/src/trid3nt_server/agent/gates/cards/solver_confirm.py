@@ -24,19 +24,16 @@ logger = logging.getLogger("trid3nt_server.agent.gates.cards.solver_confirm")
 MAX_FETCH_PX: int = 8192
 
 
-# per-fetcher resolution ladders for the fetch-resolution gate.
-# Finer = smaller metres. fetch_dem can go to 1 m (3DEP); fetch_topobathy floors
-# at 3 m (CUDEM tiles). Both default to 10 m (the tools' resolution_m default).
-# fetch_landcover: NLCD native is 30 m; for large bboxes the gate coarsens to
-# 60/120/300/600 m so the MRLC WCS GetCoverage stays under 4000 px per axis.
-# fetch_dem: the ladder used to top out at
-# 30 m, which is far too fine to ever appear as a selectable rung for a
-# state-scale AOI (a WA-state bbox needs ~150 m to stay under the tool's own
-# 4000 px/axis budget -- see data_fetch.py's _DEM_PIXEL_BUDGET_PX) -- so the
-# card's ladder-filtered choices would silently collapse to just the computed
-# finest_allowed_m with no coarser alternative to pick. 90/300/900 m rungs
-# give the user real choices at state / multi-state scale, same as
-# fetch_landcover's coarse rungs do for NLCD.
+# Per-fetcher resolution ladders for the fetch-resolution gate. Finer =
+# smaller metres. fetch_dem can go to 1 m (3DEP); fetch_topobathy floors at
+# 3 m (CUDEM tiles). Both default to 10 m (the tools' resolution_m default).
+# fetch_landcover: NLCD native is 30 m; for large bboxes the gate coarsens
+# to 60/120/300/600 m so the MRLC WCS GetCoverage stays under 4000 px per
+# axis. fetch_dem's 90/300/900 m rungs exist because a state-scale AOI (e.g.
+# WA-state) needs ~150 m to stay under the tool's own 4000 px/axis budget
+# (data_fetch.py's _DEM_PIXEL_BUDGET_PX) -- without them the ladder-filtered
+# choices collapse to just the computed finest_allowed_m with no coarser
+# alternative, same as fetch_landcover's coarse rungs give for NLCD.
 _FETCH_RES_LADDERS: dict[str, list[float]] = {
     "fetch_dem": [1.0, 3.0, 10.0, 30.0, 90.0, 300.0, 900.0],
     "fetch_topobathy": [3.0, 10.0, 30.0],
@@ -250,25 +247,25 @@ async def _build_flood_run_settings_envelope(
     gate into ONE card the user reviews + overrides before the heavy SFINCS run,
     carrying BOTH:
 
-    * a ``GranularitySuggestion`` (SPATIAL resolution — the SFINCS
+    * a ``GranularitySuggestion`` (SPATIAL resolution -- the SFINCS
       ``grid_resolution_m`` ladder + estimated cells / solve time / compute
       class), built from the bbox via
-      :func:`suggest_sfincs_resolution_from_bbox` (no DEM read — loop-safe; the
+      :func:`suggest_sfincs_resolution_from_bbox` (no DEM read -- loop-safe; the
       real cell count comes from ``build_sfincs_model``'s DEM autoscale at run
       time, so the card numbers are labelled ESTIMATES), and
-    * a ``TimeScaleSuggestion`` (TEMPORAL cadence + window — the resolved
+    * a ``TimeScaleSuggestion`` (TEMPORAL cadence + window -- the resolved
       animation ``output_interval_min`` + ``duration_hr`` + a frame-count
       estimate) for a COASTAL/wave run (the "looks like rain" fix). PLUVIAL
       runs animate hourly with a fixed cadence, so ``time_scale`` is None and
       the card degrades to the granularity-only resolution gate.
 
     Returns ``(envelope, granularity_suggestion, resolved_interval_min,
-    duration_hr)`` — the granularity result is the raw ``GridAutoscaleResult``
+    duration_hr)`` -- the granularity result is the raw ``GridAutoscaleResult``
     so the decision tail can pin the suggested resolution on ``proceed``;
     ``resolved_interval_min`` is the resolved coastal cadence (None for pluvial)
     pinned on ``proceed``; ``duration_hr`` is the simulation window.
 
-    Raises on ANY failure — the caller's try/except fails OPEN (proceeds with
+    Raises on ANY failure -- the caller's try/except fails OPEN (proceeds with
     the original params) so a gate problem never blocks or orphans a solve.
     """
     from trid3nt_contracts.payload_warning import (
@@ -479,7 +476,7 @@ def _build_psha_confirm_envelope(params: dict) -> Any:
     rupture/incident-area user input to gate (that is scenario mode, not built).
     The card summarizes the run (approximate AOI area, IMT, PoE -> return period)
     so the user confirms the consequential Batch solve (Invariant 9). Built inline
-    from the tool args (no composer extraction — the run args ARE the args).
+    from the tool args (no composer extraction -- the run args ARE the args).
     """
     import math
 
@@ -571,11 +568,11 @@ def _build_fire_confirm_envelope(params: dict) -> Any:
     """build the ELMFIRE fire-spread solver-confirm card.
 
     A simple proceed/cancel confirmation (mirrors ``openquake_psha``):
-    PURE arithmetic from the call args — the approximate computational grid
+    PURE arithmetic from the call args -- the approximate computational grid
     (``estimate_elmfire_grid``, cosine-latitude cell count) + the
     -calibrated runtime heuristic (``estimate_elmfire_runtime_s``) + the
     scenario weather (wind, fuel-moisture preset expanded to its m1/m10/m100
-    percentages, duration). No fetch, no rasterio — safe to build inline. The
+    percentages, duration). No fetch, no rasterio -- safe to build inline. The
     ignition-required rule is NOT enforced here: a missing ignition falls
     through to the tool's own typed ``FIRE_IGNITION_REQUIRED`` error (the gate
     must never mask parameter problems, matching the extraction-failure
@@ -671,14 +668,14 @@ def _build_geoclaw_confirm_envelope(params: dict) -> Any:
     """build the GeoClaw inundation solver-confirm card.
 
     A simple proceed/cancel confirmation (mirrors ``openquake_psha`` /
-    ``elmfire_fire_spread``): PURE arithmetic from the call args — the
+    ``elmfire_fire_spread``): PURE arithmetic from the call args -- the
     approximate AOI area (cosine-latitude correction) + the scenario
     (dam_break / tsunami / surge) + the simulated window + AMR levels. No
     fetch, no rasterio, so it is safe to build inline. GeoClaw's adaptive mesh
     means there is no single fixed cell count to advertise (unlike the SWMM /
     TELEMAC granularity gates), so this is a plain proceed/cancel: ``amr_levels``
     / ``sim_duration_s`` are explicit tool args the LLM can restate. A missing
-    bbox is NOT enforced here — it falls through to the tool's own typed
+    bbox is NOT enforced here -- it falls through to the tool's own typed
     ``GEOCLAW_PARAMS_INCOMPLETE`` error after approval (the gate must never mask
     parameter problems, matching the fire/psha fall-through).
     """
@@ -824,13 +821,13 @@ async def _build_telemac_mesh_envelope(
     est_s = float(stats["est_solve_seconds"])
     where = stats.get("location_name") or params.get("location") or "?"
 
-    # 2026-07-18 release-coverage guard: when the CALL carried plausible
-    # release coords the preview seeds the reach from them, so the built mesh
-    # should contain the release point. If it STILL does not (coords off any
+    # Release-coverage guard: when the CALL carried plausible release coords
+    # the preview seeds the reach from them, so the built mesh should
+    # contain the release point. If it STILL does not (coords off any
     # flowline, snap landed on a different water body), say so ON THE CARD -
-    # never silently mesh elsewhere. The tri-state pin below also lets the
-    # decision tail tell call-provided coords (seed the reach) apart from the
-    # gate-picked click (source only).
+    # never silently mesh elsewhere. The tri-state pin below lets the
+    # decision tail tell call-provided coords (seed the reach) apart from
+    # the gate-picked click (source only).
     _rel = plausible_release_coords(
         params.get("release_lon"), params.get("release_lat")
     )
@@ -931,14 +928,14 @@ async def _build_swmm_granularity_envelope(params: dict) -> tuple[Any, Any, str]
     The synchronous DEM read + suggest is OFFLOADED via ``asyncio.to_thread`` so
     the WS heartbeat is never starved (memory: no-sync-blocking-on-asyncio-loop).
 
-    Returns ``(envelope, autoscale_result, local_dem_path)`` — the
+    Returns ``(envelope, autoscale_result, local_dem_path)`` -- the
     ``PayloadWarningEnvelopePayload`` carrying the ``GranularitySuggestion``
     block, the raw ``SWMMAutoscaleResult``, and the localized DEM path the
     decision tail needs for the REAL-grid cap-clamp on a ``narrow_scope``
     override (``clamp_swmm_resolution_to_real_cap`` re-probes this same DEM so the
     clamp matches the count :func:`build_swmm_mesh` will produce).
 
-    Raises on ANY failure (DEM fetch, read, suggest) — the caller's try/except
+    Raises on ANY failure (DEM fetch, read, suggest) -- the caller's try/except
     fails OPEN (proceeds with the original params) so a gate problem never blocks
     or orphans a solve.
     """

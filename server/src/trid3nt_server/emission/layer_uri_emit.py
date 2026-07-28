@@ -5,31 +5,12 @@ THE ONE PLACE a ``LayerURI`` destined for the client passes through before
 carries it to the browser. Every site that hands a ``LayerURI`` to
 ``add_loaded_layer`` routes it through :func:`emit_layer_uri` first.
 
-Why this exists (Decision 11)
-=============================
-The original plan ("sign every client-bound LayerURI via
-``mint_signed_url``") assumed the browser fetches GCS objects directly. The
-design inventory proved no such surface exists today:
-
-  * Rasters reach the client as QGIS Server **WMS run.app URLs** (locked down by
-    invoker-only QGIS + the agent ``/qgis-proxy`` route). A WMS URL is
-    not a ``gs://`` object, so ``mint_signed_url`` structurally cannot sign it
-    (``parse_layer_uri`` rejects non-``gs://``).
-  * Vectors reach the client as **inline GeoJSON**: the ``LayerURI.uri``
-    legitimately stays ``gs://`` while ``PipelineEmitter`` reads it server-side
-    (``pipeline_emitter.py`` ``_read_vector_uri_as_geojson``) and ships the parsed
-    FeatureCollection inline in ``session-state.loaded_layers[].inline_geojson``.
-    The browser never fetches the ``gs://`` uri for a vector — so it must pass
-    through this seam UNTOUCHED.
-  * Charts embed their data inline; ImpactPanel shows ``gs://`` as text only.
-
-The single client-reaching raw ``gs://`` is the publish-FAILURE degraded path in
-``workflows/model_flood_scenario.py`` (§1): when ``publish_layer`` fails,
-the composer used to fall back to emitting the raw ``gs://`` COG in
-``LayerURI.uri`` — which never renders (MapLibre cannot fetch ``gs://``); it only
-paints a broken, dead layer row in the LayerPanel. §1 drops that emission at the
-source; this seam turns the drop into an **invariant** so no future site can
-re-introduce a renderable raw-``gs://`` raster.
+No client surface fetches a raw ``gs://`` object today (Decision 11):
+rasters reach the client as QGIS Server WMS run.app URLs or, on the local
+build, are fetched directly by the QGIS plugin via ``/vsicurl/``; vectors
+reach the client as inline GeoJSON (``PipelineEmitter`` reads the ``gs://``
+uri server-side and ships the parsed FeatureCollection inline); charts embed
+their data inline.
 
 The guardrail
 =============
@@ -41,30 +22,15 @@ the failure (the LLM-visible tool result stays truthful so the
 retry-on-failure loop can act). Everything else passes untouched:
 
   * raster + ``s3://`` (raw COG; the QGIS plugin reads it via /vsicurl/) -> PASS
-    (TiTiler exit / QGIS-native swap: this REVERSES the
-    browser-era drop -- on the local build the plugin, not MapLibre, renders
-    rasters, and it fetches the COG directly)
   * raster + ``http(s)`` (a WMS/tile URL) -> PASS
   * vector + ``gs://`` / ``s3://`` (inline-GeoJSON path) -> PASS
     (do NOT break it)
   * vector + ``http(s)`` -> PASS
 
-``SIGNED_URLS`` — dormant scaffold (Decision 11)
-===============================================
-The ``SIGNED_URLS`` env var is the placeholder for a FUTURE direct-fetch feature
-(signed-COG rendering or signed large-vector delivery past the inline ceiling).
-Per the scout's Architecture A, that feature's signing belongs in the **web
-client** (it mints per-object signed URLs over its own authenticated channel,
-respecting Decision F wire isolation), NOT here in the agent — so today this seam
-deliberately does NOTHING when the flag is set beyond logging a loud WARNING. The
-default is ``false`` and production ships with the flag absent/false (manifest
-Correction 2). When ``SIGNED_URLS=true`` is set, emissions are byte-identical to
-``SIGNED_URLS`` absent; only a WARNING is logged.
-
-When the direct-fetch feature lands, the implementer extends this seam (or, per
-Architecture A, the client) to mint signed URLs for ``gs://`` rasters here —
-and at that point the guardrail's "drop renderable raw gs://" rule is relaxed for
-the signed case. Until then: dormant.
+``SIGNED_URLS`` (Decision 11) is a dormant placeholder env var for a future
+direct-fetch feature; when set, this seam does NOTHING beyond logging a loud
+WARNING -- emissions are byte-identical to ``SIGNED_URLS`` absent. Default is
+``false`` and production ships with the flag absent/false.
 """
 
 from __future__ import annotations
@@ -90,7 +56,7 @@ def signed_urls_enabled() -> bool:
     """Read the dormant ``SIGNED_URLS`` flag (default ``False``).
 
     Accepts ``"true"`` / ``"1"`` / ``"yes"`` (case-insensitive) as truthy. The
-    flag is DORMANT in v0.1: even when truthy it changes no emission behavior —
+    flag is DORMANT in v0.1: even when truthy it changes no emission behavior --
     see the module docstring and Decision 11.
     """
     raw = os.environ.get(SIGNED_URLS_ENV, "")
@@ -121,7 +87,7 @@ def emit_layer_uri(layer: LayerURI) -> LayerURI | None:
 
     ``SIGNED_URLS`` (dormant): when set truthy, a WARNING is logged and behavior
     is otherwise UNCHANGED (byte-identical emission). See the module docstring
-    and Decision 11 — the natural consumer is a future direct-fetch feature whose
+    and Decision 11 -- the natural consumer is a future direct-fetch feature whose
     signing lives in the client (scout Architecture A), not here.
     """
     if signed_urls_enabled():
@@ -183,11 +149,11 @@ async def publish_input_layer(
         made if the incoming role differs) so an input renders non-intrusively
         beneath the primary result, never competing with it for "the answer".
       * ``bbox`` is FORCED to ``None`` so ``add_loaded_layer`` does NOT emit a
-        competing ``zoom-to`` map-command — an input/context layer must never
+        competing ``zoom-to`` map-command -- an input/context layer must never
         fight the AOI / result camera for the view (mirrors the mesh-layer rule).
 
     BEST-EFFORT CONTRACT (the whole point): a failure to surface an input must
-    NEVER fail the solve. This function NEVER raises — every failure path (no
+    NEVER fail the solve. This function NEVER raises -- every failure path (no
     emitter bound, a falsy layer, the guardrail dropping a raw-object-store
     raster, an ``add_loaded_layer`` exception) is swallowed with a WARNING and
     returns ``False``. Returns ``True`` only when the layer actually reached the

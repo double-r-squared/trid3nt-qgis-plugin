@@ -14,7 +14,7 @@ This module implements the **M5 capstone composition**:
       → AssessmentEnvelope (Flood subtype, Appendix B.4)
 
 Per Decision G + FR-TA-1, this workflow is **deterministic Python composition**
-— there is no LLM in the chain. The workflow returns a typed
+-- there is no LLM in the chain. The workflow returns a typed
 ``AssessmentEnvelope`` whose ``flood: FloodPayload`` subtype carries the
 narration metrics.
 
@@ -29,7 +29,7 @@ LLM exposure (workflow-as-atomic-tool-wrapper pattern):
     def sfincs_flood(bbox?, location_query?, ...) -> dict: ...
 
 The wrapper forwards verbatim to ``model_flood_scenario`` and returns the
-envelope's ``model_dump(mode="json")`` (a dict — the LLM tool surface doesn't
+envelope's ``model_dump(mode="json")`` (a dict -- the LLM tool surface doesn't
 need the pydantic instance). The wrapper carries the FR-DC-6 ``cacheable=False``
 flag because workflows are uncacheable (the whole point is the dispatch +
 solver run + envelope build, never the cached return).
@@ -37,7 +37,7 @@ solver run + envelope build, never the cached return).
 Partial-failure envelope shape (TENTATIVE per kickoff Open Questions):
     On any internal failure (fetcher exception, NLCD validation gate firing,
     SFINCS dispatch error, solver SOLVER_FAILED, postprocess error), the
-    workflow still returns a typed ``AssessmentEnvelope`` — but with
+    workflow still returns a typed ``AssessmentEnvelope`` -- but with
     ``envelope_type="modeled"``, an empty layers list, and a
     ``FloodPayload`` carrying zero-valued metrics + the error code threaded
     into the ``solver_version`` field (a documented seam). The agent surface narrates the
@@ -49,12 +49,12 @@ Cross-cutting principles in force:
 - **Invariant 2 (Deterministic workflows): preserves.** Straight-line
   composition; each step's failure surfaces as a typed exception caught at
   the workflow boundary.
-- **Invariant 7 (no silent wrong answers): EXTENDS — the headline.** The
+- **Invariant 7 (no silent wrong answers): EXTENDS -- the headline.** The
   ``build_sfincs_model`` NLCD validation gate is the load-bearing mitigation.
   ``LULC_MAPPING_MISMATCH`` is surfaced as a failed envelope, not a
   dispatched-broken-model SFINCS run.
 - **Invariant 8 (Cancellation is first-class): preserves.** The workflow
-  awaits ``wait_for_completion`` — any ``asyncio.CancelledError`` propagates
+  awaits ``wait_for_completion`` -- any ``asyncio.CancelledError`` propagates
   through the workflow as-is, triggering the 850ms cancel chain.
 """
 
@@ -165,16 +165,12 @@ _FALLBACK_SESSION_ID = None
 
 # --- Pre-solver phase timeouts (terminal-pipeline-card hardening) -----------
 # The fetcher chain (Steps 1-4) + ``build_sfincs_model`` (Step 5) run BEFORE
-# ``wait_for_completion``, which is the only phase that previously emitted
-# progress. If any pre-solver step hangs (a wedged data endpoint, a GDAL VSI
-# read with no overall timeout, a py3dep stall) the card sat ``running`` with
-# NO progress and NO timeout — indistinguishable from the spin-after-cancel
-# bug and consistent with NATE's "120 min, never finished" symptom. Each phase
-# is now wrapped in ``asyncio.wait_for`` (the sync calls go through
-# ``asyncio.to_thread`` so the timeout is enforceable) and bounded by a
-# GENEROUS budget — large enough that a healthy fetch/build never trips it, but
-# finite so a true hang surfaces as a typed ``*_TIMEOUT`` failed envelope
-# instead of an infinite await. Overridable via env for ops tuning.
+# ``wait_for_completion``. Each phase is wrapped in ``asyncio.wait_for`` (the
+# sync calls go through ``asyncio.to_thread`` so the timeout is enforceable)
+# and bounded by a GENEROUS budget -- large enough that a healthy fetch/build
+# never trips it, but finite so a true hang surfaces as a typed ``*_TIMEOUT``
+# failed envelope instead of an infinite await. Overridable via env for ops
+# tuning.
 _FETCHER_PHASE_TIMEOUT_S = float(
     os.environ.get("TRID3NT_FLOOD_FETCHER_TIMEOUT_S", "900")  # 15 min
 )
@@ -190,14 +186,14 @@ async def _emit_presolver_progress(
 
     Keeps the card from sitting SILENTLY during the multi-second pre-solver
     chain. ``emitter`` is the ``current_emitter()`` handle (may be ``None``
-    outside a WS dispatch — direct call / smoke / unit test); failure is
+    outside a WS dispatch -- direct call / smoke / unit test); failure is
     swallowed because progress is a UX hint, never a correctness gate.
     """
     if emitter is None:
         return
     try:
         await emitter.update_current_progress(progress_percent)
-    except Exception as exc:  # noqa: BLE001 — progress is non-fatal
+    except Exception as exc:  # noqa: BLE001 -- progress is non-fatal
         logger.debug(
             "model_flood_scenario: pre-solver progress emit failed (non-fatal): %s",
             exc,
@@ -205,7 +201,7 @@ async def _emit_presolver_progress(
 
 
 #: Cadence (seconds) for the LIVE solve-progress envelope during the long solve.
-#: Independent of the solver poll cadence — this is a UX tick on the running
+#: Independent of the solver poll cadence -- this is a UX tick on the running
 #: card; conservative so a 10-20-min solve emits a steady (not chatty) stream.
 _LIVE_SOLVE_PROGRESS_INTERVAL_S = 10.0
 
@@ -345,7 +341,7 @@ async def _drive_live_solve_progress(
             )
             try:
                 await emitter.emit_solve_progress(payload)
-            except Exception as exc:  # noqa: BLE001 — UX hint, never fatal
+            except Exception as exc:  # noqa: BLE001 -- UX hint, never fatal
                 logger.debug(
                     "model_flood_scenario: live solve-progress emit failed "
                     "(non-fatal): %s",
@@ -353,7 +349,7 @@ async def _drive_live_solve_progress(
                 )
             await asyncio.sleep(_LIVE_SOLVE_PROGRESS_INTERVAL_S)
     except asyncio.CancelledError:
-        # Normal teardown when the solve completes — re-raise so the task
+        # Normal teardown when the solve completes -- re-raise so the task
         # finalizes cleanly.
         raise
 
@@ -417,14 +413,14 @@ async def _drive_presolver_phase_progress(
             pct = int(start_pct) + int(round(band * frac))
             try:
                 await emitter.update_current_progress(pct)
-            except Exception as exc:  # noqa: BLE001 — liveness hint, never fatal
+            except Exception as exc:  # noqa: BLE001 -- liveness hint, never fatal
                 logger.debug(
                     "model_flood_scenario: pre-solver progress tick failed "
                     "(non-fatal): %s",
                     exc,
                 )
     except asyncio.CancelledError:
-        # Normal teardown when the phase completes — re-raise so the task
+        # Normal teardown when the phase completes -- re-raise so the task
         # finalizes cleanly.
         raise
 
@@ -445,7 +441,7 @@ class WorkflowError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
-# Helpers — bbox resolution + zero-metrics envelope builder
+# Helpers -- bbox resolution + zero-metrics envelope builder
 # --------------------------------------------------------------------------- #
 
 
@@ -457,7 +453,7 @@ def _resolve_bbox(
     """Resolve the bbox via direct param or via ``geocode_location``.
 
     Precedence per the kickoff TENTATIVE: bbox-direct wins when both are
-    given (matches the "intent + irreducible inputs" Decision K — bbox IS
+    given (matches the "intent + irreducible inputs" Decision K -- bbox IS
     the irreducible input; geocode is a convenience).
 
     Returns:
@@ -506,7 +502,7 @@ def _build_failed_envelope(
 
     Per (TENTATIVE): zero-valued
     FloodMetrics + error_code threaded into ``solver_version`` (a documented
-    out-of-band seam — the schema-side ``solver_version`` is a string field
+    out-of-band seam -- the schema-side ``solver_version`` is a string field
     so we can carry ``"failed:LULC_MAPPING_MISMATCH"`` etc. The agent surface
     parses this and emits a meaningful failure narration.)
 
@@ -582,7 +578,7 @@ def _emit_flood_solve_telemetry(
     Pulls the autoscale provenance (estimated active cells, chosen resolution,
     vCPU) off ``model_setup.parameters`` and the wall-clock from the
     ``RunResult`` (``duration_seconds``), and folds in the backend
-    (``handle.workflow_name`` — ``local-docker`` / ``local-exec`` /
+    (``handle.workflow_name`` -- ``local-docker`` / ``local-exec`` /
     ``model_flood_scenario``) + aoi_km2. Best-effort; returns the record
     (or ``None`` on any failure) so the caller's try/except stays simple.
     """
@@ -631,7 +627,7 @@ def _record_flood_batch_solve_telemetry(
     ``None``). This folds that together with the active-cell count + the built
     grid resolution + the solver + the terminal status + the run/case/session ids
     into the SOLVE telemetry sink (``telemetry.record_solve_telemetry``). Mirrors
-    ``_emit_flood_solve_telemetry`` (the autoscale row) — they are siblings: the
+    ``_emit_flood_solve_telemetry`` (the autoscale row) -- they are siblings: the
     autoscale row drives cap re-tuning, this row drives completion-time
     inference. Best-effort; returns the recorded row (or ``None`` on any failure)
     so the caller's try/except stays trivial. Only the regular-grid path calls
@@ -660,7 +656,7 @@ def _record_flood_batch_solve_telemetry(
         "resolution_m": float(built_res) if built_res is not None else None,
     }
     # Merge the Batch instance + timing fields (instance_type / lifecycle / az /
-    # vcpus / memory_mib / *_at_ms / *_secs) — present only on the aws-batch
+    # vcpus / memory_mib / *_at_ms / *_secs) -- present only on the aws-batch
     # terminal paths; empty dict otherwise (local/in-process).
     row.update(meta)
     return record_solve_telemetry(row)
@@ -681,13 +677,13 @@ def _default_runs_prefix(run_id: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# cht_sfincs quadtree+SnapWave deck-build (coastal North Star) — agent side
+# cht_sfincs quadtree+SnapWave deck-build (coastal North Star) -- agent side
 #
 # The agent composes a build_spec JSON from the already-fetched topobathy +
 # forcing + the grid params build_sfincs_model already computed, uploads it to
 # S3, and hands its URI to ``build_sfincs_quadtree_deck`` (solver.py) which
 # SUBMITS the GPL-isolated deck-builder Batch job and returns the deck manifest
-# URI. The agent NEVER imports cht_sfincs — this is pure JSON + S3 + batch.submit.
+# URI. The agent NEVER imports cht_sfincs -- this is pure JSON + S3 + batch.submit.
 # --------------------------------------------------------------------------- #
 
 
@@ -1302,16 +1298,16 @@ def _compose_and_upload_deckbuild_spec(
     ENTIRELY from artifacts the regular ``build_sfincs_model`` already produced
     (topobathy COG URI, grid params on ``model_setup.parameters``, materialised
     surge/wave forcing URIs) so the deck-build mirrors the regular build's inputs
-    — only the authoring engine (refined quadtree + SnapWave) differs.
+    -- only the authoring engine (refined quadtree + SnapWave) differs.
 
     The two known cht_sfincs caveats are baked in here so the worker reproduces
     the deck exactly:
-      * CAVEAT 2 — ``snapwave.use_herbers = 1`` (the Herbers infragravity-wave
+      * CAVEAT 2 -- ``snapwave.use_herbers = 1`` (the Herbers infragravity-wave
         run-up path; matches the deck-builder worker's validated default). Passed
         EXPLICITLY so agent + worker agree on the contract value.
       * CAVEAT 1 (SnapWave bnd time column) is owned by cht/the worker (the
         boundary time column is written as ``(time - tref).total_seconds()``
-        there; do NOT post-correct it agent-side) — recorded here as
+        there; do NOT post-correct it agent-side) -- recorded here as
         ``snapwave.time_column_owned_by_cht = True`` so the worker honors it.
 
     The deck dir + manifest output URIs are co-located with the build_spec under
@@ -1320,7 +1316,7 @@ def _compose_and_upload_deckbuild_spec(
     consumes. Returns the build_spec ``s3://.../build_spec.json`` URI.
 
     Raises ``DeckBuildError`` when the build_spec cannot be uploaded (no S3
-    backend / upload failure) — honest typed failure, never a silent local
+    backend / upload failure) -- honest typed failure, never a silent local
     fallback the GPL worker on Batch could not reach.
     """
     import json as _json
@@ -1338,7 +1334,7 @@ def _compose_and_upload_deckbuild_spec(
     # --- target_epsg: the projected CRS the quadtree grid is authored in ---
     # Prefer an explicit epsg in params; else parse the EPSG int from the builder's
     # ``crs`` param (e.g. "EPSG:3857"); else derive the UTM zone from the bbox
-    # centroid (matching ``fetch_topobathy``'s UTM default — a coastal AOI gets a
+    # centroid (matching ``fetch_topobathy``'s UTM default -- a coastal AOI gets a
     # metric grid, not Web-Mercator). The deck-build worker REQUIRES an int.
     target_epsg = (
         explicit_grid.get("epsg")
@@ -1355,7 +1351,7 @@ def _compose_and_upload_deckbuild_spec(
     if not target_epsg or int(target_epsg) in (4326, 3857):
         # Web-Mercator / geographic is unsuitable for a metric quadtree grid;
         # snap to the bbox-centroid UTM zone (northern hemisphere assumed for the
-        # CONUS coastal North Star — matches fetch_topobathy).
+        # CONUS coastal North Star -- matches fetch_topobathy).
         lon_c = (float(bbox[0]) + float(bbox[2])) / 2.0
         lat_c = (float(bbox[1]) + float(bbox[3])) / 2.0
         zone = int((lon_c + 180.0) // 6.0) + 1
@@ -1488,7 +1484,7 @@ def _compose_and_upload_deckbuild_spec(
             surge_forcing["snapwave_boundary"] = wave_bc
 
     # --- auto-refinement + cell budget (combined-worker v2) ---
-    # The agent does NOT do heavy GIS or import cht — it only declares the
+    # The agent does NOT do heavy GIS or import cht -- it only declares the
     # refinement DEPTH (max levels, x2 each) + the cell budget; the combined
     # worker DERIVES the actual refinement polygons (e.g. a nearshore/AOI-interior
     # band carrying the 'refinement_level' int column cht.grid.build requires) and
@@ -1522,16 +1518,16 @@ def _compose_and_upload_deckbuild_spec(
             "zmax": params.get("mask_zmax") if isinstance(params, dict) else None,
         },
         "snapwave": {
-            # CAVEAT 2 — snapwave_use_herbers = 1 (the Herbers infragravity-wave
+            # CAVEAT 2 -- snapwave_use_herbers = 1 (the Herbers infragravity-wave
             # run-up path; the deck-builder worker's validated default is also 1).
             # The agent passes it EXPLICITLY so agent + worker agree on the
             # contract value rather than the agent silently overriding the
             # worker's default.
             "use_herbers": 1,
-            # CAVEAT 1 — let cht own the SnapWave boundary time column; do NOT
+            # CAVEAT 1 -- let cht own the SnapWave boundary time column; do NOT
             # post-correct to tref-relative (the boundary time column is written
             # as (time - tref).total_seconds() inside cht/the worker, NOT a raw
-            # epoch column — the worker owns it).
+            # epoch column -- the worker owns it).
             "time_column_owned_by_cht": True,
             "gamma": 0.8,
             "gammaig": 1.0,
@@ -1588,7 +1584,7 @@ def _compose_and_upload_deckbuild_spec(
         }
 
     # --- rivers (combined-worker v2, OPTIONAL) ---
-    # OSM waterway LineStrings (FlatGeobuf — same Overpass pattern fetch_roads_osm
+    # OSM waterway LineStrings (FlatGeobuf -- same Overpass pattern fetch_roads_osm
     # uses). The combined worker may burn them as flow paths / refinement seeds.
     # Absent when no waterways fetched.
     if rivers_uri:
@@ -1637,7 +1633,7 @@ def _compose_and_upload_deckbuild_spec(
 
 
 # --------------------------------------------------------------------------- #
-# REGULAR-GRID (pluvial) BUILD offload — compose a job_spec, submit ONE combined
+# REGULAR-GRID (pluvial) BUILD offload -- compose a job_spec, submit ONE combined
 # hydromt-BUILD + SFINCS-solve Batch job (heavy-compute offload, the reference
 # implementation). Mirrors the quadtree ``_compose_and_upload_deckbuild_spec`` +
 # ``run_sfincs_quadtree`` pattern, but for the regular-grid ``build_sfincs_model``
@@ -1648,7 +1644,7 @@ def _compose_and_upload_deckbuild_spec(
 
 
 #: Forcing-member file-URI keys the worker downloads (superset of the quadtree
-#: helper's — also covers wind/pressure ``grid_uri`` + infiltration rasters). A
+#: helper's -- also covers wind/pressure ``grid_uri`` + infiltration rasters). A
 #: LOCAL value (a /tmp adapter/parametric file) must be uploaded to S3 before it
 #: enters the job_spec, else the remote worker cannot read it.
 _FLOOD_BUILD_FORCING_FILE_KEYS = (
@@ -1669,7 +1665,7 @@ def _sfincs_build_offload_enabled() -> bool:
 
     Gated OFF by default (``TRID3NT_SFINCS_BUILD_OFFLOAD`` unset) so live behavior
     is byte-identical to the legacy in-agent build until NATE rebuilds+deploys the
-    ``grace2-sfincs`` image (which now bundles hydromt) and flips the flag — the
+    ``grace2-sfincs`` image (which now bundles hydromt) and flips the flag -- the
     same inert-until-provisioned discipline the quadtree path uses. A truthy value
     (``1``/``on``/``true``/``yes``) activates it."""
     return (os.environ.get("TRID3NT_SFINCS_BUILD_OFFLOAD") or "").strip().lower() in {
@@ -1819,8 +1815,8 @@ def _compose_and_upload_flood_build_spec(
     ``setup_uri`` is the job_spec URI and whose ``parameters['sfincs_build_spec']``
     marks the combined build+solve dispatch. The DEM/NetCDF are NEVER loaded here.
 
-    Raises ``SFINCSSetupError`` (NLCD gate / mapping load) — caught by the
-    composer's existing handler — and ``DeckBuildError`` (storage backend not S3,
+    Raises ``SFINCSSetupError`` (NLCD gate / mapping load) -- caught by the
+    composer's existing handler -- and ``DeckBuildError`` (storage backend not S3,
     forcing upload, spec upload).
     """
     from trid3nt_server.agent.tools.cache import storage_scheme
@@ -1948,8 +1944,8 @@ class PrecipForcingError(RuntimeError):
     Carries an A.6 open-set ``error_code`` so the workflow surface lifts it
     into a failed AssessmentEnvelope (same pattern as ``SFINCSSetupError``).
     Codes:
-    - ``PRECIP_RASTER_READ_FAILED`` — the raster bytes were unreadable.
-    - ``PRECIP_RASTER_EMPTY`` — the raster had no valid (non-nodata) cells in
+    - ``PRECIP_RASTER_READ_FAILED`` -- the raster bytes were unreadable.
+    - ``PRECIP_RASTER_EMPTY`` -- the raster had no valid (non-nodata) cells in
       the domain → no area-mean is computable.
     """
 
@@ -1968,12 +1964,12 @@ def compute_precip_area_mean_mm_per_hr(
     """Compute the AREA-MEAN accumulated precip over the model domain → mm/hr.
 
      v2 (netamt fallback). Reads the precipitation raster at
-    ``forcing_raster_uri`` (an accumulated-precip COG — MRMS QPE, ERA5,
+    ``forcing_raster_uri`` (an accumulated-precip COG -- MRMS QPE, ERA5,
     gridMET, …), computes the mean over all valid cells, and converts that
     single domain-mean accumulated depth into a uniform SFINCS ``netamt``
     rate in **mm/hr** by dividing by the ``accumulation_hours`` window.
 
-    This collapses the raster's spatial structure to one number — the v0.1
+    This collapses the raster's spatial structure to one number -- the v0.1
     netamt fallback locked by manifest. The spw spatially-varying-precip
     upgrade path (ingest the raster as a 2D time grid) is documented in
     ``sfincs_builder._generate_hydromt_yaml_config`` + this job's report.md.
@@ -1988,7 +1984,7 @@ def compute_precip_area_mean_mm_per_hr(
     Args:
         forcing_raster_uri: ``gs://...`` (or local path / ``/vsigs/...``) URI
             of the accumulated-precip COG.
-        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` — the model domain.
+        bbox: ``(min_lon, min_lat, max_lon, max_lat)`` -- the model domain.
             Carried for provenance + future exact-window cropping; v0.1 uses
             the whole-raster mean.
         accumulation_hours: the precip accumulation window in hours (e.g. 24
@@ -2000,7 +1996,7 @@ def compute_precip_area_mean_mm_per_hr(
             per-hour conversion.
 
     Returns:
-        ``(magnitude_mm_per_hr, area_mean_mm)`` — the uniform SFINCS netamt
+        ``(magnitude_mm_per_hr, area_mean_mm)`` -- the uniform SFINCS netamt
         rate AND the area-mean accumulated depth in mm (echoed into forcing
         provenance for narration).
 
@@ -2025,13 +2021,13 @@ def compute_precip_area_mean_mm_per_hr(
     # Scheme dispatch for the forcing-raster read:
     # s3:// - boto3 stage-then-open. GDAL's
     #            /vsis3/ credential chain does NOT resolve the EC2 instance role
-    #            in this env (boto3 does) — observed live: "does not exist" on an
+    #            in this env (boto3 does) -- observed live: "does not exist" on an
     #            existing object. Stage the bytes via the shared boto3 reader and
     #            open in-memory (MemoryFile frees with the dataset; no temp-file
-    #            leak — mirrors extract_landcover_class._open_source). The MRMS
+    #            leak -- mirrors extract_landcover_class._open_source). The MRMS
     #            COG is bbox-clipped/small, so a whole-file fetch is safe.
     #   gs:// / /vsigs/ / file:// / local - keep the GDAL /vsigs/ path (
-    #            — keeps the fragile gcsfs path out of the read; local pass-through).
+    #            -- keeps the fragile gcsfs path out of the read; local pass-through).
     try:
         if forcing_raster_uri.startswith("s3://"):
             from rasterio.io import MemoryFile  # type: ignore[import-not-found]
@@ -2054,7 +2050,7 @@ def compute_precip_area_mean_mm_per_hr(
         ) from exc
 
     # Mask nodata + common sentinels + non-finite values. Negative precip is
-    # physically invalid (some products use negatives as fill) — mask those
+    # physically invalid (some products use negatives as fill) -- mask those
     # too so they don't drag the mean.
     mask = np.isfinite(arr)
     if nodata is not None:
@@ -2090,7 +2086,7 @@ def compute_precip_area_mean_mm_per_hr(
 
 
 # --------------------------------------------------------------------------- #
-# COASTAL SFINCS — surge-forcing member construction (engine plumbing)
+# COASTAL SFINCS -- surge-forcing member construction (engine plumbing)
 # --------------------------------------------------------------------------- #
 
 
@@ -2215,14 +2211,14 @@ def _resolve_surge_forcing_from_fetchers(
     ``timeseries_uri`` / ``locations_uri`` / ``geodataset_uri`` the deck consumes
     verbatim):
 
-    - ``waterlevel.fetch_uri`` (or ``fgb_uri``) — a GTSM / CO-OPS FlatGeobuf to
+    - ``waterlevel.fetch_uri`` (or ``fgb_uri``) -- a GTSM / CO-OPS FlatGeobuf to
       adapt into bzs files. Optional ``offset`` / ``buffer_m`` pass through.
-    - ``discharge.fetch_uri`` (or ``fgb_uri``) — an NWM FlatGeobuf to adapt into
+    - ``discharge.fetch_uri`` (or ``fgb_uri``) -- an NWM FlatGeobuf to adapt into
       dis files. Optional ``cama_cog_uri`` instead → sample the CaMa COG.
       ``rivers_uri`` / ``hydrography_uri`` / ``river_upa_km2`` pass through.
 
     A sub-dict that ALREADY carries ``timeseries_uri`` / ``geodataset_uri`` is
-    left untouched (the pre-materialised path — backward compatible). Returns the
+    left untouched (the pre-materialised path -- backward compatible). Returns the
     surge_forcing dict with raw inputs replaced by materialised URIs, or the
     input unchanged when there is nothing to adapt. ``None`` → ``None``.
 
@@ -2230,7 +2226,7 @@ def _resolve_surge_forcing_from_fetchers(
     requested that cannot be materialised must surface as a typed failed envelope
     (the workflow's Step-5 try/except catches ``SFINCSForcingAdapterError`` and
     threads its ``error_code``), NOT silently degrade to a pluvial-only deck
-    (Invariant 7 — never a silent wrong answer for an explicit surge request).
+    (Invariant 7 -- never a silent wrong answer for an explicit surge request).
     """
     if not surge_forcing:
         return surge_forcing
@@ -2515,10 +2511,9 @@ def _autowire_coastal_surge_forcing(
 ) -> dict[str, Any]:
     """Auto-wire a time-varying SEA surge water-level boundary for a coastal run.
 
-    The COASTAL fix: a ``coastal=True`` run with NO explicit ``surge_forcing``
-    used to silently degrade to a pure-RAINFALL deck (``fetch_topobathy`` only
-    deepened the bed, no sea water was added). This builds a water-level boundary
-    so the flood animation shows water rising from the sea and marching inland.
+    Builds a water-level boundary for a ``coastal=True`` run with NO explicit
+    ``surge_forcing`` so the flood animation shows water rising from the sea
+    and marching inland (instead of a pure-rainfall deck).
 
     Degrade ladder (data-source fallback norm: primary -> fallback -> honest
     last-resort, never a silent dead-end):
@@ -2816,7 +2811,7 @@ def _resolve_building_obstacle_uri(
 ) -> str | None:
     """Resolve the building-obstacle geofile URI for the SFINCS deck (best-effort).
 
-    COASTAL SFINCS — burn building footprints into the deck so the rough 2D
+    COASTAL SFINCS -- burn building footprints into the deck so the rough 2D
     flood routes around buildings. Three forms of ``building_obstacles``:
 
     - ``False`` / falsy → no obstacles (``None``).
@@ -2825,7 +2820,7 @@ def _resolve_building_obstacle_uri(
     - ``True`` → fetch OSM building footprints for ``bbox`` via the
       ``fetch_buildings`` atomic tool (OSM Overpass primary). This is
       BEST-EFFORT: any fetch failure logs + returns ``None`` (the flood proceeds
-      WITHOUT obstacles, never aborts) — same degrade policy as river geometry
+      WITHOUT obstacles, never aborts) -- same degrade policy as river geometry
       A successful fetch is recorded as a ``DataSource``.
 
     Returns the obstacle geofile URI, or ``None`` when there is nothing to burn.
@@ -2849,7 +2844,7 @@ def _resolve_building_obstacle_uri(
                 )
             )
         return uri
-    except Exception as exc:  # noqa: BLE001 — obstacles are optional for the flood
+    except Exception as exc:  # noqa: BLE001 -- obstacles are optional for the flood
         logger.warning(
             "model_flood_scenario: fetch_buildings failed for bbox=%s (%s) — "
             "proceeding WITHOUT building obstacles (the flood still runs, just "
@@ -3031,7 +3026,7 @@ def _resolve_infiltration_uri(
                 )
             )
         return uri
-    except Exception as exc:  # noqa: BLE001 — infiltration is optional for the flood
+    except Exception as exc:  # noqa: BLE001 -- infiltration is optional for the flood
         logger.warning(
             "model_flood_scenario: fetch_gcn250_curve_numbers failed for bbox=%s "
             "(%s) — proceeding WITHOUT an infiltration loss (the flood still runs).",
@@ -3215,7 +3210,7 @@ def _resolve_quadtree_rivers_uri(
 
     BEST-EFFORT: fetches river/waterway LineStrings for ``bbox`` so the combined
     worker can burn them into the deck as flow paths / refinement seeds. The agent
-    only POINTS at the geofile — it does NO GIS. Any fetch failure logs + returns
+    only POINTS at the geofile -- it does NO GIS. Any fetch failure logs + returns
     ``None`` (the combined run proceeds WITHOUT rivers; same degrade policy as the
     building footprints + the land/pluvial river branch). A successful
     fetch is recorded as a ``DataSource``. Returns the river geofile URI, or
@@ -3235,7 +3230,7 @@ def _resolve_quadtree_rivers_uri(
                 )
             )
         return uri
-    except Exception as exc:  # noqa: BLE001 — rivers are optional for the flood
+    except Exception as exc:  # noqa: BLE001 -- rivers are optional for the flood
         logger.warning(
             "model_flood_scenario: fetch_river_geometry failed for bbox=%s (%s) — "
             "proceeding WITHOUT rivers in the combined quadtree deck (the flood "
@@ -3304,7 +3299,7 @@ async def model_flood_scenario(
     On internal failure (fetch error, NLCD gate firing, SFINCS dispatch
     failure, SOLVER_FAILED, postprocess error), returns a typed
     AssessmentEnvelope with zero-valued ``FloodMetrics`` and the error code
-    threaded into ``solver_version`` — never raises (caller-friendly).
+    threaded into ``solver_version`` -- never raises (caller-friendly).
     The agent surface narrates the failed envelope honestly.
 
     Args:
@@ -3328,10 +3323,10 @@ async def model_flood_scenario(
             fallback (spw spatial upgrade path documented in
             ``sfincs_builder``). ``duration_hr`` is reused as the precip
             accumulation window for the depth→rate conversion. When ``None``
-            (the default) the Atlas 14 design-storm path runs unchanged —
+            (the default) the Atlas 14 design-storm path runs unchanged --
             behavior is **identical** to the v1 workflow (regression-critical).
         surge_forcing: optional nested dict wiring the COASTAL SFINCS surge /
-            tide / discharge / wind / pressure boundary forcing into the deck —
+            tide / discharge / wind / pressure boundary forcing into the deck --
             ``{"waterlevel": {...}, "discharge": {...}, "wind": {...},
             "pressure": {...}}``. Each sub-dict carries the forcing-file URIs
             (timeseries CSV + locations geofile, or a geodataset / grid netCDF)
@@ -3352,15 +3347,15 @@ async def model_flood_scenario(
         building_obstacle_mode: ``"exclude"`` (default) makes footprint cells
             INACTIVE no-flow holes; ``"raise"`` keeps them active but lifts their
             bed elevation via the subgrid (requires subgrid; auto-enabled).
-        coastal: COASTAL-AOI flag (SFINCS North Star P1). When ``True`` — OR
+        coastal: COASTAL-AOI flag (SFINCS North Star P1). When ``True`` -- OR
             implicitly when ``surge_forcing`` is supplied (a water-level / surge
-            boundary is physically incoherent without a nearshore bed) — the DEM
+            boundary is physically incoherent without a nearshore bed) -- the DEM
             fetch is routed through ``fetch_topobathy`` instead of ``fetch_dem``.
             ``fetch_topobathy`` produces ONE seamless topo-bathymetry surface
             (USGS 3DEP land + NOAA NCEI CUDEM bathymetry, CUDEM winning on the
             coast) in the SAME contract as ``fetch_dem`` (single-band float32
             NAVD88-metres COG, positive-up, EPSG:32616), so ``build_sfincs_model``
-            / ``setup_dep`` consume it UNCHANGED — the coastal DEM is a drop-in.
+            / ``setup_dep`` consume it UNCHANGED -- the coastal DEM is a drop-in.
             ``False`` (default) AND no ``surge_forcing`` → the LAND/pluvial path
             is byte-identical to the v0.1 workflow (``fetch_dem``,
             regression-critical). If ``fetch_topobathy`` cannot find CUDEM
@@ -3379,14 +3374,14 @@ async def model_flood_scenario(
             coming IN from the sea + a wave-height field, instead of the old
             silent rainfall-only degrade. ALL gated on ``is_coastal``  -  the
             inland/pluvial path is byte-identical (no boundary, quadtree unchanged).
-        quadtree: COASTAL SFINCS North Star — build the deck with a multi-level
+        quadtree: COASTAL SFINCS North Star -- build the deck with a multi-level
             REFINED QUADTREE grid + SnapWave wave coupling (incident + infragravity
             waves) instead of a regular grid. This authoring requires cht_sfincs
             (GPL-3.0), so it runs in a DEDICATED GPL-isolated Batch worker the
             agent only SUBMITS: the workflow composes a build_spec from the
             already-fetched topobathy + forcing, submits the deck-build Batch job
             (``build_sfincs_quadtree_deck``), and feeds the resulting deck
-            manifest URI into the SAME ``run_solver('sfincs', ...)`` solve — the
+            manifest URI into the SAME ``run_solver('sfincs', ...)`` solve -- the
             solve half is unchanged. INERT until NATE provisions + flips
             ``TRID3NT_SOLVER_BACKEND=aws-batch`` + the deck-builder job-def
             (``TRID3NT_AWS_BATCH_JOB_DEF_SFINCS_DECKBUILDER``); when unset the
@@ -3480,17 +3475,17 @@ async def model_flood_scenario(
     # water-level boundary is physically incoherent on a land-only DEM (there is
     # no nearshore bed to route run-up over), so a surge request implies a
     # coastal AOI that needs the merged topo-bathymetry surface. This is a clean,
-    # testable signal off the existing workflow inputs — no geometry/coastline
+    # testable signal off the existing workflow inputs -- no geometry/coastline
     # lookup needed. When False, the DEM fetch stays on ``fetch_dem`` exactly as
     # the v0.1 land/pluvial path (regression-critical).
     # ``quadtree`` (the cht_sfincs quadtree+SnapWave deck-build North Star) is a
-    # coastal-only path — a wave-coupled run needs the merged topo-bathymetry
-    # surface — so it implies coastal regardless of the explicit flag.
+    # coastal-only path -- a wave-coupled run needs the merged topo-bathymetry
+    # surface -- so it implies coastal regardless of the explicit flag.
     # scenario-coverage couplings. A ``compound`` run is BOTH a
     # coastal-surge AND a fluvial-discharge driver (plus the always-present
     # precip), so it lifts both ``coastal`` and ``river``. A ``tsunami`` run needs
     # the seaward bed + msk==2 boundary, so it implies ``coastal`` too. These are
-    # additive — a pluvial run (all flags off) is byte-identical.
+    # additive -- a pluvial run (all flags off) is byte-identical.
     # SPIDERWEB (2026-07-19): a storm (name+season, or a verbatim track URI)
     # implies coastal + the parametric hurricane wind path. The mutual-exclusion
     # with the ``wind`` param is validated as a typed USER_INPUT error below
@@ -3560,7 +3555,7 @@ async def model_flood_scenario(
     # the tsunami wave height are PHYSICAL magnitudes the user MUST supply. If a
     # breach/tsunami intent is detected WITHOUT its magnitude, return a typed
     # USER_INPUT_REQUIRED failed envelope (honest gate) rather than inventing a
-    # hydrograph / wave height. The drawn breach POINT alone is not enough — the
+    # hydrograph / wave height. The drawn breach POINT alone is not enough -- the
     # peak discharge governs the flood, so it must be explicit.
     if breach_point is not None and breach_peak_discharge_m3s is None:
         logger.info(
@@ -3638,12 +3633,12 @@ async def model_flood_scenario(
         )
 
     # --- Zoom-on-area-first: emit ``map-command(zoom-to)`` BEFORE
-    # any compute starts. As soon as we have a bbox, the map zooms — the
+    # any compute starts. As soon as we have a bbox, the map zooms -- the
     # user sees immediate response while the multi-minute SFINCS chain runs.
     # The emitter binding is set by ``PipelineEmitter.emit_tool_call`` via
     # the ``_CURRENT_EMITTER`` ContextVar; outside that scope (direct call,
     # smoke harness, unit test without an emitter) ``current_emitter()``
-    # returns ``None`` and we skip silently — emitting a transient verb is
+    # returns ``None`` and we skip silently -- emitting a transient verb is
     # a UX nice-to-have, not a correctness gate.
     emitter = current_emitter()
     if emitter is not None:
@@ -3656,7 +3651,7 @@ async def model_flood_scenario(
                 "model_flood_scenario: zoom-on-area-first emitted bbox=%s",
                 resolved_bbox,
             )
-        except Exception as exc:  # noqa: BLE001 — non-fatal UX hint
+        except Exception as exc:  # noqa: BLE001 -- non-fatal UX hint
             logger.warning(
                 "model_flood_scenario: zoom-on-area-first emit failed (non-fatal): %s",
                 exc,
@@ -3782,7 +3777,7 @@ async def model_flood_scenario(
                     accessed_at=datetime.now(timezone.utc),
                 )
             )
-        except Exception as exc:  # noqa: BLE001 — river is optional for pluvial
+        except Exception as exc:  # noqa: BLE001 -- river is optional for pluvial
             logger.warning(
                 "model_flood_scenario: fetch_river_geometry failed for bbox=%s "
                 "(%s) — proceeding WITHOUT river geometry (pluvial deck does not "
@@ -3812,14 +3807,14 @@ async def model_flood_scenario(
                 )
             )
             # Envelope-side ``ForcingSummary.forcing_type`` is a contract-owned
-            # Literal that does NOT (yet) include ``"pluvial_observed"`` — the
+            # Literal that does NOT (yet) include ``"pluvial_observed"`` -- the
             # observed precip raster IS a pluvial-precip forcing on the same
             # SFINCS netamt path, so we summarise it as ``"pluvial_synthetic"``
             # and carry the observed/area-mean distinction in the free-form
             # ``parameters`` dict (``forcing_mode="area_mean_netamt"`` +
             # ``forcing_raster_uri``) + the human-readable ``source``. The
             # ENGINE-internal ``ForcingSpec.forcing_type`` (below) is
-            # ``"pluvial_observed"`` — that drives the deck-builder branch and
+            # ``"pluvial_observed"`` -- that drives the deck-builder branch and
             # is engine-owned. A future schema amendment could add a dedicated
             # ``"pluvial_observed"`` envelope literal.
             forcing_summary = ForcingSummary(
@@ -3949,9 +3944,9 @@ async def model_flood_scenario(
     except TopobathyError as exc:
         # COASTAL DEM hard failure (no CUDEM AND no 3DEP, bad bbox, datum
         # mismatch). The soft "CUDEM missing, 3DEP present" case does NOT reach
-        # here — fetch_topobathy degrades internally and returns a result. This
+        # here -- fetch_topobathy degrades internally and returns a result. This
         # is the honest dead-end: thread the typed error_code into the failed
-        # envelope (Invariant 7 — never a fabricated topobathy success).
+        # envelope (Invariant 7 -- never a fabricated topobathy success).
         logger.warning(
             "model_flood_scenario: fetch_topobathy hard-failed for coastal "
             "bbox=%s (%s / %s) — returning failed envelope.",
@@ -4009,19 +4004,19 @@ async def model_flood_scenario(
         # run_id is not minted until AFTER the solve, below; an input is surfaced
         # PRE-solve so the user sees the terrain/landcover/rivers immediately).
         _input_id_base = new_ulid()
-        # (a) RIVERS — a VECTOR already carrying role="input"; no publish_layer
+        # (a) RIVERS -- a VECTOR already carrying role="input"; no publish_layer
         # round-trip (the s3:// FlatGeobuf inlines server-side).
         if river_layer is not None:
             await publish_input_layer(emitter, river_layer)
 
-        # (b) DEM + LANDCOVER — RASTERs carrying a raw s3:// COG, which MapLibre
+        # (b) DEM + LANDCOVER -- RASTERs carrying a raw s3:// COG, which MapLibre
         #     cannot fetch; each needs a publish_layer round-trip to mint a
         #     renderable tile/WMS URL FIRST, then emit as role="input" with its
         #     existing preset (continuous_dem / categorical_landcover resolve in
         #     the TiTiler registry). publish_layer runs a sync worker-poll loop ->
         #     OFFLOADED off the loop. On AWS publish_layer fails until QGIS-on-AWS
         # lands; the input is then simply absent (honest no-surface,
-        #     never fatal) — exactly like the result-layer publish-or-drop gate.
+        #     never fatal) -- exactly like the result-layer publish-or-drop gate.
         for _raster_in, _fallback_preset, _kind in (
             (dem_layer, "continuous_dem", "DEM"),
             (landcover_layer, "categorical_landcover", "landcover"),
@@ -4065,16 +4060,16 @@ async def model_flood_scenario(
 
     # --- Step 5: build_sfincs_model with NLCD validation gate ---
     try:
-        # COASTAL SFINCS — surge / tide / discharge / wind / pressure members.
+        # COASTAL SFINCS -- surge / tide / discharge / wind / pressure members.
         # ``surge_forcing`` is a nested dict of forcing URIs. Two shapes are
-        # accepted: (a) PRE-MATERIALISED — sub-dicts already carry
+        # accepted: (a) PRE-MATERIALISED -- sub-dicts already carry
         # ``timeseries_uri`` / ``locations_uri`` / ``geodataset_uri`` (consumed
-        # verbatim); (b) RAW FETCHER — sub-dicts carry ``fetch_uri`` (a GTSM /
+        # verbatim); (b) RAW FETCHER -- sub-dicts carry ``fetch_uri`` (a GTSM /
         # CO-OPS / NWM FlatGeobuf) or ``cama_cog_uri``, which the forcing ADAPTER
         # (sfincs_forcing_adapter) converts into the bzs/dis CSV + locations files
         # the deck-emission seam expects. The resolver materialises (b) in place;
         # an adapter failure for an EXPLICIT surge request raises (caught below as
-        # a typed failed envelope — never a silent pluvial degrade). Empty/absent
+        # a typed failed envelope -- never a silent pluvial degrade). Empty/absent
         # → pure-pluvial deck (no surge blocks emitted).
         # NO-SYNC-BLOCKING-ON-LOOP: the forcing adapter does heavy synchronous
         # geopandas/rasterio/pandas work (reads the GTSM/CO-OPS/NWM FlatGeobuf,
@@ -4083,23 +4078,22 @@ async def model_flood_scenario(
         # the coastal surge path (otherwise the loop stalls -> the client sees
         # ~30s of silence -> force-reconnect -> the turn's socket dies 1005).
         #
-        # COASTAL AUTO-WIRE (the fix): a coastal run with NO explicit
-        # ``surge_forcing`` used to silently degrade to a pure-RAINFALL deck
-        # (``fetch_topobathy`` only deepened the bed  -  no sea water entered). For a
-        # coastal AOI we now AUTO-WIRE a time-varying sea-surge water-level
-        # boundary (CO-OPS primary -> GTSM -> parametric last-resort) so water
-        # rises from the sea and marches inland across the frames. Gated strictly
-        # on ``is_coastal`` so the inland / pluvial path is byte-identical (no
-        # surge boundary, branch never taken). The fetcher fan-out does sync
-        # network I/O, so it runs off the loop alongside the resolve.
-        # scenario-coverage auto-wire precedence ladder. Each
-        # branch fills the SAME ``surge_forcing`` dict so compound combinations
-        # compose; all run BEFORE ``_resolve_surge_forcing_from_fetchers`` so any
-        # ``fetch_uri`` gets materialised. Order: tsunami -> coastal storm-surge
-        # (only if no waterlevel yet) -> fluvial/breach discharge -> wind merge.
+        # COASTAL AUTO-WIRE: for a coastal AOI we AUTO-WIRE a time-varying
+        # sea-surge water-level boundary (CO-OPS primary -> GTSM -> parametric
+        # last-resort) so water rises from the sea and marches inland across
+        # the frames. Gated strictly on ``is_coastal`` so the inland / pluvial
+        # path is byte-identical (no surge boundary, branch never taken). The
+        # fetcher fan-out does sync network I/O, so it runs off the loop
+        # alongside the resolve.
+        #
+        # Auto-wire precedence ladder: each branch fills the SAME
+        # ``surge_forcing`` dict so compound combinations compose; all run
+        # BEFORE ``_resolve_surge_forcing_from_fetchers`` so any ``fetch_uri``
+        # gets materialised. Order: tsunami -> coastal storm-surge (only if no
+        # waterlevel yet) -> fluvial/breach discharge -> wind merge.
         surge_forcing = dict(surge_forcing) if surge_forcing else {}
 
-        # 1) TSUNAMI waterlevel (pre-materialised N-wave) — the magnitude gate
+        # 1) TSUNAMI waterlevel (pre-materialised N-wave) -- the magnitude gate
         #    already fired above, so a height is present here. Sets a sentinel so
         #    the coastal storm-surge synth below does NOT also fire (a tsunami is
         #    NOT a storm surge).
@@ -4167,7 +4161,7 @@ async def model_flood_scenario(
                 )
             )
 
-        # 2) COASTAL storm-surge auto-wire — only when no waterlevel is present
+        # 2) COASTAL storm-surge auto-wire -- only when no waterlevel is present
         #    yet (a tsunami / explicit surge / spiderweb tide-base already wins).
         #    SUPPRESSED for the spiderweb path (storm_requested) so the surge is
         #    generated by the spw wind+pressure, never double-counted.
@@ -4182,7 +4176,7 @@ async def model_flood_scenario(
             if _surge:
                 surge_forcing = {**surge_forcing, **_surge}
 
-        # 3a) LEVEE-BREACH discharge (pre-materialised interior jet) — distinct
+        # 3a) LEVEE-BREACH discharge (pre-materialised interior jet) -- distinct
         #     from a domain-edge river discharge; carried onto ForcingSpec.breach
         #     so a compound run can have BOTH. The magnitude gate already fired.
         breach_member = None
@@ -4310,7 +4304,7 @@ async def model_flood_scenario(
                 infiltration=infiltration_member,
                 provenance=dict(forcing_summary.parameters if forcing_summary else {}),
             )
-        # COASTAL SFINCS — building-obstacle URI. ``building_obstacles=True``
+        # COASTAL SFINCS -- building-obstacle URI. ``building_obstacles=True``
         # triggers a BEST-EFFORT OSM-footprint fetch (so a footprint-fetch
         # failure NEVER kills the flood - same degrade policy as river geometry);
         # a string is used verbatim as the obstacle geofile URI.
@@ -4351,7 +4345,7 @@ async def model_flood_scenario(
             # solve budget + vCPU via the perf model). build_sfincs_model snaps
             # grid_resolution_m UP if the estimated active-cell count overruns.
             compute_class=compute_class,
-            # COASTAL SFINCS — subgrid + building-obstacle mask (urban flood).
+            # COASTAL SFINCS -- subgrid + building-obstacle mask (urban flood).
             # Subgrid is auto-enabled when buildings are present (the obstacle
             # "raise" mode needs it; "exclude" benefits from sub-cell topography).
             enable_subgrid=bool(enable_subgrid or building_obstacle_uri),
@@ -4420,8 +4414,8 @@ async def model_flood_scenario(
         # build_sfincs_model may snap grid_resolution_m UP (coarsen) if the
         # estimated active-cell count overruns the per-job cell cap. Refresh the
         # workflow-local resolution from the ACTUALLY-BUILT value so downstream
-        # consumers — the solve-telemetry record (cells/resolution/vCPU/wall) and
-        # any envelope metrics — report the resolution the solver really ran at,
+        # consumers -- the solve-telemetry record (cells/resolution/vCPU/wall) and
+        # any envelope metrics -- report the resolution the solver really ran at,
         # not the pre-coarsen 30 m request.
         _built_res = getattr(model_setup, "grid_resolution_m", None)
         if _built_res:
@@ -4452,7 +4446,7 @@ async def model_flood_scenario(
             grid_resolution_m=grid_resolution_m,
         )
     except SFINCSSetupError as exc:
-        # The headline failure path — LULC_MAPPING_MISMATCH and friends
+        # The headline failure path -- LULC_MAPPING_MISMATCH and friends
         # surface here. Invariant 7: the failed envelope carries the error
         # code instead of a fabricated FloodPayload.
         logger.warning(
@@ -4475,10 +4469,10 @@ async def model_flood_scenario(
             grid_resolution_m=grid_resolution_m,
         )
     except SFINCSForcingAdapterError as exc:
-        # COASTAL SFINCS — the surge/discharge FETCHER → ADAPTER bridge failed
+        # COASTAL SFINCS -- the surge/discharge FETCHER → ADAPTER bridge failed
         # (unreadable fetcher FGB/COG, no usable stations, all-NaN hydrographs).
         # Invariant 7: an EXPLICIT surge request that cannot be materialised
-        # surfaces as a typed failed envelope carrying the adapter error code —
+        # surfaces as a typed failed envelope carrying the adapter error code --
         # NOT a silent degrade to a pluvial-only deck.
         logger.warning(
             "surge forcing adapter raised %s (details=%s) — returning failed envelope",
@@ -4523,7 +4517,7 @@ async def model_flood_scenario(
             grid_resolution_m=grid_resolution_m,
         )
 
-    # Pre-solver phases done — the long solve takes over progress emission from
+    # Pre-solver phases done -- the long solve takes over progress emission from
     # here (wait_for_completion drives the binding). Stamp the hand-off so the
     # card shows clear forward motion into Step 7.
     await _emit_presolver_progress(emitter, 40)
@@ -4546,7 +4540,7 @@ async def model_flood_scenario(
     # cells']) instead of always dispatching at the default "standard" (8 vCPU).
     # A big domain grabs more compute (up to the new xlarge 48-vCPU tier); a
     # small one stays cheap. When the estimate is unavailable we fall back to the
-    # caller's compute_class (default "medium" == standard) — select_compute_class
+    # caller's compute_class (default "medium" == standard) -- select_compute_class
     # never raises, so a missing/zero estimate can never crash the dispatch.
     # The combined quadtree solved (Step 5.5 returned its solve
     # RunResult); skip the second run_solver + wait_for_completion entirely and
@@ -4653,7 +4647,7 @@ async def model_flood_scenario(
         # spinner. The ETA comes from the perf model (autoscale
         # estimated_solve_seconds) when available, else None (no fabricated ETA).
         # The driver is a side task that we cancel as soon as the solve
-        # returns/raises — it never affects the outcome.
+        # returns/raises -- it never affects the outcome.
         _autoscale = _extract_solve_autoscale(model_setup)
         _live_active_cells = _autoscale.get("estimated_active_cells")
         _live_vcpus = _autoscale.get("vcpus")
@@ -4711,7 +4705,7 @@ async def model_flood_scenario(
     # --- Solve-time telemetry (SFINCS per-job autoscale) ---
     # Accumulate real (active_cells, vCPU, wall_clock) data so the adaptive-grid
     # cell cap can be re-tuned from logged measurements. Emitted on the CURRENT
-    # path (every solve), for BOTH success and failure/timeout — a censored
+    # path (every solve), for BOTH success and failure/timeout -- a censored
     # timeout is itself a data point about a too-big AOI. Best-effort; never
     # breaks the solve loop.
     try:
@@ -4722,7 +4716,7 @@ async def model_flood_scenario(
             bbox=resolved_bbox,
             grid_resolution_m=grid_resolution_m,
         )
-    except Exception as exc:  # noqa: BLE001 — telemetry must never break the solve
+    except Exception as exc:  # noqa: BLE001 -- telemetry must never break the solve
         logger.warning("solve telemetry emission failed (non-fatal): %s", exc)
 
     # --- SOLVE telemetry: Batch instance + size + timing breakdown ---
@@ -4730,7 +4724,7 @@ async def model_flood_scenario(
     # queue/compute/total timing the wait-loop captured) with the mesh size
     # descriptor (active_cell_count + resolution_m) so a perf model can later infer
     # completion time. ONLY the regular-grid path (handle is not None) records this
-    # — the quadtree submit+wait path is left uninstrumented (consistent with the
+    # -- the quadtree submit+wait path is left uninstrumented (consistent with the
     # two-card work). Best-effort; a telemetry failure never affects the solve.
     if handle is not None:
         try:
@@ -4742,13 +4736,13 @@ async def model_flood_scenario(
                 session_id=sess_id,
                 case_id=None,
             )
-        except Exception as exc:  # noqa: BLE001 — telemetry must never break the solve
+        except Exception as exc:  # noqa: BLE001 -- telemetry must never break the solve
             logger.warning(
                 "solve batch-compute telemetry failed (non-fatal): %s", exc
             )
 
     if run_result.status != "complete":
-        # SOLVER_FAILED, SOLVER_TIMEOUT, cancelled — surface as failed envelope.
+        # SOLVER_FAILED, SOLVER_TIMEOUT, cancelled -- surface as failed envelope.
         return _build_failed_envelope(
             bbox=resolved_bbox,
             project_id=proj_id,
@@ -4788,7 +4782,7 @@ async def model_flood_scenario(
                 safe = emit_layer_uri(mesh_layer)
                 if safe is not None:
                     await emitter.add_loaded_layer(safe)
-        except Exception as exc:  # noqa: BLE001 — mesh emit is non-fatal
+        except Exception as exc:  # noqa: BLE001 -- mesh emit is non-fatal
             logger.warning(
                 "model_flood_scenario: sfincs mesh emit failed (non-fatal): %s",
                 exc,
@@ -4835,7 +4829,7 @@ async def model_flood_scenario(
                 try:
                     await emitter.add_loaded_layer(lyr)
                     emitted += 1
-                except Exception as exc:  # noqa: BLE001 — never break the solve
+                except Exception as exc:  # noqa: BLE001 -- never break the solve
                     logger.warning(
                         "model_flood_scenario: manifest frame emit failed for "
                         "%s: %s", lyr.layer_id, exc,
@@ -4855,7 +4849,7 @@ async def model_flood_scenario(
 
     # --- Step 8: postprocess_flood (ON-BOX FALLBACK) ---
     # audit #1: ``postprocess_flood`` downloads the full ``sfincs_map.nc`` via
-    # SYNC boto3 and writes N COGs to object storage — tens of seconds to
+    # SYNC boto3 and writes N COGs to object storage -- tens of seconds to
     # minutes of blocking I/O right after the solve. Run it off the loop so it
     # cannot stall the WS keepalive. ``postprocess_flood`` is EMIT-FREE (no
     # current_emitter()/emit_*/add_loaded_layer): it produces the LayerURIs +
@@ -4908,7 +4902,7 @@ async def model_flood_scenario(
         # Non-fatal: if publish_layer fails (e.g.
         # is not yet landed), we DROP the primary raster layer from the emitted set
         # rather than fall back to the raw gs:// uri (§1, Decision 11). A
-        # gs:// uri never renders — MapLibre cannot fetch it; emitting it only paints
+        # gs:// uri never renders -- MapLibre cannot fetch it; emitting it only paints
         # a dead, broken layer row in the LayerPanel. Dropping it keeps the map
         # honest while the rest of the envelope (metrics, provenance, narration)
         # stays intact, so the LLM narrates the publish failure truthfully and the
@@ -4916,7 +4910,7 @@ async def model_flood_scenario(
         # this same rule at the emission boundary as a belt-and-suspenders invariant.
         # postprocess_flood returns [peak_primary] + [frame_0..frame_k]. The PEAK
         # layer (role="primary") is the ONE returned by the wrapper + the
-        # published/on_map summary source + the habitat/Pelicun hazard raster — it
+        # published/on_map summary source + the habitat/Pelicun hazard raster -- it
         # takes the existing publish-or-honest-drop path UNCHANGED. The FRAME layers
         # (role="context", names "Flood depth step N") are the time-stepped animation
         # (flood North Star Phase 1): each is published + emitted OUT-OF-BAND via the
@@ -4928,7 +4922,7 @@ async def model_flood_scenario(
         published_layers: list[LayerURI] = []
         for lyr in primary_layers:
             # s3:// COGs (AWS local-docker backend) take the same
-            # publish-or-honest-drop gate as gs:// — a raw object-store URI never
+            # publish-or-honest-drop gate as gs:// -- a raw object-store URI never
             # renders in MapLibre (§1), so it must never reach the map.
             # On AWS publish_layer fails until lands QGIS-on-AWS; the
             # layer is dropped and the metrics/narration stay honest.
@@ -4973,7 +4967,7 @@ async def model_flood_scenario(
                             # job (flood-duplicate-layer fix): the published layer
                             # is the ONE styled (white->blue->green) peak-depth
                             # layer the user sees. Carry the canonical preset
-                            # unconditionally — never emit a styleless flood-depth
+                            # unconditionally -- never emit a styleless flood-depth
                             # raster (a styleless COG falls through to TiTiler's
                             # default matplotlib viridis, the redundant unstyled
                             # duplicate this workflow must never produce).
@@ -5001,7 +4995,7 @@ async def model_flood_scenario(
                         exc.error_code,
                         exc,
                     )
-                    # Intentionally do NOT append `lyr` — the gs:// uri stays off the
+                    # Intentionally do NOT append `lyr` -- the gs:// uri stays off the
                     # map. (resolution restores the
                     # success path; until then the depth metrics still surface.)
             else:
@@ -5017,21 +5011,21 @@ async def model_flood_scenario(
         # wrapper return), so they never reach summarize_tool_result and can't trip a
         # re-publish, and the habitat/Pelicun consumers still see layers[0] = peak.
         # When current_emitter() is None (direct call / smoke / unit test) frame
-        # emission is skipped — the frames still live in the returned `layers` from
+        # emission is skipped -- the frames still live in the returned `layers` from
         # postprocess_flood for tests to assert on.
         if frame_layers and emitter is not None:
             published_frame_count = 0
             for lyr in frame_layers:
                 if not (lyr.uri.startswith("gs://") or lyr.uri.startswith("s3://")):
-                    # Already a renderable URL (defensive) — emit as-is.
+                    # Already a renderable URL (defensive) -- emit as-is.
                     try:
                         await emitter.add_loaded_layer(lyr)
                         published_frame_count += 1
-                    except Exception as exc:  # noqa: BLE001 — never break the solve
+                    except Exception as exc:  # noqa: BLE001 -- never break the solve
                         logger.warning("frame emit failed for %s: %s", lyr.layer_id, exc)
                     continue
                 try:
-                    # audit #1: same as the peak ``publish_layer`` above —
+                    # audit #1: same as the peak ``publish_layer`` above --
                     # ``time.sleep`` poll loop blocks the loop for tens of seconds
                     # per frame. Run it off the loop so it cannot stall the WS
                     # keepalive. EMIT-FREE: it returns the WMS URL; the
@@ -5047,7 +5041,7 @@ async def model_flood_scenario(
                     # Honest drop: a frame that won't publish is dropped (its raw
                     # gs:// never renders). The remaining frames + the peak layer
                     # stay intact. If too many frames drop the group may fall below
-                    # 2 members and simply not form — acceptable, never a fake row.
+                    # 2 members and simply not form -- acceptable, never a fake row.
                     logger.warning(
                         "publish_layer failed for frame layer_id=%s error_code=%s "
                         "(%s) — dropping this frame from the animation group.",
@@ -5056,7 +5050,7 @@ async def model_flood_scenario(
                     continue
                 frame_layer = LayerURI(
                     layer_id=lyr.layer_id,
-                    name=lyr.name,  # "Flood depth step N" — the web grouping token
+                    name=lyr.name,  # "Flood depth step N" -- the web grouping token
                     layer_type=lyr.layer_type,
                     uri=frame_wms_url,
                     style_preset=lyr.style_preset or FLOOD_DEPTH_STYLE_PRESET,
@@ -5067,7 +5061,7 @@ async def model_flood_scenario(
                 try:
                     await emitter.add_loaded_layer(frame_layer)
                     published_frame_count += 1
-                except Exception as exc:  # noqa: BLE001 — never break the solve
+                except Exception as exc:  # noqa: BLE001 -- never break the solve
                     logger.warning(
                         "frame add_loaded_layer failed for %s: %s", lyr.layer_id, exc
                     )
@@ -5088,14 +5082,14 @@ async def model_flood_scenario(
         # GATED on a quadtree+SnapWave run: the time-resolved wave height field
         # (hm0 / hm0ig, dims (nmesh2d_face, time)) is written EVERY output step ONLY
         # on the quadtree+SnapWave solve, so the wave postprocess runs ONLY when the
-        # combined quadtree job ran (``quadtree_run_result is not None`` — the
+        # combined quadtree job ran (``quadtree_run_result is not None`` -- the
         # regular-grid SFINCS path has no wave field). This makes the SnapWave waves
         # visibly ANIMATE on the Mexico Beach (Hurricane Michael) North Star.
         #
         # DEGRADE-not-fail: the entire block is best-effort (mirrors the Step 7.5
         # mesh-emit pattern). A wave-postprocess failure (no SnapWave field, a COG
         # write error, a publish/emit error) MUST NEVER sink the depth layers OR the
-        # envelope — it logs + degrades, leaving the flood-depth peak + frames intact.
+        # envelope -- it logs + degrades, leaving the flood-depth peak + frames intact.
         # The peak wave layer takes the SAME publish-or-honest-drop gate the depth
         # peak uses; the wave frames emit OUT-OF-BAND via the emitter (same as the
         # depth frames) so they form a SEPARATE web scrubber group ("Wave height
@@ -5116,7 +5110,7 @@ async def model_flood_scenario(
                         bbox=resolved_bbox,
                     )
             except PostprocessError as exc:
-                # No SnapWave field / read / write failure — degrade silently to the
+                # No SnapWave field / read / write failure -- degrade silently to the
                 # depth layers (a non-SnapWave quadtree run is a legitimate state).
                 logger.info(
                     "model_flood_scenario: wave postprocess degraded (%s: %s) — "
@@ -5124,7 +5118,7 @@ async def model_flood_scenario(
                     exc.error_code, exc,
                 )
                 wave_layers = []
-            except Exception as exc:  # noqa: BLE001 — wave emit is non-fatal
+            except Exception as exc:  # noqa: BLE001 -- wave emit is non-fatal
                 logger.warning(
                     "model_flood_scenario: wave postprocess raised unexpectedly "
                     "(non-fatal): %s — depth layers intact.",
@@ -5135,7 +5129,7 @@ async def model_flood_scenario(
             wave_peak = [lyr for lyr in wave_layers if lyr.role == "primary"]
             wave_frames = [lyr for lyr in wave_layers if lyr.role != "primary"]
 
-            # Peak wave layer — publish-or-honest-drop gate (same as the depth peak).
+            # Peak wave layer -- publish-or-honest-drop gate (same as the depth peak).
             # The published peak wave LayerURI is appended to ``published_layers`` so
             # it rides into the success envelope's ResultLayer set alongside the
             # depth peak; a publish failure DROPS it (a raw s3:// never renders).
@@ -5156,7 +5150,7 @@ async def model_flood_scenario(
                             lyr.layer_id, exc.error_code, exc,
                         )
                         continue
-                    except Exception as exc:  # noqa: BLE001 — never break the solve
+                    except Exception as exc:  # noqa: BLE001 -- never break the solve
                         logger.warning(
                             "model_flood_scenario: peak wave publish raised "
                             "unexpectedly (non-fatal): %s", exc,
@@ -5181,7 +5175,7 @@ async def model_flood_scenario(
                 else:
                     published_layers.append(lyr)
 
-            # Wave frames — publish + emit OUT-OF-BAND (same as the depth frames) so
+            # Wave frames -- publish + emit OUT-OF-BAND (same as the depth frames) so
             # they form a SEPARATE "Wave height step N" scrubber group. Emitted only
             # through the emitter (NOT added to published_layers / result_layers), so
             # they never reach summarize_tool_result. Skipped when no emitter bound.
@@ -5211,7 +5205,7 @@ async def model_flood_scenario(
                             lyr.layer_id, exc.error_code, exc,
                         )
                         continue
-                    except Exception as exc:  # noqa: BLE001 — never break the solve
+                    except Exception as exc:  # noqa: BLE001 -- never break the solve
                         logger.warning(
                             "wave frame publish raised unexpectedly (non-fatal): %s",
                             exc,
@@ -5219,7 +5213,7 @@ async def model_flood_scenario(
                         continue
                     wave_frame_layer = LayerURI(
                         layer_id=lyr.layer_id,
-                        name=lyr.name,  # "Wave height step N" — the web grouping token
+                        name=lyr.name,  # "Wave height step N" -- the web grouping token
                         layer_type=lyr.layer_type,
                         uri=wf_wms_url,
                         style_preset=lyr.style_preset or WAVE_HEIGHT_STYLE_PRESET,
@@ -5230,7 +5224,7 @@ async def model_flood_scenario(
                     try:
                         await emitter.add_loaded_layer(wave_frame_layer)
                         published_wave_frames += 1
-                    except Exception as exc:  # noqa: BLE001 — never break the solve
+                    except Exception as exc:  # noqa: BLE001 -- never break the solve
                         logger.warning(
                             "wave frame add_loaded_layer failed for %s: %s",
                             lyr.layer_id, exc,
@@ -5370,22 +5364,22 @@ async def sfincs_flood(
     """Run the full deterministic SFINCS flood-modeling workflow end-to-end.
 
     Nine-step composition chain (all deterministic Python, zero LLM calls):
-    1. ``geocode_location(location_query)`` — optional; derives bbox from
+    1. ``geocode_location(location_query)`` -- optional; derives bbox from
        a free-text place name when ``bbox`` is not provided.
-    2. ``fetch_dem(bbox)`` — downloads USGS 3DEP or CoastalDEM to a COG.
-    3. ``fetch_landcover(bbox)`` — downloads NLCD landcover for Manning's
+    2. ``fetch_dem(bbox)`` -- downloads USGS 3DEP or CoastalDEM to a COG.
+    3. ``fetch_landcover(bbox)`` -- downloads NLCD landcover for Manning's
        roughness parameterization.
-    4. ``fetch_river_geometry(bbox)`` — downloads NHD river geometry for
+    4. ``fetch_river_geometry(bbox)`` -- downloads NHD river geometry for
        channel routing.
     5. ``lookup_precip_return_period(bbox, return_period_years, duration_hours)``
-       — looks up NOAA Atlas 14 design-storm precipitation depth.
+       -- looks up NOAA Atlas 14 design-storm precipitation depth.
     6. ``build_sfincs_model(dem_uri, landcover_uri, river_uri, forcing, bbox)``
-       — assembles the HydroMT-SFINCS deck in GCS with NLCD validation gate.
-    7. ``run_solver(model_setup)`` — submits the SFINCS Cloud Run Job.
-    8. ``wait_for_completion(run_id)`` — polls until SUCCEEDED or FAILED;
+       -- assembles the HydroMT-SFINCS deck in GCS with NLCD validation gate.
+    7. ``run_solver(model_setup)`` -- submits the SFINCS Cloud Run Job.
+    8. ``wait_for_completion(run_id)`` -- polls until SUCCEEDED or FAILED;
        emits progress events per FR-WC-12.
     9. ``postprocess_flood(run_outputs_uri)`` → ``publish_layer(flood_depth_cog)``
-       — extracts peak depth COG, uploads to the runs bucket, and publishes
+       -- extracts peak depth COG, uploads to the runs bucket, and publishes
        to QGIS Server WMS.
 
     When to use:
@@ -5431,11 +5425,11 @@ async def sfincs_flood(
             accumulated-precipitation raster (e.g. an MRMS QPE COG from
             ``fetch_mrms_qpe``). When provided, the workflow forces SFINCS
             with the AREA-MEAN of this raster over the model domain (converted
-            to a uniform rain rate) INSTEAD of the Atlas 14 design storm — this
+            to a uniform rain rate) INSTEAD of the Atlas 14 design storm -- this
             is the Case 3 real-data forcing path. ``duration_hours`` is reused
             as the accumulation window. Leave unset (``None``) for the standard
             return-period design-storm scenario.
-        surge_forcing: optional COMPOUND-FLOOD forcing spec — a nested dict that
+        surge_forcing: optional COMPOUND-FLOOD forcing spec -- a nested dict that
             wires the coastal water-level (surge / tide) boundary AND/OR the
             fluvial river-discharge boundary (plus optional wind / pressure)
             into the SFINCS deck, so the run combines coastal surge + river
@@ -5462,7 +5456,7 @@ async def sfincs_flood(
             the ocean shoreline. This routes the terrain fetch through
             ``fetch_topobathy`` (a SEAMLESS land-plus-seafloor DEM merging USGS
             3DEP with NOAA NCEI CUDEM bathymetry) instead of the land-only
-            ``fetch_dem`` — so the model has a real nearshore bed to route
+            ``fetch_dem`` -- so the model has a real nearshore bed to route
             inundation over. Default ``False`` for an inland / pluvial flood
             (land-only DEM, unchanged). Auto-enabled when a surge water-level
             boundary is supplied. Use for prompts mentioning the coast, storm
@@ -5476,11 +5470,11 @@ async def sfincs_flood(
             runs default fine; pluvial stays hourly). Leave unset unless asked.
         building_obstacles: OPTIONAL, default ``False`` (OFF). When truthy, the
             workflow burns building footprints into the SFINCS grid so the flood
-            routes AROUND buildings — a more realistic (but slightly slower)
+            routes AROUND buildings -- a more realistic (but slightly slower)
             urban-flood estimate. Three forms:
               * ``True`` → best-effort fetch of OSM building footprints (OSM
                 Overpass) for the AOI; burned as no-flow ``exclude_mask`` cells.
-                A footprint-fetch failure NEVER aborts the flood — it logs a
+                A footprint-fetch failure NEVER aborts the flood -- it logs a
                 warning and proceeds WITHOUT obstacles (honest degrade, same
                 policy as river geometry).
               * a ``str`` → used verbatim as a footprint geofile URI (e.g. a
@@ -5489,9 +5483,9 @@ async def sfincs_flood(
                 plain DEM + Manning deck).
             ASK-WHEN-URBAN: for an URBAN / developed AOI (a named city core,
             downtown / midtown, a dense built-up bbox), if the user has NOT said
-            whether to include buildings, ASK before running — e.g. "Model
-            buildings as obstacles so water routes around them — more realistic
-            but a bit slower — or just terrain?" — and set ``building_obstacles``
+            whether to include buildings, ASK before running -- e.g. "Model
+            buildings as obstacles so water routes around them -- more realistic
+            but a bit slower -- or just terrain?" -- and set ``building_obstacles``
             from the answer. If the user PRE-specified ("include buildings" /
             "route around buildings" → ``True``; "terrain only" → ``False``),
             honor it without asking. RURAL / non-urban AOIs default to no
@@ -5532,7 +5526,7 @@ async def sfincs_flood(
             ``"Michael"``). With ``storm_season`` it resolves the IBTrACS best
             track via ``fetch_storm_tracks`` and builds a parametric Holland
             wind+pressure SPIDERWEB (.spw) that GENERATES the surge over a
-            shelf-scale domain — the asymmetry uniform wind cannot produce
+            shelf-scale domain -- the asymmetry uniform wind cannot produce
             (inundation concentrated RIGHT of the eye). Implies ``coastal``.
             MUTUALLY EXCLUSIVE with ``wind`` (typed STORM_WIND_CONFLICT).
             Example: "Simulate Hurricane Michael at landfall at Mexico Beach" ->
@@ -5548,7 +5542,7 @@ async def sfincs_flood(
             internal workflow mints fresh ULIDs (direct-call / smoke path).
 
     Returns:
-        On success: the primary flood-depth COG as a ``LayerURI`` — the
+        On success: the primary flood-depth COG as a ``LayerURI`` -- the
         ``PipelineEmitter.emit_tool_call`` gate at
         ``pipeline_emitter.py:517`` fires ``add_loaded_layer`` when it sees
         a ``LayerURI`` return, which appends to ``session-state.loaded_layers``
@@ -5563,22 +5557,22 @@ async def sfincs_flood(
 
     FR-DC-6: This wrapper declares ``cacheable=False`` +
     ``ttl_class="live-no-cache"`` + ``source_class="workflow_dispatch"`` (a new
-    FR-DC-6 source class for the workflow exposure surface — same shape as
+    FR-DC-6 source class for the workflow exposure surface -- same shape as
     ``solver_dispatch``).
 
     Cross-tool dependencies:
-        Upstream (consumes) — the 9-step fetch + solve chain above:
+        Upstream (consumes) -- the 9-step fetch + solve chain above:
         - ``geocode_location`` (optional) → ``fetch_dem`` → ``fetch_landcover``
           → ``fetch_river_geometry`` → ``lookup_precip_return_period``
           → ``build_sfincs_model`` → ``run_solver`` → ``wait_for_completion``
           → ``postprocess_flood`` → ``publish_layer``
         Downstream (feeds):
-        - ``run_model_flood_habitat_scenario`` — calls this sub-workflow as
+        - ``run_model_flood_habitat_scenario`` -- calls this sub-workflow as
           step 3 to generate the flood layer for Case 1 habitat analysis.
         - ``pelicun_damage_assessment`` (explicit ``assets_uri`` OR bbox
-          auto-fetch mode) — consumes the returned flood-depth COG
+          auto-fetch mode) -- consumes the returned flood-depth COG
           ``LayerURI.uri`` as ``hazard_raster_uri`` for building-damage assessment.
-        - ``compute_zonal_statistics`` — flood-depth COG as ``value_raster_uri``
+        - ``compute_zonal_statistics`` -- flood-depth COG as ``value_raster_uri``
           for population-in-flood-zone or habitat-impact metrics.
     """
     envelope = await model_flood_scenario(

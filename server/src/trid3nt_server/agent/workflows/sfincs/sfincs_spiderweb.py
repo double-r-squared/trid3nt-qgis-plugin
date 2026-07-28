@@ -571,16 +571,16 @@ def build_spiderweb_from_fixes(
     step -> re-anchor TIME to ``tref`` (first window fix -> minute 0) -> write
     the ASCII spw into ``out_dir``. The utm zone comes from the AOI centroid.
 
-    WINDOW SIZING (the design's #1 hazard - silent surge underestimate): by
-    default ``window_hr`` TRACKS ``deck_sim_hours`` so the landfall (anchored
-    ~``landfall_frac`` through the window) always falls INSIDE the simulated
-    ``[0, deck_sim_hours*60]`` deck window. If the window were fixed larger than
-    the deck (the old 48 h default over a 24 h deck) landfall re-anchors to
-    ~``landfall_frac*window_hr*60`` min - PAST the deck end - so the pre-landfall
-    ramp overlaps (the overlap assert passes, false confidence) but the peak
-    surge + right-of-eye asymmetry (the entire falsifiable observable) is never
-    simulated. An explicit ``window_hr`` is still honoured, but then the landfall
-    assert below hard-fails if it would push landfall out of the deck window.
+    WINDOW SIZING (silent surge underestimate risk): by default ``window_hr``
+    TRACKS ``deck_sim_hours`` so the landfall (anchored ~``landfall_frac``
+    through the window) always falls INSIDE the simulated
+    ``[0, deck_sim_hours*60]`` deck window. If the window is fixed larger than
+    the deck, landfall re-anchors to ~``landfall_frac*window_hr*60`` min -
+    PAST the deck end - so the pre-landfall ramp overlaps (the overlap assert
+    passes, false confidence) but the peak surge + right-of-eye asymmetry
+    (the entire falsifiable observable) is never simulated. An explicit
+    ``window_hr`` is still honoured, but then the landfall assert below
+    hard-fails if it would push landfall out of the deck window.
 
     DECK-WINDOW ASSERTS: the re-anchored spw spans
     ``[0, span_min]`` and the deck runs ``[0, deck_sim_hours*60]``. We raise a

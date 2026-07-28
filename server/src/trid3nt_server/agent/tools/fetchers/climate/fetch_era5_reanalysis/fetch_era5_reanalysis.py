@@ -1,4 +1,4 @@
-"""``fetch_era5_reanalysis`` atomic tool — Copernicus ERA5 reanalysis Tier-2 fetcher.
+"""``fetch_era5_reanalysis`` atomic tool -- Copernicus ERA5 reanalysis Tier-2 fetcher.
 """
 
 from __future__ import annotations
@@ -88,14 +88,13 @@ _DEFAULT_CDS_URL = "https://cds.climate.copernicus.eu/api"
 _RETRIEVE_TIMEOUT_S = 300
 
 # Narrow, specific phrases that mark a cdsapi failure as "no credentials
-# configured at all" (the missing-``~/.cdsapirc`` / no-key family) — distinct
+# configured at all" (the missing-``~/.cdsapirc`` / no-key family) -- distinct
 # from a present-but-rejected key (AUTH) or a transient queue/network failure
 # (UPSTREAM). When the cdsapi Client constructor cannot find any key it raises
 # ``Exception("Missing/incomplete configuration file: <path>/.cdsapirc")``;
 # these phrases catch that and the close variants WITHOUT over-matching a
-# generic upstream error (LIVE BUG - the missing-config
-# message previously fell through to ERA5UpstreamError and no credential card
-# fired). Matched case-insensitively against the lower-cased message.
+# generic upstream error. Matched case-insensitively against the lower-cased
+# message.
 _MISSING_KEY_CDS_PHRASES: tuple[str, ...] = (
     ".cdsapirc",
     "missing/incomplete configuration",
@@ -120,7 +119,7 @@ _CDS_VARIABLES: frozenset[str] = frozenset(
 )
 
 # Derived variable: wind SPEED magnitude sqrt(u^2 + v^2) over the 10 m
-# components. Not a CDS variable — the tool retrieves both components and
+# components. Not a CDS variable -- the tool retrieves both components and
 # combines them into one raster band. The components it depends on, its units,
 # and its style preset are named here.
 _DERIVED_WIND_SPEED = "10m_wind_speed"
@@ -143,7 +142,7 @@ _VARIABLE_UNITS: dict[str, str] = {
     "significant_height_of_combined_wind_waves_and_swell": "m",
 }
 
-# Sanity cap on date range — refuse multi-year ad-hoc retrievals that would
+# Sanity cap on date range -- refuse multi-year ad-hoc retrievals that would
 # blow through the CDS quota. A 1-year window already produces ~365 hourly
 # timesteps * variable * grid. Composers wanting a multi-year climatology
 # should call this tool in a loop and aggregate.
@@ -151,7 +150,7 @@ _MAX_DATE_RANGE_DAYS = 366
 
 
 # ---------------------------------------------------------------------------
-# AtomicToolMetadata — registered once at import time.
+# AtomicToolMetadata -- registered once at import time.
 # ---------------------------------------------------------------------------
 
 _METADATA = AtomicToolMetadata(
@@ -298,10 +297,9 @@ def _resolve_api_key(
     Priority (per audit.md):
 
     1. Explicit ``api_key`` kwarg.
-    2. ``secret_ref`` (a ``SecretRecord``) → ``Persistence.get_secret_value``
-       (the per-Case path landed by sibling).
+    2. ``secret_ref`` (a ``SecretRecord``) -> ``Persistence.get_secret_value``.
     3. ``TRID3NT_COPERNICUS_CDS_API_KEY`` env var.
-    4. ``None`` — cdsapi falls back to ``~/.cdsapirc`` on instantiation.
+    4. ``None`` -- cdsapi falls back to ``~/.cdsapirc`` on instantiation.
 
     A return value of ``None`` means "let cdsapi find its own key via the
     library's default discovery path (``~/.cdsapirc``)". We do NOT raise
@@ -450,7 +448,7 @@ def _build_cds_request(
         "month": sorted(months),
         "day": sorted(days),
         "time": hours,
-        "area": [north, west, south, east],  # N, W, S, E — CDS convention
+        "area": [north, west, south, east],  # N, W, S, E -- CDS convention
         "format": "netcdf",
     }
 
@@ -464,7 +462,7 @@ def _cds_retrieve_with_timeout(
 ) -> None:
     """Call cdsapi.Client.retrieve under a wall-clock timeout watchdog.
 
-    cdsapi has no native ``timeout`` parameter — the library polls the CDS
+    cdsapi has no native ``timeout`` parameter -- the library polls the CDS
     queue every ~1s until the job completes (or fails) and only then
     streams the file. We spawn the retrieve in a worker thread and join
     with a deadline; on timeout we raise ``ERA5UpstreamError`` (retryable).
@@ -513,21 +511,17 @@ def _cds_retrieve_with_timeout(
         msg = str(exc)
         low = msg.lower()
         # Classify in priority order: MISSING-KEY (no credentials configured at
-        # all) → AUTH (a key is present but rejected) → generic UPSTREAM.
+        # all) -> AUTH (a key is present but rejected) -> generic UPSTREAM.
         #
-        # The NO-KEY case is what fires when none of the four key-resolution
-        # paths produced a key AND there is no ``~/.cdsapirc``: cdsapi's own
-        # Client constructor raises ``Exception("Missing/incomplete
-        # configuration file: <path>/.cdsapirc")`` (LIVE BUG:
-        # a Mexico Beach run hit exactly this and got NO secret-entry card
-        # because the message matched neither the auth nor the old missing-key
-        # heuristic, so it fell through to ``ERA5UpstreamError`` and the
-        # credential pipeline never fired). We now classify it as
-        # ``ERA5MissingKeyError`` (error_code ERA5_MISSING_KEY) so the server's
-        # ``is_credential_error`` → ``credential-request`` path surfaces the
-        # registered ``ecmwf_cds`` card. ``_MISSING_KEY_CDS_PHRASES`` is kept
-        # narrow + specific so a genuine transient/queue/timeout upstream
-        # failure is NOT misclassified as a missing key.
+        # The NO-KEY case fires when none of the four key-resolution paths
+        # produced a key AND there is no ``~/.cdsapirc``: cdsapi's own Client
+        # constructor raises ``Exception("Missing/incomplete configuration
+        # file: <path>/.cdsapirc")``. We classify it as ``ERA5MissingKeyError``
+        # (error_code ERA5_MISSING_KEY) so the server's ``is_credential_error``
+        # -> ``credential-request`` path surfaces the registered ``ecmwf_cds``
+        # card. ``_MISSING_KEY_CDS_PHRASES`` is kept narrow + specific so a
+        # genuine transient/queue/timeout upstream failure is NOT
+        # misclassified as a missing key.
         if any(phrase in low for phrase in _MISSING_KEY_CDS_PHRASES):
             raise ERA5MissingKeyError(
                 f"No Copernicus CDS API key is configured "
@@ -541,7 +535,7 @@ def _cds_retrieve_with_timeout(
                 f"CDS API rejected the key: {msg[:200]}"
             ) from exc
         # Backstop missing-key heuristic ("no api key" / a message that names
-        # both "missing" and "key") — kept for upstreams whose phrasing differs
+        # both "missing" and "key") -- kept for upstreams whose phrasing differs
         # from cdsapi's own constructor text.
         if "no api key" in low or ("missing" in low and "key" in low):
             raise ERA5MissingKeyError(
@@ -577,7 +571,7 @@ def _netcdf_to_da(
         ``ERA5EmptyError``: bbox falls outside the variable's coverage.
     """
     import numpy as np
-    import rioxarray  # noqa: F401 — registers .rio accessor on DataArrays
+    import rioxarray  # noqa: F401 -- registers .rio accessor on DataArrays
     import xarray as xr
 
     try:
@@ -687,7 +681,7 @@ def _netcdf_to_da(
 def _da_to_cog_bytes(da: Any, variable: str) -> bytes:
     """Stamp metadata on ``da`` and write a float32 EPSG:4326 COG; return bytes.
 
-    Per audit.md, the kickoff returns "GeoTIFF" — we write COG which is a
+    Per audit.md, the kickoff returns "GeoTIFF" -- we write COG which is a
     GeoTIFF profile (and the canonical raster output across the rest of the
     atomic-tool set: HRSL, MTBS, LANDFIRE, NLCD).
     """
@@ -714,7 +708,7 @@ def _da_to_cog_bytes(da: Any, variable: str) -> bytes:
                 compress="DEFLATE",
                 nodata=float("nan"),
             )
-        except Exception:  # noqa: BLE001 — fall back to GTiff if COG fails
+        except Exception:  # noqa: BLE001 -- fall back to GTiff if COG fails
             da_out.rio.to_raster(
                 out_path,
                 driver="GTiff",
@@ -765,8 +759,8 @@ def _netcdf_to_cog_bytes(
         ``ERA5EmptyError``: bbox falls outside the variable's coverage.
     """
     try:
-        import numpy as np  # noqa: F401 — used by helpers
-        import rioxarray  # noqa: F401 — registers .rio accessor on DataArrays
+        import numpy as np  # noqa: F401 -- used by helpers
+        import rioxarray  # noqa: F401 -- registers .rio accessor on DataArrays
         import xarray as xr  # noqa: F401
     except ImportError as exc:
         raise ERA5UpstreamError(
@@ -794,7 +788,7 @@ def _combine_wind_components_to_cog_bytes(
     """
     try:
         import numpy as np
-        import rioxarray  # noqa: F401 — registers .rio accessor on DataArrays
+        import rioxarray  # noqa: F401 -- registers .rio accessor on DataArrays
         import xarray as xr
     except ImportError as exc:
         raise ERA5UpstreamError(
@@ -807,7 +801,7 @@ def _combine_wind_components_to_cog_bytes(
 
     # Magnitude = sqrt(u^2 + v^2). NaN in either component propagates as NaN
     # (np.hypot preserves NaN), preserving the nodata mask. xarray aligns the
-    # two DataArrays on their (latitude, longitude) coords — they ride the
+    # two DataArrays on their (latitude, longitude) coords -- they ride the
     # identical ERA5 0.25° grid so alignment is a no-op.
     speed = xr.apply_ufunc(np.hypot, da_u, da_v, keep_attrs=False)
     speed = speed.astype("float32")
@@ -934,7 +928,7 @@ def fetch_era5_reanalysis(
     - A GENERIC historical wind request ("how windy was it", "wind speed over
       the Gulf during the storm", "show me the wind") → use
       ``variable="10m_wind_speed"``. This returns a SINGLE positive wind-speed
-      magnitude field (``sqrt(u^2 + v^2)``, m s-1) — the natural answer to "how
+      magnitude field (``sqrt(u^2 + v^2)``, m s-1) -- the natural answer to "how
       windy". Only reach for the lone signed ``10m_u_component_of_wind`` /
       ``10m_v_component_of_wind`` when the user explicitly needs wind DIRECTION
       or a vector component.
@@ -949,10 +943,10 @@ def fetch_era5_reanalysis(
       the research-validated global atmospheric forcing for that workflow.
 
     **When NOT to use:**
-    - DO NOT use for real-time / forecast data — ERA5 lags by 5 days (ERA5T
+    - DO NOT use for real-time / forecast data -- ERA5 lags by 5 days (ERA5T
       preliminary) or 3 months (finalised); use ``fetch_hrrr_forecast`` or
       ``fetch_goes_satellite`` for live/near-real-time queries.
-    - DO NOT use for CONUS precipitation when MRMS is available — MRMS QPE is
+    - DO NOT use for CONUS precipitation when MRMS is available -- MRMS QPE is
       1 km gauge-corrected vs ERA5's 27 km; use ``fetch_mrms_qpe`` instead.
     - DO NOT use for sub-hourly timesteps; ERA5 is hourly minimum.
     - Key auto-requested if missing: ERA5 uses a free Copernicus CDS API key
@@ -963,7 +957,7 @@ def fetch_era5_reanalysis(
 
     **Parameters:**
     - ``bbox`` (tuple[float, float, float, float]): ``(west, south, east,
-      north)`` in EPSG:4326. ``supports_global_query=True`` — global bbox
+      north)`` in EPSG:4326. ``supports_global_query=True`` -- global bbox
       ``(-180, -90, 180, 90)`` is valid but expensive. Example for Gulf
       Coast: ``(-100.0, 20.0, -80.0, 35.0)``.
     - ``variable`` (str): one of ``"10m_wind_speed"`` (DERIVED wind-speed
@@ -995,7 +989,7 @@ def fetch_era5_reanalysis(
       ``fetch_hrrr_forecast`` (CONUS, 3 km, forecast, no key).
 
     FR-CE-8: ``read_through`` with ``ttl_class="static-30d"``; cache key
-    is ``(variable, bbox-rounded-6dp, start_date, end_date)`` — api_key
+    is ``(variable, bbox-rounded-6dp, start_date, end_date)`` -- api_key
     excluded so the same ERA5 grid is shared across callers (FR-DC-4 dedup).
     CDS jobs are queued server-side; wrapped in a 5-minute wall-clock timeout.
     """
@@ -1006,7 +1000,7 @@ def fetch_era5_reanalysis(
 
     # ---- API-key resolution (pre-network; cheap fail) ----
     resolved_key = _resolve_api_key(api_key=api_key, secret_ref=secret_ref)
-    # NOTE: resolved_key may be None — that is intentional. cdsapi falls
+    # NOTE: resolved_key may be None -- that is intentional. cdsapi falls
     # back to ~/.cdsapirc; the auth error surfaces from the call site.
 
     # ---- Cache-key params (key omits api_key by design) ----
@@ -1035,7 +1029,7 @@ def fetch_era5_reanalysis(
     )
 
     # The derived wind-speed variable stamps the shared ``wind_speed`` preset
-    # (0–25 m s-1 viridis in the publish registry); CDS-native variables keep
+    # (0-25 m s-1 viridis in the publish registry); CDS-native variables keep
     # their per-variable preset name.
     style_preset = (
         _WIND_SPEED_STYLE_PRESET

@@ -1,6 +1,6 @@
 """``spatial_query`` atomic tool - read-only SQL over the Case's vector layers.
 
-The DuckDB spatial-query fold (NATE option 1, Phase B): ONE SQL surface
+The DuckDB spatial-query fold: ONE SQL surface
 replaces the three fixed-shape analytical Q&A tools
 (``summarize_layer_statistics`` / ``count_features_above_threshold`` /
 ``aggregate_property_within_zone``). Their fixed result shapes were
@@ -32,8 +32,8 @@ How it works:
 4. Results are capped at ``_ROW_CAP`` rows and returned with columns + a
    compact LLM-facing summary. Bad SQL surfaces the DuckDB error message
    VERBATIM in a typed error so the FR-AS-11 retry loop can self-correct.
-5. RESULT MATERIALIZATION (NATE directive: "show me all X in Y" must PAINT,
-   not just tabulate). When the SELECT result carries a geometry column and
+5. RESULT MATERIALIZATION: a "show me all X in Y" query PAINTS a layer rather
+   than just tabulating. When the SELECT result carries a geometry column and
    more than zero rows, the TOOL (not the model's SQL - the read-only
    allowlist on the user statement is untouched) writes the FULL result set
    as FlatGeobuf, persists it under the runs bucket

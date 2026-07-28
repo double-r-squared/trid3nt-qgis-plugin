@@ -1,7 +1,7 @@
 """``search_spatial_functions`` atomic tool - BM25 lookup over the vendored
 DuckDB ``spatial`` extension function catalog.
 
-Companion to ``spatial_query`` (job-B7 lane-B ADR 0019 landing): once
+Companion to ``spatial_query`` (ADR 0019): once
 ``spatial_query`` resolved the diet-in-miniature problem of NOT enumerating
 every ``ST_*`` function inline in its own docstring (that prose was
 redundant with this tool and grew unboundedly as the extension gained

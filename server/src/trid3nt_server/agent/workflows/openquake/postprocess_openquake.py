@@ -8,7 +8,7 @@ returns the typed :class:`~trid3nt_contracts.openquake_contracts.SeismicHazardLa
 
 The OpenQuake analogue of ``postprocess_modflow`` (MF6-GWT plume) /
 ``postprocess_swmm`` (urban depth) / ``postprocess_flood`` (SFINCS). The defining
-difference: OpenQuake emits a SCATTERED set of site values in a CSV, NOT a grid —
+difference: OpenQuake emits a SCATTERED set of site values in a CSV, NOT a grid --
 we interpolate/rasterize the point hazard onto a raster ourselves (the engine's
 site grid is regular, so a nearest/linear fill onto the lon/lat lattice is the
 honest reconstruction). The hazard map is in EPSG:4326 already (the site grid was
@@ -18,10 +18,10 @@ Reuse (do NOT reinvent): the COG-write profile + ``_cog_bbox_4326`` zoom-to +
 ``_dispatch_publish_layer`` non-fatal publish pattern from ``postprocess_modflow``
 (adapted for an already-EPSG:4326 site lattice). The honesty floor (Invariant 1 /
 FR-AS-7): the hazard scalars are computed with plain arithmetic from the site
-values — no LLM anywhere; the agent narrates the typed fields, never invents them.
+values -- no LLM anywhere; the agent narrates the typed fields, never invents them.
 
 Tier separation (Invariant 5): the COG lands in the runs bucket (scheme-aware via
-``cache.storage_scheme()``); the agent does not re-render — ``publish_layer`` /
+``cache.storage_scheme()``); the agent does not re-render -- ``publish_layer`` /
 TiTiler serves the tiles from the URI on the envelope.
 """
 
@@ -57,7 +57,7 @@ __all__ = [
 
 #: The publish_layer style preset key the seismic hazard map renders with (the
 #: magma ramp 0..1 in g; an ADDITIVE registry preset, disjoint from the existing
-#: flood/plume keys — never mutated). Merged into _TITILER_STYLE_REGISTRY by the
+#: flood/plume keys -- never mutated). Merged into _TITILER_STYLE_REGISTRY by the
 #: orchestrator (see shared_appends.publish_layer_preset).
 SEISMIC_HAZARD_STYLE_PRESET: str = "continuous_seismic_pga"
 
@@ -72,11 +72,11 @@ class PostprocessOpenQuakeError(RuntimeError):
     ``error_code`` matches the open-set A.6 surface so the agent emitter renders
     a typed error frame. Codes:
 
-    - ``OQ_HAZARD_READ_FAILED`` — could not open / parse the hazard-map CSV.
-    - ``OQ_HAZARD_EMPTY`` — the CSV carries no site rows — nothing to rasterize.
-    - ``OQ_DEPENDENCY_MISSING`` — numpy / rasterio not importable in the runtime.
-    - ``OQ_COG_WRITE_FAILED`` — rasterio could not write the hazard COG.
-    - ``OQ_COG_UPLOAD_FAILED`` — the runs-bucket upload of the COG failed.
+    - ``OQ_HAZARD_READ_FAILED`` -- could not open / parse the hazard-map CSV.
+    - ``OQ_HAZARD_EMPTY`` -- the CSV carries no site rows -- nothing to rasterize.
+    - ``OQ_DEPENDENCY_MISSING`` -- numpy / rasterio not importable in the runtime.
+    - ``OQ_COG_WRITE_FAILED`` -- rasterio could not write the hazard COG.
+    - ``OQ_COG_UPLOAD_FAILED`` -- the runs-bucket upload of the COG failed.
     """
 
     error_code: str = "POSTPROCESS_OPENQUAKE_FAILED"
@@ -175,11 +175,9 @@ def rasterize_hazard_sites(
     OpenQuake's ``region_grid_spacing`` is in KM, so the site
     grid is NOT a clean lat/lon lattice - the lon of each row is offset slightly
     by latitude (km->deg for lon depends on lat), giving ~3e-5 deg jitter within a
-    column. The old ``round(., 6)`` treated those jittered near-duplicates as
-    DISTINCT lons (e.g. 34 "columns" for a real ~5, a striped raster + area=0,
-    proven by a real local oq run). We now CLUSTER near-duplicate axis values
-    within a tolerance (derived from the clean lat spacing) so the true lattice is
-    recovered, then snap each site to its nearest clustered node. Returns
+    column. We CLUSTER near-duplicate axis values within a tolerance (derived
+    from the clean lat spacing) so the true lattice is recovered, then snap
+    each site to its nearest clustered node. Returns
     ``(grid, (min_lon,min_lat,max_lon,max_lat), cell_deg)``. ``grid`` is row 0 =
     NORTH (north-up, ready for ``from_origin(west, north, ...)``).
     """
@@ -270,7 +268,7 @@ def compute_hazard_metrics(
     ``hazard_area_km2`` is the footprint of cells above ``HAZARD_FLOOR_VALUE``
     (each cell's area = the cell extent in km^2, accounting for the lat-dependent
     longitude foreshortening). ``n_sites`` counts the non-NaN cells (the PSHA
-    sites). Plain arithmetic — no LLM.
+    sites). Plain arithmetic -- no LLM.
     """
     import numpy as np  # type: ignore[import-not-found]
 
@@ -292,7 +290,7 @@ def compute_hazard_metrics(
 
 
 # --------------------------------------------------------------------------- #
-# COG write (already EPSG:4326 — no reprojection).
+# COG write (already EPSG:4326 -- no reprojection).
 # --------------------------------------------------------------------------- #
 #: stage -> (OpenQuake error_code) map (STEP 1 dedupe; byte-identical codes).
 _OQ_STAGE_CODES: dict[str, str] = {

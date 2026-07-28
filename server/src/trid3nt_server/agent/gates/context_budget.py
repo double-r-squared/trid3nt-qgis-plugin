@@ -1,14 +1,9 @@
-"""Context-budget compaction + overflow guard for the LOCAL model path
-(OPEN-14).
+"""Context-budget compaction + overflow guard for the LOCAL model path.
 
-PROVEN FAILURE THIS FIXES (2x reproduced, session 01KX8GCZKNBAFEJ9SY1C8VNVND,
-trid3nt-local/logs/agent.log): a turn's serialized prompt hit EXACTLY
-``num_ctx`` (the "gemini usage" log line read ``prompt=16384`` for a
-``qwen3.5-lowvram:9b-16k`` model, whose configured window is 16384). Ollama
-SILENTLY clips an over-long prompt to fit the window rather than erroring --
-the model never saw its own tool contract, emitted ZERO tool calls, and
-narrated a fabricated success ("I have computed the hillshade... and
-published") as if the (non-existent) work had happened.
+Ollama silently clips an over-long prompt to fit the context window rather
+than erroring -- the model never sees its own tool contract, can emit ZERO
+tool calls, and narrate a fabricated success as if the (non-existent) work
+had happened. This module exists to prevent that.
 
 Four independent pieces, all LOCAL (``MODEL_PROVIDER=openai``) only -- the
 Bedrock path is untouched:
@@ -25,9 +20,17 @@ Bedrock path is untouched:
      tokens as ``ceil(chars / 4)`` and, when over budget
      (``num_ctx - output_reserve - safety_margin``), compacts with
      HYSTERESIS (targets a FRACTION of budget so a borderline turn does not
-     re-trigger compaction every round): drop oldest rows -> harden long
-     tool-result rows -> fold the remaining oldest rows into one digest row.
-     The terminal user message and the case-state note immediately before it
+     re-trigger compaction every round): (a) drop oldest rows, (b) harden
+     long tool-result rows AND cap any oversized narration ``text`` Part,
+     (c) fold the remaining oldest rows into one digest row, (d) if still
+     over target with nothing left to drop, cap the text length of the
+     PROTECTED tail (case-state note / terminal user message) and log a
+     WARNING naming the oversized block. A defensive per-row
+     ``normalize_contents_row_sizes`` pass runs unconditionally at the top of
+     ``compact_contents``, capping every row's text to
+     ``CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT`` so a single runaway row never
+     survives even on a turn that sits under budget overall. Otherwise the
+     terminal user message and the case-state note immediately before it
      (always the last <= 2 rows of ``contents`` per the
      ``build_contents_from_history`` / server.py ``turn_history_for_contents``
      contract) are NEVER touched.
@@ -38,7 +41,11 @@ Bedrock path is untouched:
      ``>= num_ctx`` proves the send was clipped. One harder recompaction +
      retry is attempted; a second clip raises the typed error, which
      server.py surfaces as an honest ``CONTEXT_WINDOW_EXCEEDED`` envelope
-     (not the generic ``LLM_UNAVAILABLE`` bucket).
+     (not the generic ``LLM_UNAVAILABLE`` bucket). ``max_tokens`` is also
+     capped on every request (``openai_max_output_tokens``, env
+     ``TRID3NT_OPENAI_MAX_TOKENS``, default 4096) and COUPLED to
+     ``reserve_output_tokens`` so the proactive budget can never drift from
+     the real request cap.
 
   4. FABRICATION BACKSTOP (``looks_like_fabricated_action_claim``) -- cheap,
      conservative regex over the closing narration of a turn that issued
@@ -48,69 +55,14 @@ Bedrock path is untouched:
      answers and any turn that actually dispatched a tool never trigger it --
      the structural (zero-tool-call) gate is the caller's job
      (``server.py``), this module only judges the TEXT.
+     ``build_context_window_abort_note`` folds the same regex check into the
+     ``ContextWindowExceededError`` abort path, so a clipped/aborted turn
+     cannot persist an unqualified false completion claim either.
 
 All four pieces are individually unit-testable without a live Ollama or
 network access; ``discover_num_ctx`` is the only piece that makes a network
 call, and it degrades gracefully (best-effort) through its fallback chain on
 any fault.
-
-STILL-OVER-AFTER-STEP-A BUG (2x reproduced, trid3nt-local/logs/agent.log,
-session 01KX8GCZKNBAFEJ9SY1C8VNVND-adjacent runs): ``proactive compaction
-model=qwen3:8b-16k num_ctx=16384 budget=11264 before_est=64485
-after_est=17066 dropped=7 hardened=0 folded=False`` -- still ~6k tokens over
-budget, yet steps (b) (harden) and (c) (fold) never fired, and the turn then
-clipped (``prompt_tokens=16384``) and aborted. Root cause: steps (b) and (c)
-were BOTH gated on ``if working and ...`` -- once step (a) exhausted every
-row it is allowed to drop (either because that emptied ``working``
-completely, or because the only rows left carry a ``function_call`` /
-``function_response`` Part alongside a giant narration ``text`` Part --
-``adapter.build_contents_from_history``'s ``parts_blob`` full-fidelity path
-can legitimately reconstruct a model turn as ONE ``Content`` with both a
-text preamble and a tool call, and ``_is_droppable_row`` correctly refuses
-to drop that row), the excess tokens end up living entirely in rows step
-(b)'s old function-response-only hardening never touches, or in the
-PROTECTED tail (the case-state note / terminal user message,
-``_protected_tail_len``). An empty ``working`` list is falsy in Python, so
-both ``if working`` checks silently no-op instead of running -- the ladder
-returned still-over-budget with no further mitigation and no signal
-anything was wrong. Fixed by: (1) step (b) now also caps any oversized
-``text`` Part directly (not just ``function_response`` Parts), so a mixed
-narration+function_call row is no longer immune; (2) a new step (d) that,
-only when the ladder is still over target with nothing left in ``working``,
-applies that same text cap to the PROTECTED tail (the one case a narration
-row's TEXT LENGTH is not "structurally protected" the way its
-existence/position is -- see ``compact_contents``) and logs a WARNING
-naming which protected block was oversized; (3) a defensive per-row
-``normalize_contents_row_sizes`` pass, run unconditionally at the top of
-``compact_contents``, caps every row's text to
-``CONTENTS_NORMALIZE_CHAR_CAP_DEFAULT`` so a single runaway row (the
-177KB-message shape from the live log) never survives this function even on
-a turn that happens to sit under budget overall.
-
-POST-OPEN-14 ACCEPTANCE RERUN FOLLOW-UPS (3 bugs, sessions
-01KXAGEJAAPWDH0YSEGYQK5QVG / 01KXAJ1WKWDC0XS7VW4RY6CVF6):
-
-  BUG 1 -- a ``ContextWindowExceededError`` abort could persist NEITHER the
-    typed failure card NOR any acknowledgement in the chat transcript itself
-    (server.py's except-block ordering; see server.py ``_stream_gemini_reply``
-    / ``_dispatch_gemini_and_persist``). Fixed by persisting first, and by
-    appending ``CONTEXT_WINDOW_ABORT_NOTE`` to the turn's already-persisted
-    partial narration so the reader sees the abort verdict right after the
-    unverified streamed text, not only in a transient error envelope a
-    dead/detached socket may never deliver.
-
-  BUG 2 -- the fabrication backstop (item 4 below) was only wired into the
-    normal zero-tool-call terminal branch, so an abort mid-fabrication
-    persisted an unqualified false claim. ``build_context_window_abort_note``
-    folds the same regex check into the abort path.
-
-  BUG 3 -- no ``max_tokens`` cap meant a clipped/looping generation could run
-    for ~22 minutes before the reactive clip guard (item 3) got a chance to
-    react (it only inspects usage AFTER the stream ends). Fixed by
-    ``openai_max_output_tokens`` (env ``TRID3NT_OPENAI_MAX_TOKENS``, default
-    4096), sent as ``max_tokens`` on every request in
-    ``openai_adapter.stream_openai`` and COUPLED to ``reserve_output_tokens``
-    so the proactive budget can never drift from the real request cap.
 """
 
 from __future__ import annotations

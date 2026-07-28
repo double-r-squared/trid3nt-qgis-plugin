@@ -7,10 +7,10 @@ peak flood depth field, converts it to a Cloud-Optimized GeoTIFF, uploads to
 GCS, and returns a typed ``LayerURI`` pointing at the COG.
 
 Output format set is fixed by FR-CE-4 + FR-QS-3: rasters COG; vectors
-FlatGeobuf/GeoParquet — produced identically by engine, consumed identically
+FlatGeobuf/GeoParquet -- produced identically by engine, consumed identically
 by QGIS Server + web. The postprocess output here is one COG (flood depth at
 peak); future workflows may emit additional layers (flood velocity,
-arrival-time COG, affected-buildings FlatGeobuf, …) — extend the return list
+arrival-time COG, affected-buildings FlatGeobuf, …) -- extend the return list
 when those land.
 
 Style preset: ``continuous_flood_depth`` (a new preset name for the M5
@@ -20,10 +20,10 @@ engine's styles follow-up job will author.
 
 Tier separation (Invariant 5): the COG is written under
 ``s3://trid3nt-runs/<run_id>/`` (the runs bucket).
-The agent service doesn't re-render — QGIS Server picks up the URI from the
+The agent service doesn't re-render -- QGIS Server picks up the URI from the
 AssessmentEnvelope's ``ResultLayer`` and serves WMS/WMTS tiles.
 
-This module is workflow-internal — not registered as an atomic tool.
+This module is workflow-internal -- not registered as an atomic tool.
 ``model_flood_scenario`` calls it after ``wait_for_completion`` returns a
 COMPLETE ``RunResult``.
 """
@@ -72,7 +72,7 @@ RUNS_BUCKET_DEFAULT: str = "trid3nt-runs"
 FLOOD_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
 
 #: Minimum depth threshold below which cells are masked to NaN (treated as dry).
-#: 5 cm is the physically meaningful wet-cell threshold — matches the
+#: 5 cm is the physically meaningful wet-cell threshold -- matches the
 #: ``flooded_cell_count`` reporting convention (evidence) and the
 #: lowest QML colour stop (``continuous_flood_depth.qml`` alpha=0 at 0.05 m).
 #: Belt-and-suspenders: the QML renderer also hides values < 0.05 m (alpha=0),
@@ -90,17 +90,17 @@ class PostprocessError(RuntimeError):
     Carries ``error_code`` matching the open-set A.6 surface so the agent
     emitter can render a typed error frame. Codes used here:
 
-    - ``RUN_OUTPUT_READ_FAILED`` — could not read the raw solver output
+    - ``RUN_OUTPUT_READ_FAILED`` -- could not read the raw solver output
       (network, missing blob, malformed NetCDF).
-    - ``RUN_OUTPUT_EMPTY`` — output exists but contains no depth field /
+    - ``RUN_OUTPUT_EMPTY`` -- output exists but contains no depth field /
       no timesteps (defensive; surfaces alongside the typed envelope
       so the user understands why the layer is missing).
-    - ``RUN_OUTPUT_UNEXPECTED_SHAPE`` — the extracted depth array has extra
+    - ``RUN_OUTPUT_UNEXPECTED_SHAPE`` -- the extracted depth array has extra
       singleton dims that do not collapse to 2D after squeeze; indicates an
       unexpected HydroMT-SFINCS output shape variant.
-    - ``COG_WRITE_FAILED`` — rasterio could not write the COG (encoder
+    - ``COG_WRITE_FAILED`` -- rasterio could not write the COG (encoder
       error, disk full).
-    - ``COG_UPLOAD_FAILED`` — the GCS upload of the staged COG failed.
+    - ``COG_UPLOAD_FAILED`` -- the GCS upload of the staged COG failed.
     - ``CRS_TAG_MISMATCH`` - belt-and-suspenders guard: the CRS tag written to
       the COG does not match what rasterio reads back, OR the tag's
       geographic/projected classification is inconsistent with the actual
@@ -178,23 +178,23 @@ def _read_crs_from_dataset(ds: Any) -> str:
 
     SFINCS stores the CRS in a **data variable** named ``crs``, not in
     ``ds.attrs``.  The variable carries EPSG information either in its
-    attributes (CF conventions) OR — for the cht_sfincs quadtree writer — as
+    attributes (CF conventions) OR -- for the cht_sfincs quadtree writer -- as
     the variable's SCALAR VALUE (the bare int EPSG code, e.g. ``32616``, with
     a useless ``attrs={'EPSG':'-'}``).  We try the known SFINCS encodings in
     order:
 
-    1. ``crs_var.attrs["epsg_code"]`` — SFINCS emits ``"EPSG:32617"`` (string
+    1. ``crs_var.attrs["epsg_code"]`` -- SFINCS emits ``"EPSG:32617"`` (string
        already prefixed); strip any accidental whitespace and return as-is.
-    2. ``crs_var.attrs["epsg"]`` / ``["EPSG"]`` — a bare int EPSG attr (when it
+    2. ``crs_var.attrs["epsg"]`` / ``["EPSG"]`` -- a bare int EPSG attr (when it
        is a usable number, not the cht placeholder ``"-"``).
-    3. ``crs_var.attrs["crs_wkt"]`` — CF canonical WKT string; parse via
+    3. ``crs_var.attrs["crs_wkt"]`` -- CF canonical WKT string; parse via
        pyproj and return the EPSG authority string.
-    4. ``crs_var.attrs["spatial_ref"]`` / ``["wkt"]`` — OGC WKT variants used by
+    4. ``crs_var.attrs["spatial_ref"]`` / ``["wkt"]`` -- OGC WKT variants used by
        some GDAL writers; parse via pyproj.
-    5. The crs VARIABLE VALUE itself — the cht_sfincs quadtree writer stores the
+    5. The crs VARIABLE VALUE itself -- the cht_sfincs quadtree writer stores the
        bare int EPSG code (32616) AS the variable value, not in an attr; read it
        as ``int(crs_var.values)`` -> ``"EPSG:32616"``.
-    6. Fallback: ``ds.attrs.get("crs", "EPSG:3857")`` — original logic,
+    6. Fallback: ``ds.attrs.get("crs", "EPSG:3857")`` -- original logic,
        retained for any dataset that does not carry the ``crs`` variable.
 
     A logged warning is emitted whenever the fallback fires so the mismatch
@@ -205,7 +205,7 @@ def _read_crs_from_dataset(ds: Any) -> str:
         attrs = crs_var.attrs
 
         if "epsg_code" in attrs:
-            # SFINCS emits e.g. "EPSG:32617" — may occasionally be bare int.
+            # SFINCS emits e.g. "EPSG:32617" -- may occasionally be bare int.
             raw = str(attrs["epsg_code"]).strip()
             if raw.upper().startswith("EPSG:"):
                 return raw  # already canonical
@@ -216,12 +216,12 @@ def _read_crs_from_dataset(ds: Any) -> str:
 
         for epsg_key in ("epsg", "EPSG"):
             if epsg_key in attrs:
-                # cht_sfincs writes attrs={'EPSG':'-'} (a placeholder) — int()
+                # cht_sfincs writes attrs={'EPSG':'-'} (a placeholder) -- int()
                 # raises and we fall through to the variable value below.
                 try:
                     return f"EPSG:{int(str(attrs[epsg_key]).strip())}"
                 except (ValueError, TypeError):
-                    pass  # placeholder / non-numeric — fall through
+                    pass  # placeholder / non-numeric -- fall through
 
         for wkt_key in ("crs_wkt", "spatial_ref", "wkt"):
             if wkt_key in attrs:
@@ -229,7 +229,7 @@ def _read_crs_from_dataset(ds: Any) -> str:
                     import pyproj  # optional; rasterio ships pyproj
                     return pyproj.CRS.from_wkt(attrs[wkt_key]).to_string()
                 except Exception:  # noqa: BLE001
-                    pass  # malformed WKT — fall through
+                    pass  # malformed WKT -- fall through
 
         # cht_sfincs quadtree: the crs VARIABLE VALUE is the bare int EPSG code
         # (e.g. 32616), not an attr. Read it as a scalar and validate via pyproj.
@@ -247,7 +247,7 @@ def _read_crs_from_dataset(ds: Any) -> str:
                     except Exception:  # noqa: BLE001
                         return f"EPSG:{epsg_int}"
         except Exception:  # noqa: BLE001
-            pass  # non-numeric variable value — fall through to attrs fallback
+            pass  # non-numeric variable value -- fall through to attrs fallback
 
     # Fallback: old .attrs encoding or bare dataset without a crs variable.
     fallback = ds.attrs.get("crs", "EPSG:3857")
@@ -262,17 +262,17 @@ def _read_crs_from_dataset(ds: Any) -> str:
 def _orient_array_for_cog(arr: Any, ds: Any) -> Any:
     """Apply the rotation + Y-flip + X-flip orientation guards to a 2D depth array.
 
-    Centralizes the per-cell orientation corrections that used to live inline in
-    ``_extract_peak_depth_geotiff`` so they can be applied IDENTICALLY to every
-    per-frame depth array (flood-animation Phase 1). Pure geometry — no masking,
-    no I/O. Takes the squeezed 2D ``arr`` (already rotation-aware? NO — rotation
-    is decided from ds dim names below) and the open dataset; returns the
-    correctly-oriented array (``(y_rows, x_cols)``, row 0 = north, col 0 = west).
+    Centralizes the per-cell orientation corrections so they apply IDENTICALLY
+    to every per-frame depth array. Pure geometry -- no masking, no I/O. Takes
+    the squeezed 2D ``arr`` (rotation is decided from ``ds`` dim names below)
+    and the open dataset; returns the correctly-oriented array
+    (``(y_rows, x_cols)``, row 0 = north, col 0 = west).
 
     The rotation guard reads the ``x``/``y`` dim names from ``ds`` (not array
-    shapes) so square grids are handled correctly. Y/X flips read the coordinate
-    direction. All three degrade to identity on probe failure (defensive — a bad
-    coordinate read must never corrupt the raster, only skip the correction).
+    shapes) so square grids are handled correctly. Y/X flips read the
+    coordinate direction. All three degrade to identity on probe failure
+    (defensive -- a bad coordinate read must never corrupt the raster, only
+    skip the correction).
     """
     import numpy as np  # type: ignore[import-not-found]
 
@@ -287,7 +287,7 @@ def _orient_array_for_cog(arr: Any, ds: Any) -> Any:
         _y_dim = ds["y"].dims[0]  # e.g. "n"
         _n_x = int(ds.sizes.get(_x_dim, ds["x"].shape[0]))
         _n_y = int(ds.sizes.get(_y_dim, ds["y"].shape[0]))
-        # If the array is (n_x, n_y) — x-cols in rows — transpose to (n_y, n_x).
+        # If the array is (n_x, n_y) -- x-cols in rows -- transpose to (n_y, n_x).
         if (
             arr.ndim == 2
             and _n_x != _n_y
@@ -300,7 +300,7 @@ def _orient_array_for_cog(arr: Any, ds: Any) -> Any:
                 arr.shape, _x_dim, _n_x, _n_y, _n_x,
             )
             arr = arr.T
-    except Exception:  # noqa: BLE001 — dim inspection failure falls through to identity
+    except Exception:  # noqa: BLE001 -- dim inspection failure falls through to identity
         pass
 
     # --- Y-orientation guard ---
@@ -314,7 +314,7 @@ def _orient_array_for_cog(arr: Any, ds: Any) -> Any:
             y_ascends_along_rows = bool(_y_vals[0] < _y_vals[-1])
         if y_ascends_along_rows:
             arr = arr[::-1, :]
-    except Exception:  # noqa: BLE001 — defensive; bad y → identity, no harm
+    except Exception:  # noqa: BLE001 -- defensive; bad y → identity, no harm
         logger.warning("postprocess_flood: y-orientation probe failed; not flipping")
 
     # --- X-orientation guard (belt-and-suspenders) ---
@@ -328,7 +328,7 @@ def _orient_array_for_cog(arr: Any, ds: Any) -> Any:
             x_descends_along_cols = bool(_x_vals[0] > _x_vals[-1])
         if x_descends_along_cols:
             arr = arr[:, ::-1]
-    except Exception:  # noqa: BLE001 — defensive; bad x → identity, no harm
+    except Exception:  # noqa: BLE001 -- defensive; bad x → identity, no harm
         logger.warning("postprocess_flood: x-orientation probe failed; not flipping")
 
     return np.ascontiguousarray(arr)
@@ -339,7 +339,7 @@ def _is_quadtree_output(ds: Any) -> bool:
 
     The cht_sfincs quadtree solve writes a UGRID ``sfincs_map.nc`` whose fields
     live on ``nmesh2d_face`` (one scalar per quadtree face) with per-face
-    coordinates ``mesh2d_face_x`` / ``mesh2d_face_y`` — NOT the regular
+    coordinates ``mesh2d_face_x`` / ``mesh2d_face_y`` -- NOT the regular
     ``(n, m)`` grid + 1D ``x``/``y`` coords the legacy ``_write_verified_cog``
     ``from_bounds`` path assumes. ``_write_verified_cog`` branches on this probe
     so a face-indexed field routes through ``_rasterize_face_field`` (P1) instead
@@ -360,7 +360,7 @@ def _read_face_coords(ds: Any) -> tuple[Any, Any]:
     Returns ``(face_x, face_y)`` 1D numpy arrays in the deck's projected CRS
     (UTM metres). Resolution order:
 
-    1. ``mesh2d_face_x`` / ``mesh2d_face_y`` (or ``face_x`` / ``face_y``) —
+    1. ``mesh2d_face_x`` / ``mesh2d_face_y`` (or ``face_x`` / ``face_y``) --
        the canonical pre-computed per-face centroid coords. Fast path.
     2. **Compute from the UGRID node coords + connectivity.** The REAL
        cht_sfincs quadtree ``sfincs_map.nc`` does NOT carry ``mesh2d_face_x/_y``;
@@ -445,10 +445,10 @@ def _rasterize_face_field(
     """Grid a per-face scalar UGRID field onto a regular raster.
 
     The quadtree solve emits one scalar per face (``values_1d``) at the face
-    centroids (``face_x``/``face_y`` in the deck's PROJECTED CRS — UTM metres).
+    centroids (``face_x``/``face_y`` in the deck's PROJECTED CRS -- UTM metres).
     To produce a COG the agent's TiTiler fast-path can serve, we interpolate the
     scattered per-face values onto a regular metric grid via
-    ``scipy.interpolate.griddata`` (nearest-neighbour — preserves the per-face
+    ``scipy.interpolate.griddata`` (nearest-neighbour -- preserves the per-face
     value, no smoothing across the variable-size quadtree, and never invents
     intermediate magnitudes), at ``resolution_m`` metres.
 
@@ -457,11 +457,11 @@ def _rasterize_face_field(
     ``bbox`` (EPSG:4326) is reprojected to the face CRS to bound the output grid
     when supplied; otherwise the face-coordinate extent is used.
 
-    Returns ``(arr_2d, transform)`` — a float32 2D array (row 0 = north) and the
+    Returns ``(arr_2d, transform)`` -- a float32 2D array (row 0 = north) and the
     rasterio Affine. NaN fills cells with no nearby face (outside the convex hull
     of the mesh) so the dry/no-data mask downstream stays honest.
 
-    Never imports the GPL cht packages — pure numpy + scipy + the face vars off
+    Never imports the GPL cht packages -- pure numpy + scipy + the face vars off
     the NetCDF (the 1.2GB cht deck-builder stays in the worker image).
     """
     import numpy as np  # type: ignore[import-not-found]
@@ -481,7 +481,7 @@ def _rasterize_face_field(
             details={"n_values": int(vals.shape[0]), "n_faces": int(fx.shape[0])},
         )
 
-    # Drop non-finite faces (defensive — a NaN centroid would poison the grid).
+    # Drop non-finite faces (defensive -- a NaN centroid would poison the grid).
     finite = np.isfinite(fx) & np.isfinite(fy)
     fx, fy, vals = fx[finite], fy[finite], vals[finite]
     if fx.size == 0:
@@ -505,7 +505,7 @@ def _rasterize_face_field(
             bx1, by1 = tf.transform(float(bbox[2]), float(bbox[3]))
             minx, maxx = min(bx0, bx1), max(bx0, bx1)
             miny, maxy = min(by0, by1), max(by0, by1)
-        except Exception as exc:  # noqa: BLE001 — fall back to the face extent
+        except Exception as exc:  # noqa: BLE001 -- fall back to the face extent
             logger.warning(
                 "postprocess_flood: bbox->%s reproject for the quadtree raster "
                 "grid failed (%s); bounding to the face extent instead.",
@@ -542,7 +542,7 @@ def _rasterize_face_field(
             (fx, fy), np.ones_like(vals), (grid_x, grid_y), method="linear"
         )
         arr = np.where(np.isfinite(hull_mask), arr, np.nan).astype("float32")
-    except Exception:  # noqa: BLE001 — convex-hull mask is best-effort
+    except Exception:  # noqa: BLE001 -- convex-hull mask is best-effort
         pass
 
     transform = rasterio.transform.from_bounds(
@@ -574,7 +574,7 @@ def _write_verified_cog(
     - **Quadtree / face-indexed UGRID**: when the dataset is face-indexed
       (``_is_quadtree_output``) OR ``face_values`` (a 1D per-face array) is
       supplied, the field is rasterized via ``_rasterize_face_field`` onto a
-      regular metric grid in the deck's projected (UTM) CRS — no ``from_bounds``
+      regular metric grid in the deck's projected (UTM) CRS -- no ``from_bounds``
       regular-grid assumption. This is what fixes BOTH depth and waves on the
       true quadtree path (the legacy path would raise on the missing ``x``/``y``
       regular coords).
@@ -593,7 +593,7 @@ def _write_verified_cog(
     # Route a per-face scalar field through the UGRID rasterizer. Triggered when
     # an explicit ``face_values`` 1D array is passed OR the dataset is face
     # indexed (then ``arr_2d`` IS the 1D per-face field). Reads face geometry
-    # straight off the NetCDF (mesh2d_face_x/_y) — never imports cht_sfincs.
+    # straight off the NetCDF (mesh2d_face_x/_y) -- never imports cht_sfincs.
     face_indexed = _is_quadtree_output(ds)
     face_field = face_values if face_values is not None else (
         arr_2d if face_indexed else None
@@ -769,13 +769,13 @@ def _collapse_running_max(field: Any) -> Any:
     SFINCS writes its max fields with a leading ``timemax`` axis whose length is
     ``ceil(tstop-tstart / dtmaxout)``. When ``dtmaxout >= sim-length`` that axis
     is size 1 (a single global max, squeezes away cleanly). But when ``dtmaxout``
-    is set FINER than the sim window — which the flood-animation deck does
+    is set FINER than the sim window -- which the flood-animation deck does
     (``dtmaxout = max(600, total/24)`` in sfincs_builder, giving ~24 blocks over a
-    24h sim) — SFINCS emits a SEQUENCE of running-max snapshots: ``hmax`` arrives
+    24h sim) -- SFINCS emits a SEQUENCE of running-max snapshots: ``hmax`` arrives
     as ``(timemax=24, n, m)``. The representative PEAK is the max OVER those
     blocks, so we reduce any ``timemax``/``time`` leading axis here. Without this
     the peak array stays 3D and ``_write_verified_cog``'s squeeze raises
-    ``RUN_OUTPUT_UNEXPECTED_SHAPE`` — sinking BOTH the peak layer and every
+    ``RUN_OUTPUT_UNEXPECTED_SHAPE`` -- sinking BOTH the peak layer and every
     animation frame (the whole flood layer set vanishes on an otherwise-good
     solve). Any non-spatial reduce dim present on the field is collapsed; the
     spatial ``n``/``m`` dims are left intact.
@@ -796,7 +796,7 @@ def _select_peak_depth(ds: Any) -> Any:
 
     ``hmax`` / ``zsmax`` carry a leading ``timemax`` axis that is size 1 when
     ``dtmaxout >= sim-length`` but size N when the deck sets a finer
-    ``dtmaxout`` (the animation deck does — ~24 running-max blocks). We collapse
+    ``dtmaxout`` (the animation deck does -- ~24 running-max blocks). We collapse
     that axis to a true global 2D peak via ``_collapse_running_max`` so the COG
     writer always receives a 2D field.
     """
@@ -864,27 +864,27 @@ def _extract_depth_frames(
     netcdf_path: Path,
 ) -> tuple[Path, dict[str, Any], list[Path], list[str]]:
     """Extract the PEAK depth COG AND (when time-varying output exists) N per-frame
-    depth COGs from a SFINCS map output — the engine-agnostic flood-animation core.
+    depth COGs from a SFINCS map output -- the engine-agnostic flood-animation core.
 
     Returns ``(peak_cog, peak_metrics, frame_cogs, frame_labels)``:
 
-    - ``peak_cog`` — the representative max-depth COG (always produced; identical
+    - ``peak_cog`` -- the representative max-depth COG (always produced; identical
       to the legacy ``_extract_peak_depth_geotiff`` output). Drives FloodMetrics
       + the habitat/Pelicun/honesty-floor consumers (regression-safe).
-    - ``peak_metrics`` — PEAK aggregates (max/mean/p95/flooded_cell_count) +
+    - ``peak_metrics`` -- PEAK aggregates (max/mean/p95/flooded_cell_count) +
       crs/units. Computed over the PEAK field, NOT a single frame.
-    - ``frame_cogs`` — up to ``MAX_FLOOD_FRAMES`` per-timestep depth COGs in
+    - ``frame_cogs`` -- up to ``MAX_FLOOD_FRAMES`` per-timestep depth COGs in
       ASCENDING time order, evenly subsampled (first + last always kept). EMPTY
       when the dataset has no usable time-varying water level (only hmax/zsmax,
       or a single zs timestep) → caller emits ONLY the peak layer (full
       backward-compat). Each frame COG is orientation-corrected + CRS-verified
       by ``_write_verified_cog`` (the per-frame VALID-COG guard).
-    - ``frame_labels`` — parallel short labels (e.g. ``"step 1"``) for provenance;
+    - ``frame_labels`` -- parallel short labels (e.g. ``"step 1"``) for provenance;
       the AUTHORITATIVE web grouping token lives in the LayerURI NAME the caller
       assigns ("Flood depth step N"), NOT here.
 
     The per-frame path REQUIRES ``zs(time,n,m)`` + ``zb(n,m)`` with a time dim of
-    length > 1 — which only exists once ``dtout`` is set in the SFINCS deck
+    length > 1 -- which only exists once ``dtout`` is set in the SFINCS deck
     (sfincs_builder). Without time-varying output the function degrades cleanly
     to the single-max behavior.
     """
@@ -1050,12 +1050,12 @@ def postprocess_flood(
 
         ``layers[0]`` is ALWAYS the representative peak flood-depth COG
         (``layer_id=flood-depth-peak-{run_id}``, name ``"Peak flood depth"``,
-        role ``"primary"``) — the regression-safe single layer the habitat /
+        role ``"primary"``) -- the regression-safe single layer the habitat /
         Pelicun / honesty-floor / wrapper-return consumers read. ``layers[1:]``
         (present ONLY when the SFINCS output carries time-varying water level)
         are up to ``MAX_FLOOD_FRAMES`` per-timestep depth COGs named
         ``"Flood depth step N"`` (N = 1..k, contiguous, 1-based) with role
-        ``"context"`` — the web ``parseFrameToken`` recognizes the ``step N``
+        ``"context"`` -- the web ``parseFrameToken`` recognizes the ``step N``
         token and ``detectSequentialGroups`` collapses them into ONE bottom-
         center-scrubber temporal group (engine-agnostic flood animation,
         Phase 1). Each frame COG lands at a DISTINCT runs-bucket key so its
@@ -1068,7 +1068,7 @@ def postprocess_flood(
     netcdf_path = _resolve_run_output_to_local(run_outputs_uri)
     peak_cog, metrics, frame_cogs, frame_labels = _extract_depth_frames(netcdf_path)
 
-    # --- Peak (representative) layer — ALWAYS layers[0], unchanged contract. ---
+    # --- Peak (representative) layer -- ALWAYS layers[0], unchanged contract. ---
     try:
         peak_uri = _upload_cog_to_runs_bucket(peak_cog, run_id, runs_bucket)
     finally:
@@ -1079,8 +1079,8 @@ def postprocess_flood(
 
     layers: list[LayerURI] = [
         LayerURI(
-            # job (flood-duplicate-layer fix): a clear human-readable name —
-            # "Peak flood depth" — so the LayerPanel row matches the
+            # job (flood-duplicate-layer fix): a clear human-readable name --
+            # "Peak flood depth" -- so the LayerPanel row matches the
             # white->blue->green ``continuous_flood_depth`` styling. The
             # style_preset MUST stay set (FLOOD_DEPTH_STYLE_PRESET); a layer that
             # reaches publish_layer / the map with NO preset falls through to the
@@ -1102,7 +1102,7 @@ def postprocess_flood(
     # frame. Names carry the EXACT web token ("Flood depth step N") so the panel
     # forms the sequential group. role="context" (LayerURI.role is a closed
     # Literal["primary","context","input"]; frames are NOT the primary peak
-    # layer, so they ride as context — the grouping key on the web side is the
+    # layer, so they ride as context -- the grouping key on the web side is the
     # NAME token + style_preset + bbox-signature, never the role).
     for frame_no, (frame_cog, _label) in enumerate(
         zip(frame_cogs, frame_labels), start=1

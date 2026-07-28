@@ -39,7 +39,7 @@ needed. The output raster covers exactly the bbox (clipped to the source
 extent); when ``bbox`` is None the entire source raster is processed.
 
 **Cache key** is derived from ``(landcover_uri, sorted(classes), bbox_rounded_6dp,
-year="2021")`` — all four parameters materially affect the output pixels. The
+year="2021")`` -- all four parameters materially affect the output pixels. The
 ``year`` tag pins to NLCD 2021 (the default vintage for ``fetch_landcover``)
 and is reserved for a future-vintage opt-in.
 
@@ -50,12 +50,12 @@ and is reserved for a future-vintage opt-in.
 - **Invariant 2 (Deterministic workflows): preserves.** Pure rasterio + numpy
   pipeline, no LLM calls, deterministic given inputs.
 - **FR-DC-6 (cacheable): honors.** ``cacheable=True``, ``ttl_class="static-30d"``,
-  ``source_class="landcover_class"`` — a binary mask of a static NLCD COG is
+  ``source_class="landcover_class"`` -- a binary mask of a static NLCD COG is
   stable for the 30-day window.
 - **NFR-R-1 (resilience): preserves.** Read / parse failures surface as
   ``LandcoverClassError`` (typed; never an unhandled exception).
-- **Job-0086 codified lesson (geographic correctness):** the live test asserts
-  that the mask aligns with the known geography of the source raster — a pixel
+- **Geographic-correctness check (codified lesson):** the live test asserts
+  that the mask aligns with the known geography of the source raster -- a pixel
   classified as Open Water (NLCD 11) must remain 1 in the mask after
   extraction, and a Developed (NLCD 21-24) pixel must become 0 if those classes
   aren't requested. The mask is verified against ``np.isin`` of the source array
@@ -102,12 +102,12 @@ class LandcoverClassError(RuntimeError):
     pipeline strip (NFR-R-1 typed-error requirement).
 
     Codes:
-    - ``CLASSES_EMPTY`` — ``classes`` argument was empty.
-    - ``CLASSES_INVALID`` — a class code is out of NLCD uint8 range (0-254).
-    - ``BBOX_INVALID`` — bbox is malformed (wrong arity, non-finite, degenerate).
-    - ``RASTER_OPEN_FAILED`` — rasterio cannot open the landcover raster.
-    - ``WINDOW_EMPTY`` — the requested bbox does not intersect the source raster.
-    - ``WRITE_FAILED`` — rasterio could not write the output GeoTIFF.
+    - ``CLASSES_EMPTY`` -- ``classes`` argument was empty.
+    - ``CLASSES_INVALID`` -- a class code is out of NLCD uint8 range (0-254).
+    - ``BBOX_INVALID`` -- bbox is malformed (wrong arity, non-finite, degenerate).
+    - ``RASTER_OPEN_FAILED`` -- rasterio cannot open the landcover raster.
+    - ``WINDOW_EMPTY`` -- the requested bbox does not intersect the source raster.
+    - ``WRITE_FAILED`` -- rasterio could not write the output GeoTIFF.
     """
 
     def __init__(self, error_code: str, message: str) -> None:
@@ -132,7 +132,7 @@ _METADATA = AtomicToolMetadata(
 _NODATA_OUT = 255
 
 # NLCD source classes can legally be 0-254 (uint8). The output sentinel 255 is
-# reserved for nodata; if the caller asks to extract 255 we refuse — it would
+# reserved for nodata; if the caller asks to extract 255 we refuse -- it would
 # silently merge with nodata.
 _NLCD_MAX_CLASS = 254
 
@@ -209,7 +209,7 @@ def _open_source(landcover_uri: str) -> Any:
     this is a CONTEXT MANAGER (was a plain return-the-dataset
     function). For the s3:// in-memory path the prior code did
     ``MemoryFile(...).open()`` and returned the dataset, ORPHANING the
-    MemoryFile — Python could GC it (freeing the /vsimem/ buffer) mid-read, so
+    MemoryFile -- Python could GC it (freeing the /vsimem/ buffer) mid-read, so
     reads returned valid pixels PLUS uninitialized garbage. Yielding the
     dataset from inside a nested ``with MemoryFile(...)`` pins the buffer for
     the dataset's whole lifetime (the same bug + fix as the NLCD validation
@@ -355,7 +355,7 @@ def _extract_mask_bytes(
         "tiled": True,
         # 256x256 blocksize for COG-friendly tiling; rasterio enforces a
         # multiple-of-16 constraint and falls back to a strip layout when the
-        # raster is too small for tiling — we accept that fallback.
+        # raster is too small for tiling -- we accept that fallback.
         "blockxsize": 256,
         "blockysize": 256,
     }
@@ -477,7 +477,7 @@ def extract_landcover_class(
     bbox_rounded = _round_bbox(bbox) if bbox is not None else None
 
     # Cache key on (landcover_uri, sorted classes, bbox, year tag). The year
-    # tag pins to NLCD 2021 — when the engine bumps the default vintage the
+    # tag pins to NLCD 2021 -- when the engine bumps the default vintage the
     # cache key naturally changes, avoiding silent staleness.
     params: dict[str, object] = {
         "landcover_uri": landcover_uri,

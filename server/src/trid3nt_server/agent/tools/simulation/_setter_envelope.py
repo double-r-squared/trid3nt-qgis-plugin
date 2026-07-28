@@ -1,4 +1,4 @@
-"""Shared machinery for the group-D parameter setters (LANE D EXCLUSIVE).
+"""Shared machinery for the group-D parameter setters.
 
 ``set_sfincs_parameters`` / ``set_swmm_parameters`` / ``set_modflow_parameters``
 (the V&V-wave calibration primitives, docs/validation/build-contract.md section
