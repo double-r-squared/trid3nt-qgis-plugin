@@ -5,7 +5,7 @@ silently dropping ``Part.thought_signature`` on the producer side and
 never echoing it back on the replayed model turn. On Gemini 3 (Vertex)
 this would trigger a ``thought-signature mismatch`` 400 on the second
 turn of any tool-using conversation. Gemini 2.5 (the current
-``GEMINI_DEFAULT_MODEL``) does not surface signatures, so the wire is
+``DEFAULT_VERTEX_MODEL``) does not surface signatures, so the wire is
 None today — the plumbing is forward-compat so the bug does not return
 the moment ``TRID3NT_GEMINI_MODEL=gemini-3-pro`` is flipped.
 

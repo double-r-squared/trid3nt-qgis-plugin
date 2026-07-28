@@ -47,8 +47,9 @@ Invariants:
   needs a ``.qgs`` URI per Case; it does NOT special-case any hazard or
   engine. The seam is engine-agnostic — a future ``publish_vector_layer``
   uses the same resolver.
-- **MongoDB MCP canonical persistence.** All Case reads here go
-  through ``Persistence`` — no custom Mongo wrapper, no direct driver.
+- **Canonical persistence via the ``Persistence`` seam.** All Case reads here
+  go through ``Persistence`` (the file backend on this stack) — no custom
+  storage wrapper, no direct driver.
 """
 
 from __future__ import annotations

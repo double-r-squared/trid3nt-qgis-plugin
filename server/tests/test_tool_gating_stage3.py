@@ -24,7 +24,7 @@ import pytest
 
 import trid3nt_server.main as agent_main
 from trid3nt_server import server as agent_server
-from trid3nt_server.agent.adapters.adapter import GeminiSettings, TextDeltaEvent
+from trid3nt_server.agent.adapters.adapter import ModelSettings, TextDeltaEvent
 from trid3nt_server.agent.categories import HOT_SET_TOOLS
 from trid3nt_server.agent.gates.tool_gating import (
     META_TOOL_FLOOR,
@@ -176,7 +176,7 @@ def test_gate_disabled_at_k_zero():
 
 
 # ---------------------------------------------------------------------------
-# Integration: provider scoping through _stream_gemini_reply
+# Integration: provider scoping through _stream_model_reply
 # ---------------------------------------------------------------------------
 
 
@@ -191,8 +191,8 @@ class _FakeSocket:
             self.sent.append(msg)
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -221,7 +221,7 @@ async def _drive_turn_and_capture_registry(monkeypatch) -> dict:
     with patch.object(agent_server, "build_client", return_value=MagicMock()), \
          patch.object(agent_server, "build_tool_declarations", _capture_decls), \
          patch.object(agent_server, "stream_events_with_contents", _fake_stream):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "fetch something for Boulder", "research"
         )
     return captured
@@ -282,7 +282,7 @@ async def test_openai_gate_fails_open_on_cold_index(monkeypatch):
     with patch.object(agent_server, "build_client", return_value=MagicMock()), \
          patch.object(agent_server, "build_tool_declarations", _capture_decls), \
          patch.object(agent_server, "stream_events_with_contents", _fake_stream):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "fetch something", "research"
         )
     assert len(captured["registry"]) == _full_registry_size()

@@ -1,5 +1,5 @@
 """BUG 1 + BUG 2 (post-OPEN-14 acceptance rerun): the ContextWindowExceededError
-abort path in server.py's ``_stream_gemini_reply`` / ``_dispatch_gemini_and_persist``.
+abort path in server.py's ``_stream_model_reply`` / ``_dispatch_gemini_and_persist``.
 
 Root cause (BUG 1): the OLD except-block sent the live error envelope FIRST and
 persisted the typed terminal-failure card SECOND. Both proven reproductions
@@ -23,7 +23,7 @@ an unqualified false claim ("The hillshade has been generated..."). Fixed by
 folding the same structural gate (zero tool calls this turn) + text regex into
 the abort note builder (``context_budget.build_context_window_abort_note``).
 
-These tests drive the REAL ``_stream_gemini_reply`` / ``_dispatch_gemini_and_persist``
+These tests drive the REAL ``_stream_model_reply`` / ``_dispatch_gemini_and_persist``
 seams (no Gemini, no Playwright) against file-backed persistence, mirroring
 ``tests/test_terminal_narration_and_failure_card.py``.
 """
@@ -36,7 +36,7 @@ import logging
 import pytest
 
 from trid3nt_server import server
-from trid3nt_server.agent.adapters.adapter import GeminiSettings, TextDeltaEvent, FunctionCallEvent
+from trid3nt_server.agent.adapters.adapter import ModelSettings, TextDeltaEvent, FunctionCallEvent
 from trid3nt_server.agent import tools as agent_tools
 from trid3nt_server.agent.gates.context_budget import (
     CONTEXT_WINDOW_ABORT_NOTE,
@@ -98,13 +98,13 @@ async def _create_case(ws, state, title="Context Window Abort Case") -> str:
 
 
 async def _drive_real_stream(ws, state, fake_stream):
-    """Drive REAL ``_stream_gemini_reply`` via ``_dispatch_gemini_and_persist``
+    """Drive REAL ``_stream_model_reply`` via ``_dispatch_gemini_and_persist``
     with a mocked ``stream_events_with_contents`` (``fake_stream``)."""
     from unittest.mock import patch
 
     from trid3nt_server import server as agent_server
 
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="m", project="p", location="us-central1", use_vertex=True
     )
     with patch.object(agent_server, "build_client", return_value=object()), \

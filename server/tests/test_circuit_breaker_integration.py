@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from trid3nt_server.agent.adapters.adapter import (
-    GeminiSettings,
+    ModelSettings,
     MAX_TURN_ITERATIONS,
     summarize_tool_result,
 )
@@ -158,7 +158,7 @@ async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(
     # Use threshold=3 (default) and a long cooldown so the breaker stays open.
     state = SessionState(session_id=new_ulid())
     state.circuit_breaker = ToolCircuitBreaker(threshold=3, cooldown_s=3600.0)
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
     sock = _FakeSocket()
@@ -166,7 +166,7 @@ async def test_circuit_breaker_trips_on_third_failure_and_short_circuits_fourth(
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke_stub), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Get me the DEM for Fort Myers", "research"
         )
 
@@ -317,7 +317,7 @@ async def test_arg_errors_through_server_do_not_trip_breaker():
     # Default threshold (3) — well below N_BAD, so the OLD behaviour would have
     # tripped after 3 arg errors and blocked everything after.
     state.circuit_breaker = ToolCircuitBreaker(threshold=3, cooldown_s=3600.0)
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
     sock = _FakeSocket()
@@ -325,7 +325,7 @@ async def test_arg_errors_through_server_do_not_trip_breaker():
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke_stub), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings,
             "show me historical tornado touchdowns in Oklahoma since 2000",
             "research",
@@ -392,14 +392,14 @@ async def test_circuit_breaker_error_not_counted_as_additional_failure():
         return {"wms_url": "http://example.com"}
 
     sock = _FakeSocket()
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_real_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Get DEM", "research"
         )
 

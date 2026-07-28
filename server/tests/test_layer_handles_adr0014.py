@@ -21,7 +21,7 @@ Covers the four server-side mechanisms:
    as a storage-only ``layer_handles`` field on the cases doc that
    ``upsert_case`` never clobbers and ``CaseSummary`` never carries.
 
-Plus one end-to-end drive of ``_stream_gemini_reply`` (fake Gemini, real
+Plus one end-to-end drive of ``_stream_model_reply`` (fake Gemini, real
 emit seam) proving the function_response the model reads carries ``L<n>``
 while the raw uri never reaches it.
 """
@@ -401,7 +401,7 @@ async def test_server_persist_and_seed_helpers_round_trip(tmp_path) -> None:
 
 # --------------------------------------------------------------------------- #
 # 5. End-to-end: the function_response the model reads shows L<n>, never the
-#    raw uri (fake Gemini, REAL emit seam in _stream_gemini_reply).
+#    raw uri (fake Gemini, REAL emit seam in _stream_model_reply).
 # --------------------------------------------------------------------------- #
 
 
@@ -459,7 +459,7 @@ def _function_response_payloads(contents_per_turn):
 @pytest.mark.asyncio
 async def test_emit_seam_llm_sees_handle_not_uri() -> None:
     from trid3nt_server import server as agent_server
-    from trid3nt_server.agent.adapters.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
     from trid3nt_server.main import _import_tools_registry
     from trid3nt_server.server import SessionState
 
@@ -494,14 +494,14 @@ async def test_emit_seam_llm_sees_handle_not_uri() -> None:
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1",
         use_vertex=True,
     )
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Model a flood for Cedar Rapids", "research",
         )
 

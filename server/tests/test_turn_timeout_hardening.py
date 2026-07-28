@@ -316,7 +316,7 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
 
-    settings = agent_server.GeminiSettings(
+    settings = agent_server.ModelSettings(
         model="bedrock", project="test", location="us-west-2", use_vertex=False
     )
     state = SessionState(session_id=new_ulid())
@@ -333,7 +333,7 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
         # Launch the turn as a TASK and register it as a detached live turn --
         # this is the exact path that pins the registry if the turn never completes.
         task = asyncio.ensure_future(
-            agent_server._stream_gemini_reply(
+            agent_server._stream_model_reply(
                 sock, state, settings, "switch to Nova and run it", "research"
             )
         )
@@ -343,7 +343,7 @@ async def test_failed_model_call_clears_busy_and_surfaces_error(monkeypatch):
         # While running, the detached turn is in flight.
         assert agent_server.inflight_turn_count() >= 1
 
-        await task  # _stream_gemini_reply swallows the error internally
+        await task  # _stream_model_reply swallows the error internally
         # Let the task's done-callback (_drop) run so the registry empties.
         await asyncio.sleep(0)
 
@@ -375,7 +375,7 @@ async def test_normal_turn_path_unaffected(monkeypatch):
     from trid3nt_server.server import SessionState
     from trid3nt_contracts import new_ulid
 
-    settings = agent_server.GeminiSettings(
+    settings = agent_server.ModelSettings(
         model="bedrock", project="test", location="us-west-2", use_vertex=False
     )
     state = SessionState(session_id=new_ulid())
@@ -387,7 +387,7 @@ async def test_normal_turn_path_unaffected(monkeypatch):
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "build_client", return_value=None):
         task = asyncio.ensure_future(
-            agent_server._stream_gemini_reply(
+            agent_server._stream_model_reply(
                 sock, state, settings, "hello", "research"
             )
         )
@@ -422,7 +422,7 @@ async def test_solve_tool_path_unaffected_by_model_bound(monkeypatch):
     from trid3nt_server.agent.adapters.adapter import FunctionCallEvent
     from trid3nt_contracts import new_ulid
 
-    settings = agent_server.GeminiSettings(
+    settings = agent_server.ModelSettings(
         model="bedrock", project="test", location="us-west-2", use_vertex=False
     )
     state = SessionState(session_id=new_ulid())
@@ -451,7 +451,7 @@ async def test_solve_tool_path_unaffected_by_model_bound(monkeypatch):
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "build_client", return_value=None):
         task = asyncio.ensure_future(
-            agent_server._stream_gemini_reply(
+            agent_server._stream_model_reply(
                 sock, state, settings, "where is X", "research"
             )
         )

@@ -1,7 +1,0 @@
-open_case_in_qgis:
-- export this case to QGIS
-- download these layers as a QGIS project
-- give me a geopackage of the case layers
-- open these results in QGIS on my desktop
-- export the map layers for offline GIS work
-- save everything as a qgz project file

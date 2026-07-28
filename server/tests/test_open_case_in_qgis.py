@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from trid3nt_server.agent.tools.meta.open_case_in_qgis.open_case_in_qgis import (
+    _OPEN_CASE_IN_QGIS_METADATA,
     ExportCaseError,
     ExportInputError,
     NoExportableLayersError,
@@ -464,12 +465,17 @@ async def test_empty_layers_list_raises(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_tool_is_registered() -> None:
+def test_tool_is_not_registered() -> None:
+    # DEREGISTERED: open_case_in_qgis is no longer an LLM-visible tool -- its
+    # module function serves the /api/export-qgis HTTP route directly. The
+    # registry must NOT carry it (the catalog HTTP payload iterates the registry,
+    # so this keeps the two names out of the catalog too).
     from trid3nt_server.agent.tools import TOOL_REGISTRY
 
-    entry = TOOL_REGISTRY.get("open_case_in_qgis")
-    assert entry is not None
-    assert entry.metadata.cacheable is False
-    assert entry.metadata.ttl_class == "live-no-cache"
+    assert TOOL_REGISTRY.get("open_case_in_qgis") is None
+    # The metadata object is still importable + carries the route's ttl/cacheable
+    # semantics even though the tool is not registered.
+    assert _OPEN_CASE_IN_QGIS_METADATA.cacheable is False
+    assert _OPEN_CASE_IN_QGIS_METADATA.ttl_class == "live-no-cache"
     # Base error type is importable + typed (FR-AS-11).
     assert issubclass(NoExportableLayersError, ExportCaseError)

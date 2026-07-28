@@ -6,7 +6,7 @@ layers:
 
   * unit tests for the small ``runaway_guard`` module (thresholds, cheap-model
     halving, the ``LoopWatchdog`` state machine, honest abort messages);
-  * integration tests that drive ``server._stream_gemini_reply`` and assert the
+  * integration tests that drive ``server._stream_model_reply`` and assert the
     WALL-CLOCK and STEP-CAP guards each fire a clean honest abort -- while a
     normal short turn is left untouched.
 
@@ -152,9 +152,9 @@ def _abort_codes(sock: _FakeSocket) -> list[str]:
 
 
 def _settings():
-    from trid3nt_server.server import GeminiSettings
+    from trid3nt_server.server import ModelSettings
 
-    return GeminiSettings(
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -199,7 +199,7 @@ async def test_wall_clock_guard_aborts_a_slow_turn(monkeypatch):
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_slow_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "max_turn_seconds", return_value=0.05):
-        await agent_server._stream_gemini_reply(sock, state, _settings(), "x", "research")
+        await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
 
     # Round 1 fully ran (the in-flight await was not killed); the wall-clock then
     # aborted before a runaway could continue.
@@ -245,7 +245,7 @@ async def test_step_cap_guard_aborts_a_varied_runaway(monkeypatch):
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "step_cap_for_model", return_value=3):
-        await agent_server._stream_gemini_reply(sock, state, _settings(), "x", "research")
+        await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
 
     # Stopped at the (tightened) step cap, not before, not infinitely.
     assert dispatched == 3
@@ -281,7 +281,7 @@ async def test_normal_turn_not_aborted_by_guards(monkeypatch):
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          patch.object(agent_server, "build_client", return_value=None):
-        await agent_server._stream_gemini_reply(sock, state, _settings(), "where is X", "research")
+        await agent_server._stream_model_reply(sock, state, _settings(), "where is X", "research")
 
     # No guard abort on the wire; the narration landed.
     assert _abort_codes(sock) == []

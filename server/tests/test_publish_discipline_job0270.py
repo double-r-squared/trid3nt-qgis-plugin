@@ -14,7 +14,7 @@ computed the relief, but the chain to visible pixels broke two ways:
    stayed invisible (a layer is not on the map until publish_layer adds it
    to the QGIS Server project).
 
-These tests drive ``_stream_gemini_reply`` end-to-end (fake Gemini, fake
+These tests drive ``_stream_model_reply`` end-to-end (fake Gemini, fake
 tool dispatch — no live calls) and prove:
 
 - FIX A: a registry-valid, non-hot-set tool dispatches on the FIRST call
@@ -34,7 +34,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.agent.adapters.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_contracts import new_ulid
 
 
@@ -106,7 +106,7 @@ def _function_response_payloads(contents_per_turn: list[list[Any]]) -> list[tupl
 
 
 async def _drive_loop(turn_chunks: list[list[Any]], fake_invoke) -> tuple[list[list[Any]], "_FakeSocket", Any]:
-    """Run ``_stream_gemini_reply`` against pre-canned Gemini turns.
+    """Run ``_stream_model_reply`` against pre-canned Gemini turns.
 
     Returns (contents captured per Gemini call, fake socket, session state).
     """
@@ -125,7 +125,7 @@ async def _drive_loop(turn_chunks: list[list[Any]], fake_invoke) -> tuple[list[l
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro",
         project="test",
         location="us-central1",
@@ -135,7 +135,7 @@ async def _drive_loop(turn_chunks: list[list[Any]], fake_invoke) -> tuple[list[l
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings,
             "Compute a colored relief map for Boulder, Colorado", "research",
         )

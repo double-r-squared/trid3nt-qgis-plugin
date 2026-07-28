@@ -31,7 +31,7 @@ import pytest
 
 from trid3nt_server import server as agent_server
 from trid3nt_server.agent import tools as agent_tools
-from trid3nt_server.agent.adapters.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_server.agent.categories import HOT_SET_TOOLS
 from trid3nt_server.agent.tools import RegisteredTool
 from trid3nt_server.agent.tools.search import search_tools as st_pkg
@@ -211,8 +211,8 @@ def _text_chunk(text: str):
     return chunk
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -268,7 +268,7 @@ async def _drive_door_call(state, monkeypatch, decl_registries):
         agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
             lambda **kw: _script(**kw)
         )
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "model a groundwater contamination plume", "research"
         )
     return sock

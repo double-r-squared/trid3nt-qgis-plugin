@@ -103,8 +103,6 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.agent.tools import register_tool
-
 __all__ = [
     "open_case_in_qgis",
     "ExportCaseError",
@@ -866,17 +864,11 @@ async def _layers_from_case(case_id: str) -> tuple[list[dict[str, Any]], list[fl
 # --------------------------------------------------------------------------- #
 
 
-@register_tool(
-    _OPEN_CASE_IN_QGIS_METADATA,
-    # Writes files into the local export dir => not read-only / not
-    # idempotent-free of side effects, but re-running with the same inputs
-    # rewrites the same folder contents (idempotent), destroys nothing that
-    # is not its own output, and reaches object storage (open world).
-    read_only_hint=False,
-    open_world_hint=True,
-    destructive_hint=False,
-    idempotent_hint=True,
-)
+# DEREGISTERED (not LLM-visible): this function is NOT a registered tool. It
+# serves the ``/api/export-qgis`` HTTP route directly (lazy-imported there) and
+# is called by tests/routes as a plain coroutine. ``_OPEN_CASE_IN_QGIS_METADATA``
+# above is retained as the route's source-of-truth for the tool's ttl/cacheable
+# semantics.
 async def open_case_in_qgis(
     case_id: str | None = None,
     layers: list[dict] | None = None,

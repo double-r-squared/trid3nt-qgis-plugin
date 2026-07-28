@@ -8,7 +8,7 @@ the ``run_sfincs`` DOOR + the ``sfincs_flood`` template):
    list it builds from the registry.
 3. The ``stream_events`` adapter correctly yields a ``FunctionCallEvent``
    when a mocked Gemini stream emits a function_call part.
-4. ``_stream_gemini_reply`` dispatches the function call through
+4. ``_stream_model_reply`` dispatches the function call through
    ``_invoke_tool_via_emitter`` when Gemini emits a function_call event
    (mocked Gemini + mocked tool).
 """

@@ -622,7 +622,7 @@ def test_dispatch_detection_signal(tmp_path):
 
     Confirm a chart tool's result trips it while an ordinary tool result (a
     spatial_query rows dict - the Phase-B fold of the analytical_qa surface)
-    does not — this is the exact branch condition in _stream_gemini_reply.
+    does not — this is the exact branch condition in _stream_model_reply.
     """
     from trid3nt_server.agent.tools.processing.spatial_query.spatial_query import spatial_query
 

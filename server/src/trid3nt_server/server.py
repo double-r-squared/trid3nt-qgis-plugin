@@ -113,7 +113,7 @@ from .agent.adapters.adapter import (
     CompactionCompleteEvent,
     CompactionStartEvent,
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     MAX_TURN_ITERATIONS,
     SYSTEM_PROMPT,
     TextDeltaEvent,
@@ -159,12 +159,6 @@ from .credentials.credential_registry import (
     provider_for_tool,
 )
 from .emission.layer_uri_emit import emit_layer_uri
-from .agent.lessons import (
-    lessons_appendix,
-    lessons_enabled,
-    observe_turn as observe_lessons_turn,
-    register_lesson,
-)
 from .agent.gates.mode2_classifier import (
     Mode2CandidateEnvelope,
     classify_for_mode2,
@@ -1402,7 +1396,7 @@ def _default_declarable_registry() -> dict[str, Any]:
     ENGINE-DOOR invariant: engine templates (``sfincs_flood``, ``modflow_*``,
     ``openquake_psha``, ...) surface to the model ONLY via their door's gate
     expansion (see ``_gate_expander_tool_names`` and the door-expand block in
-    ``_stream_gemini_reply``). Declaring them by default -- which the raw
+    ``_stream_model_reply``). Declaring them by default -- which the raw
     ``TOOL_REGISTRY`` default did in the gating-off / retrieval-off / fail-open
     paths -- defeats the door architecture. This is the SINGLE default-registry
     seam: the door expand re-adds the specific templates it lists back into the
@@ -2149,7 +2143,7 @@ _CASE_SYNC_NEVER = "__case-context-never-synced__"
 #: client's ROOT_STREAM_KEY in Chat.tsx).
 _ROOT_STREAM_KEY = "__root__"
 
-#: Per-task narration-list registry. ``_stream_gemini_reply`` registers its
+#: Per-task narration-list registry. ``_stream_model_reply`` registers its
 #: turn's narration list under the running asyncio task (in the synchronous
 #: prefix, so crash/cancel still leaves the entry) and
 #: ``_dispatch_gemini_and_persist`` pops it in its finally -- the wrapper then
@@ -2160,7 +2154,7 @@ _TURN_NARRATION_BY_TASK: "weakref.WeakKeyDictionary[asyncio.Task, list[str]]" = 
     weakref.WeakKeyDictionary()
 )
 
-#: Per-task OPEN-segment registry. ``_stream_gemini_reply`` registers the
+#: Per-task OPEN-segment registry. ``_stream_model_reply`` registers the
 #: list backing the currently open narration segment (received text not yet
 #: finalized). On each finalize the in-loop code ``.clear()``s this same
 #: list object (never rebinds it) so the wrapper always reads the live open
@@ -2453,7 +2447,7 @@ class SessionState:
     # Cases root). Only a re-prompt in the SAME stream replaces (cancels)
     # that stream's turn; turns in other Cases keep running. Their
     # persistence follows the turn-Case pin and their model context is the
-    # per-turn captured history list (see _stream_gemini_reply), so a
+    # per-turn captured history list (see _stream_model_reply), so a
     # concurrent turn cannot re-aim either. Known v0.1 limit (display only):
     # the web routes live streaming envelopes to the last-submitted stream,
     # so a still-running turn's late envelopes may paint in the newer
@@ -2517,7 +2511,7 @@ class SessionState:
     # agent row's ``map_command_emissions`` so Case reopen can snap the
     # camera back (web replays the LAST persisted zoom-to).
     current_turn_map_commands: list[dict] = field(default_factory=list)
-    # Per-turn narration accumulator. ``_stream_gemini_reply`` resets it at
+    # Per-turn narration accumulator. ``_stream_model_reply`` resets it at
     # stream start and appends every ``TextDeltaEvent`` delta (across all
     # loop iterations -- they share one ``message_id`` bubble on the wire).
     # ``_dispatch_gemini_and_persist`` joins it at turn close and persists
@@ -2525,7 +2519,7 @@ class SessionState:
     # reopen replays what the agent actually said.
     current_turn_narration: list[str] = field(default_factory=list)
     # BUG 1 (post-OPEN-14 acceptance rerun): set by the ``except
-    # ContextWindowExceededError`` handler in ``_stream_gemini_reply`` when a
+    # ContextWindowExceededError`` handler in ``_stream_model_reply`` when a
     # turn aborts on a clipped prompt. ``_dispatch_gemini_and_persist``'s
     # finally reads + clears it and appends the text to whichever partial-
     # narration row it is about to persist, so the reader sees the abort
@@ -2597,7 +2591,7 @@ class SessionState:
     # Per-session circuit breaker. Tracks consecutive failures per tool;
     # trips after TRID3NT_CIRCUIT_THRESHOLD (default 3) consecutive failures,
     # enforcing a TRID3NT_CIRCUIT_COOLDOWN_S (default 60s) cooldown.
-    # ``_stream_gemini_reply`` checks ``is_tripped`` before every
+    # ``_stream_model_reply`` checks ``is_tripped`` before every
     # ``_invoke_tool_via_emitter`` dispatch and records success/failure after
     # each attempt. A tripped breaker raises ``CircuitBreakerError``, which
     # ``summarize_tool_result`` surfaces as a structured envelope so the
@@ -3261,10 +3255,10 @@ async def _maybe_emit_tool_candidates(
     return pinned, notes
 
 
-async def _stream_gemini_reply(
+async def _stream_model_reply(
     websocket: ServerConnection,
     state: SessionState,
-    settings: GeminiSettings,
+    settings: ModelSettings,
     user_text: str,
     research_mode: str,
     bedrock_model: str | None = None,
@@ -3618,23 +3612,6 @@ async def _stream_gemini_reply(
         )
     tool_decls = build_tool_declarations(_retrieval_registry)
 
-    # LESSONS LOOP v1 READ SEAM (TRID3NT_LESSONS gate -- dark by default):
-    # once per turn, score the stored failed-then-corrected lessons against
-    # user_text (BM25, ~200-token budget, top 2) and append the advisory
-    # "Past corrections" appendix to the system prompt for THIS turn only.
-    # Advisory text only; any fault falls back to the plain SYSTEM_PROMPT. A
-    # non-empty appendix varies the system prompt across turns, which can
-    # reduce Bedrock cachePoint prefix hits -- acceptable while the gate is
-    # dark/off by default; benchmark before arming.
-    _turn_system_prompt = SYSTEM_PROMPT
-    if lessons_enabled():
-        try:
-            _lessons_text = await asyncio.to_thread(lessons_appendix, user_text)
-            if _lessons_text:
-                _turn_system_prompt = SYSTEM_PROMPT + "\n\n" + _lessons_text
-        except Exception:  # noqa: BLE001 -- advisory, never blocks the turn
-            logger.warning("lessons: read-side appendix failed", exc_info=True)
-
     # GCP decommissioned: the agent runs on Bedrock, whose prompt caching is
     # its own ``cachePoint`` mechanism (bedrock_adapter). The Vertex-only
     # ``CachedContent`` fast-path (``gemini_cache.py``) is REMOVED, so this is
@@ -3718,12 +3695,6 @@ async def _stream_gemini_reply(
     _deliverable_done = False
     _post_deliverable_idle = 0
     _crisp_concluded = False
-
-    # LESSONS LOOP v1 WRITE SEAM (part 1/3): per-turn dispatch record. Every
-    # tool call this turn appends {tool, args, success, error_code} (stamped at
-    # the telemetry chokepoint below); the end-of-turn observe distills any
-    # failed-then-corrected pair into the lessons store (TRID3NT_LESSONS gate).
-    _lessons_turn_calls: list[dict] = []
 
     # OPEN-14 FABRICATION BACKSTOP: tracks whether ANY round of this turn
     # dispatched a tool call. A turn that ends with this still False AND
@@ -3839,10 +3810,7 @@ async def _stream_gemini_reply(
                 settings.model,
                 contents,
                 tool_declarations=tool_decls,
-                # LESSONS LOOP v1: SYSTEM_PROMPT plus the per-turn advisory
-                # lessons appendix (identical to SYSTEM_PROMPT when the
-                # TRID3NT_LESSONS gate is off -- the default).
-                system_prompt=_turn_system_prompt,
+                system_prompt=SYSTEM_PROMPT,
                 cached_content_name=state.gemini_cache_name,
                 bedrock_model=bedrock_model,
                 show_thinking=show_thinking,
@@ -4632,18 +4600,6 @@ async def _stream_gemini_reply(
                     # recall@k join key against this turn's shadow-selection row.
                     turn_id=pipeline_id,
                 )
-                # LESSONS LOOP v1 WRITE SEAM (part 2/3): record this dispatch
-                # for the end-of-turn distillation, reusing the telemetry
-                # success/error_code verdict computed just above (so a
-                # returned-failure envelope counts as a typed failure too).
-                _lessons_turn_calls.append(
-                    {
-                        "tool": call.name,
-                        "args": call.args or {},
-                        "success": _tel_success,
-                        "error_code": _tel_error_code,
-                    }
-                )
                 # PER-TURN TELEMETRY: one dispatched tool call counted at the
                 # same chokepoint the per-tool record is emitted from.
                 _turn_tool_dispatch_count += 1
@@ -4917,19 +4873,6 @@ async def _stream_gemini_reply(
                 PipelineStatePayload(pipeline_id=pipeline_id, steps=[thinking_step]),
             )
         )
-        # LESSONS LOOP v1 WRITE SEAM (part 3/3): end-of-turn distillation. If a
-        # typed tool failure was later corrected in THIS turn (same tool with
-        # changed args, or an intent-matched tool swap), observe_turn distills
-        # it into the lessons store. Never-raise + off-loop (asyncio.to_thread
-        # for the file write); a no-op when TRID3NT_LESSONS is off (default).
-        if lessons_enabled() and _lessons_turn_calls:
-            try:
-                await asyncio.to_thread(
-                    observe_lessons_turn, user_text, _lessons_turn_calls
-                )
-            except Exception:  # noqa: BLE001 -- advisory, never breaks the turn
-                logger.warning("lessons: end-of-turn observe failed", exc_info=True)
-
         # Append to the entry-captured list -- after a mid-stream
         # case switch this turn's text must not leak into the NEW Case's
         # LLM context (the carryover class, 74fc0d6).
@@ -10074,7 +10017,7 @@ async def _invoke_tool_via_emitter(
     # was LOST on reopen). ``_card_raw_args`` is the post-resolution params the
     # tool actually ran with; ``_card_response`` is the raw tool RESULT (the
     # closest in-wrapper analogue of the live sidecar's ``function_response``
-    # summary -- the summary itself is built downstream in _stream_gemini_reply,
+    # summary -- the summary itself is built downstream in _stream_model_reply,
     # which we don't reach from here). ``_persist_tool_card`` serializes both
     # with the SAME ``_json_for_tool_io`` helper + field names the live sidecar
     # uses, so the persisted shape matches the wire shape.
@@ -11492,7 +11435,7 @@ def _parse_invoke_directive(text: str) -> tuple[str, dict] | None:
 async def _dispatch_gemini_and_persist(
     websocket: ServerConnection,
     state: SessionState,
-    settings: GeminiSettings,
+    settings: ModelSettings,
     user_text: str,
     research_mode: str,
     bedrock_model: str | None = None,
@@ -11500,14 +11443,14 @@ async def _dispatch_gemini_and_persist(
 ) -> None:
     """Stream Gemini reply, then persist the agent's reply to the active Case.
 
-    Wraps ``_stream_gemini_reply`` so the Case chat-history append happens
+    Wraps ``_stream_model_reply`` so the Case chat-history append happens
     after the stream completes (the streamed text is the canonical
     ``content`` field on ``CaseChatMessage``). On cancel/error we still
     attempt a best-effort persist of whatever the narration accumulator
     captured before the stream died.
 
     The persisted ``content`` is the REAL accumulated narration --
-    ``_stream_gemini_reply`` resets ``state.current_turn_narration`` at
+    ``_stream_model_reply`` resets ``state.current_turn_narration`` at
     stream start and appends every ``TextDeltaEvent`` delta across all loop
     iterations.
     """
@@ -11527,7 +11470,7 @@ async def _dispatch_gemini_and_persist(
     turn_history = state.chat_history
     pre_chat_len = len(turn_history)
     try:
-        await _stream_gemini_reply(
+        await _stream_model_reply(
             websocket, state, settings, user_text, research_mode,
             bedrock_model=bedrock_model,
             show_thinking=show_thinking,
@@ -11570,7 +11513,7 @@ async def _dispatch_gemini_and_persist(
         open_tail = "".join(open_segment or []).strip()
         stream_completed = len(turn_history) > pre_chat_len
         # When the turn aborted on ``ContextWindowExceededError``,
-        # ``_stream_gemini_reply``'s except handler stashed the honest abort
+        # ``_stream_model_reply``'s except handler stashed the honest abort
         # verdict here. Read + clear it once so it lands on exactly the row
         # that carries the (unverified) streamed text below, and never leaks
         # into a later turn.
@@ -11809,65 +11752,6 @@ async def _emit_secrets_list(
         state.session_id,
         case_id,
         len(payload.secrets),
-    )
-
-
-async def _handle_lesson_add(
-    websocket: ServerConnection,
-    state: SessionState,
-    payload_dict: Any,
-) -> None:
-    """LESSONS LOOP v1 (track 4): the thumbs-down stub's server half.
-
-    Consumes a loosely-shaped ``lesson-add`` payload -- ``{text, trigger_text?}``
-    (kept untyped like ``layer-delete`` for forward-compat; the web thumbs-down
-    UI is out of scope here) -- and writes a user-authored lesson row via
-    ``lessons.register_lesson``. Replies with a ``lesson-added`` ack carrying
-    the stored row's id + normalized text; malformed payloads surface a typed
-    ``TOOL_PARAMS_INVALID``. The write runs off-loop (asyncio.to_thread). The
-    ack is a raw-JSON envelope (the ``turn-complete`` / ``_send_loop_exhausted``
-    pattern) because the typed ``Envelope.payload`` forbids extra keys and the
-    lesson-added payload has no ``trid3nt_contracts`` model yet.
-    """
-    text = payload_dict.get("text") if isinstance(payload_dict, dict) else None
-    if not isinstance(text, str) or not text.strip():
-        await _send_error(
-            websocket,
-            state.session_id,
-            "TOOL_PARAMS_INVALID",
-            "lesson-add requires a non-empty 'text' field.",
-        )
-        return
-    trigger = payload_dict.get("trigger_text")
-    trigger = trigger if isinstance(trigger, str) else ""
-    try:
-        row = await asyncio.to_thread(register_lesson, text, trigger)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("lesson-add failed session=%s", state.session_id)
-        await _send_error(
-            websocket,
-            state.session_id,
-            "INTERNAL_ERROR",
-            f"lesson-add failed: {exc}",
-        )
-        return
-    import json as _json  # matches the raw-JSON envelope pattern above
-
-    await websocket.send(
-        _json.dumps(
-            {
-                "type": "lesson-added",
-                "id": new_ulid(),
-                "ts": now_utc().isoformat().replace("+00:00", "Z"),
-                "session_id": state.session_id,
-                "case_id": current_turn_case(),
-                "payload": {
-                    "envelope_type": "lesson-added",
-                    "lesson_id": row.get("id"),
-                    "lesson": row.get("lesson"),
-                },
-            }
-        )
     )
 
 
@@ -12260,7 +12144,7 @@ def inflight_turn_count() -> int:
     return total
 
 
-def _make_handler(settings: GeminiSettings):
+def _make_handler(settings: ModelSettings):
     """Build the per-connection coroutine, closing over the resolved settings."""
 
     async def handler(websocket: ServerConnection) -> None:
@@ -12551,13 +12435,6 @@ def _make_handler(settings: GeminiSettings):
                             payload_dict
                         )
                         await _handle_secret_add(websocket, state, sa)
-
-                    elif msg_type == "lesson-add":
-                        # LESSONS LOOP v1 (track 4): thumbs-down stub. The
-                        # payload is loosely-shaped ({text, trigger_text?});
-                        # the handler validates inline and writes via
-                        # lessons.register_lesson. UI lands separately.
-                        await _handle_lesson_add(websocket, state, payload_dict)
 
                     elif msg_type == "secret-revoke":
                         # Soft-revoke a per-Case secret.
@@ -13061,13 +12938,29 @@ async def run_server(host: str = "127.0.0.1", port: int | None = None) -> None:
     # TRID3NT_AGENT_HOST=0.0.0.0. The real public surface is a later increment.
     host = os.environ.get("TRID3NT_AGENT_HOST", host)
     settings = load_settings()
+    # Log the ACTUAL active provider + its real model -- never the dormant
+    # Vertex/Gemini settings defaults. Under MODEL_PROVIDER=openai this prints
+    # the OpenAI model; under bedrock the Bedrock model id; scripted/replay/fake
+    # or the retained-dormant vertex seam fall back to the settings model.
+    from .agent.adapters.bedrock_adapter import (
+        model_provider as _active_model_provider,
+        bedrock_model_id as _active_bedrock_model_id,
+    )
+
+    _active_provider = _active_model_provider()
+    if _active_provider == "openai":
+        from .agent.adapters import openai_adapter as _active_oa
+        _active_model = _active_oa.openai_model(None)
+    elif _active_provider == "bedrock":
+        _active_model = _active_bedrock_model_id()
+    else:
+        _active_model = settings.model
     logger.info(
-        "starting agent server host=%s port=%d model=%s project=%s location=%s",
+        "starting agent server host=%s port=%d provider=%s model=%s",
         host,
         port,
-        settings.model,
-        settings.project,
-        settings.location,
+        _active_provider,
+        _active_model,
     )
     # #6 (loop-safety): armed-only emit-free safety gate for the staged
     # sync-tool dispatch off-load. No-op (one log line) under the dark default;
@@ -13213,8 +13106,6 @@ __all__ = [
     "_emit_secrets_list",
     "_handle_secret_add",
     "_handle_secret_revoke",
-    # LESSONS LOOP v1 (track 4): thumbs-down stub envelope handler.
-    "_handle_lesson_add",
     # job VAULT-READ: credential pipeline (secret_ref injection + JIT prompt).
     "_inject_secret_ref",
     "_resolve_active_secret_ref",

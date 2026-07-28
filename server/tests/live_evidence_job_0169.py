@@ -1,6 +1,6 @@
 """Live-evidence harness for job-0169 (multi-turn function_call loop).
 
-Runs the real ``_stream_gemini_reply`` against a fake WebSocket sink and a
+Runs the real ``_stream_model_reply`` against a fake WebSocket sink and a
 mocked Gemini that emits a sequence of ``function_call`` chunks followed by a
 final narrative.  Prints the verbatim send-transcript to stdout so the audit
 can compare against the kickoff acceptance:
@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.agent.adapters.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_server.server import SessionState
 from trid3nt_contracts import new_ulid
 
@@ -149,7 +149,7 @@ async def run() -> None:
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro",
         project="legacy-cloud-project",
         location="us-central1",
@@ -159,7 +159,7 @@ async def run() -> None:
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock,
             state,
             settings,

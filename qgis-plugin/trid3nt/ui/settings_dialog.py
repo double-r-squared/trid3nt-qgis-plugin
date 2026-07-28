@@ -20,9 +20,8 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from .. import update
 from ..plugin_settings import MODE_LOCAL, MODE_REMOTE, PluginSettings
-from ..net.tasks import _DaemonProbeTask, _ModelListTask, _ProviderConfigTask, _UpdateTask
+from ..net.tasks import _ModelListTask, _ProviderConfigTask
 
 
 
@@ -288,43 +287,9 @@ class SettingsDialog(QDialog):
         )
         self._apply_mode_field_visibility(self.mode_combo.currentText())
 
-        # Update button (NATE): stay-current automation for local-mode
-        # testing -- see trid3nt/update.py for the read/compare/pull logic
-        # this section drives. Version indicator = three facts side by side
-        # (installed / repo HEAD / daemon), drift highlighted honestly.
-        # ``_update_tasks`` keeps the off-thread worker QObjects alive for
-        # the dialog's lifetime (mirrors ``_model_list_tasks`` above).
-        self._update_tasks: List = []
-        self.repo_path_edit = QLineEdit(settings.repo_path)
-        self.repo_path_edit.setPlaceholderText(update.DEFAULT_REPO_PATH)
-        self.repo_path_edit.setToolTip(
-            "Source checkout the Update button runs git fetch/pull and "
-            "install_plugin.sh against -- the installed copy is a "
-            "disconnected copy of this path, so it cannot be auto-detected."
-        )
-        form.addRow("Plugin repo path", self.repo_path_edit)
-
-        self.version_label = QLabel("Checking versions...")
-        self.version_label.setWordWrap(True)
-        form.addRow("Versions", self.version_label)
-
-        self.update_btn = QPushButton("Update")
-        self.update_btn.setToolTip(
-            "git fetch + fast-forward-only pull on the current branch, then "
-            "re-sync (install_plugin.sh) + reload the plugin. Aborts on a "
-            "dirty tree or a non-fast-forward pull -- never forces, never "
-            "stashes."
-        )
-        self.update_btn.clicked.connect(self._run_update)
-        form.addRow("", self.update_btn)
-
-        self.update_log = QPlainTextEdit()
-        self.update_log.setReadOnly(True)
-        self.update_log.setMaximumHeight(90)
-        self.update_log.setPlaceholderText("Update step output appears here.")
-        form.addRow("", self.update_log)
-
-        self._refresh_version_indicator()
+        # (Plugin self-update removed 2026-07: QGIS Plugin Manager -- the custom
+        # repository / plugins.xml path -- is the update mechanism now, so the
+        # in-dialog Update button / version indicator / repo-path field are gone.)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
@@ -366,10 +331,6 @@ class SettingsDialog(QDialog):
         self._settings.openrouter_api_key = self.provider_key_edit.text()
         self._settings.model_id = self.model_combo.currentText()
         self._push_provider_config()
-        # Update button: persist the repo path too (it also self-persists the
-        # moment Update runs, so this is a no-op in that case -- but Save
-        # must not silently drop a typed-but-never-run edit).
-        self._settings.repo_path = self.repo_path_edit.text()
         super().accept()
 
     def _disconnect_and_close(self) -> None:
@@ -479,102 +440,3 @@ class SettingsDialog(QDialog):
         # honest fallback -- a live-fetch failure is silent by design (no UI to
         # repaint on a possibly-closed dialog).
         return
-
-    # -- Update button (NATE): version indicator + update flow --------------- #
-
-    def _current_repo_path(self) -> str:
-        return self.repo_path_edit.text().strip() or self._settings.repo_path
-
-    def _refresh_version_indicator(self) -> None:
-        """Re-read the installed stamp + repo HEAD (cheap: local disk read +
-        a couple of short-timeout subprocess calls, safe on the UI thread)
-        and kick the daemon probe off-thread (network, must never block the
-        dialog). The label repaints twice: once immediately with "probing..."
-        for the daemon column, then again when the probe lands."""
-        installed = update.read_installed_version(update.installed_plugin_dir())
-        repo = update.read_repo_head(self._current_repo_path())
-        drift = update.compare_versions(installed, repo)
-        self._render_version_label(installed, repo, drift, daemon_label="probing...")
-
-        task = _DaemonProbeTask(self._resolve_http_base(), self)
-        self._update_tasks.append(task)
-        task.finished.connect(
-            lambda result: self._on_daemon_probe_finished(result, installed, repo, drift)
-        )
-        task.start()
-
-    def _on_daemon_probe_finished(self, result, installed, repo, drift) -> None:
-        try:
-            self._render_version_label(installed, repo, drift, daemon_label=result.label)
-        except RuntimeError:
-            # Dialog (or its version_label) was destroyed mid-probe.
-            return
-
-    def _render_version_label(self, installed, repo, drift, daemon_label: str) -> None:
-        note = {
-            "match": "up to date",
-            "drift": "DRIFT -- installed != repo HEAD",
-            "unknown": "unknown (cannot confirm match)",
-        }[drift]
-        self.version_label.setText(
-            f"Installed: {installed.label}    |    Repo HEAD: {repo.label}    |    "
-            f"Daemon: {daemon_label}    ({note})"
-        )
-
-    def _run_update(self) -> None:
-        """Update button: (a) fetch + ff-only pull, (b) install_plugin.sh --
-        both off the UI thread via ``_UpdateTask`` -- then (c)
-        ``qgis.utils.reloadPlugin`` and (d) refresh the indicator, both back
-        on the UI thread in ``_on_update_finished``. The repo path persists
-        immediately (an action, like Connect/Disconnect -- not gated on
-        Save)."""
-        repo_path = self._current_repo_path()
-        self._settings.repo_path = repo_path
-        self.update_btn.setEnabled(False)
-        self.update_log.clear()
-        self.update_log.appendPlainText(f"Updating from {repo_path} ...")
-
-        task = _UpdateTask(repo_path, self)
-        self._update_tasks.append(task)
-        task.step_finished.connect(self._on_update_step)
-        task.finished.connect(lambda ok: self._on_update_finished(ok))
-        task.start()
-
-    def _on_update_step(self, step) -> None:
-        try:
-            status = "OK" if step.ok else "FAILED"
-            self.update_log.appendPlainText(f"[{status}] {step.name}: {step.message}")
-        except RuntimeError:
-            return  # dialog closed mid-run
-
-    def _on_update_finished(self, ok: bool) -> None:
-        try:
-            if ok:
-                # Step (c): reload the plugin in-process. Best-effort --
-                # reloadPlugin can misbehave (partially-reloaded modules,
-                # dangling references from THIS still-open dialog into the
-                # old module objects) -- any exception is caught and surfaced
-                # as an honest restart hint rather than crashing QGIS or
-                # silently pretending success.
-                try:
-                    import qgis.utils
-
-                    qgis.utils.reloadPlugin(update.PLUGIN_PACKAGE_NAME)
-                    self.update_log.appendPlainText(
-                        f"[OK] reloadPlugin({update.PLUGIN_PACKAGE_NAME})"
-                    )
-                except Exception as exc:  # noqa: BLE001 -- honest, never silent
-                    self.update_log.appendPlainText(
-                        f"[FAILED] reloadPlugin({update.PLUGIN_PACKAGE_NAME}): "
-                        f"{type(exc).__name__}: {exc} -- restart QGIS to be "
-                        "sure the new code is running"
-                    )
-            else:
-                self.update_log.appendPlainText(
-                    "Update aborted -- plugin was NOT re-synced or reloaded "
-                    "(nothing changed)."
-                )
-            self.update_btn.setEnabled(True)
-            self._refresh_version_indicator()
-        except RuntimeError:
-            return  # dialog closed mid-run

@@ -456,8 +456,11 @@ from .search.search_spatial_functions import search_spatial_functions  # noqa: E
 # -- meta (web fetch, code exec, passthroughs, case utilities) --
 from .meta.code_exec_tool import code_exec_tool  # noqa: E402,F401
 from .meta.compose_case_report import compose_case_report  # noqa: E402,F401
-from .meta.open_case_in_qgis import open_case_in_qgis  # noqa: E402,F401
-from .meta.register_case_layer import register_case_layer  # noqa: E402,F401
+# open_case_in_qgis + register_case_layer are DEREGISTERED (not LLM-visible):
+# their module functions serve the /api/export-qgis + /api/ingest-layer HTTP
+# routes directly (lazy-imported at the route), so the modules are NOT imported
+# here (importing them no longer registers a tool -- the @register_tool
+# decorator was removed).
 from .meta.list_run_frames import list_run_frames  # noqa: E402,F401
 from .meta.passthroughs import passthroughs  # noqa: E402,F401
 from .meta.spatial_input_tool import spatial_input_tool  # noqa: E402,F401

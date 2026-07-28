@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.agent.adapters.adapter import GeminiSettings, MAX_TURN_ITERATIONS
+from trid3nt_server.agent.adapters.adapter import ModelSettings, MAX_TURN_ITERATIONS
 from trid3nt_server.server import (
     SessionState,
     _POST_DELIVERABLE_WRAPUP_ROUNDS,
@@ -68,8 +68,8 @@ def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
     return fake_chunk
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -154,7 +154,7 @@ async def test_delivered_composer_concludes_without_loop_exhausted():
         agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
             lambda **kw: _script(**kw)
         )
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "model the Mexico Beach flood", "research"
         )
 
@@ -227,7 +227,7 @@ async def test_composer_function_response_carries_completion_directive():
         agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
             lambda **kw: _script(**kw)
         )
-        await agent_server._stream_gemini_reply(sock, state, _settings(), "x", "research")
+        await agent_server._stream_model_reply(sock, state, _settings(), "x", "research")
 
     # The follow-up round (>=2) must have been handed the composer's
     # function_response carrying the wrap-up directive.
@@ -282,7 +282,7 @@ async def test_non_composer_runaway_still_trips_loop_exhausted():
         agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
             lambda **kw: _script(**kw)
         )
-        await agent_server._stream_gemini_reply(sock, state, _settings(), "spin", "research")
+        await agent_server._stream_model_reply(sock, state, _settings(), "spin", "research")
 
     # The historical runaway guard is untouched.
     assert dispatches["n"] == MAX_TURN_ITERATIONS, dispatches["n"]

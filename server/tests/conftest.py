@@ -135,7 +135,7 @@ def _default_vertex_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     (``bedrock_adapter.model_provider``). The bulk of the agent-loop tests,
     however, drive the retained google-genai stream-parsing path: they patch
     ``server.build_client`` and feed fake ``generate_content_stream`` chunks
-    into ``_stream_gemini_reply`` / ``stream_events_with_contents``. Those tests
+    into ``_stream_model_reply`` / ``stream_events_with_contents``. Those tests
     pre-date the provider flip and assume the Vertex branch. Pinning the env to
     ``vertex`` here keeps them exercising the Gemini path; any test that needs
     the Bedrock branch sets ``MODEL_PROVIDER`` itself (monkeypatch wins inside

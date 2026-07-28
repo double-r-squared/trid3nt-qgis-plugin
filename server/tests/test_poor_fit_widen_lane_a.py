@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.agent.adapters.adapter import GeminiSettings, TextDeltaEvent
+from trid3nt_server.agent.adapters.adapter import ModelSettings, TextDeltaEvent
 from trid3nt_server.agent.gates.tool_gating import (
     WIDEN_K,
     WIDEN_THRESHOLD_DEFAULT,
@@ -71,8 +71,8 @@ def test_widen_k_exceeds_gate_floor():
 # ---------------------------------------------------------------------------
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="qwen", project="t", location="us-central1", use_vertex=False
     )
 
@@ -112,7 +112,7 @@ async def _drive_and_record_ks(top_score: float, monkeypatch) -> list[int]:
         "trid3nt_server.agent.tools.search.tool_retrieval.retrieve_ranked_tools",
         _fake_ranked,
     ):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "hmm something vague", "research"
         )
     return ks

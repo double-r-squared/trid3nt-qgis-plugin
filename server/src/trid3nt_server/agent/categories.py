@@ -318,15 +318,11 @@ PRIMARY_CATEGORY: dict[str, str] = {
     # DOOR carries the hazard_modeling membership; cross-listed to fire below
     # (reached from the wildfire lane next to LANDFIRE / NIFC / FIRMS).
     "run_elmfire": "hazard_modeling",
-    # The QGIS bridge exporter: a case-product utility, not a modeling engine.
-    # geographic_primitives is the general-purpose/utility lane; reached from
-    # "take this into QGIS / export my project".
-    "open_case_in_qgis": "geographic_primitives",
-    # The reverse seam: register an already-uploaded QGIS layer (vector or
-    # raster) onto a case as a first-class input layer. Filed alongside
-    # open_case_in_qgis -- same general-purpose/utility lane, same
-    # "bridge between the case and the user's desktop QGIS project" family.
-    "register_case_layer": "geographic_primitives",
+    # open_case_in_qgis + register_case_layer were DEREGISTERED (their module
+    # functions now serve the /api/export-qgis + /api/ingest-layer HTTP routes
+    # directly, not the LLM catalog), so they carry NO primary category -- a
+    # PRIMARY_CATEGORY entry for a non-registered tool fails the
+    # test_no_primary_category_entry_points_to_missing_tool invariant.
     # case-analysis batch: point/series sampling + the case situation report are
     # general-purpose case utilities (the conversational-analysis surface);
     # exposure-in-footprint is an impact/exposure product, so it files under

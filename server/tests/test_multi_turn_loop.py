@@ -15,7 +15,7 @@ Tests:
 2. ``stream_events_with_contents`` parses both text and function_call chunks
    the same way ``stream_events`` did (parity check — the existing routing
    tests already exercise ``stream_events`` which delegates here).
-3. ``_stream_gemini_reply`` drives the multi-turn loop end-to-end:
+3. ``_stream_model_reply`` drives the multi-turn loop end-to-end:
    - First turn: Gemini emits a function_call (``geocode_location``).
    - Second turn: Gemini sees the function_response (with bbox) and emits
      another function_call (``fetch_wdpa_protected_areas`` with the bbox).
@@ -43,7 +43,7 @@ import pytest
 
 from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     MAX_TURN_ITERATIONS,
     TextDeltaEvent,
     build_contents_from_history,
@@ -240,7 +240,7 @@ async def test_stream_events_with_contents_yields_function_call():
 
 
 # ---------------------------------------------------------------------------
-# Test 5: end-to-end multi-turn loop in _stream_gemini_reply
+# Test 5: end-to-end multi-turn loop in _stream_model_reply
 # ---------------------------------------------------------------------------
 
 
@@ -255,7 +255,7 @@ class _FakeSocket:
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_multi_turn_loop():
+async def test_stream_model_reply_multi_turn_loop():
     """Proper recovery flow: geocode → list_tools_in_category → wdpa → narrative.
 
     Scenario mirrors the kickoff: "Show me protected areas in Fort Myers".
@@ -357,7 +357,7 @@ async def test_stream_gemini_reply_multi_turn_loop():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro",
         project="test",
         location="us-central1",
@@ -367,7 +367,7 @@ async def test_stream_gemini_reply_multi_turn_loop():
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Show me protected areas in Fort Myers", "research"
         )
 
@@ -453,7 +453,7 @@ async def test_stream_gemini_reply_multi_turn_loop():
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_tool_error_does_not_kill_loop():
+async def test_stream_model_reply_tool_error_does_not_kill_loop():
     """Dispatch error is summarized into the function_response; loop continues."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
@@ -474,7 +474,7 @@ async def test_stream_gemini_reply_tool_error_does_not_kill_loop():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -482,7 +482,7 @@ async def test_stream_gemini_reply_tool_error_does_not_kill_loop():
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_failing_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
         # MUST NOT raise — the error becomes a function_response payload.
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Model flood depth at Fort Myers.", "research"
         )
 
@@ -497,7 +497,7 @@ async def test_stream_gemini_reply_tool_error_does_not_kill_loop():
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_caps_runaway_loop():
+async def test_stream_model_reply_caps_runaway_loop():
     """A Gemini that emits a function_call every turn is fail-stopped at the cap."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
@@ -524,14 +524,14 @@ async def test_stream_gemini_reply_caps_runaway_loop():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_counting_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
         )
 
@@ -635,14 +635,14 @@ async def test_stream_segments_interleave_distinct_message_ids():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Show me Fort Myers protected areas", "research"
         )
 
@@ -723,14 +723,14 @@ async def test_stream_no_leading_text_before_first_tool_no_empty_bubble():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
         )
 
@@ -776,14 +776,14 @@ async def test_stream_multiple_calls_one_round_single_finalize():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
         )
 
@@ -923,7 +923,7 @@ async def test_turn_survives_client_ws_close_mid_dispatch():
         return {"status": "ok", "layer_id": "landcover-2023"}
 
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro",
         project="test",
         location="us-central1",
@@ -940,7 +940,7 @@ async def test_turn_survives_client_ws_close_mid_dispatch():
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          p1, p2, p3:
         # Must NOT raise despite every post-dispatch send hitting a dead socket.
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "show me landcover", "research"
         )
 
@@ -974,7 +974,7 @@ async def test_client_close_is_not_reported_as_llm_unavailable():
     fake_client.models.generate_content_stream.side_effect = _raise_closed
 
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro",
         project="test",
         location="us-central1",
@@ -987,7 +987,7 @@ async def test_client_close_is_not_reported_as_llm_unavailable():
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          p1, p2, p3:
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             _FakeSocket(), state, settings, "hi", "research"
         )
 
@@ -1010,7 +1010,7 @@ async def test_genuine_model_failure_still_reports_llm_unavailable():
     fake_client.models.generate_content_stream.side_effect = _raise_model
 
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro",
         project="test",
         location="us-central1",
@@ -1023,7 +1023,7 @@ async def test_genuine_model_failure_still_reports_llm_unavailable():
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]), \
          p1, p2, p3:
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             _FakeSocket(), state, settings, "hi", "research"
         )
 

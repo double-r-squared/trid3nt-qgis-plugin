@@ -35,9 +35,10 @@ mkdir -p "$DST"
 rsync -a --delete "$SRC" "$DST"
 echo "synced: $SRC -> $DST"
 
-# Version stamp (Update button, NATE): write the source commit this sync came
-# from into the INSTALLED copy so the plugin can read back what's actually
-# running vs. what's in the repo (trid3nt.update.read_installed_version).
+# Version stamp (install-script provenance): write the source commit this sync
+# came from into the INSTALLED copy so a human can eyeball what's actually
+# installed vs. the repo. (The in-plugin Update button was removed; QGIS Plugin
+# Manager owns updates now -- this stamp is now just informational provenance.)
 # Two lines: short sha, branch. Honest "unknown" fallback if this checkout is
 # not a git repo (e.g. an extracted zip) rather than failing the sync.
 GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"

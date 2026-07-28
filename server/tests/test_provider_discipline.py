@@ -24,7 +24,7 @@ import pytest
 
 from trid3nt_server import server as agent_server
 from trid3nt_server.agent.adapters.adapter import (
-    GeminiSettings,
+    ModelSettings,
     UpstreamProviderError,
     classify_provider_error_class,
     provider_backoff_wait,
@@ -327,8 +327,8 @@ class _FakeSocket:
             self.sent.append(msg)
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -364,7 +364,7 @@ async def test_exhaustion_ends_turn_with_honest_narration_and_error_class():
          patch.object(agent_server, "emit_turn_telemetry", _capture_turn), \
          patch.object(agent_server, "_persist_chat_turn", side_effect=_capture_persist), \
          patch.object(agent_server, "_persist_terminal_failure_card", new=AsyncMock()) as card:
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "run a flood sim", "research"
         )
 

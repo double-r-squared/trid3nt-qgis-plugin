@@ -32,7 +32,7 @@ logger = logging.getLogger("trid3nt_server.agent.tools.meta.passthroughs.passthr
 # ON-BOX QGIS EXECUTION GATE (reliability hardening 2026-06-29).
 #
 # ``qgis_process`` RUN historically shelled ``docker run -v rundir:/data
-# grace2-qgis qgis_process run ...`` (or a local ``qgis_process`` subprocess)
+# trid3nt-qgis qgis_process run ...`` (or a local ``qgis_process`` subprocess)
 # directly ON the shared agent box -- heavy CPU/RAM work that competes with
 # every other session on the single EC2 box and that cannot run at all on a
 # future Fargate/AgentCore task (no docker socket, no QGIS binary). Until the
@@ -111,7 +111,7 @@ def set_worker_submitter(submitter: Any) -> None:
 # qgis_process RUN substrate (Decision Q).
 #
 # Execution mirrors the SFINCS solver's local-docker stage-then-mount pattern:
-# stage s3:// input params into a host rundir, mount it into the grace2-qgis
+# stage s3:// input params into a host rundir, mount it into the trid3nt-qgis
 # container, `qgis_process run <alg> --PARAM=…`, upload OUTPUT* artifacts back
 # to s3://<runs>/runs/<run_id>/. The host stages via boto3, so no GDAL-/vsis3/-
 # in-container credential problem (the recurring instance-role lesson).
@@ -302,12 +302,12 @@ def qgis_process(
         )
         return _qgis_offloaded_result(algorithm, params)
 
-    # AWS path (Decision Q): run inside the grace2-qgis container via
-    # stage-then-mount. Engages when an image is configured OR when no local
-    # qgis_process exists but docker + the image are present (the EC2 box).
+    # Docker path: run inside the trid3nt-qgis container via stage-then-mount.
+    # Engages when an image is configured OR when no local qgis_process exists
+    # but docker + the image are present (hosts that ship QGIS only in-container).
     image = os.environ.get("TRID3NT_QGIS_DOCKER_IMAGE")
     if not image and shutil.which("qgis_process") is None and shutil.which("docker"):
-        image = "grace2-qgis:ltr"
+        image = "trid3nt-qgis:ltr"
     if image:
         return _run_qgis_process_docker(algorithm, params, image, timeout_s=1800)
 
@@ -315,7 +315,7 @@ def qgis_process(
     if shutil.which("qgis_process") is None:
         raise RuntimeError(
             "qgis_process unavailable: set TRID3NT_QGIS_DOCKER_IMAGE (docker path), "
-            "ensure docker + the grace2-qgis image are present, or install "
+            "ensure docker + the trid3nt-qgis image are present, or install "
             "qgis_process on PATH."
         )
     import subprocess

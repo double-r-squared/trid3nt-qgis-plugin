@@ -7,7 +7,7 @@ multi-step turn surfaces a SEQUENCE of stage-labeled picks (acquisition ->
 preprocessing -> analysis -> visualization) instead of one blob. AUTO mode is
 unchanged (single near-tie emission only).
 
-Driven end-to-end through ``_stream_gemini_reply`` on the scripted provider; the
+Driven end-to-end through ``_stream_model_reply`` on the scripted provider; the
 retrieval ranking is patched at its module seam and tool dispatch is stubbed so
 no real tool runs.
 """
@@ -21,7 +21,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.agent.adapters.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_server.agent.adapters.scripted_adapter import set_script
 from trid3nt_server.agent.tools.search import tool_retrieval as tr
 from trid3nt_contracts import new_ulid
@@ -38,8 +38,8 @@ class _FakeSocket:
             self.sent.append(msg)
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -90,7 +90,7 @@ async def test_ask_mode_emits_stage_labeled_wave_per_round(monkeypatch):
     state = agent_server.SessionState(session_id=new_ulid())
     try:
         await asyncio.wait_for(
-            agent_server._stream_gemini_reply(
+            agent_server._stream_model_reply(
                 sock, state, _settings(), "map slope for the coast", "research"
             ),
             timeout=10.0,
@@ -127,7 +127,7 @@ async def test_auto_mode_emits_no_per_round_waves(monkeypatch):
     state = agent_server.SessionState(session_id=new_ulid())
     try:
         await asyncio.wait_for(
-            agent_server._stream_gemini_reply(
+            agent_server._stream_model_reply(
                 sock, state, _settings(), "map slope for the coast", "research"
             ),
             timeout=10.0,

@@ -266,7 +266,7 @@ async def emit_tool_call_event(
         tool_name: Registered tool name (e.g. ``"fetch_dem"``).
         source: Where the call originated.
             - ``"llm"`` -- Gemini-initiated ``function_call`` in the multi-turn
-              loop (``_stream_gemini_reply``).
+              loop (``_stream_model_reply``).
             - ``"workflow"`` -- inside-composer dispatch (reserved for future
               workflow orchestration paths).
             - ``"manual"`` -- ``/invoke`` directive from the debug harness or

@@ -8,7 +8,7 @@ FR-AS-1: Gemini-only. The deferred multi-provider future (§5) is not
 foreclosed cheaply because the seam exists, but no abstraction is paid for now.
 
 Model selection:
-  ``TRID3NT_GEMINI_MODEL`` env override, defaulting to ``GEMINI_DEFAULT_MODEL``
+  ``TRID3NT_GEMINI_MODEL`` env override, defaulting to ``DEFAULT_VERTEX_MODEL``
   below. Gemini 3 (``gemini-3-pro*``) is not yet GA on Vertex for this
   project; ``gemini-2.5-pro`` is the current best stable. When Gemini 3 lands
   on Vertex this constant -- and the env override path -- flips with no other
@@ -40,7 +40,7 @@ This module exposes the multi-turn function_call -> function_response loop:
     typed helpers for appending the model+function turn pair after a
     dispatch.
 
-The loop driver itself lives in ``server.py`` (``_stream_gemini_reply``) so it
+The loop driver itself lives in ``server.py`` (``_stream_model_reply``) so it
 can dispatch tools through ``_invoke_tool_via_emitter`` (registry + emitter
 side effects).  This file stays the Gemini-containment seam.
 """
@@ -64,7 +64,7 @@ logger = logging.getLogger("trid3nt_server.agent.adapters.adapter")
 
 # Default Gemini model id. See module docstring for the Gemini-3-on-Vertex
 # availability note. Override at runtime via ``TRID3NT_GEMINI_MODEL``.
-GEMINI_DEFAULT_MODEL = "gemini-2.5-pro"
+DEFAULT_VERTEX_MODEL = "gemini-2.5-pro"
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ class FunctionCallEvent:
     happen at the part level (not the FunctionCall level -- ``FunctionCall``
     has no signature field in google-genai types.py); see
     ``build_function_call_content``. For Gemini 2.5 (current default until
-    Gemini 3 lands on Vertex per ``GEMINI_DEFAULT_MODEL``), the field is
+    Gemini 3 lands on Vertex per ``DEFAULT_VERTEX_MODEL``), the field is
     absent and harvested as ``None``, a no-op when fed back -- the plumbing
     is forward-compat.
     """
@@ -240,6 +240,19 @@ class UpstreamProviderError(RuntimeError):
             f"upstream provider {provider} unavailable after {attempts} "
             f"attempt(s): {detail}"
         )
+
+
+class UnsupportedModelProviderError(RuntimeError):
+    """``MODEL_PROVIDER`` names a provider the dispatch does not support.
+
+    The provider dispatch in ``stream_events_with_contents`` is EXPLICIT:
+    scripted/replay/fake, bedrock, and openai each have a branch, and the
+    retained-dormant google-genai / Vertex seam handles ``vertex``/``gemini``.
+    Any OTHER value raises this (never a silent fall-through to the genai
+    path), so a typo or a decommissioned provider fails loudly.
+    """
+
+    error_class = "internal"
 
 
 def provider_retries() -> int:
@@ -1157,11 +1170,11 @@ def build_tool_declarations(
 
 
 # ---------------------------------------------------------------------------
-# GeminiSettings
+# ModelSettings
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class GeminiSettings:
+class ModelSettings:
     """Resolved Gemini configuration (env-derived; no implicit fallbacks)."""
 
     model: str
@@ -1170,7 +1183,7 @@ class GeminiSettings:
     use_vertex: bool
 
 
-def load_settings() -> GeminiSettings:
+def load_settings() -> ModelSettings:
     """Resolve Gemini settings from the environment.
 
     Required env (substrate):
@@ -1180,10 +1193,10 @@ def load_settings() -> GeminiSettings:
     - ``GOOGLE_CLOUD_LOCATION`` (default: ``us-central1``)
 
     Optional:
-    - ``TRID3NT_GEMINI_MODEL`` (default: ``GEMINI_DEFAULT_MODEL``)
+    - ``TRID3NT_GEMINI_MODEL`` (default: ``DEFAULT_VERTEX_MODEL``)
     """
-    return GeminiSettings(
-        model=os.environ.get("TRID3NT_GEMINI_MODEL", GEMINI_DEFAULT_MODEL),
+    return ModelSettings(
+        model=os.environ.get("TRID3NT_GEMINI_MODEL", DEFAULT_VERTEX_MODEL),
         project=os.environ.get("GOOGLE_CLOUD_PROJECT", ""),
         location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
         use_vertex=os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "True").lower()
@@ -1191,7 +1204,7 @@ def load_settings() -> GeminiSettings:
     )
 
 
-def build_client(settings: GeminiSettings) -> genai.Client:
+def build_client(settings: ModelSettings) -> genai.Client:
     """Build a google-genai Client configured for Vertex AI.
 
     Containment: nothing outside this module imports ``genai`` or
@@ -2711,6 +2724,21 @@ async def stream_events_with_contents(
             yield _ev
         return
 
+    # Provider dispatch is EXPLICIT -- scripted/replay/fake, bedrock, and openai
+    # each returned above. The ONLY remaining valid value is the retained-dormant
+    # google-genai / Vertex seam (``vertex``/``gemini``, or the empty default the
+    # test harness pins). Any OTHER MODEL_PROVIDER is a typo or a decommissioned
+    # provider: raise a TYPED error instead of silently running the genai path.
+    # (Removal of the vertex generate path itself is deferred -- CLAUDE.md keeps
+    # it as a reversible seam and the turn-loop test harness drives it.)
+    _prov = model_provider()
+    if _prov not in ("vertex", "gemini", ""):
+        raise UnsupportedModelProviderError(
+            f"MODEL_PROVIDER={_prov!r} is not supported. Valid providers: "
+            "scripted/replay/fake, bedrock, openai (or the retained-dormant "
+            "vertex/gemini genai seam)."
+        )
+
     loop = asyncio.get_running_loop()
 
     # Build the tool list for the config. SKIPPED when a cache is supplied --
@@ -2859,9 +2887,9 @@ async def stream_events_with_contents(
 # ---------------------------------------------------------------------------
 
 __all__ = [
-    "GEMINI_DEFAULT_MODEL",
+    "DEFAULT_VERTEX_MODEL",
     "MAX_TURN_ITERATIONS",
-    "GeminiSettings",
+    "ModelSettings",
     "StreamEvent",
     "TextDeltaEvent",
     "ThinkingDeltaEvent",

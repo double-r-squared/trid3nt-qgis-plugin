@@ -65,8 +65,6 @@ from typing import Any
 from trid3nt_contracts import new_ulid, now_utc
 from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
-from trid3nt_server.agent.tools import register_tool
-
 logger = logging.getLogger("trid3nt_server.agent.tools.meta.register_case_layer.register_case_layer")
 
 __all__ = [
@@ -727,20 +725,11 @@ _REGISTER_CASE_LAYER_METADATA = AtomicToolMetadata(
 )
 
 
-@register_tool(
-    _REGISTER_CASE_LAYER_METADATA,
-    # Writes a new object to the runs bucket + mutates the Case document --
-    # not read-only. Reaches object storage (open world). Not destructive
-    # (never overwrites another layer's data; a same-layer_id collision is
-    # never possible -- layer_id is minted fresh per call). Idempotent in the
-    # sense that re-running with the SAME s3_uri produces an equivalent new
-    # layer (not a no-op -- each call mints its own layer_id), so
-    # idempotent_hint=False.
-    read_only_hint=False,
-    open_world_hint=True,
-    destructive_hint=False,
-    idempotent_hint=False,
-)
+# DEREGISTERED (not LLM-visible): this function is NOT a registered tool. It
+# serves the ``/api/ingest-layer`` HTTP route directly (lazy-imported there) and
+# is called by tests/routes as a plain coroutine. ``_REGISTER_CASE_LAYER_METADATA``
+# above is retained as the route's source-of-truth for the tool's ttl/cacheable
+# semantics.
 async def register_case_layer(
     s3_uri: str,
     name: str,

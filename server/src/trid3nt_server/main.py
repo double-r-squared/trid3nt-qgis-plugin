@@ -182,8 +182,7 @@ def _default_qgis_process_submitter():
     suitable for the local environment and the M4 discovery loop.
 
     Override via ``TRID3NT_QGIS_PROCESS_BIN`` env var; defaults to
-    ``qgis_process`` discovered on PATH (the ``grace2`` conda env per
-    PROJECT_STATE / has this).
+    ``qgis_process`` discovered on PATH.
 
     Returns:
         A zero-argument-less callable bound to the chosen ``qgis_process``
@@ -195,17 +194,16 @@ def _default_qgis_process_submitter():
     import subprocess
     import time
 
-    # (Decision Q): on the AWS EC2 box QGIS lives ONLY
-    # inside the grace2-qgis container (no qgis_process on PATH). Prefer a
-    # docker-backed submitter when an image is configured (TRID3NT_QGIS_DOCKER_
-    # IMAGE) OR when no local qgis_process exists but docker + the image are
-    # available. Same (args, timeout_s) -> dict contract; list/describe pass
-    # file-free args so a plain `docker run` suffices. (qgis_process RUN with
-    # data I/O uses the separate stage-then-mount path -- follow-up.)
+    # Prefer a docker-backed qgis_process submitter when an image is configured
+    # (TRID3NT_QGIS_DOCKER_IMAGE) OR when no local qgis_process binary exists but
+    # docker + the image are available (some hosts ship QGIS only inside the
+    # trid3nt-qgis container). Same (args, timeout_s) -> dict contract;
+    # list/describe pass file-free args so a plain `docker run` suffices.
+    # (qgis_process RUN with data I/O uses the separate stage-then-mount path.)
     _image = os.environ.get("TRID3NT_QGIS_DOCKER_IMAGE")
     _local_bin = os.environ.get("TRID3NT_QGIS_PROCESS_BIN") or shutil.which("qgis_process")
     if _image or (_local_bin is None and shutil.which("docker")):
-        _image = _image or "grace2-qgis:ltr"
+        _image = _image or "trid3nt-qgis:ltr"
 
         def _submit_docker(args: list[str], timeout_s: int) -> dict[str, object]:
             cmd = [

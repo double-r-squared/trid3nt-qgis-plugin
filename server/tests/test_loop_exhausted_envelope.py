@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server.agent.adapters.adapter import (
-    GeminiSettings,
+    ModelSettings,
     MAX_TURN_ITERATIONS,
 )
 from trid3nt_server.server import _send_loop_exhausted, SessionState
@@ -174,7 +174,7 @@ def _make_fake_chunk_with_function_call(name: str, args: dict, call_id: str):
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_emits_loop_exhausted_on_cap():
+async def test_stream_model_reply_emits_loop_exhausted_on_cap():
     """A loop that always requests tool calls hits the cap and emits loop_exhausted.
 
     Gemini is mocked to always emit one function_call per turn; the tool is
@@ -203,14 +203,14 @@ async def test_stream_gemini_reply_emits_loop_exhausted_on_cap():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_always_succeed), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "never terminates", "research"
         )
 
@@ -238,7 +238,7 @@ async def test_stream_gemini_reply_emits_loop_exhausted_on_cap():
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_terminal_chunk_after_loop_exhausted():
+async def test_stream_model_reply_terminal_chunk_after_loop_exhausted():
     """After loop_exhausted, the terminal agent-message-chunk (done=True) is emitted.
 
     The client waits for done=True to close the stream. If the loop exits via
@@ -256,14 +256,14 @@ async def test_stream_gemini_reply_terminal_chunk_after_loop_exhausted():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_succeed), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
         )
 

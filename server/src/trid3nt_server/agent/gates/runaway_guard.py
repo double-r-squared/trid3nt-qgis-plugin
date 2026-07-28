@@ -8,7 +8,7 @@ channel, and locked the user out behind a "connecting" loop. Only an
 again.
 
 This module holds the small, env-overridable, fully unit-testable guard logic
-that the per-turn driver (``server._stream_gemini_reply``) consults each
+that the per-turn driver (``server._stream_model_reply``) consults each
 iteration. Keeping it here -- rather than inline in the 10k-line server -- makes
 the thresholds + watchdog testable in isolation and keeps normal-turn behavior
 untouched under the caps.

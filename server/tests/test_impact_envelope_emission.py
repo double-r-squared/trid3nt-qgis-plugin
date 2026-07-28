@@ -2,7 +2,7 @@
 
 Coverage:
 1. ``test_compute_impact_envelope_dispatch_emits_impact_envelope`` — when
-   ``_stream_gemini_reply`` dispatches ``compute_impact_envelope`` and the
+   ``_stream_model_reply`` dispatches ``compute_impact_envelope`` and the
    result carries a valid ``raw_envelope`` (with ``n_structures_total``), an
    extra ``impact-envelope`` envelope is sent on the wire IN ADDITION to the
    standard ``function_response``.
@@ -122,7 +122,7 @@ async def test_compute_impact_envelope_dispatch_emits_impact_envelope():
     """compute_impact_envelope with valid raw_envelope triggers extra WS send."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.agent.adapters.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
 
     # Turn 1: Gemini calls compute_impact_envelope.
     turn1_chunk = _make_fake_chunk_with_function_call(
@@ -150,14 +150,14 @@ async def test_compute_impact_envelope_dispatch_emits_impact_envelope():
     # the allowed set (mirrors what happens when the LLM calls
     # list_tools_in_category("damage_assessment") before the composer).
     state.allowed_tool_set.add_tools(["compute_impact_envelope"])
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Compute the impact envelope for Fort Myers flood.", "research"
         )
 
@@ -202,7 +202,7 @@ async def test_non_impact_tool_does_not_emit_impact_envelope():
     """Dispatching fetch_dem (or any non-impact tool) emits no impact-envelope."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.agent.adapters.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "fetch_dem",
@@ -220,14 +220,14 @@ async def test_non_impact_tool_does_not_emit_impact_envelope():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Show me a DEM for Fort Myers.", "research"
         )
 
@@ -248,7 +248,7 @@ async def test_impact_envelope_emission_without_raw_envelope():
     """No impact-envelope when result lacks the raw_envelope key."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.agent.adapters.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "compute_impact_envelope",
@@ -268,14 +268,14 @@ async def test_impact_envelope_emission_without_raw_envelope():
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     state.allowed_tool_set.add_tools(["compute_impact_envelope"])
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Compute impact.", "research"
         )
 
@@ -294,7 +294,7 @@ async def test_impact_envelope_emission_raw_envelope_missing_n_structures_total(
     """No impact-envelope when raw_envelope lacks n_structures_total."""
     from trid3nt_server import server as agent_server
     from trid3nt_server.server import SessionState
-    from trid3nt_server.agent.adapters.adapter import GeminiSettings
+    from trid3nt_server.agent.adapters.adapter import ModelSettings
 
     turn1_chunk = _make_fake_chunk_with_function_call(
         "compute_impact_envelope",
@@ -317,14 +317,14 @@ async def test_impact_envelope_emission_raw_envelope_missing_n_structures_total(
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
     state.allowed_tool_set.add_tools(["compute_impact_envelope"])
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="test", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Compute impact.", "research"
         )
 

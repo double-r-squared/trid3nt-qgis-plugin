@@ -1,6 +1,6 @@
 """BUG 3 + BUG 4b — terminal closing narration + terminal-failure replay card.
 
-Two server-side fixes, both driving the REAL ``_stream_gemini_reply`` /
+Two server-side fixes, both driving the REAL ``_stream_model_reply`` /
 ``_dispatch_gemini_and_persist`` seams (no Gemini, no Playwright) against
 file-backed persistence:
 
@@ -31,7 +31,7 @@ import pytest
 from trid3nt_server import server
 from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     TextDeltaEvent,
 )
 from trid3nt_server.agent import tools as agent_tools
@@ -88,13 +88,13 @@ def _agent_chunks(ws):
 
 
 async def _drive_real_stream(ws, state, fake_stream):
-    """Drive REAL ``_stream_gemini_reply`` via ``_dispatch_gemini_and_persist``
+    """Drive REAL ``_stream_model_reply`` via ``_dispatch_gemini_and_persist``
     with a mocked ``stream_events_with_contents`` (``fake_stream``)."""
     from unittest.mock import patch
 
     from trid3nt_server import server as agent_server
 
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="m", project="p", location="us-central1", use_vertex=True
     )
     with patch.object(agent_server, "build_client", return_value=object()), \
@@ -281,7 +281,7 @@ async def test_terminal_model_failure_persists_failed_tool_card(
 
     ws.sent.clear()
     # The model-stream exception is caught + surfaced as an error envelope (no
-    # re-raise) inside _stream_gemini_reply.
+    # re-raise) inside _stream_model_reply.
     await _drive_real_stream(ws, state, exploding_stream)
 
     # An error envelope was emitted live (existing behavior).

@@ -5,7 +5,7 @@ ZERO tool calls AND ZERO non-whitespace text -- the empty-completion shape (log:
 "gemini loop terminal ... text_chunks=0"). Before this fix the loop logged
 terminal and BROKE, so the user's request (e.g. compute_hillshade) silently died.
 
-The fix (server.py, ``_stream_gemini_reply`` loop): on the LOCAL path only, an
+The fix (server.py, ``_stream_model_reply`` loop): on the LOCAL path only, an
 empty round RETRIES with a corrective user-role nudge appended to ``contents``,
 BOUNDED by ``_EMPTY_COMPLETION_RETRY_CAP`` so an always-empty model can never
 loop forever. Bedrock / vertex (production narration) is byte-unchanged.
@@ -33,7 +33,7 @@ from unittest.mock import MagicMock, patch
 
 from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     TextDeltaEvent,
 )
 from trid3nt_contracts import new_ulid
@@ -104,7 +104,7 @@ def _install_scripted_stream(agent_server, rounds):
 
 
 def _drive(provider: str, rounds, monkeypatch, dispatch_side_effect=None):
-    """Run one ``_stream_gemini_reply`` turn under ``provider`` with ``rounds``.
+    """Run one ``_stream_model_reply`` turn under ``provider`` with ``rounds``.
 
     Returns ``(user_texts_per_call, model_calls, dispatch_log, sock)``.
     """
@@ -127,7 +127,7 @@ def _drive(provider: str, rounds, monkeypatch, dispatch_side_effect=None):
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gpt-oss", project="t", location="us-central1", use_vertex=True
     )
 
@@ -138,7 +138,7 @@ def _drive(provider: str, rounds, monkeypatch, dispatch_side_effect=None):
              ), \
              patch.object(agent_server, "build_tool_declarations", return_value=[]), \
              stream_patch:
-            await agent_server._stream_gemini_reply(
+            await agent_server._stream_model_reply(
                 sock, state, settings, "compute a hillshade here", "research"
             )
 

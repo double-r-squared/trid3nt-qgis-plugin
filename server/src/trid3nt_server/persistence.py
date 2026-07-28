@@ -1,12 +1,18 @@
-"""Thin typed wrapper around MongoDB Atlas MCP server CRUD operations (FR-AS-4).
+"""Thin typed wrapper over the persistence MCP surface (FR-AS-4).
 
 Agent code calls ``Persistence.upsert_case(case_dataclass)``; this module
-calls the MongoDB MCP server's ``insert-one`` / ``update-one`` / ``find-one``
-/ ``find`` tools and serializes/deserializes through ``trid3nt_contracts``
-``GraceModel`` types (never raw dicts at the call site). This is the
-LLM-facing DB path per FR-AS-4 and Decision F; worker-side direct-driver
-writes (``engine``'s solver result inserts, FR-MP-3) are a separate seam that
-does not route through this module.
+issues logical ``insert-one`` / ``update-one`` / ``find-one`` / ``find`` calls
+through an ``MCPClientProtocol`` client and serializes/deserializes through
+``trid3nt_contracts`` ``GraceModel`` types (never raw dicts at the call site).
+
+Live backend (local-first build): the file-backed twin ``FileMCPClient`` --
+a small JSON-document store that implements the same logical MCP surface with
+Mongo-faithful filter/update semantics. It is bound by
+``main._maybe_bind_dev_persistence`` / ``server.init_persistence_from_env``.
+A cloud MCP-backed client (the original MongoDB Atlas path) implements the
+same ``MCPClientProtocol`` and drops in unchanged, but is dormant on this
+stack (``mcp.py`` and the DynamoDB backend were removed in the local-only
+slim; both are preserved in git history for a future cloud re-weave).
 
 Supports ``CaseSummary`` round-trip (get/upsert/list/archive/delete),
 ``CaseChatMessage`` append + ``CaseSessionState`` hydration, ``User``
@@ -14,14 +20,13 @@ round-trip (``get_user_by_firebase_uid``/``upsert_user``), ``SecretRecord``
 round-trip (vault-ref-only, Decision F: list/upsert/revoke), and
 ``append_audit`` (fire-and-forget audit log line).
 
-Containment: this module never opens a direct PyMongo driver -- every storage
-call goes through ``mcp_client.call_tool("<mcp-method>", args)``, a single
-LLM-facing DB seam. The MCP server (``mongodb-mcp-server`` npm package) is
-consumed verbatim, not wrapped; callers pass typed ``GraceModel`` instances
-in and get typed instances out, and the ``dict``-shape MCP transport is
-contained here. The session-record write carveout (Appendix D.6, FR-AS-8) is
-enforced at the confirmation-hook layer (``server.CONFIRMATION_TRIGGERS``),
-not here; persistence is the I/O substrate, the hook policy is per-call.
+Containment: every storage call goes through
+``mcp_client.call_tool("<mcp-method>", args)``, a single seam; callers pass
+typed ``GraceModel`` instances in and get typed instances out, and the
+``dict``-shape MCP transport is contained here. The session-record write
+carveout (Appendix D.6, FR-AS-8) is enforced at the confirmation-hook layer
+(``server.CONFIRMATION_TRIGGERS``), not here; persistence is the I/O
+substrate, the hook policy is per-call.
 
 Invariants: ``SecretRecord`` serialization never carries a raw key value --
 ``key_value`` only appears on the ``secret-add`` envelope (cleared at the
@@ -53,9 +58,9 @@ from trid3nt_contracts.user import User
 
 logger = logging.getLogger("trid3nt_server.persistence")
 
-# MongoDB Atlas database used for all Case/User/Secret persistence at v0.1.
-# Override via env var ``TRID3NT_MONGO_DB`` for staging / test isolation; the
-# production deploy pins the database name via Secret Manager.
+# Logical database name for all Case/User/Secret persistence. The file backend
+# uses it as a namespace prefix; a cloud MCP client would use it as the DB name.
+# Override via env var ``TRID3NT_MONGO_DB`` for staging / test isolation.
 import os
 
 DEFAULT_DATABASE = os.environ.get("TRID3NT_MONGO_DB", "trid3nt_dev")
@@ -140,185 +145,6 @@ class MCPClientProtocol(Protocol):
 
 
 # --------------------------------------------------------------------------- #
-# Live-server surface translation
-# --------------------------------------------------------------------------- #
-# The real mongodb-mcp-server does not expose ``find-one``/``insert-one``/
-# ``update-one``; its document surface is ``find``/``insert-many``/
-# ``update-many`` (+ ``delete-many``, ``count``, ...), and ``find`` results
-# come back as EJSON wrapped in ``<untrusted-user-data-{uuid}>`` tags in the
-# second content entry (the first is a human-readable banner).
-#
-# The logical surface (``find-one``/``insert-one``/``update-one``/``find``)
-# is our seam contract (``MCPClientProtocol``) -- ``FileMCPClient``, every
-# test mock, and every call site speak it. This translator is the single
-# boundary adapting the logical surface to the real server's tool names and
-# response shape; when MongoDB renames tools again, this class is the only
-# thing that changes. ``server.init_persistence_from_env`` wraps the live
-# ``MCPClient`` in this translator before handing it to ``Persistence``.
-
-
-def _ejson_normalize(value: Any) -> Any:
-    """Collapse the EJSON extended-type wrappers we can encounter.
-
-    Our documents store string ULIDs and ISO-8601 strings, so most
-    round-trips are plain JSON. Mongo may still emit ``{"$date": ...}`` /
-    ``{"$oid": ...}`` / ``{"$numberLong": ...}`` for fields written by
-    other paths -- collapse them to their plain value so Pydantic
-    validation sees normal scalars.
-    """
-    if isinstance(value, dict):
-        if len(value) == 1:
-            ((k, v),) = value.items()
-            if k == "$oid":
-                return v
-            if k == "$numberLong" or k == "$numberInt" or k == "$numberDouble":
-                try:
-                    return float(v) if "." in str(v) else int(v)
-                except (TypeError, ValueError):
-                    return v
-            if k == "$date":
-                # {"$date": "ISO"} or {"$date": {"$numberLong": "ms"}}
-                if isinstance(v, dict) and "$numberLong" in v:
-                    return v["$numberLong"]
-                return v
-        return {k: _ejson_normalize(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_ejson_normalize(v) for v in value]
-    return value
-
-
-import re as _re
-
-# The warning prose MENTIONS both tags inline ("between the <tag> and
-# </tag> tags may lead to...") BEFORE the actual payload block -- a lazy
-# match from the first mention captures the prose word "and" instead of
-# the payload. The real block is newline-delimited (``<tag>\npayload\n</tag>``
-# per formatUntrustedData), so the mandatory ``\n`` on both sides skips the
-# prose mentions. Verified against a live mongod round-trip (evidence/).
-_UNTRUSTED_RE = _re.compile(
-    r"<untrusted-user-data-([0-9a-fA-F-]+)>\n(.*?)\n</untrusted-user-data-\1>",
-    _re.DOTALL,
-)
-
-
-def _extract_untrusted_payload(raw: dict[str, Any]) -> Any | None:
-    """Pull the EJSON document payload out of a real-server tool result.
-
-    Returns the parsed (and EJSON-normalized) payload, or ``None`` when no
-    untrusted-data block is present (e.g. "Found 0 documents" responses).
-    """
-    content = raw.get("content")
-    if not isinstance(content, list):
-        return None
-    for entry in content:
-        if not isinstance(entry, dict):
-            continue
-        text = entry.get("text")
-        if not isinstance(text, str):
-            continue
-        m = _UNTRUSTED_RE.search(text)
-        if not m:
-            continue
-        import json as _json
-
-        try:
-            return _ejson_normalize(_json.loads(m.group(2)))
-        except _json.JSONDecodeError:
-            logger.warning("untrusted-data block was not valid EJSON")
-            return None
-    return None
-
-
-class MCPSurfaceTranslator:
-    """Adapt the logical MCP surface to the real ``mongodb-mcp-server``.
-
-    Implements :class:`MCPClientProtocol`. Wraps a raw client (the live
-    stdio :class:`trid3nt_server.mcp.MCPClient`) whose tool names are the
-    REAL server surface, and translates:
-
-    - ``find-one``   → ``find`` with ``limit=1`` → ``{"document": doc|None}``
-    - ``find``       → ``find`` with an explicit generous limit (the real
-      server DEFAULTS TO limit=10 -- unbounded logical reads like chat
-      history would silently truncate) → ``{"documents": [...]}``
-    - ``insert-one`` → ``insert-many`` with ``documents=[doc]``
-    - ``update-one`` → ``update-many`` (every update in this codebase filters on a
-      unique key, so the semantics coincide)
-
-    Any other tool name passes through untouched.
-    """
-
-    #: Explicit limit injected when the logical ``find`` has none. The
-    #: real server also caps responses at ``responseBytesLimit`` (1 MiB
-    #: default) -- we raise it for chat-history reads; documents beyond
-    #: either cap are not paginated.
-    DEFAULT_FIND_LIMIT = 1000
-    RESPONSE_BYTES_LIMIT = 8 * 1024 * 1024
-
-    def __init__(self, raw_client: MCPClientProtocol) -> None:
-        self._raw = raw_client
-
-    async def call_tool(
-        self, name: str, arguments: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        args = dict(arguments or {})
-
-        if name == "find-one":
-            real = {
-                "database": args["database"],
-                "collection": args["collection"],
-                "filter": args.get("filter", {}),
-                "limit": 1,
-            }
-            raw = await self._raw.call_tool("find", real)
-            docs = _extract_untrusted_payload(raw)
-            doc = docs[0] if isinstance(docs, list) and docs else None
-            return {"document": doc}
-
-        if name == "find":
-            real = {
-                "database": args["database"],
-                "collection": args["collection"],
-                "filter": args.get("filter", {}),
-                "limit": args.get("limit", self.DEFAULT_FIND_LIMIT),
-                "responseBytesLimit": self.RESPONSE_BYTES_LIMIT,
-            }
-            if args.get("sort"):
-                real["sort"] = args["sort"]
-            raw = await self._raw.call_tool("find", real)
-            docs = _extract_untrusted_payload(raw)
-            if docs is None:
-                docs = []
-            if isinstance(docs, dict):
-                docs = [docs]
-            return {"documents": docs}
-
-        if name == "insert-one":
-            raw = await self._raw.call_tool(
-                "insert-many",
-                {
-                    "database": args["database"],
-                    "collection": args["collection"],
-                    "documents": [args["document"]],
-                },
-            )
-            return raw if isinstance(raw, dict) else {}
-
-        if name == "update-one":
-            real = {
-                "database": args["database"],
-                "collection": args["collection"],
-                "filter": args.get("filter", {}),
-                "update": args.get("update", {}),
-            }
-            if args.get("upsert"):
-                real["upsert"] = True
-            raw = await self._raw.call_tool("update-many", real)
-            return raw if isinstance(raw, dict) else {}
-
-        return await self._raw.call_tool(name, args)
-
-
-# --------------------------------------------------------------------------- #
 # Persistence wrapper
 # --------------------------------------------------------------------------- #
 
@@ -356,11 +182,12 @@ def _unwrap_mcp_result(raw: dict[str, Any]) -> Any:
 
 
 class Persistence:
-    """Typed wrapper around the MongoDB Atlas MCP server.
+    """Typed wrapper over the persistence MCP surface (``MCPClientProtocol``).
 
-    Construct with a live ``MCPClient`` (or any object implementing the
-    ``MCPClientProtocol``). All methods are ``async`` -- the underlying MCP
-    transport is async stdio.
+    Construct with any object implementing ``MCPClientProtocol`` -- on this
+    stack that is the file-backed ``FileMCPClient``; a cloud MCP client drops
+    in unchanged. All methods are ``async`` (the file backend off-loads its
+    blocking I/O; a cloud client's transport is async).
     """
 
     def __init__(
@@ -452,12 +279,14 @@ class Persistence:
 
         ephemeral-cases track: ``ephemeral=True`` (only ever passed for
         ANONYMOUS / pre-Auth Cases) stamps a NUMERIC epoch-seconds
-        ``expires_at`` (``int(now + CASES_ANON_TTL_SECONDS)``) so DynamoDB-native
-        TTL can reap the Case after the window. This is intentionally a Number
-        attribute, NOT the ISO ``expires_at`` string the sessions collection
-        uses -- DynamoDB TTL only honours a numeric epoch. ``expires_at`` is a
-        storage-only field; ``_doc_to_case_summary`` drops it so it NEVER
-        reaches the wire ``CaseSummary``.
+        ``expires_at`` (``int(now + CASES_ANON_TTL_SECONDS)``) -- a RESERVED TTL
+        marker a TTL-capable backend can reap the Case with after the window.
+        The file backend does not reap; the field is written for forward
+        compat. Intentionally a Number attribute, NOT the ISO ``expires_at``
+        string the sessions collection uses (a numeric-epoch TTL index only
+        honours a number). ``expires_at`` is a storage-only field;
+        ``_doc_to_case_summary`` drops it so it NEVER reaches the wire
+        ``CaseSummary``.
 
         ``ephemeral=False`` (the DEFAULT, and the only shape authed call-sites
         ever use) writes NO ``expires_at`` at all -- authed Cases are durable
@@ -465,14 +294,15 @@ class Persistence:
         behaviour, so the new kwarg is dormant until a call-site opts in.
         """
         body = case.model_dump(mode="json")
-        body["_id"] = case.case_id  # MongoDB primary key (FR-MP-5)
+        body["_id"] = case.case_id  # the ``_id`` primary key (FR-MP-5)
         if owner_user_id:
             body["user_id"] = owner_user_id
         if ephemeral:
             from trid3nt_contracts.collections import CASES_ANON_TTL_SECONDS
 
-            # DynamoDB-native TTL requires a NUMBER epoch-seconds attribute
-            # (not the ISO string sessions use). Authed Cases never reach here.
+            # RESERVED numeric-epoch TTL marker (a TTL-capable backend requires
+            # a NUMBER, not the ISO string sessions use); the file backend does
+            # not reap. Authed Cases never reach here.
             body["expires_at"] = int(now_utc().timestamp()) + CASES_ANON_TTL_SECONDS
         await self._mcp.call_tool(
             "update-one",
@@ -561,9 +391,7 @@ class Persistence:
         (every Case now has a ``user_id``). Re-running is a safe no-op.
 
         **Non-corrupting**: a single ``$set`` of one field via the logical
-        ``update-one`` surface (translated to ``update-many`` by the
-        :class:`MCPSurfaceTranslator` so ALL matching orphans are stamped in
-        one round-trip -- ``update-one`` semantics would only touch one doc).
+        ``update-one`` (upsert=False) surface stamps the matching orphan Cases.
         No other field is read, written, or removed; sessions and chat
         histories are untouched (this method only ever writes the ``projects``
         collection).
@@ -817,10 +645,10 @@ class Persistence:
 
         Routes through the SAME ``update-one`` (upsert) surface every backend
         implements. The filter carries BOTH key shapes so it targets the natural
-        key on each: ``_id`` for the file/Mongo backends (chat ``_id`` ==
-        ``message_id``) AND the composite ``case_id`` + ``message_id`` the live
-        DynamoDB chat table is keyed by -- so the get/apply/put upsert lands on
-        exactly one row everywhere. Best-effort at the call sites
+        key on each: ``_id`` for the file backend (chat ``_id`` ==
+        ``message_id``), plus the composite ``case_id`` + ``message_id`` shape a
+        keyed cloud backend would use -- so the get/apply/put upsert lands on
+        exactly one row on either. Best-effort at the call sites
         (``_persist_chat_turn`` swallows write failures), matching
         ``append_chat_message``.
         """
@@ -1226,9 +1054,9 @@ class Persistence:
         """Production S3 put for the case-view snapshot.
 
         Runs the synchronous boto3 ``put_object`` in a worker thread so the
-        async turn loop is never blocked (the same off-thread discipline the
-        DynamoDB backend uses). boto3 resolves creds + region from the standard
-        chain (env / ~/.aws / EC2 instance role -- lesson).
+        async turn loop is never blocked (the same off-thread discipline every
+        blocking storage call here uses). boto3 resolves creds + region from the
+        standard chain (env / ~/.aws / instance role).
 
         ``metadata`` is the S3 OBJECT METADATA dict (the owner-gate carrier:
         ``{"owner-user-id": <owner>}`` or ``{}`` / ``None`` when the Case has no
@@ -1571,8 +1399,9 @@ class Persistence:
         Activity heartbeat for an anonymous Case: ``$set`` a fresh NUMERIC
         epoch-seconds ``expires_at`` (``int(now) + ttl``) on the case doc so a
         Case the user is actively working in is not reaped mid-session. Mirrors
-        :meth:`touch_session`, but stamps a Number epoch (DynamoDB-native TTL),
-        NOT the ISO string the sessions TTL index uses.
+        :meth:`touch_session`, but stamps a Number epoch (a RESERVED TTL marker
+        for a TTL-capable backend), NOT the ISO string the sessions TTL index
+        uses.
 
         Only ever called for anonymous Cases. Authed Cases carry no
         ``expires_at`` and must stay durable forever -- server.py simply never
@@ -1963,10 +1792,10 @@ class Persistence:
 # --------------------------------------------------------------------------- #
 # Local-dev file-backed MCP client
 # --------------------------------------------------------------------------- #
-# The MongoDB Atlas MCP server is the production LLM-facing DB seam (FR-AS-4).
-# For local dev without Atlas/MCP, this file-backed shim satisfies the same
-# ``MCPClientProtocol`` surface so ``Persistence`` doesn't need to know which
-# substrate it is talking to, and can be bound at startup either way.
+# The file-backed shim is the LIVE persistence substrate on this stack. It
+# satisfies the same ``MCPClientProtocol`` surface a cloud MCP client would, so
+# ``Persistence`` doesn't need to know which substrate it is talking to, and
+# can be bound at startup either way (FR-AS-4).
 #
 # Storage: ``~/.trid3nt/dev_persistence/<database>/<collection>.json``, one
 # JSON file per collection (dict mapping ``_id`` -> document). Atomicity: a
@@ -2061,8 +1890,7 @@ class FileMCPClient:
     @staticmethod
     def _read_store(path: _Path) -> dict[str, dict]:
         # OFF-LOOP CONTRACT: this is a BLOCKING body. Callers in ``call_tool``
-        # run it via ``await _asyncio.to_thread(self._read_store, path)`` (the
-        # file-backend twin of the DynamoMCPClient boto3 off-loop fix) so the
+        # run it via ``await _asyncio.to_thread(self._read_store, path)`` so the
         # blocking read never stalls the asyncio WS loop. The per-collection
         # async lock is still held across the await, preserving serialization.
         if not path.exists():
@@ -2369,7 +2197,6 @@ def make_persistence_for_backend(
 __all__ = [
     "Persistence",
     "MCPClientProtocol",
-    "MCPSurfaceTranslator",
     "FileMCPClient",
     "make_file_persistence",
     "make_persistence_for_backend",

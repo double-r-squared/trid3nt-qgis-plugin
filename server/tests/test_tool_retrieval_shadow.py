@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from trid3nt_server.agent.adapters.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_contracts import new_ulid
 
 
@@ -74,8 +74,8 @@ def _make_fc_chunk(name: str, args: dict, call_id: str = "c1"):
     return chunk
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro",
         project="test",
         location="us-central1",
@@ -112,7 +112,7 @@ async def _drive_one_turn(
     state=None,
     dispatch=None,
 ):
-    """Drive ONE _stream_gemini_reply turn with the given retrieval mode.
+    """Drive ONE _stream_model_reply turn with the given retrieval mode.
 
     Returns (state, registries_seen, dispatch_log) where registries_seen is the
     list of objects passed to build_tool_declarations (one per turn iteration).
@@ -153,7 +153,7 @@ async def _drive_one_turn(
          patch.object(
              agent_server, "build_tool_declarations", side_effect=_capture_build
          ):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), user_text, "research"
         )
     return state, registries_seen, dispatch_log

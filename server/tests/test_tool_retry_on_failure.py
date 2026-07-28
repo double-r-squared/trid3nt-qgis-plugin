@@ -48,7 +48,7 @@ import pytest
 
 from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     MAX_TURN_ITERATIONS,
     TextDeltaEvent,
     _classify_error,
@@ -227,7 +227,7 @@ class _FakeSocket:
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_retry_after_recoverable_failure():
+async def test_stream_model_reply_retry_after_recoverable_failure():
     """First dispatch fails (retryable=True) → second dispatch succeeds.
 
     Gemini reads the structured error_code + retryable=True in the
@@ -304,14 +304,14 @@ async def test_stream_gemini_reply_retry_after_recoverable_failure():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_flaky_invoke), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Get me the DEM for Fort Myers", "research"
         )
 
@@ -351,7 +351,7 @@ async def test_stream_gemini_reply_retry_after_recoverable_failure():
 
 
 @pytest.mark.asyncio
-async def test_stream_gemini_reply_failed_retry_caps_at_max_iterations():
+async def test_stream_model_reply_failed_retry_caps_at_max_iterations():
     """A tool that always raises + a Gemini that always retries → loop stops.
 
     With the circuit breaker (job-B8, Wave 4.10) wired into the loop, the
@@ -388,14 +388,14 @@ async def test_stream_gemini_reply_failed_retry_caps_at_max_iterations():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_always_fail), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "x", "research"
         )
 

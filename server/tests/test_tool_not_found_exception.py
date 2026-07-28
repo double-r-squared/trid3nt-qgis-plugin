@@ -36,7 +36,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from trid3nt_server.agent.adapters.adapter import (
-    GeminiSettings,
+    ModelSettings,
     summarize_tool_result,
     _classify_error,
 )
@@ -300,7 +300,7 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini():
     # because "fetch_volcano_lava_flow" is not in TOOL_REGISTRY.
     sock = _FakeSocket()
     state = _make_session()
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -308,7 +308,7 @@ async def test_multi_turn_loop_tool_not_found_feeds_error_to_gemini():
         patch.object(agent_server, "build_client", return_value=fake_client),
         patch.object(agent_server, "build_tool_declarations", return_value=[]),
     ):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Show me lava flows in Hawaii", "research"
         )
 

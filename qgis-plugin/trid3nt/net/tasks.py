@@ -22,7 +22,6 @@ from .trid3nt_client import (
     fetch_model_list,
     post_provider_config,
 )
-from .. import update
 from ..case import case_export, push_layer
 from ..render import probe
 
@@ -288,57 +287,3 @@ class _ProbePointTask(QObject):
             return
         self.finished.emit(self._lon, self._lat, result)
 
-
-class _DaemonProbeTask(QObject):
-    """``update.probe_daemon`` off the UI thread -- the version-indicator's
-    daemon column, at dialog construction and after an Update run. Follows
-    the ``_EffectiveModelTask`` pattern (best-effort, short timeout) but
-    always emits (never silent) since "unreachable" is itself the honest
-    result the indicator needs to show."""
-
-    finished = pyqtSignal(object)  # update.DaemonProbeResult
-
-    def __init__(self, http_base: str, parent: Optional[QObject] = None):
-        super().__init__(parent)
-        self._http_base = http_base
-
-    def start(self) -> None:
-        threading.Thread(target=self._run, daemon=True).start()
-
-    def _run(self) -> None:
-        result = update.probe_daemon(self._http_base)
-        self.finished.emit(result)
-
-
-class _UpdateTask(QObject):
-    """The Update button flow's two blocking steps -- (a) ``git fetch`` +
-    fast-forward-only pull, (b) ``scripts/install_plugin.sh`` -- off the UI
-    thread, following the ``_ExportTask`` pattern. Each step's
-    ``update.UpdateStepResult`` streams via ``step_finished`` as it completes
-    (dialog appends it to the log immediately, not just at the end); step (b)
-    only runs if step (a) succeeded (an aborted pull leaves the repo AND the
-    installed copy untouched). Steps (c) ``qgis.utils.reloadPlugin`` and (d)
-    the version-indicator refresh are Qt-registry/widget work that MUST run
-    back on the UI thread -- the dialog's ``finished`` slot does those, not
-    this task.
-    """
-
-    step_finished = pyqtSignal(object)  # update.UpdateStepResult
-    finished = pyqtSignal(bool)  # overall ok (both steps succeeded)
-
-    def __init__(self, repo_path: str, parent: Optional[QObject] = None):
-        super().__init__(parent)
-        self._repo_path = repo_path
-
-    def start(self) -> None:
-        threading.Thread(target=self._run, daemon=True).start()
-
-    def _run(self) -> None:
-        pull_result = update.git_fetch_and_ff_pull(self._repo_path)
-        self.step_finished.emit(pull_result)
-        if not pull_result.ok:
-            self.finished.emit(False)
-            return
-        install_result = update.run_install_script(self._repo_path)
-        self.step_finished.emit(install_result)
-        self.finished.emit(install_result.ok)

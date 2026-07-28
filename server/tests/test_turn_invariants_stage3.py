@@ -10,7 +10,7 @@ content so the model gets exactly one more round:
       while the user message asked for data/analysis gets the same nudge.
 
 Kill-switch: ``TRID3NT_TURN_INVARIANTS=0``. Driven end-to-end through
-``_stream_gemini_reply`` on the scripted (replay) provider.
+``_stream_model_reply`` on the scripted (replay) provider.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from unittest.mock import patch
 import pytest
 
 from trid3nt_server import server as agent_server
-from trid3nt_server.agent.adapters.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_server.agent.adapters.scripted_adapter import set_script
 from trid3nt_contracts import new_ulid
 
@@ -38,8 +38,8 @@ class _FakeSocket:
             self.sent.append(msg)
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -81,7 +81,7 @@ async def _drive(monkeypatch, script, dispatch_results, user_text):
     with patch.object(agent_server, "stream_events_with_contents", _wrap), \
          patch.object(agent_server, "_invoke_tool_via_emitter", side_effect=_dispatch), \
          patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), user_text, "research"
         )
     return sock, captured["contents"], captured["rounds"]

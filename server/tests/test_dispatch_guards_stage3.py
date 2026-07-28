@@ -32,7 +32,7 @@ import pytest
 
 from trid3nt_server import server as agent_server
 from trid3nt_server.agent import tools as agent_tools
-from trid3nt_server.agent.adapters.adapter import GeminiSettings
+from trid3nt_server.agent.adapters.adapter import ModelSettings
 from trid3nt_server.scenario_reuse import reset_scenario_indexes_for_tests
 from trid3nt_server.agent.tool_arg_normalizer import (
     fuzzy_correct_enum_args,
@@ -187,8 +187,8 @@ def _make_fake_chunk_with_text(text: str):
     return fake_chunk
 
 
-def _settings() -> GeminiSettings:
-    return GeminiSettings(
+def _settings() -> ModelSettings:
+    return ModelSettings(
         model="gemini-2.5-pro", project="t", location="us-central1", use_vertex=True
     )
 
@@ -238,7 +238,7 @@ async def _drive_geocode_then_fetch(fetch_bbox: list) -> list:
         agent_server.build_client.return_value.models.generate_content_stream.side_effect = (
             lambda **kw: _script(**kw)
         )
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, _settings(), "show elevation data for Tampa", "research"
         )
     return captured_contents

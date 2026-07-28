@@ -93,3 +93,12 @@ been written yet but I don't want you to forget it.")
   infrastructure, CSO, detention/storage, water-quality washoff, pump/RTC;
   this IS the feedstock for the deferred SWMM-deepening pick (21 pct
   capability, largest uncovered surface).
+- 2026-07-28 PYQGIS SANDBOX (NATE): upgrade the code-exec sandbox runtime
+  from generic Python to PyQGIS-capable - platform-native outputs (styled
+  layers, correct orientation for the QGIS product) instead of charts-only;
+  pairs with the template-authoring flow. Scope: bindings availability in
+  the sandbox env, containment implications, layer-emission seam.
+- 2026-07-28 GENAI TYPES IR DECOUPLING (queued, NATE): own internal message-IR
+  dataclasses (Content/Part/FunctionDeclaration/FunctionResponse), rewrite
+  the 4 importers (bedrock_adapter, openai_adapter, context_budget,
+  adapter remnants), drop google-genai - the last GCP-era dependency.

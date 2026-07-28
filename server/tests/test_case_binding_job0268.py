@@ -100,7 +100,7 @@ async def test_narration_stays_in_owning_case_on_midstream_switch(
         await release.wait()
         st.chat_history.append({"role": "user", "text": user_text})
 
-    monkeypatch.setattr(server, "_stream_gemini_reply", slow_stream)
+    monkeypatch.setattr(server, "_stream_model_reply", slow_stream)
 
     # Real pre-dispatch path: pins the turn binding + persists the user row.
     directive = await server._prepare_user_turn(ws, state, "flood in A")
@@ -199,7 +199,7 @@ async def test_new_turn_repin_does_not_steal_old_turn_narration(
         st.current_turn_narration = [narration_text]
         await release.wait()
 
-    monkeypatch.setattr(server, "_stream_gemini_reply", slow_stream)
+    monkeypatch.setattr(server, "_stream_model_reply", slow_stream)
 
     await server._prepare_user_turn(ws, state, "old turn in A")
     old_task = asyncio.create_task(
@@ -272,7 +272,7 @@ async def test_auto_created_case_receives_full_stream(
             st.current_turn_narration.append("Done.")
             st.chat_history.append({"role": "user", "text": user_text})
 
-        monkeypatch.setattr(server, "_stream_gemini_reply", fake_stream)
+        monkeypatch.setattr(server, "_stream_model_reply", fake_stream)
         await server._dispatch_gemini_and_persist(
             ws, state, None, "model the flood in fort myers", "off"
         )

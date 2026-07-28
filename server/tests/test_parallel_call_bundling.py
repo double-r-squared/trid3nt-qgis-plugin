@@ -1,7 +1,7 @@
 """Parallel-call bundling regression guard (job-B10).
 
 The verification audit (Q4) found that the multi-turn loop in
-``server.py::_stream_gemini_reply`` already correctly accumulates ALL
+``server.py::_stream_model_reply`` already correctly accumulates ALL
 function_call Parts emitted in a single Gemini stream chunk and dispatches
 them all before re-streaming, bundling all of their function_response
 Parts into the single follow-up content turn. These tests are a
@@ -36,7 +36,7 @@ import pytest
 
 from trid3nt_server.agent.adapters.adapter import (
     FunctionCallEvent,
-    GeminiSettings,
+    ModelSettings,
     TextDeltaEvent,
     stream_events_with_contents,
 )
@@ -253,14 +253,14 @@ async def test_loop_dispatches_three_parallel_calls_in_one_turn():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-3-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), patch.object(
         agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke
     ), patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Fetch DEM, landcover, and rivers for Fort Myers.",
             "research",
         )
@@ -360,14 +360,14 @@ async def test_loop_dispatches_parallel_calls_split_across_chunks():
 
     sock = _FakeSocket()
     state = SessionState(session_id=new_ulid())
-    settings = GeminiSettings(
+    settings = ModelSettings(
         model="gemini-3-pro", project="t", location="us-central1", use_vertex=True
     )
 
     with patch.object(agent_server, "build_client", return_value=fake_client), patch.object(
         agent_server, "_invoke_tool_via_emitter", side_effect=_fake_invoke
     ), patch.object(agent_server, "build_tool_declarations", return_value=[]):
-        await agent_server._stream_gemini_reply(
+        await agent_server._stream_model_reply(
             sock, state, settings, "Fetch 3 things.", "research"
         )
 
