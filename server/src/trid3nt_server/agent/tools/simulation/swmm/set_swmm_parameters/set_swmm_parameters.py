@@ -33,7 +33,7 @@ from trid3nt_server.agent.tools.simulation._setter_envelope import (
 
 __all__ = ["set_swmm_parameters", "SWMM_PARAM_BOUNDS"]
 
-logger = logging.getLogger("trid3nt_server.agent.tools.simulation.set_swmm_parameters.set_swmm_parameters")
+logger = logging.getLogger("trid3nt_server.agent.tools.simulation.swmm.set_swmm_parameters.set_swmm_parameters")
 
 
 #: Physical bounds, named table, per-parameter literature source (lane-D brief).

@@ -63,7 +63,7 @@ from trid3nt_contracts.tool_registry import AtomicToolMetadata
 
 from trid3nt_server.agent.tools import TOOL_REGISTRY, register_tool
 from trid3nt_server.agent.tools.fetchers.socioeconomic.geocode_location.geocode_location import geocode_location
-from trid3nt_server.agent.tools.simulation.postprocess_pelicun.postprocess_pelicun import (
+from trid3nt_server.agent.tools.simulation.pelicun.postprocess_pelicun.postprocess_pelicun import (
     PelicunPostprocessError,
     postprocess_pelicun,
 )

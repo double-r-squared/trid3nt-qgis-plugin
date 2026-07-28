@@ -398,7 +398,7 @@ from .simulation.model_debris_flow import model_debris_flow  # noqa: E402,F401
 # elmfire_fire_spread TEMPLATE (engine="elmfire", tier="template") registered in
 # workflows/elmfire/fire_spread/fire_spread.py (imported below); the run_elmfire
 # door lists + gate-expands it.
-from .simulation.postprocess_pelicun import postprocess_pelicun  # noqa: E402,F401
+from .simulation.pelicun.postprocess_pelicun import postprocess_pelicun  # noqa: E402,F401
 # engine-door refactor (LANDLAB slice): the run_landlab_susceptibility thin
 # wrapper is DELETED. The Landlab engine tool is now the landlab_susceptibility
 # TEMPLATE (engine="landlab", tier="template") registered in

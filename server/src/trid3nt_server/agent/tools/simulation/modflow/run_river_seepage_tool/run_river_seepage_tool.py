@@ -70,7 +70,7 @@ from trid3nt_server.agent.workflows.modflow.run_modflow import (
 )
 from trid3nt_server.agent.workflows.shared.solve_progress import drive_live_solve_progress
 
-logger = logging.getLogger("trid3nt_server.agent.tools.simulation.run_river_seepage_tool.run_river_seepage_tool")
+logger = logging.getLogger("trid3nt_server.agent.tools.simulation.modflow.run_river_seepage_tool.run_river_seepage_tool")
 
 __all__ = ["run_river_seepage_job", "RunRiverSeepageError"]
 

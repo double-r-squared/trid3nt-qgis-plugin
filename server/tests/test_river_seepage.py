@@ -237,7 +237,7 @@ async def test_composer_assembles_args_and_threads_result(monkeypatch) -> None:
     monkeypatch.setattr(mod, "TOOL_REGISTRY", fake_registry)
     # engine-door refactor: the composer imports the UNREGISTERED run_river_seepage_job
     # engine surface directly, so patch it at its module (not via the registry).
-    import trid3nt_server.agent.tools.simulation.run_river_seepage_tool.run_river_seepage_tool as _rs
+    import trid3nt_server.agent.tools.simulation.modflow.run_river_seepage_tool.run_river_seepage_tool as _rs
     monkeypatch.setattr(_rs, "run_river_seepage_job", _fake_run)
 
     result = await mod.model_river_seepage_scenario(

@@ -339,7 +339,7 @@ async def test_emit_chart_payloads_emits_each_via_current_emitter() -> None:
 
 def _patch_archetype_run(monkeypatch: Any, layer: Any) -> None:
     """Stub the archetype run-tool the MODFLOW composers dispatch to (no solver)."""
-    import trid3nt_server.agent.tools.simulation.run_modflow_archetype_tool as run_tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_archetype_tool as run_tool
 
     async def _fake_run(run_args, *, compute_class="standard"):  # noqa: ANN001
         return layer

@@ -360,7 +360,7 @@ async def test_composer_single_contaminant_yields_one_plume(
         captured["run_args"] = run_args
         return MultiSpeciesPlumeResult(plumes=[_fake_plume("benzene", area=1.25, conc=12.5)])
 
-    import trid3nt_server.agent.tools.simulation.run_modflow_multi_species_tool as tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _fake_run)
 
@@ -398,7 +398,7 @@ async def test_composer_full_chain_two_plumes(
             ]
         )
 
-    import trid3nt_server.agent.tools.simulation.run_modflow_multi_species_tool as tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _fake_run)
 
@@ -432,7 +432,7 @@ async def test_composer_surfaces_run_error_dict(
             "error_message": "no non-trivial plume for any species",
         }
 
-    import trid3nt_server.agent.tools.simulation.run_modflow_multi_species_tool as tool
+    import trid3nt_server.agent.tools.simulation.modflow.run_modflow_multi_species_tool as tool
 
     monkeypatch.setattr(tool, "run_modflow_multi_species_job", _err_run)
 

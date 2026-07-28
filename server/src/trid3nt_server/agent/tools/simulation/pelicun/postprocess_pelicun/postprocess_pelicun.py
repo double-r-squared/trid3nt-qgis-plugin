@@ -79,7 +79,7 @@ __all__ = [
 ]
 
 
-logger = logging.getLogger("trid3nt_server.agent.tools.simulation.postprocess_pelicun.postprocess_pelicun")
+logger = logging.getLogger("trid3nt_server.agent.tools.simulation.pelicun.postprocess_pelicun.postprocess_pelicun")
 
 
 # ---------------------------------------------------------------------------

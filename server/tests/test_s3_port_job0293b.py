@@ -228,7 +228,7 @@ def test_pelicun_fetch_stages_s3_inputs_and_unlinks_after(monkeypatch):
 
 
 def test_postprocess_pelicun_download_s3_stages_and_wraps_errors(monkeypatch):
-    from trid3nt_server.agent.tools.simulation.postprocess_pelicun.postprocess_pelicun import (
+    from trid3nt_server.agent.tools.simulation.pelicun.postprocess_pelicun.postprocess_pelicun import (
         PelicunPostprocessIOError,
         _download_uri_to_local,
     )
@@ -251,7 +251,7 @@ def test_postprocess_pelicun_download_s3_stages_and_wraps_errors(monkeypatch):
 def test_postprocess_pelicun_tool_unlinks_s3_staged_file(monkeypatch):
     import geopandas as gpd
 
-    from trid3nt_server.agent.tools.simulation.postprocess_pelicun import postprocess_pelicun as mod
+    from trid3nt_server.agent.tools.simulation.pelicun.postprocess_pelicun import postprocess_pelicun as mod
 
     _bind_fake_reader(monkeypatch, b"FGB-PAYLOAD")
 

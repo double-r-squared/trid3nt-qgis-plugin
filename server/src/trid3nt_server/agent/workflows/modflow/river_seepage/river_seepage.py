@@ -282,7 +282,7 @@ async def model_river_seepage_scenario(
     # FOLD (engine-door refactor): run_river_seepage_job is now the UNREGISTERED
     # internal engine surface (its registration folded into this template), so we
     # import + call it directly instead of resolving it through the registry.
-    from trid3nt_server.agent.tools.simulation.run_river_seepage_tool.run_river_seepage_tool import (
+    from trid3nt_server.agent.tools.simulation.modflow.run_river_seepage_tool.run_river_seepage_tool import (
         run_river_seepage_job as run_fn,
     )
     # task-168: wrap the solve as a nested child row. The failed-but-RETURNED

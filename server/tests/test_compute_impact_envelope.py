@@ -51,7 +51,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from trid3nt_server.agent.tools import TOOL_REGISTRY
-from trid3nt_server.agent.tools.simulation.postprocess_pelicun.postprocess_pelicun import (
+from trid3nt_server.agent.tools.simulation.pelicun.postprocess_pelicun.postprocess_pelicun import (
     PelicunPostprocessEmptyError,
 )
 from trid3nt_server.agent.workflows.pelicun.compute_impact_envelope.compute_impact_envelope import (
