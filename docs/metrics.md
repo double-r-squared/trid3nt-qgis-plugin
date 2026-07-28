@@ -13,3 +13,4 @@ matters, not the absolute).
 | date | server pkg | server tests | contracts | workers | plugin | scripts | registry | server.py | notes |
 |---|---|---|---|---|---|---|---|---|---|
 | 2026-07-27 | 224,142 (563f) | 179,409 (423f) | 11,675+9,483 | 47,897 | 14,300 | 6,255 | 211 | 15,441 | post engine-door rollout, pre cull-pass-2 landing; server.py monolith flagged (cards extraction queued); Mexico Beach scripts + hygiene sweep pending |
+| 2026-07-27b | 219,681 (552f) | 176,598 (414f) | - | - | - | - | 202 | 15,441 | post cull (9 tools, replication-proven) + structural batch (agent/ umbrella, search/, 35 dead files); -4,461 pkg lines, -11 files, -9 registered tools vs morning row; suite true baseline = 10 |
