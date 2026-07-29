@@ -28,3 +28,4 @@ matters, not the absolute).
 | 2026-07-28 | 119,548 | 57,056 | 12,406 | 189,010 (87%) | 20,785 | 4,190 | 2,081 | 1,665 | 28,721 (13%) |
 | 2026-07-28d | 216078 | - | - | 32878 | - | - | 200 | 13,116 | SFINCS remediation: flood.py 5637->2405 (conformance: run_sfincs + forcing_autowire), deckbuilder worker gone, quadtree/waves arm deleted, shared hoist; TRUE BASELINE NOW 9 (coastal fixed) | 
 | 2026-07-29 | 214738 | - | - | - | - | - | 200 | 13,116 | fetcher-fold wave 1: 5 twins deleted (-5,735), spec-served surfaces live, experiment SUPPORTED byte-identical |
+| 2026-07-29b | 211629 | - | - | - | - | - | 200 | 13,116 | fetcher-fold wave 2 (ArcGIS vector family): 6 twins deleted (net -5,306 incl. tests), router gains declarative where/column_map/fallback-chain/endpoint_select; 3 deferred by stop-rule (ejscreen, slr, levees) |
