@@ -34,4 +34,5 @@ matters, not the absolute).
 | 2026-07-29e | ~206850 | - | - | - | - | - | 197 | 13,116 | cull phase B: glm wrapper out (P2 dropped, moving-base proven live); shared/ model_* residuals now 1 (satellite, FIRMS-key gated) |
 | 2026-07-29f | ~204600 | - | - | - | - | - | 191 | 13,116 | processing wave: generate_chart generic primitive in, 4 fixed-shape charts + clip_bbox + zonal + aggregate tools out (all live-gated); folder at redundancy floor |
 | 2026-07-29g | ~202700 | - | - | - | - | - | 191 | 13,116 | fold wave 4 (stations): coops_currents folded (net -1,590), 5 deferred by stop-rule; twin-comparison experiment machinery retired |
-| 2026-07-29g | ~205200 | - | - | - | - | - | 191 | 13,116 | ingest transport (ADR 0044): httpx opener owns remote-file sockets, direct_window off vsicurl (parity sha-identical), 404->EMPTY restored; STAC-tile seam residual |
+| 2026-07-29h | ~204000 | - | - | - | - | - | 191 | 13,116 | ingest transport (ADR 0044): httpx opener owns remote-file sockets, direct_window off vsicurl (parity sha-identical), 404->EMPTY restored; STAC-tile seam residual |
+| 2026-07-29i | 204730 | - | - | - | - | - | 190 | 13,116 | satellite preemptive cull (NATE waiver, ADR 0046): last shared/ model_* wrapper out; corpus re-homed w/ retrieval proof |
