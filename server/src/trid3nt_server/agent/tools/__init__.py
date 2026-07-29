@@ -242,7 +242,8 @@ from .fetchers.hydrology.fetch_cama_flood_discharge import fetch_cama_flood_disc
 from .fetchers.hydrology.fetch_flood_extent_observation import fetch_flood_extent_observation  # noqa: E402,F401
 from .fetchers.hydrology.fetch_high_water_marks import fetch_high_water_marks  # noqa: E402,F401
 from .fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_surface_water  # noqa: E402,F401
-from .fetchers.hydrology.fetch_nhd_waterbodies import fetch_nhd_waterbodies  # noqa: E402,F401
+# fetch_nhd_waterbodies: data-router fold phase-2 wave-2 -- twin DELETED, now
+# spec-driven (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.hydrology.fetch_nhdplus_nldi_navigate import fetch_nhdplus_nldi_navigate  # noqa: E402,F401
 from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow  # noqa: E402,F401
 from .fetchers.hydrology.fetch_nwi_wetlands import fetch_nwi_wetlands  # noqa: E402,F401
@@ -289,7 +290,8 @@ from .fetchers.climate.fetch_era5_reanalysis import fetch_era5_reanalysis  # noq
 # fetch_gridmet: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.climate.fetch_modis_lst import fetch_modis_lst  # noqa: E402,F401
-from .fetchers.climate.fetch_us_drought_monitor import fetch_us_drought_monitor  # noqa: E402,F401
+# fetch_us_drought_monitor: data-router fold phase-2 wave-2 -- twin DELETED, now
+# spec-driven (source.yaml + router), registered by _register_router_specs() below.
 from .fetchers.climate.lookup_precip_return_period import lookup_precip_return_period  # noqa: E402,F401
 
 # -- fetchers/biodiversity --
@@ -304,7 +306,8 @@ from .fetchers.biodiversity.fetch_wdpa_protected_areas import fetch_wdpa_protect
 # -- fetchers/socioeconomic --
 from .fetchers.socioeconomic.fetch_administrative_boundaries import fetch_administrative_boundaries  # noqa: E402,F401
 from .fetchers.socioeconomic.fetch_buildings import fetch_buildings  # noqa: E402,F401
-from .fetchers.socioeconomic.fetch_cdc_svi import fetch_cdc_svi  # noqa: E402,F401
+# fetch_cdc_svi: data-router fold phase-2 wave-2 -- twin DELETED, now spec-driven
+# (source.yaml + router), registered by _register_router_specs() below.
 # fetch_census_acs: data-router fold pilot -- twin DELETED, now spec-driven
 # (source.yaml + router JOIN transform), registered by _register_router_specs() below.
 from .fetchers.socioeconomic.fetch_epa_ejscreen import fetch_epa_ejscreen  # noqa: E402,F401
@@ -325,10 +328,12 @@ from .fetchers.hazard.fetch_fema_nfhl_zones import fetch_fema_nfhl_zones  # noqa
 from .fetchers.hazard.fetch_firms_active_fire import fetch_firms_active_fire  # noqa: E402,F401
 # fetch_hifld_critical_infrastructure: data-router fold pilot -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
-from .fetchers.hazard.fetch_hifld_transmission_lines import fetch_hifld_transmission_lines  # noqa: E402,F401
+# fetch_hifld_transmission_lines: data-router fold phase-2 wave-2 -- twin DELETED,
+# now spec-driven (source.yaml + router), registered by _register_router_specs().
 from .fetchers.hazard.fetch_landfire_fuels import fetch_landfire_fuels  # noqa: E402,F401
-from .fetchers.hazard.fetch_mtbs_burn_severity import fetch_mtbs_burn_severity  # noqa: E402,F401
-from .fetchers.hazard.fetch_nifc_fire_perimeters import fetch_nifc_fire_perimeters  # noqa: E402,F401
+# fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: data-router fold phase-2
+# wave-2 -- twins DELETED, now spec-driven (source.yaml + router), registered by
+# _register_router_specs() below.
 from .fetchers.hazard.fetch_openfema_disasters import fetch_openfema_disasters  # noqa: E402,F401
 from .fetchers.hazard.fetch_tsunami_events import fetch_tsunami_events  # noqa: E402,F401
 from .fetchers.hazard.fetch_usace_dams import fetch_usace_dams  # noqa: E402,F401

@@ -36,7 +36,7 @@ def _fmt(res: SourceResult) -> str:
 
 def _verdict_md(results: list[SourceResult]) -> str:
     lines = [
-        "# Replication-parity VERDICT -- data-router fold pilots (5)",
+        "# Replication-parity VERDICT -- data-router fold phase-2 wave-2 (ArcGIS vector family, 6)",
         "",
         "Authority: docs/specs/router-pilot-contract.md sec 4.2. Twin vs router,",
         "identical synthetic upstream, offline + deterministic (no MinIO). Twin",
@@ -66,7 +66,32 @@ def _verdict_md(results: list[SourceResult]) -> str:
     return "\n".join(lines)
 
 
-_FINDINGS = """## Findings: 5/5 parity across the FULL edge matrix (round-2 gaps CLOSED)
+_FINDINGS = """## Phase-2 wave-2: 6/6 parity across the FULL edge matrix (ArcGIS vector family)
+
+Migrated the ArcGIS FeatureServer/MapServer vector family (the audit's #1
+highest-leverage mode, proven by the fetch_hifld pilot): fetch_nifc_fire_perimeters,
+fetch_hifld_transmission_lines, fetch_mtbs_burn_severity, fetch_cdc_svi,
+fetch_nhd_waterbodies, fetch_us_drought_monitor. Each graded twin-vs-router on the
+same synthetic upstream over the contract-4.2 edge matrix (values / schema /
+docstring-verbatim / layer-output / caveats + forced upstream + honest-empty +
+every invalid-param class + declared gates), plus the family-specific paths:
+declarative WHERE builder (transmission VOLTAGE floor, mtbs YEAR range, drought
+period), column_map normalization (cdc -999 sentinel, nhd case-insensitive +
+ftype_label lookup, drought dm->label + epoch-ms ddate->ISO), int_range +
+date_compact params, primary->fallback endpoint chain (nhd HR->medium), and
+param-conditioned endpoint_select (drought current /3 vs archive /2). Bug caught
+by the edge matrix and fixed: the nhd spec initially omitted its bbox param
+(degenerate-bbox validation never fired + promoted inputSchema would have drifted).
+
+Deferred (each needs a wholly new ingestion MODE, its own wave): fetch_epa_ejscreen
+(esri-json f=json rings->GeoJSON geometry parser + dual-clamp + indicator field
+select), fetch_noaa_slr_scenarios (multi-query per scenario_ft with per-value
+service-name URL + column merge), fetch_usace_levees (multi-service sub-layer
+routing 16/14/10 with per-layer geom types + property allowlists).
+
+### (retired) wave-1 pilots findings
+"""
+_FINDINGS_LEGACY = """## Findings: 5/5 parity across the FULL edge matrix (round-2 gaps CLOSED)
 
 The harness now grades the contract-4.2 edge matrix per source (error paths ARE
 values): happy-path values/schema/layer + BOTH honesty-floor empty paths + every

@@ -1,16 +1,18 @@
-"""Promotion parity tests (data-router fold, phase-2 wave 1).
+"""Promotion parity tests (data-router fold, phase-2 wave-1 pilots + wave-2 ArcGIS family).
 
-Migrated from the deleted twin test files (test_fetch_gridmet /
+Migrated from the deleted twin test files (wave-1: test_fetch_gridmet /
 _hifld_critical_infrastructure / _noaa_coops_tides / _esri_landcover_10m /
-_census_acs). Those files unit-tested the twins' INTERNAL helpers
-(``_plan_tile_grid``, ``_VARIABLES``, ``_fetch_coops_tides_bytes``,
-``_resolve_variable`` ...) which no longer exist -- deleted per the migration
-rule. The CONTRACT-level behavior that survives the fold (each twin name is a
-registered tool with the twin's signature / docstring / typed errors) is
-re-expressed HERE against the promoted router surface. Deeper behavior parity
-(values, layer output, caveats, every error path) is covered twin-vs-router by
-``experiments/fetcher_fold_replication`` (5/5 edge matrix) and the router unit
-suites (``test_router_engine`` / ``test_router_executors`` / ``test_router_spec_loader``).
+_census_acs; wave-2: test_fetch_nifc_fire_perimeters / _hifld_transmission_lines /
+_mtbs_burn_severity / _cdc_svi / _nhd_waterbodies / _us_drought_monitor). Those
+files unit-tested the twins' INTERNAL helpers (``_plan_tile_grid``, ``_VARIABLES``,
+``_build_where_clause``, ``_normalize_props``, ``_ddate_to_iso`` ...) which no
+longer exist -- deleted per the migration rule. The CONTRACT-level behavior that
+survives the fold (each twin name is a registered tool with the twin's signature /
+docstring / typed errors) is re-expressed HERE against the promoted router surface.
+Deeper behavior parity (values, layer output, caveats, every error path) is covered
+twin-vs-router by ``experiments/fetcher_fold_replication`` (wave-2 6/6 edge matrix)
+and the router unit suites (``test_router_engine`` / ``test_router_executors`` /
+``test_router_spec_loader``).
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ from trid3nt_server.agent.tools.fetchers._router.spec import compose_specs_from_
 # The 5 promoted pilots: name -> (source_class, expected declaration inputSchema).
 # The schema map is the ground truth captured from the hand-written twins BEFORE
 # deletion (properties + required set) -- the fold must reproduce it byte-for-byte.
-PILOTS = {
+PROMOTED = {
     "fetch_gridmet": {
         "source_class": "gridmet",
         "properties": ["bbox", "end_date", "start_date", "variable"],
@@ -54,19 +56,52 @@ PILOTS = {
         "properties": ["bbox", "variable", "year"],
         "required": ["bbox"],
     },
+    # --- phase-2 wave-2: the ArcGIS FeatureServer/MapServer vector family ---
+    "fetch_nifc_fire_perimeters": {
+        "source_class": "nifc_perimeters",
+        "properties": ["bbox", "status"],
+        # A None-default param is required-in-schema per the adapter (twin-identical);
+        # status carries a real "active" default so it stays optional.
+        "required": ["bbox"],
+    },
+    "fetch_hifld_transmission_lines": {
+        "source_class": "hifld_transmission_lines",
+        "properties": ["bbox", "min_voltage_kv"],
+        "required": ["bbox", "min_voltage_kv"],
+    },
+    "fetch_mtbs_burn_severity": {
+        "source_class": "mtbs_burn_severity",
+        "properties": ["bbox", "year_range"],
+        "required": ["bbox", "year_range"],
+    },
+    "fetch_cdc_svi": {
+        "source_class": "cdc_svi",
+        "properties": ["bbox"],
+        "required": ["bbox"],
+    },
+    "fetch_nhd_waterbodies": {
+        "source_class": "nhd_waterbodies",
+        "properties": ["bbox"],
+        "required": ["bbox"],
+    },
+    "fetch_us_drought_monitor": {
+        "source_class": "us_drought_monitor",
+        "properties": ["bbox", "date"],
+        "required": ["bbox", "date"],
+    },
 }
 
 _SPECS = compose_specs_from_tree()
 
 
-@pytest.mark.parametrize("name", sorted(PILOTS))
+@pytest.mark.parametrize("name", sorted(PROMOTED))
 def test_pilot_registered_as_general_tool(name: str) -> None:
     """The twin name resolves to a promoted spec-driven tool in the default pool."""
     entry = TOOL_REGISTRY.get(name)
     assert entry is not None, f"{name} not registered (promotion did not fire)"
     # tier=general -> in every default-pool producer (none filter it out).
     assert getattr(entry.metadata, "tier", "general") == "general"
-    assert entry.metadata.source_class == PILOTS[name]["source_class"]
+    assert entry.metadata.source_class == PROMOTED[name]["source_class"]
     assert entry.metadata.cacheable is True
     # The callable resolves through the router engine's synthetic module (so the
     # payload-warning seam finds the synthesized estimate_payload_mb).
@@ -77,7 +112,7 @@ def test_pilot_registered_as_general_tool(name: str) -> None:
     assert callable(getattr(mod, "estimate_payload_mb"))
 
 
-@pytest.mark.parametrize("name", sorted(PILOTS))
+@pytest.mark.parametrize("name", sorted(PROMOTED))
 def test_pilot_declaration_schema_matches_twin(name: str) -> None:
     """FunctionDeclaration inputSchema (properties + required) == the twin's."""
     entry = TOOL_REGISTRY[name]
@@ -88,13 +123,13 @@ def test_pilot_declaration_schema_matches_twin(name: str) -> None:
     assert d.parameters is not None
     props = sorted((d.parameters.properties or {}).keys())
     required = sorted(d.parameters.required or [])
-    assert props == PILOTS[name]["properties"], f"{name} properties drifted"
-    assert required == PILOTS[name]["required"], f"{name} required set drifted"
+    assert props == PROMOTED[name]["properties"], f"{name} properties drifted"
+    assert required == PROMOTED[name]["required"], f"{name} required set drifted"
     # A non-trivial description is carried (the twin docstring, indistinguishable).
     assert d.description and len(d.description) > 200
 
 
-@pytest.mark.parametrize("name", sorted(PILOTS))
+@pytest.mark.parametrize("name", sorted(PROMOTED))
 def test_pilot_docstring_is_twin_verbatim(name: str) -> None:
     """The promoted tool carries the spec docstring (== twin, drives the index)."""
     entry = TOOL_REGISTRY[name]
@@ -105,7 +140,7 @@ def test_pilot_docstring_is_twin_verbatim(name: str) -> None:
     assert entry.fn.__doc__ == spec.docstring
 
 
-@pytest.mark.parametrize("name", sorted(PILOTS))
+@pytest.mark.parametrize("name", sorted(PROMOTED))
 def test_pilot_degenerate_bbox_raises_twin_typed_error(name: str) -> None:
     """A degenerate bbox raises the twin-identical typed input error, pre-network.
 

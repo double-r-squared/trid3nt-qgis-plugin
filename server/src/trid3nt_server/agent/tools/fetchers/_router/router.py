@@ -198,6 +198,41 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
             _check_range(sc, pname, pspec, fv, sfx)
             out[pname] = fv
 
+        elif pspec.type == "int_range":
+            # A 2-element [start, end] int list (mtbs year_range). Element bounds:
+            # `min` floors start, `max` ceils end; start must be <= end. A bool is
+            # rejected (True/False are ints in Python but never a valid year).
+            if isinstance(value, bool) or not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise router_input_error(sc, f"{pname} must be a 2-element [start, end] list; got {value!r}", sfx)
+            try:
+                a, b = int(value[0]), int(value[1])
+            except (TypeError, ValueError):
+                raise router_input_error(sc, f"{pname} elements must be ints; got {value!r}", sfx)
+            if isinstance(value[0], bool) or isinstance(value[1], bool):
+                raise router_input_error(sc, f"{pname} elements must be ints; got {value!r}", sfx)
+            if pspec.min is not None and a < pspec.min:
+                raise router_input_error(sc, f"{pname} start {a} below min {int(pspec.min)}", sfx)
+            if pspec.max is not None and b > pspec.max:
+                raise router_input_error(sc, f"{pname} end {b} above max {int(pspec.max)}", sfx)
+            if a > b:
+                raise router_input_error(sc, f"{pname} start {a} must be <= end {b}", sfx)
+            out[pname] = [a, b]
+
+        elif pspec.type == "date_compact":
+            # Accept 'YYYY-MM-DD' or 'YYYYMMDD'; normalize to the 8-digit compact
+            # form and validate it is a real calendar date (us_drought_monitor).
+            if not isinstance(value, str):
+                raise router_input_error(sc, f"{pname} must be a string date; got {type(value).__name__}", sfx)
+            compact = value.strip().replace("-", "")
+            import re as _re
+            if not _re.fullmatch(r"\d{8}", compact):
+                raise router_input_error(sc, f"{pname} must be 'YYYY-MM-DD' or 'YYYYMMDD' (8 digits); got {value!r}", sfx)
+            try:
+                _dt.datetime.strptime(compact, "%Y%m%d")
+            except ValueError:
+                raise router_input_error(sc, f"{pname}={value!r} is not a real calendar date", sfx)
+            out[pname] = compact
+
         else:  # str
             out[pname] = str(value)
 

@@ -71,7 +71,12 @@ SourceShape = Literal[
 AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 
 #: Request-param declared types (contract sec 1.1 ``params.<name>.type``).
-ParamType = Literal["bbox", "iso_date", "enum", "int", "float", "str"]
+#: ``int_range`` = a 2-element ``[start, end]`` int list (mtbs year_range);
+#: ``date_compact`` = ``YYYY-MM-DD`` / ``YYYYMMDD`` normalized to ``YYYYMMDD``
+#: (us_drought_monitor date). Both are phase-2 wave-2 ArcGIS-family additions.
+ParamType = Literal[
+    "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact"
+]
 
 #: Payload-estimate models (contract sec 1.1 ``payload_estimate.model``).
 PayloadModel = Literal["bbox_area", "per_station", "per_feature", "tiled"]

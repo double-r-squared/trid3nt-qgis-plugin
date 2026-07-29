@@ -420,3 +420,127 @@ def test_join_execute_via_monkeypatch(monkeypatch):
     gdf = gpd.read_file(io.BytesIO(data))
     assert len(gdf) == 1
     assert float(gdf.iloc[0]["value"]) == pytest.approx(72000.0)
+
+
+# --------------------------------------------------------------------------- #
+# phase-2 wave-2 ArcGIS-family additions: WHERE builder / column_map /
+# endpoint chain / int_range + date_compact params.
+# --------------------------------------------------------------------------- #
+
+
+def _wave2_spec(**over) -> SourceSpec:
+    base = {
+        "name": "fetch_demo_w2",
+        "source_class": "demo_w2",
+        "shape": "vector-fgb",
+        "endpoints": {"data": {"url": "http://example.test/FeatureServer/0/query"}},
+        "params": {"bbox": {"type": "bbox", "required": True}},
+        "ingest": {"pagination": {"page_size": 2}},
+        "output": {"layer_type": "vector", "ext": "fgb", "style_preset": "w2"},
+        "cache": {"ttl_class": "static-30d"},
+        "payload_estimate": {"model": "per_feature", "kb_per_feature": 1.0},
+    }
+    base.update(over)
+    return SourceSpec.model_validate(base)
+
+
+def test_build_where_conditional_clause():
+    spec = _wave2_spec(
+        params={"bbox": {"type": "bbox", "required": True},
+                "min_voltage_kv": {"type": "float", "required": False}},
+        ingest={"where_clauses": [{"template": "VOLTAGE >= {min_voltage_kv:g}", "require": ["min_voltage_kv"]}]},
+    )
+    # absent -> 1=1; present -> the templated floor.
+    assert vector_fgb.build_where(spec, {"bbox": [-1, 0, 1, 2]}) == "1=1"
+    assert vector_fgb.build_where(spec, {"bbox": [-1, 0, 1, 2], "min_voltage_kv": 345.0}) == "VOLTAGE >= 345"
+
+
+def test_build_where_int_range_template():
+    spec = _wave2_spec(
+        ingest={"where_clauses": [{"template": "YEAR >= {year_range[0]} AND YEAR <= {year_range[1]}", "require": ["year_range"]}]},
+    )
+    assert vector_fgb.build_where(spec, {"year_range": [2018, 2021]}) == "YEAR >= 2018 AND YEAR <= 2021"
+
+
+def test_column_map_rename_and_null_sentinel():
+    spec = _wave2_spec(ingest={"column_map": {
+        "fips": {"from": "FIPS"},
+        "score": {"from": "RPL", "kind": "float", "null_below": -999.0},
+    }})
+    feats = [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]},
+         "properties": {"FIPS": "48201", "RPL": 0.82, "DROP_ME": 1}},
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [1, 1]},
+         "properties": {"FIPS": "48202", "RPL": -999.0}},
+    ]
+    out = vector_fgb.apply_column_map(feats, spec)
+    assert set(out[0]["properties"]) == {"fips", "score"}       # projected + renamed
+    assert out[0]["properties"]["score"] == 0.82
+    assert out[1]["properties"]["score"] is None                # -999 sentinel -> null
+
+
+def test_column_map_lookup_and_skip_feature():
+    spec = _wave2_spec(ingest={"column_map": {
+        "dm": {"from": "dm", "kind": "int", "default": 0, "on_error": "skip_feature"},
+        "label": {"from": "dm", "kind": "lookup", "key_from": "dm",
+                  "table": {0: "D0", 2: "D2 Severe"}, "default_template": "D{key}"},
+    }})
+    feats = [
+        {"type": "Feature", "geometry": None, "properties": {"dm": 2}},
+        {"type": "Feature", "geometry": None, "properties": {"dm": 7}},     # miss -> template
+        {"type": "Feature", "geometry": None, "properties": {"dm": None}},  # bad int -> skip
+    ]
+    out = vector_fgb.apply_column_map(feats, spec)
+    assert len(out) == 2                                        # third feature skipped
+    assert out[0]["properties"] == {"dm": 2, "label": "D2 Severe"}
+    assert out[1]["properties"] == {"dm": 7, "label": "D7"}
+
+
+def test_column_map_epoch_ms_iso_and_ci():
+    spec = _wave2_spec(ingest={"column_map_ci": True, "column_map": {
+        "valid_date": {"from": "ddate", "kind": "epoch_ms_iso", "default": ""},
+        "ftype": {"from": "FType", "kind": "int"},
+    }})
+    feats = [{"type": "Feature", "geometry": None,
+              "properties": {"DDATE": 1659398400000, "FTYPE": "390"}}]
+    out = vector_fgb.apply_column_map(feats, spec)
+    assert out[0]["properties"]["valid_date"] == "2022-08-02"   # epoch-ms -> ISO
+    assert out[0]["properties"]["ftype"] == 390                 # case-insensitive match
+
+
+def test_resolve_endpoints_select_and_fallback():
+    spec = _wave2_spec(
+        endpoints={"current": {"url": "http://x/3/query"}, "archive": {"url": "http://x/2/query"}},
+        params={"bbox": {"type": "bbox", "required": True},
+                "date": {"type": "date_compact", "required": False}},
+        ingest={"endpoint_select": {"param": "date", "absent": "current", "present": "archive"}},
+    )
+    assert vector_fgb.resolve_endpoints(spec, {})[0].url == "http://x/3/query"
+    assert vector_fgb.resolve_endpoints(spec, {"date": "20220802"})[0].url == "http://x/2/query"
+    # fallback chain
+    spec2 = _wave2_spec(
+        endpoints={"data": {"url": "http://a/query"}, "medium": {"url": "http://b/query"}},
+        fallback=["medium"],
+    )
+    chain = vector_fgb.resolve_endpoints(spec2, {"bbox": [0, 0, 1, 1]})
+    assert [e.url for e in chain] == ["http://a/query", "http://b/query"]
+
+
+def test_validate_int_range_and_date_compact():
+    from trid3nt_server.agent.tools.fetchers._router import router as router_mod
+    from trid3nt_server.agent.tools.fetchers._router.errors import RouterInputError
+
+    spec = _wave2_spec(params={
+        "bbox": {"type": "bbox", "required": True},
+        "year_range": {"type": "int_range", "required": False, "min": 1984, "max": 2100},
+        "date": {"type": "date_compact", "required": False},
+    })
+    out = router_mod.validate_params(spec, {"bbox": [-1, 0, 1, 2], "year_range": [2018, 2021], "date": "2022-08-02"})
+    assert out["year_range"] == [2018, 2021]
+    assert out["date"] == "20220802"                           # normalized to compact
+    # below the min -> typed input error
+    with pytest.raises(RouterInputError):
+        router_mod.validate_params(spec, {"bbox": [-1, 0, 1, 2], "year_range": [1800, 1900]})
+    # not a real calendar date -> typed input error
+    with pytest.raises(RouterInputError):
+        router_mod.validate_params(spec, {"bbox": [-1, 0, 1, 2], "date": "2020-13-40"})

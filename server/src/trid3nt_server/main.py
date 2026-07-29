@@ -148,10 +148,10 @@ def _import_tools_registry() -> int:
     from .agent.tools.fetchers.hazard.fetch_landfire_fuels import fetch_landfire_fuels  # noqa: F401
     # register fetch_gcn250_curve_numbers (GCN250 global SCS curve numbers; Wave 1.5).
     from .agent.tools.fetchers.soil.fetch_gcn250_curve_numbers import fetch_gcn250_curve_numbers  # noqa: F401
-    # register fetch_mtbs_burn_severity (MTBS historic burn-severity polygons; CONUS+AK+HI 1984-).
-    from .agent.tools.fetchers.hazard.fetch_mtbs_burn_severity import fetch_mtbs_burn_severity  # noqa: F401
-    # register fetch_nifc_fire_perimeters (NIFC current wildfire perimeters; Wave 1.5).
-    from .agent.tools.fetchers.hazard.fetch_nifc_fire_perimeters import fetch_nifc_fire_perimeters  # noqa: F401
+    # fetch_mtbs_burn_severity + fetch_nifc_fire_perimeters: data-router fold
+    # phase-2 wave-2 -- twins DELETED, now spec-driven (source.yaml + router),
+    # registered by register_specs_from_tree() via agent.tools import (no eager
+    # module import here).
     # register fetch_ebird_observations (Cornell Lab eBird Tier-2 recent sightings; per-Case secret_ref).
     from .agent.tools.fetchers.biodiversity.fetch_ebird_observations import fetch_ebird_observations  # noqa: F401
     # register fetch_iucn_red_list_range (IUCN Red List Tier-2 species range info fetcher; per-Case secret_ref).

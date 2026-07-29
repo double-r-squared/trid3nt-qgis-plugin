@@ -471,16 +471,21 @@ def _severity_from_mtbs(
     """
     from pfdf.raster import Raster
 
+    # fetch_mtbs_burn_severity is now spec-driven (data-router fold, phase-2
+    # wave-2): resolve it through the registry seam (indistinguishable callable)
+    # and catch the router's shared FetchError base (was the twin's MTBSError).
     try:
-        from trid3nt_server.agent.tools.fetchers.hazard.fetch_mtbs_burn_severity.fetch_mtbs_burn_severity import MTBSError, fetch_mtbs_burn_severity
+        from trid3nt_server.agent.tools import TOOL_REGISTRY
+        from trid3nt_server.agent.tools.fetchers._fetch_common import FetchError
+        _fetch_mtbs = TOOL_REGISTRY["fetch_mtbs_burn_severity"].fn
     except Exception as exc:  # noqa: BLE001
         raise DebrisFlowDependencyError(
             f"fetch_mtbs_burn_severity unavailable: {exc}"
         ) from exc
 
     try:
-        layer = fetch_mtbs_burn_severity(bbox=bbox)
-    except MTBSError as exc:
+        layer = _fetch_mtbs(bbox=bbox)
+    except FetchError as exc:
         raise DebrisFlowUpstreamError(
             f"MTBS burned-area query failed for bbox={bbox}: {exc}"
         ) from exc

@@ -13,6 +13,7 @@ monkeypatch (or drive against a fake ``_fetch_one_page``).
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import logging
 import math
@@ -31,10 +32,159 @@ logger = logging.getLogger(
 __all__ = [
     "features_to_fgb_bytes",
     "apply_ingest_transforms",
+    "apply_column_map",
+    "build_where",
+    "resolve_endpoints",
     "build_query_params",
     "fetch_features",
     "execute",
 ]
+
+
+# --------------------------------------------------------------------------- #
+# Declarative WHERE-clause builder (phase-2 wave-2 ArcGIS family).
+#
+# `ingest.where_clauses` is an ordered list of {template, require:[params]}
+# rules: a rule contributes its `str.format(**params)` clause ONLY when every
+# `require` param is present + non-None in the validated params; the surviving
+# clauses are AND-joined. Absent/none-declared -> falls back to a literal
+# `where` param else "1=1". This carries the hifld VOLTAGE floor, the mtbs YEAR
+# range, and the drought period= filters as spec data, no source hardcode.
+# --------------------------------------------------------------------------- #
+
+
+def build_where(spec: SourceSpec, params: dict[str, Any]) -> str:
+    ingest = spec.ingest or {}
+    clauses_spec = ingest.get("where_clauses")
+    if not clauses_spec:
+        return str(params.get("where", "1=1"))
+    parts: list[str] = []
+    for rule in clauses_spec:
+        if not isinstance(rule, dict):
+            continue
+        require = rule.get("require") or []
+        if any(params.get(p) is None for p in require):
+            continue
+        template = rule.get("template", "")
+        try:
+            parts.append(template.format(**params))
+        except (KeyError, IndexError, ValueError):
+            continue
+    return " AND ".join(parts) if parts else "1=1"
+
+
+# --------------------------------------------------------------------------- #
+# Declarative column normalizer (phase-2 wave-2 ArcGIS family).
+#
+# `ingest.column_map` is an ORDERED map out_col -> rule reproducing a twin's
+# raw-property -> output-column projection/rename/normalization WITHOUT a source
+# hardcode. Rule fields:
+#   from            source property key (case-insensitive when column_map_ci)
+#   kind            passthrough(default) | int | float | str | lookup | epoch_ms_iso
+#   null_below      numeric: value <= this -> None (the -999 SVI sentinel)
+#   on_error        null(default) | skip_feature (drop the whole feature)
+#   key_from        lookup: an already-computed out_col to key the table on
+#   table           lookup: {key -> label}
+#   default         value when the source key is absent / lookup miss
+#   default_template  lookup miss: str formatted with {key} (drought "D{key}")
+# When column_map is present the executor emits EXACTLY the mapped columns (a
+# projection), then derived_columns / json_coerce / geometry_filter layer on top.
+# --------------------------------------------------------------------------- #
+
+
+class _SkipFeature(Exception):
+    """Internal sentinel: a column_map rule with on_error=skip_feature failed."""
+
+
+def _num(raw: Any) -> float:
+    return float(raw)
+
+
+def _resolve_column(rule: dict[str, Any], src_props: dict[str, Any], out_row: dict[str, Any]) -> Any:
+    kind = rule.get("kind", "passthrough")
+    on_error = rule.get("on_error", "null")
+
+    if kind == "lookup":
+        table = rule.get("table") or {}
+        key = out_row.get(rule["key_from"]) if "key_from" in rule else src_props.get(rule.get("from"))
+        if key is None:
+            return rule.get("default")
+        # YAML int-keyed tables load as int keys; coerce the lookup key to int
+        # when the table is int-keyed so a float/str code still resolves.
+        if table and all(isinstance(k, int) for k in table):
+            try:
+                key = int(key)
+            except (TypeError, ValueError):
+                return rule.get("default")
+        if key in table:
+            return table[key]
+        if "default_template" in rule:
+            return str(rule["default_template"]).format(key=key)
+        return rule.get("default")
+
+    present = rule.get("from") in src_props
+    raw = src_props.get(rule.get("from")) if present else rule.get("default")
+
+    if kind == "passthrough":
+        return raw
+    if kind == "str":
+        return str(raw)
+    if kind == "epoch_ms_iso":
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            try:
+                return _dt.datetime.fromtimestamp(raw / 1000.0, tz=_dt.timezone.utc).date().isoformat()
+            except (OverflowError, OSError, ValueError):
+                return rule.get("default", "")
+        return rule.get("default", "")
+    if kind in ("int", "float"):
+        if raw is None:
+            if on_error == "skip_feature":
+                raise _SkipFeature
+            return None
+        try:
+            f = _num(raw)
+        except (TypeError, ValueError):
+            if on_error == "skip_feature":
+                raise _SkipFeature
+            return None
+        null_below = rule.get("null_below")
+        if null_below is not None and f <= null_below:
+            return None
+        if kind == "int":
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                if on_error == "skip_feature":
+                    raise _SkipFeature
+                return None
+        return f
+    return raw
+
+
+def apply_column_map(features: list[dict[str, Any]], spec: SourceSpec) -> list[dict[str, Any]]:
+    """Project each feature's props to the declared ``ingest.column_map`` columns."""
+    ingest = spec.ingest or {}
+    cmap = ingest.get("column_map")
+    if not cmap:
+        return features
+    ci = bool(ingest.get("column_map_ci"))
+    out: list[dict[str, Any]] = []
+    for feat in features:
+        if not isinstance(feat, dict):
+            continue
+        raw_props = dict(feat.get("properties") or {})
+        src = {str(k).lower(): v for k, v in raw_props.items()} if ci else raw_props
+        row: dict[str, Any] = {}
+        try:
+            for out_col, rule in cmap.items():
+                r = dict(rule)
+                if ci and "from" in r:
+                    r["from"] = str(r["from"]).lower()
+                row[str(out_col)] = _resolve_column(r, src, row)
+        except _SkipFeature:
+            continue
+        out.append({"type": "Feature", "geometry": feat.get("geometry"), "properties": row})
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -103,6 +253,9 @@ def apply_ingest_transforms(
     """Apply declarative ``geometry_filter`` / ``json_coerce_nested`` /
     ``derived_columns`` to raw features (no-op when none are declared)."""
     ingest = spec.ingest or {}
+    # Column-map projection (rename/normalize) runs FIRST so geometry_filter /
+    # json_coerce / derived_columns see the normalized output props.
+    features = apply_column_map(features, spec)
     gf = ingest.get("geometry_filter")
     json_coerce = bool(ingest.get("json_coerce_nested"))
     derived = ingest.get("derived_columns") or {}
@@ -133,8 +286,14 @@ def _out_columns(spec: SourceSpec, features: list[dict[str, Any]]) -> list[str]:
     still carries them (matching the hifld twin's ``[facility_type,
     facility_label]`` empty schema).
     """
-    declared = (spec.ingest or {}).get("properties")
-    if declared:
+    ingest = spec.ingest or {}
+    cmap = ingest.get("column_map")
+    declared = ingest.get("properties")
+    if cmap:
+        # column_map is the authoritative projected schema (honest-empty header
+        # still carries every mapped column, matching the twins' empty FGB).
+        cols = [str(c) for c in cmap]
+    elif declared:
         cols = [str(c) for c in declared]
     else:
         cols = []
@@ -215,37 +374,75 @@ def features_to_fgb_bytes(
 # --------------------------------------------------------------------------- #
 
 
+def resolve_endpoints(spec: SourceSpec, params: dict[str, Any]) -> list[Any]:
+    """Ordered endpoint chain for the fetch: the SELECTED primary + fallbacks.
+
+    ``ingest.endpoint_select`` chooses the primary by a param's presence (drought
+    current layer /3 when ``date`` absent, archive layer /2 when present).
+    Absent -> the ``data`` endpoint (else the first). ``spec.fallback`` names
+    ordered sibling endpoints tried on the primary's upstream failure (nhd HR ->
+    medium-res).
+    """
+    endpoints = spec.endpoints
+    ingest = spec.ingest or {}
+    sel = ingest.get("endpoint_select")
+    if isinstance(sel, dict):
+        pname = sel.get("param")
+        chosen = sel.get("present") if params.get(pname) is not None else sel.get("absent")
+        primary = endpoints.get(chosen)
+    else:
+        primary = endpoints.get("data")
+    if primary is None:
+        primary = next(iter(endpoints.values()))
+    chain = [primary]
+    for fb in spec.fallback:
+        ep = endpoints.get(fb)
+        if ep is not None and ep is not primary:
+            chain.append(ep)
+    return chain
+
+
 def build_query_params(
     spec: SourceSpec,
-    bbox: tuple[float, float, float, float],
+    bbox: tuple[float, float, float, float] | None,
     *,
     result_offset: int = 0,
     where: str = "1=1",
+    endpoint: Any | None = None,
 ) -> tuple[str, dict[str, str]]:
     """Build an ArcGIS FeatureServer ``/query`` URL + params for one page.
 
     Reads ``ingest.query_template`` (page_size, out_fields, order_by) with the
-    hifld defaults. Returns ``(url, params)``.
+    hifld defaults. ``endpoint`` overrides the ``data`` endpoint (fallback /
+    select chain). ``bbox=None`` omits the geometry envelope (the global-query
+    sweep, supports_global_query sources: nifc). Returns ``(url, params)``.
     """
     ingest = spec.ingest or {}
     qt = ingest.get("query_template", {})
-    endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
+    if endpoint is None:
+        endpoint = spec.endpoints.get("data") or next(iter(spec.endpoints.values()))
     url = endpoint.url or endpoint.url_template or ""
-    min_lon, min_lat, max_lon, max_lat = bbox
     page_size = int(ingest.get("pagination", {}).get("page_size", 2000))
     params: dict[str, str] = {
         "where": where,
-        "geometry": f"{min_lon},{min_lat},{max_lon},{max_lat}",
-        "geometryType": "esriGeometryEnvelope",
-        "inSR": "4326",
-        "spatialRel": "esriSpatialRelIntersects",
         "outFields": str(qt.get("out_fields", "*")),
         "outSR": "4326",
         "f": str(qt.get("f", "geojson")),
         "resultOffset": str(result_offset),
         "resultRecordCount": str(page_size),
-        "orderByFields": str(qt.get("order_by", "OBJECTID ASC")),
     }
+    # orderByFields only when the spec pins one: some hosted services (CDC onemap)
+    # reject an orderByFields they do not support, so it is opt-in (the twins that
+    # need stable paging set it; those that omit it, like the CDC SVI twin, do not).
+    order_by = qt.get("order_by")
+    if order_by:
+        params["orderByFields"] = str(order_by)
+    if bbox is not None:
+        min_lon, min_lat, max_lon, max_lat = bbox
+        params["geometry"] = f"{min_lon},{min_lat},{max_lon},{max_lat}"
+        params["geometryType"] = "esriGeometryEnvelope"
+        params["inSR"] = "4326"
+        params["spatialRel"] = "esriSpatialRelIntersects"
     # merge static endpoint query
     for k, v in (endpoint.query or {}).items():
         params[str(k)] = str(v)
@@ -280,18 +477,19 @@ def _fetch_one_page(spec: SourceSpec, url: str, params: dict[str, str]) -> list[
     return body.get("features", []) or []
 
 
-def fetch_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
-    """Page through the FeatureServer query, accumulating up to ``max_features``."""
-    bbox = params["bbox"]
+def _fetch_from_endpoint(spec: SourceSpec, endpoint: Any, params: dict[str, Any]) -> list[dict[str, Any]]:
+    """Page through ONE endpoint's FeatureServer query up to ``max_features``."""
+    bbox = params.get("bbox")   # None -> global-query sweep (supports_global_query)
     max_features = spec.gates.max_features or 30000
-    ingest = spec.ingest or {}
-    page_size = int(ingest.get("pagination", {}).get("page_size", 2000))
-    where = params.get("where", "1=1")
+    page_size = int((spec.ingest or {}).get("pagination", {}).get("page_size", 2000))
+    where = build_where(spec, params)
 
     accumulated: list[dict[str, Any]] = []
     offset = 0
     while True:
-        url, qparams = build_query_params(spec, bbox, result_offset=offset, where=where)
+        url, qparams = build_query_params(
+            spec, bbox, result_offset=offset, where=where, endpoint=endpoint
+        )
         page = _fetch_one_page(spec, url, qparams)
         accumulated.extend(page)
         if len(page) < page_size:
@@ -301,6 +499,35 @@ def fetch_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, A
             break
         offset += page_size
     return accumulated
+
+
+def fetch_features(spec: SourceSpec, params: dict[str, Any]) -> list[dict[str, Any]]:
+    """Fetch features across the resolved endpoint chain (primary -> fallback).
+
+    The primary is the selected/`data` endpoint; on an upstream failure each
+    ordered ``spec.fallback`` sibling is tried before the error is surfaced
+    (the data-source fallback norm -- nhd HR -> medium-res). A single endpoint
+    (the common case) is one call with no fallback.
+    """
+    chain = resolve_endpoints(spec, params)
+    last_exc: Exception | None = None
+    for i, endpoint in enumerate(chain):
+        try:
+            return _fetch_from_endpoint(spec, endpoint, params)
+        except Exception as exc:  # noqa: BLE001 -- try the next endpoint in the chain
+            last_exc = exc
+            if i < len(chain) - 1:
+                logger.warning(
+                    "router.vector_fgb: endpoint %d/%d failed (%s); trying fallback",
+                    i + 1, len(chain), exc,
+                )
+    assert last_exc is not None
+    if len(chain) > 1:
+        raise router_upstream_error(
+            spec.error_code_prefix,
+            f"all {len(chain)} endpoints failed; last error: {last_exc}",
+        )
+    raise last_exc
 
 
 def execute(spec: SourceSpec, params: dict[str, Any]) -> bytes:

@@ -6,45 +6,22 @@ behavior is the contract; divergences are recorded, never fudged.
 
 | source | verdict | checks | key divergence |
 |---|---|---|---|
-| fetch_gridmet | PASS | 22/23 | TWIN DEFECT (flag NATE): twin rioxarray writer drops declared nodata=nan -> None; router correctly writes nodata=nan. Router must NOT copy the twin bug; byte-parity needs a twin fix (rio.write_nodata). |
-| fetch_hifld_critical_infrastructure | PASS | 16/16 | - |
-| fetch_noaa_coops_tides | PASS | 19/19 | - |
-| fetch_esri_landcover_10m | PASS | 14/14 | - |
-| fetch_census_acs | PASS | 31/31 | - |
+| fetch_nifc_fire_perimeters | PASS | 16/16 | - |
+| fetch_hifld_transmission_lines | PASS | 16/16 | - |
+| fetch_mtbs_burn_severity | PASS | 16/16 | - |
+| fetch_cdc_svi | PASS | 16/16 | - |
+| fetch_nhd_waterbodies | PASS | 17/17 | - |
+| fetch_us_drought_monitor | PASS | 17/17 | - |
 
 ## Per-check detail
 
-### fetch_gridmet -- PASS
-- [ok] values.band_count
-- [ok] values.dtype
-- [ok] values.crs
-- [XX] values.nodata: twin=None router='nan' -- TWIN DEFECT (flag NATE): twin rioxarray writer drops declared nodata=nan -> None; router correctly writes nodata=nan. Router must NOT copy the twin bug; byte-parity needs a twin fix (rio.write_nodata).
-- [ok] values.min
-- [ok] values.max
-- [ok] values.mean
-- [ok] values.bounds
-- [ok] layer.type
-- [ok] layer.style_preset
-- [ok] layer.role
-- [ok] layer.units
-- [ok] layer.bbox_present
-- [ok] caveats.reproduced -- spec carries CONUS-gate + typed-empty honesty
-- [ok] error.upstream
-- [ok] error.bad_bbox
-- [ok] error.bad_enum
-- [ok] error.date_order
-- [ok] error.date_range
-- [ok] error.date_before_coverage
-- [ok] error.date_future
-- [ok] gate.conus
-- [ok] error.empty
-
-### fetch_hifld_critical_infrastructure -- PASS
+### fetch_nifc_fire_perimeters -- PASS
+- [ok] schema.docstring_verbatim -- spec.docstring == inspect.getdoc(twin)
 - [ok] values.n
 - [ok] values.geom
 - [ok] values.crs
-- [ok] values.value_spotcheck
 - [ok] schema.columns
+- [ok] values.value_spotcheck
 - [ok] layer.type
 - [ok] layer.style_preset
 - [ok] layer.role
@@ -52,80 +29,101 @@ behavior is the contract; divergences are recorded, never fudged.
 - [ok] layer.bbox_present
 - [ok] caveats.reproduced -- honest-empty FGB caveat present
 - [ok] error.upstream
+- [ok] error.empty -- honest header-only FGB; no fabricated error
 - [ok] error.bad_bbox
 - [ok] error.bad_enum
-- [ok] error.empty -- honest header-only FGB (US-only, empty bbox); no fabricated error
-- [ok] gate.max_features_cap -- soft paging cap (not an error frame); both truncate at the same value
 
-### fetch_noaa_coops_tides -- PASS
+### fetch_hifld_transmission_lines -- PASS
+- [ok] schema.docstring_verbatim -- spec.docstring == inspect.getdoc(twin)
 - [ok] values.n
 - [ok] values.geom
 - [ok] values.crs
 - [ok] schema.columns
 - [ok] values.value_spotcheck
-- [ok] schema.time_format
 - [ok] layer.type
 - [ok] layer.style_preset
 - [ok] layer.role
 - [ok] layer.units
 - [ok] layer.bbox_present
-- [ok] caveats.reproduced -- typed-empty + one-bad-station honesty present
+- [ok] caveats.reproduced -- honest-empty FGB caveat present
 - [ok] error.upstream
-- [ok] error.empty
+- [ok] error.empty -- honest header-only FGB; no fabricated error
 - [ok] error.bad_bbox
-- [ok] error.bad_enum
-- [ok] error.date_order
-- [ok] error.date_range
-- [ok] gate.max_stations_cap -- soft station cap (not an error frame); both truncate at the same value
+- [ok] error.bad_min_voltage
 
-### fetch_esri_landcover_10m -- PASS
-- [ok] values.band_count
-- [ok] values.dtype
+### fetch_mtbs_burn_severity -- PASS
+- [ok] schema.docstring_verbatim -- spec.docstring == inspect.getdoc(twin)
+- [ok] values.n
+- [ok] values.geom
 - [ok] values.crs
-- [ok] layer.style_preset
-- [ok] layer.role
-- [ok] layer.units
-- [ok] values.palette
-- [ok] caveats.reproduced -- honest no-coverage caveat present
-- [ok] error.upstream
-- [ok] error.year_low
-- [ok] error.year_high
-- [ok] error.bad_bbox
-- [ok] gate.max_bbox
-- [ok] error.empty
-
-### fetch_census_acs -- PASS
-- [ok] values.median_income.n
-- [ok] values.median_income.geom
-- [ok] values.median_income.crs
 - [ok] schema.columns
-- [ok] values.median_income.value_spotcheck -- expected 65000.0
-- [ok] values.median_income.null_floor
+- [ok] values.value_spotcheck
 - [ok] layer.type
 - [ok] layer.style_preset
 - [ok] layer.role
 - [ok] layer.units
 - [ok] layer.bbox_present
-- [ok] values.poverty_rate.n
-- [ok] values.poverty_rate.geom
-- [ok] values.poverty_rate.crs
-- [ok] schema.columns
-- [ok] values.poverty_rate.value_spotcheck -- expected 25.0
-- [ok] values.poverty_rate.null_floor
-- [ok] layer.units.poverty_rate -- per-variable LayerURI.units=percent (full fidelity)
-- [ok] values.B19013_001E.n
-- [ok] values.B19013_001E.geom
-- [ok] values.B19013_001E.crs
-- [ok] schema.columns
-- [ok] values.B19013_001E.value_spotcheck -- expected 65000.0
-- [ok] values.B19013_001E.null_floor
-- [ok] layer.units.raw_code -- raw-code passthrough LayerURI.units=count (full fidelity)
-- [ok] caveats.reproduced -- null-never-fabricated caveat present
+- [ok] caveats.reproduced -- honest-empty FGB caveat present
 - [ok] error.upstream
+- [ok] error.empty -- honest header-only FGB; no fabricated error
 - [ok] error.bad_bbox
-- [ok] error.bad_enum
-- [ok] error.empty -- honest header-only FGB (US-only / empty bbox); no fabricated error
-- [ok] gate.max_features_cap -- soft paging cap (not an error frame); both truncate at the same value
+- [ok] error.bad_year_range
+
+### fetch_cdc_svi -- PASS
+- [ok] schema.docstring_verbatim -- spec.docstring == inspect.getdoc(twin)
+- [ok] values.n
+- [ok] values.geom
+- [ok] values.crs
+- [ok] schema.columns
+- [ok] values.value_spotcheck
+- [ok] layer.type
+- [ok] layer.style_preset
+- [ok] layer.role
+- [ok] layer.units
+- [ok] layer.bbox_present
+- [ok] caveats.reproduced -- honest-empty FGB caveat present
+- [ok] error.upstream
+- [ok] error.empty -- honest header-only FGB; no fabricated error
+- [ok] error.bad_bbox
+- [ok] values.sentinel_null -- -999 sentinel -> null in both (never fabricated)
+
+### fetch_nhd_waterbodies -- PASS
+- [ok] schema.docstring_verbatim -- spec.docstring == inspect.getdoc(twin)
+- [ok] values.n
+- [ok] values.geom
+- [ok] values.crs
+- [ok] schema.columns
+- [ok] values.value_spotcheck
+- [ok] layer.type
+- [ok] layer.style_preset
+- [ok] layer.role
+- [ok] layer.units
+- [ok] layer.bbox_present
+- [ok] caveats.reproduced -- honest-empty FGB caveat present
+- [ok] error.upstream
+- [ok] error.empty -- honest header-only FGB; no fabricated error
+- [ok] error.bad_bbox
+- [ok] values.fallback_recovers -- primary 500 -> medium-res fallback recovers (UPPERCASE fields), both n=1
+- [ok] schema.fallback_columns -- case-insensitive column_map matches UPPERCASE fallback fields
+
+### fetch_us_drought_monitor -- PASS
+- [ok] schema.docstring_verbatim -- spec.docstring == inspect.getdoc(twin)
+- [ok] values.n
+- [ok] values.geom
+- [ok] values.crs
+- [ok] schema.columns
+- [ok] values.value_spotcheck
+- [ok] layer.type
+- [ok] layer.style_preset
+- [ok] layer.role
+- [ok] layer.units
+- [ok] layer.bbox_present
+- [ok] caveats.reproduced -- honest-empty FGB caveat present
+- [ok] error.upstream
+- [ok] error.empty -- honest header-only FGB; no fabricated error
+- [ok] error.bad_bbox
+- [ok] error.bad_date
+- [ok] gate.endpoint_select_archive -- date present -> archive layer /2 selected (endpoint_select)
 
 ## Findings: 5/5 parity across the FULL edge matrix (round-2 gaps CLOSED)
 
@@ -180,17 +178,9 @@ scored honestly as ok=False but non-gating because the ROOT CAUSE is the twin
 writer (needs rio.write_nodata()); the router must not propagate the bug. Byte-
 identical nodata parity requires a twin fix, which only NATE lands.
 
-NATE DECISION (2026-07-29, phase-2 promotion): router-correct nodata=nan is ACCEPTED
-as the go-forward; the twin's dropped-nodata defect DIES WITH THE TWIN (deleted in
-the pilot promotion) -- no twin fix is landed, the promoted fetch_gridmet writes the
-declared nodata=nan correctly and this divergence is closed by the twin's removal.
-
-Documented + CLOSED (full fidelity, NATE 2026-07-29): LayerURI.units was a router
-single-string field while census units are per-variable; the JOIN spec now resolves
-LayerURI.units per-variable (usd / years / percent / count-for-raw-codes), matching
-the twin, so both the per-FEATURE (FGB) and the per-LAYER units vary correctly. Raw
-ACS estimate-code passthrough (e.g. B19013_001E, units=count) restored in the JOIN
-transform. Census re-graded 31/31 PASS incl. a raw-code request.
+Documented (not a defect): LayerURI.units is a router single-string field while
+gridmet/census units are per-variable; the per-FEATURE units (census FGB) vary
+correctly via the JOIN. A general fix needs a normalize.units_by_param hook.
 
 Fold-arm drift fix (out of the replication lens, from the regression lens): server
 ._default_declarable_registry applied the pool substitution AFTER the tier=template

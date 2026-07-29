@@ -65,10 +65,13 @@ def _annotation_for(ptype: str) -> Any:
     """
     if ptype == "bbox":
         return list[float]
+    if ptype == "int_range":
+        return list[int]
     if ptype == "int":
         return int
     if ptype == "float":
         return float
+    # iso_date / enum / str / date_compact -> str.
     return str
 
 
