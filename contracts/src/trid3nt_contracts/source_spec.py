@@ -74,8 +74,12 @@ AuthMode = Literal["none", "api_key_env", "cds", "vault", "token"]
 #: ``int_range`` = a 2-element ``[start, end]`` int list (mtbs year_range);
 #: ``date_compact`` = ``YYYY-MM-DD`` / ``YYYYMMDD`` normalized to ``YYYYMMDD``
 #: (us_drought_monitor date). Both are phase-2 wave-2 ArcGIS-family additions.
+#: ``point`` = a 2-element ``[lon, lat]`` float list (nldi seed_point); the
+#: router coerces + finite-checks it and leaves the CONUS / mutual-exclusion
+#: gate to the delegating executor (phase-2 wave-3, ADR 0040).
 ParamType = Literal[
-    "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact"
+    "bbox", "iso_date", "enum", "int", "float", "str", "int_range", "date_compact",
+    "point",
 ]
 
 #: Payload-estimate models (contract sec 1.1 ``payload_estimate.model``).
@@ -142,6 +146,19 @@ class ParamSpec(GraceModel):
     #: use the spec-level ``input_error_suffix``; esri splits per-param
     #: (bbox -> BBOX_INVALID, year -> YEAR_INVALID). Default (None) = spec-level.
     error_suffix: str | None = None
+    #: Force this None-default param OPTIONAL in the promoted inputSchema
+    #: (phase-2 wave-3, ADR 0040). The adapter marks a None-default NON-Optional
+    #: annotation as required-in-schema (the wave-2 quirk). A twin that annotated
+    #: the param ``T | None = None`` is NOT required; setting ``schema_optional:
+    #: true`` reproduces that (wqp bbox, nldi seed_point/comid). Default False
+    #: preserves the wave-2 required behavior for every prior spec.
+    schema_optional: bool = False
+    #: str-param alias table (phase-2 wave-3, ADR 0040). When set, a str value is
+    #: lower-cased + stripped and mapped through this table; an unmapped value
+    #: passes through verbatim (stripped) -- exactly the wqp
+    #: ``_resolve_characteristic`` alias-or-passthrough contract. Default (None) =
+    #: no aliasing (strict no-op for every prior spec).
+    aliases: dict[str, str] | None = None
 
 
 class GateSpec(GraceModel):
@@ -161,6 +178,11 @@ class NormalizeSpec(GraceModel):
     datum: str | None = None
     quantity: str | None = None
     orientation: str | None = None           # raster only (gridmet no-sortby lesson)
+    #: Emit ``LayerURI.units`` from a request param's resolved value rather than
+    #: the static ``units`` (phase-2 wave-3, ADR 0040). The wqp twin stamps
+    #: ``units=<resolved characteristic>``; setting ``units_from_param:
+    #: characteristic`` reproduces it. Default (None) = the static ``units`` stamp.
+    units_from_param: str | None = None
 
 
 class OutputSpec(GraceModel):

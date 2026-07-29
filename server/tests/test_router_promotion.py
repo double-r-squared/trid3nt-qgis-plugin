@@ -89,6 +89,23 @@ PROMOTED = {
         "properties": ["bbox", "date"],
         "required": ["bbox", "date"],
     },
+    # --- phase-2 wave-3: USGS water-data family (dataretrieval-delegated, ADR 0040) ---
+    "fetch_usgs_water_quality": {
+        "source_class": "usgs_water_quality",
+        # bbox + characteristic both carry defaults in the twin (bbox=None,
+        # characteristic="Nitrate") -> both optional-in-schema (required=[]);
+        # the delegating executor's pre_validate raises WQP_INPUT_ERROR when
+        # bbox is missing.
+        "properties": ["bbox", "characteristic"],
+        "required": [],
+    },
+    "fetch_nhdplus_nldi_navigate": {
+        "source_class": "nhdplus_nldi",
+        # all four params carry defaults in the twin -> required=[]; the executor
+        # enforces the seed_point/comid mutual-exclusion + CONUS + comid gate.
+        "properties": ["comid", "direction", "distance_km", "seed_point"],
+        "required": [],
+    },
 }
 
 _SPECS = compose_specs_from_tree()
@@ -149,9 +166,72 @@ def test_pilot_degenerate_bbox_raises_twin_typed_error(name: str) -> None:
     the bbox param / spec-level input suffix)."""
     entry = TOOL_REGISTRY[name]
     spec = _SPECS[name]
+    # NLDI has no bbox param (seed_point/comid selector); its degenerate-bbox case
+    # is meaningless -- its selector edges are covered by the dedicated tests below.
+    if not any(p.type == "bbox" for p in spec.params.values()):
+        pytest.skip(f"{name} has no bbox param")
     expected_code = f"{spec.error_code_prefix}_{bbox_error_suffix(spec)}"
     # min_lon == max_lon -> degenerate (rejected by _validate_bbox before network).
     with pytest.raises(RouterInputError) as excinfo:
         entry.fn(bbox=(-100.0, 40.0, -100.0, 41.0))
     assert excinfo.value.error_code == expected_code
     assert excinfo.value.retryable is False
+
+
+# ---------------------------------------------------------------------------
+# Phase-2 wave-3: USGS water-data family input-validation (migrated from the
+# deleted twin tests test_fetch_usgs_water_quality + the NLDI slice of
+# test_pfdf_unlock_statsgo_nldi_3dep). All raise pre-network via the router's
+# validate_params + the delegating executor's pre_validate (offline).
+# ---------------------------------------------------------------------------
+
+
+def _route(name: str, **params):
+    from trid3nt_server.agent.tools.fetchers._router import router as _r
+    return _r.route(_SPECS[name], params)
+
+
+@pytest.mark.parametrize(
+    "params, code",
+    [
+        (dict(characteristic="Nitrate"), "WQP_INPUT_ERROR"),                       # missing bbox
+        (dict(bbox=(-100.0, 40.0, -100.0, 41.0), characteristic="Nitrate"), "WQP_INPUT_ERROR"),  # degenerate
+        (dict(bbox=(-120.0, 30.0, -100.0, 45.0), characteristic="Nitrate"), "WQP_INPUT_ERROR"),  # > 100 deg^2
+        (dict(bbox=(-93.3, 41.9, -93.1, 42.1), characteristic=""), "WQP_INPUT_ERROR"),           # empty characteristic
+    ],
+)
+def test_wqp_input_validation(params: dict, code: str) -> None:
+    with pytest.raises(RouterInputError) as exc:
+        _route("fetch_usgs_water_quality", **params)
+    assert exc.value.error_code == code
+    assert exc.value.retryable is False
+
+
+def test_wqp_characteristic_alias_resolves() -> None:
+    """The friendly alias resolves to the canonical WQP name (LayerURI.units)."""
+    spec = _SPECS["fetch_usgs_water_quality"]
+    from trid3nt_server.agent.tools.fetchers._router.router import validate_params
+    p = validate_params(spec, dict(bbox=[-93.3, 41.9, -93.1, 42.1], characteristic="do"))
+    assert p["characteristic"] == "Dissolved oxygen (DO)"  # alias-mapped
+    p2 = validate_params(spec, dict(bbox=[-93.3, 41.9, -93.1, 42.1], characteristic="Arsenic"))
+    assert p2["characteristic"] == "Arsenic"  # canonical passes through verbatim
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        dict(),                                              # neither seed nor comid
+        dict(seed_point=(-81.85, 26.55), comid=15334434),    # both (mutual exclusion)
+        dict(comid=0),                                       # comid <= 0
+        dict(comid=-1),                                      # comid < 0
+        dict(seed_point=(15.0, 35.0)),                       # Mediterranean -> outside CONUS
+        dict(comid=123, direction="XX"),                     # unknown direction
+        dict(comid=123, distance_km=-1.0),                   # distance below 0
+        dict(comid=123, distance_km=99999.0),                # distance above 1000
+    ],
+)
+def test_nldi_input_validation(params: dict) -> None:
+    with pytest.raises(RouterInputError) as exc:
+        _route("fetch_nhdplus_nldi_navigate", **params)
+    assert exc.value.error_code == "NHDPLUS_NLDI_INPUT_INVALID"
+    assert exc.value.retryable is False

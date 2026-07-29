@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import logging
+import math as _math
 from typing import Any, Callable
 
 from trid3nt_contracts.execution import LayerURI
@@ -218,6 +219,24 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
                 raise router_input_error(sc, f"{pname} start {a} must be <= end {b}", sfx)
             out[pname] = [a, b]
 
+        elif pspec.type == "point":
+            # A 2-element [lon, lat] float list (nldi seed_point). Coerce +
+            # finite/range check; the CONUS + seed/comid mutual-exclusion gate is
+            # the delegating executor's (it stamps the twin's exact error code).
+            if isinstance(value, bool) or not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise router_input_error(sc, f"{pname} must be a 2-element [lon, lat] list; got {value!r}", sfx)
+            try:
+                lon, lat = float(value[0]), float(value[1])
+            except (TypeError, ValueError):
+                raise router_input_error(sc, f"{pname} elements must be numbers; got {value!r}", sfx)
+            if not (_math.isfinite(lon) and _math.isfinite(lat)):
+                raise router_input_error(sc, f"{pname} has non-finite values: {value!r}", sfx)
+            if not (-180.0 <= lon <= 180.0):
+                raise router_input_error(sc, f"{pname} lon out of [-180,180]: {lon!r}", sfx)
+            if not (-90.0 <= lat <= 90.0):
+                raise router_input_error(sc, f"{pname} lat out of [-90,90]: {lat!r}", sfx)
+            out[pname] = [lon, lat]
+
         elif pspec.type == "date_compact":
             # Accept 'YYYY-MM-DD' or 'YYYYMMDD'; normalize to the 8-digit compact
             # form and validate it is a real calendar date (us_drought_monitor).
@@ -234,7 +253,13 @@ def validate_params(spec: SourceSpec, raw: dict[str, Any]) -> dict[str, Any]:
             out[pname] = compact
 
         else:  # str
-            out[pname] = str(value)
+            s = str(value)
+            # Alias-or-passthrough (wqp characteristic): lower/strip -> table, else
+            # verbatim (stripped). No-op when the spec declares no aliases.
+            if pspec.aliases:
+                out[pname] = pspec.aliases.get(s.strip().lower(), s.strip())
+            else:
+                out[pname] = s
 
     # Date-range ceiling: any iso_date param carrying max_range_days pairs with
     # the first declared iso_date as the range start.
@@ -345,6 +370,13 @@ def _apply_gates(spec: SourceSpec, params: dict[str, Any]) -> None:
 
 def select_executor(spec: SourceSpec) -> Callable[[SourceSpec, dict[str, Any]], bytes]:
     """Return the ``(spec, params) -> bytes`` closure for the spec's shape/transform."""
+    # A spec-declared library delegation wins over the shape dispatch (ADR 0040:
+    # the USGS water-data family delegates to the official `dataretrieval` client
+    # instead of raw HTTP + bespoke parsing). No-op for every prior spec (none
+    # declare ingest.delegate).
+    if (spec.ingest or {}).get("delegate"):
+        from .executors import dataretrieval_delegate
+        return dataretrieval_delegate.execute
     if spec.join is not None:
         return join_transform.execute
     if spec.shape == "raster-cog":
@@ -388,6 +420,12 @@ def build_layer_uri(spec: SourceSpec, params: dict[str, Any], uri: str) -> Layer
     # normalize.units stamp. Resolution can only fail on an invalid variable,
     # which the executor already rejected before this point (guarded regardless).
     units = spec.normalize.units
+    # units_from_param (wqp): stamp LayerURI.units from a request param's resolved
+    # value (the characteristic). No-op when unset. Overrides the static stamp.
+    if spec.normalize.units_from_param:
+        pv = params.get(spec.normalize.units_from_param)
+        if pv is not None:
+            units = str(pv)
     if spec.join is not None:
         try:
             _, var_spec = join_transform.select_variable(spec, params)
@@ -412,6 +450,13 @@ def route(spec: SourceSpec, raw_params: dict[str, Any]) -> LayerURI:
     """The engine: validate -> gate -> dispatch -> cache -> emit LayerURI."""
     metadata = synthesize_metadata(spec)
     params = validate_params(spec, raw_params)
+    # A delegated spec's source-specific INPUT validation (wqp bbox-required, nldi
+    # seed/comid mutual-exclusion + CONUS + comid gate) runs BEFORE read_through so
+    # a bad request raises pre-cache / pre-network -- indistinguishable from the
+    # twin (which validates in its body before read_through). No-op otherwise.
+    if (spec.ingest or {}).get("delegate"):
+        from .executors import dataretrieval_delegate
+        dataretrieval_delegate.pre_validate(spec, params)
     executor = select_executor(spec)
 
     result = read_through(

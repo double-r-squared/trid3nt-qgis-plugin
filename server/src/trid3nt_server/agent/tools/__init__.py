@@ -244,14 +244,18 @@ from .fetchers.hydrology.fetch_high_water_marks import fetch_high_water_marks  #
 from .fetchers.hydrology.fetch_jrc_global_surface_water import fetch_jrc_global_surface_water  # noqa: E402,F401
 # fetch_nhd_waterbodies: data-router fold phase-2 wave-2 -- twin DELETED, now
 # spec-driven (source.yaml + router), registered by _register_router_specs() below.
-from .fetchers.hydrology.fetch_nhdplus_nldi_navigate import fetch_nhdplus_nldi_navigate  # noqa: E402,F401
+# fetch_nhdplus_nldi_navigate: data-router fold phase-2 wave-3 (ADR 0040) -- twin
+# DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
+# registered by _register_router_specs() below.
 from .fetchers.hydrology.fetch_noaa_nwm_streamflow import fetch_noaa_nwm_streamflow  # noqa: E402,F401
 from .fetchers.hydrology.fetch_nwi_wetlands import fetch_nwi_wetlands  # noqa: E402,F401
 from .fetchers.hydrology.fetch_nws_river_forecast import fetch_nws_river_forecast  # noqa: E402,F401
 from .fetchers.hydrology.fetch_river_geometry import fetch_river_geometry  # noqa: E402,F401
 from .fetchers.hydrology.fetch_usgs_groundwater_levels import fetch_usgs_groundwater_levels  # noqa: E402,F401
 from .fetchers.hydrology.fetch_usgs_nwis_gauges import fetch_usgs_nwis_gauges  # noqa: E402,F401
-from .fetchers.hydrology.fetch_usgs_water_quality import fetch_usgs_water_quality  # noqa: E402,F401
+# fetch_usgs_water_quality: data-router fold phase-2 wave-3 (ADR 0040) -- twin
+# DELETED, now spec-driven (source.yaml + dataretrieval-delegating router),
+# registered by _register_router_specs() below.
 
 # -- fetchers/ocean --
 from .fetchers.ocean.fetch_gtsm_tide_surge import fetch_gtsm_tide_surge  # noqa: E402,F401

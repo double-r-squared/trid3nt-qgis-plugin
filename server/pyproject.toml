@@ -213,6 +213,13 @@ dependencies = [
     # numpy+scipy dependency (no native/compiled extensions), so it installs
     # cleanly on the offline box.
     "spotpy>=1.6,<2",
+    # Fetcher-fold phase-2 wave-3 (ADR 0040): the official USGS `dataretrieval`
+    # client backs the router's dataretrieval-delegating executor for the USGS
+    # water-data family (WQP water-quality + NLDI navigation), absorbing the
+    # NWIS -> Water Data OGC API migration churn instead of our hand-rolled
+    # RDB/GeoJSON parsers. Pinned exactly: the OGC-API surface + tabular schemas
+    # evolve, so a floating pin risks silent column/endpoint drift.
+    "dataretrieval==1.2.0",
     # Consumed verbatim from contracts/ in this repo (editable install).
     "trid3nt-contracts>=0.1,<0.2",
 ]

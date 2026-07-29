@@ -65,6 +65,8 @@ def _annotation_for(ptype: str) -> Any:
     """
     if ptype == "bbox":
         return list[float]
+    if ptype == "point":
+        return list[float]
     if ptype == "int_range":
         return list[int]
     if ptype == "int":
@@ -88,18 +90,27 @@ def promoted_signature(spec: SourceSpec) -> tuple[inspect.Signature, dict[str, A
     annotations: dict[str, Any] = {}
     for pname, pspec in spec.params.items():
         ann = _annotation_for(pspec.type)
-        annotations[pname] = ann
         if pspec.required and pspec.default is None:
+            annotations[pname] = ann
             required.append(
                 inspect.Parameter(pname, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=ann)
             )
         else:
+            # The adapter marks a None-default NON-Optional annotation as
+            # required-in-schema (the "None-default is required" quirk wave-2
+            # relies on: min_voltage_kv / year_range / date). A param that the
+            # twin author wrote ``T | None = None`` (Optional) is NOT required in
+            # the twin schema; ``schema_optional`` reproduces that by annotating
+            # ``X | None`` so the adapter keeps it OUT of required (wqp bbox, nldi
+            # seed_point / comid). Default preserves the wave-2 required quirk.
+            opt_ann = (ann | None) if (pspec.default is None and getattr(pspec, "schema_optional", False)) else ann
+            annotations[pname] = opt_ann
             optional.append(
                 inspect.Parameter(
                     pname,
                     inspect.Parameter.POSITIONAL_OR_KEYWORD,
                     default=pspec.default,
-                    annotation=ann,
+                    annotation=opt_ann,
                 )
             )
     params = required + optional + [

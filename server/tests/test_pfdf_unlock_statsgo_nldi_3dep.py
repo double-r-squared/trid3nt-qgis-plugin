@@ -2,9 +2,13 @@
 
 Covers:
 - ``fetch_statsgo_soils`` (USGS STATSGO via pfdf.data.usgs.statsgo)
-- ``fetch_nhdplus_nldi_navigate`` (USGS NLDI navigate over NHDPlus v2.1)
 - ``fetch_3dep_extra`` (USGS 3DEP non-default resolutions via
   pfdf.data.usgs.tnm.dem)
+
+``fetch_nhdplus_nldi_navigate`` was FOLDED to the spec-driven,
+dataretrieval-delegating router (data-router fold phase-2 wave-3, ADR 0040): its
+twin module is deleted, so its contract-level coverage (registered, typed errors,
+input validation) moved to ``test_router_promotion.py``.
 
 Coverage:
 - All three tools are registered in TOOL_REGISTRY with expected metadata.
@@ -32,12 +36,6 @@ from trid3nt_server.agent.tools.fetchers.terrain.fetch_3dep_extra.fetch_3dep_ext
     estimate_payload_mb as _est_3dep,
     fetch_3dep_extra,
 )
-from trid3nt_server.agent.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate.fetch_nhdplus_nldi_navigate import (
-    NHDPlusNLDIError,
-    NHDPlusNLDIInputError,
-    estimate_payload_mb as _est_nldi,
-    fetch_nhdplus_nldi_navigate,
-)
 from trid3nt_server.agent.tools.fetchers.soil.fetch_statsgo_soils.fetch_statsgo_soils import (
     STATSGOSoilsError,
     STATSGOSoilsInputError,
@@ -50,7 +48,6 @@ _LIVE = os.environ.get("TRID3NT_TEST_LIVE_PFDF_A11") == "1"
 
 # Fort Myers / Caloosahatchee — same demo bbox used across the suite.
 _FORT_MYERS_BBOX = (-82.0, 26.4, -81.7, 26.7)
-_FORT_MYERS_POINT = (-81.85, 26.55)
 
 
 # ---------------------------------------------------------------------------
@@ -65,13 +62,6 @@ _FORT_MYERS_POINT = (-81.85, 26.55)
             "fetch_statsgo_soils",
             "static-30d",
             "statsgo_soils",
-            False,
-            "estimate_payload_mb",
-        ),
-        (
-            "fetch_nhdplus_nldi_navigate",
-            "static-30d",
-            "nhdplus_nldi",
             False,
             "estimate_payload_mb",
         ),
@@ -115,8 +105,6 @@ def test_a11_tools_registered(
     [
         (STATSGOSoilsError, "STATSGO_SOILS_ERROR", True),
         (STATSGOSoilsInputError, "STATSGO_SOILS_INPUT_INVALID", False),
-        (NHDPlusNLDIError, "NHDPLUS_NLDI_ERROR", True),
-        (NHDPlusNLDIInputError, "NHDPLUS_NLDI_INPUT_INVALID", False),
         (ThreeDEPExtraError, "THREE_DEP_EXTRA_ERROR", True),
         (ThreeDEPExtraInputError, "THREE_DEP_EXTRA_INPUT_INVALID", False),
     ],
@@ -142,16 +130,6 @@ def test_estimate_payload_mb_statsgo_scales_with_bbox() -> None:
     assert 0.0 < small < big
     # None bbox returns a safe default.
     assert _est_statsgo(bbox=None) > 0.0
-
-
-def test_estimate_payload_mb_nldi_scales_with_distance_and_direction() -> None:
-    """fetch_nhdplus_nldi_navigate estimator: UT > DM for same distance."""
-    dm_50 = _est_nldi(direction="DM", distance_km=50.0)
-    ut_50 = _est_nldi(direction="UT", distance_km=50.0)
-    dm_200 = _est_nldi(direction="DM", distance_km=200.0)
-    assert dm_50 > 0
-    assert ut_50 > dm_50, "UT (tributaries) should estimate larger than DM"
-    assert dm_200 > dm_50, "longer distance should estimate larger"
 
 
 def test_estimate_payload_mb_3dep_scales_with_resolution() -> None:
@@ -205,61 +183,6 @@ def test_statsgo_absorbs_invented_kwargs() -> None:
             bbox=(0.0, 0.0, 0.0, 0.0),
             invented_kwarg="ignored",
             another_invented=42,
-        )
-
-
-# ---------------------------------------------------------------------------
-# Input validation — NLDI.
-# ---------------------------------------------------------------------------
-
-
-def test_nldi_requires_exactly_one_seed() -> None:
-    with pytest.raises(NHDPlusNLDIInputError):
-        fetch_nhdplus_nldi_navigate()
-    with pytest.raises(NHDPlusNLDIInputError):
-        fetch_nhdplus_nldi_navigate(
-            seed_point=_FORT_MYERS_POINT, comid=123456, direction="DM",
-        )
-
-
-def test_nldi_rejects_unknown_direction() -> None:
-    with pytest.raises(NHDPlusNLDIInputError):
-        fetch_nhdplus_nldi_navigate(
-            seed_point=_FORT_MYERS_POINT,
-            direction="XX",  # type: ignore[arg-type]
-        )
-
-
-def test_nldi_rejects_bad_distance() -> None:
-    with pytest.raises(NHDPlusNLDIInputError):
-        fetch_nhdplus_nldi_navigate(
-            seed_point=_FORT_MYERS_POINT, direction="DM", distance_km=-1.0,
-        )
-    with pytest.raises(NHDPlusNLDIInputError):
-        fetch_nhdplus_nldi_navigate(
-            seed_point=_FORT_MYERS_POINT, direction="DM", distance_km=99999.0,
-        )
-
-
-def test_nldi_rejects_seed_outside_conus() -> None:
-    with pytest.raises(NHDPlusNLDIInputError):
-        fetch_nhdplus_nldi_navigate(
-            seed_point=(15.0, 35.0),  # Mediterranean — not CONUS
-            direction="DM",
-        )
-
-
-def test_nldi_rejects_non_positive_comid() -> None:
-    with pytest.raises(NHDPlusNLDIInputError):
-        fetch_nhdplus_nldi_navigate(comid=0, direction="DM")
-    with pytest.raises(NHDPlusNLDIInputError):
-        fetch_nhdplus_nldi_navigate(comid=-1, direction="DM")
-
-
-def test_nldi_absorbs_invented_kwargs() -> None:
-    with pytest.raises(NHDPlusNLDIInputError):
-        fetch_nhdplus_nldi_navigate(
-            comid=0, direction="DM", made_up_kwarg="ignored",
         )
 
 
@@ -333,20 +256,6 @@ def test_live_statsgo_fetch_kffact_fort_myers() -> None:
 
 
 @pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
-def test_live_nldi_navigate_dm_from_caloosahatchee() -> None:
-    """Real NLDI navigate DM from Fort Myers point returns a FlatGeobuf URI."""
-    layer = fetch_nhdplus_nldi_navigate(
-        seed_point=_FORT_MYERS_POINT,
-        direction="DM",
-        distance_km=20.0,
-    )
-    assert layer.layer_type == "vector"
-    assert layer.uri.startswith("gs://")
-    assert layer.uri.endswith(".fgb")
-    assert "NLDI" in layer.name
-
-
-@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
 def test_live_3dep_extra_one_arc_second_fort_myers() -> None:
     """Real 3DEP 1-arc-second fetch over Fort Myers returns a COG URI."""
     layer = fetch_3dep_extra(
@@ -381,17 +290,3 @@ def test_live_statsgo_direct_pfdf_call() -> None:
     assert hasattr(raster, "save")
 
 
-@pytest.mark.skipif(not _LIVE, reason="set TRID3NT_TEST_LIVE_PFDF_A11=1 to run")
-def test_live_nldi_snap_and_navigate_direct() -> None:
-    """Direct NLDI HTTP smoke — confirms upstream is up."""
-    from trid3nt_server.agent.tools.fetchers.hydrology.fetch_nhdplus_nldi_navigate.fetch_nhdplus_nldi_navigate import (
-        _navigate_flowlines,
-        _snap_point_to_comid,
-    )
-
-    comid = _snap_point_to_comid(_FORT_MYERS_POINT)
-    assert isinstance(comid, int) and comid > 0
-    feats = _navigate_flowlines(comid, "DM", 20.0)
-    # At least one feature for a coastal-area seed (may be 0 at network
-    # terminus — Fort Myers's COMID typically has at least one DM reach).
-    assert isinstance(feats, list)
