@@ -1,0 +1,139 @@
+{
+  "schema_version": "1.0",
+  "status": "AWAITING_NATE_SIGNOFF",
+  "authority": [
+    "docs/specs/data-router-fold.md",
+    "docs/specs/fetcher-fold-audit.md",
+    "docs/specs/router-pilot-contract.md",
+    "experiments/fetcher_fold_routing/DESIGN.md"
+  ],
+  "note_do_not_run": "This file assembles the ROUTING-PARITY experiment inputs only. Per standing methodology (NATE-first, sign-off on inputs before any run), the experiment itself (baseline arm vs fold arm through retrieve_ranked_tools/retrieve_visible_tools, scored per DESIGN.md) MUST NOT be executed until NATE signs this file. status flips to NATE_SIGNED (or similar) at that point.",
+  "surfacing_design_note": "acceptable_baseline and acceptable_fold are IDENTICAL per pilot by design, not oversight. router-pilot-contract.md sec 3.2/3.3 pins the LEADING (and only currently-implemented) fold-arm mechanism as per-source virtual surfaces registered under an internal alias (fetch_X__spec, tier=template) which the env-gated pool substitution (registration.py:_relabel_virtual, verified in-tree) RELABELS to the twin's own name with tier=general when TRID3NT_FETCHER_FOLD_ARM is set -- so in BOTH arms the visible registry name a phrasing must hit is the twin name itself; only the underlying callable differs (hand-written fn vs router.route(spec, ...)). The consumption-pair alternate surface (search_data_catalog + fetch_from_catalog, contract sec 3.2 candidate B / open decision #3) is NOT implemented as a fold-arm toggle in the current tree (no code path surfaces pilots through it as an arm) and is therefore excluded from acceptable_fold here; flag to NATE if arm B should be added before sign-off.",
+  "validation": {
+    "method": "Every acceptable_baseline / acceptable_fold / control expected_tool name below was checked against the LIVE TOOL_REGISTRY (server/src/trid3nt_server/agent/tools, full surface import incl. workflows/solver/search, matching test_tool_retrieval.py's import set) in this session. All 5 pilot twin names and all 12 control expected names resolved True. The corresponding fetch_X__spec virtual aliases are NOT yet present in TOOL_REGISTRY at plain import time (register_specs_from_tree() is opt-in, called explicitly by the fold-arm harness/tests, not at server import) -- expected per _router/__init__.py; the routing-parity run script must call register_specs_from_tree() before flipping TRID3NT_FETCHER_FOLD_ARM=1 for the fold arm.",
+    "registry_size_at_check": 200
+  },
+  "pilots": [
+    {
+      "source": "fetch_gridmet",
+      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/climate/fetch_gridmet/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/climate/fetch_gridmet/corpus.yaml",
+      "acceptable_baseline": ["fetch_gridmet"],
+      "acceptable_fold": ["fetch_gridmet"],
+      "phrasings": [
+        {"text": "what is the fuel moisture index for this fire-prone area?", "kind": "corpus_verbatim"},
+        {"text": "give me fire-danger weather for the past week in this watershed", "kind": "corpus_verbatim"},
+        {"text": "I need daily temperature and humidity for drought analysis in the West", "kind": "corpus_verbatim"},
+        {"text": "fetch 100-hour fuel moisture for this historic fire date", "kind": "corpus_verbatim"},
+        {"text": "show me the dead fuel moisture raster for this California study area", "kind": "corpus_verbatim"},
+        {"text": "I need historical gridded wind speed for this fire weather analysis", "kind": "corpus_verbatim"},
+        {"text": "fetch energy release component for the western US fire season", "kind": "corpus_verbatim"},
+        {"text": "give me 1000-hour fuel moisture for the fire spread model", "kind": "corpus_verbatim"},
+        {"text": "can you pull the gridded reference evapotranspiration for this basin", "kind": "paraphrase"},
+        {"text": "what was the burning index like around here last month", "kind": "paraphrase"},
+        {"text": "fire weather data for this area", "kind": "vague"},
+        {"text": "climate grid here", "kind": "vague"}
+      ]
+    },
+    {
+      "source": "fetch_hifld_critical_infrastructure",
+      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hazard/fetch_hifld_critical_infrastructure/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/hazard/fetch_hifld_critical_infrastructure/corpus.yaml",
+      "acceptable_baseline": ["fetch_hifld_critical_infrastructure"],
+      "acceptable_fold": ["fetch_hifld_critical_infrastructure"],
+      "phrasings": [
+        {"text": "where are the hospitals near this city", "kind": "corpus_verbatim"},
+        {"text": "show me fire stations in this area", "kind": "corpus_verbatim"},
+        {"text": "find public schools inside the flood zone", "kind": "corpus_verbatim"},
+        {"text": "police stations critical infrastructure map", "kind": "corpus_verbatim"},
+        {"text": "what hospitals are in the surge footprint", "kind": "corpus_verbatim"},
+        {"text": "HIFLD critical infrastructure points by type", "kind": "corpus_verbatim"},
+        {"text": "power plants near my area of interest", "kind": "corpus_verbatim"},
+        {"text": "schools and fire stations for evacuation planning", "kind": "corpus_verbatim"},
+        {"text": "locate emergency medical facilities within this county", "kind": "paraphrase"},
+        {"text": "map out critical infrastructure assets for this region", "kind": "paraphrase"},
+        {"text": "infrastructure near here", "kind": "vague"},
+        {"text": "important facilities in this area", "kind": "vague"}
+      ]
+    },
+    {
+      "source": "fetch_noaa_coops_tides",
+      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/ocean/fetch_noaa_coops_tides/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/ocean/fetch_noaa_coops_tides/corpus.yaml",
+      "acceptable_baseline": ["fetch_noaa_coops_tides"],
+      "acceptable_fold": ["fetch_noaa_coops_tides"],
+      "phrasings": [
+        {"text": "show me tide gauge readings at Fort Myers for Hurricane Ian", "kind": "corpus_verbatim"},
+        {"text": "what were the water levels at Key West during the storm?", "kind": "corpus_verbatim"},
+        {"text": "I need hourly tide observations for SFINCS coastal boundary forcing", "kind": "corpus_verbatim"},
+        {"text": "fetch CO-OPS water level data for the Gulf Coast during this surge event", "kind": "corpus_verbatim"},
+        {"text": "give me observed tidal elevations at all stations near Tampa Bay", "kind": "corpus_verbatim"},
+        {"text": "I need storm surge water levels from NOAA gauges for this date range", "kind": "corpus_verbatim"},
+        {"text": "fetch tidal predictions for the Charleston, SC harbor", "kind": "corpus_verbatim"},
+        {"text": "pull the NOAA tide gauge record for this coastal stretch", "kind": "paraphrase"},
+        {"text": "what did the water level sensors read during the hurricane", "kind": "paraphrase"},
+        {"text": "tide data here", "kind": "vague"},
+        {"text": "coastal water levels for this spot", "kind": "vague"}
+      ]
+    },
+    {
+      "source": "fetch_esri_landcover_10m",
+      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/terrain/fetch_esri_landcover_10m/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/terrain/fetch_esri_landcover_10m/corpus.yaml",
+      "acceptable_baseline": ["fetch_esri_landcover_10m"],
+      "acceptable_fold": ["fetch_esri_landcover_10m"],
+      "phrasings": [
+        {"text": "land cover land use map for a location outside the US", "kind": "corpus_verbatim"},
+        {"text": "what land cover is here forest crops urban built area global", "kind": "corpus_verbatim"},
+        {"text": "10m Esri Impact Observatory annual land cover for Africa Asia South America", "kind": "corpus_verbatim"},
+        {"text": "global land use classification raster for a bbox by year", "kind": "corpus_verbatim"},
+        {"text": "show me trees vs crops vs built-up area for this region", "kind": "corpus_verbatim"},
+        {"text": "non-US land cover layer like NLCD but worldwide", "kind": "corpus_verbatim"},
+        {"text": "Sentinel-2 derived 9-class land cover for a country", "kind": "corpus_verbatim"},
+        {"text": "annual land cover change comparison between two years", "kind": "corpus_verbatim"},
+        {"text": "what kind of ground cover does this part of the world have", "kind": "paraphrase"},
+        {"text": "classify the land surface types for this international region", "kind": "paraphrase"},
+        {"text": "land cover here", "kind": "vague"},
+        {"text": "what's on the ground in this area", "kind": "vague"}
+      ]
+    },
+    {
+      "source": "fetch_census_acs",
+      "source_yaml": "server/src/trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_census_acs/source.yaml",
+      "twin_corpus_yaml": "server/src/trid3nt_server/agent/tools/fetchers/socioeconomic/fetch_census_acs/corpus.yaml",
+      "acceptable_baseline": ["fetch_census_acs"],
+      "acceptable_fold": ["fetch_census_acs"],
+      "phrasings": [
+        {"text": "median household income by census tract", "kind": "corpus_verbatim"},
+        {"text": "show poverty rate choropleth for this county", "kind": "corpus_verbatim"},
+        {"text": "demographics for environmental justice analysis", "kind": "corpus_verbatim"},
+        {"text": "median home value per tract", "kind": "corpus_verbatim"},
+        {"text": "percent of renter households by neighborhood", "kind": "corpus_verbatim"},
+        {"text": "households with no vehicle by census tract", "kind": "corpus_verbatim"},
+        {"text": "ACS census demographics for a bounding box", "kind": "corpus_verbatim"},
+        {"text": "median age population by tract", "kind": "corpus_verbatim"},
+        {"text": "how much do people typically earn in this part of town", "kind": "paraphrase"},
+        {"text": "what share of households in this county are below the poverty line", "kind": "paraphrase"},
+        {"text": "demographic data here", "kind": "vague"},
+        {"text": "socioeconomic info for this area", "kind": "vague"}
+      ]
+    }
+  ],
+  "control": {
+    "note": "12 canonical phrasings for UNTOUCHED tools (none of the 5 pilots), drawn verbatim from the two live canonical-query test fixtures: server/tests/test_search_tools.py::test_search_tools_routes_canonical_queries (the kickoff's 5 canonical queries) and server/tests/test_tool_retrieval.py::_RECALL_FIXTURE (the STEP-7 recall fixture). Per DESIGN.md sec 4, this set must be BYTE-IDENTICAL across baseline and fold arms in the run -- any drift is an instrumentation bug, not a result.",
+    "phrasings": [
+      {"text": "weather alerts", "acceptable": ["fetch_nws_alerts_conus"], "source_test": "test_search_tools.py"},
+      {"text": "show flood zones", "acceptable": ["fetch_fema_nfhl_zones"], "source_test": "test_search_tools.py"},
+      {"text": "national parks polygons", "acceptable": ["fetch_wdpa_protected_areas"], "source_test": "test_search_tools.py"},
+      {"text": "elevation Grand Canyon", "acceptable": ["fetch_dem"], "source_test": "test_search_tools.py"},
+      {"text": "model flooding", "acceptable": ["run_sfincs"], "source_test": "test_search_tools.py"},
+      {"text": "show me the lightning over this storm from GOES", "acceptable": ["fetch_glm_lightning"], "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"},
+      {"text": "detect the active fire hot pixels from GOES", "acceptable": ["fetch_goes_active_fire"], "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"},
+      {"text": "geocode this city to a bounding box", "acceptable": ["geocode_location"], "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"},
+      {"text": "fetch NEXRAD radar reflectivity", "acceptable": ["fetch_nexrad_reflectivity"], "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"},
+      {"text": "simulate urban street flooding from heavy rain in this city", "acceptable": ["run_swmm"], "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"},
+      {"text": "fetch high resolution aerial imagery for this area", "acceptable": ["fetch_naip"], "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"},
+      {"text": "model the groundwater contamination plume from this chemical spill", "acceptable": ["run_model_groundwater_contamination_scenario"], "source_test": "test_tool_retrieval.py::_RECALL_FIXTURE"}
+    ]
+  }
+}
