@@ -31,3 +31,4 @@ matters, not the absolute).
 | 2026-07-29b | 211629 | - | - | - | - | - | 200 | 13,116 | fetcher-fold wave 2 (ArcGIS vector family): 6 twins deleted (net -5,306 incl. tests), router gains declarative where/column_map/fallback-chain/endpoint_select; 3 deferred by stop-rule (ejscreen, slr, levees) |
 | 2026-07-29c | ~210060 | - | - | - | - | - | 200 | 13,116 | fetcher-fold wave 3 (USGS via dataretrieval): wqp+nldi folded (-1,570 py), gw-levels+nwis-gauges deferred by stop-rule |
 | 2026-07-29d | ~206500 | - | - | - | - | - | 198 | 13,116 | cull phase A: news+conservation+goes wrappers out (live-gated), fetch_slider_timestamps in; satellite deferred on FIRMS key |
+| 2026-07-29e | ~206850 | - | - | - | - | - | 197 | 13,116 | cull phase B: glm wrapper out (P2 dropped, moving-base proven live); shared/ model_* residuals now 1 (satellite, FIRMS-key gated) |
