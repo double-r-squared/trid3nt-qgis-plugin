@@ -1,0 +1,87 @@
+# Router source spec (data-router fold, pilot 4/5) -- Esri/IO 10m land cover.
+# Twin: fetch_esri_landcover_10m.py (HYBRID, raster-COG STAC + tiled-mosaic).
+# STAC search + auto-tile grid + rasterio.merge (categorical, first-non-nodata).
+schema_version: v1
+
+name: fetch_esri_landcover_10m
+source_class: esri_landcover_10m   # cache prefix == twin source_class
+error_prefix: ESRI_LANDCOVER       # twin A.6 token (EsriLandcover*Error) != cache prefix
+shape: raster-cog                  # base shape; ingest.mosaic wraps it (tiled-mosaic transform)
+supports_global_query: false
+
+# --- endpoints ------------------------------------------------------------
+endpoints:
+  data:
+    url: "https://planetarycomputer.microsoft.com/api/stac/v1"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+# --- request-param schema -------------------------------------------------
+params:
+  bbox: {type: bbox, required: true, quantize: round_6dp}
+  year: {type: int, default: 2023}   # twin range [2017,2023], default latest
+gates:
+  max_bbox_deg2: 8.0                 # hard ceiling -> redirect to NLCD (fetch_landcover)
+
+# --- ingestion (raster-COG / STAC-search + tiled-mosaic transform) --------
+# NOTE: the router raster-cog STAC sub-mode is a stub -- it does NOT SAS-sign the
+# PC asset, reproject UTM->EPSG:4326, apply categorical nodata, bake the palette,
+# or mosaic all intersecting items (single-item, float32). The twin does all of
+# these (uint8 palette COG). Full STAC parity is a router-executor gap
+# (see VERDICT.md); this spec captures the DATA the twin used.
+ingest:
+  access: stac_search
+  stac:
+    root: "https://planetarycomputer.microsoft.com/api/stac/v1"
+    collection: io-lulc-annual-v02
+    data_asset: data
+    sign: sas
+  year: {min: 2017, max: 2023, default: 2023}
+  native_cell_m: 10
+  tile_deg2: 0.5                     # sub-tile cap -> tiled-mosaic transform
+  mosaic: {method: first, resampling: nearest, nodata: 0}
+  dtype: uint8                       # categorical class codes (twin _write_palette_cog)
+  palette: passthrough
+  class_labels:                      # PC file:values on the data asset
+    0: "No Data"
+    1: Water
+    2: Trees
+    4: "Flooded vegetation"
+    5: Crops
+    7: "Built area"
+    8: "Bare ground"
+    9: "Snow/Ice"
+    10: Clouds
+    11: Rangeland
+
+# --- normalization stamps -------------------------------------------------
+normalize:
+  crs: "EPSG:4326"
+  units: esri_io_lulc_class_code
+  quantity: land_cover_class
+  orientation: north_up
+
+# --- output surface -------------------------------------------------------
+output:
+  layer_type: raster
+  ext: tif
+  role: input
+  style_preset: "categorical_landcover"
+
+# --- cache + payload gate -------------------------------------------------
+cache:
+  ttl_class: static-30d
+payload_estimate:                    # twin: max(0.2, sq_deg * 5.0)
+  model: bbox_area
+  mb_per_sq_deg: 5.0
+  floor_mb: 0.2
+
+# --- honesty: caveats + fallback -----------------------------------------
+caveats:
+  - "global 10m (worldwide complement to US-only NLCD); no covering item or all-nodata mosaic -> ESRI_LANDCOVER_NO_COVERAGE (never a fabricated layer)"
+  - "hard ceiling 8 deg^2; larger extents -> fetch_landcover (NLCD, CONUS, ~30m, no ceiling)"
+  - "9-class categorical (1=Water 2=Trees 4=Flooded 5=Crops 7=Built 8=Bare 9=Snow/Ice 11=Rangeland; 0=NoData)"
+fallback: [fetch_landcover]
+
+# corpus lifted from sibling corpus.yaml.

@@ -1,0 +1,88 @@
+# Router source spec (data-router fold, pilot 3/5) -- NOAA CO-OPS tide stations.
+# Twin: fetch_noaa_coops_tides.py (SPEC-EXPRESSIBLE, station-timeseries-FGB).
+# catalog-discover + per-station datagetter loop + inline time_series_csv -> FGB.
+schema_version: v1
+
+name: fetch_noaa_coops_tides
+source_class: noaa_coops_tides   # cache prefix == twin source_class
+error_prefix: COOPS_TIDES        # twin A.6 token (COOPSTides*Error) != cache prefix
+shape: station-timeseries-fgb
+supports_global_query: false
+
+# --- endpoints ------------------------------------------------------------
+endpoints:
+  catalog:
+    url: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json"
+    query: {type: waterlevels, units: metric, format: json}
+  data:
+    url_template: "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+# --- request-param schema -------------------------------------------------
+params:
+  bbox:       {type: bbox, required: true, quantize: round_6dp}
+  start_date: {type: iso_date, required: true}
+  end_date:   {type: iso_date, required: true, max_range_days: 366}
+  product:    {type: enum, values: [water_level, predictions], default: water_level}
+gates:
+  max_stations: 50
+
+# --- ingestion (station-timeseries-FGB) ----------------------------------
+ingest:
+  station_catalog: {lat_key: lat, lon_key: lng, id_key: id, name_key: name, rows_key: stations}
+  per_station:
+    # CO-OPS datagetter needs begin_date/end_date as YYYYMMDD. The router station
+    # executor coerces the router-validated ISO date to a date object, so a
+    # "{start:%Y%m%d}" template strftimes correctly (a raw str would raise on %Y).
+    request:
+      datum: MLLW
+      time_zone: gmt
+      interval: h
+      units: metric
+      application: trid3nt
+      begin_date: "{start:%Y%m%d}"
+      end_date: "{end:%Y%m%d}"
+      station: "{id}"
+      product: "{product}"
+      format: json
+    rows_key: [data, predictions]   # first present wins
+    time_key: t
+    value_key: v
+    time_normalize: iso8601z        # "YYYY-MM-DD HH:MM" -> "YYYY-MM-DDTHH:MMZ" (twin parity)
+    time_series_csv: true           # inline CSV attribute (SFINCS boundary forcing)
+    scalars: [wl_min_m, wl_max_m, wl_mean_m, n_timesteps, time_start, time_end]
+
+# --- normalization stamps -------------------------------------------------
+normalize:
+  crs: "EPSG:4326"
+  units: "m (MLLW)"
+  datum: MLLW
+  quantity: water_level
+
+# --- output surface -------------------------------------------------------
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "coops_{product}"
+
+# --- cache + payload gate -------------------------------------------------
+cache:
+  ttl_class: dynamic-1h
+payload_estimate:              # ~2 KB/station/day + 0.5 KB/station overhead; ~2 stations/deg^2
+  model: per_station
+  kb_per_station_per_day: 2.0
+  overhead_kb: 0.5
+  stations_per_sq_deg: 2.0
+  floor_mb: 0.01
+
+# --- honesty: caveats + fallback -----------------------------------------
+caveats:
+  - "~300 US stations globally (US coastline + Great Lakes + territories); empty bbox -> COOPS_TIDES_EMPTY (retryable=false)"
+  - "one bad station never aborts the bbox (swallowed to null); all-empty -> typed EMPTY, never fabricated"
+  - "non-US coastal water level -> fetch_gtsm_tide_surge (GTSM v3.0 global reanalysis)"
+fallback: [fetch_gtsm_tide_surge]
+
+# corpus lifted from sibling corpus.yaml.

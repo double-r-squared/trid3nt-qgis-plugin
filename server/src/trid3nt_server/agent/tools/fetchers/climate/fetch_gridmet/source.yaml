@@ -1,0 +1,82 @@
+# Router source spec (data-router fold, pilot 1/5) -- gridMET CONUS gridded met.
+# Twin: fetch_gridmet/fetch_gridmet.py (SPEC-EXPRESSIBLE, raster-COG / OPeNDAP).
+# Normalization stamps + endpoints + params lifted VERBATIM from the twin's code.
+schema_version: v1
+
+name: fetch_gridmet
+source_class: gridmet          # cache prefix == twin _METADATA.source_class
+shape: raster-cog
+supports_global_query: false   # gridMET is CONUS-only
+
+# --- endpoints ------------------------------------------------------------
+# THREDDS NKN DAP base; the aggregate is <base>/agg_met_<var>_1979_..._CONUS.nc
+endpoints:
+  data:
+    url: "http://thredds.northwestknowledge.net:8080/thredds/dodsC"
+auth:
+  mode: none
+  user_agent: trid3nt_default
+
+# --- request-param schema (validate BEFORE any network call) --------------
+params:
+  bbox:       {type: bbox, required: true, quantize: round_6dp}
+  variable:   {type: enum, required: true,
+               values: [fm100, fm1000, pet, pdsi, tmmn, tmmx, vpd, vs, rmin, rmax, pr, srad]}
+  start_date: {type: iso_date, required: true}
+  end_date:   {type: iso_date, required: true, max_range_days: 366}
+gates:
+  conus_only: true             # bbox must intersect gridMET CONUS domain
+
+# --- ingestion (raster-COG / OPeNDAP sub-mode) ----------------------------
+ingest:
+  access: opendap
+  dap_url_template: "agg_met_{variable}_1979_CurrentYear_CONUS.nc"
+  time_reduce: mean            # time-mean collapse across the day axis
+  variables:                   # code -> (long_name token, native units) from _VARIABLES
+    fm100:  {long_name: dead_fuel_moisture_100hr,  units: Percent}
+    fm1000: {long_name: dead_fuel_moisture_1000hr, units: Percent}
+    pet:    {long_name: potential_evapotranspiration, units: mm}
+    pdsi:   {long_name: palmer_drought_severity_index, units: unitless}
+    tmmn:   {long_name: air_temperature, units: K}
+    tmmx:   {long_name: air_temperature, units: K}
+    vpd:    {long_name: mean_vapor_pressure_deficit, units: kPa}
+    vs:     {long_name: wind_speed, units: "m s-1"}
+    rmin:   {long_name: relative_humidity, units: Percent}
+    rmax:   {long_name: relative_humidity, units: Percent}
+    pr:     {long_name: precipitation_amount, units: mm}
+    srad:   {long_name: surface_downwelling_shortwave_flux_in_air, units: "W m-2"}
+
+# --- normalization stamps (indistinguishability) -------------------------
+# NOTE: units are per-variable in the twin; the router carries ONE units string
+# on the emitted LayerURI, so this stamps the fm100/fm1000/rmin/rmax value
+# ("Percent"). Per-variable LayerURI.units is a router single-string limitation
+# (see VERDICT.md); the pilot fixed request is fm100 -> Percent (parity holds).
+normalize:
+  crs: "EPSG:4326"
+  units: "Percent"
+  quantity: dead_fuel_moisture
+  orientation: north_up        # gridMET already north-up: NO lat sortby
+
+# --- output surface ------------------------------------------------------
+output:
+  layer_type: raster
+  ext: tif
+  role: primary
+  style_preset: "gridmet_{variable}"
+
+# --- cache + payload gate ------------------------------------------------
+cache:
+  ttl_class: static-30d
+payload_estimate:              # twin: max(0.01, 0.01 * sq_deg)
+  model: bbox_area
+  mb_per_sq_deg: 0.01
+  floor_mb: 0.01
+
+# --- honesty: caveats + fallback -----------------------------------------
+caveats:
+  - "CONUS-only (bbox must intersect ~-124.77,25.05,-67.06,49.40); non-CONUS -> fetch_era5_reanalysis"
+  - "daily cadence; gridMET lags ~3 days from real time; 366-day hard cap per call"
+  - "empty/out-of-coverage window -> GRIDMET_EMPTY (retryable=false); no fabricated pixels"
+fallback: [fetch_era5_reanalysis]
+
+# corpus omitted here -> loader lifts it verbatim from the sibling corpus.yaml.

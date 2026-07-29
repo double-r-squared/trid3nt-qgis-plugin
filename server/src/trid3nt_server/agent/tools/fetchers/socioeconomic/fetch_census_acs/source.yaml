@@ -1,0 +1,91 @@
+# Router source spec (data-router fold, pilot 5/5) -- Census ACS tract choropleth.
+# Twin: fetch_census_acs.py (HYBRID, vector-FGB + JOIN-on-key transform).
+# The two-source geometry+values join on GEOID that 6+ fetchers share.
+schema_version: v1
+
+name: fetch_census_acs
+source_class: census_acs        # cache prefix == twin source_class
+shape: vector-fgb               # join block below selects the JOIN transform
+supports_global_query: false
+
+# --- endpoints ------------------------------------------------------------
+# geometry = TIGERweb tract polygons (keyless ArcGIS REST).
+# values   = ACS estimates. The twin's PRIMARY keyless path is the
+#   data.census.gov backend (g=/tid=, response.data shape); the router JOIN
+#   transform speaks the api.census.gov Data-API shape (get=/for=/in=). These
+#   are different protocols (see VERDICT.md: census values-endpoint protocol +
+#   {year}-templating gaps). The offline harness feeds identical values to both,
+#   so the JOIN + null-floor + serialization parity is exercised regardless.
+endpoints:
+  geometry:
+    url: "https://tigerweb.geo.census.gov/arcgis/rest/services/Generalized_ACS2023/Tracts_Blocks/MapServer/4/query"
+  values:
+    url: "https://api.census.gov/data/2022/acs/acs5"
+auth:
+  mode: api_key_env
+  api_key_env: {var: CENSUS_API_KEY, required: false}   # keyless fallback
+  user_agent: trid3nt_default
+
+# --- request-param schema -------------------------------------------------
+params:
+  bbox:     {type: bbox, required: true, quantize: round_6dp}
+  variable: {type: enum, default: median_income,
+             values: [median_income, median_age, median_home_value, poverty_rate, pct_renters, pct_no_vehicle]}
+  year:     {type: int, default: 2022}
+gates:
+  max_features: 20000
+
+# --- ingestion (geometry endpoint ArcGIS query template) ------------------
+ingest:
+  query_template: {out_fields: "GEOID,NAME,STATE,COUNTY,TRACT", f: geojson, order_by: "OBJECTID ASC"}
+  pagination: {mode: result_offset, page_size: 1000}
+
+# --- named transform: two-source JOIN-on-key (contract sec 2.5) -----------
+join:
+  geometry: {endpoint: geometry, key_field: GEOID, keep: [NAME, STATE, COUNTY]}
+  values:
+    endpoint: values
+    key_field: geoid11
+    scope_by: [STATE, COUNTY]        # values fetched per-county from the geometry set
+    null_sentinel_below: -666666000.0
+    variables:                       # the ACS_VARIABLES registry, declarative
+      median_income:     {table: B19013, code: B19013_001E, kind: value, units: usd}
+      median_age:        {table: B01002, code: B01002_001E, kind: value, units: years}
+      median_home_value: {table: B25077, code: B25077_001E, kind: value, units: usd}
+      poverty_rate:      {table: B17001, num: [B17001_002E], denom: B17001_001E, kind: pct, units: percent}
+      pct_renters:       {table: B25003, num: [B25003_003E], denom: B25003_001E, kind: pct, units: percent}
+      pct_no_vehicle:    {table: B25044, num: [B25044_003E, B25044_010E], denom: B25044_001E, kind: pct, units: percent}
+
+# --- normalization stamps -------------------------------------------------
+# NOTE: units are per-variable in the twin (usd / years / percent); the router
+# carries ONE units string on the LayerURI, stamped here to the median_income
+# pilot value. Per-feature units (in the FGB) DO vary correctly via the JOIN.
+# Per-variable LayerURI.units is a router single-string limitation (VERDICT.md).
+normalize:
+  crs: "EPSG:4326"
+  units: usd
+  quantity: acs_estimate
+
+# --- output surface -------------------------------------------------------
+output:
+  layer_type: vector
+  ext: fgb
+  role: primary
+  style_preset: "acs_choropleth"
+
+# --- cache + payload gate -------------------------------------------------
+cache:
+  ttl_class: static-30d
+payload_estimate:              # twin: clamp(area * 3.0, 0.02, 80.0)
+  model: bbox_area
+  mb_per_sq_deg: 3.0
+  floor_mb: 0.02
+
+# --- honesty: caveats + fallback -----------------------------------------
+caveats:
+  - "US-only; a bbox over ocean / outside the US -> header-only FGB (honest-empty)"
+  - "missing ACS estimate or jam sentinel (<= -666666000) -> value=null (NEVER fabricated)"
+  - "keyless (data.census.gov backend); optional CENSUS_API_KEY uses classic Data API as primary"
+fallback: []
+
+# corpus lifted from sibling corpus.yaml.

@@ -1408,11 +1408,25 @@ def _default_declarable_registry() -> dict[str, Any]:
     default-declaration path and the retrieval pool exclude templates
     identically.
     """
-    return {
+    _reg = {
         name: entry
         for name, entry in TOOL_REGISTRY.items()
         if getattr(entry.metadata, "tier", "general") != "template"
     }
+    # Fetcher-fold arm (router-pilot-contract sec 3.3): env-gated pool
+    # substitution -- the twin's declarable entry is swapped for its spec-driven
+    # virtual entry under the twin's name when TRID3NT_FETCHER_FOLD_ARM is set.
+    # STRICT no-op when the env is unset OR no specs registered (default), so the
+    # default declarable set is byte-identical to today.
+    try:
+        from trid3nt_server.agent.tools.fetchers._router.registration import (
+            apply_fold_substitution_registry,
+        )
+
+        _reg = apply_fold_substitution_registry(_reg)
+    except Exception:  # noqa: BLE001 -- the fold arm must never break dispatch
+        pass
+    return _reg
 
 
 def _gate_expander_tool_names() -> frozenset[str]:
