@@ -1,9 +1,9 @@
-# Build-context .dockerignore for the grace2-qgis worker image.
+# Build-context .dockerignore for the trid3nt-qgis worker image.
 #
 # UNLIKE the sfincs/modflow/swmm worker images (which build from the REPO ROOT
 # and rely on the root /.dockerignore), this image builds with THIS directory as
 # its own build context -- see the Dockerfile header:
-#     docker build -t grace2-qgis:ltr services/workers/qgis
+#     docker build -t trid3nt-qgis:ltr services/workers/qgis
 # So the relevant hygiene boundary is local to services/workers/qgis/.
 #
 # The Dockerfile COPYs nothing from the context today (it only FROM + apt + a

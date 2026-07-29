@@ -61,7 +61,7 @@ def test_unknown_analysis_raises_typed_value_error():
 # REAL library's ``landlab.components`` submodule (which this package does not
 # define) rather than the bare top-level name, so the in-memory chain run is
 # correctly SKIPPED in any env without the actual Landlab library installed (the
-# agent venv). In the worker image ``/opt/grace2`` is the only PYTHONPATH entry
+# agent venv). In the worker image ``/opt/trid3nt`` is the only PYTHONPATH entry
 # (``services/workers`` is NOT on it), so ``import landlab`` resolves to the real
 # library and ``import services.workers.landlab.component_chain`` resolves here —
 # no shadow at runtime.

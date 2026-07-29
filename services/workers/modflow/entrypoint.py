@@ -112,7 +112,7 @@ logging.basicConfig(
 )
 
 MF6_BIN = os.environ.get("TRID3NT_MF6_BIN", "/usr/local/bin/mf6")
-SCRATCH = Path(os.environ.get("TRID3NT_MF6_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_MF6_SCRATCH", "/opt/trid3nt/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
 RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 

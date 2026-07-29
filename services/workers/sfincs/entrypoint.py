@@ -80,7 +80,7 @@ logging.basicConfig(
 )
 
 SFINCS_BIN = os.environ.get("TRID3NT_SFINCS_BIN", "/usr/local/bin/sfincs")
-SCRATCH = Path(os.environ.get("TRID3NT_SFINCS_SCRATCH", "/opt/grace2/work"))
+SCRATCH = Path(os.environ.get("TRID3NT_SFINCS_SCRATCH", "/opt/trid3nt/work"))
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "legacy-cloud-project")
 RUNS_BUCKET = os.environ.get("TRID3NT_RUNS_BUCKET", "trid3nt-runs")
 

@@ -809,7 +809,7 @@ async def _create_stream_with_retry(client: Any, kwargs: dict[str, Any]) -> Any:
 async def _stream_one_round(
     client: Any, kwargs: dict[str, Any]
 ) -> AsyncIterator[StreamEvent]:
-    """Stream ONE ``chat.completions.create`` round, yielding the GRACE
+    """Stream ONE ``chat.completions.create`` round, yielding the TRID3NT
     ``StreamEvent`` union. Split out of ``stream_openai`` (OPEN-14) so the
     caller can wrap it in the clip-guard retry loop without duplicating the
     chunk-accumulation logic.

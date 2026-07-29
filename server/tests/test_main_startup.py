@@ -61,7 +61,7 @@ def test_bind_worker_submitter_logs_probe_ready(monkeypatch, caplog):
 
     monkeypatch.delenv("TRID3NT_SKIP_WORKER_SUBMITTER", raising=False)
     # QGIS infra configured -> probe runs SYNCHRONOUSLY (and logs inline).
-    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "trid3nt-qgis:ltr")
     monkeypatch.setattr(
         main_mod, "_default_qgis_process_submitter", lambda: _fake_submitter
     )
@@ -91,12 +91,12 @@ def test_bind_worker_submitter_logs_not_ready_on_bad_returncode(monkeypatch, cap
             "stderr": "qgis_process: command not found in image\n",
             "returncode": 127,
             "duration_s": 0.01,
-            "qgis_bin": "docker:grace2-qgis:ltr",
+            "qgis_bin": "docker:trid3nt-qgis:ltr",
         }
 
     monkeypatch.delenv("TRID3NT_SKIP_WORKER_SUBMITTER", raising=False)
     # QGIS infra configured -> probe runs SYNCHRONOUSLY (and logs inline).
-    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "trid3nt-qgis:ltr")
     monkeypatch.setattr(
         main_mod, "_default_qgis_process_submitter", lambda: _bad_submitter
     )
@@ -124,7 +124,7 @@ def test_bind_worker_submitter_probe_exception_is_non_fatal(monkeypatch, caplog)
 
     monkeypatch.delenv("TRID3NT_SKIP_WORKER_SUBMITTER", raising=False)
     # QGIS infra configured -> probe runs SYNCHRONOUSLY (and logs inline).
-    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "trid3nt-qgis:ltr")
     monkeypatch.setattr(
         main_mod, "_default_qgis_process_submitter", lambda: _raising_submitter
     )

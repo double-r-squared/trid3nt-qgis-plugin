@@ -33,7 +33,7 @@
 # WEIGHTS (gated build step -- orchestrator + NATE): the weights are pulled at
 # BUILD time from Meta's public, no-sign-request bucket
 # https://dataforgood-fb-data.s3.amazonaws.com/forests/v1/models/saved_checkpoints/
-# and baked into /opt/grace2/weights/canopy. VERIFY the exact filenames +
+# and baked into /opt/trid3nt/weights/canopy. VERIFY the exact filenames +
 # (ideally) SHA256-pin them before the first build, the same digest discipline the
 # SWAN source tarball uses. The model + weights are Apache-2.0 (redistributable in
 # a container; no key, no registration).
@@ -43,11 +43,11 @@
 
 # --------------------------------------------------------------------------- #
 # Stage 1 -- builder: resolve + install the CPU torch + geoai stack into a
-# self-contained venv. Nothing here except /opt/grace2/.venv reaches the runtime.
+# self-contained venv. Nothing here except /opt/trid3nt/.venv reaches the runtime.
 # --------------------------------------------------------------------------- #
 FROM public.ecr.aws/docker/library/python:3.11-slim-bookworm AS builder
 
-ENV VENV=/opt/grace2/.venv \
+ENV VENV=/opt/trid3nt/.venv \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     DEBIAN_FRONTEND=noninteractive
@@ -93,7 +93,7 @@ RUN python3 -m venv "$VENV" \
 FROM public.ecr.aws/docker/library/python:3.11-slim-bookworm AS weights
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    CANOPY_WEIGHTS=/opt/grace2/weights/canopy \
+    CANOPY_WEIGHTS=/opt/trid3nt/weights/canopy \
     META_WEIGHTS_BASE=https://dataforgood-fb-data.s3.amazonaws.com/forests/v1/models/saved_checkpoints
 
 RUN apt-get update \
@@ -133,26 +133,26 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy ONLY the resolved venv + the baked weights -- the hygiene payoff.
-ENV VENV=/opt/grace2/.venv
-COPY --from=builder /opt/grace2/.venv /opt/grace2/.venv
-COPY --from=weights /opt/grace2/weights /opt/grace2/weights
+ENV VENV=/opt/trid3nt/.venv
+COPY --from=builder /opt/trid3nt/.venv /opt/trid3nt/.venv
+COPY --from=weights /opt/trid3nt/weights /opt/trid3nt/weights
 ENV PATH="$VENV/bin:$PATH"
 
 # COPY the worker package onto a stable runtime path. Build context is the repo
 # root (mirrors the openquake/swan context); paths below are relative to repo root.
-RUN mkdir -p /opt/grace2/services/workers/canopy
-COPY services/workers/canopy/ /opt/grace2/services/workers/canopy/
+RUN mkdir -p /opt/trid3nt/services/workers/canopy
+COPY services/workers/canopy/ /opt/trid3nt/services/workers/canopy/
 
 # WORKDIR controls where the entrypoint writes its scratch (downloaded RGB +
-# canopy COG) before upload. /opt/grace2/work is writable scratch the entrypoint
+# canopy COG) before upload. /opt/trid3nt/work is writable scratch the entrypoint
 # clears + re-creates per invocation.
-WORKDIR /opt/grace2
+WORKDIR /opt/trid3nt
 
-ENV PYTHONPATH=/opt/grace2 \
+ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
-    TRID3NT_CANOPY_SCRATCH=/opt/grace2/work \
+    TRID3NT_CANOPY_SCRATCH=/opt/trid3nt/work \
     TRID3NT_CANOPY_MODEL_VARIANT=compressed_SSLhuge_aerial \
-    GEOAI_CANOPY_CACHE=/opt/grace2/weights/canopy \
+    GEOAI_CANOPY_CACHE=/opt/trid3nt/weights/canopy \
     # Cap torch CPU threads to the per-job vCPU the agent sets via
     # containerOverrides (OMP_NUM_THREADS); a sane default keeps a small box from
     # oversubscribing. The agent overrides this per-job.
@@ -178,8 +178,8 @@ ENV TRID3NT_OBJECT_STORE=s3 \
 # Catches a path/import/weights mistake at build time instead of at Batch exec.
 RUN python3 -c "from services.workers.canopy.entrypoint import main, write_canopy_cog, canopy_cog_is_nonempty; print('canopy entrypoint import OK')" \
     && python3 -c "import torch, torchvision, rasterio; print('torch/rasterio import OK')" \
-    && test -s /opt/grace2/weights/canopy/compressed_SSLhuge_aerial.pth \
-    && test -s /opt/grace2/weights/canopy/aerial_normalization_quantiles_predictor.ckpt \
+    && test -s /opt/trid3nt/weights/canopy/compressed_SSLhuge_aerial.pth \
+    && test -s /opt/trid3nt/weights/canopy/aerial_normalization_quantiles_predictor.ckpt \
     && echo "canopy weights baked OK"
 
 # ENTRYPOINT runs this image as a one-shot solver job. CMD is empty so AWS Batch

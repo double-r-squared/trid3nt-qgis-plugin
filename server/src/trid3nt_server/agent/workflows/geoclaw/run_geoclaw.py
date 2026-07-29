@@ -1206,7 +1206,7 @@ def geoclaw_local_spec() -> "Any":
         env_pairs = [
             ("TRID3NT_RUNS_BUCKET", runs_bucket),
             ("TRID3NT_OBJECT_STORE", "s3"),
-            ("TRID3NT_GEOCLAW_SCRATCH", "/opt/grace2/work"),
+            ("TRID3NT_GEOCLAW_SCRATCH", "/opt/trid3nt/work"),
             ("AWS_REGION", aws_region),
             ("PYTHONUNBUFFERED", "1"),
         ]

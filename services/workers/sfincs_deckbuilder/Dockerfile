@@ -108,20 +108,20 @@ RUN find /opt/venv -depth -type d -name '__pycache__' -exec rm -rf {} + \
 
 # Worker code lands on PYTHONPATH so `-m services.workers.sfincs_deckbuilder.entrypoint`
 # resolves. Build context is the repo root; paths are repo-root-relative.
-RUN mkdir -p /opt/grace2/services/workers/sfincs_deckbuilder
-COPY services/workers/sfincs_deckbuilder/ /opt/grace2/services/workers/sfincs_deckbuilder/
+RUN mkdir -p /opt/trid3nt/services/workers/sfincs_deckbuilder
+COPY services/workers/sfincs_deckbuilder/ /opt/trid3nt/services/workers/sfincs_deckbuilder/
 
 # The shared GPL-free NetCDF -> COG postprocess substrate (postprocess-offload
 # spike). COPY'd into BOTH SFINCS images (and any future raster worker) so the
 # heavy raster postprocess runs ON the worker, not the always-on agent box.
-RUN mkdir -p /opt/grace2/services/workers/_raster_postprocess
-COPY services/workers/_raster_postprocess/ /opt/grace2/services/workers/_raster_postprocess/
+RUN mkdir -p /opt/trid3nt/services/workers/_raster_postprocess
+COPY services/workers/_raster_postprocess/ /opt/trid3nt/services/workers/_raster_postprocess/
 
-WORKDIR /opt/grace2
+WORKDIR /opt/trid3nt
 
-ENV PYTHONPATH=/opt/grace2 \
+ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
-    TRID3NT_DECK_SCRATCH=/opt/grace2/work \
+    TRID3NT_DECK_SCRATCH=/opt/trid3nt/work \
     TRID3NT_SFINCS_BIN=/usr/local/bin/sfincs \
     GCP_PROJECT=legacy-cloud-project
 

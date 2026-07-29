@@ -598,7 +598,7 @@ modflow_contaminant_plume; spill news article →
 run_model_groundwater_contamination_scenario.
 
 Flood-engine routing -- urban PySWMM vs SFINCS (CRITICAL, North Star B3):
-GRACE has TWO flood solvers. Route to the right one from the prompt; do NOT
+TRID3NT has TWO flood solvers. Route to the right one from the prompt; do NOT
 default every flood to SFINCS. The SFINCS engine is reached through the
 run_sfincs DOOR (a read-only concierge that lists the sfincs_flood template +
 makes it callable this turn); then SELECT-THEN-CALL sfincs_flood with the knobs

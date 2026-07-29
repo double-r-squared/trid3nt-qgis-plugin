@@ -14,7 +14,7 @@
 # stays tiny.
 #
 # MULTI-STAGE (container-hygiene norm): a `builder` stage compiles the wheels
-# into a venv at /opt/grace2/.venv; the final stage copies ONLY that venv + the
+# into a venv at /opt/trid3nt/.venv; the final stage copies ONLY that venv + the
 # worker source onto a fresh python:slim, keeping the build toolchain + pip
 # caches OUT of the shipped image. landlab + rasterio ship manylinux wheels for
 # x86_64, so no compiler is normally needed; the multi-stage split is the hygiene
@@ -26,12 +26,12 @@
 
 # --------------------------------------------------------------------------- #
 # Stage 1 — builder: resolve + install the Python deps into a self-contained
-# venv. Nothing from this stage except /opt/grace2/.venv reaches the final
+# venv. Nothing from this stage except /opt/trid3nt/.venv reaches the final
 # image, so pip caches + any transient build toolchain are discarded.
 # --------------------------------------------------------------------------- #
 FROM python:3.12-slim-bookworm AS builder
 
-ENV VENV=/opt/grace2/.venv \
+ENV VENV=/opt/trid3nt/.venv \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -73,25 +73,25 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy ONLY the resolved venv from the builder — the hygiene payoff.
-ENV VENV=/opt/grace2/.venv
-COPY --from=builder /opt/grace2/.venv /opt/grace2/.venv
+ENV VENV=/opt/trid3nt/.venv
+COPY --from=builder /opt/trid3nt/.venv /opt/trid3nt/.venv
 ENV PATH="$VENV/bin:$PATH"
 
 # COPY the worker source into a stable runtime path. Build context is the repo
 # root (mirrors the SWMM/MODFLOW cloudbuild context); paths below are relative to
 # repo root. component_chain.py is imported as
 # services.workers.landlab.component_chain by the entrypoint.
-RUN mkdir -p /opt/grace2/services/workers/landlab
-COPY services/workers/landlab/ /opt/grace2/services/workers/landlab/
+RUN mkdir -p /opt/trid3nt/services/workers/landlab
+COPY services/workers/landlab/ /opt/trid3nt/services/workers/landlab/
 
 # WORKDIR controls where the entrypoint writes its scratch field COG before it
-# uploads. /opt/grace2/work is a writable scratch dir; the entrypoint clears it
+# uploads. /opt/trid3nt/work is a writable scratch dir; the entrypoint clears it
 # on start and re-creates it per invocation.
-WORKDIR /opt/grace2
+WORKDIR /opt/trid3nt
 
-ENV PYTHONPATH=/opt/grace2 \
+ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
-    TRID3NT_LANDLAB_SCRATCH=/opt/grace2/work
+    TRID3NT_LANDLAB_SCRATCH=/opt/trid3nt/work
 
 # Runtime config — overridable from the AWS Batch container env block.
 #   TRID3NT_OBJECT_STORE  — s3 (AWS Batch) routes all object I/O through boto3.

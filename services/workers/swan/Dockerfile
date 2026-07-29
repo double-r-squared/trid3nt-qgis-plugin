@@ -50,7 +50,7 @@ LABEL org.opencontainers.image.title="trid3nt-swan-solver" \
       org.opencontainers.image.description="SWAN spectral nearshore wave solver runtime (AWS Batch). Reads a build_spec + bathy DEM from s3://...-cache/, authors a .swn command file, runs headless swanrun, writes the gridded wave-field output + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="GPL-3.0-or-later"
 
-ENV VENV=/opt/grace2/.venv \
+ENV VENV=/opt/trid3nt/.venv \
     SWAN_HOME=/opt/swan \
     SWAN_VERSION=41.51 \
     PIP_NO_CACHE_DIR=1 \
@@ -138,17 +138,17 @@ ENV PATH="$VENV/bin:$PATH"
 # COPY the worker package (entrypoint + deck_builder) onto a stable runtime path.
 # Build context is the repo root (mirrors the SFINCS/GeoClaw/SWMM context); paths
 # below are relative to repo root.
-RUN mkdir -p /opt/grace2/services/workers/swan
-COPY services/workers/swan/ /opt/grace2/services/workers/swan/
+RUN mkdir -p /opt/trid3nt/services/workers/swan
+COPY services/workers/swan/ /opt/trid3nt/services/workers/swan/
 
 # WORKDIR controls where SWAN writes its scratch output (INPUT + swan_out.mat)
-# before the entrypoint uploads it. /opt/grace2/work is writable scratch; the
+# before the entrypoint uploads it. /opt/trid3nt/work is writable scratch; the
 # entrypoint clears + re-creates it per invocation.
-WORKDIR /opt/grace2
+WORKDIR /opt/trid3nt
 
-ENV PYTHONPATH=/opt/grace2 \
+ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
-    TRID3NT_SWAN_SCRATCH=/opt/grace2/work
+    TRID3NT_SWAN_SCRATCH=/opt/trid3nt/work
 
 # Runtime config -- overridable from the AWS Batch container env block.
 ENV TRID3NT_OBJECT_STORE=s3 \

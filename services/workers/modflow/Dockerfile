@@ -14,7 +14,7 @@
 #   container's build-verification needs Python — whereas SFINCS needed no
 #   Python at run time so it kept the upstream Ubuntu base. Bookworm's pip 23+
 #   enforces PEP 668, so we install Python deps into a venv at
-#   /opt/grace2/.venv (matches the infra/worker/Dockerfile venv discipline)
+#   /opt/trid3nt/.venv (matches the infra/worker/Dockerfile venv discipline)
 #   rather than using --break-system-packages.
 #
 # MODFLOW binary version pin (design doc § 1, § 9 OQ-MOD-1):
@@ -72,13 +72,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Python venv + deps (single layer, design doc § 3) -------------------
-# venv at /opt/grace2/.venv to sidestep PEP 668 on Bookworm. flopy is needed
+# venv at /opt/trid3nt/.venv to sidestep PEP 668 on Bookworm. flopy is needed
 # by the agent-side deck builder + postprocess (and for in-container
 # verification); the entrypoint object-store envelope is SCHEME-AWARE
 # (google-cloud-storage drives gs://; boto3 drives s3:// on AWS Batch — the
 # job-0289 boto3-not-s3fs lesson, mirroring the SFINCS worker image);
 # numpy/rasterio back the postprocess COG conversion.
-ENV VENV=/opt/grace2/.venv
+ENV VENV=/opt/trid3nt/.venv
 RUN python3 -m venv "$VENV" \
     && "$VENV/bin/pip" install --no-cache-dir --upgrade pip \
     && "$VENV/bin/pip" install --no-cache-dir \
@@ -110,8 +110,8 @@ RUN curl -fL "$MF6_ZIP_URL" -o /tmp/mf6.zip \
 # --- COPY entrypoint + fixtures ------------------------------------------
 # Build context is the repo root (see infra/modflow/cloudbuild.yaml); paths
 # below are relative to repo root.
-RUN mkdir -p /opt/grace2/services/workers/modflow
-COPY services/workers/modflow/ /opt/grace2/services/workers/modflow/
+RUN mkdir -p /opt/trid3nt/services/workers/modflow
+COPY services/workers/modflow/ /opt/trid3nt/services/workers/modflow/
 
 # --- COPY the shared offload substrate packages --------------------------
 # Heavy-compute offload (reports/design/heavy-compute-offload-2026-07-02.md):
@@ -120,22 +120,22 @@ COPY services/workers/modflow/ /opt/grace2/services/workers/modflow/
 # raster manifest/upload helpers (_raster_postprocess). All are PEP-420 namespace
 # subpackages under services/workers/ (no __init__ at services/ level). Mirrors
 # the SFINCS worker image's _raster_postprocess + _sfincs_build COPYs.
-RUN mkdir -p /opt/grace2/services/workers/_raster_postprocess \
-    && mkdir -p /opt/grace2/services/workers/_modflow_build \
-    && mkdir -p /opt/grace2/services/workers/_modflow_postprocess
-COPY services/workers/_raster_postprocess/ /opt/grace2/services/workers/_raster_postprocess/
-COPY services/workers/_modflow_build/ /opt/grace2/services/workers/_modflow_build/
-COPY services/workers/_modflow_postprocess/ /opt/grace2/services/workers/_modflow_postprocess/
+RUN mkdir -p /opt/trid3nt/services/workers/_raster_postprocess \
+    && mkdir -p /opt/trid3nt/services/workers/_modflow_build \
+    && mkdir -p /opt/trid3nt/services/workers/_modflow_postprocess
+COPY services/workers/_raster_postprocess/ /opt/trid3nt/services/workers/_raster_postprocess/
+COPY services/workers/_modflow_build/ /opt/trid3nt/services/workers/_modflow_build/
+COPY services/workers/_modflow_postprocess/ /opt/trid3nt/services/workers/_modflow_postprocess/
 
 # WORKDIR controls where mf6 writes its scratch outputs before the entrypoint
-# uploads them. /opt/grace2/work is a writable scratch dir; the entrypoint
+# uploads them. /opt/trid3nt/work is a writable scratch dir; the entrypoint
 # clears it on start and re-creates it per invocation.
-WORKDIR /opt/grace2
+WORKDIR /opt/trid3nt
 
-ENV PYTHONPATH=/opt/grace2 \
+ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
     TRID3NT_MF6_BIN=/usr/local/bin/mf6 \
-    TRID3NT_MF6_SCRATCH=/opt/grace2/work
+    TRID3NT_MF6_SCRATCH=/opt/trid3nt/work
 
 # Runtime config. GCP is decommissioned: on AWS, MODFLOW runs the mf6 binary
 # directly via the agent's local-exec supervisor (run_modflow.py) — there is NO

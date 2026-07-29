@@ -435,10 +435,10 @@ def _editable_source_roots() -> list[str]:
     executor's ``_convert_figure`` imports, ``trid3nt_server`` for the executor's
     own dir) are EDITABLE installs: a ``.pth`` in site-packages adds their ``src``
     dir to ``sys.path``. Those source dirs live OUTSIDE the venv (the repo /
-    ``/opt/grace2`` on the box) and so must be bound read-only into the jail for
+    ``/opt/trid3nt`` on the box) and so must be bound read-only into the jail for
     the import to succeed. We resolve them from the already-imported packages'
     ``__file__`` (the dir two levels up from ``<pkg>/__init__.py``), which is
-    exactly what the ``.pth`` lists -- robust to repo vs ``/opt/grace2`` layout."""
+    exactly what the ``.pth`` lists -- robust to repo vs ``/opt/trid3nt`` layout."""
     roots: list[str] = []
     for mod_name in ("trid3nt_contracts", "trid3nt_server"):
         try:
@@ -486,7 +486,7 @@ def wrap_with_jail(
         READ these and nothing else),
       * a private ``tmpfs`` for ``/tmp`` and the writable ``workdir`` (so the child
         can write scratch + matplotlib's cache, but sees NONE of the host fs --
-        no ``~/.aws``, no ``/opt/grace2`` secrets, no other Cases' payloads),
+        no ``~/.aws``, no ``/opt/trid3nt`` secrets, no other Cases' payloads),
       * ``--die-with-parent`` so the jail dies if the runner is killed,
       * ``--new-session`` so the child cannot reuse the parent's controlling tty,
       * ``--clearenv`` + ``--setenv`` so ONLY the scrubbed allowlist env is visible.

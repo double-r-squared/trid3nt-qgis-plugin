@@ -18,13 +18,10 @@ The ELMFIRE analogue of ``run_geoclaw.py`` / ``run_swmm.py``. This module owns:
   3. **Staging** (``stage_elmfire_manifest``): the run_solver manifest. Under
      the ``local-docker`` backend the manifest + deck stay on the local disk
      (``file://`` URIs — ``launch_local_solver`` resolves them by scheme,
-     exactly like the sfincs_builder local-manifest fallback). Under the
-     ``aws-batch`` backend the deck files + manifest are uploaded to the cache
-     bucket (mirrors ``stage_geoclaw_manifest``) — that lane stays INERT until
-      provisions the ECR image + Batch job definition
-     (``TRID3NT_AWS_BATCH_JOB_DEF_ELMFIRE`` / ``ELMFIRE_BATCH_JOB_DEF_NAME``).
+     exactly like the sfincs_builder local-manifest fallback). local-docker is
+     the only backend (the AWS Batch staging lane was removed with the arm).
   4. **Solver registration**: ``'elmfire'`` in ``SOLVER_WORKFLOW_REGISTRY``
-     (AWS-Batch sentinel, the seam) + a ``LocalSolverSpec`` docker
+     (local-docker backend) + a ``LocalSolverSpec`` docker
      runner for the proven image ``trid3nt/elmfire:dev`` (rootless
      docker via DOCKER_HOST, deck dir mounted, ``--cpus`` capped).
   5. **Gate arithmetic** (``estimate_elmfire_grid`` /
@@ -32,9 +29,9 @@ The ELMFIRE analogue of ``run_geoclaw.py`` / ``run_swmm.py``. This module owns:
      solver-confirm card (cell count + estimated runtime) — no rasterio, no
      network, safe to call from the gate.
 
-Cloud/Batch wiring is: this module only leaves the clean seam (the
-solver-registry key + the pinned job-definition name constant). Nothing here
-touches AWS at import time.
+This module registers a solver-registry key + a LocalSolverSpec docker runner
+for the proven image ``trid3nt/elmfire:dev``. Nothing here touches AWS. The AWS
+Batch arm (ECR image + job definition) was removed as dead local residue.
 """
 
 from __future__ import annotations
@@ -57,7 +54,6 @@ logger = logging.getLogger("trid3nt_server.agent.workflows.elmfire.run_elmfire")
 
 __all__ = [
     "ELMFIRE_SOLVER_NAME",
-    "ELMFIRE_BATCH_JOB_DEF_NAME",
     "DEFAULT_ELMFIRE_IMAGE",
     "DEFAULT_ELMFIRE_BINARY",
     "ELMFIRE_OUTPUT_GLOBS",
@@ -77,14 +73,6 @@ __all__ = [
 
 #: The solver-registry key (``run_solver(solver='elmfire', ...)``).
 ELMFIRE_SOLVER_NAME: str = "elmfire"
-
-#: seam: the canonical AWS Batch NAME the infra job will
-#: register (per-solver env override ``TRID3NT_AWS_BATCH_JOB_DEF_ELMFIRE`` is
-#: the activation switch — ``_resolve_batch_job_def`` reads it; we deliberately
-#: do NOT seed ``SOLVER_BATCH_JOBDEF_REGISTRY`` so the Batch lane stays inert
-#: until provisions the ECR image + job def). Nothing in touches
-#: AWS Batch.
-ELMFIRE_BATCH_JOB_DEF_NAME: str = "grace2-elmfire"
 
 #: The proven local image (env ``TRID3NT_ELMFIRE_IMAGE`` overrides).
 DEFAULT_ELMFIRE_IMAGE: str = "trid3nt/elmfire:dev"

@@ -66,7 +66,7 @@ def test_qgis_process_disabled_returns_honest_no_run(monkeypatch):
     monkeypatch.delenv("TRID3NT_QGIS_ONBOX_DOCKER", raising=False)
     # A docker image IS configured -- proving the gate short-circuits BEFORE
     # the docker path would otherwise engage.
-    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "trid3nt-qgis:ltr")
 
     with patch(
         "trid3nt_server.agent.tools.meta.passthroughs.passthroughs._run_qgis_process_docker"
@@ -90,7 +90,7 @@ def test_qgis_process_disabled_returns_honest_no_run(monkeypatch):
 def test_qgis_process_enabled_runs_docker_path(monkeypatch):
     """With the gate ON, the existing docker RUN path engages (kept intact)."""
     monkeypatch.setenv("TRID3NT_QGIS_ONBOX_DOCKER", "on")
-    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "grace2-qgis:ltr")
+    monkeypatch.setenv("TRID3NT_QGIS_DOCKER_IMAGE", "trid3nt-qgis:ltr")
 
     sentinel = {"status": "succeeded", "tool": "qgis_process"}
     with patch(

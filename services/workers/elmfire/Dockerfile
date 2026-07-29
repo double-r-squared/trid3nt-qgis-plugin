@@ -97,7 +97,7 @@ ENV ELMFIRE_VER=2025.0526 \
 
 # Python venv for the entrypoint's S3 envelope (boto3 ONLY - no rasterio, the
 # deck builds agent-side).
-ENV VENV=/opt/grace2/venv \
+ENV VENV=/opt/trid3nt/venv \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 RUN python3 -m venv "$VENV" && \
@@ -107,15 +107,15 @@ RUN python3 -m venv "$VENV" && \
 
 # The worker package (entrypoint + deck_builder for provenance/tests) on a
 # stable runtime path; repo-root-relative COPY (CodeBuild context parity).
-RUN mkdir -p /opt/grace2/services/workers/elmfire
-COPY services/workers/elmfire/ /opt/grace2/services/workers/elmfire/
-RUN find /opt/grace2/services -name __pycache__ -type d -prune -exec rm -rf {} + || true
+RUN mkdir -p /opt/trid3nt/services/workers/elmfire
+COPY services/workers/elmfire/ /opt/trid3nt/services/workers/elmfire/
+RUN find /opt/trid3nt/services -name __pycache__ -type d -prune -exec rm -rf {} + || true
 
-# WORKDIR scratch: the entrypoint clears + recreates /opt/grace2/work per run.
-WORKDIR /opt/grace2
-ENV PYTHONPATH=/opt/grace2 \
+# WORKDIR scratch: the entrypoint clears + recreates /opt/trid3nt/work per run.
+WORKDIR /opt/trid3nt
+ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
-    TRID3NT_ELMFIRE_SCRATCH=/opt/grace2/work
+    TRID3NT_ELMFIRE_SCRATCH=/opt/trid3nt/work
 
 # Runtime config - overridden from the AWS Batch job-definition env block.
 ENV TRID3NT_OBJECT_STORE=s3 \
@@ -132,5 +132,5 @@ RUN "$VENV/bin/python" -c "from services.workers.elmfire.entrypoint import main;
 # One-shot solver job: AWS Batch containerOverrides command feeds straight
 # through as argv (--run-id / --manifest-uri; env fallbacks parsed by the
 # entrypoint) - the SFINCS/GeoClaw/SWAN pattern.
-ENTRYPOINT ["/opt/grace2/venv/bin/python", "-m", "services.workers.elmfire.entrypoint"]
+ENTRYPOINT ["/opt/trid3nt/venv/bin/python", "-m", "services.workers.elmfire.entrypoint"]
 CMD []

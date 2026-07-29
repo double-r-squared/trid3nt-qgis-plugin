@@ -420,7 +420,7 @@ def test_qgis_process_raises_runtime_error_when_no_backend(monkeypatch) -> None:
 
     job-0308 (Decision Q) rewired qgis_process OFF the old job-0032
     NotImplementedError stub and onto a stage-then-mount docker path
-    (``TRID3NT_QGIS_DOCKER_IMAGE`` / the ``grace2-qgis`` image present on the
+    (``TRID3NT_QGIS_DOCKER_IMAGE`` / the ``trid3nt-qgis`` image present on the
     EC2 box) with a local-``qgis_process``-on-PATH dev fallback. When NO
     backend is reachable the body raises a RuntimeError telling the operator
     how to provide one. This pins that contract deterministically — we

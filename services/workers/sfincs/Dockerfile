@@ -68,14 +68,14 @@ RUN apt-get update \
 # COPY the entrypoint into a stable runtime path. Build context is the repo
 # root (see infra/sfincs/cloudbuild.yaml); paths below are relative to repo
 # root.
-RUN mkdir -p /opt/grace2/services/workers/sfincs
-COPY services/workers/sfincs/ /opt/grace2/services/workers/sfincs/
+RUN mkdir -p /opt/trid3nt/services/workers/sfincs
+COPY services/workers/sfincs/ /opt/trid3nt/services/workers/sfincs/
 
 # The shared GPL-free NetCDF -> COG postprocess substrate (postprocess-offload
 # spike). COPY'd into BOTH SFINCS images so the regular-grid path does NOT
 # regress to raw-NetCDF (the quadtree worker carries the same package).
-RUN mkdir -p /opt/grace2/services/workers/_raster_postprocess
-COPY services/workers/_raster_postprocess/ /opt/grace2/services/workers/_raster_postprocess/
+RUN mkdir -p /opt/trid3nt/services/workers/_raster_postprocess
+COPY services/workers/_raster_postprocess/ /opt/trid3nt/services/workers/_raster_postprocess/
 
 # The SFINCS regular-grid deck BUILD substrate (heavy-compute offload). Vendored
 # pure hydromt-SFINCS build logic (dataclasses + Manning/NLCD gate + adaptive
@@ -83,18 +83,18 @@ COPY services/workers/_raster_postprocess/ /opt/grace2/services/workers/_raster_
 # entrypoint's --build-spec-uri mode calls. The hydromt-sfincs dep installed
 # above powers it. Kept in sync with the agent's sfincs_builder.py (see the
 # module header); ``services/workers/`` is not on the agent import path.
-RUN mkdir -p /opt/grace2/services/workers/_sfincs_build
-COPY services/workers/_sfincs_build/ /opt/grace2/services/workers/_sfincs_build/
+RUN mkdir -p /opt/trid3nt/services/workers/_sfincs_build
+COPY services/workers/_sfincs_build/ /opt/trid3nt/services/workers/_sfincs_build/
 
 # WORKDIR controls where SFINCS writes its scratch outputs before the
-# entrypoint uploads them. /opt/grace2/work is a writable scratch dir; the
+# entrypoint uploads them. /opt/trid3nt/work is a writable scratch dir; the
 # entrypoint clears it on start and re-creates it for each invocation.
-WORKDIR /opt/grace2
+WORKDIR /opt/trid3nt
 
-ENV PYTHONPATH=/opt/grace2 \
+ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
     TRID3NT_SFINCS_BIN=/usr/local/bin/sfincs \
-    TRID3NT_SFINCS_SCRATCH=/opt/grace2/work
+    TRID3NT_SFINCS_SCRATCH=/opt/trid3nt/work
 
 # Runtime config — overridable from the AWS Batch job-def containerOverrides.
 # GCP is decommissioned: the live object store is AWS S3 (TRID3NT_OBJECT_STORE=s3,

@@ -339,7 +339,7 @@ _LOCAL_WORKFLOW_NAMES: tuple[str, str] = (
 LOCAL_DOCKER_WORKFLOW_LOCATION: str = "local"
 
 #: Default rundir root under local-docker (env ``TRID3NT_RUNS_DIR``).
-DEFAULT_LOCAL_RUNS_DIR: str = "/opt/grace2/runs"
+DEFAULT_LOCAL_RUNS_DIR: str = "/opt/trid3nt/runs"
 
 #: Default SFINCS image under local-docker (env ``TRID3NT_SFINCS_IMAGE``).
 DEFAULT_SFINCS_IMAGE: str = "deltares/sfincs-cpu:latest"

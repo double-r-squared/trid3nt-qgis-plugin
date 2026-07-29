@@ -197,12 +197,6 @@ def test_elmfire_local_spec_docker_argv(monkeypatch, tmp_path):
     assert "elmfire_2025.0526 ./inputs/elmfire.data" in inner
 
 
-def test_batch_job_def_seam_constant():
-    # FIRE-4 seam: the job-def NAME constant exists; nothing seeds the Batch
-    # registry (the lane stays inert until TRID3NT_AWS_BATCH_JOB_DEF_ELMFIRE).
-    from trid3nt_server.agent.workflows.elmfire.run_elmfire import ELMFIRE_BATCH_JOB_DEF_NAME
-
-    assert ELMFIRE_BATCH_JOB_DEF_NAME == "grace2-elmfire"
 
 
 # ===========================================================================

@@ -49,7 +49,7 @@ LABEL org.opencontainers.image.title="trid3nt-geoclaw-solver" \
       org.opencontainers.image.description="GeoClaw (Clawpack) shallow-water inundation solver runtime (AWS Batch). Reads a build_spec + topo DEM from s3://...-cache/, authors a setrun.py, runs the headless Clawpack solver, writes fort.q frames + completion manifest to s3://...-runs/<run_id>/." \
       org.opencontainers.image.licenses="BSD-3-Clause"
 
-ENV VENV=/opt/grace2/.venv \
+ENV VENV=/opt/trid3nt/.venv \
     CLAW_SRC=/opt/clawpack-src \
     CLAWPACK_VERSION=5.14.0 \
     PIP_NO_CACHE_DIR=1 \
@@ -129,17 +129,17 @@ ENV CLAW=/opt/clawpack-src \
 # COPY the worker package (entrypoint + setrun_builder) onto a stable runtime
 # path. Build context is the repo root (mirrors the SFINCS/MODFLOW/SWMM context);
 # paths below are relative to repo root.
-RUN mkdir -p /opt/grace2/services/workers/geoclaw
-COPY services/workers/geoclaw/ /opt/grace2/services/workers/geoclaw/
+RUN mkdir -p /opt/trid3nt/services/workers/geoclaw
+COPY services/workers/geoclaw/ /opt/trid3nt/services/workers/geoclaw/
 
 # WORKDIR controls where GeoClaw writes its scratch _output/ before the
-# entrypoint uploads it. /opt/grace2/work is a writable scratch dir; the
+# entrypoint uploads it. /opt/trid3nt/work is a writable scratch dir; the
 # entrypoint clears + re-creates it per invocation.
-WORKDIR /opt/grace2
+WORKDIR /opt/trid3nt
 
-ENV PYTHONPATH=/opt/grace2 \
+ENV PYTHONPATH=/opt/trid3nt \
     PYTHONUNBUFFERED=1 \
-    TRID3NT_GEOCLAW_SCRATCH=/opt/grace2/work
+    TRID3NT_GEOCLAW_SCRATCH=/opt/trid3nt/work
 
 # Runtime config — overridable from the AWS Batch container env block.
 ENV TRID3NT_OBJECT_STORE=s3 \
