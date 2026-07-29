@@ -17,3 +17,12 @@ matters, not the absolute).
 | 2026-07-28 | 219757 (558f) | - | - | - | - | - | 200 | 13,910 | post hygiene sweep: server.py -1,529 (cards extracted), comment archaeology -1,785 across 264 files (comment lines 25,317 -> 25301), meta renames, ADR offload notes; suite baseline 10 |
 | 2026-07-28b | 218614 | - | - | - | - | - | 200 | 13,228 | recall pass: narrative blocks 216->16, war-stories 0, -1143 lines, comment-lines -> 24502; 9 genuine-architecture ADRs |
 | 2026-07-28c | 217252 | - | 11381 | - | - | - | 200 | 13,072 | dynamic hot-set + mongo_collections cut: Mongo stratum fully closed; lessons/vertex-log/deadname-default/plugin-button batch landed
+
+## Folder-level view (added 2026-07-28, regenerate per milestone)
+
+    cd server/src/trid3nt_server && for d in */ agent/*/; do \
+      find "$d" -name "*.py" -not -path "*__pycache__*" | xargs wc -l | tail -1; done
+
+| date | agent/tools | agent/workflows | agent/other | AGENT total | root files | emission | sandbox | credentials | PLATFORM total |
+|---|---|---|---|---|---|---|---|---|---|
+| 2026-07-28 | 119,548 | 57,056 | 12,406 | 189,010 (87%) | 20,785 | 4,190 | 2,081 | 1,665 | 28,721 (13%) |
