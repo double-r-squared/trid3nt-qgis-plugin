@@ -2003,8 +2003,8 @@ def publish_layer(
         (any raster ``LayerURI``), ``clip_raster_to_polygon`` /
         ``clip_raster_to_bbox`` (clipped rasters for extent-scoped display).
         Downstream: QGIS plugin layer panel (loads the returned ``s3://``
-        COG URI via GDAL ``/vsicurl/``); ``sfincs_flood`` /
-        ``run_model_flood_habitat_scenario`` call this as the final step.
+        COG URI via GDAL ``/vsicurl/``); ``sfincs_flood`` calls this as the
+        final step.
     """
     # OPEN-17 (2026-07-13): unknown/placeholder handle guard. A registered
     # handle was already substituted with its real URI by the server's

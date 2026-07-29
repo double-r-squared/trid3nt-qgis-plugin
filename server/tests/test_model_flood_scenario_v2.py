@@ -669,7 +669,7 @@ def test_gs_forcing_read_path_unchanged_does_not_call_boto3() -> None:
             side_effect=AssertionError("boto3 reader must not be called for gs://"),
         ),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood._to_vsigs",
+            "trid3nt_server.agent.workflows.sfincs.sfincs_forcing_autowire._to_vsigs",
             return_value="/vsigs/test-cache/cache/mrms/precip.tif",
         ) as mock_to_vsigs,
         patch("rasterio.open", side_effect=RuntimeError("vsigs open stubbed")),

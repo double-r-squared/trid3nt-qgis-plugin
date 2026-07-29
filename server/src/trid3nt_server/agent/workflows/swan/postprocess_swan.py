@@ -53,12 +53,15 @@ from trid3nt_contracts.swan_contracts import (
 
 # Reuse the SFINCS postprocess constants/helpers (single source of truth so the
 # SWAN + SnapWave + GeoClaw animation paths stay byte-compatible on the web side).
-from trid3nt_server.agent.workflows.sfincs.postprocess_flood import (
+from trid3nt_server.agent.workflows.shared.cog_io import RUNS_BUCKET_DEFAULT
+from trid3nt_server.agent.workflows.shared.frames import (
     MAX_FLOOD_FRAMES,
-    RUNS_BUCKET_DEFAULT,
     _select_frame_time_indices,
 )
-from trid3nt_server.agent.workflows.sfincs.postprocess_waves import NODATA_WAVE_M
+# SWAN's own dry/no-data wave floor (5 cm). Formerly imported from the SFINCS
+# SnapWave postprocess; SWAN now owns it so it carries no dependency on that
+# deleted module.
+NODATA_WAVE_M: float = 0.05
 
 __all__ = [
     "PostprocessSwanError",

@@ -58,10 +58,12 @@ from trid3nt_server.agent.workflows.shared.cog_io import CogIoError
 
 # Reuse the SFINCS postprocess constants/helpers (single source of truth so the
 # GeoClaw + SFINCS + SWMM animation paths stay byte-compatible on the web side).
-from trid3nt_server.agent.workflows.sfincs.postprocess_flood import (
-    MAX_FLOOD_FRAMES,
+from trid3nt_server.agent.workflows.shared.cog_io import (
     NODATA_DEPTH_M,
     RUNS_BUCKET_DEFAULT,
+)
+from trid3nt_server.agent.workflows.shared.frames import (
+    MAX_FLOOD_FRAMES,
     _select_frame_time_indices,
 )
 

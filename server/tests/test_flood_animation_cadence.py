@@ -31,7 +31,7 @@ from trid3nt_server.agent.workflows.sfincs.flood.flood import (
     _estimate_frame_count,
     _resolve_output_interval_min,
 )
-from trid3nt_server.agent.workflows.sfincs.postprocess_flood import (
+from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
     MAX_FLOOD_FRAMES,
     _select_frame_time_indices,
 )
@@ -161,52 +161,6 @@ def test_coastal_deck_dtout_reflects_interval(
         f"yaml=\n{yaml_text}"
     )
     assert f"dtmaxout: {expected_dtout}" in yaml_text
-
-
-def test_quadtree_deckbuild_output_dt_reflects_interval(monkeypatch) -> None:
-    """The quadtree+SnapWave deck-build output_dt follows the fine cadence too."""
-    from trid3nt_server.agent.tools.simulation.solver import solver as solver_mod
-    from trid3nt_server.agent.workflows.sfincs.flood.flood import (
-        _compose_and_upload_deckbuild_spec,
-    )
-
-    class _FakeS3:
-        def __init__(self) -> None:
-            self.objects: dict[tuple[str, str], bytes] = {}
-
-        def put_object(self, Bucket, Key, Body, **_kw):  # noqa: N803
-            data = Body.read() if hasattr(Body, "read") else bytes(Body)
-            self.objects[(Bucket, Key)] = data
-            return {}
-
-    monkeypatch.setenv("TRID3NT_STORAGE_BACKEND", "s3")
-    monkeypatch.setenv("TRID3NT_CACHE_BUCKET", "deck-cache-bucket")
-    s3 = _FakeS3()
-    monkeypatch.setattr(solver_mod, "_get_s3_client", lambda: s3)
-
-    class _FakeModelSetup:
-        parameters = {"crs": "EPSG:3857", "forcing_provenance": {}}
-
-    class _FakeForcingSpec:
-        provenance: dict[str, Any] = {}
-
-    # The workflow maps a 5-min coastal interval -> output_dt_s = 300.0.
-    build_spec_uri = _compose_and_upload_deckbuild_spec(
-        bbox=_BBOX,
-        topobathy_uri="s3://topo-bucket/topobathy.tif",
-        bathymetry_present=True,
-        model_setup=_FakeModelSetup(),
-        forcing_spec=_FakeForcingSpec(),
-        surge_forcing=None,
-        grid_resolution_m=30.0,
-        duration_hr=6.0,
-        output_dt_s=300.0,
-        is_coastal=True,
-        return_period_yr=100,
-    )
-    s3_bucket, _, key = build_spec_uri[len("s3://"):].partition("/")
-    composed = json.loads(s3.objects[(s3_bucket, key)])
-    assert composed["output"]["output_dt"] == 300.0
 
 
 # --------------------------------------------------------------------------- #

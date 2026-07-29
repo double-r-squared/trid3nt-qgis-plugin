@@ -300,7 +300,7 @@ def _resolve_mesh_crs(bucket: str, mesh_key: str) -> str | None:
     try:
         import xarray as xr  # type: ignore[import-not-found]
 
-        from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _read_crs_from_dataset
+        from trid3nt_server.agent.workflows.shared.cog_io import _read_crs_from_dataset
 
         tmp = tempfile.NamedTemporaryFile(suffix=".nc", delete=False, prefix="trid3nt_meshcrs_")
         tmp.close()

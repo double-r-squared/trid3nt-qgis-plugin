@@ -50,6 +50,12 @@ from trid3nt_server.agent.workflows.shared.frames import (  # noqa: F401 - re-ex
     MAX_FLOOD_FRAMES,
     _select_frame_time_indices,
 )
+from trid3nt_server.agent.workflows.shared.cog_io import (  # noqa: F401 - cross-engine seams, re-exported
+    FLOOD_DEPTH_STYLE_PRESET,
+    NODATA_DEPTH_M,
+    RUNS_BUCKET_DEFAULT,
+    _read_crs_from_dataset,
+)
 
 __all__ = [
     "PostprocessError",
@@ -60,28 +66,13 @@ __all__ = [
     "MAX_FLOOD_FRAMES",
 ]
 
-logger = logging.getLogger("trid3nt_server.agent.workflows.sfincs.postprocess_flood")
+logger = logging.getLogger("trid3nt_server.agent.workflows.sfincs.postprocess_sfincs")
 
-
-#: Default runs bucket -- the local MinIO runs bucket (env override: TRID3NT_RUNS_BUCKET).
-RUNS_BUCKET_DEFAULT: str = "trid3nt-runs"
-
-#: QML style preset name the workflow attaches to the postprocessed flood-depth COG.
-#: The styles/ package is FROZEN under this job; engine styles follow-up
-#: authors the matching ``continuous_flood_depth.qml``.
-FLOOD_DEPTH_STYLE_PRESET: str = "continuous_flood_depth"
-
-#: Minimum depth threshold below which cells are masked to NaN (treated as dry).
-#: 5 cm is the physically meaningful wet-cell threshold -- matches the
-#: ``flooded_cell_count`` reporting convention (evidence) and the
-#: lowest QML colour stop (``continuous_flood_depth.qml`` alpha=0 at 0.05 m).
-#: Belt-and-suspenders: the QML renderer also hides values < 0.05 m (alpha=0),
-#: so the two layers reinforce each other (transparency fix).
-NODATA_DEPTH_M: float = 0.05
-
-#: ``MAX_FLOOD_FRAMES`` now lives in ``frames.py`` and is imported + re-exported
-#: at the top of this module (STEP 1 extract-in-place). Kept available under the
-#: same name for every legacy importer.
+# ``RUNS_BUCKET_DEFAULT`` / ``NODATA_DEPTH_M`` / ``FLOOD_DEPTH_STYLE_PRESET`` /
+# ``_read_crs_from_dataset`` (shared/cog_io.py) and ``MAX_FLOOD_FRAMES`` /
+# ``_select_frame_time_indices`` (shared/frames.py) are the CROSS-ENGINE seams --
+# imported + re-exported above so this module's own callers/tests resolve to the
+# SAME objects. Sibling engines import them straight from ``shared/``.
 
 
 class PostprocessError(RuntimeError):
@@ -173,90 +164,6 @@ def _resolve_run_output_to_local(run_outputs_uri: str) -> Path:
     )
 
 
-def _read_crs_from_dataset(ds: Any) -> str:
-    """Read CRS from a SFINCS netCDF dataset; CF-convention compliant.
-
-    SFINCS stores the CRS in a **data variable** named ``crs``, not in
-    ``ds.attrs``.  The variable carries EPSG information either in its
-    attributes (CF conventions) OR -- for the cht_sfincs quadtree writer -- as
-    the variable's SCALAR VALUE (the bare int EPSG code, e.g. ``32616``, with
-    a useless ``attrs={'EPSG':'-'}``).  We try the known SFINCS encodings in
-    order:
-
-    1. ``crs_var.attrs["epsg_code"]`` -- SFINCS emits ``"EPSG:32617"`` (string
-       already prefixed); strip any accidental whitespace and return as-is.
-    2. ``crs_var.attrs["epsg"]`` / ``["EPSG"]`` -- a bare int EPSG attr (when it
-       is a usable number, not the cht placeholder ``"-"``).
-    3. ``crs_var.attrs["crs_wkt"]`` -- CF canonical WKT string; parse via
-       pyproj and return the EPSG authority string.
-    4. ``crs_var.attrs["spatial_ref"]`` / ``["wkt"]`` -- OGC WKT variants used by
-       some GDAL writers; parse via pyproj.
-    5. The crs VARIABLE VALUE itself -- the cht_sfincs quadtree writer stores the
-       bare int EPSG code (32616) AS the variable value, not in an attr; read it
-       as ``int(crs_var.values)`` -> ``"EPSG:32616"``.
-    6. Fallback: ``ds.attrs.get("crs", "EPSG:3857")`` -- original logic,
-       retained for any dataset that does not carry the ``crs`` variable.
-
-    A logged warning is emitted whenever the fallback fires so the mismatch
-    is visible in the pipeline-strip log rather than silently using EPSG:3857.
-    """
-    if "crs" in ds.variables:
-        crs_var = ds["crs"]
-        attrs = crs_var.attrs
-
-        if "epsg_code" in attrs:
-            # SFINCS emits e.g. "EPSG:32617" -- may occasionally be bare int.
-            raw = str(attrs["epsg_code"]).strip()
-            if raw.upper().startswith("EPSG:"):
-                return raw  # already canonical
-            try:
-                return f"EPSG:{int(raw)}"
-            except ValueError:
-                pass  # fall through to next key
-
-        for epsg_key in ("epsg", "EPSG"):
-            if epsg_key in attrs:
-                # cht_sfincs writes attrs={'EPSG':'-'} (a placeholder) -- int()
-                # raises and we fall through to the variable value below.
-                try:
-                    return f"EPSG:{int(str(attrs[epsg_key]).strip())}"
-                except (ValueError, TypeError):
-                    pass  # placeholder / non-numeric -- fall through
-
-        for wkt_key in ("crs_wkt", "spatial_ref", "wkt"):
-            if wkt_key in attrs:
-                try:
-                    import pyproj  # optional; rasterio ships pyproj
-                    return pyproj.CRS.from_wkt(attrs[wkt_key]).to_string()
-                except Exception:  # noqa: BLE001
-                    pass  # malformed WKT -- fall through
-
-        # cht_sfincs quadtree: the crs VARIABLE VALUE is the bare int EPSG code
-        # (e.g. 32616), not an attr. Read it as a scalar and validate via pyproj.
-        try:
-            import numpy as np  # type: ignore[import-not-found]
-
-            raw_val = np.asarray(crs_var.values).ravel()
-            if raw_val.size >= 1 and np.isfinite(raw_val[0]):
-                epsg_int = int(raw_val[0])
-                if epsg_int > 0:
-                    try:
-                        import pyproj  # validate it is a real authority code
-
-                        return pyproj.CRS.from_epsg(epsg_int).to_string()
-                    except Exception:  # noqa: BLE001
-                        return f"EPSG:{epsg_int}"
-        except Exception:  # noqa: BLE001
-            pass  # non-numeric variable value -- fall through to attrs fallback
-
-    # Fallback: old .attrs encoding or bare dataset without a crs variable.
-    fallback = ds.attrs.get("crs", "EPSG:3857")
-    if fallback == "EPSG:3857":
-        logger.warning(
-            "postprocess_flood: no 'crs' variable found in sfincs_map.nc; "
-            "falling back to EPSG:3857 — COG CRS tag may not match pixel coords."
-        )
-    return fallback
 
 
 def _orient_array_for_cog(arr: Any, ds: Any) -> Any:

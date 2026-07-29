@@ -56,12 +56,14 @@ from trid3nt_server.agent.workflows.sfincs.flood.flood import (
 from trid3nt_server.agent.workflows.sfincs.sfincs_builder import (
     BuildOptions,
     ForcingSpec,
-    MANNING_MAPPING_PATH,
-    MANNING_MAPPING_VERSION,
     SFINCSSetupError,
     build_sfincs_model,
-    load_manning_mapping,
     validate_nlcd_vintage_against_mapping,
+)
+from trid3nt_server.agent.workflows.shared.manning import (
+    MANNING_MAPPING_PATH,
+    MANNING_MAPPING_VERSION,
+    load_manning_mapping,
 )
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.envelope import AssessmentEnvelope
@@ -481,7 +483,7 @@ async def test_workflow_geocode_fallback_when_bbox_missing() -> None:
 
     with (
         patch(
-            "trid3nt_server.agent.workflows.sfincs.flood.flood.geocode_location",
+            "trid3nt_server.agent.workflows.sfincs.run_sfincs.geocode_location",
             return_value=geocode_result,
         ) as mock_geocode,
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")) as mock_dem,
@@ -533,7 +535,7 @@ async def test_workflow_direct_bbox_path_skips_geocode() -> None:
         raise SFINCSSetupError("HYDROMT_UNAVAILABLE", message="test stub")
 
     with (
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.geocode_location") as mock_geocode,
+        patch("trid3nt_server.agent.workflows.sfincs.run_sfincs.geocode_location") as mock_geocode,
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover", return_value=landcover_result),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
@@ -576,7 +578,7 @@ async def test_workflow_bbox_wins_when_both_supplied() -> None:
         raise SFINCSSetupError("HYDROMT_UNAVAILABLE", message="test stub")
 
     with (
-        patch("trid3nt_server.agent.workflows.sfincs.flood.flood.geocode_location") as mock_geocode,
+        patch("trid3nt_server.agent.workflows.sfincs.run_sfincs.geocode_location") as mock_geocode,
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_dem", return_value=_mock_layer_uri("dem")) as mock_dem,
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_landcover", return_value=landcover_result),
         patch("trid3nt_server.agent.workflows.sfincs.flood.flood.fetch_river_geometry", return_value=_mock_layer_uri("rivers")),
@@ -1690,7 +1692,7 @@ def test_extract_peak_depth_geotiff_squeezes_singleton_timemax_dim(
     except ImportError:
         pytest.skip("rasterio not installed; skipping COG-squeeze integration test")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _extract_peak_depth_geotiff
 
     # Build a synthetic sfincs_map.nc with hmax shape (timemax=1, n=8, m=8).
     n, m = 8, 8
@@ -2165,7 +2167,7 @@ def test_extract_peak_depth_geotiff_reads_crs_from_epsg_code_var(
     except ImportError:
         pytest.skip("rasterio not installed")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _extract_peak_depth_geotiff
 
     netcdf_path = _build_synthetic_sfincs_nc_oq59(
         tmp_path,
@@ -2207,7 +2209,7 @@ def test_extract_peak_depth_geotiff_reads_crs_from_spatial_ref_wkt(
     except ImportError:
         pytest.skip("rasterio/pyproj not installed")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _extract_peak_depth_geotiff
 
     utm17n_wkt = pyproj.CRS.from_epsg(32617).to_wkt()
     netcdf_path = _build_synthetic_sfincs_nc_oq59(
@@ -2245,7 +2247,7 @@ def test_extract_peak_depth_geotiff_falls_back_to_attrs_crs_when_no_var(
     except ImportError:
         pytest.skip("rasterio not installed")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _extract_peak_depth_geotiff
 
     # No crs_var_attrs → no 'crs' variable in the dataset; fall back to .attrs.
     netcdf_path = _build_synthetic_sfincs_nc_oq59(
@@ -2871,7 +2873,7 @@ def test_extract_peak_depth_geotiff_rotation_fix_transposed_axes(
     except ImportError:
         pytest.skip("numpy/xarray/rasterio not installed")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _extract_peak_depth_geotiff
 
     # Use a non-square grid (m=12 cols, n=8 rows) so transposition is detectable.
     n, m = 8, 12  # n=y-rows, m=x-cols
@@ -2947,7 +2949,7 @@ def test_extract_peak_depth_geotiff_rotation_correct_axis_order(
     except ImportError:
         pytest.skip("numpy/xarray/rasterio not installed")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _extract_peak_depth_geotiff
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _extract_peak_depth_geotiff
 
     n, m = 8, 12  # n=y-rows, m=x-cols
     rng = np.random.default_rng(7)
@@ -3013,7 +3015,7 @@ def test_extract_peak_depth_geotiff_transparency_threshold(
     except ImportError:
         pytest.skip("numpy/xarray/rasterio not installed")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import (
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
         _extract_peak_depth_geotiff,
         NODATA_DEPTH_M,
     )
@@ -3136,7 +3138,7 @@ def test_crs_tag_mismatch_guard_correct_case_no_raise(tmp_path: Path) -> None:
     except ImportError:
         pytest.skip("xarray/rasterio not installed")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _extract_peak_depth_geotiff, PostprocessError
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _extract_peak_depth_geotiff, PostprocessError
 
     netcdf_path = _build_netcdf_for_crs_guard(
         tmp_path,
@@ -3166,7 +3168,7 @@ def test_crs_tag_mismatch_guard_geographic_tag_projected_coords(tmp_path: Path) 
     except ImportError:
         pytest.skip("xarray/rasterio not installed")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _extract_peak_depth_geotiff, PostprocessError
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _extract_peak_depth_geotiff, PostprocessError
 
     netcdf_path = _build_netcdf_for_crs_guard(
         tmp_path,
@@ -3199,7 +3201,7 @@ def test_crs_tag_mismatch_guard_projected_tag_geographic_coords(tmp_path: Path) 
     except ImportError:
         pytest.skip("xarray/rasterio not installed")
 
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _extract_peak_depth_geotiff, PostprocessError
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _extract_peak_depth_geotiff, PostprocessError
 
     netcdf_path = _build_netcdf_for_crs_guard(
         tmp_path,

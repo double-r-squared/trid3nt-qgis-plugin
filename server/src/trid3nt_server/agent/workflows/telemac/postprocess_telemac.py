@@ -49,7 +49,7 @@ from trid3nt_contracts.execution import LegendKey
 
 from trid3nt_server.agent.workflows.shared import cog_io
 from trid3nt_server.agent.workflows.shared.cog_io import CogIoError
-from trid3nt_server.agent.workflows.sfincs.postprocess_flood import RUNS_BUCKET_DEFAULT
+from trid3nt_server.agent.workflows.shared.cog_io import RUNS_BUCKET_DEFAULT
 
 __all__ = [
     "PostprocessTelemacError",

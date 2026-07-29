@@ -36,7 +36,7 @@ from trid3nt_server.agent.workflows.sfincs.flood.flood import (
     model_flood_scenario,
     sfincs_flood,
 )
-from trid3nt_server.agent.workflows.sfincs.postprocess_flood import (
+from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
     FLOOD_DEPTH_STYLE_PRESET,
     postprocess_flood,
 )
@@ -212,7 +212,7 @@ def test_postprocess_flood_layer_is_styled_and_single() -> None:
 
     with (
         patch(
-            "trid3nt_server.agent.workflows.sfincs.postprocess_flood._resolve_run_output_to_local",
+            "trid3nt_server.agent.workflows.sfincs.postprocess_sfincs._resolve_run_output_to_local",
             return_value=Path("/tmp/fake.nc"),
         ),
         patch(
@@ -221,11 +221,11 @@ def test_postprocess_flood_layer_is_styled_and_single() -> None:
             # time-varying output (only hmax/zsmax) frame_cogs/labels are empty,
             # so postprocess_flood emits EXACTLY the single peak layer (the
             # styled-single-layer contract this test guards).
-            "trid3nt_server.agent.workflows.sfincs.postprocess_flood._extract_depth_frames",
+            "trid3nt_server.agent.workflows.sfincs.postprocess_sfincs._extract_depth_frames",
             return_value=(Path("/tmp/fake_cog.tif"), dict(_DEPTH_METRICS), [], []),
         ),
         patch(
-            "trid3nt_server.agent.workflows.sfincs.postprocess_flood._upload_cog_to_runs_bucket",
+            "trid3nt_server.agent.workflows.sfincs.postprocess_sfincs._upload_cog_to_runs_bucket",
             return_value=cog_uri,
         ),
         patch("pathlib.Path.unlink", return_value=None),

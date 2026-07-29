@@ -116,7 +116,7 @@ __all__ = [
 ]
 
 # Re-use the SFINCS substrate Manning loader (version-pinned NLCD -> n table).
-from trid3nt_server.agent.workflows.sfincs.sfincs_builder import load_manning_mapping  # noqa: E402
+from trid3nt_server.agent.workflows.shared.manning import load_manning_mapping  # noqa: E402
 
 # Default overland Manning n when no NLCD raster is supplied (matches the spike
 # / the contracts default). Used for the synthetic-AOI proof and as a fallback.

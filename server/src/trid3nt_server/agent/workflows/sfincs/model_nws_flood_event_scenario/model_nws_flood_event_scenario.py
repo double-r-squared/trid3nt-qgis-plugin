@@ -939,7 +939,7 @@ async def run_model_nws_flood_event_scenario(
 
     FR-DC-6: declares ``cacheable=False`` + ``ttl_class="live-no-cache"`` +
     ``source_class="workflow_dispatch"`` -- same shape as
-    ``run_sfincs`` / ``run_model_flood_habitat_scenario``. The
+    ``sfincs_flood``. The
     composer runs through cacheable atomic tools, so identical inputs still
     benefit from per-tool cache hits even though the composer itself is uncached.
 

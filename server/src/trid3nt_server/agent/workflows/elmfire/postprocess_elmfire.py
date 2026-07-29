@@ -57,7 +57,7 @@ from trid3nt_server.agent.workflows.shared.frames import (
     frame_layer_id,
     frame_name,
 )
-from trid3nt_server.agent.workflows.sfincs.postprocess_flood import RUNS_BUCKET_DEFAULT
+from trid3nt_server.agent.workflows.shared.cog_io import RUNS_BUCKET_DEFAULT
 
 logger = logging.getLogger("trid3nt_server.agent.workflows.elmfire.postprocess_elmfire")
 

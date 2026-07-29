@@ -45,8 +45,6 @@ import trid3nt_server.agent.workflows.sfincs.flood.flood as mfs
 _OFFLOOP_REQUIRED = {
     "_resolve_surge_forcing_from_fetchers",
     "_resolve_building_obstacle_uri",
-    "_resolve_quadtree_rivers_uri",
-    "_compose_and_upload_deckbuild_spec",
 }
 
 

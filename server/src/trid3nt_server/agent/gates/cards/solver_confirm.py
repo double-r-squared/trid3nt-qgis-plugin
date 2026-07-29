@@ -278,7 +278,7 @@ async def _build_flood_run_settings_envelope(
         _estimate_frame_count,
         _resolve_output_interval_min,
     )
-    from ...workflows.sfincs.postprocess_flood import MAX_FLOOD_FRAMES
+    from ...workflows.shared.frames import MAX_FLOOD_FRAMES
     from ...workflows.sfincs.sfincs_builder import (
         SFINCS_RES_LADDER,
         suggest_sfincs_resolution_from_bbox,

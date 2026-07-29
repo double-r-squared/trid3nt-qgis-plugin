@@ -18,8 +18,8 @@ The agent then collapses to REGISTER-ONLY:
      mint ``layer_id = f"{layer_id_stem}-{run_id}"``, call
      ``observe_published_layer``, build a ``LayerURI``.
   3. SHORT-CIRCUIT the on-box heavy path: NO ``_resolve_run_output_to_local``,
-     NO ``postprocess_flood``/``postprocess_waves``, NO
-     ``_ensure_raster_has_overviews`` (``has_overviews`` is true).
+     NO ``postprocess_sfincs``, NO ``_ensure_raster_has_overviews``
+     (``has_overviews`` is true).
 
 TiTiler exit: the former ``TRID3NT_TILE_SERVER_BASE`` publish-or-honest-drop gate
 is GONE - no tile server is needed to display a raster anymore, so no manifest

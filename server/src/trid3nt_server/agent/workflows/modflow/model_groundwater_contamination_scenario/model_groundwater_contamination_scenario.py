@@ -2,7 +2,7 @@
 
 The Case 2 end-to-end higher-order workflow: it turns a news article about a
 chemical / solvent spill into a rendered groundwater-contaminant plume layer.
-It is the MODFLOW analogue of ``model_flood_habitat_scenario`` (Case 1) and the
+It is the MODFLOW analogue of the Case 1 SFINCS flood composer and the
 downstream half of ``model_news_event_ingest`` (the review-gated
 front half stopped before any solver; this composer picks up and runs the
 solver after a confirmation gate).
@@ -939,7 +939,7 @@ def _jsonable_derived(derived: dict[str, Any]) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-# Pipeline-emitter helper (mirror model_flood_habitat_scenario)
+# Pipeline-emitter helper (mirror the SFINCS flood composer)
 # --------------------------------------------------------------------------- #
 
 

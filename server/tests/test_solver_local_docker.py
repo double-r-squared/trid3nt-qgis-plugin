@@ -751,7 +751,7 @@ def test_to_vsigs_maps_s3_to_vsis3() -> None:
 
 
 def test_postprocess_resolves_s3_run_output_via_boto3(reset_seams) -> None:
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import _resolve_run_output_to_local
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import _resolve_run_output_to_local
 
     s3 = FakeS3Client()
     set_s3_client(s3)
@@ -765,7 +765,7 @@ def test_postprocess_resolves_s3_run_output_via_boto3(reset_seams) -> None:
 
 
 def test_postprocess_s3_read_failure_is_typed(reset_seams) -> None:
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import (
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
         PostprocessError,
         _resolve_run_output_to_local,
     )
@@ -779,7 +779,7 @@ def test_postprocess_s3_read_failure_is_typed(reset_seams) -> None:
 def test_postprocess_cog_upload_scheme_aware(
     reset_seams, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from trid3nt_server.agent.workflows.sfincs.postprocess_flood import (
+    from trid3nt_server.agent.workflows.sfincs.postprocess_sfincs import (
         PostprocessError,
         _upload_cog_to_runs_bucket,
     )

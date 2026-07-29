@@ -72,6 +72,12 @@ import yaml
 
 from trid3nt_contracts import new_ulid
 from trid3nt_contracts.execution import LayerURI, ModelSetup
+from trid3nt_server.agent.workflows.shared.manning import (
+    MANNING_MAPPING_PATH,
+    MANNING_MAPPING_VERSION,
+    ManningMappingError,
+    load_manning_mapping,
+)
 
 __all__ = [
     "SFINCSSetupError",
@@ -83,10 +89,7 @@ __all__ = [
     "InfiltrationForcing",
     "BuildOptions",
     "build_sfincs_model",
-    "load_manning_mapping",
     "validate_nlcd_vintage_against_mapping",
-    "MANNING_MAPPING_PATH",
-    "MANNING_MAPPING_VERSION",
     # Adaptive grid autoscale (SFINCS per-job autoscale)
     "GridAutoscaleResult",
     "autoscale_grid_resolution",
@@ -231,20 +234,9 @@ _PANDAS_GUARD_OK = _install_pandas_set_forcing_1d_guard()
 
 
 # --------------------------------------------------------------------------- #
-# Module constants -- Manning's mapping CSV location + version
-# --------------------------------------------------------------------------- #
-
-
-#: Absolute path to the version-pinned Manning's mapping CSV.
-#: Co-located with the workflows package so it travels in the agent service
-#: container. The validation gate reads this file once per ``build_sfincs_model``
-#: call (no module-level caching -- keep the read explicit so a hot-swap is
-#: trivial in tests).
-MANNING_MAPPING_PATH: Path = Path(__file__).parent / "manning_mapping.csv"
-
-#: Version string embedded in the CSV's header block. Surfaced in
-#: ``ModelSetup.parameters`` for provenance.
-MANNING_MAPPING_VERSION: str = "1.0.0"
+# Manning's mapping CSV location + version + loader now live in
+# ``shared/manning.py`` (cross-engine substrate: the SWMM mesh builder reads the
+# SAME table). Imported at the top of this module for internal use + provenance.
 
 
 # --------------------------------------------------------------------------- #
@@ -645,102 +637,6 @@ class BuildOptions:
 # --------------------------------------------------------------------------- #
 
 
-def load_manning_mapping(
-    csv_path: Path | str | None = None,
-) -> dict[int, float]:
-    """Load the version-pinned NLCD class → Manning's n mapping.
-
-    Reads ``manning_mapping.csv`` (default: the module-local file) and returns
-    a dict keyed by NLCD class integer. Comments (``#``) and empty lines are
-    ignored; the CSV header row is consumed; data rows must have exactly two
-    numeric columns at indices 0 (nlcd_class) and 1 (manning_n). Optional
-    columns (e.g. ``description``) are tolerated.
-
-    Args:
-        csv_path: optional explicit override (tests use this to inject a fixture
-            CSV with only a subset of classes); ``None`` reads
-            ``MANNING_MAPPING_PATH``.
-
-    Returns:
-        ``{nlcd_class_int: manning_n_float}`` -- every row in the CSV becomes
-        an entry; duplicates are last-wins with a logged warning.
-
-    Raises:
-        SFINCSSetupError("MANNING_MAPPING_LOAD_FAILED", …): the CSV is missing,
-            empty, or unparseable.
-    """
-    path = Path(csv_path) if csv_path is not None else MANNING_MAPPING_PATH
-    if not path.exists():
-        raise SFINCSSetupError(
-            "MANNING_MAPPING_LOAD_FAILED",
-            message=f"Manning's mapping CSV not found at {path}",
-            details={"path": str(path)},
-        )
-
-    mapping: dict[int, float] = {}
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            # Skip leading comments + blank lines.
-            data_lines = [
-                line
-                for line in fh.readlines()
-                if line.strip() and not line.lstrip().startswith("#")
-            ]
-        if not data_lines:
-            raise SFINCSSetupError(
-                "MANNING_MAPPING_LOAD_FAILED",
-                message=f"Manning's mapping CSV at {path} is empty after stripping comments",
-                details={"path": str(path)},
-            )
-        reader = csv.reader(data_lines)
-        header = next(reader, None)
-        if header is None or not header:
-            raise SFINCSSetupError(
-                "MANNING_MAPPING_LOAD_FAILED",
-                message=f"Manning's mapping CSV at {path} has no header row",
-                details={"path": str(path)},
-            )
-        for row_idx, row in enumerate(reader, start=2):
-            if not row or all(not c.strip() for c in row):
-                continue
-            if len(row) < 2:
-                continue
-            try:
-                cls = int(row[0].strip())
-                n_val = float(row[1].strip())
-            except (ValueError, IndexError):
-                logger.warning(
-                    "manning_mapping row %d not parseable: %r (skipped)",
-                    row_idx,
-                    row,
-                )
-                continue
-            if cls in mapping:
-                logger.warning(
-                    "manning_mapping duplicate nlcd_class=%d at row %d "
-                    "(was %.4f, now %.4f) — last-wins",
-                    cls,
-                    row_idx,
-                    mapping[cls],
-                    n_val,
-                )
-            mapping[cls] = n_val
-    except SFINCSSetupError:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise SFINCSSetupError(
-            "MANNING_MAPPING_LOAD_FAILED",
-            message=f"Manning's mapping CSV at {path} could not be parsed: {exc}",
-            details={"path": str(path)},
-        ) from exc
-
-    if not mapping:
-        raise SFINCSSetupError(
-            "MANNING_MAPPING_LOAD_FAILED",
-            message=f"Manning's mapping CSV at {path} parsed to an empty mapping",
-            details={"path": str(path)},
-        )
-    return mapping
 
 
 def validate_nlcd_vintage_against_mapping(
@@ -2504,7 +2400,15 @@ def build_sfincs_model(
         )
 
     # --- Step 1: Manning's mapping load ---
-    mapping = load_manning_mapping(manning_mapping_csv)
+    # The loader lives in ``shared/manning.py`` and raises ``ManningMappingError``;
+    # translate it to the SFINCS setup-error contract so the failed envelope is
+    # byte-identical (error_code ``MANNING_MAPPING_LOAD_FAILED``).
+    try:
+        mapping = load_manning_mapping(manning_mapping_csv)
+    except ManningMappingError as exc:
+        raise SFINCSSetupError(
+            exc.error_code, message=str(exc), details=exc.details
+        ) from exc
     mapping_path = str(
         Path(manning_mapping_csv) if manning_mapping_csv else MANNING_MAPPING_PATH
     )

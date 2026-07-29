@@ -67,7 +67,7 @@ import trid3nt_server.agent.workflows.shared.model_news_event_ingest.model_news_
 # PELICUN fold: pelicun_damage_with_buildings folded into the
 # pelicun_damage_assessment template's bbox AUTO-FETCH input mode.
 import trid3nt_server.agent.workflows.pelicun.damage_assessment.damage_assessment  # noqa: F401
-import trid3nt_server.agent.workflows.sfincs.postprocess_flood  # noqa: F401
+import trid3nt_server.agent.workflows.sfincs.postprocess_sfincs  # noqa: F401
 import trid3nt_server.agent.workflows.sfincs.sfincs_builder  # noqa: F401
 
 logger = logging.getLogger(__name__)

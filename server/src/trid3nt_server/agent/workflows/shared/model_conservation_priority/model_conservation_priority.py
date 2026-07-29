@@ -470,7 +470,7 @@ async def run_model_conservation_priority(
     When NOT to use:
         - A single data layer (call the atomic tool directly: ``fetch_naip`` /
           ``compute_ndvi`` / ``fetch_mobi`` / ``fetch_gbif_occurrences``).
-        - Flood + habitat exposure (use ``run_model_flood_habitat_scenario``).
+        - Flood + habitat exposure (use ``sfincs_flood`` + the spatial tools).
         - Non-US AOIs for the NAIP / MoBI layers (those degrade with an honest
           typed error; NDVI + GBIF + IUCN still work globally).
 
